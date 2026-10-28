@@ -67,6 +67,10 @@ type VenueBrowseCardProps = {
   mediaLayout?: "inline" | "cover";
   selectedForAsk?: boolean;
   onAskSelect?: () => void;
+  /** Existing map selection. Only coordinate-backed venues receive a map action. */
+  pinId?: string;
+  selectedForMap?: boolean;
+  onMapSelect?: () => void;
 };
 
 function formatTagLabel(tag: string): string {
@@ -139,6 +143,9 @@ export function VenueBrowseCard({
   mediaLayout = "cover",
   selectedForAsk,
   onAskSelect,
+  pinId,
+  selectedForMap,
+  onMapSelect,
 }: VenueBrowseCardProps) {
   const config = KIND_CONFIG[kind];
   const Icon = config.icon;
@@ -147,6 +154,8 @@ export function VenueBrowseCard({
   return (
     <VenueCardShell
       testId={config.cardTestId(listing.id)}
+      pinId={pinId}
+      selected={selectedForMap}
       resultKind={kind}
       composition={composition}
       mediaLayout={mediaLayout}
@@ -160,6 +169,11 @@ export function VenueBrowseCard({
         />
       }
       footer={<div className="flex flex-wrap items-center gap-2">
+        {onMapSelect ? <Button type="button" size="sm" variant={selectedForMap ? "secondary" : "outline"}
+          aria-pressed={Boolean(selectedForMap)} data-testid="venue-map-select" onClick={onMapSelect}>
+          <MapPin className="size-3.5" aria-hidden />
+          {selectedForMap ? "Selected on map" : "View on map"}
+        </Button> : null}
         {onAskSelect ? <Button type="button" size="sm" variant={selectedForAsk ? "secondary" : "outline"}
           aria-pressed={Boolean(selectedForAsk)} data-testid="venue-ask-select" onClick={onAskSelect}>
           {selectedForAsk ? "Clear selection" : "Ask about this"}

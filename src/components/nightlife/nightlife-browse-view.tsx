@@ -1,11 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useVenueAskSelection } from "@/components/chat/use-venue-ask-selection";
 import { BrowseMapContextShell } from "@/components/browse/BrowseMapContextShell";
 import { BrowseMapPanel } from "@/components/browse/BrowseMapPanel";
 import { BrowseMapSheet } from "@/components/browse/BrowseMapSheet";
+import { useMapContext } from "@/platform/maps/map-context";
+import { useBrowseMapSync } from "@/hooks/use-browse-map-sync";
+import { venueToMapPin } from "@/lib/browse/browse-pin-converters";
 import { DiscoveryGroundedResults } from "@/components/chat/discovery-grounded-results";
 import type { DiscoveryAgentResult } from "@/components/chat/discovery-tool-results";
 import type { GroundedToolRow } from "@/lib/parse-grounded-tool-result";
@@ -43,9 +46,16 @@ function NightlifeBrowseViewInner({
   neighborhood,
   vibe,
 }: NightlifeBrowseViewProps) {
+  const { selectedPinId, panToPin } = useMapContext();
   const retryHref = buildFilterUrl({ neighborhood, vibe });
   const [searched, setSearched] = useState<{ scope: string; rows: GroundedToolRow[] } | null>(null);
   const activeRows = searched?.scope === retryHref ? searched.rows : null;
+  // Only real source coordinates become browse pins; AI search owns its grounded pins separately.
+  const basePins = useMemo(() => results.flatMap((r) => {
+    const pin = venueToMapPin(r);
+    return pin ? [pin] : [];
+  }), [results]);
+  useBrowseMapSync(activeRows === null && !error ? basePins : [], "venue");
   const { selectedId, selectForAsk, clearAskSelection } = useVenueAskSelection(
     activeRows, results.map((r) => r.id),
   );
@@ -71,7 +81,7 @@ function NightlifeBrowseViewInner({
     <DiscoveryWorkspace
       activeSlug="nightlife"
       askComposer={<DiscoveryAskComposer page="nightlife" onAgentResults={onAgentResults} />}
-      rightPanel={activeRows ? <BrowseMapPanel fill /> : undefined}
+      rightPanel={activeRows !== null || (!error && basePins.length > 0) ? <BrowseMapPanel fill /> : undefined}
       testId="nightlife-page"
       title="Nightlife"
       subtitle="Clubs & bars in Medellín"
@@ -121,6 +131,9 @@ function NightlifeBrowseViewInner({
                 kind="nightlife"
                 listing={listing}
                 selectedForAsk={selectedId === listing.id}
+                pinId={basePins.some((pin) => pin.id === `venue-${listing.id}`) ? `venue-${listing.id}` : undefined}
+                selectedForMap={selectedPinId === `venue-${listing.id}`}
+                onMapSelect={basePins.some((pin) => pin.id === `venue-${listing.id}`) ? () => panToPin(`venue-${listing.id}`) : undefined}
                 onAskSelect={() => selectForAsk(selectedId === listing.id ? null : listing.id)}
                 composition="nova"
                 mediaLayout="inline"
@@ -130,7 +143,7 @@ function NightlifeBrowseViewInner({
         ) : null}
       </section>
     </DiscoveryWorkspace>
-    {activeRows ? <BrowseMapSheet raised /> : null}
+    {activeRows !== null || (!error && basePins.length > 0) ? <BrowseMapSheet raised /> : null}
     </>
   );
 }

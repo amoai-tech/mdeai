@@ -61,3 +61,31 @@ export function rentalToMapPin(r: Rental): MapPin | null {
   });
   return validated.success ? validated.data : null;
 }
+
+/** The café and nightlife browse pages share source venue anchors and one map category.
+ * Never synthesize a coordinate for a venue that has no saved location. */
+type VenuePinSource = {
+  id: string;
+  name: string;
+  neighborhood?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  mapsUrl?: string | null;
+  summary?: string | null;
+};
+
+export function venueToMapPin(r: VenuePinSource): MapPin | null {
+  if (r.latitude == null || r.longitude == null) return null;
+  const parsed = mapPinSchema.safeParse({
+    id: `venue-${r.id}`,
+    category: "venue",
+    lat: r.latitude,
+    lng: r.longitude,
+    title: r.name,
+    subtitle: r.neighborhood ?? undefined,
+    placeUri: safeUrl(r.mapsUrl),
+    source: "sql",
+    meta: r.summary?.trim() ? { summary: r.summary.trim() } : undefined,
+  });
+  return parsed.success ? parsed.data : null;
+}
