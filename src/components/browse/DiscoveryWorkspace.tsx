@@ -56,13 +56,13 @@ export function DiscoveryWorkspace(props: DiscoveryWorkspaceProps) {
         data-testid="workspace-results-column"
       >
         <header className="sticky top-0 z-10 border-b border-border bg-background/95 px-4 py-4 backdrop-blur sm:px-6">
-          <div className="flex items-start gap-3">
+          <div className="flex flex-wrap items-start gap-3 sm:flex-nowrap">
             <ChatNavDrawer rail={<WorkspaceNavRail activeSlug={activeSlug} testId="workspace-nav-rail-drawer" />} />
             <div className="min-w-0 flex-1">
               <h1 className="font-serif text-2xl font-semibold">{title}</h1>
               <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
             </div>
-            <div className="flex shrink-0 flex-col items-end gap-1">
+            <div className="flex w-full min-w-0 justify-end gap-1 sm:w-auto sm:shrink-0 sm:flex-col sm:items-end">
               <AuthStatus />
               <Link href="/chat" className="hidden text-sm text-primary hover:underline sm:inline">
                 Ask concierge
