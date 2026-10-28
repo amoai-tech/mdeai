@@ -20,10 +20,7 @@ export function categoryPinId(category: MapPinCategory, rawId: string) {
 
 // Use the same strict UUID validation as the canonical public discovery lookup.
 // Do not interpret an external/Google place ID as a Supabase restaurant UUID.
-const restaurantIdSchema = z.string().uuid();
-export function canonicalRestaurantIdOrUndefined(id: string): string | undefined {
-  return restaurantIdSchema.safeParse(id).success ? id : undefined;
-}
+export const restaurantUuidSchema = z.string().uuid();
 
 type PlaceRow = {
   id: string;
@@ -140,7 +137,7 @@ export function DomainResults({
               const bookingTarget = toRestaurantVenueDetail({
                 pinId,
                 title,
-                restaurantId: canonicalRestaurantIdOrUndefined(r.id),
+                restaurantId: restaurantUuidSchema.safeParse(r.id).success ? r.id : undefined,
                 placeId: r.placeId,
                 mapsUrl: r.mapsUrl,
                 neighborhood: r.neighborhood,
