@@ -182,7 +182,7 @@ for (const size of [{ name: "desktop", width: 1440, height: 900 }, { name: "mobi
         await expect(select(second)).toHaveAttribute("aria-pressed", "false");
         const clearedReply = await ask(page, scenario.route,
           "Is any place currently selected? Do not assume the previous place is still selected.", 3);
-        expect(clearedReply).toMatch(/no |none|not selected|nothing selected|cleared|don't have|do not have/i);
+        expect(clearedReply).toMatch(/\bno\b|\bnone\b|not selected|nothing (?:is )?selected|cleared|don['’]t have|do not have/i);
         expect(copilotPosts.filter((status) => status === 200).length).toBeGreaterThanOrEqual(3);
         expect(copilotPosts.some((status) => status >= 400 && status !== 401)).toBe(false);
         expect(errors).toEqual([]);

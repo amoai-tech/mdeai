@@ -42,6 +42,8 @@ vi.mock("@/components/chat/concierge-coagent-context", () => ({
 /** Capture the provider's onError so the test can deliver exact CopilotKit events. */
 const captured = vi.hoisted(() => ({
   onError: undefined as undefined | ((event: unknown) => void),
+  mounts: 0,
+  unmounts: 0,
 }));
 vi.mock("@copilotkit/react-core/v2", () => ({
   CopilotKitProvider: ({
@@ -51,6 +53,10 @@ vi.mock("@copilotkit/react-core/v2", () => ({
     children: React.ReactNode;
     onError?: (event: unknown) => void;
   }) => {
+    React.useEffect(() => {
+      captured.mounts += 1;
+      return () => { captured.unmounts += 1; };
+    }, []);
     captured.onError = onError;
     return <>{children}</>;
   },
@@ -106,6 +112,8 @@ beforeEach(() => {
   session.loading = false;
   navigation.pathname = "/restaurants";
   captured.onError = undefined;
+  captured.mounts = 0;
+  captured.unmounts = 0;
   clearConciergeError();
 });
 
@@ -122,6 +130,25 @@ describe("DiscoveryConciergeProvider guest startup 401 (SAN-1592)", () => {
 
     expect(getConciergeErrorVersion()).toBe(0);
     expect(getConciergeErrorForThread(undefined).version).toBe(0);
+  });
+
+  it("rebinds the runtime agent when session restoration becomes authenticated", () => {
+    session.loading = true;
+    renderProvider();
+    expect(captured.mounts).toBe(1);
+    session.loading = false;
+    session.userId = "signed-in-owner";
+    act(() => root.render(<MdeCopilotKitProvider><div>page</div></MdeCopilotKitProvider>));
+    expect(captured.mounts).toBe(2);
+    expect(captured.unmounts).toBe(1);
+  });
+
+  it("does not remount for the same authenticated user on a normal re-render", () => {
+    session.userId = "stable-owner";
+    renderProvider();
+    act(() => root.render(<MdeCopilotKitProvider><div>page</div></MdeCopilotKitProvider>));
+    expect(captured.mounts).toBe(1);
+    expect(captured.unmounts).toBe(0);
   });
 
   it("still records a startup failure for a signed-in user", () => {
