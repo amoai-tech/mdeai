@@ -101,7 +101,7 @@ function CafeBrowseViewInner({
 
         {!error && activeRows === null && results.length > 0 ? (
           <div
-            className="grid auto-rows-fr gap-4 sm:grid-cols-2"
+            className="mx-auto flex w-full max-w-3xl flex-col gap-3"
             aria-label={`${results.length} cafés`}
             data-testid="cafes-grid"
           >
@@ -113,7 +113,7 @@ function CafeBrowseViewInner({
                 selectedForAsk={selectedId === listing.id}
                 onAskSelect={() => selectForAsk(selectedId === listing.id ? null : listing.id)}
                 composition="nova"
-                mediaLayout="cover"
+                mediaLayout="inline"
               />
             ))}
           </div>

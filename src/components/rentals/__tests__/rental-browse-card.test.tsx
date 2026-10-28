@@ -78,6 +78,20 @@ describe("RentalBrowseCard — SAN-1349 viewing CTA truthfulness", () => {
     expect(html).toContain("Constructor");
   });
 
+  it("renders inline 96px photo, honest price and existing viewing action", () => {
+    const html = renderToStaticMarkup(<RentalBrowseCard
+      rental={rowToRental(apartmentRow())}
+      mediaLayout="inline"
+      onSchedule={vi.fn()}
+      onDetails={vi.fn()}
+    />);
+    expect(html).toContain('data-testid="rental-browse-card-photo"');
+    expect(html).toContain("w-24");
+    expect(html).toContain("USD");
+    expect(html).toContain('data-testid="rental-schedule-cta"');
+    expect(html).toContain('data-testid="rental-card-link-rnt_lau_001"');
+  });
+
   it("shows the schedule CTA exactly when the database computed the listing requestable", () => {
     const html = renderCard({ rental_can_request_viewing: true });
     expect(html).toContain('data-testid="rental-schedule-cta"');

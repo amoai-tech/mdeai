@@ -1,0 +1,14 @@
+{
+  "route": "rentals",
+  "width": 390,
+  "status": 200,
+  "cardCount": 41,
+  "feedWidth": 358,
+  "thumbWidth": 96,
+  "composer": true,
+  "overflow": 0,
+  "errors": [],
+  "devAgent401": 1,
+  "retest": true,
+  "passed": true
+}
