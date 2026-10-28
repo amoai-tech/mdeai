@@ -6,8 +6,9 @@ import { useVenueAskSelection } from "@/components/chat/use-venue-ask-selection"
 import { BrowseMapContextShell } from "@/components/browse/BrowseMapContextShell";
 import { BrowseMapPanel } from "@/components/browse/BrowseMapPanel";
 import { BrowseMapSheet } from "@/components/browse/BrowseMapSheet";
-import { useMapContext } from "@/platform/maps/map-context";
+import { useMapContext, useMapPinSelect } from "@/platform/maps/map-context";
 import { useBrowseMapSync } from "@/hooks/use-browse-map-sync";
+import { useBrowseCardScroll } from "@/hooks/use-browse-card-scroll";
 import { venueToMapPin } from "@/lib/browse/browse-pin-converters";
 import { DiscoveryGroundedResults, hasVenueBrowseMapPins } from "@/components/chat/discovery-grounded-results";
 import type { DiscoveryAgentResult } from "@/components/chat/discovery-tool-results";
@@ -46,7 +47,9 @@ function CafeBrowseViewInner({
   neighborhood,
   feature,
 }: CafeBrowseViewProps) {
-  const { selectedPinId, panToPin } = useMapContext();
+  const { selectedPinId } = useMapContext();
+  const selectPin = useMapPinSelect();
+  useBrowseCardScroll();
   const retryHref = buildFilterUrl({ neighborhood, feature });
   const [searched, setSearched] = useState<{ scope: string; rows: GroundedToolRow[] } | null>(null);
   const activeRows = searched?.scope === retryHref ? searched.rows : null;
@@ -125,7 +128,7 @@ function CafeBrowseViewInner({
                 selectedForAsk={selectedId === listing.id}
                 pinId={basePins.some((pin) => pin.id === `venue-${listing.id}`) ? `venue-${listing.id}` : undefined}
                 selectedForMap={selectedPinId === `venue-${listing.id}`}
-                onMapSelect={basePins.some((pin) => pin.id === `venue-${listing.id}`) ? () => panToPin(`venue-${listing.id}`) : undefined}
+                onMapSelect={basePins.some((pin) => pin.id === `venue-${listing.id}`) ? () => selectPin(`venue-${listing.id}`) : undefined}
                 onAskSelect={() => selectForAsk(selectedId === listing.id ? null : listing.id)}
                 composition="nova"
                 mediaLayout="inline"
