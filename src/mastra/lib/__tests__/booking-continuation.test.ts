@@ -51,6 +51,7 @@ describe('SAN-1149 same-turn booking continuation', () => {
     const requestContext = {get:(key:string)=>values.get(key),set:(key:string,value:unknown)=>{values.set(key,value)}};
     rememberGroundedRestaurantSearch(requestContext,grounded);
     expect(continueAfterSearch({stepNumber:0,messages:user,steps:[],requestContext})).toBe(false);
+    expect(requestContext.get('mdeaiRestaurantBookingSearch')).toBeNull();
     expect(continueAfterSearch({stepNumber:1,messages:user,steps:[],requestContext})).toBe(false);
     rememberGroundedRestaurantSearch(requestContext,grounded);
     // A receipt by itself is not evidence that a real search happened in this run.

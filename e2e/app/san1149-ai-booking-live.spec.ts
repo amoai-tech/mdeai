@@ -5,7 +5,7 @@ import {
   createThrowawayIdentity, deleteThrowawayIdentity, getSupabaseAdmin,
   hasE2eEnv, signInAsOnOrigin, getTestSession,
 } from "../helpers/auth";
-import { sendConciergeMessage } from "../helpers/maps-layout";
+import { ensureChatInputVisible, sendConciergeMessage } from "../helpers/maps-layout";
 import { asUser } from "../helpers/rental-journey-fixture";
 
 /** Real Gemini → CopilotKit v2 → Mastra → HITL → API → live Supabase.
@@ -23,8 +23,7 @@ async function askAgentToPrepare(page: Page, email: string, baseURL: string) {
   // for a pre-message /info response made cold local runs fail without ever
   // exercising Mastra. The shared submit helper watches the actual request.
   await page.goto(new URL("/chat", baseURL).toString());
-  await page.getByTestId("copilot-chat-region").getByRole("textbox").first()
-    .waitFor({ state: "visible", timeout: 45_000 });
+  await ensureChatInputVisible(page, 45_000);
   await sendConciergeMessage(page,
     "Find Verdeo restaurant in El Poblado. Prepare a table request for two on " +
     "November 15 2026 at 7 PM Medellin. Contact name SAN-1149 QA, email " +

@@ -153,14 +153,34 @@ export async function waitForCopilotRuntime(page: Page) {
   await ensureChatInputVisible(page);
 }
 
-export async function ensureChatInputVisible(page: Page) {
+/** Wait until the composer can accept input, not just until it is painted.
+ * Saved history keeps CopilotChat mounted but inert during loading/errors. */
+export async function ensureChatInputVisible(page: Page, timeoutMs = 15_000) {
   const input = page.getByTestId("copilot-chat-region").getByRole("textbox").first();
-  if (await input.isVisible().catch(() => false)) return;
-  const open = page.getByRole("button", { name: /open chat/i });
-  if (await open.isVisible().catch(() => false)) {
-    await open.click();
+  if (!(await input.isVisible().catch(() => false))) {
+    const open = page.getByRole("button", { name: /open chat/i });
+    if (await open.isVisible().catch(() => false)) {
+      await open.click();
+    }
   }
-  await input.waitFor({ state: "visible", timeout: 15_000 });
+  await input.waitFor({ state: "visible", timeout: timeoutMs });
+  const status = await page.waitForFunction(
+    () => {
+      const region = document.querySelector('[data-testid="copilot-chat-region"]');
+      if (!region) return false;
+      if (region.querySelector('[data-testid="saved-history-error"]')) return "error";
+      if (region.querySelector('[data-testid="saved-history-loading"], [inert], [aria-busy="true"]')) {
+        return false;
+      }
+      return "ready";
+    },
+    undefined,
+    { timeout: timeoutMs },
+  );
+  if (await status.jsonValue() === "error") {
+    throw new Error("Saved chat history failed to load; refusing to send from an inert composer.");
+  }
+  await expect(input).toBeEditable({ timeout: timeoutMs });
 }
 
 /** One fill plus one submit attempt (multi-strategy send cascade). */
