@@ -170,9 +170,11 @@ export function RestaurantCard({
         : null;
   const blurb = aiSummary?.trim() || neighborhood?.trim() || null;
 
-  const preview = () => onSelect?.();
+  // Selection is a click/activation concern. Hover and focus must not select: a pointer preview
+  // would toggle an already-selected card off, and a click right after preview would clear it.
+  const select = () => onSelect?.();
   const openDetails = () => {
-    preview();
+    select();
     onOpenDetails?.();
   };
 
@@ -231,7 +233,7 @@ export function RestaurantCard({
             data-testid={bookingTestId}
             onClick={(e) => {
               e.stopPropagation();
-              preview();
+              select();
               onBookRequest();
             }}
           >
@@ -252,11 +254,10 @@ export function RestaurantCard({
       composition={composition}
       mediaLayout={mediaLayout}
       ariaLabel={`Restaurant: ${title}${neighborhood ? `, ${neighborhood}` : ""}`}
-      onPreview={preview}
       bodyRole={onOpenDetails ? "button" : undefined}
       bodyTabIndex={onOpenDetails ? 0 : undefined}
       bodyAriaLabel={onOpenDetails ? `Open details for ${title}` : undefined}
-      onBodyClick={onOpenDetails ? openDetails : preview}
+      onBodyClick={onOpenDetails ? openDetails : select}
       onBodyKeyDown={
         onOpenDetails
           ? (e) => {
