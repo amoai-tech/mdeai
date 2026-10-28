@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { VenueCardShell } from "@/components/browse/venue-card-shell";
 import { VenueCardPlaceholder } from "@/components/browse/venue-card-placeholder";
-import { EVENT_TIME_ZONE, formatEventCardPrice } from "@/lib/events/format-event";
+import { formatEventCardPrice, formatEventStartsAt } from "@/lib/events/format-event";
 import type { PublishedEventListItem } from "@/lib/events/list-published-events";
 import type { EventCategory } from "@/mastra/tools/search-events";
 import { cn } from "@/lib/utils";
@@ -15,6 +15,8 @@ type EventBrowseCardProps = {
   mediaLayout?: "inline" | "cover";
   selectedForAsk?: boolean;
   onAskSelect?: () => void;
+  /** Present only when the event has a real map pin; the same ID the shared map uses. */
+  pinId?: string;
 };
 
 const CATEGORY_LABELS: Record<EventCategory, string> = {
@@ -24,21 +26,6 @@ const CATEGORY_LABELS: Record<EventCategory, string> = {
   sport: "Sport",
   nightlife: "Nightlife",
 };
-
-function formatStartsAt(iso: string) {
-  try {
-    return new Intl.DateTimeFormat("en-US", {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-      timeZone: EVENT_TIME_ZONE,
-    }).format(new Date(iso));
-  } catch {
-    return iso;
-  }
-}
 
 function EventBrowseCardMedia({
   imageUrl,
@@ -85,6 +72,7 @@ export function EventBrowseCard({
   mediaLayout = "cover",
   selectedForAsk,
   onAskSelect,
+  pinId,
 }: EventBrowseCardProps) {
   const detailsHref = `/events/${event.slug}`;
   const priceLabel =
@@ -98,6 +86,8 @@ export function EventBrowseCard({
     <VenueCardShell
       testId="event-card"
       resultKind="event"
+      pinId={pinId}
+      selected={selectedForAsk}
       composition={composition}
       mediaLayout={mediaLayout}
       ariaLabel={`Event: ${event.title}${event.neighborhood ? `, ${event.neighborhood}` : ""}`}
@@ -109,63 +99,57 @@ export function EventBrowseCard({
         />
       }
       footer={
-        <div className="flex w-full flex-wrap items-center justify-between gap-2">
-          {onAskSelect ? <Button type="button" size="sm" variant={selectedForAsk ? "secondary" : "outline"}
+        <div className="flex w-full flex-wrap items-center justify-between gap-x-2 gap-y-1">
+          {/* One secondary toggle: selecting an event also highlights its marker and sets the Ask MDE context. */}
+          {onAskSelect ? <Button type="button" size="sm" variant="ghost" className="-ml-2 text-muted-foreground"
             data-testid="event-ask-select" aria-pressed={Boolean(selectedForAsk)} onClick={onAskSelect}>
             {selectedForAsk ? "Clear selection" : "Ask about this"}
-          </Button> : null}
-          <Link
-            href={detailsHref}
-            data-testid="event-details-cta"
-            className={cn(buttonVariants({ size: "sm", variant: "outline" }))}
-          >
-            Details
-          </Link>
-          {!event.canBuyTickets ? null : event.ticketUrl.startsWith("http") ? (
+          </Button> : <span />}
+          <div className="ml-auto flex items-center gap-2">
+            {/* Details is the primary action unless a real ticket offer exists; then Buy is. */}
             <Link
-              href={event.ticketUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              data-testid="event-buy-cta"
-              className={cn(buttonVariants({ size: "sm", variant: "default" }))}
+              href={detailsHref}
+              data-testid="event-details-cta"
+              className={cn(buttonVariants({ size: "sm", variant: event.canBuyTickets ? "outline" : "default" }))}
             >
-              <Ticket data-icon="inline-start" aria-hidden />
-              Buy tickets
+              Details
             </Link>
-          ) : (
-            <Button
-              size="sm"
-              variant="default"
-              nativeButton={false}
-              render={
-                <Link
-                  href={detailsHref}
-                  data-testid="event-buy-cta"
-                />
-              }
-            >
-              <Ticket data-icon="inline-start" aria-hidden />
-              Buy tickets
-            </Button>
-          )}
+            {!event.canBuyTickets ? null : event.ticketUrl.startsWith("http") ? (
+              <Link
+                href={event.ticketUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                data-testid="event-buy-cta"
+                className={cn(buttonVariants({ size: "sm", variant: "default" }))}
+              >
+                <Ticket data-icon="inline-start" aria-hidden />
+                Buy tickets
+              </Link>
+            ) : (
+              <Button
+                size="sm"
+                variant="default"
+                nativeButton={false}
+                render={<Link href={detailsHref} data-testid="event-buy-cta" />}
+              >
+                <Ticket data-icon="inline-start" aria-hidden />
+                Buy tickets
+              </Button>
+            )}
+          </div>
         </div>
       }
     >
-      {event.neighborhood ? (
-        <p className="text-[11px] font-medium text-muted-foreground">
-          {event.neighborhood}
-        </p>
-      ) : null}
-      <h3 className="font-medium leading-snug">{event.title}</h3>
-      <div className="mt-1.5 flex flex-wrap gap-1.5">
-        <Badge variant="secondary">
-          {CATEGORY_LABELS[event.category]}
-        </Badge>
-        <Badge variant="outline">{priceLabel}</Badge>
-      </div>
-      <p className="mt-2 line-clamp-2 text-xs leading-5 text-muted-foreground">
-        {event.venue} · {formatStartsAt(event.startsAt)}
+      <p className="text-xs font-semibold text-primary">{formatEventStartsAt(event.startsAt)}</p>
+      <h3 className="mt-0.5 font-semibold leading-snug">{event.title}</h3>
+      <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
+        {event.venue}
+        {event.neighborhood && !event.venue.includes(event.neighborhood) ? ` · ${event.neighborhood}` : ""}
       </p>
+      <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+        <span className="text-sm font-semibold" data-testid="event-price-label">{priceLabel}</span>
+        <Badge variant="secondary">{CATEGORY_LABELS[event.category]}</Badge>
+      </div>
     </VenueCardShell>
   );
 }

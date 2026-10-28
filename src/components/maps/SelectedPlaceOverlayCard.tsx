@@ -64,13 +64,15 @@ export function SelectedPlaceOverlayCard({ pin }: SelectedPlaceOverlayCardProps)
           </div>
         ) : (
           <div
-            className="flex h-32 items-center justify-center bg-muted text-4xl"
+            // Events have no photo to show: a short glyph strip, so the date and Details come into view sooner.
+            className={pin.category === "event" ? "flex h-14 items-center justify-center bg-muted text-3xl" : "flex h-32 items-center justify-center bg-muted text-4xl"}
             data-testid="selected-place-overlay-photo-placeholder"
             aria-hidden
           >
             {glyph}
           </div>
         )}
+        {pin.category === "event" ? null : (
         <div className="absolute right-2 top-2 flex gap-1.5">
           <button
             type="button"
@@ -93,6 +95,7 @@ export function SelectedPlaceOverlayCard({ pin }: SelectedPlaceOverlayCardProps)
             +
           </button>
         </div>
+        )}
       </div>
 
       <div className="space-y-2 p-3">
@@ -129,6 +132,16 @@ export function SelectedPlaceOverlayCard({ pin }: SelectedPlaceOverlayCardProps)
           >
             {editorial}
           </p>
+        ) : null}
+        {meta.detailsPath ? (
+          // Same-site Details page (events); plain link so it works inside the map's own portal.
+          <a
+            href={meta.detailsPath}
+            className="inline-flex min-h-9 items-center rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground hover:bg-primary/90"
+            data-testid="selected-place-overlay-details"
+          >
+            View details
+          </a>
         ) : null}
         <OverlayMapCtas
           mapsUrl={mapsUrl}

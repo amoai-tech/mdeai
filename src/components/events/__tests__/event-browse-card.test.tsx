@@ -95,4 +95,34 @@ describe("EventBrowseCard", () => {
     expect(html).toContain("https://cdn.example.com/event.jpg");
     expect(html).toContain('alt="Salsa Night"');
   });
+
+  it("leads with the Medellín-local date, then title, venue and the real price", () => {
+    const html = renderToStaticMarkup(<EventBrowseCard event={{ ...event, startsAt: "2026-10-19T21:00:00.000Z" }} />);
+    const at = (needle: string) => html.indexOf(needle);
+    expect(at("Mon, Oct 19, 4:00 PM")).toBeGreaterThan(-1);
+    expect(at("Mon, Oct 19, 4:00 PM")).toBeLessThan(at("<h3"));
+    expect(at("<h3")).toBeLessThan(at("Club Social"));
+    expect(at("Club Social")).toBeLessThan(at('data-testid="event-price-label"'));
+    expect(html).toContain("Laureles");
+  });
+
+  it("shares one selection: the shared pin id is on the card, selecting highlights it, and there is no separate map button", () => {
+    const html = renderToStaticMarkup(<EventBrowseCard event={event} pinId="event-evt-1" selectedForAsk onAskSelect={() => {}} />);
+    expect(html).toContain('data-pin-id="event-evt-1"');
+    expect(html).toContain('data-selected="true"');
+    expect(html).not.toContain("event-map-select");
+    const without = renderToStaticMarkup(<EventBrowseCard event={event} />);
+    expect(without).not.toContain("data-pin-id");
+    expect(without).toContain('data-selected="false"');
+  });
+
+  it("keeps one dominant action: Buy beside an outline Details when tickets are real, Details alone otherwise", () => {
+    const withBuy = renderToStaticMarkup(<EventBrowseCard event={event} />);
+    const detailsTag = (html: string) => html.slice(html.lastIndexOf("<a", html.indexOf('data-testid="event-details-cta"')), html.indexOf(">", html.indexOf('data-testid="event-details-cta"')));
+    expect(withBuy).toContain('data-testid="event-buy-cta"');
+    expect(detailsTag(withBuy)).toContain("border-border");
+    const noBuy = renderToStaticMarkup(<EventBrowseCard event={{ ...event, pricePerTicket: null, canBuyTickets: false }} />);
+    expect(noBuy).not.toContain('data-testid="event-buy-cta"');
+    expect(detailsTag(noBuy)).not.toContain("border-border");
+  });
 });

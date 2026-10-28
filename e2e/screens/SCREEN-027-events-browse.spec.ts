@@ -57,7 +57,60 @@ test.describe("SCREEN-027 /events browse", () => {
     await expect(page).toHaveURL(/category=music/, { timeout: 15_000 });
     await expect(
       categoryFilters.getByRole("link", { name: "Music" }),
-    ).toHaveAttribute("aria-pressed", "true");
+    ).toHaveAttribute("aria-current", "true");
+    assertConsoleHygiene(errors);
+  });
+
+  test("phone: secondary filters collapse behind More filters, results stay in one column", async ({
+    page,
+  }) => {
+    const errors = attachConsoleWatcher(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await gotoBrowseRoute(page, "/events");
+    const more = page.getByTestId("events-filter-more");
+    await expect(more).toHaveAttribute("aria-expanded", "false");
+    await expect(page.getByRole("group", { name: "Price filters" })).toBeHidden();
+    // Retry the click until React has hydrated the button; only click while still collapsed.
+    await expect(async () => {
+      if ((await more.getAttribute("aria-expanded")) !== "true") await more.click();
+      await expect(more).toHaveAttribute("aria-expanded", "true", { timeout: 1_000 });
+    }).toPass();
+    await expect(page.getByRole("group", { name: "Price filters" })).toBeVisible();
+    await page.getByTestId("events-filter-price-paid").click();
+    await expect(page).toHaveURL(/price=paid/, { timeout: 15_000 });
+    // An applied secondary filter stays visible after navigation.
+    await expect(page.getByRole("group", { name: "Price filters" })).toBeVisible();
+    await expect(page.getByTestId("events-filter-price-paid")).toHaveAttribute("aria-current", "true");
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+    );
+    expect(overflow).toBe(false);
+    assertConsoleHygiene(errors);
+  });
+
+  test("desktop: results use the pane they have, one column beside the map or two without it", async ({
+    page,
+  }) => {
+    const errors = attachConsoleWatcher(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await gotoBrowseRoute(page, "/events");
+    const cards = page.getByTestId("event-card");
+    await expect(page.getByTestId("events-browse").first()).toBeVisible();
+    if ((await cards.count()) < 2) test.skip(true, "Needs two published events");
+    await expect(cards.nth(0)).toBeVisible();
+    await expect(cards.nth(1)).toBeVisible();
+    const mapShown = (await page.getByTestId("browse-map-panel").count()) > 0;
+    // Poll: the page can re-render once while hydrating, which briefly detaches a card.
+    await expect
+      .poll(async () => {
+        const [a, b] = await Promise.all([cards.nth(0).boundingBox(), cards.nth(1).boundingBox()]);
+        if (!a || !b) return "pending";
+        // With a map column the center pane is narrow, so cards stack; with no map they sit side by side.
+        const stacked = Math.abs(a.x - b.x) < 4 && b.y > a.y;
+        const sideBySide = Math.abs(a.y - b.y) < 4 && b.x > a.x;
+        return mapShown ? (stacked ? "ok" : "not stacked") : sideBySide ? "ok" : "not side by side";
+      })
+      .toBe("ok");
     assertConsoleHygiene(errors);
   });
 
@@ -78,7 +131,10 @@ test.describe("SCREEN-027 /events browse", () => {
   test("sidebar Events nav links to browse catalog", async ({ page }) => {
     const errors = attachConsoleWatcher(page);
     await gotoBrowseRoute(page, "/");
-    const eventsLink = page.getByTestId("nav-events-link");
+    const eventsLink = page
+      .getByRole("navigation", { name: "Site verticals" })
+      .getByRole("link", { name: "Events" });
+    await expect(eventsLink).toBeVisible();
     await expect(eventsLink).not.toHaveAttribute("aria-disabled", "true");
     await eventsLink.click();
     await expect(page).toHaveURL(/\/events/, { timeout: 15_000 });
