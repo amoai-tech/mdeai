@@ -37,7 +37,7 @@ export function EventDetailNavigation({ eventName, returnPath, backTo = "events"
   return (
         <header className="border-b border-border/70 bg-background/95 backdrop-blur">
           <nav aria-label="Event navigation"
-            className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
+            className="mx-auto flex max-w-6xl items-center justify-between gap-3 py-3 pl-4 pr-20 lg:pr-4">
             <Link href={backTo === "chat" ? "/chat" : "/events"} data-testid="event-back"
               className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "gap-1.5")}>
               <ArrowLeft className="size-4" aria-hidden /> {backTo === "chat" ? "Back to chat" : "Back to Events"}
@@ -78,7 +78,8 @@ export function EventDetailHero({ imageUrl, eventName, startsAt }: { imageUrl: s
                   <span className="text-7xl font-semibold leading-none tracking-tight" data-testid="event-date-tile-day">{part({ day: "numeric" })}</span>
                   <span className="text-xl font-medium">{part({ month: "long" })}</span>
                   <span className="text-sm text-primary/70">{part({ weekday: "long" })}</span>
-                  <span className="mt-3 text-xs text-primary/60">Event photo not available</span>
+                  <span className="text-sm font-medium text-primary/80">{part({ year: "numeric" })}</span>
+                  <span className="mt-2 text-xs text-primary/70">Event photo not available</span>
                 </div>
               )}
             </div>

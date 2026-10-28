@@ -34,6 +34,7 @@ export function formatEventSchedule(startsAt: string, endsAt: string | null): st
     weekday: "short",
     month: "short",
     day: "numeric",
+    year: "numeric",
     hour: "numeric",
     minute: "2-digit",
     timeZone: EVENT_TIME_ZONE,
@@ -54,7 +55,7 @@ export function formatEventSchedule(startsAt: string, endsAt: string | null): st
   const endLabel = sameDay
     ? new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZone: EVENT_TIME_ZONE }).format(end)
     : new Intl.DateTimeFormat("en-US", {
-        weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+        weekday: "short", month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit",
         timeZone: EVENT_TIME_ZONE,
       }).format(end);
 

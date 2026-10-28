@@ -47,6 +47,9 @@ describe("SAN-1600 public detail journeys", () => {
     expect(screen.queryByTestId("event-directions")).toBeNull();
     expect(screen.getByTestId("event-location-unconfirmed").textContent).toContain("not been confirmed");
     expect(screen.getByTestId("event-image-placeholder").textContent).toContain("photo not available");
+    expect(screen.getByRole("heading", { name: "Tickets" }).className).toContain("sr-only");
+    expect(screen.getByTestId("event-tier-empty").textContent).toContain("No ticket tiers are listed");
+    expect(screen.getByRole("navigation", { name: "Event navigation" }).className).toContain("pr-20");
     expect(screen.queryByText("Event photo coming soon")).toBeNull();
   });
 
@@ -77,6 +80,7 @@ describe("SAN-1600 public detail journeys", () => {
     expect(screen.getByTestId("event-date-tile-day").textContent).toBe("6");
     expect(tile.textContent).toContain("December");
     expect(tile.textContent).toContain("Sunday");
+    expect(tile.textContent).toContain("2026");
   });
 
   it("moves the stored listing notice out of About into a visible note", () => {

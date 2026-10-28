@@ -83,7 +83,7 @@ export function EventTicketTiers({
 
   return (
     <section aria-labelledby="event-tiers-heading">
-      <h2 id="event-tiers-heading" className="text-lg font-semibold">
+      <h2 id="event-tiers-heading" className={event.tickets.length === 0 ? "sr-only" : "text-lg font-semibold"}>
         Tickets
       </h2>
       {event.tickets.length > 0 && fromTier === null ? (
@@ -98,10 +98,10 @@ export function EventTicketTiers({
       <ul className="mt-3 space-y-3" data-testid="event-tier-list">
         {event.tickets.length === 0 ? (
           <li
-            className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground"
+            className="py-1 text-sm leading-6 text-muted-foreground"
             data-testid="event-tier-empty"
           >
-            Ticket tiers coming soon. Check back or ask the concierge in chat.
+            No ticket tiers are listed for this event. Ask MDE or check with the organizer for updates.
           </li>
         ) : (
           event.tickets.map((tier) => {
