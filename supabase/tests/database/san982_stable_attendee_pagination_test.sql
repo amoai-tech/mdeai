@@ -2,7 +2,7 @@
 -- sharing ONE order timestamp. All test rows roll back.
 begin;
 set local search_path = public, extensions;
-select plan(13);
+select plan(15);
 
 create temp table san982_actor (host_id uuid, outsider_id uuid, event_id uuid, order_id uuid);
 do $fixture$
@@ -54,6 +54,24 @@ set local role authenticated;
 select throws_ok($$select public.event_attendees_paginated((select event_id from san982_actor),'',50,0)$$,
   '42501','UNAUTHENTICATED','authenticated role with no user identity sees no attendees');
 reset role;
+-- Regression for SAN-982: a signed-in DB role cannot spoof the service-role
+-- JWT GUC to bypass organizer authorization when no verified auth.uid() exists.
+select set_config('request.jwt.claim.sub','',true);
+select set_config('request.jwt.claim.role','service_role',true);
+set local role authenticated;
+select throws_ok($$select public.event_attendees_paginated((select event_id from san982_actor),'',50,0)$$,
+  '42501','UNAUTHENTICATED','forged legacy service_role JWT claim cannot read attendee PII');
+reset role;
+-- The newer JSON claims container must not become another impersonation path.
+select set_config('request.jwt.claim.role','',true);
+select set_config('request.jwt.claims','{"role":"service_role"}',true);
+set local role authenticated;
+select throws_ok($$select public.event_attendees_paginated((select event_id from san982_actor),'',50,0)$$,
+  '42501','UNAUTHENTICATED','forged JSON-only service_role claim cannot read attendee PII');
+reset role;
+select set_config('request.jwt.claims','',true);
+select set_config('request.jwt.claim.role','authenticated',true);
+
 -- Trusted service role retains its documented server-side read path.
 select set_config('request.jwt.claim.role','service_role',true);
 set local role service_role;
