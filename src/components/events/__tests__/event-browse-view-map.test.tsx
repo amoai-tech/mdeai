@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PublishedEventListItem } from "@/lib/events/list-published-events";
 import type { DiscoveryAgentResult } from "@/components/chat/discovery-tool-results";
@@ -95,6 +96,19 @@ describe("EventBrowseView — one selected event", () => {
     await user.click(askFor("b")); // "Clear selection"
     expect(ctx()).toBe("");
     expect(mapPin()).toBe("");
+  });
+
+  it("behaves the same under React StrictMode (double render): A → marker B → close clears everything", async () => {
+    const user = userEvent.setup();
+    render(<StrictMode><EventBrowseView {...props} results={[A, B]} /></StrictMode>);
+    await user.click(askFor("a"));
+    expect(ctx()).toBe("a");
+    await user.click(await screen.findByTestId("marker-event-b"));
+    expect(ctx()).toBe("b");
+    expect(pressed("a")).toBe("false");
+    await user.click(screen.getByTestId("info-close"));
+    expect(ctx()).toBe("");
+    expect(pressed("b")).toBe("false");
   });
 
   it("clicking marker B selects card B and points Ask MDE at B; closing the info card clears both", async () => {
