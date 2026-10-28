@@ -1,9 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { DiscoveryAgentResult } from "@/components/chat/discovery-tool-results";
 import { CalendarDays } from "lucide-react";
+import { BrowseMapContextShell } from "@/components/browse/BrowseMapContextShell";
+import { BrowseMapPanel } from "@/components/browse/BrowseMapPanel";
+import { BrowseMapSheet } from "@/components/browse/BrowseMapSheet";
 import { DiscoveryWorkspace } from "@/components/browse/DiscoveryWorkspace";
 import { DiscoveryAskComposer } from "@/components/chat/discovery-ask-composer";
 import { DiscoveryPageContext } from "@/components/chat/discovery-page-context";
@@ -11,7 +14,11 @@ import { EventBrowseCard } from "@/components/events/event-browse-card";
 import { EventBrowseFilters } from "@/components/events/event-browse-filters";
 import { EmptyState } from "@/components/empty/empty-state";
 import { Button } from "@/components/ui/button";
+import { useBrowseCardScroll } from "@/hooks/use-browse-card-scroll";
+import { useBrowseMapSync } from "@/hooks/use-browse-map-sync";
+import { eventToMapPin } from "@/lib/browse/browse-pin-converters";
 import type { PublishedEventListItem } from "@/lib/events/list-published-events";
+import { useMapContext } from "@/platform/maps/map-context";
 import type { DateWindow, EventCategory } from "@/mastra/tools/search-events";
 
 function buildFilterUrl(filters: {
@@ -41,7 +48,7 @@ type EventBrowseViewProps = {
   price: "free" | "paid" | null;
 };
 
-export function EventBrowseView({
+function EventBrowseViewInner({
   results,
   total,
   error,
@@ -50,6 +57,7 @@ export function EventBrowseView({
   dateWindow,
   price,
 }: EventBrowseViewProps) {
+  const { selectedPinId, panToPin } = useMapContext();
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [resolved, setResolved] = useState<{ scope: string; rows: PublishedEventListItem[] } | null>(null);
   const [lookupError, setLookupError] = useState<string | null>(null);
@@ -96,6 +104,19 @@ export function EventBrowseView({
   const shownEvents = resolved?.scope === scope ? resolved.rows : results;
   // A selection is valid only while its real card is in the current result set.
   const selectedId = shownEvents.some((event) => event.id === selectedEventId) ? selectedEventId : null;
+  // Pins come only from the events shown right now and only from saved coordinates, so a filter or
+  // Ask change replaces them together with the cards and an event without a position stays card-only.
+  const pins = useMemo(
+    () => (error ? [] : shownEvents.flatMap((event) => {
+      const pin = eventToMapPin(event);
+      return pin ? [pin] : [];
+    })),
+    [shownEvents, error],
+  );
+  useBrowseMapSync(pins, "event");
+  useBrowseCardScroll();
+  const pinIds = useMemo(() => new Set(pins.map((pin) => pin.id)), [pins]);
+  const hasMap = pins.length > 0;
   const retryHref = buildFilterUrl({
     category,
     neighborhood,
@@ -114,6 +135,8 @@ export function EventBrowseView({
         category, neighborhood, dateWindow,
         onEventIds: (ids) => void resolveIds(ids),
       }} />}
+      rightPanel={hasMap ? <BrowseMapPanel fill /> : undefined}
+      mobileMapTrigger={hasMap ? <BrowseMapSheet inline /> : null}
       testId="events-browse"
       title="Events in Medellín"
       subtitle={`Published events — ${countLabel}`}
@@ -171,19 +194,30 @@ export function EventBrowseView({
 
         {!error && shownEvents.length > 0 ? (
           <div
-            className="grid w-full grid-cols-1 gap-3 @3xl:grid-cols-2"
+            className={hasMap ? "grid w-full grid-cols-1 gap-3" : "grid w-full grid-cols-1 gap-3 @3xl:grid-cols-2"}
             aria-label={`${shownEvents.length} events`}
             data-testid="events-grid"
           >
-            {shownEvents.map((event) => (
+            {shownEvents.map((event) => {
+              const pinId = `event-${event.id}`;
+              const onMap = pinIds.has(pinId);
+              return (
               <EventBrowseCard key={event.id} event={event} mediaLayout="inline"
+                pinId={onMap ? pinId : undefined}
+                selectedForMap={onMap && selectedPinId === pinId}
+                onMapSelect={onMap ? () => panToPin(pinId) : undefined}
                 selectedForAsk={selectedId === event.id}
                 onAskSelect={() => setSelectedEventId((current) => current === event.id ? null : event.id)} />
-            ))}
+              );
+            })}
           </div>
         ) : null}
       </section>
     </DiscoveryWorkspace>
     </>
   );
+}
+
+export function EventBrowseView(props: EventBrowseViewProps) {
+  return <BrowseMapContextShell><EventBrowseViewInner {...props} /></BrowseMapContextShell>;
 }

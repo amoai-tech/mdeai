@@ -105,4 +105,16 @@ describe("EventBrowseCard", () => {
     expect(at("Club Social")).toBeLessThan(at('data-testid="event-price-label"'));
     expect(html).toContain("Laureles");
   });
+
+  it("offers View on map and the shared pin id only when the event has a real pin", () => {
+    const withPin = renderToStaticMarkup(
+      <EventBrowseCard event={event} pinId="event-evt-1" selectedForMap onMapSelect={() => {}} />,
+    );
+    expect(withPin).toContain('data-pin-id="event-evt-1"');
+    expect(withPin).toContain('data-testid="event-map-select"');
+    expect(withPin).toContain("Selected on map");
+    const without = renderToStaticMarkup(<EventBrowseCard event={event} />);
+    expect(without).not.toContain("event-map-select");
+    expect(without).not.toContain("data-pin-id");
+  });
 });

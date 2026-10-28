@@ -1,10 +1,10 @@
 import Link from "next/link";
-import { CalendarDays, Ticket } from "lucide-react";
+import { CalendarDays, MapPin, Ticket } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { VenueCardShell } from "@/components/browse/venue-card-shell";
 import { VenueCardPlaceholder } from "@/components/browse/venue-card-placeholder";
-import { EVENT_TIME_ZONE, formatEventCardPrice } from "@/lib/events/format-event";
+import { formatEventCardPrice, formatEventStartsAt } from "@/lib/events/format-event";
 import type { PublishedEventListItem } from "@/lib/events/list-published-events";
 import type { EventCategory } from "@/mastra/tools/search-events";
 import { cn } from "@/lib/utils";
@@ -15,6 +15,10 @@ type EventBrowseCardProps = {
   mediaLayout?: "inline" | "cover";
   selectedForAsk?: boolean;
   onAskSelect?: () => void;
+  /** Present only when the event has a real map pin; the same ID the shared map uses. */
+  pinId?: string;
+  selectedForMap?: boolean;
+  onMapSelect?: () => void;
 };
 
 const CATEGORY_LABELS: Record<EventCategory, string> = {
@@ -24,21 +28,6 @@ const CATEGORY_LABELS: Record<EventCategory, string> = {
   sport: "Sport",
   nightlife: "Nightlife",
 };
-
-function formatStartsAt(iso: string) {
-  try {
-    return new Intl.DateTimeFormat("en-US", {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-      timeZone: EVENT_TIME_ZONE,
-    }).format(new Date(iso));
-  } catch {
-    return iso;
-  }
-}
 
 function EventBrowseCardMedia({
   imageUrl,
@@ -85,6 +74,9 @@ export function EventBrowseCard({
   mediaLayout = "cover",
   selectedForAsk,
   onAskSelect,
+  pinId,
+  selectedForMap,
+  onMapSelect,
 }: EventBrowseCardProps) {
   const detailsHref = `/events/${event.slug}`;
   const priceLabel =
@@ -98,6 +90,8 @@ export function EventBrowseCard({
     <VenueCardShell
       testId="event-card"
       resultKind="event"
+      pinId={pinId}
+      selected={selectedForMap}
       composition={composition}
       mediaLayout={mediaLayout}
       ariaLabel={`Event: ${event.title}${event.neighborhood ? `, ${event.neighborhood}` : ""}`}
@@ -110,6 +104,11 @@ export function EventBrowseCard({
       }
       footer={
         <div className="flex w-full flex-wrap items-center justify-between gap-2">
+          {pinId && onMapSelect ? <Button type="button" size="sm" variant={selectedForMap ? "secondary" : "outline"}
+            data-testid="event-map-select" aria-pressed={Boolean(selectedForMap)} onClick={onMapSelect}>
+            <MapPin className="size-3.5" aria-hidden />
+            {selectedForMap ? "Selected on map" : "View on map"}
+          </Button> : null}
           {onAskSelect ? <Button type="button" size="sm" variant={selectedForAsk ? "secondary" : "outline"}
             data-testid="event-ask-select" aria-pressed={Boolean(selectedForAsk)} onClick={onAskSelect}>
             {selectedForAsk ? "Clear selection" : "Ask about this"}
@@ -151,7 +150,7 @@ export function EventBrowseCard({
         </div>
       }
     >
-      <p className="text-xs font-semibold text-primary">{formatStartsAt(event.startsAt)}</p>
+      <p className="text-xs font-semibold text-primary">{formatEventStartsAt(event.startsAt)}</p>
       <h3 className="mt-0.5 font-medium leading-snug">{event.title}</h3>
       <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
         {event.venue}

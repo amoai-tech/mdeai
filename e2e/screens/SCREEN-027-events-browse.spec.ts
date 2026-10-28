@@ -88,7 +88,7 @@ test.describe("SCREEN-027 /events browse", () => {
     assertConsoleHygiene(errors);
   });
 
-  test("desktop: results fill the pane in two columns when there are two or more events", async ({
+  test("desktop: results use the pane they have, one column beside the map or two without it", async ({
     page,
   }) => {
     const errors = attachConsoleWatcher(page);
@@ -97,12 +97,20 @@ test.describe("SCREEN-027 /events browse", () => {
     const cards = page.getByTestId("event-card");
     await expect(page.getByTestId("events-browse").first()).toBeVisible();
     if ((await cards.count()) < 2) test.skip(true, "Needs two published events");
+    await expect(cards.nth(0)).toBeVisible();
     await expect(cards.nth(1)).toBeVisible();
-    const [a, b] = await Promise.all([cards.nth(0).boundingBox(), cards.nth(1).boundingBox()]);
-    expect(a).not.toBeNull();
-    expect(b).not.toBeNull();
-    expect(Math.abs(a!.y - b!.y)).toBeLessThan(4);
-    expect(b!.x).toBeGreaterThan(a!.x);
+    const mapShown = (await page.getByTestId("browse-map-panel").count()) > 0;
+    // Poll: the page can re-render once while hydrating, which briefly detaches a card.
+    await expect
+      .poll(async () => {
+        const [a, b] = await Promise.all([cards.nth(0).boundingBox(), cards.nth(1).boundingBox()]);
+        if (!a || !b) return "pending";
+        // With a map column the center pane is narrow, so cards stack; with no map they sit side by side.
+        const stacked = Math.abs(a.x - b.x) < 4 && b.y > a.y;
+        const sideBySide = Math.abs(a.y - b.y) < 4 && b.x > a.x;
+        return mapShown ? (stacked ? "ok" : "not stacked") : sideBySide ? "ok" : "not side by side";
+      })
+      .toBe("ok");
     assertConsoleHygiene(errors);
   });
 

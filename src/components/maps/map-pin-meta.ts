@@ -10,6 +10,8 @@ export type MapPinPreviewMeta = {
   summary?: string;
   directionsUrl?: string;
   reviewsUrl?: string;
+  /** Same-site path to the item's own Details page (events). */
+  detailsPath?: string;
   photoAuthorAttributions?: GroundedPhotoAttribution[];
 };
 
@@ -38,6 +40,10 @@ export function parseMapPinPreviewMeta(
     typeof meta.directionsUrl === "string" ? meta.directionsUrl : undefined;
   const reviewsUrl =
     typeof meta.reviewsUrl === "string" ? meta.reviewsUrl : undefined;
+  const detailsPath =
+    typeof meta.detailsPath === "string" && /^\/(?!\/)/.test(meta.detailsPath)
+      ? meta.detailsPath
+      : undefined;
   const photoAuthorAttributions = Array.isArray(meta.photoAuthorAttributions)
     ? (meta.photoAuthorAttributions as GroundedPhotoAttribution[])
     : undefined;
@@ -51,6 +57,7 @@ export function parseMapPinPreviewMeta(
     summary,
     directionsUrl,
     reviewsUrl,
+    detailsPath,
     photoAuthorAttributions,
   };
 }

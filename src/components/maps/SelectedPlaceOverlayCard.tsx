@@ -130,6 +130,16 @@ export function SelectedPlaceOverlayCard({ pin }: SelectedPlaceOverlayCardProps)
             {editorial}
           </p>
         ) : null}
+        {meta.detailsPath ? (
+          // Same-site Details page (events); plain link so it works inside the map's own portal.
+          <a
+            href={meta.detailsPath}
+            className="inline-flex min-h-9 items-center rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground hover:bg-primary/90"
+            data-testid="selected-place-overlay-details"
+          >
+            View details
+          </a>
+        ) : null}
         <OverlayMapCtas
           mapsUrl={mapsUrl}
           directionsUrl={meta.directionsUrl}

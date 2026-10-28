@@ -46,4 +46,13 @@ describe("SelectedPlaceOverlayCard", () => {
     expect(html).toContain('data-testid="selected-place-overlay-photo-placeholder"');
     expect(html).toContain("☕");
   });
+
+  it("links an event pin to its own Details page, and ignores external or protocol-relative paths", () => {
+    const eventPin: MapPin = { ...groundedPin, id: "event-1", category: "event", meta: { detailsPath: "/events/salsa-night" } };
+    expect(renderToStaticMarkup(<SelectedPlaceOverlayCard pin={eventPin} />)).toContain('href="/events/salsa-night"');
+    for (const detailsPath of ["//evil.example/x", "https://evil.example/x"]) {
+      const html = renderToStaticMarkup(<SelectedPlaceOverlayCard pin={{ ...eventPin, meta: { detailsPath } }} />);
+      expect(html).not.toContain("selected-place-overlay-details");
+    }
+  });
 });

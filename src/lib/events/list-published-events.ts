@@ -27,6 +27,11 @@ export type PublishedEventListItem = {
   ticketUrl: string;
   category: EventCategory;
   status: "published";
+  /** Saved venue position; absent when the event has no valid coordinates. Never derived. */
+  latitude?: number;
+  longitude?: number;
+  /** Real Google Maps link saved on the event, when it is a valid http(s) URL. */
+  mapsUrl?: string;
 };
 
 export type ListPublishedEventsQuery = {
@@ -61,11 +66,31 @@ type EventBrowseRow = {
   primary_image_url: string | null;
   ticket_url: string | null;
   status: string;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
+  maps_url?: string | null;
   event_tickets?: EventTicketTier[];
 };
 
 const EVENT_LIST_SELECT =
-  "id, slug, name, event_type, address, city, event_start_time, currency, primary_image_url, ticket_url, status";
+  "id, slug, name, event_type, address, city, event_start_time, currency, primary_image_url, ticket_url, status, latitude, longitude, maps_url";
+
+/** Postgres numeric arrives as a string; only finite numbers are coordinates. */
+function toCoordinate(value: number | string | null | undefined): number | undefined {
+  if (value == null || value === "") return undefined;
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+function toHttpUrl(value: string | null | undefined): string | undefined {
+  if (!value) return undefined;
+  try {
+    const { protocol } = new URL(value);
+    return protocol === "https:" || protocol === "http:" ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 export function mapEventRowToBrowseItem(row: EventBrowseRow): PublishedEventListItem {
   const slug = row.slug?.trim() || row.id;
@@ -87,6 +112,9 @@ export function mapEventRowToBrowseItem(row: EventBrowseRow): PublishedEventList
     ticketUrl,
     category: mapCategory(row.event_type),
     status: "published",
+    latitude: toCoordinate(row.latitude),
+    longitude: toCoordinate(row.longitude),
+    mapsUrl: toHttpUrl(row.maps_url),
   };
 }
 
