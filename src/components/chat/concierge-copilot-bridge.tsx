@@ -56,13 +56,14 @@ type HitlRenderProps = {
   respond?: (result: unknown) => Promise<void>;
 };
 
-function createVenueBookingHitlRender() {
+export function createVenueBookingHitlRender() {
   return function VenueBookingHitlRender({
     args,
     status,
     result,
     respond,
   }: HitlRenderProps) {
+    const { setVenueBookingConfirmation } = useRentalUi();
     // CopilotKit streams tool arguments incrementally. Mount review only after
     // the complete, validated proposal is available; normalize the model's
     // venue-local/offset time to UTC before the first render and before Send.
@@ -96,13 +97,23 @@ function createVenueBookingHitlRender() {
             if (!saved.ok) {
               throw saved.error instanceof Error ? saved.error : new Error("Could not save the booking request.");
             }
-            await respond({
-              success: true,
-              requestId: saved.confirmation.requestId,
-              message: saved.confirmation.message,
-              venueTitle: saved.confirmation.venueTitle,
-            });
+            // The API returned a real persisted request ID: show that receipt
+            // immediately. CopilotKit may unmount the completed tool render,
+            // so relying on its later result event can lose the UI receipt.
+            setVenueBookingConfirmation(saved.confirmation);
             clearVenueBookingReview();
+            try {
+              await respond({
+                success: true,
+                requestId: saved.confirmation.requestId,
+                message: saved.confirmation.message,
+                venueTitle: saved.confirmation.venueTitle,
+              });
+            } catch (error) {
+              // The request is already persisted. Do not turn a failed agent
+              // acknowledgement into a misleading 'Send failed' retry prompt.
+              console.warn('[venue-booking] saved request; agent acknowledgement failed', error);
+            }
           }}
         />
       </>
