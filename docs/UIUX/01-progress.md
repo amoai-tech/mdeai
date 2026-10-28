@@ -60,7 +60,7 @@ Priority within each area follows Linear priority (P0 → P4), then state.
 | [SAN-972 — Events — Polish the Responsive Cards, Filters and Map Layout](https://linear.app/amo100/issue/SAN-972/events-polish-the-responsive-cards-filters-and-map-layout) | Backlog | ❓ | N/A | Events page live with filters, cards and inline Ask | No responsive/keyboard audit evidence recorded | — | Audit 320/390/768/1440 after #599 merges |
 | [SAN-1424 — MAP-013 · Resolve pasted Google Maps links and place names to stable Place IDs](https://linear.app/amo100/issue/SAN-1424/map-013-resolve-pasted-google-maps-links-and-place-names-to-stable) | Backlog | ❓ | N/A | Places/geocoding helpers exist | Pasted-link resolution unproven | — | Test a pasted Google Maps link |
 | [SAN-108 — MAP-023 — Static Maps API — event location previews + OG images](https://linear.app/amo100/issue/SAN-108/map-023-static-maps-api-event-location-previews-og-images) | Todo | 🔵 | N/A | — | No Static Maps usage located | — | Not started |
-| [SAN-1348 — MDE Accessibility — Test What Screen Readers Announce](https://linear.app/amo100/issue/SAN-1348/mde-accessibility-test-what-screen-readers-announce) | Backlog | 🟡 | N/A | Measured: 23–45 sub-24px targets on home, /rentals, /new-projects, /partners | No screen-reader pass recorded | — | Fix the measured touch targets, then run an AT pass |
+| [SAN-1348 — MDE Accessibility — Test What Screen Readers Announce](https://linear.app/amo100/issue/SAN-1348/mde-accessibility-test-what-screen-readers-announce) | Backlog | 🟡 | N/A | Measured: 13–45 sub-24px targets (`/rentals` worst: 29 at 320, 45 at 1024; home 23 at 320) | No screen-reader pass recorded | — | Fix the measured touch targets, then run an AT pass |
 
 ### 2 · Rentals
 

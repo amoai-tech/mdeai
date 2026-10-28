@@ -23,7 +23,7 @@ MDE is a **working discovery product with an unfinished venue surface and a merg
 | 5 | **The event journey cannot be exercised at all.** 49 published events, 0 in the next 14 days, 2 future (2026-12-06, 2027-02-24). | Supabase `events`; live "salsa events this weekend" → honest empty state | SAN-1600 / inventory | Seed development events across the next 60 days, labelled as development records |
 | 6 | **Guest chat silently answers with a fast path where it can, and offers sign-in only where it cannot.** A guest who types a free-form question gets cards but no AI answer and no explanation; a non-fast-path question gets the sign-in offer. | Live: `POST /api/copilotkit` → 401; `use-concierge-send-handlers.ts:71-77` shows `showSignInPrompt` only on the agent path | SAN-1145, SAN-1150-adjacent | Show the existing `SIGN_IN_REQUIRED_MESSAGE` next to fast-path results for guests |
 | 7 | **Rental cards without photos are dominated by a large grey "Photo" box.** | [`journey-02-rental-turn1`](screenshots/2026-10-28-audit/journey-02-rental-turn1.png): three cards, each with a ~200px empty media block | SAN-1140 (#599) | In the compact card, replace the empty media block with the existing neutral fallback at thumbnail size |
-| 8 | **Small touch targets on public pages.** 23–45 interactive targets under 24×24 CSS px depending on route/width (home 23 at 320, `/rentals` 45 at 1024). | Audit DOM measurement, 50 loads | SAN-1348, SAN-524 | Fix the measured offenders; 24×24 is the WCAG 2.2 floor, 44×44 the product goal |
+| 8 | **Small touch targets on public pages.** 13–45 interactive targets under 24×24 CSS px depending on route/width (`/rentals` 45 at 1024, 38 at 390/768, 29 at 320; home 23 at 320; `/new-projects` 17–18; `/partners` 13–14). | Audit DOM measurement, 50 loads | SAN-1348, SAN-524 | Fix the measured offenders; 24×24 is the WCAG 2.2 floor, 44×44 the product goal |
 | 9 | **The site emits a 401 to `/api/copilotkit` on every public page for every guest.** | Console error on all 10 routes, 5 widths each; response body `{"error":"unauthorized"}` | SAN-1592/SAN-1301 | Skip runtime connect when no session, or return a typed non-error payload |
 | 10 | **`/rentals` contradicts itself above the fold on mobile**: "42 apartments (showing 41)" with no explanation, and the first viewport is filters only. | [`rentals-390`](screenshots/2026-10-28-audit/_rentals-390.png) | SAN-1421 | Say which apartment is excluded and why, or stop excluding it |
 
@@ -150,7 +150,7 @@ Real project cards, real prices, no AI dependency, no login. This is the most co
 | Broken images | 0 | 0 | 0 | 0 | 0 | pass |
 | Composer present | /chat only | /chat | /chat, /events | /chat, /events | /chat, /events | partial: browse pages gate Ask behind sign-in |
 | Map column | rentals, restaurants | rentals, restaurants | + | + | + | **fail** for cafés, nightlife, events |
-| Targets < 24×24 px | 23–29 | 29–38 | 24–38 | 45 | 35 | **fail** WCAG 2.2 §2.5.8 |
+| Targets < 24×24 px (worst route) | 29 (`/rentals`) | 38 (`/rentals`) | 38 (`/rentals`) | 45 (`/rentals`) | 35 (`/rentals`) | **fail** WCAG 2.2 §2.5.8 |
 | Console 401 (guest runtime) | every route | every route | every route | every route | every route | noise, not user-visible |
 
 Keyboard, focus-visible, 200%/400% zoom and screen-reader announcement were **not** exercised in this audit; those remain SAN-1348's scope and are marked unknown rather than passed.
