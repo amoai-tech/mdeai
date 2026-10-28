@@ -13,6 +13,8 @@ type EventBrowseCardProps = {
   event: PublishedEventListItem;
   composition?: "legacy" | "nova";
   mediaLayout?: "inline" | "cover";
+  selectedForAsk?: boolean;
+  onAskSelect?: () => void;
 };
 
 const CATEGORY_LABELS: Record<EventCategory, string> = {
@@ -81,6 +83,8 @@ export function EventBrowseCard({
   event,
   composition = "nova",
   mediaLayout = "cover",
+  selectedForAsk,
+  onAskSelect,
 }: EventBrowseCardProps) {
   const detailsHref = `/events/${event.slug}`;
   const priceLabel =
@@ -106,6 +110,10 @@ export function EventBrowseCard({
       }
       footer={
         <div className="flex w-full flex-wrap items-center justify-between gap-2">
+          {onAskSelect ? <Button type="button" size="sm" variant={selectedForAsk ? "secondary" : "outline"}
+            data-testid="event-ask-select" aria-pressed={Boolean(selectedForAsk)} onClick={onAskSelect}>
+            {selectedForAsk ? "Clear selection" : "Ask about this"}
+          </Button> : null}
           <Link
             href={detailsHref}
             data-testid="event-details-cta"

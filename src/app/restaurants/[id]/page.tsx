@@ -11,6 +11,8 @@ import {
 import { RestaurantVotePanel, type ContestWindow } from "@/components/restaurants/restaurant-vote-panel";
 import { contestState } from "@/lib/restaurants/contest-state";
 import { VenueCardPlaceholder } from "@/components/browse/venue-card-placeholder";
+import { RestaurantReservationRequest } from "@/components/restaurants/restaurant-reservation-request";
+import { isRenderableRemoteImage } from "@/lib/images/remote-image-hosts";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +40,17 @@ export default async function RestaurantDetailPage({
     );
   }
 
-  const { restaurant } = lookup;
+  const { restaurant, listing } = lookup;
+  const renderableImages = listing.images
+    .map((image) => image.url)
+    .filter((url) => isRenderableRemoteImage(url));
+  const menuSections: { section: string; items: typeof listing.menu }[] = [];
+  for (const item of listing.menu) {
+    const section = item.section ?? "Menu";
+    const existing = menuSections.find((entry) => entry.section === section);
+    if (existing) existing.items.push(item);
+    else menuSections.push({ section, items: [item] });
+  }
   const meta = [restaurant.neighborhood, restaurant.cuisine].filter(Boolean).join(" · ");
   // priceTier/rating come from the catalog; unknown values stay unstated, never zero.
   const catalogRating =
@@ -111,6 +123,125 @@ export default async function RestaurantDetailPage({
         </p>
         {restaurant.aiSummary ? <p className="mt-3 text-sm text-foreground">{restaurant.aiSummary}</p> : null}
       </section>
+
+      <RestaurantReservationRequest
+        placeId={restaurant.placeId ?? undefined}
+        restaurantId={restaurant.id}
+        venueTitle={restaurant.name}
+      />
+
+      {listing.description ? (
+        <section className="mt-6" aria-labelledby="restaurant-about">
+          <h2 className="text-lg font-semibold" id="restaurant-about">
+            About
+          </h2>
+          <p className="mt-2 whitespace-pre-line text-sm text-foreground" data-testid="restaurant-public-description">
+            {listing.description}
+          </p>
+        </section>
+      ) : null}
+
+      {listing.website || listing.phone ? (
+        <section className="mt-6" aria-labelledby="restaurant-contact">
+          <h2 className="text-lg font-semibold" id="restaurant-contact">
+            Contact
+          </h2>
+          <div className="mt-2 flex flex-wrap gap-3 text-sm">
+            {listing.website ? (
+              <a
+                className="inline-flex min-h-11 items-center underline"
+                data-testid="restaurant-public-website"
+                href={listing.website}
+                rel="noopener noreferrer"
+                target="_blank"
+              >
+                Restaurant website
+              </a>
+            ) : null}
+            {listing.phone ? (
+              <a
+                className="inline-flex min-h-11 items-center underline"
+                data-testid="restaurant-public-phone"
+                href={"tel:" + listing.phone.replace(/[^+0-9]/g, "")}
+              >
+                {listing.phone}
+              </a>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
+
+      {listing.hours.length > 0 ? (
+        <section className="mt-6" aria-labelledby="restaurant-hours">
+          <h2 className="text-lg font-semibold" id="restaurant-hours">
+            Opening hours
+          </h2>
+          <dl className="mt-2 grid max-w-sm grid-cols-2 gap-1 text-sm" data-testid="restaurant-public-hours">
+            {listing.hours.map((entry) => (
+              <div key={entry.day} className="contents">
+                <dt className="capitalize text-muted-foreground">{entry.day}</dt>
+                <dd>
+                  {entry.open}–{entry.close}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+      ) : null}
+
+      {renderableImages.length > 0 ? (
+        <section className="mt-6" aria-labelledby="restaurant-photos">
+          <h2 className="text-lg font-semibold" id="restaurant-photos">
+            Photos
+          </h2>
+          <ul className="mt-2 grid grid-cols-2 gap-2" data-testid="restaurant-public-gallery">
+            {renderableImages.map((url) => (
+              <li key={url} className="overflow-hidden rounded-lg border">
+                <Image
+                  alt={restaurant.name}
+                  className="h-40 w-full object-cover"
+                  height={320}
+                  src={url}
+                  width={480}
+                />
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {menuSections.length > 0 ? (
+        <section className="mt-6" aria-labelledby="restaurant-menu">
+          <h2 className="text-lg font-semibold" id="restaurant-menu">
+            Menu
+          </h2>
+          <div className="mt-2 grid gap-4" data-testid="restaurant-public-menu">
+            {menuSections.map((group) => (
+              <div key={group.section}>
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                  {group.section}
+                </h3>
+                <ul className="mt-1 grid gap-2">
+                  {group.items.map((item) => (
+                    <li key={item.id} className="text-sm">
+                      <div className="flex flex-wrap items-baseline justify-between gap-2">
+                        <span className="font-medium">{item.name}</span>
+                        <span className="text-muted-foreground">{item.price ?? "Price not published"}</span>
+                      </div>
+                      {item.description ? (
+                        <p className="text-muted-foreground">{item.description}</p>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Menu details are maintained by the restaurant.
+          </p>
+        </section>
+      ) : null}
 
       <section className="mt-6" aria-labelledby="restaurant-contest">
         <h2 className="text-lg font-semibold" id="restaurant-contest">Restaurant contest</h2>

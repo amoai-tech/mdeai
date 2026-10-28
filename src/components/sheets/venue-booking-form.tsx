@@ -14,11 +14,14 @@ import type {
 export function VenueBookingForm({
   venueKind,
   placeId,
+  restaurantId,
   venueTitle,
   onSuccess,
 }: {
   venueKind: VenueBookingKind;
-  placeId: string;
+  placeId?: string;
+  /** SAN-1542: canonical restaurant links request to the owner inbox. */
+  restaurantId?: string | null;
   venueTitle: string;
   onSuccess: (result: VenueBookingSubmitResult) => void;
 }) {
@@ -97,6 +100,7 @@ export function VenueBookingForm({
       const result = await submitVenueBooking({
         venueKind,
         placeId,
+        ...(restaurantId ? { restaurantId } : {}),
         requestedAt: requestedAtIso,
         partySize: parsedParty,
         contactName: contactName.trim(),
@@ -107,6 +111,7 @@ export function VenueBookingForm({
         idempotencyKey: buildVenueBookingIdempotencyKey({
           venueKind,
           placeId,
+          restaurantId,
           requestedAt: requestedAtIso,
           partySize: parsedParty,
         }),

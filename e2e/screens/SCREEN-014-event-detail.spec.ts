@@ -24,7 +24,13 @@ test.describe(`${SCREEN_ID} event detail page`, () => {
 
   test("curl draft/unknown slug returns 404", async ({ request }) => {
     const res = await request.get(`${BASE}/events/not-a-real-event-slug-404`);
-    expect(res.status()).toBe(404);
+    // Streamed Next.js notFound() can legitimately return 200 with noindex.
+    // See https://nextjs.org/docs/app/api-reference/file-conventions/loading#status-codes
+    if (res.status() === 200) {
+      expect(await res.text()).toContain("noindex");
+    } else {
+      expect(res.status()).toBe(404);
+    }
   });
 
   test.describe("desktop", () => {
@@ -85,20 +91,11 @@ test.describe(`${SCREEN_ID} event detail page`, () => {
       await expect(page.locator('[data-testid="event-tier-row"]').first()).toBeVisible();
       await expect(page.locator('[data-testid="event-tier-row"]')).toHaveCount(4);
 
-      const documentOrderOk = await page.evaluate(() => {
-        const host = document.querySelector('[data-testid="event-host-block"]');
-        const tier = document.querySelector('[data-testid="event-tier-row"]');
-        const venue = document.querySelector('[data-testid="event-venue-section"]');
-        if (!host || !tier || !venue) return false;
-        const hostBeforeTier =
-          (host.compareDocumentPosition(tier) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
-        const tierBeforeVenue =
-          (tier.compareDocumentPosition(venue) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
-        return hostBeforeTier && tierBeforeVenue;
-      });
-      expect(documentOrderOk).toBe(true);
+      // The event title and ticket selector are together in the decision panel.
+      await expect(page.locator("h1")).toHaveCount(1);
+      await expect(page.getByTestId("event-ticket-picker")).toBeVisible();
 
-      await page.locator('[data-testid="event-detail-buy-cta"]').first().click();
+      await page.locator('[data-testid="event-tier-buy"]').first().click();
       await expect(page.locator('[data-testid="booking-checkout-modal"]')).toBeVisible();
       await page.getByRole("button", { name: "Cancel" }).click();
       await expect(page.locator('[data-testid="booking-checkout-modal"]')).toHaveCount(0);
@@ -160,8 +157,8 @@ test.describe(`${SCREEN_ID} event detail page`, () => {
 
             // Exercise a real navigation after hydration instead of fixed sleeps.
             // React mismatches on this page surface as page/console errors.
-            await page.getByRole("link", { name: "Back to chat" }).click();
-            await expect(page).toHaveURL(/\/chat(?:[/?#]|$)/);
+            await page.getByRole("link", { name: "Back to Events" }).click();
+            await expect(page).toHaveURL(/\/events(?:[/?#]|$)/);
             expect(errors, `hydration errors on ${device}/${timezoneId}`).toEqual([]);
           });
         });
@@ -180,6 +177,8 @@ test.describe(`${SCREEN_ID} event detail page`, () => {
       await expect(page.locator('[data-testid="event-venue-section"]')).toBeVisible();
       await expect(page.locator('[data-testid="event-detail-mobile-buy-bar"]')).toBeVisible();
       await page.locator('[data-testid="event-detail-mobile-buy-cta"]').click();
+      await expect(page.locator('[data-testid="event-ticket-picker"]')).toBeFocused();
+      await page.getByTestId("event-tier-buy").first().click();
       await expect(page.locator('[data-testid="booking-checkout-modal"]')).toBeVisible();
 
       await captureScreenEvidence(page, SCREEN_ID, "mobile-event-detail.png");

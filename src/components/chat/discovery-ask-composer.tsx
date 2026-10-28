@@ -169,6 +169,7 @@ function LiveComposer({ page, guestEvents, onAgentResults }: { page: Exclude<Dis
             : <button type="button" data-testid="discovery-ask-send" className="flex size-11 items-center justify-center rounded-lg bg-primary text-primary-foreground disabled:opacity-40" disabled={!draft.trim() || !isReady} aria-label="Send question" onClick={() => void send()}><ArrowUp className="size-4" /></button>}
         </div>
       )}
+      {busy && draft.trim() ? <p className="mt-2 text-xs text-muted-foreground" role="status">Not sent yet. Finish or stop the current reply, then press Enter to send this question.</p> : null}
       {!signedOut && !isReady ? <p className="mt-2 text-xs text-muted-foreground" role="status">Connecting to MDE…</p> : null}
       {error ? <p role="alert" className="mt-2 text-xs text-destructive">{error}</p> : null}
     </section>

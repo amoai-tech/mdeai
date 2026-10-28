@@ -36,6 +36,21 @@ afterEach(() => {
   harness.append.mockReset();
 });
 
+describe("SAN-1407 busy second question", () => {
+  it("keeps the unsent question and explains that Enter did not send it", async () => {
+    harness.append.mockImplementation(() => new Promise<boolean>(() => {}));
+    render(<DiscoveryAskComposer page="events" />);
+    fireEvent.change(screen.getByTestId("discovery-ask-input"), { target: { value: "Salsa events" } });
+    fireEvent.click(screen.getByTestId("discovery-ask-send"));
+    await waitFor(() => expect(harness.append).toHaveBeenCalledTimes(1));
+    fireEvent.change(screen.getByTestId("discovery-ask-input"), { target: { value: "Only techno events" } });
+    fireEvent.keyDown(screen.getByTestId("discovery-ask-input"), { key: "Enter" });
+    expect((screen.getByTestId("discovery-ask-input") as HTMLTextAreaElement).value).toBe("Only techno events");
+    expect(harness.append).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("status").textContent).toMatch(/not sent yet/i);
+  });
+});
+
 describe("signed-in Ask MDE tool delivery", () => {
   it("publishes the current search only after the agent finishes, exactly once", async () => {
     let resolveRun: (() => void) | undefined;

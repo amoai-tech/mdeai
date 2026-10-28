@@ -97,6 +97,8 @@ type RentalBrowseCardProps = {
    * external ad, to the advertiser's listing.
    */
   onDetails?: () => void;
+  selectedForAsk?: boolean;
+  onAskSelect?: () => void;
   /** A later row with the same title/area/size/price as an earlier one; labels it instead of hiding it. */
   duplicateNote?: string;
 };
@@ -166,6 +168,8 @@ export function RentalBrowseCard({
   onPreview,
   onSchedule,
   onDetails,
+  selectedForAsk,
+  onAskSelect,
   duplicateNote,
 }: RentalBrowseCardProps) {
   // Pass the listing's own currency: a COP monthly rent must not be labelled with a USD symbol.
@@ -245,6 +249,10 @@ export function RentalBrowseCard({
       }
       footer={
         <div className="flex w-full flex-wrap items-center justify-between gap-2">
+          {onAskSelect ? <Button type="button" size="sm" variant={selectedForAsk ? "secondary" : "outline"}
+            aria-pressed={Boolean(selectedForAsk)} data-testid="rental-ask-select" onClick={onAskSelect}>
+            {selectedForAsk ? "Clear selection" : "Ask about this"}
+          </Button> : null}
           {onDetails ? (
             <Button
               type="button"

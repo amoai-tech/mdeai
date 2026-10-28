@@ -59,6 +59,15 @@ describe("EventBrowseCard", () => {
     expect(html).toContain('data-testid="event-details-cta"');
   });
 
+  it("offers an explicit, accessible Ask selection without replacing event Details or tickets", () => {
+    const html = renderToStaticMarkup(<EventBrowseCard event={event} selectedForAsk onAskSelect={() => {}} />);
+    expect(html).toContain('data-testid="event-ask-select"');
+    expect(html).toContain('aria-pressed="true"');
+    expect(html).toContain('Clear selection');
+    expect(html).toContain('data-testid="event-details-cta"');
+    expect(html).toContain('data-testid="event-buy-cta"');
+  });
+
   it("uses a real COP tier price instead of the event summary currency", () => {
     const html = renderToStaticMarkup(
       <EventBrowseCard event={{ ...event, pricePerTicket: 40000, currency: "COP" }} />,
