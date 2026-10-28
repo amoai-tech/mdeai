@@ -195,6 +195,22 @@ describe("EventBrowseView — Ask MDE results", () => {
     expect(fetchMock).toHaveBeenLastCalledWith(expect.stringContaining("ids=b"), expect.anything());
   });
 
+  it("a failed search does not leave its error or Retry under different filters", async () => {
+    const { rerender } = render(<EventBrowseView {...props} results={[A, B]} />);
+    fetchMock.mockResolvedValueOnce({ ok: false, json: () => Promise.resolve({}) } as Response);
+    search(["a"]);
+    await screen.findByTestId("events-lookup-error");
+    rerender(<EventBrowseView {...props} category="music" results={[B]} />);
+    expect(screen.queryByTestId("events-lookup-error")).toBeNull();
+    expect(screen.queryByTestId("events-lookup-retry")).toBeNull();
+    // Back on the original filters the same failure is still that search's, and Retry repeats exactly it.
+    rerender(<EventBrowseView {...props} results={[A, B]} />);
+    fetchMock.mockResolvedValueOnce(ok([A]));
+    await userEvent.setup().click(await screen.findByTestId("events-lookup-retry"));
+    await screen.findByTestId("guest-event-results-count");
+    expect(fetchMock).toHaveBeenLastCalledWith(expect.stringContaining("ids=a"), expect.anything());
+  });
+
   it("a slow older response can never replace a newer search", async () => {
     render(<EventBrowseView {...props} results={[A, B]} />);
     const gate: { release?: (response: Response) => void } = {};

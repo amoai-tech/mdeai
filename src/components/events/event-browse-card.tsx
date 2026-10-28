@@ -141,7 +141,7 @@ export function EventBrowseCard({
       }
     >
       <p className="text-xs font-semibold text-primary">{formatEventStartsAt(event.startsAt)}</p>
-      <h3 className="mt-0.5 font-medium leading-snug">{event.title}</h3>
+      <h3 className="mt-0.5 font-semibold leading-snug">{event.title}</h3>
       <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
         {event.venue}
         {event.neighborhood && !event.venue.includes(event.neighborhood) ? ` · ${event.neighborhood}` : ""}

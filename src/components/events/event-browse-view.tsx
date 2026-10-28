@@ -60,10 +60,11 @@ function EventBrowseViewInner({
   const { selectedPinId, setSelectedPinId, panToPin } = useMapContext();
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [resolved, setResolved] = useState<{ scope: string; rows: PublishedEventListItem[] } | null>(null);
-  const [lookupError, setLookupError] = useState<string | null>(null);
-  const [loadingIds, setLoadingIds] = useState(false);
+  // A failure and an in-flight lookup belong to the filter scope they started in, with the IDs to retry, so a
+  // filter change can never leave an old error or Retry standing under different filters.
+  const [lookupFailure, setLookupFailure] = useState<{ scope: string; message: string; ids: string[] } | null>(null);
+  const [loadingScope, setLoadingScope] = useState<string | null>(null);
   const inFlight = useRef<AbortController | null>(null);
-  const lastIds = useRef<string[]>([]);
   const scope = buildFilterUrl({ category, neighborhood, dateWindow, price });
   useEffect(() => () => inFlight.current?.abort(), []);
 
@@ -75,9 +76,8 @@ function EventBrowseViewInner({
     inFlight.current?.abort();
     const controller = new AbortController();
     inFlight.current = controller;
-    lastIds.current = ids;
-    setLookupError(null);
-    setLoadingIds(true);
+    setLookupFailure(null);
+    setLoadingScope(scope);
     try {
       if (ids.length === 0) {
         setResolved({ scope, rows: [] });
@@ -101,10 +101,10 @@ function EventBrowseViewInner({
         // The failed search must not leave the previous search's results standing as its answer:
         // fall back to the canonical browse results for the current filters and offer Retry.
         setResolved(null);
-        setLookupError(e instanceof Error ? e.message : "Could not load events.");
+        setLookupFailure({ scope, ids, message: e instanceof Error ? e.message : "Could not load events." });
       }
     } finally {
-      if (!controller.signal.aborted) setLoadingIds(false);
+      if (!controller.signal.aborted) setLoadingScope(null);
     }
   }, [scope]);
   const onAgentResults = useCallback((result: DiscoveryAgentResult) => {
@@ -193,12 +193,12 @@ function EventBrowseViewInner({
       }
     >
       <section className="@container mt-6" aria-label="Event listings">
-        {loadingIds ? <p role="status" className="mb-3 text-sm">Confirming event details…</p> : null}
-        {lookupError ? (
+        {loadingScope === scope ? <p role="status" className="mb-3 text-sm">Confirming event details…</p> : null}
+        {lookupFailure?.scope === scope ? (
           <div role="alert" className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-destructive" data-testid="events-lookup-error">
-            <span>{lookupError} Showing all events for these filters.</span>
+            <span>{lookupFailure.message} Showing all events for these filters.</span>
             <Button type="button" variant="outline" size="sm" data-testid="events-lookup-retry"
-              onClick={() => void resolveIds(lastIds.current)}>
+              onClick={() => void resolveIds(lookupFailure.ids)}>
               Retry
             </Button>
           </div>

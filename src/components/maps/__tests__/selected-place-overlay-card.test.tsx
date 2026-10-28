@@ -64,4 +64,10 @@ describe("SelectedPlaceOverlayCard", () => {
     expect(groundedHtml).toContain("selected-place-overlay-save");
     expect(groundedHtml).toContain("selected-place-overlay-add-trip");
   });
+
+  it("uses a short placeholder strip for events and the full one for other places", () => {
+    const strip = (pin: MapPin) => renderToStaticMarkup(<SelectedPlaceOverlayCard pin={{ ...pin, meta: {} }} />);
+    expect(strip({ ...groundedPin, id: "event-3", category: "event" })).toContain("h-14");
+    expect(strip(groundedPin)).toContain("h-32");
+  });
 });
