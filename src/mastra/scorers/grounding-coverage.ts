@@ -47,6 +47,51 @@ function judgeEnabled(requestContext: unknown): boolean {
   return flag !== false;
 }
 
+/** A judge can clear a heuristic entity finding only by citing an actual
+ * source name with a shared distinctive word. An empty judge verdict, an
+ * invented alias or a generic source word must never turn a fabricated venue
+ * into a perfect grounding score. */
+function normalizeName(text: string): string {
+  return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function sourceNames(value: unknown): string[] {
+  if (Array.isArray(value)) return value.flatMap(sourceNames);
+  if (!value || typeof value !== "object") return [];
+  const names: string[] = [];
+  for (const [key, entry] of Object.entries(value)) {
+    if (["name", "title", "aliases", "alias", "venue_name", "listing_name", "event_name"].includes(key)) {
+      if (typeof entry === "string") names.push(entry);
+      if (Array.isArray(entry)) names.push(...entry.filter((s): s is string => typeof s === "string"));
+    }
+    if (entry && typeof entry === "object") names.push(...sourceNames(entry));
+  }
+  return names;
+}
+
+const GENERIC_ENTITY_WORDS = new Set(["hotel", "restaurant", "cafe", "club", "the", "el", "la", "medellin"]);
+
+export function reconcileGroundingJudgeVerdict(
+  unsupported: FaithfulnessClaim[],
+  uncovered: string[],
+  groundedAliases: { claim: string; sourceName: string }[],
+  toolOutputs: unknown[],
+): FaithfulnessClaim[] {
+  const confirmedAbsent = new Set(uncovered.map(normalizeName));
+  const validSources = new Set(sourceNames(toolOutputs).map(normalizeName));
+  return unsupported.filter((candidate) => {
+    const claim = normalizeName(candidate.claim);
+    if (confirmedAbsent.has(claim)) return true;
+    return !groundedAliases.some((alias) => {
+      const source = normalizeName(alias.sourceName);
+      if (normalizeName(alias.claim) !== claim || !validSources.has(source)) return false;
+      const claimWords = new Set(claim.split(" ").filter((word) => word.length > 2 && !GENERIC_ENTITY_WORDS.has(word)));
+      return source.split(" ").some((word) => claimWords.has(word) && word.length > 2 && !GENERIC_ENTITY_WORDS.has(word));
+    });
+  });
+}
+
 async function judgeUncovered(
   unsupported: FaithfulnessClaim[],
   toolOutputs: unknown[],
@@ -58,6 +103,10 @@ async function judgeUncovered(
         uncovered: z
           .array(z.string())
           .describe("Entity claim strings genuinely absent from tool output."),
+        groundedAliases: z.array(z.object({
+          claim: z.string(),
+          sourceName: z.string(),
+        })).default([]).describe("Exact source name that proves a flagged alias is grounded."),
       }),
       prompt: [
         "You verify whether named venues/listings/events in a concierge reply are grounded.",
@@ -68,11 +117,15 @@ async function judgeUncovered(
         ...unsupported.map((c) => `- ${c.claim}`),
         "",
         "Return only entities genuinely absent from tool output.",
-        "Paraphrases or synonyms present in the tool output are NOT uncovered.",
+        "Only clear a candidate as a paraphrase when you can cite its exact source name",
+        "from TOOL OUTPUT in groundedAliases: [{claim, sourceName}].",
+        "If there is no concrete source name, keep the entity in uncovered.",
+        "Do not make up source names; an empty uncovered list alone proves nothing.",
       ].join("\n"),
     });
-    const set = new Set(object.uncovered.map((s) => s.toLowerCase().trim()));
-    return unsupported.filter((c) => set.has(c.claim.toLowerCase().trim()));
+    return reconcileGroundingJudgeVerdict(
+      unsupported, object.uncovered, object.groundedAliases ?? [], toolOutputs,
+    );
   } catch {
     return unsupported;
   }

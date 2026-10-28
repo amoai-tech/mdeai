@@ -70,3 +70,36 @@ it("does not call the model judge with only the wrong provider key", async () =>
   expect(result.reason).toContain("heuristic");
   expect(modelJudge).not.toHaveBeenCalled();
 });
+
+
+it("fails closed when NVIDIA judge returns no uncovered entities without grounded evidence", async () => {
+  vi.stubEnv("MDE_AI_PROVIDER", "nvidia");
+  vi.stubEnv("NVIDIA_API_KEY", "test-nvidia-key");
+  modelJudge.mockResolvedValue({ object: { uncovered: [] } });
+  const { groundingCoverageScorer } = await import("../grounding-coverage");
+  const result = await groundingCoverageScorer.run({
+    input: { toolOutputs },
+    output: { reply: "Choose Carmen or Skyline Rooftop Medellín." },
+  });
+  expect(result.score).toBeLessThan(1);
+  expect(result.reason).toContain("Skyline Rooftop");
+});
+
+
+it("accepts only a real source-name alias with matching distinctive words", async () => {
+  const { reconcileGroundingJudgeVerdict } = await import("../grounding-coverage");
+  const candidates = [
+    { claim: "Hotel Carmen", type: "entity" as const },
+    { claim: "Skyline Rooftop Medellín", type: "entity" as const },
+  ];
+  const aliases = [
+    { claim: "Hotel Carmen", sourceName: "Carmen" },
+    { claim: "Skyline Rooftop Medellín", sourceName: "Carmen" },
+  ];
+  const remaining = reconcileGroundingJudgeVerdict(candidates, [], aliases, toolOutputs);
+  expect(remaining.map((candidate) => candidate.claim)).toEqual(["Skyline Rooftop Medellín"]);
+  expect(reconcileGroundingJudgeVerdict(candidates, [], [
+    { claim: "Skyline Rooftop Medellín", sourceName: "Skyline Rooftop" },
+  ], toolOutputs)).toEqual(candidates);
+  expect(reconcileGroundingJudgeVerdict(candidates, ["Hotel Carmen"], aliases, toolOutputs)).toEqual(candidates);
+});
