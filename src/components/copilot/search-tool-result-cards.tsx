@@ -8,6 +8,7 @@ import type { RentalSearchMeta } from "@/components/chat/rental-fast-path-contex
 import { EventCard } from "@/components/copilot/event-card";
 import { DomainResults } from "@/components/copilot/domain-results";
 import { ToolPinsSync } from "@/components/copilot/tool-pins-sync";
+import { useCurrentSearchToolResult } from "@/components/copilot/search-tool-result-ownership";
 import { EmptyState } from "@/components/empty/empty-state";
 import { WebCitationList } from "@/components/copilot/web-citation-list";
 import {
@@ -435,6 +436,7 @@ export function EventResults({ result }: { result: unknown }) {
   const { selectedPinId, panToPin } = useMapContext();
   const { openVenueDetail } = useRentalUi();
   const { setRows, setWebCitations } = useEventSearchResults();
+  const isCurrent = useCurrentSearchToolResult();
   const listRef = useRef<HTMLDivElement>(null);
   const envelope = normalizeToolEnvelope(result);
   const reasons = visibleEventSearchReasons(envelope.rankExplanation ?? []);
@@ -459,6 +461,7 @@ export function EventResults({ result }: { result: unknown }) {
   }>;
 
   useEffect(() => {
+    if (!isCurrent) return;
     const parsed = normalizeToolEnvelope(result);
     const list = (parsed.results ?? []) as Array<{
       id: string;
@@ -481,6 +484,7 @@ export function EventResults({ result }: { result: unknown }) {
         typeof c.title === "string",
     );
     if (list.length === 0) {
+      setRows([]);
       setWebCitations(validCitations);
       return;
     }
@@ -500,7 +504,7 @@ export function EventResults({ result }: { result: unknown }) {
       })),
     );
     setWebCitations(validCitations);
-  }, [result, setRows, setWebCitations]);
+  }, [result, setRows, setWebCitations, isCurrent]);
 
   useEffect(() => {
     if (!selectedPinId || !listRef.current) return;
