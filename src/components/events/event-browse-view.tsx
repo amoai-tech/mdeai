@@ -57,21 +57,25 @@ function EventBrowseViewInner({
   dateWindow,
   price,
 }: EventBrowseViewProps) {
-  const { selectedPinId, panToPin } = useMapContext();
+  const { selectedPinId, setSelectedPinId, panToPin } = useMapContext();
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [resolved, setResolved] = useState<{ scope: string; rows: PublishedEventListItem[] } | null>(null);
   const [lookupError, setLookupError] = useState<string | null>(null);
   const [loadingIds, setLoadingIds] = useState(false);
   const inFlight = useRef<AbortController | null>(null);
+  const lastIds = useRef<string[]>([]);
   const scope = buildFilterUrl({ category, neighborhood, dateWindow, price });
   useEffect(() => () => inFlight.current?.abort(), []);
 
   // Re-fetch returned IDs through the canonical public event catalog: tool prices
   // are NOT ticket-tier prices and must never drive a "Free" or checkout CTA.
   const resolveIds = useCallback(async (ids: string[]) => {
+    // A newer search aborts the older one; the aborted response is ignored below, so it can never
+    // replace the newer results.
     inFlight.current?.abort();
     const controller = new AbortController();
     inFlight.current = controller;
+    lastIds.current = ids;
     setLookupError(null);
     setLoadingIds(true);
     try {
@@ -93,7 +97,12 @@ function EventBrowseViewInner({
         "startsAt" in r && typeof r.startsAt === "string") as PublishedEventListItem[];
       if (!controller.signal.aborted) setResolved({ scope, rows });
     } catch (e) {
-      if (!controller.signal.aborted) setLookupError(e instanceof Error ? e.message : "Could not load events.");
+      if (!controller.signal.aborted) {
+        // The failed search must not leave the previous search's results standing as its answer:
+        // fall back to the canonical browse results for the current filters and offer Retry.
+        setResolved(null);
+        setLookupError(e instanceof Error ? e.message : "Could not load events.");
+      }
     } finally {
       if (!controller.signal.aborted) setLoadingIds(false);
     }
@@ -102,7 +111,8 @@ function EventBrowseViewInner({
     if (result.page === "events") void resolveIds(result.ids);
   }, [resolveIds]);
   const shownEvents = resolved?.scope === scope ? resolved.rows : results;
-  // A selection is valid only while its real card is in the current result set.
+  // One selected event drives the card highlight, the marker and the Ask MDE context. It is valid only
+  // while its real card is in the current result set.
   const selectedId = shownEvents.some((event) => event.id === selectedEventId) ? selectedEventId : null;
   // Pins come only from the events shown right now and only from saved coordinates, so a filter or
   // Ask change replaces them together with the cards and an event without a position stays card-only.
@@ -117,6 +127,39 @@ function EventBrowseViewInner({
   useBrowseCardScroll();
   const pinIds = useMemo(() => new Set(pins.map((pin) => pin.id)), [pins]);
   const hasMap = pins.length > 0;
+
+  // Select (or clear) an event everywhere at once. An event with no saved position stays selectable for
+  // Ask MDE; it simply has no marker, and any other marker selection is cleared.
+  const selectEvent = useCallback((id: string | null) => {
+    setSelectedEventId(id);
+    if (id && pinIds.has(`event-${id}`)) panToPin(`event-${id}`);
+    else setSelectedPinId(null);
+  }, [pinIds, panToPin, setSelectedPinId]);
+
+  // A marker click (or closing its info card) arrives through the shared map context; mirror it into the
+  // one selected event instead of keeping a second selection. This adjusts our own state while rendering
+  // (the documented pattern for state derived from other state), so there is no effect and no extra render pass.
+  const [prevPinId, setPrevPinId] = useState<string | null>(null);
+  if (selectedPinId !== prevPinId) {
+    setPrevPinId(selectedPinId);
+    if (selectedPinId?.startsWith("event-")) {
+      const id = selectedPinId.slice("event-".length);
+      if (id !== selectedEventId && shownEvents.some((event) => event.id === id)) setSelectedEventId(id);
+    } else if (prevPinId?.startsWith("event-") && selectedEventId === prevPinId.slice("event-".length)) {
+      // The info card was closed: clear Ask too, but only if that same event was the selected one.
+      setSelectedEventId(null);
+    }
+  }
+
+  // Filters or Ask results changed and the selected event is gone: forget it now, so it cannot reappear
+  // when the filter is cleared. Its marker selection is cleared by the shared pin sync when the pin leaves.
+  const shownKey = shownEvents.map((event) => event.id).join(",");
+  const [prevShownKey, setPrevShownKey] = useState(shownKey);
+  if (shownKey !== prevShownKey) {
+    setPrevShownKey(shownKey);
+    if (selectedEventId && !shownEvents.some((event) => event.id === selectedEventId)) setSelectedEventId(null);
+  }
+
   const retryHref = buildFilterUrl({
     category,
     neighborhood,
@@ -151,7 +194,15 @@ function EventBrowseViewInner({
     >
       <section className="@container mt-6" aria-label="Event listings">
         {loadingIds ? <p role="status" className="mb-3 text-sm">Confirming event details…</p> : null}
-        {lookupError ? <p role="alert" className="mb-3 text-sm text-destructive">{lookupError}</p> : null}
+        {lookupError ? (
+          <div role="alert" className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-destructive" data-testid="events-lookup-error">
+            <span>{lookupError} Showing all events for these filters.</span>
+            <Button type="button" variant="outline" size="sm" data-testid="events-lookup-retry"
+              onClick={() => void resolveIds(lastIds.current)}>
+              Retry
+            </Button>
+          </div>
+        ) : null}
         {resolved?.scope === scope ? <p data-testid="guest-event-results-count" className="mb-3 text-sm text-muted-foreground">{shownEvents.length} matching events from the public catalog. Ticket prices and booking actions come from actual ticket tiers.</p> : null}
         {error ? (
           <div
@@ -204,10 +255,8 @@ function EventBrowseViewInner({
               return (
               <EventBrowseCard key={event.id} event={event} mediaLayout="inline"
                 pinId={onMap ? pinId : undefined}
-                selectedForMap={onMap && selectedPinId === pinId}
-                onMapSelect={onMap ? () => panToPin(pinId) : undefined}
                 selectedForAsk={selectedId === event.id}
-                onAskSelect={() => setSelectedEventId((current) => current === event.id ? null : event.id)} />
+                onAskSelect={() => selectEvent(selectedId === event.id ? null : event.id)} />
               );
             })}
           </div>

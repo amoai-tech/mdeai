@@ -55,4 +55,13 @@ describe("SelectedPlaceOverlayCard", () => {
       expect(html).not.toContain("selected-place-overlay-details");
     }
   });
+
+  it("hides the unsupported Save and Add to trip buttons for events only", () => {
+    const eventHtml = renderToStaticMarkup(<SelectedPlaceOverlayCard pin={{ ...groundedPin, id: "event-2", category: "event", meta: {} }} />);
+    expect(eventHtml).not.toContain("selected-place-overlay-save");
+    expect(eventHtml).not.toContain("selected-place-overlay-add-trip");
+    const groundedHtml = renderToStaticMarkup(<SelectedPlaceOverlayCard pin={groundedPin} />);
+    expect(groundedHtml).toContain("selected-place-overlay-save");
+    expect(groundedHtml).toContain("selected-place-overlay-add-trip");
+  });
 });

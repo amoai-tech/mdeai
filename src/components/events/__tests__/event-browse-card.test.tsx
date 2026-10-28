@@ -106,15 +106,23 @@ describe("EventBrowseCard", () => {
     expect(html).toContain("Laureles");
   });
 
-  it("offers View on map and the shared pin id only when the event has a real pin", () => {
-    const withPin = renderToStaticMarkup(
-      <EventBrowseCard event={event} pinId="event-evt-1" selectedForMap onMapSelect={() => {}} />,
-    );
-    expect(withPin).toContain('data-pin-id="event-evt-1"');
-    expect(withPin).toContain('data-testid="event-map-select"');
-    expect(withPin).toContain("Selected on map");
+  it("shares one selection: the shared pin id is on the card, selecting highlights it, and there is no separate map button", () => {
+    const html = renderToStaticMarkup(<EventBrowseCard event={event} pinId="event-evt-1" selectedForAsk onAskSelect={() => {}} />);
+    expect(html).toContain('data-pin-id="event-evt-1"');
+    expect(html).toContain('data-selected="true"');
+    expect(html).not.toContain("event-map-select");
     const without = renderToStaticMarkup(<EventBrowseCard event={event} />);
-    expect(without).not.toContain("event-map-select");
     expect(without).not.toContain("data-pin-id");
+    expect(without).toContain('data-selected="false"');
+  });
+
+  it("keeps one dominant action: Buy beside an outline Details when tickets are real, Details alone otherwise", () => {
+    const withBuy = renderToStaticMarkup(<EventBrowseCard event={event} />);
+    const detailsTag = (html: string) => html.slice(html.lastIndexOf("<a", html.indexOf('data-testid="event-details-cta"')), html.indexOf(">", html.indexOf('data-testid="event-details-cta"')));
+    expect(withBuy).toContain('data-testid="event-buy-cta"');
+    expect(detailsTag(withBuy)).toContain("border-border");
+    const noBuy = renderToStaticMarkup(<EventBrowseCard event={{ ...event, pricePerTicket: null, canBuyTickets: false }} />);
+    expect(noBuy).not.toContain('data-testid="event-buy-cta"');
+    expect(detailsTag(noBuy)).not.toContain("border-border");
   });
 });

@@ -9,6 +9,23 @@ import { attachConsoleWatcher, gotoBrowseRoute } from "../helpers/venue-release"
 
 const shots = process.env.SAN972_SHOTS;
 
+/** Evidence screenshot without the dev-server-only overlays (CopilotKit inspector, Next.js dev badge). */
+async function shoot(page: Page, name: string) {
+  if (!shots) return;
+  await page.addStyleTag({ content: "cpk-web-inspector, nextjs-portal { display: none !important; }" });
+  // Map tiles fade in; capture only once two consecutive frames are identical.
+  let previous = "";
+  await expect
+    .poll(async () => {
+      const current = (await page.screenshot()).toString("base64");
+      const settled = current === previous;
+      previous = current;
+      return settled;
+    }, { intervals: [500], timeout: 20_000 })
+    .toBe(true);
+  await page.screenshot({ path: `${shots}/${name}.png` });
+}
+
 async function openEvents(page: Page, width: number, height: number) {
   await page.setViewportSize({ width, height });
   await gotoBrowseRoute(page, "/events");
@@ -21,6 +38,23 @@ async function pressUntilOn(button: Locator) {
     if ((await button.getAttribute("aria-pressed")) !== "true") await button.click();
     await expect(button).toHaveAttribute("aria-pressed", "true", { timeout: 1_000 });
   }).toPass();
+}
+
+/** Scroll the last Details button into view and report whether something else sits on top of it. */
+async function lastDetailsCovered(page: Page): Promise<string | false> {
+  let covered: string | false = "not measured";
+  // Retry: a dev-mode hydration pass can swap the button out from under the first attempt.
+  await expect(async () => {
+    const details = page.getByTestId("event-details-cta").last();
+    await details.scrollIntoViewIfNeeded({ timeout: 2_000 });
+    covered = await details.evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      if (top === el || el.contains(top)) return false;
+      return `${top?.tagName.toLowerCase()}[${top?.getAttribute("data-testid") ?? top?.getAttribute("class")?.slice(0, 40)}] at ${Math.round(r.top)}px of ${innerHeight}`;
+    });
+  }).toPass();
+  return covered;
 }
 
 async function locatedCards(page: Page) {
@@ -48,11 +82,7 @@ test.describe("SAN-972 /events map workspace", () => {
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
     expect(overflow).toBe(false);
     if (shots) {
-      // Let every map tile finish loading before the evidence screenshot.
-      await expect
-        .poll(() => page.evaluate(() => [...document.querySelectorAll(".gm-style img")].filter((i) => !(i as HTMLImageElement).complete).length), { timeout: 20_000 })
-        .toBe(0);
-      await page.screenshot({ path: `${shots}/events-1440.png` });
+      await shoot(page, "events-1440");
     }
     expect(errors.filter((e) => !/401|copilotkit/i.test(e))).toEqual([]);
   });
@@ -61,15 +91,16 @@ test.describe("SAN-972 /events map workspace", () => {
     await openEvents(page, 1440, 900);
     const cards = await locatedCards(page);
     const card = cards.first();
-    const pinId = (await card.getAttribute("data-pin-id"))!;
+    const pinId = await card.getAttribute("data-pin-id");
+    if (!pinId) throw new Error("located card has no pin id");
     const slugHref = await card.getByTestId("event-details-cta").getAttribute("href");
 
-    await pressUntilOn(card.getByTestId("event-map-select"));
+    await pressUntilOn(card.getByTestId("event-ask-select"));
     await expect(card).toHaveAttribute("data-selected", "true");
     const overlay = page.getByTestId("browse-map-panel").getByTestId("selected-place-overlay");
     await expect(overlay).toHaveAttribute("data-pin-id", pinId, { timeout: 10_000 });
     await expect(page.getByTestId("browse-map-panel").locator(`[data-testid="map-pin"][data-pin-id="${pinId}"]`)).toHaveAttribute("data-marker-selected", "true");
-    if (shots) await page.screenshot({ path: `${shots}/events-1440-selected.png` });
+    await shoot(page, "events-1440-selected");
 
     // Map -> Details -> Back
     await overlay.getByTestId("selected-place-overlay-details").click();
@@ -79,50 +110,58 @@ test.describe("SAN-972 /events map workspace", () => {
 
     // Map -> card: clicking another marker selects its matching card.
     const other = cards.nth((await cards.count()) > 1 ? 1 : 0);
-    const otherId = (await other.getAttribute("data-pin-id"))!;
+    const otherId = await other.getAttribute("data-pin-id");
+    if (!otherId) throw new Error("located card has no pin id");
     await page.getByTestId("browse-map-panel").locator(`[data-testid="map-pin"][data-pin-id="${otherId}"]`).click();
     await expect(other).toHaveAttribute("data-selected", "true", { timeout: 10_000 });
+    // One selection: the Ask control follows the marker, and the previous card is released.
+    await expect(other.getByTestId("event-ask-select")).toHaveAttribute("aria-pressed", "true");
+    await expect(card).toHaveAttribute("data-selected", "false");
   });
 
-  test("keyboard only: View on map and Ask about this work with Enter and Space in tab order", async ({ page }) => {
+  test("keyboard only: Enter and Space select an event; Tab and Shift+Tab move through the card in order", async ({ page }) => {
     await openEvents(page, 1440, 900);
     const cards = await locatedCards(page);
     const card = cards.first();
-    const viewOnMap = card.getByTestId("event-map-select");
     const ask = card.getByTestId("event-ask-select");
+    const details = card.getByTestId("event-details-cta");
     await expect(async () => {
-      await viewOnMap.focus();
+      await ask.focus();
       await page.keyboard.press("Enter");
       await expect(card).toHaveAttribute("data-selected", "true", { timeout: 1_000 });
     }).toPass();
-    // Next control in tab order is "Ask about this"; Space toggles it.
     await page.keyboard.press("Tab");
+    await expect(details).toBeFocused();
+    await page.keyboard.press("Shift+Tab");
     await expect(ask).toBeFocused();
-    await page.keyboard.press("Space");
-    await expect(ask).toHaveAttribute("aria-pressed", "true");
-    // A visible focus ring is drawn on the focused control.
+    await page.keyboard.press("Space"); // toggles off
+    await expect(card).toHaveAttribute("data-selected", "false");
+    // A visible focus indicator is drawn on the focused control.
     const ring = await ask.evaluate((el) => getComputedStyle(el).outlineStyle !== "none" || getComputedStyle(el).boxShadow !== "none");
     expect(ring).toBe(true);
   });
 
-  test("Ask selection moves from event A to event B and clears", async ({ page }) => {
+  test("Ask selection moves from event A to event B and clears, and the marker selection follows", async ({ page }) => {
     await openEvents(page, 1440, 900);
     const asks = page.getByTestId("event-ask-select");
     test.skip((await asks.count()) < 2, "Needs two published events");
     await pressUntilOn(asks.nth(0));
     await pressUntilOn(asks.nth(1));
     await expect(asks.nth(0)).toHaveAttribute("aria-pressed", "false");
+    const selectedPins = page.locator('[data-testid="map-pin"][data-marker-selected="true"]');
+    const located = (await page.locator('[data-testid="event-card"][data-pin-id]').count()) >= 2;
+    if (located) await expect(selectedPins).toHaveCount(1);
     await asks.nth(1).click();
     await expect(asks.nth(1)).toHaveAttribute("aria-pressed", "false");
+    if (located) await expect(selectedPins).toHaveCount(0);
   });
 
-  test("filters replace cards and pins together; an empty result drops the map instead of showing a blank one", async ({ page }) => {
+  test("a filter with no results drops the map; Clear brings cards and pins back (independent of catalog contents)", async ({ page }) => {
     await openEvents(page, 1440, 900);
     await locatedCards(page);
     await expect(page.getByTestId("browse-map-panel")).toBeVisible();
-    // The catalog has no sports event, so this filter has no results and so no pins.
-    await page.getByTestId("events-filter-category-sport").click();
-    await expect(page).toHaveURL(/category=sport/, { timeout: 15_000 });
+    // A neighborhood that cannot exist matches nothing whatever events are published.
+    await page.goto("/events?neighborhood=zz-no-such-neighborhood-972");
     await expect(page.getByTestId("events-empty")).toBeVisible();
     await expect(page.getByTestId("browse-map-panel")).toHaveCount(0);
     await page.getByTestId("events-filter-clear").click();
@@ -144,14 +183,14 @@ test.describe("SAN-972 /events map workspace", () => {
       await expect(dialog).toBeVisible({ timeout: 1_500 });
     }).toPass();
     await expect(dialog.getByTestId("chat-map")).toBeVisible();
-    if (shots) await page.screenshot({ path: `${shots}/events-390-map.png` });
+    await shoot(page, "events-390-map");
     await page.keyboard.press("Escape");
     await expect(dialog).toBeHidden();
     await expect(fab).toBeFocused();
     const first = page.getByTestId("event-card").first();
     const box = await first.boundingBox();
-    expect(box && box.width).toBeGreaterThan(250);
-    if (shots) await page.screenshot({ path: `${shots}/events-390.png` });
+    expect(box?.width).toBeGreaterThan(250);
+    await shoot(page, "events-390");
     expect(errors.filter((e) => !/401|copilotkit/i.test(e))).toEqual([]);
   });
 
@@ -175,4 +214,30 @@ test.describe("SAN-972 /events map workspace", () => {
       expect(bad).toEqual([]);
     });
   }
+
+  // Real browser zoom shrinks the CSS viewport and raises the pixel ratio. 400% zoom of a 1280x1024
+  // window is 320x256 CSS px at 4x; 200% is 640x512 at 2x. Cards must stay reachable and un-clipped.
+  for (const [zoom, width, height] of [["200%", 640, 512], ["400%", 320, 256]] as const) {
+    test(`${zoom} zoom: no horizontal scroll; Details stays reachable and is not covered by the pinned Ask bar`, async ({ browser }) => {
+      const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 1280 / width });
+      const page = await context.newPage();
+      await gotoBrowseRoute(page, "/events");
+      await expect(page.getByTestId("events-browse").first()).toBeVisible();
+      await expect(page.getByTestId("event-card").first()).toBeVisible();
+      const covered = await lastDetailsCovered(page);
+      expect(covered, "something covers the last Details button at this zoom").toBe(false);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)).toBe(false);
+      await context.close();
+    });
+  }
+
+  test("phone with the on-screen keyboard open (short viewport): Ask input stays usable and Details is still reachable", async ({ page }) => {
+    // A phone keyboard takes roughly half the screen; the visual viewport shrinks accordingly.
+    await openEvents(page, 390, 420);
+    const input = page.getByTestId("workspace-ask-composer").getByRole("textbox").first();
+    await input.focus();
+    await expect(input).toBeFocused();
+    const covered = await lastDetailsCovered(page);
+    expect(covered, "something covers Details while the keyboard is open").toBe(false);
+  });
 });

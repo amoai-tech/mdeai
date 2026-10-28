@@ -131,7 +131,10 @@ test.describe("SCREEN-027 /events browse", () => {
   test("sidebar Events nav links to browse catalog", async ({ page }) => {
     const errors = attachConsoleWatcher(page);
     await gotoBrowseRoute(page, "/");
-    const eventsLink = page.getByTestId("nav-events-link");
+    const eventsLink = page
+      .getByRole("navigation", { name: "Site verticals" })
+      .getByRole("link", { name: "Events" });
+    await expect(eventsLink).toBeVisible();
     await expect(eventsLink).not.toHaveAttribute("aria-disabled", "true");
     await eventsLink.click();
     await expect(page).toHaveURL(/\/events/, { timeout: 15_000 });

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CalendarDays, MapPin, Ticket } from "lucide-react";
+import { CalendarDays, Ticket } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { VenueCardShell } from "@/components/browse/venue-card-shell";
@@ -17,8 +17,6 @@ type EventBrowseCardProps = {
   onAskSelect?: () => void;
   /** Present only when the event has a real map pin; the same ID the shared map uses. */
   pinId?: string;
-  selectedForMap?: boolean;
-  onMapSelect?: () => void;
 };
 
 const CATEGORY_LABELS: Record<EventCategory, string> = {
@@ -75,8 +73,6 @@ export function EventBrowseCard({
   selectedForAsk,
   onAskSelect,
   pinId,
-  selectedForMap,
-  onMapSelect,
 }: EventBrowseCardProps) {
   const detailsHref = `/events/${event.slug}`;
   const priceLabel =
@@ -91,7 +87,7 @@ export function EventBrowseCard({
       testId="event-card"
       resultKind="event"
       pinId={pinId}
-      selected={selectedForMap}
+      selected={selectedForAsk}
       composition={composition}
       mediaLayout={mediaLayout}
       ariaLabel={`Event: ${event.title}${event.neighborhood ? `, ${event.neighborhood}` : ""}`}
@@ -103,50 +99,44 @@ export function EventBrowseCard({
         />
       }
       footer={
-        <div className="flex w-full flex-wrap items-center justify-between gap-2">
-          {pinId && onMapSelect ? <Button type="button" size="sm" variant={selectedForMap ? "secondary" : "outline"}
-            data-testid="event-map-select" aria-pressed={Boolean(selectedForMap)} onClick={onMapSelect}>
-            <MapPin className="size-3.5" aria-hidden />
-            {selectedForMap ? "Selected on map" : "View on map"}
-          </Button> : null}
-          {onAskSelect ? <Button type="button" size="sm" variant={selectedForAsk ? "secondary" : "outline"}
+        <div className="flex w-full flex-wrap items-center justify-between gap-x-2 gap-y-1">
+          {/* One secondary toggle: selecting an event also highlights its marker and sets the Ask MDE context. */}
+          {onAskSelect ? <Button type="button" size="sm" variant="ghost" className="-ml-2 text-muted-foreground"
             data-testid="event-ask-select" aria-pressed={Boolean(selectedForAsk)} onClick={onAskSelect}>
             {selectedForAsk ? "Clear selection" : "Ask about this"}
-          </Button> : null}
-          <Link
-            href={detailsHref}
-            data-testid="event-details-cta"
-            className={cn(buttonVariants({ size: "sm", variant: "outline" }))}
-          >
-            Details
-          </Link>
-          {!event.canBuyTickets ? null : event.ticketUrl.startsWith("http") ? (
+          </Button> : <span />}
+          <div className="ml-auto flex items-center gap-2">
+            {/* Details is the primary action unless a real ticket offer exists; then Buy is. */}
             <Link
-              href={event.ticketUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              data-testid="event-buy-cta"
-              className={cn(buttonVariants({ size: "sm", variant: "default" }))}
+              href={detailsHref}
+              data-testid="event-details-cta"
+              className={cn(buttonVariants({ size: "sm", variant: event.canBuyTickets ? "outline" : "default" }))}
             >
-              <Ticket data-icon="inline-start" aria-hidden />
-              Buy tickets
+              Details
             </Link>
-          ) : (
-            <Button
-              size="sm"
-              variant="default"
-              nativeButton={false}
-              render={
-                <Link
-                  href={detailsHref}
-                  data-testid="event-buy-cta"
-                />
-              }
-            >
-              <Ticket data-icon="inline-start" aria-hidden />
-              Buy tickets
-            </Button>
-          )}
+            {!event.canBuyTickets ? null : event.ticketUrl.startsWith("http") ? (
+              <Link
+                href={event.ticketUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                data-testid="event-buy-cta"
+                className={cn(buttonVariants({ size: "sm", variant: "default" }))}
+              >
+                <Ticket data-icon="inline-start" aria-hidden />
+                Buy tickets
+              </Link>
+            ) : (
+              <Button
+                size="sm"
+                variant="default"
+                nativeButton={false}
+                render={<Link href={detailsHref} data-testid="event-buy-cta" />}
+              >
+                <Ticket data-icon="inline-start" aria-hidden />
+                Buy tickets
+              </Button>
+            )}
+          </div>
         </div>
       }
     >

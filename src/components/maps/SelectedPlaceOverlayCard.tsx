@@ -71,6 +71,7 @@ export function SelectedPlaceOverlayCard({ pin }: SelectedPlaceOverlayCardProps)
             {glyph}
           </div>
         )}
+        {pin.category === "event" ? null : (
         <div className="absolute right-2 top-2 flex gap-1.5">
           <button
             type="button"
@@ -93,6 +94,7 @@ export function SelectedPlaceOverlayCard({ pin }: SelectedPlaceOverlayCardProps)
             +
           </button>
         </div>
+        )}
       </div>
 
       <div className="space-y-2 p-3">
