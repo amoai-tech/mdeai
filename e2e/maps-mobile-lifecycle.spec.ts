@@ -220,7 +220,7 @@ test.describe("real Google Maps mobile lifecycle", () => {
 });
 
 test.describe("real Google Maps desktop lifecycle", () => {
-  test.use({ viewport: { width: 1440, height: 900 } });
+  test.use({ viewport: { width: 1440, height: 900 }, isMobile: false, hasTouch: false });
 
   test("desktop map mounts once and survives a grounded search", async ({ page }) => {
     test.setTimeout(300_000);
@@ -262,7 +262,7 @@ test.describe("real Google Maps desktop lifecycle", () => {
 });
 
 test.describe("authenticated desktop map lifecycle", () => {
-  test.use({ viewport: { width: 1440, height: 900 } });
+  test.use({ viewport: { width: 1440, height: 900 }, isMobile: false, hasTouch: false });
 
   // SAN-1564: the reported appendChild crash was seen while signed in. A throwaway
   // Supabase identity (SAN-547 helper) gives a real session; cleanup runs even on failure.
@@ -271,6 +271,7 @@ test.describe("authenticated desktop map lifecycle", () => {
     test.setTimeout(420_000);
 
     const identity = await createThrowawayIdentity("san1564-map");
+    let journeyError: unknown;
     try {
       const version = (await (await fetch(`${BASE}/api/version`)).json()) as { sha?: string };
       test.info().annotations.push({
@@ -338,8 +339,22 @@ test.describe("authenticated desktop map lifecycle", () => {
       await expect(map.locator(".gm-style")).toHaveCount(1);
       // A successful AI answer must never hide a Maps failure.
       await assertNoPageErrors(page, errors, "signed-in desktop");
-    } finally {
-      await deleteThrowawayIdentity(identity);
+    } catch (error) {
+      journeyError = error;
     }
+
+    // Cleanup must not hide the journey's own failure: report it when the journey
+    // already failed, but surface it when everything else passed.
+    try {
+      await deleteThrowawayIdentity(identity);
+    } catch (cleanupError) {
+      if (journeyError) {
+        console.error("[san1564-map] cleanup failed after a failing journey", cleanupError);
+      } else {
+        throw cleanupError;
+      }
+    }
+
+    if (journeyError) throw journeyError;
   });
 });
