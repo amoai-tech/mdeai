@@ -352,6 +352,18 @@ token columns on one orphan test user; admin lookup and signed-in routes now suc
 
 **Follow-up:** Recruit a second reviewer to eliminate reliance on this structural exception. Check that a subsequent ordinary MDE PR runs on the new pin; clean up temporary test PRs and branches after proof.
 
+## 2026-10-28 — PR #597 (chat checkout pays for the chosen ticket, plus the event page UI pass)
+
+**Sole-collaborator exception, used on the exact final head.** [PR #597](https://github.com/amoai-tech/mdeai/pull/597) fixes a chat-sheet defect where the single payment button always targeted the cheapest ticket tier (a visitor choosing VIP × 3 was sent to General × 1) and, after [PR #601](https://github.com/amoai-tech/mdeai/pull/601) was merged into its branch, also carries the event page UI pass (date tile, visible unverified-event notice, one ticket heading, explicit-year schedule format). 19 files; no Stripe, checkout API, webhook, migration or Supabase change.
+
+**Conditions, checked at merge time:** the repository had exactly one collaborator (`amoai-tech`), who also authored the PR; GitHub forbids self-approval, so the one-approval rule was structurally unsatisfiable. On the exact final head `b2971f00699f93b23c44789116d966250153f925`, `floor`, `mastra-schema-init` and `review / verify-review-result` all passed (also `codacy-eslint`, `auth redirect + guard chromium`, `deterministic chromium 3/3`, `real mobile composer chromium`); the canonical MDE incremental review was "safe to merge" (score 87) with no blocking finding; Codacy and Kilo were clean; unresolved review threads were zero. The PR body recorded the exception and the head SHA before the merge.
+
+**Merge result:** merged by the owner (`amoai-tech`) on 2026-10-28 at 09:15:52Z as `4b2230f4680c2e7a39e0e5d736fe9c7b34b585aa`. The agent's own `gh pr merge --admin` attempt was denied by the Claude Code auto-mode safety classifier and was not worked around; the owner merged it.
+
+**Review question:** Does choosing VIP × 3 send the VIP tier id with quantity 3 to checkout (on the full page and in the chat sheet), and does the Feria page show the date tile and the visible "not verified" notice without breaking at 320/390/768/1440? Local focused Vitest, `npm run floor` (522 files / 4005 tests) and real-browser checks on Reina de Antioquia 2026 Finals (checkout request aborted before the server: `ticketId 33333333-3333-3333-3333-000000000002`, `quantity 3`) passed before the merge.
+
+**Open question:** the production outcome is verified separately and is not claimed here: production reported `2e5ca782dd` shortly after the merge while the staged candidate was still building. The staged Candidate Runtime Certification path applies; no promotion was forced.
+
 ## Adding an entry
 
 Record: the PRs, the date, the reason, which required checks had passed, what a reviewer would have
