@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { useSession } from "@/hooks/use-session";
 import { useOptionalConciergeCoAgent, useConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
 import { useConciergeChat } from "@/lib/hooks/use-concierge-chat";
-import { getConciergeErrorVersion } from "@/lib/concierge-error-store";
+import { getConciergeErrorForThread, getConciergeErrorVersion } from "@/lib/concierge-error-store";
 import { useTurns } from "@/components/rentals/rental-ask-tool-results";
 import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 import { ArrowUp, Square } from "lucide-react";
@@ -68,6 +68,10 @@ function GuestEventComposer({ options }: { options: EventGuestOptions }) {
 
 const INTERRUPTED_COPY = "The response was interrupted. Check the conversation before retrying.";
 
+/** Did THIS conversation report a failure after `before`? Another chat's error must not count. */
+const runFailedSince = (threadId: string | undefined, before: number) =>
+  getConciergeErrorForThread(threadId).version > before || getConciergeErrorForThread(null).version > before;
+
 /** One composer on every non-rental browse page; Rentals retains its richer search adapter. */
 function LiveComposer({ page, guestEvents, onAgentResults }: { page: Exclude<DiscoveryPage, "rentals">; guestEvents?: EventGuestOptions; onAgentResults?: (result: DiscoveryAgentResult) => void }) {
   const { user, loading: sessionLoading } = useSession();
@@ -87,12 +91,14 @@ function LiveComposer({ page, guestEvents, onAgentResults }: { page: Exclude<Dis
   // A run's tool result may arrive in a separate agent update from its final text.
   // Retain the submitting page/filter callback rather than re-scoping old results
   // to filters changed while an answer is streaming.
-  const pendingResult = useRef<{ since: number; emit: (result: DiscoveryAgentResult) => void } | null>(null);
+  const pendingResult = useRef<{ since: number; errorVersion: number; emit: (result: DiscoveryAgentResult) => void } | null>(null);
   useEffect(() => {
     if (!agent) return;
     const publishCompletedResult = () => {
       const pending = pendingResult.current;
       if (!pending || agent.isRunning || cancelled.current) return;
+      // A failed run must not replace the browse cards with its partial results.
+      if (runFailedSince(agent.threadId, pending.errorVersion)) return;
       const result = getLatestDiscoveryToolResult(agent.messages, page, pending.since);
       if (!result) return;
       pendingResult.current = null; // exactly once, regardless of subsequent message updates
@@ -118,14 +124,14 @@ function LiveComposer({ page, guestEvents, onAgentResults }: { page: Exclude<Dis
     setError(null);
     setDraft("");
     const startIndex = agent?.messages.length ?? 0;
-    pendingResult.current = onAgentResults ? { since: startIndex, emit: onAgentResults } : null;
     const errorVersionBefore = getConciergeErrorVersion();
+    pendingResult.current = onAgentResults ? { since: startIndex, errorVersion: errorVersionBefore, emit: onAgentResults } : null;
     try {
       const saved = await appendMessage(message);
       if (!saved && !cancelled.current) {
         setError("MDE could not send your question. Please try again.");
         setDraft((current) => current || message);
-      } else if (!cancelled.current && getConciergeErrorVersion() !== errorVersionBefore) {
+      } else if (!cancelled.current && runFailedSince(agent?.threadId, errorVersionBefore)) {
         // CopilotKit reports a failed stream through the error store and still resolves runAgent.
         // The question is already in the thread, so say so instead of showing nothing.
         pendingResult.current = null;

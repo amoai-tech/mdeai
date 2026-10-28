@@ -7,6 +7,7 @@ const h = vi.hoisted(() => ({
   appendMessage: vi.fn(),
   stopActiveRun: vi.fn(),
   latestResult: vi.fn(),
+  subscribers: [] as Array<{ onMessagesChanged?: () => void; onRunFinalized?: () => void }>,
 }));
 
 vi.mock("next/link", () => ({
@@ -15,7 +16,13 @@ vi.mock("next/link", () => ({
 vi.mock("next/navigation", () => ({ usePathname: () => "/restaurants" }));
 vi.mock("@/hooks/use-session", () => ({ useSession: () => ({ user: h.user, loading: false }) }));
 vi.mock("@/lib/deterministic-e2e", () => ({ isDeterministicE2E: () => false }));
-const agent = { messages: [], isRunning: false, subscribe: () => ({ unsubscribe: () => {} }) };
+const agent = {
+  messages: [], isRunning: false, threadId: "thread-1",
+  subscribe: (s: { onMessagesChanged?: () => void; onRunFinalized?: () => void }) => {
+    h.subscribers.push(s);
+    return { unsubscribe: () => {} };
+  },
+};
 vi.mock("@/components/chat/concierge-coagent-context", () => ({
   useOptionalConciergeCoAgent: () => ({ agent, isReady: true }),
   useConciergeCoAgent: () => ({ agent, isReady: true }),
@@ -42,7 +49,10 @@ beforeEach(() => {
   h.user = { id: "u1" };
   h.appendMessage.mockReset();
   h.stopActiveRun.mockReset();
-  h.latestResult.mockReset().mockReturnValue(result);
+  // Like the real extractor: only results from the submitted page/start index count.
+  h.latestResult.mockReset().mockImplementation((_messages: unknown, page: string, since: number) =>
+    page === "restaurants" && since === 0 ? result : null);
+  h.subscribers.length = 0;
   clearConciergeError();
 });
 afterEach(cleanup);
@@ -55,8 +65,32 @@ describe("SAN-1145 shared Ask MDE composer — signed-in send outcomes", () => {
     ask("Italian in El Poblado");
     await waitFor(() => expect(onAgentResults).toHaveBeenCalledTimes(1));
     expect(onAgentResults).toHaveBeenCalledWith(result);
+    expect(h.latestResult).toHaveBeenCalledWith(agent.messages, "restaurants", 0);
     expect(screen.queryByRole("alert")).toBeNull();
     expect(input().value).toBe("");
+  });
+
+  it("does not let a run that failed replace the cards, even if the run finalizes before the check", async () => {
+    h.appendMessage.mockImplementation(async () => {
+      reportConciergeError("thread-1");
+      // The agent finalizes with a tool result already in the thread, then runAgent resolves.
+      h.subscribers.forEach((s) => s.onRunFinalized?.());
+      return true;
+    });
+    const onAgentResults = vi.fn();
+    render(<DiscoveryAskComposer page="restaurants" onAgentResults={onAgentResults} />);
+    ask("Italian in El Poblado");
+    expect((await screen.findByRole("alert")).textContent).toContain("The response was interrupted");
+    expect(onAgentResults).not.toHaveBeenCalled();
+  });
+
+  it("ignores another conversation's error: a successful reply is not reported as interrupted", async () => {
+    h.appendMessage.mockImplementation(async () => { reportConciergeError("some-other-thread"); return true; });
+    const onAgentResults = vi.fn();
+    render(<DiscoveryAskComposer page="restaurants" onAgentResults={onAgentResults} />);
+    ask("Italian in El Poblado");
+    await waitFor(() => expect(onAgentResults).toHaveBeenCalledWith(result));
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 
   it("tells the visitor when the server fails mid-reply instead of showing nothing, and publishes no results", async () => {
