@@ -1,7 +1,7 @@
 import { createScorer } from "@mastra/core/evals";
 import { generateObject } from "ai";
 import { z } from "zod";
-import { ACTIVE_TEXT_MODEL } from "../lib/models";
+import { ACTIVE_AI_PROVIDER, ACTIVE_TEXT_MODEL } from "../lib/models";
 import { extractClaims, type FaithfulnessClaim } from "./faithfulness-core";
 import {
   evaluateGroundingCoverage,
@@ -38,7 +38,7 @@ function getInput(input: GroundingCoverageInput | undefined): GroundingCoverageI
 
 function judgeEnabled(requestContext: unknown): boolean {
   // A judge uses the configured provider; do not require a Google key for NVIDIA.
-  const key = process.env.MDE_AI_PROVIDER === "nvidia"
+  const key = ACTIVE_AI_PROVIDER === "nvidia"
     ? process.env.NVIDIA_API_KEY
     : process.env.GOOGLE_GENERATIVE_AI_API_KEY;
   if (!key?.trim()) return false;

@@ -1,7 +1,7 @@
 import { createScorer } from "@mastra/core/evals";
 import { generateObject } from "ai";
 import { z } from "zod";
-import { ACTIVE_TEXT_MODEL } from "../lib/models";
+import { ACTIVE_AI_PROVIDER, ACTIVE_TEXT_MODEL } from "../lib/models";
 import {
   evaluateFaithfulness,
   extractClaims,
@@ -51,7 +51,7 @@ function getInput(input: FaithfulnessInput | undefined): FaithfulnessInput {
 
 function judgeEnabled(requestContext: unknown): boolean {
   // A judge uses the configured provider; do not require a Google key for NVIDIA.
-  const key = process.env.MDE_AI_PROVIDER === "nvidia"
+  const key = ACTIVE_AI_PROVIDER === "nvidia"
     ? process.env.NVIDIA_API_KEY
     : process.env.GOOGLE_GENERATIVE_AI_API_KEY;
   if (!key?.trim()) return false;
@@ -78,6 +78,20 @@ function normalizeClaim(claim: string): string {
     .replace(/^\[[^\]]*\]\s*/, "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+/** Keep absent exact prices and IDs flagged even when a non-deterministic judge
+ * returns an empty or incomplete list. The judge can still clear a false-positive
+ * entity alias/paraphrase, but cannot make an invented price or booking ID look grounded.
+ */
+export function reconcileJudgeVerdict(
+  unsupported: FaithfulnessClaim[],
+  judgeFabricated: string[],
+): FaithfulnessClaim[] {
+  const fabricatedSet = new Set(judgeFabricated.map(normalizeClaim));
+  return unsupported.filter((claim) =>
+    claim.type === "price" || claim.type === "id" || fabricatedSet.has(normalizeClaim(claim.claim)),
+  );
 }
 
 /**
@@ -111,8 +125,7 @@ async function judgeFabrications(
         "Repeat each fabricated claim verbatim, without the [type] prefix.",
       ].join("\n"),
     });
-    const fabricatedSet = new Set(object.fabricated.map(normalizeClaim));
-    return unsupported.filter((c) => fabricatedSet.has(normalizeClaim(c.claim)));
+    return reconcileJudgeVerdict(unsupported, object.fabricated);
   } catch {
     return unsupported;
   }
