@@ -39,6 +39,10 @@ export function EventVenueDetailBody({
   const [checkout, setCheckout] = useState<BookingCheckoutTarget | null>(null);
 
   const returnPath = `/events/${publicEvent?.slug ?? detail.eventId}`;
+  // Opened from chat: let the full page offer a way back (internal event paths only).
+  const fullPageHref = detail.ticketUrl.startsWith("/events/")
+    ? `${detail.ticketUrl}${detail.ticketUrl.includes("?") ? "&" : "?"}from=chat`
+    : detail.ticketUrl;
   const scheduleLabel = publicEvent
     ? formatEventSchedule(publicEvent.startsAt, publicEvent.endsAt)
     : null;
@@ -72,7 +76,7 @@ export function EventVenueDetailBody({
           <div className="space-y-3 text-sm" data-testid="event-sheet-load-error">
             <p className="text-destructive">{loadError ?? "Could not load tickets"}</p>
             <Link
-              href={detail.ticketUrl}
+              href={fullPageHref}
               className={cn(buttonVariants({ variant: "default" }))}
               data-testid="event-sheet-fallback-page"
             >
@@ -179,7 +183,7 @@ export function EventVenueDetailBody({
           </Button>
         ) : null}
         <Link
-          href={detail.ticketUrl}
+          href={fullPageHref}
           className={cn(
             buttonVariants({ variant: "ghost", size: "sm" }),
             "inline-flex gap-1.5",

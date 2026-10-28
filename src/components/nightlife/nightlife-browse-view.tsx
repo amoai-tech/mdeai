@@ -75,19 +75,21 @@ function NightlifeBrowseViewInner({
     </p>
   );
 
+  // The map exists for a grounded result set or when saved cards have real coordinates (no pin means no map).
+  const hasMap = activeRows !== null || (!error && basePins.length > 0);
+
   return (
     <>
     <DiscoveryPageContext page="nightlife" filters={{ neighborhood, vibe }} selectedId={selectedId} />
     <DiscoveryWorkspace
       activeSlug="nightlife"
       askComposer={<DiscoveryAskComposer page="nightlife" onAgentResults={onAgentResults} />}
-      rightPanel={activeRows !== null || (!error && basePins.length > 0) ? <BrowseMapPanel fill /> : undefined}
+      rightPanel={hasMap ? <BrowseMapPanel fill /> : undefined}
       testId="nightlife-page"
       title="Nightlife"
       subtitle="Clubs & bars in Medellín"
-      filterBar={
-        <NightlifeBrowseFilters neighborhood={neighborhood} vibe={vibe} />
-      }
+      mobileMapTrigger={hasMap ? <BrowseMapSheet inline /> : null}
+      filterBar={<NightlifeBrowseFilters neighborhood={neighborhood} vibe={vibe} />}
       notice={notice}
     >
       <section className="mt-6" aria-label="Nightlife listings">
@@ -143,7 +145,6 @@ function NightlifeBrowseViewInner({
         ) : null}
       </section>
     </DiscoveryWorkspace>
-    {activeRows !== null || (!error && basePins.length > 0) ? <BrowseMapSheet raised /> : null}
     </>
   );
 }

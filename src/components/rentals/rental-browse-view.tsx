@@ -183,6 +183,7 @@ function RentalBrowseViewInner({
         activeSlug="rentals"
         title="Rentals in Medellín"
         subtitle={subtitle}
+        mobileMapTrigger={<BrowseMapSheet inline />}
         filterBar={
           previewMode ? (
             <p className="text-sm text-muted-foreground">Preview only — filters and bookings are disabled.</p>
@@ -317,7 +318,6 @@ function RentalBrowseViewInner({
         </section>
       </DiscoveryWorkspace>
 
-      <BrowseMapSheet raised />
       {detailsRental && !isLgUp ? (
         <RentalDetailsSheet
           rental={detailsRental}

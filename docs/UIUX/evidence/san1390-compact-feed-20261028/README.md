@@ -39,3 +39,16 @@ Screenshots: events-{320,390,768,1440}.png and each other page at {390,1440}.png
 - Preserve compact visible `Explore contests` on mobile, but restore `aria-label="Explore restaurant contests"` for screen reader semantics and the existing test.
 - Verified locally with `PW_SKIP_WEBSERVER=1 SMOKE_BASE_URL=http://localhost:3002 npx playwright test e2e/san-1524-contests.spec.ts --project=local-chromium --grep "restaurant directory links to contest discovery" --workers=1 --retries=0` (Playwright test-results/.last-run.json: passed, no failed tests).
 - This is a P1 regression correction, not proof of entire CI/production. Required exact-head checks must rerun after push.
+
+
+## PR #599 focused mobile Map correction — 2026-10-28
+
+**Issue reproduced:** At 390px the old fixed Map trigger intersects a restaurant `Ask about this` button and, at some scroll positions, rental card actions. The trigger intercepts part of a critical action's hit area.
+
+**Correction:** Reuse the existing `BrowseMapSheet`, rendered as a 44px inline button in `DiscoveryWorkspace`'s sticky mobile header for Rentals, Restaurants, Cafés and Nightlife when that page has a map; preserve its original floating behavior for other callers. The existing bottom-sheet map and Close control are reused. The shared map-error fallback no longer calls rentals and cafés a “restaurant list.”
+
+**Code proof:** Five focused Vitest files: 65/65 pass; typecheck pass; changed-file ESLint and diff check required before pushing.
+
+**Real browser proof:** 320px and 390px Rentals: HTTP 200; button stays visible after scrolling, map sheet opens and closes, and no horizontal overflow or page error. Restaurants 320px: Map opens with no overflow; Google Maps later reports `getRootNode` on a detached/undefined element. A broader browser sweep was interrupted when the local development device restarted; **do not claim complete 5-route, map-render or production verification**. The local 390px Rentals capture `map-header-rentals-390.png` shows unobstructed Schedule viewing. Development-only inspector notices are visible in the capture rather than concealed.
+
+**Remaining gate:** independent GitHub exact-head Floor and deterministic browser suite; browser check 390/768/1440 on all affected routes, map fallback and keyboard focus, and Vercel preview/production exact-SHA readback. The map-provider runtime error is not fixed by repositioning its trigger and must not be counted as a successful rendered map.

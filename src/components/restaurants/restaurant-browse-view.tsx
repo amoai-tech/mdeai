@@ -95,12 +95,8 @@ function RestaurantBrowseViewInner({
             ? "Sample listings — live restaurant data is unavailable; these are not contest nominees"
             : searched?.scope === retryHref ? `Ask MDE — ${shownResults.length} restaurants` : "Food & dining in Medellín"
         }
-        filterBar={
-          <RestaurantBrowseFilters
-            neighborhood={neighborhood}
-            cuisine={cuisine}
-          />
-        }
+        mobileMapTrigger={<BrowseMapSheet inline />}
+        filterBar={<RestaurantBrowseFilters neighborhood={neighborhood} cuisine={cuisine} />}
       >
         <aside className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-border/70 bg-card px-3 py-3" data-testid="restaurant-contests-entry">
           <Trophy className="size-5 shrink-0 text-primary" aria-hidden="true" />
@@ -108,8 +104,8 @@ function RestaurantBrowseViewInner({
             <h2 className="text-sm font-semibold">Medellín restaurant contests</h2>
             <p className="hidden text-xs text-muted-foreground sm:block">Explore participating restaurants and their voting options.</p>
           </div>
-          <Link className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-medium text-foreground hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary" href="/contests" aria-label="Explore restaurant contests">
-            Explore contests <ArrowUpRight className="size-3.5" aria-hidden="true" />
+          <Link className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-medium text-foreground hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary" href="/contests">
+            Explore restaurant contests <ArrowUpRight className="size-3.5" aria-hidden="true" />
           </Link>
         </aside>
         <section className="mt-6" aria-label="Restaurant listings">
@@ -187,7 +183,6 @@ function RestaurantBrowseViewInner({
         </section>
       </DiscoveryWorkspace>
 
-      <BrowseMapSheet raised />
       {selectedRestaurant && !desktop ? <RestaurantDetailsSheet restaurant={selectedRestaurant} onClose={closeDetails} /> : null}
     </>
   );

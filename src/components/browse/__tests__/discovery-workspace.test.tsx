@@ -10,6 +10,7 @@ import { DiscoveryWorkspace } from "../DiscoveryWorkspace";
 function render(askComposer?: ReactNode) {
   return renderToStaticMarkup(
     <DiscoveryWorkspace
+      mobileMapTrigger={<button type="button" data-testid="map-trigger-stub">Map</button>}
       testId="rentals-browse"
       activeSlug="rentals"
       title="Rentals in Medellín"
@@ -51,6 +52,17 @@ describe("DiscoveryWorkspace (SAN-1421)", () => {
     expect(html).toMatch(/data-testid="workspace-results-column"/);
     expect(html).toContain("lg:overflow-y-auto");
     expect(html).toContain("lg:h-dvh");
+  });
+
+  it("places mobile Map inside the sticky header before filters and cards", () => {
+    const html = render();
+    const header = html.indexOf("<header ");
+    const map = html.indexOf('data-testid="map-trigger-stub"');
+    const filters = html.indexOf('data-testid="filters"');
+    expect(header).toBeGreaterThanOrEqual(0);
+    expect(map).toBeGreaterThan(header);
+    expect(map).toBeLessThan(filters);
+    expect(html).toContain('data-testid="workspace-mobile-map-trigger"');
   });
 
   it("gives phones a menu button", () => {

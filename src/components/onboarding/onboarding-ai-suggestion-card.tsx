@@ -59,7 +59,7 @@ export function OnboardingAiSuggestionCard({ suggestion, onAccept, onIgnore }: P
     <section
       data-testid="onboarding-suggestion-card"
       aria-label="AI profile suggestions"
-      className="rounded-2xl border border-accent/40 bg-accent/5 p-4"
+      className="min-w-0 rounded-2xl border border-accent/40 bg-accent/5 p-4"
     >
       <div className="flex items-center gap-2">
         <SparklesIcon className="size-4 text-accent" aria-hidden="true" />
@@ -72,9 +72,9 @@ export function OnboardingAiSuggestionCard({ suggestion, onAccept, onIgnore }: P
       <dl className="mt-3 grid gap-1 text-sm">
         {FIELDS.map((field) =>
           suggestion[field.key] !== undefined ? (
-            <div key={field.key} className="flex gap-2">
+            <div key={field.key} className="flex min-w-0 gap-2">
               <dt className="w-28 shrink-0 text-muted-foreground">{field.label}</dt>
-              <dd data-testid={"suggestion-" + field.key}>{suggestion[field.key]}</dd>
+              <dd className="min-w-0 break-words [overflow-wrap:anywhere]" data-testid={"suggestion-" + field.key}>{suggestion[field.key]}</dd>
             </div>
           ) : null,
         )}

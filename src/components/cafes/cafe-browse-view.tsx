@@ -66,19 +66,21 @@ function CafeBrowseViewInner({
     }
   }, [retryHref, clearAskSelection]);
 
+  // The map exists for a grounded result set or when saved cards have real coordinates (no pin means no map).
+  const hasMap = activeRows !== null || (!error && basePins.length > 0);
+
   return (
     <>
     <DiscoveryPageContext page="cafes" filters={{ neighborhood, feature }} selectedId={selectedId} />
     <DiscoveryWorkspace
       activeSlug="cafes"
       askComposer={<DiscoveryAskComposer page="cafes" onAgentResults={onAgentResults} />}
-      rightPanel={activeRows !== null || (!error && basePins.length > 0) ? <BrowseMapPanel fill /> : undefined}
+      rightPanel={hasMap ? <BrowseMapPanel fill /> : undefined}
       testId="cafes-browse"
       title="Cafés"
       subtitle="Specialty coffee & workspace spots in Medellín"
-      filterBar={
-        <CafeBrowseFilters neighborhood={neighborhood} feature={feature} />
-      }
+      mobileMapTrigger={hasMap ? <BrowseMapSheet inline /> : null}
+      filterBar={<CafeBrowseFilters neighborhood={neighborhood} feature={feature} />}
     >
       <section className="mt-6" aria-label="Café listings">
         <DiscoveryGroundedResults rows={activeRows} selectedId={selectedId} onSelectRow={selectForAsk} />
@@ -133,7 +135,6 @@ function CafeBrowseViewInner({
         ) : null}
       </section>
     </DiscoveryWorkspace>
-    {activeRows !== null || (!error && basePins.length > 0) ? <BrowseMapSheet raised /> : null}
     </>
   );
 }

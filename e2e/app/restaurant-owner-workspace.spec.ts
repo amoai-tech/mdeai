@@ -183,6 +183,67 @@ test.describe("SAN-1540 restaurant owner workspace", () => {
     await expect(page).toHaveURL(/\/login\?next=%2Fapp%2Fpartners%2Frestaurants/);
   });
 
+  test("SAN-1602 live NVIDIA website → review → owner save → DB readback", async ({ page }) => {
+    test.skip(process.env.MDE_RESTAURANT_LIVE_SOURCE_E2E !== "1",
+      "Opt-in real NVIDIA + real Supabase: MDE_RESTAURANT_LIVE_SOURCE_E2E=1");
+    test.setTimeout(180_000);
+    const sourceUrl = "https://co.pergamino.co/pages/quienes-somos";
+    fixture = await buildFixture();
+    await signInPartner(page, fixture.identityA.email);
+    await openAssignedRestaurant(page, fixture);
+
+    // This is a read-only draft: the stored restaurant must remain unchanged.
+    const before = await fixture.admin.from("restaurants")
+      .select("description").eq("id", fixture.restaurantA.id).single();
+    expect(before.error).toBeNull();
+    const reply = page.waitForResponse(response =>
+      response.request().method() === "POST" &&
+      new URL(response.url()).pathname ===
+        `/api/partners/restaurants/${fixture!.restaurantA.id}/website-import`,
+      { timeout: 40_000 },
+    );
+    await page.getByLabel("Restaurant website").fill(sourceUrl);
+    await page.getByRole("button", { name: "Read website" }).click();
+    const response = await reply;
+    expect(response.status()).toBe(200);
+    const result = await response.json() as {
+      success?: boolean; draft?: { sources?: string[]; name?: string };
+    };
+    expect(result.success).toBe(true);
+    expect(result.draft?.name?.toLowerCase()).toContain("pergamino");
+    expect(result.draft?.sources).toContain(sourceUrl);
+    await expect(page.getByTestId("restaurant-import-proposal")).toBeVisible();
+    const unchanged = await fixture.admin.from("restaurants")
+      .select("description").eq("id", fixture.restaurantA.id).single();
+    expect(unchanged.data?.description).toBe(before.data?.description);
+
+    await page.getByRole("button", { name: "Apply to form" }).click();
+    const editedDescription = "QA manual edit after real NVIDIA website extraction";
+    await page.getByTestId("restaurant-description").fill(editedDescription);
+    await page.getByTestId("restaurant-save").click();
+    await expect(page.getByTestId("restaurant-saved")).toBeVisible({ timeout: 30_000 });
+    await page.reload();
+    await expect(page.getByTestId("restaurant-description")).toHaveValue(editedDescription);
+
+    const stored = await fixture.admin.from("restaurants")
+      .select("id,description,website,partner_id")
+      .eq("id", fixture.restaurantA.id).single();
+    expect(stored.error).toBeNull();
+    expect(stored.data).toMatchObject({
+      id: fixture.restaurantA.id, partner_id: fixture.partnerA,
+      description: editedDescription, website: sourceUrl,
+    });
+    // The real partner authorization remains the only way to import.
+    const forbidden = await page.request.post(
+      `/api/partners/restaurants/${fixture.restaurantB.id}/website-import`,
+      { data: { url: sourceUrl } },
+    );
+    expect(forbidden.status()).toBe(403);
+    console.log("SAN1602_RESTAURANT_NVIDIA_E2E_PASS",
+      JSON.stringify({ sourceConfirmed: true, imported: response.status(),
+        editPersisted: true, tenantDenied: forbidden.status(), savedRecordCount: 1 }));
+  });
+
   test("partner A edits the assigned restaurant, reloads it, and cannot reach B", async ({
     page,
   }) => {

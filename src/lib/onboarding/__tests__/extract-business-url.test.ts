@@ -1,4 +1,11 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const mocks = vi.hoisted(() => ({ page: vi.fn(), model: vi.fn() }));
+vi.mock("@/lib/web/safe-public-page-reader", async importOriginal => ({
+  ...(await importOriginal<typeof import("@/lib/web/safe-public-page-reader")>()),
+  readPublicWebsite: mocks.page,
+}));
+vi.mock("@/lib/web/extract-website-json", () => ({ extractWebsiteJson: mocks.model }));
 
 import {
   businessUrlDraftSchema,
@@ -50,67 +57,51 @@ describe("business URL extraction parsing (SAN-1193)", () => {
     expect(businessUrlDraftSchema.safeParse({ sources: [] }).success).toBe(false);
   });
 
-  afterEach(() => {
-    vi.unstubAllGlobals();
-    vi.unstubAllEnvs();
+  beforeEach(() => {
+    mocks.page.mockReset().mockResolvedValue({
+      requestedUrl: "https://cafe.example.com/", finalUrl: "https://cafe.example.com/about",
+      title: "Café Central", text: "Café Central serves specialty coffee in Laureles.",
+      retrievedAt: "2026-10-28T00:00:00Z",
+    });
+    mocks.model.mockReset().mockResolvedValue({
+      businessName: "Café Central", category: "Café", neighborhood: "Laureles",
+      description: "Specialty coffee", sources: ["https://fake-citation.example"],
+    });
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  it("returns only actually retrieved source URLs, never model-written citations", async () => {
+    await expect(extractBusinessDraft("https://cafe.example.com")).resolves.toMatchObject({
+      businessName: "Café Central",
+      website: "https://cafe.example.com/about",
+      sources: ["https://cafe.example.com/about"],
+    });
+    expect(mocks.model).toHaveBeenCalledTimes(1);
+    expect(mocks.model).toHaveBeenCalledWith(expect.objectContaining({
+      finalUrl: "https://cafe.example.com/about",
+    }), "partner", expect.any(String));
   });
 
-  function mockGemini(steps: unknown[]) {
-    vi.stubEnv("GOOGLE_GENERATIVE_AI_API_KEY", "test-key");
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({ steps }),
-      }),
-    );
-  }
-
-  it("rejects invented citations when the provider did not retrieve the URL", async () => {
-    mockGemini([
-      {
-        type: "model_output",
-        content: [{
-          type: "text",
-          text: JSON.stringify({
-            businessName: "Café Central",
-            sources: ["https://fake-citation.example.com"],
-          }),
-        }],
-      },
-      {
-        type: "url_context_result",
-        result: [{ url: "https://cafe.example.com", status: "error" }],
-      },
-    ]);
+  it("does not accept a bare website as extracted business detail", async () => {
+    mocks.model.mockResolvedValue({ website: "https://fake-citation.example" });
     await expect(extractBusinessDraft("https://cafe.example.com")).rejects.toMatchObject({
       code: "invalid_output",
     });
   });
 
-  it("returns only successfully retrieved provider URLs, not model-written URLs", async () => {
-    mockGemini([
-      {
-        type: "model_output",
-        content: [{
-          type: "text",
-          text: JSON.stringify({
-            businessName: "Café Central",
-            sources: ["https://made-up.example.com"],
-          }),
-        }],
-      },
-      {
-        type: "url_context_result",
-        result: [
-          { url: "https://cafe.example.com", status: "success" },
-          { url: "https://failed.example.com", status: "unsafe" },
-        ],
-      },
-    ]);
-    await expect(extractBusinessDraft("https://cafe.example.com")).resolves.toMatchObject({
-      businessName: "Café Central",
-      sources: ["https://cafe.example.com/"],
+  it("returns recoverable failure when public website is unavailable", async () => {
+    const { PublicWebsiteReadError } = await import("@/lib/web/safe-public-page-reader");
+    mocks.page.mockRejectedValue(new PublicWebsiteReadError("unavailable"));
+    await expect(extractBusinessDraft("https://cafe.example.com")).rejects.toMatchObject({
+      code: "provider_failed",
+    });
+    expect(mocks.model).not.toHaveBeenCalled();
+  });
+
+  it("rejects privileged model keys even when page was actually fetched", async () => {
+    mocks.model.mockResolvedValue({ businessName: "Cafe", status: "approved" });
+    await expect(extractBusinessDraft("https://cafe.example.com")).rejects.toMatchObject({
+      code: "invalid_output",
     });
   });
 });
