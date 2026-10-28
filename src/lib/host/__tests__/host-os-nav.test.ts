@@ -30,10 +30,14 @@ describe("HOST_OS_NAV_ITEMS", () => {
 });
 
 describe("HOST_OS_APP_NAV_ITEMS", () => {
-  it("links the same three workspaces under /app/events", () => {
+  it("links the live workspaces under /app/events, including tickets, attendees and check-in", () => {
     expect(HOST_OS_APP_NAV_ITEMS.map((item) => item.href)).toEqual([
       "/app/events/overview",
       "/app/events",
+      // SAN-983 / 982 / 984 — real order, attendee and door surfaces.
+      "/app/events/tickets",
+      "/app/events/attendees",
+      "/app/events/check-in",
       "/app/events/analytics",
     ]);
     expect(hostOsNavItems("/app/events")).toBe(HOST_OS_APP_NAV_ITEMS);
@@ -89,10 +93,9 @@ describe("HOST_OS_QUICK_LINKS", () => {
 });
 
 describe("HOST_OS_NAV_PLACEHOLDERS", () => {
-  it("reserves Venues, Tickets, Inbox, Settings as disabled — never pages this phase", () => {
+  it("reserves Venues, Inbox, Settings as disabled — Tickets is now a live /app page", () => {
     expect(HOST_OS_NAV_PLACEHOLDERS.map((i) => i.label)).toEqual([
       "Venues",
-      "Tickets",
       "Inbox",
       "Settings",
     ]);

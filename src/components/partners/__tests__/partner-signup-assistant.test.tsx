@@ -82,12 +82,19 @@ function mount() {
   mounted = { root, container };
   return container;
 }
-function click(container: HTMLElement, testId: string) {
-  fireEvent.click(within(container).getByTestId(testId));
+// React 19 queues updates from fireEvent; flush them before asserting.
+async function click(container: HTMLElement, testId: string) {
+  await act(async () => {
+    fireEvent.click(within(container).getByTestId(testId));
+    await Promise.resolve();
+  });
 }
-function editCategory(container: HTMLElement, value: string) {
-  fireEvent.change(within(container).getByRole("textbox", { name: "Category" }), {
-    target: { value },
+async function editCategory(container: HTMLElement, value: string) {
+  await act(async () => {
+    fireEvent.change(within(container).getByRole("textbox", { name: "Category" }), {
+      target: { value },
+    });
+    await Promise.resolve();
   });
 }
 function expectCategory(container: HTMLElement, expected: string) {
@@ -104,47 +111,47 @@ afterEach(() => {
 });
 
 describe("SAN-709 assistant proposal revision guard", () => {
-  it("applies a reviewed current proposal but never writes on its own", () => {
+  it("applies a reviewed current proposal but never writes on its own", async () => {
     const container = mount();
-    click(container, "suggest-current");
+    await click(container, "suggest-current");
     expectCategory(container, "");
-    click(container, "onboarding-suggestion-accept");
+    await click(container, "onboarding-suggestion-accept");
     expectCategory(container, "Café");
     expect(within(container).queryByTestId("onboarding-suggestion-card")).toBeNull();
   });
 
-  it("keeps a newer manual edit when an old response arrives", () => {
+  it("keeps a newer manual edit when an old response arrives", async () => {
     const container = mount();
-    editCategory(container, "Restaurant");
-    click(container, "suggest-old");
+    await editCategory(container, "Restaurant");
+    await click(container, "suggest-old");
     expectCategory(container, "Restaurant");
     expect(within(container).queryByTestId("onboarding-suggestion-card")).toBeNull();
   });
 
-  it("invalidates a displayed proposal after the user edits the form", () => {
+  it("invalidates a displayed proposal after the user edits the form", async () => {
     const container = mount();
-    click(container, "suggest-current");
-    editCategory(container, "Restaurant");
+    await click(container, "suggest-current");
+    await editCategory(container, "Restaurant");
     expect(within(container).queryByTestId("onboarding-suggestion-stale")).not.toBeNull();
     expect(within(container).queryByTestId("onboarding-suggestion-accept")).toBeNull();
     expectCategory(container, "Restaurant");
   });
 
-  it("invalidates an earlier AI proposal after website autofill is accepted", () => {
+  it("invalidates an earlier AI proposal after website autofill is accepted", async () => {
     const container = mount();
-    click(container, "suggest-current");
-    click(container, "url-apply");
+    await click(container, "suggest-current");
+    await click(container, "url-apply");
     expectCategory(container, "Imported venue");
     expect(within(container).queryByTestId("onboarding-suggestion-stale")).not.toBeNull();
     expect(within(container).queryByTestId("onboarding-suggestion-accept")).toBeNull();
-    click(container, "suggest-old");
+    await click(container, "suggest-old");
     expectCategory(container, "Imported venue");
   });
 
-  it("Ignore never changes the form", () => {
+  it("Ignore never changes the form", async () => {
     const container = mount();
-    click(container, "suggest-current");
-    click(container, "onboarding-suggestion-ignore");
+    await click(container, "suggest-current");
+    await click(container, "onboarding-suggestion-ignore");
     expectCategory(container, "");
   });
 });

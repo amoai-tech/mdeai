@@ -80,7 +80,7 @@ export function useGroundedSearchFastPath() {
       userText: string,
       params: CafeSearchApiParams,
     ): Promise<boolean> => {
-      if (busyRef.current) return true;
+      if (busyRef.current) return false;
       busyRef.current = true;
       try {
         const envelope = await fetchGroundedSearch(params);
@@ -116,6 +116,7 @@ export function useGroundedSearchFastPath() {
       const params = buildCafeSearchParams(trimmed);
       if (!params) return false;
 
+      if (busyRef.current) return false;
       clearLocalMessages();
       return runSearch(trimmed, params);
     },

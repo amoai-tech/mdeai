@@ -26,7 +26,7 @@ import type { PersistTurnLog } from "@/mastra/copilotkit/logging-mastra-agent";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 30;
+export const maxDuration = 90;
 
 /** Keep ai_runs writes alive after the CopilotKit SSE response (Vercel serverless). */
 const persistTurnLog: PersistTurnLog = (opts) => {

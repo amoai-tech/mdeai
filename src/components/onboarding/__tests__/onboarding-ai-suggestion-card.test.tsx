@@ -38,51 +38,58 @@ function mount(onAccept = vi.fn(), onIgnore = vi.fn()) {
   return { container, onAccept, onIgnore };
 }
 
-function click(container: HTMLElement, testId: string) {
-  fireEvent.click(within(container).getByTestId(testId));
+// React 19 queues updates from fireEvent; flush them before asserting.
+async function click(container: HTMLElement, testId: string) {
+  await act(async () => {
+    fireEvent.click(within(container).getByTestId(testId));
+    await Promise.resolve();
+  });
 }
 
-function setValue(container: HTMLElement, testId: string, value: string) {
-  fireEvent.change(within(container).getByTestId(testId), { target: { value } });
+async function setValue(container: HTMLElement, testId: string, value: string) {
+  await act(async () => {
+    fireEvent.change(within(container).getByTestId(testId), { target: { value } });
+    await Promise.resolve();
+  });
 }
 
 describe("OnboardingAiSuggestionCard (SAN-709)", () => {
-  it("does not persist before explicit form activation", () => {
+  it("does not persist before explicit form activation", async () => {
     const onAccept = vi.fn();
     const { container } = mount(onAccept);
     expect(onAccept).not.toHaveBeenCalled();
     expect(container.textContent).toContain("Nothing is saved until");
   });
 
-  it("accepts the proposal without writing anything itself", () => {
+  it("accepts the proposal without writing anything itself", async () => {
     const { container, onAccept } = mount();
-    click(container, "onboarding-suggestion-accept");
+    await click(container, "onboarding-suggestion-accept");
     expect(onAccept).toHaveBeenCalledWith(
       expect.objectContaining({ businessName: "Café Central", category: "Café" }),
     );
   });
 
-  it("ignores the proposal", () => {
+  it("ignores the proposal", async () => {
     const { container, onIgnore } = mount();
-    click(container, "onboarding-suggestion-ignore");
+    await click(container, "onboarding-suggestion-ignore");
     expect(onIgnore).toHaveBeenCalledTimes(1);
   });
 
-  it("edits, validates and applies the changed values", () => {
+  it("edits, validates and applies the changed values", async () => {
     const { container, onAccept } = mount();
-    click(container, "onboarding-suggestion-edit");
-    setValue(container, "suggestion-edit-businessName", "Café Central Updated");
-    click(container, "onboarding-suggestion-save");
+    await click(container, "onboarding-suggestion-edit");
+    await setValue(container, "suggestion-edit-businessName", "Café Central Updated");
+    await click(container, "onboarding-suggestion-save");
     expect(onAccept).toHaveBeenCalledWith(
       expect.objectContaining({ businessName: "Café Central Updated" }),
     );
   });
 
-  it("shows a readable error and does not apply an invalid edit", () => {
+  it("shows a readable error and does not apply an invalid edit", async () => {
     const { container, onAccept } = mount();
-    click(container, "onboarding-suggestion-edit");
-    setValue(container, "suggestion-edit-businessName", "A");
-    click(container, "onboarding-suggestion-save");
+    await click(container, "onboarding-suggestion-edit");
+    await setValue(container, "suggestion-edit-businessName", "A");
+    await click(container, "onboarding-suggestion-save");
     expect(onAccept).not.toHaveBeenCalled();
     expect(
       container.querySelector('[data-testid="suggestion-error"]')?.textContent,

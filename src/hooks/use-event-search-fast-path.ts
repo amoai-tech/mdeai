@@ -77,6 +77,9 @@ export function useEventSearchFastPath() {
           neighborhood: e.neighborhood,
           startsAt: e.startsAt,
           pricePerTicket: e.pricePerTicket,
+          currency: e.currency,
+          canBuyTickets: e.canBuyTickets,
+          ticketUrl: e.ticketUrl,
           imageUrl: e.imageUrl,
           sourceUrl: e.sourceUrl ?? e.mapsUrl ?? undefined,
         })),
@@ -104,7 +107,7 @@ export function useEventSearchFastPath() {
       memory: ConciergeWorkingMemory,
       propagateFailure = false,
     ): Promise<boolean> => {
-      if (busyRef.current) return true;
+      if (busyRef.current) return false;
       busyRef.current = true;
       try {
         let { results: cards, hybridUsed, rankExplanation } =
@@ -165,7 +168,7 @@ export function useEventSearchFastPath() {
       };
 
       if (shouldInstantEventClarify(trimmed, memory)) {
-        if (busyRef.current) return true;
+        if (busyRef.current) return false;
         busyRef.current = true;
         try {
           setToolResult(null);
@@ -182,6 +185,8 @@ export function useEventSearchFastPath() {
       const params = buildEventSearchParams(trimmed, memory);
       if (!params) return false;
 
+      // A busy handler cannot claim it accepted a second turn without retaining it.
+      if (busyRef.current) return false;
       clearLocalMessages();
       return runSearch(trimmed, params, memory, true);
     },

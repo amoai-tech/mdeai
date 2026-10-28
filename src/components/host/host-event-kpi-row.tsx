@@ -9,8 +9,7 @@ const LABELS = [
 
 /**
  * SAN-885 — the three real numbers on one event. Values come from
- * `event_dashboard_summary`; a missing summary shows 0 rather than inventing
- * a sale, and the page marks the KPI block as supporting information.
+ * `event_dashboard_summary`; when unavailable, show unknown, never a fake zero.
  */
 export function HostEventKpiRow({
   summary,
@@ -20,9 +19,9 @@ export function HostEventKpiRow({
   currency: string | null;
 }) {
   const values: Record<(typeof LABELS)[number]["key"], string> = {
-    revenue: formatMoney(summary?.revenue_cents ?? 0, currency ?? "COP"),
-    sold: String(summary?.kpis?.tickets_sold ?? 0),
-    checkedIn: String(summary?.kpis?.checked_in ?? 0),
+    revenue: summary?.revenue_cents == null ? "—" : formatMoney(summary.revenue_cents, currency ?? "COP"),
+    sold: summary?.kpis?.tickets_sold == null ? "—" : String(summary.kpis.tickets_sold),
+    checkedIn: summary?.kpis?.checked_in == null ? "—" : String(summary.kpis.checked_in),
   };
 
   return (

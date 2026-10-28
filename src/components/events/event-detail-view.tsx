@@ -143,7 +143,9 @@ export function EventDetailView({ event }: EventDetailViewProps) {
                 From {formatTicketPrice(fromTier.priceCents, fromTier.currency)}
               </p>
             ) : (
-              <p className="text-sm font-medium text-muted-foreground">Sold out</p>
+              <p className="text-sm font-medium text-muted-foreground">
+                {event.tickets.length === 0 ? "Price TBD" : "Sold out"}
+              </p>
             )}
 
             <EventTicketTiers

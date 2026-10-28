@@ -2,6 +2,7 @@ import { Agent } from '@mastra/core/agent';
 import { z } from 'zod';
 import { searchEventsTool } from '../tools/search-events';
 import { FLASH_MODEL } from '../lib/models';
+import { geminiMalformedFirstStepRetry } from '../lib/gemini-malformed-retry';
 import { createThreadMemory } from '../lib/agent-memory';
 import { formatEventSourcePromptHint } from '@/lib/events/trusted-event-sources';
 
@@ -89,6 +90,8 @@ If zero results: state plainly why, relax exactly ONE filter (price OR category 
 
 ${formatEventSourcePromptHint()}`,
   model: FLASH_MODEL,
+  // SAN-1396: same bounded first-step recovery as the concierge (never after a tool ran).
+  errorProcessors: [geminiMalformedFirstStepRetry],
   tools: { searchEventsTool },
   memory: createThreadMemory(eventWorkingMemorySchema),
 });
