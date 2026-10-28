@@ -43,14 +43,31 @@ async function ask(page: Page, route: Route, question: string, count: number) {
   await expect(input).toBeVisible({ timeout: 40_000 });
   await input.fill(question);
   await expect(send).toBeEnabled({ timeout: 40_000 });
+  // Assistant text arrives token-by-token. Merely seeing an MDE <li> means
+  // streaming STARTED, not that the exact name has finished streaming.
+  const completedRun = page.waitForResponse((response) => {
+    if (!response.url().includes("/api/copilotkit") || response.request().method() !== "POST") return false;
+    try {
+      const envelope: unknown = response.request().postDataJSON();
+      return !!envelope && typeof envelope === "object" && "method" in envelope &&
+        envelope.method === "agent/run";
+    } catch { return false; }
+  }, { timeout: 125_000 });
   await send.click();
   if (rental && count === 1) {
     const toggle = page.locator('[data-testid="rental-ask-toggle-transcript"]:visible');
     await expect(toggle).toBeVisible({ timeout: 30_000 });
     await toggle.click();
   }
+  const response = await completedRun;
+  expect(response.status(), "real signed-in agent/run must succeed").toBe(200);
+  const streamError = await response.finished();
+  expect(streamError, "the agent stream must finish successfully").toBeNull();
+  const stream = await response.text();
+  expect(stream, "an HTTP 200 with only partial tokens is not an AI answer")
+    .toContain('"type":"RUN_FINISHED"');
   const history = page.locator(rental ? '[data-testid="rental-ask-transcript"]:visible' : '[data-testid="discovery-ask-history"]:visible');
-  await expect.poll(async () => (await assistantTexts(history)).length, { timeout: 125_000 })
+  await expect.poll(async () => (await assistantTexts(history)).length, { timeout: 60_000 })
     .toBeGreaterThanOrEqual(count);
   const replies = await assistantTexts(history);
   const reply = replies[count - 1] ?? "";
