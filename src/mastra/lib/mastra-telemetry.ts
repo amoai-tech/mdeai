@@ -23,6 +23,7 @@ export type AgentErrorType =
   | "client_abort"
   | "timeout"
   | "rate_limit"
+  | "billing"
   | "auth"
   | "tool_failure"
   | "model_failure"
@@ -92,6 +93,10 @@ export function classifyAgentError(err: unknown): AgentErrorType {
     return "timeout";
   if (name === "aborterror" || msg.includes("abort") || msg.includes("cancel"))
     return "client_abort";
+  // Gemini Prepay depletion is HTTP 402 (RESOURCE_EXHAUSTED), not a transient
+  // 429 rate limit. Retrying cannot restore service; report billing separately.
+  if (status === 402 || msg.includes("prepayment credits are depleted"))
+    return "billing";
   if (status === 429 || msg.includes("rate limit") || msg.includes("too many requests") || msg.includes("resource_exhausted"))
     return "rate_limit";
   if (status === 401 || status === 403 || msg.includes("unauthorized") || msg.includes("permission") || msg.includes("forbidden"))
