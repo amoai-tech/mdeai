@@ -152,7 +152,11 @@ export default async function AppEventAttendeesPage({ searchParams }: PageProps)
             </thead>
             <tbody>
               {attendees.rows.map((row) => {
-                const status = (row.status ?? "").toLowerCase();
+                const storedStatus = (row.status ?? "").toLowerCase();
+                // A consumed QR is checked in even when a legacy row still says "active".
+                // Refunds and cancellations retain their distinct payment states.
+                const status = row.qr_used_at && storedStatus === "active"
+                  ? "used" : storedStatus;
                 return (
                   <tr key={row.id} className="border-b border-border/60">
                     <td className="py-2 pr-3 font-medium">{row.full_name ?? "—"}</td>
