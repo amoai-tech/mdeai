@@ -10,7 +10,7 @@ import { nextPinSelection } from "@/platform/maps/pin-selection";
  *
  * Selecting still goes through `panToPin`, so the map keeps its existing pan + focus behaviour.
  */
-export function useMapPinSelect(): (pinId: string) => void {
+export function useMapPinSelect() {
   const { selectedPinId, setSelectedPinId, panToPin } = useMapContext();
 
   return useCallback(

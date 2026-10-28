@@ -21,25 +21,31 @@ describe("useMapPinSelect", () => {
     context.panToPin = vi.fn();
   });
 
-  it("pans to a newly selected pin", () => {
+  it("pans to a newly selected pin", async () => {
     const { result } = renderHook(() => useMapPinSelect());
-    act(() => result.current("venue-a"));
+    await act(async () => {
+      result.current("venue-a");
+    });
     expect(context.panToPin).toHaveBeenCalledWith("venue-a");
     expect(context.setSelectedPinId).not.toHaveBeenCalled();
   });
 
-  it("clears instead of panning when the selected pin is clicked again", () => {
+  it("clears instead of panning when the selected pin is clicked again", async () => {
     context.selectedPinId = "venue-a";
     const { result } = renderHook(() => useMapPinSelect());
-    act(() => result.current("venue-a"));
+    await act(async () => {
+      result.current("venue-a");
+    });
     expect(context.setSelectedPinId).toHaveBeenCalledWith(null);
     expect(context.panToPin).not.toHaveBeenCalled();
   });
 
-  it("moves the selection to a different pin", () => {
+  it("moves the selection to a different pin", async () => {
     context.selectedPinId = "venue-a";
     const { result } = renderHook(() => useMapPinSelect());
-    act(() => result.current("venue-b"));
+    await act(async () => {
+      result.current("venue-b");
+    });
     expect(context.panToPin).toHaveBeenCalledWith("venue-b");
   });
 });
