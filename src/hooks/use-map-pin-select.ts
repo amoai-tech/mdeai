@@ -1,6 +1,5 @@
 "use client";
 
-import { useCallback } from "react";
 import { useMapContext } from "@/platform/maps/map-context";
 import { nextPinSelection } from "@/platform/maps/pin-selection";
 
@@ -14,15 +13,12 @@ import { nextPinSelection } from "@/platform/maps/pin-selection";
 export function useMapPinSelect() {
   const { selectedPinId, setSelectedPinId, panToPin } = useMapContext();
 
-  return useCallback(
-    (pinId: string) => {
-      const next = nextPinSelection(selectedPinId, pinId);
-      if (next === null) {
-        setSelectedPinId(null);
-        return;
-      }
-      panToPin(next);
-    },
-    [selectedPinId, setSelectedPinId, panToPin],
-  );
+  return function selectPin(targetPinId: string) {
+    const next = nextPinSelection(selectedPinId, targetPinId);
+    if (next === null) {
+      setSelectedPinId(null);
+      return;
+    }
+    panToPin(next);
+  };
 }
