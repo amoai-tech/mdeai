@@ -97,7 +97,11 @@ export function BusinessUrlImportCard({ onApply }: Props) {
             data-testid="business-url-input"
             type="url"
             value={url}
-            onChange={(event) => setUrl(event.target.value)}
+            onChange={(event) => {
+              setUrl(event.target.value);
+              // A draft is evidence for the requested URL, never a new one.
+              setDraft(null);
+            }}
             placeholder="https://yourbusiness.com"
             maxLength={500}
             disabled={loading}
