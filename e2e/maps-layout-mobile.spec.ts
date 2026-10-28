@@ -118,6 +118,35 @@ test.describe("SAN-524 mobile map interaction — 390×844 touch", () => {
     hasTouch: true,
   });
 
+  test("map trigger is disabled in server HTML until hydrated", async ({
+    browser,
+    page,
+  }) => {
+    const withoutJs = await browser.newContext({
+      viewport: PHONE_390,
+      isMobile: true,
+      hasTouch: true,
+      javaScriptEnabled: false,
+    });
+    try {
+      const serverPage = await withoutJs.newPage();
+      await serverPage.goto("/chat", { waitUntil: "domcontentloaded" });
+      const serverTrigger = serverPage.getByTestId("map-sheet-trigger");
+      await expect(serverTrigger).toBeVisible({ timeout: 15_000 });
+      await expect(serverTrigger).toBeDisabled();
+      await expect(serverTrigger).toHaveAttribute("data-hydrated", "false");
+    } finally {
+      await withoutJs.close();
+    }
+
+    await gotoDeterministicChat(page);
+    const trigger = page.getByTestId("map-sheet-trigger");
+    await expect(trigger).toBeEnabled({ timeout: 15_000 });
+    await expect(trigger).toHaveAttribute("data-hydrated", "true");
+    await trigger.tap();
+    await expect(page.getByTestId("map-sheet-content")).toBeVisible();
+  });
+
   test("map close control and unselected pin meet the 44×44 touch target", async ({
     page,
   }) => {

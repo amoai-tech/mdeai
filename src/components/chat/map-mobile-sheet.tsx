@@ -57,9 +57,20 @@ function getLgUpServerSnapshot() {
   return false;
 }
 
+const subscribeHydration = () => () => {};
+const getHydratedSnapshot = () => true;
+const getServerHydratedSnapshot = () => false;
+
 /** MAP-007 mobile bottom sheet — map without covering chat input. */
 export function MapMobileSheet() {
   const [userMapOpen, setUserMapOpen] = useState(false);
+  // The trigger is server-rendered before React attaches its click handler.
+  // Keep it visibly disabled until hydration so an early tap cannot do nothing.
+  const isHydrated = useSyncExternalStore(
+    subscribeHydration,
+    getHydratedSnapshot,
+    getServerHydratedSnapshot,
+  );
   const isLgUp = useSyncExternalStore(
     subscribeLgUp,
     getLgUpSnapshot,
@@ -86,6 +97,8 @@ export function MapMobileSheet() {
       <Button
         type="button"
         data-testid="map-sheet-trigger"
+        data-hydrated={isHydrated ? "true" : "false"}
+        disabled={!isHydrated}
         className="pointer-events-auto h-11 gap-2 rounded-full px-4 shadow-lg"
         size="default"
         aria-label={pinCount > 0 ? `Open map with ${pinCount} pins` : "Open map"}
