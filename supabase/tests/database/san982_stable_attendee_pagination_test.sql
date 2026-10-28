@@ -2,7 +2,7 @@
 -- sharing ONE order timestamp. All test rows roll back.
 begin;
 set local search_path = public, extensions;
-select plan(15);
+select plan(21);
 
 create temp table san982_actor (host_id uuid, outsider_id uuid, event_id uuid, order_id uuid);
 do $fixture$
@@ -98,6 +98,18 @@ select is((public.event_attendees_paginated((select event_id from san982_actor),
 select is(public.event_attendees_paginated((select event_id from san982_actor),'',50,0)->'rows',
   public.event_attendees_paginated((select event_id from san982_actor),'',50,0)->'rows',
   'refresh returns stable first-page ordering');
+select is((public.event_attendees_paginated((select event_id from san982_actor),'',100,0)->>'total')::integer,
+  52,'maximum permitted page size is accepted');
+select throws_ok($$select public.event_attendees_paginated((select event_id from san982_actor),'',0,0)$$,
+  '22023','INVALID_PAGINATION','zero page limit is rejected inside SQL');
+select throws_ok($$select public.event_attendees_paginated((select event_id from san982_actor),'',101,0)$$,
+  '22023','INVALID_PAGINATION','oversized page limit is rejected inside SQL');
+select throws_ok($$select public.event_attendees_paginated((select event_id from san982_actor),'',50,-1)$$,
+  '22023','INVALID_PAGINATION','negative page offset is rejected inside SQL');
+select throws_ok($$select public.event_attendees_paginated((select event_id from san982_actor),'',null,0)$$,
+  '22023','INVALID_PAGINATION','null page limit is rejected inside SQL');
+select is((public.event_attendees_paginated((select event_id from san982_actor),'',1,0)->'rows'->0 ? 'stripe_payment_intent'),
+  false,'attendee RPC omits unused payment processor reference');
 reset role;
 
 update public.event_attendees set qr_used_at = now()
