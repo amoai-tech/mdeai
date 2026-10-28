@@ -16,10 +16,9 @@ import { RestaurantDetailsPanel, RestaurantDetailsSheet } from "@/components/res
 import { useIsLgUp } from "@/hooks/use-is-lg-up";
 import { EmptyState } from "@/components/empty/empty-state";
 import { Button } from "@/components/ui/button";
-import { useMapContext } from "@/platform/maps/map-context";
+import { useMapContext, useMapPinSelect } from "@/platform/maps/map-context";
 import { useBrowseMapSync } from "@/hooks/use-browse-map-sync";
 import { useBrowseCardScroll } from "@/hooks/use-browse-card-scroll";
-import { useMapPinSelect } from "@/hooks/use-map-pin-select";
 import { restaurantToMapPin } from "@/lib/browse/browse-pin-converters";
 import type { Restaurant } from "@/mastra/tools/search-restaurants";
 
