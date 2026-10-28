@@ -25,6 +25,8 @@ export const hostOpsAgent = new Agent({
   model: FLASH_MODEL,
   // SAN-1396: same bounded first-step recovery as the concierge (never after a tool ran).
   errorProcessors: [geminiMalformedFirstStepRetry],
+  // One carefully scoped first-step correction, not up to three implicit replays (same as the concierge).
+  maxProcessorRetries: 1,
   instructions: HOST_OPS_INSTRUCTIONS,
   memory: createThreadMemory(hostOpsMemorySchema),
 });

@@ -34,6 +34,11 @@ describe("SAN-1396 every chat agent carries the Gemini malformed-call recovery",
         geminiMalformedFirstStepRetry.id,
       );
     });
+
+    it(`${key} states a one-retry processor cap explicitly`, () => {
+      // Without it Mastra warns on every cold start and silently allows up to 3 replays.
+      expect(agent.__getMaxProcessorRetries()).toBe(1);
+    });
   }
 });
 
@@ -94,6 +99,7 @@ async function runTurn(script: Attempt[], opts: { withTool?: boolean } = {}) {
     model,
     tools,
     errorProcessors: [geminiMalformedFirstStepRetry],
+    maxProcessorRetries: 1, // same cap as the real agents
   });
   const requestContext = new RequestContext();
   const settled = await agent

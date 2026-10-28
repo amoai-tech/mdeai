@@ -13,6 +13,8 @@ export const hostEventAgent = new Agent({
   model: ACTIVE_TEXT_MODEL,
   // SAN-1396: same bounded first-step recovery as the concierge (never after a tool ran).
   errorProcessors: [geminiMalformedFirstStepRetry],
+  // One carefully scoped first-step correction, not up to three implicit replays (same as the concierge).
+  maxProcessorRetries: 1,
   instructions: HOST_EVENT_INSTRUCTIONS,
   memory: createHostEventThreadMemory(EventDraftStateSchema),
 });
