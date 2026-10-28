@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { MenuItemRow } from "@/lib/restaurants/restaurant-owner-load";
+import { parseMenuPrice } from "@/lib/restaurants/restaurant-menu-price";
 
 type Draft = {
   id: string;
@@ -34,7 +35,7 @@ function toDraft(item: MenuItemRow): Draft {
 }
 
 function toPayload(draft: Draft) {
-  const parsedPrice = draft.price.trim() === "" ? null : Number(draft.price);
+  const parsedPrice = parseMenuPrice(draft.price);
   return {
     section: draft.section.trim() || null,
     name: draft.name.trim(),
@@ -142,7 +143,7 @@ export function RestaurantMenuEditor({
           section: newItem.section.trim() || null,
           name: newItem.name.trim(),
           description: newItem.description.trim() || null,
-          priceAmount: newItem.price.trim() === "" ? null : Number(newItem.price),
+          priceAmount: parseMenuPrice(newItem.price),
           currency: newItem.currency.trim().toUpperCase(),
           position: items.length,
         }),

@@ -129,6 +129,17 @@ const TEXT_FIELDS = [
   "primary_image_url",
 ] as const;
 
+/** Detect unknown legacy JSON before a user can accidentally replace it. */
+export function unsupportedRestaurantFields(record: {
+  hours_of_operation?: unknown;
+  images?: unknown;
+}): { hours: boolean; images: boolean } {
+  return {
+    hours: !openingHoursSchema.safeParse(record.hours_of_operation ?? {}).success,
+    images: !z.array(listingImageSchema).safeParse(record.images ?? []).success,
+  };
+}
+
 /** Normalize an unknown database row into safe form values (never invents facts). */
 export function listingValuesFromRecord(record: {
   name?: string | null;

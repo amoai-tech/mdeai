@@ -23,6 +23,7 @@ import {
 } from "@/lib/restaurants/restaurant-owner-schema";
 
 const FIELD = "h-11 text-base md:text-sm";
+const savedAtFormat = new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Bogota" });
 
 const LIST_FIELDS = [
   ["cuisine_types", "Cuisine types", "Colombian, Italian"],
@@ -47,6 +48,7 @@ type RestaurantOwnerEditorProps = {
   partnerId: string | null;
   partnerName: string | null;
   initial: RestaurantListingValues;
+  unsupportedFields: { hours: boolean; images: boolean };
   updatedAt: string;
   isActive: boolean;
   isAdmin: boolean;
@@ -63,6 +65,7 @@ export function RestaurantOwnerEditor(props: RestaurantOwnerEditorProps) {
     partnerId,
     partnerName,
     initial,
+    unsupportedFields,
     updatedAt,
     isActive,
     isAdmin,
@@ -100,8 +103,14 @@ export function RestaurantOwnerEditor(props: RestaurantOwnerEditorProps) {
   }
 
   function applyImport(next: Partial<RestaurantListingValues>) {
+    const safeNext = { ...next };
+    if (unsupportedFields.hours) delete safeNext.hours_of_operation;
+    if (unsupportedFields.images) {
+      delete safeNext.images;
+      delete safeNext.primary_image_url;
+    }
     setValues((current) => {
-      const merged = { ...current, ...next };
+      const merged = { ...current, ...safeNext };
       setListText({
         cuisine_types: merged.cuisine_types.join(", "),
         dietary_options: merged.dietary_options.join(", "),
@@ -317,12 +326,18 @@ export function RestaurantOwnerEditor(props: RestaurantOwnerEditorProps) {
           </div>
         </section>
 
+        {unsupportedFields.images ? (
+          <p role="alert" className="text-sm text-muted-foreground">
+            Existing photos use an unsupported format. Photo editing is disabled to avoid data loss;
+            other listing fields remain editable.
+          </p>
+        ) : null}
         <RestaurantPhotoEditor
           partnerId={partnerId ?? ""}
           restaurantId={restaurantId}
           images={values.images}
           coverUrl={values.primary_image_url}
-          disabled={saving}
+          disabled={saving || unsupportedFields.images}
           onChange={(images, coverUrl) => {
             setValues((current) => ({ ...current, images, primary_image_url: coverUrl }));
             setSaved(false);
@@ -338,9 +353,14 @@ export function RestaurantOwnerEditor(props: RestaurantOwnerEditorProps) {
               Only days you set are published. Unknown hours stay unstated.
             </p>
           </div>
+          {unsupportedFields.hours ? (
+            <p role="alert" className="text-sm text-muted-foreground">
+              Existing opening hours use an unsupported format. Hours editing is disabled to prevent data loss.
+            </p>
+          ) : null}
           <RestaurantHoursEditor
             value={values.hours_of_operation}
-            disabled={saving}
+            disabled={saving || unsupportedFields.hours}
             onChange={(hours: OpeningHours) => update("hours_of_operation", hours)}
           />
         </section>
@@ -359,7 +379,7 @@ export function RestaurantOwnerEditor(props: RestaurantOwnerEditorProps) {
             </p>
           ) : (
             <p className="text-sm text-muted-foreground">
-              Last saved {new Date(lastSavedAt).toLocaleString()}
+              Last saved {savedAtFormat.format(new Date(lastSavedAt))}
             </p>
           )}
           <span className="ml-auto text-xs text-muted-foreground">

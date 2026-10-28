@@ -245,7 +245,14 @@ begin
         select 1
         from pg_catalog.jsonb_array_elements(p_patch -> 'images') as item
         where pg_catalog.jsonb_typeof(item) <> 'object'
-          or pg_catalog.jsonb_typeof(item -> 'url') <> 'string'
+          or coalesce(pg_catalog.jsonb_typeof(item -> 'url'), '') <> 'string'
+          or exists (
+            select 1 from pg_catalog.jsonb_object_keys(
+              case when pg_catalog.jsonb_typeof(item) = 'object'
+                then item else '{}'::jsonb end
+            ) as key
+            where key <> all (array['url', 'source', 'sourceUrl', 'alt'])
+          )
           or (item ->> 'url') !~* '^https?://[^[:space:]]+$'
           or length(item ->> 'url') > 1000
           or (

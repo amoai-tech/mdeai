@@ -18,6 +18,25 @@ export function buildVenueBookingIdempotencyKey(input: {
   return `vb-${digest}`;
 }
 
+async function verifyRestaurantPlacePair(
+  supabase: SupabaseClient<Database>,
+  input: VenueBookingRequestInput,
+): Promise<{ ok: false; status: number; message: string } | null> {
+  if (!input.restaurantId) return null;
+  if (input.venueKind !== "restaurant") {
+    return { ok: false, status: 400, message: "Restaurant request type does not match" };
+  }
+  const { data: restaurant, error } = await supabase.from("restaurants")
+    .select("google_place_id").eq("id", input.restaurantId).maybeSingle();
+  if (error) return { ok: false, status: 500, message: "Could not verify the restaurant" };
+  if (!restaurant) return { ok: false, status: 400, message: "Restaurant not found" };
+  // Phase A listings with no Google Place ID are not blocked.
+  if (restaurant.google_place_id && restaurant.google_place_id !== input.placeId) {
+    return { ok: false, status: 400, message: "Restaurant and place do not match" };
+  }
+  return null;
+}
+
 export async function insertVenueBookingRequest(
   supabase: SupabaseClient<Database>,
   userId: string,
@@ -36,6 +55,8 @@ export async function insertVenueBookingRequest(
   }
 
   const input: VenueBookingRequestInput = parsed.data;
+  const mismatch = await verifyRestaurantPlacePair(supabase, input);
+  if (mismatch) return mismatch;
   const idempotencyKey =
     input.idempotencyKey ??
     buildVenueBookingIdempotencyKey({

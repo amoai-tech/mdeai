@@ -73,7 +73,10 @@ create policy restaurant_menu_items_partner_insert
       select 1
       from public.restaurants r
       where r.id = restaurant_id
-        and r.partner_id in (select public.partner_ids_for_user())
+        and (
+          r.partner_id in (select public.partner_ids_for_user())
+          or public.is_admin()
+        )
     )
   );
 
@@ -87,7 +90,10 @@ create policy restaurant_menu_items_partner_update
       select 1
       from public.restaurants r
       where r.id = restaurant_id
-        and r.partner_id in (select public.partner_ids_for_user())
+        and (
+          r.partner_id in (select public.partner_ids_for_user())
+          or public.is_admin()
+        )
     )
   )
   with check (
@@ -95,7 +101,10 @@ create policy restaurant_menu_items_partner_update
       select 1
       from public.restaurants r
       where r.id = restaurant_id
-        and r.partner_id in (select public.partner_ids_for_user())
+        and (
+          r.partner_id in (select public.partner_ids_for_user())
+          or public.is_admin()
+        )
     )
   );
 
@@ -109,7 +118,10 @@ create policy restaurant_menu_items_partner_delete
       select 1
       from public.restaurants r
       where r.id = restaurant_id
-        and r.partner_id in (select public.partner_ids_for_user())
+        and (
+          r.partner_id in (select public.partner_ids_for_user())
+          or public.is_admin()
+        )
     )
   );
 

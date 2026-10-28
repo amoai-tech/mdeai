@@ -9,7 +9,7 @@ import {
   signInAsOnOrigin,
   type ThrowawayIdentity,
 } from "../helpers/auth";
-import { createPartner, type Admin } from "../helpers/partner-fixtures";
+import { cleanupFixtures, createPartner, type Admin } from "../helpers/partner-fixtures";
 
 const QA_DIR = "tmp/qa/san-1540";
 const BASE = process.env.SMOKE_BASE_URL || "http://localhost:3001";
@@ -67,37 +67,49 @@ async function createRestaurant(
 async function buildFixture(): Promise<Fixture> {
   const admin = await getSupabaseAdmin();
   const suffix = crypto.randomUUID().slice(0, 8);
-  const identityA = await createThrowawayIdentity(`san1540-a-${suffix}`);
-  const identityB = await createThrowawayIdentity(`san1540-b-${suffix}`);
-  const identityCustomer = await createThrowawayIdentity(`san1540-c-${suffix}`);
-  const partnerA = await createPartner(admin, identityA.userId, "venue", {
-    businessName: `Cafe Norte ${suffix}`,
-  });
-  const partnerB = await createPartner(admin, identityB.userId, "venue", {
-    businessName: `Cafe Sur ${suffix}`,
-  });
-  const restaurantA = await createRestaurant(
-    admin,
-    partnerA,
-    `Restaurant A ${suffix}`,
-    `san1540-place-a-${suffix}`,
-  );
-  const restaurantB = await createRestaurant(
-    admin,
-    partnerB,
-    `Restaurant B ${suffix}`,
-    `san1540-place-b-${suffix}`,
-  );
-  return {
-    admin,
-    partnerA,
-    partnerB,
-    restaurantA,
-    restaurantB,
-    identityA,
-    identityB,
-    identityCustomer,
-  };
+  const identities: ThrowawayIdentity[] = [];
+  const partnerIds: string[] = [];
+  const restaurantIds: string[] = [];
+  try {
+    const identityA = await createThrowawayIdentity(`san1540-a-${suffix}`);
+    identities.push(identityA);
+    const identityB = await createThrowawayIdentity(`san1540-b-${suffix}`);
+    identities.push(identityB);
+    const identityCustomer = await createThrowawayIdentity(`san1540-c-${suffix}`);
+    identities.push(identityCustomer);
+    const partnerA = await createPartner(admin, identityA.userId, "venue", {
+      businessName: `Cafe Norte ${suffix}`,
+    });
+    partnerIds.push(partnerA);
+    const partnerB = await createPartner(admin, identityB.userId, "venue", {
+      businessName: `Cafe Sur ${suffix}`,
+    });
+    partnerIds.push(partnerB);
+    const restaurantA = await createRestaurant(admin, partnerA,
+      `Restaurant A ${suffix}`, `san1540-place-a-${suffix}`);
+    restaurantIds.push(restaurantA.id);
+    const restaurantB = await createRestaurant(admin, partnerB,
+      `Restaurant B ${suffix}`, `san1540-place-b-${suffix}`);
+    restaurantIds.push(restaurantB.id);
+    return { admin, partnerA, partnerB, restaurantA, restaurantB,
+      identityA, identityB, identityCustomer };
+  } catch (setupError) {
+    // If setup fails midway, afterEach never receives a completed fixture.
+    try {
+      if (restaurantIds.length) {
+        for (const table of ["venue_booking_requests", "restaurant_menu_items", "restaurants"] as const) {
+          const { error } = await admin.from(table).delete()
+            .in(table === "restaurants" ? "id" : "restaurant_id", restaurantIds);
+          if (error) throw new Error(`fixture cleanup of ${table}: ${error.message}`);
+        }
+      }
+      await cleanupFixtures(admin, partnerIds, identities);
+    } catch (cleanupError) {
+      throw new AggregateError([setupError, cleanupError],
+        "Restaurant fixture setup and partial cleanup both failed");
+    }
+    throw setupError;
+  }
 }
 
 async function cleanup(fixture: Fixture | null): Promise<void> {

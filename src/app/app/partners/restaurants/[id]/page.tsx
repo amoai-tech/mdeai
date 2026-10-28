@@ -12,7 +12,7 @@ import {
   loadRestaurantMenuItems,
   loadRestaurantReservationRequests,
 } from "@/lib/restaurants/restaurant-owner-load";
-import { listingValuesFromRecord } from "@/lib/restaurants/restaurant-owner-schema";
+import { listingValuesFromRecord, unsupportedRestaurantFields } from "@/lib/restaurants/restaurant-owner-schema";
 import { getServerUser } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 
@@ -186,6 +186,7 @@ export default async function PartnerRestaurantEditorPage({
           partnerId={restaurant.partner_id}
           partnerName={partnerName}
           initial={listingValuesFromRecord(restaurant)}
+          unsupportedFields={unsupportedRestaurantFields(restaurant)}
           updatedAt={restaurant.updated_at}
           isActive={restaurant.is_active}
           isAdmin={isAdmin}

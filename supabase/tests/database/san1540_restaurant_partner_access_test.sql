@@ -2,7 +2,7 @@
 -- Every write is transaction-local and rolled back.
 begin;
 
-select plan(31);
+select plan(33);
 
 -- ── Fixtures ────────────────────────────────────────────────────────────────
 insert into auth.users (id, email) values
@@ -124,6 +124,19 @@ select throws_ok(
       'a1540000-0000-4000-8000-000000000031','{"images":[{"url":"file:///etc/passwd"}]}'::jsonb)$$,
   '22023', 'restaurant_owner_patch: invalid image entry',
   'non-http image URLs are rejected');
+
+select throws_ok(
+  $select public.restaurant_owner_patch(
+    'a1540000-0000-4000-8000-000000000031','{"images":[{}]}'::jsonb)$,
+  '22023','restaurant_owner_patch: invalid image entry',
+  'missing URL is rejected in SQL');
+
+select throws_ok(
+  $select public.restaurant_owner_patch(
+    'a1540000-0000-4000-8000-000000000031',
+    '{"images":[{"url":"https://example.com/a.jpg","hijack":true}]}'::jsonb)$,
+  '22023','restaurant_owner_patch: invalid image entry',
+  'unexpected image keys are rejected in SQL');
 
 -- Direct table writes are still blocked by the existing RLS policies.
 with attempted as (

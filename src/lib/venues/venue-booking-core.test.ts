@@ -8,11 +8,14 @@ import type { Database } from "@/lib/supabase/database.types";
 
 function mockSupabase(
   insertResult: { data: { id: string } | null; error: { code?: string } | null },
+  restaurantResult?: { data: { google_place_id: string | null } | null; error: { code?: string } | null },
 ) {
   const single = vi.fn(async () => insertResult);
   const select = vi.fn(() => ({ single }));
   const insert = vi.fn(() => ({ select }));
-  const from = vi.fn(() => ({ insert }));
+  const from = vi.fn((table: string) => table === "restaurants"
+    ? { select: () => ({ eq: () => ({ maybeSingle: async () => restaurantResult ?? { data: null, error: null } }) }) }
+    : { insert });
   return { from, insert } as unknown as SupabaseClient<Database> & {
     insert: typeof insert;
   };
@@ -84,6 +87,42 @@ describe("insertVenueBookingRequest", () => {
     );
   });
 
+  it("rejects a forged restaurant/place pair before insert", async () => {
+    const supabase = mockSupabase(
+      { data: { id: "a" }, error: null },
+      { data: { google_place_id: "ChIJcorrectRestaurant" }, error: null },
+    );
+    const result = await insertVenueBookingRequest(supabase, "user-a", {
+      ...body, venueKind: "restaurant",
+      restaurantId: "a1540000-0000-4000-8000-000000000031",
+      placeId: "ChIJwrongRestaurant",
+    });
+    expect(result).toEqual({ ok: false, status: 400, message: "Restaurant and place do not match" });
+    expect(supabase.insert).not.toHaveBeenCalled();
+  });
+  it("allows a correct restaurant/place pair", async () => {
+    const supabase = mockSupabase(
+      { data: { id: "a" }, error: null },
+      { data: { google_place_id: "ChIJcorrectRestaurant" }, error: null },
+    );
+    const result = await insertVenueBookingRequest(supabase, "user-a", {
+      ...body, venueKind: "restaurant",
+      restaurantId: "a1540000-0000-4000-8000-000000000031",
+      placeId: "ChIJcorrectRestaurant",
+    });
+    expect(result.ok).toBe(true);
+  });
+  it("rejects a nonexistent restaurant", async () => {
+    const supabase = mockSupabase(
+      { data: { id: "a" }, error: null }, { data: null, error: null },
+    );
+    const result = await insertVenueBookingRequest(supabase, "user-a", {
+      ...body, venueKind: "restaurant",
+      restaurantId: "a1540000-0000-4000-8000-000000000031",
+    });
+    expect(result).toMatchObject({ ok: false, status: 400 });
+    expect(supabase.insert).not.toHaveBeenCalled();
+  });
   it("returns 409 on idempotency conflict", async () => {
     const supabase = mockSupabase({
       data: null,

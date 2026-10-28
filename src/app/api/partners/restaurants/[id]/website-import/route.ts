@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
+import { canAccessOwnerRestaurant, isAdminUser } from "@/lib/restaurants/restaurant-owner-load";
 import {
   extractRestaurantWebsiteDraft,
   RestaurantWebsiteImportError,
@@ -34,14 +35,24 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   } = await supabase.auth.getUser();
   if (!user) return fail("Unauthorized", 401);
 
-  // Prove the caller can already read this restaurant before spending a provider call.
+  // Verify edit authority, not merely public read, before spending Gemini quota.
   const { data: restaurant, error } = await supabase
     .from("restaurants")
-    .select("id")
+    .select("id, partner_id")
     .eq("id", id)
     .maybeSingle();
   if (error) return fail("Could not load the restaurant", 500);
   if (!restaurant) return fail("Restaurant not found", 404);
+  const [isAdmin, memberships] = await Promise.all([
+    isAdminUser(supabase),
+    supabase.from("partner_members").select("partner_id").eq("profile_id", user.id),
+  ]);
+  if (memberships.error) return fail("Could not verify business access", 500);
+  if (!canAccessOwnerRestaurant({
+    partnerId: restaurant.partner_id,
+    authorizedPartnerIds: (memberships.data ?? []).map((member) => member.partner_id),
+    isAdmin,
+  })) return fail("You do not have access to this restaurant", 403);
 
   let body: unknown;
   try {

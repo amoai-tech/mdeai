@@ -34,7 +34,7 @@ Results on the commit this folder describes:
 
 - pgTAP: 3 files, 60 assertions, all passing.
 - Focused Vitest: 14 files, 97 tests, all passing.
-- Playwright: 8 tests passing (5 restaurant-owner tests + 2 existing partner-workspace tests + 390px), against a local Supabase stack with real rows; fixtures deleted and re-queried to prove zero leftovers.
+- Playwright: 8 tests passing (5 restaurant-owner tests + 2 existing partner-workspace tests + 390px), against a local Supabase stack with real rows; fixtures deleted; post-cleanup checks confirmed restaurants, partners and venue_booking_requests only.
 - `npm run floor`: exit 0 (503 Vitest files / 3,870 tests passed, lint, typecheck, build, env contract, Mastra schema gate).
 
 ## Screenshots
@@ -43,4 +43,9 @@ Results on the commit this folder describes:
 - `reservation-inbox.png` — the real request in the correct partner inbox.
 - `public-restaurant.png` — the public Details page after photos/menu were saved.
 
-Development records created by the browser spec are throwaway partner/restaurant rows deleted in `afterEach`; the database was re-queried to prove no rows remained. No Phase A business approval, ownership paperwork or publishing gate was introduced.
+Development records created by the browser spec are throwaway partner/restaurant rows deleted in `afterEach`; the database was re-queried for restaurants, partners and venue_booking_requests only. No Phase A business approval, ownership paperwork or publishing gate was introduced.
+
+### Subsequent verification
+- At commit `d98331462c`, Codacy Cloud had 0 introduced issues, required check green.
+- Full `npm run floor` passed: 3,872 tests, 35 skipped.
+- A local browser rerun got 1 pass, 5 fixture setup failures from `PGRST204` (stale local Supabase schema lacked `restaurants.partner_id`). This is **not a successful restaurant E2E run**. Revalidate with a fresh migrated stack.

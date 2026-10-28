@@ -1,3 +1,4 @@
+import { unsupportedRestaurantFields } from "@/lib/restaurants/restaurant-owner-schema";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -126,5 +127,18 @@ describe("parseListInput", () => {
       "Colombian",
       "Italian",
     ]);
+  });
+});
+
+describe("unsupported legacy listing data", () => {
+  it("detects unknown stored hours and photos before edits", () => {
+    expect(unsupportedRestaurantFields({
+      hours_of_operation: { legacy: "open today" },
+      images: [{ legacyUrl: "https://example.com/photo.jpg" }],
+    })).toEqual({ hours: true, images: true });
+    expect(unsupportedRestaurantFields({
+      hours_of_operation: { monday: { open: "09:00", close: "18:00" } },
+      images: [{ url: "https://example.com/photo.jpg" }],
+    })).toEqual({ hours: false, images: false });
   });
 });

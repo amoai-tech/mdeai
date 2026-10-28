@@ -1,5 +1,6 @@
 import type { ReservationRequestRow } from "@/lib/restaurants/restaurant-owner-load";
 import { venueBookingStatusChip } from "@/lib/venues/venue-booking-status-display";
+const requestDateFormat = new Intl.DateTimeFormat("en-US", {dateStyle:"medium",timeStyle:"short",timeZone:"America/Bogota"});
 
 /**
  * SAN-1542 — the real reservation-request inbox for one restaurant.
@@ -51,7 +52,7 @@ export function RestaurantReservationInbox({
                   </span>
                 </div>
                 <p className="mt-1 text-muted-foreground">
-                  Requested for {new Date(request.requested_at).toLocaleString()}
+                  Requested for {requestDateFormat.format(new Date(request.requested_at))}
                 </p>
                 <p className="mt-1 break-words text-muted-foreground">
                   {request.contact_email}
@@ -59,7 +60,7 @@ export function RestaurantReservationInbox({
                 </p>
                 {request.notes ? <p className="mt-1 text-muted-foreground">“{request.notes}”</p> : null}
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Submitted {new Date(request.created_at).toLocaleString()} · {request.source}
+                  Submitted {requestDateFormat.format(new Date(request.created_at))} · {request.source}
                 </p>
               </li>
             );

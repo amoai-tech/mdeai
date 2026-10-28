@@ -2,12 +2,16 @@
 -- restaurant → partner assignment, never by a Google Place ID.
 begin;
 
-select plan(16);
+select plan(19);
 
 -- ── Fixtures ────────────────────────────────────────────────────────────────
 insert into auth.users (id, email) values
   ('a1541000-0000-4000-8000-000000000001','san1541-partner-a@example.com'),
-  ('a1541000-0000-4000-8000-000000000002','san1541-partner-b@example.com');
+  ('a1541000-0000-4000-8000-000000000002','san1541-partner-b@example.com'),
+  ('a1541000-0000-4000-8000-000000000003','san1541-admin@example.com');
+
+insert into public.user_roles (user_id,role)
+values ('a1541000-0000-4000-8000-000000000003','admin');
 
 
 insert into public.partners (id, profile_id, type, settings) values
@@ -96,6 +100,25 @@ select is((select count(*)::int from updated), 1,
 select is(
   (select name from public.restaurant_menu_items where id='a1541000-0000-4000-8000-000000000043'),
   'A main', 'partner B''s update did not touch restaurant A''s menu');
+
+-- Admin keeps full menu controls without partner membership.
+select set_config('request.jwt.claim.sub','a1541000-0000-4000-8000-000000000003',true);
+insert into public.restaurant_menu_items (id,restaurant_id,name,currency)
+values ('a1541000-0000-4000-8000-000000000044',
+  'a1541000-0000-4000-8000-000000000031','Admin item','COP');
+select is((select count(*)::int from public.restaurant_menu_items
+  where id='a1541000-0000-4000-8000-000000000044'),1,
+  'admin inserts menu row');
+with updated as (
+  update public.restaurant_menu_items set name='Admin edited'
+  where id='a1541000-0000-4000-8000-000000000044' returning id
+)
+select is((select count(*)::int from updated),1,'admin updates menu row');
+with deleted as (
+  delete from public.restaurant_menu_items
+  where id='a1541000-0000-4000-8000-000000000044' returning id
+)
+select is((select count(*)::int from deleted),1,'admin deletes menu row');
 
 -- ── Photo bucket: public read, member-scoped write policies ─────────────────
 reset role;
