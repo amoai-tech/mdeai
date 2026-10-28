@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { z } from "zod";
 import { PlaceResultCard } from "@/components/copilot/place-result-card";
 import { AttractionCard } from "@/components/copilot/attraction-card";
 import { RestaurantCardWithEventVenue } from "@/components/copilot/restaurant-card-with-event-venue";
@@ -15,6 +16,13 @@ import type { MapPinCategory } from "@/platform/contracts";
 
 export function categoryPinId(category: MapPinCategory, rawId: string) {
   return `${category}-${rawId}`;
+}
+
+// Use the same strict UUID validation as the canonical public discovery lookup.
+// Do not interpret an external/Google place ID as a Supabase restaurant UUID.
+const restaurantIdSchema = z.string().uuid();
+export function canonicalRestaurantIdOrUndefined(id: string): string | undefined {
+  return restaurantIdSchema.safeParse(id).success ? id : undefined;
 }
 
 type PlaceRow = {
@@ -132,7 +140,7 @@ export function DomainResults({
               const bookingTarget = toRestaurantVenueDetail({
                 pinId,
                 title,
-                restaurantId: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(r.id) ? r.id : undefined,
+                restaurantId: canonicalRestaurantIdOrUndefined(r.id),
                 placeId: r.placeId,
                 mapsUrl: r.mapsUrl,
                 neighborhood: r.neighborhood,
