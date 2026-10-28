@@ -72,6 +72,17 @@ describe("restaurant search fast path", () => {
     expect(canFastPathRestaurantSearch("fine dining modern poblado")).toBe(true);
   });
 
+  it("does not swallow a venue booking request into discovery-only cards", () => {
+    for (const query of [
+      "Find Verdeo restaurant in El Poblado. Prepare a table request for two on Nov 15 at 7 PM",
+      "Book a table at Verdeo for two on Sunday",
+      "Reserve a restaurant table in El Poblado for four at 8",
+    ]) {
+      expect(canFastPathRestaurantSearch(query)).toBe(false);
+      expect(buildRestaurantSearchParams(query)).toBeNull();
+    }
+  });
+
   it("preserves composed queryText on restaurant discovery fast-path", () => {
     const params = buildRestaurantSearchParams("suggest restaurants in Provenza");
     expect(params).not.toBeNull();
