@@ -36,10 +36,11 @@ vi.mock("@/components/browse/BrowseMapPanel", async () => {
   };
 });
 
-let composer: { onAgentResults: (r: DiscoveryAgentResult) => void } | null = null;
+type ResultHandler = (result: DiscoveryAgentResult) => void;
+let onAgentResults: ResultHandler | null = null;
 vi.mock("@/components/chat/discovery-ask-composer", () => ({
-  DiscoveryAskComposer: (p: { onAgentResults: (r: DiscoveryAgentResult) => void }) => {
-    composer = p;
+  DiscoveryAskComposer: (p: { onAgentResults: ResultHandler }) => {
+    onAgentResults = p.onAgentResults;
     return null;
   },
 }));
@@ -59,15 +60,26 @@ const B = make("b", { latitude: 6.22, longitude: -75.57 });
 const NOLOC = make("c", { latitude: undefined, longitude: undefined });
 const props = { total: 2, error: null, category: null, neighborhood: null, dateWindow: null, price: null } as const;
 
-const card = (id: string) => screen.getByLabelText(new RegExp(`^Event: Event ${id.toUpperCase()}`));
+const card = (id: string) => {
+  const prefix = `Event: Event ${id.toUpperCase()}`;
+  const found = screen.getAllByTestId("event-card").find((c) => c.getAttribute("aria-label")?.startsWith(prefix));
+  if (!found) throw new Error(`No card for event ${id}`);
+  return found;
+};
 const askFor = (id: string) => within(card(id)).getByTestId("event-ask-select");
 const pressed = (id: string) => askFor(id).getAttribute("aria-pressed");
 const ctx = () => screen.getByTestId("ask-context").getAttribute("data-selected");
 const mapPin = () => screen.getByTestId("map").getAttribute("data-selected-pin");
-const search = (ids: string[]) => act(() => composer!.onAgentResults({ page: "events", ids }));
+const search = (ids: string[]) => {
+  if (!onAgentResults) throw new Error("Ask composer was not rendered");
+  const handler = onAgentResults;
+  act(() => {
+    handler({ page: "events", ids });
+  });
+};
 const cardTitles = () => screen.getAllByTestId("event-card").map((c) => c.getAttribute("aria-label"));
 
-const ok = (rows: PublishedEventListItem[]) => ({ ok: true, json: async () => ({ results: rows }) }) as Response;
+const ok = (rows: PublishedEventListItem[]) => ({ ok: true, json: () => Promise.resolve({ results: rows }) }) as Response;
 let fetchMock: ReturnType<typeof vi.fn>;
 beforeEach(() => {
   // jsdom has no layout; the shared map-to-card scroll hook calls this.
@@ -78,7 +90,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
-  composer = null;
+  onAgentResults = null;
 });
 
 describe("EventBrowseView — one selected event", () => {
@@ -167,7 +179,7 @@ describe("EventBrowseView — Ask MDE results", () => {
     await screen.findByTestId("guest-event-results-count");
     expect(cardTitles()).toHaveLength(1);
 
-    fetchMock.mockResolvedValueOnce({ ok: false, json: async () => ({}) } as Response);
+    fetchMock.mockResolvedValueOnce({ ok: false, json: () => Promise.resolve({}) } as Response);
     search(["b"]);
     const alert = await screen.findByTestId("events-lookup-error");
     expect(alert.textContent).toContain("Could not confirm event details");
@@ -185,17 +197,20 @@ describe("EventBrowseView — Ask MDE results", () => {
 
   it("a slow older response can never replace a newer search", async () => {
     render(<EventBrowseView {...props} results={[A, B]} />);
-    let releaseOld!: (r: Response) => void;
+    const gate: { release?: (response: Response) => void } = {};
     fetchMock
       .mockImplementationOnce((_url: string, init: RequestInit) => new Promise<Response>((resolve, reject) => {
-        releaseOld = resolve;
-        init.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+        gate.release = resolve;
+        init.signal?.addEventListener("abort", () => {
+          reject(new DOMException("aborted", "AbortError"));
+        });
       }))
       .mockResolvedValueOnce(ok([B]));
     search(["a"]);
     search(["b"]);
     await screen.findByTestId("guest-event-results-count");
-    releaseOld(ok([A])); // the old answer arrives last
+    expect(gate.release).toBeDefined();
+    gate.release?.(ok([A])); // the old answer arrives last
     await act(async () => { await Promise.resolve(); });
     const titles = cardTitles();
     expect(titles).toHaveLength(1);
