@@ -15,6 +15,24 @@ describe("venueBookingRequestSchema", () => {
     expect(venueBookingRequestSchema.safeParse(valid).success).toBe(true);
   });
 
+  it("normalizes a Gemini Medellín-local appointment, an explicit -05:00 offset and UTC to the same instant", () => {
+    const samples = [
+      "2026-11-15T19:00:00",
+      "2026-11-15T19:00:00-05:00",
+      "2026-11-16T00:00:00.000Z",
+    ];
+    for (const requestedAt of samples) {
+      const parsed = venueBookingRequestSchema.safeParse({ ...valid, requestedAt });
+      expect(parsed.success, requestedAt).toBe(true);
+      if (parsed.success) expect(parsed.data.requestedAt).toBe("2026-11-16T00:00:00.000Z");
+    }
+  });
+
+  it("rejects malformed and impossible Medellín dates without interpreting browser time", () => {
+    for (const requestedAt of ["2026-02-30T19:00:00", "tomorrow 7pm", "2026-11-15T25:00:00"])
+      expect(venueBookingRequestSchema.safeParse({ ...valid, requestedAt }).success).toBe(false);
+  });
+
   it("rejects invalid venue kind", () => {
     const result = venueBookingRequestSchema.safeParse({
       ...valid,

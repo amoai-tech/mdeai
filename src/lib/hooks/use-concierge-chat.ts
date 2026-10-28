@@ -57,10 +57,11 @@ function useLiveConciergeChat() {
 
   /**
    * Await the existing CopilotKit handshake before a signed-in first send.
-   * A connecting runtime may succeed within six seconds; an error or timeout
+   * A connecting runtime can take longer than six seconds on a cold serverless
+   * compile/handshake. Continue waiting for a bounded 30 seconds; an error or timeout
    * fails closed without starting an agent run or retrying any action.
    */
-  const waitForRuntimeReady = useCallback(async (maxWaitMs = 6_000): Promise<boolean> => {
+  const waitForRuntimeReady = useCallback(async (maxWaitMs = 30_000): Promise<boolean> => {
     const requestedThread = currentSelectedThreadRef.current;
     const stillCurrent = () =>
       mountedRef.current && currentSelectedThreadRef.current === requestedThread;

@@ -33,6 +33,7 @@ function VenueBookingResultBannerSync({
       success?: boolean;
       requestId?: string;
       message?: string;
+      venueTitle?: string;
     };
     if (!payload.success || !payload.requestId || !payload.message) return;
     if (syncedRef.current === payload.requestId) return;
@@ -40,7 +41,7 @@ function VenueBookingResultBannerSync({
     setVenueBookingConfirmation({
       requestId: payload.requestId,
       message: payload.message,
-      venueTitle,
+      venueTitle: payload.venueTitle ?? venueTitle,
     });
   }, [result, setVenueBookingConfirmation, venueTitle]);
 
@@ -61,11 +62,13 @@ function createVenueBookingHitlRender() {
     result,
     respond,
   }: HitlRenderProps) {
-    const hitlArgs = args as VenueBookingHitlArgs;
-    if (!(hitlArgs?.placeId || (hitlArgs?.venueKind === "restaurant" && hitlArgs?.restaurantId)) ||
-      !hitlArgs?.requestedAt || !hitlArgs?.partySize) {
-      return null;
-    }
+    // CopilotKit streams tool arguments incrementally. Mount review only after
+    // the complete, validated proposal is available; normalize the model's
+    // venue-local/offset time to UTC before the first render and before Send.
+    // A partial argument object must never be captured as an editable draft.
+    const validated = venueBookingRequestSchema.safeParse(args);
+    if (!validated.success) return null;
+    const hitlArgs = validated.data as VenueBookingHitlArgs;
 
     const venueTitle = hitlArgs.venueTitle?.trim() || hitlArgs.placeId || hitlArgs.restaurantId || "Restaurant";
 
@@ -97,6 +100,7 @@ function createVenueBookingHitlRender() {
               success: true,
               requestId: saved.confirmation.requestId,
               message: saved.confirmation.message,
+              venueTitle: saved.confirmation.venueTitle,
             });
             clearVenueBookingReview();
           }}

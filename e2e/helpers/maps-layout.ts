@@ -301,13 +301,16 @@ function watchForAppApiRequest(
 }
 
 /** Type into the concierge composer and submit, retrying once (see above). */
-export async function sendConciergeMessage(page: Page, text: string) {
+export async function sendConciergeMessage(
+  page: Page, text: string, graceMs: number = CONCIERGE_ACCEPT_GRACE_MS,
+) {
   await submitConciergeMessageWithRetry(
     {
       armReactionWatch: (timeoutMs) => watchForAppApiRequest(page, timeoutMs),
       submit: () => submitConciergeMessageOnce(page, text),
     },
     text,
+    graceMs,
   );
 }
 

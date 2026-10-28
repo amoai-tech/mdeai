@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useSession } from "@/hooks/use-session";
+import { createClient } from "@/lib/supabase/client";
+import { venueBookingRequestSchema } from "@/lib/venues/venue-booking-form-schema";
 import { saveVenueBookingReview } from "./venue-booking-draft-store";
 import { formatMedellinBookingTime, medellinIsoToLocal, medellinLocalToIso } from "@/lib/venues/venue-booking-time";
 import type { VenueBookingKind } from "@/lib/venues/venue-booking-form-schema";
@@ -32,11 +34,41 @@ type VenueBookingHitlPanelProps = {
 export function VenueBookingHitlPanel({ args, status, respond }: VenueBookingHitlPanelProps) {
   const { user, loading } = useSession();
   const pathname = usePathname();
-  const [draft, setDraft] = useState(args);
+  const [draft, setDraft] = useState(() => {
+    const parsed = venueBookingRequestSchema.safeParse(args);
+    if (!parsed.success) return args;
+    // A model-generated Google Place ID can be wrong even if its MDE restaurant
+    // UUID is real. Never forward both: the canonical UUID is independently
+    // resolved by the booking API and is the customer's review target.
+    if (parsed.data.venueKind === "restaurant" && parsed.data.restaurantId) {
+      return { ...args, requestedAt: parsed.data.requestedAt,
+        placeId: undefined, venueTitle: undefined };
+    }
+    return { ...args, requestedAt: parsed.data.requestedAt };
+  });
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const venueLabel = draft.venueTitle?.trim() || draft.placeId || draft.restaurantId || "Restaurant";
+  const [canonicalRestaurantName, setCanonicalRestaurantName] = useState<string | null>(null);
+  const restaurantId = args.venueKind === "restaurant" ? args.restaurantId : null;
+  // The model may know the canonical restaurant UUID but omit its display name.
+  // Prefer a real, RLS-checked restaurants.name over exposing a bare UUID in review.
+  // This read is informational only: only the explicit Send invokes the booking API.
+  useEffect(() => {
+    if (!restaurantId) return;
+    let active = true;
+    void createClient().from("restaurants").select("name").eq("id", restaurantId)
+      .maybeSingle().then(({ data, error }) => {
+        if (active && !error && data?.name?.trim()) {
+          const name = data.name.trim();
+          setCanonicalRestaurantName(name);
+          setDraft((current) => ({ ...current, venueTitle: name, placeId: undefined }));
+        }
+      });
+    return () => { active = false; };
+  }, [restaurantId]);
+  const venueLabel = canonicalRestaurantName ?? draft.venueTitle?.trim() ??
+    (restaurantId ? `Restaurant (ID ${restaurantId.slice(0, 8)})` : draft.placeId || "Venue");
   const returnPath = encodeURIComponent(pathname || "/chat");
   const storeForLogin = () => saveVenueBookingReview(draft);
 
