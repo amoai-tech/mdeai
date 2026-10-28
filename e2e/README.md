@@ -82,3 +82,36 @@ use the repository's updated Playwright lockfile and matching browser.
 If a browser binary is missing, run `npx playwright install chromium`.
 For debugging, run:
 `npx playwright test e2e/signed-in.spec.ts --project=chromium --headed`.
+
+
+## SAN-1193 — live Gemini + deployed partner-signup smoke (opt-in)
+
+**Canonical owner:** [SAN-1193 · MDE Partner Signup — Autofill Business Details From a Website](https://linear.app/amo100/issue/SAN-1193).
+**Merged implementation:** [PR #404](https://github.com/amoai-tech/mdeai/pull/404).
+**Live UI:** https://www.mdeai.co/partners/signup?type=venue.
+
+The fast, deterministic regression remains `e2e/app/partner-ai-signup-persistence.spec.ts`: it mocks **only** URL extraction and proves real Auth, review, database persistence, concurrent saves, duplicate prevention, mobile and cleanup.
+
+`e2e/app/partner-ai-signup-live-gemini.spec.ts` is a **separate explicitly opt-in**, real-Gemini Playwright journey: signed-out extraction denied → throwaway authenticated partner → live website URL Context result with a retrieved source → edit the existing review card → actual activation → Supabase readback → page refresh/readback → one partner/member → mobile overflow check → exact fixture cleanup. It calls the real paid Gemini endpoint and shared Supabase project; never run this in the default PR suite or with fake credentials. An extraction failure is a **failed smoke**, never a silent skip or a mocked success.
+
+### Run on the deployed website
+
+1. Inspect the intended Vercel **production deployment** and its `githubCommitSha`, and verify that the **www.mdeai.co domain alias points to that same deployment ID**. Do not infer deployed SHA from GitHub merge status or from HTTP 200. Use the connected Vercel deployment/alias tools or [Vercel CLI inspect](https://vercel.com/docs/cli/inspect).
+2. Provide local ignored environment values for `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (or anon key) and `SUPABASE_SERVICE_ROLE_KEY` **only to the test process**; do not export the service key into client code, browser context, GitHub artifacts, or screenshots.
+3. Start the focused live smoke **only when intentional**:
+
+```bash
+MDE_PARTNER_SIGNUP_LIVE_E2E=1 PW_SKIP_WEBSERVER=1 \
+  SMOKE_BASE_URL=https://www.mdeai.co \
+  npx playwright test e2e/app/partner-ai-signup-live-gemini.spec.ts \
+    --project=chromium --workers=1
+```
+
+4. Read the `SAN1193_LIVE_PASS` and `SAN1193_LIVE_CLEANUP_VERIFIED` evidence in terminal output and confirm **1 test passed, zero failures**. Do not upload authenticated screenshots, storage state, traces, or test identities. The test itself does not capture any screenshots. If the test fails, inspect the failure and cleanup independently before retrying.
+5. Recheck deployed SHA/alias and key API runtime errors after the smoke; compare with step 1. **Production-path verification is not public-launch authorization**.
+
+### Local Gemini HTTP 402: billing, not a code/retry fix
+
+A past local URL Context call returned HTTP **402** while the production request succeeded with **200**. Google defines 402 `payment_required` as a **depleted prepaid credit balance**. Verify the billing account and credits associated with the **local** API key in [Google AI Studio](https://aistudio.google.com/) and follow [official Gemini billing](https://ai.google.dev/gemini-api/docs/billing) and [API error codes](https://ai.google.dev/gemini-api/docs/api-errors). Compare project IDs or key fingerprints only through your provider dashboard; **never print, paste, or commit API keys**. Add eligible credits or configure a separate already authorized development key. Do **not** rotate/overwrite the functioning production key or retry 402 requests; retries apply to transient 429/5xx errors, not payment failures. The manual signup form remains the fallback when URL extraction is unavailable. Do not infer business verification from imported website data.
+
+**No new agent/database architecture is required:** existing Next.js + CopilotKit v2 / Mastra + Supabase partner activation and RLS are canonical. OpenMuse/OpenDots are UX reference patterns; OpenBot is not involved. `pgvector` and Maps are unrelated to website extraction.
