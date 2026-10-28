@@ -140,16 +140,18 @@ async function signInHost(ctx: HostRun, path: string) {
   await ctx.page.goto(new URL(path, base).toString(), { waitUntil: "domcontentloaded" });
 }
 
-/** Poll the chat rail until `done()` is true; on timeout throw with the reply text so a failure is diagnosable. */
-async function waitForReply(page: Page, rail: Locator, done: () => Promise<boolean>, timeoutMs: number): Promise<string> {
-  const deadline = Date.now() + timeoutMs;
-  let text = "";
-  while (Date.now() < deadline) {
-    text = await rail.innerText();
-    if (await done()) return text;
-    await page.waitForTimeout(2_000);
+/** Use Playwright polling, retaining the reply text when the assertion fails. */
+async function waitForReply(rail: Locator, done: () => Promise<boolean>, timeoutMs: number): Promise<string> {
+  try {
+    await expect.poll(done, { timeout: timeoutMs, intervals: [1_000, 2_000, 3_000] }).toBe(true);
+  } catch (cause) {
+    const reply = await rail.innerText().catch(() => "<chat unavailable>");
+    throw new Error(
+      `Host Ops reply never matched the seeded figures. Reply tail: ${JSON.stringify(reply.slice(-500))}`,
+      { cause },
+    );
   }
-  throw new Error(`Host Ops reply never matched the seeded figures. Reply tail: ${JSON.stringify(text.slice(-500))}`);
+  return rail.innerText();
 }
 
 async function expectNoOverflow(page: Page) {
@@ -189,7 +191,7 @@ for (const width of [390, 1440]) {
       // Wait until the streamed reply is complete: amounts present and ALL equal to the seeded total.
       // A wrong total never converges, so a wrong answer still fails; the failure shows the reply.
       const ticketsRe = new RegExp(`\\b${TICKETS}\\s+tickets?\\b`, "i");
-      const afterFirst = await waitForReply(page, rail, async () => {
+      const afterFirst = await waitForReply(rail, async () => {
         const amounts = await copAmounts();
         return amounts.length > 0 && amounts.every((n) => n === DISPLAYED_TOTAL) && ticketsRe.test(await rail.innerText());
       }, 90_000);
@@ -216,7 +218,8 @@ for (const width of [390, 1440]) {
       const chat = page.getByTestId("host-copilot-chat-region");
       const editor = chat.locator("textarea").first();
       const send = chat.getByTestId("copilot-send-button");
-      const prompt = 'Fill the form for an event titled "QA Salsa Night" in Laureles, capacity 80, free entry. Do not publish.';
+      const expectedTitle = "QA Salsa Night";
+      const prompt = `Fill the form for an event titled "${expectedTitle}" in Laureles, capacity 80, free entry. Do not publish.`;
       await expect(async () => {
         await editor.fill("");
         await editor.pressSequentially(prompt, { delay: 8 });
@@ -225,8 +228,8 @@ for (const width of [390, 1440]) {
       await editor.press("Enter");
 
       await expect(page.getByTestId("host-event-field-neighborhood")).toHaveValue(/laureles/i, { timeout: 90_000 });
-      // Exact title, except the model sometimes drops the "QA" qualifier (3 of ~28 live runs). Extra words fail.
-      await expect(page.getByTestId("host-event-field-title")).toHaveValue(/^(QA )?Salsa Night$/i, { timeout: 30_000 });
+      // A dropped "QA" or added words are incorrect, not a successful AI form-fill.
+      await expect(page.getByTestId("host-event-field-title")).toHaveValue(expectedTitle, { timeout: 30_000 });
       await expect(page.getByTestId("host-event-field-capacity")).toHaveValue("80", { timeout: 30_000 });
 
       // The wizard only writes when the host approves. Nothing was approved here.
