@@ -73,7 +73,7 @@ test.describe("SAN-972 /events map workspace", () => {
 
     // Map -> Details -> Back
     await overlay.getByTestId("selected-place-overlay-details").click();
-    await expect(page).toHaveURL(new RegExp(`${slugHref}$`));
+    await expect(page).toHaveURL((url) => url.pathname === slugHref);
     await page.goBack();
     await expect(page.getByTestId("events-browse").first()).toBeVisible();
 
