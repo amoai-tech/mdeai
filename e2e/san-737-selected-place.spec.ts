@@ -118,6 +118,14 @@ for (const size of [{ name: "desktop", width: 1440, height: 900 }, { name: "mobi
         const composerInput = page.locator(scenario.route === "rentals"
           ? "#rental-ask-input" : '[data-testid="discovery-ask-input"]:visible');
         await expect(composerInput).toBeEnabled({ timeout: 90_000 });
+        // A textarea is always enabled even while CopilotKit is connecting.
+        // The send control is gated on the real co-agent isReady flag. Prove
+        // readiness without sending any message, then clear the harmless draft.
+        await composerInput.fill("Ready check — not sent");
+        await expect(page.locator(scenario.route === "rentals"
+          ? '[data-testid="rental-ask-send"]:visible' : '[data-testid="discovery-ask-send"]:visible'))
+          .toBeEnabled({ timeout: 90_000 });
+        await composerInput.fill("");
         const cards = page.locator(scenario.card);
         await expect.poll(() => cards.count(), { timeout: 40_000 }).toBeGreaterThanOrEqual(2);
         // Titles and IDs come from the actual rendered public data.
