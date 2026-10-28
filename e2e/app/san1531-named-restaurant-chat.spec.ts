@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { signInAsOnOrigin, hasE2eEnv } from "../helpers/auth";
 
-const origin = process.env.SMOKE_BASE_URL || "http://localhost:3131";
+const origin = process.env.SMOKE_BASE_URL ?? "http://localhost:3131";
 test.describe("SAN-1531 named restaurant chat — actual signed-in agent", () => {
   test.skip(process.env.MDE_SAN1531_LIVE_E2E !== "1" || !hasE2eEnv(), "Explicit opt-in QA-only signed-in agent test");
   test.setTimeout(120_000);
