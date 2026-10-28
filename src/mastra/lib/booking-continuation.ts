@@ -107,13 +107,27 @@ export function shouldContinueVenueBookingAfterSearch({
     requestContext?.set?.(RESTAURANT_BOOKING_SEARCH_KEY, null);
     return false;
   }
-  // The trusted per-run receipt is sufficient even if Mastra omits prior steps.
   const lastUser = messages.findLast(m => m.role === 'user');
   const text = lastUser ? userText(lastUser.content) : '';
+  // An unrelated follow-up must never inherit an earlier booking proposal.
   if (!hasCompleteRestaurantBookingDetails(text)) return false;
-  // Check only tool results from this agent run, not historic search cards.
   if (steps.some(step => step.toolCalls?.some(call => BOOKING_NAMES.has(call.toolName || '')))) return false;
-  return steps.some(step => step.toolResults?.some(result =>
-    SEARCH_NAMES.has(result.toolName || '') && hasGroundedNamedRestaurant(text, result.output)))
-    || hasGroundedNamedRestaurant(text, requestContext?.get(RESTAURANT_BOOKING_SEARCH_KEY));
+
+  // Prefer the actual tool result if Mastra included it in this run's steps.
+  const matchedStepResult = steps.some(step => step.toolResults?.some(result =>
+    SEARCH_NAMES.has(result.toolName || '') && hasGroundedNamedRestaurant(text, result.output)));
+
+  // When the provider omits tool-result snapshots, the per-run receipt alone
+  // cannot authorize a proposal: require a search tool call in these steps.
+  const searchedThisRun = steps.some(step =>
+    step.toolCalls?.some(call => SEARCH_NAMES.has(call.toolName || '')));
+  const matchedReceipt = !matchedStepResult && searchedThisRun && !!requestContext?.set &&
+    hasGroundedNamedRestaurant(text, requestContext.get(RESTAURANT_BOOKING_SEARCH_KEY));
+
+  if (!matchedStepResult && !matchedReceipt) return false;
+
+  // One search can trigger only one forced proposal. Preserve normal Mastra
+  // tool-result matching when no RequestContext was provided.
+  requestContext?.set?.(RESTAURANT_BOOKING_SEARCH_KEY, null);
+  return true;
 }
