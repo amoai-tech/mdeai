@@ -1,44 +1,49 @@
 /**
  * SAN-1092 · RE-DES-005 — Broker onboarding wizard (Class U proof).
  *
- *   PW_SKIP_WEBSERVER=1 infisical run --silent --env=dev --path=/ -- \
- *     npx playwright test e2e/san-1092-broker-onboarding.spec.ts --project=chromium
+ *   # Explicit real database opt-in; default E2E skips this write-bearing test.
+ *   ALLOW_PROD_CERTIFICATION=1 npm run test:e2e:broker-onboarding
  */
-import { test, expect, type Page } from "@playwright/test";
-import { createClient } from "@supabase/supabase-js";
-import fs from "node:fs";
-import path from "node:path";
+import { test as base, expect, type Page } from "@playwright/test";
 import {
   watchCriticalConsoleErrors,
   assertConsoleClean,
 } from "./helpers/screen-evidence";
-import { hasE2eEnv, loadEnvLocalForE2E, injectSession, getTestSession } from "./helpers/auth";
+import {
+  createThrowawayIdentity,
+  deleteThrowawayIdentity,
+  getSupabaseAdmin,
+  type ThrowawayIdentity,
+  hasE2eEnv,
+  injectSession,
+  getTestSession,
+} from "./helpers/auth";
+import { cleanupBrokerOnboarding } from "./helpers/cleanup-broker-onboarding";
 
-const EVIDENCE_DATE = "2026-06-16";
-const EVIDENCE_DIR = path.join(
-  process.cwd(),
-  "docs/tasks/testing/evidence",
-  EVIDENCE_DATE,
-);
+// Use Playwright's fixture teardown, which still runs after assertion failure or
+// a timed-out test. Never depend on reaching the end of the test body to clean
+// up real Supabase records. The single broker spec opts into this fixture.
+type BrokerFixture = {
+  admin: Awaited<ReturnType<typeof getSupabaseAdmin>>;
+  identity: ThrowawayIdentity;
+};
+const test = base.extend<{ qaBroker: BrokerFixture }>({
+  qaBroker: async ({}, runFixture) => {
+    const admin = await getSupabaseAdmin();
+    const identity = await createThrowawayIdentity("qa-broker-onboarding");
+    try {
+      await runFixture({ admin, identity });
+    } finally {
+      await cleanupBrokerOnboarding(admin, identity, deleteThrowawayIdentity);
+    }
+  },
+});
 
-// skipcq: JS-0067
-function serviceClient() {
-  loadEnvLocalForE2E();
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) {
-    throw new Error("E2E Supabase env missing (NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY)");
-  }
-  return createClient(url, key, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
-
-// skipcq: JS-0067
+// Authenticated screenshots can contain private data and sessions; never put
+// them under tracked docs. Only an explicit local opt-in captures test artifacts.
 async function captureEvidence(page: Page, filename: string): Promise<void> {
-  fs.mkdirSync(EVIDENCE_DIR, { recursive: true });
-  const filePath = path.join(EVIDENCE_DIR, filename);
-  await page.screenshot({ path: filePath, fullPage: true });
+  if (process.env.BROKER_E2E_CAPTURE_SCREENSHOTS !== "1") return;
+  await page.screenshot({ path: test.info().outputPath(filename), fullPage: true });
 }
 
 // skipcq: JS-0067
@@ -48,29 +53,21 @@ async function hideCpkInspector(page: Page): Promise<void> {
   });
 }
 
-test.describe("SAN-1092 · RE-DES-005 broker onboarding", () => {
-  test.use({ viewport: { width: 1360, height: 900 } });
+test.use({ viewport: { width: 1360, height: 900 }, trace: "off", screenshot: "off", video: "off" });
 
+test.describe("SAN-1092 · RE-DES-005 broker onboarding", () => {
   test.beforeEach(() => {
-    test.skip(!hasE2eEnv(), "E2E Supabase env missing — need Infisical or .env.local");
+    test.skip(process.env.RUN_REAL_BROKER_ONBOARDING !== "1", "Opt in with test:e2e:broker-onboarding; creates real QA database records");
+    expect(hasE2eEnv(), "Real broker E2E requires Supabase public and admin credentials").toBe(true);
   });
 
-  test("new broker completes wizard → listings + DB rows", async ({ page }) => {
-    test.setTimeout(180_000);
+  test("new broker completes wizard → listings + DB rows", async ({ page, qaBroker }) => {
+    test.setTimeout(240_000);
     const errors = watchCriticalConsoleErrors(page);
-    const runTag = Date.now();
-    const email = `qa.broker.onboard+${runTag}@mdeai.co`;
-    const displayName = `QA Broker ${runTag}`;
-    const admin = serviceClient();
-
-    const { data: created, error: createErr } = await admin.auth.admin.createUser({
-      email,
-      email_confirm: true,
-    });
-    expect(createErr).toBeNull();
-    const userId = created.user?.id;
-    expect(userId).toBeTruthy();
-    if (!userId) return;
+    const { admin, identity } = qaBroker;
+    const userId = identity.userId;
+    const email = identity.email;
+    const displayName = `[QA DELETE] Broker ${userId.slice(0, 8)}`;
 
     const { data: existingProfile } = await admin
       .from("landlord_profiles")
@@ -83,13 +80,17 @@ test.describe("SAN-1092 · RE-DES-005 broker onboarding", () => {
     await injectSession(page.context(), session);
     await hideCpkInspector(page);
 
-    await page.goto("/host/rentals/onboarding", { waitUntil: "domcontentloaded" });
+    await page.goto("/host/rentals/onboarding", { waitUntil: "load" });
     await expect(page.locator('[data-testid="rentals-onboarding"]')).toBeVisible();
     await captureEvidence(page, "SAN-1092-onboarding-step1.png");
 
     await page.locator("#ro-display-name").fill(displayName);
     await page.getByRole("button", { name: "Laureles" }).click();
-    await page.getByRole("button", { name: "Continue →" }).click();
+    // Fail promptly on invalid form state rather than waiting 4 minutes for a
+    // disabled button. Slow Next.js hydration can otherwise lose the first click.
+    const continueButton = page.getByRole("button", { name: "Continue →" });
+    await expect(continueButton).toBeEnabled({ timeout: 15_000 });
+    await continueButton.click();
     await expect(page.locator('[data-testid="ro-step-listing"]')).toBeVisible();
     await captureEvidence(page, "SAN-1092-onboarding-step2.png");
 
@@ -114,7 +115,7 @@ test.describe("SAN-1092 · RE-DES-005 broker onboarding", () => {
       .maybeSingle();
     expect(profile).not.toBeNull();
     expect(profile?.display_name).toBe(displayName);
-    if (!profile) return;
+    if (!profile) throw new Error("Broker profile was not persisted");
 
     const { data: apartments } = await admin
       .from("apartments")

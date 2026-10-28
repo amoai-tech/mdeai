@@ -82,3 +82,27 @@ use the repository's updated Playwright lockfile and matching browser.
 If a browser binary is missing, run `npx playwright install chromium`.
 For debugging, run:
 `npx playwright test e2e/signed-in.spec.ts --project=chromium --headed`.
+
+
+## SAN-677 — Real broker onboarding E2E (explicit, cleanup-verified)
+
+`e2e/san-1092-broker-onboarding.spec.ts` creates a **real** Supabase Auth
+identity, landlord profile and rental draft. The generic Playwright suite skips
+this write-bearing case. Run it intentionally on an isolated Next.js port:
+
+```bash
+# Use ignored, real QA secrets and a known backend target (never commit them).
+SMOKE_BASE_URL=http://localhost:3098 \
+PLAYWRIGHT_WEB_SERVER_COMMAND='npx next dev --webpack -p 3098' \
+ALLOW_PROD_CERTIFICATION=1 npm run test:e2e:broker-onboarding
+```
+
+The established `require-safe-e2e-backend.mjs` guard refuses a hosted Supabase
+project without the explicit override. The test creates its own unique QA
+identity, checks the saved broker/listing, deletes its own listings and profile,
+then uses the existing `deleteThrowawayIdentity` helper. It verifies all rows
+were removed, and fails (rather than falsely going green) on cleanup errors.
+Never run this spec against an actual tenant account. Screenshots are disabled
+by default; explicit `BROKER_E2E_CAPTURE_SCREENSHOTS=1` places them in ignored
+Playwright test artifacts, not under tracked docs. Treat all browser artifacts
+and error-context files as private and do not upload them publicly.
