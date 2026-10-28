@@ -10,6 +10,16 @@ export const partnerProfileSuggestionSchema = z
     businessName: z.string().trim().min(2).max(160).optional(),
     category: z.string().trim().min(2).max(80).optional(),
     neighborhood: z.string().trim().min(2).max(80).optional(),
+    website: z
+      .string()
+      .trim()
+      .max(300)
+      .refine(
+        (value) => value === "" || /^https?:\/\/[^\s]+$/i.test(value),
+        "Enter a valid http(s) URL",
+      )
+      .optional(),
+    description: z.string().trim().max(1000).optional(),
     reason: z.string().trim().max(300).optional(),
   })
   .strict()
@@ -17,7 +27,9 @@ export const partnerProfileSuggestionSchema = z
     (value) =>
       value.businessName !== undefined ||
       value.category !== undefined ||
-      value.neighborhood !== undefined,
+      value.neighborhood !== undefined ||
+      value.website !== undefined ||
+      value.description !== undefined,
     "Suggestion contained no profile fields",
   );
 
@@ -70,6 +82,10 @@ export function applySuggestionToForm<T extends Record<string, unknown>>(
     ...(suggestion.category !== undefined ? { category: suggestion.category } : {}),
     ...(suggestion.neighborhood !== undefined
       ? { neighborhood: suggestion.neighborhood }
+      : {}),
+    ...(suggestion.website !== undefined ? { website: suggestion.website } : {}),
+    ...(suggestion.description !== undefined
+      ? { description: suggestion.description }
       : {}),
   };
 }
