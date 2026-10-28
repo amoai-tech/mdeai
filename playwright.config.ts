@@ -21,6 +21,7 @@ const VITEST_TESTS = "**/*.test.ts";
 
 const PROD_SPECS = [
   "**/app/host-ai-continuity.spec.ts",
+  "**/app/host-ai-sales-accuracy.spec.ts",
   "**/prod-candidate-certification.spec.ts",
   "**/prod-synthetic-smoke.spec.ts",
   "**/prod-signed-in-route.spec.ts",

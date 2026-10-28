@@ -1,5 +1,8 @@
 import type { ProcessAPIErrorArgs } from "@mastra/core/processors";
-import { describe, expect, it } from "vitest";
+import { RequestContext } from "@mastra/core/request-context";
+import { buildTurnTelemetryMetadata } from "../mastra-telemetry";
+import { summarizeToolSpans } from "../tool-audit-context";
+import { describe, expect, it, vi } from "vitest";
 import { geminiMalformedFirstStepRetry } from "../gemini-malformed-retry";
 
 function messageList(activeParts: string[] = [], previousParts: string[] = []) {
@@ -78,10 +81,68 @@ describe("SAN-1396 Gemini malformed function-call recovery", () => {
     })).toBeUndefined();
   });
 
+  it("recovers when Mastra has not yet materialized a response message", () => {
+    const onlyUser = { get: { all: { db: () => [
+      { id: "active", role: "user", content: { parts: [] } },
+    ] } } } as never;
+    expect(geminiMalformedFirstStepRetry.processAPIError({
+      ...firstStep, messageList: onlyUser,
+    })).toEqual({ retry: true });
+    expect(geminiMalformedFirstStepRetry.processAPIError({
+      ...firstStep, messageId: "nonexistent",
+    })).toEqual({ retry: true });
+  });
+
+  it("joins retry decisions to the final canonical ai_runs payload without another write", () => {
+    for (const status of ["success", "error"] as const) {
+      const requestContext = new RequestContext();
+      expect(geminiMalformedFirstStepRetry.processAPIError({
+        ...firstStep, requestContext,
+      })).toEqual({ retry: true });
+      const metadata = buildTurnTelemetryMetadata({
+        agentMapKey: "hostOpsAgent",
+        agent: { model: "google/gemini-3.5-flash" },
+        status,
+        durationMs: 12,
+        toolSummary: summarizeToolSpans([]),
+        requestContext,
+      });
+      expect(metadata.gemini_malformed_retry).toEqual({
+        decisions: ["retry_requested"],
+        final_turn_status: status,
+      });
+      expect(metadata.server_environment).toBeTruthy();
+      expect(metadata.deployment_sha).toBeTruthy();
+    }
+    const noRetry = buildTurnTelemetryMetadata({
+      agentMapKey: "hostOpsAgent",
+      agent: {},
+      status: "success",
+      durationMs: 1,
+      toolSummary: summarizeToolSpans([]),
+    });
+    expect(noRetry.gemini_malformed_retry).toBeUndefined();
+  });
+
   it("recognizes the exact provider finish reason in a wrapped error cause", () => {
     expect(geminiMalformedFirstStepRetry.processAPIError({
       ...firstStep,
       error: { code: "STREAM_WRAPPER", cause: malformed },
     })).toEqual({ retry: true });
+  });
+
+  it("logs one structured line per decision with no message content", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    geminiMalformedFirstStepRetry.processAPIError({ ...firstStep, agent: { id: "host-ops-agent" } as never });
+    geminiMalformedFirstStepRetry.processAPIError({
+      ...firstStep, messageList: messageList(["tool-invocation"]), agent: { id: "host-ops-agent" } as never,
+    });
+    const lines = warn.mock.calls.map((c) => JSON.parse(String(c[0])));
+    warn.mockRestore();
+    expect(lines.map((l) => [l.event, l.outcome, l.agent])).toEqual([
+      ["gemini_malformed_recovery", "retry", "host-ops-agent"],
+      ["gemini_malformed_recovery", "refused_tool_ran", "host-ops-agent"],
+    ]);
+    expect(Object.keys(lines[0]).sort()).toEqual(["agent", "event", "model", "outcome", "sha", "ts"]);
   });
 });
