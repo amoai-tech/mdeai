@@ -7,6 +7,7 @@ import { getPublicEvent } from "@/lib/events/get-public-event";
 
 type EventDetailPageProps = {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ from?: string | string[] }>;
 };
 
 export async function generateMetadata({
@@ -29,8 +30,10 @@ export async function generateMetadata({
   };
 }
 
-export default async function EventDetailPage({ params }: EventDetailPageProps) {
+export default async function EventDetailPage({ params, searchParams }: EventDetailPageProps) {
   const { slug } = await params;
+  // Allowlist, not a redirect target: only the literal "chat" changes the back link.
+  const { from } = await searchParams;
   const event = await getPublicEvent(slug);
   if (!event) notFound();
 
@@ -39,7 +42,7 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
       <Suspense fallback={null}>
         <EventCheckoutNotice />
       </Suspense>
-      <EventDetailView event={event} />
+      <EventDetailView event={event} backTo={from === "chat" ? "chat" : "events"} />
     </>
   );
 }

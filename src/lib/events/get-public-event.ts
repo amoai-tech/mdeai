@@ -1,9 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { isEventLookupUuid } from "./event-lookup";
 import { NON_QA_EVENT_SLUG_FILTER, QA_EVENT_NAME_SQL_PATTERN } from "./public-event-fixtures";
+import { parseEventFacts } from "./parse-event-facts";
 import { parseEventHostDisplay } from "./parse-host-display";
 import type {
   PublicEventDetail,
+  PublicEventFacts,
   PublicEventHost,
   PublicEventTicket,
   PublicEventVenue,
@@ -85,6 +87,7 @@ function mapEvent(
   tickets: PublicEventTicket[],
   host: PublicEventHost | null,
   venue: PublicEventVenue | null,
+  facts: PublicEventFacts | null,
 ): PublicEventDetail {
   return {
     id: row.id,
@@ -103,6 +106,7 @@ function mapEvent(
     longitude: toNumber(row.longitude),
     host,
     venue,
+    facts,
     tickets,
   };
 }
@@ -145,5 +149,5 @@ export async function getPublicEvent(
 
   if (ticketError) return null;
 
-  return mapEvent(row, (ticketRows ?? []).map(mapTicket), host, venue);
+  return mapEvent(row, (ticketRows ?? []).map(mapTicket), host, venue, parseEventFacts(row.details));
 }

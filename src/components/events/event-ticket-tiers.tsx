@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Minus, Plus, Ticket } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   formatTicketPrice,
   ticketsRemaining,
@@ -56,6 +57,19 @@ export function EventTicketTiers({
     () => lowestAvailablePrice(event.tickets),
     [event.tickets],
   );
+  // Compact mode has one CTA, so it must follow the tier the visitor picked, never the cheapest.
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selectedTier =
+    event.tickets.find(
+      (t) =>
+        t.id === selectedId && ticketsRemaining(t.qtyTotal, t.qtySold) > 0,
+    ) ?? fromTier;
+  const selectedQty = selectedTier ? (quantities[selectedTier.id] ?? 0) : 0;
+
+  const changeQty = (tier: PublicEventTicket, next: number) => {
+    setQuantities((prev) => ({ ...prev, [tier.id]: next }));
+    setSelectedId(tier.id);
+  };
 
   const openCheckout = (tier: PublicEventTicket) => {
     const qty = quantities[tier.id] ?? 1;
@@ -67,20 +81,9 @@ export function EventTicketTiers({
     });
   };
 
-  const primaryTier = fromTier ?? event.tickets[0] ?? null;
-  const stickyTotal =
-    primaryTier && (quantities[primaryTier.id] ?? 0) > 0
-      ? formatTicketPrice(
-          primaryTier.priceCents * (quantities[primaryTier.id] ?? 1),
-          primaryTier.currency,
-        )
-      : fromTier
-        ? formatTicketPrice(fromTier.priceCents, fromTier.currency)
-        : "Sold out";
-
   return (
     <section aria-labelledby="event-tiers-heading">
-      <h2 id="event-tiers-heading" className="text-lg font-semibold">
+      <h2 id="event-tiers-heading" className={event.tickets.length === 0 ? "sr-only" : "text-lg font-semibold"}>
         Tickets
       </h2>
       {event.tickets.length > 0 && fromTier === null ? (
@@ -95,10 +98,10 @@ export function EventTicketTiers({
       <ul className="mt-3 space-y-3" data-testid="event-tier-list">
         {event.tickets.length === 0 ? (
           <li
-            className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground"
+            className="py-1 text-sm leading-6 text-muted-foreground"
             data-testid="event-tier-empty"
           >
-            Ticket tiers coming soon. Check back or ask the concierge in chat.
+            No ticket tiers are listed for this event. Ask MDE or check with the organizer for updates.
           </li>
         ) : (
           event.tickets.map((tier) => {
@@ -111,12 +114,31 @@ export function EventTicketTiers({
             return (
               <li
                 key={tier.id}
-                className="rounded-lg border border-border p-3"
+                className={cn(
+                  "rounded-lg border p-3",
+                  compactFooter && selectedTier?.id === tier.id
+                    ? "border-primary"
+                    : "border-border",
+                )}
                 data-testid="event-tier-row"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="font-medium">{tier.name}</p>
+                    {compactFooter && !soldOut ? (
+                      <label className="flex cursor-pointer items-center gap-2 font-medium">
+                        <input
+                          type="radio"
+                          name="event-tier"
+                          className="size-4 accent-primary"
+                          checked={selectedTier?.id === tier.id}
+                          onChange={() => setSelectedId(tier.id)}
+                          data-testid="event-tier-select"
+                        />
+                        {tier.name}
+                      </label>
+                    ) : (
+                      <p className="font-medium">{tier.name}</p>
+                    )}
                     <p className="text-sm text-muted-foreground">
                       {formatTicketPrice(tier.priceCents, tier.currency)}
                     </p>
@@ -139,12 +161,7 @@ export function EventTicketTiers({
                         size="icon-sm"
                         aria-label={`Decrease ${tier.name} quantity`}
                         disabled={qty <= 0}
-                        onClick={() =>
-                          setQuantities((prev) => ({
-                            ...prev,
-                            [tier.id]: Math.max(0, (prev[tier.id] ?? 0) - 1),
-                          }))
-                        }
+                        onClick={() => changeQty(tier, Math.max(0, qty - 1))}
                       >
                         <Minus className="size-3.5" />
                       </Button>
@@ -160,12 +177,7 @@ export function EventTicketTiers({
                         size="icon-sm"
                         aria-label={`Increase ${tier.name} quantity`}
                         disabled={qty >= cap}
-                        onClick={() =>
-                          setQuantities((prev) => ({
-                            ...prev,
-                            [tier.id]: Math.min(cap, (prev[tier.id] ?? 0) + 1),
-                          }))
-                        }
+                        onClick={() => changeQty(tier, Math.min(cap, qty + 1))}
                       >
                         <Plus className="size-3.5" />
                       </Button>
@@ -200,21 +212,23 @@ export function EventTicketTiers({
         )}
       </ul>
 
-      {compactFooter &&
-      primaryTier &&
-      ticketsRemaining(primaryTier.qtyTotal, primaryTier.qtySold) > 0 ? (
+      {compactFooter && selectedTier ? (
         <Button
           type="button"
           className="mt-4 w-full"
+          disabled={selectedQty < 1}
           data-testid="event-sheet-checkout-cta"
-          onClick={() => openCheckout(primaryTier)}
+          onClick={() => openCheckout(selectedTier)}
         >
           <Ticket className="size-4" aria-hidden />
-          Continue to payment · {stickyTotal}
+          {selectedQty < 1
+            ? `Choose a quantity for ${selectedTier.name}`
+            : `Pay for ${selectedTier.name} × ${selectedQty} · ${formatTicketPrice(
+                selectedTier.priceCents * selectedQty,
+                selectedTier.currency,
+              )}`}
         </Button>
       ) : null}
-
-
     </section>
   );
 }

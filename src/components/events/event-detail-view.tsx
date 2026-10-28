@@ -5,6 +5,7 @@ import { useMemo, useRef, useState } from "react";
 import { ChevronRight, Ticket } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BookingCheckoutModal, type BookingCheckoutTarget } from "@/components/modals/booking-checkout-modal";
+import { EventFactsBlock } from "@/components/events/event-facts-block";
 import { EventHostBlock } from "@/components/events/event-host-block";
 import { EventDetailAside } from "@/components/events/event-detail-aside";
 import { EventDetailNavigation, EventDetailHero } from "@/components/events/event-detail-chrome";
@@ -19,10 +20,20 @@ function lowestAvailablePrice(tickets: PublicEventTicket[]): PublicEventTicket |
     : null;
 }
 
-export function EventDetailView({ event }: { event: PublicEventDetail }) {
+/** Stored descriptions may end with an explicit "Listing notice:" paragraph; surface it as a callout, not About text. */
+function splitListingNotice(description: string | null): { about: string | null; notice: string | null } {
+  if (!description) return { about: null, notice: null };
+  const paragraphs = description.split(/\n\s*\n/);
+  const notice = paragraphs.find((p) => /^\s*Listing notice:/i.test(p)) ?? null;
+  const about = paragraphs.filter((p) => p !== notice).join("\n\n").trim();
+  return { about: about || null, notice: notice?.trim() ?? null };
+}
+
+export function EventDetailView({ event, backTo = "events" }: { event: PublicEventDetail; backTo?: "events" | "chat" }) {
   const [checkout, setCheckout] = useState<BookingCheckoutTarget | null>(null);
   const tiersRef = useRef<HTMLDivElement>(null);
   const schedule = formatEventSchedule(event.startsAt, event.endsAt);
+  const { about, notice } = splitListingNotice(event.description);
   const street = event.venue?.address ?? event.address;
   const city = event.venue?.city ?? event.city;
   const venueLine = [street, street?.toLowerCase().includes((city ?? "").toLowerCase()) ? null : city]
@@ -49,7 +60,7 @@ export function EventDetailView({ event }: { event: PublicEventDetail }) {
   return (
     <>
       <div className="min-h-screen bg-background pb-28 md:pb-8" data-testid="event-detail-page">
-        <EventDetailNavigation eventName={event.name} returnPath={returnPath} />
+        <EventDetailNavigation eventName={event.name} returnPath={returnPath} backTo={backTo} />
         <div className="mx-auto max-w-6xl px-4 pt-6 md:pt-8">
           <nav aria-label="Breadcrumb" className="mb-5 hidden items-center gap-2 text-sm text-muted-foreground sm:flex">
             <Link href="/events" className="hover:underline">Events</Link>
@@ -57,7 +68,7 @@ export function EventDetailView({ event }: { event: PublicEventDetail }) {
             <span aria-current="page" className="truncate">{event.name}</span>
           </nav>
           <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(300px,380px)] lg:gap-x-9 lg:gap-y-8">
-            <EventDetailHero imageUrl={event.imageUrl} eventName={event.name} />
+            <EventDetailHero imageUrl={event.imageUrl} eventName={event.name} startsAt={event.startsAt} />
             <EventDetailAside
               event={event}
               city={city}
@@ -67,17 +78,19 @@ export function EventDetailView({ event }: { event: PublicEventDetail }) {
               fromTier={fromTier}
               tiersRef={tiersRef}
               askUrl={askUrl}
+              notice={notice}
               onCheckout={setCheckout}
             />
             {event.host ? <EventHostBlock host={event.host} className="order-3 lg:col-start-1" /> : null}
             <section className="order-4 space-y-2 lg:col-start-1" aria-labelledby="event-about-heading">
               <h2 id="event-about-heading" className="text-lg font-semibold tracking-tight">About this experience</h2>
-              {event.description ? (
-                <p className="whitespace-pre-wrap text-sm leading-7 text-muted-foreground">{event.description}</p>
+              {about ? (
+                <p className="whitespace-pre-wrap text-sm leading-7 text-muted-foreground">{about}</p>
               ) : (
                 <p className="text-sm text-muted-foreground">The organizer has not provided a detailed description yet.</p>
               )}
             </section>
+            <EventFactsBlock facts={event.facts} className="order-4 lg:col-start-1" />
             {street || event.venue ? (
               <EventVenueSection className="order-5 lg:col-start-1"
                 venue={event.venue ?? { name: street || city || "Event location", address: street, city: city ?? null }}
