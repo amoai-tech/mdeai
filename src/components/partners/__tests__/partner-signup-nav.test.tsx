@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { renderToStaticMarkup } from "react-dom/server";
+import { render } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { PartnerSignupNav } from "@/components/partners/partner-signup-nav";
@@ -33,10 +34,9 @@ describe("PartnerSignupNav", () => {
   });
 
   it("keeps mobile navigation compact and preserves both destinations", () => {
-    const root = document.createElement("div");
-    root.innerHTML = renderToStaticMarkup(<PartnerSignupNav showBackToPicker />);
+    const { container } = render(<PartnerSignupNav showBackToPicker />);
 
-    const back = root.querySelector('a[aria-label="All partner types"]');
+    const back = container.querySelector('a[aria-label="All partner types"]');
     expect(back?.getAttribute("href")).toBe("/partners/signup");
     expect(back?.classList.contains("shrink-0")).toBe(true);
     const backLabel = back?.querySelector("span");
@@ -44,10 +44,10 @@ describe("PartnerSignupNav", () => {
     expect(backLabel?.classList.contains("hidden")).toBe(true);
     expect(backLabel?.classList.contains("sm:inline")).toBe(true);
 
-    const explore = root.querySelector('a[href="/chat"]');
+    const explore = container.querySelector('a[href="/chat"]');
     expect(explore?.classList.contains("hidden")).toBe(true);
     expect(explore?.classList.contains("sm:inline-flex")).toBe(true);
-    expect(root.querySelector('a[href="/login"]')?.textContent).toContain("Sign in");
+    expect(container.querySelector('a[href="/login"]')?.textContent).toContain("Sign in");
   });
 
   it("sign-in uses next redirect when provided", () => {
