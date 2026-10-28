@@ -104,8 +104,8 @@ function RestaurantBrowseViewInner({
             <h2 className="text-sm font-semibold">Medellín restaurant contests</h2>
             <p className="hidden text-xs text-muted-foreground sm:block">Explore participating restaurants and their voting options.</p>
           </div>
-          <Link className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-medium text-foreground hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary" href="/contests" aria-label="Explore restaurant contests">
-            Explore contests <ArrowUpRight className="size-3.5" aria-hidden="true" />
+          <Link className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-medium text-foreground hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary" href="/contests">
+            Explore restaurant contests <ArrowUpRight className="size-3.5" aria-hidden="true" />
           </Link>
         </aside>
         <section className="mt-6" aria-label="Restaurant listings">
