@@ -33,3 +33,9 @@ Screenshots: events-{320,390,768,1440}.png and each other page at {390,1440}.png
 - https://playwright.dev/docs/api/class-locator : real browser locators and screenshots.
 
 **Release:** Not merged or deployed. Require exact-head GitHub CI, review and later production readback.
+
+## PR #599 exact-head review correction
+- First pushed head `9bbf9aa332` failed deterministic Chromium shard 3 on `e2e/san-1524-contests.spec.ts` because shortened visible contest CTA also changed the accessible link name expected by the shipped browser contract.
+- Preserve compact visible `Explore contests` on mobile, but restore `aria-label="Explore restaurant contests"` for screen reader semantics and the existing test.
+- Verified locally with `PW_SKIP_WEBSERVER=1 SMOKE_BASE_URL=http://localhost:3002 npx playwright test e2e/san-1524-contests.spec.ts --project=local-chromium --grep "restaurant directory links to contest discovery" --workers=1 --retries=0` (Playwright test-results/.last-run.json: passed, no failed tests).
+- This is a P1 regression correction, not proof of entire CI/production. Required exact-head checks must rerun after push.
