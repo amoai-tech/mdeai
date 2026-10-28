@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Locator, type Page } from "@playwright/test";
 import { attachConsoleWatcher, gotoBrowseRoute } from "../helpers/venue-release";
 
 /**
@@ -13,6 +13,14 @@ async function openEvents(page: Page, width: number, height: number) {
   await page.setViewportSize({ width, height });
   await gotoBrowseRoute(page, "/events");
   await expect(page.getByTestId("events-browse").first()).toBeVisible();
+}
+
+/** Click a toggle until it reports pressed: a click that lands before hydration is ignored. */
+async function pressUntilOn(button: Locator) {
+  await expect(async () => {
+    if ((await button.getAttribute("aria-pressed")) !== "true") await button.click();
+    await expect(button).toHaveAttribute("aria-pressed", "true", { timeout: 1_000 });
+  }).toPass();
 }
 
 async function locatedCards(page: Page) {
@@ -56,7 +64,7 @@ test.describe("SAN-972 /events map workspace", () => {
     const pinId = (await card.getAttribute("data-pin-id"))!;
     const slugHref = await card.getByTestId("event-details-cta").getAttribute("href");
 
-    await card.getByTestId("event-map-select").click();
+    await pressUntilOn(card.getByTestId("event-map-select"));
     await expect(card).toHaveAttribute("data-selected", "true");
     const overlay = page.getByTestId("browse-map-panel").getByTestId("selected-place-overlay");
     await expect(overlay).toHaveAttribute("data-pin-id", pinId, { timeout: 10_000 });
@@ -80,10 +88,8 @@ test.describe("SAN-972 /events map workspace", () => {
     await openEvents(page, 1440, 900);
     const asks = page.getByTestId("event-ask-select");
     test.skip((await asks.count()) < 2, "Needs two published events");
-    await asks.nth(0).click();
-    await expect(asks.nth(0)).toHaveAttribute("aria-pressed", "true");
-    await asks.nth(1).click();
-    await expect(asks.nth(1)).toHaveAttribute("aria-pressed", "true");
+    await pressUntilOn(asks.nth(0));
+    await pressUntilOn(asks.nth(1));
     await expect(asks.nth(0)).toHaveAttribute("aria-pressed", "false");
     await asks.nth(1).click();
     await expect(asks.nth(1)).toHaveAttribute("aria-pressed", "false");
