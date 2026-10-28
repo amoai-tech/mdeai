@@ -70,5 +70,7 @@ export function EventDetailHero({ imageUrl, eventName }: { imageUrl: string | nu
                   <CalendarDays className="size-9 opacity-70" aria-hidden />
                   <span className="text-sm">Event photo coming soon</span>
                 </div>
+              )}
+            </div>
   );
 }

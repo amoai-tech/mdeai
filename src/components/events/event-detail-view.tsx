@@ -58,8 +58,6 @@ export function EventDetailView({ event }: { event: PublicEventDetail }) {
           </nav>
           <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(300px,380px)] lg:gap-x-9 lg:gap-y-8">
             <EventDetailHero imageUrl={event.imageUrl} eventName={event.name} />
-              )}
-            </div>
             <EventDetailAside
               event={event}
               city={city}
