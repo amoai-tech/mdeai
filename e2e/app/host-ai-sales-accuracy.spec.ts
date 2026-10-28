@@ -154,6 +154,63 @@ async function waitForReply(rail: Locator, done: () => Promise<boolean>, timeout
   return rail.innerText();
 }
 
+/**
+ * Capture status and request IDs only: do not log SSE bodies, tokens or headers.
+ * A successful HTTP response can still contain an agent stream failure.
+ */
+function observeAgentNetwork(page: Page) {
+  const events: Array<{ kind: string; status?: number; path: string; requestId?: string; failure?: string }> = [];
+  const isAgentRequest = (method: string, url: string) => {
+    try {
+      return method === "POST" && new URL(url).pathname.startsWith("/api/copilotkit");
+    } catch { return false; }
+  };
+  page.on("response", response => {
+    const request = response.request();
+    if (!isAgentRequest(request.method(), response.url())) return;
+    events.push({
+      kind: "response",
+      status: response.status(),
+      path: new URL(response.url()).pathname,
+      requestId: response.headers()["x-vercel-id"],
+    });
+  });
+  page.on("requestfailed", request => {
+    if (!isAgentRequest(request.method(), request.url())) return;
+    events.push({
+      kind: "requestfailed",
+      path: new URL(request.url()).pathname,
+      failure: request.failure()?.errorText?.slice(0, 180),
+    });
+  });
+  return () => events.slice(-12);
+}
+
+async function recordAgentFailure(
+  page: Page,
+  rail: Locator,
+  network: ReturnType<typeof observeAgentNetwork>,
+  label: string,
+  fields?: { title: Locator; neighborhood: Locator; capacity: Locator; price: Locator },
+) {
+  const getValue = (locator: Locator) => locator.inputValue().catch(() => "<unavailable>");
+  const formState = fields ? {
+    title: await getValue(fields.title),
+    neighborhood: await getValue(fields.neighborhood),
+    capacity: await getValue(fields.capacity),
+    price: await getValue(fields.price),
+  } : undefined;
+  const reply = await rail.innerText().catch(() => "<chat unavailable>");
+  const screenshotPath = test.info().outputPath(`${label}-failure.png`);
+  await page.screenshot({ path: screenshotPath, fullPage: true }).catch(() => undefined);
+  return {
+    formState,
+    chatTail: reply.slice(-1500).replace(/[\\w.+-]+@[\\w.-]+\\.[a-z]{2,}/gi, "[redacted email]"),
+    network: network(),
+    screenshotPath,
+  };
+}
+
 async function expectNoOverflow(page: Page) {
   const widths = await page.evaluate(() => ({ page: document.documentElement.scrollWidth, screen: window.innerWidth }));
   expect(widths.page).toBeLessThanOrEqual(widths.screen);
@@ -167,6 +224,7 @@ for (const width of [390, 1440]) {
       const run = randomUUID().slice(0, 8);
       const fixture = await seedDraftWithPaidOrder(admin, host, run);
       await signInHost(ctx, "/app/events/overview");
+      const network = observeAgentNetwork(page);
       const rail = page.getByTestId("host-os-chat-region");
       await expect(rail).toBeVisible({ timeout: 45_000 });
       const editor = rail.locator("textarea").first();
@@ -191,10 +249,16 @@ for (const width of [390, 1440]) {
       // Wait until the streamed reply is complete: amounts present and ALL equal to the seeded total.
       // A wrong total never converges, so a wrong answer still fails; the failure shows the reply.
       const ticketsRe = new RegExp(`\\b${TICKETS}\\s+tickets?\\b`, "i");
-      const afterFirst = await waitForReply(rail, async () => {
-        const amounts = await copAmounts();
-        return amounts.length > 0 && amounts.every((n) => n === DISPLAYED_TOTAL) && ticketsRe.test(await rail.innerText());
-      }, 90_000);
+      let afterFirst: string;
+      try {
+        afterFirst = await waitForReply(rail, async () => {
+          const amounts = await copAmounts();
+          return amounts.length > 0 && amounts.every((n) => n === DISPLAYED_TOTAL) && ticketsRe.test(await rail.innerText());
+        }, 90_000);
+      } catch (cause) {
+        const evidence = await recordAgentFailure(page, rail, network, `host-ops-${width}`);
+        throw new Error(`Host Ops failed verified COP ${DISPLAYED_TOTAL} / ${TICKETS} tickets: ${JSON.stringify(evidence)}`, { cause });
+      }
       console.log("SAN1396_SALES_REPLY", JSON.stringify(afterFirst.slice(-400)));
 
       await ask("Which event is that for?");
@@ -212,6 +276,7 @@ for (const width of [390, 1440]) {
     await withThrowawayHost(browser, "san1396-wizard", width, async (ctx) => {
       const { host, admin, page, consoleErrors } = ctx;
       await signInHost(ctx, "/app/events/new");
+      const network = observeAgentNetwork(page);
       const wizard = page.getByTestId("host-event-wizard");
       await expect(wizard).toBeVisible({ timeout: 45_000 });
       // The form's description field is also a textarea; type into the chat region only.
@@ -227,7 +292,17 @@ for (const width of [390, 1440]) {
       }).toPass({ timeout: 20_000 });
       await editor.press("Enter");
 
-      await expect(page.getByTestId("host-event-field-neighborhood")).toHaveValue(/laureles/i, { timeout: 90_000 });
+      try {
+        await expect(page.getByTestId("host-event-field-neighborhood")).toHaveValue(/laureles/i, { timeout: 90_000 });
+      } catch (cause) {
+        const evidence = await recordAgentFailure(page, chat, network, `host-event-wizard-${width}`, {
+          title: page.getByTestId("host-event-field-title"),
+          neighborhood: page.getByTestId("host-event-field-neighborhood"),
+          capacity: page.getByTestId("host-event-field-capacity"),
+          price: page.getByTestId("host-event-field-price"),
+        });
+        throw new Error(`Wizard did not apply Laureles at ${width}px: ${JSON.stringify(evidence)}`, { cause });
+      }
       // A dropped "QA" or added words are incorrect, not a successful AI form-fill.
       await expect(page.getByTestId("host-event-field-title")).toHaveValue(expectedTitle, { timeout: 30_000 });
       await expect(page.getByTestId("host-event-field-capacity")).toHaveValue("80", { timeout: 30_000 });
