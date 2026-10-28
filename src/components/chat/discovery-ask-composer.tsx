@@ -146,7 +146,7 @@ function LiveComposer({ page, guestEvents, onAgentResults }: { page: Exclude<Dis
     }
   };
   return (
-    <section data-testid={`discovery-ask-${page}`} aria-label={`Ask MDE about ${page}`} className="px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 sm:px-6">
+    <section data-ready={isReady ? "true" : "false"} aria-busy={busy} data-testid={`discovery-ask-${page}`} aria-label={`Ask MDE about ${page}`} className="px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 sm:px-6">
       <div className="mb-2 flex items-center justify-between gap-3">
         <strong className="text-sm">Ask MDE</strong>
         <div className="flex items-center gap-3 text-xs">
