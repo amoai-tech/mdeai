@@ -4,8 +4,9 @@ import type { AdkGroundingInvokeResponse } from "./adk-grounding-types";
 export type GroundedPlaceResult = {
   id: string;
   title: string;
-  latitude: number;
-  longitude: number;
+  /** Absent when the source has no real coordinates; such a place is listed but never pinned. */
+  latitude?: number;
+  longitude?: number;
   placeId?: string;
   mapsUrl?: string;
   directionsUrl?: string;
