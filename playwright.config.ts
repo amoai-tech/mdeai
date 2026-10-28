@@ -36,6 +36,7 @@ const PROD_SPECS = [
   "**/rental-ai-security.spec.ts",
   "**/san-1204-broker-viewing-requests.spec.ts",
   "**/rental-conversion-journey.spec.ts",
+  "**/maps-mobile-lifecycle.spec.ts",
 ];
 
 export default defineConfig({
