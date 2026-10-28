@@ -2,7 +2,7 @@ name: PR Agent
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, test/pr-agent-nvidia-pilot]
     types: [opened, reopened, ready_for_review, synchronize]
 
 permissions:
@@ -22,9 +22,8 @@ jobs:
       contents: read
       issues: write
       pull-requests: write
-    uses: amoai-tech/pr-review-infra/.github/workflows/pr-agent.yml@8c6ce4c09fb08fc58c6b57686acb3bea987a6066
+    uses: amoai-tech/pr-review-infra/.github/workflows/pr-agent.yml@66d32390b62eddcb62537c3f753458c82f2d74f3
     with:
       evidence_title: MDE PR-Agent Evidence
     secrets:
       NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
-      GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
