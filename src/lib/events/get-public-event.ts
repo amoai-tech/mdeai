@@ -19,6 +19,8 @@ type EventRow = {
   event_start_time: string;
   event_end_time: string | null;
   primary_image_url: string | null;
+  source: string | null;
+  maps_url: string | null;
   currency: string | null;
   latitude: number | string | null;
   longitude: number | string | null;
@@ -94,6 +96,8 @@ function mapEvent(
     startsAt: row.event_start_time,
     endsAt: row.event_end_time,
     imageUrl: row.primary_image_url,
+    source: row.source,
+    mapsUrl: row.maps_url,
     currency: row.currency,
     latitude: toNumber(row.latitude),
     longitude: toNumber(row.longitude),
@@ -112,7 +116,7 @@ export async function getPublicEvent(
   let eventQuery = supabase
     .from("events")
     .select(
-      "id, slug, name, description, address, city, event_start_time, event_end_time, primary_image_url, currency, latitude, longitude, status, is_active, details, event_venues ( name, address, city )",
+      "id, slug, name, description, address, city, event_start_time, event_end_time, primary_image_url, source, maps_url, currency, latitude, longitude, status, is_active, details, event_venues ( name, address, city )",
     )
     .in("status", ["published", "live"])
     .eq("is_active", true)
