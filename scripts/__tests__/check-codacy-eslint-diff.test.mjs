@@ -34,7 +34,7 @@ test('bad or contradictory report cannot pass', () => {
 });
 
 test('partial source coverage cannot pass', () => {
-  assert.throws(() => validateDiffReport(complete(), 0, ['a.ts', 'b.ts', 'c.ts', 'd.ts']), /successful/);
+  assert.throws(() => validateDiffReport(complete(), 0, ['a.ts', 'b.ts', 'c.ts', 'd.ts']), /independent lint coverage missing/);
 });
 
 test('Codacy under-count is accepted only with independent ESLint coverage of every changed file', () => {
