@@ -371,11 +371,11 @@ export function looksLikeNonRentalSearch(text: string): boolean {
   // Explicit "do not search for listings" and requests to explain the assistant's
   // capabilities are conversations, even when a neighborhood/rental noun appears.
   // Do not mistake "don't search outside Laureles" for a ban on searching rentals.
-  if (/\b(?:do\s+not|don['’]?t)\s+(?:search\s+for|list|show|look\s+up)\s+(?:listings?|rentals?|apartments?|properties?|homes?)\b/i.test(t)) {
+  if (/\b(?:do\s+not|don['’]?t)\s+(?:search\s+for|list|show|look\s+up)\s+(?:(?:me|us)\s+)?(?:listings?|rentals?|apartments?|properties?|homes?)\b/i.test(t)) {
     return true;
   }
   if (/\bexplain\s+(?:briefly\s+)?how\s+(?:you|mde)\s+can\b/i.test(t) ||
-      /\b(?:what|how)\s+can\s+you\s+(?:do|help)\b/i.test(t)) {
+      /\b(?:what|how)\s+can\s+(?:you|mde)\s+(?:do|help)\b/i.test(t)) {
     return true;
   }
   if (looksLikeRentalSearch(t)) return false;

@@ -168,6 +168,11 @@ describe("rental-search-fast-path", () => {
     "I am visiting Medellín. In two short sentences explain how you can help me find a place to stay in Laureles, then ask me one useful question. Do not search for listings, create a lead, or make a booking.",
     "I'm visiting Medellín and deciding where to stay. Explain briefly how you can help me find an apartment in Laureles, then ask me one useful follow-up question.",
     "What can you do to help me find apartments in Laureles?",
+    "What can MDE do to help me find apartments in Laureles?",
+    "How can MDE help me find an apartment in Laureles?",
+    "Do not show me apartments in Laureles",
+    "Don’t show me listings",
+    "Don't show us rentals in Laureles",
     "Find an apartment in Laureles. Do not search for listings.",
   ])("SAN-1589: %j goes to the Concierge, not the rental fast path", (prompt) => {
     expect(canFastPathRentalSearch(prompt, {})).toBe(false);
