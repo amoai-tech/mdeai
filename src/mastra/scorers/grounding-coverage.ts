@@ -1,7 +1,7 @@
 import { createScorer } from "@mastra/core/evals";
 import { generateObject } from "ai";
 import { z } from "zod";
-import { FLASH_MODEL } from "../lib/models";
+import { ACTIVE_TEXT_MODEL } from "../lib/models";
 import { extractClaims, type FaithfulnessClaim } from "./faithfulness-core";
 import {
   evaluateGroundingCoverage,
@@ -37,7 +37,11 @@ function getInput(input: GroundingCoverageInput | undefined): GroundingCoverageI
 }
 
 function judgeEnabled(requestContext: unknown): boolean {
-  if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) return false;
+  // A judge uses the configured provider; do not require a Google key for NVIDIA.
+  const key = process.env.MDE_AI_PROVIDER === "nvidia"
+    ? process.env.NVIDIA_API_KEY
+    : process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+  if (!key?.trim()) return false;
   const ctx = requestContext as { get?: (k: string) => unknown } | undefined;
   const flag = typeof ctx?.get === "function" ? ctx.get(JUDGE_CONTEXT_KEY) : undefined;
   return flag !== false;
@@ -49,7 +53,7 @@ async function judgeUncovered(
 ): Promise<FaithfulnessClaim[]> {
   try {
     const { object } = await generateObject({
-      model: FLASH_MODEL,
+      model: ACTIVE_TEXT_MODEL,
       schema: z.object({
         uncovered: z
           .array(z.string())
