@@ -2,7 +2,7 @@ import { Agent } from '@mastra/core/agent';
 import { rentalSearchWorkflow } from '../workflows/rental-search-workflow';
 import { eventDiscoveryWorkflow } from '../workflows/event-discovery-workflow';
 import { classifyIntentTool } from '../tools/classify-intent';
-import { FLASH_MODEL } from '../lib/models';
+import { ACTIVE_TEXT_MODEL } from '../lib/models';
 
 export const routerAgent = new Agent({
   id: 'router-agent',
@@ -42,7 +42,7 @@ Same rule for event_discovery ("what time does it start?", "any cheaper tickets?
 - Never invent listings, events, prices, or URLs.
 - Never call both workflows in one turn.
 - Never write a multi-paragraph reply — at most one short sentence + the workflow output.`,
-  model: FLASH_MODEL,
+  model: ACTIVE_TEXT_MODEL,
   tools: { classifyIntentTool },
   workflows: { rentalSearchWorkflow, eventDiscoveryWorkflow },
 });

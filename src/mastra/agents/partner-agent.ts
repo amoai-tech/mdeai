@@ -1,6 +1,6 @@
 import { Agent } from "@mastra/core/agent";
 
-import { FLASH_MODEL } from "../lib/models";
+import { ACTIVE_TEXT_MODEL } from "../lib/models";
 import { getPartnerProfileTool } from "../tools/partner-profile-tool";
 
 const INSTRUCTIONS = [
@@ -22,7 +22,7 @@ const INSTRUCTIONS = [
 export const partnerAgent = new Agent({
   id: "partner-agent",
   name: "MDE Partner Assistant",
-  model: FLASH_MODEL,
+  model: ACTIVE_TEXT_MODEL,
   tools: { getPartnerProfile: getPartnerProfileTool },
   instructions: INSTRUCTIONS,
 });

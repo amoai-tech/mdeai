@@ -1,7 +1,7 @@
 import { createStep, createWorkflow } from "@mastra/core/workflows";
 import { z } from "zod";
 import { generateText } from "ai";
-import { FLASH_MODEL } from "../lib/models";
+import { ACTIVE_TEXT_MODEL } from "../lib/models";
 import { salesSummarySchema } from "@/lib/events/hostops-read-core";
 import {
   computeSalesInsights,
@@ -38,7 +38,7 @@ const narrateStep = createStep({
   outputSchema,
   execute: async ({ inputData }) => {
     const { text } = await generateText({
-      model: FLASH_MODEL,
+      model: ACTIVE_TEXT_MODEL,
       prompt: buildNarrationPrompt(inputData),
     });
     return { ...inputData, narrative: text };

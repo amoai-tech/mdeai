@@ -39,6 +39,11 @@ describe("src/mastra/lib/models.ts provider switch", () => {
     expect((CONCIERGE_MODEL as unknown as ModelWithId).modelId).toBe(NVIDIA_MODEL_ID);
     expect((CONCIERGE_MODEL as unknown as ModelWithId).provider).toBe("nvidia.chat");
     expect((CONCIERGE_MODEL as unknown as ModelWithId).specificationVersion).toBe("v2");
+    const { REASONING_MODEL, PLANNING_MODEL, PRO_MODEL } = await import("./models");
+    expect(REASONING_MODEL.modelId).toBe(NVIDIA_MODEL_ID);
+    expect(PLANNING_MODEL.modelId).toBe(NVIDIA_MODEL_ID);
+    // Separate, intentionally Gemini-only Pro tier; not a second NVIDIA primary.
+    expect(PRO_MODEL.modelId).toBe("gemini-3.1-pro-preview");
   });
 
   it("falls back to Gemini when NVIDIA is slow without retrying the same model", async () => {

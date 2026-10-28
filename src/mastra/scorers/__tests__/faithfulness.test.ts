@@ -1,6 +1,6 @@
 import { RequestContext } from "@mastra/core/request-context";
 import { describe, expect, it } from "vitest";
-import { faithfulnessScorer } from "../faithfulness";
+import { faithfulnessScorer, reconcileJudgeVerdict } from "../faithfulness";
 import {
   evaluateFaithfulness,
   extractClaims,
@@ -97,6 +97,24 @@ describe("faithfulness core — venue hallucination (SAN-590)", () => {
         (c) => c.type === "entity" && c.claim.includes("Skyline"),
       ),
     ).toBe(true);
+  });
+});
+
+describe("faithfulness judge fail-closed reconciliation", () => {
+  it("cannot clear an absent exact price or ID even when the model says nothing was fabricated", () => {
+    const unsupported = evaluateFaithfulness(TOOL_OUTPUT, {
+      reply: `${FABRICATED_REPLY} Confirmation id: bogus_12345.`,
+    }).unsupportedClaims;
+    expect(unsupported.some((claim) => claim.type === "price")).toBe(true);
+    expect(unsupported.some((claim) => claim.type === "id")).toBe(true);
+    const remaining = reconcileJudgeVerdict(unsupported, []);
+    expect(remaining.some((claim) => claim.type === "price")).toBe(true);
+    expect(remaining.some((claim) => claim.type === "id")).toBe(true);
+    // Keep the existing ability to clear a genuine entity alias after model review.
+    expect(remaining.some((claim) => claim.type === "entity")).toBe(false);
+    // Decorated judge strings must still map back to the exact entity claim.
+    const reviewed = reconcileJudgeVerdict(unsupported, ["[entity] Hotel Skyline Penthouse"]);
+    expect(reviewed.some((claim) => claim.type === "entity")).toBe(true);
   });
 });
 
