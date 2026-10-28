@@ -99,6 +99,21 @@ describe("ToolPinsSync leaves the map alone for unfinished input", () => {
   });
 });
 
+describe("SAN-1429: incomplete payloads cannot erase current map pins", () => {
+  it.each([
+    ["unknown object", { anything: "here" }],
+    ["missing results with total", { total: 0 }],
+    ["malformed results", { results: null }],
+    ["citations-only object", { citations: [] }],
+    ["metadata-only object", { source: "supabase", metadata: { phase: "running" } }],
+  ])("%s after a valid mapped result", (_label, partial) => {
+    show("event", { results: [mapped("valid", 6.2, -75.5)] });
+    expect(merge).toHaveBeenCalledTimes(1);
+    show("event", partial);
+    expect(merge).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("a bare array of rows", () => {
   it("is a finished grounded result", () => {
     show("grounded", [groundedRow("g1", 6.24, -75.58)]);

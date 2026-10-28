@@ -127,14 +127,15 @@ function isMissingMastraTable(error: { code?: string; message?: string } | null)
  */
 async function waitForSettledThreads(admin: AdminClient, userId: string, timeoutMs = 90_000): Promise<void> {
   const readCount = async (): Promise<number> => {
-    const { data, error } = await admin.from("mastra_threads").select("id").eq("resourceId", userId);
+    const { data, error } = await retryTransientDb(
+      () => admin.from("mastra_threads").select("id").eq("resourceId", userId),
+    );
     if (error) throw new Error("select threads: " + error.message);
     const ids = (data ?? []).map((row) => (row as { id: string }).id);
     if (ids.length === 0) return 0;
-    const { count, error: countError } = await admin
-      .from("mastra_messages")
-      .select("id", { count: "exact", head: true })
-      .in("thread_id", ids);
+    const { count, error: countError } = await retryTransientDb(
+      () => admin.from("mastra_messages").select("id", { count: "exact", head: true }).in("thread_id", ids),
+    );
     if (countError) throw new Error("count messages: " + countError.message);
     return count ?? 0;
   };
@@ -152,6 +153,24 @@ async function waitForSettledThreads(admin: AdminClient, userId: string, timeout
 
 /** Gateway/edge blips (Cloudflare 502/503/504) are retried, not reported as a leak. */
 const TRANSIENT_DB_ERROR = /(502|503|504|Bad Gateway|ETIMEDOUT|ECONNRESET|fetch failed)/i;
+
+/** Bounded retries only for transport failures; these test-only deletes are idempotent. */
+async function retryTransientDb<T extends { error: { message: string } | null }>(
+  operation: () => PromiseLike<T>,
+): Promise<T> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const result = await operation();
+      if (!result.error || !TRANSIENT_DB_ERROR.test(result.error.message) || attempt === 2) {
+        return result;
+      }
+    } catch (error) {
+      if (!TRANSIENT_DB_ERROR.test(String(error)) || attempt === 2) throw error;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 350 * (attempt + 1)));
+  }
+  throw new Error("transient database retry exhausted");
+}
 
 async function selectThreadIds(
   admin: Awaited<ReturnType<typeof getSupabaseAdmin>>,
@@ -182,10 +201,13 @@ async function selectThreadIds(
  * an earlier run leave orphaned messages behind.
  */
 export async function deleteThrowawayIdentity(identity: ThrowawayIdentity): Promise<void> {
+  if (!identity.email.endsWith("@qa-isolation.mdeai.co")) {
+    throw new Error("refusing to delete a non-disposable QA identity");
+  }
   const admin = await getSupabaseAdmin();
   const failures: string[] = [];
 
-  // A local stack with no Mastra tables has no rows to clean, only the identity.
+  // Mastra may save messages just after the final browser event. Settle before cleanup.
   const probe = await selectThreadIds(admin, identity.userId);
   const mastraAbsent = isMissingMastraTable(probe.error);
   if (probe.error && !mastraAbsent) failures.push("select threads: " + probe.error.message);
@@ -197,54 +219,77 @@ export async function deleteThrowawayIdentity(identity: ThrowawayIdentity): Prom
       failures.push(error instanceof Error ? error.message : String(error));
     }
 
-    // Re-read AFTER settling: a turn that finished during the wait may have created a
-    // new thread, and its messages must be removed too.
-    const { data: threads, error: selectError } = await selectThreadIds(
-      admin,
-      identity.userId,
-    );
-    if (selectError && !isMissingMastraTable(selectError)) {
-      failures.push("select threads: " + selectError.message);
-    }
-    const ids = (threads ?? []).map((row) => (row as { id: string }).id);
+    // Reconcile again if a late persisted turn appeared during the first delete. Do not
+    // assume success from a delete response; re-read both tables and require zero.
+    for (let attempt = 0; attempt < 3 && failures.length === 0; attempt++) {
+      const { data: threads, error: selectError } = await selectThreadIds(admin, identity.userId);
+      if (selectError) {
+        failures.push("select threads: " + selectError.message);
+        break;
+      }
+      const ids = (threads ?? []).map((row) => row.id);
 
-    if (ids.length > 0) {
-      const { error: messagesError } = await admin.from("mastra_messages").delete().in("thread_id", ids);
-      if (messagesError) failures.push("delete messages: " + messagesError.message);
-    }
+      if (ids.length > 0) {
+        const { error } = await retryTransientDb(
+          () => admin.from("mastra_messages").delete().in("thread_id", ids),
+        );
+        if (error) { failures.push("delete messages: " + error.message); break; }
+      }
+      const { error: threadsError } = await retryTransientDb(
+        () => admin.from("mastra_threads").delete().eq("resourceId", identity.userId),
+      );
+      if (threadsError) { failures.push("delete threads: " + threadsError.message); break; }
 
-    const { error: threadsError } = await admin
-      .from("mastra_threads")
-      .delete()
-      .eq("resourceId", identity.userId);
-    if (threadsError) failures.push("delete threads: " + threadsError.message);
-
-    // Prove the outcome rather than assume the deletes worked.
-    const remaining = await admin.from("mastra_threads").select("id").eq("resourceId", identity.userId);
-    if (remaining.error && !isMissingMastraTable(remaining.error)) {
-      failures.push("verify threads: " + remaining.error.message);
-    } else if ((remaining.data ?? []).length > 0) {
-      failures.push("threads remain after cleanup: " + (remaining.data ?? []).length);
-    }
-    if (ids.length > 0) {
-      const remainingMessages = await admin.from("mastra_messages").select("id").in("thread_id", ids);
-      if (remainingMessages.error && !isMissingMastraTable(remainingMessages.error)) {
+      const remaining = await retryTransientDb(
+        () => admin.from("mastra_threads").select("id").eq("resourceId", identity.userId),
+      );
+      if (remaining.error) {
+        failures.push("verify threads: " + remaining.error.message);
+        break;
+      }
+      const remainingMessages = ids.length
+        ? await retryTransientDb(() => admin.from("mastra_messages").select("id").in("thread_id", ids))
+        : { data: [] as Array<{ id: string }>, error: null };
+      if (remainingMessages.error) {
         failures.push("verify messages: " + remainingMessages.error.message);
-      } else if ((remainingMessages.data ?? []).length > 0) {
-        failures.push("messages remain after cleanup: " + (remainingMessages.data ?? []).length);
+        break;
+      }
+      if ((remaining.data ?? []).length === 0 && (remainingMessages.data ?? []).length === 0) {
+        break;
+      }
+      if (attempt === 2) {
+        failures.push("Mastra rows remain after 3 cleanup attempts");
+      } else {
+        await new Promise((resolve) => setTimeout(resolve, 700 * (attempt + 1)));
       }
     }
   }
 
-  const { error: userError } = await admin.auth.admin.deleteUser(identity.userId);
-  if (userError) failures.push("delete identity: " + userError.message);
+  // Never delete the auth owner while its private Mastra rows might remain.
+  // Keep the disposable identity available for a later safe cleanup retry.
+  if (failures.length > 0) {
+    throw new Error("cleanup failed for " + identity.email + " — " + failures.join("; "));
+  }
 
-  // Deleting the auth user leaves the public.profiles row behind (no cascade), so a run that
-  // trusted identity deletion alone left a real user profile in the database. Delete it and
-  // prove it is gone, like every other row this helper owns.
-  const { error: profileDeleteError } = await admin.from("profiles").delete().eq("id", identity.userId);
+  const { error: userError } = await retryTransientDb(
+    () => admin.auth.admin.deleteUser(identity.userId),
+  );
+  if (userError) {
+    // An earlier delete may have succeeded before its HTTP response was lost.
+    // Check the actual account instead of reporting a false leak or deleting a different user.
+    const lookup = await retryTransientDb(() => admin.auth.admin.getUserById(identity.userId));
+    if (lookup.data.user || (lookup.error && lookup.error.status !== 404)) {
+      failures.push("delete identity: " + userError.message);
+    }
+  }
+
+  const { error: profileDeleteError } = await retryTransientDb(
+    () => admin.from("profiles").delete().eq("id", identity.userId),
+  );
   if (profileDeleteError) failures.push("delete profile: " + profileDeleteError.message);
-  const profileLeft = await admin.from("profiles").select("id").eq("id", identity.userId);
+  const profileLeft = await retryTransientDb(
+    () => admin.from("profiles").select("id").eq("id", identity.userId),
+  );
   if (profileLeft.error) {
     failures.push("verify profile: " + profileLeft.error.message);
   } else if ((profileLeft.data ?? []).length > 0) {

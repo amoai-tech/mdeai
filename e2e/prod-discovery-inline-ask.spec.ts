@@ -40,11 +40,15 @@ test.describe("SAN-1390 — four signed-in discovery journeys on the real concie
       if (isPreview) await establishVercelAutomationBypass(page, base, process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim() ?? "");
       const failures: string[] = [];
       page.on("pageerror", (error) => failures.push(error.message));
-      const responses: number[] = [];
-      page.on("response", (r) => {
-        if (r.url().includes("/api/copilotkit") && r.request().method() === "POST") {
-          responses.push(r.status());
-        }
+      const agentRunStatuses: number[] = [];
+      page.on("response", (response) => {
+        if (!response.url().includes("/api/copilotkit") || response.request().method() !== "POST") return;
+        // The runtime intentionally refuses resource/request with 403 to protect other users'
+        // threads. Count only the agent/run calls that actually answer these AI questions.
+        let method: unknown;
+        try { method = (response.request().postDataJSON() as { method?: unknown })?.method; }
+        catch { return; }
+        if (method === "agent/run") agentRunStatuses.push(response.status());
       });
       await page.goto(new URL("/" + scenario.route, base).toString(), { waitUntil: "domcontentloaded" });
       // Responsive desktop/mobile composer instances may coexist in the DOM.
@@ -71,8 +75,9 @@ test.describe("SAN-1390 — four signed-in discovery journeys on the real concie
         await expect(history).toContainText(query);
       }
       expect(failures).toEqual([]);
-      expect(responses.some((code) => code === 200)).toBe(true);
-      expect(responses.some((code) => code >= 400 && code !== 401)).toBe(false);
+      expect(agentRunStatuses.length, "two real AI questions require two agent runs").toBe(2);
+      expect(agentRunStatuses, "all AI runs must succeed; intentional private resource 403s are separate")
+        .toEqual([200, 200]);
       // The browser sees only real tool outputs: a no-match result is acceptable,
       // but a search that yielded no tool result cannot be called a verified cards journey.
       if (scenario.route === "cafes" || scenario.route === "nightlife") {
