@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { useConciergeChat } from "@/lib/hooks/use-concierge-chat";
 import { useConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
+import { useEventLocalChat } from "@/components/chat/event-local-chat-context";
 import type { ConciergeWorkingMemory } from "@/lib/types";
 import { eventSubChipPrompt } from "@/lib/event-query-classifier";
 import { useEventSearchFastPath } from "@/hooks/use-event-search-fast-path";
@@ -23,6 +24,7 @@ export function ChatQueryBar() {
   const { state: agentState, setState } = useConciergeCoAgent();
   const { appendMessage, isLoading } = useConciergeChat();
   const { handleEventChip } = useEventSearchFastPath();
+  const { showNotice } = useEventLocalChat();
   // Reuse the same classify → rental fast-path → Mastra fallback sender as the chat composer.
   const sendHandlers = useConciergeSendHandlers();
   const priceRequestRef = useRef(false);
@@ -57,12 +59,18 @@ export function ChatQueryBar() {
       const budget = chip.maxPriceMonthly.toLocaleString("en-US");
       // The explicit sentence lets the existing rental query parser carry an exact monthly
       // amount and original currency into /api/rentals/search, even before React rerenders.
-      await sendConciergeUserMessage(
+      const handled = await sendConciergeUserMessage(
         `Find rental apartments under ${chip.budgetCurrency} ${budget}/month`,
         sendHandlers,
       );
+      if (!handled) throw new Error("Monthly rental query was not accepted");
     } catch (error) {
       console.error("[chat-query-bar] monthly rental search failed", error);
+      // A failed dispatch must not leave an apparently applied budget. Preserve any
+      // neighborhood/bedroom edits made while the search was in flight.
+      setLocalState((current) => applyChipToggle(current, chip, false));
+      setState((current) => applyChipToggle(current, chip, false));
+      showNotice("We couldn't start that rental search. Tap the budget again to retry.");
     } finally {
       priceRequestRef.current = false;
       setPriceSearching(false);
