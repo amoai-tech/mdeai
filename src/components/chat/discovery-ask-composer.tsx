@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useSession } from "@/hooks/use-session";
 import { useOptionalConciergeCoAgent, useConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
 import { useConciergeChat } from "@/lib/hooks/use-concierge-chat";
+import { getConciergeErrorVersion } from "@/lib/concierge-error-store";
 import { useTurns } from "@/components/rentals/rental-ask-tool-results";
 import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 import { ArrowUp, Square } from "lucide-react";
@@ -65,6 +66,8 @@ function GuestEventComposer({ options }: { options: EventGuestOptions }) {
   </div>;
 }
 
+const INTERRUPTED_COPY = "The response was interrupted. Check the conversation before retrying.";
+
 /** One composer on every non-rental browse page; Rentals retains its richer search adapter. */
 function LiveComposer({ page, guestEvents, onAgentResults }: { page: Exclude<DiscoveryPage, "rentals">; guestEvents?: EventGuestOptions; onAgentResults?: (result: DiscoveryAgentResult) => void }) {
   const { user, loading: sessionLoading } = useSession();
@@ -116,11 +119,18 @@ function LiveComposer({ page, guestEvents, onAgentResults }: { page: Exclude<Dis
     setDraft("");
     const startIndex = agent?.messages.length ?? 0;
     pendingResult.current = onAgentResults ? { since: startIndex, emit: onAgentResults } : null;
+    const errorVersionBefore = getConciergeErrorVersion();
     try {
       const saved = await appendMessage(message);
       if (!saved && !cancelled.current) {
         setError("MDE could not send your question. Please try again.");
         setDraft((current) => current || message);
+      } else if (!cancelled.current && getConciergeErrorVersion() !== errorVersionBefore) {
+        // CopilotKit reports a failed stream through the error store and still resolves runAgent.
+        // The question is already in the thread, so say so instead of showing nothing.
+        pendingResult.current = null;
+        setError(INTERRUPTED_COPY);
+        setShowHistory(true);
       } else if (!cancelled.current) {
         // Catch the case where runAgent resolved after the last subscription event.
         const pending = pendingResult.current;
@@ -135,7 +145,7 @@ function LiveComposer({ page, guestEvents, onAgentResults }: { page: Exclude<Dis
       }
     } catch {
       // The turn may already have been committed to the thread. Never blindly append it again.
-      if (!cancelled.current) setError("The response was interrupted. Check the conversation before retrying.");
+      if (!cancelled.current) setError(INTERRUPTED_COPY);
     } finally {
       pendingResult.current = null;
       inFlight.current = false;
