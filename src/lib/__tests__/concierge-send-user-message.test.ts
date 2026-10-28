@@ -62,6 +62,31 @@ describe("SAN-867 · VEB-MVP-001 — Router hijack fix — sendConciergeUserMess
     expect(handlers.onAgentSend).not.toHaveBeenCalled();
   });
 
+  it("SAN-1559 routes a second event search to the agent when its fast path is busy", async () => {
+    const handlers = makeHandlers();
+    let signalStarted!: () => void;
+    let finishFirst!: (handled: boolean) => void;
+    const started = new Promise<void>((resolve) => { signalStarted = resolve; });
+    handlers.handleEventMessage
+      .mockImplementationOnce(() => {
+        signalStarted();
+        return new Promise<boolean>((resolve) => { finishFirst = resolve; });
+      })
+      .mockResolvedValueOnce(false);
+
+    const first = sendConciergeUserMessage("salsa events this weekend", handlers);
+    await started;
+
+    expect(await sendConciergeUserMessage("music events tonight", handlers)).toBe(true);
+    expect(handlers.handleEventMessage).toHaveBeenCalledTimes(2);
+    expect(handlers.onAgentSend).toHaveBeenCalledOnce();
+    expect(handlers.onAgentSend).toHaveBeenCalledWith("music events tonight");
+
+    finishFirst(true);
+    expect(await first).toBe(true);
+    expect(handlers.onAgentSend).toHaveBeenCalledOnce();
+  });
+
   it("retries the failed fast-path search, not the previous agent turn", async () => {
     const handlers = makeHandlers();
     handlers.threadId = "thread-a";
