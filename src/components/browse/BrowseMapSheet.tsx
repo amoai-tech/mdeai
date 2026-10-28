@@ -9,13 +9,13 @@ import { AppErrorBoundary } from "@/components/errors/error-boundary";
 import { MapsShell } from "@/components/maps/MapProvider";
 import { ChatMap } from "@/components/maps/ChatMap";
 
-export function BrowseMapSheet({ raised = false }: { raised?: boolean }) {
+export function BrowseMapSheet({ raised = false, inline = false }: { raised?: boolean; inline?: boolean }) {
   const [open, setOpen] = useState(false);
   const [composerHeight, setComposerHeight] = useState<number | null>(null);
   // The inline conversation grows as turns arrive. Measure the actual composer
   // instead of assuming its height is always six rem (which overlays chat text).
   useEffect(() => {
-    if (!raised) return;
+    if (!raised || inline) return;
     const composer = document.querySelector('[data-testid="workspace-ask-composer"]');
     if (!composer) return;
     const measure = () => setComposerHeight(Math.ceil(composer.getBoundingClientRect().height));
@@ -24,16 +24,16 @@ export function BrowseMapSheet({ raised = false }: { raised?: boolean }) {
     const observer = new ResizeObserver(measure);
     observer.observe(composer);
     return () => observer.disconnect();
-  }, [raised]);
+  }, [raised, inline]);
   return (
-    <div className="lg:hidden">
+    <div className={inline ? "flex justify-end lg:hidden" : "lg:hidden"}>
       <Button
         variant="default"
         size="sm"
         // SAN-1421: on a page with a pinned Ask MDE composer, the phone FAB sits above that bar —
         // measured, so an expanded transcript or an error row cannot end up underneath the button.
-        className={raised ? "fixed right-4 z-50 gap-2 shadow-lg" : "fixed bottom-6 right-4 z-50 gap-2 shadow-lg"}
-        style={raised ? { bottom: composerHeight == null ? "calc(1rem + var(--mde-ask-composer-height, 6rem))" : `calc(1rem + ${composerHeight}px)` } : undefined}
+        className={inline ? "min-h-11 gap-2" : raised ? "fixed right-4 z-50 gap-2 shadow-lg" : "fixed bottom-6 right-4 z-50 gap-2 shadow-lg"}
+        style={raised && !inline ? { bottom: composerHeight == null ? "calc(1rem + var(--mde-ask-composer-height, 6rem))" : `calc(1rem + ${composerHeight}px)` } : undefined}
         onClick={() => setOpen(true)}
         aria-label="Open map"
         data-testid="browse-map-fab"

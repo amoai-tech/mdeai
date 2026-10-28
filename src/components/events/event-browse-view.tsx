@@ -171,12 +171,12 @@ export function EventBrowseView({
 
         {!error && shownEvents.length > 0 ? (
           <div
-            className="grid auto-rows-fr gap-4 sm:grid-cols-2 lg:grid-cols-3"
+            className="mx-auto flex w-full max-w-3xl flex-col gap-3"
             aria-label={`${shownEvents.length} events`}
             data-testid="events-grid"
           >
             {shownEvents.map((event) => (
-              <EventBrowseCard key={event.id} event={event}
+              <EventBrowseCard key={event.id} event={event} mediaLayout="inline"
                 selectedForAsk={selectedId === event.id}
                 onAskSelect={() => setSelectedEventId((current) => current === event.id ? null : event.id)} />
             ))}
