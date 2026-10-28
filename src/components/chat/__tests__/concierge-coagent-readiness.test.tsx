@@ -4,7 +4,7 @@ import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 
 const mocks = vi.hoisted(() => ({
-  mockUseAgent: vi.fn<() => { agent: unknown }>(() => ({ agent: undefined })),
+  mockUseAgent: vi.fn<() => { agent: unknown; isReady?: boolean }>(() => ({ agent: undefined })),
   mockUseCopilotKit: vi.fn<
     () => {
       copilotkit: {
@@ -58,6 +58,9 @@ function renderWithAct(component: React.ReactElement) {
   });
 
   return {
+    rerender: (next: React.ReactElement) => {
+      act(() => root.render(next));
+    },
     unmount: () => {
       act(() => root.unmount());
       document.body.removeChild(container);
@@ -104,7 +107,7 @@ describe("ConciergeCoAgentProvider — readiness behavior", () => {
   });
 
   it("returns isReady=false when runtimeUrl is missing", () => {
-    mockUseAgent.mockReturnValue({ agent: {} });
+    mockUseAgent.mockReturnValue({ agent: {}, isReady: false });
     mockUseCopilotKit.mockReturnValue({
       copilotkit: {
         runtimeUrl: undefined,
@@ -123,8 +126,25 @@ describe("ConciergeCoAgentProvider — readiness behavior", () => {
     unmount();
   });
 
+  it("trusts the real useAgent readiness when a redundant runtime-status snapshot lags", () => {
+    mockUseAgent.mockReturnValue({ agent: { id: "conciergeAgent" }, isReady: true });
+    mockUseCopilotKit.mockReturnValue({
+      copilotkit: {
+        runtimeUrl: "/api/copilotkit",
+        runtimeConnectionStatus: "connecting",
+        subscribe: () => ({ unsubscribe: () => undefined }),
+      },
+    });
+    const { captured, TestComponent } = captureReadiness();
+    const { unmount } = renderWithAct(
+      <ConciergeCoAgentProvider><TestComponent /></ConciergeCoAgentProvider>,
+    );
+    expect(captured.isReady).toBe(true);
+    unmount();
+  });
+
   it("returns isReady=false while runtime is connecting", () => {
-    mockUseAgent.mockReturnValue({ agent: {} });
+    mockUseAgent.mockReturnValue({ agent: {}, isReady: false });
     mockUseCopilotKit.mockReturnValue({
       copilotkit: {
         runtimeUrl: "/api/copilotkit",
@@ -143,47 +163,19 @@ describe("ConciergeCoAgentProvider — readiness behavior", () => {
     unmount();
   });
 
-  it("reacts to the cold runtime connecting -> connected subscription event", () => {
-    let onRuntimeConnectionStatusChanged:
-      | ((event: { status: string }) => void)
-      | undefined;
-    const unsubscribe = vi.fn();
-    const copilotkit = {
-      runtimeUrl: "/api/copilotkit" as string | undefined,
-      runtimeConnectionStatus: "connecting",
-      subscribe: vi.fn(
-        (subscriber: {
-          onRuntimeConnectionStatusChanged?: (event: {
-            status: string;
-          }) => void;
-        }) => {
-          onRuntimeConnectionStatusChanged =
-            subscriber.onRuntimeConnectionStatusChanged;
-          return { unsubscribe };
-        },
-      ),
-    };
-    mockUseAgent.mockReturnValue({ agent: { id: "test-agent" } });
-    mockUseCopilotKit.mockImplementation(() => ({ copilotkit }));
-
+  it("reacts to the real hook becoming ready after connection without a custom subscription", () => {
+    let agentReady = false;
+    const agent = { id: "test-agent" };
+    mockUseAgent.mockImplementation(() => ({ agent, isReady: agentReady }));
     const { captured, TestComponent } = captureReadiness();
-    const { unmount } = renderWithAct(
-      <ConciergeCoAgentProvider>
-        <TestComponent />
-      </ConciergeCoAgentProvider>,
-    );
-
+    const jsx = <ConciergeCoAgentProvider><TestComponent /></ConciergeCoAgentProvider>;
+    const { rerender, unmount } = renderWithAct(jsx);
     expect(captured.isReady).toBe(false);
-    expect(copilotkit.subscribe).toHaveBeenCalledOnce();
 
-    act(() => {
-      copilotkit.runtimeConnectionStatus = "connected";
-      onRuntimeConnectionStatusChanged?.({ status: "connected" });
-    });
-
+    agentReady = true;
+    rerender(<ConciergeCoAgentProvider><TestComponent /></ConciergeCoAgentProvider>);
     expect(captured.isReady).toBe(true);
     unmount();
-    expect(unsubscribe).toHaveBeenCalledOnce();
   });
 
   it("uses a ready local provider without live CopilotKit transport in deterministic E2E mode", () => {
@@ -203,7 +195,7 @@ describe("ConciergeCoAgentProvider — readiness behavior", () => {
   });
 
   it("returns isReady=true when runtime is already connected", () => {
-    mockUseAgent.mockReturnValue({ agent: { id: "test-agent" } });
+    mockUseAgent.mockReturnValue({ agent: { id: "test-agent" }, isReady: true });
     const { captured, TestComponent } = captureReadiness();
     const { unmount } = renderWithAct(
       <ConciergeCoAgentProvider>

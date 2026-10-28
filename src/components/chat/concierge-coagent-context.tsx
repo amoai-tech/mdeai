@@ -6,12 +6,10 @@ import {
   useContext,
   useMemo,
   useState,
-  useSyncExternalStore,
   type ReactNode,
 } from "react";
 import {
   useAgent,
-  useCopilotKit,
   UseAgentUpdate,
   type AbstractAgent,
 } from "@copilotkit/react-core/v2";
@@ -36,8 +34,7 @@ const ConciergeCoAgentContext = createContext<ConciergeCoAgentValue | null>(
 
 /** Live CopilotKit agent mount for concierge. */
 function LiveConciergeCoAgentProvider({ children }: { children: ReactNode }) {
-  const { copilotkit } = useCopilotKit();
-  const { agent } = useAgent({
+  const { agent, isReady } = useAgent({
     agentId: "conciergeAgent",
     updates: [
       UseAgentUpdate.OnStateChanged,
@@ -46,35 +43,10 @@ function LiveConciergeCoAgentProvider({ children }: { children: ReactNode }) {
     ],
   });
 
-  // Custom readiness plumbing written before useAgent().isReady existed; re-verify against the installed pins before simplifying.
-  // CopilotKitCore is an external mutable store. useSyncExternalStore reads a
-  // current snapshot after subscribing, so a cold connecting -> connected
-  // transition cannot be lost between render and the subscription effect.
-  const subscribeToRuntimeStatus = useCallback(
-    (onStoreChange: () => void) => {
-      const subscription = copilotkit.subscribe({
-        onRuntimeConnectionStatusChanged: () => onStoreChange(),
-      });
-      return () => subscription.unsubscribe();
-    },
-    [copilotkit],
-  );
-  const getRuntimeConnectionStatus = useCallback(
-    () => copilotkit.runtimeConnectionStatus,
-    [copilotkit],
-  );
-  const runtimeConnectionStatus = useSyncExternalStore(
-    subscribeToRuntimeStatus,
-    getRuntimeConnectionStatus,
-    getRuntimeConnectionStatus,
-  );
-
-  const isReady = Boolean(
-    agent &&
-    copilotkit.runtimeUrl !== undefined &&
-    runtimeConnectionStatus === "connected",
-  );
-
+  // useAgent().isReady tracks the actual bound runtime agent. A separate
+  // CopilotKitCore status snapshot can lag after the info request succeeds,
+  // leaving the send button disabled even though the agent is usable.
+  const ready = Boolean(agent && isReady);
   const state = useMemo(
     () => (agent?.state ?? {}) as ConciergeWorkingMemory,
     [agent?.state],
@@ -96,8 +68,8 @@ function LiveConciergeCoAgentProvider({ children }: { children: ReactNode }) {
   );
 
   const value = useMemo(
-    () => ({ agent, isReady, state, setState }),
-    [agent, isReady, state, setState],
+    () => ({ agent, isReady: ready, state, setState }),
+    [agent, ready, state, setState],
   );
 
   return (

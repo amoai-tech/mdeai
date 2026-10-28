@@ -26,8 +26,14 @@ function DiscoveryConciergeProvider({ children }: { children: ReactNode }) {
   const shouldReplay = Boolean(activeThreadId || restoredThread ||
     (hasPersistedThread && initialRestorableThread === sessionThreadId));
 
+  // Do not start a guest /info request during cold session restoration.
+  // Once resolved, keep the runtime stable across loading/status refreshes.
+  // Change identity only on an actual guest/user or user/user switch.
+  if (sessionLoading && !user) return null;
+
   return (
     <CopilotKitProvider
+      key={user?.id ?? "guest"}
       {...getCopilotKitClientProps("conciergeAgent")}
       // SAN-1592 — the same classification rule as /chat (chat-provider.tsx).
       // A guest's refused `/info` probe is the expected consequence of

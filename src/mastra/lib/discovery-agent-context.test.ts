@@ -134,10 +134,20 @@ describe("SAN-737 selected-name history freshness", () => {
       expect(currentSelectedNameOnly(history, page), question).toBe(history);
     }
   });
+  it("trims history when the user explicitly excludes an old item, without requesting a comparison", () => {
+    const latest = { role: "user", content: { parts: [{ type: "text",
+      text: "What is the exact name of the place I have selected NOW? Use its verified current record, not the previous item.",
+    }] } };
+    expect(currentSelectedNameOnly([old, latest], page)).toEqual([latest]);
+    const alsoExcludes = { role: "user", content: { parts: [{ type: "text",
+      text: "What is the exact name of the selected place, not the previous event?",
+    }] } };
+    expect(currentSelectedNameOnly([old, alsoExcludes], page)).toEqual([alsoExcludes]);
+  });
   it("preserves history for comparisons and previous-item references", () => {
     for (const question of [
       "What is the name of the selected place compared to the previous one?",
-      "What is the exact name of the selected place, not the previous event?",
+      "What is the exact name of the selected place compared with the previous event?",
       "Can you compare the selected restaurant's name with the earlier restaurant?",
       "What's the name of the selected place versus the other café?",
     ]) {
@@ -164,6 +174,29 @@ describe("SAN-737 selected-name history freshness", () => {
       metadata: { text: "What is the name of the selected place?" },
     } };
     expect(currentSelectedNameOnly([old, current], page)).toEqual([old, current]);
+  });
+  it("discards stale B history for a directly cleared-selection status question", () => {
+    const clearedPage = ctx({ route: "/rentals", selectedPublicEntityId: null });
+    for (const question of [
+      "Is any place currently selected? Do not assume the previous place is still selected.",
+      "Is there any place selected?",
+      "Which place is currently selected?",
+    ]) {
+      const latest = { role: "user", content: { parts: [{ type: "text", text: question }] } };
+      expect(currentSelectedNameOnly([old, latest], clearedPage), question).toEqual([latest]);
+    }
+  });
+  it("preserves comparison and new-discovery history after clearing selection", () => {
+    const clearedPage = ctx({ route: "/rentals", selectedPublicEntityId: null });
+    for (const question of [
+      "Compare the previously selected apartment with another in Laureles",
+      "Is any place selected and can you show cheaper apartments?",
+      "Show cafes nearby",
+    ]) {
+      const latest = { role: "user", content: { parts: [{ type: "text", text: question }] } };
+      const history = [old, latest];
+      expect(currentSelectedNameOnly(history, clearedPage), question).toBe(history);
+    }
   });
   it("preserves normal follow-ups and unselected/unknown question contexts", () => {
     const normal = { role: "user", content: { parts: [{ type: "text", text: "Show apartments with balconies" }] } };
