@@ -36,3 +36,27 @@ test('bad or contradictory report cannot pass', () => {
 test('partial source coverage cannot pass', () => {
   assert.throws(() => validateDiffReport(complete(), 0, ['a.ts', 'b.ts', 'c.ts', 'd.ts']), /successful/);
 });
+
+test('Codacy under-count is accepted only with independent ESLint coverage of every changed file', () => {
+  const files = ['a.ts', 'b.ts', 'c.ts', 'd.ts'];
+  assert.throws(
+    () => validateDiffReport(complete(), 0, files, ['a.ts', 'b.ts', 'c.ts']),
+    /independent lint coverage missing/,
+  );
+  assert.match(
+    validateDiffReport(complete(), 0, files, files),
+    /passed/,
+  );
+});
+
+test('independent ESLint cannot rescue a crashed Codacy analyzer or lint finding', () => {
+  const files = ['a.ts', 'b.ts', 'c.ts', 'd.ts'];
+  assert.throws(
+    () => validateDiffReport({ ...complete(), toolResults: [{ ...complete().toolResults[0], status: 'failed' }] }, 0, files, files),
+    /consistent, successful/,
+  );
+  assert.throws(
+    () => validateDiffReport(complete([{ filePath: 'a.ts' }]), 1, files, files),
+    /finding/,
+  );
+});
