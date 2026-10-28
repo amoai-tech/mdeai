@@ -1,4 +1,10 @@
 import { test, expect, type Page } from "@playwright/test";
+import {
+  createThrowawayIdentity,
+  deleteThrowawayIdentity,
+  hasE2eEnv,
+  signInAsOnOrigin,
+} from "./helpers/auth";
 
 /**
  * SAN-1564 — real Google Maps lifecycle regression for the mobile chat map.
@@ -252,5 +258,88 @@ test.describe("real Google Maps desktop lifecycle", () => {
       .toBeGreaterThan(0);
     await expect(map.locator(".gm-style")).toHaveCount(1);
     await assertNoPageErrors(page, errors, "desktop lifecycle");
+  });
+});
+
+test.describe("authenticated desktop map lifecycle", () => {
+  test.use({ viewport: { width: 1440, height: 900 } });
+
+  // SAN-1564: the reported appendChild crash was seen while signed in. A throwaway
+  // Supabase identity (SAN-547 helper) gives a real session; cleanup runs even on failure.
+  test("signed-in 1440 concierge turn keeps the map alive", async ({ page }) => {
+    test.skip(!hasE2eEnv(), "Supabase admin env is required for the signed-in journey");
+    test.setTimeout(420_000);
+
+    const identity = await createThrowawayIdentity("san1564-map");
+    try {
+      const version = (await (await fetch(`${BASE}/api/version`)).json()) as { sha?: string };
+      test.info().annotations.push({
+        type: "deployed-sha",
+        description: version.sha ?? "unknown",
+      });
+
+      await signInAsOnOrigin(page, BASE, identity.email);
+      const errors = captureErrors(page);
+      await installRejectionCapture(page);
+
+      const response = await page.goto(`${BASE}/chat`, {
+        waitUntil: "domcontentloaded",
+        timeout: 60_000,
+      });
+      expect(response?.ok(), `GET /chat -> ${response?.status()}`).toBeTruthy();
+      await expect(page.getByTestId("copilot-chat-textarea")).toBeVisible({
+        timeout: 30_000,
+      });
+
+      const map = page.getByTestId("map-panel");
+      await expect(map.locator(".gm-style").first()).toBeVisible({ timeout: 30_000 });
+
+      // A free-form planning question, not a "cafés in X" pattern the fast path
+      // answers by itself: this must reach the CopilotKit agent, which is the path
+      // where the reported appendChild crash was seen.
+      const copilotResponses: number[] = [];
+      page.on("response", (response) => {
+        if (
+          response.url().includes("/api/copilotkit") &&
+          response.request().method() === "POST"
+        ) {
+          copilotResponses.push(response.status());
+        }
+      });
+
+      await page
+        .getByTestId("copilot-chat-textarea")
+        .fill("Plan a relaxed evening in Laureles for two people under 200,000 COP. Explain your reasoning.");
+      await page.getByTestId("copilot-send-button").click();
+
+      await expect
+        .poll(() => copilotResponses.some((status) => status === 200), {
+          timeout: 240_000,
+          message: "signed-in concierge: expected a 200 /api/copilotkit response",
+        })
+        .toBe(true);
+
+      // The answer must be real text, not just a transport success and not the
+      // inline failure notice (which shares the assistant-message class).
+      await expect(page.getByTestId("concierge-error-notice")).toHaveCount(0);
+      await expect
+        .poll(async () => {
+          const text = await page
+            .locator(".copilotKitAssistantMessage")
+            .last()
+            .innerText()
+            .catch(() => "");
+          const normalised = text.replace(/\s+/g, " ").trim();
+          if (/something went wrong|could not finish|couldn.t finish/i.test(normalised)) return 0;
+          return normalised.length;
+        }, { timeout: 240_000, message: "signed-in concierge: expected assistant text" })
+        .toBeGreaterThan(0);
+
+      await expect(map.locator(".gm-style")).toHaveCount(1);
+      // A successful AI answer must never hide a Maps failure.
+      await assertNoPageErrors(page, errors, "signed-in desktop");
+    } finally {
+      await deleteThrowawayIdentity(identity);
+    }
   });
 });
