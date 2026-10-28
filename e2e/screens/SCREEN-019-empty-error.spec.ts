@@ -55,7 +55,7 @@ test.describe(`${SCREEN_ID} empty and error states`, () => {
       });
 
       await page.goto(`/events/${KNOWN_SLUG}`, { waitUntil: "domcontentloaded" });
-      await page.locator('[data-testid="event-detail-buy-cta"]').first().click();
+      await page.locator('[data-testid="event-tier-buy"]').first().click();
       await expect(page.locator('[data-testid="booking-checkout-modal"]')).toBeVisible();
 
       await page.locator('[data-testid="booking-checkout-modal"] input[name="buyerName"]').fill("Andres Test");

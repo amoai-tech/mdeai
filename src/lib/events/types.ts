@@ -30,6 +30,8 @@ export type PublicEventDetail = {
   startsAt: string;
   endsAt: string | null;
   imageUrl: string | null;
+  source?: string | null;
+  mapsUrl?: string | null;
   currency: string | null;
   latitude: number | null;
   longitude: number | null;
