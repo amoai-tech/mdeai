@@ -70,6 +70,30 @@ describe("SAN-1600 public detail journeys", () => {
     expect(screen.getByTestId("checkout-selection").textContent).toBe("tier-vip:3");
   });
 
+  it("Back goes to /events by default and to /chat only for the allowlisted chat origin", () => {
+    const { unmount } = render(<EventDetailView event={base} />);
+    expect(screen.getByTestId("event-back").getAttribute("href")).toBe("/events");
+    unmount();
+    render(<EventDetailView event={base} backTo="chat" />);
+    expect(screen.getByTestId("event-back").getAttribute("href")).toBe("/chat");
+    expect(screen.getByTestId("event-back").textContent).toContain("Back to chat");
+  });
+
+  it("shows stored practical details and omits the section when nothing is stored", () => {
+    const { unmount } = render(<EventDetailView event={base} />);
+    expect(screen.queryByTestId("event-facts")).toBeNull();
+    unmount();
+    render(<EventDetailView event={{ ...base, facts: {
+      artist: "Ryan Castro", genre: "Reggaeton", ticketInfo: null, listingSource: "Concerts50",
+      highlights: ["Doors at 7pm"],
+    } }} />);
+    const facts = screen.getByTestId("event-facts").textContent ?? "";
+    expect(facts).toContain("Ryan Castro");
+    expect(facts).toContain("Concerts50");
+    expect(facts).toContain("Doors at 7pm");
+    expect(facts).not.toContain("Tickets");
+  });
+
   it("preserves native share success and does not overwrite it with clipboard status", async () => {
     const share = vi.fn().mockResolvedValue(undefined);
     const writeText = vi.fn().mockRejectedValue(new Error("clipboard blocked"));

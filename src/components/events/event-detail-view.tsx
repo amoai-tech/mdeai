@@ -5,6 +5,7 @@ import { useMemo, useRef, useState } from "react";
 import { ChevronRight, Ticket } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BookingCheckoutModal, type BookingCheckoutTarget } from "@/components/modals/booking-checkout-modal";
+import { EventFactsBlock } from "@/components/events/event-facts-block";
 import { EventHostBlock } from "@/components/events/event-host-block";
 import { EventDetailAside } from "@/components/events/event-detail-aside";
 import { EventDetailNavigation, EventDetailHero } from "@/components/events/event-detail-chrome";
@@ -19,7 +20,7 @@ function lowestAvailablePrice(tickets: PublicEventTicket[]): PublicEventTicket |
     : null;
 }
 
-export function EventDetailView({ event }: { event: PublicEventDetail }) {
+export function EventDetailView({ event, backTo = "events" }: { event: PublicEventDetail; backTo?: "events" | "chat" }) {
   const [checkout, setCheckout] = useState<BookingCheckoutTarget | null>(null);
   const tiersRef = useRef<HTMLDivElement>(null);
   const schedule = formatEventSchedule(event.startsAt, event.endsAt);
@@ -49,7 +50,7 @@ export function EventDetailView({ event }: { event: PublicEventDetail }) {
   return (
     <>
       <div className="min-h-screen bg-background pb-28 md:pb-8" data-testid="event-detail-page">
-        <EventDetailNavigation eventName={event.name} returnPath={returnPath} />
+        <EventDetailNavigation eventName={event.name} returnPath={returnPath} backTo={backTo} />
         <div className="mx-auto max-w-6xl px-4 pt-6 md:pt-8">
           <nav aria-label="Breadcrumb" className="mb-5 hidden items-center gap-2 text-sm text-muted-foreground sm:flex">
             <Link href="/events" className="hover:underline">Events</Link>
@@ -78,6 +79,7 @@ export function EventDetailView({ event }: { event: PublicEventDetail }) {
                 <p className="text-sm text-muted-foreground">The organizer has not provided a detailed description yet.</p>
               )}
             </section>
+            <EventFactsBlock facts={event.facts} className="order-4 lg:col-start-1" />
             {street || event.venue ? (
               <EventVenueSection className="order-5 lg:col-start-1"
                 venue={event.venue ?? { name: street || city || "Event location", address: street, city: city ?? null }}

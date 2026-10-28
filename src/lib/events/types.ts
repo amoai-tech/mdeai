@@ -20,6 +20,15 @@ export type PublicEventVenue = {
   city: string | null;
 };
 
+/** Optional practical details stored in events.details; every field is shown only when present. */
+export type PublicEventFacts = {
+  artist: string | null;
+  genre: string | null;
+  ticketInfo: string | null;
+  listingSource: string | null;
+  highlights: string[];
+};
+
 export type PublicEventDetail = {
   id: string;
   slug: string | null;
@@ -37,5 +46,6 @@ export type PublicEventDetail = {
   longitude: number | null;
   host: PublicEventHost | null;
   venue: PublicEventVenue | null;
+  facts?: PublicEventFacts | null;
   tickets: PublicEventTicket[];
 };

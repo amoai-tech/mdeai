@@ -8,7 +8,9 @@ import { cn } from "@/lib/utils";
 import { VENUE_PLACEHOLDER_GRADIENT } from "@/components/browse/venue-card-placeholder";
 
 /** Share outcomes are exclusive: native success, cancellation or clipboard fallback. */
-export function EventDetailNavigation({ eventName, returnPath }: { eventName: string; returnPath: string }) {
+export function EventDetailNavigation({ eventName, returnPath, backTo = "events" }: {
+  eventName: string; returnPath: string; backTo?: "events" | "chat";
+}) {
   const [shareStatus, setShareStatus] = useState("");
   const shareEvent = async () => {
     const url = new URL(returnPath, window.location.origin).href;
@@ -35,8 +37,9 @@ export function EventDetailNavigation({ eventName, returnPath }: { eventName: st
         <header className="border-b border-border/70 bg-background/95 backdrop-blur">
           <nav aria-label="Event navigation"
             className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
-            <Link href="/events" className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "gap-1.5")}>
-              <ArrowLeft className="size-4" aria-hidden /> Back to Events
+            <Link href={backTo === "chat" ? "/chat" : "/events"} data-testid="event-back"
+              className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "gap-1.5")}>
+              <ArrowLeft className="size-4" aria-hidden /> {backTo === "chat" ? "Back to chat" : "Back to Events"}
             </Link>
             <span className="hidden text-sm font-medium text-muted-foreground sm:inline">mdeai</span>
             <div className="flex min-w-0 items-center gap-2">
