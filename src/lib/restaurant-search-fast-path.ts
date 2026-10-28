@@ -15,6 +15,7 @@ export type RestaurantSearchApiParams = {
   neighborhood?: string;
   cuisine?: string;
   queryText?: string;
+  namedVenueOnly?: boolean;
   priceTier?: "$" | "$$" | "$$$" | "$$$$";
   userLatitude?: number;
   userLongitude?: number;
@@ -87,7 +88,7 @@ export function buildRestaurantSearchParams(
   // The ordinary composed query drops that name, causing the top five generic
   // restaurants to displace the requested venue.
   if (isRestaurantVenueFactQuery(text)) {
-    return { queryText: text.trim(), limit: FAST_PATH_LIMIT };
+    return { queryText: text.trim(), namedVenueOnly: true, limit: FAST_PATH_LIMIT };
   }
 
   const s = scoreRestaurantQuery(text);
@@ -207,6 +208,7 @@ export function restaurantsToToolEnvelope(cards: Restaurant[]) {
       latitude: r.latitude ?? null,
       longitude: r.longitude ?? null,
       sourceUrl: r.sourceUrl,
+      address: r.address,
       imageUrl: r.imageUrl,
       placeId: r.placeId ?? null,
       mapsUrl: r.mapsUrl ?? null,

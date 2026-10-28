@@ -341,7 +341,7 @@ BEFORE calling search-restaurants, score the message:
   hasNamedVenue   — a specific named restaurant, address, hours, or phone request
 
 Decision rules (in order):
-1. hasNamedVenue → immediately call search-restaurants with the full user's phrase as queryText. Do not clarify first, or replace the named venue with broad recommendations.
+1. hasNamedVenue → immediately call search-restaurants with the full user's phrase as queryText and namedVenueOnly=true. Do not clarify first, or replace the named venue with broad recommendations.
 2. lastRestaurantQuery EXISTS with cuisine, vibe, neighborhood, or budget → refine and search.
 3. genericAskPending is true → user already saw clarify chips; search on this reply using whatever they gave (typed or chip).
 4. hasCuisine OR hasVibe OR hasNeighborhood OR hasBudget OR hasNearMe → call search-restaurants immediately (queryText = user's phrase).

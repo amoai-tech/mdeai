@@ -26,6 +26,7 @@ const bodySchema = z
       ])
       .optional(),
     queryText: z.string().optional(),
+    namedVenueOnly: z.boolean().optional(),
     priceTier: z.enum(["$", "$$", "$$$", "$$$$"]).optional(),
     userLatitude: z.number().optional(),
     userLongitude: z.number().optional(),
@@ -60,12 +61,13 @@ export async function POST(req: Request) {
     );
   }
 
-  const { neighborhood, cuisine, queryText, priceTier, userLatitude, userLongitude, limit } =
+  const { neighborhood, cuisine, queryText, namedVenueOnly, priceTier, userLatitude, userLongitude, limit } =
     parsed.data;
   const { results, total, source } = await searchRestaurants({
     neighborhood,
     cuisine,
     queryText,
+    namedVenueOnly,
     priceTier,
     userLatitude,
     userLongitude,

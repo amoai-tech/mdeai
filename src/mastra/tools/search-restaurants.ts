@@ -46,6 +46,8 @@ export const restaurantSchema = z.object({
   vibe: z.array(z.string()),
   imageUrl: z.string(),
   sourceUrl: z.string(),
+  /** Actual catalog address, never generated from an AI summary. */
+  address: z.string().optional(),
   latitude: z.number().optional(),
   longitude: z.number().optional(),
   // MASTRA-048 enrichment fields (populated by scripts/enrich-places.ts)
@@ -151,6 +153,7 @@ export type RestaurantQuery = {
   userLongitude?: number;
   /** Natural-language query — enables hybrid + venue_signals (SEARCH-003). */
   queryText?: string;
+  namedVenueOnly?: boolean;
 };
 
 /**
@@ -260,6 +263,7 @@ export function rowToRestaurant(row: RestaurantRow): Restaurant {
     vibe: row.tags?.length ? row.tags : row.cuisine_types ?? [],
     imageUrl: row.primary_image_url ?? '',
     sourceUrl: `https://mdeai.co/restaurants/${row.id}`,
+    address: row.address ?? undefined,
     latitude: lat,
     longitude: lng,
     // MASTRA-048 enrichment fields — null until enrich-places.ts + cache-ai-summaries.ts run
@@ -339,7 +343,9 @@ async function findNamedRestaurants(
   const text = query.queryText?.trim();
   if (!text) return null;
   const client = getSupabaseClient();
-  if (!client) return null;
+  if (!client) {
+    return query.namedVenueOnly ? { results: [], total: 0, source: 'unavailable' } : null;
+  }
 
   const { data, error } = await client
     .from('restaurants')
@@ -348,12 +354,16 @@ async function findNamedRestaurants(
 
   if (error) {
     console.warn('[search-restaurants] named lookup unavailable:', error.code);
-    return null;
+    return query.namedVenueOnly ? { results: [], total: 0, source: 'unavailable' } : null;
   }
 
   const matches = ((data ?? []) as RestaurantRow[])
     .filter((row) => restaurantNameMentioned(text, row.name));
-  if (!matches.length) return null;
+  if (!matches.length) {
+    // A catalog-backed no-match is not a semantic recommendation. For an
+    // explicitly requested venue, never substitute unrelated rated venues.
+    return query.namedVenueOnly ? { results: [], total: 0, source: 'supabase' } : null;
+  }
 
   const matched = applyRestaurantFilters(matches.map(rowToRestaurant), query);
   // A definite name hit with conflicting constraints must not return unrelated
@@ -450,6 +460,10 @@ export async function searchRestaurants(
     };
   }
 
+  if (query.namedVenueOnly && !query.queryText?.trim()) {
+    return { results: [], total: 0, source: 'unavailable' };
+  }
+
   if (query.queryText?.trim()) {
     const named = await findNamedRestaurants(query);
     if (named) {
@@ -459,7 +473,7 @@ export async function searchRestaurants(
         resultsCount: named.total,
         latencyMs: 0,
         hybridUsed: false,
-        groundingUsed: true,
+        groundingUsed: named.source === 'supabase',
         rankExplanation: named.rankExplanation,
       });
       return named;
@@ -534,6 +548,7 @@ export const searchRestaurantsTool = createTool({
       .string()
       .optional()
       .describe('Natural-language search e.g. quiet rooftop dinner in Provenza'),
+    namedVenueOnly: z.boolean().optional().describe('For a specific named restaurant: return only canonical name matches, never generic suggestions'),
   }),
   outputSchema: z.object({
     results: z.array(
@@ -565,7 +580,7 @@ export const searchRestaurantsTool = createTool({
   }),
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   execute: async (inputData: RestaurantQuery, context?: any) => {
-    const { cuisine, neighborhood, minRating, limit = 5, queryText } = inputData;
+    const { cuisine, neighborhood, minRating, limit = 5, queryText, namedVenueOnly } = inputData;
     const { results, total, source, hybridUsed, rankExplanation } = await runAuditedSearch(
       'search-restaurants',
       searchRestaurants,
@@ -575,6 +590,7 @@ export const searchRestaurantsTool = createTool({
         minRating,
         limit,
         queryText,
+        namedVenueOnly,
       },
       context,
     );

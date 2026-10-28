@@ -17,6 +17,7 @@ describe.skipIf(!hasLiveSupabase())('SAN-1531 named restaurant search — existi
     expect(r.results[0]?.id).toBe(malDeOjoId);
     expect(r.results[0]?.sourceUrl).toMatch(/\/restaurants\/b049abc8-2ffd-4f14-ae5c-635d94936385$/);
     expect(r.results[0]?.aiSummary).toContain('Calle 8 #43C-68');
+    expect(r.results[0]?.address).toBe('Calle 8 #43C-68, Piso 11, Astorga, El Poblado, Medellín');
     expect(r.total).toBeGreaterThanOrEqual(1);
     expect(r.rankExplanation?.[0]?.factor).toBe('exact_catalog_name');
   }, 35_000);
@@ -35,6 +36,17 @@ describe.skipIf(!hasLiveSupabase())('SAN-1531 named restaurant search — existi
     expect(r.results.length).toBeGreaterThanOrEqual(2);
     expect(new Set(r.results.map(x=>x.id)).size).toBe(r.results.length);
     expect(r.results.every(x=>x.name.toLowerCase().startsWith('elcielo'))).toBe(true);
+  }, 35_000);
+
+  it('does not return unrelated top-five restaurants when a requested name is absent', async () => {
+    const r = await searchRestaurants({
+      queryText: 'Where is Restaurant Impossible Fictional Bistro in Medellín? Give its address.',
+      namedVenueOnly: true,
+      limit: 5,
+    });
+    expect(r.source).toBe('supabase');
+    expect(r.total).toBe(0);
+    expect(r.results).toHaveLength(0);
   }, 35_000);
 
   it('does not replace a named venue with unrelated matches when neighborhood conflicts', async () => {

@@ -61,6 +61,7 @@ describe("restaurant search fast path", () => {
     expect(shouldInstantRestaurantClarify(text, {})).toBe(false);
     expect(canFastPathRestaurantSearch(text)).toBe(true);
     expect(buildRestaurantSearchParams(text)?.queryText).toBe(text);
+    expect(buildRestaurantSearchParams(text)?.namedVenueOnly).toBe(true);
     expect(buildRestaurantSearchParams("Mal De Ojo address")?.queryText).toBe("Mal De Ojo address");
     expect(buildRestaurantSearchParams("Where is El Cielo?")?.queryText).toBe("Where is El Cielo?");
   });
