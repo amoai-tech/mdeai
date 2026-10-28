@@ -38,6 +38,9 @@ describe("SAN-1600 grounded event detail chat for guests", () => {
     expect(text).toContain("no ticket tiers have been published");
     expect(text).toContain("not independently verified");
     expect(text).toContain("December preview not confirmed");
+    expect(text).toContain("Listed area (exact meeting point not confirmed)");
+    expect(text).toContain("https://www.google.com/maps/search/?api=1&query=Avenida");
+    expect(text).not.toContain("https://www.google.com/maps/dir/?");
     expect(text).toContain(`/events/${event.id}`);
     expect(text).not.toContain("Buy tickets");
     expect(text).not.toContain("Registration confirmed");
@@ -52,6 +55,15 @@ describe("SAN-1600 grounded event detail chat for guests", () => {
     const soldout = summarizePublicEventForChat({ ...event, tickets: [{ ...ticket, qtySold: 10 }] });
     expect(soldout).toContain("Sold out");
     expect(soldout).not.toContain("VIP: $120,000 COP");
+  });
+
+  it("keeps exact directions for a linked, saved venue", () => {
+    const answer = summarizePublicEventForChat({ ...event, venue: {
+      name: "Hotel Intercontinental", address: "Calle 16 #28-51", city: "Medellín",
+    } });
+    expect(answer).toContain("Directions: https://www.google.com/maps/dir/?api=1&destination=Calle");
+    expect(answer).not.toContain("Listed area (exact meeting point not confirmed)");
+    expect(answer).not.toContain("/maps/search/?");
   });
 
   it("does not imply an unknown venue is a known address", () => {
