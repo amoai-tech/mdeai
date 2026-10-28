@@ -9,6 +9,7 @@ import { nextPinSelection } from "@/platform/maps/pin-selection";
  * of leaving `aria-pressed="true"` with no way out (SAN-1146).
  *
  * Selecting still goes through `panToPin`, so the map keeps its existing pan + focus behaviour.
+ * Used by cafés, nightlife and restaurants, which is why the rule lives in one place.
  */
 export function useMapPinSelect() {
   const { selectedPinId, setSelectedPinId, panToPin } = useMapContext();

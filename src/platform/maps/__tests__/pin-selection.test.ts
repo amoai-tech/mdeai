@@ -13,4 +13,8 @@ describe("nextPinSelection", () => {
   it("replaces the selection when another pin is clicked", () => {
     expect(nextPinSelection("venue-a", "venue-b")).toBe("venue-b");
   });
+
+  it("treats the same id under another category as a different pin", () => {
+    expect(nextPinSelection("venue-1", "restaurant-1")).toBe("restaurant-1");
+  });
 });
