@@ -134,10 +134,20 @@ describe("SAN-737 selected-name history freshness", () => {
       expect(currentSelectedNameOnly(history, page), question).toBe(history);
     }
   });
+  it("trims history when the user explicitly excludes an old item, without requesting a comparison", () => {
+    const latest = { role: "user", content: { parts: [{ type: "text",
+      text: "What is the exact name of the place I have selected NOW? Use its verified current record, not the previous item.",
+    }] } };
+    expect(currentSelectedNameOnly([old, latest], page)).toEqual([latest]);
+    const alsoExcludes = { role: "user", content: { parts: [{ type: "text",
+      text: "What is the exact name of the selected place, not the previous event?",
+    }] } };
+    expect(currentSelectedNameOnly([old, alsoExcludes], page)).toEqual([alsoExcludes]);
+  });
   it("preserves history for comparisons and previous-item references", () => {
     for (const question of [
       "What is the name of the selected place compared to the previous one?",
-      "What is the exact name of the selected place, not the previous event?",
+      "What is the exact name of the selected place compared with the previous event?",
       "Can you compare the selected restaurant's name with the earlier restaurant?",
       "What's the name of the selected place versus the other café?",
     ]) {

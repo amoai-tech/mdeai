@@ -103,7 +103,11 @@ export function currentSelectedNameOnly<T extends { role: string; content: unkno
   // need the original history; unrelated discovery questions need it too.
   const question = latestText.trim().replace(/\s+/g, " ");
   const asksDirectly = /^(?:please\s+)?(?:what(?:'s| is| was)|(?:can|could|would) you tell me|(?:tell|give|show|remind) me|name\b)/i.test(question);
-  const compares = /\b(?:compare|compared|comparison|versus|vs\.?|previous|prior|earlier|before|other|both|difference|different|between)\b/i.test(question);
+  // "not the previous item" explicitly excludes stale history; it is not
+  // a request to compare two items. Real comparisons still retain both turns.
+  const excludesPrevious = /\b(?:not|rather than)\s+(?:(?:the|that|a|an)\s+)?(?:previous|prior|earlier|old)\s+(?:item|one|place|venue|apartment|rental|listing|restaurant|caf[eé]|nightclub|club|event)\b/i.test(question);
+  const compares = /\b(?:compare|compared|comparison|versus|vs\.?|other|both|difference|different|between)\b/i.test(question)
+    || (/\b(?:previous|prior|earlier|before)\b/i.test(question) && !excludesPrevious);
   // Keep full history when a name question also asks for more information.
   const hasAnotherRequest = /\b(?:and|also|plus)\b|[;,]\s*(?:(?:can|could|would)\s+you\s+)?(?:what|where|when|how|which|show|find|list|recommend)\b/i.test(question);
   // A static pattern: only the question text is dynamic, never the regex.
