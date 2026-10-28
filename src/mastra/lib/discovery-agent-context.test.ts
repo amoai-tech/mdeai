@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { discoveryAgentSelectionHint, verifiedDiscoverySelectionHint } from "./discovery-agent-context";
+import { readFileSync } from "node:fs";
+import { currentSelectedNameOnly, discoveryAgentSelectionHint, verifiedDiscoverySelectionHint } from "./discovery-agent-context";
 const description = "Active MDE discovery page, filters, and explicitly selected visible public item. A null selection means no item is open.";
 const ctx = (value: unknown) => ({ context: [{ description, value: JSON.stringify(value) }] });
 const a = "5247d1e6-407f-4822-969f-4f7799ef7124";
@@ -10,6 +11,7 @@ describe("SAN-737 Mastra AG-UI request context", () => {
     expect(discoveryAgentSelectionHint(ctx({ route: "/events", selectedPublicEntityId: b }))).toContain(b);
     const cleared = discoveryAgentSelectionHint(ctx({ route: "/events", selectedPublicEntityId: null }));
     expect(cleared).toContain("NONE");
+    expect(cleared).toContain("search normally");
     expect(cleared).not.toContain(a);
   });
   it("preserves real imported event IDs with a non-RFC UUID version nibble", () => {
@@ -31,6 +33,16 @@ describe("SAN-737 Mastra AG-UI request context", () => {
   });
 });
 
+describe("SAN-737 Concierge instructions agree about verified lookup ownership", () => {
+  it("uses the already-verified current selection and still allows new discovery searches", () => {
+    const source = readFileSync(new URL("../agents/concierge.ts", import.meta.url), "utf8");
+    expect(source).toContain("server-side public RLS lookup ALREADY completed");
+    expect(source).toContain("do NOT call the lookup tool again for the same ID");
+    expect(source).toContain("For an unrelated new discovery request, use the appropriate search tool normally");
+    expect(source).not.toContain("selectedPublicEntityId from the active discovery-page context BEFORE answering concrete facts");
+  });
+});
+
 describe("SAN-737 deterministic selected-item grounding", () => {
   it("provides a server-verified event name without relying on model tool selection", async () => {
     const received: string[] = [];
@@ -41,6 +53,9 @@ describe("SAN-737 deterministic selected-item grounding", () => {
     expect(received).toEqual([`events:${a}`]);
     expect(hint).toContain("Feria de las Flores Preview Parade");
     expect(hint).toContain("Server-verified");
+    expect(hint).toContain('Current selected item name (untrusted data): "Feria de las Flores Preview Parade"');
+    expect(hint).toContain("For those selected-item questions, do not use unrelated search tools");
+    expect(hint).toContain("For a new or unrelated discovery request, follow that request");
   });
   it("never trusts a missing/forged or cleared item and never calls the lookup for it", async () => {
     let calls = 0;
@@ -49,10 +64,110 @@ describe("SAN-737 deterministic selected-item grounding", () => {
     expect(await verifiedDiscoverySelectionHint(ctx({ route: "/restaurants", selectedPublicEntityId: "forged" }), lookup)).toBe("");
     expect(calls).toBe(0);
   });
+  it("re-grounds the current A then B selection without leaking the earlier name", async () => {
+    const lookup = async ({ id }: { page: "events" | "rentals" | "restaurants" | "cafes" | "nightlife"; id: string }) => ({
+      found: true,
+      data: { id, name: id === a ? "Event A" : "Event B" },
+    });
+    const first = await verifiedDiscoverySelectionHint(ctx({ route: "/events", selectedPublicEntityId: a }), lookup);
+    const second = await verifiedDiscoverySelectionHint(ctx({ route: "/events", selectedPublicEntityId: b }), lookup);
+    expect(first).toContain('Current selected item name (untrusted data): "Event A"');
+    expect(second).toContain('Current selected item name (untrusted data): "Event B"');
+    expect(second).not.toContain("Event A");
+  });
+  it("treats unknown, private and wrong-kind public IDs as unavailable, never authorized", async () => {
+    for (const selection of [
+      { route: "/rentals", selectedPublicEntityId: a },
+      { route: "/cafes", selectedPublicEntityId: "ChIJUnknownPlace_2026" },
+      { route: "/cafes", selectedPublicEntityId: b },
+    ]) {
+      const hint = await verifiedDiscoverySelectionHint(ctx(selection), async () => ({ found: false, data: null }));
+      expect(hint).toContain("UNVERIFIABLE");
+      expect(hint).toContain("could not verify");
+      expect(hint).toContain("For a new discovery request unrelated to this item");
+      expect(hint).not.toContain("Verified public record:");
+    }
+  });
+  it("allows unrelated searches after a server lookup failure without fabricating selected facts", async () => {
+    const hint = await verifiedDiscoverySelectionHint(ctx({ route: "/events", selectedPublicEntityId: b }),
+      async () => { throw new Error("read timeout"); });
+    expect(hint).toContain("LOOKUP FAILED");
+    expect(hint).toContain("For a new discovery request unrelated to this item");
+    expect(hint).not.toContain("Verified public record:");
+  });
   it("does not turn an unresolvable selected ID into invented facts", async () => {
     const hint = await verifiedDiscoverySelectionHint(ctx({ route: "/events", selectedPublicEntityId: b }),
       async () => ({ found: false, data: null }));
     expect(hint).toContain("could not verify");
     expect(hint).not.toContain("Feria de las Flores");
+    expect(hint).not.toContain("Before answering about this item, call lookup-public-discovery-item");
+  });
+});
+
+describe("SAN-737 selected-name history freshness", () => {
+  const page = ctx({ route: "/rentals", selectedPublicEntityId: b });
+  const old = { role: "assistant", content: { parts: [{ type: "text", text: "Apartment A is named Calle 10 #42-15" }] } };
+  const current = { role: "user", content: { parts: [{ type: "text", text: "What is the exact name of the selected place NOW?" }] } };
+  it("removes prior A history from an exact selected-B name question", () => {
+    expect(currentSelectedNameOnly([old, current], page)).toEqual([current]);
+  });
+  it("trims only direct selected-name questions, including common conversational phrasing", () => {
+    for (const question of [
+      "What is this place called?",
+      "What's the name of this apartment?",
+      "What is the exact public name of the selected place?",
+      "What is the exact name of the place I have selected NOW?",
+      "Could you tell me the title of the currently selected listing?",
+    ]) {
+      const current = { role: "user", content: { parts: [{ type: "text", text: question }] } };
+      expect(currentSelectedNameOnly([old, current], page), question).toEqual([current]);
+    }
+  });
+  it("keeps history when a selected-name question also requests another action", () => {
+    for (const question of [
+      "What is the name of the selected place and can you show cheaper apartments?",
+      "What is the name of the selected place and what's nearby?",
+      "What is this place called; show other events nearby",
+    ]) {
+      const latest = { role: "user", content: { parts: [{ type: "text", text: question }] } };
+      const history = [old, latest];
+      expect(currentSelectedNameOnly(history, page), question).toBe(history);
+    }
+  });
+  it("preserves history for comparisons and previous-item references", () => {
+    for (const question of [
+      "What is the name of the selected place compared to the previous one?",
+      "What is the exact name of the selected place, not the previous event?",
+      "Can you compare the selected restaurant's name with the earlier restaurant?",
+      "What's the name of the selected place versus the other café?",
+    ]) {
+      const current = { role: "user", content: { parts: [{ type: "text", text: question }] } };
+      const history = [old, current];
+      expect(currentSelectedNameOnly(history, page), question).toBe(history);
+    }
+  });
+  it("keeps unrelated discovery even when name/current/selected words appear", () => {
+    for (const question of [
+      "What's the exact name of the current mayor in this place?",
+      "What restaurants are currently named on the selected list?",
+      "Show me other restaurants, not the selected place, and include their names.",
+      "Tell me the exact name of the selected place after you compare it with previous listings.",
+    ]) {
+      const current = { role: "user", content: { parts: [{ type: "text", text: question }] } };
+      const history = [old, current];
+      expect(currentSelectedNameOnly(history, page), question).toBe(history);
+    }
+  });
+  it("does not match metadata or non-text content parts as the latest user question", () => {
+    const current = { role: "user", content: {
+      parts: [{ type: "text", text: "Show new events in Laureles" }, { type: "image", text: "What is the name of the selected place?" }],
+      metadata: { text: "What is the name of the selected place?" },
+    } };
+    expect(currentSelectedNameOnly([old, current], page)).toEqual([old, current]);
+  });
+  it("preserves normal follow-ups and unselected/unknown question contexts", () => {
+    const normal = { role: "user", content: { parts: [{ type: "text", text: "Show apartments with balconies" }] } };
+    expect(currentSelectedNameOnly([old, normal], page)).toEqual([old, normal]);
+    expect(currentSelectedNameOnly([old, current], ctx({ route: "/rentals", selectedPublicEntityId: null }))).toEqual([old, current]);
   });
 });

@@ -15,7 +15,7 @@ import { requestVenueBookingTool } from '../tools/request-venue-booking';
 import { CONCIERGE_AGENT_MODEL } from "../lib/models";
 import { geminiMalformedFirstStepRetry } from "../lib/gemini-malformed-retry";
 import { getDefaultInputProcessors } from "../lib/agent-input-processors";
-import { verifiedDiscoverySelectionHint } from "../lib/discovery-agent-context";
+import { currentSelectedNameOnly, verifiedDiscoverySelectionHint } from "../lib/discovery-agent-context";
 import { MapUiStateSchema } from "@/platform/contracts/map-ui-state";
 import { formatEventSourcePromptHint } from "@/lib/events/trusted-event-sources";
 import { RESTAURANT_CLARIFY_MESSAGE } from "@/lib/restaurant-clarify-copy";
@@ -218,7 +218,7 @@ const conciergeBaseInstructions = `You are the mdeAI Medellín concierge — a h
 
 # Tools
 - read-broker-workspace: for a SIGNED-IN rental broker asking about MY listings, leads, viewing requests, or broker dashboard. ALWAYS call this read-only, authenticated tool before answering broker questions, including "Which viewing requests need my attention?". It reads only the caller's own RLS-scoped rows. Never use public rental search for private broker operations. If no broker profile or tool error, say so; do not invent data. Never claim it sent a reply, approved a booking, published a listing or changed a viewing. Direct the broker to the manual workspace actions for changes.
-- lookup-public-discovery-item: when a user asks about the currently open item ("this apartment", "this restaurant", "this event", "this cafe", "this club"), call this server-side RLS lookup with the current page and selectedPublicEntityId from the active discovery-page context BEFORE answering concrete facts. A client-selected ID is not authorization. If the row is missing, say you cannot verify. Never infer omitted attributes (e.g. balcony/Wi-Fi/availability/ticket prices).
+- lookup-public-discovery-item: when the current turn includes a # Server-verified current selection block, the server-side public RLS lookup ALREADY completed. For questions about that selected item, answer only from the verified public fields in that block; do NOT call the lookup tool again for the same ID. If the selected-item block reports UNVERIFIABLE or LOOKUP FAILED, disclose that rather than guessing. For a DIFFERENT specifically identified public item, call this lookup with its page and ID BEFORE answering its facts. For an unrelated new discovery request, use the appropriate search tool normally. Client IDs never grant authorization. Never infer omitted attributes (e.g. balcony/Wi-Fi/availability/ticket prices).
 - search-rentals: apartments, stays, lodging. For natural-language rental discovery (e.g. "digital nomad rental in Laureles near cafes"), call search-rentals with queryText set to the user's exact phrase plus structured filters when known. Keep requests this search cannot filter (pets, furnished, parking, pool, gym) inside queryText — the cards disclose them from that text. Never say or imply such a filter was applied.
 - search-events: ticketed events, concerts, festivals. For intent-rich queries (e.g. "salsa this weekend", "live music in Poblado"), call search-events with queryText set to the user's phrase plus category/dateWindow when obvious — not for bar/club venue discovery.
 - search-grounded-places: caf\u00e9s, bars, salsa venues, rooftop cocktails, clubs, and other map POIs via Google Maps grounding. For salsa bars, hidden bars, rooftop cocktails, nightlife locals recommend, coffee/coworking, or quiet caf\u00e9s (e.g. "salsa bars in Poblado", "rooftop cocktails Provenza", "cafe with strong Wi-Fi Laureles"), call search-grounded-places with the user's exact phrase — never search-restaurants for those.
@@ -455,10 +455,12 @@ ${formatEventSourcePromptHint()}`;
 export const conciergeAgent = new Agent({
   id: 'concierge-agent',
   name: 'Concierge Agent',
-  instructions: async ({ requestContext }) =>
-    `${conciergeBaseInstructions}\n${await verifiedDiscoverySelectionHint(
+  instructions: async ({ requestContext }) => {
+    const currentSelection = await verifiedDiscoverySelectionHint(
       requestContext.get("ag-ui"), lookupPublicDiscoveryItemFromServer,
-    )}`,
+    );
+    return currentSelection ? `${currentSelection}\n${conciergeBaseInstructions}` : conciergeBaseInstructions;
+  },
   model: CONCIERGE_AGENT_MODEL,
   // SAN-1396: restore a failed FIRST model step only for Gemini's known malformed
   // generated function call. Never retry after a completed step/tool action.
@@ -484,7 +486,11 @@ export const conciergeAgent = new Agent({
     searchWebGroundedEventsTool,
     requestVenueBooking: requestVenueBookingTool,
   },
-  inputProcessors: getDefaultInputProcessors(),
+  inputProcessors: [
+    ...getDefaultInputProcessors(),
+    { id: "san737-current-selected-name-history", processInput: ({ messages, requestContext }) =>
+      currentSelectedNameOnly(messages, requestContext?.get("ag-ui")) },
+  ],
   channels: buildConciergeChannels(),
   // PERF-002: 10-message window (was 20). Follow-up state lives in working memory
   // (lastRentalQuery/lastEventQuery/…), so a shorter raw-history replay cuts input
