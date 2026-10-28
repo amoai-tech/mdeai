@@ -30,6 +30,7 @@ const b = { id: "tier-vip", name: "VIP", priceCents: 9000000, currency: "COP", q
 
 beforeEach(() => {
   Element.prototype.scrollIntoView = vi.fn();
+  Object.defineProperty(navigator, "share", { configurable: true, value: undefined });
 });
 
 describe("SAN-1600 public detail journeys", () => {
@@ -54,6 +55,44 @@ describe("SAN-1600 public detail journeys", () => {
     fireEvent.click(screen.getByRole("button", { name: "Increase VIP quantity" }));
     fireEvent.click(screen.getByRole("button", { name: "Buy VIP" }));
     expect(screen.getByTestId("checkout-selection").textContent).toBe("tier-vip:3");
+  });
+
+  it("preserves native share success and does not overwrite it with clipboard status", async () => {
+    const share = vi.fn().mockResolvedValue(undefined);
+    const writeText = vi.fn().mockRejectedValue(new Error("clipboard blocked"));
+    Object.defineProperty(navigator, "share", { configurable: true, value: share });
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    render(<EventDetailView event={base} />);
+    fireEvent.click(screen.getByTestId("event-share"));
+    await waitFor(() => expect(screen.getByTestId("event-share-announcement").textContent).toBe("Event shared"));
+    expect(share).toHaveBeenCalledWith(expect.objectContaining({
+      title: base.name, url: expect.stringContaining(`/events/${base.id}`),
+    }));
+    expect(writeText).not.toHaveBeenCalled();
+  });
+
+  it("leaves the announcement unchanged when native sharing is canceled", async () => {
+    const share = vi.fn().mockRejectedValue(new DOMException("Canceled", "AbortError"));
+    const writeText = vi.fn();
+    Object.defineProperty(navigator, "share", { configurable: true, value: share });
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    render(<EventDetailView event={base} />);
+    fireEvent.click(screen.getByTestId("event-share"));
+    await waitFor(() => expect(share).toHaveBeenCalledOnce());
+    await waitFor(() => expect(screen.getByTestId("event-share-announcement").textContent).toBe(""));
+    expect(writeText).not.toHaveBeenCalled();
+  });
+
+  it("copies the link after a native-share failure", async () => {
+    const share = vi.fn().mockRejectedValue(new DOMException("Blocked", "NotAllowedError"));
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "share", { configurable: true, value: share });
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    render(<EventDetailView event={base} />);
+    fireEvent.click(screen.getByTestId("event-share"));
+    await waitFor(() => expect(screen.getByTestId("event-share-announcement").textContent).toBe("Link copied"));
+    expect(share).toHaveBeenCalledOnce();
+    expect(writeText).toHaveBeenCalledOnce();
   });
 
   it("copies a canonical URL when native share is absent and announces success", async () => {
