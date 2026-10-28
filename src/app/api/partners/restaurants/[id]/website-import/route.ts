@@ -36,7 +36,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   } = await supabase.auth.getUser();
   if (!user) return fail("Unauthorized", 401);
 
-  // Verify edit authority, not merely public read, before spending Gemini quota.
+  // Verify edit authority, not merely public read, before spending website inference quota.
   const { data: restaurant, error } = await supabase
     .from("restaurants")
     .select("id, partner_id")
@@ -65,7 +65,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!parsed.success) return fail("Enter the restaurant website address", 400);
 
   // Reuse the existing Postgres-backed per-user quota across serverless instances.
-  // Never invoke the paid Gemini URL Context provider if the durable store fails.
+  // Never invoke paid website inference if the durable store fails.
   const limit = await checkRateLimitDurable("restaurant-website-import:user:" + user.id, 10, 3600);
   if (!limit.storeAvailable) return fail("Website analysis temporarily unavailable", 503);
   if (!limit.allowed) {

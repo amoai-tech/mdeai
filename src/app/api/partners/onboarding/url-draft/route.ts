@@ -17,7 +17,7 @@ const fail = (message: string, status: number) =>
   NextResponse.json({ success: false, error: { message } }, { status });
 
 /**
- * SAN-1193 — signed-in partner asks Gemini URL Context to read a public
+ * SAN-1193 — signed-in partner asks the guarded website reader to read a public
  * business website. The response is a proposal for review, never a save.
  */
 export async function POST(req: Request) {

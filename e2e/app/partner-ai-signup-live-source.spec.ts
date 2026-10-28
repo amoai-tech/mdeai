@@ -93,6 +93,10 @@ test("SAN-1193: live website → source source → review/edit → save → refr
     // The model must never write the database. Exercise the *actual* review
     // card and edit the final form with an unmistakably synthetic QA name.
     await expect(page.getByTestId("onboarding-suggestion-card")).toBeVisible();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), {
+      message: "Source-review card must not overflow a 390px viewport",
+    }).toBe(true);
     await page.getByTestId("onboarding-suggestion-edit").click();
     await page.getByTestId("suggestion-edit-businessName").fill(businessName);
     await page.getByTestId("suggestion-edit-website").fill(sourceUrl);
@@ -133,8 +137,15 @@ test("SAN-1193: live website → source source → review/edit → save → refr
       }
     };
     await readBack();
+    await expect(page.getByTestId("partner-signup-success")).toBeVisible();
+    await expect(page.getByTestId("partner-signup-partner-id")).toContainText(partnerId);
     await page.reload({ waitUntil: "load" });
-    await readBack();
+
+    // A post-refresh database check alone does not prove the real saved profile UI works.
+    await page.goto(`/app/partners/profile?partner=${partnerId}`, { waitUntil: "load" });
+    await page.reload({ waitUntil: "load" });
+    await expect(page.getByTestId("profile-business-name")).toHaveValue(businessName);
+    await expect(page.getByTestId("profile-website")).toHaveValue(sourceUrl);
 
     const owned = await admin
       .from("partners")
@@ -172,6 +183,14 @@ test("SAN-1193: live website → source source → review/edit → save → refr
     } finally {
       expect(owned.error, "Fixture discovery must not silently fail").toBeNull();
     }
+    // cleanupFixtures independently checks every passed partner, member and identity;
+    // also catch orphan actor-scoped records not present in the initial discovery set.
+    const remainingPartners = await admin.from("partners").select("id").eq("profile_id", actor.userId);
+    const remainingMembers = await admin.from("partner_members").select("partner_id").eq("profile_id", actor.userId);
+    expect(remainingPartners.error, remainingPartners.error?.message).toBeNull();
+    expect(remainingMembers.error, remainingMembers.error?.message).toBeNull();
+    expect(remainingPartners.data).toHaveLength(0);
+    expect(remainingMembers.data).toHaveLength(0);
     console.log("SAN1193_LIVE_CLEANUP_VERIFIED");
   }
 });

@@ -23,7 +23,7 @@ type Draft = {
 };
 
 /**
- * SAN-1193 — paste a public website, let Gemini URL Context propose business
+ * SAN-1193 — paste a public website, let the selected AI provider propose business
  * details, then review them with the same Accept/Edit/Ignore card as SAN-709.
  */
 export function BusinessUrlImportCard({ onApply }: Props) {
