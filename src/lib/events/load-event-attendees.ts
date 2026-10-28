@@ -67,7 +67,29 @@ export async function loadEventAttendees(
     return { status: "error", message: "Could not load attendees. Try again." };
   }
 
-  const payload = (data ?? {}) as { total?: number; rows?: AttendeeRow[] };
+  // The database response is runtime JSON, not a TypeScript contract.
+  // A null or malformed RPC result is a failed read, never an empty guest list.
+  const validNullableString = (value: unknown): value is string | null =>
+    value === null || typeof value === "string";
+  const isAttendeeRow = (value: unknown): value is AttendeeRow => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+    const row = value as Record<string, unknown>;
+    return typeof row.id === "string" && row.id.length > 0 &&
+      (["full_name", "email", "status", "qr_used_at", "tier_name",
+        "purchase_time", "order_short_id"] as const)
+        .every((field) => Object.hasOwn(row, field) && validNullableString(row[field]));
+  };
+  const payload = data as { total?: unknown; rows?: unknown } | null;
+  if (
+    !payload || typeof payload !== "object" || Array.isArray(payload) ||
+    !Number.isSafeInteger(payload.total) || (payload.total as number) < 0 ||
+    !Array.isArray(payload.rows) || payload.rows.length > limit ||
+    payload.rows.length > (payload.total as number) ||
+    !payload.rows.every(isAttendeeRow)
+  ) {
+    console.error("[load-event-attendees] malformed attendee RPC result");
+    return { status: "error", message: "Could not load attendees. Try again." };
+  }
 
   return {
     status: "ok",
@@ -77,8 +99,8 @@ export async function loadEventAttendees(
         name: String((event as { name: string }).name ?? "Untitled event"),
         status: String((event as { status: string }).status ?? "draft"),
       },
-      rows: payload.rows ?? [],
-      total: payload.total ?? 0,
+      rows: payload.rows as AttendeeRow[],
+      total: payload.total as number,
       limit,
       offset,
     },
