@@ -30,6 +30,12 @@ describe("SAN-1312 PR-Agent changed-file routing", () => {
     expect(names(["src/proxy.test.ts"])).not.toContain("supabase");
   });
 
+  it("routes standalone SQL outside supabase directories to Supabase guidance", () => {
+    expect(names(["scripts/sql/partner-schema-gate.sql"])).toContain("supabase");
+    expect(names(["tests/fixtures/access-policy.SQL"])).toContain("supabase");
+    expect(names(["docs/sql-reference.md"])).not.toContain("supabase");
+  });
+
   it("routes Mastra changes", () => {
     expect(names(["src/mastra/agents/concierge.ts"])).toEqual([
       "code-review",
@@ -84,7 +90,7 @@ describe("SAN-1312 PR-Agent changed-file routing", () => {
   it("includes Next.js review invariants in PR-Agent context", () => {
     const result = selectSkills(["src/app/page.tsx"]);
     expect(result.paths).not.toContain("/github/workspace/.claude/skills/nextjs");
-    expect(result.paths).toContain("/github/workspace/.claude/skills/nextjs/references/review.md");
+    expect(result.paths).toContain("/github/workspace/scripts/pr-agent/skills/nextjs/SKILL.md");
   });
 
   it("caps the specialist context budget", () => {

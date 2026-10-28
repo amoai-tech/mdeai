@@ -77,6 +77,9 @@ export function useEventSearchFastPath() {
           neighborhood: e.neighborhood,
           startsAt: e.startsAt,
           pricePerTicket: e.pricePerTicket,
+          currency: e.currency,
+          canBuyTickets: e.canBuyTickets,
+          ticketUrl: e.ticketUrl,
           imageUrl: e.imageUrl,
           sourceUrl: e.sourceUrl ?? e.mapsUrl ?? undefined,
         })),
@@ -102,8 +105,9 @@ export function useEventSearchFastPath() {
       userText: string,
       params: EventSearchApiParams,
       memory: ConciergeWorkingMemory,
+      propagateFailure = false,
     ): Promise<boolean> => {
-      if (busyRef.current) return true;
+      if (busyRef.current) return false;
       busyRef.current = true;
       try {
         let { results: cards, hybridUsed, rankExplanation } =
@@ -135,6 +139,9 @@ export function useEventSearchFastPath() {
       } catch (err) {
         console.error("[event-fast-path]", err);
         setToolResult(null);
+        // Chat sends must reach the operation-aware Retry handler. Filter-chip
+        // searches retain their existing non-throwing failure behavior.
+        if (propagateFailure) throw err;
         return false;
       } finally {
         busyRef.current = false;
@@ -161,7 +168,7 @@ export function useEventSearchFastPath() {
       };
 
       if (shouldInstantEventClarify(trimmed, memory)) {
-        if (busyRef.current) return true;
+        if (busyRef.current) return false;
         busyRef.current = true;
         try {
           setToolResult(null);
@@ -178,8 +185,10 @@ export function useEventSearchFastPath() {
       const params = buildEventSearchParams(trimmed, memory);
       if (!params) return false;
 
+      // A busy handler cannot claim it accepted a second turn without retaining it.
+      if (busyRef.current) return false;
       clearLocalMessages();
-      return runSearch(trimmed, params, memory);
+      return runSearch(trimmed, params, memory, true);
     },
     [clarifyKind, clarifyPending, clearLocalMessages, clearOthers, runSearch, setToolResult, showClarify, state],
   );

@@ -69,7 +69,9 @@ export type EventVenueDetail = {
   neighborhood: string;
   venue: string;
   startsAt: string;
-  pricePerTicket: number;
+  pricePerTicket: number | null;
+  currency?: string;
+  canBuyTickets?: boolean;
   imageUrl?: string;
   ticketUrl: string;
   sourceUrl?: string;

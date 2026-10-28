@@ -85,7 +85,8 @@ export function useEventVenueBookingFastPath() {
       const params = buildEventVenueBookingSearchParams(trimmed);
       if (!params) return false;
 
-      if (busyRef.current) return true;
+      // Let the Concierge own the second turn instead of silently discarding it.
+      if (busyRef.current) return false;
       busyRef.current = true;
       try {
         setEventToolResult(null);

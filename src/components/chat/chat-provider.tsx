@@ -19,7 +19,8 @@ import {
 import { reconcileSavedHistory, type SavedThreadMessage } from "@/lib/chat/saved-thread-history";
 import { useThreadNav } from "@/lib/chat/thread-nav-context";
 import { getCopilotKitClientProps } from "@/lib/copilotkit-client-props";
-import { reportConciergeError } from "@/lib/concierge-error-store";
+import { classifyConciergeStartupError, reportConciergeError } from "@/lib/concierge-error-store";
+import { useSession } from "@/hooks/use-session";
 import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 
 /**
@@ -89,14 +90,16 @@ function watchConnectCycle(agent: AbstractAgent, signal: AbortSignal): Promise<C
  *    the `agent.threadId` check). If the reconnect never finishes, history is
  *    NOT installed: the chat shows the retryable error instead.
  */
-function SavedThreadHistory({
+export function SavedThreadHistory({
   threadId,
   children,
+  agentId = "conciergeAgent",
 }: {
   threadId: string;
   children: ReactNode;
+  agentId?: "conciergeAgent" | "hostOpsAgent";
 }) {
-  const { agent } = useAgent({ agentId: "conciergeAgent", updates: [UseAgentUpdate.OnRunStatusChanged] });
+  const { agent } = useAgent({ agentId, updates: [UseAgentUpdate.OnRunStatusChanged] });
   const [attempt, setAttempt] = useState(0);
   const [outcome, setOutcome] = useState<{
     threadId: string;
@@ -172,13 +175,31 @@ function SavedThreadHistory({
 }
 
 /**
+ * Replay a saved thread's messages inside an already-configured CopilotKit provider.
+ *
+ * `/chat` owns its provider; discovery routes (Rentals, Events, Restaurants…) already get
+ * `CopilotChatConfigurationProvider` from `copilot-kit-provider`, so they only need the history
+ * replay. Without this, the thread id survives a refresh but the inline Ask MDE transcript comes
+ * back empty and the page shows the plain catalogue.
+ */
+export function SavedThreadReplay({
+  threadId,
+  children,
+}: {
+  threadId: string;
+  children: ReactNode;
+}) {
+  if (isDeterministicE2E()) return <>{children}</>;
+  return <SavedThreadHistory threadId={threadId}>{children}</SavedThreadHistory>;
+}
+
+/**
  * The /chat concierge surface, and the one place its thread is decided.
  *
  * - A saved thread picked in the nav rail is bound as EXPLICIT, so the chat
  *   continues that exact thread.
- * - Otherwise the chat runs on a fresh, NON-explicit thread: new on every visit
- *   to /chat and on every New Chat, so a new conversation never writes into an
- *   old one and does not try to reconnect to a thread that has never run.
+ * - Otherwise the chat uses the root per-tab thread, shared with other pages.
+ *   New Chat mints a fresh ID; only a persisted thread is reconnected.
  *
  * One `CopilotChatConfigurationProvider` owns that choice for every consumer on
  * the page (chat, map sync, tools), so they cannot drift onto different threads.
@@ -188,31 +209,50 @@ function SavedThreadHistory({
  * configuration provider's imperative setters.
  */
 function LiveChatProvider({ children }: { children: ReactNode }) {
-  const { activeThreadId, newChatCount } = useThreadNav();
+  const { user, loading: sessionLoading } = useSession();
+  const { sessionThreadId, activeThreadId, hasPersistedThread, restoredThread } = useThreadNav();
+  const threadId = activeThreadId ?? sessionThreadId;
+  // A successfully saved live turn must NOT immediately reconnect/replay itself.
+  // Remember whether this tab's thread was already saved when /chat mounted;
+  // when the user returns after visiting Rentals, it is now safe to replay.
+  const [initialRestorableThread] = useState(() => hasPersistedThread ? sessionThreadId : undefined);
+  // A refresh/reopen adopts the stored conversation AFTER auth resolves, which
+  // is later than the mount-time capture above; that stored conversation is
+  // exactly what must be replayed.
+  const shouldReplay = Boolean(activeThreadId || restoredThread ||
+    (hasPersistedThread && initialRestorableThread === sessionThreadId));
 
-  // React's "adjust state when a prop changes" pattern: a new id the moment
-  // New Chat is pressed, with no intermediate render on the old thread.
-  const [fresh, setFresh] = useState(() => ({
-    newChatCount,
-    threadId: crypto.randomUUID(),
-  }));
-  if (fresh.newChatCount !== newChatCount) {
-    setFresh({ newChatCount, threadId: crypto.randomUUID() });
-  }
+  // The runtime-info 401 may arrive before the guest session finishes loading.
+  // Don't show a false failed-turn notice or hide a signed-in auth failure.
+  const pendingStartup401 = useRef<string | undefined | null>(null);
+  useEffect(() => {
+    if (sessionLoading || pendingStartup401.current === null) return;
+    const failedThreadId = pendingStartup401.current;
+    pendingStartup401.current = null;
+    if (user && failedThreadId === threadId) reportConciergeError(failedThreadId);
+  }, [sessionLoading, user, threadId]);
 
   return (
     <CopilotKitProvider
       {...getCopilotKitClientProps("conciergeAgent")}
       enableInspector={false}
-      onError={reportConciergeError}
+      onError={(event) => {
+        const decision = classifyConciergeStartupError(event, Boolean(user), sessionLoading);
+        if (decision === "ignore") return;
+        if (decision === "defer") {
+          pendingStartup401.current = threadId;
+          return;
+        }
+        reportConciergeError(threadId);
+      }}
     >
       <CopilotChatConfigurationProvider
         agentId="conciergeAgent"
-        threadId={activeThreadId ?? fresh.threadId}
-        hasExplicitThreadId={activeThreadId !== undefined}
+        threadId={threadId}
+        hasExplicitThreadId={shouldReplay}
       >
-        {activeThreadId !== undefined && !isDeterministicE2E() ? (
-          <SavedThreadHistory threadId={activeThreadId}>{children}</SavedThreadHistory>
+        {threadId && shouldReplay && !isDeterministicE2E() ? (
+          <SavedThreadHistory threadId={threadId}>{children}</SavedThreadHistory>
         ) : (
           children
         )}

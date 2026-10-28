@@ -1,18 +1,11 @@
 import type { NextConfig } from "next";
+import { remoteImageRules } from "./src/lib/images/remote-image-hosts";
 
-// The Supabase project host that serves restaurant and listing photos. NEXT_PUBLIC_* is
-// inlined at build time, so this follows whichever project the build targets. Without it,
-// every next/image pointing at Supabase Storage throws "hostname is not configured" and the
-// page fails to render — restaurant photos are stored exactly there.
-const supabaseStorageHost = (() => {
-  try {
-    return process.env.NEXT_PUBLIC_SUPABASE_URL
-      ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).hostname
-      : undefined;
-  } catch {
-    return undefined;
-  }
-})();
+// The allowed remote image hosts live in src/lib/images/remote-image-hosts so that components
+// rendering a database-supplied URL check the same list this config declares. NEXT_PUBLIC_* is
+// inlined at build time, so the Supabase host follows whichever project the build targets.
+// Without it, every next/image pointing at Supabase Storage throws "hostname is not configured"
+// and the page fails to render — restaurant photos are stored exactly there.
 
 const nextConfig: NextConfig = {
   output: "standalone",
@@ -29,15 +22,11 @@ const nextConfig: NextConfig = {
     return config;
   },
   images: {
-    remotePatterns: [
-      { protocol: "https", hostname: "images.unsplash.com" },
-      // Apartment seed images (SAN-718 live data)
-      { protocol: "https", hostname: "picsum.photos" },
-      // Supabase Storage (restaurant and listing photos).
-      ...(supabaseStorageHost
-        ? [{ protocol: "https" as const, hostname: supabaseStorageHost, pathname: "/storage/v1/object/public/**" }]
-        : []),
-    ],
+    remotePatterns: remoteImageRules().map((rule) =>
+      rule.pathPrefix
+        ? { protocol: rule.protocol, hostname: rule.hostname, pathname: rule.pathPrefix + "**" }
+        : { protocol: rule.protocol, hostname: rule.hostname },
+    ),
   },
 };
 

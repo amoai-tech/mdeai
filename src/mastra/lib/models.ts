@@ -1,39 +1,72 @@
 import { google } from "@ai-sdk/google";
-import { GEMINI_FLASH_MODEL_ID } from "@/lib/ai-model-ids";
+import { GEMINI_FLASH_MODEL_ID, parseAiProvider, type AiProvider } from "@/lib/ai-model-ids";
+import { createActiveLanguageModel } from "@/lib/ai-provider";
 import { withTokenUsageTracking } from "./token-usage-middleware";
 
 /**
- * Development-phase default: **gemini-3.5-flash-lite** (all agents).
+ * Development-phase model owner for every Mastra agent and scorer.
  *
- * The id itself lives in `src/lib/ai-model-ids.ts` so that call sites which
- * cannot import this module — `flash-route-classifier.ts` is reachable from the
- * client chat bundle, and this file reaches `node:async_hooks` through the
- * token-usage sink — still share one source of identity. Switching back to
- * `gemini-3.5-flash` is a one-line change there.
+ * Default provider: **Gemini** (`gemini-3.5-flash-lite`). Set
+ * `MDE_AI_PROVIDER=nvidia` enables Lightning only for the concierge in PR #509.
+ * Other agents keep the existing Gemini model until separately verified.
  *
- * Verified before changing rather than assumed from memory:
+ * Why an AI SDK model object rather than Mastra's `model: "nvidia/..."` router
+ * string: the pinned `@mastra/core@1.74.0` registry does not contain this model,
+ * and COST-001 token tracking observes the concrete V2/V3 model contract. See
+ * `src/lib/ai-provider.ts` for the full evidence.
  *
- *   - `gemini-3.5-flash-lite` is a **stable** model id and served a live
- *     `generateContent` call (HTTP 200, `modelVersion: gemini-3.5-flash-lite`);
- *   - the official model page reports **function calling** and **structured
- *     outputs** as supported, which is what MDE's tools and `generateObject`
- *     call sites require. Image generation, Live API and audio generation are
- *     *not* supported by it — these agents do not use them.
+ * The model id lives in `src/lib/ai-model-ids.ts` (no imports) so call sites
+ * that must stay browser-safe — `flash-route-classifier.ts` is reachable from
+ * the client chat bundle — never import this module's `node:async_hooks`
+ * dependency.
  *
- * Wrapped with COST-001 token-usage tracking so every agent model call records
- * its Gemini token usage into the active per-turn sink (token-usage-middleware).
- * The wrapper is transparent — same LanguageModelV2 contract, no behavior change.
- *
- * @see https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite
+ * Wrapped with COST-001 token-usage tracking so every model call records its
+ * token usage into the active per-turn sink, regardless of provider. The wrapper
+ * is transparent: same V2/V3 model contract, no behavior change.
  */
-export const FLASH_MODEL = withTokenUsageTracking(
-  google(GEMINI_FLASH_MODEL_ID),
-);
-export const PRO_MODEL = withTokenUsageTracking(
-  google("gemini-3.1-pro-preview"),
+export const ACTIVE_AI_PROVIDER: AiProvider = parseAiProvider(
+  process.env.MDE_AI_PROVIDER,
 );
 
+export const FLASH_MODEL = withTokenUsageTracking(google(GEMINI_FLASH_MODEL_ID));
+
+/** PR #509: opt in only the existing concierge (and rental extraction) to NVIDIA. */
+export const ACTIVE_TEXT_MODEL =
+  ACTIVE_AI_PROVIDER === "nvidia"
+    ? withTokenUsageTracking(createActiveLanguageModel())
+    : FLASH_MODEL;
+
+/**
+ * Pro tier stays on Gemini regardless of MDE_AI_PROVIDER. No NVIDIA pro-tier
+ * model is selected in this PR, so this still needs a Google key even when the
+ * concierge runs on Lightning.
+ */
+export const PRO_MODEL = withTokenUsageTracking(google("gemini-3.1-pro-preview"));
+
 /** Legacy aliases (my-mastra-app used string IDs; mdeapp uses AI SDK) */
-export const CONCIERGE_MODEL = FLASH_MODEL;
+export const CONCIERGE_MODEL = ACTIVE_TEXT_MODEL;
+/**
+ * Nvidia occasionally stalls its first stream. Mastra's native model list moves
+ * to the already-configured Gemini model when the primary exceeds its step
+ * deadline. A user Stop/abort still cancels the entire run; do not add manual
+ * retries that could replay tool side effects or duplicate chat messages.
+ *
+ * The 19s Mastra step deadline is below the adapter's 22s abort deadline.
+ * Mastra needs to observe its OWN step timeout to invoke fallback; the model
+ * adapter's AbortSignal.timeout alone ends the stream without fallback.
+ */
+// A fallback can only succeed if the outer agent stream outlives both model
+// step deadlines. Keep a bounded margin for tool output and AG-UI finalization.
+export const CONCIERGE_PRIMARY_STEP_TIMEOUT_MS = 19_000;
+export const CONCIERGE_FALLBACK_STEP_TIMEOUT_MS = 45_000;
+export const CONCIERGE_TURN_TIMEOUT_MS = ACTIVE_AI_PROVIDER === "nvidia"
+  ? CONCIERGE_PRIMARY_STEP_TIMEOUT_MS + CONCIERGE_FALLBACK_STEP_TIMEOUT_MS + 10_000
+  : 26_000;
+export const CONCIERGE_AGENT_MODEL = ACTIVE_AI_PROVIDER === "nvidia"
+  ? [
+      { model: CONCIERGE_MODEL, maxRetries: 0, modelSettings: { timeout: { stepMs: CONCIERGE_PRIMARY_STEP_TIMEOUT_MS } } },
+      { model: FLASH_MODEL, maxRetries: 0, modelSettings: { timeout: { stepMs: CONCIERGE_FALLBACK_STEP_TIMEOUT_MS } } },
+    ]
+  : CONCIERGE_MODEL;
 export const REASONING_MODEL = FLASH_MODEL;
 export const PLANNING_MODEL = FLASH_MODEL;

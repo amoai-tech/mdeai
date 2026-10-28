@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+
 import {
   gotoMarketingHome,
   submitHomeHeroQuery,
@@ -17,6 +18,25 @@ import {
 test.describe("SAN-1341 deterministic critical journeys", { tag: ["@critical", "@deterministic"] }, () => {
   test.beforeEach(async ({ page }) => {
     await mockFastPaths(page);
+  });
+
+  test("shared fast-path mocks intercept the nav rail thread fetch without Supabase", async ({ page }) => {
+    // A cold Next.js compile can take longer than the default 30s network wait.
+    // Keep this test-specific budget above the 45s hydration timeout.
+    test.setTimeout(90_000);
+    // Prove the fixture itself supplied this response. A 200 from an external
+    // service (or a quiet catch in useNavThreads) must not satisfy this test.
+    const threadResponse = page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === "/api/threads" &&
+        response.request().method() === "GET",
+      { timeout: 60_000 },
+    );
+    await gotoDeterministicChat(page);
+    const response = await threadResponse;
+    expect(response.status()).toBe(200);
+    expect(response.headers()["x-mde-e2e-fixture"]).toBe("threads");
+    expect(await response.json()).toEqual({ threads: [] });
   });
 
   test("Home → Chat sends one restaurant query and renders mocked results", async ({
@@ -69,6 +89,21 @@ test.describe("SAN-1341 deterministic critical journeys", { tag: ["@critical", "
     // expose the viewing action. Paired with the unowned case below, this pins both directions
     // of the requestability contract on the chat surface.
     await expect(page.getByTestId("rental-schedule-cta")).toHaveCount(1);
+  });
+
+  // SAN-1421 post-merge: the Details panel must expose the exact listing id, so the card,
+  // map pin and panel can be proven to refer to the same apartment.
+  test("rental Details opens the panel for the exact listing id", async ({ page }) => {
+    await gotoDeterministicChat(page);
+    const responsePromise = waitForPost(page, "/api/rentals/search");
+    await typeAndSubmit(page, RENTAL_QUERY);
+    expect((await responsePromise).ok()).toBe(true);
+
+    await expect(page.getByTestId("rental-card")).toHaveCount(1);
+    await page.getByTestId("rental-details-cta").click();
+    const panel = page.getByTestId("rental-details-panel");
+    await expect(panel).toBeVisible();
+    await expect(panel).toHaveAttribute("data-listing-id", rental.id);
   });
 
   // SAN-1349: an unowned / non-requestable listing stays browseable but must never expose a

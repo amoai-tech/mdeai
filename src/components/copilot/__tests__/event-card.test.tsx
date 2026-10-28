@@ -40,6 +40,7 @@ describe("EventCard", () => {
         neighborhood={toolPayload.neighborhood}
         startsAt={toolPayload.startsAt}
         pricePerTicket={toolPayload.pricePerTicket}
+        canBuyTickets
         imageUrl={toolPayload.imageUrl}
         ticketUrl={`/events/${toolPayload.id}`}
       />,
@@ -51,11 +52,37 @@ describe("EventCard", () => {
       'aria-label="Event: Salsa Night at Lleras, El Poblado"',
     );
     expect(html).toContain(toolPayload.title);
+    // 22:00Z is 17:00 in Medellín, independent of server/browser timezone.
+    expect(html).toContain("5:00 PM");
+
     expect(html).toContain(toolPayload.venue);
     expect(html).toContain(toolPayload.neighborhood);
     expect(html).toContain("From $25");
     expect(html).toContain('data-testid="event-buy-cta"');
     expect(html).toContain(`href="/events/${toolPayload.id}"`);
+  });
+
+  it("does not invent free entry or Buy when tiers are absent", () => {
+    const html = renderToStaticMarkup(
+      <EventCard id="event-tierless" eventId="tierless" title="Informational parade"
+        venue="Medellín" neighborhood="Laureles" startsAt={toolPayload.startsAt}
+        pricePerTicket={null} currency="COP" canBuyTickets={false}
+        ticketUrl="/events/tierless" />,
+    );
+    expect(html).toContain("Price TBD");
+    expect(html).not.toContain("From $0");
+    expect(html).not.toContain('data-testid="event-buy-cta"');
+  });
+
+  it("shows Free only for a real zero-priced tier and hides Buy when sold out", () => {
+    const html = renderToStaticMarkup(
+      <EventCard id="event-sold-out" eventId="sold-out" title="Sold Out"
+        venue="Medellín" neighborhood="" startsAt={toolPayload.startsAt}
+        pricePerTicket={0} currency="COP" canBuyTickets={false}
+        ticketUrl="/events/sold-out" />,
+    );
+    expect(html).toContain("Free");
+    expect(html).not.toContain('data-testid="event-buy-cta"');
   });
 
   it("Buy tickets uses button when onBuyTickets is provided (no navigation href)", () => {
@@ -68,6 +95,7 @@ describe("EventCard", () => {
         neighborhood={toolPayload.neighborhood}
         startsAt={toolPayload.startsAt}
         pricePerTicket={toolPayload.pricePerTicket}
+        canBuyTickets
         ticketUrl={`/events/${toolPayload.id}`}
         onBuyTickets={() => {}}
       />,

@@ -16,7 +16,13 @@ export type DiscoveryWorkspaceProps = {
   notice?: ReactNode;
   children: ReactNode;
   /** Right column on desktop: the map, optionally with a details panel over it. */
-  rightPanel: ReactNode;
+  rightPanel?: ReactNode;
+  /**
+   * SAN-1421 — the page's own chat entry point, pinned to the bottom of the results column.
+   * Optional on purpose: this layout still renders with no chat stack at all, and the caller decides
+   * which conversation (if any) belongs on its page.
+   */
+  askComposer?: ReactNode;
 };
 
 /**
@@ -31,11 +37,11 @@ export type DiscoveryWorkspaceProps = {
  * shared conversation per browser tab (SAN-1088).
  */
 export function DiscoveryWorkspace(props: DiscoveryWorkspaceProps) {
-  const { testId, activeSlug, title, subtitle, filterBar, notice, children, rightPanel } = props;
+  const { testId, activeSlug, title, subtitle, filterBar, notice, children, rightPanel, askComposer } = props;
   return (
     <div
       data-testid={testId}
-      className="flex min-h-dvh flex-col lg:grid lg:h-dvh lg:grid-cols-[208px_minmax(0,1fr)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)] lg:overflow-hidden xl:grid-cols-[240px_minmax(0,1fr)_minmax(0,1fr)]"
+      className={rightPanel ? "flex min-h-dvh flex-col lg:grid lg:h-dvh lg:grid-cols-[208px_minmax(0,1fr)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)] lg:overflow-hidden xl:grid-cols-[240px_minmax(0,1fr)_minmax(0,1fr)]" : "flex min-h-dvh flex-col lg:grid lg:h-dvh lg:grid-cols-[208px_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)] lg:overflow-hidden xl:grid-cols-[240px_minmax(0,1fr)]"}
     >
       <aside
         className="hidden min-h-0 overflow-y-auto border-r border-border p-4 lg:flex lg:flex-col"
@@ -50,13 +56,13 @@ export function DiscoveryWorkspace(props: DiscoveryWorkspaceProps) {
         data-testid="workspace-results-column"
       >
         <header className="sticky top-0 z-10 border-b border-border bg-background/95 px-4 py-4 backdrop-blur sm:px-6">
-          <div className="flex items-start gap-3">
+          <div className="flex flex-wrap items-start gap-3 sm:flex-nowrap">
             <ChatNavDrawer rail={<WorkspaceNavRail activeSlug={activeSlug} testId="workspace-nav-rail-drawer" />} />
             <div className="min-w-0 flex-1">
               <h1 className="font-serif text-2xl font-semibold">{title}</h1>
               <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
             </div>
-            <div className="flex shrink-0 flex-col items-end gap-1">
+            <div className="flex w-full min-w-0 justify-end gap-1 sm:w-auto sm:shrink-0 sm:flex-col sm:items-end">
               <AuthStatus />
               <Link href="/chat" className="hidden text-sm text-primary hover:underline sm:inline">
                 Ask concierge
@@ -72,15 +78,24 @@ export function DiscoveryWorkspace(props: DiscoveryWorkspaceProps) {
 
         {notice}
         <div className="px-4 pb-24 sm:px-6 lg:pb-6">{children}</div>
+
+        {askComposer ? (
+          <div
+            data-testid="workspace-ask-composer"
+            className="sticky bottom-0 z-20 mt-auto border-t border-border/60 bg-background/95 shadow-[0_-6px_16px_-14px_rgb(0_0_0/0.35)] backdrop-blur supports-[backdrop-filter]:bg-background/90"
+          >
+            {askComposer}
+          </div>
+        ) : null}
       </main>
 
-      <aside
+      {rightPanel ? <aside
         className="relative hidden min-h-0 p-3 lg:block"
         aria-label="Map and details"
         data-testid="workspace-right-column"
       >
         {rightPanel}
-      </aside>
+      </aside> : null}
     </div>
   );
 }

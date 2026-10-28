@@ -119,6 +119,20 @@ describe("Supabase proxy session gate", () => {
     expect(authMocks.getClaims).toHaveBeenCalledOnce();
   });
 
+  it("never bypasses auth on Vercel production even if NODE_ENV is misconfigured", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("VERCEL_ENV", "production");
+    vi.stubEnv("E2E_BYPASS_AUTH", "1");
+
+    const response = await updateSession(request("/saved"));
+
+    expect(response.status).toBe(307);
+    expect(new URL(response.headers.get("location")!).pathname).toBe(
+      "/login",
+    );
+    expect(authMocks.getClaims).toHaveBeenCalledOnce();
+  });
+
   it("ignores E2E auth bypass in production", async () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");

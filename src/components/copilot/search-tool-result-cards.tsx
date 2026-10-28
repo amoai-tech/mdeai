@@ -21,6 +21,7 @@ import { useEventSearchResults } from "@/components/chat/event-search-results-co
 import { RichCardResultsRegistrar } from "@/components/chat/rich-card-results-context";
 import { useMapContext } from "@/platform/maps/map-context";
 import { normalizeToolEnvelope } from "@/lib/normalize-tool-envelope";
+import { visibleEventSearchReasons } from "@/lib/event-search-fast-path";
 import { toDetailRental } from "@/lib/rentals/chat-rental-detail";
 import { emptyRentalNotice, unappliedRentalNotice } from "@/lib/rental-display";
 import { normalizeToolOutput } from "@/platform/maps/normalize-tool-output";
@@ -436,7 +437,7 @@ export function EventResults({ result }: { result: unknown }) {
   const { setRows, setWebCitations } = useEventSearchResults();
   const listRef = useRef<HTMLDivElement>(null);
   const envelope = normalizeToolEnvelope(result);
-  const rankExplanation = envelope.rankExplanation ?? [];
+  const reasons = visibleEventSearchReasons(envelope.rankExplanation ?? []);
   // SAN-1422 — an event without trusted coordinates is a usable card with no pin, so it must not
   // pan, select or highlight a map target that does not exist.
   const pinnedIds = useMemo(
@@ -449,7 +450,9 @@ export function EventResults({ result }: { result: unknown }) {
     venue: string;
     neighborhood: string;
     startsAt: string;
-    pricePerTicket: number;
+    pricePerTicket: number | null;
+    canBuyTickets?: boolean;
+    ticketUrl?: string;
     currency?: string;
     imageUrl?: string;
     sourceUrl?: string;
@@ -463,7 +466,10 @@ export function EventResults({ result }: { result: unknown }) {
       venue?: string;
       neighborhood?: string;
       startsAt: string;
-      pricePerTicket?: number;
+      pricePerTicket?: number | null;
+      currency?: string;
+      canBuyTickets?: boolean;
+      ticketUrl?: string;
       imageUrl?: string;
       sourceUrl?: string;
       mapsUrl?: string | null;
@@ -485,7 +491,10 @@ export function EventResults({ result }: { result: unknown }) {
         venue: e.venue ?? "Medellín",
         neighborhood: e.neighborhood ?? "Medellín",
         startsAt: e.startsAt,
-        pricePerTicket: e.pricePerTicket ?? 0,
+        pricePerTicket: e.pricePerTicket ?? null,
+        currency: e.currency,
+        canBuyTickets: e.canBuyTickets,
+        ticketUrl: e.ticketUrl,
         imageUrl: e.imageUrl,
         sourceUrl: e.sourceUrl ?? e.mapsUrl ?? undefined,
       })),
@@ -505,18 +514,14 @@ export function EventResults({ result }: { result: unknown }) {
     <>
       <RichCardResultsRegistrar category="event" count={rows.length} />
       <ToolPinsSync category="event" result={result} />
-      {rankExplanation.length > 0 ? (
+      {rows.length > 0 && reasons.length > 0 ? (
         <div
           className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
           data-testid="rank-explanation-event"
         >
           <p className="font-medium text-foreground">Why these events</p>
           <ul className="mt-1 list-inside list-disc">
-            {rankExplanation.map((entry) => (
-              <li key={`${entry.factor}-${entry.note}`}>
-                {entry.factor} ({entry.score.toFixed(2)}): {entry.note}
-              </li>
-            ))}
+            {reasons.map((reason) => <li key={reason}>{reason}</li>)}
           </ul>
         </div>
       ) : null}
@@ -535,7 +540,7 @@ export function EventResults({ result }: { result: unknown }) {
           {rows.map((e) => {
           const pinId = eventPinId(e.id);
           const hasPin = pinnedIds.has(pinId);
-          const ticketUrl = `/events/${e.id}`;
+          const ticketUrl = e.ticketUrl ?? `/events/${e.id}`;
           const selectOnMap = () => {
             if (hasPin) panToPin(pinId);
           };
@@ -550,6 +555,8 @@ export function EventResults({ result }: { result: unknown }) {
               venue: e.venue,
               startsAt: e.startsAt,
               pricePerTicket: e.pricePerTicket,
+              currency: e.currency,
+              canBuyTickets: e.canBuyTickets === true,
               imageUrl: e.imageUrl,
               ticketUrl,
             });
@@ -564,6 +571,7 @@ export function EventResults({ result }: { result: unknown }) {
               neighborhood={e.neighborhood}
               startsAt={e.startsAt}
               pricePerTicket={e.pricePerTicket}
+              canBuyTickets={e.canBuyTickets === true}
               currency={e.currency}
               imageUrl={e.imageUrl}
               ticketUrl={ticketUrl}

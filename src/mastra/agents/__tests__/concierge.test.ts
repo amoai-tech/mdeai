@@ -18,6 +18,7 @@ describe("conciergeAgent", () => {
     const toolIds = Object.values(tools).map((tool) => tool.id);
     expect(toolIds).toEqual(
       expect.arrayContaining([
+        "read-broker-workspace",
         "search-rentals",
         "search-new-projects",
         "search-events",
@@ -89,10 +90,28 @@ describe("conciergeAgent", () => {
     expect(instructions).toContain("fewer than 3 rows");
   });
 
-  it("instructions forbid repeating grounded place names in prose", async () => {
+  it("instructions avoid repeating names for a new search but allow a recommendation", async () => {
     const instructions = await conciergeAgent.getInstructions();
-    expect(instructions).toContain("NEVER list cafés or venues by name");
+    expect(instructions).toContain("For a new search, do NOT list cafés or venues by name");
+    expect(instructions).toContain("name at most 2 places from lastGroundedResults");
+    expect(instructions).toContain("Never invent amenities");
     expect(instructions).toContain("View on Google Maps");
+  });
+
+  it("working memory accepts the grounded rows shown on screen", () => {
+    const parsed = conciergeWorkingMemorySchema.parse({
+      lastIntent: "restaurant_discovery",
+      lastGroundedResults: [
+        {
+          id: "cafe-1",
+          title: "Semilla Café Coworking",
+          area: "Laureles",
+          summary: "Coworking café with reliable Wi-Fi.",
+          rating: 4.7,
+        },
+      ],
+    });
+    expect(parsed.lastGroundedResults?.[0]?.title).toBe("Semilla Café Coworking");
   });
 
   it("instructions tell agent to pass search-grounded-places intent for nightlife and cafés", async () => {
@@ -134,6 +153,18 @@ describe("conciergeAgent", () => {
 
     const venue = conciergeWorkingMemorySchema.parse({ lastIntent: "venue_booking" });
     expect(venue.lastIntent).toBe("venue_booking");
+  });
+
+  it("uses the canonical router intent schema for working memory", () => {
+    expect(conciergeWorkingMemorySchema.shape.lastIntent.unwrap().options).toEqual([
+      "rental_search", "event_discovery", "venue_booking", "restaurant_discovery",
+      "day_trip_planning", "general_concierge", "chitchat", "unknown",
+    ]);
+  });
+
+  it("instructions map nightlife and cafés to the canonical lastIntent", async () => {
+    const instructions = await conciergeAgent.getInstructions();
+    expect(instructions).toContain("For cafés, bars, clubs, nightlife, and grounded place searches use restaurant_discovery");
   });
 
   it("working memory rental genericAskPending defaults to undefined when omitted", () => {
@@ -196,6 +227,44 @@ describe("concierge updateWorkingMemory tolerates provider padding", () => {
     );
     return { out, saved };
   }
+
+  it.each(["nightlife_grounded", "grounded_places", "grounded_place_search", "cafe_grounded"])(
+    "saves a grounded place search with canonical lastIntent rather than failing: %s",
+    async (reportedIntent) => {
+      const { out, saved } = await update({
+        lastIntent: reportedIntent,
+        lastGroundedResults: [{ id: "club-1", title: "Salsa venue", area: "Provenza" }],
+      });
+      expect(out.error).toBeUndefined();
+      expect(saved?.lastIntent).toBe("restaurant_discovery");
+      expect(saved?.lastGroundedResults).toEqual([{ id: "club-1", title: "Salsa venue", area: "Provenza" }]);
+    },
+  );
+
+  it("keeps only source-identifiable grounded rows when the model omits a title", async () => {
+    const { out, saved } = await update({
+      lastIntent: "restaurant_discovery",
+      lastGroundedResults: [
+        { id: "venue-1", title: "Salsa venue", area: "Provenza" },
+        { id: "venue-2", area: "Laureles" },
+        { id: "venue-3", title: "  " },
+      ],
+    });
+    expect(out.error).toBeUndefined();
+    expect(saved?.lastGroundedResults).toEqual([
+      { id: "venue-1", title: "Salsa venue", area: "Provenza" },
+    ]);
+  });
+
+  it("preserves an honest empty grounded result list", async () => {
+    const { out, saved } = await update({ lastGroundedResults: [] });
+    expect(out.error).toBeUndefined();
+    expect(saved?.lastGroundedResults).toEqual([]);
+  });
+
+  it("still rejects unrecognized/unsafe intent values", () => {
+    expect(conciergeMemoryInput.safeParse({ lastIntent: "unknown_invented_intent" }).success).toBe(false);
+  });
 
   it("blank rental budgetType is dropped and the saved rental query survives", async () => {
     const { out, saved } = await update({ lastRentalQuery: { budgetType: "", neighborhood: "Poblado" } });

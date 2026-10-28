@@ -3,18 +3,74 @@ name: Playwright deterministic
 on:
   pull_request:
     branches: [main]
+    # `labeled` lets a reviewer add `run-e2e` after the PR opened and start the
+    # suite without an empty push; `unlabeled` lets the next push re-evaluate it.
+    types: [opened, synchronize, reopened, labeled, unlabeled]
 
 permissions:
   contents: read
+
+# A new push cancels only an older browser run for this SAME PR.
+concurrency:
+  group: playwright-${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  deterministic-chromium:
-    name: deterministic chromium
+  # Risk tiering: the deterministic browser suite is advisory, not a required check.
+  # It protects UI, routing, styling, and the browser harness; a backend-only change
+  # (for example a Zod validation guard) does not need 14 minutes of Chromium.
+  # Add the `run-e2e` label to any PR to force the browser suite.
+  browser_scope:
+    name: detect browser scope
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
+    outputs:
+      run_e2e: ${{ steps.scope.outputs.run_e2e }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Decide whether browser journeys apply
+        id: scope
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          LABELS: ${{ toJson(github.event.pull_request.labels.*.name) }}
+        run: |
+          set -euo pipefail
+
+          # Fail safe: if the diff cannot be computed, run the browser suite rather
+          # than silently claiming a browser-facing change was covered.
+          if ! changed="$(git diff --name-only "$BASE_SHA...$HEAD_SHA")"; then
+            echo "run_e2e=true" >> "$GITHUB_OUTPUT"
+            echo "Could not compute the changed paths; running the browser suite."
+            exit 0
+          fi
+
+          CHANGED_FILES="$changed" LABELS="$LABELS" node scripts/ci/browser-scope.mjs
+
+  deterministic-chromium:
+    name: deterministic chromium ${{ matrix.shard }}/3
+    needs: browser_scope
+    # Fail safe: if the scope job itself fails, run the browser suite instead of
+    # skipping it. A green run_e2e is the only path that skips Chromium.
+    if: always() && (needs.browser_scope.result != 'success' || needs.browser_scope.outputs.run_e2e == 'true')
+    runs-on: ubuntu-latest
+    # Allow transient slow Ubuntu package mirrors without cancelling passing tests.
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
 
     steps:
       - uses: actions/checkout@v4
@@ -27,55 +83,225 @@ jobs:
       - name: Install
         run: npm ci
 
+      # All three browser lanes run headless Chromium on GitHub's Ubuntu image.
+      # Download only Playwright's pinned headless shell; avoid cold apt mirror
+      # downloads that previously stalled a shard for 18m45s before cancellation.
+      # Real Playwright launches will fail if the runner is missing required libs.
       - name: Install Chromium
-        run: npx playwright install chromium --with-deps
+        run: npx playwright install chromium --only-shell
 
-      - name: Run deterministic critical journeys
+      # The npm script includes long-chat virtualization with the same deterministic
+      # adapter. One Playwright invocation = one Next dev-server start for both suites.
+      # Keep the real mobile composer separate: it MUST NOT use deterministic chat.
+      - name: Run deterministic journeys and long-chat virtualization
         env:
           NODE_ENV: development
+          PLAYWRIGHT_CI_WARMUP: "1" # Precompile /chat outside test timeouts.
+          DEBUG: pw:webserver # Diagnostics for local Next.js startup/readiness.
+          PLAYWRIGHT_BLOB_OUTPUT_NAME: shard-${{ matrix.shard }}.zip
           NEXT_TELEMETRY_DISABLED: 1
           E2E_BYPASS_AUTH: "1"
           NEXT_PUBLIC_E2E_MOCK_MAPS: "1"
+          NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID: DEMO_MAP_ID # Expected on mocked dev maps; avoid repeated warnings.
           NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT: "1"
-          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
-          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_test
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ""
-          SMOKE_BASE_URL: http://localhost:3002
-          PLAYWRIGHT_WEB_SERVER_COMMAND: npm run dev:ui:worktree
-        run: npm run test:e2e:deterministic
-
-      # SAN-1357: the long-chat virtualization proof is a *permanent* regression, so it must
-      # run on every PR. `test:e2e:deterministic` only runs deterministic-critical.spec.ts,
-      # so without this step the 500-message proof would exist but silently stop protecting
-      # main. The npm script owns its own safe dummy environment and web-server command, so
-      # nothing is duplicated here.
-      - name: Prove long-chat virtualization
-        run: npm run test:e2e:chat-virtualization
-
-      # SAN-522: the mobile composer regression must run against the REAL v2
-      # composer, so it is its own step *without* NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT
-      # (the deterministic adapter replaces the composer and would not cover this).
-      # No Supabase secret is provided, so the signed-in agent case skips.
-      - name: Prove the mobile composer regression
-        env:
-          NODE_ENV: development
-          NEXT_TELEMETRY_DISABLED: 1
-          NEXT_PUBLIC_E2E_MOCK_MAPS: "1"
-          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
-          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_test
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ""
           NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: test
+          # An intentionally unreachable local Supabase endpoint: deterministic/browser-guard
+          # jobs have no database credentials and must not wait on external DNS/TLS.
+          # Keep real Supabase proof in the separately authorized integration suites.
+          NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:9
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_test
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ""
           SMOKE_BASE_URL: http://localhost:3002
           PLAYWRIGHT_WEB_SERVER_COMMAND: npm run dev:ui:worktree
-        run: npm run test:e2e:mobile-composer
+        run: npm run test:e2e:deterministic -- --shard=${{ matrix.shard }}/3 --reporter=blob,list
+
+      - name: Retain each shard's blob report (including failures)
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          # Stable across reruns: only failed shards need rerunning; overwrite
+          # replaces an earlier blob instead of confusing the aggregator.
+          name: playwright-blob-shard-${{ matrix.shard }}
+          overwrite: true
+          path: blob-report/*.zip
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Upload Playwright failure artifacts
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: deterministic-playwright-${{ github.run_id }}
+          name: deterministic-playwright-${{ github.run_id }}-${{ matrix.shard }}-${{ github.run_attempt }}
           path: |
             test-results/**
             tmp/playwright-report/**
           if-no-files-found: ignore
           retention-days: 7
+
+
+  # Real CopilotKit v2 composer: NEVER enable NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT.
+  mobile-composer:
+    name: real mobile composer chromium
+    needs: browser_scope
+    if: always() && (needs.browser_scope.result != 'success' || needs.browser_scope.outputs.run_e2e == 'true')
+    runs-on: ubuntu-latest
+    # Cold Ubuntu runners can spend nearly 14 minutes installing Playwright system deps.
+    # Allow time for Next.js startup and the real mobile assertion (run 40299912456).
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install
+        run: npm ci
+      # All three browser lanes run headless Chromium on GitHub's Ubuntu image.
+      # Download only Playwright's pinned headless shell; avoid cold apt mirror
+      # downloads that previously stalled a shard for 18m45s before cancellation.
+      # Real Playwright launches will fail if the runner is missing required libs.
+      - name: Install Chromium
+        run: npx playwright install chromium --only-shell
+      - name: Prove the mobile composer regression
+        env:
+          NODE_ENV: development
+          PLAYWRIGHT_CI_WARMUP: "1" # Precompile /chat outside test timeouts.
+          DEBUG: pw:webserver # Diagnostics for local Next.js startup/readiness.
+          PLAYWRIGHT_BLOB_OUTPUT_NAME: mobile-composer.zip
+          NEXT_TELEMETRY_DISABLED: 1
+          NEXT_PUBLIC_E2E_MOCK_MAPS: "1"
+          # An intentionally unreachable local Supabase endpoint: deterministic/browser-guard
+          # jobs have no database credentials and must not wait on external DNS/TLS.
+          # Keep real Supabase proof in the separately authorized integration suites.
+          NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:9
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_test
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ""
+          NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: test
+          SMOKE_BASE_URL: http://localhost:3002
+          PLAYWRIGHT_WEB_SERVER_COMMAND: npm run dev:ui:worktree
+        run: npm run test:e2e:mobile-composer -- --reporter=blob,list
+
+      - name: Retain real-composer blob report (including failures)
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-blob-mobile
+          overwrite: true
+          path: blob-report/*.zip
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upload real-composer failure traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: real-mobile-composer-failures-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-results/**
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # Stable overall check: missing blobs, any failed shard, or failed mobile is RED.
+  browser-results:
+    name: browser report + result
+    needs: [browser_scope, deterministic-chromium, mobile-composer]
+    if: always() && (needs.browser_scope.result != 'success' || needs.browser_scope.outputs.run_e2e == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install report tooling
+        run: npm ci
+      - name: Download all Playwright blob reports
+        uses: actions/download-artifact@v4
+        with:
+          # Successful earlier attempts and retried shards share stable names.
+          pattern: playwright-blob-*
+          path: all-blob-reports
+          merge-multiple: true
+      - name: Require every original suite's report
+        run: |
+          set -euo pipefail
+          for name in shard-1.zip shard-2.zip shard-3.zip mobile-composer.zip; do
+            test -s "all-blob-reports/$name" || { echo "::error::Missing $name"; exit 1; }
+          done
+          test "$(find all-blob-reports -maxdepth 1 -type f -name '*.zip' | wc -l)" -eq 4
+      - name: Merge shards into one HTML report
+        env:
+          PLAYWRIGHT_HTML_OUTPUT_DIR: tmp/playwright-merged-report
+        run: npx playwright merge-reports --reporter html ./all-blob-reports
+      - name: Upload combined HTML report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-combined-${{ github.run_id }}-${{ github.run_attempt }}
+          path: tmp/playwright-merged-report/**
+          if-no-files-found: error
+          retention-days: 14
+      - name: Enforce shard and real-composer results
+        if: always()
+        env:
+          SHARDS_RESULT: ${{ needs.deterministic-chromium.result }}
+          MOBILE_RESULT: ${{ needs.mobile-composer.result }}
+        run: |
+          if [[ "$SHARDS_RESULT" != success || "$MOBILE_RESULT" != success ]]; then
+            echo "::error::Browser jobs failed or did not execute (shards=$SHARDS_RESULT mobile=$MOBILE_RESULT)"
+            exit 1
+          fi
+
+  # Run the existing real auth-route browser suite on every PR, in parallel with the
+  # long deterministic suite. No E2E_BYPASS_AUTH and NO privileged Supabase secrets:
+  # these tests assert anonymous guard and sanitized post-login return behavior.
+  auth-guard-chromium:
+    name: auth redirect + guard chromium
+    runs-on: ubuntu-latest
+    # PR #403 spent >12m downloading Playwright Linux deps on a slow apt mirror.
+    # Preserve the actual guard assertions; allow cold install + Next startup.
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      # All three browser lanes run headless Chromium on GitHub's Ubuntu image.
+      # Download only Playwright's pinned headless shell; avoid cold apt mirror
+      # downloads that previously stalled a shard for 18m45s before cancellation.
+      # Real Playwright launches will fail if the runner is missing required libs.
+      - name: Install Chromium
+        run: npx playwright install chromium --only-shell
+
+      - name: Prove safe login redirects and auth guards
+        env:
+          NODE_ENV: development
+          DEBUG: pw:webserver # Diagnostics for local Next.js startup/readiness.
+          NEXT_TELEMETRY_DISABLED: 1
+          NEXT_PUBLIC_E2E_MOCK_MAPS: "1"
+          # An intentionally unreachable local Supabase endpoint: deterministic/browser-guard
+          # jobs have no database credentials and must not wait on external DNS/TLS.
+          # Keep real Supabase proof in the separately authorized integration suites.
+          NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:9
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_test
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ""
+          NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: test
+          SMOKE_BASE_URL: http://localhost:3002
+          PLAYWRIGHT_WEB_SERVER_COMMAND: npm run dev:ui:worktree
+        run: npm run test:e2e:auth
+
+      # This job has no production credentials, but limit retained diagnostics.
+      - name: Upload auth failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: auth-guard-playwright-${{ github.run_id }}
+          path: test-results/**
+          if-no-files-found: ignore
+          retention-days: 3

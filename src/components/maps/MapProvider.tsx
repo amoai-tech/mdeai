@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { APIProvider } from "@vis.gl/react-google-maps";
 import { MapsStatusProvider } from "@/components/maps/use-maps-auth-failure";
 import { useMapsAuthFailure } from "@/components/maps/use-maps-auth-failure";
@@ -30,6 +31,8 @@ import { getGoogleMapsApiKey, isE2EMapsMockEnabled } from "@/platform/maps/map-c
 export function MapsShell({ children }: { children: React.ReactNode }) {
   const apiKey = getGoogleMapsApiKey();
   const authFailed = useMapsAuthFailure();
+  // The script itself can fail to arrive; without this the map slot stays an empty box with no message.
+  const [loadFailed, setLoadFailed] = useState(false);
 
   if (isE2EMapsMockEnabled()) {
     return <MapsStatusProvider value="ok">{children}</MapsStatusProvider>;
@@ -42,8 +45,8 @@ export function MapsShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <MapsStatusProvider value={authFailed ? "auth-failed" : "ok"}>
-      <APIProvider apiKey={apiKey} libraries={["marker"]}>
+    <MapsStatusProvider value={authFailed ? "auth-failed" : loadFailed ? "load-failed" : "ok"}>
+      <APIProvider apiKey={apiKey} libraries={["marker"]} onError={() => setLoadFailed(true)}>
         {children}
       </APIProvider>
     </MapsStatusProvider>

@@ -174,15 +174,19 @@ export async function unlinkAdminRestaurant(
   if (error) throw new Error(error.message);
 }
 
+
 /**
- * Active catalog restaurants for the admin picker. Already-linked ids are excluded in SQL so an
+ * Catalog restaurants for the admin picker. Already-linked ids are excluded in SQL so an
  * unlinked restaurant beyond the row limit is never hidden from the selector.
+ *
+ * Visibility is owned by the catalog RLS policy (`is_active = true OR phase =
+ * 'development'`), so an extra `is_active` predicate here would only hide the
+ * development records the team is meant to manage (SAN-1468 1.5).
  */
 export async function listCatalogRestaurants(excludeIds: string[] = []): Promise<CatalogRestaurant[]> {
   let query = service()
     .from("restaurants")
-    .select("id,name,neighborhood")
-    .eq("is_active", true);
+    .select("id,name,neighborhood");
   if (excludeIds.length > 0) {
     // Ids come from our own contest entries, never from the browser.
     query = query.not("id", "in", "(" + excludeIds.join(",") + ")");

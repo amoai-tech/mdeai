@@ -25,7 +25,7 @@ export function ChatNavDrawer({ rail }: { rail?: ReactNode } = {}) {
         type="button"
         variant="outline"
         size="icon"
-        className="lg:hidden"
+        className="size-11 shrink-0 lg:hidden"
         data-testid="nav-drawer-trigger"
         aria-label="Open navigation"
         aria-haspopup="dialog"
@@ -46,7 +46,7 @@ export function ChatNavDrawer({ rail }: { rail?: ReactNode } = {}) {
             <SheetTitle>Navigation</SheetTitle>
             <SheetDescription>Concierge navigation menu</SheetDescription>
           </SheetHeader>
-          {rail ?? <ChatNavRail testId="nav-rail-drawer" />}
+          {rail ?? <ChatNavRail testId="nav-rail-drawer" onNavigate={() => setOpen(false)} />}
         </SheetContent>
       </Sheet>
     </>

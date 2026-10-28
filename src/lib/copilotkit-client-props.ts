@@ -3,7 +3,7 @@ import {
   COPILOTKIT_USE_SINGLE_ENDPOINT,
 } from "@/lib/copilotkit-transport";
 
-type CopilotAgentName = "conciergeAgent" | "hostEventAgent" | "hostOpsAgent";
+type CopilotAgentName = "conciergeAgent" | "hostEventAgent" | "hostOpsAgent" | "partnerAgent";
 
 /** Module-level empties — never inline `{}` on the provider; new refs each render retrigger connect. */
 const STABLE_HEADERS: Record<string, string> = {};

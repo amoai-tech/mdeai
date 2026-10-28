@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { RunAgentInput } from "@ag-ui/core";
 import { test, expect, type Page } from "@playwright/test";
 import {
   createThrowawayIdentity,
@@ -10,6 +11,10 @@ import {
 } from "./helpers/auth";
 import { gotoConcierge, sendConciergeMessage, waitForCopilotIdle } from "./helpers/maps-layout";
 import { establishVercelAutomationBypass } from "./fixtures/vercel-bypass";
+
+// Authenticated pages and private threads must not generate failure screenshots/traces.
+// Playwright may still attach automatic error-context; keep test reports private.
+test.use({ trace: "off", screenshot: "off", video: "off" });
 
 /**
  * SAN-547 · D17 — live User A / User B isolation proof against a deployed environment.
@@ -58,7 +63,7 @@ const privateMarker = `${runMarker}-private-${randomUUID().slice(0, 8)}`;
  * from live production traffic:
  *
  *   {"method":"agent/connect","params":{"agentId":"conciergeAgent"},
- *    "body":{"threadId":"…","runId":"…","messages":[…],"tools":[…]}}
+ *    "body":{"threadId":"…","runId":"…","messages":[…],"tools":[…],"context":[]}}
  *
  * The AG-UI run input — and therefore `threadId` — is nested under `body`. A
  * probe that puts `threadId` at the top level exercises a shape the product never
@@ -66,10 +71,14 @@ const privateMarker = `${runMarker}-private-${randomUUID().slice(0, 8)}`;
  * real user. These probes must use the real shape to be worth anything.
  */
 function realRunBody(threadId: string) {
+  // Compile-time AG-UI contract: context/tools are required even when empty.
+  const body = {
+    threadId, runId: randomUUID(), messages: [], tools: [], context: [],
+  } satisfies RunAgentInput;
   return {
     method: "agent/connect",
     params: { agentId: "conciergeAgent" },
-    body: { threadId, runId: randomUUID(), messages: [], tools: [] },
+    body,
   };
 }
 
@@ -319,6 +328,39 @@ test.describe("prod CopilotKit per-user isolation (SAN-547 · D17)", () => {
   test("User B is refused every CopilotKit thread route on User A's thread", async ({ page }) => {
     await signInWithDeploymentAccess(page, userB.email);
 
+    // A saved chat's title is legitimately derived from its owner's first message
+    // (SAN-1412), so "the title must not contain runMarker" cannot distinguish a rename
+    // from a real title: the owner's own message contains the marker. Capture the
+    // settled title first, then prove the unauthorized mutations left it untouched.
+    const admin = await getSupabaseAdmin();
+    const readThread = async () => {
+      const { data, error } = await admin
+        .from("mastra_threads")
+        .select("resourceId, title")
+        .eq("id", threadId)
+        .single();
+      if (error) throw new Error(`thread re-read failed: ${error.message}`);
+      return data as { resourceId: string; title: string | null };
+    };
+    // Fail fast if the thread row is missing, then wait for its real title.
+    await readThread();
+    // Retrying assertion, not a fixed sleep: wait until the saved chat has its real title
+    // rather than Mastra's placeholder, then take that as the baseline.
+    await expect
+      .poll(
+        async () => {
+          const title = ((await readThread()).title ?? "").trim();
+          return title !== "" && title !== "Untitled Thread";
+        },
+        {
+          message: "User A's chat should have a real title before the unauthorized probes",
+          timeout: 15_000,
+          intervals: [500, 1_000, 2_000],
+        },
+      )
+      .toBe(true);
+    const before = await readThread();
+
     // SAN-1358 · D20: these arrive as `resource/request` with the thread id in
     // `params.path`, so the body-based gate never sees them; the runtime's
     // fail-closed route allowlist must refuse them. Read-only and per-thread
@@ -345,16 +387,10 @@ test.describe("prod CopilotKit per-user isolation (SAN-547 · D17)", () => {
       expect(text).not.toContain(threadId);
     }
 
-    // The mutations changed nothing: A's thread is still there, still A's.
-    const admin = await getSupabaseAdmin();
-    const { data, error } = await admin
-      .from("mastra_threads")
-      .select("resourceId, title")
-      .eq("id", threadId)
-      .single();
-    if (error) throw new Error(`thread re-read failed: ${error.message}`);
-    expect(data.resourceId).toBe(userA.userId);
-    expect(data.title ?? "").not.toContain(runMarker);
+    // The mutations changed nothing: A's thread is still there, still A's, same title.
+    const after = await readThread();
+    expect(after.resourceId).toBe(userA.userId);
+    expect(after.title, "User B's probes must not rename User A's thread").toBe(before.title);
     expect(await messageCount([threadId])).toBeGreaterThanOrEqual(2);
   });
 

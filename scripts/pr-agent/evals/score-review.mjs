@@ -69,6 +69,8 @@ function invalidState(reason) {
     runComplete: null,
     runKind: null,
     runHeadSha: null,
+    excludedFiles: null,
+    schemaVersion: null,
     findings: [],
   };
 }
@@ -209,6 +211,13 @@ function toFinding(rawBody, meta = {}) {
     hasFailureScenario: /\bfailure scenario\s*:/i.test(body),
     state: String(meta.state ?? "").toUpperCase() || null,
     path: meta.path ?? null,
+    // Grounded location carried by the persistent state (SAN-1552). Additive: scoring never reads
+    // these, but a fix-prompt renderer must recover the authoritative line range and identity
+    // from the same parser instead of scraping the marker a second time.
+    findingId: meta.findingId ?? null,
+    lineStart: Number.isInteger(meta.lineStart) ? meta.lineStart : null,
+    lineEnd: Number.isInteger(meta.lineEnd) ? meta.lineEnd : null,
+    lastSeenHeadSha: meta.lastSeenHeadSha ?? null,
     source: meta.source ?? "unknown",
   };
 }
@@ -349,8 +358,20 @@ export function parseFindings(text) {
       runComplete: payload.last_run?.complete ?? null,
       runKind: payload.last_run?.kind ?? null,
       runHeadSha: payload.last_run?.head_sha ?? null,
+      excludedFiles: Array.isArray(payload.last_run?.excluded_files)
+        ? payload.last_run.excluded_files
+        : null,
+      schemaVersion: payload.schema_version ?? null,
       findings: payload.findings.map((entry) =>
-        toFinding(entry.body, { state: entry.state, path: entry.path ?? null, source: "state" }),
+        toFinding(entry.body, {
+          state: entry.state,
+          path: entry.path ?? null,
+          source: "state",
+          findingId: entry.finding_id ?? null,
+          lineStart: entry.line_start,
+          lineEnd: entry.line_end,
+          lastSeenHeadSha: entry.last_seen_head_sha ?? null,
+        }),
       ),
     };
   }
@@ -374,6 +395,8 @@ export function parseFindings(text) {
     runComplete: null,
     runKind: null,
     runHeadSha: null,
+    excludedFiles: null,
+    schemaVersion: null,
     findings: merged,
   };
 }

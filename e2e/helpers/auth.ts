@@ -150,6 +150,29 @@ async function waitForSettledThreads(admin: AdminClient, userId: string, timeout
   throw new Error("persistence did not settle for " + userId + " within " + timeoutMs + "ms");
 }
 
+/** Gateway/edge blips (Cloudflare 502/503/504) are retried, not reported as a leak. */
+const TRANSIENT_DB_ERROR = /(502|503|504|Bad Gateway|ETIMEDOUT|ECONNRESET|fetch failed)/i;
+
+async function selectThreadIds(
+  admin: Awaited<ReturnType<typeof getSupabaseAdmin>>,
+  userId: string,
+): Promise<{ data: Array<{ id: string }> | null; error: { message: string } | null }> {
+  let last: { data: Array<{ id: string }> | null; error: { message: string } | null } = {
+    data: null,
+    error: null,
+  };
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const result = await admin.from("mastra_threads").select("id").eq("resourceId", userId);
+    last = {
+      data: (result.data as Array<{ id: string }> | null) ?? null,
+      error: result.error,
+    };
+    if (!result.error || !TRANSIENT_DB_ERROR.test(result.error.message)) return last;
+    await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
+  }
+  return last;
+}
+
 /**
  * Delete a throwaway identity, its durable AI memory, and — unlike the auth
  * delete alone — every thread/message the run created under it.
@@ -163,7 +186,7 @@ export async function deleteThrowawayIdentity(identity: ThrowawayIdentity): Prom
   const failures: string[] = [];
 
   // A local stack with no Mastra tables has no rows to clean, only the identity.
-  const probe = await admin.from("mastra_threads").select("id").eq("resourceId", identity.userId);
+  const probe = await selectThreadIds(admin, identity.userId);
   const mastraAbsent = isMissingMastraTable(probe.error);
   if (probe.error && !mastraAbsent) failures.push("select threads: " + probe.error.message);
 
@@ -176,10 +199,10 @@ export async function deleteThrowawayIdentity(identity: ThrowawayIdentity): Prom
 
     // Re-read AFTER settling: a turn that finished during the wait may have created a
     // new thread, and its messages must be removed too.
-    const { data: threads, error: selectError } = await admin
-      .from("mastra_threads")
-      .select("id")
-      .eq("resourceId", identity.userId);
+    const { data: threads, error: selectError } = await selectThreadIds(
+      admin,
+      identity.userId,
+    );
     if (selectError && !isMissingMastraTable(selectError)) {
       failures.push("select threads: " + selectError.message);
     }
@@ -243,6 +266,29 @@ export async function getTestSession(email = QA_HOST_EMAIL): Promise<Session> {
     throw new Error("E2E Supabase env missing (url/anon)");
   }
   const admin = await getSupabaseAdmin();
+
+  // Supabase admin.generateLink(type: "magiclink") creates missing users.
+  // The shared QA identity must already exist: a smoke run must never silently
+  // provision a new account in the real project if the QA account was deleted.
+  // Throwaway identities are created explicitly elsewhere before this helper.
+  if (email.toLowerCase() === QA_HOST_EMAIL.toLowerCase()) {
+    let page = 1;
+    let found = false;
+    while (true) {
+      const { data, error } = await admin.auth.admin.listUsers({
+        page,
+        perPage: 1000,
+      });
+      if (error) throw new Error(`QA account lookup failed: ${error.message}`);
+      found = data.users.some((user) => user.email?.toLowerCase() === QA_HOST_EMAIL);
+      if (found || !data.nextPage) break;
+      page = data.nextPage;
+    }
+    if (!found) {
+      throw new Error(`Existing QA account ${QA_HOST_EMAIL} not found; refusing magic-link auto-creation`);
+    }
+  }
+
   const { createClient } = await import("@supabase/supabase-js");
   const client = createClient(url, anon);
 

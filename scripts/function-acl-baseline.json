@@ -39,6 +39,11 @@
     "anon": false,
     "authenticated": true
   },
+  "admin_event_set_state(p_event_id uuid, p_action text)": {
+    "public": false,
+    "anon": false,
+    "authenticated": true
+  },
   "admin_grant_rental_test_access(p_user_id uuid, p_access_role text, p_expires_at timestamp with time zone, p_note text)": {
     "public": false,
     "anon": false,
@@ -109,16 +114,6 @@
     "anon": true,
     "authenticated": true
   },
-  "check_rate_limit(p_key text, p_max integer, p_window_seconds integer)": {
-    "public": false,
-    "anon": true,
-    "authenticated": true
-  },
-  "compute_ticket_total(p_ticket_id uuid, p_quantity integer, p_discount_cents integer)": {
-    "public": true,
-    "anon": true,
-    "authenticated": true
-  },
   "create_broker_onboarding_draft(p_display_name text, p_listing_title text, p_neighborhood text)": {
     "public": false,
     "anon": true,
@@ -141,11 +136,6 @@
   },
   "event_dashboard_summary(p_event_id uuid)": {
     "public": false,
-    "anon": false,
-    "authenticated": true
-  },
-  "fn_join_wait_list(p_ticket_type_id uuid, p_user_id uuid, p_email text, p_phone text)": {
-    "public": true,
     "anon": false,
     "authenticated": true
   },
@@ -175,7 +165,22 @@
     "authenticated": true
   },
   "has_role(_user_id uuid, _role user_role)": {
-    "public": true,
+    "public": false,
+    "anon": false,
+    "authenticated": true
+  },
+  "hybrid_search_events(query_text text, query_embedding vector, match_count integer, fts_weight double precision, semantic_weight double precision, rrf_k integer)": {
+    "public": false,
+    "anon": true,
+    "authenticated": true
+  },
+  "hybrid_search_listings(query_text text, query_embedding vector, match_count integer, fts_weight double precision, semantic_weight double precision, rrf_k integer)": {
+    "public": false,
+    "anon": true,
+    "authenticated": true
+  },
+  "hybrid_search_restaurants(query_text text, query_embedding vector, match_count integer, fts_weight double precision, semantic_weight double precision, rrf_k integer)": {
+    "public": false,
     "anon": true,
     "authenticated": true
   },
@@ -239,12 +244,22 @@
     "anon": true,
     "authenticated": true
   },
+  "partner_profile_patch(p_patch jsonb, p_partner_id uuid)": {
+    "public": false,
+    "anon": false,
+    "authenticated": true
+  },
   "pause_listing(p_apartment_id uuid)": {
     "public": false,
     "anon": false,
     "authenticated": true
   },
   "post_new_project_commission(p_registration_id uuid, p_sale_price_cents bigint, p_idempotency_key text, p_trigger_evidence jsonb)": {
+    "public": false,
+    "anon": false,
+    "authenticated": true
+  },
+  "publish_event_tx(p_proposal_id text, p_draft jsonb, p_slug text)": {
     "public": false,
     "anon": false,
     "authenticated": true
@@ -262,16 +277,6 @@
   "publish_verified_rental(p_apartment_id uuid, p_actor_id uuid)": {
     "public": false,
     "anon": false,
-    "authenticated": true
-  },
-  "record_check_in(p_event_id uuid, p_attendee_id uuid, p_qr_token text, p_scanned_by uuid, p_scanner_device text, p_ip_address inet, p_result text, p_details jsonb)": {
-    "public": false,
-    "anon": false,
-    "authenticated": true
-  },
-  "redeem_promo_code(p_event_id uuid, p_code text, p_ticket_id uuid)": {
-    "public": true,
-    "anon": true,
     "authenticated": true
   },
   "register_new_project_buyer(p_project_id uuid, p_idempotency_key text, p_qualification jsonb, p_email text, p_phone text, p_name text)": {
@@ -331,15 +336,10 @@
   },
   "ticket_checkout_create_pending(p_event_id uuid, p_ticket_id uuid, p_quantity integer, p_buyer_email text, p_buyer_name text, p_access_token text, p_attendees jsonb)": {
     "public": false,
-    "anon": true,
-    "authenticated": true
-  },
-  "ticket_payment_refund_v2(p_order_id uuid, p_amount_cents integer, p_reason text, p_stripe_refund_id text, p_initiated_by uuid, p_initiated_via text, p_attendee_ids uuid[])": {
-    "public": false,
     "anon": false,
-    "authenticated": true
+    "authenticated": false
   },
-  "ticket_validate_consume(p_qr_token text)": {
+  "compute_ticket_total(p_ticket_id uuid, p_quantity integer, p_discount_cents bigint)": {
     "public": false,
     "anon": true,
     "authenticated": true

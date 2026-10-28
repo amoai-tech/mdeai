@@ -12,7 +12,7 @@ export type WebCitation = z.infer<typeof WebCitationSchema>;
 
 export const SearchGroundedMetadataSchema = z.object({
   reason: z.string().nullable(),
-  source: z.literal("google-search-grounding"),
+  source: z.enum(["google-search-grounding", "unverified"]),
   searchDisabled: z.boolean().optional(),
   answer: z.string().optional(),
   webSearchQueries: z.array(z.string()).optional(),
@@ -55,47 +55,74 @@ export function parseSearchGroundedSidecarPayload(
       ? (row.metadata as Record<string, unknown>)
       : {};
   const citationsRaw = Array.isArray(row.citations) ? row.citations : [];
+  // The sidecar's provenance is the only evidence that a response came from
+  // Google's live Search grounding. A 200 response with arbitrary links or a
+  // failure reason is NOT proof, even if a provider field is present.
+  const isVerified =
+    meta.source === "google-search-grounding" &&
+    (meta.reason === null || meta.reason === undefined) &&
+    meta.searchDisabled !== true;
 
   const citations: WebCitation[] = [];
-  for (const c of citationsRaw) {
-    if (!c || typeof c !== "object") continue;
-    const item = c as Record<string, unknown>;
-    const url = typeof item.url === "string" ? item.url : "";
-    if (!url.startsWith("http")) continue;
-    const title =
-      typeof item.title === "string" && item.title.trim()
-        ? item.title
-        : url;
-    const snippet =
-      typeof item.snippet === "string" ? item.snippet : null;
-    citations.push({ title, url, snippet });
+  if (isVerified) {
+    for (const c of citationsRaw) {
+      if (!c || typeof c !== "object") continue;
+      const item = c as Record<string, unknown>;
+      const url = typeof item.url === "string" ? item.url : "";
+      let protocol: string;
+      try {
+        protocol = new URL(url).protocol;
+      } catch {
+        continue;
+      }
+      if (protocol !== "https:" && protocol !== "http:") continue;
+      const candidate = WebCitationSchema.safeParse({
+        url,
+        title:
+          typeof item.title === "string" && item.title.trim()
+            ? item.title
+            : url,
+        snippet: typeof item.snippet === "string" ? item.snippet : null,
+      });
+      if (candidate.success) citations.push(candidate.data);
+    }
   }
 
   const reason =
-    citations.length === 0
-      ? typeof meta.reason === "string"
-        ? meta.reason
-        : "no_grounding_metadata"
-      : (typeof meta.reason === "string" ? meta.reason : null);
+    typeof meta.reason === "string"
+      ? meta.reason
+      : !isVerified
+        ? "unverified_source"
+        : citations.length === 0
+          ? "no_grounding_metadata"
+          : null;
+
+  const confidence =
+    isVerified &&
+    typeof row.confidence === "number" &&
+    Number.isFinite(row.confidence) &&
+    row.confidence >= 0 &&
+    row.confidence <= 1 &&
+    citations.length > 0
+      ? row.confidence
+      : 0;
+
+  const webSearchQueries = isVerified && Array.isArray(meta.webSearchQueries)
+    ? meta.webSearchQueries.filter((q): q is string => typeof q === "string")
+    : undefined;
 
   return SearchGroundedResponseSchema.parse({
-    answer: typeof meta.answer === "string" ? meta.answer : "",
+    answer: isVerified && typeof meta.answer === "string" ? meta.answer : "",
     citations,
-    confidence:
-      typeof row.confidence === "number" ? row.confidence : citations.length ? 0.75 : 0,
-    webSearchQueries: Array.isArray(meta.webSearchQueries)
-      ? meta.webSearchQueries.filter((q): q is string => typeof q === "string")
-      : undefined,
+    confidence,
+    webSearchQueries,
     metadata: {
       reason,
-      source: "google-search-grounding",
+      source: isVerified ? "google-search-grounding" : "unverified",
       searchDisabled: meta.searchDisabled === true,
-      answer: typeof meta.answer === "string" ? meta.answer : undefined,
-      webSearchQueries: Array.isArray(meta.webSearchQueries)
-        ? meta.webSearchQueries.filter((q): q is string => typeof q === "string")
-        : undefined,
-      requestId:
-        typeof meta.requestId === "string" ? meta.requestId : undefined,
+      answer: isVerified && typeof meta.answer === "string" ? meta.answer : undefined,
+      webSearchQueries,
+      requestId: typeof meta.requestId === "string" ? meta.requestId : undefined,
       message: typeof meta.message === "string" ? meta.message : undefined,
     },
   });

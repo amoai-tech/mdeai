@@ -7857,6 +7857,10 @@ export type Database = {
       }
     }
     Functions: {
+      partner_profile_patch: {
+        Args: { p_patch: Json; p_partner_id?: string | null }
+        Returns: Json
+      }
       admin_contest_create: {
         Args: {
           p_actor: string
@@ -7918,6 +7922,18 @@ export type Database = {
       }
       vote_restaurant_target: {
         Args: { p_restaurant_id: string; p_contest_id?: string }
+        Returns: Json
+      }
+      vote_restaurant_contest_options: {
+        Args: { p_restaurant_id: string }
+        Returns: Json
+      }
+      contest_public_list: {
+        Args: Record<string, never>
+        Returns: Json
+      }
+      contest_public_get: {
+        Args: { p_ref: string }
         Returns: Json
       }
       _postgis_deprecate: {
@@ -10040,7 +10056,21 @@ export type Database = {
         }
         Returns: string
       }
+      admin_event_set_state: {
+        Args: { p_event_id: string; p_action: string }
+        Returns: Json
+      }
       ticket_validate_consume: { Args: { p_qr_token: string }; Returns: Json }
+      ticket_validate_consume_audited: {
+        Args: {
+          p_event_id: string
+          p_qr_token: string
+          p_scanned_by: string
+          p_scanner_device: string | null
+          p_ip_address: unknown | null
+        }
+        Returns: Json
+      }
       transition_listing_workflow: {
         Args: {
           p_apartment_id: string

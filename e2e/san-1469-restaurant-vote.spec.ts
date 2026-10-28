@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import type { Browser } from "@playwright/test";
+import type { Browser, Page } from "@playwright/test";
 import { Client } from "pg";
 import {
   createThrowawayIdentity,
@@ -16,11 +16,84 @@ loadEnvLocalForE2E();
 // Local OS Chrome fallback; CI uses its pinned Playwright browser by default.
 test.use({ launchOptions: process.env.MDE_E2E_CHROME_PATH
   ? { executablePath: process.env.MDE_E2E_CHROME_PATH } : {} });
+/**
+ * Inject a real signed-in session for the current Playwright target.
+ * localhost works in local CI; production requires the www.mdeai.co cookie scope.
+ * An absent target must fail explicitly instead of making auth tests false-green.
+ */
+async function injectSessionForTestOrigin(
+  context: Parameters<typeof injectSession>[0],
+  session: Awaited<ReturnType<typeof getTestSession>>,
+): Promise<void> {
+  const baseURL = test.info().project.use.baseURL;
+  if (!baseURL) throw new Error("Voting E2E requires an explicit Playwright baseURL");
+  const origin = new URL(baseURL);
+  await injectSession(context, session, {
+    host: origin.hostname,
+    secure: origin.protocol === "https:",
+  });
+  const cookies = await context.cookies(origin.origin);
+  expect(
+    cookies.some((cookie) => cookie.name.startsWith("sb-") && cookie.name.endsWith("-auth-token")),
+    "the signed-in QA cookie must be readable by the tested site",
+  ).toBe(true);
+}
+
 const restaurantId = process.env.SAN1469_TEST_RESTAURANT_ID;
 const contestId = process.env.SAN1469_TEST_CONTEST_ID;
 const entityId = process.env.SAN1469_TEST_ENTITY_ID;
 const dbUrl = process.env.SUPABASE_DB_URL;
 const configured = Boolean(hasE2eEnv() && dbUrl && restaurantId && contestId && entityId);
+
+type ContestWindow = {
+  id: string;
+  status: string;
+  starts_at: Date;
+  ends_at: Date;
+  is_test_fixture: boolean;
+};
+
+/**
+ * SAN-1469's configured fixture was created as a two-day development contest. After
+ * PR #516 correctly stopped offering a vote outside an open contest window, the gate
+ * became red because that fixture ended on 2026-10-15 while the test still expected a CTA.
+ *
+ * Open only a contest explicitly marked `is_test_fixture`; never make a real contest
+ * votable just to satisfy CI. The original status and window are restored in `finally`.
+ * A misconfigured non-fixture contest fails loudly instead of silently weakening the gate.
+ */
+async function openTestFixtureWindow(db: Client, id: string): Promise<ContestWindow | null> {
+  const result = await db.query<ContestWindow>(
+    "select id, status, starts_at, ends_at, is_test_fixture from vote.contests where id = $1",
+    [id],
+  );
+  const contest = result.rows[0];
+  expect(contest, "configured vote contest must exist").toBeTruthy();
+  const now = Date.now();
+  const open =
+    contest.status === "live" &&
+    new Date(contest.starts_at).getTime() <= now &&
+    new Date(contest.ends_at).getTime() > now;
+  if (open) return null;
+
+  expect(
+    contest.is_test_fixture,
+    "the vote E2E may only open a contest marked is_test_fixture",
+  ).toBe(true);
+  await db.query(
+    "update vote.contests set status = 'live', starts_at = now() - interval '1 hour', ends_at = now() + interval '2 hours' where id = $1",
+    [id],
+  );
+  return contest;
+}
+
+async function restoreContestWindow(db: Client, original: ContestWindow | null): Promise<void> {
+  if (!original) return;
+  await db.query(
+    "update vote.contests set status = $2, starts_at = $3, ends_at = $4 where id = $1",
+    [original.id, original.status, original.starts_at, original.ends_at],
+  );
+}
 
 /**
  * A second browser context has NO localStorage key. It must still recover the original
@@ -38,9 +111,9 @@ async function proveSecondBrowserRecovery(
     baseURL: test.info().project.use.baseURL as string,
   });
   try {
-    await injectSession(secondContext, session);
+    await injectSessionForTestOrigin(secondContext, session);
     const secondPage = await secondContext.newPage();
-    await secondPage.goto("/restaurants/" + ids.restaurantId);
+    await secondPage.goto("/restaurants/" + ids.restaurantId + "?contest_id=" + ids.contestId);
     const secondKey = await secondPage.evaluate(({ contest, entity, user }) =>
       localStorage.getItem("mde:restaurant-vote:" + contest + ":" + entity + ":" + user),
       { contest: ids.contestId, entity: ids.entityId, user: ids.userId },
@@ -59,6 +132,79 @@ async function proveSecondBrowserRecovery(
   }
 }
 
+/**
+ * Contest selection is the reason this screen exists. One restaurant can contest more
+ * than one event, so each contest link must resolve its own ballot, and a foreign or
+ * malformed selection must never borrow another contest's ballot.
+ */
+async function proveContestSelection(
+  page: Page,
+  db: Client,
+  ids: { restaurantId: string; contestId: string },
+): Promise<void> {
+  const { restaurantId, contestId } = ids;
+  // Assert the canonical contest region. A hidden duplicate can survive a
+  // client-side route transition; it is not the user's voting surface.
+  const contestRegion = page.getByRole("region", { name: "Restaurant contest" });
+  // Read the sibling contest from the database rather than inventing it.
+  const sibling = await db.query<{ contest_id: string; entity_id: string; status: string }>(
+    "select e.contest_id, e.id as entity_id, c.status from vote.entities e " +
+      "join vote.contests c on c.id = e.contest_id " +
+      "where e.restaurant_id = $1 and c.kind = 'restaurant' and e.contest_id <> $2 limit 1",
+    [restaurantId, contestId],
+  );
+  if (sibling.rows[0]) {
+    await page.goto("/restaurants/" + restaurantId + "?contest_id=" + sibling.rows[0].contest_id);
+    if (sibling.rows[0].status === "live") {
+      await expect(contestRegion.getByTestId("vote-cta")).toBeVisible();
+    } else {
+      // A draft/closed sibling is where this page used to offer a Vote the cast RPC was
+      // guaranteed to reject (CONTEST_NOT_OPEN). The window must now win over the button.
+      await expect(contestRegion.getByTestId("vote-not-open")).toBeVisible();
+      await expect(contestRegion.getByTestId("vote-cta")).toHaveCount(0);
+    }
+  }
+  // A well-formed contest id that is not this restaurant's contest. The sentinel below
+  // must never become a real contest id.
+  await page.goto("/restaurants/" + restaurantId + "?contest_id=11111111-1111-4111-8111-111111111111");
+  await expect(contestRegion.getByTestId("vote-not-open")).toBeVisible();
+  await expect(contestRegion.getByTestId("vote-cta")).toHaveCount(0);
+  // A malformed selection is rejected before any contest lookup happens.
+  await page.goto("/restaurants/" + restaurantId + "?contest_id=not-a-uuid");
+  await expect(contestRegion.getByTestId("vote-not-open")).toBeVisible();
+  await expect(contestRegion.getByTestId("vote-cta")).toHaveCount(0);
+}
+
+/**
+ * Replay the exact saved idempotency key against the deployed service. No nonce means a
+ * NEW ballot cannot be created; a committed receipt must come back unchanged.
+ */
+async function proveIdempotentReplay(
+  page: Page,
+  session: Awaited<ReturnType<typeof getTestSession>>,
+  ids: { contestId: string; entityId: string; userId: string },
+  receipt: string,
+  countBallots: () => Promise<unknown[]>,
+): Promise<void> {
+  const key = await page.evaluate(({ contest, entity, user }) =>
+    localStorage.getItem("mde:restaurant-vote:" + contest + ":" + entity + ":" + user),
+    { contest: ids.contestId, entity: ids.entityId, user: ids.userId },
+  );
+  expect(key).toBeTruthy();
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const apiKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+    ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+  const replay = await page.request.post(url + "/functions/v1/vote-cast", {
+    headers: { apikey: apiKey, Authorization: "Bearer " + session.access_token },
+    data: { contest_id: ids.contestId, entity_id: ids.entityId, idempotency_key: key },
+  });
+  expect(replay.status()).toBe(200);
+  const replayBody = await replay.json() as { data: { vote_id: string; status: string } };
+  expect(replayBody.data.vote_id).toBe(receipt);
+  expect(replayBody.data.status).toBe("replayed");
+  expect(await countBallots()).toHaveLength(1);
+}
+
 test.describe("SAN-1469 real restaurant vote / database receipt", () => {
   // The dedicated voting gate sets SAN1469_VOTE_E2E=required: missing configuration must FAIL
 // there rather than silently skip. Other suites keep the opt-in skip.
@@ -70,25 +216,48 @@ if (!configured && process.env.SAN1469_VOTE_E2E === "required") {
 }
 test.skip(!configured, "Needs linked SAN-1483 restaurant/entry IDs, E2E Auth keys, and DB read-back access");
 
-  test("confirmation, one ballot, saved receipt, reload, idempotent retry and responsive widths", async ({ page, browser }) => {
+  // A failing run must still leave a safe artifact: the workflow uploads
+  // `test-results/*.png`, while Playwright's automatic failure screenshot is nested under a
+  // per-test directory and is not masked. Capture a top-level screenshot with the receipt id
+  // masked, so a failure stays diagnosable without publishing private data.
+  test.afterEach(async ({ page }, testInfo) => {
+    if (testInfo.status === testInfo.expectedStatus) return;
+    await page
+      .screenshot({ path: "test-results/vote-failure-390.png", mask: [page.getByTestId("vote-receipt-id")] })
+      .catch(() => {});
+  });
+
+  test("contest selection, confirmation, one ballot, saved receipt, reload, idempotent retry and responsive widths", async ({ page, browser }) => {
+    // This full signed-in flow compiles multiple routes on a cold CI runner, then
+    // proves a database transaction, cross-browser receipt and replay. In run
+    // 39728843489, the first restaurant page took 62s of the former 120s test
+    // budget. Keep each user-action assertion strict and CI retries disabled.
+    test.setTimeout(300_000);
     const db = new Client({ connectionString: dbUrl });
     await db.connect();
     let userId: string | null = null;
-    // Real network + database work, and CI cold starts are slow. An explicit budget keeps a
-    // slow run a slow run instead of a flaky one; CI runs with --retries=0 so a retry can
-    // never disguise a real failure.
-    test.setTimeout(120_000);
     let cleanupError: unknown = null;
+    let originalWindow: ContestWindow | null = null;
     try {
       const phase = await db.query<{ application_phase: string }>(
         "select private.mde_application_phase() as application_phase",
       );
       expect(phase.rows[0]?.application_phase).toBe("development");
 
+      // The gate proves a real vote, so its fixture must actually be open. Only a marked
+      // test fixture is opened, and the exact prior window is restored below.
+      originalWindow = await openTestFixtureWindow(db, contestId!);
+
+      // The same restaurant contests more than one event: each contest-specific link must
+      // resolve its own ballot, and a wrong one must not borrow another contest's ballot.
+      await proveContestSelection(page, db, { restaurantId: restaurantId!, contestId: contestId! });
+
       const identity = await createThrowawayIdentity("san1469-voter");
       userId = identity.userId;
-      await page.goto("/restaurants/" + restaurantId);
+      await page.goto("/restaurants/" + restaurantId + "?contest_id=" + contestId);
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+      // One actionable button, never two. A duplicate would be a real defect, not noise.
+      await expect(page.getByTestId("vote-cta")).toHaveCount(1);
       await expect(page.getByTestId("vote-cta")).toBeVisible();
       // Wait for hydration BEFORE clicking. A click on server-rendered HTML has no handler
       // attached yet and silently does nothing, which is exactly how this test failed in CI.
@@ -102,15 +271,23 @@ test.skip(!configured, "Needs linked SAN-1483 restaurant/entry IDs, E2E Auth key
       // that route after the click. The trace shows it completing AFTER the default
       // 5-second URL assertion. Still require the exact safe return URL.
       await expect(page).toHaveURL(
-        (url) => url.pathname === "/login" && url.searchParams.get("next") === "/restaurants/" + restaurantId,
+        (url) => url.pathname === "/login" && url.searchParams.get("next") === "/restaurants/" + restaurantId + "?contest_id=" + contestId,
         { timeout: 30_000 },
       );
+      // The URL changes when the client router pushes; the route itself has not necessarily
+      // rendered. Reloading /login before it commits leaves the previous restaurant tree
+      // mounted, which is how CI ended up with a second, unhydrated Vote button after the
+      // redirect. Wait for the form to exist before reloading.
+      await expect(page.locator('input[name="email"]')).toBeVisible({ timeout: 30_000 });
       const session = await getTestSession(identity.email);
-      await injectSession(page.context(), session);
+      await injectSessionForTestOrigin(page.context(), session);
       await page.reload(); // /login recognizes the real Supabase session and redirects back.
       // Predicate instead of a constructed RegExp: no dynamic pattern to backtrack on.
-      await expect(page).toHaveURL((url) => url.pathname === "/restaurants/" + restaurantId);
+      await expect(page).toHaveURL((url) => url.pathname === "/restaurants/" + restaurantId && url.searchParams.get("contest_id") === contestId);
+      // Wait for the redirect transition to settle: exactly one button, hydrated and clickable.
+      await expect(page.getByTestId("vote-cta")).toHaveCount(1);
       await expect(page.getByTestId("vote-cta")).toBeVisible();
+      await expect(page.getByTestId("vote-cta")).toHaveAttribute("data-hydrated", "true");
 
       await page.getByTestId("vote-cta").click();
       await expect(page.getByRole("dialog")).toBeVisible();
@@ -152,30 +329,15 @@ test.skip(!configured, "Needs linked SAN-1483 restaurant/entry IDs, E2E Auth key
         countBallots,
       );
 
-      // Hit the deployed service directly with the exact saved idempotency key.
-      // No nonce means a NEW ballot cannot be created, but a committed receipt can be replayed.
-      const key = await page.evaluate(({ contest, entity, user }) =>
-        localStorage.getItem("mde:restaurant-vote:" + contest + ":" + entity + ":" + user),
-        { contest: contestId!, entity: entityId!, user: userId! },
-      );
-      expect(key).toBeTruthy();
-      const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-      const apiKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
-        ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-      const replay = await page.request.post(url + "/functions/v1/vote-cast", {
-        headers: { apikey: apiKey, Authorization: "Bearer " + session.access_token },
-        data: { contest_id: contestId, entity_id: entityId, idempotency_key: key },
-      });
-      expect(replay.status()).toBe(200);
-      const replayBody = await replay.json() as { data: { vote_id: string; status: string } };
-      expect(replayBody.data.vote_id).toBe(receipt);
-      expect(replayBody.data.status).toBe("replayed");
-      expect(await countBallots()).toHaveLength(1);
+      // Hit the deployed service directly with the exact saved idempotency key: no nonce
+      // means a NEW ballot cannot be created, but a committed receipt must replay.
+      await proveIdempotentReplay(page, session, { contestId: contestId!, entityId: entityId!, userId: userId! }, receipt, countBallots);
 
       for (const width of [390, 768, 1440]) {
         await page.setViewportSize({ width, height: 850 });
         await expect(page.getByTestId("vote-receipt")).toBeVisible();
-        await page.screenshot({ path: "test-results/vote-receipt-" + width + ".png" });
+        // The receipt id is real data: mask it before publishing the artifact.
+        await page.screenshot({ path: "test-results/vote-receipt-" + width + ".png", mask: [page.getByTestId("vote-receipt-id")] });
         const hasOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
         expect(hasOverflow).toBe(false);
       }
@@ -196,6 +358,16 @@ test.skip(!configured, "Needs linked SAN-1483 restaurant/entry IDs, E2E Auth key
         cleanupError = err;
         console.error("[san1469] cleanup failed:", err instanceof Error ? err.message : err);
       } finally {
+        // Restore the fixture even when the vote journey failed.
+        try {
+          await restoreContestWindow(db, originalWindow);
+        } catch (err) {
+          cleanupError ??= err;
+          console.error(
+            "[san1469] restoring the contest window failed:",
+            err instanceof Error ? err.message : err,
+          );
+        }
         // Always close the connection, even when cleanup threw.
         await db.end().catch(() => {});
       }
