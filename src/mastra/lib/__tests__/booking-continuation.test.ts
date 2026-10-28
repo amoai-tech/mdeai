@@ -63,4 +63,37 @@ describe('SAN-1149 same-turn booking continuation', () => {
   it('requires a grounded named restaurant in exactly the current text', () => {
     expect(continueAfterSearch({stepNumber:1,messages:[{role:'user',content:ask.replace('Verdeo','Verdant')}],steps:search})).toBe(false);
   });
+
+  it('accepts the exact text used by real production QA identities', () => {
+    const qaAsk = ask.replace('Contact name Maria, email maria@example.com',
+      'Contact name SAN-1149 QA, email san1149-ai-cancel@qa-isolation.mdeai.co');
+    expect(continueAfterSearch({stepNumber:1,messages:[{role:'user',content:qaAsk}],steps:search})).toBe(true);
+  });
+  it('treats punctuation in venue names literally, not as regex syntax', () => {
+    const venue = 'Café (MDE) [2]+';
+    const text = ask.replace('Verdeo', venue);
+    const source = [{toolResults:[{toolName:'searchRestaurantsTool',output:{
+      source:'supabase',results:[{id,name:venue}],
+    }}]}];
+    expect(continueAfterSearch({stepNumber:1,messages:[{role:'user',content:text}],steps:source})).toBe(true);
+    expect(continueAfterSearch({stepNumber:1,messages:[{role:'user',content:ask}],steps:source})).toBe(false);
+  });
+  it('matches complete Unicode names but not a substring of another word', () => {
+    for (const name of ['SuperVerdeo', 'Verdeo2', 'PreVerdeo']) {
+      const altered = [{toolResults:[{toolName:'searchRestaurantsTool',output:{
+        source:'supabase',results:[{id,name}],
+      }}]}];
+      expect(continueAfterSearch({stepNumber:1,messages:user,steps:altered})).toBe(false);
+    }
+  });
+  it('rejects excessively long venue labels and user texts without compiling regexes', () => {
+    const oversized = [{toolResults:[{toolName:'searchRestaurantsTool',output:{
+      source:'supabase',results:[{id,name:'A'.repeat(10_000)}],
+    }}]}];
+    expect(continueAfterSearch({stepNumber:1,messages:user,steps:oversized})).toBe(false);
+    expect(continueAfterSearch({stepNumber:1,messages:[
+      {role:'user',content:ask + 'X'.repeat(20_000)},
+    ],steps:search})).toBe(false);
+  });
+
 });

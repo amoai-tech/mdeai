@@ -34,11 +34,23 @@ export function hasCompleteRestaurantBookingDetails(text: string): boolean {
     && /\b(?:(?:contact\s+)?name\s*(?:is\s+|[:=-]\s*|\s+)[A-Z][a-z]+|call\s+me\s+[A-Z][a-z]+|i(?:'m|\s+am)\s+[A-Z][a-z]+)/i.test(text);
 }
 
+// Static boundary test only: restaurant labels are data, never regex source.
+// Limit work for malformed or unexpectedly large provider/user text.
+const NAME_WORD_CHAR = /[\p{L}\p{N}]/u;
+
 function containsExactName(text: string, name: string): boolean {
-  // Name comes from the source-backed restaurant tool; match whole words so
-  // an unrelated similarly named restaurant cannot qualify this booking.
-  const literal = name.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return literal.length > 1 && new RegExp(`(?:^|[^\\p{L}\\p{N}])${literal}(?=$|[^\\p{L}\\p{N}])`, 'iu').test(text);
+  const literal = name.trim();
+  if (literal.length < 2 || literal.length > 160 || text.length > 16_000) return false;
+
+  const haystack = text.toLocaleLowerCase();
+  const needle = literal.toLocaleLowerCase();
+  for (let at = haystack.indexOf(needle); at !== -1; at = haystack.indexOf(needle, at + 1)) {
+    // Two UTF-16 units cover one adjacent Unicode code point (incl. astral characters).
+    const previous = at === 0 ? '' : Array.from(haystack.slice(Math.max(0, at - 2), at)).at(-1) ?? '';
+    const next = Array.from(haystack.slice(at + needle.length, at + needle.length + 2))[0] ?? '';
+    if (!NAME_WORD_CHAR.test(previous) && !NAME_WORD_CHAR.test(next)) return true;
+  }
+  return false;
 }
 
 function hasGroundedNamedRestaurant(text: string, output: unknown): boolean {
