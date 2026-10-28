@@ -21,9 +21,9 @@ import { fetchRestaurantById } from "../fetch-restaurant-by-id";
 const hotelId = "fc6031d7-dcf6-44c3-9547-f7172c37ee95";
 const carreraId = "a1b2c3d4-e5f6-4789-abcd-100000000004";
 
-function restaurantRow(id: string, name = "El Cielo") {
+function restaurantRow(id: string, name = id === hotelId ? "Elcielo Hotel Medellín" : "Elcielo Restaurant Medellín") {
   return {
-    id, name, address: id === hotelId ? "Elcielo Hotel, El Poblado" : "Carrera 40 #10A-22",
+    id, name, address: "Calle 7D #43C-36, El Poblado",
     neighborhood: "El Poblado", city: "Medellín",
     cuisine_types: ["steakhouse"], price_level: 4, rating: 4.4,
     tags: [], latitude: 6.2, longitude: -75.5,
@@ -36,8 +36,8 @@ describe("restaurant Details location labels (SAN-1556)", () => {
   beforeEach(() => maybeSingle.mockReset());
 
   it.each([
-    [hotelId, "El Cielo · Elcielo Hotel"],
-    [carreraId, "El Cielo · Carrera 40"],
+    [hotelId, "Elcielo Hotel Medellín"],
+    [carreraId, "Elcielo Restaurant Medellín"],
   ])("uses the same distinct label as search for %s", async (id, label) => {
     maybeSingle.mockResolvedValueOnce({ data: restaurantRow(id), error: null });
     const lookup = await fetchRestaurantById(id);

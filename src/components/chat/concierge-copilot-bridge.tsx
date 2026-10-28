@@ -60,11 +60,12 @@ function createVenueBookingHitlRender() {
     respond,
   }: HitlRenderProps) {
     const hitlArgs = args as VenueBookingHitlArgs;
-    if (!hitlArgs?.placeId || !hitlArgs?.requestedAt || !hitlArgs?.partySize) {
+    if (!(hitlArgs?.placeId || (hitlArgs?.venueKind === "restaurant" && hitlArgs?.restaurantId)) ||
+      !hitlArgs?.requestedAt || !hitlArgs?.partySize) {
       return null;
     }
 
-    const venueTitle = hitlArgs.venueTitle?.trim() || hitlArgs.placeId;
+    const venueTitle = hitlArgs.venueTitle?.trim() || hitlArgs.placeId || hitlArgs.restaurantId || "Restaurant";
 
     return (
       <>

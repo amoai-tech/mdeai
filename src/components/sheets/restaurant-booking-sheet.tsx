@@ -44,10 +44,11 @@ export function RestaurantBookingSheet({
             </SheetHeader>
 
             <div className="flex flex-col gap-4 px-4 pb-4 text-sm">
-              {target.placeId ? (
+              {target.placeId || target.restaurantId ? (
                 <VenueBookingForm
                   venueKind="restaurant"
                   placeId={target.placeId}
+                  restaurantId={target.restaurantId}
                   venueTitle={target.title}
                   onSuccess={(result) => {
                     setVenueBookingConfirmation({
@@ -63,8 +64,8 @@ export function RestaurantBookingSheet({
                   className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-destructive"
                   data-testid="restaurant-booking-missing-place-id"
                 >
-                  This listing is missing a verified Place ID — table requests
-                  cannot be saved yet.
+                  This result is missing a restaurant identifier. Open a saved
+                  MDE restaurant listing or a Google Maps-backed result to request a table.
                 </p>
               )}
 
@@ -87,9 +88,11 @@ export function RestaurantBookingSheet({
               </SheetFooter>
 
               <div className="flex flex-wrap gap-1.5">
-                <Badge variant="secondary">Google-verified candidate</Badge>
+                {target.restaurantId ? (
+                  <Badge variant="secondary">MDE restaurant</Badge>
+                ) : null}
                 {target.placeId ? (
-                  <Badge variant="outline">Place ID verified</Badge>
+                  <Badge variant="outline">Google Place ID available</Badge>
                 ) : null}
               </div>
             </div>

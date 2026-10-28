@@ -132,6 +132,7 @@ export function DomainResults({
               const bookingTarget = toRestaurantVenueDetail({
                 pinId,
                 title,
+                restaurantId: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(r.id) ? r.id : undefined,
                 placeId: r.placeId,
                 mapsUrl: r.mapsUrl,
                 neighborhood: r.neighborhood,
@@ -147,6 +148,7 @@ export function DomainResults({
                   bookingAsRestaurant: true,
                   pinId,
                   title,
+                  restaurantId: bookingTarget.restaurantId,
                   placeId: r.placeId ?? undefined,
                   mapsUrl: r.mapsUrl ?? undefined,
                   rating: r.rating,

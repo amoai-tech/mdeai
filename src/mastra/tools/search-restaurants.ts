@@ -227,14 +227,11 @@ function num(v: number | string | null | undefined): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
-/** Distinct public card/map labels for the two active El Cielo locations.
- * Keep canonical restaurant names and Google place IDs untouched in Supabase.
- * IDs and address distinctions were verified against the live rows (2026-10-20).
+/** Use canonical DB names; SAN-1539 reconciles the two former El Cielo identities.
+ * The historical hardcoded location labels no longer match source-backed data.
  */
 export function restaurantSearchDisplayName(name: string, id: string): string {
-  if (name !== 'El Cielo') return name;
-  if (id === 'fc6031d7-dcf6-44c3-9547-f7172c37ee95') return 'El Cielo · Elcielo Hotel';
-  if (id === 'a1b2c3d4-e5f6-4789-abcd-100000000004') return 'El Cielo · Carrera 40';
+  void id; // Keep the existing search contract without stale hardcoded labels.
   return name;
 }
 
