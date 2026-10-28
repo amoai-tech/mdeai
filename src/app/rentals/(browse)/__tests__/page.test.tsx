@@ -4,7 +4,7 @@
  * rendering demo cards or "0 apartments".
  */
 import type { ReactElement } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RentalSearchUnavailableError } from "@/mastra/lib/rental-search-unavailable";
 
 const searchRentals = vi.fn();
@@ -46,7 +46,29 @@ beforeEach(() => {
   vi.spyOn(console, "error").mockImplementation(() => undefined);
 });
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 describe("/rentals page", () => {
+  it("avoids remote Supabase on the existing deterministic browse-map test path", async () => {
+    vi.stubEnv("NODE_ENV", "test");
+    vi.stubEnv("NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT", "1");
+    const props = await render({});
+    expect(createServerClient).not.toHaveBeenCalled();
+    expect(searchRentals).not.toHaveBeenCalled();
+    expect(props).toMatchObject({ results: [], total: 0, error: null });
+  });
+
+  it("never bypasses the real rental search in production even if an E2E flag is set", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT", "1");
+    searchRentals.mockResolvedValue({ results: [], total: 0, source: "supabase" });
+    await render({});
+    expect(createServerClient).toHaveBeenCalledOnce();
+    expect(searchRentals).toHaveBeenCalledOnce();
+  });
+
   it("does not forward a stale ?maxPrice= as a nightly cap", async () => {
     searchRentals.mockResolvedValue({ results: [], total: 0, source: "supabase" });
     const props = await render({ maxPrice: "75", neighborhood: "Laureles", beds: "2" });

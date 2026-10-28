@@ -113,6 +113,7 @@
     "push:migration": "npm run preflight:migration && npm run migration:dry-run && node scripts/confirm-migration-push.mjs && npx supabase db push --db-url \"$SUPABASE_DB_URL\"",
     "push:migration:include-all": "npm run preflight:migration && npm run migration:dry-run:include-all && node scripts/confirm-migration-push.mjs && npx supabase db push --include-all --db-url \"$SUPABASE_DB_URL\"",
     "verify:migrations": "node scripts/verify-production-migrations.mjs",
+    "check:freshness": "node scripts/check-release-freshness.mjs",
     "check:release-gates": "node --test scripts/__tests__/*.test.mjs",
     "check:pr-agent-pinned-loader": "node --test scripts/__tests__/pr-agent-pinned-loader.test.mjs",
     "check:docs": "node --test scripts/__tests__/check-docs-regressions.test.mjs && node scripts/check-docs.mjs",
