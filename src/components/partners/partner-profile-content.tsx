@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { PartnerProfileForm } from "@/components/partners/partner-profile-form";
+import { PartnerBusinessSwitcher } from "@/components/partners/partner-business-switcher";
 import { PartnerWorkspaceChat } from "@/components/partners/partner-workspace-chat";
 import type { PartnerProfileLoad } from "@/lib/partners/partner-profile-load";
 import { profileValuesFromSettings } from "@/lib/partners/partner-profile-patch";
@@ -16,10 +17,6 @@ type PartnerProfileContentProps = {
    */
   basePath: string;
 };
-
-function profileHref(basePath: string, partnerId: string): string {
-  return `${basePath}?partner=${encodeURIComponent(partnerId)}`;
-}
 
 function ProfileLoadError({
   message,
@@ -95,23 +92,13 @@ export function PartnerProfileContent({
       </p>
 
       {options.length > 1 ? (
-        <nav aria-label="Choose your business" className="mt-6 flex flex-wrap gap-2">
-          {options.map((option) => {
-            const label =
-              profileValuesFromSettings(option.settings).businessName ||
-              option.type;
-            return (
-              <Link
-                key={option.id}
-                href={profileHref(basePath, option.id)}
-                aria-current={option.id === partner?.id ? "page" : undefined}
-                className={`inline-flex min-h-11 items-center rounded-lg border px-4 text-sm font-medium ${option.id === partner?.id ? "border-accent text-accent" : "border-border text-foreground"}`}
-              >
-                {label}
-              </Link>
-            );
-          })}
-        </nav>
+        <div className="mt-6">
+          <PartnerBusinessSwitcher
+            basePath={basePath}
+            options={options}
+            selectedId={partner?.id}
+          />
+        </div>
       ) : null}
 
       {profile.status === "selection_required" ? (
@@ -120,6 +107,23 @@ export function PartnerProfileContent({
         </p>
       ) : partner ? (
         <div className="mt-8">
+          <Link
+            href={`/app/partners/restaurants?partner=${encodeURIComponent(partner.id)}`}
+            data-testid="partner-manage-restaurants"
+            className="mb-6 flex min-h-14 flex-wrap items-center justify-between gap-2 rounded-2xl border border-border bg-background-elevated px-5 py-3 transition-colors hover:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            <span>
+              <span className="block text-sm font-semibold text-foreground">
+                Manage Restaurants
+              </span>
+              <span className="block text-sm text-muted-foreground">
+                Edit your assigned restaurant listings, menu and reservation requests.
+              </span>
+            </span>
+            <span aria-hidden className="text-sm font-semibold text-accent">
+              Open →
+            </span>
+          </Link>
           <PartnerProfileForm
             key={partner.id}
             partnerId={partner.id}
