@@ -80,12 +80,18 @@ function BaseVenueSelectionHarness({ visiblePins = basePins }: { visiblePins?: t
   useBrowseMapSync(visiblePins, "venue");
   const { selectedId, selectForAsk } = useVenueAskSelection(null, baseIds);
   const { pins, selectedPinId, setSelectedPinId } = useMapContext();
+  const askA = () => {
+    selectForAsk("a");
+  };
+  const askWithoutPin = () => {
+    selectForAsk("no-coordinates");
+  };
   return <>
     <output data-testid="selected-base-id">{selectedId ?? "NONE"}</output>
     <output data-testid="base-pin-id">{selectedPinId ?? "NONE"}</output>
     <output data-testid="base-pin-count">{pins.length}</output>
-    <button onClick={() => { selectForAsk("a"); }}>Ask A</button>
-    <button onClick={() => { selectForAsk("no-coordinates"); }}>Ask without pin</button>
+    <button onClick={askA}>Ask A</button>
+    <button onClick={askWithoutPin}>Ask without pin</button>
     <button onClick={() => { setSelectedPinId("venue-b"); }}>Map B</button>
     <button onClick={() => { setSelectedPinId(null); }}>Clear map</button>
   </>;
