@@ -32,10 +32,22 @@ describe("PartnerSignupNav", () => {
     );
   });
 
-  it("collapses the secondary Explore action on mobile to prevent header overflow", () => {
-    const html = renderToStaticMarkup(<PartnerSignupNav showBackToPicker />);
-    expect(html).toContain('href="/chat"');
-    expect(html).toContain("sm:inline-flex");
+  it("keeps mobile navigation compact and preserves both destinations", () => {
+    const root = document.createElement("div");
+    root.innerHTML = renderToStaticMarkup(<PartnerSignupNav showBackToPicker />);
+
+    const back = root.querySelector('a[aria-label="All partner types"]');
+    expect(back?.getAttribute("href")).toBe("/partners/signup");
+    expect(back?.classList.contains("shrink-0")).toBe(true);
+    const backLabel = back?.querySelector("span");
+    expect(backLabel?.textContent).toBe("All partner types");
+    expect(backLabel?.classList.contains("hidden")).toBe(true);
+    expect(backLabel?.classList.contains("sm:inline")).toBe(true);
+
+    const explore = root.querySelector('a[href="/chat"]');
+    expect(explore?.classList.contains("hidden")).toBe(true);
+    expect(explore?.classList.contains("sm:inline-flex")).toBe(true);
+    expect(root.querySelector('a[href="/login"]')?.textContent).toContain("Sign in");
   });
 
   it("sign-in uses next redirect when provided", () => {

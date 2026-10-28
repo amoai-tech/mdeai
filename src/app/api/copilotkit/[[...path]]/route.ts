@@ -18,6 +18,7 @@ import { logAgentRunForTurn } from "@/mastra/lib/log-agent-run";
 import {
   loadPartnerRuntimeContext,
   setPartnerRuntimeContext,
+  type PartnerRuntimeContext,
 } from "@/mastra/lib/partner-request-context";
 import { isPartnerAgentRunOrConnect, isPartnerStopRequest, readPartnerSelectionFromRun } from "@/lib/partners/partner-selection";
 import { enforcePartnerThreadBinding } from "@/lib/partners/partner-thread-binding";
@@ -25,7 +26,7 @@ import type { PersistTurnLog } from "@/mastra/copilotkit/logging-mastra-agent";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 30;
+export const maxDuration = 90;
 
 /** Keep ai_runs writes alive after the CopilotKit SSE response (Vercel serverless). */
 const persistTurnLog: PersistTurnLog = (opts) => {
@@ -221,7 +222,7 @@ async function handleCopilotKit(req: NextRequest) {
 
       // SAN-705: selection travels with this agent run (not a shared cookie).
       // The untrusted ID is authorized by the existing RLS-scoped membership lookup.
-      let partnerContext = null;
+      let partnerContext: PartnerRuntimeContext | null = null;
       if (isPartnerRun) {
         // A missing selector is allowed only when membership resolves exactly
         // one business. Multi-business users must select explicitly.
@@ -231,10 +232,27 @@ async function handleCopilotKit(req: NextRequest) {
           selectedPartnerId ?? undefined,
         );
         if (!partnerContext) {
-          return Response.json(
-            { error: "Select a business you can access" },
-            { status: 403 },
-          );
+          // A newly signed-up user has no partner_members row yet. They must
+          // still be able to ask partnerAgent to suggest signup form fields.
+          // Keep all existing-business access fail-closed: a requested foreign
+          // business or an ambiguous membership must never enter the agent.
+          const { data: memberships, error: membershipsError } = await supabase
+            .from("partner_members")
+            .select("partner_id")
+            .eq("profile_id", userId)
+            .limit(1);
+          if (membershipsError || !Array.isArray(memberships)) {
+            throw new Error("partner_membership_lookup_failed");
+          }
+          if (selectedPartnerId !== null || memberships.length !== 0) {
+            return Response.json(
+              { error: "Select a business you can access" },
+              { status: 403 },
+            );
+          }
+          // No membership and no selector: a general, user-owned signup chat.
+          // Do not populate partner RequestContext or bind a business. The
+          // getPartnerProfile tool already returns found=false in this case.
         }
       }
 

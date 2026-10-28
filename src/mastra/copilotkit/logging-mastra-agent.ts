@@ -27,6 +27,7 @@ import {
   createTokenSink,
   runWithTokenSink,
 } from "@/mastra/lib/token-usage-als";
+import { CONCIERGE_TURN_TIMEOUT_MS } from "@/mastra/lib/models";
 /**
  * [SAN-905 · CK-V2-007d — Console clean on hostEventAgent stream](https://linear.app/sanjiovani/issue/SAN-905/ck-v2-007d-console-clean-on-hosteventagent-stream):
  * CopilotKit replays AG-UI messages without Gemini thought_signature on assistant
@@ -92,6 +93,12 @@ export type LoggingMastraAgentConfig = MastraAgentConfig & {
   persistTurnLog?: PersistTurnLog;
 };
 
+/** The concierge needs the sum of its primary + fallback model deadlines.
+ * Other agents preserve the existing 26s hard limit. */
+export function agentTurnTimeoutMs(agentMapKey: string): number {
+  return agentMapKey === "conciergeAgent" ? CONCIERGE_TURN_TIMEOUT_MS : 26_000;
+}
+
 /**
  * Wraps @ag-ui/mastra MastraAgent.run() so each CopilotKit turn logs to public.ai_runs.
  * AG-UI calls agent.stream() without onFinish — this is the Pattern 1 hook point.
@@ -132,6 +139,7 @@ export class LoggingMastraAgent extends MastraAgent {
     // only `error` flipped a boolean and the thrown value was thrown away, so
     // every failure landed in ai_runs with status=error + error_message=NULL,
     // and aborts were silently mislabeled success.
+    const turnTimeoutMs = agentTurnTimeoutMs(this.agentMapKey);
     let status: "success" | "error" = "success";
     let completed = false;
     let timedOut = false;
@@ -165,7 +173,7 @@ export class LoggingMastraAgent extends MastraAgent {
         if (timedOut) {
           status = "error";
           errorType = "timeout";
-          errorMessage = "MDE agent turn timed out after 26 seconds";
+          errorMessage = `MDE agent turn timed out after ${Math.round(turnTimeoutMs / 1_000)} seconds`;
         } else if (status === "success" && !completed) {
           status = "error";
           errorType = "client_abort";
@@ -223,8 +231,8 @@ export class LoggingMastraAgent extends MastraAgent {
       // The error flows through tap/finalize, so ai_runs records the failure.
       const deadline = setTimeout(() => {
         timedOut = true;
-        subscriber.error(new Error("MDE agent turn timed out after 26 seconds"));
-      }, 26_000);
+        subscriber.error(new Error(`MDE agent turn timed out after ${Math.round(turnTimeoutMs / 1_000)} seconds`));
+      }, turnTimeoutMs);
       const sub = runWithTokenSink(tokenSink, () => stream.subscribe(subscriber));
       return () => {
         clearTimeout(deadline);

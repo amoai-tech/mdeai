@@ -21,7 +21,7 @@ export function PartnerSignupNav({
 }: PartnerSignupNavProps) {
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur-md">
-      <div className="mx-auto flex h-14 max-w-7xl items-center gap-4 px-4 sm:px-6 lg:px-8">
+      <div className="mx-auto flex h-14 max-w-7xl items-center gap-2 px-4 sm:gap-4 sm:px-6 lg:px-8">
         <Link
           href="/"
           className="shrink-0 text-lg font-extrabold tracking-[-0.04em] text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -33,8 +33,8 @@ export function PartnerSignupNav({
           <Button
             variant="ghost"
             size="sm"
-            className="px-2 sm:px-3"
             nativeButton={false}
+            className="shrink-0 px-2 sm:px-3"
             render={<Link href={pickerHref} aria-label="All partner types" />}
           >
             <ArrowLeftIcon data-icon="inline-start" aria-hidden="true" />
@@ -74,7 +74,7 @@ export function PartnerSignupNav({
           ) : null}
           <Button
             variant="outline"
-            className="min-h-11 px-4"
+            className="min-h-11 px-3 sm:px-4"
             nativeButton={false}
             render={<Link href={signInHref} />}
           >
