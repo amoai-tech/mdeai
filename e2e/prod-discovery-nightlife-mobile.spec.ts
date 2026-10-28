@@ -33,6 +33,15 @@ test("SAN-1390 Nightlife answers two live mobile questions without a browser ret
     const screenshotDir = process.env.MDE_QA_EVIDENCE_DIR?.trim();
     if (screenshotDir) { await mkdir(screenshotDir, { recursive: true }); await page.screenshot({ path: join(screenshotDir, "nightlife-mobile-390-two-turn.png"), fullPage: true }); }
     await expect(page.getByTestId("discovery-ask-input")).toBeVisible();
+    // Expanded chat and the map FAB must not overlap at a real 390px viewport.
+    const composerBox = await page.getByTestId("workspace-ask-composer").boundingBox();
+    const mapBox = await page.getByTestId("browse-map-fab").boundingBox();
+    expect(composerBox).not.toBeNull();
+    expect(mapBox).not.toBeNull();
+    expect(mapBox!.y + mapBox!.height).toBeLessThan(composerBox!.y - 4);
+    const title = await page.getByRole("heading", { name: "Nightlife", exact: true }).boundingBox();
+    expect(title).not.toBeNull();
+    expect(title!.height).toBeLessThan(50);
   } finally {
     if (identity) await deleteThrowawayIdentity(identity);
   }
