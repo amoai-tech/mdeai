@@ -66,9 +66,8 @@ function CafeBrowseViewInner({
       testId="cafes-browse"
       title="Cafés"
       subtitle="Specialty coffee & workspace spots in Medellín"
-      filterBar={
-        <CafeBrowseFilters neighborhood={neighborhood} feature={feature} />
-      }
+      mobileMapTrigger={activeRows ? <BrowseMapSheet inline /> : null}
+      filterBar={<CafeBrowseFilters neighborhood={neighborhood} feature={feature} />}
     >
       <section className="mt-6" aria-label="Café listings">
         <DiscoveryGroundedResults rows={activeRows} selectedId={selectedId} onSelectRow={selectForAsk} />
@@ -120,7 +119,6 @@ function CafeBrowseViewInner({
         ) : null}
       </section>
     </DiscoveryWorkspace>
-    {activeRows ? <BrowseMapSheet raised /> : null}
     </>
   );
 }

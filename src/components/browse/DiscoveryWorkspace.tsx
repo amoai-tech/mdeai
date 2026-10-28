@@ -23,6 +23,8 @@ export type DiscoveryWorkspaceProps = {
    * which conversation (if any) belongs on its page.
    */
   askComposer?: ReactNode;
+  /** Always-reachable mobile map action in the sticky header, not over listing CTAs. */
+  mobileMapTrigger?: ReactNode;
 };
 
 /**
@@ -37,7 +39,7 @@ export type DiscoveryWorkspaceProps = {
  * shared conversation per browser tab (SAN-1088).
  */
 export function DiscoveryWorkspace(props: DiscoveryWorkspaceProps) {
-  const { testId, activeSlug, title, subtitle, filterBar, notice, children, rightPanel, askComposer } = props;
+  const { testId, activeSlug, title, subtitle, filterBar, notice, children, rightPanel, askComposer, mobileMapTrigger } = props;
   return (
     <div
       data-testid={testId}
@@ -62,7 +64,8 @@ export function DiscoveryWorkspace(props: DiscoveryWorkspaceProps) {
               <h1 className="font-serif text-2xl font-semibold">{title}</h1>
               <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
             </div>
-            <div className="flex w-full min-w-0 justify-end gap-1 sm:w-auto sm:shrink-0 sm:flex-col sm:items-end">
+            <div className="flex w-full min-w-0 items-center justify-between gap-2 sm:w-auto sm:shrink-0 sm:flex-col sm:items-end">
+              {mobileMapTrigger ? <div className="shrink-0 lg:hidden" data-testid="workspace-mobile-map-trigger">{mobileMapTrigger}</div> : null}
               <AuthStatus />
               <Link href="/chat" className="hidden text-sm text-primary hover:underline sm:inline">
                 Ask concierge

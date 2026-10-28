@@ -95,12 +95,8 @@ function RestaurantBrowseViewInner({
             ? "Sample listings — live restaurant data is unavailable; these are not contest nominees"
             : searched?.scope === retryHref ? `Ask MDE — ${shownResults.length} restaurants` : "Food & dining in Medellín"
         }
-        filterBar={
-          <RestaurantBrowseFilters
-            neighborhood={neighborhood}
-            cuisine={cuisine}
-          />
-        }
+        mobileMapTrigger={<BrowseMapSheet inline />}
+        filterBar={<RestaurantBrowseFilters neighborhood={neighborhood} cuisine={cuisine} />}
       >
         <aside className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-border/70 bg-card px-3 py-3" data-testid="restaurant-contests-entry">
           <Trophy className="size-5 shrink-0 text-primary" aria-hidden="true" />
@@ -187,7 +183,6 @@ function RestaurantBrowseViewInner({
         </section>
       </DiscoveryWorkspace>
 
-      <BrowseMapSheet raised />
       {selectedRestaurant && !desktop ? <RestaurantDetailsSheet restaurant={selectedRestaurant} onClose={closeDetails} /> : null}
     </>
   );

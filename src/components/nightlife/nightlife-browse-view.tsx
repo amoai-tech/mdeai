@@ -75,9 +75,8 @@ function NightlifeBrowseViewInner({
       testId="nightlife-page"
       title="Nightlife"
       subtitle="Clubs & bars in Medellín"
-      filterBar={
-        <NightlifeBrowseFilters neighborhood={neighborhood} vibe={vibe} />
-      }
+      mobileMapTrigger={activeRows ? <BrowseMapSheet inline /> : null}
+      filterBar={<NightlifeBrowseFilters neighborhood={neighborhood} vibe={vibe} />}
       notice={notice}
     >
       <section className="mt-6" aria-label="Nightlife listings">
@@ -130,7 +129,6 @@ function NightlifeBrowseViewInner({
         ) : null}
       </section>
     </DiscoveryWorkspace>
-    {activeRows ? <BrowseMapSheet raised /> : null}
     </>
   );
 }
