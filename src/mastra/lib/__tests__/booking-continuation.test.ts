@@ -15,6 +15,24 @@ describe('SAN-1149 same-turn booking continuation', () => {
       toolName:'searchRestaurantsTool',output:{type:'json',value:grounded},
     }]}]})).toBe(true);
   });
+  it.each([
+    'Name Maria', 'name is Maria', 'Call me Maria', 'I am Maria', "I'm Maria",
+  ])('accepts natural contact wording: %s', name => {
+    expect(continueAfterSearch({stepNumber:1,messages:[{role:'user',content:ask.replace('Contact name Maria', name)}],steps:search})).toBe(true);
+  });
+  it('ignores stale complete booking text when the latest user turn asks something else', () => {
+    expect(continueAfterSearch({stepNumber:1,messages:[
+      {role:'user',content:ask},
+      {role:'assistant',content:'Here are restaurants'},
+      {role:'user',content:'What is the address of Verdeo?'},
+    ],steps:search})).toBe(false);
+  });
+  it('does not treat fragments of unrelated text as a complete request', () => {
+    expect(continueAfterSearch({stepNumber:1,messages:[{role:'user',content:{parts:[
+      {type:'text',text:'Find Verdeo for dinner'},
+      {type:'text',text:'Show restaurants with no booking request. Contact name Maria, email maria@example.com'},
+    ]}}],steps:search})).toBe(false);
+  });
   it('does not require optional phone or notes', () => {
     expect(continueAfterSearch({stepNumber:1,messages:user,steps:search})).toBe(true);
   });

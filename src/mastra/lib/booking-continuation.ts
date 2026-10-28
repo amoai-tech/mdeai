@@ -29,7 +29,9 @@ export function hasCompleteRestaurantBookingDetails(text: string): boolean {
     && /\b\d{1,2}(?::\d{2})?\s*(?:a\.?m\.?|p\.?m\.?)\b/i.test(text)
     && /\b(?:for|party(?:\s+size)?(?:\s+of)?|guests?:?)\s+(?:one|two|three|four|five|six|seven|eight|nine|ten|[1-9]\d?)\b/i.test(text)
     && /\b[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}\b/.test(text)
-    && /\b(?:contact name\s*[:=-]?\s*\S+|my name is\s+\S+|i(?:'m| am)\s+[A-Z][a-z]+)/i.test(text);
+    // Require a named-contact cue, but accept how people actually type it.
+    // Do not infer a name from an unrelated capitalized venue/location word.
+    && /\b(?:(?:contact\s+)?name\s*(?:is\s+|[:=-]\s*|\s+)[A-Z][a-z]+|call\s+me\s+[A-Z][a-z]+|i(?:'m|\s+am)\s+[A-Z][a-z]+)/i.test(text);
 }
 
 function containsExactName(text: string, name: string): boolean {
