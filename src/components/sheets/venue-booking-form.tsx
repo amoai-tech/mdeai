@@ -15,11 +15,14 @@ export function VenueBookingForm({
   venueKind,
   placeId,
   venueTitle,
+  restaurantId,
   onSuccess,
 }: {
   venueKind: VenueBookingKind;
   placeId: string;
   venueTitle: string;
+  /** SAN-1542: links the request to the canonical restaurant so its owner can see it. */
+  restaurantId?: string | null;
   onSuccess: (result: VenueBookingSubmitResult) => void;
 }) {
   const { user, loading } = useSession();
@@ -97,6 +100,7 @@ export function VenueBookingForm({
       const result = await submitVenueBooking({
         venueKind,
         placeId,
+        ...(restaurantId ? { restaurantId } : {}),
         requestedAt: requestedAtIso,
         partySize: parsedParty,
         contactName: contactName.trim(),

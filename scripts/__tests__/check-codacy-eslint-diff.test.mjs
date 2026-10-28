@@ -36,3 +36,41 @@ test('bad or contradictory report cannot pass', () => {
 test('partial source coverage cannot pass', () => {
   assert.throws(() => validateDiffReport(complete(), 0, ['a.ts', 'b.ts', 'c.ts', 'd.ts']), /successful/);
 });
+
+test('Codacy may explicitly skip only the oversized generated Supabase types', () => {
+  const generated = 'src/lib/supabase/database.types.ts';
+  const report = {
+    ...complete(),
+    skippedFiles: [{ filePath: generated, sizeBytes: 324245 }],
+  };
+  assert.match(
+    validateDiffReport(report, 0, ['src/a.ts', 'src/b.ts', 'src/c.ts', generated]),
+    /passed/,
+  );
+});
+
+test('skipping handwritten code, unknown files or small generated files fails', () => {
+  const generated = 'src/lib/supabase/database.types.ts';
+  for (const skippedFiles of [
+    [{ filePath: 'src/api/important.ts', sizeBytes: 324245 }],
+    [{ filePath: generated, sizeBytes: 200 }],
+    [{ filePath: 'src/unexpected.ts', sizeBytes: 324245 }],
+    [{ filePath: generated, sizeBytes: 324245 }, { filePath: generated, sizeBytes: 324245 }],
+  ]) {
+    assert.throws(
+      () => validateDiffReport({ ...complete(), skippedFiles }, 0,
+        ['src/api/important.ts', generated]),
+      /unexpected lintable file/,
+    );
+  }
+});
+
+test('a skipped generated file cannot hide missing ordinary ESLint coverage', () => {
+  const generated = 'src/lib/supabase/database.types.ts';
+  assert.throws(
+    () => validateDiffReport({
+      ...complete(), skippedFiles: [{ filePath: generated, sizeBytes: 324245 }],
+    }, 0, ['a.ts', 'b.ts', 'c.ts', 'd.ts', generated]),
+    /consistent, successful/,
+  );
+});

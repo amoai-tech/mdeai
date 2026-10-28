@@ -2,11 +2,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { maybeSingle } = vi.hoisted(() => ({ maybeSingle: vi.fn() }));
 
+const menuQuery = {
+  order: () => menuQuery,
+  then: (resolve: (value: { data: unknown[]; error: null }) => unknown) =>
+    Promise.resolve({ data: [], error: null }).then(resolve),
+};
+
 vi.mock("@supabase/supabase-js", () => ({
   createClient: () => ({
     from: () => ({
       select: () => ({
-        eq: () => ({ maybeSingle }),
+        eq: () => ({ maybeSingle, ...menuQuery }),
       }),
     }),
   }),
