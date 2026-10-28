@@ -9,23 +9,39 @@
 -- /home/sk/Downloads/mde-restaurant-place-id-audit-2026-10-27.json
 -- /home/sk/Downloads/mde-restaurant-place-id-alternatives-2026-10-27.json
 
-DO $$
+-- Fresh migrations insert these canonical restaurant rows with NULL Google IDs.
+-- The independently audited existing catalog instead has the known old IDs.
+-- Accept both VERIFIED starting states, but never a conflicting non-NULL
+-- Place ID, a renamed/missing source restaurant, or a destination assigned
+-- to a different restaurant.
+DO $
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM public.restaurants
-       WHERE id = 'a1b2c3d4-e5f6-4789-abcd-100000000004'::uuid
-         AND google_place_id = 'ChIJ9dyLhikoRI4R1IEZoWSmNOo') THEN
-    RAISE EXCEPTION 'SAN-1539: El Cielo source row changed; review before correcting';
+  IF NOT EXISTS (
+    SELECT 1 FROM public.restaurants
+    WHERE id = 'a1b2c3d4-e5f6-4789-abcd-100000000004'::uuid
+      AND name = 'El Cielo'
+      AND (google_place_id IS NULL
+           OR google_place_id = 'ChIJ9dyLhikoRI4R1IEZoWSmNOo')
+  ) THEN
+    RAISE EXCEPTION 'SAN-1539: El Cielo source identity conflict or missing row';
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM public.restaurants
-       WHERE id = 'a1b2c3d4-e5f6-4789-abcd-100000000002'::uuid
-         AND google_place_id = 'ChIJw67M_fgoRI4RMiM53OU6lnQ') THEN
-    RAISE EXCEPTION 'SAN-1539: Hacienda Junín source row changed';
+  IF NOT EXISTS (
+    SELECT 1 FROM public.restaurants
+    WHERE id = 'a1b2c3d4-e5f6-4789-abcd-100000000002'::uuid
+      AND name = 'Hacienda Junín'
+      AND (google_place_id IS NULL
+           OR google_place_id = 'ChIJw67M_fgoRI4RMiM53OU6lnQ')
+  ) THEN
+    RAISE EXCEPTION 'SAN-1539: Hacienda Junín source identity conflict or missing row';
   END IF;
-  IF EXISTS (SELECT 1 FROM public.restaurants
-       WHERE google_place_id = 'ChIJF8IIwLcoRI4RKCdeMuiochQ') THEN
-    RAISE EXCEPTION 'SAN-1539: Elcielo restaurant Place ID already assigned';
+  IF EXISTS (
+    SELECT 1 FROM public.restaurants
+    WHERE google_place_id = 'ChIJF8IIwLcoRI4RKCdeMuiochQ'
+      AND id <> 'a1b2c3d4-e5f6-4789-abcd-100000000004'::uuid
+  ) THEN
+    RAISE EXCEPTION 'SAN-1539: Elcielo restaurant Place ID assigned to another restaurant';
   END IF;
-END $$;
+END $;
 
 -- Elcielo official restaurant is Calle 7D #43C-36, not Bar Restaurante Divino Cielo.
 -- Google Text Search independently returned the following restaurant Place ID.
@@ -39,7 +55,9 @@ SET name = 'Elcielo Restaurant Medellín',
     maps_url = 'https://www.google.com/maps/search/?api=1&query=Elcielo%20Restaurant%20Medellin&query_place_id=ChIJF8IIwLcoRI4RKCdeMuiochQ',
     updated_at = now()
 WHERE id = 'a1b2c3d4-e5f6-4789-abcd-100000000004'::uuid
-  AND google_place_id = 'ChIJ9dyLhikoRI4R1IEZoWSmNOo';
+  AND name = 'El Cielo'
+  AND (google_place_id IS NULL
+       OR google_place_id = 'ChIJ9dyLhikoRI4R1IEZoWSmNOo');
 
 -- The second existing El Cielo row resolves to the HOTEL, not its restaurant.
 -- Correct its identity, retaining the verified hotel ID (do not merge UUIDs).
@@ -59,7 +77,32 @@ SET address = 'Carrera 49 Junín #52-98, La Candelaria, Medellín',
     longitude = -75.56577,
     updated_at = now()
 WHERE id = 'a1b2c3d4-e5f6-4789-abcd-100000000002'::uuid
-  AND google_place_id = 'ChIJw67M_fgoRI4RMiM53OU6lnQ';
+  AND name = 'Hacienda Junín'
+  AND (google_place_id IS NULL
+       OR google_place_id = 'ChIJw67M_fgoRI4RMiM53OU6lnQ');
+
+-- Mandatory corrections must actually be present after both UPDATE statements.
+-- Keep failure atomic: do not allow a green migration that updated zero rows.
+DO $
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM public.restaurants
+    WHERE id = 'a1b2c3d4-e5f6-4789-abcd-100000000004'::uuid
+      AND name = 'Elcielo Restaurant Medellín'
+      AND google_place_id = 'ChIJF8IIwLcoRI4RKCdeMuiochQ'
+      AND address = 'Calle 7D #43C-36, El Poblado, Medellín'
+  ) THEN
+    RAISE EXCEPTION 'SAN-1539: Elcielo restaurant correction not applied';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM public.restaurants
+    WHERE id = 'a1b2c3d4-e5f6-4789-abcd-100000000002'::uuid
+      AND name = 'Hacienda Junín'
+      AND address = 'Carrera 49 Junín #52-98, La Candelaria, Medellín'
+  ) THEN
+    RAISE EXCEPTION 'SAN-1539: Hacienda Junín correction not applied';
+  END IF;
+END $;
 
 -- Correct the coordinate drift for the independently name-matched venue.
 UPDATE public.restaurants
