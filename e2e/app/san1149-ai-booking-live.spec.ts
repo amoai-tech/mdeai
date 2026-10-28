@@ -1,4 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
+import { mkdir } from "node:fs/promises";
+import { join } from "node:path";
 import {
   createThrowawayIdentity, deleteThrowawayIdentity, getSupabaseAdmin,
   hasE2eEnv, signInAsOnOrigin, getTestSession,
@@ -17,12 +19,11 @@ test.skip(!hasE2eEnv() || process.env.MDE_AI_BOOKING_LIVE !== "1",
 const VERDEO = "a1b2c3d4-e5f6-4789-abcd-100000000005";
 const BOGOTA_7_PM = "2026-11-16T00:00:00.000Z";
 async function askAgentToPrepare(page: Page, email: string, baseURL: string) {
-  // Arm before navigating: the initial runtime info request may finish before
-  // the page load promise resolves. The 200 handshake, not a fixed sleep,
-  // is the evidence that the actual CopilotKit runtime accepted the session.
+  // Arm before navigation: the installed runtime can handshake via /info
+  // or POST /api/copilotkit depending on connection state. A specific JSON
+  // method="info" predicate missed real HTTP 200 handshakes in Next dev.
   const ready = page.waitForResponse(r => r.url().includes("/api/copilotkit") &&
-    r.request().postDataJSON()?.method === "info" && r.status() === 200,
-    { timeout: 40_000 });
+    r.status() === 200, { timeout: 45_000 });
   await page.goto(new URL("/chat", baseURL).toString());
   await ready;
   await sendConciergeMessage(page,
@@ -34,7 +35,7 @@ async function askAgentToPrepare(page: Page, email: string, baseURL: string) {
   );
   const review = page.getByTestId("venue-booking-hitl-card");
   await expect(review).toBeVisible({ timeout: 115_000 });
-  await expect(review).toContainText("Verdeo");
+  await expect(review).toContainText("Verdeo", { timeout: 15_000 });
   await expect(review).toContainText("7:00 PM");
   await expect(review).toContainText("Medellín");
   return review;
@@ -77,6 +78,14 @@ test("AI-generated Verdeo proposal: Send persists exactly one pending receipt an
     expect(saved.requestId).toMatch(/^[0-9a-f-]{36}$/i);
     await expect(page.getByTestId("venue-booking-confirmation-card"))
       .toContainText(saved.requestId.slice(0,8),{timeout:30000});
+    const evidenceDir = process.env.MDE_QA_EVIDENCE_DIR;
+    if (evidenceDir) {
+      await mkdir(evidenceDir, { recursive: true });
+      await page.screenshot({
+        path: join(evidenceDir, "san1149-ai-saved-pending-receipt-390-20261028.png"),
+        mask: [page.getByText(person.email, { exact: false })],
+      });
+    }
     const rows=await admin.from("venue_booking_requests")
       .select("id,requested_at,party_size,status,restaurant_id")
       .eq("user_id",person.userId);

@@ -7914,6 +7914,15 @@ export type Database = {
         Args: { p_patch: Json; p_partner_id?: string | null }
         Returns: Json
       }
+      restaurant_admin_transfer: {
+        Args: {
+          p_restaurant_id: string
+          p_partner_id: string | null
+          p_expected_partner_id: string | null
+          p_reason: string
+        }
+        Returns: Json
+      }
       restaurant_assign_partner: {
         Args: { p_restaurant_id: string; p_partner_id: string | null }
         Returns: Json

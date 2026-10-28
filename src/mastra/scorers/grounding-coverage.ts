@@ -5,6 +5,9 @@ import { ACTIVE_AI_PROVIDER, ACTIVE_TEXT_MODEL } from "../lib/models";
 import { extractClaims, type FaithfulnessClaim } from "./faithfulness-core";
 import {
   evaluateGroundingCoverage,
+  groundedSourceNames,
+  normalizeGroundingName,
+  sameGroundedEntityName,
   type GroundingCoverageInput,
   type GroundingCoverageReply,
 } from "./grounding-coverage-core";
@@ -47,6 +50,27 @@ function judgeEnabled(requestContext: unknown): boolean {
   return flag !== false;
 }
 
+export function reconcileGroundingJudgeVerdict(
+  unsupported: FaithfulnessClaim[],
+  uncovered: string[],
+  groundedAliases: { claim: string; sourceName: string }[],
+  toolOutputs: unknown[],
+): FaithfulnessClaim[] {
+  const confirmedAbsent = new Set(uncovered.map(normalizeGroundingName));
+  const validSources = new Set(groundedSourceNames(toolOutputs).map(normalizeGroundingName));
+  return unsupported.filter((candidate) => {
+    const claim = normalizeGroundingName(candidate.claim);
+    if (confirmedAbsent.has(claim)) return true;
+    return !groundedAliases.some((alias) => {
+      const source = normalizeGroundingName(alias.sourceName);
+      if (normalizeGroundingName(alias.claim) !== claim || !validSources.has(source)) return false;
+      // A judge-proposed alias is not evidence by itself. Compare the full
+      // distinctive word sets to an actual tool-row name, in both directions.
+      return sameGroundedEntityName(claim, source);
+    });
+  });
+}
+
 async function judgeUncovered(
   unsupported: FaithfulnessClaim[],
   toolOutputs: unknown[],
@@ -58,6 +82,10 @@ async function judgeUncovered(
         uncovered: z
           .array(z.string())
           .describe("Entity claim strings genuinely absent from tool output."),
+        groundedAliases: z.array(z.object({
+          claim: z.string(),
+          sourceName: z.string(),
+        })).default([]).describe("Exact source name that proves a flagged alias is grounded."),
       }),
       prompt: [
         "You verify whether named venues/listings/events in a concierge reply are grounded.",
@@ -68,11 +96,15 @@ async function judgeUncovered(
         ...unsupported.map((c) => `- ${c.claim}`),
         "",
         "Return only entities genuinely absent from tool output.",
-        "Paraphrases or synonyms present in the tool output are NOT uncovered.",
+        "Only clear a candidate as a paraphrase when you can cite its exact source name",
+        "from TOOL OUTPUT in groundedAliases: [{claim, sourceName}].",
+        "If there is no concrete source name, keep the entity in uncovered.",
+        "Do not make up source names; an empty uncovered list alone proves nothing.",
       ].join("\n"),
     });
-    const set = new Set(object.uncovered.map((s) => s.toLowerCase().trim()));
-    return unsupported.filter((c) => set.has(c.claim.toLowerCase().trim()));
+    return reconcileGroundingJudgeVerdict(
+      unsupported, object.uncovered, object.groundedAliases ?? [], toolOutputs,
+    );
   } catch {
     return unsupported;
   }

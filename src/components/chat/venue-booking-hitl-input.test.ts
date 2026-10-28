@@ -26,6 +26,17 @@ describe("CopilotKit venue-booking tool-argument lifecycle", () => {
       requestedAt: "2026-11-16T00:00:00.000Z",
     }));
   });
+  it("treats a restaurant UUID placed in the model's placeId field as a candidate canonical restaurant, never a Google Place ID", () => {
+    const { restaurantId, ...missingId } = complete;
+    expect(readyVenueBookingHitlArgs({ ...missingId, placeId: restaurantId, venueTitle: "Untrusted model name" }, "executing"))
+      .toEqual(expect.objectContaining({ restaurantId, placeId: undefined, venueTitle: undefined }));
+  });
+  it("keeps a non-UUID Google Place ID as Place ID for a café or restaurant", () => {
+    const { restaurantId: _omit, ...withoutRestaurantId } = complete;
+    void _omit;
+    expect(readyVenueBookingHitlArgs({ ...withoutRestaurantId, placeId: "ChIJabcdefghijklmnop" }, "executing")?.placeId)
+      .toBe("ChIJabcdefghijklmnop");
+  });
   it("still permits the saved result to render after the tool completes", () => {
     expect(readyVenueBookingHitlArgs(complete, "complete")?.contactEmail).toBe("maria@example.com");
   });
