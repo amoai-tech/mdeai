@@ -338,6 +338,20 @@ A prior production Auth failure (`Database error finding users`) had been repair
 token columns on one orphan test user; admin lookup and signed-in routes now succeed.
 
 **Nothing unreviewed rode along:** one test file.
+## 2026-10-28 — PR #608 (NVIDIA-only PR Agent caller)
+
+**PR:** [#608](https://github.com/amoai-tech/mdeai/pull/608). **Reason:** At the time of this change, amoai-tech is the repository's sole collaborator and PR author; GitHub disallows self-approval. This note records the limited sole-collaborator exception under AGENTS.md, not a general bypass of review or CI.
+
+**Exact-head proof:** The final PR head SHA, successful floor and mastra-schema-init checks, review / verify-review-result, and unresolved review-thread count must all be recorded on PR #608 **before** any administrator merge. The admin override must not be used if any of those conditions fails. GitHub's required checks and review guard remain configured.
+
+**Change and review scope:** Switch one existing GitHub Actions caller from the previous shared PR-Agent SHA to merged NVIDIA-only review-infra SHA 75233d4cdd1e6b041b8bdb497450dee6fd513cb3, and remove the obsolete Gemini secret mapping. The accompanying change to this history is solely the required merge-exception record; no application, database, payments or end-user behavior is altered.
+
+**Evidence:** Shared [infra PR #14](https://github.com/amoai-tech/pr-review-infra/pull/14) merged; 24/24 focused tests passed; MDE test [PR #606](https://github.com/amoai-tech/mdeai/pull/606) completed three consecutive 26-file, 2-chunk NVIDIA reviews with zero excluded files and passing exact-head verification.
+
+**What an independent reviewer would be asked:** Does this SHA pin match the merged shared workflow, is removal of the Gemini mapping atomic with the pin, does the callable interface still accept the NVIDIA secret, and is the existing exact-head review verification unchanged?
+
+**Follow-up:** Recruit a second reviewer to eliminate reliance on this structural exception. Check that a subsequent ordinary MDE PR runs on the new pin; clean up temporary test PRs and branches after proof.
+
 ## Adding an entry
 
 Record: the PRs, the date, the reason, which required checks had passed, what a reviewer would have
