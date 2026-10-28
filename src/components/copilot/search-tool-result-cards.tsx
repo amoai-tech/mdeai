@@ -125,6 +125,7 @@ export function GroundedNightlifeResults({ result }: { result: unknown }) {
   const nightlifeRows = rows.map((r, index) =>
     toNightlifeVenueDetail(r, index + 1),
   );
+  const mappedPinIds = new Set(normalizeToolOutput("grounded", result).pins.map((pin) => pin.id));
 
   useGroundedListScroll(listRef);
 
@@ -148,7 +149,7 @@ export function GroundedNightlifeResults({ result }: { result: unknown }) {
               detailsTestId="nightlife-details-cta"
               bookingTestId="nightlife-booking-cta"
               mediaPlaceholderLabel="Bar"
-              pinId={detail.pinId}
+              pinId={mappedPinIds.has(detail.pinId) ? detail.pinId : undefined}
               rank={detail.rank ?? 1}
               title={detail.title}
               mapsUrl={detail.mapsUrl}
@@ -167,7 +168,7 @@ export function GroundedNightlifeResults({ result }: { result: unknown }) {
               fieldMaskVersion={detail.fieldMaskVersion}
               groundingSource={detail.groundingSource}
               selected={selectedPinId === detail.pinId}
-              onSelect={() => panToPin(detail.pinId)}
+              onSelect={mappedPinIds.has(detail.pinId) ? () => panToPin(detail.pinId) : undefined}
               onOpenDetails={() =>
                 openNightlifeDetail(detail, nightlifeRows)
               }
@@ -186,6 +187,7 @@ export function GroundedCafeResults({ result }: { result: unknown }) {
   const listRef = useRef<HTMLDivElement>(null);
   const { results: rows } = parseGroundedToolResult(result);
   const cafeRows = rows.map((r, index) => toCafeVenueDetail(r, index + 1));
+  const mappedPinIds = new Set(normalizeToolOutput("grounded", result).pins.map((pin) => pin.id));
 
   useGroundedListScroll(listRef);
 
@@ -206,7 +208,7 @@ export function GroundedCafeResults({ result }: { result: unknown }) {
               key={detail.pinId}
               testId="grounded-card"
               resultKind="cafe"
-              pinId={detail.pinId}
+              pinId={mappedPinIds.has(detail.pinId) ? detail.pinId : undefined}
               rank={detail.rank ?? 1}
               title={detail.title}
               mapsUrl={detail.mapsUrl}
@@ -225,7 +227,7 @@ export function GroundedCafeResults({ result }: { result: unknown }) {
               fieldMaskVersion={detail.fieldMaskVersion}
               groundingSource={detail.groundingSource}
               selected={selectedPinId === detail.pinId}
-              onSelect={() => panToPin(detail.pinId)}
+              onSelect={mappedPinIds.has(detail.pinId) ? () => panToPin(detail.pinId) : undefined}
               onOpenDetails={() => openCafeDetail(detail, cafeRows)}
               onBookRequest={() => openCafeBooking(detail)}
             />

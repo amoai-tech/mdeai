@@ -57,6 +57,24 @@ describe("VenueBrowseCard", () => {
     expect(html).not.toContain('px-3 pt-3');
   });
 
+  it("shows map selection only when a real pin exists", () => {
+    const mapped = renderToStaticMarkup(<VenueBrowseCard kind="cafe" listing={cafe}
+      pinId="venue-cafe-1" selectedForMap onMapSelect={() => {}} />);
+    expect(mapped).toContain('data-pin-id="venue-cafe-1"');
+    expect(mapped).toContain('data-testid="venue-map-select"');
+    expect(mapped).toContain("Selected on map");
+    expect(mapped).toContain('aria-pressed="true"');
+
+    const dangling = renderToStaticMarkup(<VenueBrowseCard kind="cafe" listing={cafe}
+      onMapSelect={() => {}} onAskSelect={() => {}} />);
+    expect(dangling).not.toContain('data-testid="venue-map-select"');
+
+    const unmapped = renderToStaticMarkup(<VenueBrowseCard kind="cafe" listing={cafe}
+      onAskSelect={() => {}} />);
+    expect(unmapped).not.toContain('data-testid="venue-map-select"');
+    expect(unmapped).toContain('data-testid="venue-ask-select"');
+  });
+
   it("renders the nightlife contract with its own test ids", () => {
     const html = renderToStaticMarkup(
       <VenueBrowseCard kind="nightlife" listing={nightlife} />,

@@ -1,0 +1,26 @@
+[
+  {
+    "route": "cafes",
+    "width": 390,
+    "status": 200,
+    "pinId": "venue-39dbcfad-8e46-4631-9b5d-0cdc67fd1774",
+    "selectedId": "venue-39dbcfad-8e46-4631-9b5d-0cdc67fd1774",
+    "visiblePins": 17,
+    "overflow": 0,
+    "errors": [],
+    "pass": true,
+    "screenshot": "docs/UIUX/evidence/san1146-map-20261028/cafes-390.png"
+  },
+  {
+    "route": "nightlife",
+    "width": 390,
+    "status": 200,
+    "pinId": "venue-4be2eb3e-4b24-4bdb-89a5-4b846c110b43",
+    "selectedId": "venue-4be2eb3e-4b24-4bdb-89a5-4b846c110b43",
+    "visiblePins": 13,
+    "overflow": 0,
+    "errors": [],
+    "pass": true,
+    "screenshot": "docs/UIUX/evidence/san1146-map-20261028/nightlife-390.png"
+  }
+]

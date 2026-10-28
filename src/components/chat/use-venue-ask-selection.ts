@@ -11,7 +11,9 @@ export function useVenueAskSelection(rows: GroundedToolRow[] | null, baseIds: st
   const mappedId = rows?.find((row) =>
     selectedPinId === `grounded-${row.id}` &&
     pins.some((pin) => pin.id === selectedPinId),
-  )?.id ?? null;
+  )?.id ?? (rows === null ? baseIds.find((id) =>
+    selectedPinId === `venue-${id}` && pins.some((pin) => pin.id === selectedPinId),
+  ) : null) ?? null;
 
   // Map selection has changed externally: don't restore the old Ask card on clear.
   useEffect(() => {
@@ -25,12 +27,15 @@ export function useVenueAskSelection(rows: GroundedToolRow[] | null, baseIds: st
       ? selectedCardId : null
   );
   const selectForAsk = useCallback((id: string | null) => {
-    setSelectedCardId(id);
-    const pinId = id !== null && rows?.some((r) => r.id === id) &&
-      pins.some((pin) => pin.id === `grounded-${id}`)
-      ? `grounded-${id}` : null;
+    const grounded = id !== null && rows?.some((r) => r.id === id) &&
+      pins.some((pin) => pin.id === `grounded-${id}`);
+    const base = id !== null && rows === null && baseIds.includes(id) &&
+      pins.some((pin) => pin.id === `venue-${id}`);
+    const pinId = grounded ? `grounded-${id}` : base ? `venue-${id}` : null;
+    // Only an unpinned Ask item needs local selection; pinned items follow map truth.
+    setSelectedCardId(pinId ? null : id);
     setSelectedPinId(pinId);
-  }, [pins, rows, setSelectedPinId]);
+  }, [pins, rows, baseIds, setSelectedPinId]);
   const clearAskSelection = useCallback(() => {
     setSelectedCardId(null);
     setSelectedPinId(null);
