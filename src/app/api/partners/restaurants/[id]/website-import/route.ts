@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
+import { checkRateLimitDurable } from "@/lib/distributed-rate-limit";
 import { canAccessOwnerRestaurant, isAdminUser } from "@/lib/restaurants/restaurant-owner-load";
 import {
   extractRestaurantWebsiteDraft,
@@ -62,6 +63,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
   const parsed = schema.safeParse(body);
   if (!parsed.success) return fail("Enter the restaurant website address", 400);
+
+  // Reuse the existing Postgres-backed per-user quota across serverless instances.
+  // Never invoke the paid Gemini URL Context provider if the durable store fails.
+  const limit = await checkRateLimitDurable("restaurant-website-import:user:" + user.id, 10, 3600);
+  if (!limit.storeAvailable) return fail("Website analysis temporarily unavailable", 503);
+  if (!limit.allowed) {
+    return NextResponse.json(
+      { success: false, error: { message: "Too many website checks. Please try later." } },
+      { status: 429, headers: { "Retry-After": String(Math.max(1, Math.ceil(limit.retryAfterSeconds))) } },
+    );
+  }
 
   try {
     const draft = await extractRestaurantWebsiteDraft(parsed.data.url);
