@@ -65,6 +65,20 @@ describe("POST /api/restaurants/search", () => {
     expect(await res.json()).toEqual({ error: "Restaurant catalog temporarily unavailable" });
   });
 
+  it("passes the named-only contract to canonical restaurant search without adding a second engine", async () => {
+    vi.mocked(searchRestaurants).mockResolvedValue({ results: [], total: 0, source: "supabase" });
+    const res = await POST(new Request("http://localhost/api/restaurants/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ queryText: "Where is Fictional Bistro?", namedVenueOnly: true }),
+    }));
+    expect(res.status).toBe(200);
+    expect(searchRestaurants).toHaveBeenCalledWith(expect.objectContaining({
+      queryText: "Where is Fictional Bistro?", namedVenueOnly: true,
+    }));
+    expect((await res.json()).results).toEqual([]);
+  });
+
   it("rejects one-sided user coordinates", async () => {
     const res = await POST(
       new Request("http://localhost/api/restaurants/search", {

@@ -1,6 +1,6 @@
 import { createTool } from '@mastra/core/tools';
 import { createClient } from '@supabase/supabase-js';
-import { restaurantNameMentioned } from '../lib/restaurant-name-match';
+import { restaurantNameMentioned, restaurantNameCandidateTsQuery } from '../lib/restaurant-name-match';
 export { restaurantNameMentioned } from '../lib/restaurant-name-match';
 import { getSupabaseServerAnonEnv } from '@/lib/supabase/server-env';
 import { isDeterministicE2E } from '@/lib/deterministic-e2e';
@@ -347,18 +347,34 @@ async function findNamedRestaurants(
     return query.namedVenueOnly ? { results: [], total: 0, source: 'unavailable' } : null;
   }
 
+  const candidateQuery = restaurantNameCandidateTsQuery(text);
+  if (!candidateQuery) {
+    // We cannot verify a no-match without a meaningful name candidate.
+    return query.namedVenueOnly ? { results: [], total: 0, source: 'unavailable' } : null;
+  }
+
+  // Indexed candidate retrieval (restaurants_fts_idx), NOT a 500-row table
+  // download. One extra row detects ambiguous truncation; never call that
+  // situation a verified no-match or silently lose an additional branch.
+  const NAME_CANDIDATE_CAP = 80;
   const { data, error } = await client
     .from('restaurants')
     .select('id, name, cuisine_types, price_level, address, city, neighborhood, latitude, longitude, primary_image_url, rating, tags, google_place_id, maps_url, ai_summary')
-    .limit(500);
+    .textSearch('fts_content', candidateQuery, { config: 'spanish' })
+    .order('name')
+    .limit(NAME_CANDIDATE_CAP + 1);
 
   if (error) {
     console.warn('[search-restaurants] named lookup unavailable:', error.code);
     return query.namedVenueOnly ? { results: [], total: 0, source: 'unavailable' } : null;
   }
 
-  const matches = ((data ?? []) as RestaurantRow[])
-    .filter((row) => restaurantNameMentioned(text, row.name));
+  const candidates = (data ?? []) as RestaurantRow[];
+  if (candidates.length > NAME_CANDIDATE_CAP) {
+    console.warn('[search-restaurants] named lookup candidate cap exceeded');
+    return query.namedVenueOnly ? { results: [], total: 0, source: 'unavailable' } : null;
+  }
+  const matches = candidates.filter((row) => restaurantNameMentioned(text, row.name));
   if (!matches.length) {
     // A catalog-backed no-match is not a semantic recommendation. For an
     // explicitly requested venue, never substitute unrelated rated venues.

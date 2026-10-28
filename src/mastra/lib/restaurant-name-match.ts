@@ -41,3 +41,41 @@ export function restaurantNameMentioned(queryText: string, name: string): boolea
   }
   return false;
 }
+
+
+/**
+ * Candidate lookup using the *existing* indexed restaurants.fts_content GIN
+ * column. The full name matcher above remains the authority; FTS only narrows
+ * what we download. Raw tsquery terms are ASCII letters/numbers from the user
+ * (never unescaped text), with short prefixes for stemming/diacritics.
+ */
+const nonNameWords = new Set([
+  'a','an','and','any','anything','are','at','book','booking','but','can',
+  'cite','city','could','de','del','direccion','do','does','donde','dont',
+  'el','else','en','esta','find','for','give','hotel','i','in','is',
+  'its','la','las','los','me','medellin','my','need','never','no',
+  'not','of','or','please','reservation','reservations','reserve',
+  'reservar','restaurante','restaurant','restaurants','source','street',
+  'table','tables','the','there','to','us','want','what','whats','where',
+  'which','with','without','y','you','your','queda','address','near',
+]);
+
+export function restaurantNameCandidateTsQuery(input: string): string | null {
+  const normalized = input.normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/['’]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ');
+  const words = [...new Set(normalized.split(/\s+/).filter(
+    (word) => word.length >= 3 && !nonNameWords.has(word),
+  ))].slice(0, 2);
+  if (!words.length) return null;
+  return words.map((word) => {
+    const prefix = word.slice(0, 3);
+    // Spanish articles may be stored attached to the name, e.g. Elcielo.
+    const article = /\bel\s+/i.test(normalized)
+      ? ' | el' + word.slice(0, 4) + ':*'
+      : '';
+    return '(' + prefix + ':*' + article + ')';
+  }).join(' & ');
+}

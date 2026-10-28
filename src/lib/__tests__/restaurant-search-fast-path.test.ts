@@ -74,6 +74,21 @@ describe("restaurant search fast path", () => {
   });
 
 
+  it("does not bypass booking consent when a positive request also contains a negative clause", () => {
+    for (const q of [
+      "Book a table at Mal De Ojo, but do not book anything else",
+      "I want a reservation without booking a table",
+      "Where is Mal De Ojo? Do not book anything, but reserve a table for tomorrow",
+      "Reserve a table at Mondongos. Never book other venues",
+    ]) {
+      expect(isRestaurantVenueFactQuery(q)).toBe(false);
+      expect(buildRestaurantSearchParams(q)).toBeNull();
+      expect(canFastPathRestaurantSearch(q)).toBe(false);
+    }
+    // A purely factual query with a prohibition still uses catalog search.
+    expect(isRestaurantVenueFactQuery("Where is Mal De Ojo? Do not book anything.")).toBe(true);
+  });
+
   it("instant clarify for generic restaurant ask", () => {
     expect(shouldInstantRestaurantClarify("suggest restaurants", {})).toBe(true);
     expect(RESTAURANT_CLARIFY_MESSAGE).toContain("Tap a filter");
