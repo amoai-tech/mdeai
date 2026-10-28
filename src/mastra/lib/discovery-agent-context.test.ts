@@ -175,6 +175,29 @@ describe("SAN-737 selected-name history freshness", () => {
     } };
     expect(currentSelectedNameOnly([old, current], page)).toEqual([old, current]);
   });
+  it("discards stale B history for a directly cleared-selection status question", () => {
+    const clearedPage = ctx({ route: "/rentals", selectedPublicEntityId: null });
+    for (const question of [
+      "Is any place currently selected? Do not assume the previous place is still selected.",
+      "Is there any place selected?",
+      "Which place is currently selected?",
+    ]) {
+      const latest = { role: "user", content: { parts: [{ type: "text", text: question }] } };
+      expect(currentSelectedNameOnly([old, latest], clearedPage), question).toEqual([latest]);
+    }
+  });
+  it("preserves comparison and new-discovery history after clearing selection", () => {
+    const clearedPage = ctx({ route: "/rentals", selectedPublicEntityId: null });
+    for (const question of [
+      "Compare the previously selected apartment with another in Laureles",
+      "Is any place selected and can you show cheaper apartments?",
+      "Show cafes nearby",
+    ]) {
+      const latest = { role: "user", content: { parts: [{ type: "text", text: question }] } };
+      const history = [old, latest];
+      expect(currentSelectedNameOnly(history, clearedPage), question).toBe(history);
+    }
+  });
   it("preserves normal follow-ups and unselected/unknown question contexts", () => {
     const normal = { role: "user", content: { parts: [{ type: "text", text: "Show apartments with balconies" }] } };
     expect(currentSelectedNameOnly([old, normal], page)).toEqual([old, normal]);

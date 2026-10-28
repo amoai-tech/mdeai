@@ -10,6 +10,10 @@ describe("SAN-737 explicit cleared selection", () => {
     "Selection is cleared.",
     "No — there is no currently selected public record. I last verified Rituales and Pergamino.",
     "No, I checked — there is no public item selected right now.",
+    "Currently, no public item is selected.",
+    "No. The previously selected item no longer holds, and there is no new item selected.",
+    "Based on the current browser state, no place is currently selected.",
+
   ])("accepts explicit %s", (reply) => expect(confirmsNothingSelected(reply)).toBe(true));
 
   it.each([

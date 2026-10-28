@@ -80,16 +80,17 @@ Public server lookup failed for this selection. If asked about this selected ite
   }
 }
 
-/** For a factual current-selection name question, prior chat messages are
- * competing stale evidence. Mastra still supplies current-turn verified
- * public fields through dynamic instructions; we only trim *history* for this
- * narrow request, leaving normal discovery/refinement memory unchanged.
+/** Prior selections in chat history can override the live browser state.
+ * Trim stale history only for isolated questions about the current selected
+ * name or the absence of selection. Preserve comparisons and new searches.
+ * Current-turn selection instructions remain server-verified/validated.
  */
 export function currentSelectedNameOnly<T extends { role: string; content: unknown }>(
   messages: T[], agui: unknown,
 ): T[] {
   const lastUser = messages.findLastIndex((m) => m.role === "user");
-  if (lastUser < 0 || !discoveryAgentSelectionHint(agui).includes("Selected public item ID:")) return messages;
+  const selectionHint = discoveryAgentSelectionHint(agui);
+  if (lastUser < 0 || !selectionHint) return messages;
   const content = messages[lastUser].content;
   // Inspect the user's actual text, not JSON metadata or tool payload fields.
   const latestText = typeof content === "string" ? content :
@@ -102,6 +103,18 @@ export function currentSelectedNameOnly<T extends { role: string; content: unkno
   // safely discard past conversation. Comparisons and previous-item references
   // need the original history; unrelated discovery questions need it too.
   const question = latestText.trim().replace(/\s+/g, " ");
+  // A cleared selection is current browser truth, not a continuation of B.
+  // For a direct status question only, remove B's obsolete answer from history;
+  // otherwise comparisons and new-discovery requests keep their context.
+  if (selectionHint.includes("Selected public item: NONE.")) {
+    const asksCurrentStatus = /^(?:is|are|do|does|what|which)\b/i.test(question) &&
+      /\b(?:selected|selection)\b/i.test(question) &&
+      /\b(?:any|there|currently|current|now|which|what)\b/i.test(question) &&
+      !/\b(?:name|title|called)\b/i.test(question);
+    const compoundOrComparison = /\b(?:and|also|plus|compare|compared|comparison|versus|vs\.?|difference|between)\b/i.test(question);
+    return asksCurrentStatus && !compoundOrComparison ? messages.slice(lastUser) : messages;
+  }
+  if (!selectionHint.includes("Selected public item ID:")) return messages;
   const asksDirectly = /^(?:please\s+)?(?:what(?:'s| is| was)|(?:can|could|would) you tell me|(?:tell|give|show|remind) me|name\b)/i.test(question);
   // "not the previous item" explicitly excludes stale history; it is not
   // a request to compare two items. Real comparisons still retain both turns.
