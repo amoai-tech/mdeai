@@ -14,6 +14,7 @@ import {
   MASTRA_COPILOT_TOOL_ACTIONS,
   MASTRA_TOOL_IDS,
 } from "@/platform/copilot/mastra-tool-action-names";
+import { readyVenueBookingHitlArgs } from "@/components/chat/venue-booking-hitl-input";
 import { venueBookingRequestSchema } from "@/lib/venues/venue-booking-form-schema";
 import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 
@@ -66,9 +67,8 @@ function createVenueBookingHitlRender() {
     // the complete, validated proposal is available; normalize the model's
     // venue-local/offset time to UTC before the first render and before Send.
     // A partial argument object must never be captured as an editable draft.
-    const validated = venueBookingRequestSchema.safeParse(args);
-    if (!validated.success) return null;
-    const hitlArgs = validated.data as VenueBookingHitlArgs;
+    const hitlArgs = readyVenueBookingHitlArgs(args, status);
+    if (!hitlArgs) return null;
 
     const venueTitle = hitlArgs.venueTitle?.trim() || hitlArgs.placeId || hitlArgs.restaurantId || "Restaurant";
 

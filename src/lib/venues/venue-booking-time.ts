@@ -51,6 +51,12 @@ export function normalizeVenueBookingRequestedAt(value: string): string {
   const calendar = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
   if (calendar.getUTCFullYear() !== Number(year) || calendar.getUTCMonth() + 1 !== Number(month) ||
       calendar.getUTCDate() !== Number(day)) throw new Error("Invalid booking calendar date.");
+  // Medellín is UTC-05:00 year-round. ISO UTC is also valid because the form
+  // and Supabase return timestamps in UTC. Any other model-supplied offset is
+  // ambiguous relative to the customer's Medellín wall-clock request.
+  if (shape[8] && !/^(?:[zZ]|\+00:00|-05:00)$/.test(shape[8])) {
+    throw new Error("Use Medellín time (-05:00) or UTC (Z) for this request.");
+  }
   const hasZone = Boolean(shape[8]);
   const withZone = hasZone ? raw : `${raw}${shape[6] ? "" : ":00"}-05:00`;
   const date = new Date(withZone);

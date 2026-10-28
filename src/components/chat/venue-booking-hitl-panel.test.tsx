@@ -3,12 +3,18 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, cleanup, waitFor } from "@testing-library/react";
 import { VenueBookingHitlPanel, type VenueBookingHitlArgs } from "./venue-booking-hitl-panel";
 
-const restaurantLookup = vi.hoisted(() => vi.fn(async () => ({ data: { name: "Verdeo" }, error: null })));
+const { restaurantLookup, userSession } = vi.hoisted(() => ({
+  restaurantLookup: vi.fn(async (): Promise<{
+    data: { name: string } | null;
+    error: { message: string } | null;
+  }> => ({ data: { name: "Verdeo" }, error: null })),
+  userSession: { user: { id: "qa-user" } as { id: string } | null, loading: false },
+}));
 vi.mock("@/lib/supabase/client", () => ({
   createClient: () => ({ from: () => ({ select: () => ({ eq: () => ({ maybeSingle: restaurantLookup }) }) }) }),
 }));
 vi.mock("@/hooks/use-session", () => ({
-  useSession: () => ({ user: { id: "qa-user" }, loading: false }),
+  useSession: () => userSession,
 }));
 vi.mock("next/navigation", () => ({ usePathname: () => "/restaurants" }));
 
@@ -22,9 +28,32 @@ const args: VenueBookingHitlArgs = {
   venueTitle: "Verdeo",
 };
 
-afterEach(() => { cleanup(); });
+afterEach(() => { cleanup(); userSession.user = { id: "qa-user" }; userSession.loading = false; restaurantLookup.mockClear(); restaurantLookup.mockResolvedValue({ data: { name: "Verdeo" }, error: null }); });
 
 describe("HITL customer confirmation", () => {
+  it("does not query restaurant data before the customer is signed in", async () => {
+    userSession.user = null;
+    restaurantLookup.mockClear();
+    try {
+      render(<VenueBookingHitlPanel args={{ ...args, venueTitle: undefined }} status="executing" respond={vi.fn()} />);
+      expect(screen.getByTestId("venue-booking-hitl-sign-in")).toBeTruthy();
+      expect(restaurantLookup).not.toHaveBeenCalled();
+    } finally {
+      userSession.user = { id: "qa-user" };
+    }
+  });
+  it("does not query restaurant data while authentication is loading", async () => {
+    userSession.loading = true;
+    render(<VenueBookingHitlPanel args={{ ...args, venueTitle: undefined }} status="executing" respond={vi.fn()} />);
+    expect(screen.getByText("Checking session…")).toBeTruthy();
+    expect(restaurantLookup).not.toHaveBeenCalled();
+  });
+  it("does not falsely claim a restaurant name when a grounded lookup fails", async () => {
+    restaurantLookup.mockResolvedValueOnce({ data: null, error: { message: "Blocked by RLS" } });
+    render(<VenueBookingHitlPanel args={{ ...args, venueTitle: undefined }} status="executing" respond={vi.fn()} />);
+    await waitFor(() => expect(restaurantLookup).toHaveBeenCalledTimes(1));
+    expect(screen.getByTestId("venue-booking-hitl-card").textContent).toContain("Restaurant (ID ");
+  });
   it("uses the actual restaurant name when the agent proposes only a canonical UUID", async () => {
     const respond = vi.fn(async () => {});
     render(<VenueBookingHitlPanel args={{ ...args, venueTitle: undefined }} status="executing" respond={respond} />);

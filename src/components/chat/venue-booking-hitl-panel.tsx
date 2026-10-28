@@ -51,11 +51,14 @@ export function VenueBookingHitlPanel({ args, status, respond }: VenueBookingHit
   const [error, setError] = useState<string | null>(null);
   const [canonicalRestaurantName, setCanonicalRestaurantName] = useState<string | null>(null);
   const restaurantId = args.venueKind === "restaurant" ? args.restaurantId : null;
+  const signedInUserId = user?.id;
   // The model may know the canonical restaurant UUID but omit its display name.
   // Prefer a real, RLS-checked restaurants.name over exposing a bare UUID in review.
   // This read is informational only: only the explicit Send invokes the booking API.
   useEffect(() => {
-    if (!restaurantId) return;
+    // Public-discovery metadata is still fetched only after an authenticated
+    // session has finished loading; do not start a direct database read for guests.
+    if (!restaurantId || loading || !signedInUserId) return;
     let active = true;
     void createClient().from("restaurants").select("name").eq("id", restaurantId)
       .maybeSingle().then(({ data, error }) => {
@@ -66,7 +69,7 @@ export function VenueBookingHitlPanel({ args, status, respond }: VenueBookingHit
         }
       });
     return () => { active = false; };
-  }, [restaurantId]);
+  }, [restaurantId, loading, signedInUserId]);
   const venueLabel = canonicalRestaurantName ?? draft.venueTitle?.trim() ??
     (restaurantId ? `Restaurant (ID ${restaurantId.slice(0, 8)})` : draft.placeId || "Venue");
   const returnPath = encodeURIComponent(pathname || "/chat");

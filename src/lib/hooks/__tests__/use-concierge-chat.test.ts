@@ -95,6 +95,19 @@ describe("SAN-1396 — wait for a signed-in cold runtime without duplicate sends
     }
   });
 
+  it("stops an unsuccessful first connection after the bounded 15-second default", async () => {
+    vi.useFakeTimers();
+    try {
+      copilotkit.runtimeConnectionStatus = "connecting";
+      const ready = useConciergeChat().waitForRuntimeReady();
+      await vi.advanceTimersByTimeAsync(15_125);
+      await expect(ready).resolves.toBe(false);
+      expect(copilotkit.runAgent).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("fails without an agent run when the runtime reports an error", async () => {
     copilotkit.runtimeConnectionStatus = "error";
     await expect(useConciergeChat().waitForRuntimeReady()).resolves.toBe(false);

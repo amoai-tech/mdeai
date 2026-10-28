@@ -115,6 +115,25 @@ describe("onAgentSend never leaves the renter with nothing", () => {
     expect(shown).toEqual([]);
   });
 
+  it("shows a visible retryable unavailable message after the bounded runtime wait fails", async () => {
+    chat.waitForRuntimeReady.mockResolvedValue(false);
+    await act(async () => {
+      await handlers.onAgentSend("Request a table at Verdeo at 7 PM");
+    });
+    expect(chat.appendMessage).not.toHaveBeenCalled();
+    expect(shown.map((m) => [m.role, m.content])).toEqual([
+      ["user", "Request a table at Verdeo at 7 PM"],
+      ["assistant", AGENT_UNAVAILABLE_MESSAGE],
+    ]);
+    // A later deliberate retry is accepted once runtime recovers; no hidden replay.
+    chat.waitForRuntimeReady.mockResolvedValue(true);
+    chat.appendMessage.mockResolvedValue(true);
+    await act(async () => {
+      await handlers.onAgentSend("Request a table at Verdeo at 7 PM");
+    });
+    expect(chat.appendMessage).toHaveBeenCalledTimes(1);
+  });
+
   it("does not run the same accepted chat send twice while waiting for connection", async () => {
     let connect!: (ready: boolean) => void;
     chat.waitForRuntimeReady.mockReturnValue(new Promise<boolean>((resolve) => {

@@ -28,6 +28,12 @@ describe("venueBookingRequestSchema", () => {
     }
   });
 
+  it("rejects a model-supplied non-Medellín local offset rather than shifting the requested wall clock", () => {
+    expect(venueBookingRequestSchema.safeParse({
+      ...valid, requestedAt: "2026-11-15T19:00:00+02:00",
+    }).success).toBe(false);
+  });
+
   it("rejects malformed and impossible Medellín dates without interpreting browser time", () => {
     for (const requestedAt of ["2026-02-30T19:00:00", "tomorrow 7pm", "2026-11-15T25:00:00"])
       expect(venueBookingRequestSchema.safeParse({ ...valid, requestedAt }).success).toBe(false);
