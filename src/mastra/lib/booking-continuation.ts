@@ -13,6 +13,28 @@ type ToolStep = {
 const SEARCH_NAMES = new Set(['searchRestaurantsTool', 'search-restaurants']);
 const BOOKING_NAMES = new Set(['requestVenueBooking', 'request-venue-booking']);
 const UUID = /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i;
+// The search tool writes only its own verified public result into Mastra's
+// per-run RequestContext. A model may receive tool results as JSON, text, or
+// summary parts; a saved trusted search receipt avoids that transport drift.
+export const RESTAURANT_BOOKING_SEARCH_KEY = 'mdeaiRestaurantBookingSearch';
+export type RestaurantBookingSearchContext = {
+  get: (key: string) => unknown;
+  set: (key: string, value: unknown) => void;
+};
+
+export function rememberGroundedRestaurantSearch(
+  ctx: RestaurantBookingSearchContext | undefined,
+  result: { source: string; results: readonly { id: string; name: string }[] },
+): void {
+  if (!ctx) return;
+  ctx.set(RESTAURANT_BOOKING_SEARCH_KEY, {
+    source: result.source,
+    results: result.source === 'supabase'
+      ? result.results.filter(row => UUID.test(row.id)).map(({ id, name }) => ({ id, name }))
+      : [],
+  });
+}
+
 
 function userText(content: unknown): string {
   if (typeof content === 'string') return content;
@@ -71,18 +93,27 @@ function hasGroundedNamedRestaurant(text: string, output: unknown): boolean {
 }
 
 export function shouldContinueVenueBookingAfterSearch({
-  stepNumber, messages, steps,
+  stepNumber, messages, steps, requestContext,
 }: {
   stepNumber: number;
   messages: readonly Message[];
   steps: readonly ToolStep[];
+  requestContext?: Pick<RestaurantBookingSearchContext, 'get'> & Partial<Pick<RestaurantBookingSearchContext, 'set'>>;
 }): boolean {
-  if (stepNumber < 1 || !steps.length) return false;
+  // A client can supply unreserved request-context keys. Invalidate any such
+  // value before the first model step; only the server-side restaurant tool may
+  // populate this key during the current agent run.
+  if (stepNumber === 0) {
+    requestContext?.set?.(RESTAURANT_BOOKING_SEARCH_KEY, null);
+    return false;
+  }
+  // The trusted per-run receipt is sufficient even if Mastra omits prior steps.
   const lastUser = messages.findLast(m => m.role === 'user');
   const text = lastUser ? userText(lastUser.content) : '';
   if (!hasCompleteRestaurantBookingDetails(text)) return false;
   // Check only tool results from this agent run, not historic search cards.
   if (steps.some(step => step.toolCalls?.some(call => BOOKING_NAMES.has(call.toolName || '')))) return false;
   return steps.some(step => step.toolResults?.some(result =>
-    SEARCH_NAMES.has(result.toolName || '') && hasGroundedNamedRestaurant(text, result.output)));
+    SEARCH_NAMES.has(result.toolName || '') && hasGroundedNamedRestaurant(text, result.output)))
+    || hasGroundedNamedRestaurant(text, requestContext?.get(RESTAURANT_BOOKING_SEARCH_KEY));
 }

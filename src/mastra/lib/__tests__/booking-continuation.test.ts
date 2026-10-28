@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hasCompleteRestaurantBookingDetails, shouldContinueVenueBookingAfterSearch as continueAfterSearch } from '../booking-continuation';
+import { hasCompleteRestaurantBookingDetails, rememberGroundedRestaurantSearch, shouldContinueVenueBookingAfterSearch as continueAfterSearch } from '../booking-continuation';
 const id = 'a1b2c3d4-e5f6-4789-abcd-100000000005';
 const ask = 'Find Verdeo restaurant in El Poblado. Prepare a table request for two on November 15 2026 at 7 PM Medellin. Contact name Maria, email maria@example.com. Show review before sending.';
 const user = [{role:'user',content:{parts:[{type:'text',text:ask}]}}];
@@ -32,6 +32,37 @@ describe('SAN-1149 same-turn booking continuation', () => {
       {type:'text',text:'Find Verdeo for dinner'},
       {type:'text',text:'Show restaurants with no booking request. Contact name Maria, email maria@example.com'},
     ]}}],steps:search})).toBe(false);
+  });
+  it('uses the source-backed RequestContext receipt if the provider omits results from its step snapshot', () => {
+    const values = new Map<string, unknown>();
+    const requestContext = {get:(key:string)=>values.get(key),set:(key:string,value:unknown)=>{values.set(key,value)}};
+    rememberGroundedRestaurantSearch(requestContext, grounded);
+    expect(continueAfterSearch({stepNumber:1,messages:user,steps:[{toolCalls:[{toolName:'searchRestaurantsTool'}]}],requestContext})).toBe(true);
+    expect(continueAfterSearch({stepNumber:1,messages:user,steps:[],requestContext})).toBe(true);
+    // No new search, no old restaurant allowed on an unrelated user turn.
+    expect(continueAfterSearch({stepNumber:1,messages:[...user,{role:'user',content:'Show the menu'}],steps:[{toolCalls:[{toolName:'searchRestaurantsTool'}]}],requestContext})).toBe(false);
+  });
+  it('clears client-supplied request context at step zero until a real server search occurs', () => {
+    const values = new Map<string, unknown>();
+    const requestContext = {get:(key:string)=>values.get(key),set:(key:string,value:unknown)=>{values.set(key,value)}};
+    rememberGroundedRestaurantSearch(requestContext,grounded);
+    expect(continueAfterSearch({stepNumber:0,messages:user,steps:[],requestContext})).toBe(false);
+    expect(continueAfterSearch({stepNumber:1,messages:user,steps:[],requestContext})).toBe(false);
+    rememberGroundedRestaurantSearch(requestContext,grounded);
+    expect(continueAfterSearch({stepNumber:1,messages:user,steps:[],requestContext})).toBe(true);
+  });
+  it('never accepts unavailable, fixture, wrong-name, or UUID-free search receipts', () => {
+    const values = new Map<string, unknown>();
+    const requestContext = {get:(key:string)=>values.get(key),set:(key:string,value:unknown)=>{values.set(key,value)}};
+    for (const value of [
+      {source:'unavailable',results:grounded.results},
+      {source:'fallback',results:grounded.results},
+      {source:'supabase',results:[{id,name:'Other Restaurant'}]},
+      {source:'supabase',results:[{id:'fake',name:'Verdeo'}]},
+    ]) {
+      rememberGroundedRestaurantSearch(requestContext,value);
+      expect(continueAfterSearch({stepNumber:1,messages:user,steps:[{toolCalls:[{toolName:'searchRestaurantsTool'}]}],requestContext})).toBe(false);
+    }
   });
   it('does not require optional phone or notes', () => {
     expect(continueAfterSearch({stepNumber:1,messages:user,steps:search})).toBe(true);

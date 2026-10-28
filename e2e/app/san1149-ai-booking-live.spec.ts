@@ -19,13 +19,12 @@ test.skip(!hasE2eEnv() || process.env.MDE_AI_BOOKING_LIVE !== "1",
 const VERDEO = "a1b2c3d4-e5f6-4789-abcd-100000000005";
 const BOGOTA_7_PM = "2026-11-16T00:00:00.000Z";
 async function askAgentToPrepare(page: Page, email: string, baseURL: string) {
-  // Arm before navigation: the installed runtime can handshake via /info
-  // or POST /api/copilotkit depending on connection state. A specific JSON
-  // method="info" predicate missed real HTTP 200 handshakes in Next dev.
-  const ready = page.waitForResponse(r => r.url().includes("/api/copilotkit") &&
-    r.status() === 200, { timeout: 45_000 });
+  // CopilotKit may connect lazily only after the first user message. Waiting
+  // for a pre-message /info response made cold local runs fail without ever
+  // exercising Mastra. The shared submit helper watches the actual request.
   await page.goto(new URL("/chat", baseURL).toString());
-  await ready;
+  await page.getByTestId("copilot-chat-region").getByRole("textbox").first()
+    .waitFor({ state: "visible", timeout: 45_000 });
   await sendConciergeMessage(page,
     "Find Verdeo restaurant in El Poblado. Prepare a table request for two on " +
     "November 15 2026 at 7 PM Medellin. Contact name SAN-1149 QA, email " +
