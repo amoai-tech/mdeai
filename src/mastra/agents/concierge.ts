@@ -21,6 +21,7 @@ import { formatEventSourcePromptHint } from "@/lib/events/trusted-event-sources"
 import { RESTAURANT_CLARIFY_MESSAGE } from "@/lib/restaurant-clarify-copy";
 import { routerIntentSchema } from "@/lib/router-intent";
 import { buildConciergeChannels } from "./whatsapp-channels";
+import { shouldContinueVenueBookingAfterSearch } from "../lib/booking-continuation";
 
 export const conciergeWorkingMemorySchema = z.object({
   // One canonical enum for both deterministic routing and AI thread memory.
@@ -488,6 +489,14 @@ export const conciergeAgent = new Agent({
   },
   inputProcessors: [
     ...getDefaultInputProcessors(),
+    // The model sometimes repeats restaurant search instead of issuing the
+    // proposal. Once the current run grounded the exact named venue and the
+    // customer already supplied every mandatory field, require the *existing*
+    // proposal-only HITL tool for the next Mastra step. No database writer here.
+    { id: 'san1149-booking-continuation', processInputStep: ({ stepNumber, messages, steps }) =>
+      shouldContinueVenueBookingAfterSearch({ stepNumber, messages, steps })
+        ? { toolChoice: { type: 'tool' as const, toolName: 'requestVenueBooking' } }
+        : {} },
     { id: "san737-current-selected-name-history", processInput: ({ messages, requestContext }) =>
       currentSelectedNameOnly(messages, requestContext?.get("ag-ui")) },
   ],
