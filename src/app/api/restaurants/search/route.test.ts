@@ -54,6 +54,17 @@ describe("POST /api/restaurants/search", () => {
     );
   });
 
+  it("returns a retryable 503, not an invented zero-match, when catalog is unavailable", async () => {
+    vi.mocked(searchRestaurants).mockResolvedValue({ results: [], total: 0, source: "unavailable" });
+    const res = await POST(new Request("http://localhost/api/restaurants/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ queryText: "Where is Fictional Cafe?", namedVenueOnly: true }),
+    }));
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({ error: "Restaurant catalog temporarily unavailable" });
+  });
+
   it("rejects one-sided user coordinates", async () => {
     const res = await POST(
       new Request("http://localhost/api/restaurants/search", {

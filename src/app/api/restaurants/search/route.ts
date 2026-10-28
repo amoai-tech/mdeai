@@ -74,6 +74,12 @@ export async function POST(req: Request) {
     limit,
   });
 
+  // Do not claim "no matching restaurants" when the catalog was unreachable.
+  // The existing client treats non-2xx as a retryable search error.
+  if (source === 'unavailable') {
+    return NextResponse.json({ error: 'Restaurant catalog temporarily unavailable' }, { status: 503 });
+  }
+
   const enriched = await prepareRestaurantSearchResults(results);
 
   return NextResponse.json({ results: enriched, total, source });
