@@ -126,15 +126,15 @@ select throws_ok(
   'non-http image URLs are rejected');
 
 select throws_ok(
-  $select public.restaurant_owner_patch(
-    'a1540000-0000-4000-8000-000000000031','{"images":[{}]}'::jsonb)$,
+  $$select public.restaurant_owner_patch(
+    'a1540000-0000-4000-8000-000000000031','{"images":[{}]}'::jsonb)$$,
   '22023','restaurant_owner_patch: invalid image entry',
   'missing URL is rejected in SQL');
 
 select throws_ok(
-  $select public.restaurant_owner_patch(
+  $$select public.restaurant_owner_patch(
     'a1540000-0000-4000-8000-000000000031',
-    '{"images":[{"url":"https://example.com/a.jpg","hijack":true}]}'::jsonb)$,
+    '{"images":[{"url":"https://example.com/a.jpg","hijack":true}]}'::jsonb)$$,
   '22023','restaurant_owner_patch: invalid image entry',
   'unexpected image keys are rejected in SQL');
 

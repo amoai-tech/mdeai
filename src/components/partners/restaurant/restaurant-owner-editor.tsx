@@ -109,15 +109,15 @@ export function RestaurantOwnerEditor(props: RestaurantOwnerEditorProps) {
       delete safeNext.images;
       delete safeNext.primary_image_url;
     }
-    setValues((current) => {
-      const merged = { ...current, ...safeNext };
-      setListText({
-        cuisine_types: merged.cuisine_types.join(", "),
-        dietary_options: merged.dietary_options.join(", "),
-        ambiance: merged.ambiance.join(", "),
-        tags: merged.tags.join(", "),
-      });
-      return merged;
+    // Compute the merged draft in the event handler: a state updater must stay
+    // pure, and StrictMode may invoke it twice.
+    const merged = { ...values, ...safeNext };
+    setValues(merged);
+    setListText({
+      cuisine_types: merged.cuisine_types.join(", "),
+      dietary_options: merged.dietary_options.join(", "),
+      ambiance: merged.ambiance.join(", "),
+      tags: merged.tags.join(", "),
     });
     setSaved(false);
   }

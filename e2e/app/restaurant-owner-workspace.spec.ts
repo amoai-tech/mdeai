@@ -144,6 +144,16 @@ async function cleanup(fixture: Fixture | null): Promise<void> {
     .select("id")
     .in("restaurant_id", restaurantIds);
   expect(leftoverRequests.data ?? []).toHaveLength(0);
+  const leftoverMenu = await admin
+    .from("restaurant_menu_items")
+    .select("id")
+    .in("restaurant_id", restaurantIds);
+  expect(leftoverMenu.data ?? []).toHaveLength(0);
+  const leftoverLocations = await admin
+    .from("partner_locations")
+    .select("id")
+    .in("partner_id", partnerIds);
+  expect(leftoverLocations.data ?? []).toHaveLength(0);
 }
 
 async function signInPartner(page: Page, email: string) {
@@ -152,9 +162,10 @@ async function signInPartner(page: Page, email: string) {
 
 async function openAssignedRestaurant(page: Page, fixture: Fixture) {
   await page.goto(`/app/partners/restaurants?partner=${fixture.partnerA}`);
-  await expect(page.getByTestId("partner-restaurants")).toBeVisible();
+  await expect(page.getByTestId("partner-restaurants")).toBeVisible({ timeout: 30_000 });
   await page.getByTestId("partner-restaurants-list").getByText(`Restaurant A`).first().click();
-  await expect(page.getByTestId("restaurant-owner-form")).toBeVisible();
+  // The first client navigation compiles the editor route on a cold dev server.
+  await expect(page.getByTestId("restaurant-owner-form")).toBeVisible({ timeout: 30_000 });
 }
 
 test.describe("SAN-1540 restaurant owner workspace", () => {

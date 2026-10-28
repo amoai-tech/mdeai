@@ -24,6 +24,13 @@ type Draft = {
   retrievedAt: string;
 };
 
+// Explicit locale + time zone: server and client must format the retrieval time identically.
+const retrievedAtFormat = new Intl.DateTimeFormat("en-US", {
+  dateStyle: "medium",
+  timeStyle: "short",
+  timeZone: "America/Bogota",
+});
+
 const LABELS: Record<string, string> = {
   name: "Restaurant name",
   description: "Description",
@@ -193,7 +200,7 @@ export function RestaurantWebsiteImport({
               ))}
             </ul>
             <p className="mt-1 text-xs text-muted-foreground">
-              Retrieved {new Date(draft.retrievedAt).toLocaleString()}
+              Retrieved {retrievedAtFormat.format(new Date(draft.retrievedAt))}
             </p>
             {draft.unknownFields.length > 0 ? (
               <p className="mt-1 text-xs text-muted-foreground">

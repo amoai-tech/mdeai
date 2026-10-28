@@ -135,18 +135,21 @@ select is(
   array['image/jpeg','image/png','image/webp']::text[],
   'only image mime types are accepted');
 
-select is(
-  (select count(*)::int from pg_policies
-   where schemaname='storage' and tablename='objects'
-     and policyname in ('restaurant_photos_storage_insert','restaurant_photos_storage_update','restaurant_photos_storage_delete')),
-  3, 'insert/update/delete policies exist for restaurant photos');
+-- Behavioural proof, not a policy-text check: the storage RLS itself must allow
+-- the owner's folder and deny a folder belonging to another partner.
+set local role authenticated;
+select set_config('request.jwt.claim.sub','a1541000-0000-4000-8000-000000000001',true);
+select lives_ok(
+  $$insert into storage.objects (id, bucket_id, name)
+    values ('a1541000-0000-4000-8000-000000000051','restaurant-photos',
+      'a1541000-0000-4000-8000-000000000011/a1541000-0000-4000-8000-000000000031/own.jpg')$$,
+  'partner A can upload a photo into their own partner folder');
 
-select is(
-  (select bool_and(with_check like '%restaurant-photos%' and with_check like '%partner_ids_for_user%')
-   from pg_policies
-   where schemaname='storage' and tablename='objects'
-     and policyname='restaurant_photos_storage_insert'),
-  true, 'photo writes are scoped to the caller''s partner folder');
+select throws_ok(
+  $$insert into storage.objects (id, bucket_id, name)
+    values ('a1541000-0000-4000-8000-000000000052','restaurant-photos',
+      'a1541000-0000-4000-8000-000000000012/a1541000-0000-4000-8000-000000000032/hijack.jpg')$$,
+  '42501', null, 'partner A cannot upload a photo into another partner''s folder');
 
 select * from finish();
 rollback;

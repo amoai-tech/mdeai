@@ -30,12 +30,14 @@ PW_SKIP_WEBSERVER=1 npx playwright test e2e/app/restaurant-owner-workspace.spec.
 npm run floor
 ```
 
-Results on the commit this folder describes:
+Results on the current PR head (through `038ed766` plus the review repairs):
 
-- pgTAP: 3 files, 60 assertions, all passing.
-- Focused Vitest: 14 files, 97 tests, all passing.
-- Playwright: 8 tests passing (5 restaurant-owner tests + 2 existing partner-workspace tests + 390px), against a local Supabase stack with real rows; fixtures deleted; post-cleanup checks confirmed restaurants, partners and venue_booking_requests only.
-- `npm run floor`: exit 0 (503 Vitest files / 3,870 tests passed, lint, typecheck, build, env contract, Mastra schema gate).
+- pgTAP: 3 files, **65 assertions** passing (33 partner/assignment, 19 menu/photos, 13 inbox), including behavioural storage-folder inserts and the image-validation cases.
+- Focused Vitest: **24 files / 136 tests** passing (`src/lib/restaurants`, `src/lib/venues`, the partner restaurant routes and the workspace contexts).
+- Playwright: **8 tests passing** (5 restaurant-owner tests + 2 existing partner-workspace tests + 390px), against a fresh local Supabase stack with real rows.
+- `npm run floor`: **exit 0** (505 Vitest files / 3,881 tests passed, 37 skipped; lint, typecheck, Next.js build, env contract, CopilotKit v2 audit, Mastra schema gate).
+- Fixture cleanup was re-queried after the run: 0 partners, 0 fixture restaurants, 0 venue requests, 0 menu items and 0 partner locations remained.
+- Live website import probe against `https://moshimedellin.co/` returned sourced fields and flagged unverified ones; no write occurred.
 
 ## Screenshots
 
@@ -43,9 +45,10 @@ Results on the commit this folder describes:
 - `reservation-inbox.png` — the real request in the correct partner inbox.
 - `public-restaurant.png` — the public Details page after photos/menu were saved.
 
-Development records created by the browser spec are throwaway partner/restaurant rows deleted in `afterEach`; the database was re-queried for restaurants, partners and venue_booking_requests only. No Phase A business approval, ownership paperwork or publishing gate was introduced.
+Development records created by the browser spec are throwaway partner/restaurant rows deleted in `afterEach`; the database was re-queried for restaurants, partners, venue_booking_requests, restaurant_menu_items and partner_locations. No Phase A business approval, ownership paperwork or publishing gate was introduced.
 
-### Subsequent verification
-- At commit `d98331462c`, Codacy Cloud had 0 introduced issues, required check green.
-- Full `npm run floor` passed: 3,872 tests, 35 skipped.
-- A local browser rerun got 1 pass, 5 fixture setup failures from `PGRST204` (stale local Supabase schema lacked `restaurants.partner_id`). This is **not a successful restaurant E2E run**. Revalidate with a fresh migrated stack.
+### Review verification
+
+- Codacy Cloud: 0 introduced issues on `d98331462c`; required static-analysis check green. The later review repairs are re-checked on the new head by CI.
+- A stale local Supabase schema (`PGRST204` for `restaurants.partner_id`) caused a transient local browser failure during the Codacy refactor. After `supabase db reset`, both the SQL suite and the browser suite passed; that failed run is not presented as evidence.
+- CodeRabbit's follow-up caught invalid `$...$` quoting in two new pgTAP assertions (which stopped 17 assertions from running). Both were repaired to `$$...$$`; the full 33-assertion file now runs and passes.
