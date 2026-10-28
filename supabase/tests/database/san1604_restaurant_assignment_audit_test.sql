@@ -67,7 +67,7 @@ end $$;
 reset role;
 select case when count(*)=2 and count(*) filter (where actor_user_id='fa1fa1fa-0000-4000-8000-000000000001')=2
 then 'PASS: exactly 2 correctly attributed audit records' else 'FAIL: audit count or actor' end as audit_assertion
-from public.restaurant_partner_assignment_audit where restaurant_id in (select id from public.restaurants) and actor_user_id='fa1fa1fa-0000-4000-8000-000000000001';
+from public.restaurant_partner_assignment_audit where restaurant_id in (select r.id from public.restaurants as r) and actor_user_id='fa1fa1fa-0000-4000-8000-000000000001';
 
 select ok((select count(*)=2 from public.restaurant_partner_assignment_audit where actor_user_id='fa1fa1fa-0000-4000-8000-000000000001'),'one audit row per change and no retry duplicate');
 select * from finish();
