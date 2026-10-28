@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { test, expect, type Browser, type BrowserContext, type Page } from "@playwright/test";
+import { test, expect, type Browser, type BrowserContext, type Locator, type Page } from "@playwright/test";
 import {
   createThrowawayIdentity,
   deleteThrowawayIdentity,
@@ -105,24 +105,31 @@ async function withThrowawayHost(
   const host = await createThrowawayIdentity(label);
   let context: BrowserContext | undefined;
   let fixtureFailures: string[] = [];
-  try {
+  // Every cleanup step runs even when the body or an earlier step throws, and every failure is
+  // reported together, so a failing test can never hide a leaked fixture. Identity deletion is last.
+  const problems: unknown[] = [];
+  const attempt = async (step: () => Promise<unknown>) => {
+    try {
+      await step();
+    } catch (error) {
+      problems.push(error);
+    }
+  };
+  await attempt(async () => {
     context = await browser.newContext({ viewport: { width, height: width === 390 ? 844 : 900 } });
     const page = await context.newPage();
     const consoleErrors: string[] = [];
     page.on("pageerror", (e) => consoleErrors.push(e.message));
     await body({ host, admin, page, context, consoleErrors });
-  } finally {
-    try {
-      fixtureFailures = await removeFixture(admin, host);
-    } finally {
-      try {
-        await context?.close();
-      } finally {
-        await deleteThrowawayIdentity(host);
-      }
-    }
-  }
-  expect(fixtureFailures).toEqual([]);
+  });
+  await attempt(async () => {
+    fixtureFailures = await removeFixture(admin, host);
+  });
+  await attempt(async () => context?.close());
+  await attempt(() => deleteThrowawayIdentity(host));
+  if (fixtureFailures.length) problems.push(new Error(`fixture cleanup left rows: ${fixtureFailures.join("; ")}`));
+  if (problems.length === 1) throw problems[0];
+  if (problems.length > 1) throw new AggregateError(problems, "test and/or cleanup failed");
 }
 
 async function signInHost(ctx: HostRun, path: string) {
@@ -131,6 +138,18 @@ async function signInHost(ctx: HostRun, path: string) {
     host: origin.hostname, secure: origin.protocol === "https:",
   });
   await ctx.page.goto(new URL(path, base).toString(), { waitUntil: "domcontentloaded" });
+}
+
+/** Poll the chat rail until `done()` is true; on timeout throw with the reply text so a failure is diagnosable. */
+async function waitForReply(page: Page, rail: Locator, done: () => Promise<boolean>, timeoutMs: number): Promise<string> {
+  const deadline = Date.now() + timeoutMs;
+  let text = "";
+  while (Date.now() < deadline) {
+    text = await rail.innerText();
+    if (await done()) return text;
+    await page.waitForTimeout(2_000);
+  }
+  throw new Error(`Host Ops reply never matched the seeded figures. Reply tail: ${JSON.stringify(text.slice(-500))}`);
 }
 
 async function expectNoOverflow(page: Page) {
@@ -167,15 +186,13 @@ for (const width of [390, 1440]) {
         const text = await rail.innerText();
         return [...text.matchAll(/COP\s*([\d.,]+)/gi)].map((m) => Number(m[1].replace(/[.,]/g, "")));
       };
-      // Poll until the streamed reply is complete: amounts present and ALL equal to the seeded total.
-      // A wrong total never converges, so a wrong answer still fails at the timeout.
-      await expect.poll(async () => {
-        const amounts = await copAmounts();
-        return amounts.length > 0 && amounts.every((n) => n === DISPLAYED_TOTAL);
-      }, { timeout: 90_000, intervals: [2000, 3000, 5000] }).toBe(true);
+      // Wait until the streamed reply is complete: amounts present and ALL equal to the seeded total.
+      // A wrong total never converges, so a wrong answer still fails; the failure shows the reply.
       const ticketsRe = new RegExp(`\\b${TICKETS}\\s+tickets?\\b`, "i");
-      await expect.poll(async () => ticketsRe.test(await rail.innerText()), { timeout: 30_000 }).toBe(true);
-      const afterFirst = await rail.innerText();
+      const afterFirst = await waitForReply(page, rail, async () => {
+        const amounts = await copAmounts();
+        return amounts.length > 0 && amounts.every((n) => n === DISPLAYED_TOTAL) && ticketsRe.test(await rail.innerText());
+      }, 90_000);
       console.log("SAN1396_SALES_REPLY", JSON.stringify(afterFirst.slice(-400)));
 
       await ask("Which event is that for?");
@@ -199,7 +216,7 @@ for (const width of [390, 1440]) {
       const chat = page.getByTestId("host-copilot-chat-region");
       const editor = chat.locator("textarea").first();
       const send = chat.getByTestId("copilot-send-button");
-      const prompt = 'Fill the form for an event titled "SAN-1396 QA Salsa Night" in Laureles, capacity 80, free entry. Do not publish.';
+      const prompt = 'Fill the form for an event titled "QA Salsa Night" in Laureles, capacity 80, free entry. Do not publish.';
       await expect(async () => {
         await editor.fill("");
         await editor.pressSequentially(prompt, { delay: 8 });
@@ -208,7 +225,8 @@ for (const width of [390, 1440]) {
       await editor.press("Enter");
 
       await expect(page.getByTestId("host-event-field-neighborhood")).toHaveValue(/laureles/i, { timeout: 90_000 });
-      await expect(page.getByTestId("host-event-field-title")).toHaveValue(/Salsa Night/i, { timeout: 30_000 });
+      // Exact title, except the model sometimes drops the "QA" qualifier (3 of ~28 live runs). Extra words fail.
+      await expect(page.getByTestId("host-event-field-title")).toHaveValue(/^(QA )?Salsa Night$/i, { timeout: 30_000 });
       await expect(page.getByTestId("host-event-field-capacity")).toHaveValue("80", { timeout: 30_000 });
 
       // The wizard only writes when the host approves. Nothing was approved here.

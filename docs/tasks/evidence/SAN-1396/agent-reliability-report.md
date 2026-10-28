@@ -96,7 +96,9 @@ Failure causes in those 12 failed turns: missing Google key ×3, database connec
 | 1 | Fix committed to open PR but not deployed | PR #576 head and deployment SHA must be compared | Blocks "production ready" |
 | 2 | Concierge "New Chat while a reply is still streaming": the user message was not saved within 60 s on one of 5 first attempts | 1 flaky, then 3/3 pass. Screenshot at `test-results/prod-concierge-thread-life-51b14-g-leaves-the-new-chat-clean-prod-smoke/` (treat as sensitive). Cause not found. | Medium (≈20% in 5 first attempts, small sample) |
 | 3 | No live proof for wizard **publish**, or for Events discovery | Not run: publish creates a public event; the Events agent has no screen | Medium |
-| 4 | Gemini turn-order error seen once in production | `ai_runs`, 2026-10-20 13:04 | Low; not reproduced |
+| 4a | **Wizard AI sometimes alters the event title.** In live runs after the title check was tightened, the AI wrote "N-1396 QA Salsa Night", "QA Salsa Night" (asked for the prefixed title) and "Salsa Night" (asked for "QA Salsa Night"): about 1 in 10 runs. The host sees the field and can edit it; nothing is saved without Approve. | Live specs, 2026-10-27 | Low-medium (a copy-fidelity weakness of the flash-lite model, not caused by this PR) |
+| 4b | One Host Ops live run (1 of about 34) did not match the seeded figures within the time limit; the reply was not captured. The spec now prints the reply on failure. 12 of 12 later runs passed. | Live spec | Low; watch after deploy |
+| 4c | Gemini turn-order error seen once in production | `ai_runs`, 2026-10-20 13:04 | Low; not reproduced |
 | 5 | The `eventAgent` has no screen and no usage | grep: no component references it | Decision needed |
 
 ## 7. What I did not do, and why
