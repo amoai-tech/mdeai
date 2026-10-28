@@ -2,7 +2,7 @@
 
 **Progress source of truth:** [SAN-1390 · EPIC · One Ask MDE Across Five Discovery Pages](https://linear.app/amo100/issue/SAN-1390/epic-one-ask-mde-across-five-discovery-pages). This file owns the **technical execution steps only**. It keeps no progress count; read the verified acceptance count in SAN-1390 (17/36 when this was written) and change it only with task + PR + SHA + browser/test/DB proof.
 **Written:** 2026-10-28 against `main` @ `ad2119a545`. Refresh PR heads before acting.
-**Supersedes (execution order only):** [mde-shared-discovery-readiness.md](./mde-shared-discovery-readiness.md) (2026-10-14 snapshot, kept as history).
+**Supersedes (execution order only):** [mde-shared-discovery-readiness.md](../plans/mde-shared-discovery-readiness.md) (2026-10-14 snapshot, kept as history).
 **Phase:** A, prelaunch development. No approval, ownership, eligibility or publishing gate. Keep authentication, RLS, authorization, idempotency and truthful data.
 
 ## 1. Executive summary
