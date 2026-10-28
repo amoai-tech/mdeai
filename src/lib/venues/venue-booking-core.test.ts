@@ -158,6 +158,21 @@ describe("insertVenueBookingRequest", () => {
     expect(supabase.insert).toHaveBeenCalledTimes(1);
   });
 
+  it("returns the same UUID-based receipt after Google enrichment is added", async () => {
+    const placeId = "ChIJcorrectRestaurant";
+    const supabase = mockSupabase({
+      restaurant: { id: MDE_UUID, google_place_id: placeId },
+      insertResult: { data: null, error: { code: "23505" } },
+      previous: {
+        id: "first-uuid-only-request", venue_kind: "restaurant",
+        place_id: null, restaurant_id: MDE_UUID,
+        requested_at: NOW, party_size: 2,
+      },
+    });
+    const result = await insertVenueBookingRequest(supabase, "user-1", { ...payload, placeId });
+    expect(result).toMatchObject({ ok: true, data: { requestId: "first-uuid-only-request" } });
+  });
+
   it("rejects an idempotency key reused for a different booking", async () => {
     const supabase = mockSupabase({
       insertResult: { data: null, error: { code: "23505" } },

@@ -122,7 +122,9 @@ export async function insertVenueBookingRequest(
       if (
         !lookupError && previous &&
         previous.venue_kind === input.venueKind &&
-        previous.place_id === (input.placeId ?? null) &&
+        // Google enrichment may have changed since an earlier identical MDE
+        // restaurant request. The canonical UUID is the stable identity.
+        (restaurantId !== null || previous.place_id === (input.placeId ?? null)) &&
         previous.restaurant_id === restaurantId &&
         previous.party_size === input.partySize &&
         new Date(previous.requested_at).getTime() === new Date(input.requestedAt).getTime()

@@ -17,6 +17,7 @@ import { asUser } from "../helpers/rental-journey-fixture";
  */
 test.describe("SAN-1539 real restaurant UUID-only reservation request", () => {
   test.setTimeout(140_000);
+  test.use({ viewport: { width: 390, height: 844 }, timezoneId: "America/Bogota" });
   test.skip(
     !hasE2eEnv() || process.env.MDE_RESTAURANT_BOOKING_LIVE !== "1",
     "Opt in with MDE_RESTAURANT_BOOKING_LIVE=1 and real Supabase E2E credentials",
@@ -48,6 +49,32 @@ test.describe("SAN-1539 real restaurant UUID-only reservation request", () => {
         contactName: "SAN-1539 QA renter",
         contactEmail: primary.email,
       };
+      // Prove the customer can finish the REAL 390px restaurant detail form,
+      // not merely that a direct HTTP call can write a row.
+      await page.goto(new URL(`/restaurants/${restaurantId}`, origin).toString());
+      await expect(page.getByTestId("restaurant-reservation-request")).toBeVisible();
+      // Server-rendered buttons are visible before React hydration; wait for
+      // the client bundle before exercising the real interaction.
+      await page.waitForLoadState("networkidle");
+      await page.getByTestId("restaurant-request-open").click();
+      await expect(page.getByTestId("venue-booking-form")).toBeVisible();
+      await page.locator('[name="contactName"]').fill(input.contactName);
+      await page.locator('[name="contactEmail"]').fill(input.contactEmail);
+      await page.locator('[name="requestedAt"]').fill("2026-11-15T18:00");
+      const submitResponse = page.waitForResponse(
+        (res) => res.url().includes("/api/venue-booking/request") && res.request().method() === "POST",
+      );
+      await page.getByTestId("venue-booking-submit").click();
+      expect((await submitResponse).status()).toBe(200);
+      await expect(page.getByTestId("restaurant-request-submitted")).toContainText("Request saved");
+      await expect(page.getByTestId("restaurant-request-submitted")).toContainText("not a confirmed reservation");
+      const formReceipt = await page.getByTestId("restaurant-request-submitted").innerText();
+
+      // A reload must read the actual persisted pending status by restaurant UUID
+      // even though this venue has no Google Place ID.
+      await page.reload();
+      await expect(page.getByTestId("restaurant-request-status")).toContainText(/pending/i);
+
       const send = () => page.request.post(new URL("/api/venue-booking/request", origin).toString(), {
         data: input,
       });
@@ -58,6 +85,7 @@ test.describe("SAN-1539 real restaurant UUID-only reservation request", () => {
       expect(firstBody.requestId).toMatch(/^[0-9a-f-]{36}$/i);
       expect(firstBody.message).toContain("not a confirmed reservation");
       savedId = firstBody.requestId;
+      expect(formReceipt).toContain(savedId);
 
       const { data: rows, error } = await admin.from("venue_booking_requests")
         .select("id,user_id,restaurant_id,place_id,status,party_size")
@@ -89,9 +117,8 @@ test.describe("SAN-1539 real restaurant UUID-only reservation request", () => {
       expect(denied.error).toBeNull();
       expect(denied.data).toEqual([]);
 
-      await page.setViewportSize({ width: 390, height: 844 });
-      // Device-width runtime smoke only; a screenshot of the signed-in session
-      // must remain private. The booking request itself is proved by DB readback.
+      // Browser, authenticated server route and durable Supabase record were all
+      // exercised at mobile width. Do not expose signed-in screenshots.
       expect(await page.evaluate(() => innerWidth)).toBe(390);
     } finally {
       const failures: string[] = [];
