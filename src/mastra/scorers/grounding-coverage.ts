@@ -48,9 +48,8 @@ function judgeEnabled(requestContext: unknown): boolean {
 }
 
 /** A judge can clear a heuristic entity finding only by citing an actual
- * source name with a shared distinctive word. An empty judge verdict, an
- * invented alias or a generic source word must never turn a fabricated venue
- * into a perfect grounding score. */
+ * source name that contains every distinctive word from the claim. An empty
+ * verdict or partial name overlap must never clear an invented venue. */
 function normalizeName(text: string): string {
   return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "")
     .toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
@@ -70,7 +69,9 @@ function sourceNames(value: unknown): string[] {
   return names;
 }
 
-const GENERIC_ENTITY_WORDS = new Set(["hotel", "restaurant", "cafe", "club", "the", "el", "la", "medellin"]);
+// Location qualifiers distinguish venues (e.g. Skyline Rooftop ≠ Skyline Rooftop Medellín).
+// Do not treat city names as generic words when checking entity identity.
+const GENERIC_ENTITY_WORDS = new Set(["hotel", "restaurant", "cafe", "club", "the", "el", "la"]);
 
 export function reconcileGroundingJudgeVerdict(
   unsupported: FaithfulnessClaim[],
@@ -86,8 +87,11 @@ export function reconcileGroundingJudgeVerdict(
     return !groundedAliases.some((alias) => {
       const source = normalizeName(alias.sourceName);
       if (normalizeName(alias.claim) !== claim || !validSources.has(source)) return false;
-      const claimWords = new Set(claim.split(" ").filter((word) => word.length > 2 && !GENERIC_ENTITY_WORDS.has(word)));
-      return source.split(" ").some((word) => claimWords.has(word) && word.length > 2 && !GENERIC_ENTITY_WORDS.has(word));
+      const claimWords = claim.split(" ").filter((word) => word.length > 2 && !GENERIC_ENTITY_WORDS.has(word));
+      const sourceWords = new Set(source.split(" "));
+      // A judge repeating its own candidate as an alias proves nothing.
+      // Check EVERY identity-bearing word against the actual source name.
+      return claimWords.length > 0 && claimWords.every((word) => sourceWords.has(word));
     });
   });
 }

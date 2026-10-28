@@ -29,8 +29,16 @@ describe("grounding coverage core — evaluateGroundingCoverage", () => {
     expect(verdict.score).toBeLessThan(1);
     expect(verdict.unsupportedClaims.length).toBeGreaterThanOrEqual(2);
     expect(verdict.unsupportedClaims.map((c) => c.claim)).toEqual(
-      expect.arrayContaining(["Skyline Rooftop Medell", "Luna Social Club"]),
+      expect.arrayContaining(["Skyline Rooftop Medellín", "Luna Social Club"]),
     );
+  });
+
+  it("preserves accented identity qualifiers in a grounded venue name", () => {
+    const source = { toolOutputs: [{ results: [{ name: "Skyline Rooftop Medellín" }] }] };
+    const verdict = evaluateGroundingCoverage(source, { reply: "The venue is Skyline Rooftop Medellín." });
+    expect(verdict.score).toBe(1);
+    expect(verdict.claimCount).toBe(1);
+    expect(verdict.unsupportedClaims).toEqual([]);
   });
 
   it("ignores wrong prices — coverage 1.0 while faithfulness fails", () => {
