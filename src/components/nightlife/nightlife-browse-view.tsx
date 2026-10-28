@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import { useCallback, useState } from "react";
+import { useVenueAskSelection } from "@/components/chat/use-venue-ask-selection";
 import { BrowseMapContextShell } from "@/components/browse/BrowseMapContextShell";
 import { BrowseMapPanel } from "@/components/browse/BrowseMapPanel";
 import { BrowseMapSheet } from "@/components/browse/BrowseMapSheet";
 import { DiscoveryGroundedResults } from "@/components/chat/discovery-grounded-results";
 import type { DiscoveryAgentResult } from "@/components/chat/discovery-tool-results";
-import { useMapContext } from "@/platform/maps/map-context";
 import type { GroundedToolRow } from "@/lib/parse-grounded-tool-result";
 import { MoonStar } from "lucide-react";
 import { DiscoveryWorkspace } from "@/components/browse/DiscoveryWorkspace";
@@ -45,25 +45,16 @@ function NightlifeBrowseViewInner({
 }: NightlifeBrowseViewProps) {
   const retryHref = buildFilterUrl({ neighborhood, vibe });
   const [searched, setSearched] = useState<{ scope: string; rows: GroundedToolRow[] } | null>(null);
-  const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const activeRows = searched?.scope === retryHref ? searched.rows : null;
+  const { selectedId, selectForAsk, clearAskSelection } = useVenueAskSelection(
+    activeRows, results.map((r) => r.id),
+  );
   const onAgentResults = useCallback((result: DiscoveryAgentResult) => {
     if (result.page === "nightlife") {
-      setSelectedCardId(null);
       setSearched({ scope: retryHref, rows: result.rows });
+      clearAskSelection();
     }
-  }, [retryHref]);
-  const { selectedPinId, setSelectedPinId } = useMapContext();
-  const visibleIds = activeRows?.map((r) => r.id) ?? results.map((r) => r.id);
-  const selectedId = selectedCardId && visibleIds.includes(selectedCardId) ? selectedCardId :
-    activeRows?.find((r) => "grounded-" + r.id === selectedPinId)?.id ?? null;
-  const selectForAsk = (id: string | null) => {
-    setSelectedCardId(id);
-    // Clearing selection must not resurrect a previously selected map pin.
-    if (id === null || !activeRows?.some((r) => r.id === id && r.latitude != null && r.longitude != null)) {
-      setSelectedPinId(null);
-    }
-  };
+  }, [retryHref, clearAskSelection]);
 
   const notice = (
     <p
