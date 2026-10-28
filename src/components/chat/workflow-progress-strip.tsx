@@ -10,7 +10,7 @@ import { useChatWorkflow } from "@/components/chat/chat-workflow-context";
 
 /** SCREEN-004 — Mindtrip-style step strip driven by tool generative render status. */
 export function WorkflowProgressStrip() {
-  const { snapshot, now } = useChatWorkflow();
+  const { snapshot } = useChatWorkflow();
 
   if (snapshot.phase === "idle" || !snapshot.kind) {
     return (
@@ -24,12 +24,9 @@ export function WorkflowProgressStrip() {
   }
 
   const labels = WORKFLOW_STEP_LABELS[snapshot.kind];
-  const elapsed =
-    snapshot.startedAt != null ? now - snapshot.startedAt : 0;
   const activeIndex = activeWorkflowStepIndex(
     snapshot.phase,
     labels.length,
-    elapsed,
   );
   const isError = snapshot.phase === "error";
 
