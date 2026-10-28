@@ -5,6 +5,9 @@ import { ACTIVE_AI_PROVIDER, ACTIVE_TEXT_MODEL } from "../lib/models";
 import { extractClaims, type FaithfulnessClaim } from "./faithfulness-core";
 import {
   evaluateGroundingCoverage,
+  groundedSourceNames,
+  normalizeGroundingName,
+  sameGroundedEntityName,
   type GroundingCoverageInput,
   type GroundingCoverageReply,
 } from "./grounding-coverage-core";
@@ -47,47 +50,23 @@ function judgeEnabled(requestContext: unknown): boolean {
   return flag !== false;
 }
 
-/** A judge can clear a heuristic entity finding only by citing an actual
- * source name with a shared distinctive word. An empty judge verdict, an
- * invented alias or a generic source word must never turn a fabricated venue
- * into a perfect grounding score. */
-function normalizeName(text: string): string {
-  return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-}
-
-function sourceNames(value: unknown): string[] {
-  if (Array.isArray(value)) return value.flatMap(sourceNames);
-  if (!value || typeof value !== "object") return [];
-  const names: string[] = [];
-  for (const [key, entry] of Object.entries(value)) {
-    if (["name", "title", "aliases", "alias", "venue_name", "listing_name", "event_name"].includes(key)) {
-      if (typeof entry === "string") names.push(entry);
-      if (Array.isArray(entry)) names.push(...entry.filter((s): s is string => typeof s === "string"));
-    }
-    if (entry && typeof entry === "object") names.push(...sourceNames(entry));
-  }
-  return names;
-}
-
-const GENERIC_ENTITY_WORDS = new Set(["hotel", "restaurant", "cafe", "club", "the", "el", "la", "medellin"]);
-
 export function reconcileGroundingJudgeVerdict(
   unsupported: FaithfulnessClaim[],
   uncovered: string[],
   groundedAliases: { claim: string; sourceName: string }[],
   toolOutputs: unknown[],
 ): FaithfulnessClaim[] {
-  const confirmedAbsent = new Set(uncovered.map(normalizeName));
-  const validSources = new Set(sourceNames(toolOutputs).map(normalizeName));
+  const confirmedAbsent = new Set(uncovered.map(normalizeGroundingName));
+  const validSources = new Set(groundedSourceNames(toolOutputs).map(normalizeGroundingName));
   return unsupported.filter((candidate) => {
-    const claim = normalizeName(candidate.claim);
+    const claim = normalizeGroundingName(candidate.claim);
     if (confirmedAbsent.has(claim)) return true;
     return !groundedAliases.some((alias) => {
-      const source = normalizeName(alias.sourceName);
-      if (normalizeName(alias.claim) !== claim || !validSources.has(source)) return false;
-      const claimWords = new Set(claim.split(" ").filter((word) => word.length > 2 && !GENERIC_ENTITY_WORDS.has(word)));
-      return source.split(" ").some((word) => claimWords.has(word) && word.length > 2 && !GENERIC_ENTITY_WORDS.has(word));
+      const source = normalizeGroundingName(alias.sourceName);
+      if (normalizeGroundingName(alias.claim) !== claim || !validSources.has(source)) return false;
+      // A judge-proposed alias is not evidence by itself. Compare the full
+      // distinctive word sets to an actual tool-row name, in both directions.
+      return sameGroundedEntityName(claim, source);
     });
   });
 }

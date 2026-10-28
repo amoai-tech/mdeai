@@ -103,3 +103,92 @@ it("accepts only a real source-name alias with matching distinctive words", asyn
   ], toolOutputs)).toEqual(candidates);
   expect(reconcileGroundingJudgeVerdict(candidates, ["Hotel Carmen"], aliases, toolOutputs)).toEqual(candidates);
 });
+
+
+it("does not clear an invented city qualifier from a real venue with shared name words", async () => {
+  const { reconcileGroundingJudgeVerdict } = await import("../grounding-coverage");
+  const candidate = { claim: "Skyline Rooftop Medellín", type: "entity" as const };
+  const source = [{ results: [{ name: "Skyline Rooftop" }] }];
+  // The model may repeat the candidate as its own 'alias'; that is not evidence.
+  expect(reconcileGroundingJudgeVerdict(
+    [candidate], [],
+    [{ claim: candidate.claim, sourceName: "Skyline Rooftop" }],
+    source,
+  )).toEqual([candidate]);
+  // The model must not smuggle a fabricated qualifier through an alias with just one shared word.
+  expect(reconcileGroundingJudgeVerdict(
+    [candidate], [],
+    [{ claim: candidate.claim, sourceName: "Skyline" }],
+    [{ results: [{ name: "Skyline" }] }],
+  )).toEqual([candidate]);
+});
+
+it("keeps a claimed city distinguishing while allowing accents-only spelling variants", async () => {
+  const { reconcileGroundingJudgeVerdict } = await import("../grounding-coverage");
+  const claim = { claim: "Café Medellín", type: "entity" as const };
+  const source = [{ results: [{ name: "Cafe Medellin" }] }];
+  expect(reconcileGroundingJudgeVerdict([claim], [], [
+    { claim: claim.claim, sourceName: "Cafe Medellin" },
+  ], source)).toEqual([]);
+  expect(reconcileGroundingJudgeVerdict([claim], [], [
+    { claim: claim.claim, sourceName: "Cafe" },
+  ], [{ results: [{ name: "Cafe" }] }])).toEqual([claim]);
+});
+
+it("never grades the invented Skyline Rooftop Medellín as fully grounded from a real Skyline Rooftop tool row", async () => {
+  vi.stubEnv("MDE_AI_PROVIDER", "nvidia");
+  vi.stubEnv("NVIDIA_API_KEY", "test-nvidia-key");
+  modelJudge.mockResolvedValue({ object: {
+    uncovered: [],
+    groundedAliases: [{ claim: "Skyline Rooftop Medellín", sourceName: "Skyline Rooftop" }],
+  } });
+  const { groundingCoverageScorer } = await import("../grounding-coverage");
+  const result = await groundingCoverageScorer.run({
+    input: { toolOutputs: [{ results: [{ name: "Skyline Rooftop" }] }] },
+    output: { reply: "The venue is Skyline Rooftop Medellín." },
+  });
+  expect(result.score).toBeLessThan(1);
+  expect(result.reason).toContain("Skyline Rooftop");
+  expect(modelJudge).toHaveBeenCalledOnce();
+});
+
+
+it.each([
+  ["Skyline Rooftop Medellín", "Skyline Rooftop Medellín Club"],
+  ["Skyline Rooftop Medellín Club", "Skyline Rooftop Medellín"],
+])("rejects source-name qualifier mismatches in both directions: %s vs %s", async (claim, realSource) => {
+  const { reconcileGroundingJudgeVerdict } = await import("../grounding-coverage");
+  const candidate = { claim, type: "entity" as const };
+  expect(reconcileGroundingJudgeVerdict(
+    [candidate], [],
+    [{ claim, sourceName: realSource }],
+    [{ results: [{ name: realSource }] }],
+  )).toEqual([candidate]);
+});
+
+it.each([
+  ["Skyline Rooftop Medellín", "Skyline Rooftop Medellín Club", true],
+  ["Skyline Rooftop Medellín Club", "Skyline Rooftop Medellín", true],
+  ["Skyline Rooftop Medellín", "Skyline Rooftop Medellín Club", false],
+])("does not give an invented name score 1 for claim=%s vs source=%s; aliases=%s", async (claim, realSource, hasAlias) => {
+  vi.stubEnv("MDE_AI_PROVIDER", "nvidia");
+  vi.stubEnv("NVIDIA_API_KEY", "test-nvidia-key");
+  modelJudge.mockResolvedValue({ object: {
+    uncovered: [],
+    groundedAliases: hasAlias ? [{ claim, sourceName: realSource }] : [],
+  } });
+  const { groundingCoverageScorer } = await import("../grounding-coverage");
+  const result = await groundingCoverageScorer.run({
+    input: { toolOutputs: [{ results: [{ name: realSource }] }] },
+    output: { reply: `The venue is ${claim}.` },
+  });
+  expect(result.score).toBeLessThan(1);
+  expect(result.reason).toContain(claim);
+  // For unsupported names NVIDIA must receive the actual claim and tool row:
+  // a heuristic-only return is insufficient, even if the score looks correct.
+  expect(modelJudge).toHaveBeenCalledOnce();
+  const judgeArgs = modelJudge.mock.calls[0][0];
+  expect(judgeArgs.model.modelId).toBe(NVIDIA_MODEL_ID);
+  expect(judgeArgs.prompt).toContain(claim);
+  expect(judgeArgs.prompt).toContain(realSource);
+});

@@ -38,6 +38,19 @@ const FABRICATED_REPLY =
   "Try the Hotel Skyline Penthouse for 9,900,000 COP per month — it has a private rooftop pool.";
 
 describe("faithfulness core — extractClaims", () => {
+  it("extracts full accented multi-word venue names but not lone sentence starters", () => {
+    const entities = extractClaims(
+      "The venue is Skyline Rooftop Medellín. Another is Café Medellín. Sure. Here. Relato. Medellín.",
+    ).filter((claim) => claim.type === "entity").map((claim) => claim.claim);
+    expect(entities).toContain("Skyline Rooftop Medellín");
+    expect(entities).toContain("Café Medellín");
+    expect(entities).not.toContain("Skyline Rooftop Medell");
+    expect(entities).not.toContain("Sure");
+    expect(entities).not.toContain("Here");
+    expect(entities).not.toContain("Relato");
+    expect(entities).not.toContain("Medellín");
+  });
+
   it("extracts entity + price claims, drops generic geo words", () => {
     const claims = extractClaims(GROUNDED_REPLY);
     const entities = claims.filter((c) => c.type === "entity").map((c) => c.claim);
