@@ -254,16 +254,25 @@ export function RestaurantCard({
       composition={composition}
       mediaLayout={mediaLayout}
       ariaLabel={`Restaurant: ${title}${neighborhood ? `, ${neighborhood}` : ""}`}
-      bodyRole={onOpenDetails ? "button" : undefined}
-      bodyTabIndex={onOpenDetails ? 0 : undefined}
-      bodyAriaLabel={onOpenDetails ? `Open details for ${title}` : undefined}
+      // Pointer hover no longer selects, so the body itself stays the keyboard path: Enter/Space
+      // opens details when they exist, and otherwise selects this card on the map exactly once.
+      bodyRole={onOpenDetails || onSelect ? "button" : undefined}
+      bodyTabIndex={onOpenDetails || onSelect ? 0 : undefined}
+      bodyAriaLabel={
+        onOpenDetails
+          ? `Open details for ${title}`
+          : onSelect
+            ? `Select ${title} on the map`
+            : undefined
+      }
       onBodyClick={onOpenDetails ? openDetails : select}
       onBodyKeyDown={
-        onOpenDetails
+        onOpenDetails || onSelect
           ? (e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
-                openDetails();
+                if (onOpenDetails) openDetails();
+                else select();
               }
             }
           : undefined

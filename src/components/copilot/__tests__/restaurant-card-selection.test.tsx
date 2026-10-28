@@ -55,6 +55,26 @@ describe("RestaurantCard selection", () => {
     expect(onSelect).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps a keyboard selection path when the card has no details action", () => {
+    const onSelect = vi.fn();
+    const { container } = render(
+      <RestaurantCard
+        title="El Cielo"
+        neighborhood="El Poblado"
+        cuisine="Colombian"
+        rating={4.8}
+        pinId="restaurant-1"
+        composition="nova"
+        selected={false}
+        onSelect={onSelect}
+      />,
+    );
+    const body = container.querySelector('[role="button"]');
+    expect(body).not.toBeNull();
+    fireEvent.keyDown(body as Element, { key: "Enter" });
+    expect(onSelect).toHaveBeenCalledTimes(1);
+  });
+
   it("renders the title and no dead hover affordance", () => {
     renderCard();
     expect(screen.getByText("El Cielo")).toBeTruthy();
