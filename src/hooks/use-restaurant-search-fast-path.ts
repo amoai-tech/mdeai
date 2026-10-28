@@ -16,6 +16,7 @@ import {
   buildRestaurantSearchParams,
   canFastPathRestaurantSearch,
   fastPathRestaurantSummary,
+  isRestaurantVenueFactQuery,
   restaurantsToToolEnvelope,
   shouldInstantRestaurantClarify,
   type RestaurantSearchApiParams,
@@ -115,9 +116,14 @@ export function useRestaurantSearchFastPath() {
           ts: new Date().toISOString(),
         });
         const pinCount = applySearchResults(cards, params, chip);
+        const exactFact =
+          isRestaurantVenueFactQuery(userText) && cards.length === 1 &&
+          cards[0]?.aiSummary?.trim() && cards[0]?.sourceUrl?.startsWith('https://mdeai.co/restaurants/');
         showExchange(
           userText,
-          fastPathRestaurantSummary(cards.length, pinCount, params.neighborhood),
+          exactFact
+            ? cards[0].aiSummary!.trim() + ' Source: ' + cards[0].sourceUrl
+            : fastPathRestaurantSummary(cards.length, pinCount, params.neighborhood),
         );
         return true;
       } catch (err) {

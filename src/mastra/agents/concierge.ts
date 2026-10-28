@@ -328,7 +328,7 @@ Grounded listing rules (critical):
 - When re-calling search-grounded-places for nightlife bar/club discovery, pass intent: "nightlife" again. For café-only follow-ups, pass intent: "cafe".
 
 # Output formatting (restaurants — UI renders cards)
-After search-restaurants, the frontend renders cards and map pins from the tool — do NOT repeat card fields (name, price, rating, URLs) in prose.
+After search-restaurants, the frontend renders cards and map pins from the tool — do NOT repeat card fields (name, price, rating, URLs) in prose. Exception: when the user explicitly asks for a street address or source, answer using the real address from the tool aiSummary (when present) and canonical sourceUrl. Never claim a named venue is absent merely because a top-five recommendation list omitted it.
 
 # Pre-search clarification gate (restaurants — applies before search-restaurants)
 BEFORE calling search-restaurants, score the message:
@@ -338,12 +338,14 @@ BEFORE calling search-restaurants, score the message:
   hasNeighborhood — Poblado, Laureles, Envigado, Provenza, Belén
   hasBudget       — $, $$, $$$
   hasNearMe       — "near me" with location context
+  hasNamedVenue   — a specific named restaurant, address, hours, or phone request
 
 Decision rules (in order):
-1. lastRestaurantQuery EXISTS with cuisine, vibe, neighborhood, or budget → refine and search.
-2. genericAskPending is true → user already saw clarify chips; search on this reply using whatever they gave (typed or chip).
-3. hasCuisine OR hasVibe OR hasNeighborhood OR hasBudget OR hasNearMe → call search-restaurants immediately (queryText = user's phrase).
-4. Generic request ("suggest restaurants", "where to eat in Medellín" with no cuisine/vibe/area/budget) → send exactly ONE clarify message, set genericAskPending=true, do NOT call search-restaurants in the same turn. UI shows filter chips.
+1. hasNamedVenue → immediately call search-restaurants with the full user's phrase as queryText. Do not clarify first, or replace the named venue with broad recommendations.
+2. lastRestaurantQuery EXISTS with cuisine, vibe, neighborhood, or budget → refine and search.
+3. genericAskPending is true → user already saw clarify chips; search on this reply using whatever they gave (typed or chip).
+4. hasCuisine OR hasVibe OR hasNeighborhood OR hasBudget OR hasNearMe → call search-restaurants immediately (queryText = user's phrase).
+5. Generic request ("suggest restaurants", "where to eat in Medellín" with no cuisine/vibe/area/budget) → send exactly ONE clarify message, set genericAskPending=true, do NOT call search-restaurants in the same turn. UI shows filter chips.
 
 Clarification format (one message — same copy as RESTAURANT_CLARIFY_MESSAGE in restaurant-clarify-copy.ts):
 ${RESTAURANT_CLARIFY_MESSAGE}

@@ -10,6 +10,7 @@ import {
 import {
   buildRestaurantSearchParams,
   canFastPathRestaurantSearch,
+  isRestaurantVenueFactQuery,
   shouldInstantRestaurantClarify,
 } from "@/lib/restaurant-search-fast-path";
 import { RESTAURANT_CLARIFY_MESSAGE } from "@/lib/restaurant-clarify-copy";
@@ -54,6 +55,24 @@ describe("restaurant query classifier", () => {
 });
 
 describe("restaurant search fast path", () => {
+  it("sends factual named restaurant questions to the real catalog without dropping the name", () => {
+    const text = "Where is Mal De Ojo restaurant in Medellín? Give its street address and cite a source. Do not book anything.";
+    expect(isRestaurantVenueFactQuery(text)).toBe(true);
+    expect(shouldInstantRestaurantClarify(text, {})).toBe(false);
+    expect(canFastPathRestaurantSearch(text)).toBe(true);
+    expect(buildRestaurantSearchParams(text)?.queryText).toBe(text);
+    expect(buildRestaurantSearchParams("Mal De Ojo address")?.queryText).toBe("Mal De Ojo address");
+    expect(buildRestaurantSearchParams("Where is El Cielo?")?.queryText).toBe("Where is El Cielo?");
+  });
+
+  it("keeps actual booking requests and other categories on their original action paths", () => {
+    expect(isRestaurantVenueFactQuery("Where is Mal De Ojo? Book a table for two.")).toBe(false);
+    expect(canFastPathRestaurantSearch("Where is Mal De Ojo? Book a table for two.")).toBe(false);
+    expect(isRestaurantVenueFactQuery("Where is the best salsa club?")).toBe(false);
+    expect(isRestaurantVenueFactQuery("Italian restaurant in Poblado")).toBe(false);
+  });
+
+
   it("instant clarify for generic restaurant ask", () => {
     expect(shouldInstantRestaurantClarify("suggest restaurants", {})).toBe(true);
     expect(RESTAURANT_CLARIFY_MESSAGE).toContain("Tap a filter");

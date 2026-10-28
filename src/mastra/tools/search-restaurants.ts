@@ -326,6 +326,89 @@ function applyRestaurantFilters(rows: Restaurant[], query: RestaurantQuery): Res
   return results;
 }
 
+/**
+ * Match an explicitly mentioned catalog name, not merely a semantically similar
+ * restaurant. Handles accents, punctuation and close word-order variants.
+ */
+export function restaurantNameMentioned(queryText: string, name: string): boolean {
+  const normalize = (text: string) =>
+    text.normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/['’]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, ' ')
+      .trim()
+      .replace(/\s+/g, ' ');
+
+  // Normalize common Spanish article spacing (e.g. El Cielo / Elcielo).
+  const compactArticle = (text: string) => text.replace(/\b(el|la)\s+([a-z0-9]+)/g, '$1$2');
+  const query = compactArticle(normalize(queryText));
+  const fullName = compactArticle(normalize(name));
+  if (fullName.length < 5 || !query) return false;
+
+  // A venue often carries a generic business/city suffix in the catalog.
+  // Permit a caller to use the distinctive name without that suffix.
+  const candidates = [fullName];
+  let shortName = fullName;
+  while (/\s+(medellin|restaurant|restaurante|hotel)$/.test(shortName)) {
+    shortName = shortName.replace(/\s+(medellin|restaurant|restaurante|hotel)$/, '');
+    if (shortName.length >= 5) candidates.push(shortName);
+  }
+
+  for (const nameText of candidates) {
+    if ((' ' + query + ' ').includes(' ' + nameText + ' ')) return true;
+    // Word-order variations must form a contiguous phrase, not be scattered
+    // across generic discovery instructions.
+    const nameWords = nameText.split(' ');
+    if (nameWords.length < 2) continue;
+    const queryWords = query.split(' ');
+    const sortedName = [...nameWords].sort().join(' ');
+    for (let i = 0; i <= queryWords.length - nameWords.length; i++) {
+      if ([...queryWords.slice(i, i + nameWords.length)].sort().join(' ') === sortedName) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Resolve named venues before the hybrid top-N limit. Read the existing
+ * public catalog under its canonical RLS and preserve real card/map fields.
+ * Returning null means no named match; ordinary discovery uses hybrid search.
+ */
+async function findNamedRestaurants(
+  query: RestaurantQuery,
+): Promise<RestaurantSearchResult | null> {
+  const text = query.queryText?.trim();
+  if (!text) return null;
+  const client = getSupabaseClient();
+  if (!client) return null;
+
+  const { data, error } = await client
+    .from('restaurants')
+    .select('id, name, cuisine_types, price_level, address, city, neighborhood, latitude, longitude, primary_image_url, rating, tags, google_place_id, maps_url, ai_summary')
+    .limit(500);
+
+  if (error) {
+    console.warn('[search-restaurants] named lookup unavailable:', error.code);
+    return null;
+  }
+
+  const matches = ((data ?? []) as RestaurantRow[])
+    .filter((row) => restaurantNameMentioned(text, row.name));
+  if (!matches.length) return null;
+
+  const matched = applyRestaurantFilters(matches.map(rowToRestaurant), query);
+  // A definite name hit with conflicting constraints must not return unrelated
+  // restaurants from the highly rated default fallback.
+  return {
+    results: withRestaurantDisplayNames(matched.slice(0, query.limit ?? 5)),
+    total: matched.length,
+    source: 'supabase',
+    hybridUsed: false,
+    rankExplanation: [{ factor: 'exact_catalog_name', score: 1, note: 'RLS-protected restaurants.name' }],
+  };
+}
+
 export type RestaurantSearchResult = {
   results: Restaurant[];
   total: number;
@@ -410,6 +493,20 @@ export async function searchRestaurants(
   }
 
   if (query.queryText?.trim()) {
+    const named = await findNamedRestaurants(query);
+    if (named) {
+      await writeSearchLog({
+        queryText: query.queryText,
+        toolName: 'search-restaurants',
+        resultsCount: named.total,
+        latencyMs: 0,
+        hybridUsed: false,
+        groundingUsed: true,
+        rankExplanation: named.rankExplanation,
+      });
+      return named;
+    }
+
     const started = Date.now();
     let intel: Awaited<ReturnType<typeof import('../lib/intelligence-restaurant-search').searchRestaurantsIntelligent>> | null = null;
     try {
