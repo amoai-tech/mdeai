@@ -47,6 +47,9 @@ describe("SAN-1600 public detail journeys", () => {
     expect(screen.queryByTestId("event-directions")).toBeNull();
     expect(screen.getByTestId("event-location-unconfirmed").textContent).toContain("not been confirmed");
     expect(screen.getByTestId("event-image-placeholder").textContent).toContain("photo not available");
+    expect(screen.getByRole("heading", { name: "Tickets" }).className).toContain("sr-only");
+    expect(screen.getByTestId("event-tier-empty").textContent).toContain("No ticket tiers are listed");
+    expect(screen.getByRole("navigation", { name: "Event navigation" }).className).toContain("pr-20");
     expect(screen.queryByText("Event photo coming soon")).toBeNull();
   });
 
@@ -68,6 +71,36 @@ describe("SAN-1600 public detail journeys", () => {
     fireEvent.click(screen.getByRole("button", { name: "Increase VIP quantity" }));
     fireEvent.click(screen.getByRole("button", { name: "Buy VIP" }));
     expect(screen.getByTestId("checkout-selection").textContent).toBe("tier-vip:3");
+  });
+
+  it("shows the event date on the placeholder in Colombia time and keeps the honest no-photo label", () => {
+    render(<EventDetailView event={base} />);
+    const tile = screen.getByTestId("event-image-placeholder");
+    expect(tile.getAttribute("aria-label")).toBe("No event photo available");
+    expect(screen.getByTestId("event-date-tile-day").textContent).toBe("6");
+    expect(tile.textContent).toContain("December");
+    expect(tile.textContent).toContain("Sunday");
+    expect(tile.textContent).toContain("2026");
+  });
+
+  it("moves the stored listing notice out of About into a visible note", () => {
+    const description = "Parade of flowers.\n\nListing notice: MDE has not verified an organizer announcement for this date.";
+    render(<EventDetailView event={{ ...base, description }} />);
+    const note = screen.getByTestId("event-source-note");
+    expect(note.getAttribute("role")).toBe("note");
+    expect(note.textContent).toContain("has not verified an organizer announcement");
+    expect(note.textContent).not.toMatch(/^Listing notice/);
+    const about = screen.getByText("Parade of flowers.");
+    expect(about.textContent).not.toContain("Listing notice");
+  });
+
+  it("has one ticket heading and makes Ask MDE the primary action only when there is nothing to buy", () => {
+    const { unmount } = render(<EventDetailView event={base} />);
+    expect(screen.queryByText("Tickets & registration")).toBeNull();
+    expect(screen.getByTestId("event-ask-mde").className).toContain("bg-primary");
+    unmount();
+    render(<EventDetailView event={{ ...base, tickets: [a] }} />);
+    expect(screen.getByTestId("event-ask-mde").className).not.toContain("bg-primary");
   });
 
   it("Back goes to /events by default and to /chat only for the allowlisted chat origin", () => {
