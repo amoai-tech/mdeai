@@ -24,4 +24,31 @@ describe("SAN-1407 newest search owns results and pins", () => {
     const a = [user("events"), call("call-event"), call("booking", "bookVenueTool")];
     expect(isCurrentDiscoveryToolCall(a, "call-event")).toBe(true);
   });
+  it("keeps different search types from the same user turn eligible", () => {
+    const messages = [
+      user("events and restaurants in Laureles"),
+      call("events"),
+      call("restaurants", "searchRestaurantsTool"),
+    ];
+    expect(isCurrentDiscoveryToolCall(messages, "events")).toBe(true);
+    expect(isCurrentDiscoveryToolCall(messages, "restaurants")).toBe(true);
+  });
+  it("allows catalog results and web citations in one event-search turn", () => {
+    const messages = [
+      user("salsa this weekend"),
+      call("events"),
+      call("web-events", "searchWebGroundedEventsTool"),
+    ];
+    expect(isCurrentDiscoveryToolCall(messages, "events")).toBe(true);
+    expect(isCurrentDiscoveryToolCall(messages, "web-events")).toBe(true);
+  });
+  it("supersedes earlier calls of the same search type, including legacy aliases", () => {
+    const messages = [
+      user("find events"),
+      call("old", "search-events"),
+      call("new", "searchEventsTool"),
+    ];
+    expect(isCurrentDiscoveryToolCall(messages, "old")).toBe(false);
+    expect(isCurrentDiscoveryToolCall(messages, "new")).toBe(true);
+  });
 });

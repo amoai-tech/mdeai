@@ -317,14 +317,15 @@ function useDualToolRender(
   toolId: string,
   parameters: z.ZodType,
   render: (props: ToolRenderProps) => ReactElement,
+  scopeDiscovery = true,
 ) {
   const scopedRender = useCallback(
-    (props: ToolRenderProps) => (
+    (props: ToolRenderProps) => scopeDiscovery ? (
       <SearchToolResultScope toolCallId={props.toolCallId}>
         {render(props)}
       </SearchToolResultScope>
-    ),
-    [render],
+    ) : render(props),
+    [render, scopeDiscovery],
   );
   useRenderTool({ name: mastraName, parameters, render: scopedRender }, [scopedRender]);
   useRenderTool({ name: toolId, parameters, render: scopedRender }, [scopedRender]);
@@ -375,12 +376,14 @@ export function useSearchToolRenders() {
     MASTRA_TOOL_IDS.newProjects,
     looseToolParams,
     newProjectRender,
+    false, // New-project tools are workflows, not discovery searches.
   );
   useDualToolRender(
     MASTRA_COPILOT_TOOL_ACTIONS.compareProjects,
     MASTRA_TOOL_IDS.compareProjects,
     looseToolParams,
     compareProjectsRender,
+    false,
   );
   useDualToolRender(
     MASTRA_COPILOT_TOOL_ACTIONS.events,

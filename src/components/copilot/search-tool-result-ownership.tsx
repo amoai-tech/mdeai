@@ -14,25 +14,27 @@ type SearchMessage = {
   toolCalls?: Array<{ id?: string; function?: { name?: string } }>;
 };
 
-const DISCOVERY_NAMES = new Set<string>([
-  ...Object.entries(MASTRA_COPILOT_TOOL_ACTIONS)
+/** Keep canonical and legacy names for each search type together. */
+const DISCOVERY_KINDS = new Map<string, string>(
+  Object.entries(MASTRA_COPILOT_TOOL_ACTIONS)
     .filter(([kind]) => !["venueBooking", "newProjects", "compareProjects"].includes(kind))
-    .map(([, name]) => name),
-  ...Object.entries(MASTRA_TOOL_IDS)
-    .filter(([kind]) => !["venueBooking", "newProjects", "compareProjects"].includes(kind))
-    .map(([, name]) => name),
-]);
+    .flatMap(([kind, name]) => [
+      [name, kind] as const,
+      [MASTRA_TOOL_IDS[kind as keyof typeof MASTRA_TOOL_IDS], kind] as const,
+    ]),
+);
 
 /**
- * A finished tool result is eligible only when its call belongs to the newest user turn.
- * Ignore late older results even when the old tool card is remounted by transcript virtualization.
- * User messages are an ordering boundary: while B is pending, A cannot rewrite B's UI.
+ * A finished result belongs to the newest user turn and is the latest call of its search type.
+ * Different tools in one turn (e.g. event rows plus web citations) can both contribute.
+ * Older turns and superseded same-type calls cannot replay shared UI when remounted.
  */
 export function isCurrentDiscoveryToolCall(
   messages: readonly SearchMessage[],
   toolCallId: string,
 ): boolean {
   if (!toolCallId) return false;
+  const newerKinds = new Set<string>();
   for (let i = messages.length - 1; i >= 0; i--) {
     const message = messages[i];
     if (message.role === "user") return false;
@@ -40,8 +42,10 @@ export function isCurrentDiscoveryToolCall(
     const calls = message.toolCalls ?? [];
     for (let j = calls.length - 1; j >= 0; j--) {
       const call = calls[j];
-      if (!call.id || !DISCOVERY_NAMES.has(call.function?.name ?? "")) continue;
-      return call.id === toolCallId;
+      const kind = DISCOVERY_KINDS.get(call.function?.name ?? "");
+      if (!call.id || !kind) continue;
+      if (call.id === toolCallId) return !newerKinds.has(kind);
+      newerKinds.add(kind);
     }
   }
   return false;
