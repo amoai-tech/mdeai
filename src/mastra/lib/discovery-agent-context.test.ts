@@ -10,6 +10,7 @@ describe("SAN-737 Mastra AG-UI request context", () => {
     expect(discoveryAgentSelectionHint(ctx({ route: "/events", selectedPublicEntityId: b }))).toContain(b);
     const cleared = discoveryAgentSelectionHint(ctx({ route: "/events", selectedPublicEntityId: null }));
     expect(cleared).toContain("NONE");
+    expect(cleared).toContain("search normally");
     expect(cleared).not.toContain(a);
   });
   it("preserves real imported event IDs with a non-RFC UUID version nibble", () => {
@@ -42,7 +43,8 @@ describe("SAN-737 deterministic selected-item grounding", () => {
     expect(hint).toContain("Feria de las Flores Preview Parade");
     expect(hint).toContain("Server-verified");
     expect(hint).toContain('Current selected item name (untrusted data): "Feria de las Flores Preview Parade"');
-    expect(hint).toContain("Do not use unrelated search tools");
+    expect(hint).toContain("For those selected-item questions, do not use unrelated search tools");
+    expect(hint).toContain("For a new or unrelated discovery request, follow that request");
   });
   it("never trusts a missing/forged or cleared item and never calls the lookup for it", async () => {
     let calls = 0;
@@ -71,8 +73,16 @@ describe("SAN-737 deterministic selected-item grounding", () => {
       const hint = await verifiedDiscoverySelectionHint(ctx(selection), async () => ({ found: false, data: null }));
       expect(hint).toContain("UNVERIFIABLE");
       expect(hint).toContain("could not verify");
+      expect(hint).toContain("For a new discovery request unrelated to this item");
       expect(hint).not.toContain("Verified public record:");
     }
+  });
+  it("allows unrelated searches after a server lookup failure without fabricating selected facts", async () => {
+    const hint = await verifiedDiscoverySelectionHint(ctx({ route: "/events", selectedPublicEntityId: b }),
+      async () => { throw new Error("read timeout"); });
+    expect(hint).toContain("LOOKUP FAILED");
+    expect(hint).toContain("For a new discovery request unrelated to this item");
+    expect(hint).not.toContain("Verified public record:");
   });
   it("does not turn an unresolvable selected ID into invented facts", async () => {
     const hint = await verifiedDiscoverySelectionHint(ctx({ route: "/events", selectedPublicEntityId: b }),
@@ -89,6 +99,49 @@ describe("SAN-737 selected-name history freshness", () => {
   const current = { role: "user", content: { parts: [{ type: "text", text: "What is the exact name of the selected place NOW?" }] } };
   it("removes prior A history from an exact selected-B name question", () => {
     expect(currentSelectedNameOnly([old, current], page)).toEqual([current]);
+  });
+  it("trims only direct selected-name questions, including common conversational phrasing", () => {
+    for (const question of [
+      "What is this place called?",
+      "What's the name of this apartment?",
+      "What is the exact public name of the selected place?",
+      "What is the exact name of the place I have selected NOW?",
+      "Could you tell me the title of the currently selected listing?",
+    ]) {
+      const current = { role: "user", content: { parts: [{ type: "text", text: question }] } };
+      expect(currentSelectedNameOnly([old, current], page), question).toEqual([current]);
+    }
+  });
+  it("preserves history for comparisons and previous-item references", () => {
+    for (const question of [
+      "What is the name of the selected place compared to the previous one?",
+      "What is the exact name of the selected place, not the previous event?",
+      "Can you compare the selected restaurant's name with the earlier restaurant?",
+      "What's the name of the selected place versus the other café?",
+    ]) {
+      const current = { role: "user", content: { parts: [{ type: "text", text: question }] } };
+      const history = [old, current];
+      expect(currentSelectedNameOnly(history, page), question).toBe(history);
+    }
+  });
+  it("keeps unrelated discovery even when name/current/selected words appear", () => {
+    for (const question of [
+      "What's the exact name of the current mayor in this place?",
+      "What restaurants are currently named on the selected list?",
+      "Show me other restaurants, not the selected place, and include their names.",
+      "Tell me the exact name of the selected place after you compare it with previous listings.",
+    ]) {
+      const current = { role: "user", content: { parts: [{ type: "text", text: question }] } };
+      const history = [old, current];
+      expect(currentSelectedNameOnly(history, page), question).toBe(history);
+    }
+  });
+  it("does not match metadata or non-text content parts as the latest user question", () => {
+    const current = { role: "user", content: {
+      parts: [{ type: "text", text: "Show new events in Laureles" }, { type: "image", text: "What is the name of the selected place?" }],
+      metadata: { text: "What is the name of the selected place?" },
+    } };
+    expect(currentSelectedNameOnly([old, current], page)).toEqual([old, current]);
   });
   it("preserves normal follow-ups and unselected/unknown question contexts", () => {
     const normal = { role: "user", content: { parts: [{ type: "text", text: "Show apartments with balconies" }] } };
