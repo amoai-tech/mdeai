@@ -260,27 +260,28 @@ test.describe(
       });
       await page.mouse.move(box.x, box.y);
 
+      // Wheel events do not wait for scrolling or React's virtual window to settle.
+      // Send the real input once, then poll the resulting rendered state separately.
+      // Sending a new wheel on every poll can starve painting on slower CI runners:
+      // the failed CI screenshot showed message 1 visible despite this assertion failing.
+      await page.mouse.wheel(0, -100_000);
+
       // Up: the first logical row must become reachable again, with its text rendered.
       await expect
-        .poll(
-          async () => {
-            await page.mouse.wheel(0, -9000);
-            return rowInViewport(scroller, 0);
-          },
-          { timeout: 30_000, intervals: [250] },
-        )
+        .poll(() => rowInViewport(scroller, 0), {
+          timeout: 30_000,
+          intervals: [250],
+        })
         .toBe(true);
       await expect(page.getByText(FIRST, { exact: true })).toBeVisible({ timeout: 20_000 });
 
       // Down: the final logical row must become reachable again.
+      await page.mouse.wheel(0, 100_000);
       await expect
-        .poll(
-          async () => {
-            await page.mouse.wheel(0, 9000);
-            return rowInViewport(scroller, LAST_INDEX);
-          },
-          { timeout: 30_000, intervals: [250] },
-        )
+        .poll(() => rowInViewport(scroller, LAST_INDEX), {
+          timeout: 30_000,
+          intervals: [250],
+        })
         .toBe(true);
     });
 

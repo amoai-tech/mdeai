@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  HOST_OS_APP_NAV_ITEMS,
   HOST_OS_NAV_ITEMS,
   HOST_OS_NAV_PLACEHOLDERS,
+  HOST_OS_QUICK_LINKS,
   deriveHostOsRouteLabel,
+  hostOsNavItems,
   isHostOsNavActive,
   isHostOsShellRoute,
 } from "@/lib/host/host-os-nav";
@@ -26,11 +29,73 @@ describe("HOST_OS_NAV_ITEMS", () => {
   });
 });
 
+describe("HOST_OS_APP_NAV_ITEMS", () => {
+  it("links the live workspaces under /app/events, including tickets, attendees and check-in", () => {
+    expect(HOST_OS_APP_NAV_ITEMS.map((item) => item.href)).toEqual([
+      "/app/events/overview",
+      "/app/events",
+      // SAN-983 / 982 / 984 — real order, attendee and door surfaces.
+      "/app/events/tickets",
+      "/app/events/attendees",
+      "/app/events/check-in",
+      "/app/events/analytics",
+    ]);
+    expect(hostOsNavItems("/app/events")).toBe(HOST_OS_APP_NAV_ITEMS);
+    expect(hostOsNavItems("/host")).toBe(HOST_OS_NAV_ITEMS);
+  });
+
+  it("marks exactly the current app workspace active", () => {
+    expect(
+      isHostOsNavActive("/app/events", "/app/events", "/app/events"),
+    ).toBe(true);
+    // The Events landing is the parent path; it must not also activate on its
+    // Overview/Analytics siblings.
+    expect(
+      isHostOsNavActive("/app/events/overview", "/app/events", "/app/events"),
+    ).toBe(false);
+    expect(
+      isHostOsNavActive(
+        "/app/events/overview",
+        "/app/events/overview",
+        "/app/events",
+      ),
+    ).toBe(true);
+    expect(
+      isHostOsNavActive(
+        "/app/events/analytics",
+        "/app/events/analytics",
+        "/app/events",
+      ),
+    ).toBe(true);
+    expect(
+      isHostOsNavActive(
+        "/app/events/analytics",
+        "/app/events/overview",
+        "/app/events",
+      ),
+    ).toBe(false);
+  });
+});
+
+describe("HOST_OS_QUICK_LINKS", () => {
+  it("keeps legacy and /app deep links in their own URL families", () => {
+    expect(HOST_OS_QUICK_LINKS["/host"].map((link) => link.href)).toEqual([
+      "/host/analytics",
+      "/host/events",
+      "/host/event/new",
+    ]);
+    expect(HOST_OS_QUICK_LINKS["/app/events"].map((link) => link.href)).toEqual([
+      "/app/events/analytics",
+      "/app/events",
+      "/app/events/new",
+    ]);
+  });
+});
+
 describe("HOST_OS_NAV_PLACEHOLDERS", () => {
-  it("reserves Venues, Tickets, Inbox, Settings as disabled — never pages this phase", () => {
+  it("reserves Venues, Inbox, Settings as disabled — Tickets is now a live /app page", () => {
     expect(HOST_OS_NAV_PLACEHOLDERS.map((i) => i.label)).toEqual([
       "Venues",
-      "Tickets",
       "Inbox",
       "Settings",
     ]);
@@ -71,6 +136,10 @@ describe("deriveHostOsRouteLabel", () => {
     ["/host/event/new", "Create event"],
     ["/host/analytics", "Analytics"],
     ["/host", "Host"],
+    ["/app/events", "Events"],
+    ["/app/events/overview", "Overview"],
+    ["/app/events/analytics", "Analytics"],
+    ["/app/events/new", "Create event"],
   ])("labels %s as %s", (pathname, label) => {
     expect(deriveHostOsRouteLabel(pathname)).toBe(label);
   });

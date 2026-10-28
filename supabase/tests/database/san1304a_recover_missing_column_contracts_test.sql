@@ -65,7 +65,7 @@ select col_type_is('public', 'user_preferences', 'whatsapp_opted_in',       'boo
 select col_type_is('public', 'user_preferences', 'whatsapp_phone',          'text',      'B: user_preferences.whatsapp_phone is text');
 
 select col_type_is('public', 'event_orders', 'buyer_anon_id',   'text',      'B: event_orders.buyer_anon_id is text');
-select col_type_is('public', 'event_orders', 'discount_cents',  'integer',   'B: event_orders.discount_cents is integer');
+select col_type_is('public', 'event_orders', 'discount_cents',  'bigint',    'B: event_orders.discount_cents is bigint (SAN-1285 minor units)');
 select col_type_is('public', 'event_orders', 'promo_code_id',   'uuid',      'B: event_orders.promo_code_id is uuid');
 
 select col_type_is('public', 'event_tickets', 'is_hidden',      'boolean',   'B: event_tickets.is_hidden is boolean');

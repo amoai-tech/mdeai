@@ -13,6 +13,8 @@ type EventBrowseCardProps = {
   event: PublishedEventListItem;
   composition?: "legacy" | "nova";
   mediaLayout?: "inline" | "cover";
+  selectedForAsk?: boolean;
+  onAskSelect?: () => void;
 };
 
 const CATEGORY_LABELS: Record<EventCategory, string> = {
@@ -81,12 +83,16 @@ export function EventBrowseCard({
   event,
   composition = "nova",
   mediaLayout = "cover",
+  selectedForAsk,
+  onAskSelect,
 }: EventBrowseCardProps) {
   const detailsHref = `/events/${event.slug}`;
   const priceLabel =
-    event.pricePerTicket <= 0
-      ? "Free"
-      : `From ${formatEventCardPrice(event.pricePerTicket, event.currency)}`;
+    event.pricePerTicket === null
+      ? "See tickets"
+      : event.pricePerTicket === 0
+        ? "Free"
+        : `From ${formatEventCardPrice(event.pricePerTicket, event.currency)}`;
 
   return (
     <VenueCardShell
@@ -104,6 +110,10 @@ export function EventBrowseCard({
       }
       footer={
         <div className="flex w-full flex-wrap items-center justify-between gap-2">
+          {onAskSelect ? <Button type="button" size="sm" variant={selectedForAsk ? "secondary" : "outline"}
+            data-testid="event-ask-select" aria-pressed={Boolean(selectedForAsk)} onClick={onAskSelect}>
+            {selectedForAsk ? "Clear selection" : "Ask about this"}
+          </Button> : null}
           <Link
             href={detailsHref}
             data-testid="event-details-cta"
@@ -111,7 +121,7 @@ export function EventBrowseCard({
           >
             Details
           </Link>
-          {event.ticketUrl.startsWith("http") ? (
+          {!event.canBuyTickets ? null : event.ticketUrl.startsWith("http") ? (
             <Link
               href={event.ticketUrl}
               target="_blank"

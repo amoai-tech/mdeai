@@ -269,6 +269,7 @@ export function CafeDetailPanel({
                     toRestaurantVenueDetail({
                       pinId: detail.pinId,
                       title: detail.title,
+                      restaurantId: detail.restaurantId,
                       placeId: detail.placeId,
                       mapsUrl: detail.mapsUrl,
                       neighborhood: detail.formattedAddress,

@@ -97,6 +97,12 @@ type RentalBrowseCardProps = {
    * external ad, to the advertiser's listing.
    */
   onDetails?: () => void;
+  selectedForAsk?: boolean;
+  onAskSelect?: () => void;
+  /** A later row with the same title/area/size/price as an earlier one; labels it instead of hiding it. */
+  duplicateNote?: string;
+  /** Compact /chat-style browse feed, or existing cover layout. */
+  mediaLayout?: "inline" | "cover";
 };
 
 function RentalBrowseCardMedia({
@@ -105,19 +111,21 @@ function RentalBrowseCardMedia({
   neighborhood,
   nightlyLabel,
   currency,
+  mediaLayout,
 }: {
   imageUrl?: string;
   title: string;
   neighborhood: string;
   nightlyLabel: string | null;
   currency?: string;
+  mediaLayout: "inline" | "cover";
 }) {
   // A failed Storage request must fall back to the normal placeholder, not a broken image.
   const [imageFailed, setImageFailed] = useState(false);
   return (
     <div className="relative">
       {imageUrl && !imageFailed ? (
-        <div className="relative aspect-[16/10] w-full overflow-hidden rounded-xl bg-muted">
+        <div className={cn("relative aspect-[16/10] overflow-hidden rounded-xl bg-muted", mediaLayout === "inline" ? "w-24" : "w-full")}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={imageUrl}
@@ -132,11 +140,11 @@ function RentalBrowseCardMedia({
         <VenueCardPlaceholder
           label="Apartment"
           icon={<Building2 className="size-5" aria-hidden />}  
-          mediaLayout="cover"
+          mediaLayout={mediaLayout}
           testId="rental-browse-card-photo-placeholder"
         />
       )}
-      {nightlyLabel ? (
+      {nightlyLabel && mediaLayout === "cover" ? (
         <span className="absolute bottom-2 right-2 flex items-center gap-1 rounded-full bg-background/90 px-2.5 py-0.5 font-mono text-xs font-semibold text-foreground backdrop-blur-sm">
           {nightlyLabel}
           {currency?.toUpperCase() === "USD" ? (
@@ -164,6 +172,10 @@ export function RentalBrowseCard({
   onPreview,
   onSchedule,
   onDetails,
+  selectedForAsk,
+  onAskSelect,
+  duplicateNote,
+  mediaLayout = "cover",
 }: RentalBrowseCardProps) {
   // Pass the listing's own currency: a COP monthly rent must not be labelled with a USD symbol.
   // A listing that stores a monthly rent leads with that rent. Its nightly figure is only rent ÷ 30,
@@ -204,7 +216,7 @@ export function RentalBrowseCard({
       resultKind="rental"
       pinId={pinId}
       composition="nova"
-      mediaLayout="cover"
+      mediaLayout={mediaLayout}
       selected={selected}
       ariaLabel={`Rental: ${rental.title}, ${rental.neighborhood}`}
       onPreview={interactive ? preview : undefined}
@@ -220,7 +232,7 @@ export function RentalBrowseCard({
             onClick={onDetails}
             data-testid={`rental-card-photo-details-${rental.id}`}
             aria-label={`Details: ${rental.title}`}
-            className="block w-full rounded-xl text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            className={cn("block rounded-xl text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring", mediaLayout === "inline" ? "w-24 shrink-0 self-start" : "w-full")}
           >
             <RentalBrowseCardMedia
               imageUrl={rental.image || undefined}
@@ -228,6 +240,7 @@ export function RentalBrowseCard({
               neighborhood={rental.neighborhood}
               nightlyLabel={nightlyLabel}
               currency={rental.currency}
+              mediaLayout={mediaLayout}
             />
           </button>
         ) : (
@@ -237,11 +250,16 @@ export function RentalBrowseCard({
             neighborhood={rental.neighborhood}
             nightlyLabel={nightlyLabel}
             currency={rental.currency}
+            mediaLayout={mediaLayout}
           />
         )
       }
       footer={
         <div className="flex w-full flex-wrap items-center justify-between gap-2">
+          {onAskSelect ? <Button type="button" size="sm" variant={selectedForAsk ? "secondary" : "outline"}
+            aria-pressed={Boolean(selectedForAsk)} data-testid="rental-ask-select" onClick={onAskSelect}>
+            {selectedForAsk ? "Clear selection" : "Ask about this"}
+          </Button> : null}
           {onDetails ? (
             <Button
               type="button"
@@ -297,7 +315,19 @@ export function RentalBrowseCard({
         </div>
       }
     >
-      <p className="text-[11px] font-medium text-muted-foreground">{rental.neighborhood}</p>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <p className="text-[11px] font-medium text-muted-foreground">{rental.neighborhood}</p>
+        {duplicateNote ? (
+          <Badge
+            variant="outline"
+            className="font-normal text-[10px]"
+            data-testid={`rental-card-duplicate-${rental.id}`}
+            title={duplicateNote}
+          >
+            {duplicateNote}
+          </Badge>
+        ) : null}
+      </div>
       <h3 className="mt-0.5 font-medium leading-snug">
         {onDetails ? (
           <button
@@ -363,7 +393,19 @@ export function RentalBrowseCard({
         )}
       </div>
 
-      {monthlyLabel ? (
+      {mediaLayout === "inline" && nightlyLabel ? (
+        // Inline cards have no photo overlay, so the stored nightly price is shown here. Checked
+        // before `monthlyLabel`: that label is always set when a nightly price exists (derived,
+        // marked "~"), which made this branch unreachable and showed "~$2,340/mo" for $78/night.
+        <div className="mt-1.5 flex flex-wrap items-center gap-2">
+          <p className="text-xs font-medium">{nightlyLabel}</p>
+          {rental.currency?.toUpperCase() === "USD" ? (
+            <Badge variant="outline" className="font-normal text-[10px]" data-testid="rental-card-currency">
+              USD
+            </Badge>
+          ) : null}
+        </div>
+      ) : monthlyLabel ? (
         <div className="mt-1.5 flex flex-wrap items-center gap-2">
           <p className="text-xs text-muted-foreground">{monthlyLabel}</p>
           {rental.currency?.toUpperCase() === "USD" ? (

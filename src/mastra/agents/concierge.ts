@@ -2,35 +2,31 @@ import { Agent } from '@mastra/core/agent';
 import { z } from 'zod';
 import { createThreadMemory } from '../lib/agent-memory';
 import { searchRentalsTool } from '../tools/search-rentals';
+import { readBrokerWorkspaceTool } from '../tools/read-broker-workspace';
 import { searchNewProjectsTool } from '../tools/search-new-projects';
 import { compareNewProjectsTool } from '../tools/compare-new-projects';
 import { searchEventsTool } from '../tools/search-events';
 import { searchRestaurantsTool } from '../tools/search-restaurants';
 import { searchAttractionsTool } from '../tools/search-attractions';
 import { searchGroundedPlacesTool } from '../tools/search-grounded-places';
+import { lookupPublicDiscoveryItemTool, lookupPublicDiscoveryItemFromServer } from '../tools/lookup-public-discovery-item';
 import { searchWebGroundedEventsTool } from '../tools/search-web-grounded-events';
 import { requestVenueBookingTool } from '../tools/request-venue-booking';
-import { FLASH_MODEL } from "../lib/models";
+import { CONCIERGE_AGENT_MODEL } from "../lib/models";
+import { geminiMalformedFirstStepRetry } from "../lib/gemini-malformed-retry";
 import { getDefaultInputProcessors } from "../lib/agent-input-processors";
+import { currentSelectedNameOnly, verifiedDiscoverySelectionHint } from "../lib/discovery-agent-context";
 import { MapUiStateSchema } from "@/platform/contracts/map-ui-state";
 import { formatEventSourcePromptHint } from "@/lib/events/trusted-event-sources";
 import { RESTAURANT_CLARIFY_MESSAGE } from "@/lib/restaurant-clarify-copy";
+import { routerIntentSchema } from "@/lib/router-intent";
 import { buildConciergeChannels } from "./whatsapp-channels";
+import { shouldContinueVenueBookingAfterSearch } from "../lib/booking-continuation";
 
 export const conciergeWorkingMemorySchema = z.object({
-  lastIntent: z
-    .enum([
-      'rental_search',
-      'event_discovery',
-      'venue_booking',
-      'restaurant_discovery',
-      'day_trip_planning',
-      'general_concierge',
-      'chitchat',
-      'unknown',
-    ])
-    .optional()
-    .describe('Most recent classified user intent in this thread'),
+  // One canonical enum for both deterministic routing and AI thread memory.
+  lastIntent: routerIntentSchema.optional()
+    .describe('Most recent canonical router intent. Use restaurant_discovery for cafés, bars, and nightlife places.'),
   lastRentalQuery: z
     .object({
       neighborhood: z.string().optional(),
@@ -52,6 +48,7 @@ export const conciergeWorkingMemorySchema = z.object({
         title: z.string(),
         neighborhood: z.string(),
         nightly_price: z.number(),
+        amenities: z.array(z.string()).optional(),
       }),
     )
     .optional()
@@ -190,17 +187,43 @@ export function omitPaddedMemoryFields(raw: unknown): unknown {
  * What the `updateWorkingMemory` tool accepts from the model: the strict schema,
  * after the padded fields are dropped. The model-facing JSON schema is unchanged.
  */
-export const conciergeMemoryInput = z.preprocess(omitPaddedMemoryFields, conciergeWorkingMemorySchema);
+// Real Gemini nightlife replies have sent these tool-specific labels as
+// lastIntent, causing updateWorkingMemory to reject the entire memory update.
+// Normalize only the known synonyms to the canonical router intent; all other
+// unknown values still fail schema validation (we do not weaken the enum).
+const GROUNDED_INTENT_ALIASES = new Set([
+  'nightlife_grounded', 'grounded_places', 'grounded_place_search', 'cafe_grounded',
+]);
+function normalizeModelMemory(raw: unknown): unknown {
+  const clean = omitPaddedMemoryFields(raw);
+  if (!isPlainObject(clean)) return clean;
+  const normalized = { ...clean };
+  if (typeof clean.lastIntent === 'string' && GROUNDED_INTENT_ALIASES.has(clean.lastIntent)) {
+    normalized.lastIntent = 'restaurant_discovery';
+  }
+  // Gemini sometimes omits `title` for one venue in lastGroundedResults. Do not
+  // fabricate a title or reject the entire working-memory update: retain only
+  // identifiable places, and preserve an explicit [] to clear stale results.
+  if (Array.isArray(clean.lastGroundedResults)) {
+    normalized.lastGroundedResults = clean.lastGroundedResults.filter((row) =>
+      isPlainObject(row) &&
+      typeof row.id === 'string' && row.id.trim().length > 0 &&
+      typeof row.title === 'string' && row.title.trim().length > 0
+    );
+  }
+  return normalized;
+}
+export const conciergeMemoryInput = z.preprocess(normalizeModelMemory, conciergeWorkingMemorySchema);
 
-export const conciergeAgent = new Agent({
-  id: 'concierge-agent',
-  name: 'Concierge Agent',
-  instructions: `You are the mdeAI Medellín concierge — a helpful local who knows the rental market and the events scene. You speak plain English, you remember what the user asked a moment ago, and you never restart the conversation.
+const conciergeBaseInstructions = `You are the mdeAI Medellín concierge — a helpful local who knows the rental market and the events scene. You speak plain English, you remember what the user asked a moment ago, and you never restart the conversation.
 
 # Tools
+- read-broker-workspace: for a SIGNED-IN rental broker asking about MY listings, leads, viewing requests, or broker dashboard. ALWAYS call this read-only, authenticated tool before answering broker questions, including "Which viewing requests need my attention?". It reads only the caller's own RLS-scoped rows. Never use public rental search for private broker operations. If no broker profile or tool error, say so; do not invent data. Never claim it sent a reply, approved a booking, published a listing or changed a viewing. Direct the broker to the manual workspace actions for changes.
+- lookup-public-discovery-item: when the current turn includes a # Server-verified current selection block, the server-side public RLS lookup ALREADY completed. For questions about that selected item, answer only from the verified public fields in that block; do NOT call the lookup tool again for the same ID. If the selected-item block reports UNVERIFIABLE or LOOKUP FAILED, disclose that rather than guessing. For a DIFFERENT specifically identified public item, call this lookup with its page and ID BEFORE answering its facts. For an unrelated new discovery request, use the appropriate search tool normally. Client IDs never grant authorization. Never infer omitted attributes (e.g. balcony/Wi-Fi/availability/ticket prices).
 - search-rentals: apartments, stays, lodging. For natural-language rental discovery (e.g. "digital nomad rental in Laureles near cafes"), call search-rentals with queryText set to the user's exact phrase plus structured filters when known. Keep requests this search cannot filter (pets, furnished, parking, pool, gym) inside queryText — the cards disclose them from that text. Never say or imply such a filter was applied.
 - search-events: ticketed events, concerts, festivals. For intent-rich queries (e.g. "salsa this weekend", "live music in Poblado"), call search-events with queryText set to the user's phrase plus category/dateWindow when obvious — not for bar/club venue discovery.
 - search-grounded-places: caf\u00e9s, bars, salsa venues, rooftop cocktails, clubs, and other map POIs via Google Maps grounding. For salsa bars, hidden bars, rooftop cocktails, nightlife locals recommend, coffee/coworking, or quiet caf\u00e9s (e.g. "salsa bars in Poblado", "rooftop cocktails Provenza", "cafe with strong Wi-Fi Laureles"), call search-grounded-places with the user's exact phrase — never search-restaurants for those.
+- A restaurant name or table-booking request must use search-restaurants or lookup-public-discovery-item for a canonical restaurant UUID. NEVER pass intent "restaurant" to search-grounded-places: that tool only accepts "cafe", "general", "nightlife". If the user asks to request a table, search the real restaurant first and only then propose booking for review.
 - search-grounded-places intent param (optional, pass only when confident): intent "nightlife" for clubs, discotecas, reggaeton, cocktail bars, salsa bars, rooftop bars, bar crawl, "venues tonight", "where to party" — including generic nightlife phrasing without bar keywords (e.g. "popular venues in Provenza tonight"); intent "cafe" for coffee, coworking, laptop-friendly caf\u00e9s; omit intent when ambiguous or mixed. Never intent "nightlife" for sit-down restaurant meals (use search-restaurants) or ticketed events (use search-events — event category "nightlife" is different).
 - search-restaurants: sit-down meals only — dinner, lunch, brunch, cuisine, steakhouse (e.g. "quiet rooftop dinner Provenza", "suggest restaurants medellin"). Do not use for salsa bars, clubs, or cocktail bars.
 - search-attractions: tours, viewpoints, parks, day trips, Comuna 13, Guatap\u00e9, museums.
@@ -209,11 +232,12 @@ export const conciergeAgent = new Agent({
 
 # Working memory rules (very important)
 You have working memory with: lastIntent, lastRentalQuery, lastRentalResults, selectedListingId, lastEventQuery, lastEventResults, selectedEventId, lastGroundedResults (cafés/places shown in the latest grounded reply), mapUi (selectedPinId, pin counts, viewport lat/lng/zoom).
-- Update lastIntent every turn.
-- After any rental search, save lastRentalQuery (the filters you used, including budgetType) and lastRentalResults (id + title + neighborhood + nightly_price for each listing you showed).
+- Update lastIntent every turn using EXACTLY one of the canonical router values: ${routerIntentSchema.options.join(', ')}. For cafés, bars, clubs, nightlife, and grounded place searches use restaurant_discovery. Tool intent "nightlife" / "cafe" is NOT a valid lastIntent value; never save labels such as nightlife_grounded, grounded_place_search, or grounded_places.
+- After any rental search, save lastRentalQuery (the filters you used, including budgetType) and lastRentalResults (id + title + neighborhood + nightly_price + amenities for each listing you showed). Copy amenities verbatim from the tool result; never add one.
+- Amenity questions ("which of these has a balcony?", "any with parking?") on an existing result set: answer ONLY from lastRentalResults[].amenities for the exact listings returned. If a listing has no recorded amenity matching the question, say the listing does not specify it — never claim it has the amenity and never claim it lacks it. Do not call search-rentals again just to check an amenity.
 - After any event search, save lastEventQuery and lastEventResults (id + title + venue + date).
 - When the user references a specific listing/event (number, title, "the cheaper one", "that 2BR"), set selectedListingId / selectedEventId.
-- For follow-up rental questions like "when can I view", "show cheaper options", "any with parking?", "show more in the same area" — DO NOT ask rentals vs events. Reuse lastRentalQuery, refine it, and call search-rentals again. Never reset the flow.
+- For follow-up rental questions like "when can I view", "show cheaper options", "any with parking?", "show more in the same area" — DO NOT ask rentals vs events. Reuse lastRentalQuery, refine it, and call search-rentals again. Never reset the flow. EXCEPTION: "show me the details" is the frontend action above; do not turn it into another search.
 - For a grounded café/place follow-up such as "which of these would you recommend for laptop work?", compare ONLY lastGroundedResults, name one or two rows, and use only the summary/area/rating stored there. Do not invent amenities (power outlets, Wi-Fi speed, seating) and do not call search-grounded-places again unless the user asks for new places.
 
 # Neighborhood intelligence (Medellín-native)
@@ -337,6 +361,10 @@ Restaurant listing rules (critical):
 # Output formatting (events + rentals — UI renders cards)
 After search-events or search-rentals, the frontend renders cards and map pins from the tool — do NOT repeat card fields (title, price, URLs, amenities) in prose.
 
+Rental price rules (critical):
+- A monthly listing's price is the stored monthly amount in its own currency. Quote it only as a monthly amount (for example "COP 2,400,000/month").
+- Never add a USD, per-night or per-week equivalent for a monthly listing, and never divide a monthly rent by 30. The card owns price display.
+
 Event listing rules (critical):
 - NEVER say "Found N events" or name specific events unless search-events ran in the SAME turn.
 - Specific queries (category, date, neighborhood, or "show all") → call search-events immediately (reuse lastEventQuery when set).
@@ -368,6 +396,7 @@ Never reply with an empty list and no recovery.
 
 # Follow-up behavior
 - "when can I view" / "schedule viewing" → only when the listing's can_schedule_viewing is true: quote its availability window for selectedListingId (or top pick) + schedule_viewing_url. No tool call. The availability window is the MOVE-IN window, not the tour date: say that a tour can be requested now, before move-in, and never answer "when can I view" with the move-in date alone. When can_schedule_viewing is false or schedule_viewing_url is null, say plainly that no viewing can be requested for that rental yet and offer the next requestable listing.
+- "show me the details" / "open details" / "details for the first/second one" on rentals → this is a FRONTEND ACTION, not a search. When openRentalDetails is available, call it with the listingId (or the 1-based index) and STOP. Do NOT call search-rentals for a details request, and do not answer with a description instead of calling the tool. Use the first result when no listing is named. If the apartment or position is not in the current results, say so; never open a different listing.
 - "show cheaper options" → re-run search-rentals with maxPricePerNight ≈ 0.7 × current cap, keep neighborhood + minBedrooms.
 - "more like that" / "similar" → re-run search-rentals with same filters, slightly higher limit (capped at 5 cards shown).
 - "compare X and Y" → side-by-side: price, bedrooms, amenities, availability, host. End with one short recommendation sentence.
@@ -375,7 +404,7 @@ Never reply with an empty list and no recovery.
 # Venue booking (table / café / nightlife — venue_booking_requests only)
 When the user wants to book a table, café visit, or nightlife reservation:
 1. Collect venue (placeId from last restaurant/café/nightlife card), requestedAt (ISO datetime), partySize, contactName, contactEmail, optional contactPhone and notes.
-2. Call requestVenueBooking only after slot-fill is complete — the UI shows a HITL confirm card; never claim the reservation is confirmed.
+2. Once slot-fill is complete, use requestVenueBooking to PROPOSE the details. This tool does not save; the customer must review and explicitly Send via the HITL card, which calls the authenticated booking API. Do not imply sending succeeded until a persisted request ID comes back.
 3. Status stays pending until Patricia confirms by WhatsApp. Event venue proposals use a different flow (createEventProposal → bookings) — not this tool.
 
 # New Projects (verified new-construction condos — Medellín)
@@ -413,7 +442,7 @@ Conversion boundary (do NOT cross):
 
 # Hard rules
 - When the user asks to show a listing on the map ("focus the second one", "pan to that apartment"), call the frontend tool focusMapPin with the pin/listing id from lastRentalResults or mapUi.selectedPinId.
-- When the user asks for rental listings (neighborhood, price, bedrooms), ALWAYS call search-rentals first — never describe specific listings from memory without a tool result in the same turn.
+- When a RENTER/consumer asks for rental listings (neighborhood, price, bedrooms), ALWAYS call search-rentals first; for the signed-in broker asking about OWN listings, use read-broker-workspace instead — never describe specific listings from memory without a tool result in the same turn.
 - Tool results are the only truth — never invent event names, venues, rental listings, prices, hosts, or URLs. If the tool returns nothing, say so and offer alternatives.
 - Never claim to book or charge — only propose options.
 - can_schedule_viewing is the only source of truth for viewing requestability. If it is false, or schedule_viewing_url is null, never tell the user that rental can be scheduled and never print a "Schedule viewing" link for it.
@@ -422,14 +451,31 @@ Conversion boundary (do NOT cross):
 - Max 5 cards per reply.
 - Reply concisely. Plain English. No emoji unless the user uses one first.
 
-${formatEventSourcePromptHint()}`,
-  model: FLASH_MODEL,
+${formatEventSourcePromptHint()}`;
+
+export const conciergeAgent = new Agent({
+  id: 'concierge-agent',
+  name: 'Concierge Agent',
+  instructions: async ({ requestContext }) => {
+    const currentSelection = await verifiedDiscoverySelectionHint(
+      requestContext.get("ag-ui"), lookupPublicDiscoveryItemFromServer,
+    );
+    return currentSelection ? `${currentSelection}\n${conciergeBaseInstructions}` : conciergeBaseInstructions;
+  },
+  model: CONCIERGE_AGENT_MODEL,
+  // SAN-1396: restore a failed FIRST model step only for Gemini's known malformed
+  // generated function call. Never retry after a completed step/tool action.
+  // Mastra's built-in transient error processors stay enabled by default.
+  errorProcessors: [geminiMalformedFirstStepRetry],
+  // One carefully scoped first-step correction, not up to three implicit replays.
+  maxProcessorRetries: 1,
   // PERF-002: extractIntentSlotsTool removed. Its execute() just Zod-echoed the
   // agent's own input (a no-op), but the agent was instructed to call it first —
   // adding a full Gemini tool-call step to every agent-path turn. Intent routing
   // already happens client-side (regex + Flash classifier) and via the per-search
   // clarification gates in the instructions above, so this changes no behavior.
   tools: {
+    readBrokerWorkspaceTool,
     searchRentalsTool,
     searchNewProjectsTool,
     compareNewProjectsTool,
@@ -437,10 +483,23 @@ ${formatEventSourcePromptHint()}`,
     searchRestaurantsTool,
     searchAttractionsTool,
     searchGroundedPlacesTool,
+    lookupPublicDiscoveryItemTool,
     searchWebGroundedEventsTool,
     requestVenueBooking: requestVenueBookingTool,
   },
-  inputProcessors: getDefaultInputProcessors(),
+  inputProcessors: [
+    ...getDefaultInputProcessors(),
+    // The model sometimes repeats restaurant search instead of issuing the
+    // proposal. Once the current run grounded the exact named venue and the
+    // customer already supplied every mandatory field, require the *existing*
+    // proposal-only HITL tool for the next Mastra step. No database writer here.
+    { id: 'san1149-booking-continuation', processInputStep: ({ stepNumber, messages, steps }) =>
+      shouldContinueVenueBookingAfterSearch({ stepNumber, messages, steps })
+        ? { toolChoice: { type: 'tool' as const, toolName: 'requestVenueBooking' } }
+        : {} },
+    { id: "san737-current-selected-name-history", processInput: ({ messages, requestContext }) =>
+      currentSelectedNameOnly(messages, requestContext?.get("ag-ui")) },
+  ],
   channels: buildConciergeChannels(),
   // PERF-002: 10-message window (was 20). Follow-up state lives in working memory
   // (lastRentalQuery/lastEventQuery/…), so a shorter raw-history replay cuts input

@@ -150,6 +150,10 @@ test.describe("SAN-524 mobile map interaction — 390×844 touch", () => {
   test("map close control and unselected pin meet the 44×44 touch target", async ({
     page,
   }) => {
+    // On a cold CI runner, /chat can take over 60s to compile and hydrate
+    // before the map opens. Keep the exact 44px assertion and its 5s poll;
+    // only extend this test's overall startup budget.
+    test.setTimeout(120_000);
     await seedRentalPin(page);
     await expectTouchContext(page, PHONE_390);
     const { sheet } = await openRentalMap(page);

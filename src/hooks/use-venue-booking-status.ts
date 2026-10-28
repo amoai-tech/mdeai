@@ -11,6 +11,7 @@ import { useSession } from "@/hooks/use-session";
 
 export function useVenueBookingStatus(input: {
   placeId?: string;
+  restaurantId?: string;
   uiKind: "cafe" | "nightlife" | "restaurant";
 }) {
   const { user, loading: sessionLoading } = useSession();
@@ -21,6 +22,7 @@ export function useVenueBookingStatus(input: {
   >("idle");
 
   const placeId = input.placeId?.trim();
+  const restaurantId = input.uiKind === "restaurant" ? input.restaurantId?.trim() : undefined;
   const venueKind = venueKindForBookingQuery(input.uiKind);
 
   useEffect(() => {
@@ -29,7 +31,7 @@ export function useVenueBookingStatus(input: {
     let cancelled = false;
 
     void (async () => {
-      if (!user || !placeId) {
+      if (!user || (!placeId && !restaurantId)) {
         if (!cancelled) {
           setStatusRaw(null);
           setRequestId(null);
@@ -42,7 +44,9 @@ export function useVenueBookingStatus(input: {
 
       const supabase = createClient();
       const result = await fetchLatestVenueBookingStatus(supabase, {
+        userId: user.id,
         placeId,
+        restaurantId,
         venueKind,
       });
 
@@ -70,7 +74,7 @@ export function useVenueBookingStatus(input: {
     return () => {
       cancelled = true;
     };
-  }, [sessionLoading, user, placeId, venueKind]);
+  }, [sessionLoading, user, placeId, restaurantId, venueKind]);
 
   const chip =
     statusRaw && fetchState === "ready"

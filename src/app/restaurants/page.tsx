@@ -33,13 +33,22 @@ async function loadRestaurants(filters: {
       cuisine: filters.cuisine,
       limit: 12,
     });
+    // An unreadable catalog is an outage, not an empty directory: show Retry
+    // instead of a misleading "no restaurants matched" (SAN-1468 1.3).
+    if (source === "unavailable") {
+      return {
+        results: [],
+        error: "Could not load restaurants. Try again in a moment.",
+        source,
+      };
+    }
     const enriched = await prepareRestaurantSearchResults(results);
     return { results: enriched, error: null, source };
   } catch {
     return {
       results: [],
       error: "Could not load restaurants. Try again in a moment.",
-      source: "supabase",
+      source: "unavailable",
     };
   }
 }

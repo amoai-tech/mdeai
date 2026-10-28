@@ -2,6 +2,7 @@ import {
   searchCafeVenueAnchorsForBrowse,
   venueAnchorMapsUrl,
   venueAnchorSummary,
+  venueAnchorToCoordinates,
   type VenueAnchorRow,
 } from "@/mastra/tools/search-venue-anchors";
 
@@ -24,6 +25,9 @@ export type CafeListing = {
   tags: string[];
   summary: string | null;
   mapsUrl: string;
+  /** The venue's real saved coordinates; null means no pin (never a placeholder point). */
+  latitude: number | null;
+  longitude: number | null;
 };
 
 export function mapVenueAnchorToCafeListing(row: VenueAnchorRow): CafeListing {
@@ -34,6 +38,7 @@ export function mapVenueAnchorToCafeListing(row: VenueAnchorRow): CafeListing {
     tags: row.tags ?? [],
     summary: venueAnchorSummary(row) ?? null,
     mapsUrl: venueAnchorMapsUrl(row.google_place_id),
+    ...venueAnchorToCoordinates(row),
   };
 }
 

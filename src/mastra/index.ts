@@ -10,6 +10,7 @@ import {
   evaluationAgent,
   hostEventAgent,
   hostOpsAgent,
+  partnerAgent,
 } from "./agents";
 import {
   rentalSearchWorkflow,
@@ -32,6 +33,7 @@ export const mastra = new Mastra({
     evaluationAgent,
     hostEventAgent,
     hostOpsAgent,
+    partnerAgent,
   },
   workflows: {
     rentalSearchWorkflow,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { EventCard } from "@/components/copilot/event-card";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,12 +20,82 @@ import {
   buildEventReviewProposal,
   eventPublishReceipt,
 } from "@/lib/events/review-proposal";
-import type { ReviewReceipt } from "@/platform/contracts/review-proposal";
+import {
+  computeDraftHash,
+  type ReviewReceipt,
+} from "@/platform/contracts/review-proposal";
 import { EventDraftStateSchema, type EventDraftState } from "@/lib/types";
 import type { ApprovalDecision } from "@/lib/events/approval-decision";
 
+const PENDING_EVENT_PROPOSAL = "mde:pending-event-publish";
+const COMPLETED_EVENT_PUBLISH = "mde:completed-event-publish";
+
+type CompletedPublish = {
+  draftHash: string;
+  reviewId?: string;
+  proposalId: string;
+  eventId: string;
+  slug: string;
+  approvalRequestId?: string;
+  savedAt: string;
+};
+
+function readCompletedPublish(
+  draftHash: string,
+  reviewId: string | undefined,
+  identity: { approvalRequestId?: string; eventId?: string },
+): CompletedPublish | null {
+  try {
+    const stored = JSON.parse(sessionStorage.getItem(COMPLETED_EVENT_PUBLISH) ?? "null") as
+      | CompletedPublish
+      | null;
+    if (!stored || stored.draftHash !== draftHash || !stored.eventId || !stored.slug) {
+      return null;
+    }
+    // Content alone is not review identity: a new review of the same event
+    // details must not inherit an older receipt. The HITL tool-call id is the
+    // stable identity for this review; approval/event ids are a fallback when
+    // the parent draft already carries them.
+    const sameReview = Boolean(reviewId) && stored.reviewId === reviewId;
+    const sameApproval =
+      Boolean(identity.approvalRequestId) &&
+      stored.approvalRequestId === identity.approvalRequestId;
+    const sameEvent = Boolean(identity.eventId) && stored.eventId === identity.eventId;
+    return sameReview || sameApproval || sameEvent ? stored : null;
+  } catch {
+    return null;
+  }
+}
+
+function storeCompletedPublish(value: CompletedPublish): void {
+  try {
+    sessionStorage.setItem(COMPLETED_EVENT_PUBLISH, JSON.stringify(value));
+  } catch {
+    // Storage is optional; the database receipt remains the authority.
+  }
+}
+
+/** Keep the same idempotency key if a browser reload follows a lost response. */
+function recoverProposalId(draftHash: string, candidateId: string): string {
+  try {
+    const previous = JSON.parse(sessionStorage.getItem(PENDING_EVENT_PROPOSAL) ?? "null") as
+      | { draftHash?: string; proposalId?: string }
+      | null;
+    if (previous?.draftHash === draftHash && previous.proposalId &&
+        /^[a-f0-9-]{36}$/i.test(previous.proposalId)) {
+      return previous.proposalId;
+    }
+    sessionStorage.setItem(PENDING_EVENT_PROPOSAL, JSON.stringify({ draftHash, proposalId: candidateId }));
+  } catch {
+    // Storage is optional; database idempotency remains the authority.
+  }
+  return candidateId;
+}
+
 type EventPublishApprovalPanelProps = {
   draft: EventDraftState;
+  /** Stable CopilotKit HITL tool-call id; new reviews get a new id. */
+  reviewId?: string;
   status: "inProgress" | "executing" | "complete";
   respond: (decision: ApprovalDecision) => void;
   onPublished?: (payload: {
@@ -38,6 +108,7 @@ type EventPublishApprovalPanelProps = {
 /** F37 — HITL publish card for preview_and_publish. */
 export function EventPublishApprovalPanel({
   draft,
+  reviewId,
   status,
   respond,
   onPublished,
@@ -50,19 +121,63 @@ export function EventPublishApprovalPanel({
   const [receipt, setReceipt] = useState<ReviewReceipt | null>(null);
   const [lastDecision, setLastDecision] = useState<ApprovalDecision | null>(null);
 
+  // A reload after a committed publish must show the original receipt instead of
+  // opening a fresh review that could publish the same event again.
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      try {
+        const hash = await computeDraftHash(EventDraftStateSchema.parse(draft));
+        if (!active) return;
+        const stored = readCompletedPublish(hash, reviewId, {
+          approvalRequestId: draft.approvalRequestId,
+          eventId: draft.publishedEventId,
+        });
+        if (!stored) return;
+        setReceipt({
+          proposalId: stored.proposalId,
+          status: "saved",
+          savedId: stored.eventId,
+          readbackUrl: `/events/${encodeURIComponent(stored.slug)}`,
+          message: "Event published and saved.",
+          savedAt: stored.savedAt,
+        });
+        setApprovalRequestId(stored.approvalRequestId);
+        setDecided(true);
+      } catch {
+        // A malformed draft is handled by the normal commit validation.
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [draft, reviewId]);
+
   const preview = draftToEventCardProps(draft, {
     slug: draft.publishedSlug ?? "preview",
   });
 
   async function commit(decision: ApprovalDecision) {
     if (decided || submitting) return;
+    // Edit/Cancel only change the local draft. No database approval or
+    // network round-trip is required during prelaunch development.
+    if (decision !== "approved") {
+      try { sessionStorage.removeItem(PENDING_EVENT_PROPOSAL); } catch { /* storage is optional */ }
+      setDecided(true);
+      respond(decision);
+      return;
+    }
     setSubmitting(true);
     setError(null);
     setLastDecision(decision);
 
     try {
       const normalizedDraft = EventDraftStateSchema.parse(draft);
-      const proposal = await buildEventReviewProposal(normalizedDraft, proposalId);
+      const freshProposal = await buildEventReviewProposal(normalizedDraft, proposalId);
+      const stableId = recoverProposalId(freshProposal.draftHash, proposalId);
+      const proposal = stableId === proposalId
+        ? freshProposal
+        : await buildEventReviewProposal(normalizedDraft, stableId);
       const res = await fetch("/api/approval-commit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -88,23 +203,28 @@ export function EventPublishApprovalPanel({
       }
 
       if (outcome.kind === "published") {
-        setReceipt(eventPublishReceipt(proposal.proposalId, outcome));
+        const savedReceipt = eventPublishReceipt(proposal.proposalId, outcome);
+        try {
+          sessionStorage.removeItem(PENDING_EVENT_PROPOSAL);
+          storeCompletedPublish({
+            draftHash: proposal.draftHash,
+            reviewId,
+            proposalId: proposal.proposalId,
+            eventId: outcome.eventId,
+            slug: outcome.slug,
+            approvalRequestId: outcome.approvalRequestId,
+            savedAt: savedReceipt.savedAt ?? new Date().toISOString(),
+          });
+        } catch { /* storage is optional */ }
+        setReceipt(savedReceipt);
         onPublished?.({
           eventId: outcome.eventId,
           slug: outcome.slug,
           approvalRequestId: outcome.approvalRequestId,
         });
-      } else {
-        setReceipt({
-          proposalId: proposal.proposalId,
-          status: "saved",
-          message:
-            decision === "edit"
-              ? "Changes requested. Your draft is editable."
-              : "Review cancelled. Nothing was written.",
-          savedAt: new Date().toISOString(),
-        });
       }
+      // Edit and Cancel change the local wizard state only. Do not invent
+      // a persisted "saved" receipt when no database write occurred.
       setDecided(true);
       respond(decision);
     } catch (err) {
@@ -126,6 +246,25 @@ export function EventPublishApprovalPanel({
       </CardHeader>
       <CardContent className="space-y-3">
         <EventCard {...preview} />
+        <div
+          data-testid="host-event-review-details"
+          className="space-y-2 rounded-md border border-border bg-muted/20 p-3 text-sm"
+        >
+          <p className="font-medium">Details that will be published</p>
+          <p>Capacity: {draft.capacity} people</p>
+          {draft.description.trim() ? <p>Description: {draft.description}</p> : null}
+          {draft.ticketTiers.length > 0 ? (
+            <ul aria-label="Ticket tiers" className="list-inside list-disc space-y-1">
+              {draft.ticketTiers.map((tier, index) => (
+                <li key={index}>
+                  {tier.name}: {tier.priceCop.toLocaleString("en-US")} COP · {tier.quantity} tickets
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p>Ticket price: {draft.priceMinCop.toLocaleString("en-US")} COP</p>
+          )}
+        </div>
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
         {receipt ? (
           <div

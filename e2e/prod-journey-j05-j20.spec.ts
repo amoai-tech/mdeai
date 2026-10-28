@@ -92,7 +92,10 @@ test.describe("SAN-546 · OPS-JOURNEY — prod matrix J05–J20", () => {
   test("J09 — event buy CTA (checkout or login redirect)", async ({ page }) => {
     test.setTimeout(240_000);
     await gotoHome(page);
-    await sendConciergeMessage(page, "salsa events this weekend in Medellín");
+    // Inventory-dependent: production may legitimately have no salsa event
+    // *this weekend*. Use a city-wide query so J09 proves the buy CTA whenever
+    // the catalog has any upcoming salsa event, without inventing inventory.
+    await sendConciergeMessage(page, "events in Medellín");
     await waitForCopilotIdle(page, 150_000);
     const eventCard = page.locator('[data-testid="event-card"]').first();
     await eventCard.waitFor({ state: "visible", timeout: 120_000 });

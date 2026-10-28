@@ -25,6 +25,14 @@ export function classifyCheckoutError(
     };
   }
   const msg = message ?? "";
+  if (code === "CHECKOUT_KEY_CANCELLED") {
+    return {
+      kind: "expired",
+      heading: "Previous checkout cancelled",
+      detail: "Close this checkout and start a new one for a new payment session.",
+      canRetry: false,
+    };
+  }
   if (
     SOLD_OUT_RE.test(msg) ||
     code === "TIER_SOLD_OUT" ||

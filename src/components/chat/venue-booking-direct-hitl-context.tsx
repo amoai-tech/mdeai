@@ -1,26 +1,24 @@
 "use client";
 
 import {
-  createContext,
-  useCallback,
-  useContext,
-  useMemo,
-  useState,
+  createContext, useCallback, useContext, useEffect, useMemo, useRef, useState,
   type ReactNode,
 } from "react";
 import {
-  VenueBookingHitlPanel,
-  type VenueBookingHitlArgs,
+  VenueBookingHitlPanel, type VenueBookingHitlArgs,
 } from "@/components/chat/venue-booking-hitl-panel";
 import { useRentalUi } from "@/components/chat/rental-ui-context";
+import { useSession } from "@/hooks/use-session";
+import { clearVenueBookingReview, restoreVenueBookingReview } from "./venue-booking-draft-store";
 import { submitDirectVenueBooking } from "@/components/chat/venue-booking-direct-hitl-core";
 
+type BookingDecision = "approved" | "rejected";
 type VenueBookingDirectHitlContextValue = {
   openDirectHitl: (args: VenueBookingHitlArgs) => void;
   clearDirectHitl: () => void;
   args: VenueBookingHitlArgs | null;
   status: "inProgress" | "executing" | "complete";
-  respond: (decision: "approved" | "rejected" | "edit") => void;
+  respond: (decision: BookingDecision, draft: VenueBookingHitlArgs) => Promise<void>;
 };
 
 const VenueBookingDirectHitlContext =
@@ -28,11 +26,7 @@ const VenueBookingDirectHitlContext =
 
 function useVenueBookingDirectHitlContext() {
   const ctx = useContext(VenueBookingDirectHitlContext);
-  if (!ctx) {
-    throw new Error(
-      "VenueBookingDirectHitlContext missing — wrap with VenueBookingDirectHitlProvider",
-    );
-  }
+  if (!ctx) throw new Error("VenueBookingDirectHitlContext missing — wrap with VenueBookingDirectHitlProvider");
   return ctx;
 }
 
@@ -51,65 +45,73 @@ export function VenueBookingDirectHitlPanel() {
   );
 }
 
-/** Slot-complete booking — show HITL without waiting for conciergeAgent tool selection. */
+/** A slot-complete direct proposal uses the same confirmed API path as the agent review. */
 export function VenueBookingDirectHitlProvider({ children }: { children: ReactNode }) {
   const [args, setArgs] = useState<VenueBookingHitlArgs | null>(null);
-  const [status, setStatus] = useState<"inProgress" | "executing" | "complete">(
-    "inProgress",
-  );
+  // executing is CopilotKit's "awaiting human input" status, not "request in flight".
+  const [status, setStatus] = useState<"inProgress" | "executing" | "complete">("executing");
+  const inFlight = useRef(false);
+  const { user, loading } = useSession();
   const { setVenueBookingConfirmation } = useRentalUi();
 
+  useEffect(() => {
+    if (loading || !user || args) return;
+    const draft = restoreVenueBookingReview();
+    if (!draft) return;
+    // sessionStorage is external to React; restore after hydration without
+    // synchronously cascading state changes inside the effect.
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) setArgs((current) => current ?? draft);
+    });
+    return () => { cancelled = true; };
+  }, [loading, user, args]);
+
   const clearDirectHitl = useCallback(() => {
+    clearVenueBookingReview();
     setArgs(null);
-    setStatus("inProgress");
+    setStatus("executing");
+    inFlight.current = false;
   }, []);
 
   const openDirectHitl = useCallback((next: VenueBookingHitlArgs) => {
     setArgs(next);
-    setStatus("inProgress");
+    setStatus("executing");
   }, []);
 
   const respond = useCallback(
-    (decision: "approved" | "rejected" | "edit") => {
-      if (!args) return;
-      // Guard against double-submit: a booking is already in flight. Without
-      // this, a rapid second "approved" (or a programmatic caller once
-      // openDirectHitl is wired) fires submitDirectVenueBooking twice and races
-      // to confirm a duplicate booking. The panel's disabled button is only a
-      // UI-level defence; this makes it explicit.
-      if (status === "executing") return;
-      if (decision === "rejected" || decision === "edit") {
+    async (decision: BookingDecision, draft: VenueBookingHitlArgs): Promise<void> => {
+      if (!args || inFlight.current || status !== "executing") return;
+      if (decision === "rejected") {
         clearDirectHitl();
         return;
       }
-
-      setStatus("executing");
-      void submitDirectVenueBooking(args).then((result) => {
-        if (result.ok) {
-          setVenueBookingConfirmation(result.confirmation);
-          // Booking saved: close the panel but leave a terminal "complete"
-          // observable. The confirmation banner is the user-facing signal.
-          setArgs(null);
-          setStatus("complete");
-          return;
+      // Synchronous guard prevents repeated clicks racing before React renders.
+      inFlight.current = true;
+      setArgs(draft);
+      setStatus("inProgress");
+      try {
+        const result = await submitDirectVenueBooking(draft);
+        if (!result.ok) {
+          throw result.error instanceof Error ? result.error : new Error("Could not send request.");
         }
-        // Failure is not swallowed: submitDirectVenueBooking already logged it.
-        // Reset the panel so the user isn't stuck on a dead "executing" state.
-        // TODO SAN-496: surface error to the user via toast/banner.
-        clearDirectHitl();
-      });
+        clearVenueBookingReview();
+        setVenueBookingConfirmation(result.confirmation);
+        setArgs(null);
+        setStatus("complete");
+      } catch (error) {
+        setStatus("executing");
+        // The panel catches and displays the error while preserving its editable draft.
+        throw error;
+      } finally {
+        inFlight.current = false;
+      }
     },
     [args, status, clearDirectHitl, setVenueBookingConfirmation],
   );
 
   const value = useMemo(
-    () => ({
-      openDirectHitl,
-      clearDirectHitl,
-      args,
-      status,
-      respond,
-    }),
+    () => ({ openDirectHitl, clearDirectHitl, args, status, respond }),
     [openDirectHitl, clearDirectHitl, args, status, respond],
   );
 

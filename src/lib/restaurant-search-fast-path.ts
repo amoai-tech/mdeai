@@ -23,6 +23,13 @@ export type RestaurantSearchApiParams = {
 
 const FAST_PATH_LIMIT = 5;
 
+/** Booking/action intents must reach the concierge's consent workflow.
+ * Search-only fast paths can display cards, but cannot request a table.
+ */
+function isRestaurantBookingAction(text: string): boolean {
+  return /\b(?:book(?:ing)?|reserv(?:e|ation|ations)|reservar|reserva|reservación|reservaciones|table\s+request|request\s+(?:a\s+)?table|table\s+booking)\b/i.test(text);
+}
+
 function looksLikeNonRestaurantSearch(text: string): boolean {
   return looksLikeNightlifeGroundingSearch(text) || looksLikeCafeSearch(text);
 }
@@ -33,6 +40,7 @@ export function shouldInstantRestaurantClarify(
   memory: ConciergeWorkingMemory,
 ): boolean {
   return (
+    !isRestaurantBookingAction(text) &&
     isGenericRestaurantQuery(text) &&
     memory.lastRestaurantQuery?.genericAskPending !== true
   );
@@ -53,7 +61,7 @@ export function buildRestaurantSearchParams(
   memory?: ConciergeWorkingMemory,
   overrides?: Partial<RestaurantSearchApiParams>,
 ): RestaurantSearchApiParams | null {
-  if (looksLikeNonRestaurantSearch(text)) return null;
+  if (looksLikeNonRestaurantSearch(text) || isRestaurantBookingAction(text)) return null;
 
   const s = scoreRestaurantQuery(text);
   const q = memory?.lastRestaurantQuery;

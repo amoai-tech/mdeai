@@ -1,6 +1,12 @@
 import { defineConfig, devices } from "@playwright/test";
 
 const localBaseURL = process.env.SMOKE_BASE_URL || "http://localhost:3001";
+// Parse once: browser CI needs to know when Next.js is LISTENING, not when the
+// expensive marketing homepage has finished compiling or fetching live data.
+const localWebServerURL = new URL(localBaseURL);
+const localWebServerPort = Number(
+  localWebServerURL.port || (localWebServerURL.protocol === "https:" ? 443 : 80),
+);
 const webServerCommand =
   process.env.PLAYWRIGHT_WEB_SERVER_COMMAND || "npm run dev:ui";
 const prodBaseURL = process.env.PROD_SMOKE_BASE_URL?.trim();
@@ -14,11 +20,17 @@ const runProductionProjects = Boolean(prodBaseURL) && process.env.PW_SKIP_WEBSER
 const VITEST_TESTS = "**/*.test.ts";
 
 const PROD_SPECS = [
+  "**/app/host-ai-continuity.spec.ts",
+  "**/app/host-ai-sales-accuracy.spec.ts",
   "**/prod-candidate-certification.spec.ts",
   "**/prod-synthetic-smoke.spec.ts",
   "**/prod-signed-in-route.spec.ts",
+  "**/prod-rentals-results-refresh.spec.ts",
+  "**/prod-discovery-inline-ask.spec.ts",
+  "**/prod-discovery-nightlife-mobile.spec.ts",
   "**/prod-copilotkit-isolation.spec.ts",
   "**/prod-concierge-thread-lifecycle.spec.ts",
+  "**/prod-release-health.spec.ts",
   "**/san-1413-saved-chat-continuity.spec.ts",
   "**/prod-journey-j05-j20.spec.ts",
   "**/rental-ai-security.spec.ts",
@@ -27,6 +39,8 @@ const PROD_SPECS = [
 ];
 
 export default defineConfig({
+  // Only CI opt-in runs this; never on production smoke or ordinary local tests.
+  globalSetup: process.env.PLAYWRIGHT_CI_WARMUP === "1" ? "./e2e/ci-warmup.ts" : undefined,
   testDir: "./e2e",
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
@@ -172,7 +186,13 @@ export default defineConfig({
     ? undefined
     : {
         command: webServerCommand,
-        url: localBaseURL,
+        // A GET / can compile the full marketing homepage (and depend on external
+        // discovery calls), causing false 120s "startup" failures in cold CI.
+        // Keep baseURL above for real page assertions; only readiness checks the port.
+        port: localWebServerPort,
+        // Playwright otherwise hides server stdout; preserve diagnostics when CI fails.
+        stdout: "pipe",
+        stderr: "pipe",
         // A reused server may belong to a different worktree and produce false greens.
         // Explicit opt-in is available when the caller knows the server owner.
         reuseExistingServer: !process.env.CI && process.env.PW_REUSE_WEBSERVER === "1",

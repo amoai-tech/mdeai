@@ -6,6 +6,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
+import { renderToStaticMarkup } from "react-dom/server";
+import { BrowseMapFallback } from "../browse-map-fallback";
 
 vi.mock("@/components/maps/MapProvider", () => ({ MapsShell: ({ children }: { children: React.ReactNode }) => <>{children}</> }));
 vi.mock("@/components/maps/ChatMap", () => ({
@@ -20,6 +22,14 @@ import { BrowseMapSheet } from "@/components/browse/BrowseMapSheet";
 
 afterEach(() => {
   document.body.innerHTML = "";
+});
+
+describe("Shared map failure copy", () => {
+  it("does not call rentals or cafés a restaurant list", () => {
+    const html = renderToStaticMarkup(<BrowseMapFallback />);
+    expect(html).toContain("explore the listings");
+    expect(html).not.toContain("restaurant list");
+  });
 });
 
 describe("BrowseMapSheet map holder", () => {
@@ -46,6 +56,22 @@ describe("BrowseMapSheet map holder", () => {
     expect(sheet?.className).toContain("pb-[env(safe-area-inset-bottom,0px)]");
     // Same redraw signal as the working chat map sheet.
     expect(stub.getAttribute("data-resize-signal")).toBe("1");
+    await act(async () => root.unmount());
+  });
+});
+
+describe("BrowseMapSheet inline control", () => {
+  it("keeps the Map action in normal layout, clear of compact card CTAs", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    await act(async () => root.render(<BrowseMapSheet inline />));
+    const trigger = document.querySelector('[data-testid="browse-map-fab"]') as HTMLButtonElement;
+    expect(trigger.className).not.toContain("fixed");
+    expect(trigger.className).toContain("min-h-11");
+    expect(trigger.style.bottom).toBe("");
+    await act(async () => trigger.click());
+    expect(document.querySelector('[data-testid="chat-map-stub"]')).not.toBeNull();
     await act(async () => root.unmount());
   });
 });
@@ -83,6 +109,39 @@ describe("BrowseMapSheet close control", () => {
 
 /** SAN-1421 — when a page pins an Ask MDE composer at the bottom, the phone Map button clears it. */
 describe("BrowseMapSheet placement above a pinned composer", () => {
+  it("follows the measured conversation height when the transcript expands", async () => {
+    const composer = document.createElement("div");
+    composer.dataset.testid = "workspace-ask-composer";
+    let height = 165;
+    composer.getBoundingClientRect = () => ({ height } as DOMRect);
+    document.body.appendChild(composer);
+    let notifyResize: (() => void) | undefined;
+    const original = globalThis.ResizeObserver;
+    class ResizeObserverStub {
+      constructor(callback: ResizeObserverCallback) {
+        notifyResize = () => callback([], this as unknown as ResizeObserver);
+      }
+      observe() {}
+      disconnect() {}
+      unobserve() {}
+    }
+    vi.stubGlobal("ResizeObserver", ResizeObserverStub);
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    try {
+      await act(async () => root.render(<BrowseMapSheet raised />));
+      const fab = () => document.querySelector('[data-testid="browse-map-fab"]') as HTMLElement;
+      expect(fab().style.bottom).toMatch(/^calc\((?:1rem \+ 165px|165px \+ 1rem)\)$/);
+      height = 306; // A second chat turn expands the transcript.
+      await act(async () => notifyResize?.());
+      expect(fab().style.bottom).toMatch(/^calc\((?:1rem \+ 306px|306px \+ 1rem)\)$/);
+    } finally {
+      await act(async () => root.unmount());
+      vi.stubGlobal("ResizeObserver", original);
+    }
+  });
+
   it("sits above the composer instead of on top of its Send button", async () => {
     const container = document.createElement("div");
     document.body.appendChild(container);

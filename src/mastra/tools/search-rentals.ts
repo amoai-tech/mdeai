@@ -11,7 +11,6 @@ import {
 import { applyAvailabilityFilters } from '@/lib/rentals/availability-filter';
 import { z } from 'zod';
 import { runAuditedSearch } from '../lib/run-audited-search';
-import { searchRentalsIntelligent } from '../lib/intelligence-rental-search';
 import { EXTERNAL_RENTAL_BUDGET_NOTE, getOptionalExternalRentals, mixRentalResults } from '@/lib/rentals/mixed-rental-results';
 import {
   RentalSearchUnavailableError,
@@ -634,6 +633,8 @@ export async function searchRentals(
   if (query.queryText?.trim()) {
     try {
       const started = Date.now();
+      // Load after tool initialization; intelligence search reuses our row-mapping helpers.
+      const { searchRentalsIntelligent } = await import('../lib/intelligence-rental-search');
       const intel = await searchRentalsIntelligent(query, { ...options, developmentPhase: developmentMode });
       const latencyMs = Date.now() - started;
       await writeSearchLog({
@@ -707,6 +708,12 @@ export const searchRentalsTool = createTool({
       .describe(
         'Monthly rent ceiling in the listing currency, e.g. 3500000 with budgetCurrency COP. Applied only to listings already priced in that currency.',
       ),
+    stayType: z
+      .enum(['nightly', 'monthly', 'total_trip'])
+      .optional()
+      .describe(
+        "Stay pricing period. 'monthly' sorts by monthly price and must be set when the renter asks per month; never convert a monthly budget into a nightly cap.",
+      ),
     budgetCurrency: monthlyBudgetCurrencySchema
       .optional()
       .describe('Three-letter budget currency code (e.g. COP). Defaults to COP.'),
@@ -745,6 +752,7 @@ export const searchRentalsTool = createTool({
       minBedrooms,
       maxPricePerNight,
       maxPriceMonthly,
+      stayType,
       budgetCurrency,
       limit = 8,
       queryText,
@@ -759,7 +767,7 @@ export const searchRentalsTool = createTool({
     const { results, source, budgetNote, hybridUsed, rankExplanation } = await runAuditedSearch(
       'search-rentals',
       (q: RentalQuery) => searchRentals(q, options),
-      { neighborhood, minBedrooms, maxPricePerNight, maxPriceMonthly, budgetCurrency, limit, queryText },
+      { neighborhood, minBedrooms, maxPricePerNight, maxPriceMonthly, stayType, budgetCurrency, limit, queryText },
       context,
     );
 

@@ -96,7 +96,7 @@ export function useRestaurantSearchFastPath() {
       chip?: RestaurantFilterChip,
       propagateFailure = false,
     ): Promise<boolean> => {
-      if (busyRef.current) return true;
+      if (busyRef.current) return false;
       busyRef.current = true;
       try {
         const cards = await fetchRestaurantSearch(params);
@@ -158,7 +158,7 @@ export function useRestaurantSearchFastPath() {
       };
 
       if (shouldInstantRestaurantClarify(trimmed, memory)) {
-        if (busyRef.current) return true;
+        if (busyRef.current) return false;
         busyRef.current = true;
         try {
           logRoutingDecision({
@@ -187,6 +187,8 @@ export function useRestaurantSearchFastPath() {
       const params = buildRestaurantSearchParams(trimmed, memory);
       if (!params) return false;
 
+      // Busy searches must be routed through the Concierge, never acknowledged as handled.
+      if (busyRef.current) return false;
       clearLocalMessages();
       return runSearch(trimmed, params, undefined, true);
     },
@@ -219,7 +221,7 @@ export function useRestaurantSearchFastPath() {
     async (
       chip: RestaurantFilterChip,
     ): Promise<{ handled: boolean; geoDenied?: boolean }> => {
-      if (busyRef.current) return { handled: true };
+      if (busyRef.current) return { handled: false };
 
       let geo: { latitude: number; longitude: number } | undefined;
       if (chip.nearMe) {
@@ -235,6 +237,8 @@ export function useRestaurantSearchFastPath() {
 
       const prompt = restaurantChipSearchPrompt(chip);
       const params = restaurantSearchParamsFromChip(chip, geo);
+      // The location lookup can finish while another search starts: do not clear its UI.
+      if (busyRef.current) return { handled: false };
       clearLocalMessages();
       const handled = await runSearch(prompt, params, chip);
       return { handled };

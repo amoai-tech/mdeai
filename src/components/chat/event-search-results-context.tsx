@@ -16,7 +16,10 @@ export type EventSearchResultRow = {
   venue: string;
   neighborhood: string;
   startsAt: string;
-  pricePerTicket: number;
+  pricePerTicket: number | null;
+  currency?: string;
+  canBuyTickets?: boolean;
+  ticketUrl?: string;
   imageUrl?: string;
   sourceUrl?: string;
 };

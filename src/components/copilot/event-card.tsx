@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Ticket } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { formatEventCardPrice } from "@/lib/events/format-event";
+import { EVENT_TIME_ZONE, formatEventCardPrice } from "@/lib/events/format-event";
 import type { CardInteractionProps, ResultKind } from "@/components/cards/card-interaction-props";
 
 export type EventCardProps = {
@@ -14,7 +14,8 @@ export type EventCardProps = {
   venue: string;
   neighborhood: string;
   startsAt: string;
-  pricePerTicket: number;
+  pricePerTicket: number | null;
+  canBuyTickets?: boolean;
   /** EventCard.currency — "USD" or "COP". Defaults to USD when omitted. */
   currency?: string;
   imageUrl?: string;
@@ -40,6 +41,7 @@ function formatStartsAt(iso: string) {
       day: "numeric",
       hour: "numeric",
       minute: "2-digit",
+      timeZone: EVENT_TIME_ZONE,
     }).format(new Date(iso));
   } catch {
     return iso;
@@ -54,6 +56,7 @@ export function EventCard({
   neighborhood,
   startsAt,
   pricePerTicket,
+  canBuyTickets,
   currency,
   imageUrl,
   ticketUrl,
@@ -126,10 +129,14 @@ export function EventCard({
           {formatStartsAt(startsAt)}
         </p>
         <p className="mt-1 inline-flex rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
-          From {formatEventCardPrice(pricePerTicket, currency)}
+          {pricePerTicket === null
+            ? "Price TBD"
+            : pricePerTicket === 0
+              ? "Free"
+              : `From ${formatEventCardPrice(pricePerTicket, currency)}`}
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
-          {onBuyTickets ? (
+          {canBuyTickets && onBuyTickets ? (
             <Button
               type="button"
               size="sm"
@@ -142,7 +149,7 @@ export function EventCard({
               <Ticket className="size-3.5" aria-hidden />
               Buy tickets
             </Button>
-          ) : (
+          ) : canBuyTickets ? (
             <Link
               href={ticketUrl}
               data-testid="event-buy-cta"
@@ -152,7 +159,7 @@ export function EventCard({
               <Ticket className="size-3.5" aria-hidden />
               Buy tickets
             </Link>
-          )}
+          ) : null}
           {sourceUrl && sourceUrl !== ticketUrl && sourceUrl.startsWith("http") ? (
             <a
               href={sourceUrl}

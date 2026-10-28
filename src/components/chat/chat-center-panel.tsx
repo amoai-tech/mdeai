@@ -7,16 +7,18 @@ import { ChatFilterCopilotInstructions } from "@/components/chat/chat-filter-cop
 import { ChatQueryBar } from "@/components/chat/chat-query-bar";
 import { ConciergeChatView } from "@/components/chat/concierge-copilot-chat-view";
 import { ConciergeInitialPrompt } from "@/components/chat/concierge-initial-prompt";
+import { ConciergeErrorFeedback } from "@/components/chat/concierge-run-feedback";
 import { DeterministicConciergeChat } from "@/components/chat/deterministic-concierge-chat";
 import { useSavedThreadHistory } from "@/components/chat/chat-provider";
 import { useConciergeSession } from "@/components/chat/concierge-session-context";
 import { WorkflowProgressStrip } from "@/components/chat/workflow-progress-strip";
+import { RENTAL_EXAMPLE_QUERY } from "@/lib/rental-failure-recovery";
 import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 
-const CONCIERGE_LABELS = {
+export const CONCIERGE_LABELS = {
   modalHeaderTitle: "Medellín concierge",
   welcomeMessageText:
-    'Hi — I can help with rentals, events, restaurants, and day trips in Medellín. Try: "1BR in Laureles under $80/night" or "salsa events this weekend".',
+    `Hi — I can help with rentals, events, restaurants, and day trips in Medellín. Try: "${RENTAL_EXAMPLE_QUERY}" or "salsa events this weekend".`,
 };
 
 /**
@@ -59,6 +61,8 @@ export function ChatCenterPanel() {
           aria-relevant="additions"
           className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-2 pb-2 pt-1 sm:px-4"
         >
+          {/* First child of the polite live region: an empty-thread failure is still announced. */}
+          <ConciergeErrorFeedback />
           <Suspense fallback={null}>
             <ConciergeInitialPrompt />
           </Suspense>

@@ -37,6 +37,11 @@ export type RentalCardProps = RentalResultRow & {
    * would reject.
    */
   canScheduleViewing?: boolean;
+  /**
+   * SAN-1235 — set when another result row looks like this same apartment ("Also listed as #1").
+   * Labelled, never hidden: the rows may be two real feeds for one home.
+   */
+  duplicateNote?: string;
 } & Omit<CardInteractionProps, "onSelect" | "pinId"> & {
   /** Unifies to `() => void` in UX-024; callers pass listing id today. */
   onSelect?: (id: string) => void;
@@ -68,6 +73,7 @@ export function RentalCard({
   onSchedule,
   onOpenDetails,
   canScheduleViewing,
+  duplicateNote,
 }: RentalCardProps) {
   // The listing's own currency — never assumed USD. A stored monthly rent leads: the nightly figure
   // would only be rent ÷ 30, so it is not shown as an offer (same rule as the /rentals browse card).
@@ -174,6 +180,19 @@ export function RentalCard({
         ) : null}
         <h3 className="min-w-0 flex-1 font-medium leading-snug">{title}</h3>
       </div>
+
+      {duplicateNote ? (
+        <div className="mt-1">
+          <Badge
+            variant="outline"
+            className="text-[10px] font-normal"
+            data-testid={`rental-card-duplicate-${id}`}
+            title={duplicateNote}
+          >
+            {duplicateNote}
+          </Badge>
+        </div>
+      ) : null}
 
       <p className="mt-0.5 text-xs text-muted-foreground">
         {neighborhood}

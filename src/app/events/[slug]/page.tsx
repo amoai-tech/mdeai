@@ -7,6 +7,7 @@ import { getPublicEvent } from "@/lib/events/get-public-event";
 
 type EventDetailPageProps = {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ from?: string | string[] }>;
 };
 
 export async function generateMetadata({
@@ -19,12 +20,20 @@ export async function generateMetadata({
   }
   return {
     title: `${event.name} · mdeai`,
-    description: event.description ?? `Tickets for ${event.name} in Medellín`,
+    description: event.description ?? `Event information for ${event.name} in Medellín`,
+    alternates: { canonical: `/events/${event.slug ?? event.id}` },
+    openGraph: {
+      title: event.name,
+      description: event.description ?? `Event information for ${event.name} in Medellín`,
+      ...(event.imageUrl ? { images: [{ url: event.imageUrl }] } : {}),
+    },
   };
 }
 
-export default async function EventDetailPage({ params }: EventDetailPageProps) {
+export default async function EventDetailPage({ params, searchParams }: EventDetailPageProps) {
   const { slug } = await params;
+  // Allowlist, not a redirect target: only the literal "chat" changes the back link.
+  const { from } = await searchParams;
   const event = await getPublicEvent(slug);
   if (!event) notFound();
 
@@ -33,7 +42,7 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
       <Suspense fallback={null}>
         <EventCheckoutNotice />
       </Suspense>
-      <EventDetailView event={event} />
+      <EventDetailView event={event} backTo={from === "chat" ? "chat" : "events"} />
     </>
   );
 }

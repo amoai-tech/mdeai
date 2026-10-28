@@ -11,6 +11,7 @@ import { createRoot, type Root } from "react-dom/client";
 const ui = vi.hoisted(() => ({
   panToPin: vi.fn(),
   openVenueDetail: vi.fn(),
+  setRows: vi.fn(),
   selectedPinId: null as string | null,
 }));
 
@@ -21,7 +22,7 @@ vi.mock("@/components/chat/rental-ui-context", () => ({
   useRentalUi: () => ({ openVenueDetail: ui.openVenueDetail }),
 }));
 vi.mock("@/components/chat/event-search-results-context", () => ({
-  useEventSearchResults: () => ({ setRows: vi.fn(), setWebCitations: vi.fn() }),
+  useEventSearchResults: () => ({ setRows: ui.setRows, setWebCitations: vi.fn() }),
 }));
 vi.mock("@/components/chat/rich-card-results-context", () => ({
   RichCardResultsRegistrar: () => null,
@@ -69,6 +70,7 @@ beforeEach(() => {
   Element.prototype.scrollIntoView = vi.fn();
   ui.panToPin.mockReset();
   ui.openVenueDetail.mockReset();
+  ui.setRows.mockReset();
   ui.selectedPinId = null;
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -80,7 +82,42 @@ afterEach(() => {
   container.remove();
 });
 
+describe("SAN-1407 empty event result replacement", () => {
+  it("clears previously shown rows when the latest finished event result is empty", () => {
+    act(() => root.render(<EventResults result={{ results: [event("old")], source: "supabase" }} />));
+    expect(ui.setRows).toHaveBeenLastCalledWith([expect.objectContaining({ id: "old" })]);
+    act(() => root.render(<EventResults result={{ results: [], source: "supabase" }} />));
+    expect(ui.setRows).toHaveBeenLastCalledWith([]);
+  });
+});
+
 describe("event cards on the map", () => {
+  it("preserves tier-backed price, Buy availability and URL in the shared rows", () => {
+    act(() =>
+      root.render(
+        <EventResults result={{
+          results: [{
+            ...event("paid"),
+            pricePerTicket: 40000,
+            currency: "COP",
+            canBuyTickets: true,
+            ticketUrl: "/events/paid",
+          }],
+          source: "supabase",
+        }} />,
+      ),
+    );
+    expect(ui.setRows).toHaveBeenCalledWith([
+      expect.objectContaining({
+        id: "paid",
+        pricePerTicket: 40000,
+        currency: "COP",
+        canBuyTickets: true,
+        ticketUrl: "/events/paid",
+      }),
+    ]);
+  });
+
   it("an event with coordinates pans to its pin and opens its details", () => {
     render();
     act(() => cardBody("event-mapped").click());

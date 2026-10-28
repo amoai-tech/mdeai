@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/hooks/use-session";
+import { medellinLocalToIso } from "@/lib/venues/venue-booking-time";
 import { buildVenueBookingIdempotencyKey } from "@/lib/venues/venue-booking-core";
 import { submitVenueBooking } from "@/lib/venues/submit-venue-booking";
 import type {
@@ -14,11 +15,14 @@ import type {
 export function VenueBookingForm({
   venueKind,
   placeId,
+  restaurantId,
   venueTitle,
   onSuccess,
 }: {
   venueKind: VenueBookingKind;
-  placeId: string;
+  placeId?: string;
+  /** SAN-1542: canonical restaurant links request to the owner inbox. */
+  restaurantId?: string | null;
   venueTitle: string;
   onSuccess: (result: VenueBookingSubmitResult) => void;
 }) {
@@ -79,9 +83,11 @@ export function VenueBookingForm({
       return;
     }
 
-    const requestedAt = new Date(requestedAtLocal);
-    if (Number.isNaN(requestedAt.getTime())) {
-      setError("Choose a valid date and time.");
+    let requestedAtIso: string;
+    try {
+      requestedAtIso = medellinLocalToIso(requestedAtLocal);
+    } catch {
+      setError("Choose a valid Medellín date and time.");
       return;
     }
 
@@ -93,10 +99,10 @@ export function VenueBookingForm({
 
     setSubmitting(true);
     try {
-      const requestedAtIso = requestedAt.toISOString();
       const result = await submitVenueBooking({
         venueKind,
         placeId,
+        ...(restaurantId ? { restaurantId } : {}),
         requestedAt: requestedAtIso,
         partySize: parsedParty,
         contactName: contactName.trim(),
@@ -107,6 +113,7 @@ export function VenueBookingForm({
         idempotencyKey: buildVenueBookingIdempotencyKey({
           venueKind,
           placeId,
+          restaurantId,
           requestedAt: requestedAtIso,
           partySize: parsedParty,
         }),
@@ -165,7 +172,7 @@ export function VenueBookingForm({
         />
       </label>
       <label className="block text-sm">
-        <span className="font-medium">Preferred date & time</span>
+        <span className="font-medium">Preferred date & time (Medellín, Colombia)</span>
         <input
           type="datetime-local"
           className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"

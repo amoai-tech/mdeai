@@ -165,6 +165,8 @@ export function eventCardsToToolEnvelope(
       neighborhood: e.neighborhood,
       startsAt: e.startsAt,
       pricePerTicket: e.pricePerTicket,
+      canBuyTickets: e.canBuyTickets,
+      ticketUrl: e.ticketUrl,
       currency: e.currency,
       imageUrl: e.imageUrl,
       sourceUrl: e.sourceUrl ?? e.mapsUrl ?? undefined,
@@ -177,6 +179,20 @@ export function eventCardsToToolEnvelope(
     hybridUsed: meta?.hybridUsed,
     rankExplanation: meta?.rankExplanation,
   };
+}
+
+/** Human-readable reasons only: never expose internal RPC names, scores, or feature flags. */
+export function visibleEventSearchReasons(
+  entries: Array<{ factor: string; note: string }>,
+): string[] {
+  const date = entries.find((entry) => entry.factor === "date_window");
+  const salsa = entries.some((entry) => entry.factor === "salsa_intent");
+  const reasons: string[] = [];
+  if (date && ["tonight", "this_weekend", "this_week", "next_week"].includes(date.note)) {
+    reasons.push(`Date: ${date.note.replaceAll("_", " ")}`);
+  }
+  if (salsa) reasons.push("Salsa and music relevance");
+  return reasons;
 }
 
 /** The requested window had nothing, so upcoming events are shown instead. `count` is at least 1. */

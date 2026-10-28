@@ -56,7 +56,7 @@ function apartmentRow(overrides: Partial<ApartmentRow> = {}): ApartmentRow {
 
 function renderCard(
   overrides: Partial<ApartmentRow> = {},
-  props: { selected?: boolean; onSchedule?: (() => void) | undefined } = {},
+  props: { selected?: boolean; onSchedule?: (() => void) | undefined; duplicateNote?: string } = {},
 ) {
   // `?? vi.fn()` would mask a deliberate `onSchedule: undefined`, which is exactly the case
   // the "no handler → no CTA" test needs to exercise.
@@ -66,6 +66,7 @@ function renderCard(
       rental={rowToRental(apartmentRow(overrides))}
       onSelect={vi.fn()}
       onSchedule={hasHandler ? props.onSchedule : vi.fn()}
+      duplicateNote={props.duplicateNote}
       selected={props.selected}
     />,
   );
@@ -75,6 +76,54 @@ describe("RentalBrowseCard — SAN-1349 viewing CTA truthfulness", () => {
   it("treats inherited object keys as ordinary amenity text, not object properties", () => {
     const html = renderCard({ amenities: ["constructor"] });
     expect(html).toContain("Constructor");
+  });
+
+  it("renders inline 96px photo, honest price and existing viewing action", () => {
+    const html = renderToStaticMarkup(<RentalBrowseCard
+      rental={rowToRental(apartmentRow())}
+      mediaLayout="inline"
+      onSchedule={vi.fn()}
+      onDetails={vi.fn()}
+    />);
+    expect(html).toContain('data-testid="rental-browse-card-photo"');
+    expect(html).toContain("w-24");
+    expect(html).toContain("USD");
+    expect(html).toContain('data-testid="rental-schedule-cta"');
+    expect(html).toContain('data-testid="rental-card-link-rnt_lau_001"');
+  });
+
+  it("inline card shows the stored $78/night price, never a derived monthly estimate", () => {
+    const html = renderToStaticMarkup(<RentalBrowseCard
+      rental={rowToRental(apartmentRow())}
+      mediaLayout="inline"
+      onSchedule={vi.fn()}
+      onDetails={vi.fn()}
+    />);
+    expect(html).toContain("$78/night");
+    expect(html).not.toContain("~$2,340/mo");
+  });
+
+  it("inline card with a stored monthly price shows only that price, never a derived nightly", () => {
+    const html = renderToStaticMarkup(<RentalBrowseCard
+      rental={rowToRental(apartmentRow({ price_monthly: 2100 }))}
+      mediaLayout="inline"
+      onSchedule={vi.fn()}
+      onDetails={vi.fn()}
+    />);
+    expect(html).toContain("$2,100/mo");
+    expect(html).not.toContain("/night");
+    expect(html).not.toContain("~$");
+  });
+
+  it("inline card with only a stored monthly price shows that price", () => {
+    const html = renderToStaticMarkup(<RentalBrowseCard
+      rental={rowToRental(apartmentRow({ price_daily: null, price_monthly: 2100 }))}
+      mediaLayout="inline"
+      onSchedule={vi.fn()}
+      onDetails={vi.fn()}
+    />);
+    expect(html).toContain("$2,100/mo");
+    expect(html).not.toContain("/night");
   });
 
   it("shows the schedule CTA exactly when the database computed the listing requestable", () => {
@@ -98,6 +147,10 @@ describe("RentalBrowseCard — SAN-1349 viewing CTA truthfulness", () => {
   it("fails closed when the row projection omits the computed column", () => {
     const html = renderCard({ rental_can_request_viewing: null });
     expect(html).not.toContain('data-testid="rental-schedule-cta"');
+  });
+
+  it("labels a duplicate row instead of hiding it", () => {
+    expect(renderCard({}, { duplicateNote: "Also listed as #1" })).toContain("Also listed as #1");
   });
 
   it("still renders the listing itself when the CTA is withheld", () => {

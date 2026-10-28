@@ -6,6 +6,7 @@ describe("toRestaurantVenueDetail", () => {
     const detail = toRestaurantVenueDetail({
       pinId: "restaurant-r1",
       title: "Rocoto",
+      restaurantId: "936636a5-967a-4356-ac03-0a01ac553e1d",
       placeId: "ChIJ_test",
       mapsUrl: "https://maps.google.com/?cid=1",
       neighborhood: "Laureles",
@@ -19,6 +20,7 @@ describe("toRestaurantVenueDetail", () => {
       kind: "restaurant",
       pinId: "restaurant-r1",
       title: "Rocoto",
+      restaurantId: "936636a5-967a-4356-ac03-0a01ac553e1d",
       placeId: "ChIJ_test",
       mapsUrl: "https://maps.google.com/?cid=1",
       neighborhood: "Laureles",
