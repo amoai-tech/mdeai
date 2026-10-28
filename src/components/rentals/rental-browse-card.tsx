@@ -393,7 +393,19 @@ export function RentalBrowseCard({
         )}
       </div>
 
-      {monthlyLabel ? (
+      {mediaLayout === "inline" && nightlyLabel ? (
+        // Inline cards have no photo overlay, so the stored nightly price is shown here. Checked
+        // before `monthlyLabel`: that label is always set when a nightly price exists (derived,
+        // marked "~"), which made this branch unreachable and showed "~$2,340/mo" for $78/night.
+        <div className="mt-1.5 flex flex-wrap items-center gap-2">
+          <p className="text-xs font-medium">{nightlyLabel}</p>
+          {rental.currency?.toUpperCase() === "USD" ? (
+            <Badge variant="outline" className="font-normal text-[10px]" data-testid="rental-card-currency">
+              USD
+            </Badge>
+          ) : null}
+        </div>
+      ) : monthlyLabel ? (
         <div className="mt-1.5 flex flex-wrap items-center gap-2">
           <p className="text-xs text-muted-foreground">{monthlyLabel}</p>
           {rental.currency?.toUpperCase() === "USD" ? (
@@ -402,8 +414,6 @@ export function RentalBrowseCard({
             </Badge>
           ) : null}
         </div>
-      ) : nightlyLabel && mediaLayout === "inline" ? (
-        <p className="mt-1.5 text-xs font-medium">{nightlyLabel}{rental.currency?.toUpperCase() === "USD" ? " USD" : ""}</p>
       ) : !nightlyLabel ? (
         <p className="mt-1.5 text-xs text-muted-foreground">Price not provided</p>
       ) : null}

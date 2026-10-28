@@ -92,6 +92,40 @@ describe("RentalBrowseCard — SAN-1349 viewing CTA truthfulness", () => {
     expect(html).toContain('data-testid="rental-card-link-rnt_lau_001"');
   });
 
+  it("inline card shows the stored $78/night price, never a derived monthly estimate", () => {
+    const html = renderToStaticMarkup(<RentalBrowseCard
+      rental={rowToRental(apartmentRow())}
+      mediaLayout="inline"
+      onSchedule={vi.fn()}
+      onDetails={vi.fn()}
+    />);
+    expect(html).toContain("$78/night");
+    expect(html).not.toContain("~$2,340/mo");
+  });
+
+  it("inline card with a stored monthly price shows only that price, never a derived nightly", () => {
+    const html = renderToStaticMarkup(<RentalBrowseCard
+      rental={rowToRental(apartmentRow({ price_monthly: 2100 }))}
+      mediaLayout="inline"
+      onSchedule={vi.fn()}
+      onDetails={vi.fn()}
+    />);
+    expect(html).toContain("$2,100/mo");
+    expect(html).not.toContain("/night");
+    expect(html).not.toContain("~$");
+  });
+
+  it("inline card with only a stored monthly price shows that price", () => {
+    const html = renderToStaticMarkup(<RentalBrowseCard
+      rental={rowToRental(apartmentRow({ price_daily: null, price_monthly: 2100 }))}
+      mediaLayout="inline"
+      onSchedule={vi.fn()}
+      onDetails={vi.fn()}
+    />);
+    expect(html).toContain("$2,100/mo");
+    expect(html).not.toContain("/night");
+  });
+
   it("shows the schedule CTA exactly when the database computed the listing requestable", () => {
     const html = renderCard({ rental_can_request_viewing: true });
     expect(html).toContain('data-testid="rental-schedule-cta"');
