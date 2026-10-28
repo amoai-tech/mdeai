@@ -4,23 +4,25 @@ import { resolveAgentModelName } from "@/mastra/lib/mastra-telemetry";
 
 afterEach(() => { vi.unstubAllEnvs(); vi.resetModules(); });
 
+// Static import specifiers and fixed exports keep this test analyzable by Vite
+// and prevent a dynamic import/property-access security sink.
 const agentModules = [
-  ["./rental-agent", "rentalAgent"],
-  ["./event-agent", "eventAgent"],
-  ["./partner-agent", "partnerAgent"],
-  ["./host-ops", "hostOpsAgent"],
-  ["./router", "routerAgent"],
-  ["./evaluation", "evaluationAgent"],
-  ["./index", "pingAgent"],
+  ["rentalAgent", async () => (await import("./rental-agent")).rentalAgent],
+  ["eventAgent", async () => (await import("./event-agent")).eventAgent],
+  ["partnerAgent", async () => (await import("./partner-agent")).partnerAgent],
+  ["hostOpsAgent", async () => (await import("./host-ops")).hostOpsAgent],
+  ["routerAgent", async () => (await import("./router")).routerAgent],
+  ["evaluationAgent", async () => (await import("./evaluation")).evaluationAgent],
+  ["pingAgent", async () => (await import("./index")).pingAgent],
 ] as const;
 
 describe("SAN-1589 specialist model selection", () => {
-  for (const [file, exportName] of agentModules) {
+  for (const [exportName, loadAgent] of agentModules) {
     it(exportName + " uses NVIDIA when selected", async () => {
       vi.stubEnv("MDE_AI_PROVIDER", "nvidia");
       vi.stubEnv("NVIDIA_API_KEY", "test-nvidia-key");
-      const agentExports = await import(/* @vite-ignore */ file);
-      expect(resolveAgentModelName(agentExports[exportName])).toBe(NVIDIA_MODEL_ID);
+      const agent = await loadAgent();
+      expect(resolveAgentModelName(agent)).toBe(NVIDIA_MODEL_ID);
     });
   }
 
