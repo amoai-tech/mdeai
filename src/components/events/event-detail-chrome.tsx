@@ -18,7 +18,7 @@ export function EventDetailNavigation({ eventName, returnPath }: { eventName: st
         setShareStatus("Event shared");
         return; // Native share succeeded. Clipboard is only a fallback.
       } catch (error) {
-        if (error instanceof Error && error.name === "AbortError") return;
+        if (typeof error === "object" && error !== null && "name" in error && error.name === "AbortError") return;
         // A blocked native share can still recover through the clipboard below.
       }
     }
