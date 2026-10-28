@@ -20,10 +20,20 @@ function lowestAvailablePrice(tickets: PublicEventTicket[]): PublicEventTicket |
     : null;
 }
 
+/** Stored descriptions may end with an explicit "Listing notice:" paragraph; surface it as a callout, not About text. */
+function splitListingNotice(description: string | null): { about: string | null; notice: string | null } {
+  if (!description) return { about: null, notice: null };
+  const paragraphs = description.split(/\n\s*\n/);
+  const notice = paragraphs.find((p) => /^\s*Listing notice:/i.test(p)) ?? null;
+  const about = paragraphs.filter((p) => p !== notice).join("\n\n").trim();
+  return { about: about || null, notice: notice?.trim() ?? null };
+}
+
 export function EventDetailView({ event, backTo = "events" }: { event: PublicEventDetail; backTo?: "events" | "chat" }) {
   const [checkout, setCheckout] = useState<BookingCheckoutTarget | null>(null);
   const tiersRef = useRef<HTMLDivElement>(null);
   const schedule = formatEventSchedule(event.startsAt, event.endsAt);
+  const { about, notice } = splitListingNotice(event.description);
   const street = event.venue?.address ?? event.address;
   const city = event.venue?.city ?? event.city;
   const venueLine = [street, street?.toLowerCase().includes((city ?? "").toLowerCase()) ? null : city]
@@ -58,7 +68,7 @@ export function EventDetailView({ event, backTo = "events" }: { event: PublicEve
             <span aria-current="page" className="truncate">{event.name}</span>
           </nav>
           <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(300px,380px)] lg:gap-x-9 lg:gap-y-8">
-            <EventDetailHero imageUrl={event.imageUrl} eventName={event.name} />
+            <EventDetailHero imageUrl={event.imageUrl} eventName={event.name} startsAt={event.startsAt} />
             <EventDetailAside
               event={event}
               city={city}
@@ -68,13 +78,14 @@ export function EventDetailView({ event, backTo = "events" }: { event: PublicEve
               fromTier={fromTier}
               tiersRef={tiersRef}
               askUrl={askUrl}
+              notice={notice}
               onCheckout={setCheckout}
             />
             {event.host ? <EventHostBlock host={event.host} className="order-3 lg:col-start-1" /> : null}
             <section className="order-4 space-y-2 lg:col-start-1" aria-labelledby="event-about-heading">
               <h2 id="event-about-heading" className="text-lg font-semibold tracking-tight">About this experience</h2>
-              {event.description ? (
-                <p className="whitespace-pre-wrap text-sm leading-7 text-muted-foreground">{event.description}</p>
+              {about ? (
+                <p className="whitespace-pre-wrap text-sm leading-7 text-muted-foreground">{about}</p>
               ) : (
                 <p className="text-sm text-muted-foreground">The organizer has not provided a detailed description yet.</p>
               )}

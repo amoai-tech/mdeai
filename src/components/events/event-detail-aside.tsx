@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { RefObject } from "react";
-import { CalendarDays, MapPin, Sparkles } from "lucide-react";
+import { CalendarDays, Info, MapPin, Sparkles } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { EventTicketTiers } from "@/components/events/event-ticket-tiers";
 import type { BookingCheckoutTarget } from "@/components/modals/booking-checkout-modal";
@@ -19,12 +19,13 @@ type EventDetailAsideProps = {
   fromTier: PublicEventTicket | null;
   tiersRef: RefObject<HTMLDivElement | null>;
   askUrl: string;
+  notice: string | null;
   onCheckout: (target: BookingCheckoutTarget) => void;
 };
 
 /** Visitor decision panel: event facts, one canonical ticket picker and existing AI handoff. */
 export function EventDetailAside({
-  event, city, venueLine, schedule, durationLabel, fromTier, tiersRef, askUrl, onCheckout,
+  event, city, venueLine, schedule, durationLabel, fromTier, tiersRef, askUrl, notice, onCheckout,
 }: EventDetailAsideProps) {
   return (
             <aside className="order-2 space-y-5 lg:col-start-2 lg:row-start-1 lg:row-span-4 lg:sticky lg:top-8 lg:self-start">
@@ -40,20 +41,25 @@ export function EventDetailAside({
                   ) : null}
                   {durationLabel ? <p className="text-xs text-muted-foreground">Duration: {durationLabel}</p> : null}
                 </div>
-                {event.source === "manual" ? (
+                {notice ? (
+                  <p role="note" data-testid="event-source-note"
+                    className="flex items-start gap-2 rounded-lg border border-accent/40 bg-accent/10 p-3 text-sm leading-6">
+                    <Info className="mt-1 size-4 shrink-0" aria-hidden />
+                    <span>{notice.replace(/^\s*Listing notice:\s*/i, "")}</span>
+                  </p>
+                ) : event.source === "manual" ? (
                   <p className="text-xs text-muted-foreground" data-testid="event-source-note">
                     Date and details are provided by this listing. Confirm arrangements with the organizer.
                   </p>
                 ) : null}
               </div>
               <div className="rounded-xl border border-border bg-card p-4 shadow-sm sm:p-5">
-                <p className="text-xs font-medium text-muted-foreground">Tickets & registration</p>
                 {fromTier ? (
-                  <p className="mt-1 text-lg font-semibold">
+                  <p className="text-lg font-semibold">
                     From {formatTicketPrice(fromTier.priceCents, fromTier.currency)}
                   </p>
                 ) : (
-                  <p className="mt-1 text-lg font-semibold">
+                  <p className="text-lg font-semibold">
                     {event.tickets.length === 0 ? "Price TBD" : "Sold out"}
                   </p>
                 )}
@@ -70,7 +76,7 @@ export function EventDetailAside({
                 ) : null}
               </div>
               <Link href={askUrl} data-testid="event-ask-mde"
-                className={cn(buttonVariants({ variant: "outline" }), "w-full justify-start gap-2 whitespace-normal text-left")}>
+                className={cn(buttonVariants({ variant: fromTier ? "outline" : "default" }), "w-full justify-start gap-2 whitespace-normal text-left")}>
                 <Sparkles className="size-4 shrink-0" aria-hidden />
                 Ask MDE about this event
               </Link>

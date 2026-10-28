@@ -48,7 +48,7 @@ describe("formatEventSchedule", () => {
   it("uses Medellín local dates to decide whether the event spans two days", () => {
     expect(
       formatEventSchedule("2026-10-19T04:30:00.000Z", "2026-10-19T06:30:00.000Z"),
-    ).toContain("Sun, Oct 18, 11:30 PM – 10/19/2026, 1:30:00 AM");
+    ).toBe("Sun, Oct 18, 11:30 PM – Mon, Oct 19, 1:30 AM");
   });
 
   it("shows end time on same day", () => {

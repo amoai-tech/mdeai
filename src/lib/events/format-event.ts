@@ -50,13 +50,15 @@ export function formatEventSchedule(startsAt: string, endsAt: string | null): st
   });
   const sameDay = localDay.format(start) === localDay.format(end);
 
-  const endLabel = new Intl.DateTimeFormat("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone: EVENT_TIME_ZONE,
-  }).format(end);
+  // A different end day repeats the start's date style ("Wed, Feb 24, 12:30 AM"), not a raw locale string.
+  const endLabel = sameDay
+    ? new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZone: EVENT_TIME_ZONE }).format(end)
+    : new Intl.DateTimeFormat("en-US", {
+        weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+        timeZone: EVENT_TIME_ZONE,
+      }).format(end);
 
-  return sameDay ? `${startLabel} – ${endLabel}` : `${startLabel} – ${end.toLocaleString("en-US", { timeZone: EVENT_TIME_ZONE })}`;
+  return `${startLabel} – ${endLabel}`;
 }
 
 export function ticketsRemaining(qtyTotal: number, qtySold: number): number {

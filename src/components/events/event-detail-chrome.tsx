@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { ArrowLeft, CalendarDays, Share2 } from "lucide-react";
+import { ArrowLeft, Share2 } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { VENUE_PLACEHOLDER_GRADIENT } from "@/components/browse/venue-card-placeholder";
+import { EVENT_TIME_ZONE } from "@/lib/events/format-event";
 
 /** Share outcomes are exclusive: native success, cancellation or clipboard fallback. */
 export function EventDetailNavigation({ eventName, returnPath, backTo = "events" }: {
@@ -58,8 +59,10 @@ export function EventDetailNavigation({ eventName, returnPath, backTo = "events"
 }
 
 /** Local image error falls back to neutral media, not an invented event photo. */
-export function EventDetailHero({ imageUrl, eventName }: { imageUrl: string | null; eventName: string }) {
+export function EventDetailHero({ imageUrl, eventName, startsAt }: { imageUrl: string | null; eventName: string; startsAt: string }) {
   const [imageFailed, setImageFailed] = useState(false);
+  const part = (opts: Intl.DateTimeFormatOptions) =>
+    new Intl.DateTimeFormat("en-US", { ...opts, timeZone: EVENT_TIME_ZONE }).format(new Date(startsAt));
   return (
             <div className="order-1 lg:col-start-1">
               {imageUrl && !imageFailed ? (
@@ -69,11 +72,13 @@ export function EventDetailHero({ imageUrl, eventName }: { imageUrl: string | nu
                   className="aspect-[16/10] w-full rounded-xl bg-muted object-cover"
                   data-testid="event-hero-image" />
               ) : (
-                <div className="flex aspect-[16/10] flex-col items-center justify-center gap-3 rounded-xl border border-primary/10 text-primary/70"
+                <div className="flex aspect-[16/10] flex-col items-center justify-center gap-1 rounded-xl border border-primary/10 text-primary"
                   style={{ background: VENUE_PLACEHOLDER_GRADIENT }}
                   data-testid="event-image-placeholder" role="img" aria-label="No event photo available">
-                  <CalendarDays className="size-11 opacity-70" aria-hidden />
-                  <span className="text-sm font-medium">Event photo not available</span>
+                  <span className="text-7xl font-semibold leading-none tracking-tight" data-testid="event-date-tile-day">{part({ day: "numeric" })}</span>
+                  <span className="text-xl font-medium">{part({ month: "long" })}</span>
+                  <span className="text-sm text-primary/70">{part({ weekday: "long" })}</span>
+                  <span className="mt-3 text-xs text-primary/60">Event photo not available</span>
                 </div>
               )}
             </div>
