@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { useMapContext } from "@/platform/maps/map-context";
 import { useBrowseMapSync } from "@/hooks/use-browse-map-sync";
 import { useBrowseCardScroll } from "@/hooks/use-browse-card-scroll";
+import { useMapPinSelect } from "@/hooks/use-map-pin-select";
 import { restaurantToMapPin } from "@/lib/browse/browse-pin-converters";
 import type { Restaurant } from "@/mastra/tools/search-restaurants";
 
@@ -50,6 +51,7 @@ function RestaurantBrowseViewInner({
   isSample = false,
 }: RestaurantBrowseViewProps) {
   const { selectedPinId, setSelectedPinId } = useMapContext();
+  const selectPin = useMapPinSelect();
   const desktop = useIsLgUp();
   const retryHref = buildFilterUrl({ neighborhood, cuisine });
   const [searched, setSearched] = useState<{ scope: string; rows: Restaurant[] } | null>(null);
@@ -158,7 +160,7 @@ function RestaurantBrowseViewInner({
                     aiSummary={r.aiSummary}
                     pinId={pinId}
                     selected={selectedPinId === pinId}
-                    onSelect={() => setSelectedPinId(pinId)}
+                    onSelect={() => selectPin(pinId)}
                     testId={`restaurant-card-${r.id}`}
                     composition="nova"
                     mediaLayout="inline"
