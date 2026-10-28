@@ -3,8 +3,9 @@ import {
   providerForModelId,
 } from "@/lib/ai-model-ids";
 import { calculateModelCost } from "./model-cost";
+import { LoadAPIKeyError } from "@ai-sdk/provider";
 import type { ToolSpanSummary } from "./tool-audit-context";
-import { getTokenUsage, type TokenUsage } from "./tool-audit-context";
+import { getTokenUsage, getMalformedRetryDecisions, type MalformedRetryDecision, type TokenUsage } from "./tool-audit-context";
 
 /** Schema version stamped on every `ai_runs.metadata` telemetry payload (AGT-00C). */
 export const TELEMETRY_SCHEMA_VERSION = "agt-00c-v1";
@@ -51,6 +52,15 @@ export interface TurnTelemetryPayload extends ToolSpanSummary {
   error_type?: AgentErrorType;
   /** Trimmed human-readable cause; never the full stack. */
   error_message?: string;
+  /** Request-context decisions correlated to this final turn (not a separate insert). */
+  gemini_malformed_retry?: {
+    decisions: MalformedRetryDecision[];
+    /** Transport-level final status, not proof the model answer was correct. */
+    final_turn_status: TurnStatus;
+  };
+  /** Server-derived provenance; no user-provided environment or SHA. */
+  server_environment: string;
+  deployment_sha: string;
 }
 
 /** Normalize an unknown thrown value into a short, log-safe message. */
@@ -86,6 +96,18 @@ export function classifyAgentError(err: unknown): AgentErrorType {
     return "rate_limit";
   if (status === 401 || status === 403 || msg.includes("unauthorized") || msg.includes("permission") || msg.includes("forbidden"))
     return "auth";
+  // A missing API key is server configuration/auth, never a model-generation
+  // incident; do not attribute deployment mistakes to Gemini reliability.
+  if (LoadAPIKeyError.isInstance(err)) return "auth";
+  // SAN-1396: provider-side generation faults (unparsable function call,
+  // broken turn order) were landing in `unknown`.
+  // Real AI SDK errors carry their identity in `name` (AI_APICallError,
+  // AI_LoadAPIKeyError); the message prefix only appears once logged as text.
+  if (
+    msg.includes("malformed_function_call") ||
+    name === "ai_apicallerror" || msg.includes("ai_apicallerror")
+  )
+    return "model_failure";
   if (msg.includes("tool") && (msg.includes("fail") || msg.includes("error")))
     return "tool_failure";
   if (msg.includes("zod") || msg.includes("invalid") || msg.includes("validation") || msg.includes("schema"))
@@ -176,6 +198,7 @@ export function buildTurnTelemetryMetadata(opts: {
       : getTokenUsage(toTelemetryContext(opts.requestContext)),
   );
   const modelName = resolveAgentModelName(opts.agent);
+  const retryDecisions = getMalformedRetryDecisions(toTelemetryContext(opts.requestContext));
   const cost = calculateModelCost({
     modelName,
     inputTokens: tokens.input_tokens,
@@ -183,6 +206,11 @@ export function buildTurnTelemetryMetadata(opts: {
   });
   return {
     telemetry_version: TELEMETRY_SCHEMA_VERSION,
+    server_environment: process.env.VERCEL_ENV ?? "local",
+    deployment_sha: process.env.VERCEL_GIT_COMMIT_SHA ?? "local",
+    ...(retryDecisions.length > 0
+      ? { gemini_malformed_retry: { decisions: retryDecisions, final_turn_status: opts.status } }
+      : {}),
     agent_map_key: opts.agentMapKey,
     model_name: modelName,
     turn_status: opts.status,

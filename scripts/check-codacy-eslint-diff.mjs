@@ -13,14 +13,29 @@ export function validateDiffReport(report, cliExit, expectedFiles) {
   if (report.errors.length) throw new Error(`Codacy analyzer reported ${report.errors.length} execution error(s)`);
   const tools = report.toolResults.filter((tool) => tool.toolId === 'ESLint9');
   if (report.toolResults.length !== tools.length || tools.length > 1) throw new Error('Unexpected Codacy analyzer results');
+  // Codacy reports oversized skips explicitly. The generated Supabase type file
+  // is checked by tsc, not Codacy, and is the only accepted oversized skip.
+  // Fail closed on every skipped handwritten/unknown file.
+  const skipped = report.skippedFiles ?? [];
+  if (!Array.isArray(skipped)) throw new Error('Codacy skippedFiles must be an array');
+  const skippedPaths = new Set();
+  for (const entry of skipped) {
+    if (!entry || entry.filePath !== 'src/lib/supabase/database.types.ts' ||
+        !Number.isInteger(entry.sizeBytes) || entry.sizeBytes < 250_000 ||
+        !expectedFiles.includes(entry.filePath) || skippedPaths.has(entry.filePath)) {
+      throw new Error(`Codacy skipped an unexpected lintable file: ${entry?.filePath ?? 'unknown'}`);
+    }
+    skippedPaths.add(entry.filePath);
+  }
+  const expectedAnalyzed = expectedFiles.filter((path) => !skippedPaths.has(path)).length;
   const [tool] = tools;
   if (!tool) {
-    if (expectedFiles.length) throw new Error(`ESLint9 skipped ${expectedFiles.length} changed lintable file(s)`);
+    if (expectedAnalyzed) throw new Error(`ESLint9 skipped ${expectedAnalyzed} changed lintable file(s)`);
     if (report.issues.length || cliExit !== 0) throw new Error('Unexpected issues or exit code with no analyzable files');
     return 'No changed ESLint-analyzable files; verified clean skip';
   }
   if (tool.status !== 'success' || !Number.isInteger(tool.filesAnalyzed) ||
-      tool.filesAnalyzed < Math.max(1, expectedFiles.length) || tool.errorCount !== 0 ||
+      tool.filesAnalyzed < Math.max(1, expectedAnalyzed) || tool.errorCount !== 0 ||
       !Number.isInteger(tool.issueCount) || tool.issueCount !== report.issues.length) {
     throw new Error('ESLint9 did not complete a consistent, successful analysis');
   }

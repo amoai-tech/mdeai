@@ -19,7 +19,13 @@ export async function generateMetadata({
   }
   return {
     title: `${event.name} · mdeai`,
-    description: event.description ?? `Tickets for ${event.name} in Medellín`,
+    description: event.description ?? `Event information for ${event.name} in Medellín`,
+    alternates: { canonical: `/events/${event.slug ?? event.id}` },
+    openGraph: {
+      title: event.name,
+      description: event.description ?? `Event information for ${event.name} in Medellín`,
+      ...(event.imageUrl ? { images: [{ url: event.imageUrl }] } : {}),
+    },
   };
 }
 

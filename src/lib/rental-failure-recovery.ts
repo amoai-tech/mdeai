@@ -2,6 +2,13 @@
  * SAN-1059 · RE-FAIL-002 — Rental failure recovery matrix (user copy + telemetry tags).
  */
 
+/**
+ * The rental example shown to renters (chat welcome, timeout hint). Monthly pesos, because renters here
+ * think in pesos per month. The search parses it to a COP monthly cap (see the test), so the example
+ * does what it says.
+ */
+export const RENTAL_EXAMPLE_QUERY = "1BR in Laureles under COP 3,000,000/month";
+
 export type RentalFailureKind =
   | "gemini_timeout"
   | "gemini_rate_limit"
@@ -22,7 +29,7 @@ export type RentalFailureRecovery = {
 const MATRIX: Record<RentalFailureKind, Omit<RentalFailureRecovery, "kind">> = {
   gemini_timeout: {
     userMessage:
-      "Search is taking longer than usual. Try a simpler query like \"1BR in Laureles under $80/night\".",
+      `Search is taking longer than usual. Try a simpler query like "${RENTAL_EXAMPLE_QUERY}".`,
     telemetryTag: "gemini_parse_fallback",
     fallback: "regex",
   },

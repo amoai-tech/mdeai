@@ -59,7 +59,7 @@ test.describe(`${SCREEN_ID} accessibility pass`, () => {
     test("checkout modal closes with Escape", async ({ page }) => {
       const errors = watchCriticalConsoleErrors(page);
       await page.goto(`/events/${KNOWN_SLUG}`, { waitUntil: "domcontentloaded" });
-      await page.locator('[data-testid="event-detail-buy-cta"]').first().click();
+      await page.locator('[data-testid="event-tier-buy"]').first().click();
       await expect(page.locator('[role="dialog"][aria-labelledby="booking-checkout-title"]')).toBeVisible();
 
       await page.keyboard.press("Escape");

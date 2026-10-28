@@ -2,7 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "functions": {
     "src/app/api/copilotkit/**": {
-      "maxDuration": 30
+      "maxDuration": 90
     },
     "src/app/api/grounding/**": {
       "maxDuration": 15

@@ -83,8 +83,12 @@ jobs:
       - name: Install
         run: npm ci
 
+      # All three browser lanes run headless Chromium on GitHub's Ubuntu image.
+      # Download only Playwright's pinned headless shell; avoid cold apt mirror
+      # downloads that previously stalled a shard for 18m45s before cancellation.
+      # Real Playwright launches will fail if the runner is missing required libs.
       - name: Install Chromium
-        run: npx playwright install chromium --with-deps
+        run: npx playwright install chromium --only-shell
 
       # The npm script includes long-chat virtualization with the same deterministic
       # adapter. One Playwright invocation = one Next dev-server start for both suites.
@@ -141,7 +145,9 @@ jobs:
     needs: browser_scope
     if: always() && (needs.browser_scope.result != 'success' || needs.browser_scope.outputs.run_e2e == 'true')
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Cold Ubuntu runners can spend nearly 14 minutes installing Playwright system deps.
+    # Allow time for Next.js startup and the real mobile assertion (run 40299912456).
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -150,8 +156,12 @@ jobs:
           cache: npm
       - name: Install
         run: npm ci
+      # All three browser lanes run headless Chromium on GitHub's Ubuntu image.
+      # Download only Playwright's pinned headless shell; avoid cold apt mirror
+      # downloads that previously stalled a shard for 18m45s before cancellation.
+      # Real Playwright launches will fail if the runner is missing required libs.
       - name: Install Chromium
-        run: npx playwright install chromium --with-deps
+        run: npx playwright install chromium --only-shell
       - name: Prove the mobile composer regression
         env:
           NODE_ENV: development
@@ -262,8 +272,12 @@ jobs:
       - name: Install
         run: npm ci
 
+      # All three browser lanes run headless Chromium on GitHub's Ubuntu image.
+      # Download only Playwright's pinned headless shell; avoid cold apt mirror
+      # downloads that previously stalled a shard for 18m45s before cancellation.
+      # Real Playwright launches will fail if the runner is missing required libs.
       - name: Install Chromium
-        run: npx playwright install chromium --with-deps
+        run: npx playwright install chromium --only-shell
 
       - name: Prove safe login redirects and auth guards
         env:

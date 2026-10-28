@@ -114,14 +114,19 @@
     "anon": true,
     "authenticated": true
   },
+  "compute_ticket_total(p_ticket_id uuid, p_quantity integer, p_discount_cents bigint)": {
+    "public": false,
+    "anon": true,
+    "authenticated": true
+  },
   "create_broker_onboarding_draft(p_display_name text, p_listing_title text, p_neighborhood text)": {
     "public": false,
     "anon": true,
     "authenticated": true
   },
   "decide_approval(p_request_id uuid, p_decision text, p_reason text)": {
-    "public": true,
-    "anon": true,
+    "public": false,
+    "anon": false,
     "authenticated": true
   },
   "decide_developer_registration(p_registration_id uuid, p_decision text, p_reason text, p_developer_reference text)": {
@@ -200,11 +205,6 @@
     "authenticated": true
   },
   "is_moderator()": {
-    "public": true,
-    "anon": true,
-    "authenticated": true
-  },
-  "is_suppressed(p_channel text, p_identifier text)": {
     "public": true,
     "anon": true,
     "authenticated": true
@@ -319,6 +319,21 @@
     "anon": false,
     "authenticated": true
   },
+  "restaurant_assign_partner(p_restaurant_id uuid, p_partner_id uuid)": {
+    "public": false,
+    "anon": false,
+    "authenticated": true
+  },
+  "restaurant_create_for_partner(p_partner_id uuid, p_name text, p_google_place_id text)": {
+    "public": false,
+    "anon": false,
+    "authenticated": true
+  },
+  "restaurant_owner_patch(p_restaurant_id uuid, p_patch jsonb, p_partner_id uuid)": {
+    "public": false,
+    "anon": false,
+    "authenticated": true
+  },
   "semantic_search_events(query_embedding vector, similarity_threshold double precision, match_count integer)": {
     "public": true,
     "anon": true,
@@ -331,16 +346,6 @@
   },
   "semantic_search_restaurants(query_embedding vector, similarity_threshold double precision, match_count integer)": {
     "public": true,
-    "anon": true,
-    "authenticated": true
-  },
-  "ticket_checkout_create_pending(p_event_id uuid, p_ticket_id uuid, p_quantity integer, p_buyer_email text, p_buyer_name text, p_access_token text, p_attendees jsonb)": {
-    "public": false,
-    "anon": false,
-    "authenticated": false
-  },
-  "compute_ticket_total(p_ticket_id uuid, p_quantity integer, p_discount_cents bigint)": {
-    "public": false,
     "anon": true,
     "authenticated": true
   }
