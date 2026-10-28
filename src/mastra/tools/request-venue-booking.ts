@@ -1,7 +1,5 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import { createServiceRoleClient } from "@/lib/supabase/service";
-import { insertVenueBookingRequest } from "@/lib/venues/venue-booking-core";
 import {
   venueBookingKindSchema,
   venueBookingRequestSchema,
@@ -34,7 +32,6 @@ const executeRequestVenueBooking = withAudit(
   "request-venue-booking",
   RiskLevel.medium,
   async ({
-    booking,
     userId,
   }: AuditedVenueBookingInput): Promise<RequestVenueBookingOutput> => {
     if (!userId) {
@@ -44,26 +41,13 @@ const executeRequestVenueBooking = withAudit(
       };
     }
 
-    const supabase = createServiceRoleClient();
-    if (!supabase) {
-      return {
-        success: false,
-        message: "Booking service is unavailable. Try again in a moment.",
-      };
-    }
-
-    const result = await insertVenueBookingRequest(supabase, userId, booking);
-    if (!result.ok) {
-      return {
-        success: false,
-        message: result.message,
-      };
-    }
-
+    // An AI tool call is NOT customer consent. Never perform the side effect
+    // here: the existing CopilotKit approval UI collects the user's decision,
+    // then submits through the authenticated POST /api/venue-booking/request.
+    // This also prevents headless/forged agent calls from booking anything.
     return {
-      success: true,
-      requestId: result.data.requestId,
-      message: result.data.message,
+      success: false,
+      message: "Booking proposal prepared. Ask the customer to review and send the request; no request has been saved yet.",
     };
   },
 );
@@ -71,7 +55,7 @@ const executeRequestVenueBooking = withAudit(
 export const requestVenueBookingTool = createTool({
   id: "request-venue-booking",
   description:
-    "Submit a table, café, or nightlife booking request after the user confirms details in the HITL card. Requires venueKind, requestedAt (ISO datetime), partySize and contact fields; restaurant requests accept a canonical restaurantId without placeId, while external places need a placeId. Never call before human confirmation — status stays pending until Patricia confirms by WhatsApp.",
+    "Propose a table, café, or nightlife booking request for explicit customer review in the HITL card. Requires venueKind, requestedAt (ISO datetime), partySize and contact fields; restaurant requests accept a canonical restaurantId without placeId, while external places need a placeId. This tool never saves a booking; only the customer-confirmed UI calls the authenticated booking API.",
   inputSchema: requestVenueBookingInputSchema,
   outputSchema: requestVenueBookingOutputSchema,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

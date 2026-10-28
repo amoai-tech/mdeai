@@ -17,7 +17,7 @@ import { RentalUiProvider } from "@/components/chat/rental-ui-context";
 import { RestaurantFastPathProvider } from "@/components/chat/restaurant-fast-path-context";
 import { RichCardResultsProvider } from "@/components/chat/rich-card-results-context";
 import { VenueBookingConfirmationBanner } from "@/components/chat/venue-booking-confirmation-banner";
-import { VenueBookingDirectHitlProvider } from "@/components/chat/venue-booking-direct-hitl-context";
+import { VenueBookingDirectHitlPanel, VenueBookingDirectHitlProvider } from "@/components/chat/venue-booking-direct-hitl-context";
 import { FocusMapPinAction } from "@/components/copilot/focus-map-pin-action";
 import { EventWebCitationFetch } from "@/components/copilot/event-web-citation-fetch";
 import { MapUiSync } from "@/components/copilot/map-ui-sync";
@@ -160,6 +160,7 @@ export function GeoChatShell() {
                                   <div className="flex min-h-0 flex-1 flex-col">
                                     <LeadConfirmationBanner />
                                     <VenueBookingConfirmationBanner />
+                                    <VenueBookingDirectHitlPanel />
                                     <ChatCanvas />
                                   </div>
                                 </MapsShell>

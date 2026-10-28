@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { normalizeVenueBookingRequestedAt } from "@/lib/venues/venue-booking-time";
 
 export const venueBookingKindSchema = z.enum([
   "cafe",
@@ -12,7 +13,13 @@ export const venueBookingRequestSchema = z.object({
   venueKind: venueBookingKindSchema,
   placeId: z.string().trim().min(8).max(256).nullable().optional(),
   restaurantId: z.string().uuid().nullable().optional(),
-  requestedAt: z.string().datetime(),
+  requestedAt: z.string().trim().describe("ISO date/time with Z or timezone offset; if no offset, Medellín America/Bogota local time").transform((value, ctx) => {
+    try { return normalizeVenueBookingRequestedAt(value); }
+    catch {
+      ctx.addIssue({ code: "custom", message: "Enter a valid Medellín booking date and time." });
+      return z.NEVER;
+    }
+  }),
   partySize: z.coerce.number().int().min(1).max(50),
   contactName: z.string().trim().min(1).max(120),
   contactEmail: z.string().trim().email().max(120),
