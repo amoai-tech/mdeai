@@ -55,6 +55,19 @@ describe("src/mastra/lib/models.ts provider switch", () => {
     expect(CONCIERGE_AGENT_MODEL[0]?.modelSettings?.timeout?.stepMs).toBeLessThan(22_000);
   });
 
+  it("reserves enough agent time for NVIDIA and Gemini fallback steps", async () => {
+    vi.stubEnv("MDE_AI_PROVIDER", "nvidia");
+    vi.stubEnv("NVIDIA_API_KEY", "test-key");
+    const model = await import("./models");
+    expect(model.CONCIERGE_TURN_TIMEOUT_MS).toBeGreaterThan(
+      model.CONCIERGE_PRIMARY_STEP_TIMEOUT_MS + model.CONCIERGE_FALLBACK_STEP_TIMEOUT_MS,
+    );
+    expect(model.CONCIERGE_TURN_TIMEOUT_MS).toBeLessThan(90_000);
+    const { agentTurnTimeoutMs } = await import("../copilotkit/logging-mastra-agent");
+    expect(agentTurnTimeoutMs("conciergeAgent")).toBe(model.CONCIERGE_TURN_TIMEOUT_MS);
+    expect(agentTurnTimeoutMs("hostEventAgent")).toBe(26_000);
+  });
+
   it("uses only Gemini when the NVIDIA switch is disabled", async () => {
     vi.stubEnv("MDE_AI_PROVIDER", "gemini");
     const { CONCIERGE_AGENT_MODEL } = await import("./models");

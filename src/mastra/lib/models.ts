@@ -55,10 +55,17 @@ export const CONCIERGE_MODEL = ACTIVE_TEXT_MODEL;
  * Mastra needs to observe its OWN step timeout to invoke fallback; the model
  * adapter's AbortSignal.timeout alone ends the stream without fallback.
  */
+// A fallback can only succeed if the outer agent stream outlives both model
+// step deadlines. Keep a bounded margin for tool output and AG-UI finalization.
+export const CONCIERGE_PRIMARY_STEP_TIMEOUT_MS = 19_000;
+export const CONCIERGE_FALLBACK_STEP_TIMEOUT_MS = 45_000;
+export const CONCIERGE_TURN_TIMEOUT_MS = ACTIVE_AI_PROVIDER === "nvidia"
+  ? CONCIERGE_PRIMARY_STEP_TIMEOUT_MS + CONCIERGE_FALLBACK_STEP_TIMEOUT_MS + 10_000
+  : 26_000;
 export const CONCIERGE_AGENT_MODEL = ACTIVE_AI_PROVIDER === "nvidia"
   ? [
-      { model: CONCIERGE_MODEL, maxRetries: 0, modelSettings: { timeout: { stepMs: 19_000 } } },
-      { model: FLASH_MODEL, maxRetries: 0, modelSettings: { timeout: { stepMs: 45_000 } } },
+      { model: CONCIERGE_MODEL, maxRetries: 0, modelSettings: { timeout: { stepMs: CONCIERGE_PRIMARY_STEP_TIMEOUT_MS } } },
+      { model: FLASH_MODEL, maxRetries: 0, modelSettings: { timeout: { stepMs: CONCIERGE_FALLBACK_STEP_TIMEOUT_MS } } },
     ]
   : CONCIERGE_MODEL;
 export const REASONING_MODEL = FLASH_MODEL;
