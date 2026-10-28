@@ -54,6 +54,30 @@ flowchart LR
 
 ---
 
+## 1a · Post-merge resolution — 2026-10-28 09:55 UTC
+
+Four PRs merged and deployed to `4c6e48f6`. The findings below are updated, not retracted; the original evidence stays in this file.
+
+| Original finding | Status now | Evidence |
+| --- | --- | --- |
+| #1 Café/nightlife not a discovery surface | **Partly fixed**: compact rows with Ask + Directions; still **no map and no photos** | [`postmerge/pages-cafes-1440.png`](screenshots/2026-10-28-postmerge/pages-cafes-1440.png) |
+| #3 Same apartment twice in one answer | **Fixed and live**: shared label rule, "Also listed as #1" | #609 merged in `824e0a3a`; 8 tests |
+| #4 Four proven PRs unmergeable | **Resolved**: #599, #597, #609, #600 merged and promoted | `/api/version` = `4c6e48f6` |
+| #6 Guest chat offers sign-in only sometimes | **Open** | unchanged |
+| #7 Photo-less cards dominated by a grey block | **Improved**: 96 px inline thumbnail rows; still no photo when data has none | [`pages-cafes-390.png`](screenshots/2026-10-28-postmerge/pages-cafes-390.png) |
+| #9 Guest 401 on every page | **Open** | unchanged |
+| #10 "42 apartments (showing 41)" unexplained | **Open** | unchanged |
+| — Event page: duplicate ticket heading, buried notice, grey placeholder, mixed dates | **Fixed and live**: date tile, one heading, listing note, correct multi-day format, allowlisted Back | [`event-detail-390.png`](screenshots/2026-10-28-postmerge/event-detail-390.png) |
+| — Chat sheet always bought the cheapest tier | **Fixed and live**: GA modal `$40,000`, VIP modal `$120,000`; TEST checkout payload VIP ×1 | `event-tier-1440.png`, `event-checkout-modal.png` |
+
+### New defect discovered during post-merge release
+
+**Three production certification runs were rejected as "candidate is stale; main moved before certification"** because four PRs merged within ten minutes (#599 09:14:30, #597 09:15:52, #609 09:20:50, #600 ~09:24). Merged code was **not live for ~17 minutes** and three workflow runs went red without a code fault. The gate is behaving as designed; the *release process* is the defect: it cannot converge while merges keep arriving. Fix by serializing merges (merge → wait for promotion → merge next) or by letting certification re-target the newest `main` candidate, and by making the freshness job's failure message name this cause.
+
+### New operational observation
+
+Submitting the checkout modal creates a **pending order and an attendee row before payment**. An abandoned checkout therefore leaves rows behind; this probe created and then removed one (`event_attendees` `fddeaaf5…`, `event_orders` `8688f8e0…`, idempotency key `73302587…`, Stripe TEST session expired unpaid; verified counts 0/0/0). Worth confirming that host attendee lists exclude unpaid orders — if they do not, abandoned carts inflate attendee counts.
+
 ## 2 · Route inventory (from `src/app/`)
 
 68 `page.tsx`, 39 `route.ts`, 14 `layout.tsx`, 1 proxy (`src/proxy.ts`), 5 `'use server'` files with 9 actions. Route groups are `(browse)`, `(broker)` ×2, `(workspace)` — there is **no** `(marketing)` or `(app)` group.

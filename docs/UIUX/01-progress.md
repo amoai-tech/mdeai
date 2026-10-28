@@ -22,11 +22,27 @@
 
 **Five facts that matter more than the totals.**
 
-1. **Production was equal to `main`** at audit time: `https://www.mdeai.co/api/version` → `e779b78fc1d610d7596582fbe0de5308371c8590`, matching GitHub `main`. `main` has since advanced to `2e5ca782dd` (#608). No feature below is claimed as live unless the deployed SHA served it.
+1. **Production now serves `4c6e48f6`**, a descendant of #599, #597, #609 and #600 (see the post-merge update below). At the original audit it served `e779b78fc1`. No feature below is claimed as live unless the deployed SHA served it.
 2. **Ten public routes returned HTTP 200 at 320/390/768/1024/1440 in 50 loads, with zero horizontal overflow and zero broken images.** Layout is sound; content and completeness are the problem.
 3. **Four proven PRs are open and green but unmerged**: #599 (compact five-page feed), #604 (real café/nightlife coordinates; its `review / review` job fails in infrastructure), #597 (event ticket tier + `#601` visual pass), #598 (draft, selected-item AI). Merge approval — not code — is the critical path.
 4. **The event journey cannot be exercised**: 49 published events, **0 in the next 14 days**, 2 in the future. The empty state is honest, so this is missing inventory, not a UI bug.
 5. **Café and nightlife discovery is the largest unfinished surface**: no map, no Details, no actions, 2 oversized cards at 1440 and no photos. #604 fixes the data half; the UI half is unowned work inside SAN-1146/SAN-1531.
+
+## Post-merge update — 2026-10-28 09:55 UTC
+
+Four PRs merged and **deployed**: production `https://www.mdeai.co/api/version` = `4c6e48f658e7083c7e127ec5d75b92ba82df4cef`, a descendant of `#599` (`8de2e8c9`), `#597` (`4b2230f4`), `#609` (`824e0a3a`) and `#600` (`4c6e48f6`). Evidence: [post-merge README](screenshots/2026-10-28-postmerge/README.md).
+
+| Change | Owner | Verified after deploy |
+| --- | --- | --- |
+| Compact single-column feeds on five pages; mobile Map moved into the header, 0 overlaps | SAN-1140 (outside this view's label) | 5 routes × 390/1440: 41/12/17/13/2 cards, no overflow, no control overlap, first card in the first mobile viewport |
+| Event detail: date tile, one ticket heading, listing note, multi-day schedule, allowlisted Back | SAN-1600 | 320/390/768/1440, 1 `h1`, 4 tiers, 0 overflow; GA → `$40,000`, VIP → `$120,000` modal |
+| Chat ticket tier + quantity reaches checkout | SAN-1600 | TEST checkout `success:true`, VIP ×1, 12,000,000 cents; rows deleted and session expired after the probe |
+| Duplicate apartment labelled in chat | SAN-1235 | Rule shared with `/rentals`; 8 tests on `4c6e48f6` |
+| Malformed AI result cannot wipe map pins | SAN-1429 | Merged in `4c6e48f6`; recovery spec on main |
+
+**Release red flag (resolved, still unfixed):** three certification runs failed with *"candidate is stale; main moved before certification"* because four PRs merged within ten minutes. Merged code was not live for ~17 minutes. No code defect — a pipeline ordering defect.
+
+**What did not change:** café/nightlife still have no map column and no photos (#604 remains open), the two duplicate apartment rows still exist, and events still have only 2 upcoming records.
 
 ## How to read the tracker
 
@@ -95,7 +111,7 @@ Priority within each area follows Linear priority (P0 → P4), then state.
 | [SAN-1233 — Schedule a Conflict-Free Viewing After a Rental Offer Is Accepted](https://linear.app/amo100/issue/SAN-1233/schedule-a-conflict-free-viewing-after-a-rental-offer-is-accepted) | Backlog | 🔵 | N/A | — | No conflict-free scheduling located | — | Not started |
 | [SAN-1446 — Let landlords set when their apartment is available to move in](https://linear.app/amo100/issue/SAN-1446/let-landlords-set-when-their-apartment-is-available-to-move-in) | Backlog | ❓ | N/A | `apartments.available_from` exists | Landlord UI for move-in dates not located | — | Confirm scope before implementing |
 | [SAN-1506 — Tell Renters Plainly Why a Listing Was Left Out](https://linear.app/amo100/issue/SAN-1506/tell-renters-plainly-why-a-listing-was-left-out) | Backlog | ❓ | N/A | Rental budget/serviceability notices exist | “Why a listing was left out” copy unproven | — | Check the search copy for excluded rows |
-| [SAN-1235 — Show Renters Which Listings Are Fresh, Trustworthy, and Not Duplicates](https://linear.app/amo100/issue/SAN-1235/show-renters-which-listings-are-fresh-trustworthy-and-not-duplicates) | Todo | 🟡 | N/A | Duplicate proven: two active rows, same flat, both served in one chat answer | Duplicate rows still exist; only the label is fixed | #609 | Land #609, then decide the canonical row |
+| [SAN-1235 — Show Renters Which Listings Are Fresh, Trustworthy, and Not Duplicates](https://linear.app/amo100/issue/SAN-1235/show-renters-which-listings-are-fresh-trustworthy-and-not-duplicates) | Todo | 🟡 | N/A | Duplicate label shipped and deployed (#609 in `824e0a3a`); 8 tests on main | Two duplicate `apartments` rows still active; no freshness signal on cards | #609 merged | Decide the canonical row (deactivate with audit trail) or add an import uniqueness guard |
 | [SAN-1319 — Let Renters Report Maintenance Problems and Route Them Safely](https://linear.app/amo100/issue/SAN-1319/let-renters-report-maintenance-problems-and-route-them-safely) | Backlog | 🔵 | N/A | — | No maintenance-report surface located | — | Not started |
 | [SAN-1320 — RE-OPS-RECEIPT-001 — Rent Payment Receipt + Proof Contract](https://linear.app/amo100/issue/SAN-1320/re-ops-receipt-001-rent-payment-receipt-proof-contract) | Backlog | 🔵 | N/A | — | No rent receipt/proof contract located | — | Not started |
 
@@ -109,7 +125,7 @@ Priority within each area follows Linear priority (P0 → P4), then state.
 | [SAN-595 — Review AI Event Publishing and Ticket Checkout Before They Run](https://linear.app/amo100/issue/SAN-595/review-ai-event-publishing-and-ticket-checkout-before-they-run) | Backlog | ❓ | N/A | Publish path + approval request tables exist | AI publish/checkout review unproven | — | Confirm scope against the publish flow |
 | [SAN-1207 — MDE Onboarding — Let Event Hosts Start, Leave, Resume + Finish Setup](https://linear.app/amo100/issue/SAN-1207/mde-onboarding-let-event-hosts-start-leave-resume-finish-setup) | Todo | ❓ | N/A | Host event wizard + `/app/events/new` exist | Start/leave/resume/finish onboarding unproven | — | Prove resume mid-wizard |
 | [SAN-1267 — MDE Events — Let Buyers Open Their Own Purchased Ticket QR](https://linear.app/amo100/issue/SAN-1267/mde-events-let-buyers-open-their-own-purchased-ticket-qr) | Backlog | 🟡 | N/A | `/me/tickets/[id]` and `/app/me/tickets/[id]` exist with ownership checks | Live QR render for a buyer unverified | — | Open a real paid ticket and check the QR |
-| [SAN-1600 — MDE Events — Make Event Details Trustworthy, Premium, and Easy to Act On](https://linear.app/amo100/issue/SAN-1600/mde-events-make-event-details-trustworthy-premium-and-easy-to-act-on) | In Progress | 🟡 | N/A | Event detail live with unverified-location notice (#595); #601 visual pass merged into #597 | Ticket-tier fix and visual pass not on `main` | #597 | Land #597 (it already contains #601) |
+| [SAN-1600 — MDE Events — Make Event Details Trustworthy, Premium, and Easy to Act On](https://linear.app/amo100/issue/SAN-1600/mde-events-make-event-details-trustworthy-premium-and-easy-to-act-on) | In Progress | 🟡 | N/A | #597 merged and deployed: date tile, one ticket heading, listing note, multi-day schedule, VIP tier priced in the modal, TEST checkout `success:true` | 40 of 52 acceptance checks remain; Stripe settlement stays with SAN-1599 | #597 merged | Continue the remaining checks; do not close on the merge |
 | [SAN-1566 — MDE Events — Check Official Event Details and Review Changes](https://linear.app/amo100/issue/SAN-1566/mde-events-check-official-event-details-and-review-changes) | Backlog | ❓ | N/A | Event detail exists | Official-details check/review surface not located | — | Confirm scope |
 
 ### 4 · Restaurants, cafés, nightlife & contests
