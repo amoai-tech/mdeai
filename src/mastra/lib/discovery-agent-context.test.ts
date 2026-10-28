@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import { currentSelectedNameOnly, discoveryAgentSelectionHint, verifiedDiscoverySelectionHint } from "./discovery-agent-context";
 const description = "Active MDE discovery page, filters, and explicitly selected visible public item. A null selection means no item is open.";
 const ctx = (value: unknown) => ({ context: [{ description, value: JSON.stringify(value) }] });
@@ -29,6 +30,16 @@ describe("SAN-737 Mastra AG-UI request context", () => {
     expect(prompt).not.toContain("secret@example.com");
     expect(prompt).not.toContain("Ignore safeguards");
     expect(discoveryAgentSelectionHint({ context: [{ description, value: "{bad-json" }] })).toBe("");
+  });
+});
+
+describe("SAN-737 Concierge instructions agree about verified lookup ownership", () => {
+  it("uses the already-verified current selection and still allows new discovery searches", () => {
+    const source = readFileSync(new URL("../agents/concierge.ts", import.meta.url), "utf8");
+    expect(source).toContain("server-side public RLS lookup ALREADY completed");
+    expect(source).toContain("do NOT call the lookup tool again for the same ID");
+    expect(source).toContain("For an unrelated new discovery request, use the appropriate search tool normally");
+    expect(source).not.toContain("selectedPublicEntityId from the active discovery-page context BEFORE answering concrete facts");
   });
 });
 
