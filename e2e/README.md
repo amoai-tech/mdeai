@@ -84,34 +84,36 @@ For debugging, run:
 `npx playwright test e2e/signed-in.spec.ts --project=chromium --headed`.
 
 
-## SAN-1193 — live Gemini + deployed partner-signup smoke (opt-in)
+## SAN-1193 — source-grounded live partner-signup smoke (opt-in)
 
-**Canonical owner:** [SAN-1193 · MDE Partner Signup — Autofill Business Details From a Website](https://linear.app/amo100/issue/SAN-1193).
-**Merged implementation:** [PR #404](https://github.com/amoai-tech/mdeai/pull/404).
-**Live UI:** https://www.mdeai.co/partners/signup?type=venue.
+**Canonical issue:** [SAN-1193 · MDE Partner Signup — Autofill Business Details From a Website](https://linear.app/amo100/issue/SAN-1193). **Merged feature:** [PR #404](https://github.com/amoai-tech/mdeai/pull/404).
 
-The fast, deterministic regression remains `e2e/app/partner-ai-signup-persistence.spec.ts`: it mocks **only** URL extraction and proves real Auth, review, database persistence, concurrent saves, duplicate prevention, mobile and cleanup.
+**Provider boundary (verified against `main` on 2026-10-28):** SAN-1588 switched the **Concierge and rental extraction** to NVIDIA when `MDE_AI_PROVIDER=nvidia`. This is not a global provider switch. `src/lib/onboarding/extract-business-url.ts` still calls **Gemini Interactions URL Context directly**, regardless of `MDE_AI_PROVIDER`. The present opt-in test verifies the **real currently configured website extraction**, not NVIDIA inference. Do not describe a passing run as proof of NVIDIA website extraction. NVIDIA NIM chat-completions does not offer Gemini URL Context; an actual migration needs an explicitly source-grounded webpage retrieval step (with SSRF/redirect/DNS safeguards, source attribution, time/size limits), then a structured NVIDIA model call using MDE's existing `src/lib/ai-provider.ts` abstraction. That migration belongs to this same SAN-1193 owner, not a new agent or booking system.
 
-`e2e/app/partner-ai-signup-live-gemini.spec.ts` is a **separate explicitly opt-in**, real-Gemini Playwright journey: signed-out extraction denied → throwaway authenticated partner → live website URL Context result with a retrieved source → edit the existing review card → actual activation → Supabase readback → page refresh/readback → one partner/member → mobile overflow check → exact fixture cleanup. It calls the real paid Gemini endpoint and shared Supabase project; never run this in the default PR suite or with fake credentials. An extraction failure is a **failed smoke**, never a silent skip or a mocked success.
+The fast deterministic regression `e2e/app/partner-ai-signup-persistence.spec.ts` continues to mock just the extraction response, while testing real browser/Auth/partner writes.
 
-### Run on the deployed website
+`e2e/app/partner-ai-signup-live-source.spec.ts` is **opt-in**. It requires authenticated real Supabase credentials, performs a real external source analysis via MDE's deployed API, checks a retrieved website source, uses the actual edit/review UI, persists the final edited fields, verifies DB readback and one partner/member, checks 390px, and cleans up. It must not run in ordinary PR CI because it uses a paid live provider and shared DB. If retrieval fails, the test fails; no fabricated source or skipped-to-green run.
 
-1. Inspect the intended Vercel **production deployment** and its `githubCommitSha`, and verify that the **www.mdeai.co domain alias points to that same deployment ID**. Do not infer deployed SHA from GitHub merge status or from HTTP 200. Use the connected Vercel deployment/alias tools or [Vercel CLI inspect](https://vercel.com/docs/cli/inspect).
-2. Provide local ignored environment values for `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (or anon key) and `SUPABASE_SERVICE_ROLE_KEY` **only to the test process**; do not export the service key into client code, browser context, GitHub artifacts, or screenshots.
-3. Start the focused live smoke **only when intentional**:
+### Exact deployed test procedure
+
+1. Read the production deployment's `githubCommitSha` and compare its deployment ID with the `www.mdeai.co` Vercel domain alias. Do not infer deployed SHA from a merged PR or HTTP 200. [Vercel inspect reference](https://vercel.com/docs/cli/inspect) — REFERENCE ONLY → use the existing Vercel project/alias verification.
+2. Supply ignored E2E-only Supabase URL, publishable/anon key and service-role test credential locally. Never place service-role keys in client code or CI artifacts. Avoid committing authenticated screenshots, traces, browser storage state, real account emails or tokens.
+3. Explicitly run the real-source journey:
 
 ```bash
-MDE_PARTNER_LIVE_GEMINI_E2E=1 PW_SKIP_WEBSERVER=1 \
+MDE_PARTNER_LIVE_SOURCE_E2E=1 PW_SKIP_WEBSERVER=1 \
   SMOKE_BASE_URL=https://www.mdeai.co \
-  npx playwright test e2e/app/partner-ai-signup-live-gemini.spec.ts \
+  npx playwright test e2e/app/partner-ai-signup-live-source.spec.ts \
     --project=chromium --workers=1
 ```
 
-4. Read the `SAN1193_LIVE_PASS` and `SAN1193_LIVE_CLEANUP_VERIFIED` evidence in terminal output and confirm **1 test passed, zero failures**. Do not upload authenticated screenshots, storage state, traces, or test identities. The test itself does not capture any screenshots. If the test fails, inspect the failure and cleanup independently before retrying.
-5. Recheck deployed SHA/alias and key API runtime errors after the smoke; compare with step 1. **Production-path verification is not public-launch authorization**.
+4. Verify **1 passed, 0 failed, 0 skipped** plus `SAN1193_LIVE_PASS` and `SAN1193_LIVE_CLEANUP_VERIFIED`. Confirm test identities and any synthetic partner rows were removed. Failed tests require cleanup investigation before another run; no automatic paid-provider retries.
+5. Recheck Vercel alias/current deployed SHA and endpoint runtime errors. This Phase A exercise is not public-launch certification.
 
-### Local Gemini HTTP 402: billing, not a code/retry fix
+### Provider migration follow-up
 
-A past local URL Context call returned HTTP **402** while the production request succeeded with **200**. Google defines 402 `payment_required` as a **depleted prepaid credit balance**. Verify the billing account and credits associated with the **local** API key in [Google AI Studio](https://aistudio.google.com/) and follow [official Gemini billing](https://ai.google.dev/gemini-api/docs/billing) and [API error codes](https://ai.google.dev/gemini-api/docs/api-errors). Compare project IDs or key fingerprints only through your provider dashboard; **never print, paste, or commit API keys**. Add eligible credits or configure a separate already authorized development key. Do **not** rotate/overwrite the functioning production key or retry 402 requests; retries apply to transient 429/5xx errors, not payment failures. The manual signup form remains the fallback when URL extraction is unavailable. Do not infer business verification from imported website data.
+- **NVIDIA models/tool calling:** [NVIDIA LLM API](https://docs.api.nvidia.com/nim/reference/llm-apis) (REFERENCE ONLY `POST /v1/chat/completions`) and [NVIDIA Tool Calling](https://docs.nvidia.com/nim/large-language-models/latest/advanced-use-cases/tool-calling-and-mcp.html) (REFERENCE ONLY); adapt **only** the provider call to `src/lib/ai-provider.ts` and `extract-business-url.ts`, while retaining all source evidence and existing Supabase save contracts. NVIDIA is not a website crawler.
+- **Source retrieval:** Reuse an approved existing server-side website retrieval implementation if one is already present; otherwise implement and independently security-test an SSRF-safe public website fetch before calling NVIDIA. Verify DNS rebinding, every redirect, timeouts, bytes/content type, private/internal address denial, and untrusted page instructions before deploy. Never treat a model-generated URL as successful retrieval.
+- **Local Gemini HTTP 402:** This is an old **local Gemini-only** error. With MDE's NVIDIA chat setting it does not show an NVIDIA problem. It remains relevant only until this specialized URL extraction is migrated. Do not change healthy production secrets or falsely call NVIDIA website extraction verified.
 
-**No new agent/database architecture is required:** existing Next.js + CopilotKit v2 / Mastra + Supabase partner activation and RLS are canonical. OpenMuse/OpenDots are UX reference patterns; OpenBot is not involved. `pgvector` and Maps are unrelated to website extraction.
+**No duplicate runtime:** existing Next.js/CopilotKit v2/Mastra UI, Supabase activation/RLS, no pgvector/Maps/OpenBot/OpenDots backend needed for this test.
