@@ -1,4 +1,5 @@
 import { guardedFetch, isGuardedFetchError, readBodyAsText } from "guarded-fetch";
+import { Parser } from "htmlparser2";
 
 /** One server-only HTTP boundary shared by Partner and Restaurant website imports. */
 export type PublicWebsitePage = {
@@ -19,34 +20,50 @@ export class PublicWebsiteReadError extends Error {
 const MAX_HTML_BYTES = 512 * 1024;
 const FETCH_TIMEOUT_MS = 7_000;
 
-function decodeEntities(text: string): string {
-  const named: Record<string, string> = {
-    amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ",
-    rsquo: "’", lsquo: "‘", ldquo: "“", rdquo: "”", ndash: "–", mdash: "—",
-    copy: "©", hellip: "…",
-  };
-  return text.replace(/&(#x[\da-f]+|#\d+|[a-z]+);/gi, (match, entity: string) => {
-    const code = entity.toLowerCase();
-    const point = code.startsWith("#x") ? Number.parseInt(code.slice(2), 16)
-      : code.startsWith("#") ? Number.parseInt(code.slice(1), 10) : null;
-    if (point !== null) {
-      return Number.isInteger(point) && point > 0 && point <= 0x10ffff
-        ? String.fromCodePoint(point) : " ";
-    }
-    return named[code] ?? match;
-  });
-}
-
+/** Linear-time event-based HTML parsing, never regex over attacker-controlled markup. */
 function readablePage(html: string): { title?: string; text: string } {
-  const title = /<title(?:\s[^>]*)?>([\s\S]*?)<\/title\s*>/i.exec(html)?.[1];
-  const cleaned = html
-    .replace(/<!--[\s\S]*?-->/g, " ")
-    .replace(/<(script|style|svg|noscript|template|head|nav|footer)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, " ")
-    .replace(/<(br|p|div|li|h[1-6]|section|article)\b[^>]*>/gi, "\n")
-    .replace(/<[^>]*>/g, " ");
-  const text = decodeEntities(cleaned).replace(/[\t\r ]+/g, " ")
-    .replace(/\n\s*\n+/g, "\n").trim();
-  return { title: title ? decodeEntities(title).trim().slice(0, 250) : undefined, text: text.slice(0, 22_000) };
+  const ignored = new Set(["script", "style", "svg", "noscript", "template", "head", "nav", "footer"]);
+  const breaks = new Set(["p", "div", "li", "br", "h1", "h2", "h3", "h4", "h5", "h6", "section", "article"]);
+  const chunks: string[] = [];
+  let skipped = 0;
+  const ignoredStack: boolean[] = [];
+  let count = 0;
+  let title = "";
+  let inTitle = false;
+  const parser = new Parser({
+    onopentag(name, attributes) {
+      if (name === "title") inTitle = true;
+      const ignoreElement = ignored.has(name) || skipped > 0 || attributes.hidden !== undefined ||
+        attributes["aria-hidden"] === "true";
+      ignoredStack.push(ignoreElement);
+      if (ignoreElement) skipped++;
+      if (!skipped && breaks.has(name) && count < 22_000) {
+        chunks.push("\n");
+        count++;
+      }
+    },
+    ontext(text) {
+      if (inTitle) title += text.slice(0, Math.max(0, 250 - title.length));
+      if (skipped || count >= 22_000) return;
+      const limited = text.slice(0, 22_000 - count);
+      chunks.push(limited);
+      count += limited.length;
+    },
+    onclosetag(name) {
+      if (name === "title") inTitle = false;
+      if (ignoredStack.pop()) skipped--;
+      else if (!skipped && breaks.has(name) && count < 22_000) {
+        chunks.push("\n");
+        count++;
+      }
+    },
+  }, { decodeEntities: true });
+  parser.write(html);
+  parser.end();
+  return {
+    title: title.trim().slice(0, 250) || undefined,
+    text: chunks.join("").replace(/[\t\r ]+/g, " ").replace(/\n\s*\n+/g, "\n").trim(),
+  };
 }
 
 export async function readPublicWebsite(rawUrl: string): Promise<PublicWebsitePage> {

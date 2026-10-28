@@ -155,6 +155,7 @@
     "cmdk": "^1.1.1",
     "embla-carousel-react": "^8.6.0",
     "guarded-fetch": "0.2.0",
+    "htmlparser2": "10.0.0",
     "libsql": "^0.5.22",
     "lucide-react": "^1.16.0",
     "mastra": "1.32.1",

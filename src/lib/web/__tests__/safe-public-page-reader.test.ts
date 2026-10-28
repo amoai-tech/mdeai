@@ -72,6 +72,23 @@ describe("guarded website reader (SAN-1602)", () => {
     await expect(readPublicWebsite("https://cafe.example")).rejects.toBeInstanceOf(PublicWebsiteReadError);
   });
 
+  it("processes large malformed user-controlled HTML without pathological regex backtracking", async () => {
+    // Repeated unclosed comment/script starts were quadratic in the previous regex-stripper.
+    const hostile = "<html><head><title>Safe page</title></head><body>" +
+      "<!--".repeat(30_000) +
+      "<script".repeat(15_000) +
+      "<h1>Real public restaurant</h1><p>Authentic coffee information with a long enough paragraph.</p></body></html>";
+    fetched(hostile);
+    const began = performance.now();
+    // The reader may reject malformed content as unusable, but must return promptly.
+    try {
+      await readPublicWebsite("https://cafe.example");
+    } catch (error) {
+      expect(error).toBeInstanceOf(PublicWebsiteReadError);
+    }
+    expect(performance.now() - began).toBeLessThan(1_500);
+  });
+
   it("keeps an oversized body failure recoverable without hiding the limit", async () => {
     mock.read.mockRejectedValue(Object.assign(new Error("big"), { code: "response_too_large" }));
     await expect(readPublicWebsite("https://cafe.example")).rejects.toMatchObject({ code: "unavailable" });
