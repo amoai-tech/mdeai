@@ -31,6 +31,18 @@ describe("classifyAgentError / describeAgentError (OBS-002)", () => {
       ),
     ).toBe("timeout");
     expect(classifyAgentError({ status: 429, message: "slow down" })).toBe("rate_limit");
+    // Google API returns RESOURCE_EXHAUSTED for both temporary 429 and
+    // exhausted prepay credits (HTTP 402). The latter must not be counted as
+    // a retryable rate limit in ai_runs telemetry.
+    expect(classifyAgentError({ statusCode: 429, message: "RESOURCE_EXHAUSTED" })).toBe("rate_limit");
+    expect(classifyAgentError({ statusCode: 402, message: "RESOURCE_EXHAUSTED" })).toBe("billing");
+    expect(classifyAgentError(new APICallError({
+      message: "Your prepayment credits are depleted.",
+      url: "https://generativelanguage.googleapis.com",
+      requestBodyValues: {},
+      statusCode: 402,
+    }))).toBe("billing");
+    expect(classifyAgentError(new Error("Your prepayment credits are depleted."))).toBe("billing");
     expect(classifyAgentError({ status: 401, message: "nope" })).toBe("auth");
     expect(classifyAgentError(new Error("zod validation failed"))).toBe("validation");
     expect(classifyAgentError(new Error("tool execution failed"))).toBe("tool_failure");
