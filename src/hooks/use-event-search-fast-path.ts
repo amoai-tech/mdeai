@@ -7,6 +7,8 @@ import { useEventLocalChat } from "@/components/chat/event-local-chat-context";
 import { useEventFastPath } from "@/components/chat/event-fast-path-context";
 import { useClearOtherFastPathResults } from "@/hooks/use-clear-other-fast-path-results";
 import { EVENT_CLARIFY_MESSAGE } from "@/lib/event-clarify-copy";
+import { eventIdFromDetailAsk, summarizePublicEventForChat } from "@/lib/events/event-detail-chat";
+import type { PublicEventDetail } from "@/lib/events/types";
 import {
   buildEventSearchParams,
   canFastPathEventSearch,
@@ -167,6 +169,34 @@ export function useEventSearchFastPath() {
           : state?.lastEventQuery,
       };
 
+      // The event detail CTA contains an exact, validated public event ID.
+      // A generic discovery clarification is misleading here, especially for guests.
+      // Reuse the same published/active/RLS-filtered server endpoint as event checkout.
+      const eventId = eventIdFromDetailAsk(trimmed);
+      if (eventId) {
+        if (busyRef.current) return false;
+        busyRef.current = true;
+        try {
+          const response = await fetch(`/api/events/${eventId}/public`, { cache: "no-store" });
+          if (response.status === 404) {
+            showExchange(trimmed, "This event is no longer publicly listed. Explore current events at /events.");
+            return true;
+          }
+          if (!response.ok) throw new Error(`public event context failed: ${response.status}`);
+          const payload = (await response.json()) as { event?: PublicEventDetail };
+          if (!payload.event || payload.event.id !== eventId) {
+            throw new Error("public event context did not match the requested event");
+          }
+          clearLocalMessages();
+          clearOthers("event");
+          setToolResult(null);
+          showExchange(trimmed, summarizePublicEventForChat(payload.event));
+          return true;
+        } finally {
+          busyRef.current = false;
+        }
+      }
+
       if (shouldInstantEventClarify(trimmed, memory)) {
         if (busyRef.current) return false;
         busyRef.current = true;
@@ -190,7 +220,7 @@ export function useEventSearchFastPath() {
       clearLocalMessages();
       return runSearch(trimmed, params, memory, true);
     },
-    [clarifyKind, clarifyPending, clearLocalMessages, clearOthers, runSearch, setToolResult, showClarify, state],
+    [clarifyKind, clarifyPending, clearLocalMessages, clearOthers, runSearch, setToolResult, showClarify, showExchange, state],
   );
 
   const handleEventChip = useCallback(
