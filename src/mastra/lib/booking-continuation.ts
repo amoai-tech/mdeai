@@ -1,0 +1,74 @@
+/**
+ * SAN-1149: Keep a slot-complete table request moving after restaurant search.
+ * An agent can otherwise stop after discovery cards or repeat the same search.
+ * This changes tool selection only: requestVenueBooking is a proposal-only tool,
+ * and the existing customer-confirmed API remains the sole booking writer.
+ */
+type Message = { role: string; content: unknown };
+type ToolStep = {
+  toolCalls?: readonly { toolName?: string }[];
+  toolResults?: readonly { toolName?: string; output?: unknown }[];
+};
+
+const SEARCH_NAMES = new Set(['searchRestaurantsTool', 'search-restaurants']);
+const BOOKING_NAMES = new Set(['requestVenueBooking', 'request-venue-booking']);
+const UUID = /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i;
+
+function userText(content: unknown): string {
+  if (typeof content === 'string') return content;
+  if (!content || typeof content !== 'object' || !('parts' in content) || !Array.isArray(content.parts)) return '';
+  return content.parts.filter((p): p is { type: 'text'; text: string } =>
+    p != null && typeof p === 'object' && p.type === 'text' && typeof p.text === 'string')
+    .map(p => p.text).join(' ');
+}
+
+/** Deliberately conservative: no automatic proposal for missing customer fields. */
+export function hasCompleteRestaurantBookingDetails(text: string): boolean {
+  return /\b(book|booking|reserv(?:e|ation)|table request|request (?:a |the )?table|table for)\b/i.test(text)
+    && /\b(?:20\d{2}-\d{2}-\d{2}|(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s+20\d{2})?)\b/i.test(text)
+    && /\b\d{1,2}(?::\d{2})?\s*(?:a\.?m\.?|p\.?m\.?)\b/i.test(text)
+    && /\b(?:for|party(?:\s+size)?(?:\s+of)?|guests?:?)\s+(?:one|two|three|four|five|six|seven|eight|nine|ten|[1-9]\d?)\b/i.test(text)
+    && /\b[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}\b/.test(text)
+    && /\b(?:contact name\s*[:=-]?\s*\S+|my name is\s+\S+|i(?:'m| am)\s+[A-Z][a-z]+)/i.test(text);
+}
+
+function containsExactName(text: string, name: string): boolean {
+  // Name comes from the source-backed restaurant tool; match whole words so
+  // an unrelated similarly named restaurant cannot qualify this booking.
+  const literal = name.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return literal.length > 1 && new RegExp(`(?:^|[^\\p{L}\\p{N}])${literal}(?=$|[^\\p{L}\\p{N}])`, 'iu').test(text);
+}
+
+function hasGroundedNamedRestaurant(text: string, output: unknown): boolean {
+  // Mastra StepResult.toolResults[].output follows AI SDK v6 ToolResultOutput:
+  // { type: 'json', value: toolExecutionResult }. The browser cards receive
+  // the inner result, while processInputStep receives this typed wrapper.
+  const candidate = output && typeof output === 'object' && 'type' in output &&
+    output.type === 'json' && 'value' in output ? output.value : output;
+  if (!candidate || typeof candidate !== 'object') return false;
+  const result = candidate as { source?: unknown; results?: unknown };
+  if (result.source !== 'supabase' || !Array.isArray(result.results)) return false;
+  return result.results.some((row: unknown) => {
+    if (!row || typeof row !== 'object') return false;
+    const venue = row as { id?: unknown; name?: unknown };
+    return typeof venue.id === 'string' && UUID.test(venue.id)
+      && typeof venue.name === 'string' && containsExactName(text, venue.name);
+  });
+}
+
+export function shouldContinueVenueBookingAfterSearch({
+  stepNumber, messages, steps,
+}: {
+  stepNumber: number;
+  messages: readonly Message[];
+  steps: readonly ToolStep[];
+}): boolean {
+  if (stepNumber < 1 || !steps.length) return false;
+  const lastUser = messages.findLast(m => m.role === 'user');
+  const text = lastUser ? userText(lastUser.content) : '';
+  if (!hasCompleteRestaurantBookingDetails(text)) return false;
+  // Check only tool results from this agent run, not historic search cards.
+  if (steps.some(step => step.toolCalls?.some(call => BOOKING_NAMES.has(call.toolName || '')))) return false;
+  return steps.some(step => step.toolResults?.some(result =>
+    SEARCH_NAMES.has(result.toolName || '') && hasGroundedNamedRestaurant(text, result.output)));
+}
