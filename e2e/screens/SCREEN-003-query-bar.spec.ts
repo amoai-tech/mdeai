@@ -44,6 +44,27 @@ test.describe(`${SCREEN_ID} query bar + chips`, () => {
       await expect(chips).toHaveCount(6);
     });
 
+    test("COP/month chip sends an exact monthly cap through the existing rental search", async ({ page }) => {
+      await gotoHome(page);
+      const price = page.locator('[data-testid="filter-chip-under-4m"]');
+      await expect(price).toHaveText("Under COP 4M/month");
+      const requestPromise = page.waitForRequest((req) =>
+        req.method() === "POST" && req.url().includes("/api/rentals/search"),
+      );
+      await price.click();
+      const request = await requestPromise;
+      const params = request.postDataJSON() as Record<string, unknown>;
+      expect(params).toMatchObject({
+        maxPriceMonthly: 4_000_000,
+        budgetCurrency: "COP",
+        stayType: "monthly",
+      });
+      expect(params.maxPricePerNight).toBeUndefined();
+      await expect(price).toHaveAttribute("aria-pressed", "true");
+      await waitForRentalCards(page);
+      await captureScreenEvidence(page, SCREEN_ID, "desktop-monthly-cop-chip.png");
+    });
+
     test("rental query after Laureles chip shows cards", async ({ page }) => {
       await gotoHome(page);
       await page.locator('[data-testid="filter-chip-laureles"]').click();
