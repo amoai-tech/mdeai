@@ -18,6 +18,7 @@ import {
   NewProjectResults,
 } from "@/components/new-projects/concierge/project-result-cards";
 import { useChatWorkflow } from "@/components/chat/chat-workflow-context";
+import { SearchToolResultScope, useCurrentSearchToolResult } from "@/components/copilot/search-tool-result-ownership";
 import {
   MASTRA_COPILOT_TOOL_ACTIONS,
   MASTRA_TOOL_IDS,
@@ -34,7 +35,7 @@ import {
   isToolRenderError,
 } from "@/lib/tool-render-state";
 
-type ToolRenderProps = { status: string; result?: unknown };
+type ToolRenderProps = { status: string; result?: unknown; toolCallId?: string };
 
 const searchRentalsParams = z.object({
   neighborhood: z.string().optional(),
@@ -54,9 +55,10 @@ function WorkflowStatusReporter({
   status: string;
 }) {
   const { reportToolStatus } = useChatWorkflow();
+  const isCurrent = useCurrentSearchToolResult();
   useEffect(() => {
-    reportToolStatus(kind, status);
-  }, [kind, status, reportToolStatus]);
+    if (isCurrent) reportToolStatus(kind, status);
+  }, [kind, status, reportToolStatus, isCurrent]);
   return null;
 }
 
@@ -105,14 +107,16 @@ function parseWebEventToolGrounding(result: unknown): {
 
 function WebCitationsSync({ citations }: { citations: EventWebCitationRow[] }) {
   const { setWebCitations } = useEventSearchResults();
+  const isCurrent = useCurrentSearchToolResult();
   const lastKeyRef = useRef("");
 
   useEffect(() => {
+    if (!isCurrent) return;
     const key = JSON.stringify(citations);
     if (key === lastKeyRef.current) return;
     lastKeyRef.current = key;
     setWebCitations(citations);
-  }, [citations, setWebCitations]);
+  }, [citations, setWebCitations, isCurrent]);
 
   return null;
 }
@@ -313,9 +317,18 @@ function useDualToolRender(
   toolId: string,
   parameters: z.ZodType,
   render: (props: ToolRenderProps) => ReactElement,
+  scopeDiscovery = true,
 ) {
-  useRenderTool({ name: mastraName, parameters, render }, [render]);
-  useRenderTool({ name: toolId, parameters, render }, [render]);
+  const scopedRender = useCallback(
+    (props: ToolRenderProps) => scopeDiscovery ? (
+      <SearchToolResultScope toolCallId={props.toolCallId}>
+        {render(props)}
+      </SearchToolResultScope>
+    ) : render(props),
+    [render, scopeDiscovery],
+  );
+  useRenderTool({ name: mastraName, parameters, render: scopedRender }, [scopedRender]);
+  useRenderTool({ name: toolId, parameters, render: scopedRender }, [scopedRender]);
 }
 
 export function useSearchToolRenders() {
@@ -363,12 +376,14 @@ export function useSearchToolRenders() {
     MASTRA_TOOL_IDS.newProjects,
     looseToolParams,
     newProjectRender,
+    false, // New-project tools are workflows, not discovery searches.
   );
   useDualToolRender(
     MASTRA_COPILOT_TOOL_ACTIONS.compareProjects,
     MASTRA_TOOL_IDS.compareProjects,
     looseToolParams,
     compareProjectsRender,
+    false,
   );
   useDualToolRender(
     MASTRA_COPILOT_TOOL_ACTIONS.events,
