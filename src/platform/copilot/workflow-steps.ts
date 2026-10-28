@@ -40,14 +40,14 @@ export function toolNameToWorkflowKind(name: string): WorkflowKind | null {
   return TOOL_KIND_MAP[name] ?? null;
 }
 
-/** Active step index while running (0..n-2); complete locks on last step. */
+/** Only real tool completion may advance the strip. Time is NOT evidence of progress. */
 export function activeWorkflowStepIndex(
   phase: WorkflowPhase,
   stepCount: number,
-  elapsedMs: number,
 ): number {
   if (phase === "idle" || stepCount <= 0) return -1;
   if (phase === "complete" || phase === "error") return stepCount - 1;
-  const maxRunning = Math.max(0, stepCount - 2);
-  return Math.min(Math.floor(elapsedMs / 900), maxRunning);
+  // Until fine-grained AG-UI tool events are wired, keep intermediate steps
+  // pending rather than claiming the agent ranked/verified results by a clock.
+  return 0;
 }

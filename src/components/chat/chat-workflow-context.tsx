@@ -4,7 +4,6 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -19,7 +18,6 @@ type WorkflowSnapshot = {
 
 type ChatWorkflowContextValue = {
   snapshot: WorkflowSnapshot;
-  now: number;
   reportToolStatus: (kind: WorkflowKind, status: string) => void;
 };
 
@@ -29,7 +27,6 @@ const IDLE: WorkflowSnapshot = { kind: null, phase: "idle", startedAt: null };
 
 export function ChatWorkflowProvider({ children }: { children: ReactNode }) {
   const [snapshot, setSnapshot] = useState<WorkflowSnapshot>(IDLE);
-  const [now, setNow] = useState(() => Date.now());
 
   const reportToolStatus = useCallback((kind: WorkflowKind, status: string) => {
     if (status === "failed" || status === "error") {
@@ -49,15 +46,9 @@ export function ChatWorkflowProvider({ children }: { children: ReactNode }) {
     setSnapshot({ kind, phase: "running", startedAt: Date.now() });
   }, []);
 
-  useEffect(() => {
-    if (snapshot.phase !== "running") return;
-    const id = window.setInterval(() => setNow(Date.now()), 400);
-    return () => window.clearInterval(id);
-  }, [snapshot.phase, snapshot.kind]);
-
   const value = useMemo(
-    () => ({ snapshot, now, reportToolStatus }),
-    [snapshot, now, reportToolStatus],
+    () => ({ snapshot, reportToolStatus }),
+    [snapshot, reportToolStatus],
   );
 
   return (
