@@ -32,6 +32,11 @@ function WorkspaceCard({ context }: { context: WorkspaceContext }) {
             →
           </span>
         </Link>
+        {context.kind === "team" ? (
+          <Link href="/app/admin/restaurants" className="inline-flex min-h-11 items-center text-muted-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+            Restaurant Management
+          </Link>
+        ) : null}
         {context.kind === "personal" ? (
           <Link
             href="/app/me/tickets"

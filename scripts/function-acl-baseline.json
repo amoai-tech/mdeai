@@ -319,7 +319,7 @@
     "anon": false,
     "authenticated": true
   },
-  "restaurant_assign_partner(p_restaurant_id uuid, p_partner_id uuid)": {
+  "restaurant_admin_transfer(p_restaurant_id uuid, p_partner_id uuid, p_expected_partner_id uuid, p_reason text)": {
     "public": false,
     "anon": false,
     "authenticated": true

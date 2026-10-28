@@ -1,15 +1,16 @@
--- SAN-1540 · Restaurant ↔ partner assignment, owner writer and assignment authority.
+-- SAN-1540 + SAN-1604 · Restaurant owner writer and audited Super Admin transfer.
 -- Every write is transaction-local and rolled back.
 begin;
 
-select plan(33);
+select plan(34);
 
 -- ── Fixtures ────────────────────────────────────────────────────────────────
 insert into auth.users (id, email) values
   ('a1540000-0000-4000-8000-000000000001','san1540-partner-a@example.com'),
   ('a1540000-0000-4000-8000-000000000002','san1540-partner-b@example.com'),
   ('a1540000-0000-4000-8000-000000000003','san1540-admin@example.com'),
-  ('a1540000-0000-4000-8000-000000000004','san1540-outsider@example.com');
+  ('a1540000-0000-4000-8000-000000000004','san1540-outsider@example.com'),
+  ('a1540000-0000-4000-8000-000000000005','san1540-superadmin@example.com');
 
 
 insert into public.partners (id, profile_id, type, settings) values
@@ -23,7 +24,8 @@ insert into public.partner_members (partner_id, profile_id, role) values
   ('a1540000-0000-4000-8000-000000000012','a1540000-0000-4000-8000-000000000002','owner');
 
 insert into public.user_roles (user_id, role)
-values ('a1540000-0000-4000-8000-000000000003','admin');
+values ('a1540000-0000-4000-8000-000000000003','admin'),
+       ('a1540000-0000-4000-8000-000000000005','super_admin');
 
 insert into public.partner_locations (id, partner_id, google_place_id) values
   ('a1540000-0000-4000-8000-000000000021','a1540000-0000-4000-8000-000000000011','place-a');
@@ -41,11 +43,11 @@ select ok(
   not has_function_privilege('anon', 'public.restaurant_create_for_partner(uuid,text,text)', 'EXECUTE'),
   'anon cannot create a restaurant');
 select ok(
-  not has_function_privilege('anon', 'public.restaurant_assign_partner(uuid,uuid)', 'EXECUTE'),
+  not has_function_privilege('anon', 'public.restaurant_admin_transfer(uuid,uuid,uuid,text)', 'EXECUTE'),
   'anon cannot assign a restaurant');
 select ok(
-  has_function_privilege('authenticated', 'public.restaurant_assign_partner(uuid,uuid)', 'EXECUTE'),
-  'authenticated may attempt assignment (the function itself requires admin)');
+  has_function_privilege('authenticated', 'public.restaurant_admin_transfer(uuid,uuid,uuid,text)', 'EXECUTE'),
+  'authenticated can call transfer, but RPC requires verified Super Admin');
 
 -- ── Partner A: allowed write ─────────────────────────────────────────────────
 set local role authenticated;
@@ -179,18 +181,24 @@ select throws_ok(
   '42501', 'restaurant_create_for_partner: partner access denied',
   'partner A cannot create a listing under partner B');
 
--- ── Assignment: admin only ──────────────────────────────────────────────────
+-- ── Assignment: only Super Admin via audited optimistic writer ──────────────
 select throws_ok(
-  $$select public.restaurant_assign_partner('a1540000-0000-4000-8000-000000000033','a1540000-0000-4000-8000-000000000011')$$,
-  '42501', 'restaurant_assign_partner: admin access denied',
+  $$select public.restaurant_admin_transfer('a1540000-0000-4000-8000-000000000033','a1540000-0000-4000-8000-000000000011',null,'forged')$$,
+  '42501', 'restaurant_admin_transfer: Super Admin required',
   'a partner cannot assign a restaurant');
 
 select set_config('request.jwt.claim.sub','a1540000-0000-4000-8000-000000000003',true);
+select throws_ok(
+  $$select public.restaurant_admin_transfer('a1540000-0000-4000-8000-000000000033','a1540000-0000-4000-8000-000000000012',null,'regular admin')$$,
+  '42501', 'restaurant_admin_transfer: Super Admin required',
+  'ordinary admin cannot transfer a restaurant');
+
+select set_config('request.jwt.claim.sub','a1540000-0000-4000-8000-000000000005',true);
 select is(
-  public.restaurant_assign_partner(
-    'a1540000-0000-4000-8000-000000000033','a1540000-0000-4000-8000-000000000012') ->> 'partnerId',
+  public.restaurant_admin_transfer(
+    'a1540000-0000-4000-8000-000000000033','a1540000-0000-4000-8000-000000000012',null,'SAN-1540 upgrade to audited transfer') ->> 'partnerId',
   'a1540000-0000-4000-8000-000000000012',
-  'an admin assigns an unassigned restaurant to partner B');
+  'Super Admin assigns an unassigned restaurant to partner B');
 
 select set_config('request.jwt.claim.sub','a1540000-0000-4000-8000-000000000002',true);
 select is(
