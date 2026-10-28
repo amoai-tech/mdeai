@@ -32,7 +32,7 @@ The code fix and tests are done and green locally. The fix is **not deployed** u
 | [src/mastra/agents/host-event.ts](../../../../src/mastra/agents/host-event.ts) | Same |
 | [src/mastra/agents/event-agent.ts](../../../../src/mastra/agents/event-agent.ts) | Same |
 | [src/mastra/lib/gemini-malformed-retry.ts](../../../../src/mastra/lib/gemini-malformed-retry.ts) | One structured log line per decision (`retry`, `refused_tool_ran`, `refused_unidentified_message`) with agent, model, deploy SHA, timestamp. No message text. The retry decision is also joined to the same ai_runs.metadata row as the final transport outcome through RequestContext; Vercel logging remains diagnostic, not the measurement source. |
-| [src/mastra/lib/mastra-telemetry.ts](../../../../src/mastra/lib/mastra-telemetry.ts) | Gemini generation faults (`MALFORMED_FUNCTION_CALL`, `AI_APICallError`, `AI_LoadAPIKeyError`) now classify as `model_failure` instead of `unknown` |
+| [src/mastra/lib/mastra-telemetry.ts](../../../../src/mastra/lib/mastra-telemetry.ts) | Gemini generation faults (`MALFORMED_FUNCTION_CALL`, `AI_APICallError`) now classify as `model_failure` instead of `unknown`. A missing API key (`AI_LoadAPIKeyError`) classifies as `auth`: it is server configuration, not a model fault |
 | [src/mastra/agents/__tests__/agent-failure-matrix.test.ts](../../../../src/mastra/agents/__tests__/agent-failure-matrix.test.ts) | New shared matrix: 4 wiring checks + 8 injected failures |
 | [gemini-malformed-retry.test.ts](../../../../src/mastra/lib/__tests__/gemini-malformed-retry.test.ts), [mastra-telemetry.test.ts](../../../../src/mastra/lib/mastra-telemetry.test.ts) | Log-shape and classifier assertions |
 

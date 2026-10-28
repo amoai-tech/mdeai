@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { test, expect } from "@playwright/test";
+import { test, expect, type Browser, type BrowserContext, type Page } from "@playwright/test";
 import {
   createThrowawayIdentity,
   deleteThrowawayIdentity,
@@ -31,6 +31,7 @@ test.skip(!base, "Opt in with PROD_SMOKE_BASE_URL and PW_SKIP_WEBSERVER=1");
 
 const GROSS_CENTS = 180_000; // 2 tickets x 90_000, as stored in event_orders.total_cents
 const TICKETS = 2;
+const DISPLAYED_TOTAL = GROSS_CENTS / 100; // formatMoney: cents -> COP units
 
 type Admin = Awaited<ReturnType<typeof getSupabaseAdmin>>;
 
@@ -87,25 +88,64 @@ async function removeFixture(admin: Admin, host: ThrowawayIdentity): Promise<str
   return failures;
 }
 
-for (const width of [390, 1440]) {
-  test(`SAN-1396: Host Ops reports seeded sales figures at ${width}px`, async ({ browser }) => {
-    test.setTimeout(240_000);
-    if (!hasE2eEnv()) throw new Error("Missing real Supabase QA credentials");
-    const origin = new URL(base);
-    const admin = await getSupabaseAdmin();
-    const run = randomUUID().slice(0, 8);
-    const host = await createThrowawayIdentity("san1396-host");
-    const context = await browser.newContext({ viewport: { width, height: width === 390 ? 844 : 900 } });
+type HostRun = { host: ThrowawayIdentity; admin: Admin; page: Page; context: BrowserContext; consoleErrors: string[] };
+
+/**
+ * Cleanup scope starts the moment the identity exists, so a failure in newContext/newPage still
+ * deletes it. Identity deletion is the last step and cannot be skipped by an earlier cleanup failure.
+ */
+async function withThrowawayHost(
+  browser: Browser,
+  label: string,
+  width: number,
+  body: (ctx: HostRun) => Promise<void>,
+): Promise<void> {
+  if (!hasE2eEnv()) throw new Error("Missing real Supabase QA credentials");
+  const admin = await getSupabaseAdmin();
+  const host = await createThrowawayIdentity(label);
+  let context: BrowserContext | undefined;
+  let fixtureFailures: string[] = [];
+  try {
+    context = await browser.newContext({ viewport: { width, height: width === 390 ? 844 : 900 } });
     const page = await context.newPage();
     const consoleErrors: string[] = [];
     page.on("pageerror", (e) => consoleErrors.push(e.message));
-    let fixtureFailures: string[] = [];
+    await body({ host, admin, page, context, consoleErrors });
+  } finally {
     try {
+      fixtureFailures = await removeFixture(admin, host);
+    } finally {
+      try {
+        await context?.close();
+      } finally {
+        await deleteThrowawayIdentity(host);
+      }
+    }
+  }
+  expect(fixtureFailures).toEqual([]);
+}
+
+async function signInHost(ctx: HostRun, path: string) {
+  const origin = new URL(base);
+  await injectSession(ctx.context, await getTestSession(ctx.host.email), {
+    host: origin.hostname, secure: origin.protocol === "https:",
+  });
+  await ctx.page.goto(new URL(path, base).toString(), { waitUntil: "domcontentloaded" });
+}
+
+async function expectNoOverflow(page: Page) {
+  const widths = await page.evaluate(() => ({ page: document.documentElement.scrollWidth, screen: window.innerWidth }));
+  expect(widths.page).toBeLessThanOrEqual(widths.screen);
+}
+
+for (const width of [390, 1440]) {
+  test(`SAN-1396: Host Ops reports seeded sales figures at ${width}px`, async ({ browser }) => {
+    test.setTimeout(240_000);
+    await withThrowawayHost(browser, "san1396-host", width, async (ctx) => {
+      const { host, admin, page, consoleErrors } = ctx;
+      const run = randomUUID().slice(0, 8);
       const fixture = await seedDraftWithPaidOrder(admin, host, run);
-      await injectSession(context, await getTestSession(host.email), {
-        host: origin.hostname, secure: origin.protocol === "https:",
-      });
-      await page.goto(new URL("/app/events/overview", base).toString(), { waitUntil: "domcontentloaded" });
+      await signInHost(ctx, "/app/events/overview");
       const rail = page.getByTestId("host-os-chat-region");
       await expect(rail).toBeVisible({ timeout: 45_000 });
       const editor = rail.locator("textarea").first();
@@ -121,8 +161,8 @@ for (const width of [390, 1440]) {
       }
 
       await ask("How are my event ticket sales?");
-      // The seeded order is 180000 cents; Host Ops may show it as 180,000 or as 1,800 (cents / 100).
-      // Every "COP <amount>" in the reply must be that seeded total, and at least one must appear.
+      // formatMoney shows 180000 cents as COP 1,800. Accepting 180,000 would let a 100x error pass,
+      // so every "COP <amount>" in the reply must be exactly the displayed seeded total.
       const copAmounts = async () => {
         const text = await rail.innerText();
         return [...text.matchAll(/COP\s*([\d.,]+)/gi)].map((m) => Number(m[1].replace(/[.,]/g, "")));
@@ -131,7 +171,7 @@ for (const width of [390, 1440]) {
       // A wrong total never converges, so a wrong answer still fails at the timeout.
       await expect.poll(async () => {
         const amounts = await copAmounts();
-        return amounts.length > 0 && amounts.every((n) => n === GROSS_CENTS || n === GROSS_CENTS / 100);
+        return amounts.length > 0 && amounts.every((n) => n === DISPLAYED_TOTAL);
       }, { timeout: 90_000, intervals: [2000, 3000, 5000] }).toBe(true);
       const ticketsRe = new RegExp(`\\b${TICKETS}\\s+tickets?\\b`, "i");
       await expect.poll(async () => ticketsRe.test(await rail.innerText()), { timeout: 30_000 }).toBe(true);
@@ -141,36 +181,18 @@ for (const width of [390, 1440]) {
       await ask("Which event is that for?");
       await expect(rail).toContainText(new RegExp(`qa draft ${run}`, "i"), { timeout: 90_000 });
       expect(fixture.name).toContain(run);
-
-      const widths = await page.evaluate(() => ({ page: document.documentElement.scrollWidth, screen: window.innerWidth }));
-      expect(widths.page).toBeLessThanOrEqual(widths.screen);
+      await expectNoOverflow(page);
       expect(consoleErrors).toEqual([]);
-    } finally {
-      fixtureFailures = await removeFixture(admin, host);
-      await context.close();
-      await deleteThrowawayIdentity(host);
-    }
-    expect(fixtureFailures).toEqual([]);
+    });
   });
 }
 
 for (const width of [390, 1440]) {
   test(`SAN-1396: Host Event Wizard fills the form from chat and writes nothing at ${width}px`, async ({ browser }) => {
     test.setTimeout(240_000);
-    if (!hasE2eEnv()) throw new Error("Missing real Supabase QA credentials");
-    const origin = new URL(base);
-    const admin = await getSupabaseAdmin();
-    const host = await createThrowawayIdentity("san1396-wizard");
-    const context = await browser.newContext({ viewport: { width, height: width === 390 ? 844 : 900 } });
-    const page = await context.newPage();
-    const consoleErrors: string[] = [];
-    page.on("pageerror", (e) => consoleErrors.push(e.message));
-    let failures: string[] = [];
-    try {
-      await injectSession(context, await getTestSession(host.email), {
-        host: origin.hostname, secure: origin.protocol === "https:",
-      });
-      await page.goto(new URL("/app/events/new", base).toString(), { waitUntil: "domcontentloaded" });
+    await withThrowawayHost(browser, "san1396-wizard", width, async (ctx) => {
+      const { host, admin, page, consoleErrors } = ctx;
+      await signInHost(ctx, "/app/events/new");
       const wizard = page.getByTestId("host-event-wizard");
       await expect(wizard).toBeVisible({ timeout: 45_000 });
       // The form's description field is also a textarea; type into the chat region only.
@@ -186,7 +208,7 @@ for (const width of [390, 1440]) {
       await editor.press("Enter");
 
       await expect(page.getByTestId("host-event-field-neighborhood")).toHaveValue(/laureles/i, { timeout: 90_000 });
-      await expect(page.getByTestId("host-event-field-title")).toHaveValue(/SAN-1396 QA Salsa Night/i, { timeout: 30_000 });
+      await expect(page.getByTestId("host-event-field-title")).toHaveValue(/Salsa Night/i, { timeout: 30_000 });
       await expect(page.getByTestId("host-event-field-capacity")).toHaveValue("80", { timeout: 30_000 });
 
       // The wizard only writes when the host approves. Nothing was approved here.
@@ -194,14 +216,10 @@ for (const width of [390, 1440]) {
         .select("id", { count: "exact", head: true }).eq("organizer_id", host.userId);
       expect(error).toBeNull();
       expect(count).toBe(0);
-      const widths = await page.evaluate(() => ({ page: document.documentElement.scrollWidth, screen: window.innerWidth }));
-      expect(widths.page).toBeLessThanOrEqual(widths.screen);
+      // "free entry" was requested: the price field must not carry a positive price.
+      await expect(page.getByTestId("host-event-field-price")).toHaveValue(/^0?$/, { timeout: 30_000 });
+      await expectNoOverflow(page);
       expect(consoleErrors).toEqual([]);
-    } finally {
-      failures = await removeFixture(admin, host);
-      await context.close();
-      await deleteThrowawayIdentity(host);
-    }
-    expect(failures).toEqual([]);
+    });
   });
 }
