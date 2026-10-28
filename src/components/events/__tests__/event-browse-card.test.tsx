@@ -49,6 +49,14 @@ describe("EventBrowseCard", () => {
     expect(heroIndex).toBeLessThan(headingIndex);
   });
 
+  it("renders a compact inline media card while preserving real ticket actions", () => {
+    const html = renderToStaticMarkup(<EventBrowseCard event={event} mediaLayout="inline" />);
+    expect(html).toContain('data-testid="event-details-cta"');
+    expect(html).toContain('data-testid="event-buy-cta"');
+    expect(html).toContain('w-24');
+    expect(html).not.toContain('px-3 pt-3');
+  });
+
   it("never claims Free or Buy tickets when no active tier exists", () => {
     const html = renderToStaticMarkup(
       <EventBrowseCard event={{ ...event, pricePerTicket: null, canBuyTickets: false }} />,

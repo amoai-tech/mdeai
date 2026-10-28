@@ -34,7 +34,6 @@ import { useBrowseMapSync } from "@/hooks/use-browse-map-sync";
 import { useBrowseCardScroll } from "@/hooks/use-browse-card-scroll";
 import { useIsLgUp } from "@/hooks/use-is-lg-up";
 import { rentalToMapPin } from "@/lib/browse/browse-pin-converters";
-import { RENTAL_RESULTS_GRID } from "@/lib/rentals/browse-grid";
 import { buildRetryHref } from "@/lib/rentals/browse-retry-href";
 import type { Rental } from "@/mastra/tools/search-rentals";
 import { buildRentalsUrl, rentalsQueryString } from "@/lib/rentals/browse-filters";
@@ -286,7 +285,7 @@ function RentalBrowseViewInner({
 
           {!error && !dateError && shownResults.length > 0 ? (
             <div
-              className={RENTAL_RESULTS_GRID}
+              className="flex flex-col gap-3"
               aria-label={`${shownResults.length} rentals`}
               data-testid="rentals-grid"
             >
@@ -295,6 +294,7 @@ function RentalBrowseViewInner({
                 return (
                   <RentalBrowseCard
                     key={r.id}
+                    mediaLayout="inline"
                     rental={r}
                     detailSearch={detailSearch}
                     testId={`rental-card-${r.id}`}
