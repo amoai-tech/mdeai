@@ -65,6 +65,8 @@ type VenueBrowseCardProps = {
   listing: VenueBrowseListing;
   composition?: "legacy" | "nova";
   mediaLayout?: "inline" | "cover";
+  selectedForAsk?: boolean;
+  onAskSelect?: () => void;
 };
 
 function formatTagLabel(tag: string): string {
@@ -135,6 +137,8 @@ export function VenueBrowseCard({
   listing,
   composition = "nova",
   mediaLayout = "cover",
+  selectedForAsk,
+  onAskSelect,
 }: VenueBrowseCardProps) {
   const config = KIND_CONFIG[kind];
   const Icon = config.icon;
@@ -155,13 +159,13 @@ export function VenueBrowseCard({
           testId={config.placeholderTestId}
         />
       }
-      footer={
-        <DirectionsLink
-          mapsUrl={listing.mapsUrl}
-          directionsTestId={config.directionsTestId}
-          mapsTestId={config.mapsTestId}
-        />
-      }
+      footer={<div className="flex flex-wrap items-center gap-2">
+        {onAskSelect ? <Button type="button" size="sm" variant={selectedForAsk ? "secondary" : "outline"}
+          aria-pressed={Boolean(selectedForAsk)} data-testid="venue-ask-select" onClick={onAskSelect}>
+          {selectedForAsk ? "Clear selection" : "Ask about this"}
+        </Button> : null}
+        <DirectionsLink mapsUrl={listing.mapsUrl} directionsTestId={config.directionsTestId} mapsTestId={config.mapsTestId} />
+      </div>}
     >
       {listing.neighborhood ? (
         <p className="text-[11px] font-medium text-muted-foreground">

@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import { useCallback, useState } from "react";
+import { useVenueAskSelection } from "@/components/chat/use-venue-ask-selection";
 import { BrowseMapContextShell } from "@/components/browse/BrowseMapContextShell";
 import { BrowseMapPanel } from "@/components/browse/BrowseMapPanel";
 import { BrowseMapSheet } from "@/components/browse/BrowseMapSheet";
 import { DiscoveryGroundedResults } from "@/components/chat/discovery-grounded-results";
 import type { DiscoveryAgentResult } from "@/components/chat/discovery-tool-results";
-import { useMapContext } from "@/platform/maps/map-context";
 import type { GroundedToolRow } from "@/lib/parse-grounded-tool-result";
 import { MoonStar } from "lucide-react";
 import { DiscoveryWorkspace } from "@/components/browse/DiscoveryWorkspace";
@@ -46,11 +46,15 @@ function NightlifeBrowseViewInner({
   const retryHref = buildFilterUrl({ neighborhood, vibe });
   const [searched, setSearched] = useState<{ scope: string; rows: GroundedToolRow[] } | null>(null);
   const activeRows = searched?.scope === retryHref ? searched.rows : null;
+  const { selectedId, selectForAsk, clearAskSelection } = useVenueAskSelection(
+    activeRows, results.map((r) => r.id),
+  );
   const onAgentResults = useCallback((result: DiscoveryAgentResult) => {
-    if (result.page === "nightlife") setSearched({ scope: retryHref, rows: result.rows });
-  }, [retryHref]);
-  const { selectedPinId } = useMapContext();
-  const selectedId = activeRows?.find((r) => "grounded-" + r.id === selectedPinId)?.id ?? null;
+    if (result.page === "nightlife") {
+      setSearched({ scope: retryHref, rows: result.rows });
+      clearAskSelection();
+    }
+  }, [retryHref, clearAskSelection]);
 
   const notice = (
     <p
@@ -77,7 +81,7 @@ function NightlifeBrowseViewInner({
       notice={notice}
     >
       <section className="mt-6" aria-label="Nightlife listings">
-        <DiscoveryGroundedResults rows={activeRows} />
+        <DiscoveryGroundedResults rows={activeRows} selectedId={selectedId} onSelectRow={selectForAsk} />
         {error ? (
           <div
             className="rounded-lg border border-destructive/30 bg-destructive/5 p-6 text-center"
@@ -116,6 +120,8 @@ function NightlifeBrowseViewInner({
                 key={listing.id}
                 kind="nightlife"
                 listing={listing}
+                selectedForAsk={selectedId === listing.id}
+                onAskSelect={() => selectForAsk(selectedId === listing.id ? null : listing.id)}
                 composition="nova"
                 mediaLayout="cover"
               />

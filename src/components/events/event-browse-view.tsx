@@ -50,6 +50,7 @@ export function EventBrowseView({
   dateWindow,
   price,
 }: EventBrowseViewProps) {
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [resolved, setResolved] = useState<{ scope: string; rows: PublishedEventListItem[] } | null>(null);
   const [lookupError, setLookupError] = useState<string | null>(null);
   const [loadingIds, setLoadingIds] = useState(false);
@@ -93,6 +94,8 @@ export function EventBrowseView({
     if (result.page === "events") void resolveIds(result.ids);
   }, [resolveIds]);
   const shownEvents = resolved?.scope === scope ? resolved.rows : results;
+  // A selection is valid only while its real card is in the current result set.
+  const selectedId = shownEvents.some((event) => event.id === selectedEventId) ? selectedEventId : null;
   const retryHref = buildFilterUrl({
     category,
     neighborhood,
@@ -104,7 +107,7 @@ export function EventBrowseView({
 
   return (
     <>
-    <DiscoveryPageContext page="events" filters={{ category, neighborhood, dateWindow, price }} />
+    <DiscoveryPageContext page="events" filters={{ category, neighborhood, dateWindow, price }} selectedId={selectedId} />
     <DiscoveryWorkspace
       activeSlug="events"
       askComposer={<DiscoveryAskComposer page="events" onAgentResults={onAgentResults} guestEvents={{
@@ -173,7 +176,9 @@ export function EventBrowseView({
             data-testid="events-grid"
           >
             {shownEvents.map((event) => (
-              <EventBrowseCard key={event.id} event={event} />
+              <EventBrowseCard key={event.id} event={event}
+                selectedForAsk={selectedId === event.id}
+                onAskSelect={() => setSelectedEventId((current) => current === event.id ? null : event.id)} />
             ))}
           </div>
         ) : null}
