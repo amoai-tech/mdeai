@@ -9,7 +9,7 @@ import { BrowseMapSheet } from "@/components/browse/BrowseMapSheet";
 import { useMapContext } from "@/platform/maps/map-context";
 import { useBrowseMapSync } from "@/hooks/use-browse-map-sync";
 import { venueToMapPin } from "@/lib/browse/browse-pin-converters";
-import { DiscoveryGroundedResults } from "@/components/chat/discovery-grounded-results";
+import { DiscoveryGroundedResults, hasVenueBrowseMapPins } from "@/components/chat/discovery-grounded-results";
 import type { DiscoveryAgentResult } from "@/components/chat/discovery-tool-results";
 import type { GroundedToolRow } from "@/lib/parse-grounded-tool-result";
 import { Coffee } from "lucide-react";
@@ -66,8 +66,8 @@ function CafeBrowseViewInner({
     }
   }, [retryHref, clearAskSelection]);
 
-  // The map exists for a grounded result set or when saved cards have real coordinates (no pin means no map).
-  const hasMap = activeRows !== null || (!error && basePins.length > 0);
+  // A result set without valid positions keeps its cards but never shows an empty map.
+  const hasMap = hasVenueBrowseMapPins(basePins, activeRows, error);
 
   return (
     <>

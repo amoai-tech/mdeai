@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import { DiscoveryGroundedResults } from "../discovery-grounded-results";
+import { DiscoveryGroundedResults, hasVenueBrowseMapPins } from "../discovery-grounded-results";
 import { useVenueAskSelection } from "../use-venue-ask-selection";
 import { useBrowseMapSync } from "@/hooks/use-browse-map-sync";
 import { MapContextProvider, useMapContext } from "@/platform/maps/map-context";
@@ -76,18 +76,18 @@ const basePins = [
 ];
 const baseIds = ["a", "b", "no-coordinates"];
 
-function BaseVenueSelectionHarness() {
-  useBrowseMapSync(basePins, "venue");
+function BaseVenueSelectionHarness({ visiblePins = basePins }: { visiblePins?: typeof basePins }) {
+  useBrowseMapSync(visiblePins, "venue");
   const { selectedId, selectForAsk } = useVenueAskSelection(null, baseIds);
   const { pins, selectedPinId, setSelectedPinId } = useMapContext();
   return <>
     <output data-testid="selected-base-id">{selectedId ?? "NONE"}</output>
     <output data-testid="base-pin-id">{selectedPinId ?? "NONE"}</output>
     <output data-testid="base-pin-count">{pins.length}</output>
-    <button onClick={() => selectForAsk("a")}>Ask A</button>
-    <button onClick={() => selectForAsk("no-coordinates")}>Ask without pin</button>
-    <button onClick={() => setSelectedPinId("venue-b")}>Map B</button>
-    <button onClick={() => setSelectedPinId(null)}>Clear map</button>
+    <button onClick={() => { selectForAsk("a"); }}>Ask A</button>
+    <button onClick={() => { selectForAsk("no-coordinates"); }}>Ask without pin</button>
+    <button onClick={() => { setSelectedPinId("venue-b"); }}>Map B</button>
+    <button onClick={() => { setSelectedPinId(null); }}>Clear map</button>
   </>;
 }
 
@@ -104,4 +104,32 @@ it("SAN-1146 base venue card and map A→B→Clear stay synchronized", async () 
   fireEvent.click(screen.getByText("Ask without pin"));
   expect(screen.getByTestId("selected-base-id").textContent).toBe("no-coordinates");
   expect(screen.getByTestId("base-pin-id").textContent).toBe("NONE");
+});
+
+it("clears map-backed Ask selection when synced venue pins disappear", async () => {
+  const { rerender } = render(
+    <MapContextProvider seedMockPin={false}>
+      <BaseVenueSelectionHarness visiblePins={basePins} />
+    </MapContextProvider>,
+  );
+  await waitFor(() => expect(screen.getByTestId("base-pin-count").textContent).toBe("2"));
+  fireEvent.click(screen.getByText("Ask A"));
+  expect(screen.getByTestId("selected-base-id").textContent).toBe("a");
+  rerender(
+    <MapContextProvider seedMockPin={false}>
+      <BaseVenueSelectionHarness visiblePins={[]} />
+    </MapContextProvider>,
+  );
+  await waitFor(() => expect(screen.getByTestId("base-pin-count").textContent).toBe("0"));
+  expect(screen.getByTestId("selected-base-id").textContent).toBe("NONE");
+  expect(screen.getByTestId("base-pin-id").textContent).toBe("NONE");
+});
+
+it("hides maps for empty or coordinate-less grounded search, even if old base pins exist", () => {
+  expect(hasVenueBrowseMapPins(basePins, null, null)).toBe(true);
+  expect(hasVenueBrowseMapPins(basePins, [], null)).toBe(false);
+  expect(hasVenueBrowseMapPins(basePins, [unmapped], null)).toBe(false);
+  expect(hasVenueBrowseMapPins(basePins, [unmapped, b], null)).toBe(true);
+  expect(hasVenueBrowseMapPins(basePins, null, "Search failed")).toBe(false);
+  expect(hasVenueBrowseMapPins(basePins, [{ ...b, latitude: 91 }], null)).toBe(false);
 });

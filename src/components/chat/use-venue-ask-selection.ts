@@ -27,12 +27,13 @@ export function useVenueAskSelection(rows: GroundedToolRow[] | null, baseIds: st
       ? selectedCardId : null
   );
   const selectForAsk = useCallback((id: string | null) => {
-    setSelectedCardId(id);
     const grounded = id !== null && rows?.some((r) => r.id === id) &&
       pins.some((pin) => pin.id === `grounded-${id}`);
     const base = id !== null && rows === null && baseIds.includes(id) &&
       pins.some((pin) => pin.id === `venue-${id}`);
     const pinId = grounded ? `grounded-${id}` : base ? `venue-${id}` : null;
+    // Only an unpinned Ask item needs local selection; pinned items follow map truth.
+    setSelectedCardId(pinId ? null : id);
     setSelectedPinId(pinId);
   }, [pins, rows, baseIds, setSelectedPinId]);
   const clearAskSelection = useCallback(() => {

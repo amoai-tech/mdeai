@@ -5,8 +5,8 @@ import type { Rental } from "@/mastra/tools/search-rentals";
 function safeUrl(url: string | null | undefined): string | undefined {
   if (!url) return undefined;
   try {
-    new URL(url);
-    return url;
+    const parsed = new URL(url);
+    return parsed.protocol === "https:" || parsed.protocol === "http:" ? url : undefined;
   } catch {
     return undefined;
   }

@@ -120,9 +120,12 @@ export function mapAdkGroundingPins(
   return pinRows
     .map((row, index): GroundedPlaceResult | null => {
       const r = row as Record<string, unknown>;
+      // Number(null) is 0: never turn a missing provider coordinate into the equator.
+      if (r.latitude == null || r.longitude == null) return null;
       const latitude = Number(r.latitude);
       const longitude = Number(r.longitude);
-      if (Number.isNaN(latitude) || Number.isNaN(longitude)) return null;
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude) ||
+          Math.abs(latitude) > 90 || Math.abs(longitude) > 180) return null;
 
       const mapsUrl = r.mapsUrl ? String(r.mapsUrl) : undefined;
       const enriched = mapEnrichedFields(r);

@@ -32,5 +32,8 @@ describe("SAN-1146 real venue pins", () => {
     const pin = venueToMapPin({ ...cafe, mapsUrl: "invalid" });
     expect(pin?.placeUri).toBeUndefined();
     expect(pin?.id).toBe("venue-" + cafe.id);
+    const unsafe = venueToMapPin({ ...cafe, mapsUrl: "javascript:alert(1)" });
+    expect(unsafe?.id).toBe("venue-" + cafe.id);
+    expect(unsafe?.placeUri).toBeUndefined();
   });
 });

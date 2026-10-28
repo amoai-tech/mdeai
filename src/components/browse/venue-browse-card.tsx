@@ -169,7 +169,7 @@ export function VenueBrowseCard({
         />
       }
       footer={<div className="flex flex-wrap items-center gap-2">
-        {onMapSelect ? <Button type="button" size="sm" variant={selectedForMap ? "secondary" : "outline"}
+        {pinId && onMapSelect ? <Button type="button" size="sm" variant={selectedForMap ? "secondary" : "outline"}
           aria-pressed={Boolean(selectedForMap)} data-testid="venue-map-select" onClick={onMapSelect}>
           <MapPin className="size-3.5" aria-hidden />
           {selectedForMap ? "Selected on map" : "View on map"}

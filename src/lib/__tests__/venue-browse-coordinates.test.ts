@@ -23,6 +23,14 @@ describe("SAN-1146 venue coordinates are real or absent, never a placeholder", (
     expect(venueAnchorToCoordinates(row({ longitude: "abc" }))).toEqual(none);
   });
 
+  it("accepts valid geographic boundaries and the equator / prime meridian", () => {
+    for (const latitude of [-90, 0, 90]) {
+      for (const longitude of [-180, 0, 180]) {
+        expect(venueAnchorToCoordinates(row({ latitude, longitude }))).toEqual({ latitude, longitude });
+      }
+    }
+  });
+
   it("café and nightlife listings keep the same real coordinates, or null", () => {
     expect(mapVenueAnchorToCafeListing(row())).toMatchObject({ id: "v1", latitude: 6.2489, longitude: -75.5843 });
     expect(mapVenueAnchorToNightlifeListing(row({ kind: "nightclub" }))).toMatchObject({ latitude: 6.2489, longitude: -75.5843 });

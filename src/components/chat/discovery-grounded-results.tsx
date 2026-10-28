@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { GroundedPlaceCard } from "@/components/copilot/grounded-place-card";
 import { useBrowseMapSync } from "@/hooks/use-browse-map-sync";
-import { mapPinSchema } from "@/platform/contracts/map-pin";
+import { mapPinSchema, type MapPin } from "@/platform/contracts/map-pin";
 import { useMapContext } from "@/platform/maps/map-context";
 import type { GroundedToolRow } from "@/lib/parse-grounded-tool-result";
 
@@ -24,6 +24,16 @@ export function groundedDiscoveryPins(rows: GroundedToolRow[]) {
     });
     return pin.success ? [pin.data] : [];
   });
+}
+
+/** Match map visibility to pins that will actually be synced, even before effects run. */
+export function hasVenueBrowseMapPins(
+  basePins: MapPin[],
+  rows: GroundedToolRow[] | null,
+  error: string | null,
+): boolean {
+  if (error) return false;
+  return rows === null ? basePins.length > 0 : groundedDiscoveryPins(rows).length > 0;
 }
 
 export function DiscoveryGroundedResults({ rows, selectedId, onSelectRow }: {

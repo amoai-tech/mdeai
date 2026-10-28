@@ -65,6 +65,10 @@ describe("VenueBrowseCard", () => {
     expect(mapped).toContain("Selected on map");
     expect(mapped).toContain('aria-pressed="true"');
 
+    const dangling = renderToStaticMarkup(<VenueBrowseCard kind="cafe" listing={cafe}
+      onMapSelect={() => {}} onAskSelect={() => {}} />);
+    expect(dangling).not.toContain('data-testid="venue-map-select"');
+
     const unmapped = renderToStaticMarkup(<VenueBrowseCard kind="cafe" listing={cafe}
       onAskSelect={() => {}} />);
     expect(unmapped).not.toContain('data-testid="venue-map-select"');
