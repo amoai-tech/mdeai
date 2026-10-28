@@ -116,6 +116,11 @@
       "note": "v2 surface. Step 17 revisits the custom readiness plumbing and may simplify it; verify-only until then."
     },
     {
+      "file": "src/components/chat/concierge-booking-receipt.test.tsx",
+      "classification": "test-only",
+      "note": "SAN-1149 post-merge: mocks the v2 HITL boundary to ensure a persisted booking receipt appears immediately even if the CopilotKit result event is lost."
+    },
+    {
       "file": "src/components/chat/concierge-copilot-bridge.tsx",
       "classification": "keep",
       "note": "v2 hooks only."
