@@ -47,6 +47,18 @@ describe("SAN-1390 — real grounded card to canonical map context", () => {
     expect(screen.getByTestId("map-truth").textContent).toContain('"pins":[]');
   });
 
+  it("allows selecting an unmapped real result for Ask without inventing a pin", async () => {
+    const selected: Array<string | null> = [];
+    render(<MapContextProvider seedMockPin={false}>
+      <DiscoveryGroundedResults rows={[{ id: "unmapped-source-id", title: "Grounded source record" }]}
+        selectedId={null} onSelectRow={(id) => selected.push(id)} />
+      <MapTruth />
+    </MapContextProvider>);
+    fireEvent.click(screen.getByTestId("grounded-ask-select"));
+    expect(selected).toEqual(["unmapped-source-id"]);
+    expect(screen.getByTestId("map-truth").textContent).toContain('"pins":[]');
+  });
+
   it("never creates a map pin when the source supplied no coordinates", async () => {
     render(<Journey rows={[{ id: "without-coordinates", title: "Unmapped place" }]} />);
     await waitFor(() => expect(screen.getByTestId("map-truth").textContent).toContain('"pins":[]'));

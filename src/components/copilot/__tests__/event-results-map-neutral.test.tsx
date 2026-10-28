@@ -82,6 +82,15 @@ afterEach(() => {
   container.remove();
 });
 
+describe("SAN-1407 empty event result replacement", () => {
+  it("clears previously shown rows when the latest finished event result is empty", () => {
+    act(() => root.render(<EventResults result={{ results: [event("old")], source: "supabase" }} />));
+    expect(ui.setRows).toHaveBeenLastCalledWith([expect.objectContaining({ id: "old" })]);
+    act(() => root.render(<EventResults result={{ results: [], source: "supabase" }} />));
+    expect(ui.setRows).toHaveBeenLastCalledWith([]);
+  });
+});
+
 describe("event cards on the map", () => {
   it("preserves tier-backed price, Buy availability and URL in the shared rows", () => {
     act(() =>

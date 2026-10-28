@@ -81,7 +81,8 @@ export function EventDetailView({ event }: { event: PublicEventDetail }) {
             {street || event.venue ? (
               <EventVenueSection className="order-5 lg:col-start-1"
                 venue={event.venue ?? { name: street || city || "Event location", address: street, city: city ?? null }}
-                latitude={event.latitude} longitude={event.longitude} />
+                latitude={event.latitude} longitude={event.longitude}
+                listedAreaOnly={!event.venue} />
             ) : null}
           </div>
         </div>

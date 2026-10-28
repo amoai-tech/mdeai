@@ -42,6 +42,14 @@ describe("VenueBrowseCard", () => {
     expect(heroIndex).toBeLessThan(headingIndex);
   });
 
+  it.each(["cafe", "nightlife"] as const)("offers an Ask selection even without map coordinates for %s", (kind) => {
+    const listing = kind === "cafe" ? cafe : nightlife;
+    const html = renderToStaticMarkup(<VenueBrowseCard kind={kind} listing={listing} onAskSelect={() => {}} selectedForAsk />);
+    expect(html).toContain('data-testid="venue-ask-select"');
+    expect(html).toContain('aria-pressed="true"');
+    expect(html).toContain('Clear selection');
+  });
+
   it("renders the nightlife contract with its own test ids", () => {
     const html = renderToStaticMarkup(
       <VenueBrowseCard kind="nightlife" listing={nightlife} />,

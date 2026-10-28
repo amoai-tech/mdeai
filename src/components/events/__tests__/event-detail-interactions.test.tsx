@@ -43,7 +43,20 @@ describe("SAN-1600 public detail journeys", () => {
     expect(screen.getByRole("link", { name: /Ask MDE about this event/i }).getAttribute("href")).toContain(encodeURIComponent(base.id));
     expect(screen.getByTestId("event-image-placeholder")).toBeTruthy();
     expect(screen.getByTestId("event-source-note")).toBeTruthy();
-    expect(screen.getByTestId("event-directions").getAttribute("href")).toContain("destination=Avenida");
+    expect(screen.getByTestId("event-listed-area-map").getAttribute("href")).toContain("query=Avenida");
+    expect(screen.queryByTestId("event-directions")).toBeNull();
+    expect(screen.getByTestId("event-location-unconfirmed").textContent).toContain("not been confirmed");
+    expect(screen.getByTestId("event-image-placeholder").textContent).toContain("photo not available");
+    expect(screen.queryByText("Event photo coming soon")).toBeNull();
+  });
+
+  it("offers exact directions when a real linked venue exists", () => {
+    render(<EventDetailView event={{ ...base, venue: {
+      name: "Hotel Intercontinental", address: "Calle 16 #28-51", city: "Medellín",
+    } }} />);
+    expect(screen.getByTestId("event-directions").getAttribute("href")).toContain("destination=Calle");
+    expect(screen.queryByTestId("event-listed-area-map")).toBeNull();
+    expect(screen.queryByTestId("event-location-unconfirmed")).toBeNull();
   });
 
   it("mobile CTA focuses tier picker and does not create a wrong one-ticket checkout", () => {

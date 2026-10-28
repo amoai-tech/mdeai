@@ -125,16 +125,19 @@ function RentalBrowseViewInner({
   // If a new search drops the open rental, `detailsRental` becomes null and the panel closes.
   const isLgUp = useIsLgUp();
   const [detailsId, setDetailsId] = useState<string | null>(null);
+  const [askSelectedId, setAskSelectedId] = useState<string | null>(null);
+  const selectedForAskId = shownResults.some((r) => r.id === askSelectedId) ? askSelectedId : null;
   const detailsRental = useMemo(
     () => (detailsId ? (shownResults.find((r) => r.id === detailsId) ?? null) : null),
     [detailsId, shownResults],
   );
-  const closeDetails = useCallback(() => setDetailsId(null), []);
+  const closeDetails = useCallback(() => { setDetailsId(null); setAskSelectedId(null); }, []);
   // One path for a card click and for the agent's "show me the details": the same panel, the same
   // selected pin, and the same `selectedListingId` the next question carries.
   const openDetailsFor = useCallback(
     (rental: Rental) => {
       setDetailsId(rental.id);
+      setAskSelectedId(rental.id);
       const pinId = `rental-${rental.id}`;
       if (mappedIds.has(pinId)) panToPin(pinId);
     },
@@ -175,7 +178,7 @@ function RentalBrowseViewInner({
       {coAgent && !isDeterministicE2E() ? (
         <RentalDetailsFrontendTool results={shownResults} onOpen={openDetailsFor} />
       ) : null}
-      <DiscoveryPageContext page="rentals" filters={filterState} selectedId={detailsRental?.id ?? null} />
+      <DiscoveryPageContext page="rentals" filters={filterState} selectedId={selectedForAskId ?? detailsRental?.id ?? null} />
       <DiscoveryWorkspace
         testId="rentals-browse"
         activeSlug="rentals"
@@ -212,7 +215,7 @@ function RentalBrowseViewInner({
           <RentalAskComposer
             onResults={acceptResults}
             onOpenDetails={openDetailsFromCommand}
-            context={{ neighborhood, beds, from, through, selectedListingId: detailsId }}
+            context={{ neighborhood, beds, from, through, selectedListingId: selectedForAskId ?? detailsRental?.id ?? null }}
           />
         }
       >
@@ -301,6 +304,11 @@ function RentalBrowseViewInner({
                     onSchedule={scheduleFor(r)}
                     duplicateNote={duplicateNotes.get(r.id)}
                     onDetails={() => openDetailsFor(r)}
+                    selectedForAsk={selectedForAskId === r.id}
+                    onAskSelect={() => {
+                      setDetailsId(null);
+                      setAskSelectedId((previous) => previous === r.id ? null : r.id);
+                    }}
                   />
                 );
               })}

@@ -53,11 +53,16 @@ function RestaurantBrowseViewInner({
   const desktop = useIsLgUp();
   const retryHref = buildFilterUrl({ neighborhood, cuisine });
   const [searched, setSearched] = useState<{ scope: string; rows: Restaurant[] } | null>(null);
+  const [selectedForAskId, setSelectedForAskId] = useState<string | null>(null);
   const shownResults = searched?.scope === retryHref ? searched.rows : results;
   const selectedRestaurant = shownResults.find((r) => `restaurant-${r.id}` === selectedPinId) ?? null;
+  const selectedForAsk = shownResults.some((r) => r.id === selectedForAskId) ? selectedForAskId : null;
   const closeDetails = useCallback(() => setSelectedPinId(null), [setSelectedPinId]);
   const onAgentResults = useCallback((result: DiscoveryAgentResult) => {
-    if (result.page === "restaurants") setSearched({ scope: retryHref, rows: result.rows });
+    if (result.page === "restaurants") {
+      setSelectedForAskId(null);
+      setSearched({ scope: retryHref, rows: result.rows });
+    }
   }, [retryHref]);
 
   const pins = useMemo(
@@ -77,7 +82,7 @@ function RestaurantBrowseViewInner({
       <DiscoveryPageContext
         page="restaurants"
         filters={{ neighborhood, cuisine }}
-        selectedId={selectedRestaurant?.id ?? null}
+        selectedId={selectedForAsk ?? selectedRestaurant?.id ?? null}
       />
       <DiscoveryWorkspace
         activeSlug="restaurants"
@@ -166,6 +171,11 @@ function RestaurantBrowseViewInner({
                     composition="nova"
                     mediaLayout="cover"
                   />
+                  <button type="button" data-testid="restaurant-ask-select" aria-pressed={selectedForAsk === r.id}
+                    className="inline-flex min-h-11 items-center justify-center rounded-md border px-3 text-sm font-medium"
+                    onClick={() => { setSelectedPinId(null); setSelectedForAskId((current) => current === r.id ? null : r.id); }}>
+                    {selectedForAsk === r.id ? "Clear selection" : "Ask about this"}
+                  </button>
                   <Link
                     className="inline-flex min-h-11 items-center justify-center rounded-md border px-3 text-sm font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
                     data-testid={`restaurant-detail-link-${r.id}`}

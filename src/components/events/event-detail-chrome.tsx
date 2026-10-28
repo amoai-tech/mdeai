@@ -5,6 +5,7 @@ import { useState } from "react";
 import { ArrowLeft, CalendarDays, Share2 } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { VENUE_PLACEHOLDER_GRADIENT } from "@/components/browse/venue-card-placeholder";
 
 /** Share outcomes are exclusive: native success, cancellation or clipboard fallback. */
 export function EventDetailNavigation({ eventName, returnPath }: { eventName: string; returnPath: string }) {
@@ -65,10 +66,11 @@ export function EventDetailHero({ imageUrl, eventName }: { imageUrl: string | nu
                   className="aspect-[16/10] w-full rounded-xl bg-muted object-cover"
                   data-testid="event-hero-image" />
               ) : (
-                <div className="flex aspect-[16/10] flex-col items-center justify-center gap-2 rounded-xl bg-muted text-muted-foreground"
+                <div className="flex aspect-[16/10] flex-col items-center justify-center gap-3 rounded-xl border border-primary/10 text-primary/70"
+                  style={{ background: VENUE_PLACEHOLDER_GRADIENT }}
                   data-testid="event-image-placeholder" role="img" aria-label="No event photo available">
-                  <CalendarDays className="size-9 opacity-70" aria-hidden />
-                  <span className="text-sm">Event photo coming soon</span>
+                  <CalendarDays className="size-11 opacity-70" aria-hidden />
+                  <span className="text-sm font-medium">Event photo not available</span>
                 </div>
               )}
             </div>

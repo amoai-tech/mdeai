@@ -7,6 +7,8 @@ type EventVenueSectionProps = {
   className?: string;
   latitude?: number | null;
   longitude?: number | null;
+  /** Show a listed area, not a verified exact destination, without a linked venue. */
+  listedAreaOnly?: boolean;
 };
 
 /** Map only real saved place data. A generic city is not a precise pin. */
@@ -26,18 +28,26 @@ export function buildVenueDirectionsUrl(
   return `https://www.google.com/maps/dir/?${params.toString()}`;
 }
 
+/** A broad, unconfirmed listing location must not launch exact venue directions. */
+export function buildListedAreaMapUrl(area: string | null): string | null {
+  if (!area?.trim()) return null;
+  return `https://www.google.com/maps/search/?${new URLSearchParams({ api: "1", query: area.trim() })}`;
+}
+
 export function EventVenueSection({
-  venue, className, latitude, longitude,
+  venue, className, latitude, longitude, listedAreaOnly = false,
 }: EventVenueSectionProps) {
   const street = venue.address?.trim();
   const locationLine = [street, street?.toLowerCase().includes((venue.city ?? "").toLowerCase())
     ? null : venue.city].filter(Boolean).join(" · ");
-  const directions = buildVenueDirectionsUrl(street ?? null, latitude, longitude);
+  const locationUrl = listedAreaOnly
+    ? buildListedAreaMapUrl(street || venue.city)
+    : buildVenueDirectionsUrl(street ?? null, latitude, longitude);
 
   return (
     <section className={cn("space-y-3 border-t border-border pt-6", className)}
       data-testid="event-venue-section" aria-labelledby="event-venue-heading">
-      <h2 id="event-venue-heading" className="text-lg font-semibold tracking-tight">Location</h2>
+      <h2 id="event-venue-heading" className="text-lg font-semibold tracking-tight">{listedAreaOnly ? "Listed location" : "Location & directions"}</h2>
       <div className="flex items-start gap-3">
         <MapPin aria-hidden className="mt-0.5 size-5 shrink-0 text-muted-foreground" />
         <div className="space-y-1">
@@ -45,11 +55,16 @@ export function EventVenueSection({
           {locationLine && locationLine !== venue.name ? (
             <p className="text-sm text-muted-foreground">{locationLine}</p>
           ) : null}
-          {directions ? (
-            <a href={directions} target="_blank" rel="noopener noreferrer"
+          {listedAreaOnly ? (
+            <p className="text-sm text-muted-foreground" data-testid="event-location-unconfirmed">
+              The exact venue or meeting point has not been confirmed. Check with the organizer before traveling.
+            </p>
+          ) : null}
+          {locationUrl ? (
+            <a href={locationUrl} target="_blank" rel="noopener noreferrer"
               className="mt-2 inline-flex items-center gap-2 text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-4"
-              data-testid="event-directions">
-              <Navigation aria-hidden className="size-4" /> Get directions
+              data-testid={listedAreaOnly ? "event-listed-area-map" : "event-directions"}>
+              <Navigation aria-hidden className="size-4" /> {listedAreaOnly ? "View listed area on map" : "Get directions"}
               <span className="sr-only">(opens Google Maps in a new tab)</span>
             </a>
           ) : null}
