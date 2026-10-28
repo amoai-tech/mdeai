@@ -74,9 +74,24 @@ for (const size of [{ name: "desktop", width: 1440, height: 900 }, { name: "mobi
       test(`${scenario.route}: changes grounded selection and clears it`, async ({ page }) => {
         test.setTimeout(490_000);
         if (!identity) throw new Error("Live QA identity unavailable");
-        if (preview) await establishVercelAutomationBypass(page, base,
-          process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim() ?? "");
+        // Temporary authorized Vercel share links allow a signed-in browser to
+        // reach protected previews without weakening Deployment Protection.
+        // Never log or commit the share URL, which contains an access token.
+        // This helper calls context.clearCookies(): sign in FIRST, then set
+        // Vercel preview access. Otherwise the share/bypass cookie is erased.
         await signInAsOnOrigin(page, base, identity.email);
+        const shareUrl = process.env.SAN737_PREVIEW_SHARE_URL?.trim();
+        if (preview && shareUrl) {
+          const share = new URL(shareUrl);
+          if (share.protocol !== "https:" || share.origin !== new URL(base).origin ||
+              !share.searchParams.has("_vercel_share")) {
+            throw new Error("SAN737_PREVIEW_SHARE_URL must belong to this protected preview origin");
+          }
+          await page.goto(shareUrl, { waitUntil: "domcontentloaded" });
+        } else if (preview) {
+          await establishVercelAutomationBypass(page, base,
+            process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim() ?? "");
+        }
         const errors: string[] = [];
         page.on("pageerror", (error) => errors.push(error.message));
         const copilotPosts: number[] = [];
