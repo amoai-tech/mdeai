@@ -50,7 +50,7 @@ describe("SelectedPlaceOverlayCard", () => {
   it("links an event pin to its own Details page, and ignores external or protocol-relative paths", () => {
     const eventPin: MapPin = { ...groundedPin, id: "event-1", category: "event", meta: { detailsPath: "/events/salsa-night" } };
     expect(renderToStaticMarkup(<SelectedPlaceOverlayCard pin={eventPin} />)).toContain('href="/events/salsa-night"');
-    for (const detailsPath of ["//evil.example/x", "https://evil.example/x"]) {
+    for (const detailsPath of ["//evil.example/x", "https://evil.example/x", "/events/x?next=https://evil.example", "/events/x#frag", "/events/../admin", "/events\\x"]) {
       const html = renderToStaticMarkup(<SelectedPlaceOverlayCard pin={{ ...eventPin, meta: { detailsPath } }} />);
       expect(html).not.toContain("selected-place-overlay-details");
     }

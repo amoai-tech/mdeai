@@ -40,7 +40,10 @@ test.describe("SAN-972 /events map workspace", () => {
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
     expect(overflow).toBe(false);
     if (shots) {
-      await page.waitForTimeout(6_000); // let tiles paint before the evidence screenshot
+      // Let every map tile finish loading before the evidence screenshot.
+      await expect
+        .poll(() => page.evaluate(() => [...document.querySelectorAll(".gm-style img")].filter((i) => !(i as HTMLImageElement).complete).length), { timeout: 20_000 })
+        .toBe(0);
       await page.screenshot({ path: `${shots}/events-1440.png` });
     }
     expect(errors.filter((e) => !/401|copilotkit/i.test(e))).toEqual([]);

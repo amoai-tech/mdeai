@@ -119,7 +119,7 @@ export function eventToMapPin(e: EventPinSource): MapPin | null {
     subtitle: e.venue,
     placeUri: safeUrl(e.mapsUrl),
     source: "sql",
-    meta: { summary: formatEventStartsAt(e.startsAt), detailsPath: `/events/${e.slug}` },
+    meta: { summary: formatEventStartsAt(e.startsAt), detailsPath: `/events/${encodeURIComponent(e.slug)}` },
   });
   return parsed.success ? parsed.data : null;
 }

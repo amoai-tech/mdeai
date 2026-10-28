@@ -41,6 +41,9 @@ describe("mapEventRowToBrowseItem", () => {
     };
     const located = mapEventRowToBrowseItem({ ...row, latitude: "6.21364660", longitude: "-75.55820350", maps_url: "https://maps.google.com/?cid=1" });
     expect(located).toMatchObject({ latitude: 6.2136466, longitude: -75.5582035, mapsUrl: "https://maps.google.com/?cid=1" });
+    for (const bad of ["  abc ", "0x10", "1e3", "NaN", ""]) {
+      expect(mapEventRowToBrowseItem({ ...row, latitude: bad, longitude: "-75.5" }).latitude).toBeUndefined();
+    }
     const bare = mapEventRowToBrowseItem({ ...row, latitude: null, longitude: "", maps_url: "javascript:alert(1)" });
     expect(bare.latitude).toBeUndefined();
     expect(bare.longitude).toBeUndefined();

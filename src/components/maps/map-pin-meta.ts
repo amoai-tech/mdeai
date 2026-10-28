@@ -41,7 +41,8 @@ export function parseMapPinPreviewMeta(
   const reviewsUrl =
     typeof meta.reviewsUrl === "string" ? meta.reviewsUrl : undefined;
   const detailsPath =
-    typeof meta.detailsPath === "string" && /^\/(?!\/)/.test(meta.detailsPath)
+    // A plain same-site path: no protocol-relative start, query, fragment, backslash or ".." segment.
+    typeof meta.detailsPath === "string" && /^\/(?!\/)[^?#\\]*$/.test(meta.detailsPath) && !/(^|\/)\.\.(\/|$)/.test(meta.detailsPath)
       ? meta.detailsPath
       : undefined;
   const photoAuthorAttributions = Array.isArray(meta.photoAuthorAttributions)

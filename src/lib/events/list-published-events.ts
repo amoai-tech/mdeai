@@ -77,7 +77,9 @@ const EVENT_LIST_SELECT =
 
 /** Postgres numeric arrives as a string; only finite numbers are coordinates. */
 function toCoordinate(value: number | string | null | undefined): number | undefined {
-  if (value == null || value === "") return undefined;
+  if (value == null) return undefined;
+  // Plain decimals only: Number() would also accept hex ("0x10"), exponents and padding.
+  if (typeof value === "string" && !/^-?\d+(\.\d+)?$/.test(value.trim())) return undefined;
   const n = typeof value === "number" ? value : Number(value);
   return Number.isFinite(n) ? n : undefined;
 }

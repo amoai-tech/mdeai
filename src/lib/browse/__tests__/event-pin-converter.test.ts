@@ -42,4 +42,8 @@ describe("eventToMapPin", () => {
     expect(pin?.placeUri).toBeUndefined();
     expect(pin?.id).toBe("event-evt-1");
   });
+
+  it("encodes the slug so a stored slug can never add a query, fragment or extra path", () => {
+    expect(eventToMapPin({ ...base, slug: "a/b?c#d" })?.meta).toMatchObject({ detailsPath: "/events/a%2Fb%3Fc%23d" });
+  });
 });
