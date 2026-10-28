@@ -15,6 +15,7 @@ export type RestaurantSearchApiParams = {
   neighborhood?: string;
   cuisine?: string;
   queryText?: string;
+  namedVenueOnly?: boolean;
   priceTier?: "$" | "$$" | "$$$" | "$$$$";
   userLatitude?: number;
   userLongitude?: number;
@@ -27,7 +28,26 @@ const FAST_PATH_LIMIT = 5;
  * Search-only fast paths can display cards, but cannot request a table.
  */
 function isRestaurantBookingAction(text: string): boolean {
-  return /\b(?:book(?:ing)?|reserv(?:e|ation|ations)|reservar|reserva|reservación|reservaciones|table\s+request|request\s+(?:a\s+)?table|table\s+booking)\b/i.test(text);
+  // A factual lookup followed by "do not book anything" is NOT a booking
+  // request. Remove only the negated span; a later positive request still wins.
+  const positive = text.replace(
+    /\b(?:do\s+not|don't|dont|never|without|no\s+need\s+to)\s+(?:book(?:ing)?|reserv(?:e|ation|ations)|reservar|reserva)(?:\s+(?:anything|a\s+table))?/gi,
+    '',
+  );
+  return /\b(?:book(?:ing)?|reserv(?:e|ation|ations)|reservar|reserva|reservación|reservaciones|table\s+request|request\s+(?:a\s+)?table|table\s+booking)\b/i.test(positive);
+}
+
+/** Route factual named-venue lookups to the existing catalog API rather than
+ * asking an LLM to invent an address. No restaurant names are hardcoded.
+ */
+export function isRestaurantVenueFactQuery(text: string): boolean {
+  if (isRestaurantBookingAction(text) || looksLikeNonRestaurantSearch(text)) return false;
+  // Respect category boundaries even when the generic classifier does not
+  // recognize a conversational question form such as "Where is a salsa club?".
+  if (/\b(?:club|discoteca|salsa\s+bar|nightlife|cafe|café|coffee\s+shop)\b/i.test(text)) return false;
+  const normalized = text.trim();
+  return /^(?:where\s+(?:is|can\s+i\s+find)|what(?:'s|\s+is)\s+the\s+(?:street\s+)?address\s+(?:of|for)|d[oó]nde\s+(?:queda|est[aá])|direcci[oó]n\s+(?:de|del)|find\s+)(?:.{3,120})/i.test(normalized) ||
+    /\b(?:address|direcci[oó]n)\s*[?.!]*$/i.test(normalized);
 }
 
 function looksLikeNonRestaurantSearch(text: string): boolean {
@@ -41,6 +61,7 @@ export function shouldInstantRestaurantClarify(
 ): boolean {
   return (
     !isRestaurantBookingAction(text) &&
+    !isRestaurantVenueFactQuery(text) &&
     isGenericRestaurantQuery(text) &&
     memory.lastRestaurantQuery?.genericAskPending !== true
   );
@@ -62,6 +83,13 @@ export function buildRestaurantSearchParams(
   overrides?: Partial<RestaurantSearchApiParams>,
 ): RestaurantSearchApiParams | null {
   if (looksLikeNonRestaurantSearch(text) || isRestaurantBookingAction(text)) return null;
+
+  // Specific address/identity questions must preserve the *user's* venue name.
+  // The ordinary composed query drops that name, causing the top five generic
+  // restaurants to displace the requested venue.
+  if (isRestaurantVenueFactQuery(text)) {
+    return { queryText: text.trim(), namedVenueOnly: true, limit: FAST_PATH_LIMIT };
+  }
 
   const s = scoreRestaurantQuery(text);
   const q = memory?.lastRestaurantQuery;
@@ -180,6 +208,7 @@ export function restaurantsToToolEnvelope(cards: Restaurant[]) {
       latitude: r.latitude ?? null,
       longitude: r.longitude ?? null,
       sourceUrl: r.sourceUrl,
+      address: r.address,
       imageUrl: r.imageUrl,
       placeId: r.placeId ?? null,
       mapsUrl: r.mapsUrl ?? null,

@@ -154,6 +154,7 @@ function hybridToRestaurant(
     vibe: row.ambiance?.length ? row.ambiance : row.cuisine_types ?? [],
     imageUrl: row.primary_image_url ?? "",
     sourceUrl: `https://mdeai.co/restaurants/${row.id}`,
+    address: row.address ?? undefined,
     latitude: lat,
     longitude: lng,
     rankScore,
