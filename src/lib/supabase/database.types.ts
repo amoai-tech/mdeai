@@ -7278,7 +7278,7 @@ export type Database = {
           metadata: Json
           notes: string | null
           party_size: number | null
-          place_id: string
+          place_id: string | null
           requested_at: string
           restaurant_id: string | null
           source: string
@@ -7298,7 +7298,7 @@ export type Database = {
           metadata?: Json
           notes?: string | null
           party_size?: number | null
-          place_id: string
+          place_id?: string | null
           requested_at: string
           restaurant_id?: string | null
           source?: string
@@ -7318,7 +7318,7 @@ export type Database = {
           metadata?: Json
           notes?: string | null
           party_size?: number | null
-          place_id?: string
+          place_id?: string | null
           requested_at?: string
           restaurant_id?: string | null
           source?: string

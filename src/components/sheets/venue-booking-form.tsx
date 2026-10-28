@@ -14,15 +14,15 @@ import type {
 export function VenueBookingForm({
   venueKind,
   placeId,
-  venueTitle,
   restaurantId,
+  venueTitle,
   onSuccess,
 }: {
   venueKind: VenueBookingKind;
-  placeId: string;
-  venueTitle: string;
-  /** SAN-1542: links the request to the canonical restaurant so its owner can see it. */
+  placeId?: string;
+  /** SAN-1542: canonical restaurant links request to the owner inbox. */
   restaurantId?: string | null;
+  venueTitle: string;
   onSuccess: (result: VenueBookingSubmitResult) => void;
 }) {
   const { user, loading } = useSession();
@@ -111,6 +111,7 @@ export function VenueBookingForm({
         idempotencyKey: buildVenueBookingIdempotencyKey({
           venueKind,
           placeId,
+          restaurantId,
           requestedAt: requestedAtIso,
           partySize: parsedParty,
         }),

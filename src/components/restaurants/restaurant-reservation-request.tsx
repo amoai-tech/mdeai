@@ -21,10 +21,10 @@ export function RestaurantReservationRequest({
   venueTitle,
 }: {
   restaurantId: string;
-  placeId: string;
+  placeId?: string;
   venueTitle: string;
 }) {
-  const { chip } = useVenueBookingStatus({ placeId, uiKind: "restaurant" });
+  const { chip } = useVenueBookingStatus({ placeId, restaurantId, uiKind: "restaurant" });
   const [open, setOpen] = useState(false);
   const [result, setResult] = useState<VenueBookingSubmitResult | null>(null);
 

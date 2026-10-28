@@ -105,6 +105,8 @@ export type CafeVenueDetail = {
   groundingSource?: GroundingSource;
   /** Reused detail panel for restaurant rows — routes booking to RestaurantBookingSheet. */
   bookingAsRestaurant?: boolean;
+  /** Only when backed by public.restaurants.id, not an external result identifier. */
+  restaurantId?: string;
 };
 
 /** Restaurant card + table booking sheet (chat / browse). */
@@ -112,6 +114,7 @@ export type RestaurantVenueDetail = {
   kind: "restaurant";
   pinId: string;
   title: string;
+  restaurantId?: string;
   placeId?: string;
   mapsUrl?: string;
   neighborhood?: string;
