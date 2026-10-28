@@ -84,6 +84,27 @@ test.describe("SAN-972 /events map workspace", () => {
     await expect(other).toHaveAttribute("data-selected", "true", { timeout: 10_000 });
   });
 
+  test("keyboard only: View on map and Ask about this work with Enter and Space in tab order", async ({ page }) => {
+    await openEvents(page, 1440, 900);
+    const cards = await locatedCards(page);
+    const card = cards.first();
+    const viewOnMap = card.getByTestId("event-map-select");
+    const ask = card.getByTestId("event-ask-select");
+    await expect(async () => {
+      await viewOnMap.focus();
+      await page.keyboard.press("Enter");
+      await expect(card).toHaveAttribute("data-selected", "true", { timeout: 1_000 });
+    }).toPass();
+    // Next control in tab order is "Ask about this"; Space toggles it.
+    await page.keyboard.press("Tab");
+    await expect(ask).toBeFocused();
+    await page.keyboard.press("Space");
+    await expect(ask).toHaveAttribute("aria-pressed", "true");
+    // A visible focus ring is drawn on the focused control.
+    const ring = await ask.evaluate((el) => getComputedStyle(el).outlineStyle !== "none" || getComputedStyle(el).boxShadow !== "none");
+    expect(ring).toBe(true);
+  });
+
   test("Ask selection moves from event A to event B and clears", async ({ page }) => {
     await openEvents(page, 1440, 900);
     const asks = page.getByTestId("event-ask-select");
