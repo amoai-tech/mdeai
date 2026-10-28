@@ -454,10 +454,12 @@ ${formatEventSourcePromptHint()}`;
 export const conciergeAgent = new Agent({
   id: 'concierge-agent',
   name: 'Concierge Agent',
-  instructions: async ({ requestContext }) =>
-    `${conciergeBaseInstructions}\n${await verifiedDiscoverySelectionHint(
+  instructions: async ({ requestContext }) => {
+    const currentSelection = await verifiedDiscoverySelectionHint(
       requestContext.get("ag-ui"), lookupPublicDiscoveryItemFromServer,
-    )}`,
+    );
+    return currentSelection ? `${currentSelection}\n${conciergeBaseInstructions}` : conciergeBaseInstructions;
+  },
   model: CONCIERGE_AGENT_MODEL,
   // SAN-1396: restore a failed FIRST model step only for Gemini's known malformed
   // generated function call. Never retry after a completed step/tool action.

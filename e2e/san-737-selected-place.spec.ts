@@ -81,15 +81,28 @@ for (const size of [{ name: "desktop", width: 1440, height: 900 }, { name: "mobi
         page.on("pageerror", (error) => errors.push(error.message));
         const copilotPosts: number[] = [];
         page.on("response", (response) => {
-          if (response.url().includes("/api/copilotkit") && response.request().method() === "POST") {
-            copilotPosts.push(response.status());
-          }
+          if (!response.url().includes("/api/copilotkit") || response.request().method() !== "POST") return;
+          // Track only actual agent turns. The runtime intentionally returns 403
+          // for resource/request /threads calls; those are security denials, not
+          // selected-item answer failures and must remain blocked.
+          try {
+            const envelope: unknown = response.request().postDataJSON();
+            if (envelope && typeof envelope === "object" && "method" in envelope &&
+                envelope.method === "agent/run") {
+              copilotPosts.push(response.status());
+            }
+          } catch { /* Non-JSON transport requests are outside this journey. */ }
         });
         await page.goto(new URL("/" + scenario.route, base).toString(), { waitUntil: "domcontentloaded" });
         // Supabase session restoration can remount the entire discovery view.
         // Do not interact with a card before the authenticated agent is ready.
         await expect(page.getByText("Checking session...", { exact: true })).toHaveCount(0, { timeout: 50_000 });
-        await expect(page.getByText("Connecting to MDE...", { exact: true })).toHaveCount(0, { timeout: 60_000 });
+        // The connection banner may mount *after* session restoration. Waiting
+        // for it to be absent can race hydration; a usable composer proves the
+        // real authenticated agent is ready before clicking selection buttons.
+        const composerInput = page.locator(scenario.route === "rentals"
+          ? "#rental-ask-input" : '[data-testid="discovery-ask-input"]:visible');
+        await expect(composerInput).toBeEnabled({ timeout: 90_000 });
         const cards = page.locator(scenario.card);
         await expect.poll(() => cards.count(), { timeout: 40_000 }).toBeGreaterThanOrEqual(2);
         // Titles and IDs come from the actual rendered public data.

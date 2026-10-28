@@ -41,6 +41,8 @@ describe("SAN-737 deterministic selected-item grounding", () => {
     expect(received).toEqual([`events:${a}`]);
     expect(hint).toContain("Feria de las Flores Preview Parade");
     expect(hint).toContain("Server-verified");
+    expect(hint).toContain('Current selected item name (untrusted data): "Feria de las Flores Preview Parade"');
+    expect(hint).toContain("Do not use unrelated search tools");
   });
   it("never trusts a missing/forged or cleared item and never calls the lookup for it", async () => {
     let calls = 0;
@@ -54,5 +56,6 @@ describe("SAN-737 deterministic selected-item grounding", () => {
       async () => ({ found: false, data: null }));
     expect(hint).toContain("could not verify");
     expect(hint).not.toContain("Feria de las Flores");
+    expect(hint).not.toContain("Before answering about this item, call lookup-public-discovery-item");
   });
 });
