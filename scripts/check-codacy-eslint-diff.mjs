@@ -13,9 +13,24 @@ export function validateDiffReport(report, cliExit, expectedFiles, independently
   if (report.errors.length) throw new Error(`Codacy analyzer reported ${report.errors.length} execution error(s)`);
   const tools = report.toolResults.filter((tool) => tool.toolId === 'ESLint9');
   if (report.toolResults.length !== tools.length || tools.length > 1) throw new Error('Unexpected Codacy analyzer results');
+  // Codacy reports oversized skips explicitly. The generated Supabase type file
+  // is checked by tsc, not Codacy, and is the only accepted oversized skip.
+  // Fail closed on every skipped handwritten/unknown file.
+  const skipped = report.skippedFiles ?? [];
+  if (!Array.isArray(skipped)) throw new Error('Codacy skippedFiles must be an array');
+  const skippedPaths = new Set();
+  for (const entry of skipped) {
+    if (!entry || entry.filePath !== 'src/lib/supabase/database.types.ts' ||
+        !Number.isInteger(entry.sizeBytes) || entry.sizeBytes < 250_000 ||
+        !expectedFiles.includes(entry.filePath) || skippedPaths.has(entry.filePath)) {
+      throw new Error(`Codacy skipped an unexpected lintable file: ${entry?.filePath ?? 'unknown'}`);
+    }
+    skippedPaths.add(entry.filePath);
+  }
+  const expectedAnalyzed = expectedFiles.filter((path) => !skippedPaths.has(path)).length;
   const [tool] = tools;
   if (!tool) {
-    if (expectedFiles.length) throw new Error(`ESLint9 skipped ${expectedFiles.length} changed lintable file(s)`);
+    if (expectedAnalyzed) throw new Error(`ESLint9 skipped ${expectedAnalyzed} changed lintable file(s)`);
     if (report.issues.length || cliExit !== 0) throw new Error('Unexpected issues or exit code with no analyzable files');
     return 'No changed ESLint-analyzable files; verified clean skip';
   }
@@ -24,12 +39,12 @@ export function validateDiffReport(report, cliExit, expectedFiles, independently
       !Number.isInteger(tool.issueCount) || tool.issueCount !== report.issues.length) {
     throw new Error('ESLint9 did not complete a consistent, successful analysis');
   }
-  // Codacy --diff can count fewer changed files than ESLint's explicit file list
-  // (21 eligible files versus 20 analyzed in PR #582). Never waive coverage:
-  // require an independent project-configured ESLint run over EVERY expected file.
-  if (tool.filesAnalyzed < expectedFiles.length &&
-      !expectedFiles.every((file) => independentlyLintedFiles.includes(file))) {
-    throw new Error(`ESLint9 analyzed ${tool.filesAnalyzed}/${expectedFiles.length} expected files; independent lint coverage missing`);
+  const ordinaryFiles = expectedFiles.filter((file) => !skippedPaths.has(file));
+  // If Codacy under-counts (without a documented oversized generated skip),
+  // check EVERY remaining changed source with the repository's own ESLint rules.
+  if (tool.filesAnalyzed < ordinaryFiles.length &&
+      !ordinaryFiles.every((file) => independentlyLintedFiles.includes(file))) {
+    throw new Error(`ESLint9 analyzed ${tool.filesAnalyzed}/${ordinaryFiles.length} ordinary files; independent lint coverage missing`);
   }
   if (report.issues.length || cliExit !== 0) {
     throw new Error(`${report.issues.length} ESLint9 finding(s) in changed files (CLI exit ${cliExit})`);
@@ -52,22 +67,27 @@ async function main() {
   if (!file || !base || !/^(0|1|[2-9]\d*)$/.test(exitText ?? '')) throw new Error('Usage: check-codacy-eslint-diff.mjs <report> <base SHA> <exit code>');
   const report = JSON.parse(readFileSync(file, 'utf8'));
   const expected = await changedLintableFiles(base);
+  const skipped = Array.isArray(report.skippedFiles) ? report.skippedFiles : [];
+  const documentedSkip = new Set(skipped.filter((entry) =>
+    entry?.filePath === 'src/lib/supabase/database.types.ts' &&
+    Number.isInteger(entry.sizeBytes) && entry.sizeBytes >= 250_000
+  ).map((entry) => entry.filePath));
+  const ordinaryFiles = expected.filter((file) => !documentedSkip.has(file));
   const tool = report.toolResults?.find((entry) => entry.toolId === 'ESLint9');
   let independentlyLintedFiles = [];
-  if (tool && Number.isInteger(tool.filesAnalyzed) && tool.filesAnalyzed < expected.length) {
-    // A clean Codacy report with under-counted source files is not sufficient.
-    // Verify precisely the changed lintable paths using the same repo ESLint
-    // configuration. Report failures, warnings, omissions, or fatal errors.
+  if (tool && Number.isInteger(tool.filesAnalyzed) &&
+      tool.filesAnalyzed < ordinaryFiles.length) {
     const eslint = new ESLint();
-    const results = await eslint.lintFiles(expected);
+    const results = await eslint.lintFiles(ordinaryFiles);
     independentlyLintedFiles = results.map((result) =>
       relative(process.cwd(), result.filePath).replaceAll('\\', '/'));
-    const missed = expected.filter((file) => !independentlyLintedFiles.includes(file));
-    const findings = results.filter((result) => result.errorCount || result.warningCount || result.fatalErrorCount);
+    const missed = ordinaryFiles.filter((file) => !independentlyLintedFiles.includes(file));
+    const findings = results.filter((result) =>
+      result.errorCount || result.warningCount || result.fatalErrorCount);
     if (missed.length || findings.length) {
       throw new Error(`Independent ESLint failed: missing=${JSON.stringify(missed)}, findings=${findings.map((r) => r.filePath).join(',')}`);
     }
-    console.log(`Independent ESLint verified all ${expected.length} changed files (Codacy counted ${tool.filesAnalyzed}).`);
+    console.log(`Independent ESLint verified all ${ordinaryFiles.length} ordinary changed files (Codacy counted ${tool.filesAnalyzed}).`);
   }
   console.log(validateDiffReport(report, Number(exitText), expected, independentlyLintedFiles));
 }

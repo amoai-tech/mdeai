@@ -20,7 +20,8 @@ export function VenueBookingForm({
 }: {
   venueKind: VenueBookingKind;
   placeId?: string;
-  restaurantId?: string;
+  /** SAN-1542: canonical restaurant links request to the owner inbox. */
+  restaurantId?: string | null;
   venueTitle: string;
   onSuccess: (result: VenueBookingSubmitResult) => void;
 }) {
@@ -99,7 +100,7 @@ export function VenueBookingForm({
       const result = await submitVenueBooking({
         venueKind,
         placeId,
-        restaurantId,
+        ...(restaurantId ? { restaurantId } : {}),
         requestedAt: requestedAtIso,
         partySize: parsedParty,
         contactName: contactName.trim(),

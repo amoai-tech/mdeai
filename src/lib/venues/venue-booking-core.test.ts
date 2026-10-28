@@ -97,6 +97,23 @@ describe("insertVenueBookingRequest", () => {
     expect(supabase.insert).not.toHaveBeenCalled();
   });
 
+  it("accepts a correctly matched restaurant UUID and Google Place ID for the owner inbox", async () => {
+    const placeId = "ChIJcorrectRestaurant";
+    const supabase = mockSupabase({ restaurant: { id: MDE_UUID, google_place_id: placeId } });
+    const result = await insertVenueBookingRequest(supabase, "user-1", { ...payload, placeId });
+    expect(result.ok).toBe(true);
+    expect(supabase.insert).toHaveBeenCalledWith(expect.objectContaining({
+      restaurant_id: MDE_UUID, place_id: placeId, status: "pending",
+    }));
+  });
+
+  it("rejects an invalid request body before any database operation", async () => {
+    const supabase = mockSupabase();
+    const result = await insertVenueBookingRequest(supabase, "user-1", { venueKind: "bad" });
+    expect(result).toEqual({ ok: false, status: 400, message: "Validation failed" });
+    expect(supabase.from).not.toHaveBeenCalled();
+  });
+
   it("rejects forged Google ID that does not match the restaurant UUID", async () => {
     const supabase = mockSupabase({ restaurant: { id: MDE_UUID, google_place_id: "ChIJtrue12345678" } });
     const result = await insertVenueBookingRequest(supabase, "user-1", {

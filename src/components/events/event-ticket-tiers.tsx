@@ -88,7 +88,7 @@ export function EventTicketTiers({
           className="mt-3 rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground"
           data-testid="event-tiers-sold-out"
         >
-          All tickets for this event are sold out. Join the waitlist or check back closer to the event date.
+          All tickets for this event are sold out. Check back for updates or explore other events.
         </div>
       ) : null}
 
@@ -214,18 +214,7 @@ export function EventTicketTiers({
         </Button>
       ) : null}
 
-      {!compactFooter &&
-      primaryTier &&
-      ticketsRemaining(primaryTier.qtyTotal, primaryTier.qtySold) > 0 ? (
-        <Button
-          type="button"
-          className="mt-4 w-full"
-          data-testid="event-detail-buy-cta"
-          onClick={() => openCheckout(primaryTier)}
-        >
-          Buy tickets
-        </Button>
-      ) : null}
+
     </section>
   );
 }

@@ -37,13 +37,13 @@ test.describe(`${SCREEN_ID} booking checkout modal`, () => {
       const errors = watchCriticalConsoleErrors(page);
       await page.goto(`/events/${KNOWN_SLUG}`, { waitUntil: "domcontentloaded" });
 
-      await page.locator('[data-testid="event-detail-buy-cta"]').first().click();
+      await page.locator('[data-testid="event-tier-buy"]').first().click();
       await expect(page.locator('[data-testid="booking-checkout-modal"]')).toBeVisible();
 
       await page.locator('[data-testid="booking-checkout-modal"] input[name="buyerName"]').fill("Andres Test");
       await page.locator('[data-testid="booking-checkout-modal"] input[name="email"]').fill("andres.test@mdeai.co");
 
-      const redirectPromise = page.waitForURL(MOCK_STRIPE_URL, { timeout: 10_000 });
+      const redirectPromise = page.waitForURL(MOCK_STRIPE_URL, { timeout: 10_000, waitUntil: "commit" });
       await page.locator('[data-testid="booking-checkout-submit"]').click();
       await redirectPromise;
 
@@ -66,6 +66,8 @@ test.describe(`${SCREEN_ID} booking checkout modal`, () => {
       const errors = watchCriticalConsoleErrors(page);
       await page.goto(`/events/${KNOWN_SLUG}`, { waitUntil: "domcontentloaded" });
       await page.locator('[data-testid="event-detail-mobile-buy-cta"]').click();
+      await expect(page.locator('[data-testid="event-ticket-picker"]')).toBeFocused();
+      await page.getByTestId("event-tier-buy").first().click();
       await expect(page.locator('[data-testid="booking-checkout-modal"]')).toBeVisible();
       await captureScreenEvidence(page, SCREEN_ID, "mobile-checkout-modal.png");
       assertConsoleClean(errors);

@@ -16,6 +16,7 @@ const CLIENT_ERROR_MESSAGES: Record<ActivatePartnerError["code"], string> = {
   insert_failed: "Partner activation failed",
   member_failed: "Partner activation failed",
   draft_link_failed: "Partner activation failed",
+  patch_forbidden: "You do not have access to this partner profile",
 };
 
 function errorStatus(code: ActivatePartnerError["code"]): number {
@@ -23,6 +24,7 @@ function errorStatus(code: ActivatePartnerError["code"]): number {
     case "draft_not_found":
       return 404;
     case "draft_forbidden":
+    case "patch_forbidden":
       return 403;
     case "draft_type_mismatch":
       return 400;
@@ -62,7 +64,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Partner activation unavailable" }, { status: 503 });
   }
 
-  const result = await activatePartner(service, user.id, parsed.data);
+  const result = await activatePartner(service, user.id, parsed.data, supabase);
   if (!result.ok) {
     console.error(
       "[/api/partners/activate]",
