@@ -9,6 +9,9 @@ test.skip(!LOCAL || process.env.MDE_LOCAL_ADMIN_QA !== "1",
   "Requires local Supabase plus MDE_LOCAL_ADMIN_QA=1");
 
 test("host attendee paging, searching, refresh, isolation, mobile and real order totals", async ({ page, browser }) => {
+  const baseURL = test.info().project.use.baseURL;
+  if (!baseURL) throw new Error("Playwright baseURL is required for local attendee QA");
+  const url = (path: string) => new URL(path, baseURL).toString();
   const admin = await getSupabaseAdmin();
   const people: ThrowawayIdentity[] = [];
   const tag = randomUUID().slice(0, 8);
@@ -59,11 +62,11 @@ test("host attendee paging, searching, refresh, isolation, mobile and real order
     check((await admin.from("event_attendees").insert(attendees)).error, "create attendee test rows");
 
     await signInAs(page, host.email);
-    await page.goto(`http://localhost:3071/app/events/tickets?event=${eventId}`);
+    await page.goto(url(`/app/events/tickets?event=${eventId}`));
     await expect(page.getByTestId("tickets-kpi-sold")).toHaveText("52", { timeout: 30000 });
     await expect(page.getByTestId("tickets-kpi-orders")).toHaveText("6");
     await expect(page.getByTestId("tickets-kpi-revenue")).not.toHaveText("—");
-    const attendeeUrl = `http://localhost:3071/app/events/attendees?event=${eventId}`;
+    const attendeeUrl = url(`/app/events/attendees?event=${eventId}`);
     await page.goto(attendeeUrl);
     await expect(page.getByTestId("host-attendees-table").locator("tbody tr")).toHaveCount(50);
     await expect(page.getByTestId("host-attendees-pagination")).toContainText("Page 1 of 2");
@@ -79,6 +82,15 @@ test("host attendee paging, searching, refresh, isolation, mobile and real order
     await page.getByRole("button", { name: "Filter" }).click();
     await expect(page.getByTestId("host-attendees-table").locator("tbody tr")).toHaveCount(1);
     await expect(page.getByTestId("host-attendees-table")).toContainText("Guest 051");
+    // Read-after-write proof: legacy active rows must show their recorded check-in.
+    const checked = await admin.from("event_attendees")
+      .update({ qr_used_at: new Date().toISOString() })
+      .eq("event_id", eventId)
+      .eq("email", "guest051@example.invalid");
+    check(checked.error, "persist local-only check-in timestamp");
+    await page.reload();
+    await expect(page.getByTestId("host-attendees-table")
+      .locator('[data-attendee-status="used"]')).toContainText("Checked in");
     await page.goto(`${attendeeUrl}&q=guest051&page=99999`);
     await expect(page.getByTestId("host-attendees-pagination")).toContainText("Page 1 of 1");
     await expect(page).not.toHaveURL(/page=99999/);
@@ -96,7 +108,7 @@ test("host attendee paging, searching, refresh, isolation, mobile and real order
       const denied = await foreign.newPage();
       await signInAs(denied, outsider.email);
       for (const route of ["tickets", "attendees", "check-in"]) {
-        await denied.goto(`http://localhost:3071/app/events/${route}?event=${eventId}`);
+        await denied.goto(url(`/app/events/${route}?event=${eventId}`));
         await expect(denied.getByTestId(`host-${route}`)).toHaveCount(0);
       }
     } finally { await foreign.close(); }
