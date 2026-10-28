@@ -101,7 +101,7 @@ The fast, deterministic regression remains `e2e/app/partner-ai-signup-persistenc
 3. Start the focused live smoke **only when intentional**:
 
 ```bash
-MDE_PARTNER_SIGNUP_LIVE_E2E=1 PW_SKIP_WEBSERVER=1 \
+MDE_PARTNER_LIVE_GEMINI_E2E=1 PW_SKIP_WEBSERVER=1 \
   SMOKE_BASE_URL=https://www.mdeai.co \
   npx playwright test e2e/app/partner-ai-signup-live-gemini.spec.ts \
     --project=chromium --workers=1
