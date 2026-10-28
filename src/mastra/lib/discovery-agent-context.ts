@@ -104,11 +104,18 @@ export function currentSelectedNameOnly<T extends { role: string; content: unkno
   const question = latestText.trim().replace(/\s+/g, " ");
   const asksDirectly = /^(?:please\s+)?(?:what(?:'s| is| was)|(?:can|could|would) you tell me|(?:tell|give|show|remind) me|name\b)/i.test(question);
   const compares = /\b(?:compare|compared|comparison|versus|vs\.?|previous|prior|earlier|before|other|both|difference|different|between)\b/i.test(question);
-  const noun = "(?:place|item|venue|apartment|rental|listing|restaurant|caf[eé]|nightclub|club|event|one)";
-  const referent = String.raw`(?:(?:(?:the|my|our)\s+)?(?:(?:currently\s+)?(?:selected|current|this)\s+${noun}|${noun}\s+(?:I|we)\s+(?:have\s+)?selected))`;
-  const asksSelectedName = new RegExp(
-    `\\b(?:name|title)\\s+of\\s+${referent}\\b|\\b${referent}(?:'s|’s)?\\s+(?:name|title|called)\\b`, "i",
-  ).test(question);
-  if (!asksDirectly || compares || !asksSelectedName) return messages;
+  // Keep full history when a name question also asks for more information.
+  const hasAnotherRequest = /\b(?:and|also|plus)\b|[;,]\s*(?:(?:can|could|would)\s+you\s+)?(?:what|where|when|how|which|show|find|list|recommend)\b/i.test(question);
+  // A static pattern: only the question text is dynamic, never the regex.
+  const selectedReferents = question.matchAll(
+    /\b(?:(?:the|my|our)\s+)?(?:(?:currently\s+)?(?:selected|current|this)\s+(?:place|item|venue|apartment|rental|listing|restaurant|caf[eé]|nightclub|club|event|one)|(?:place|item|venue|apartment|rental|listing|restaurant|caf[eé]|nightclub|club|event|one)\s+(?:I|we)\s+(?:have\s+)?selected)\b/gi,
+  );
+  const asksSelectedName = [...selectedReferents].some((match) => {
+    const before = question.slice(0, match.index);
+    const after = question.slice(match.index + match[0].length);
+    return /\b(?:name|title)\s+of\s+$/i.test(before) ||
+      /^(?:'s|’s)?\s+(?:name|title|called)\b/i.test(after);
+  });
+  if (!asksDirectly || compares || hasAnotherRequest || !asksSelectedName) return messages;
   return messages.slice(lastUser);
 }

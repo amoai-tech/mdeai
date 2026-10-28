@@ -123,6 +123,17 @@ describe("SAN-737 selected-name history freshness", () => {
       expect(currentSelectedNameOnly([old, current], page), question).toEqual([current]);
     }
   });
+  it("keeps history when a selected-name question also requests another action", () => {
+    for (const question of [
+      "What is the name of the selected place and can you show cheaper apartments?",
+      "What is the name of the selected place and what's nearby?",
+      "What is this place called; show other events nearby",
+    ]) {
+      const latest = { role: "user", content: { parts: [{ type: "text", text: question }] } };
+      const history = [old, latest];
+      expect(currentSelectedNameOnly(history, page), question).toBe(history);
+    }
+  });
   it("preserves history for comparisons and previous-item references", () => {
     for (const question of [
       "What is the name of the selected place compared to the previous one?",
