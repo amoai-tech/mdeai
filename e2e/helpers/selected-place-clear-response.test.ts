@@ -13,6 +13,8 @@ describe("SAN-737 explicit cleared selection", () => {
     "Currently, no public item is selected.",
     "No. The previously selected item no longer holds, and there is no new item selected.",
     "Based on the current browser state, no place is currently selected.",
+    "No — there's no selected place.",
+    "No, nothing is currently selected.",
 
   ])("accepts explicit %s", (reply) => expect(confirmsNothingSelected(reply)).toBe(true));
 
