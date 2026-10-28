@@ -96,6 +96,34 @@ describe('SAN-1149 same-turn booking continuation', () => {
     expect(continueAfterSearch({stepNumber:1,messages:user,steps:search,requestContext})).toBe(true);
     expect(requestContext.get('mdeaiRestaurantBookingSearch')).toBeNull();
   });
+  it('rejects Supabase receipts with empty or missing canonical restaurant IDs', () => {
+    const values = new Map<string, unknown>();
+    const requestContext = {get:(key:string)=>values.get(key),set:(key:string,value:unknown)=>{values.set(key,value)}};
+    for (const row of [{id:'',name:'Verdeo'}, {name:'Verdeo'}, {id:null,name:'Verdeo'}]) {
+      requestContext.set('mdeaiRestaurantBookingSearch', {source:'supabase', results:[row]});
+      expect(continueAfterSearch({
+        stepNumber:1, messages:user,
+        steps:[{toolCalls:[{toolName:'searchRestaurantsTool'}]}],
+        requestContext,
+      })).toBe(false);
+    }
+  });
+  it('does not preserve a stale receipt after a step result already triggers continuation', () => {
+    const values = new Map<string, unknown>();
+    const requestContext = {get:(key:string)=>values.get(key),set:(key:string,value:unknown)=>{values.set(key,value)}};
+    rememberGroundedRestaurantSearch(requestContext, grounded);
+    expect(continueAfterSearch({
+      stepNumber:1, messages:user,
+      steps:[{toolCalls:[{toolName:'searchRestaurantsTool'}],toolResults:[{toolName:'searchRestaurantsTool',output:grounded}]}],
+      requestContext,
+    })).toBe(true);
+    expect(requestContext.get('mdeaiRestaurantBookingSearch')).toBeNull();
+    expect(continueAfterSearch({
+      stepNumber:2, messages:user,
+      steps:[{toolCalls:[{toolName:'searchRestaurantsTool'}]}],
+      requestContext,
+    })).toBe(false);
+  });
   it('does not require optional phone or notes', () => {
     expect(continueAfterSearch({stepNumber:1,messages:user,steps:search})).toBe(true);
   });

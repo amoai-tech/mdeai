@@ -32,6 +32,7 @@ describe('real search tool writes the SAN-1149 booking receipt', () => {
     const context = new RequestContext();
     const out = await runSearch(context);
     expect(out).toMatchObject({ source: 'supabase', total: 1 });
+    expect(runSearchMock).toHaveBeenCalledTimes(1);
     expect(context.get(RESTAURANT_BOOKING_SEARCH_KEY)).toEqual({
       source: 'supabase',
       results: [{ id: restaurant.id, name: 'Verdeo' }],
@@ -41,12 +42,14 @@ describe('real search tool writes the SAN-1149 booking receipt', () => {
   it('does not throw when Mastra omits requestContext', async () => {
     runSearchMock.mockResolvedValue({ source: 'supabase', results: [restaurant], total: 1 });
     await expect(runSearch()).resolves.toMatchObject({ source: 'supabase', total: 1 });
+    expect(runSearchMock).toHaveBeenCalledTimes(1);
   });
 
   it('does not persist ungrounded fallback rows', async () => {
     runSearchMock.mockResolvedValue({ source: 'fallback', results: [restaurant], total: 1 });
     const context = new RequestContext();
     await runSearch(context);
+    expect(runSearchMock).toHaveBeenCalledTimes(1);
     expect(context.get(RESTAURANT_BOOKING_SEARCH_KEY)).toEqual({
       source: 'fallback', results: [],
     });
