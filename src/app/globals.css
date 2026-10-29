@@ -234,6 +234,80 @@ html {
   overscroll-behavior-y: contain;
 }
 
+/* SAN-1606 — one mobile navigation geometry contract, shared by the floating five-tab bar and
+   every surface that has to clear it (chat column, discovery Ask bar, home page, detail CTAs).
+   64px of nav content + the bar's own bottom inset (8px, or the device safe area) + the 8px
+   composer gap. Nothing reserves this above `lg`, where the bar is not rendered. */
+:root {
+  --mde-mobile-nav-height: 64px;
+  --mde-mobile-nav-gap: 8px;
+  --mde-mobile-nav-inset: 8px;
+  --mde-mobile-nav-inset: max(8px, env(safe-area-inset-bottom, 0px));
+  --mde-mobile-nav-clearance: calc(
+    var(--mde-mobile-nav-height) + var(--mde-mobile-nav-inset) + var(--mde-mobile-nav-gap)
+  );
+}
+
+/* SAN-1606 — phone /chat uses a single compact composer row (add · text · send).
+   CopilotKit v2 lays the input out as a two-row grid (textarea above the + and ↑ controls),
+   which renders ~122px tall; the phone contract is 56–64px idle, growing to a scrollable cap
+   for a longer draft. Scoped to .mde-chat-viewport and below `lg`, so host chat shells and the
+   desktop composer keep the stock v2 layout, and the textarea itself (not a copy) still grows. */
+@media (max-width: 1023px) {
+  .mde-chat-viewport [data-testid="copilot-chat-input"] > div {
+    grid-template-rows: auto;
+    /* Tighter gutters buy the one-row textarea ~26px of width back. */
+    padding: 6px 8px;
+    column-gap: 8px;
+    row-gap: 0;
+  }
+  .mde-chat-viewport
+    [data-testid="copilot-chat-input"]
+    > div
+    > div:has(> div > [data-testid="copilot-send-button"])
+    > div {
+    /* CopilotKit reserves 10px after Send; the row no longer needs it. */
+    margin-right: 0;
+  }
+  .mde-chat-viewport
+    [data-testid="copilot-chat-input"]
+    > div
+    > div:has(> [data-testid="copilot-chat-textarea"]) {
+    grid-column: 2;
+    grid-row: 1;
+    min-height: 0;
+  }
+  .mde-chat-viewport
+    [data-testid="copilot-chat-input"]
+    > div
+    > div:has(> [data-testid="copilot-add-menu-button"]) {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .mde-chat-viewport
+    [data-testid="copilot-chat-input"]
+    > div
+    > div:has(> div > [data-testid="copilot-send-button"]) {
+    grid-column: 3;
+    grid-row: 1;
+  }
+  .mde-chat-viewport [data-testid="copilot-chat-textarea"] {
+    /* 44px idle: 24px line + 10px padding. CopilotKit writes its own 140px cap inline, so this
+       cap needs `!important`; a longer draft then scrolls inside the same textarea. */
+    padding: 10px 12px;
+    max-height: 100px !important;
+  }
+  /* Empty welcome screen: sit the composer directly above the bar instead of centring it. */
+  .mde-chat-viewport [data-testid="copilot-welcome-screen"] {
+    justify-content: flex-end;
+  }
+  /* ...and keep the greeting out of the map button's band (its measured 44px + 8px gap) above the
+     composer, so the floating control never sits on the welcome copy. */
+  .mde-chat-viewport [data-testid="copilot-welcome-screen"] > div > div:first-child {
+    padding-bottom: 52px;
+  }
+}
+
 /* MOB-CK-001 — /chat must fit the visible phone screen while the on-screen
    keyboard is open. Scoped to .mde-chat-viewport so the host chat shells, which
    also carry .mde-center-copilot-chat, keep their own welcome-screen behavior.

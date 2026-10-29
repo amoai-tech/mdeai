@@ -26,17 +26,21 @@ export default async function HomePage({ searchParams }: Props) {
   }
   return (
     <>
-      <HomeNav />
+      {/* SAN-1606 — the phone tab bar floats over the page, so the document keeps one bar's worth of
+          space at the bottom. The clearance token is 0 above `lg`, where the bar is not rendered. */}
+      <div className="pb-[var(--mde-mobile-nav-clearance)] lg:pb-0">
+        <HomeNav />
 
-      <main id="main-content" className="bg-background text-foreground">
-        <HomeHero />
-        <HomeVerticalsStrip />
-        <HomeDiscoveryRows />
-        <HomeCityGuide />
-        <HomeHostBand />
-      </main>
+        <main id="main-content" className="bg-background text-foreground">
+          <HomeHero />
+          <HomeVerticalsStrip />
+          <HomeDiscoveryRows />
+          <HomeCityGuide />
+          <HomeHostBand />
+        </main>
 
-      <HomeFooter />
+        <HomeFooter />
+      </div>
 
       {/* Fixed concierge FAB */}
       <HomeFab />

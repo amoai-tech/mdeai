@@ -10,6 +10,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { readFileSync } from "node:fs";
 
 vi.mock("@/lib/leads/submit-schedule-viewing", () => ({
   submitScheduleViewing: vi.fn(),
@@ -142,7 +143,12 @@ describe("rental detail — external preview fields", () => {
     await render(preview());
     const bar = document.querySelector('[data-testid="rental-detail-mobile-cta"]');
     expect(bar).not.toBeNull();
-    expect(bar?.className).toContain("pb-[calc(0.75rem+env(safe-area-inset-bottom))]");
+    // SAN-1606: the action moved above the phone tab bar, so the shared clearance token — which
+    // folds in the home-indicator inset — owns the bottom geometry instead of a per-bar padding.
+    expect(bar?.className).toContain("bottom-[var(--mde-mobile-nav-clearance)]");
+    const css = readFileSync("src/app/globals.css", "utf8");
+    expect(css).toContain("env(safe-area-inset-bottom");
+    expect(css).toMatch(/--mde-mobile-nav-clearance:[\s\S]*?--mde-mobile-nav-inset/);
   });
 
   it("keeps a real bedroom count", async () => {

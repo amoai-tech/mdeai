@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { Map, MapPin, XIcon } from "lucide-react";
 import { ChatMap } from "@/components/maps/ChatMap";
 import { EmptyState } from "@/components/empty/empty-state";
@@ -88,11 +88,87 @@ export function MapMobileSheet() {
 
   const sheetOpen = !isLgUp && userMapOpen;
 
+  // SAN-1606 — the tab bar took over the bottom of the screen, so a fixed 7.5rem offset no longer
+  // clears both the compact composer and the bar. Measure the composer card itself and keep this
+  // control just above it: the composer already sits above the bar, and a longer draft moves the
+  // card, so the trigger follows instead of overlapping.
+  const [composerGap, setComposerGap] = useState<number | null>(null);
+  useEffect(() => {
+    if (isLgUp) return;
+    const composerSelector = '[data-testid="copilot-chat-input"]';
+    const composer = () => document.querySelector<HTMLElement>(composerSelector);
+    let observer: ResizeObserver | null = null;
+    let frame = 0;
+    let frames = 0;
+    let stable = 0;
+    let last = Number.NaN;
+
+    const measure = (): number | null => {
+      const element = composer();
+      if (!element) return null;
+      const gap = Math.round(window.innerHeight - element.getBoundingClientRect().top + 8);
+      if (gap > 0) setComposerGap(gap);
+      return gap > 0 ? gap : null;
+    };
+
+    const attachObserver = () => {
+      if (observer || typeof ResizeObserver === "undefined") return;
+      const element = composer();
+      if (!element) return;
+      observer = new ResizeObserver(() => measure());
+      observer.observe(element);
+    };
+
+    // CopilotKit mounts the composer after the runtime resolves, and the welcome screen is still
+    // moving while it does: a ResizeObserver only reports size changes and would miss both, so
+    // settle on animation frames until the measured gap stops moving, then observe real resizes
+    // (a longer draft grows the card) instead of polling forever.
+    const settle = () => {
+      const gap = measure();
+      if (gap != null && gap === last) stable += 1;
+      else stable = 0;
+      last = gap ?? Number.NaN;
+      frames += 1;
+      if (stable < 3 && frames < 180) {
+        frame = requestAnimationFrame(settle);
+      } else {
+        attachObserver();
+      }
+    };
+    const startSettle = () => {
+      cancelAnimationFrame(frame);
+      frames = 0;
+      stable = 0;
+      last = Number.NaN;
+      frame = requestAnimationFrame(settle);
+    };
+
+    const watcher = new MutationObserver(() => {
+      if (!composer()) return;
+      watcher.disconnect();
+      startSettle();
+    });
+    if (composer()) startSettle();
+    else watcher.observe(document.body, { childList: true, subtree: true });
+
+    window.addEventListener("resize", measure);
+    return () => {
+      cancelAnimationFrame(frame);
+      watcher.disconnect();
+      observer?.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [isLgUp]);
+
   return (
     <div
       data-testid="map-mobile-controls"
       data-right-column-mode="map"
-      className="pointer-events-none fixed bottom-[calc(7.5rem+env(safe-area-inset-bottom,0px))] right-4 z-40 lg:hidden"
+      // Pre-measurement (server render, or before the composer mounts) it sits directly above the
+      // bar, under the composer: that can cover part of the disclaimer but never the input, the
+      // Send control or the bar. The measured position then moves it above the composer.
+      className="pointer-events-none fixed bottom-[calc(var(--mde-mobile-nav-clearance)+0.5rem)] right-4 z-40 lg:hidden"
+      style={composerGap == null ? undefined : { bottom: `${composerGap}px` }}
     >
       <Button
         type="button"

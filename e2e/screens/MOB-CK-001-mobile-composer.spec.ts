@@ -139,6 +139,79 @@ test.describe(`${SCREEN_ID} CopilotKit v2 mobile composer`, () => {
     await expectNoHorizontalOverflow(page);
   });
 
+  /**
+   * SAN-1606 — the phone composer is one compact row above the five-tab bar.
+   *
+   * Idle it is 56–64px tall: the textarea and Send share one row, so the second control row that
+   * CopilotKit renders on desktop is gone. A long draft still grows the same textarea, then scrolls
+   * inside it at the cap, and nothing (chip strip, map button, tab bar) takes the input's space.
+   */
+  test("is one compact phone row that keeps a long draft reachable above the tab bar", async ({
+    page,
+  }) => {
+    const { region, input, send } = await gotoComposer(page);
+    const composer = page.getByTestId("copilot-chat-input");
+    const nav = page.getByTestId("mobile-bottom-nav");
+    const mapTrigger = page.getByTestId("map-sheet-trigger");
+
+    await expect(composer).toBeVisible();
+    await expect
+      .poll(async () => Math.round((await composer.boundingBox())?.height ?? 0), {
+        timeout: 10_000,
+        message: "idle composer is 56–64px tall",
+      })
+      .toBeGreaterThanOrEqual(56);
+    expect(Math.round((await composer.boundingBox())!.height)).toBeLessThanOrEqual(64);
+
+    // One row: the textarea and Send share a horizontal band.
+    const textareaBox = await input.boundingBox();
+    const sendBox = await send.boundingBox();
+    expect(Math.abs(textareaBox!.y - sendBox!.y)).toBeLessThanOrEqual(4);
+
+    // No visible top chip strip on a phone, and no reserved height where it used to be.
+    await expect(page.getByTestId("chat-query-bar")).toBeHidden();
+    expect(await page.getByTestId("chat-query-bar").boundingBox()).toBeNull();
+    const header = await page.locator('[data-testid="geo-chat-shell"] header').boundingBox();
+    const canvas = await page.locator('[data-testid="chat-canvas"]').boundingBox();
+    expect(canvas?.y).toBe((header?.y ?? 0) + (header?.height ?? 0));
+
+    // The composer and the map control sit above the bar, never under it.
+    const composerBox = await composer.boundingBox();
+    const navBox = await nav.boundingBox();
+    expect(composerBox!.y + composerBox!.height).toBeLessThanOrEqual(navBox!.y);
+    // The map control measures the composer before moving above it; poll so this never races
+    // the settle (its pre-measure default sits under the composer, over the disclaimer).
+    await expect
+      .poll(
+        async () => {
+          const [map, card] = await Promise.all([mapTrigger.boundingBox(), composer.boundingBox()]);
+          return map && card ? Math.round(map.y + map.height - card.y) : Number.POSITIVE_INFINITY;
+        },
+        { timeout: 10_000, message: "map control settles above the composer" },
+      )
+      .toBeLessThanOrEqual(0);
+
+    await typeDraft(page, input, send, LONG_MESSAGE);
+
+    const grown = await composer.boundingBox();
+    expect(Math.round(grown!.height)).toBeGreaterThan(64);
+    expect(Math.round(grown!.height), "draft stays inside the compact cap").toBeLessThanOrEqual(128);
+    const scroll = await input.evaluate((el) => ({
+      scrollHeight: el.scrollHeight,
+      clientHeight: el.clientHeight,
+    }));
+    expect(scroll.scrollHeight).toBeGreaterThan(scroll.clientHeight);
+    await expect(input).toHaveValue(LONG_MESSAGE);
+    await expect(send).toBeEnabled();
+    await expectInsideViewport(page, input, "composer with a long draft");
+    await expectInsideViewport(page, send, "Send with a long draft");
+    await expectNoHorizontalOverflow(page);
+
+    const grownBox = await composer.boundingBox();
+    expect(grownBox!.y + grownBox!.height).toBeLessThanOrEqual(navBox!.y);
+    await expect(region).toBeVisible();
+  });
+
   for (const viewport of [PHONE_390, PHONE_360]) {
     test(`keeps the draft, composer and Send reachable through keyboard-height changes at ${viewport.width}×${viewport.height}`, async ({
       page,
