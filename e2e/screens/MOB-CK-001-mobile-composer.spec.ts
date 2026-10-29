@@ -414,7 +414,9 @@ test.describe("MOB-CK-001 desktop composer contract", () => {
     await expect(card).toBeVisible();
     const box = await card.boundingBox();
     expect(box, "desktop composer box").not.toBeNull();
-    expect(box!.height, "desktop keeps the stock composer height").toBeGreaterThan(60);
+    // The compact phone card is 56px; the stock desktop composer is taller. `> 60` would accept a
+    // leaked 61–64px compact row, so the bound is the phone card's own ceiling.
+    expect(box!.height, "desktop keeps the stock composer height").toBeGreaterThan(64);
 
     // The phone-only contract caps a draft at 100px of text; it must not reach a desktop viewport.
     const maxHeight = await input.evaluate((el) => getComputedStyle(el).maxHeight);

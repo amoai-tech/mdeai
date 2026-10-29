@@ -131,3 +131,5 @@ console.log(`follow-up checks: ${passed}/${results.length} passed`);
 for (const r of results) {
   if (!r.pass) console.log("FAIL", r.name, JSON.stringify(r.detail).slice(0, 400));
 }
+// A documented verification command must fail when a check fails.
+process.exitCode = passed === results.length ? 0 : 1;

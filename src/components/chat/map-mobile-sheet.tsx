@@ -108,7 +108,13 @@ export function MapMobileSheet() {
     const measure = (): number | null => {
       const element = composer();
       if (!element) return null;
-      const gap = Math.round(window.innerHeight - element.getBoundingClientRect().top + 8);
+      // The rendered position already includes the overlay keyboard's lift, and the style below
+      // adds that lift again, so measure the *unlifted* top; otherwise a measurement taken while
+      // the keyboard is open (growth, remount) would push the trigger a whole keyboard too high.
+      const viewport = window.visualViewport;
+      const lift = viewport ? Math.max(0, Math.round(window.innerHeight - viewport.height)) : 0;
+      const unliftedTop = element.getBoundingClientRect().top + lift;
+      const gap = Math.round(window.innerHeight - unliftedTop + 8);
       if (gap > 0) setComposerGap(gap);
       return gap > 0 ? gap : null;
     };
@@ -152,14 +158,21 @@ export function MapMobileSheet() {
     };
 
     // One persistent watcher, throttled to a frame: it starts measuring when the composer first
-    // appears and after each remount. Watching the chat region (not all of `body`) keeps streaming
-    // mutations cheap; the callback only compares node identity.
-    const container =
-      document.querySelector('[data-testid="copilot-chat-region"]') ?? document.body;
+    // appears and after each remount. It watches the *stable* centre panel — `copilot-chat-region`
+    // is inside the subtree that `sessionKey` replaces, so watching it would miss the new composer
+    // after a thread switch. Watching the panel (not all of `body`) keeps streaming mutations cheap;
+    // the callback only compares node identity.
+    const containerSelector = '[data-testid="center-chat-panel"]';
+    let container = document.querySelector(containerSelector) ?? document.body;
     const watcher = new MutationObserver(() => {
       if (watchFrame) return;
       watchFrame = requestAnimationFrame(() => {
         watchFrame = 0;
+        if (!container.isConnected) {
+          container = document.querySelector(containerSelector) ?? document.body;
+          watcher.disconnect();
+          watcher.observe(container, { childList: true, subtree: true });
+        }
         const current = composer();
         if (!current || current === observed) return;
         startSettle();

@@ -4,7 +4,11 @@ import { useEffect, useState } from "react";
 
 /** Height a real on-screen keyboard covers; small viewport changes are not a keyboard. */
 function keyboardOverlap(viewport: VisualViewport): number {
-  const uncovered = Math.round(window.innerHeight - viewport.height);
+  // Pinch-zoom shrinks `visualViewport.height` while the layout viewport stays put. Measuring the
+  // unzoomed height (`height / scale`) keeps zoom from reading as a keyboard for every consumer of
+  // this helper (the viewing dialog inset, the published CSS height and the bar).
+  const unzoomedHeight = viewport.scale > 0 ? viewport.height / viewport.scale : viewport.height;
+  const uncovered = Math.round(window.innerHeight - unzoomedHeight);
   return uncovered > 150 ? uncovered : 0;
 }
 
@@ -51,15 +55,36 @@ export function useOnScreenKeyboard(): boolean {
 
   useEffect(() => {
     const viewport = window.visualViewport;
-    let tallest = window.innerHeight;
-    const apply = () => {
-      tallest = Math.max(tallest, window.innerHeight);
+    const COMPOSER = '[data-testid="copilot-chat-input"]';
+    /** Layout-viewport height with no keyboard, refreshed whenever the composer is not focused. */
+    let restingHeight = window.innerHeight;
+    let focusedAt = Number.NEGATIVE_INFINITY;
+
+    const composerHasFocus = () =>
+      document.activeElement instanceof Element && document.activeElement.closest(COMPOSER) !== null;
+
+    // ponytail: deliberate ceiling — "the viewport shrank a lot while the composer is focused"
+    // is a heuristic for browsers that resize the layout viewport with the keyboard (where the
+    // overlay measurement above is 0). The 150px cutoff and the 1.5s focus window match the
+    // overlay threshold and absorb a slow soft-keyboard animation. Review it when: a browser
+    // starts resizing the layout viewport for something other than the keyboard while a composer
+    // is focused (e.g. a collapsing address bar during typing), or when real-device reports show
+    // keyboards animating in slower than 1.5s; then replace the heuristic with a platform API
+    // (e.g. the VirtualKeyboard API) instead of tuning these numbers.
+    const apply = (event?: Event) => {
+      const typing = composerHasFocus();
+      if (event?.type === "focusin" && typing) {
+        focusedAt = performance.now();
+        restingHeight = window.innerHeight;
+      } else if (!typing) {
+        // Not typing: whatever the height is now is the keyboard-free baseline. This keeps an
+        // ordinary window resize (or a collapsing browser toolbar) from being read as a keyboard.
+        restingHeight = window.innerHeight;
+      }
       const overlay = viewport ? keyboardOverlap(viewport) : 0;
-      const shrunk = tallest - window.innerHeight;
-      const typing =
-        document.activeElement instanceof Element &&
-        document.activeElement.closest('[data-testid="copilot-chat-input"]') !== null;
-      setOpen(overlay > 0 || (shrunk > 150 && typing));
+      const shrunk = restingHeight - window.innerHeight;
+      const justFocused = performance.now() - focusedAt < 1500;
+      setOpen(overlay > 0 || (shrunk > 150 && typing && justFocused));
     };
     apply();
     window.addEventListener("resize", apply);
