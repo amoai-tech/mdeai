@@ -100,7 +100,10 @@ export function ChatQueryBar() {
   return (
     <div
       data-testid="chat-query-bar"
-      className="sticky top-0 z-10 shrink-0 border-b border-border bg-background/95 px-4 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/80"
+      // SAN-1606 — phones get the tab bar instead of a chip row: the strip takes zero layout height
+      // below `lg` (display:none, so no stripe and no gap). The chips stay mounted at every size,
+      // which keeps the working-memory state, event sub-chips and the desktop budget search intact.
+      className="sticky top-0 z-10 hidden shrink-0 border-b border-border bg-background/95 px-4 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/80 lg:block"
     >
       <p className="mb-2 text-xs font-medium text-muted-foreground">
         Medellín · filters scope your next message; the budget chip searches now

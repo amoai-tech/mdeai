@@ -59,7 +59,8 @@ export function EventDetailView({ event, backTo = "events" }: { event: PublicEve
 
   return (
     <>
-      <div className="min-h-screen bg-background pb-28 md:pb-8" data-testid="event-detail-page">
+      {/* SAN-1606 — clears the mobile buy bar and, below it, the floating tab bar. */}
+      <div className="min-h-screen bg-background pb-[calc(7rem+var(--mde-mobile-nav-clearance))] lg:pb-8" data-testid="event-detail-page">
         <EventDetailNavigation eventName={event.name} returnPath={returnPath} backTo={backTo} />
         <div className="mx-auto max-w-6xl px-4 pt-6 md:pt-8">
           <nav aria-label="Breadcrumb" className="mb-5 hidden items-center gap-2 text-sm text-muted-foreground sm:flex">
@@ -100,7 +101,7 @@ export function EventDetailView({ event, backTo = "events" }: { event: PublicEve
           </div>
         </div>
         {fromTier ? (
-          <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur lg:hidden"
+          <div className="fixed inset-x-0 bottom-[var(--mde-mobile-nav-clearance)] z-20 border-t border-border bg-background/95 p-3 backdrop-blur lg:hidden"
             data-testid="event-detail-mobile-buy-bar">
             <Button type="button" className="w-full" onClick={focusTicketPicker}
               data-testid="event-detail-mobile-buy-cta">

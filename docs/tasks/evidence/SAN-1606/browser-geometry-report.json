@@ -1,0 +1,1149 @@
+{
+  "base": "http://localhost:3002",
+  "at": "2026-10-28T23:50:32.051Z",
+  "checks": [
+    {
+      "name": "390 / loads",
+      "pass": true,
+      "detail": 200
+    },
+    {
+      "name": "390 / renders the nav",
+      "pass": true,
+      "detail": {
+        "x": 12,
+        "y": 772,
+        "w": 366,
+        "h": 64,
+        "bottom": 836,
+        "right": 378
+      }
+    },
+    {
+      "name": "390 / nav has 5 links",
+      "pass": true,
+      "detail": 5
+    },
+    {
+      "name": "390 / nav is 64px tall and 12px-margined, max 480",
+      "pass": true,
+      "detail": {
+        "x": 12,
+        "y": 772,
+        "w": 366,
+        "h": 64,
+        "bottom": 836,
+        "right": 378
+      }
+    },
+    {
+      "name": "390 / every tab is >=44x44",
+      "pass": true,
+      "detail": [
+        "mobile-nav-home:71x62",
+        "mobile-nav-chat:71x62",
+        "mobile-nav-rentals:71x62",
+        "mobile-nav-restaurants:71x62",
+        "mobile-nav-events:71x62"
+      ]
+    },
+    {
+      "name": "390 / exactly one aria-current",
+      "pass": true,
+      "detail": [
+        "page",
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "name": "390 / no horizontal overflow",
+      "pass": true,
+      "detail": 0
+    },
+    {
+      "name": "390 /chat loads",
+      "pass": true,
+      "detail": 200
+    },
+    {
+      "name": "390 /chat renders the nav",
+      "pass": true,
+      "detail": {
+        "x": 12,
+        "y": 772,
+        "w": 366,
+        "h": 64,
+        "bottom": 836,
+        "right": 378
+      }
+    },
+    {
+      "name": "390 /chat nav has 5 links",
+      "pass": true,
+      "detail": 5
+    },
+    {
+      "name": "390 /chat nav is 64px tall and 12px-margined, max 480",
+      "pass": true,
+      "detail": {
+        "x": 12,
+        "y": 772,
+        "w": 366,
+        "h": 64,
+        "bottom": 836,
+        "right": 378
+      }
+    },
+    {
+      "name": "390 /chat every tab is >=44x44",
+      "pass": true,
+      "detail": [
+        "mobile-nav-home:71x62",
+        "mobile-nav-chat:71x62",
+        "mobile-nav-rentals:71x62",
+        "mobile-nav-restaurants:71x62",
+        "mobile-nav-events:71x62"
+      ]
+    },
+    {
+      "name": "390 /chat exactly one aria-current",
+      "pass": true,
+      "detail": [
+        null,
+        "page",
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "name": "390 /chat no horizontal overflow",
+      "pass": true,
+      "detail": 0
+    },
+    {
+      "name": "390 /rentals loads",
+      "pass": true,
+      "detail": 200
+    },
+    {
+      "name": "390 /rentals renders the nav",
+      "pass": true,
+      "detail": {
+        "x": 12,
+        "y": 772,
+        "w": 366,
+        "h": 64,
+        "bottom": 836,
+        "right": 378
+      }
+    },
+    {
+      "name": "390 /rentals nav has 5 links",
+      "pass": true,
+      "detail": 5
+    },
+    {
+      "name": "390 /rentals nav is 64px tall and 12px-margined, max 480",
+      "pass": true,
+      "detail": {
+        "x": 12,
+        "y": 772,
+        "w": 366,
+        "h": 64,
+        "bottom": 836,
+        "right": 378
+      }
+    },
+    {
+      "name": "390 /rentals every tab is >=44x44",
+      "pass": true,
+      "detail": [
+        "mobile-nav-home:71x62",
+        "mobile-nav-chat:71x62",
+        "mobile-nav-rentals:71x62",
+        "mobile-nav-restaurants:71x62",
+        "mobile-nav-events:71x62"
+      ]
+    },
+    {
+      "name": "390 /rentals exactly one aria-current",
+      "pass": true,
+      "detail": [
+        null,
+        null,
+        "page",
+        null,
+        null
+      ]
+    },
+    {
+      "name": "390 /rentals no horizontal overflow",
+      "pass": true,
+      "detail": 0
+    },
+    {
+      "name": "390 /restaurants loads",
+      "pass": true,
+      "detail": 200
+    },
+    {
+      "name": "390 /restaurants renders the nav",
+      "pass": true,
+      "detail": {
+        "x": 12,
+        "y": 772,
+        "w": 366,
+        "h": 64,
+        "bottom": 836,
+        "right": 378
+      }
+    },
+    {
+      "name": "390 /restaurants nav has 5 links",
+      "pass": true,
+      "detail": 5
+    },
+    {
+      "name": "390 /restaurants nav is 64px tall and 12px-margined, max 480",
+      "pass": true,
+      "detail": {
+        "x": 12,
+        "y": 772,
+        "w": 366,
+        "h": 64,
+        "bottom": 836,
+        "right": 378
+      }
+    },
+    {
+      "name": "390 /restaurants every tab is >=44x44",
+      "pass": true,
+      "detail": [
+        "mobile-nav-home:71x62",
+        "mobile-nav-chat:71x62",
+        "mobile-nav-rentals:71x62",
+        "mobile-nav-restaurants:71x62",
+        "mobile-nav-events:71x62"
+      ]
+    },
+    {
+      "name": "390 /restaurants exactly one aria-current",
+      "pass": true,
+      "detail": [
+        null,
+        null,
+        null,
+        "page",
+        null
+      ]
+    },
+    {
+      "name": "390 /restaurants no horizontal overflow",
+      "pass": true,
+      "detail": 0
+    },
+    {
+      "name": "390 /events loads",
+      "pass": true,
+      "detail": 200
+    },
+    {
+      "name": "390 /events renders the nav",
+      "pass": true,
+      "detail": {
+        "x": 12,
+        "y": 772,
+        "w": 366,
+        "h": 64,
+        "bottom": 836,
+        "right": 378
+      }
+    },
+    {
+      "name": "390 /events nav has 5 links",
+      "pass": true,
+      "detail": 5
+    },
+    {
+      "name": "390 /events nav is 64px tall and 12px-margined, max 480",
+      "pass": true,
+      "detail": {
+        "x": 12,
+        "y": 772,
+        "w": 366,
+        "h": 64,
+        "bottom": 836,
+        "right": 378
+      }
+    },
+    {
+      "name": "390 /events every tab is >=44x44",
+      "pass": true,
+      "detail": [
+        "mobile-nav-home:71x62",
+        "mobile-nav-chat:71x62",
+        "mobile-nav-rentals:71x62",
+        "mobile-nav-restaurants:71x62",
+        "mobile-nav-events:71x62"
+      ]
+    },
+    {
+      "name": "390 /events exactly one aria-current",
+      "pass": true,
+      "detail": [
+        null,
+        null,
+        null,
+        null,
+        "page"
+      ]
+    },
+    {
+      "name": "390 /events no horizontal overflow",
+      "pass": true,
+      "detail": 0
+    },
+    {
+      "name": "390 active tab on / is home",
+      "pass": true,
+      "detail": "mobile-nav-home"
+    },
+    {
+      "name": "390 accessible names on /",
+      "pass": true,
+      "detail": [
+        "Home",
+        "Chat",
+        "Rentals",
+        "Eats Restaurants",
+        "Events"
+      ]
+    },
+    {
+      "name": "390 active tab on /chat is chat",
+      "pass": true,
+      "detail": "mobile-nav-chat"
+    },
+    {
+      "name": "390 accessible names on /chat",
+      "pass": true,
+      "detail": [
+        "Home",
+        "Chat",
+        "Rentals",
+        "Eats Restaurants",
+        "Events"
+      ]
+    },
+    {
+      "name": "390 active tab on /rentals is rentals",
+      "pass": true,
+      "detail": "mobile-nav-rentals"
+    },
+    {
+      "name": "390 accessible names on /rentals",
+      "pass": true,
+      "detail": [
+        "Home",
+        "Chat",
+        "Rentals",
+        "Eats Restaurants",
+        "Events"
+      ]
+    },
+    {
+      "name": "390 active tab on /restaurants is restaurants",
+      "pass": true,
+      "detail": "mobile-nav-restaurants"
+    },
+    {
+      "name": "390 accessible names on /restaurants",
+      "pass": true,
+      "detail": [
+        "Home",
+        "Chat",
+        "Rentals",
+        "Eats Restaurants",
+        "Events"
+      ]
+    },
+    {
+      "name": "390 active tab on /events is events",
+      "pass": true,
+      "detail": "mobile-nav-events"
+    },
+    {
+      "name": "390 accessible names on /events",
+      "pass": true,
+      "detail": [
+        "Home",
+        "Chat",
+        "Rentals",
+        "Eats Restaurants",
+        "Events"
+      ]
+    },
+    {
+      "name": "390 /rentals Ask bar clears the nav at document end",
+      "pass": true,
+      "detail": {
+        "x": 0,
+        "y": 643,
+        "w": 390,
+        "h": 121,
+        "bottom": 764,
+        "right": 390
+      }
+    },
+    {
+      "name": "390 /rentals last card clears the nav and the Ask bar at document end",
+      "pass": true,
+      "detail": {
+        "lastCard": {
+          "y": 323,
+          "bottom": 547
+        },
+        "ask": {
+          "x": 0,
+          "y": 643,
+          "w": 390,
+          "h": 121,
+          "bottom": 764,
+          "right": 390
+        }
+      }
+    },
+    {
+      "name": "390 /chat composer is 56-64px idle",
+      "pass": true,
+      "detail": {
+        "x": 40,
+        "y": 628,
+        "w": 310,
+        "h": 56,
+        "bottom": 684,
+        "right": 350
+      }
+    },
+    {
+      "name": "390 /chat chip strip is gone",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "390 /chat composer sits above the nav with a gap",
+      "pass": true,
+      "detail": {
+        "disclaimer": {
+          "y": 684,
+          "bottom": 740
+        },
+        "nav": {
+          "x": 12,
+          "y": 772,
+          "w": 366,
+          "h": 64,
+          "bottom": 836,
+          "right": 378
+        }
+      }
+    },
+    {
+      "name": "390 /chat map trigger clears composer",
+      "pass": true,
+      "detail": {
+        "composer": {
+          "x": 40,
+          "y": 628,
+          "w": 310,
+          "h": 56,
+          "bottom": 684,
+          "right": 350
+        },
+        "map": {
+          "x": 247,
+          "y": 576,
+          "w": 127,
+          "h": 44,
+          "bottom": 620,
+          "right": 374
+        }
+      }
+    },
+    {
+      "name": "390 /chat map trigger clears nav",
+      "pass": true,
+      "detail": {
+        "x": 247,
+        "y": 576,
+        "w": 127,
+        "h": 44,
+        "bottom": 620,
+        "right": 374
+      }
+    },
+    {
+      "name": "390 /chat map keeps its honest count label",
+      "pass": true,
+      "detail": true
+    },
+    {
+      "name": "390 /chat long draft stays capped at 112-128px",
+      "pass": true,
+      "detail": 112
+    },
+    {
+      "name": "390 /chat long draft scrolls inside the same textarea",
+      "pass": true,
+      "detail": {
+        "taScroll": 116,
+        "taClient": 100,
+        "cardH": 112
+      }
+    },
+    {
+      "name": "390 /chat Send still reachable with a draft",
+      "pass": true,
+      "detail": {
+        "send": {
+          "x": 298,
+          "y": 606,
+          "w": 44,
+          "h": 44,
+          "bottom": 650,
+          "right": 342
+        },
+        "nav": {
+          "x": 12,
+          "y": 772,
+          "w": 366,
+          "h": 64,
+          "bottom": 836,
+          "right": 378
+        }
+      }
+    },
+    {
+      "name": "390 /chat keyboard open hides the nav",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "390 /chat keyboard open keeps the composer",
+      "pass": true,
+      "detail": {
+        "x": 40,
+        "y": 308,
+        "w": 310,
+        "h": 56,
+        "bottom": 364,
+        "right": 350
+      }
+    },
+    {
+      "name": "320 / loads",
+      "pass": true,
+      "detail": 200
+    },
+    {
+      "name": "320 / nav present, 12px margins, inside the viewport",
+      "pass": true,
+      "detail": {
+        "x": 12,
+        "y": 728,
+        "w": 296,
+        "h": 64,
+        "bottom": 792,
+        "right": 308
+      }
+    },
+    {
+      "name": "320 / no horizontal overflow",
+      "pass": true,
+      "detail": 0
+    },
+    {
+      "name": "320 / targets >=44px",
+      "pass": true,
+      "detail": [
+        "57x62",
+        "57x62",
+        "57x62",
+        "57x62",
+        "57x62"
+      ]
+    },
+    {
+      "name": "320 /chat loads",
+      "pass": true,
+      "detail": 200
+    },
+    {
+      "name": "320 /chat nav present, 12px margins, inside the viewport",
+      "pass": true,
+      "detail": {
+        "x": 12,
+        "y": 728,
+        "w": 296,
+        "h": 64,
+        "bottom": 792,
+        "right": 308
+      }
+    },
+    {
+      "name": "320 /chat no horizontal overflow",
+      "pass": true,
+      "detail": 0
+    },
+    {
+      "name": "320 /chat targets >=44px",
+      "pass": true,
+      "detail": [
+        "57x62",
+        "57x62",
+        "57x62",
+        "57x62",
+        "57x62"
+      ]
+    },
+    {
+      "name": "320 /rentals loads",
+      "pass": true,
+      "detail": 200
+    },
+    {
+      "name": "320 /rentals nav present, 12px margins, inside the viewport",
+      "pass": true,
+      "detail": {
+        "x": 12,
+        "y": 728,
+        "w": 296,
+        "h": 64,
+        "bottom": 792,
+        "right": 308
+      }
+    },
+    {
+      "name": "320 /rentals no horizontal overflow",
+      "pass": true,
+      "detail": 0
+    },
+    {
+      "name": "320 /rentals targets >=44px",
+      "pass": true,
+      "detail": [
+        "57x62",
+        "57x62",
+        "57x62",
+        "57x62",
+        "57x62"
+      ]
+    },
+    {
+      "name": "320 /restaurants loads",
+      "pass": true,
+      "detail": 200
+    },
+    {
+      "name": "320 /restaurants nav present, 12px margins, inside the viewport",
+      "pass": true,
+      "detail": {
+        "x": 12,
+        "y": 728,
+        "w": 296,
+        "h": 64,
+        "bottom": 792,
+        "right": 308
+      }
+    },
+    {
+      "name": "320 /restaurants no horizontal overflow",
+      "pass": true,
+      "detail": 0
+    },
+    {
+      "name": "320 /restaurants targets >=44px",
+      "pass": true,
+      "detail": [
+        "57x62",
+        "57x62",
+        "57x62",
+        "57x62",
+        "57x62"
+      ]
+    },
+    {
+      "name": "320 /events loads",
+      "pass": true,
+      "detail": 200
+    },
+    {
+      "name": "320 /events nav present, 12px margins, inside the viewport",
+      "pass": true,
+      "detail": {
+        "x": 12,
+        "y": 728,
+        "w": 296,
+        "h": 64,
+        "bottom": 792,
+        "right": 308
+      }
+    },
+    {
+      "name": "320 /events no horizontal overflow",
+      "pass": true,
+      "detail": 0
+    },
+    {
+      "name": "320 /events targets >=44px",
+      "pass": true,
+      "detail": [
+        "57x62",
+        "57x62",
+        "57x62",
+        "57x62",
+        "57x62"
+      ]
+    },
+    {
+      "name": "428 / loads",
+      "pass": true,
+      "detail": 200
+    },
+    {
+      "name": "428 / nav present, 12px margins, inside the viewport",
+      "pass": true,
+      "detail": {
+        "x": 12,
+        "y": 728,
+        "w": 404,
+        "h": 64,
+        "bottom": 792,
+        "right": 416
+      }
+    },
+    {
+      "name": "428 / no horizontal overflow",
+      "pass": true,
+      "detail": 0
+    },
+    {
+      "name": "428 / targets >=44px",
+      "pass": true,
+      "detail": [
+        "79x62",
+        "79x62",
+        "79x62",
+        "79x62",
+        "79x62"
+      ]
+    },
+    {
+      "name": "428 /chat loads",
+      "pass": true,
+      "detail": 200
+    },
+    {
+      "name": "428 /chat nav present, 12px margins, inside the viewport",
+      "pass": true,
+      "detail": {
+        "x": 12,
+        "y": 728,
+        "w": 404,
+        "h": 64,
+        "bottom": 792,
+        "right": 416
+      }
+    },
+    {
+      "name": "428 /chat no horizontal overflow",
+      "pass": true,
+      "detail": 0
+    },
+    {
+      "name": "428 /chat targets >=44px",
+      "pass": true,
+      "detail": [
+        "79x62",
+        "79x62",
+        "79x62",
+        "79x62",
+        "79x62"
+      ]
+    },
+    {
+      "name": "428 /rentals loads",
+      "pass": true,
+      "detail": 200
+    },
+    {
+      "name": "428 /rentals nav present, 12px margins, inside the viewport",
+      "pass": true,
+      "detail": {
+        "x": 12,
+        "y": 728,
+        "w": 404,
+        "h": 64,
+        "bottom": 792,
+        "right": 416
+      }
+    },
+    {
+      "name": "428 /rentals no horizontal overflow",
+      "pass": true,
+      "detail": 0
+    },
+    {
+      "name": "428 /rentals targets >=44px",
+      "pass": true,
+      "detail": [
+        "79x62",
+        "79x62",
+        "79x62",
+        "79x62",
+        "79x62"
+      ]
+    },
+    {
+      "name": "428 /restaurants loads",
+      "pass": true,
+      "detail": 200
+    },
+    {
+      "name": "428 /restaurants nav present, 12px margins, inside the viewport",
+      "pass": true,
+      "detail": {
+        "x": 12,
+        "y": 728,
+        "w": 404,
+        "h": 64,
+        "bottom": 792,
+        "right": 416
+      }
+    },
+    {
+      "name": "428 /restaurants no horizontal overflow",
+      "pass": true,
+      "detail": 0
+    },
+    {
+      "name": "428 /restaurants targets >=44px",
+      "pass": true,
+      "detail": [
+        "79x62",
+        "79x62",
+        "79x62",
+        "79x62",
+        "79x62"
+      ]
+    },
+    {
+      "name": "428 /events loads",
+      "pass": true,
+      "detail": 200
+    },
+    {
+      "name": "428 /events nav present, 12px margins, inside the viewport",
+      "pass": true,
+      "detail": {
+        "x": 12,
+        "y": 728,
+        "w": 404,
+        "h": 64,
+        "bottom": 792,
+        "right": 416
+      }
+    },
+    {
+      "name": "428 /events no horizontal overflow",
+      "pass": true,
+      "detail": 0
+    },
+    {
+      "name": "428 /events targets >=44px",
+      "pass": true,
+      "detail": [
+        "79x62",
+        "79x62",
+        "79x62",
+        "79x62",
+        "79x62"
+      ]
+    },
+    {
+      "name": "390 rental-detail loads",
+      "pass": true,
+      "detail": 200
+    },
+    {
+      "name": "390 rental-detail renders the nav",
+      "pass": true,
+      "detail": {
+        "x": 12,
+        "y": 772,
+        "w": 366,
+        "h": 64,
+        "bottom": 836,
+        "right": 378
+      }
+    },
+    {
+      "name": "390 rental-detail inherits the rentals tab",
+      "pass": true,
+      "detail": "mobile-nav-rentals"
+    },
+    {
+      "name": "390 rental-detail no horizontal overflow",
+      "pass": true,
+      "detail": 0
+    },
+    {
+      "name": "390 event-detail loads",
+      "pass": true,
+      "detail": 200
+    },
+    {
+      "name": "390 event-detail renders the nav",
+      "pass": true,
+      "detail": {
+        "x": 12,
+        "y": 772,
+        "w": 366,
+        "h": 64,
+        "bottom": 836,
+        "right": 378
+      }
+    },
+    {
+      "name": "390 event-detail inherits the events tab",
+      "pass": true,
+      "detail": "mobile-nav-events"
+    },
+    {
+      "name": "390 event-detail no horizontal overflow",
+      "pass": true,
+      "detail": 0
+    },
+    {
+      "name": "excluded /app has no nav",
+      "pass": true,
+      "detail": {
+        "finalPath": "/login",
+        "nav": null
+      }
+    },
+    {
+      "name": "excluded /app/rentals has no nav",
+      "pass": true,
+      "detail": {
+        "finalPath": "/login",
+        "nav": null
+      }
+    },
+    {
+      "name": "excluded /host has no nav",
+      "pass": true,
+      "detail": {
+        "finalPath": "/host",
+        "nav": null
+      }
+    },
+    {
+      "name": "excluded /host/events has no nav",
+      "pass": true,
+      "detail": {
+        "finalPath": "/login",
+        "nav": null
+      }
+    },
+    {
+      "name": "excluded /admin has no nav",
+      "pass": true,
+      "detail": {
+        "finalPath": "/admin",
+        "nav": null
+      }
+    },
+    {
+      "name": "excluded /login has no nav",
+      "pass": true,
+      "detail": {
+        "finalPath": "/login",
+        "nav": null
+      }
+    },
+    {
+      "name": "excluded /signup has no nav",
+      "pass": true,
+      "detail": {
+        "finalPath": "/signup",
+        "nav": null
+      }
+    },
+    {
+      "name": "excluded /cafes has no nav",
+      "pass": true,
+      "detail": {
+        "finalPath": "/cafes",
+        "nav": null
+      }
+    },
+    {
+      "name": "excluded /nightlife has no nav",
+      "pass": true,
+      "detail": {
+        "finalPath": "/nightlife",
+        "nav": null
+      }
+    },
+    {
+      "name": "excluded /saved has no nav",
+      "pass": true,
+      "detail": {
+        "finalPath": "/login",
+        "nav": null
+      }
+    },
+    {
+      "name": "excluded /trips has no nav",
+      "pass": true,
+      "detail": {
+        "finalPath": "/login",
+        "nav": null
+      }
+    },
+    {
+      "name": "excluded /me has no nav",
+      "pass": true,
+      "detail": {
+        "finalPath": "/me",
+        "nav": null
+      }
+    },
+    {
+      "name": "excluded /rentals/abc/checkout has no nav",
+      "pass": true,
+      "detail": {
+        "finalPath": "/rentals/abc/checkout",
+        "nav": null
+      }
+    },
+    {
+      "name": "excluded /events/abc/checkout has no nav",
+      "pass": true,
+      "detail": {
+        "finalPath": "/events/abc/checkout",
+        "nav": null
+      }
+    },
+    {
+      "name": "1024 / has no nav",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "1024 / no bottom reserve",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "1024 /chat has no nav",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "1024 /chat no bottom reserve",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "1024 /rentals has no nav",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "1024 /rentals no bottom reserve",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "1024 /restaurants has no nav",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "1024 /restaurants no bottom reserve",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "1024 /events has no nav",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "1024 /events no bottom reserve",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "1024 /chat keeps the desktop chip strip",
+      "pass": true,
+      "detail": {
+        "x": 208,
+        "y": 73,
+        "w": 408,
+        "h": 115,
+        "bottom": 188,
+        "right": 616
+      }
+    },
+    {
+      "name": "1024 /chat keeps the two-row composer",
+      "pass": true,
+      "detail": {
+        "x": 256,
+        "y": 524,
+        "w": 312,
+        "h": 66,
+        "bottom": 590,
+        "right": 568
+      }
+    },
+    {
+      "name": "nav tap /chat -> /rentals",
+      "pass": true,
+      "detail": "mobile-nav-rentals"
+    },
+    {
+      "name": "nav tap /rentals -> /restaurants",
+      "pass": true,
+      "detail": "mobile-nav-restaurants"
+    },
+    {
+      "name": "nav tap /restaurants -> /events",
+      "pass": true,
+      "detail": "mobile-nav-events"
+    },
+    {
+      "name": "nav tap /events -> /",
+      "pass": true,
+      "detail": "mobile-nav-home"
+    },
+    {
+      "name": "browser Back restores /events tab",
+      "pass": true,
+      "detail": "mobile-nav-events"
+    },
+    {
+      "name": "browser Forward restores / tab",
+      "pass": true,
+      "detail": "mobile-nav-home"
+    }
+  ],
+  "failures": []
+}

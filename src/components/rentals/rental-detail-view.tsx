@@ -231,7 +231,9 @@ const RentalMobileCta = ({
 }) => (
   <div
     data-testid="rental-detail-mobile-cta"
-    className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur lg:hidden"
+    // SAN-1606 — this bar used to own the bottom edge; the phone tab bar does now, so the request
+    // action moves up above it (the shared clearance includes the home-indicator inset).
+    className="fixed inset-x-0 bottom-[var(--mde-mobile-nav-clearance)] z-20 border-t border-border bg-background/95 p-3 backdrop-blur lg:hidden"
   >
     <div className="mx-auto flex max-w-6xl items-center gap-2">
       <div className="min-w-0 flex-1">
@@ -333,8 +335,9 @@ function RentalDetailInner({ detail, backHref }: { detail: RentalDetail; backHre
     openScheduleViewing({ listingId: detail.id, title: detail.title, neighborhood: detail.neighborhood });
 
   return (
+    // SAN-1606 — phone content also clears the floating tab bar below the fixed request bar.
     // skipcq: JS-0415 - detailed sectioned layout is intentional for readability and stable test selectors
-    <main data-testid="rental-detail" className="mx-auto max-w-6xl px-4 pb-28 pt-6 sm:px-6 lg:pb-10">
+    <main data-testid="rental-detail" className="mx-auto max-w-6xl px-4 pb-[calc(7rem+var(--mde-mobile-nav-clearance))] pt-6 sm:px-6 lg:pb-10">
       {/* A saved viewing request must be visible where it was made, not only in the chat. */}
       <LeadConfirmationBanner />
       <Link

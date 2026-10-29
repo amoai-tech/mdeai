@@ -360,6 +360,41 @@ token columns on one orphan test user; admin lookup and signed-in routes now suc
 
 **Follow-up:** Recruit a second reviewer to eliminate reliance on this structural exception. Check that a subsequent ordinary MDE PR runs on the new pin; clean up temporary test PRs and branches after proof.
 
+## 2026-10-29 — PR #623 (SAN-1606 five-tab phone navigation)
+
+**PR:** [#623](https://github.com/amoai-tech/mdeai/pull/623). **Reason:** at the time of this change amoai-tech is the
+repository's sole collaborator and the PR author; GitHub forbids self-approval. This note records the limited
+sole-collaborator exception under AGENTS.md, not a general bypass of review or CI.
+
+**Exact-head proof:** the exact head SHA, green `floor` and `mastra-schema-init`, the green
+`review / verify-review-result` result and the unresolved-thread count (0) are recorded on PR #623 before any
+administrator merge. The override must not be used if any of those conditions fails, and the required checks and
+review guard stay configured.
+
+**Change and review scope:** one new route-aware client component (`src/components/navigation/mobile-bottom-nav.tsx`)
+mounted once in `src/app/layout.tsx`, one shared clearance token plus phone-only composer CSS in `src/app/globals.css`,
+`/chat` chip-strip hiding, and clearance offsets in the existing surface owners (Home, chat centre column,
+`DiscoveryWorkspace`, rental/event detail CTA bars, restaurant detail, `/chat` map trigger, HomeFab). No schema, RLS,
+RPC, API, agent, provider, dependency or payment change; authentication and data isolation are untouched. Tests: the
+nav unit contract, a new `e2e/mobile-bottom-nav.spec.ts`, extended `MOB-CK-001`, rewritten `SCREEN-003` mobile block,
+and updated unit expectations whose contracts moved (discovery Ask bar pinning, rental CTA safe-area ownership).
+
+**Evidence:** nav unit 32/32; full Vitest 4325 passed / 0 failed; `mobile-bottom-nav` 8/8; `MOB-CK-001` 8/8;
+`SCREEN-003` 6/6; `mobile-header` + `maps-layout-mobile` + `browse-map-close-touch` 15/15; `san-1469` 2/2; typecheck,
+lint, build, `check:mastra` and the CopilotKit v2 audits exit 0; 138/138 rendered-geometry checks with before/after
+screenshots in `docs/tasks/evidence/SAN-1606/`. Locally unrunnable: `pr-agent-pinned-loader`, because the pinned
+container reads the checkout as uid 65534 and this worktree sits under a 750 home directory — CI runs it from
+`/github/workspace`.
+
+**What an independent reviewer would be asked:** does the allowlist admit exactly the five consumer routes plus
+one-segment consumer details and nothing protected or transactional; does the bar hold 64px/12px/480px/44px with a
+visible active and focus state; is the chip strip's state genuinely still mounted for desktop; is the compact
+composer the same CopilotKit textarea (no second input) with Send, auth, error/retry and draft behaviour intact; and
+does every fixed surface clear the bar without covering a composer, map control or card CTA.
+
+**Follow-up:** recruit a second reviewer so this structural exception can retire; re-measure the scoped composer CSS
+when CopilotKit v2 changes its input DOM.
+
 ## Adding an entry
 
 Record: the PRs, the date, the reason, which required checks had passed, what a reviewer would have

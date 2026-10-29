@@ -96,7 +96,13 @@ export default async function RestaurantDetailPage({
     (hasCoords ? "https://www.google.com/maps/search/?api=1&query=" + restaurant.latitude + "," + restaurant.longitude : null);
 
   return (
-    <main id="main-content" tabIndex={-1} className="mx-auto max-w-3xl px-4 py-6">
+    // SAN-1606 — the phone tab bar floats over the page, so the vote panel's last action keeps a
+    // bar's worth of room below it. Zero above `lg`, where the bar is not rendered.
+    <main
+      id="main-content"
+      tabIndex={-1}
+      className="mx-auto max-w-3xl px-4 pb-[calc(1.5rem+var(--mde-mobile-nav-clearance))] pt-6 lg:pb-6"
+    >
       <Link className="text-sm text-muted-foreground underline" href="/restaurants">Restaurants</Link>
       <div className="mt-4 overflow-hidden rounded-xl border">
         {restaurant.imageUrl ? (
