@@ -495,8 +495,8 @@ export const conciergeAgent = new Agent({
     // proposal. Once the current run grounded the exact named venue and the
     // customer already supplied every mandatory field, require the *existing*
     // proposal-only HITL tool for the next Mastra step. No database writer here.
-    { id: 'san1149-booking-continuation', processInputStep: ({ stepNumber, messages, steps }) =>
-      shouldContinueVenueBookingAfterSearch({ stepNumber, messages, steps })
+    { id: 'san1149-booking-continuation', processInputStep: ({ stepNumber, messages, steps, requestContext }) =>
+      shouldContinueVenueBookingAfterSearch({ stepNumber, messages, steps, requestContext })
         ? { toolChoice: { type: 'tool' as const, toolName: 'requestVenueBooking' } }
         : {} },
     { id: "san737-current-selected-name-history", processInput: ({ messages, requestContext }) =>

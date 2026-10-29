@@ -7,6 +7,7 @@ import { isDeterministicE2E } from '@/lib/deterministic-e2e';
 import { z } from 'zod';
 import { extractNeighborhood } from './search-events';
 import { runAuditedSearch } from '../lib/run-audited-search';
+import { rememberGroundedRestaurantSearch } from '../lib/booking-continuation';
 import { writeSearchLog, type RankExplanationEntry } from '../lib/search-logs';
 
 const cuisineEnum = z.enum([
@@ -611,6 +612,9 @@ export const searchRestaurantsTool = createTool({
       context,
     );
 
+    // This is real server-side search output, not client context or model prose.
+    // Pass a minimal source-backed receipt to the next Mastra agent step.
+    rememberGroundedRestaurantSearch(context?.requestContext, { source, results });
     return { results, total, source, hybridUsed, rankExplanation };
   },
 });

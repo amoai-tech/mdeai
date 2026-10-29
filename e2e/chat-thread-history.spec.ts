@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { gotoDeterministicChat } from "./helpers/deterministic-chat";
+import { ensureChatInputVisible } from "./helpers/maps-layout";
 
 /**
  * SAN-1413 · the selected saved chat survives refresh and Back/Forward.
@@ -127,5 +128,44 @@ test.describe("SAN-1413 the selected saved chat survives refresh and Back/Forwar
     await expect(rail(page), "the chosen chat is now the active one").toHaveAttribute(
       "data-active-thread-id", CHAT_A);
     await expect(trigger, "focus returns to the control that opened the drawer").toBeFocused();
+  });
+});
+
+// Keep readiness regressions in the existing deterministic Playwright project.
+function chatMarkup(status: "loading" | "error") {
+  return `<section data-testid="copilot-chat-region">
+    ${status === "loading" ? '<p data-testid="saved-history-loading">Loading conversation…</p>' : '<p data-testid="saved-history-error" role="alert">Couldn’t load this conversation.</p>'}
+    <div inert aria-busy="${status === "loading"}">
+      <textarea aria-label="Ask concierge"></textarea>
+    </div>
+  </section>`;
+}
+
+test.describe("SAN-1149 chat readiness helper", () => {
+  test("does not interact with a visible but inert composer until history settles", async ({ page }) => {
+    await page.setContent(chatMarkup("loading"));
+    let resolved = false;
+    const ready = ensureChatInputVisible(page, 3_000).then(() => { resolved = true; });
+    // Advance one browser rendering frame; never use a fixed sleep in E2E.
+    await page.evaluate(() => new Promise<void>((resolve) => {
+      requestAnimationFrame(() => resolve());
+    }));
+    expect(resolved, "visibility must not be mistaken for chat readiness").toBe(false);
+    await page.evaluate(() => {
+      document.querySelector('[data-testid="saved-history-loading"]')?.remove();
+      const composer = document.querySelector("[inert]");
+      composer?.removeAttribute("inert");
+      composer?.removeAttribute("aria-busy");
+    });
+    await ready;
+    expect(resolved).toBe(true);
+    await page.getByRole("textbox").fill("Hello");
+    await expect(page.getByRole("textbox")).toHaveValue("Hello");
+  });
+
+  test("reports saved-history error instead of interacting with its visible inert textbox", async ({ page }) => {
+    await page.setContent(chatMarkup("error"));
+    await expect(ensureChatInputVisible(page, 2_000)).rejects.toThrow(/history|error|inert|timeout/i);
+    await expect(page.getByRole("textbox")).toHaveValue("");
   });
 });

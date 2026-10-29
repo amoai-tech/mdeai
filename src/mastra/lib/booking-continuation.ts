@@ -13,6 +13,28 @@ type ToolStep = {
 const SEARCH_NAMES = new Set(['searchRestaurantsTool', 'search-restaurants']);
 const BOOKING_NAMES = new Set(['requestVenueBooking', 'request-venue-booking']);
 const UUID = /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i;
+// The search tool writes only its own verified public result into Mastra's
+// per-run RequestContext. A model may receive tool results as JSON, text, or
+// summary parts; a saved trusted search receipt avoids that transport drift.
+export const RESTAURANT_BOOKING_SEARCH_KEY = 'mdeaiRestaurantBookingSearch';
+export type RestaurantBookingSearchContext = {
+  get: (key: string) => unknown;
+  set: (key: string, value: unknown) => void;
+};
+
+export function rememberGroundedRestaurantSearch(
+  ctx: RestaurantBookingSearchContext | undefined,
+  result: { source: string; results: readonly { id: string; name: string }[] },
+): void {
+  if (!ctx) return;
+  ctx.set(RESTAURANT_BOOKING_SEARCH_KEY, {
+    source: result.source,
+    results: result.source === 'supabase'
+      ? result.results.filter(row => UUID.test(row.id)).map(({ id, name }) => ({ id, name }))
+      : [],
+  });
+}
+
 
 function userText(content: unknown): string {
   if (typeof content === 'string') return content;
@@ -34,11 +56,23 @@ export function hasCompleteRestaurantBookingDetails(text: string): boolean {
     && /\b(?:(?:contact\s+)?name\s*(?:is\s+|[:=-]\s*|\s+)[A-Z][a-z]+|call\s+me\s+[A-Z][a-z]+|i(?:'m|\s+am)\s+[A-Z][a-z]+)/i.test(text);
 }
 
+// Static boundary test only: restaurant labels are data, never regex source.
+// Limit work for malformed or unexpectedly large provider/user text.
+const NAME_WORD_CHAR = /[\p{L}\p{N}]/u;
+
 function containsExactName(text: string, name: string): boolean {
-  // Name comes from the source-backed restaurant tool; match whole words so
-  // an unrelated similarly named restaurant cannot qualify this booking.
-  const literal = name.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return literal.length > 1 && new RegExp(`(?:^|[^\\p{L}\\p{N}])${literal}(?=$|[^\\p{L}\\p{N}])`, 'iu').test(text);
+  const literal = name.trim();
+  if (literal.length < 2 || literal.length > 160 || text.length > 16_000) return false;
+
+  const haystack = text.toLocaleLowerCase();
+  const needle = literal.toLocaleLowerCase();
+  for (let at = haystack.indexOf(needle); at !== -1; at = haystack.indexOf(needle, at + 1)) {
+    // Two UTF-16 units cover one adjacent Unicode code point (incl. astral characters).
+    const previous = at === 0 ? '' : Array.from(haystack.slice(Math.max(0, at - 2), at)).at(-1) ?? '';
+    const next = Array.from(haystack.slice(at + needle.length, at + needle.length + 2))[0] ?? '';
+    if (!NAME_WORD_CHAR.test(previous) && !NAME_WORD_CHAR.test(next)) return true;
+  }
+  return false;
 }
 
 function hasGroundedNamedRestaurant(text: string, output: unknown): boolean {
@@ -59,18 +93,41 @@ function hasGroundedNamedRestaurant(text: string, output: unknown): boolean {
 }
 
 export function shouldContinueVenueBookingAfterSearch({
-  stepNumber, messages, steps,
+  stepNumber, messages, steps, requestContext,
 }: {
   stepNumber: number;
   messages: readonly Message[];
   steps: readonly ToolStep[];
+  requestContext?: Pick<RestaurantBookingSearchContext, 'get'> & Partial<Pick<RestaurantBookingSearchContext, 'set'>>;
 }): boolean {
-  if (stepNumber < 1 || !steps.length) return false;
+  // A client can supply unreserved request-context keys. Invalidate any such
+  // value before the first model step; only the server-side restaurant tool may
+  // populate this key during the current agent run.
+  if (stepNumber === 0) {
+    requestContext?.set?.(RESTAURANT_BOOKING_SEARCH_KEY, null);
+    return false;
+  }
   const lastUser = messages.findLast(m => m.role === 'user');
   const text = lastUser ? userText(lastUser.content) : '';
+  // An unrelated follow-up must never inherit an earlier booking proposal.
   if (!hasCompleteRestaurantBookingDetails(text)) return false;
-  // Check only tool results from this agent run, not historic search cards.
   if (steps.some(step => step.toolCalls?.some(call => BOOKING_NAMES.has(call.toolName || '')))) return false;
-  return steps.some(step => step.toolResults?.some(result =>
+
+  // Prefer the actual tool result if Mastra included it in this run's steps.
+  const matchedStepResult = steps.some(step => step.toolResults?.some(result =>
     SEARCH_NAMES.has(result.toolName || '') && hasGroundedNamedRestaurant(text, result.output)));
+
+  // When the provider omits tool-result snapshots, the per-run receipt alone
+  // cannot authorize a proposal: require a search tool call in these steps.
+  const searchedThisRun = steps.some(step =>
+    step.toolCalls?.some(call => SEARCH_NAMES.has(call.toolName || '')));
+  const matchedReceipt = !matchedStepResult && searchedThisRun && !!requestContext?.set &&
+    hasGroundedNamedRestaurant(text, requestContext.get(RESTAURANT_BOOKING_SEARCH_KEY));
+
+  if (!matchedStepResult && !matchedReceipt) return false;
+
+  // One search can trigger only one forced proposal. Preserve normal Mastra
+  // tool-result matching when no RequestContext was provided.
+  requestContext?.set?.(RESTAURANT_BOOKING_SEARCH_KEY, null);
+  return true;
 }
