@@ -395,6 +395,37 @@ does every fixed surface clear the bar without covering a composer, map control 
 **Follow-up:** recruit a second reviewer so this structural exception can retire; re-measure the scoped composer CSS
 when CopilotKit v2 changes its input DOM.
 
+## 2026-10-29 — PR #624 (SAN-1606 review follow-up)
+
+**PR:** [#624](https://github.com/amoai-tech/mdeai/pull/624). **Reason:** amoai-tech is the repository's sole
+collaborator and the PR author; GitHub forbids self-approval. The owner explicitly asked for this follow-up to be
+merged and deployed, so this records the limited sole-collaborator exception under AGENTS.md — not a general bypass
+of review or CI.
+
+**Exact-head proof:** the PR body records the head SHA plus green `floor`, `mastra-schema-init`, the browser lanes
+(deterministic shards + real mobile composer) and `review / verify-review-result`, with 0 review threads. The head
+changes whenever the body is updated for another round, so the proof is captured on the final head before merging.
+
+**Change and review scope:** three review rounds on the merged SAN-1606 work. No product surface beyond the phone
+navigation: keyboard classification (`useOnScreenKeyboard` latch), the `/chat` map trigger's measurement and remount
+watcher, `DiscoveryWorkspace`'s route-gated clearance, `Object.hasOwn` route lookups, plus test/evidence corrections
+(exact budget assertion, keyboard-close return, data-independent detail routes, desktop composer bound, evidence
+script exit code). The required `test:e2e:deterministic` gate is **not** changed: the spec wiring was reverted pending
+explicit owner approval and the spec documents how it is run meanwhile.
+
+**Evidence:** nav unit 36/36; changed-module units 233 passed; full Vitest 4329 passed / 0 failed on the previous
+head; review-fix geometry 10/10 executable (`docs/tasks/evidence/SAN-1606/followup/`); keyboard hide/return and
+desktop composer journeys green; `typecheck`, `lint` clean; only the advisory Codacy static analysis is red and was
+not inspectable locally (its CLI runtime is absent).
+
+**What an independent reviewer would be asked:** does the keyboard state survive rotation and long typing; can a
+non-keyboard viewport change still hide the bar; does the map trigger stay exactly 8px above the composer in both
+keyboard modes; is the watch on `document.body` cheap enough and does it re-read the composer after a remount; do
+routes without the bar reserve nothing; and is the required CI gate untouched.
+
+**Follow-up:** approve wiring `e2e/mobile-bottom-nav.spec.ts` into the deterministic lane (one line) so the journey
+runs in CI again; re-run the deployed check against `mdeai-gamma.vercel.app` after the merge.
+
 ## Adding an entry
 
 Record: the PRs, the date, the reason, which required checks had passed, what a reviewer would have
