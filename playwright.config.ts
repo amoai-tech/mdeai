@@ -80,6 +80,8 @@ export default defineConfig({
         "**/mobile-header.spec.ts",
         // SAN-522: mobile composer runs under local-chromium; keep it out of the general project.
         "**/screens/MOB-CK-001-mobile-composer.spec.ts",
+        // SAN-1606: the phone navigation journey runs under local-chromium (deterministic chat).
+        "**/mobile-bottom-nav.spec.ts",
         // SAN-524: the browse map sheet Close target; runs in the PR gate under `local-chromium`.
         "**/browse-map-close-touch.spec.ts",
         ...PROD_SPECS,

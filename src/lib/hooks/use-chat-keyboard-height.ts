@@ -37,6 +37,49 @@ export function useKeyboardInset(): number {
 }
 
 /**
+ * Is an on-screen keyboard open, in **both** browser behaviours?
+ *
+ * `useKeyboardInset` only sees the overlay mode: iOS Safari shrinks the visual viewport and leaves
+ * the layout viewport at full height. Chrome on Android resizes *both* viewports (this app sets
+ * `interactiveWidget: "resizes-content"`), so `innerHeight - visualViewport.height` is 0 there and
+ * a plain inset cannot tell a keyboard from a genuinely smaller window. Track the tallest layout
+ * viewport seen since mount and treat a >150px shrink as a keyboard **while a chat composer has
+ * focus** — typing is the signal, so dragging a desktop window smaller does not count.
+ */
+export function useOnScreenKeyboard(): boolean {
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    let tallest = window.innerHeight;
+    const apply = () => {
+      tallest = Math.max(tallest, window.innerHeight);
+      const overlay = viewport ? keyboardOverlap(viewport) : 0;
+      const shrunk = tallest - window.innerHeight;
+      const typing =
+        document.activeElement instanceof Element &&
+        document.activeElement.closest('[data-testid="copilot-chat-input"]') !== null;
+      setOpen(overlay > 0 || (shrunk > 150 && typing));
+    };
+    apply();
+    window.addEventListener("resize", apply);
+    document.addEventListener("focusin", apply);
+    document.addEventListener("focusout", apply);
+    viewport?.addEventListener("resize", apply);
+    viewport?.addEventListener("scroll", apply);
+    return () => {
+      window.removeEventListener("resize", apply);
+      document.removeEventListener("focusin", apply);
+      document.removeEventListener("focusout", apply);
+      viewport?.removeEventListener("resize", apply);
+      viewport?.removeEventListener("scroll", apply);
+    };
+  }, []);
+
+  return open;
+}
+
+/**
  * MOB-CK-001 — publish the on-screen keyboard height as a CSS variable.
  *
  * CopilotKit lifts the thread composer itself (CopilotChatInput translates by

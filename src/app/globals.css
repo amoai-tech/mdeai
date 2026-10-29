@@ -252,7 +252,14 @@ html {
    CopilotKit v2 lays the input out as a two-row grid (textarea above the + and ↑ controls),
    which renders ~122px tall; the phone contract is 56–64px idle, growing to a scrollable cap
    for a longer draft. Scoped to .mde-chat-viewport and below `lg`, so host chat shells and the
-   desktop composer keep the stock v2 layout, and the textarea itself (not a copy) still grows. */
+   desktop composer keep the stock v2 layout, and the textarea itself (not a copy) still grows.
+
+   ponytail: deliberate ceiling — this CSS is coupled to @copilotkit/react-core 1.75.0's rendered
+   input DOM (`CopilotChatInput`: data-testid copilot-chat-input / copilot-chat-textarea /
+   copilot-send-button, grid-rows-[auto_auto]). If CopilotKit changes that structure the selectors
+   stop matching and the phone composer falls back to the stock two-row layout (it does not break).
+   Upgrade path: on any CopilotKit bump, re-measure /chat at 390px and update the selectors and
+   MOB-CK-001's 56–64px / 112px assertions together. */
 @media (max-width: 1023px) {
   .mde-chat-viewport [data-testid="copilot-chat-input"] > div {
     grid-template-rows: auto;
@@ -296,6 +303,13 @@ html {
        cap needs `!important`; a longer draft then scrolls inside the same textarea. */
     padding: 10px 12px;
     max-height: 100px !important;
+  }
+  /* The bar is not rendered while an on-screen keyboard is open (both browser behaviours), so the
+     chat workspace must not keep reserving its space: that would leave an empty bar-sized gap
+     between the composer and the keyboard. Only /chat is affected; the marker is set only while
+     the keyboard is open. */
+  html[data-mde-no-nav] .mde-chat-viewport {
+    --mde-mobile-nav-clearance: 0px;
   }
   /* Empty welcome screen: sit the composer directly above the bar instead of centring it. */
   .mde-chat-viewport [data-testid="copilot-welcome-screen"] {

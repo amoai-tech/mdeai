@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import {
   Building2,
@@ -10,7 +11,7 @@ import {
   UtensilsCrossed,
   type LucideIcon,
 } from "lucide-react";
-import { useKeyboardInset } from "@/lib/hooks/use-chat-keyboard-height";
+import { useOnScreenKeyboard } from "@/lib/hooks/use-chat-keyboard-height";
 import { cn } from "@/lib/utils";
 
 /**
@@ -108,14 +109,15 @@ export function resolveMobileNavTab(pathname: string | null | undefined): Mobile
   const normalized =
     withoutQuery.length > 1 ? withoutQuery.replace(/\/+$/, "") : withoutQuery;
 
-  const base = BASE_ROUTES[normalized];
+  // `hasOwn`, not a bare index: `/constructor/example` must not read `Object.prototype`.
+  const base = Object.hasOwn(BASE_ROUTES, normalized) ? BASE_ROUTES[normalized] : undefined;
   if (base) return base;
 
   const segments = normalized.split("/").filter(Boolean);
   if (segments.length !== 2) return null;
 
   const [parent, child] = segments as [string, string];
-  const tab = DETAIL_PARENTS[parent];
+  const tab = Object.hasOwn(DETAIL_PARENTS, parent) ? DETAIL_PARENTS[parent] : undefined;
   if (!tab) return null;
   if (NON_CONSUMER_SEGMENTS.has(child.toLowerCase())) return null;
 
@@ -124,15 +126,28 @@ export function resolveMobileNavTab(pathname: string | null | undefined): Mobile
 
 /**
  * The bar itself. Hides (unmounts) while the on-screen keyboard is open so it can never sit on top
- * of the composer: `useKeyboardInset` already exists for exactly this measurement, and because the
- * bar mounts once for the whole app this is one VisualViewport subscription, not one per page.
+ * of the composer — in both browser behaviours (see `useOnScreenKeyboard`). It mounts once for the
+ * whole app, so this is one subscription, not one per page.
+ *
+ * While it is hidden for the keyboard it marks `<html data-mde-no-nav>` so the chat workspace stops
+ * reserving the bar's clearance: otherwise the composer would keep an empty bar-sized gap above the
+ * keyboard. The marker is only present while the keyboard is open, so first paint is unaffected.
  */
 export function MobileBottomNav() {
   const pathname = usePathname();
   const activeTab = resolveMobileNavTab(pathname);
-  const keyboardInset = useKeyboardInset();
+  const keyboardOpen = useOnScreenKeyboard();
 
-  if (!activeTab || keyboardInset > 0) return null;
+  useEffect(() => {
+    const root = document.documentElement;
+    if (!activeTab || !keyboardOpen) return;
+    root.dataset.mdeNoNav = "";
+    return () => {
+      delete root.dataset.mdeNoNav;
+    };
+  }, [activeTab, keyboardOpen]);
+
+  if (!activeTab || keyboardOpen) return null;
 
   return (
     <nav

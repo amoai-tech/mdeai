@@ -19,10 +19,24 @@ const TABS = [
   { testid: "mobile-nav-events", href: "/events", label: "Events" },
 ] as const;
 
+/**
+ * Navigate with one retry. Cold `next dev` compiles each route on first visit and can drop a
+ * connection under load (`ERR_EMPTY_RESPONSE`); that is a server hiccup, not a navigation defect,
+ * so it gets exactly one second chance.
+ */
+async function gotoWithRetry(page: Page, path: string) {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await page.goto(path, { waitUntil: "domcontentloaded", timeout: 120_000 });
+    } catch (error) {
+      if (attempt >= 1) throw error;
+      await page.waitForLoadState("domcontentloaded").catch(() => {});
+    }
+  }
+}
+
 async function open(page: Page, path: string) {
-  // Cold `next dev` compiles a route on first visit, so the navigation budget is generous; the
-  // assertions stay tight.
-  const response = await page.goto(path, { waitUntil: "domcontentloaded", timeout: 120_000 });
+  const response = await gotoWithRetry(page, path);
   expect(response?.ok(), `GET ${path}`).toBe(true);
   // The bar is server-rendered from the request pathname, so the first paint already answers
   // "eligible route or not"; no fixed settle time is needed.
@@ -122,6 +136,25 @@ test.describe("SAN-1606 mobile bottom navigation", () => {
   test("ordinary detail routes keep their parent tab; nested transactional routes get no bar", async ({
     page,
   }) => {
+    test.setTimeout(200_000);
+
+    // Data-independent first: the layout owns these routes even when the record is absent (the
+    // database-less CI lane has no fixtures and these resolve to the not-found view inside the
+    // same layout), so the bar and its active tab must still be right. Without this the checks
+    // below could all skip and the test would pass on nothing.
+    for (const [path, tab] of [
+      ["/rentals/00000000-0000-4000-8000-000000000000", "rentals"],
+      ["/restaurants/00000000-0000-4000-8000-000000000000", "restaurants"],
+      ["/events/san-1606-e2e-missing-event", "events"],
+    ] as const) {
+      const response = await gotoWithRetry(page, path);
+      expect(response?.status(), `GET ${path}`).toBeLessThan(500);
+      await page.waitForLoadState("load", { timeout: 60_000 }).catch(() => {});
+      await expect(page.locator(BAR), `${path} keeps the consumer bar`).toHaveCount(1);
+      await expect(page.getByTestId(`mobile-nav-${tab}`)).toHaveAttribute("aria-current", "page");
+    }
+
+    // Then, when the lane does have data, a real linked detail must behave the same way.
     await open(page, "/events");
     const eventHref = await page
       .locator('a[href^="/events/"]')
@@ -167,7 +200,7 @@ test.describe("SAN-1606 mobile bottom navigation", () => {
       // The bar must be absent whatever the page's own health: these lanes run without a
       // database, and several of these routes redirect to /login, so only the navigation
       // contract is asserted here (each page's own status/error behaviour has its owner).
-      await page.goto(path, { waitUntil: "domcontentloaded", timeout: 120_000 });
+      await gotoWithRetry(page, path);
       await page.waitForLoadState("load", { timeout: 60_000 }).catch(() => {});
       expect(await page.locator(BAR).count(), `${path} must not render the consumer bar`).toBe(0);
     }
@@ -189,7 +222,7 @@ test.describe("SAN-1606 mobile bottom navigation", () => {
       // The bar must be absent whatever the page's own health: these lanes run without a
       // database, and several of these routes redirect to /login, so only the navigation
       // contract is asserted here (each page's own status/error behaviour has its owner).
-      await page.goto(path, { waitUntil: "domcontentloaded", timeout: 120_000 });
+      await gotoWithRetry(page, path);
       await page.waitForLoadState("load", { timeout: 60_000 }).catch(() => {});
       expect(await page.locator(BAR).count(), `${path} must not render the consumer bar`).toBe(0);
     }
@@ -198,7 +231,7 @@ test.describe("SAN-1606 mobile bottom navigation", () => {
   test("never appears on auth or unrelated consumer routes", async ({ page }) => {
     test.setTimeout(200_000);
     for (const path of ["/login", "/signup", "/cafes", "/nightlife", "/me"]) {
-      await page.goto(path, { waitUntil: "domcontentloaded", timeout: 120_000 });
+      await gotoWithRetry(page, path);
       await page.waitForLoadState("load", { timeout: 60_000 }).catch(() => {});
       expect(await page.locator(BAR).count(), `${path} must not render the consumer bar`).toBe(0);
     }
@@ -225,15 +258,18 @@ test.describe("SAN-1606 mobile bottom navigation", () => {
   test("hides while an on-screen keyboard covers the viewport and returns when it closes", async ({
     page,
   }) => {
+    // A controllable iOS-style overlay keyboard: the visual viewport shrinks while the layout
+    // viewport does not. `__setKeyboard(0)` puts it away and notifies the listeners the app
+    // registered, which is the only way to prove the bar comes back.
     await page.addInitScript(() => {
-      const KEYBOARD_HEIGHT = 320;
+      const state = { keyboard: 320 };
       const listeners = new Set<EventListener>();
-      const fake = {
+      const visualViewport = {
         get width() {
           return window.innerWidth;
         },
         get height() {
-          return window.innerHeight - KEYBOARD_HEIGHT;
+          return window.innerHeight - state.keyboard;
         },
         offsetTop: 0,
         offsetLeft: 0,
@@ -248,13 +284,29 @@ test.describe("SAN-1606 mobile bottom navigation", () => {
         },
         dispatchEvent: () => true,
       };
-      Object.defineProperty(window, "visualViewport", { configurable: true, get: () => fake });
+      Object.defineProperty(window, "visualViewport", { configurable: true, get: () => visualViewport });
+      (window as unknown as { __setKeyboard: (height: number) => void }).__setKeyboard = (height) => {
+        state.keyboard = height;
+        for (const listener of listeners) listener(new Event("resize"));
+      };
     });
 
     await open(page, "/chat");
     await expect(page.getByTestId("copilot-chat-region")).toBeVisible({ timeout: 30_000 });
+
     // Nothing overlays the composer: the bar unmounts while the keyboard covers the viewport.
     await expect(page.locator(BAR)).toHaveCount(0);
+
+    // …and it must come back with the keyboard away (the reserved space too).
+    await page.evaluate(() => {
+      (window as unknown as { __setKeyboard: (height: number) => void }).__setKeyboard(0);
+    });
+    await expect(page.locator(BAR)).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("mobile-nav-chat")).toHaveAttribute("aria-current", "page");
+    expect(
+      await page.evaluate(() => document.documentElement.dataset.mdeNoNav ?? null),
+      "the keyboard-only marker is cleaned up",
+    ).toBeNull();
   });
 
   test("fits 320px and 428px without overflow and keeps 44px targets", async ({ page }) => {
@@ -282,6 +334,8 @@ test.describe("SAN-1606 desktop boundary", () => {
   test.use({ viewport: DESKTOP });
 
   test("keeps the original desktop UI: no bar, chips and the full composer stay", async ({ page }) => {
+    // Five cold-compiled routes, including the real /chat runtime: the default 60s is not enough.
+    test.setTimeout(180_000);
     for (const path of ["/", "/chat", "/rentals", "/restaurants", "/events"]) {
       await open(page, path);
       // The bar is display:none above `lg` (so it is out of the accessibility tree and tab order).
@@ -292,8 +346,10 @@ test.describe("SAN-1606 desktop boundary", () => {
     await expect(page.getByTestId("chat-query-bar")).toBeVisible();
     await expect(page.getByTestId("filter-chip-laureles")).toBeVisible();
 
-    // The compact single-row composer is a phone-only contract. The deterministic browser lane
-    // renders its own chat adapter, so only the real-composer lane can measure the v2 input.
+    // The compact single-row composer is a phone-only contract. This lane renders its own chat
+    // adapter, so the mandatory real-composer desktop assertion lives in MOB-CK-001 (the
+    // `real mobile composer chromium` job); the guarded check below only covers the case where a
+    // real input happens to be present.
     const composer = page.getByTestId("copilot-chat-input");
     if (await composer.count()) {
       expect((await composer.boundingBox())!.height).toBeGreaterThan(64);

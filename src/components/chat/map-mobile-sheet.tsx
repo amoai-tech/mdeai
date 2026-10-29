@@ -98,7 +98,9 @@ export function MapMobileSheet() {
     const composerSelector = '[data-testid="copilot-chat-input"]';
     const composer = () => document.querySelector<HTMLElement>(composerSelector);
     let observer: ResizeObserver | null = null;
+    let observed: HTMLElement | null = null;
     let frame = 0;
+    let watchFrame = 0;
     let frames = 0;
     let stable = 0;
     let last = Number.NaN;
@@ -111,12 +113,18 @@ export function MapMobileSheet() {
       return gap > 0 ? gap : null;
     };
 
+    // Re-attach whenever the composer is a *different node*: switching thread remounts the keyed
+    // chat subtree, and an observer left on the detached element would stop reporting growth, so
+    // the trigger could end up under an expanded draft.
     const attachObserver = () => {
-      if (observer || typeof ResizeObserver === "undefined") return;
+      if (typeof ResizeObserver === "undefined") return;
       const element = composer();
-      if (!element) return;
+      if (!element || element === observed) return;
+      observer?.disconnect();
       observer = new ResizeObserver(() => measure());
       observer.observe(element);
+      observed = element;
+      measure();
     };
 
     // CopilotKit mounts the composer after the runtime resolves, and the welcome screen is still
@@ -143,17 +151,27 @@ export function MapMobileSheet() {
       frame = requestAnimationFrame(settle);
     };
 
+    // One persistent watcher, throttled to a frame: it starts measuring when the composer first
+    // appears and after each remount. Watching the chat region (not all of `body`) keeps streaming
+    // mutations cheap; the callback only compares node identity.
+    const container =
+      document.querySelector('[data-testid="copilot-chat-region"]') ?? document.body;
     const watcher = new MutationObserver(() => {
-      if (!composer()) return;
-      watcher.disconnect();
-      startSettle();
+      if (watchFrame) return;
+      watchFrame = requestAnimationFrame(() => {
+        watchFrame = 0;
+        const current = composer();
+        if (!current || current === observed) return;
+        startSettle();
+      });
     });
-    if (composer()) startSettle();
-    else watcher.observe(document.body, { childList: true, subtree: true });
+    watcher.observe(container, { childList: true, subtree: true });
+    startSettle();
 
     window.addEventListener("resize", measure);
     return () => {
       cancelAnimationFrame(frame);
+      cancelAnimationFrame(watchFrame);
       watcher.disconnect();
       observer?.disconnect();
       window.removeEventListener("resize", measure);
@@ -168,7 +186,13 @@ export function MapMobileSheet() {
       // bar, under the composer: that can cover part of the disclaimer but never the input, the
       // Send control or the bar. The measured position then moves it above the composer.
       className="pointer-events-none fixed bottom-[calc(var(--mde-mobile-nav-clearance)+0.5rem)] right-4 z-40 lg:hidden"
-      style={composerGap == null ? undefined : { bottom: `${composerGap}px` }}
+      // `--mde-keyboard-height` (published by useChatKeyboardHeight on /chat) is the overlay
+      // keyboard's lift; the composer moves up by it without resizing, so the trigger adds it too.
+      style={
+        composerGap == null
+          ? undefined
+          : { bottom: `calc(${composerGap}px + var(--mde-keyboard-height, 0px))` }
+      }
     >
       <Button
         type="button"
