@@ -4,7 +4,11 @@ import { useEffect, useState } from "react";
 
 /** Height a real on-screen keyboard covers; small viewport changes are not a keyboard. */
 function keyboardOverlap(viewport: VisualViewport): number {
-  const uncovered = Math.round(window.innerHeight - viewport.height);
+  // Pinch-zoom shrinks `visualViewport.height` while the layout viewport stays put. Measuring the
+  // unzoomed height (`height / scale`) keeps zoom from reading as a keyboard for every consumer of
+  // this helper (the viewing dialog inset, the published CSS height and the bar).
+  const unzoomedHeight = viewport.scale > 0 ? viewport.height / viewport.scale : viewport.height;
+  const uncovered = Math.round(window.innerHeight - unzoomedHeight);
   return uncovered > 150 ? uncovered : 0;
 }
 
@@ -34,6 +38,86 @@ export function useKeyboardInset(): number {
   }, []);
 
   return inset;
+}
+
+/**
+ * Is an on-screen keyboard open, in **both** browser behaviours?
+ *
+ * `useKeyboardInset` only sees the overlay mode: iOS Safari shrinks the visual viewport and leaves
+ * the layout viewport at full height. Chrome on Android resizes *both* viewports (this app sets
+ * `interactiveWidget: "resizes-content"`), so `innerHeight - visualViewport.height` is 0 there and
+ * a plain inset cannot tell a keyboard from a genuinely smaller window.
+ *
+ * The fallback signal is a keyboard-sized layout shrink **while a chat composer is focused**,
+ * measured against the layout height captured while nothing was focused and latched until blur or
+ * until the height returns. Latched on purpose: an expiry window would drop a keyboard that is
+ * still open on a long typing session, a rotation or a toolbar collapse.
+ */
+export function useOnScreenKeyboard(): boolean {
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    const COMPOSER = '[data-testid="copilot-chat-input"]';
+    /** A keyboard-sized layout shrink; matches the overlay threshold. */
+    const KEYBOARD_MIN = 150;
+    /** A shrink this small means the keyboard is gone (browser chrome offsets stay below it). */
+    const KEYBOARD_RELEASE = 50;
+    /** Layout height with no keyboard, captured only while the composer is unfocused. */
+    let restingHeight = window.innerHeight;
+    /**
+     * Latched by a keyboard-sized shrink while typing. Latched — not time-windowed — so a rotate
+     * or a toolbar collapse during a long typing session cannot expire a keyboard that is still
+     * open; it releases on blur or when the layout height comes back.
+     */
+    let latched = false;
+
+    const composerHasFocus = () => {
+      const active = document.activeElement;
+      // `activeElement` can be null during teardown; `closest` is safe on a detached element.
+      return active instanceof Element && active.closest(COMPOSER) !== null;
+    };
+
+    // ponytail: deliberate ceiling — in browsers that resize the layout viewport with the keyboard
+    // (where the overlay measurement below is 0) "the layout shrank a lot while the composer is
+    // focused" is the only available signal. It latches, so a real keyboard stays detected through
+    // rotation, streaming renders and long sessions; it releases on blur or when the height returns.
+    // The ceiling: a mouse/keyboard user who drags the window >150px smaller *while a composer is
+    // focused* is read as a keyboard until they blur it. Review/replace this when: the Virtual
+    // Keyboard API (`navigator.virtualKeyboard` + `geometrychange`) is available on the browsers we
+    // support, or real-device reports show keyboards that resize by more than 50px on dismissal.
+    const apply = () => {
+      const typing = composerHasFocus();
+      const overlay = viewport ? keyboardOverlap(viewport) : 0;
+      if (!typing) {
+        // No focus: whatever the height is now is the keyboard-free baseline, and no keyboard.
+        restingHeight = window.innerHeight;
+        latched = false;
+      } else if (overlay > 0) {
+        latched = true;
+      } else {
+        const shrunk = restingHeight - window.innerHeight;
+        if (shrunk > KEYBOARD_MIN) latched = true;
+        else if (shrunk < KEYBOARD_RELEASE) latched = false;
+      }
+      setOpen(overlay > 0 || (typing && latched));
+    };
+    apply();
+    window.addEventListener("resize", apply);
+    document.addEventListener("focusin", apply);
+    document.addEventListener("focusout", apply);
+    viewport?.addEventListener("resize", apply);
+    viewport?.addEventListener("scroll", apply);
+    return () => {
+      window.removeEventListener("resize", apply);
+      document.removeEventListener("focusin", apply);
+      document.removeEventListener("focusout", apply);
+      viewport?.removeEventListener("resize", apply);
+      viewport?.removeEventListener("scroll", apply);
+    };
+  }, []);
+
+  return open;
 }
 
 /**

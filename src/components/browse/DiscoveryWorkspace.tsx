@@ -2,6 +2,9 @@
 
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { resolveMobileNavTab } from "@/components/navigation/mobile-bottom-nav";
+import { cn } from "@/lib/utils";
 import { AuthStatus } from "@/components/auth/auth-status";
 import { WorkspaceNavRail } from "@/components/browse/workspace-nav-rail";
 import { ChatNavDrawer } from "@/components/chat/chat-nav-drawer";
@@ -40,6 +43,10 @@ export type DiscoveryWorkspaceProps = {
  */
 export function DiscoveryWorkspace(props: DiscoveryWorkspaceProps) {
   const { testId, activeSlug, title, subtitle, filterBar, notice, children, rightPanel, askComposer, mobileMapTrigger } = props;
+  // This shell also renders Cafés and Nightlife, which have no phone tab bar. Reserve the bar's
+  // space only where the bar is actually mounted, using the bar's own allowlist as the one source
+  // of truth (so a future route change cannot leave a dead gap behind).
+  const hasMobileNav = resolveMobileNavTab(usePathname()) !== null;
   return (
     <div
       data-testid={testId}
@@ -55,8 +62,11 @@ export function DiscoveryWorkspace(props: DiscoveryWorkspaceProps) {
       <main
         id="main-content"
         // SAN-1606 — one phone-only reserve for the floating tab bar, so the pinned Ask MDE bar and
-        // the last card both end above it. Zero above `lg`, where the bar is not rendered.
-        className="flex min-h-0 min-w-0 flex-1 flex-col pb-[var(--mde-mobile-nav-clearance)] lg:overflow-y-auto lg:pb-0"
+        // the last card both end above it. Zero above `lg` and on routes without the bar.
+        className={cn(
+          "flex min-h-0 min-w-0 flex-1 flex-col lg:overflow-y-auto lg:pb-0",
+          hasMobileNav && "pb-[var(--mde-mobile-nav-clearance)]",
+        )}
         data-testid="workspace-results-column"
       >
         <header className="sticky top-0 z-10 border-b border-border bg-background/95 px-4 py-4 backdrop-blur sm:px-6">
@@ -88,8 +98,12 @@ export function DiscoveryWorkspace(props: DiscoveryWorkspaceProps) {
           <div
             data-testid="workspace-ask-composer"
             // SAN-1606 — while stuck this bar pins above the floating tab bar instead of over it;
-            // `lg:bottom-0` is the desktop behaviour it had before.
-            className="sticky bottom-[var(--mde-mobile-nav-clearance)] z-20 mt-auto border-t border-border/60 bg-background/95 shadow-[0_-6px_16px_-14px_rgb(0_0_0/0.35)] backdrop-blur supports-[backdrop-filter]:bg-background/90 lg:bottom-0"
+            // `lg:bottom-0` is the desktop behaviour it had before, and routes without the bar
+            // keep the bar at the bottom edge.
+            className={cn(
+              "sticky z-20 mt-auto border-t border-border/60 bg-background/95 shadow-[0_-6px_16px_-14px_rgb(0_0_0/0.35)] backdrop-blur supports-[backdrop-filter]:bg-background/90 lg:bottom-0",
+              hasMobileNav ? "bottom-[var(--mde-mobile-nav-clearance)]" : "bottom-0",
+            )}
           >
             {askComposer}
           </div>

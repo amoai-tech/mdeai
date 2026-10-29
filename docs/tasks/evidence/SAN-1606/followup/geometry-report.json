@@ -1,0 +1,45 @@
+{
+  "at": "2026-10-29T09:40:05.939Z",
+  "checks": [
+    [
+      "/rentals (bar) reserves 80px",
+      "pass"
+    ],
+    [
+      "/cafes (no bar) reserves nothing",
+      "pass"
+    ],
+    [
+      "/nightlife (no bar) reserves nothing",
+      "pass"
+    ],
+    [
+      "overlay keyboard hides the bar",
+      "pass"
+    ],
+    [
+      "overlay keyboard releases the chat clearance",
+      "pass"
+    ],
+    [
+      "overlay keyboard sets the keyboard-only marker",
+      "pass"
+    ],
+    [
+      "overlay keyboard keeps the composer above it",
+      "pass"
+    ],
+    [
+      "overlay keyboard keeps the map trigger above the composer",
+      "pass"
+    ],
+    [
+      "keyboard closed restores the bar/marker",
+      "pass"
+    ],
+    [
+      "keyboard closed restores the clearance",
+      "pass"
+    ]
+  ]
+}

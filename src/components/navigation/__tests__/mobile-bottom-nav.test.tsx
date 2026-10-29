@@ -55,6 +55,10 @@ describe("resolveMobileNavTab (SAN-1606)", () => {
     ["/saved", "saved"],
     ["/me", "account"],
     ["/blog/anything", "an unrelated page"],
+    ["/constructor/example", "an inherited Object.prototype key"],
+    ["/toString/example", "an inherited Object.prototype key"],
+    ["/__proto__/example", "an inherited prototype reference"],
+    ["/hasOwnProperty/example", "an inherited Object.prototype key"],
   ])("never mounts the bar on %s (%s)", (pathname) => {
     expect(resolveMobileNavTab(pathname)).toBeNull();
     expect(renderAt(pathname)).toBe("");

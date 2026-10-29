@@ -122,7 +122,8 @@ test.describe(`${SCREEN_ID} query bar + chips`, () => {
       const request = await requested;
       const body = request.postDataJSON() as Record<string, unknown>;
       // Same parser path the desktop budget chip uses; the amount is the visitor's, not a fixture.
-      expect(String(body.maxPriceMonthly ?? "")).toContain("4000000");
+      // Compare numerically: a substring check would accept 40,000,000 for a 4,000,000 question.
+      expect(Number(body.maxPriceMonthly), "monthly budget parsed from the typed question").toBe(4_000_000);
       // Let the accepted turn finish before the page closes (the helper tracks that response).
       await waitForCopilotIdle(page);
       await expect(page.locator('[data-testid="chat-query-bar"]')).toBeHidden();

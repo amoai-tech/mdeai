@@ -398,3 +398,30 @@ test.describe(`${SCREEN_ID} CopilotKit v2 mobile composer`, () => {
     await expectNoHorizontalOverflow(page);
   });
 });
+
+/**
+ * SAN-1606 — the compact composer is a phone contract, and this lane is the only one that renders
+ * the real CopilotKit v2 input (the deterministic lane has its own chat adapter), so the desktop
+ * "nothing leaked" assertion must live here instead of being skipped there.
+ */
+test.describe("MOB-CK-001 desktop composer contract", () => {
+  test.use({ viewport: { width: 1280, height: 900 } });
+
+  test("keeps the stock v2 composer at desktop width", async ({ page }) => {
+    const { input } = await gotoComposer(page);
+
+    const card = page.getByTestId("copilot-chat-input");
+    await expect(card).toBeVisible();
+    const box = await card.boundingBox();
+    expect(box, "desktop composer box").not.toBeNull();
+    // The compact phone card is 56px; the stock desktop composer is taller. `> 60` would accept a
+    // leaked 61–64px compact row, so the bound is the phone card's own ceiling. Read through null
+    // instead of `box!`: a missing box should fail this assertion, not throw a TypeError.
+    const height = box?.height ?? 0;
+    expect(height, "desktop keeps the stock composer height").toBeGreaterThan(64);
+
+    // The phone-only contract caps a draft at 100px of text; it must not reach a desktop viewport.
+    const maxHeight = await input.evaluate((el) => getComputedStyle(el).maxHeight);
+    expect(maxHeight, "phone-only draft cap must not apply on desktop").not.toBe("100px");
+  });
+});
