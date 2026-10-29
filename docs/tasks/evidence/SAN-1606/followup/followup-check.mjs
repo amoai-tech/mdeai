@@ -125,11 +125,17 @@ const READ = () => {
   await context.close();
 }
 
-await browser.close();
 const passed = results.filter((r) => r.pass).length;
 console.log(`follow-up checks: ${passed}/${results.length} passed`);
 for (const r of results) {
   if (!r.pass) console.log("FAIL", r.name, JSON.stringify(r.detail).slice(0, 400));
 }
-// A documented verification command must fail when a check fails.
+// A documented verification command must fail when a check fails — and must not be turned green by
+// a slow or failing browser shutdown, so the code is decided before closing.
 process.exitCode = passed === results.length ? 0 : 1;
+try {
+  await browser.close();
+} catch (error) {
+  console.error("browser close failed:", error);
+  process.exitCode = 1;
+}

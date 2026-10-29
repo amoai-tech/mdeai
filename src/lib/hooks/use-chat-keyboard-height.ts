@@ -46,9 +46,12 @@ export function useKeyboardInset(): number {
  * `useKeyboardInset` only sees the overlay mode: iOS Safari shrinks the visual viewport and leaves
  * the layout viewport at full height. Chrome on Android resizes *both* viewports (this app sets
  * `interactiveWidget: "resizes-content"`), so `innerHeight - visualViewport.height` is 0 there and
- * a plain inset cannot tell a keyboard from a genuinely smaller window. Track the tallest layout
- * viewport seen since mount and treat a >150px shrink as a keyboard **while a chat composer has
- * focus** — typing is the signal, so dragging a desktop window smaller does not count.
+ * a plain inset cannot tell a keyboard from a genuinely smaller window.
+ *
+ * The fallback signal is a keyboard-sized layout shrink **while a chat composer is focused**,
+ * measured against the layout height captured while nothing was focused and latched until blur or
+ * until the height returns. Latched on purpose: an expiry window would drop a keyboard that is
+ * still open on a long typing session, a rotation or a toolbar collapse.
  */
 export function useOnScreenKeyboard(): boolean {
   const [open, setOpen] = useState(false);
@@ -56,35 +59,48 @@ export function useOnScreenKeyboard(): boolean {
   useEffect(() => {
     const viewport = window.visualViewport;
     const COMPOSER = '[data-testid="copilot-chat-input"]';
-    /** Layout-viewport height with no keyboard, refreshed whenever the composer is not focused. */
+    /** A keyboard-sized layout shrink; matches the overlay threshold. */
+    const KEYBOARD_MIN = 150;
+    /** A shrink this small means the keyboard is gone (browser chrome offsets stay below it). */
+    const KEYBOARD_RELEASE = 50;
+    /** Layout height with no keyboard, captured only while the composer is unfocused. */
     let restingHeight = window.innerHeight;
-    let focusedAt = Number.NEGATIVE_INFINITY;
+    /**
+     * Latched by a keyboard-sized shrink while typing. Latched — not time-windowed — so a rotate
+     * or a toolbar collapse during a long typing session cannot expire a keyboard that is still
+     * open; it releases on blur or when the layout height comes back.
+     */
+    let latched = false;
 
-    const composerHasFocus = () =>
-      document.activeElement instanceof Element && document.activeElement.closest(COMPOSER) !== null;
+    const composerHasFocus = () => {
+      const active = document.activeElement;
+      // `activeElement` can be null during teardown; `closest` is safe on a detached element.
+      return active instanceof Element && active.closest(COMPOSER) !== null;
+    };
 
-    // ponytail: deliberate ceiling — "the viewport shrank a lot while the composer is focused"
-    // is a heuristic for browsers that resize the layout viewport with the keyboard (where the
-    // overlay measurement above is 0). The 150px cutoff and the 1.5s focus window match the
-    // overlay threshold and absorb a slow soft-keyboard animation. Review it when: a browser
-    // starts resizing the layout viewport for something other than the keyboard while a composer
-    // is focused (e.g. a collapsing address bar during typing), or when real-device reports show
-    // keyboards animating in slower than 1.5s; then replace the heuristic with a platform API
-    // (e.g. the VirtualKeyboard API) instead of tuning these numbers.
-    const apply = (event?: Event) => {
+    // ponytail: deliberate ceiling — in browsers that resize the layout viewport with the keyboard
+    // (where the overlay measurement below is 0) "the layout shrank a lot while the composer is
+    // focused" is the only available signal. It latches, so a real keyboard stays detected through
+    // rotation, streaming renders and long sessions; it releases on blur or when the height returns.
+    // The ceiling: a mouse/keyboard user who drags the window >150px smaller *while a composer is
+    // focused* is read as a keyboard until they blur it. Review/replace this when: the Virtual
+    // Keyboard API (`navigator.virtualKeyboard` + `geometrychange`) is available on the browsers we
+    // support, or real-device reports show keyboards that resize by more than 50px on dismissal.
+    const apply = () => {
       const typing = composerHasFocus();
-      if (event?.type === "focusin" && typing) {
-        focusedAt = performance.now();
-        restingHeight = window.innerHeight;
-      } else if (!typing) {
-        // Not typing: whatever the height is now is the keyboard-free baseline. This keeps an
-        // ordinary window resize (or a collapsing browser toolbar) from being read as a keyboard.
-        restingHeight = window.innerHeight;
-      }
       const overlay = viewport ? keyboardOverlap(viewport) : 0;
-      const shrunk = restingHeight - window.innerHeight;
-      const justFocused = performance.now() - focusedAt < 1500;
-      setOpen(overlay > 0 || (shrunk > 150 && typing && justFocused));
+      if (!typing) {
+        // No focus: whatever the height is now is the keyboard-free baseline, and no keyboard.
+        restingHeight = window.innerHeight;
+        latched = false;
+      } else if (overlay > 0) {
+        latched = true;
+      } else {
+        const shrunk = restingHeight - window.innerHeight;
+        if (shrunk > KEYBOARD_MIN) latched = true;
+        else if (shrunk < KEYBOARD_RELEASE) latched = false;
+      }
+      setOpen(overlay > 0 || (typing && latched));
     };
     apply();
     window.addEventListener("resize", apply);

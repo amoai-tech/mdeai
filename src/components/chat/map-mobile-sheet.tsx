@@ -157,28 +157,21 @@ export function MapMobileSheet() {
       frame = requestAnimationFrame(settle);
     };
 
-    // One persistent watcher, throttled to a frame: it starts measuring when the composer first
-    // appears and after each remount. It watches the *stable* centre panel — `copilot-chat-region`
-    // is inside the subtree that `sessionKey` replaces, so watching it would miss the new composer
-    // after a thread switch. Watching the panel (not all of `body`) keeps streaming mutations cheap;
-    // the callback only compares node identity.
-    const containerSelector = '[data-testid="center-chat-panel"]';
-    let container = document.querySelector(containerSelector) ?? document.body;
+    // One persistent watcher, throttled to a frame. It watches `document.body`, the only node in
+    // this tree that cannot be replaced: the composer, the keyed chat subtree and even the centre
+    // panel can be swapped on a thread switch, and an observer attached to any of them would then
+    // sit on a dead node and never fire again. Every tick re-reads the live composer and compares
+    // node identity, so a remount starts a fresh measurement instead of leaving a stale gap.
     const watcher = new MutationObserver(() => {
       if (watchFrame) return;
       watchFrame = requestAnimationFrame(() => {
         watchFrame = 0;
-        if (!container.isConnected) {
-          container = document.querySelector(containerSelector) ?? document.body;
-          watcher.disconnect();
-          watcher.observe(container, { childList: true, subtree: true });
-        }
         const current = composer();
         if (!current || current === observed) return;
         startSettle();
       });
     });
-    watcher.observe(container, { childList: true, subtree: true });
+    watcher.observe(document.body, { childList: true, subtree: true });
     startSettle();
 
     window.addEventListener("resize", measure);
