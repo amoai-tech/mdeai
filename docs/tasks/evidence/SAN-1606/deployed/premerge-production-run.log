@@ -1,0 +1,42 @@
+
+> mdeapp@0.1.0 verify:mobile-nav
+> node scripts/verify-mobile-nav.mjs http://localhost:3000
+
+SKIP  deployed commit — local URL, /api/version is not a release
+PASS  existing navigation journey spec (9 tests: tabs, Back/Forward, exclusions, chips, keyboard, 320/428, 1024)
+PASS  / at 390px: 200 + 64px bar at x=12 with 5 tabs
+PASS  / at 390px: exactly "home" is current, 44px targets
+PASS  / at 390px: no horizontal overflow
+PASS  /chat at 390px: 200 + 64px bar at x=12 with 5 tabs
+PASS  /chat at 390px: exactly "chat" is current, 44px targets
+PASS  /chat at 390px: no horizontal overflow
+PASS  /chat at 390px: chip strip hidden, composer 56-64px
+PASS  /chat at 390px: bar does not overlap the composer or map control
+PASS  /rentals at 390px: 200 + 64px bar at x=12 with 5 tabs
+PASS  /rentals at 390px: exactly "rentals" is current, 44px targets
+PASS  /rentals at 390px: no horizontal overflow
+PASS  /restaurants at 390px: 200 + 64px bar at x=12 with 5 tabs
+PASS  /restaurants at 390px: exactly "restaurants" is current, 44px targets
+PASS  /restaurants at 390px: no horizontal overflow
+PASS  /events at 390px: 200 + 64px bar at x=12 with 5 tabs
+PASS  /events at 390px: exactly "events" is current, 44px targets
+PASS  /events at 390px: no horizontal overflow
+PASS  map sheet opens with a 44px close control
+PASS  map sheet closes
+PASS  long draft stays within 112-128px
+PASS  Send stays above the bar with a draft
+PASS  /cafes at 390px: no bar and nothing reserved
+PASS  /nightlife at 390px: no bar and nothing reserved
+PASS  no unexpected console errors (guest runtime 401, Maps WebGL fallback, deliberate 404, dev HMR reconnect are expected)
+PASS  1023px: bar present
+PASS  1024px: bar absent
+PASS  1024px: chip strip back on desktop
+PASS  1280px: bar absent
+PASS  1280px: chip strip back on desktop
+PASS  keyboard open: bar hidden
+PASS  keyboard open: floating map control hidden
+PASS  keyboard open: chat reserve released
+PASS  keyboard open: composer above the keyboard
+PASS  keyboard closed: bar and map control return, reserve restored
+
+mobile navigation verification: 35/35 checks passed — http://localhost:3000

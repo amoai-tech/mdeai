@@ -304,8 +304,10 @@ test.describe("SAN-1606 mobile bottom navigation", () => {
     await open(page, "/chat");
     await expect(page.getByTestId("copilot-chat-region")).toBeVisible({ timeout: 30_000 });
 
-    // Nothing overlays the composer: the bar unmounts while the keyboard covers the viewport.
+    // Nothing overlays the composer: the bar unmounts while the keyboard covers the viewport, and
+    // the floating map control goes with it (it would otherwise sit on the lifted composer).
     await expect(page.locator(BAR)).toHaveCount(0);
+    await expect(page.getByTestId("map-sheet-trigger")).toBeHidden();
 
     // …and it must come back with the keyboard away (the reserved space too).
     await page.evaluate(() => {
@@ -313,6 +315,8 @@ test.describe("SAN-1606 mobile bottom navigation", () => {
     });
     await expect(page.locator(BAR)).toBeVisible({ timeout: 15_000 });
     await expect(page.getByTestId("mobile-nav-chat")).toHaveAttribute("aria-current", "page");
+    // The keyboard is gone, so the map control is reachable again.
+    await expect(page.getByTestId("map-sheet-trigger")).toBeVisible({ timeout: 15_000 });
     expect(
       await page.evaluate(() => document.documentElement.dataset.mdeNoNav ?? null),
       "the keyboard-only marker is cleaned up",
