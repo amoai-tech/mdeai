@@ -133,7 +133,7 @@ describe("EventLocalChatProvider durable save", () => {
     expect(api!.messages).toHaveLength(2);
   });
 
-  it("gives the conversation an id when the agent has none, and saves immediately", async () => {
+  it("saves under a generated conversation id when the agent has none", async () => {
     const agent = { threadId: undefined as string | undefined, addMessages: vi.fn() };
     await renderWith(agent);
 
@@ -142,11 +142,12 @@ describe("EventLocalChatProvider durable save", () => {
     });
 
     // Without an id the answer was previously queued and never sent in a session where the
-    // agent never connects (measured in the browser run), so the provider assigns one.
+    // agent never connects (measured in the browser run), so the provider resolves one.
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url] = fetchMock.mock.calls[0] as [string];
     expect(url).toMatch(/^\/api\/threads\/[0-9a-f-]{36}\/messages$/);
-    expect(agent.threadId).toMatch(/^[0-9a-f-]{36}$/);
+    // The agent object is not mutated; the generated id stays internal to this provider.
+    expect(agent.threadId).toBeUndefined();
   });
 
   it("retries a transient save failure once", async () => {
@@ -174,24 +175,7 @@ describe("EventLocalChatProvider durable save", () => {
     const [url] = fetchMock.mock.calls[0] as [string];
     expect(url).toMatch(/^\/api\/threads\/[0-9a-f-]{36}\/messages$/);
     expect(url).not.toContain("evil");
-    expect(agent.threadId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(agent.threadId).toBe("../../evil");
   });
 
-  it("drops a queued save when New Chat starts a new conversation", async () => {
-    // No agent at all: the batch can only be queued.
-    await renderWith(undefined);
-    await act(async () => {
-      api!.showExchange("Find Italian restaurants in El Poblado.", "3 Italian spots in El Poblado.");
-    });
-    expect(fetchMock).not.toHaveBeenCalled();
-
-    await act(async () => {
-      api!.clearLocalMessages();
-    });
-
-    // A later agent must not resurrect the previous conversation's save.
-    await renderWith({ threadId: THREAD, addMessages: vi.fn() });
-
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
 });

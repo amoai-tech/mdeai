@@ -71,6 +71,20 @@ function isThreadUuid(value: string): boolean {
   return true;
 }
 
+/**
+ * The conversation to save into. The agent's own id wins when it is a real uuid; otherwise one is
+ * generated once per provider and reused. The agent object is never mutated: a fast-path answer has
+ * no agent run behind it, so this only needs to be stable for this session.
+ */
+function threadIdFor(
+  agent: { threadId?: string } | undefined,
+  generated: { current: string | null },
+): string | null {
+  if (agent?.threadId && isThreadUuid(agent.threadId)) return agent.threadId;
+  if (!generated.current) generated.current = crypto.randomUUID();
+  return generated.current;
+}
+
 function nextId() {
   return `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -82,22 +96,13 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
   const [clarifyKind, setClarifyKind] = useState<LocalClarifyKind | null>(null);
   const [signInPrompt, setSignInPrompt] = useState(false);
   const pendingAgentMessagesRef = useRef<EventLocalChatMessage[]>([]);
-  const pendingSavesRef = useRef<EventLocalChatMessage[][]>([]);
+  const generatedThreadIdRef = useRef<string | null>(null);
   // Declared as a ref because the flush effect runs above the callbacks that implement saving.
   const saveRef = useRef<(threadId: string, batch: EventLocalChatMessage[]) => void>(() => {});
   const agentRef = useRef(agent);
 
   useEffect(() => {
     agentRef.current = agent;
-  }, [agent]);
-
-  useEffect(() => {
-    if (!agent || pendingSavesRef.current.length === 0) return;
-    const threadId = resolveThreadId(agent);
-    if (!threadId) return;
-    const queued = [...pendingSavesRef.current];
-    pendingSavesRef.current = [];
-    for (const batch of queued) saveRef.current(threadId, batch);
   }, [agent]);
 
   useEffect(() => {
@@ -122,22 +127,6 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
    * after a refresh. Persist the same exchange through the existing thread route (same tables, same
    * owner check) and stay silent on 401: a guest has no thread to save to.
    */
-  /**
-   * The conversation id to save into. CopilotKit may not have one yet on a page that has not run
-   * the agent, so assign it here the same way the chat flow does when it starts a session —
-   * otherwise an answer shown on Home is queued behind a connection that may never happen.
-   */
-  const resolveThreadId = useCallback((agent: { threadId?: string }): string | null => {
-    if (agent.threadId && isThreadUuid(agent.threadId)) return agent.threadId;
-    const generated = crypto.randomUUID();
-    try {
-      (agent as { threadId?: string }).threadId = generated;
-      return generated;
-    } catch {
-      return null;
-    }
-  }, []);
-
   const save = useCallback((threadId: string, batch: EventLocalChatMessage[]) => {
     // Only a real thread uuid may become a request path; anything else is not one of ours.
     if (!isThreadUuid(threadId)) {
@@ -180,13 +169,8 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
 
   const persist = useCallback(
     (batch: EventLocalChatMessage[]) => {
-      const agent = agentRef.current;
-      const threadId = agent ? resolveThreadId(agent) : null;
-      if (!threadId) {
-        pendingSavesRef.current.push(batch);
-        return;
-      }
-      save(threadId, batch);
+      const threadId = threadIdFor(agentRef.current, generatedThreadIdRef);
+      if (threadId) save(threadId, batch);
     },
     [save],
   );
@@ -286,8 +270,6 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
 
   const clearLocalMessages = useCallback(() => {
     pendingAgentMessagesRef.current = [];
-    // A queued save belongs to the conversation that produced it; New Chat starts a new one.
-    pendingSavesRef.current = [];
     setSignInPrompt(false);
     setMessages([]);
     setClarifyPending(false);
