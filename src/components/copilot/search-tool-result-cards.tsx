@@ -44,6 +44,25 @@ export function filterCustomerVisibleRentalRankExplanation<
   );
 }
 
+/**
+ * The sentence a renter reads for a visible rank factor. The internal factor name and its technical note
+ * (for example "hybrid_semantic: hybrid_search_listings RPC") are never shown.
+ */
+export function describeRentalRankFactor(entry: { factor: string; note: string }): string {
+  switch (entry.factor) {
+    case "hybrid_semantic":
+      return "Matched on the meaning of your request, not only keywords.";
+    case "neighborhood":
+      return `Limited to ${entry.note.replace(/ filter$/, "")}.`;
+    case "neighborhood_profile":
+      return `Used what we know about ${entry.note}.`;
+    case "digital_nomad_score":
+      return "Ranked remote-work friendly places higher.";
+    default:
+      return "";
+  }
+}
+
 function rentalPinId(listingId: string) {
   return `rental-${listingId}`;
 }
@@ -348,9 +367,7 @@ export function RentalResults({
           <p className="font-medium text-foreground">Why these rentals</p>
           <ul className="mt-1 list-inside list-disc">
             {rankExplanation.map((entry) => (
-              <li key={`${entry.factor}-${entry.note}`}>
-                {entry.factor}: {entry.note}
-              </li>
+              <li key={`${entry.factor}-${entry.note}`}>{describeRentalRankFactor(entry)}</li>
             ))}
           </ul>
         </div>
