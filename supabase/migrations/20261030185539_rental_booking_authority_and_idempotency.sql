@@ -8,6 +8,19 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_bookings_apartment_idempotency
   WHERE booking_type = 'apartment'::public.booking_type
     AND idempotency_key IS NOT NULL;
 
+-- Both tables already have RLS enabled on the canonical local/live database.
+-- Lock it in for fresh replays. Do not rely on a policy without RLS.
+ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.bookings ENABLE ROW LEVEL SECURITY;
+
+-- Existing payments grants include broad client write privileges, despite
+-- there being no client write policy. Keep SELECT for signed-in users and
+-- the existing authenticated admin DELETE operation used by event workflows.
+-- Payment INSERT/UPDATE always belong to trusted server flows.
+REVOKE ALL PRIVILEGES ON TABLE public.payments FROM anon;
+REVOKE INSERT, UPDATE, REFERENCES, TRIGGER
+  ON TABLE public.payments FROM authenticated;
+
 -- A renter can read their own apartment payment. Keep the existing event-order
 -- SELECT policy and its independent event authorization unchanged.
 CREATE POLICY payments_apartment_booking_owner_select
@@ -35,9 +48,12 @@ SECURITY INVOKER
 SET search_path = ''
 AS $$
 BEGIN
-  -- Stripe webhook/authorized backend use service_role. Preserve Super Admin
-  -- operational control without making ordinary renters payment authorities.
-  IF current_user NOT IN ('authenticated', 'anon')
+  -- Only the explicitly trusted server/database roles (not arbitrary SQL
+  -- roles) and authenticated Super Admin retain the existing management path.
+  -- A service_role key is highly privileged; this does NOT defend against
+  -- its compromise. SAN-1240 must enforce verified Stripe webhook + atomic
+  -- payment finalization at the owning server action/RPC boundary.
+  IF current_user IN ('service_role', 'postgres')
      OR (current_user = 'authenticated'
          AND COALESCE((SELECT public.is_admin()), false)) THEN
     RETURN NEW;
@@ -96,6 +112,9 @@ $$;
 
 REVOKE ALL ON FUNCTION public.guard_apartment_booking_payment_authority()
   FROM PUBLIC, anon, authenticated;
+-- Required by the existing SAN-1284C trigger/internal function ACL contract.
+GRANT EXECUTE ON FUNCTION public.guard_apartment_booking_payment_authority()
+  TO service_role;
 
 CREATE TRIGGER guard_apartment_booking_payment_authority
   BEFORE INSERT OR UPDATE ON public.bookings
