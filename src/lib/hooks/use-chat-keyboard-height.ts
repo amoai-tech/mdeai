@@ -13,6 +13,18 @@ function keyboardOverlap(viewport: VisualViewport): number {
 }
 
 /**
+ * The overlay keyboard's lift in pixels, using the same >150px threshold as `useKeyboardInset`.
+ *
+ * Callers that compensate for the lift must use this, not a raw `innerHeight - visualViewport.height`:
+ * mobile emulation and collapsing browser toolbars leave a smaller gap (measured ~128px) that is not
+ * a keyboard, and subtracting it would move fixed controls by that amount.
+ */
+export function keyboardLiftPx(): number {
+  const viewport = window.visualViewport;
+  return viewport ? keyboardOverlap(viewport) : 0;
+}
+
+/**
  * The part of the layout viewport an on-screen keyboard covers.
  *
  * iOS Safari overlays the keyboard instead of resizing the layout viewport, so

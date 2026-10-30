@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { Map, MapPin, XIcon } from "lucide-react";
+import { keyboardLiftPx } from "@/lib/hooks/use-chat-keyboard-height";
 import { ChatMap } from "@/components/maps/ChatMap";
 import { EmptyState } from "@/components/empty/empty-state";
 import { Button } from "@/components/ui/button";
@@ -111,9 +112,8 @@ export function MapMobileSheet() {
       // The rendered position already includes the overlay keyboard's lift, and the style below
       // adds that lift again, so measure the *unlifted* top; otherwise a measurement taken while
       // the keyboard is open (growth, remount) would push the trigger a whole keyboard too high.
-      const viewport = window.visualViewport;
-      const lift = viewport ? Math.max(0, Math.round(window.innerHeight - viewport.height)) : 0;
-      const unliftedTop = element.getBoundingClientRect().top + lift;
+      // Only a keyboard-sized gap is a lift (see keyboardLiftPx); a browser-UI gap is not.
+      const unliftedTop = element.getBoundingClientRect().top + keyboardLiftPx();
       const gap = Math.round(window.innerHeight - unliftedTop + 8);
       if (gap > 0) setComposerGap(gap);
       return gap > 0 ? gap : null;
