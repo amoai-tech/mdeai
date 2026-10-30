@@ -39,10 +39,19 @@ function supabaseEnv() {
   return { url, anon, serviceKey };
 }
 
-/** True only when the Supabase env required for authed e2e is present. */
+/** Reject fake CI backend credentials before trying authenticated QA journeys. */
 export function hasE2eEnv(): boolean {
   const { url, anon, serviceKey } = supabaseEnv();
-  return Boolean(url && anon && serviceKey);
+  if (!url || !anon || !serviceKey || anon === "sb_publishable_test") return false;
+  try {
+    const parsed = new URL(url);
+    if ((parsed.hostname === "127.0.0.1" || parsed.hostname === "localhost") && parsed.port === "9") {
+      return false;
+    }
+    return parsed.protocol === "https:" || parsed.protocol === "http:";
+  } catch {
+    return false;
+  }
 }
 
 /**
