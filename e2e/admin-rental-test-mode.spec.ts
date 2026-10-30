@@ -236,13 +236,57 @@ for (const viewport of LAYOUT_VIEWPORTS) {
     if (!email) throw new Error("Admin layout E2E requires MDE_ADMIN_RENTAL_E2E_EMAIL");
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     await signInAsOnOrigin(page, origin, email);
+
+    // This is a read-only layout test: keep real admin auth + page, but use
+    // deterministic API rows so an empty database or failed load cannot pass.
+    const fixtureId = "00000000-0000-4000-8000-000000000001";
+    await page.route("**/api/admin/rentals/test", async (route) => {
+      if (route.request().method() !== "GET") {
+        await route.continue();
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        json: {
+          rentals: [{
+            id: fixtureId, title: "Layout fixture — Laureles apartment",
+            neighborhood: "Laureles", address: "Calle 10",
+            price_monthly: 2400000, currency: "COP",
+            available_from: "2026-11-01", status: "inactive",
+            moderation_status: "pending", listing_workflow_status: "draft",
+            verified: false, metadata: { is_test_fixture: "true" },
+          }],
+          counts: { [fixtureId]: { leads: 0, showings: 0 } },
+          testAccess: [{
+            id: "00000000-0000-4000-8000-000000000011",
+            user_id: "00000000-0000-4000-8000-000000000012",
+            access_role: "renter", granted_by: null,
+            granted_at: "2026-10-30T12:00:00Z",
+            expires_at: null, revoked_at: null, active: true,
+          }],
+          testEvents: [{
+            id: 1, apartment_id: fixtureId,
+            actor_id: "00000000-0000-4000-8000-000000000012",
+            event_type: "test_listing_created",
+            details: null, created_at: "2026-10-30T12:00:00Z",
+          }],
+        },
+      });
+    });
     const rentalsLoaded = page.waitForResponse(
-      (response) => response.url().includes("/api/admin/rentals/test") && response.request().method() === "GET",
+      (response) => response.url().includes("/api/admin/rentals/test")
+        && response.request().method() === "GET",
     );
     await page.goto("/admin/rentals");
-    await rentalsLoaded;
+    expect((await rentalsLoaded).ok()).toBe(true);
     await expect(page.getByTestId("admin-rental-test-panel")).toBeVisible();
-    await expect(page.getByTestId("admin-rental-table")).toBeVisible();
+    const rentalRows = page.getByTestId("admin-rental-table").locator("tbody tr");
+    const buttons = page.getByTestId("admin-rental-table").locator("button");
+    await expect(rentalRows).toHaveCount(1);
+    await expect(page.getByTestId(`admin-test-publish-${fixtureId}`)).toBeVisible();
+    await expect(buttons).not.toHaveCount(0);
+    await expect(page.getByTestId("admin-test-access-list").locator("tbody tr")).toHaveCount(1);
+    await expect(page.getByTestId("admin-test-events").locator("tbody tr")).toHaveCount(1);
     // Let React commit the loaded rows before measuring layout.
     await page.evaluate(
       () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
@@ -268,6 +312,13 @@ for (const viewport of LAYOUT_VIEWPORTS) {
       // Keyboard users must be able to focus the scroll region to pan it.
       await scroller.focus();
       await expect(scroller).toBeFocused();
+      if (viewport.tableMustScroll) {
+        const dimensions = await scroller.evaluate((el) => ({
+          scrollWidth: el.scrollWidth,
+          clientWidth: el.clientWidth,
+        }));
+        expect(dimensions.scrollWidth, testId).toBeGreaterThan(dimensions.clientWidth);
+      }
     }
 
     const rental = await page.getByTestId("admin-rental-table-scroll").evaluate((el) => ({
@@ -283,14 +334,14 @@ for (const viewport of LAYOUT_VIEWPORTS) {
 
     // Every action button is reachable and fully visible inside the viewport once its
     // cell is scrolled into view, and panning the table never widens the page.
-    const rowCount = await page.getByTestId("admin-rental-table").locator("tbody tr").count();
-    const buttons = page.getByTestId("admin-rental-table").locator("button");
+    const rowCount = await rentalRows.count();
     const buttonCount = await buttons.count();
     test.info().annotations.push(
       { type: "rental rows", description: String(rowCount) },
       { type: "action buttons", description: String(buttonCount) },
     );
-    if (rowCount > 0) expect(buttonCount).toBeGreaterThan(0);
+    expect(rowCount).toBe(1);
+    expect(buttonCount).toBeGreaterThan(0);
     for (let index = 0; index < buttonCount; index += 1) {
       const button = buttons.nth(index);
       await button.scrollIntoViewIfNeeded();

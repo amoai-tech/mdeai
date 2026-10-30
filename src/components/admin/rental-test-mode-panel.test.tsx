@@ -81,3 +81,25 @@ describe("MDE test operator button", () => {
     expect(JSON.parse(posts[0][1].body).enabled).toBe(true);
   });
 });
+
+describe("Admin rental tables keep mobile overflow inside accessible scroll regions", () => {
+  it.each([
+    ["admin-rental-table-scroll", "admin-rental-table", "min-w-[760px]", "Rental listings"],
+    ["admin-test-access-scroll", "admin-test-access-list", "min-w-[560px]", "Development access grants"],
+    ["admin-test-events-scroll", "admin-test-events", "min-w-[520px]", "Development audit trail"],
+  ])("keeps %s scrollable and keyboard-accessible", async (wrapperId, tableId, widthClass, label) => {
+    await act(async () => {
+      root.render(<RentalTestModePanel />);
+      await Promise.resolve();
+    });
+    const scroller = container.querySelector<HTMLElement>(`[data-testid="${wrapperId}"]`);
+    expect(scroller).not.toBeNull();
+    expect(scroller?.classList.contains("max-w-full")).toBe(true);
+    expect(scroller?.classList.contains("overflow-x-auto")).toBe(true);
+    expect(scroller?.getAttribute("role")).toBe("region");
+    expect(scroller?.getAttribute("aria-label")).toBe(label);
+    expect(scroller?.tabIndex).toBe(0);
+    const table = scroller?.querySelector(`[data-testid="${tableId}"]`);
+    expect(table?.classList.contains(widthClass)).toBe(true);
+  });
+});
