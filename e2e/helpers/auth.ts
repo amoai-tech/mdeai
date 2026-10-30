@@ -5,6 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 export const QA_HOST_EMAIL = "qa-landlord@mdeai.co";
+export const QA_SUPER_ADMIN_EMAIL = "mde@socialmediaville.ca";
 
 /** Load `.env.local` into process.env for e2e helpers (Playwright doesn't read it). */
 export function loadEnvLocalForE2E(): void {
@@ -313,10 +314,11 @@ export async function getTestSession(email = QA_HOST_EMAIL): Promise<Session> {
   const admin = await getSupabaseAdmin();
 
   // Supabase admin.generateLink(type: "magiclink") creates missing users.
-  // The shared QA identity must already exist: a smoke run must never silently
-  // provision a new account in the real project if the QA account was deleted.
-  // Throwaway identities are created explicitly elsewhere before this helper.
-  if (email.toLowerCase() === QA_HOST_EMAIL.toLowerCase()) {
+  // Both permanent QA identities must already exist: a smoke run must never
+  // silently create an auth user. Explicitly provisioned throwaway identities
+  // are handled by their existing creation/cleanup flows.
+  const permanentQaEmails = [QA_HOST_EMAIL, QA_SUPER_ADMIN_EMAIL];
+  if (permanentQaEmails.includes(email.toLowerCase())) {
     let page = 1;
     let found = false;
     while (true) {
@@ -325,12 +327,12 @@ export async function getTestSession(email = QA_HOST_EMAIL): Promise<Session> {
         perPage: 1000,
       });
       if (error) throw new Error(`QA account lookup failed: ${error.message}`);
-      found = data.users.some((user) => user.email?.toLowerCase() === QA_HOST_EMAIL);
+      found = data.users.some((user) => user.email?.toLowerCase() === email.toLowerCase());
       if (found || !data.nextPage) break;
       page = data.nextPage;
     }
     if (!found) {
-      throw new Error(`Existing QA account ${QA_HOST_EMAIL} not found; refusing magic-link auto-creation`);
+      throw new Error(`Existing QA account ${email} not found; refusing magic-link auto-creation`);
     }
   }
 
