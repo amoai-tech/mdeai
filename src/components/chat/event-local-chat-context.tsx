@@ -92,10 +92,12 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
   }, [agent]);
 
   useEffect(() => {
-    if (!agent?.threadId || pendingSavesRef.current.length === 0) return;
+    if (!agent || pendingSavesRef.current.length === 0) return;
+    const threadId = resolveThreadId(agent);
+    if (!threadId) return;
     const queued = [...pendingSavesRef.current];
     pendingSavesRef.current = [];
-    for (const batch of queued) saveRef.current(agent.threadId, batch);
+    for (const batch of queued) saveRef.current(threadId, batch);
   }, [agent]);
 
   useEffect(() => {
@@ -120,6 +122,22 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
    * after a refresh. Persist the same exchange through the existing thread route (same tables, same
    * owner check) and stay silent on 401: a guest has no thread to save to.
    */
+  /**
+   * The conversation id to save into. CopilotKit may not have one yet on a page that has not run
+   * the agent, so assign it here the same way the chat flow does when it starts a session —
+   * otherwise an answer shown on Home is queued behind a connection that may never happen.
+   */
+  const resolveThreadId = useCallback((agent: { threadId?: string }): string | null => {
+    if (agent.threadId && isThreadUuid(agent.threadId)) return agent.threadId;
+    const generated = crypto.randomUUID();
+    try {
+      (agent as { threadId?: string }).threadId = generated;
+      return generated;
+    } catch {
+      return null;
+    }
+  }, []);
+
   const save = useCallback((threadId: string, batch: EventLocalChatMessage[]) => {
     // Only a real thread uuid may become a request path; anything else is not one of ours.
     if (!isThreadUuid(threadId)) {
@@ -162,9 +180,8 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
 
   const persist = useCallback(
     (batch: EventLocalChatMessage[]) => {
-      const threadId = agentRef.current?.threadId;
-      // The first fast-path answer can arrive before CopilotKit assigns a thread id. Keep the batch
-      // and save it as soon as the id exists, instead of dropping the answer.
+      const agent = agentRef.current;
+      const threadId = agent ? resolveThreadId(agent) : null;
       if (!threadId) {
         pendingSavesRef.current.push(batch);
         return;

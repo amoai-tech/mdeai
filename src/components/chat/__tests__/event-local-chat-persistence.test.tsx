@@ -133,20 +133,20 @@ describe("EventLocalChatProvider durable save", () => {
     expect(api!.messages).toHaveLength(2);
   });
 
-  it("saves the first answer once the agent assigns a thread id", async () => {
-    await renderWith({ threadId: undefined, addMessages: vi.fn() });
+  it("gives the conversation an id when the agent has none, and saves immediately", async () => {
+    const agent = { threadId: undefined as string | undefined, addMessages: vi.fn() };
+    await renderWith(agent);
 
     await act(async () => {
       api!.showExchange("Find Italian restaurants in El Poblado.", "3 Italian spots in El Poblado.");
     });
-    expect(fetchMock).not.toHaveBeenCalled();
 
-    // CopilotKit assigns the thread id a moment later; the queued save must flush.
-    await renderWith({ threadId: THREAD, addMessages: vi.fn() });
-
+    // Without an id the answer was previously queued and never sent in a session where the
+    // agent never connects (measured in the browser run), so the provider assigns one.
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url] = fetchMock.mock.calls[0] as [string];
-    expect(url).toBe(`/api/threads/${THREAD}/messages`);
+    expect(url).toMatch(/^\/api\/threads\/[0-9a-f-]{36}\/messages$/);
+    expect(agent.threadId).toMatch(/^[0-9a-f-]{36}$/);
   });
 
   it("retries a transient save failure once", async () => {
@@ -161,18 +161,25 @@ describe("EventLocalChatProvider durable save", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it("never posts to a thread id that is not a uuid", async () => {
-    await renderWith({ threadId: "../../evil", addMessages: vi.fn() });
+  it("never uses a thread id that is not a uuid", async () => {
+    const agent = { threadId: "../../evil", addMessages: vi.fn() };
+    await renderWith(agent);
 
     await act(async () => {
       api!.showExchange("Hello", "Hi");
     });
 
-    expect(fetchMock).not.toHaveBeenCalled();
+    // An invalid id is replaced with a real one; it must never reach the request path.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url] = fetchMock.mock.calls[0] as [string];
+    expect(url).toMatch(/^\/api\/threads\/[0-9a-f-]{36}\/messages$/);
+    expect(url).not.toContain("evil");
+    expect(agent.threadId).toMatch(/^[0-9a-f-]{36}$/);
   });
 
   it("drops a queued save when New Chat starts a new conversation", async () => {
-    await renderWith({ threadId: undefined, addMessages: vi.fn() });
+    // No agent at all: the batch can only be queued.
+    await renderWith(undefined);
     await act(async () => {
       api!.showExchange("Find Italian restaurants in El Poblado.", "3 Italian spots in El Poblado.");
     });
@@ -182,7 +189,7 @@ describe("EventLocalChatProvider durable save", () => {
       api!.clearLocalMessages();
     });
 
-    // A later thread id must not resurrect the previous conversation's save.
+    // A later agent must not resurrect the previous conversation's save.
     await renderWith({ threadId: THREAD, addMessages: vi.fn() });
 
     expect(fetchMock).not.toHaveBeenCalled();
