@@ -96,9 +96,6 @@ jobs:
       - name: Run deterministic journeys and long-chat virtualization
         env:
           NODE_ENV: development
-          # Webpack compiles many routes in this shard; give Next headroom before its 80% heap restart.
-          # Scoped to this job, not production or the independent real-composer lane.
-          NODE_OPTIONS: --max-old-space-size=4096
           PLAYWRIGHT_CI_WARMUP: "1" # Precompile /chat outside test timeouts.
           DEBUG: pw:webserver # Diagnostics for local Next.js startup/readiness.
           PLAYWRIGHT_BLOB_OUTPUT_NAME: shard-${{ matrix.shard }}.zip
@@ -115,10 +112,11 @@ jobs:
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_test
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ""
           SMOKE_BASE_URL: http://localhost:3002
-          # Shard 3 cold-loads many routes; Webpack dev repeatedly restarted at its
-          # heap threshold and reset page.goto. Turbopack keeps the dev-only test
-          # adapters active without affecting the two already-green Webpack shards.
-          PLAYWRIGHT_WEB_SERVER_COMMAND: ${{ matrix.shard == 3 && 'npx next dev --turbopack -p 3002' || 'npm run dev:ui:worktree' }}
+          # Run every deterministic shard on the same dev compiler. Webpack restarted
+          # at the memory threshold in CI and interrupted page navigation:
+          # https://github.com/amoai-tech/mdeai/actions/runs/41118981846/job/124280607289
+          # This tests dev-mode journeys; the Floor job separately verifies production builds.
+          PLAYWRIGHT_WEB_SERVER_COMMAND: npx next dev --turbopack -p 3002
         run: npm run test:e2e:deterministic -- --shard=${{ matrix.shard }}/3 --reporter=blob,list
 
       - name: Retain each shard's blob report (including failures)
