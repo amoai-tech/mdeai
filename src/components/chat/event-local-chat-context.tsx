@@ -77,6 +77,35 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
     }
   }, [agent]);
 
+  /**
+   * SAN-1531 — the local exchange must outlive the tab.
+   *
+   * `agent.addMessages()` only changes the browser session; nothing reaches Mastra storage until a
+   * real agent run happens. The discovery fast paths never start a run, so the answer disappeared
+   * after a refresh. Persist the same exchange through the existing thread route (same tables, same
+   * owner check) and stay silent on 401: a guest has no thread to save to.
+   */
+  const persist = useCallback((batch: EventLocalChatMessage[]) => {
+    const threadId = agentRef.current?.threadId;
+    if (!threadId) return;
+    const messages = batch
+      .filter((m) => m.role === "user" || m.role === "assistant")
+      .map(({ id, role, content }) => ({ id, role, content }));
+    if (messages.length === 0) return;
+    void fetch(`/api/threads/${encodeURIComponent(threadId)}/messages`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ messages }),
+      keepalive: true,
+    })
+      .then((response) => {
+        if (!response.ok && response.status !== 401) {
+          console.warn(`[EventLocalChat] history save failed: ${response.status}`);
+        }
+      })
+      .catch((error) => console.warn("[EventLocalChat] history save failed", error));
+  }, []);
+
   const publishOrQueue = useCallback(
     (nextMessages: EventLocalChatMessage[]) => {
       if (agentRef.current) {
@@ -104,8 +133,9 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
       setSignInPrompt(false);
       setMessages(nextMessages);
       publishOrQueue(nextMessages);
+      persist(nextMessages);
     },
-    [publishOrQueue],
+    [persist, publishOrQueue],
   );
 
   const showExchange = useCallback(
@@ -125,8 +155,9 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
       setSignInPrompt(false);
       setMessages((prev) => [...prev, ...nextMessages]);
       publishOrQueue(nextMessages);
+      persist(nextMessages);
     },
-    [publishOrQueue],
+    [persist, publishOrQueue],
   );
 
   const showNotice = useCallback(
@@ -137,8 +168,9 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
       setSignInPrompt(false);
       setMessages((prev) => [...prev, ...next]);
       publishOrQueue(next);
+      persist(next);
     },
-    [publishOrQueue],
+    [persist, publishOrQueue],
   );
 
   const showSignInPrompt = useCallback((userText: string) => {
