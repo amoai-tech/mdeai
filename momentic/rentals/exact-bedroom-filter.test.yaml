@@ -1,12 +1,13 @@
 fileType: momentic/test/v2
 id: mde-rentals-exact-bedrooms
 description: "Read-only regression: 2 BR must not show 3 BR apartments (Mo 2026-10-30)."
-url: https://www.mdeai.co/rentals
+url: https://www.mdeai.co/
 labels:
   - rentals
   - pr-pilot
 retries: 0
 steps:
+  - click: "Rentals in the public website navigation"
   - click:
       css: '[data-testid="rentals-filter-neighborhood-laureles"]:visible'
   - click:

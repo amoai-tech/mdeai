@@ -1,84 +1,151 @@
-# Advisory Momentic pilot. Keep deterministic Playwright and release gates as the required checks.
-# deployment_status uses the default-branch workflow; checkout main, not untrusted PR code.
+# Advisory Momentic pilot. Keep Playwright as the required deterministic/security foundation.
+# Deployment-status executes trusted default-branch code, never unreviewed PR source with secrets.
 name: Momentic Rentals Preview (pilot)
 on:
   deployment_status:
-  workflow_dispatch:
-    inputs:
-      preview_url:
-        description: "Exact Vercel PR preview URL (not the production website)"
-        required: true
-        type: string
 
 permissions:
   contents: read
+  pull-requests: read
+  checks: write
 
 concurrency:
-  group: momentic-rentals-${{ github.event.deployment.ref || github.ref }}
+  group: momentic-rentals-${{ github.event.deployment.sha }}
   cancel-in-progress: true
 
 jobs:
   rentals:
     if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event.deployment_status.state == 'success' &&
-       github.event.deployment.environment == 'Preview')
+      github.event.deployment_status.state == 'success' &&
+      github.event.deployment.environment == 'Preview' &&
+      github.event.deployment.creator.login == 'vercel[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 12
     # PILOT: failures are visible in the job and summary but cannot block merging.
     continue-on-error: true
     env:
-      MOMENTIC_API_KEY: ${{ secrets.MOMENTIC_API_KEY }}
-      PREVIEW_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.preview_url || github.event.deployment_status.environment_url }}
-      VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+      PREVIEW_URL: ${{ github.event.deployment_status.environment_url }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: main
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: "22"
-      - name: Validate preview target (never test production or leak bypass credentials)
+      - name: Only test an open PR affecting public Rentals
+        id: scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_SHA: ${{ github.event.deployment.sha }}
         run: |
-          node -e '
-            const url = new URL(process.env.PREVIEW_URL || "");
-            if (url.protocol !== "https:" || !url.hostname.endsWith(".vercel.app") ||
-                url.username || url.password || url.search || url.hash) {
-              console.error("Expected an HTTPS Vercel preview deployment URL, not production.");
-              process.exit(1);
-            }
-          '
+          set -euo pipefail
+          pr=$(gh api "repos/$GITHUB_REPOSITORY/commits/$DEPLOY_SHA/pulls" --jq '[.[] | select(.state == "open") | .number] | first // empty')
+          if [[ -z "$pr" ]]; then
+            echo "No open PR for the exact preview commit; skip."
+            exit 0
+          fi
+          paths=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$pr/files?per_page=100" --jq '.[].filename')
+          if ! grep -Eq '^(src/app/rentals/|src/components/rentals/|src/lib/rentals/|src/mastra/tools/search-rentals\.ts$|src/mastra/lib/intelligence-rental-search\.ts$|momentic/rentals/|momentic\.config\.yaml$|\.github/workflows/momentic-rentals-preview\.yml$)' <<< "$paths"; then
+            echo "PR #$pr does not affect Rentals; skip."
+            exit 0
+          fi
+          echo "selected=true" >> "$GITHUB_OUTPUT"
+          echo "pr=$pr" >> "$GITHUB_OUTPUT"
+          echo "sha=$DEPLOY_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Verify Vercel project and exact deployed PR commit
+        if: steps.scope.outputs.selected == 'true'
+        id: preview
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          DEPLOY_SHA: ${{ steps.scope.outputs.sha }}
+        run: |
+          node --input-type=module <<'JS'
+          const u = new URL(process.env.PREVIEW_URL);
+          if (u.protocol !== 'https:' || !u.hostname.endsWith('.vercel.app') ||
+              u.username || u.password || u.search || u.hash || u.pathname !== '/') {
+            throw new Error('Expected exact HTTPS Vercel preview origin');
+          }
+          if (!process.env.VERCEL_TOKEN || !process.env.VERCEL_PROJECT_ID) throw new Error('Missing Vercel verification secrets');
+          const r = await fetch('https://api.vercel.com/v13/deployments/' + encodeURIComponent(u.hostname), {
+            headers: { authorization: 'Bearer ' + process.env.VERCEL_TOKEN },
+          });
+          if (!r.ok) throw new Error('Vercel API returned HTTP ' + r.status);
+          const d = await r.json();
+          if ((d.projectId ?? d.project?.id) !== process.env.VERCEL_PROJECT_ID ||
+              d.meta?.githubCommitSha !== process.env.DEPLOY_SHA ||
+              d.meta?.githubOrg !== 'amoai-tech' || d.meta?.githubRepo !== 'mdeai' ||
+              d.readyState !== 'READY' || d.target === 'production') {
+            throw new Error('Preview is not the expected MDE project and PR commit');
+          }
+          console.log('Verified exact MDE preview provenance');
+          JS
+          echo "verified=true" >> "$GITHUB_OUTPUT"
+      - name: Require trusted Momentic test from main
+        if: steps.preview.outputs.verified == 'true'
+        id: installed
+        run: |
+          if [[ -f momentic.config.yaml && -f momentic/rentals/exact-bedroom-filter.test.yaml ]]; then
+            echo 'present=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'Pilot YAML is not yet merged into main; cannot run the trusted test yet.'
+          fi
       - name: Install Momentic Chromium only
+        if: steps.installed.outputs.present == 'true'
         run: npx --yes momentic@3.67.1 install-browsers chromium
       - name: Run focused signed-out Rentals regression
+        if: steps.installed.outputs.present == 'true'
         id: momentic
+        env:
+          MOMENTIC_API_KEY: ${{ secrets.MOMENTIC_API_KEY }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         shell: bash
         run: |
           args=(run momentic/rentals/exact-bedroom-filter.test.yaml
             --url-override "$PREVIEW_URL"
-            --reporter steps --reporter junit
+            --reporter steps --reporter junit --reporter-dir "$RUNNER_TEMP/momentic-junit"
             --output-dir "$RUNNER_TEMP/momentic-rentals"
             --upload-results --retries 0 -y)
-          # Do not send the protection-bypass secret to user-supplied manual URLs.
-          if [[ "${{ github.event_name }}" == "deployment_status" && -n "$VERCEL_AUTOMATION_BYPASS_SECRET" ]]; then
+          # Only run after preview provenance was verified against Vercel's API.
+          if [[ -n "$VERCEL_AUTOMATION_BYPASS_SECRET" ]]; then
             args+=(--custom-headers "x-vercel-protection-bypass=$VERCEL_AUTOMATION_BYPASS_SECRET" "x-vercel-set-bypass-cookie=true")
           fi
           npx --yes momentic@3.67.1 "${args[@]}"
-      - name: Summarize advisory result
-        if: always()
+      - name: Publish neutral advisory PR check and summary
+        if: always() && steps.scope.outputs.selected == 'true'
         env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ steps.scope.outputs.sha }}
+          PR_NUMBER: ${{ steps.scope.outputs.pr }}
           OUTCOME: ${{ steps.momentic.outcome }}
+          VERIFIED: ${{ steps.preview.outputs.verified }}
+          INSTALLED: ${{ steps.installed.outputs.present }}
         run: |
-          echo "### Momentic Rentals preview — advisory pilot" >> "$GITHUB_STEP_SUMMARY"
-          echo "Target: $PREVIEW_URL" >> "$GITHUB_STEP_SUMMARY"
-          echo "Regression: exact 2 BR filter (read-only; signed out)" >> "$GITHUB_STEP_SUMMARY"
-          echo "Outcome: $OUTCOME — not a required PR check" >> "$GITHUB_STEP_SUMMARY"
-      - name: Upload Momentic evidence
-        if: always()
-        uses: actions/upload-artifact@v4
+          set -euo pipefail
+          if [[ "$OUTCOME" == success ]]; then
+            result="PASS — 2 BR results"
+          elif [[ "$VERIFIED" != true ]]; then
+            result="BLOCKED — preview verification"
+          elif [[ "$INSTALLED" != true ]]; then
+            result="PILOT PENDING — trusted test not merged into main"
+          else
+            result="FAIL — Momentic regression"
+          fi
+          url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          {
+            echo "### Momentic Rentals preview — advisory pilot"
+            echo "PR #$PR_NUMBER · $HEAD_SHA · **$result**"
+            echo "Read-only: homepage → Rentals → Laureles → 2 BR → cards"
+            echo "Not a required merge check. [Run and evidence]($url)."
+          } >> "$GITHUB_STEP_SUMMARY"
+          gh api "repos/$GITHUB_REPOSITORY/check-runs" -X POST             -f name='Momentic Rentals Preview (pilot)' -f head_sha="$HEAD_SHA"             -f status=completed -f conclusion=neutral -f details_url="$url"             -f "output[title]=$result (advisory)"             -f "output[summary]=Signed-out Rentals regression: $result. See Actions summary and private Momentic recording." >/dev/null
+      - name: Upload JUnit evidence only (no protected-preview browser traces)
+        if: always() && steps.scope.outputs.selected == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: momentic-rentals-${{ github.run_id }}
-          path: ${{ runner.temp }}/momentic-rentals
+          name: momentic-rentals-junit-${{ github.run_id }}
+          path: ${{ runner.temp }}/momentic-junit/
           if-no-files-found: ignore
           retention-days: 7
