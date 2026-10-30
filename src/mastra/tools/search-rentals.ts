@@ -91,6 +91,8 @@ export const RENTAL_PANEL_PHOTO_LIMIT = 12;
 export type RentalQuery = {
   neighborhood?: string;
   minBedrooms?: number;
+  /** Optional inclusive ceiling; browse chips 0/1/2 BR specify both bounds. */
+  maxBedrooms?: number;
   maxPricePerNight?: number;
   /**
    * A monthly budget in the LISTING's own currency (e.g. COP 3,500,000 per month). Applied only
@@ -529,6 +531,9 @@ async function searchRentalsFromSupabase(
     if (typeof query.minBedrooms === 'number') {
       b = b.gte('bedrooms', query.minBedrooms);
     }
+    if (typeof query.maxBedrooms === 'number') {
+      b = b.lte('bedrooms', query.maxBedrooms);
+    }
     // SAN-486 / SAN-1349: one shared availability rule (known move-in date, full-stay coverage or
     // not expired), with "today" as the America/Bogota date the viewing RPC uses.
     return applyAvailabilityFilters(b, {
@@ -700,6 +705,7 @@ export const searchRentalsTool = createTool({
   inputSchema: z.object({
     neighborhood: z.string().optional().describe('e.g. Laureles, El Poblado, Envigado'),
     minBedrooms: z.number().int().min(0).optional(),
+    maxBedrooms: z.number().int().min(0).optional().describe('Inclusive bedroom ceiling when a user asks for an exact number.'),
     maxPricePerNight: z.number().positive().optional().describe('USD per night'),
     maxPriceMonthly: z
       .number()
@@ -750,6 +756,7 @@ export const searchRentalsTool = createTool({
     const {
       neighborhood,
       minBedrooms,
+      maxBedrooms,
       maxPricePerNight,
       maxPriceMonthly,
       stayType,
@@ -767,7 +774,7 @@ export const searchRentalsTool = createTool({
     const { results, source, budgetNote, hybridUsed, rankExplanation } = await runAuditedSearch(
       'search-rentals',
       (q: RentalQuery) => searchRentals(q, options),
-      { neighborhood, minBedrooms, maxPricePerNight, maxPriceMonthly, stayType, budgetCurrency, limit, queryText },
+      { neighborhood, minBedrooms, maxBedrooms, maxPricePerNight, maxPriceMonthly, stayType, budgetCurrency, limit, queryText },
       context,
     );
 

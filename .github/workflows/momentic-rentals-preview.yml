@@ -1,0 +1,84 @@
+# Advisory Momentic pilot. Keep deterministic Playwright and release gates as the required checks.
+# deployment_status uses the default-branch workflow; checkout main, not untrusted PR code.
+name: Momentic Rentals Preview (pilot)
+on:
+  deployment_status:
+  workflow_dispatch:
+    inputs:
+      preview_url:
+        description: "Exact Vercel PR preview URL (not the production website)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: momentic-rentals-${{ github.event.deployment.ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rentals:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.deployment_status.state == 'success' &&
+       github.event.deployment.environment == 'Preview')
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    # PILOT: failures are visible in the job and summary but cannot block merging.
+    continue-on-error: true
+    env:
+      MOMENTIC_API_KEY: ${{ secrets.MOMENTIC_API_KEY }}
+      PREVIEW_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.preview_url || github.event.deployment_status.environment_url }}
+      VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Validate preview target (never test production or leak bypass credentials)
+        run: |
+          node -e '
+            const url = new URL(process.env.PREVIEW_URL || "");
+            if (url.protocol !== "https:" || !url.hostname.endsWith(".vercel.app") ||
+                url.username || url.password || url.search || url.hash) {
+              console.error("Expected an HTTPS Vercel preview deployment URL, not production.");
+              process.exit(1);
+            }
+          '
+      - name: Install Momentic Chromium only
+        run: npx --yes momentic@3.67.1 install-browsers chromium
+      - name: Run focused signed-out Rentals regression
+        id: momentic
+        shell: bash
+        run: |
+          args=(run momentic/rentals/exact-bedroom-filter.test.yaml
+            --url-override "$PREVIEW_URL"
+            --reporter steps --reporter junit
+            --output-dir "$RUNNER_TEMP/momentic-rentals"
+            --upload-results --retries 0 -y)
+          # Do not send the protection-bypass secret to user-supplied manual URLs.
+          if [[ "${{ github.event_name }}" == "deployment_status" && -n "$VERCEL_AUTOMATION_BYPASS_SECRET" ]]; then
+            args+=(--custom-headers "x-vercel-protection-bypass=$VERCEL_AUTOMATION_BYPASS_SECRET" "x-vercel-set-bypass-cookie=true")
+          fi
+          npx --yes momentic@3.67.1 "${args[@]}"
+      - name: Summarize advisory result
+        if: always()
+        env:
+          OUTCOME: ${{ steps.momentic.outcome }}
+        run: |
+          echo "### Momentic Rentals preview — advisory pilot" >> "$GITHUB_STEP_SUMMARY"
+          echo "Target: $PREVIEW_URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "Regression: exact 2 BR filter (read-only; signed out)" >> "$GITHUB_STEP_SUMMARY"
+          echo "Outcome: $OUTCOME — not a required PR check" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload Momentic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: momentic-rentals-${{ github.run_id }}
+          path: ${{ runner.temp }}/momentic-rentals
+          if-no-files-found: ignore
+          retention-days: 7
