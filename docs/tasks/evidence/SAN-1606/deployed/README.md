@@ -14,7 +14,7 @@ deployed-commit check is skipped (there is no Vercel commit there).
 | Run | Target | Result | Log |
 | --- | --- | --- | --- |
 | Pre-merge, published release (feature only) | `https://mdeai-gamma.vercel.app` @ `bdac360e7262f42c9ff1820156ada57ca8762e36` | **34/36** — the two failures are the defect this change fixes: the floating map control stayed visible while the keyboard was open | [`deployed-before-fix-bdac360e72.log`](deployed-before-fix-bdac360e72.log) |
-| Pre-merge, this branch on a production build (`next build` + `next start`, port 3000) | tested tree = the commit that adds this file | **35/35 in 34s** (includes the 9-test journey spec) | [`premerge-production-run.log`](premerge-production-run.log) |
+| Pre-merge, this branch on a production build (`next build` + `next start`, port 3000) | tested tree = **`2630adff53fd5efa2a4acfc3f63d5887abdf0366`** (`git status` clean before and after the build, so the commit is the built tree) | **35/35 in 34s** (includes the 9-test journey spec) | [`premerge-production-run.log`](premerge-production-run.log) |
 | Post-merge | see the SAN-1606 Linear comment (the same command against the release that contains this change) | recorded there | — |
 
 ## What the 35 checks cover
