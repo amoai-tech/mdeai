@@ -33,8 +33,9 @@ deployed-commit check is skipped (there is no Vercel commit there).
   chat reserve released, composer above the keyboard; on close the bar **and map control return**,
   the reserve is restored and the keyboard-only marker is cleared.
 - **1023 / 1024 / 1280px**: bar present at 1023, absent at 1024 and 1280, chip strip back on desktop.
-- **Console**: only the expected guest runtime `401`, Google Maps' WebGL→Raster fallback, the
-  deliberate unsupported-route `404`, and a dev-only HMR reconnect.
+- **Console**: only the expected guest runtime `401` on `/api/copilotkit`, Google Maps'
+  WebGL→Raster fallback, and the local `/_vercel/insights/` `404`; each message is matched with its
+  URL, not by a shared status-code substring.
 
 ## Screenshots (390px and 1280px, production build)
 
@@ -55,9 +56,9 @@ deployed-commit check is skipped (there is no Vercel commit there).
 | Pre-fix deployment (map control still visible under the keyboard) | `… https://mdeai-gamma.vercel.app bdac360e72…` | `FAIL keyboard open: floating map control hidden` and the journey spec fails on the same assertion — the defect is detected, not skipped |
 | Sharding | `npx playwright test e2e/mobile-bottom-nav.spec.ts --project=local-chromium --list --shard=1/3` (then 2/3, 3/3) | 9 / 0 / 0 — the file runs in exactly one shard, so the deterministic job executes it once |
 
-Console handling is exact, not substring-based: expected console messages are matched whole, and a
-failed response is allowed only for the guest `/api/copilotkit` 401 and the local
-`/_vercel/insights/` 404; every other 4xx/5xx URL fails both the request and console checks.
+Console handling is exact, not substring-based: the guest `/api/copilotkit` 401 and local
+`/_vercel/insights/` 404 are allowed only when the console message and its source URL both match;
+the Maps fallback is matched as a whole message. Every other 4xx/5xx URL or console error fails the run.
 
 ## Why this is not a second test framework
 

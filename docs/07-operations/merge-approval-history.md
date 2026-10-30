@@ -402,7 +402,7 @@ collaborator and the PR author; GitHub forbids self-approval. The owner's SAN-16
 focused PR to be reviewed, merged and deployed, and explicitly authorizes adding the existing mobile navigation
 Playwright test to one required CI job.
 
-**Exact-head proof:** the PR body records the head SHA, the green `floor`, `mastra-schema-init`, `review / review`
+**Exact-head proof:** the PR body records the head SHA, the green `floor`, `mastra-schema-init`, `review / verify-review-result`
 (0 unresolved threads) and the deterministic shards — which now execute the mobile navigation journey itself.
 
 **Change and review scope:** hide the floating map control while an on-screen keyboard is open (one CSS rule on the

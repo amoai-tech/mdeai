@@ -90,17 +90,28 @@ const READ = () => {
  * - the guest CopilotKit runtime answers 401 until sign-in;
  * - `/_vercel/insights/script.js` is injected by Vercel and 404s on a local `next start`;
  * - Google Maps falls back to raster tiles when WebGL is unavailable.
- * Generic "Failed to load resource" lines are only accepted when the failed-request check below
- * found no unexpected URL, so a real 5xx still fails both checks.
+ * A console "Failed to load resource" line is accepted only when both its status token and its
+ * source URL match one of those cases. All other console errors fail the run.
  */
 const REQUESTS_ALLOWED = [
-  (status, url) => status === 401 && /\/api\/copilotkit$/.test(url),
+  (status, url) => status === 401 && /\/api\/copilotkit(?:\?|$)/.test(url),
   (status, url) => status === 404 && /\/_vercel\/insights\//.test(url),
 ];
 const CONSOLE_ALLOWED = [
-  /^Failed to load resource: the server responded with a status of 401\b/,
-  /^Attempted to load a Vector Map, but failed\. Falling back to Raster\./,
-  /^Failed to load resource: the server responded with a status of 404\b/,
+  {
+    test: (message, url) =>
+      /^Failed to load resource: the server responded with a status of 401\b/.test(message) &&
+      /\/api\/copilotkit(?:\?|$)/.test(url),
+  },
+  {
+    test: (message) =>
+      /^Attempted to load a Vector Map, but failed\. Falling back to Raster\.$/.test(message),
+  },
+  {
+    test: (message, url) =>
+      /^Failed to load resource: the server responded with a status of 404\b/.test(message) &&
+      /\/_vercel\/insights\//.test(url),
+  },
 ];
 
 /** Wait for something the journey depends on, and fail loudly if it never arrives. */
@@ -122,7 +133,10 @@ if (isLocal) {
     const response = await fetch(`${base}/api/version`, { signal: AbortSignal.timeout(30_000) });
     const body = await response.text();
     const sha = (body.match(/[0-9a-f]{40}/g) ?? [])[0] ?? "";
-    const matches = Boolean(sha) && (expectedSha ? sha.startsWith(expectedSha.slice(0, 12)) : true);
+    const expected = expectedSha.toLowerCase();
+    // Compare every character supplied. A full 40-char SHA must match exactly;
+    // a deliberately short input still works as a prefix.
+    const matches = Boolean(sha) && (!expected || sha.startsWith(expected));
     check(
       `deployed commit ${expectedSha ? `matches ${expectedSha.slice(0, 12)}` : "is reported"} (deployment says ${sha.slice(0, 12) || "nothing"})`,
       response.ok && matches,
@@ -173,7 +187,10 @@ const context390 = await browser.newContext({ viewport: { width: 390, height: 84
 const page = await context390.newPage();
 const consoleErrors = [];
 const failedResponses = [];
-page.on("console", (m) => m.type() === "error" && consoleErrors.push(m.text().slice(0, 200)));
+page.on("console", (m) => {
+  if (m.type() !== "error") return;
+  consoleErrors.push({ message: m.text().slice(0, 200), url: m.location().url });
+});
 page.on("response", (response) => {
   if (response.status() >= 400) failedResponses.push({ status: response.status(), url: response.url() });
 });
@@ -261,10 +278,7 @@ const unexpectedResponses = failedResponses.filter(
 );
 check("no unexpected failed requests (only the guest runtime 401 and local analytics 404 are allowed)", unexpectedResponses.length === 0, unexpectedResponses.slice(0, 5));
 const unexpectedConsole = consoleErrors.filter(
-  (message) =>
-    !CONSOLE_ALLOWED.some((re) => re.test(message)) &&
-    // generic resource failures are already covered URL-by-URL above
-    !(/^Failed to load resource: /.test(message) && unexpectedResponses.length === 0),
+  ({ message, url }) => !CONSOLE_ALLOWED.some((rule) => rule.test(message, url)),
 );
 check("no unexpected console errors", unexpectedConsole.length === 0, unexpectedConsole.slice(0, 5));
 await context390.close();

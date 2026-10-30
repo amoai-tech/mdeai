@@ -3,15 +3,14 @@ import { test, expect, type Page } from "@playwright/test";
 /**
  * SAN-1606 — the five-tab mobile navigation.
  *
- * How this spec runs today: on demand, with
- *   npx playwright test e2e/mobile-bottom-nav.spec.ts --project=chromium
- * It is deliberately **not** wired into `test:e2e:deterministic` (or the `local-chromium`
- * project): that script is a required CI gate, and changing what a required gate runs needs the
- * owner's explicit approval. Wiring it in is a one-line change to the npm script once approved; a
- * reviewer should not have to guess how the journey is verified meanwhile, which is why this note
- * exists. The phone navigation is additionally covered by MOB-CK-001 (`real mobile composer`
- * lane) for the composer/bar geometry and by the SAN-1606 evidence script for the keyboard and
- * clearance contract.
+ * How this spec runs today: in the deterministic gate, with
+ *   npm run test:e2e:deterministic
+ * or directly with
+ *   npx playwright test e2e/mobile-bottom-nav.spec.ts --project=local-chromium
+ * It is wired into `test:e2e:deterministic` and the `local-chromium` project, and is excluded
+ * from the general `chromium` project. The phone navigation is additionally covered by MOB-CK-001
+ * (`real mobile composer` lane) for the composer/bar geometry and by the SAN-1606 evidence script
+ * for the keyboard and clearance contract.
  *
  * One bar, five real routes, no consumer tab bar anywhere it does not belong, and no growth at the
  * desktop breakpoint. Measured as rendered boxes: the bar is 64px tall inside 12px side margins,
