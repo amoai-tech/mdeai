@@ -20,11 +20,22 @@ ROOT = Path(__file__).resolve().parents[1]
 CHECKS = {"catalog_contains", "skill_called", "skill_not_called", "skill_result_ok", "turn_completed"}
 
 
+def read_eval_pack(path: Path) -> object:
+    """Fail with a checkout hint instead of an unexplained FileNotFoundError."""
+    if not path.is_file():
+        raise ValueError(
+            f"skill evaluation file missing in this checkout: {path.relative_to(ROOT)}. "
+            "Your current Git branch may predate the merged skill evaluations; "
+            "run from a clean, updated main worktree (do not reset a dirty branch)."
+        )
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
 def load_case(skill: str, eval_id: int) -> dict:
     if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", skill):
         raise ValueError("invalid skill name")
     path = ROOT / ".claude" / "skills" / skill / "evals" / "evals.json"
-    spec = json.loads(path.read_text(encoding="utf-8"))
+    spec = read_eval_pack(path)
     if spec["skill_name"] != skill:
         raise ValueError("skill name does not match eval pack")
     matches = [case for case in spec["evals"] if case["id"] == eval_id]
@@ -58,7 +69,7 @@ def load_trigger_case(skill: str, trigger_id: int) -> dict:
     if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", skill):
         raise ValueError("invalid skill name")
     path = ROOT / ".claude" / "skills" / skill / "evals" / "trigger-evals.json"
-    pack = json.loads(path.read_text(encoding="utf-8"))
+    pack = read_eval_pack(path)
     if not isinstance(pack, list):
         raise TypeError("trigger pack must be an array")
     if any(not isinstance(item, dict) for item in pack):
