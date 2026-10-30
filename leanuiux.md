@@ -61,7 +61,7 @@ Work in this order:
 
 Prefer **one cohesive PR** for a single user-visible outcome, including its tests and corrections. Split only at a real independent delivery, risk, dependency or ownership boundary.
 
-**Prelaunch rule:** Follow the complete [AGENTS.md Phase A policy](./AGENTS.md#mandatory--prelaunch-development-comes-before-launch-certification). No moderation, freshness, partner/listing/photo approval, rental eligibility, ownership or owner/broker verification, photo-rights paperwork, publishing, viewing or booking business gates during development. Preserve authentication, server-side authorization, RLS/privacy, integrity, atomic writes, idempotency and audit trails. Never fabricate availability, coordinates, ownership, payments or action success.
+**Prelaunch UI rule:** [AGENTS.md Phase A policy](./AGENTS.md#mandatory--prelaunch-development-comes-before-launch-certification) is the canonical owner. UI changes must not introduce business gates that block development workflows; preserve technical safeguards and truthful data and action states.
 
 ## 5. Prove it with the cheapest decisive tests
 
@@ -69,7 +69,7 @@ Use the established D/C/U/S [change classes in lean.md](./lean.md#change-classes
 
 | Change | Cheapest proof first | Required evidence when applicable |
 | --- | --- | --- |
-| **D — Docs** | Markdown, internal links, relevant diagrams | Docs/skills checks and exact-head required CI |
+| **D — Docs** | Baseline: links and relevant diagrams (Mermaid when needed) | Supplemental docs/skills checks and exact-head CI **only when required by the applicable task/PR lifecycle**; see [pre-merge guidance](./.claude/skills/tasks/references/pre-merge-tests.md) |
 | **C — Code/API/migration** | Focused unit/contract test, typecheck, targeted runtime check | SQL/RLS/auth/tenant and persistence/idempotency checks for impacted backend/schema contracts; build if runtime wiring changes |
 | **U — UI/chat/map/agent journey** | Focused component/unit regression **when behavior changes**, plus Playwright primary journey and likely failure | Screenshots and browser evidence; **1440px, 768px, 375px, plus 390×844 if applicable**; keyboard/focus/touch targets; console/network; relevant agent/DB contracts and cross-page regression |
 | **S — Shipping/P0/production claim** | Relevant D/C/U proof and **exact-head required CI + applicable PR-bot review** | Required production smoke, deployed SHA provenance, real affected journey, recovery/rollback where relevant; use the [post-merge standard](./.claude/skills/tasks/references/post-merge.md) |
