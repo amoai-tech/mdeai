@@ -18,18 +18,18 @@ Before editing, answer in a few lines:
 
 Read the existing Linear issue, code and current evidence before researching again. Confirm the actual PR base/merge-base: do not mistake inherited changes for this task's changes.
 
-**Example:** “A renter filters Laureles apartments, sees matching cards and pins, opens Details and requests a viewing. Prove the request persists once and reaches the correct broker.” This is more testable than “improve rental UX.”
+**Example:** “A renter filters Laureles apartments, sees matching cards and pins, opens Details and requests a viewing. Read back **exactly one persisted lead and one linked showing**, prove the correct broker can see the request, and confirm retries do not create duplicates.” This is more testable than “improve rental UX.”
 
 **Stop before implementation if:** The proposed UI depends on an unverified API/data contract or creates a second owner for existing state.
 
 ## 2. Settle layout, states, and interactions once
 
-For UI-heavy work, decide these before coding. Write a short state matrix or wireframe **only when it removes ambiguity**:
+For **UI-heavy work, document a compact state matrix or wireframe** with expected behavior for each applicable state, as required by [UI review](./.claude/skills/tasks/references/ui-review.md). A small table is enough; avoid decorative diagrams, not the state decisions:
 
 | Decision | Minimum useful agreement |
 | --- | --- |
-| Layout | Check typical **1440px desktop** and **390px mobile**; also 320px/768px when the component is tight or layout changes materially. |
-| States | Normal, loading, empty/no-match, error/retry, not-found/forbidden where relevant. |
+| Layout | Verify **1440px desktop, 768px tablet, 375px phone**; add **390×844** for MDE mobile journeys when applicable. Check 320px for tight layouts. |
+| States | Define **Normal**, **Loading**, **Empty dataset**, **No match after search/filter**, **Error with retry**, and **Forbidden** and **Not found** separately where applicable. Record the expected behavior for each. |
 | Actions | One clear primary action; honest disabled/busy feedback; secondary actions do not compete. |
 | Navigation | Filters, selected item, query parameters, back/forward, sign-in return, deep links. |
 | State owner | Which existing component/store/URL/API owns selection and results; no shadow state. |
@@ -54,32 +54,32 @@ Work in this order:
 
 1. **Reuse:** Existing cards, layouts, design tokens, API/server actions, Supabase contracts, CopilotKit/Mastra integration, and Playwright helpers.
 2. **Connect the user path:** Page → action → navigation/API → actual result. Don't stop at a pretty screenshot or a mocked success toast.
-3. **Handle realistic states:** Missing images/data, empty results, authorization, retry, slow responses, and truthful external-source attribution.
-4. **Add one focused regression:** Primary success **and** the most likely failure; verify durable side effects when the journey writes data.
+3. **Handle realistic states:** Missing images/data, empty datasets versus filter no-match, authorization/not-found, retry, slow responses, and truthful external-source attribution.
+4. **Add focused regressions:** Primary success **and** the most likely failure. When React state, validation or interaction logic changes, include a component/unit test **and** user-visible Playwright proof. Read back durable writes; for a rental viewing prove **exactly one lead plus its linked showing** and correct broker visibility, including retry safety.
 5. **Polish:** Hierarchy, spacing, readable text, responsive overflow, accessible labels, focus, and interaction feedback.
 6. **Simplify:** Remove duplicate state, dead actions, speculative abstractions, and unrelated changes before review.
 
 Prefer **one cohesive PR** for a single user-visible outcome, including its tests and corrections. Split only at a real independent delivery, risk, dependency or ownership boundary.
 
-**Prelaunch rule:** Do not add business approval, ownership/verification, publishing, photo-rights, rental eligibility, or booking gates during MDE Phase A. Preserve authentication, server-side authorization, RLS/privacy, integrity, atomic writes, idempotency and audit trails. Never fabricate availability, map coordinates, ownership, payments or success.
+**Prelaunch rule:** Follow the complete [AGENTS.md Phase A policy](./AGENTS.md#mandatory--prelaunch-development-comes-before-launch-certification). No moderation, freshness, partner/listing/photo approval, rental eligibility, ownership or owner/broker verification, photo-rights paperwork, publishing, viewing or booking business gates during development. Preserve authentication, server-side authorization, RLS/privacy, integrity, atomic writes, idempotency and audit trails. Never fabricate availability, coordinates, ownership, payments or action success.
 
 ## 5. Prove it with the cheapest decisive tests
 
-Apply the existing D/C/U/S **verification tiers** (separate from `tasks`' S0–S4 complexity classification):
+Use the established D/C/U/S [change classes in lean.md](./lean.md#change-classes), **not a new classification** (separate from the `tasks` S0–S4 complexity scale). Classes are risk-aware, and the [canonical pre-merge matrix](./.claude/skills/tasks/references/pre-merge-tests.md) always supplies domain-specific proof: C already includes lib/API/migration; U includes chat/cards/maps/agents; S refers to PR shipping, P0 and production claims.
 
-| Change | Fast first proof | Add when risk requires |
+| Change | Cheapest proof first | Required evidence when applicable |
 | --- | --- | --- |
-| **D — Docs** | Markdown, relative links, relevant diagram validity | Docs checker if the path is in its scope |
-| **C — Code/data** | Focused unit/API test, typecheck for touched contract | Integration/DB permission, retry or negative test |
-| **U — UI** | Primary browser journey + likely failure, 390px and desktop, screenshot where useful | Cross-page/shared component regression, keyboard/ARIA/console/network |
-| **S — Shipping** | Exact-HEAD CI and deployed SHA provenance | Real deployed journey, safe transactions, rollback/recovery |
+| **D — Docs** | Markdown, internal links, relevant diagrams | Docs/skills checks and exact-head required CI |
+| **C — Code/API/migration** | Focused unit/contract test, typecheck, targeted runtime check | SQL/RLS/auth/tenant and persistence/idempotency checks for impacted backend/schema contracts; build if runtime wiring changes |
+| **U — UI/chat/map/agent journey** | Focused component/unit regression **when behavior changes**, plus Playwright primary journey and likely failure | Screenshots and browser evidence; **1440px, 768px, 375px, plus 390×844 if applicable**; keyboard/focus/touch targets; console/network; relevant agent/DB contracts and cross-page regression |
+| **S — Shipping/P0/production claim** | Relevant D/C/U proof and **exact-head required CI + applicable PR-bot review** | Required production smoke, deployed SHA provenance, real affected journey, recovery/rollback where relevant; use the [post-merge standard](./.claude/skills/tasks/references/post-merge.md) |
 
 **Browser test rules:**
 
 - Use Playwright's `getByRole`, `getByLabel`, and auto-retrying `expect(...).toBeVisible()`/URL assertions. Wait for actual states rather than sleeping for fixed milliseconds.
 - Use isolated, deterministic data and safe cleanup. Do not depend on today's live event inventory; never call mock-only behavior a real integration pass.
-- Verify **both visual and functional results**: no 390px horizontal overflow, usable primary CTA, correct selected item, accessible name/focus, no unexpected console/network failure.
-- For state-changing actions, verify the **actual persisted record** and retry/idempotency (for example, one lead or one ticket, not two).
+- Verify **both visual and functional results** at 1440px, 768px, 375px and 390×844 when applicable: no horizontal overflow, usable CTA and touch targets, correct selection, accessible name/focus, and no unexpected console/network error. Capture required UI screenshots/traces in the existing evidence location.
+- For state-changing actions, verify **actual persisted records** and retry/idempotency: rental viewing = **one lead and one linked showing**, visible to the correct broker; paid ticket = one durable ticket after safe payment. Never infer persistence from a toast.
 - Check WCAG 2.2 AA-relevant behaviors: keyboard usability, visible/unobscured focus, sufficient contrast, meaningful labels and touch target spacing. Automated checks support but do not replace manual interaction review.
 - For performance-sensitive changes, check loading and responsiveness; use LCP, INP, CLS where measurements are available. Avoid making a new universal performance gate for every small UI task.
 
@@ -92,7 +92,7 @@ Before requesting review:
 - Compare the exact PR diff to its **real** base/merge-base, inspect filenames, and exclude unrelated/inherited changes.
 - Run formatting, focused tests, and relevant static analysis. Keep fixtures/selectors deterministic.
 - Match the implementation to the acceptance criteria, including negative and mobile states.
-- Write a reviewer-friendly PR body: user outcome, real journey, files changed, exact tests, non-goals, post-merge proof.
+- Apply the **full canonical [GitHub PR checklist](./.claude/skills/tasks/references/github-pr.md)**: user outcome, faster/better approach, real journey (or no visible change), changed files/purpose, source/reuse receipts, exact tests, **reviewer fast path**, non-goals and post-merge checks; add security/data diagrams only when relevant.
 
 Triage findings **once**, against the current head:
 
@@ -112,8 +112,8 @@ For U/S tasks, use the existing evidence location/Linear handoff, not a new para
 
 - Acceptance result for each applicable criterion: passed, failed, blocked, or not tested.
 - Exact commands and outcomes; relevant CI checks and the SHA they evaluated.
-- Desktop/mobile screenshots when they show a real design claim (remove personal/private data).
-- Browser URL/environment, PR/commit, deployed SHA if claiming production.
+- Required desktop/mobile screenshots/traces for applicable UI/shipping claims, **redacted before sharing**; never include personal data, cookies, tokens or authorization headers.
+- **Sanitized browser URL** (origin and safe path, or redacted example), environment, PR/commit and deployed SHA for production claims. **Strip credentials, signed/bearer tokens, sensitive path/query values and fragments** before posting URLs in Linear, PRs or evidence files. Never paste raw callback/redirect or session links.
 - Remaining reproducible defects, untested risks, and next action.
 
 Do not equate commit count, merge, bot approval, or estimated percentage with working software. Use verified criteria to update Linear status.
