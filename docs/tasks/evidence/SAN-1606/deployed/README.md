@@ -14,7 +14,7 @@ deployed-commit check is skipped (there is no Vercel commit there).
 | Run | Target | Result | Log |
 | --- | --- | --- | --- |
 | Pre-merge, published release (feature only) | `https://mdeai-gamma.vercel.app` @ `bdac360e7262f42c9ff1820156ada57ca8762e36` | **34/36** — the two failures are the defect this change fixes: the floating map control stayed visible while the keyboard was open | [`deployed-before-fix-bdac360e72.log`](deployed-before-fix-bdac360e72.log) |
-| Pre-merge, this branch on a production build (`next build` + `next start`, port 3000) | tested tree = **`2630adff53fd5efa2a4acfc3f63d5887abdf0366`** (`git status` clean before and after the build, so the commit is the built tree) | **35/35 in 34s** (includes the 9-test journey spec) | [`premerge-production-run.log`](premerge-production-run.log) |
+| Pre-merge, this branch on a production build (`next build` + `next start`, port 3000) | tested tree = **`2630adff53fd5efa2a4acfc3f63d5887abdf0366`** plus the verifier hardening (the app code is unchanged by it) | **37/37 in ~35s** (includes the 9-test journey spec) | [`premerge-production-run.log`](premerge-production-run.log) |
 | Post-merge | see the SAN-1606 Linear comment (the same command against the release that contains this change) | recorded there | — |
 
 ## What the 35 checks cover
@@ -45,6 +45,19 @@ deployed-commit check is skipped (there is no Vercel commit there).
 | [`390-chat-keyboard-open.png`](390-chat-keyboard-open.png) | keyboard open: **bar and map button gone**, composer lifted |
 | [`390-cafes-no-bar.png`](390-cafes-no-bar.png) | a route without the bar, nothing reserved |
 | [`1280-chat-desktop.png`](1280-chat-desktop.png) | desktop unchanged: no bar, chip strip back |
+
+## Negative controls (prove the command fails when it should)
+
+| Control | Command | Observed |
+| --- | --- | --- |
+| Wrong deployed SHA | `npm run verify:mobile-nav -- https://mdeai-gamma.vercel.app deadbeef…` | `FAIL deployed commit matches deadbeefdead (deployment says bdac360e7262)` with both SHAs and a hint — exit 1 |
+| Broken base URL (pages never render) | `npm run verify:mobile-nav -- http://localhost:3000/nope` | `FAIL rendered / — missing / main content` per route — exit 1, no silent passes |
+| Pre-fix deployment (map control still visible under the keyboard) | `… https://mdeai-gamma.vercel.app bdac360e72…` | `FAIL keyboard open: floating map control hidden` and the journey spec fails on the same assertion — the defect is detected, not skipped |
+| Sharding | `npx playwright test e2e/mobile-bottom-nav.spec.ts --project=local-chromium --list --shard=1/3` (then 2/3, 3/3) | 9 / 0 / 0 — the file runs in exactly one shard, so the deterministic job executes it once |
+
+Console handling is exact, not substring-based: expected console messages are matched whole, and a
+failed response is allowed only for the guest `/api/copilotkit` 401 and the local
+`/_vercel/insights/` 404; every other 4xx/5xx URL fails both the request and console checks.
 
 ## Why this is not a second test framework
 

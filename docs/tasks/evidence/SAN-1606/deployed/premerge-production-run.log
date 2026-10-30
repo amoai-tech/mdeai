@@ -27,7 +27,9 @@ PASS  long draft stays within 112-128px
 PASS  Send stays above the bar with a draft
 PASS  /cafes at 390px: no bar and nothing reserved
 PASS  /nightlife at 390px: no bar and nothing reserved
-PASS  no unexpected console errors (guest runtime 401, Maps WebGL fallback, deliberate 404, dev HMR reconnect are expected)
+PASS  no unexpected failed requests (only the guest runtime 401 and local analytics 404 are allowed)
+PASS  no unexpected console errors
+PASS  /constructor/example answers without the bar (prototype-key allowlist)
 PASS  1023px: bar present
 PASS  1024px: bar absent
 PASS  1024px: chip strip back on desktop
@@ -39,4 +41,4 @@ PASS  keyboard open: chat reserve released
 PASS  keyboard open: composer above the keyboard
 PASS  keyboard closed: bar and map control return, reserve restored
 
-mobile navigation verification: 35/35 checks passed — http://localhost:3000
+mobile navigation verification: 37/37 checks passed — http://localhost:3000
