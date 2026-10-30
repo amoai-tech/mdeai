@@ -19,6 +19,10 @@ const db = vi.hoisted(() => ({
   saveError: null as string | null,
   createError: null as string | null,
   noService: false,
+  touches: [] as Array<Record<string, unknown>>,
+  deletes: [] as string[],
+  raceOwner: null as string | null,
+  otherThreadRows: [] as Array<{ id: string; thread_id: string }>,
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -42,10 +46,31 @@ vi.mock("@/lib/supabase/service", () => ({
                     : { data: db.threads.get(id) ?? null, error: null },
                 insert: async (row: Record<string, unknown>) => {
                   if (db.createError) return { error: { message: db.createError } };
+                  // Another user won the concurrent create of this id.
+                  if (db.raceOwner) {
+                    db.threads.set(String(row.id), { id: String(row.id), resourceId: db.raceOwner });
+                    return { error: { message: 'duplicate key value violates unique constraint "mastra_threads_pkey"' } };
+                  }
                   db.createdThreads.push(row);
                   db.threads.set(String(row.id), row as { id: string; resourceId: string });
                   return { error: null };
                 },
+                update: (patch: Record<string, unknown>) => ({
+                  eq: () => ({
+                    eq: async () => {
+                      db.touches.push(patch);
+                      return { error: null };
+                    },
+                  }),
+                }),
+                delete: () => ({
+                  eq: () => ({
+                    eq: async () => {
+                      db.deletes.push("thread");
+                      return { error: null };
+                    },
+                  }),
+                }),
               };
               return builder;
             }
@@ -55,13 +80,27 @@ vi.mock("@/lib/supabase/service", () => ({
                 pending = rows;
                 return messages;
               },
-              select: async () => {
-                if (db.saveError) return { data: null, error: { message: db.saveError } };
-                const inserted = pending.filter((row) => !db.rows.some((r) => r.id === row.id));
-                db.rows.push(...inserted);
-                return { data: inserted.map((row) => ({ id: row.id })), error: null };
+              // The route pre-reads ids to spot a cross-thread collision, then awaits the upsert
+              // result. Both go through `select`, so it answers to both shapes.
+              select: (columns?: string) => {
+                if (columns === "id") {
+                  // The write happens here: the route awaits this promise.
+                  return Promise.resolve().then(() => {
+                    if (db.saveError) return { data: null, error: { message: db.saveError } };
+                    const inserted = pending.filter((row) => !db.rows.some((r) => r.id === row.id));
+                    db.rows.push(...inserted);
+                    return { data: inserted.map((row) => ({ id: row.id })), error: null };
+                  });
+                }
+                return {
+                  in: async (_column: string, ids: string[]) => ({
+                    data: [...db.rows, ...db.otherThreadRows].filter((row) => ids.includes(String(row.id))),
+                    error: null,
+                  }),
+                };
               },
             };
+
             return messages;
           },
         },
@@ -97,6 +136,10 @@ beforeEach(() => {
   db.saveError = null;
   db.createError = null;
   db.noService = false;
+  db.touches.length = 0;
+  db.deletes.length = 0;
+  db.raceOwner = null;
+  db.otherThreadRows.length = 0;
 });
 
 describe("SAN-1531 POST /api/threads/[threadId]/messages", () => {
@@ -196,5 +239,105 @@ describe("SAN-1531 POST /api/threads/[threadId]/messages", () => {
 
     expect(response.status).toBe(500);
     expect(await response.json()).toMatchObject({ error: "Could not save messages" });
+  });
+
+  // --- Canary run 39d851af findings ------------------------------------------------------------
+  describe("Canary 39d851af regressions", () => {
+    it("rejects an anonymous caller before parsing anything (401, never 400)", async () => {
+      getUserMock.mockResolvedValue({ data: { user: null } });
+
+      for (const [threadId, body] of [
+        ["not-a-thread", exchange],
+        [THREAD, { messages: [{ id: "x", role: "system", content: "hi" }] }],
+        [THREAD, {}],
+      ] as const) {
+        const response = await save(threadId, body);
+        // A 400 here would tell an anonymous caller their payload was parsed.
+        expect(response.status, `${threadId} ${JSON.stringify(body)}`).toBe(401);
+      }
+      expect(db.createdThreads).toHaveLength(0);
+      expect(db.rows).toHaveLength(0);
+    });
+
+    it("does not write into a thread another user won the create race for", async () => {
+      signInAs(OWNER);
+      db.raceOwner = OTHER;
+
+      const response = await save(THREAD, exchange);
+
+      expect(response.status).toBe(403);
+      expect(db.rows).toHaveLength(0);
+    });
+
+    it("keeps user before assistant even though both rows are written together", async () => {
+      signInAs(OWNER);
+      db.threads.set(THREAD, { id: THREAD, resourceId: OWNER });
+
+      await save(THREAD, exchange);
+
+      const [user, assistant] = db.rows;
+      expect(user.role).toBe("user");
+      expect(assistant.role).toBe("assistant");
+      // Equal timestamps would let id order decide, and "assistant" sorts before "user".
+      expect(Date.parse(String(user.createdAt))).toBeLessThan(Date.parse(String(assistant.createdAt)));
+    });
+
+    it("moves the conversation to the top by touching updatedAt", async () => {
+      signInAs(OWNER);
+      db.threads.set(THREAD, { id: THREAD, resourceId: OWNER });
+
+      await save(THREAD, exchange);
+
+      expect(db.touches).toHaveLength(1);
+      expect(db.touches[0]).toHaveProperty("updatedAt");
+      expect(db.touches[0]).toHaveProperty("updatedAtZ");
+    });
+
+    it("does not leave an empty conversation behind when the first save fails", async () => {
+      signInAs(OWNER);
+      db.saveError = "connection reset";
+
+      const response = await save(THREAD, exchange);
+
+      expect(response.status).toBe(500);
+      expect(db.createdThreads).toHaveLength(1);
+      expect(db.deletes).toContain("thread");
+    });
+
+    it("stores the message exactly as shown, leading and trailing space included", async () => {
+      signInAs(OWNER);
+      db.threads.set(THREAD, { id: THREAD, resourceId: OWNER });
+
+      await save(THREAD, {
+        messages: [{ id: "local-1", role: "user", content: "  Italian in El Poblado?  " }],
+      });
+
+      expect(JSON.parse(String(db.rows[0].content)).parts[0].text).toBe("  Italian in El Poblado?  ");
+    });
+
+    it("accepts a long question the composer allows", async () => {
+      signInAs(OWNER);
+      db.threads.set(THREAD, { id: THREAD, resourceId: OWNER });
+      const long = `Find Italian restaurants in El Poblado. ${"Extra detail. ".repeat(800)}`.slice(0, 12_000);
+
+      const response = await save(THREAD, {
+        messages: [{ id: "local-1", role: "user", content: long }],
+      });
+
+      expect(response.status).toBe(200);
+      expect(JSON.parse(String(db.rows[0].content)).parts[0].text).toHaveLength(long.length);
+    });
+
+    it("keeps content when another thread already uses the same client id", async () => {
+      signInAs(OWNER);
+      db.threads.set(THREAD, { id: THREAD, resourceId: OWNER });
+      db.otherThreadRows.push({ id: "local-1-user", thread_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" });
+
+      const response = await save(THREAD, exchange);
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({ saved: 2 });
+      expect(db.rows.map((row) => row.id)).not.toContain("local-1-user");
+    });
   });
 });

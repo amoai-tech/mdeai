@@ -57,10 +57,20 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
   const [clarifyKind, setClarifyKind] = useState<LocalClarifyKind | null>(null);
   const [signInPrompt, setSignInPrompt] = useState(false);
   const pendingAgentMessagesRef = useRef<EventLocalChatMessage[]>([]);
+  const pendingSavesRef = useRef<EventLocalChatMessage[][]>([]);
+  // Declared as a ref because the flush effect runs above the callbacks that implement saving.
+  const saveRef = useRef<(threadId: string, batch: EventLocalChatMessage[]) => void>(() => {});
   const agentRef = useRef(agent);
 
   useEffect(() => {
     agentRef.current = agent;
+  }, [agent]);
+
+  useEffect(() => {
+    if (!agent?.threadId || pendingSavesRef.current.length === 0) return;
+    const queued = [...pendingSavesRef.current];
+    pendingSavesRef.current = [];
+    for (const batch of queued) saveRef.current(agent.threadId, batch);
   }, [agent]);
 
   useEffect(() => {
@@ -85,9 +95,7 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
    * after a refresh. Persist the same exchange through the existing thread route (same tables, same
    * owner check) and stay silent on 401: a guest has no thread to save to.
    */
-  const persist = useCallback((batch: EventLocalChatMessage[]) => {
-    const threadId = agentRef.current?.threadId;
-    if (!threadId) return;
+  const save = useCallback((threadId: string, batch: EventLocalChatMessage[]) => {
     const messages = batch
       .filter((m) => m.role === "user" || m.role === "assistant")
       .map(({ id, role, content }) => ({ id, role, content }));
@@ -106,6 +114,24 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
       .catch((error) => console.warn("[EventLocalChat] history save failed", error));
   }, []);
 
+  useEffect(() => {
+    saveRef.current = save;
+  }, [save]);
+
+  const persist = useCallback(
+    (batch: EventLocalChatMessage[]) => {
+      const threadId = agentRef.current?.threadId;
+      // The first fast-path answer can arrive before CopilotKit assigns a thread id. Keep the batch
+      // and save it as soon as the id exists, instead of dropping the answer.
+      if (!threadId) {
+        pendingSavesRef.current.push(batch);
+        return;
+      }
+      save(threadId, batch);
+    },
+    [save],
+  );
+
   const publishOrQueue = useCallback(
     (nextMessages: EventLocalChatMessage[]) => {
       if (agentRef.current) {
@@ -115,6 +141,22 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
       pendingAgentMessagesRef.current.push(...nextMessages);
     },
     [],
+  );
+
+  /**
+   * Publishing to the agent is a browser-session concern. A synchronous failure there (hydration
+   * race, broken socket) must not abort the exchange the person is already looking at, and must not
+   * skip its durable save.
+   */
+  const publishSafely = useCallback(
+    (batch: EventLocalChatMessage[]) => {
+      try {
+        publishOrQueue(batch);
+      } catch (error) {
+        console.warn("[EventLocalChat] publishing to the agent failed", error);
+      }
+    },
+    [publishOrQueue],
   );
 
   const showClarify = useCallback(
@@ -132,10 +174,10 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
       setClarifyKind(kind);
       setSignInPrompt(false);
       setMessages(nextMessages);
-      publishOrQueue(nextMessages);
+      publishSafely(nextMessages);
       persist(nextMessages);
     },
-    [persist, publishOrQueue],
+    [persist, publishSafely],
   );
 
   const showExchange = useCallback(
@@ -154,10 +196,10 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
       setClarifyKind(null);
       setSignInPrompt(false);
       setMessages((prev) => [...prev, ...nextMessages]);
-      publishOrQueue(nextMessages);
+      publishSafely(nextMessages);
       persist(nextMessages);
     },
-    [persist, publishOrQueue],
+    [persist, publishSafely],
   );
 
   const showNotice = useCallback(
@@ -167,10 +209,10 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
       ];
       setSignInPrompt(false);
       setMessages((prev) => [...prev, ...next]);
-      publishOrQueue(next);
+      publishSafely(next);
       persist(next);
     },
-    [persist, publishOrQueue],
+    [persist, publishSafely],
   );
 
   const showSignInPrompt = useCallback((userText: string) => {

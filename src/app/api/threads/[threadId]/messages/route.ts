@@ -103,7 +103,7 @@ function mastraTextContent(text: string): string {
 const THREAD_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MESSAGE_ID_PATTERN = /^[A-Za-z0-9._:-]{1,120}$/;
 const MAX_MESSAGES_PER_SAVE = 4;
-const MAX_CONTENT_LENGTH = 8_000;
+const MAX_CONTENT_LENGTH = 32_000;
 
 type SaveRow = { id: string; role: "user" | "assistant"; content: string };
 
@@ -121,10 +121,11 @@ function parseSaveBody(body: unknown): { rows: SaveRow[] } | { error: string } {
     if (typeof m.id !== "string" || !MESSAGE_ID_PATTERN.test(m.id)) return { error: "invalid message id" };
     if (m.role !== "user" && m.role !== "assistant") return { error: "invalid message role" };
     if (typeof m.content !== "string") return { error: "invalid message content" };
-    const content = m.content.trim();
-    if (content.length === 0) return { error: "empty message content" };
-    if (content.length > MAX_CONTENT_LENGTH) return { error: "message content too long" };
-    rows.push({ id: m.id, role: m.role, content });
+    // Reject blank text, but store exactly what the person saw: trimming here silently rewrote
+    // their message, and the reopened conversation showed different text than the live one.
+    if (m.content.trim().length === 0) return { error: "empty message content" };
+    if (m.content.length > MAX_CONTENT_LENGTH) return { error: "message content too long" };
+    rows.push({ id: m.id, role: m.role, content: m.content });
   }
   if (new Set(rows.map((r) => r.id)).size !== rows.length) return { error: "duplicate message id" };
   return { rows };
@@ -148,6 +149,12 @@ export async function POST(
 ) {
   const { threadId } = await params;
 
+  // Authenticate before touching the payload: an anonymous caller must not be able to tell a
+  // malformed thread id or body from a well-formed one (400 vs 401), and must never learn the
+  // validation rules. `GET` has always been ordered this way; `POST` now matches it.
+  const auth = await requireUser();
+  if ("response" in auth) return auth.response;
+
   if (!THREAD_ID_PATTERN.test(threadId)) {
     return NextResponse.json({ error: "Invalid thread id" }, { status: 400, headers: NO_STORE });
   }
@@ -163,9 +170,6 @@ export async function POST(
     return NextResponse.json({ error: parsed.error }, { status: 400, headers: NO_STORE });
   }
 
-  const auth = await requireUser();
-  if ("response" in auth) return auth.response;
-
   const svc = serviceOrResponse();
   if ("response" in svc) return svc.response;
 
@@ -178,7 +182,6 @@ export async function POST(
     return NextResponse.json({ error: "Forbidden" }, { status: 403, headers: NO_STORE });
   }
 
-  const now = new Date().toISOString();
   let createdThread = false;
   if (!thread) {
     // The first turn of a conversation can be a fast-path answer, before any agent run has created
@@ -188,29 +191,63 @@ export async function POST(
       resourceId: auth.userId,
       title: "",
       metadata: {},
-      createdAt: now,
-      updatedAt: now,
-      createdAtZ: now,
-      updatedAtZ: now,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      createdAtZ: new Date().toISOString(),
+      updatedAtZ: new Date().toISOString(),
     });
-    // A concurrent first save may have created it; only a real error is fatal.
-    if (createError && !/duplicate key/i.test(createError.message)) {
-      console.error("[/api/threads/messages] thread create", createError.message);
-      return NextResponse.json({ error: "Could not save messages" }, { status: 500, headers: NO_STORE });
+    if (createError) {
+      if (!/duplicate key/i.test(createError.message)) {
+        console.error("[/api/threads/messages] thread create", createError.message);
+        return NextResponse.json({ error: "Could not save messages" }, { status: 500, headers: NO_STORE });
+      }
+      // Lost a concurrent first-turn race. The winner may be someone else, so re-read and
+      // re-check ownership instead of writing this user's messages into their thread.
+      const reread = await readThread(svc.service, threadId);
+      if (reread.error) {
+        return NextResponse.json({ error: "History unavailable" }, { status: 500, headers: NO_STORE });
+      }
+      if (!reread.thread || reread.thread.resourceId !== auth.userId) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403, headers: NO_STORE });
+      }
+    } else {
+      createdThread = true;
     }
-    createdThread = !createError;
   }
 
-  const rows = parsed.rows.map((row) => ({
-    id: row.id,
-    thread_id: threadId,
-    resourceId: auth.userId,
-    role: row.role,
-    type: "text",
-    content: mastraTextContent(row.content),
-    createdAt: now,
-    createdAtZ: now,
-  }));
+  const requestedIds = parsed.rows.map((row) => row.id);
+  // Message ids are client-generated, so the same id can arrive from another thread. Never let
+  // that collide into a silent no-op: the reader would lose one of the two answers.
+  const { data: existingById, error: existingError } = await svc.service
+    .from("mastra_messages")
+    .select("id, thread_id")
+    .in("id", requestedIds);
+  if (existingError) {
+    console.error("[/api/threads/messages] id lookup", existingError.message);
+    return NextResponse.json({ error: "Could not save messages" }, { status: 500, headers: NO_STORE });
+  }
+  const foreignIds = new Set(
+    ((existingById ?? []) as Array<{ id: string; thread_id: string }>)
+      .filter((row) => row.thread_id !== threadId)
+      .map((row) => row.id),
+  );
+
+  // One shared timestamp let the reader fall back to id order, which can put the assistant first.
+  // A millisecond per message preserves the order the person actually saw.
+  const base = Date.now();
+  const rows = parsed.rows.map((row, index) => {
+    const at = new Date(base + index).toISOString();
+    return {
+      id: foreignIds.has(row.id) ? `${row.id}-${threadId.slice(0, 8)}` : row.id,
+      thread_id: threadId,
+      resourceId: auth.userId,
+      role: row.role,
+      type: "text",
+      content: mastraTextContent(row.content),
+      createdAt: at,
+      createdAtZ: at,
+    };
+  });
 
   const { data: inserted, error } = await svc.service
     .from("mastra_messages")
@@ -218,7 +255,23 @@ export async function POST(
     .select("id");
   if (error) {
     console.error("[/api/threads/messages] save", error.message);
+    // Do not leave a brand-new empty conversation behind for a save that never landed.
+    if (createdThread) {
+      await svc.service.from("mastra_threads").delete().eq("id", threadId).eq("resourceId", auth.userId);
+    }
     return NextResponse.json({ error: "Could not save messages" }, { status: 500, headers: NO_STORE });
+  }
+
+  // `/api/threads` lists by `updatedAt`, so a conversation with new activity has to move up.
+  const stamp = new Date().toISOString();
+  const { error: touchError } = await svc.service
+    .from("mastra_threads")
+    .update({ updatedAt: stamp, updatedAtZ: stamp })
+    .eq("id", threadId)
+    .eq("resourceId", auth.userId);
+  if (touchError) {
+    // The messages are saved; the list order is cosmetic. Report the save honestly.
+    console.warn("[/api/threads/messages] thread touch", touchError.message);
   }
 
   return NextResponse.json(

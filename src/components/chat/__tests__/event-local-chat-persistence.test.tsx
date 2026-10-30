@@ -15,13 +15,15 @@ import { createRoot } from "react-dom/client";
 
 const THREAD = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 
-const mocks = vi.hoisted(() => ({
-  addMessages: vi.fn(),
-  getAgent: () => ({ threadId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", addMessages: vi.fn() }) as unknown,
-}));
+const mocks = vi.hoisted(() => {
+  const state: { agent: unknown } = {
+    agent: { threadId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", addMessages: vi.fn() },
+  };
+  return { state };
+});
 
 vi.mock("@/components/chat/concierge-coagent-context", () => ({
-  useConciergeCoAgent: () => ({ agent: mocks.getAgent() }),
+  useConciergeCoAgent: () => ({ agent: mocks.state.agent }),
 }));
 
 import {
@@ -42,6 +44,7 @@ let fetchMock: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   api = null;
+  mocks.state.agent = { threadId: THREAD, addMessages: vi.fn() };
   fetchMock = vi.fn(async () => new Response(JSON.stringify({ saved: 2 }), { status: 200 }));
   vi.stubGlobal("fetch", fetchMock);
   container = document.createElement("div");
@@ -99,5 +102,64 @@ describe("EventLocalChatProvider durable save", () => {
     });
 
     expect(api!.messages.at(-1)?.content).toBe("Two under COP 60,000.");
+  });
+
+  it("still saves the exchange when publishing to the agent throws", async () => {
+    mocks.state.agent = {
+      threadId: THREAD,
+      addMessages: () => {
+        throw new Error("agent not ready");
+      },
+    };
+    await act(async () => {
+      root.render(
+        React.createElement(
+          EventLocalChatProvider,
+          null,
+          React.createElement(Probe, { onReady: (next) => (api = next) }),
+        ),
+      );
+    });
+
+    await act(async () => {
+      api!.showExchange("Find Italian restaurants in El Poblado.", "3 Italian spots in El Poblado.");
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(api!.messages).toHaveLength(2);
+  });
+
+  it("saves the first answer once the agent assigns a thread id", async () => {
+    mocks.state.agent = { threadId: undefined, addMessages: vi.fn() };
+    await act(async () => {
+      root.render(
+        React.createElement(
+          EventLocalChatProvider,
+          null,
+          React.createElement(Probe, { onReady: (next) => (api = next) }),
+        ),
+      );
+    });
+
+    await act(async () => {
+      api!.showExchange("Find Italian restaurants in El Poblado.", "3 Italian spots in El Poblado.");
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    // CopilotKit assigns the thread id a moment later; the queued save must flush.
+    mocks.state.agent = { threadId: THREAD, addMessages: vi.fn() };
+    await act(async () => {
+      root.render(
+        React.createElement(
+          EventLocalChatProvider,
+          null,
+          React.createElement(Probe, { onReady: (next) => (api = next) }),
+        ),
+      );
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url] = fetchMock.mock.calls[0] as [string];
+    expect(url).toBe(`/api/threads/${THREAD}/messages`);
   });
 });
