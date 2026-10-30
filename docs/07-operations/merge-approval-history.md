@@ -395,6 +395,33 @@ does every fixed surface clear the bar without covering a composer, map control 
 **Follow-up:** recruit a second reviewer so this structural exception can retire; re-measure the scoped composer CSS
 when CopilotKit v2 changes its input DOM.
 
+## 2026-10-30 — PR #625 (SAN-1606 mobile navigation completion)
+
+**PR:** [#625](https://github.com/amoai-tech/mdeai/pull/625). **Reason:** amoai-tech is the repository's sole
+collaborator and the PR author; GitHub forbids self-approval. The owner's SAN-1606 completion work order asks for the
+focused PR to be reviewed, merged and deployed, and explicitly authorizes adding the existing mobile navigation
+Playwright test to one required CI job.
+
+**Exact-head proof:** the PR body records the head SHA, the green `floor`, `mastra-schema-init`, `review / review`
+(0 unresolved threads) and the deterministic shards — which now execute the mobile navigation journey itself.
+
+**Change and review scope:** hide the floating map control while an on-screen keyboard is open (one CSS rule on the
+existing `html[data-mde-no-nav]` marker) plus the regression assertion that it hides and returns; wire
+`e2e/mobile-bottom-nav.spec.ts` into the existing deterministic Playwright job and out of the general `chromium`
+project; add `scripts/verify-mobile-nav.mjs` (`npm run verify:mobile-nav -- <url> <expected-sha>`) and its evidence.
+No navigation architecture, business gate, schema or API change.
+
+**Evidence:** production build of the tested tree `2630adff53fd5efa2a4acfc3f63d5887abdf0366` → **35/35** checks in
+34s (`docs/tasks/evidence/SAN-1606/deployed/`); the same command against the pre-fix deployed release `bdac360e72`
+reports **34/36**, failing exactly on the map control this PR fixes.
+
+**What an independent reviewer would be asked:** does the map control genuinely return after the keyboard closes; is
+the spec executed once (deterministic lane) rather than duplicated; does the command fail loudly on a wrong SHA or a
+broken journey; and are the 1023/1024/1280 boundaries correct.
+
+**Follow-up:** run the command against the deployed release after merge, then report the physical-device keyboard
+results to SAN-522 when hardware is available.
+
 ## Adding an entry
 
 Record: the PRs, the date, the reason, which required checks had passed, what a reviewer would have
