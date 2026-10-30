@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+import { createArgosReporterOptions } from "@argos-ci/playwright/reporter";
 
 const localBaseURL = process.env.SMOKE_BASE_URL || "http://localhost:3001";
 // Parse once: browser CI needs to know when Next.js is LISTENING, not when the
@@ -48,8 +49,15 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   timeout: 60_000,
   reporter: [
-    ["list"],
+    [process.env.CI ? "dot" : "list"],
     ["html", { open: "never", outputFolder: "tmp/playwright-report" }],
+    [
+      "@argos-ci/playwright/reporter",
+      createArgosReporterOptions({
+        // Other MDE browser CI jobs intentionally have no Argos token.
+        uploadToArgos: Boolean(process.env.CI && process.env.ARGOS_TOKEN),
+      }),
+    ],
   ],
   use: {
     baseURL,
@@ -87,7 +95,12 @@ export default defineConfig({
         ...PROD_SPECS,
       ],
       workers: 1,
-      use: { ...devices["Desktop Chrome"], baseURL },
+      use: {
+        ...devices["Desktop Chrome"],
+        baseURL,
+        // Chromium-only launch arguments stabilize screenshot text rendering.
+        launchOptions: { args: ["--disable-lcd-text", "--font-render-hinting=none"] },
+      },
     },
     {
       name: "local-chromium",
@@ -112,6 +125,7 @@ export default defineConfig({
       use: {
         ...devices["Desktop Chrome"],
         baseURL: localBaseURL,
+        launchOptions: { args: ["--disable-lcd-text", "--font-render-hinting=none"] },
         trace: "retain-on-failure",
       },
     },
@@ -120,7 +134,11 @@ export default defineConfig({
       testMatch: "**/auth-guard.spec.ts",
       testIgnore: VITEST_TESTS,
       workers: 1,
-      use: { ...devices["Desktop Chrome"], baseURL: localBaseURL },
+      use: {
+        ...devices["Desktop Chrome"],
+        baseURL: localBaseURL,
+        launchOptions: { args: ["--disable-lcd-text", "--font-render-hinting=none"] },
+      },
     },
     {
       name: "cross-browser-firefox",
@@ -145,6 +163,7 @@ export default defineConfig({
       use: {
         ...devices["Desktop Chrome"],
         baseURL: localBaseURL,
+        launchOptions: { args: ["--disable-lcd-text", "--font-render-hinting=none"] },
         trace: "retain-on-failure",
       },
     },
