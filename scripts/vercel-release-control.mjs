@@ -219,6 +219,64 @@ export async function vercelGet(
   return response.json();
 }
 
+
+// Fetch the remote ref, not a checkout made minutes earlier before the candidate browser test.
+export async function githubMainSha({ fetchImpl = fetch, token = process.env.GH_TOKEN,
+  repository = process.env.GITHUB_REPOSITORY } = {}) {
+  if (!token || !repository || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository) ||
+    repository.split("/").some(part => part === "." || part === "..")) {
+    fail("GH_TOKEN and a valid GITHUB_REPOSITORY are required");
+  }
+  let response;
+  try {
+    response = await fetchImpl("https://api.github.com/repos/" + repository + "/git/ref/heads/main", {
+      headers: { authorization: "Bearer " + token, accept: "application/vnd.github+json" },
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+  } catch { fail("cannot fetch current main from GitHub"); }
+  if (!response.ok) fail("GitHub current-main lookup failed (HTTP " + response.status + ")");
+  let body;
+  try { body = await response.json(); } catch { fail("invalid GitHub main ref response"); }
+  const sha = body?.object?.sha;
+  if (typeof sha !== "string" || !/^[0-9a-f]{40}$/i.test(sha)) fail("invalid GitHub main commit SHA");
+  return sha.toLowerCase();
+}
+
+export function checkCurrentMain(currentSha, expectedSha) {
+  if (currentSha.toLowerCase() !== expectedSha.toLowerCase())
+    fail("candidate superseded: main moved during certification; refusing promotion");
+}
+
+// A Vercel 409 alone is never success: exact current main, READY deployment and both
+// authoritative domain alias records must all match. The same seam proves later drift.
+export async function reconcilePromotion({ expected, readMain, readDeployment, readAliases,
+  attempts = 6, delayMs = 10000, pause = (ms) => new Promise(r => setTimeout(r, ms)) }) {
+  if (!Number.isInteger(attempts) || attempts < 1 || attempts > 20) fail("invalid reconciliation budget");
+  let lastError;
+  for (let i = 0; i < attempts; i += 1) {
+    checkCurrentMain(await readMain(), expected.sha);
+    const deployment = await readDeployment();
+    checkIdentity(deployment, expected);
+    try {
+      checkPromoted(deployment, expected, await readAliases());
+      return;
+    } catch (error) {
+      lastError = error;
+      if (i < attempts - 1) await pause(delayMs);
+    }
+  }
+  fail("promotion unresolved after bounded alias checks: " + (lastError?.message ?? "unknown"));
+}
+
+export async function checkStablePromotion({ expected, readMain, readDeployment, readAliases,
+  attempts = 10, delayMs = 20000, pause = (ms) => new Promise(r => setTimeout(r, ms)) }) {
+  for (let i = 0; i < attempts; i += 1) {
+    checkCurrentMain(await readMain(), expected.sha);
+    checkPromoted(await readDeployment(), expected, await readAliases());
+    if (i < attempts - 1) await pause(delayMs);
+  }
+}
+
 const required = (name) => {
   const value = (process.env[name] ?? "").trim();
   if (!value) fail(`${name} is required`);
@@ -253,6 +311,29 @@ async function main(command) {
     );
     console.log(`vercel-release: ${expected.id} is staged (READY, main, no production domain, auto-assign OFF)`);
     console.log(`vercel-release: production currently serves ${current[PRIMARY_DOMAIN]} (the version to recover to)`);
+  } else if (command === "active-deployment") {
+    const aliases = await readDomainAliases();
+    const current = checkDomainAlias(PRIMARY_DOMAIN, aliases[PRIMARY_DOMAIN]);
+    if (checkDomainAlias("mdeai.co", aliases["mdeai.co"]) !== current)
+      fail("production domains are split; cannot select current deployment");
+    console.log(current);
+  } else if (command === "assert-current-main") {
+    checkCurrentMain(await githubMainSha(), required("VERCEL_DEPLOYMENT_SHA"));
+    console.log("vercel-release: candidate still matches remote main");
+  } else if (["reconcile-promote", "assert-stable", "assert-current"].includes(command)) {
+    const expected = { id: required("VERCEL_DEPLOYMENT_ID"), sha: required("VERCEL_DEPLOYMENT_SHA") };
+    const readMain = () => githubMainSha();
+    const readDeployment = () => vercelGet("/v13/deployments/" + expected.id + "?teamId=" + TEAM_ID);
+    const readAliases = () => readDomainAliases();
+    if (command === "reconcile-promote") {
+      await reconcilePromotion({ expected, readMain, readDeployment, readAliases });
+    } else if (command === "assert-stable") {
+      await checkStablePromotion({ expected, readMain, readDeployment, readAliases });
+    } else {
+      checkCurrentMain(await readMain(), expected.sha);
+      checkPromoted(await readDeployment(), expected, await readAliases());
+    }
+    console.log("vercel-release: " + command + " OK — both domains serve the exact current main");
   } else if (command === "assert-promoted") {
     const expected = { id: required("VERCEL_DEPLOYMENT_ID"), sha: required("VERCEL_DEPLOYMENT_SHA") };
     let lastError;

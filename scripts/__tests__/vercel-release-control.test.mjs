@@ -15,6 +15,10 @@ import {
   checkPromoted,
   checkStaged,
   vercelGet,
+  githubMainSha,
+  checkCurrentMain,
+  reconcilePromotion,
+  checkStablePromotion,
 } from "../vercel-release-control.mjs";
 
 /**
@@ -377,4 +381,90 @@ test("the release env contract is exactly the application's required env contrac
   // The retired name must not come back in either contract.
   assert.equal(releaseContract.has("COPILOTKIT" + "_API_KEY"), false);
   assert.equal(appContract.has("COPILOTKIT" + "_API_KEY"), false);
+});
+
+// SAN-1586: a promotion-conflict response is not proof of alias ownership.
+const snapshot = (over = {}) => ({
+  expected, readMain: async () => SHA, readDeployment: async () => promotedDeployment(),
+  readAliases: async () => aliasesOf(), pause: async () => {}, delayMs: 0,
+  ...over,
+});
+
+test("fresh main ref: only the certified SHA may promote after E2E", () => {
+  assert.doesNotThrow(() => checkCurrentMain(SHA, SHA));
+  assert.throws(() => checkCurrentMain("a".repeat(40), SHA), /superseded/);
+});
+
+test("fresh main ref: reads authoritative GitHub API, never a checkout or caller-controlled token URL", async () => {
+  const requests = [];
+  const sha = await githubMainSha({
+    token: "probe", repository: "amoai-tech/mdeai",
+    fetchImpl: async (url, opts) => {
+      requests.push({ url, auth: opts.headers.authorization });
+      return new Response(JSON.stringify({ object: { sha: SHA } }), { status: 200 });
+    },
+  });
+  assert.equal(sha, SHA);
+  assert.deepEqual(requests, [{ url: "https://api.github.com/repos/amoai-tech/mdeai/git/ref/heads/main", auth: "Bearer probe" }]);
+  await assert.rejects(() => githubMainSha({ repository: "other/repo", token: "probe",
+    fetchImpl: async () => new Response("Forbidden", { status: 403 }) }), /HTTP 403/);
+  await assert.rejects(() => githubMainSha({ repository: "../evil", token: "probe" }), /valid GITHUB_REPOSITORY/);
+});
+
+test("409 in progress: eventual exact certified build and BOTH aliases can reconcile", async () => {
+  let count = 0;
+  await reconcilePromotion(snapshot({ readAliases: async () => (++count === 1 ? aliasesOf(OLD) : aliasesOf()) }));
+  assert.equal(count, 2);
+});
+
+test("409 to an older build or other SHA never produces a green promotion", async () => {
+  await assert.rejects(() => reconcilePromotion(snapshot({
+    readMain: async () => "a".repeat(40), attempts: 2,
+  })), /superseded/);
+  await assert.rejects(() => reconcilePromotion(snapshot({
+    readDeployment: async () => promotedDeployment({ meta: { githubCommitSha: "b".repeat(40), githubCommitRef: "main" } }),
+    attempts: 2,
+  })), /commit sha/);
+});
+
+test("409 with another live deployment times out instead of returning success", async () => {
+  await assert.rejects(() => reconcilePromotion(snapshot({
+    readAliases: async () => aliasesOf(OLD), attempts: 2,
+  })), /unresolved after bounded/);
+});
+
+test("409 with split production aliases never returns success", async () => {
+  await assert.rejects(() => reconcilePromotion(snapshot({
+    readAliases: async () => aliasesOf(ID, { "mdeai.co": domainAlias("mdeai.co", { deploymentId: OLD }) }),
+    attempts: 2,
+  })), /unresolved after bounded/);
+});
+
+test("409 cannot reconcile a preview or unready candidate", async () => {
+  await assert.rejects(() => reconcilePromotion(snapshot({
+    readDeployment: async () => promotedDeployment({ target: "preview" }), attempts: 2,
+  })), /production deployment/);
+  await assert.rejects(() => reconcilePromotion(snapshot({
+    readDeployment: async () => promotedDeployment({ readyState: "BUILDING" }), attempts: 2,
+  })), /not READY/);
+});
+
+test("late old-version alias takeover after a clean promotion is detected", async () => {
+  let rounds = 0;
+  await assert.rejects(() => checkStablePromotion(snapshot({
+    attempts: 3,
+    readAliases: async () => (++rounds === 3 ? aliasesOf(OLD) : aliasesOf()),
+  })), /does not point/);
+  assert.equal(rounds, 3);
+});
+
+test("stable alias monitoring succeeds only when both aliases and current main remain exact", async () => {
+  let rounds = 0;
+  await checkStablePromotion(snapshot({
+    attempts: 3, readAliases: async () => { rounds++; return aliasesOf(); },
+  }));
+  assert.equal(rounds, 3);
+  await assert.rejects(() => checkStablePromotion(snapshot({
+    attempts: 3, readMain: async () => "c".repeat(40),
+  })), /superseded/);
 });

@@ -33,6 +33,9 @@ on:
   # Read-only: proves the Vercel credential reaches the CURRENT team/project and that Production
   # defines the required variable names. It never promotes. Run it before changing the Vercel setting.
   workflow_dispatch:
+  # Read-only post-promotion drift detection, using the SAME release-control owner.
+  schedule:
+    - cron: "13 * * * *"
 
 permissions:
   contents: read
@@ -67,6 +70,27 @@ jobs:
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: node scripts/vercel-release-control.mjs env-names
+
+  monitor-production:
+    name: production-alias-drift
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Check both production aliases against remote current main
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERCEL_DEPLOYMENT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          VERCEL_DEPLOYMENT_ID="$(node scripts/vercel-release-control.mjs active-deployment)"
+          export VERCEL_DEPLOYMENT_ID
+          node scripts/vercel-release-control.mjs assert-current
 
   certify:
     # SAN-1367: this job name is deliberately identical to the commit-status context
@@ -206,21 +230,42 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: node .trusted/scripts/vercel-release-control.mjs assert-staged
 
-      # The ONLY step that can put a candidate on www.mdeai.co. Default `if: success()` plus the
-      # explicit certify outcome: any failed or skipped step above means no promotion command runs.
+      # Fresh GitHub main check INSIDE the promotion step: the trusted checkout may be minutes old.
+      # This step alone can change production aliases, and only after exact-candidate certification.
       - name: Promote the exact certified deployment
         if: ${{ success() && steps.certify.outcome == 'success' }}
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          # Run from the trusted checkout so the candidate's .npmrc / package.json cannot steer npx.
+          node .trusted/scripts/vercel-release-control.mjs assert-current-main
+          # Pinned Vercel CLI v59.25.4 reads VERCEL_TOKEN from env, never CLI argv.
           cd .trusted
-          npx --yes "vercel@${VERCEL_CLI_VERSION}" promote "${VERCEL_DEPLOYMENT_ID}" \
-            --yes --scope "${VERCEL_SCOPE}" --token "${VERCEL_TOKEN}"
+          log="$(mktemp)"
+          trap 'rm -f "$log"' EXIT
+          if npx --yes "vercel@${VERCEL_CLI_VERSION}" promote "${VERCEL_DEPLOYMENT_ID}" \
+            --yes --scope "${VERCEL_SCOPE}" >"$log" 2>&1; then
+            echo "vercel-release: promotion command succeeded"
+          elif grep -Eiq '(^|[^0-9])409([^0-9]|$)|already.*(promot|progress)' "$log"; then
+            # A 409 means someone else is promoting, NOT that the intended build is live.
+            node ../.trusted/scripts/vercel-release-control.mjs reconcile-promote
+          else
+            echo "::error::Vercel promote failed (not a concurrent 409); no false success"
+            exit 1
+          fi
 
       - name: Verify www.mdeai.co serves the exact certified deployment
         if: ${{ success() }}
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: node .trusted/scripts/vercel-release-control.mjs assert-promoted
+
+      # Three-minute post-promotion watch catches the observed ~2.5-minute delayed takeover;
+      # the hourly read-only monitor detects later drift without a second promotion system.
+      - name: Verify production aliases remain stable after promotion
+        if: ${{ success() }}
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node .trusted/scripts/vercel-release-control.mjs assert-stable
