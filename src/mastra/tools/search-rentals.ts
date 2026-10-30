@@ -91,6 +91,8 @@ export const RENTAL_PANEL_PHOTO_LIMIT = 12;
 export type RentalQuery = {
   neighborhood?: string;
   minBedrooms?: number;
+  /** Optional inclusive ceiling; browse chips 0/1/2 BR specify both bounds. */
+  maxBedrooms?: number;
   maxPricePerNight?: number;
   /**
    * A monthly budget in the LISTING's own currency (e.g. COP 3,500,000 per month). Applied only
@@ -529,6 +531,9 @@ async function searchRentalsFromSupabase(
     if (typeof query.minBedrooms === 'number') {
       b = b.gte('bedrooms', query.minBedrooms);
     }
+    if (typeof query.maxBedrooms === 'number') {
+      b = b.lte('bedrooms', query.maxBedrooms);
+    }
     // SAN-486 / SAN-1349: one shared availability rule (known move-in date, full-stay coverage or
     // not expired), with "today" as the America/Bogota date the viewing RPC uses.
     return applyAvailabilityFilters(b, {
@@ -624,13 +629,23 @@ export async function searchRentals(
       (!Number.isFinite(query.maxPriceMonthly) || query.maxPriceMonthly <= 0)) {
     throw new RangeError('Monthly budget must be a finite positive number');
   }
+  for (const [name, value] of [['minBedrooms', query.minBedrooms], ['maxBedrooms', query.maxBedrooms]] as const) {
+    if (value !== undefined && (!Number.isInteger(value) || value < 0)) {
+      throw new RangeError(`${name} must be a nonnegative integer`);
+    }
+  }
+  if (query.minBedrooms !== undefined && query.maxBedrooms !== undefined &&
+      query.minBedrooms > query.maxBedrooms) {
+    throw new RangeError('maxBedrooms must be greater than or equal to minBedrooms');
+  }
   const limit = query.limit ?? 8;
   const client = options?.client ?? getSupabaseClient();
   // Development inventory is already returned by canonical RLS-backed search.
   // Never add a second, allowlisted external search that can duplicate or hide it.
   const developmentMode = client ? await readRentalDevelopmentPhase(client) : false;
 
-  if (query.queryText?.trim()) {
+  // Exact browse/API ceilings use canonical SQL counting, not a truncated semantic candidate window.
+  if (query.queryText?.trim() && query.maxBedrooms === undefined) {
     try {
       const started = Date.now();
       // Load after tool initialization; intelligence search reuses our row-mapping helpers.

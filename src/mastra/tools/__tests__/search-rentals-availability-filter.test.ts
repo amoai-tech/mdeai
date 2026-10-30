@@ -9,7 +9,9 @@ const mocks = vi.hoisted(() => {
   const chain: Record<string, unknown> = {};
   const pass = vi.fn(() => chain);
   Object.assign(chain, {
-    select: pass, eq: pass, order: pass, limit: pass, ilike: pass, gte: pass, lte: pass,
+    select: pass, eq: pass, order: pass, limit: pass, ilike: pass,
+    gte: (column: string, value: unknown) => { state.filters.push(`gte(${column},${String(value)})`); return chain; },
+    lte: (column: string, value: unknown) => { state.filters.push(`lte(${column},${String(value)})`); return chain; },
     or: vi.fn((f: string) => { state.filters.push(`or(${f})`); return chain; }),
     not: vi.fn((c: string, o: string, v: unknown) => { state.filters.push(`not(${c},${o},${String(v)})`); return chain; }),
     then: (resolve: (v: unknown) => unknown, reject?: (r: unknown) => unknown) =>
@@ -35,6 +37,38 @@ vi.mock("../../lib/intelligence-rental-search", () => ({ searchRentalsIntelligen
 
 describe("searchRentals structured path — availability filter", () => {
   beforeEach(() => { mocks.state.filters = []; mocks.state.development = false; });
+
+  it("applies an upper bedroom bound for exact browse chips, without changing minimum-only AI searches", async () => {
+    const { searchRentals } = await import("../search-rentals");
+    await searchRentals({ neighborhood: "Laureles", minBedrooms: 2, maxBedrooms: 2, limit: 100 });
+    expect(mocks.state.filters).toContain("gte(bedrooms,2)");
+    expect(mocks.state.filters).toContain("lte(bedrooms,2)");
+    mocks.state.filters = [];
+    await searchRentals({ neighborhood: "Laureles", minBedrooms: 3, limit: 100 });
+    expect(mocks.state.filters).toContain("gte(bedrooms,3)");
+    expect(mocks.state.filters).not.toContain("lte(bedrooms,3)");
+  });
+
+  it("uses canonical SQL count when an exact ceiling is combined with natural-language text", async () => {
+    const { searchRentals } = await import("../search-rentals");
+    const { searchRentalsIntelligent } = await import("../../lib/intelligence-rental-search");
+    await searchRentals({ neighborhood: "Laureles", minBedrooms: 2, maxBedrooms: 2,
+      queryText: "two-bedroom apartments near cafes", limit: 8 });
+    expect(searchRentalsIntelligent).not.toHaveBeenCalled();
+    expect(mocks.state.filters).toContain("gte(bedrooms,2)");
+    expect(mocks.state.filters).toContain("lte(bedrooms,2)");
+  });
+
+  it.each([
+    { minBedrooms: 3, maxBedrooms: 2 },
+    { minBedrooms: -1, maxBedrooms: 2 },
+    { minBedrooms: 1, maxBedrooms: -1 },
+    { minBedrooms: 1.5, maxBedrooms: 2 },
+  ])("rejects invalid bounds before searching: %j", async (query) => {
+    const { searchRentals } = await import("../search-rentals");
+    await expect(searchRentals(query)).rejects.toThrow(RangeError);
+    expect(mocks.state.filters).toEqual([]);
+  });
 
   it("never allows a listing with no move-in date, with a dated search", async () => {
     const { searchRentals } = await import("../search-rentals");

@@ -23,6 +23,7 @@ const dedupeKey = (query: RentalQuery): string =>
   JSON.stringify({
     neighborhood: query.neighborhood,
     minBedrooms: query.minBedrooms,
+    maxBedrooms: query.maxBedrooms,
     maxPricePerNight: query.maxPricePerNight,
     limit: query.limit ?? 8,
     queryText: query.queryText,

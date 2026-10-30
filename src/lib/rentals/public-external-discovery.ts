@@ -156,6 +156,7 @@ export async function searchPublicExternalRentals(query: RentalQuery): Promise<R
       if (query.neighborhood && !row.neighborhood.toLocaleLowerCase()
         .includes(query.neighborhood.toLocaleLowerCase())) return false;
       if (query.minBedrooms != null && (row.bedrooms_unknown || row.bedrooms < query.minBedrooms)) return false;
+      if (query.maxBedrooms != null && (row.bedrooms_unknown || row.bedrooms > query.maxBedrooms)) return false;
       // USD/night budgets are not comparable to reported COP/month prices.
       return true;
     });
