@@ -179,8 +179,10 @@ test.describe(`${SCREEN_ID} CopilotKit v2 mobile composer`, () => {
     const composerBox = await composer.boundingBox();
     const navBox = await nav.boundingBox();
     expect(composerBox!.y + composerBox!.height).toBeLessThanOrEqual(navBox!.y);
-    // The map control measures the composer before moving above it; poll so this never races
-    // the settle (its pre-measure default sits under the composer, over the disclaimer).
+    // Wait for the control to be interactive before judging its settled position: before hydration
+    // it renders at a documented placeholder that is already above the composer, so this only
+    // excludes measuring a disabled control mid-hydration.
+    await expect(mapTrigger).toHaveAttribute("data-hydrated", "true", { timeout: 30_000 });
     await expect
       .poll(
         async () => {

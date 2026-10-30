@@ -188,10 +188,11 @@ export function MapMobileSheet() {
     <div
       data-testid="map-mobile-controls"
       data-right-column-mode="map"
-      // Pre-measurement (server render, or before the composer mounts) it sits directly above the
-      // bar, under the composer: that can cover part of the disclaimer but never the input, the
-      // Send control or the bar. The measured position then moves it above the composer.
-      className="pointer-events-none fixed bottom-[calc(var(--mde-mobile-nav-clearance)+0.5rem)] right-4 z-40 lg:hidden"
+      // Pre-measurement (server HTML, or a slow hydration on a cold runner) the trigger must already
+      // sit above the idle composer, never over it: the composer region is a fixed stack of the
+      // bar clearance + disclaimer + composer + padding, so a 9rem offset lands 8px above the
+      // composer for any phone height. The measured position then refines it.
+      className="pointer-events-none fixed bottom-[calc(var(--mde-mobile-nav-clearance)+9rem)] right-4 z-40 lg:hidden"
       // `--mde-keyboard-height` (published by useChatKeyboardHeight on /chat) is the overlay
       // keyboard's lift; the composer moves up by it without resizing, so the trigger adds it too.
       style={

@@ -37,12 +37,31 @@ Find the deployed SHA with:  curl -s <url>/api/version`);
 }
 const [rawUrl, rawSha = ""] = args;
 const base = rawUrl.replace(/\/+$/, "");
-const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/.test(base);
+/** Loopback in every form Node reports it, including the bracketed IPv6 host. */
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
+let parsedBase = null;
+try {
+  parsedBase = new URL(base);
+} catch {
+  console.error(`FAIL  url — "${rawUrl}" is not an absolute http(s) URL`);
+  process.exit(2);
+}
+const isLocal = LOCAL_HOSTS.has(parsedBase.hostname);
 // `HEAD` resolves to this checkout, which is what you verify right after a merge.
-const expectedSha =
+const resolvedSha =
   rawSha.trim().toUpperCase() === "HEAD"
     ? spawnSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).stdout?.trim() ?? ""
     : rawSha.trim();
+// A remote release must be named precisely: an empty, mistyped or short SHA would otherwise match
+// any deployment and report success for the wrong build.
+const SHA_PATTERN = /^[0-9a-f]{12,40}$/i;
+if (!isLocal && !SHA_PATTERN.test(resolvedSha)) {
+  console.error(
+    `FAIL  expected sha — a deployment needs at least 12 hex characters of the merged commit (got "${rawSha || "nothing"}").\n      use: git rev-parse HEAD   (or pass HEAD)`,
+  );
+  process.exit(2);
+}
+const expectedSha = resolvedSha;
 
 const results = [];
 const check = (name, pass, detail) => {
@@ -138,6 +157,7 @@ async function must(locator, label, timeout = 30_000) {
 const browser = await chromium.launch();
 
 // 1) deployed commit
+let deployedSha = "";
 if (isLocal) {
   console.log("SKIP  deployed commit — local URL, /api/version is not a release");
 } else {
@@ -145,6 +165,7 @@ if (isLocal) {
     const response = await fetch(`${base}/api/version`, { signal: AbortSignal.timeout(30_000) });
     const body = await response.text();
     const sha = (body.match(/[0-9a-f]{40}/g) ?? [])[0] ?? "";
+    deployedSha = sha;
     const expected = expectedSha.toLowerCase();
     // Compare every character supplied. A full 40-char SHA must match exactly;
     // a deliberately short input still works as a prefix.
@@ -199,12 +220,19 @@ const context390 = await browser.newContext({ viewport: { width: 390, height: 84
 const page = await context390.newPage();
 const consoleErrors = [];
 const failedResponses = [];
+const failedRequests = [];
 page.on("console", (m) => {
   if (m.type() !== "error") return;
   consoleErrors.push({ message: m.text().slice(0, 200), url: m.location().url });
 });
 page.on("response", (response) => {
   if (response.status() >= 400) failedResponses.push({ status: response.status(), url: response.url() });
+});
+// A request can fail without any HTTP response (DNS, TLS, connection reset). `ERR_ABORTED` is the
+// browser cancelling an in-flight request during navigation, which is normal here.
+page.on("requestfailed", (request) => {
+  const error = request.failure()?.errorText ?? "unknown";
+  if (!/ERR_ABORTED/.test(error)) failedRequests.push({ url: request.url(), error });
 });
 
 const go = async (path) => {
@@ -293,6 +321,7 @@ const unexpectedConsole = consoleErrors.filter(
   ({ message, url }) => !CONSOLE_ALLOWED.some((rule) => rule.test(message, url)),
 );
 check("no unexpected console errors", unexpectedConsole.length === 0, unexpectedConsole.slice(0, 5));
+check("no network requests failed without a response", failedRequests.length === 0, failedRequests.slice(0, 5));
 await context390.close();
 
 // an unsupported path must not render the bar — its own context, so its deliberate 404 is not
@@ -307,7 +336,11 @@ await context390.close();
     .waitForFunction(() => document.body !== null && document.body.childElementCount > 0, null, { timeout: 30_000 })
     .then(() => true)
     .catch(() => false);
-  check("/constructor/example answers without the bar (prototype-key allowlist)", rendered && (await odd.locator('[data-testid="mobile-bottom-nav"]').count()) === 0, { status: response?.status(), rendered });
+  check(
+    "/constructor/example answers 404 without the bar (prototype-key allowlist)",
+    response?.status() === 404 && rendered && (await odd.locator('[data-testid="mobile-bottom-nav"]').count()) === 0,
+    { status: response?.status(), rendered, expected: 404 },
+  );
   await context.close();
 }
 
@@ -382,6 +415,22 @@ for (const [width, barExpected] of [[1023, true], [1024, false], [1280, false]])
     check("keyboard closed: bar and map control return, reserve restored", closed.bar !== null && closed.mapControl !== null && closed.panelPad === "80px" && closed.marker === null, { bar: closed.bar, map: closed.mapControl, pad: closed.panelPad, marker: closed.marker });
   }
   await context.close();
+  }
+}
+
+// the release must not have been promoted or rolled back while the checks ran
+if (!isLocal) {
+  try {
+    const response = await fetch(`${base}/api/version`, { signal: AbortSignal.timeout(30_000) });
+    const body = await response.text();
+    const finalSha = (body.match(/[0-9a-f]{40}/g) ?? [])[0] ?? "";
+    check(
+      `release unchanged during verification (started ${deployedSha.slice(0, 12) || "unknown"})`,
+      Boolean(finalSha) && finalSha === deployedSha,
+      { started: deployedSha, finished: finalSha },
+    );
+  } catch (error) {
+    check("release still reported after verification", false, String(error).slice(0, 200));
   }
 }
 
