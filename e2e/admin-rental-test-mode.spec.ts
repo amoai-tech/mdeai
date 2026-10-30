@@ -274,7 +274,8 @@ for (const viewport of LAYOUT_VIEWPORTS) {
       });
     });
     const rentalsLoaded = page.waitForResponse(
-      (response) => response.url().includes("/api/admin/rentals/test")
+      (response) => response.ok()
+        && response.url().includes("/api/admin/rentals/test")
         && response.request().method() === "GET",
     );
     await page.goto("/admin/rentals");
