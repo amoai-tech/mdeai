@@ -96,6 +96,9 @@ jobs:
       - name: Run deterministic journeys and long-chat virtualization
         env:
           NODE_ENV: development
+          # Webpack compiles many routes in this shard; give Next headroom before its 80% heap restart.
+          # Scoped to this job, not production or the independent real-composer lane.
+          NODE_OPTIONS: --max-old-space-size=4096
           PLAYWRIGHT_CI_WARMUP: "1" # Precompile /chat outside test timeouts.
           DEBUG: pw:webserver # Diagnostics for local Next.js startup/readiness.
           PLAYWRIGHT_BLOB_OUTPUT_NAME: shard-${{ matrix.shard }}.zip

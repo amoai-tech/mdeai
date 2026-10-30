@@ -29,18 +29,32 @@ const TABS = [
 ] as const;
 
 /**
- * Navigate with one retry. Cold `next dev` compiles each route on first visit and can drop a
- * connection under load (`ERR_EMPTY_RESPONSE`); that is a server hiccup, not a navigation defect,
- * so it gets exactly one second chance.
+ * One bounded recovery for a cold Next.js dev-server restart. Under memory pressure the
+ * server can briefly stop listening; retrying page.goto immediately races the restart.
+ * Only connection failures qualify. A persistently down server or a failing route stays red.
  */
 async function gotoWithRetry(page: Page, path: string) {
-  for (let attempt = 0; ; attempt += 1) {
-    try {
-      return await page.goto(path, { waitUntil: "domcontentloaded", timeout: 120_000 });
-    } catch (error) {
-      if (attempt >= 1) throw error;
-      await page.waitForLoadState("domcontentloaded").catch(() => {});
-    }
+  try {
+    return await page.goto(path, { waitUntil: "domcontentloaded", timeout: 120_000 });
+  } catch (error) {
+    if (!/net::ERR_(?:CONNECTION_REFUSED|EMPTY_RESPONSE)/.test(String(error))) throw error;
+    await expect
+      .poll(
+        async () => {
+          try {
+            return (await page.request.get(path, { timeout: 30_000 })).ok();
+          } catch {
+            return false;
+          }
+        },
+        {
+          timeout: 60_000,
+          intervals: [500, 1_000, 2_000],
+          message: `dev server recovers for ${path}`,
+        },
+      )
+      .toBe(true);
+    return page.goto(path, { waitUntil: "domcontentloaded", timeout: 120_000 });
   }
 }
 

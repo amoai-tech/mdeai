@@ -9,6 +9,10 @@ import { remoteImageRules } from "./src/lib/images/remote-image-hosts";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  experimental: {
+    // Reduce peak Webpack compilation memory in dev and build; may slightly increase compile time.
+    webpackMemoryOptimizations: true,
+  },
   turbopack: {
     root: __dirname,
   },
