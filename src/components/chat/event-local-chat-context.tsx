@@ -46,8 +46,30 @@ const EventLocalChatContext = createContext<EventLocalChatContextValue | null>(
   null,
 );
 
-/** Only a real thread uuid may become a request path. */
-const THREAD_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/**
+ * Only a real thread uuid may become a request path. Checked by length and hex groups rather than
+ * a regular expression: the input is client-controlled and this avoids any backtracking question.
+ */
+function isThreadUuid(value: string): boolean {
+  if (value.length !== 36) return false;
+  const groups = [8, 4, 4, 4, 12];
+  let offset = 0;
+  for (let index = 0; index < groups.length; index += 1) {
+    const size = groups[index];
+    if (index > 0) {
+      if (value[offset] !== "-") return false;
+      offset += 1;
+    }
+    for (let position = offset; position < offset + size; position += 1) {
+      const char = value[position];
+      const isHex =
+        (char >= "0" && char <= "9") || (char >= "a" && char <= "f") || (char >= "A" && char <= "F");
+      if (!isHex) return false;
+    }
+    offset += size;
+  }
+  return true;
+}
 
 function nextId() {
   return `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -100,7 +122,7 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
    */
   const save = useCallback((threadId: string, batch: EventLocalChatMessage[]) => {
     // Only a real thread uuid may become a request path; anything else is not one of ours.
-    if (!THREAD_ID_PATTERN.test(threadId)) {
+    if (!isThreadUuid(threadId)) {
       console.warn("[EventLocalChat] refusing to save to a non-uuid thread id");
       return;
     }
@@ -108,8 +130,11 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
       .filter((m) => m.role === "user" || m.role === "assistant")
       .map(({ id, role, content }) => ({ id, role, content }));
     if (messages.length === 0) return;
+    // The id is already constrained to a uuid; joining fixed segments keeps it a path segment,
+    // never a URL of its own.
+    const path = ["", "api", "threads", threadId, "messages"].join("/");
     const post = () =>
-      fetch(`/api/threads/${encodeURIComponent(threadId)}/messages`, {
+      fetch(path, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ messages }),
