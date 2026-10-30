@@ -122,3 +122,6 @@ __pycache__/
 *.py[cod]
 deno.lock
 .shots/
+
+# Local nested release worktrees are not application source.
+/.release-*/
