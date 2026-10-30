@@ -68,6 +68,7 @@ mastra-agent-memory.db-*
 # Playwright / smoke artifacts
 test-results/
 playwright-report/
+screenshots/
 
 # Local scratch
 tmp/
