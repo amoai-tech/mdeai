@@ -4,12 +4,20 @@ import {
   type Page,
 } from "@playwright/test";
 import type { Session } from "@supabase/supabase-js";
-import { getTestSession, injectSession, QA_HOST_EMAIL } from "./helpers/auth";
+import {
+  getTestSession,
+  injectSession,
+  QA_HOST_EMAIL,
+  QA_SUPER_ADMIN_EMAIL,
+  signInAsOnOrigin,
+} from "./helpers/auth";
 
 type AuthStorageState = Awaited<ReturnType<BrowserContext["storageState"]>>;
 
 type SharedFixtures = {
   authenticatedPage: Page;
+  /** Opt-in, per-test Super Admin browser context; never authenticates anonymous tests. */
+  superAdminPage: Page;
 };
 
 type SharedWorkerFixtures = {
@@ -41,7 +49,27 @@ export const test = base.extend<SharedFixtures, SharedWorkerFixtures>({
     await context.setStorageState(authStorageState);
     await runFixture(page);
   },
-
+  superAdminPage: async ({ browser, contextOptions, baseURL }, runFixture) => {
+    if (!baseURL) {
+      throw new Error("Super Admin QA requires a Playwright baseURL");
+    }
+    // Separate context: the ordinary `page` fixture stays signed out even in this test.
+    const context = await browser.newContext({
+      ...contextOptions,
+      baseURL,
+      storageState: undefined,
+    });
+    try {
+      const page = await context.newPage();
+      const session = await signInAsOnOrigin(page, baseURL, QA_SUPER_ADMIN_EMAIL);
+      if (session.user.email?.toLowerCase() !== QA_SUPER_ADMIN_EMAIL) {
+        throw new Error("Super Admin QA session identity mismatch");
+      }
+      await runFixture(page);
+    } finally {
+      await context.close();
+    }
+  },
 });
 
 export { expect } from "@playwright/test";

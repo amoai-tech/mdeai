@@ -84,6 +84,41 @@ For debugging, run:
 `npx playwright test e2e/signed-in.spec.ts --project=chromium --headed`.
 
 
+## Shared Super Admin QA fixture
+
+Use the existing `e2e/fixtures.ts` and request `superAdminPage` in **only** the tests
+that require admin access. It calls `signInAsOnOrigin()` for the existing
+`mde@socialmediaville.ca` identity; no password, fake login, new user or
+global auth setup is needed. Other tests remain signed out.
+
+```ts
+import { expect, test } from "./fixtures";
+
+test.use({ trace: "off", screenshot: "off", video: "off" });
+test("admin can manage rental test listings", async ({ superAdminPage }) => {
+  await superAdminPage.goto("/admin/rentals");
+  await expect(superAdminPage.getByTestId("admin-rental-table")).toBeVisible();
+});
+```
+
+Run the **read-only** fixture proof from the repo root using ignored `.env.local`
+or trusted CI secrets (both commands intentionally opt in):
+
+```bash
+MDE_SUPER_ADMIN_QA=1 PW_SKIP_WEBSERVER=1 SMOKE_BASE_URL=http://localhost:3001 \
+  npx playwright test e2e/qa-super-admin-fixture.spec.ts --project=chromium --workers=1
+
+MDE_SUPER_ADMIN_QA=1 PW_SKIP_WEBSERVER=1 SMOKE_BASE_URL=https://www.mdeai.co \
+  npx playwright test e2e/qa-super-admin-fixture.spec.ts --project=chromium --workers=1
+```
+
+The existing Supabase helpers reject absent permanent QA accounts and never put
+privileged credentials in browser code. Keep these signed-in runs **read-only by
+default**, and do not publish cookies, traces, screenshots or local error-context
+artifacts. For write tests, require an explicit task-specific opt-in, synthetic
+fixtures and verified cleanup; use separate identities for renter/broker and
+cross-user denial tests. A passing local test never proves production deployment.
+
 ## SAN-1193 — source-grounded live partner-signup smoke (opt-in)
 
 **Canonical issue:** [SAN-1193 · MDE Partner Signup — Autofill Business Details From a Website](https://linear.app/amo100/issue/SAN-1193). **Merged feature:** [PR #404](https://github.com/amoai-tech/mdeai/pull/404).
