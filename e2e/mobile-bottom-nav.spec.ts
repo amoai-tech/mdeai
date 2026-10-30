@@ -3,15 +3,14 @@ import { test, expect, type Page } from "@playwright/test";
 /**
  * SAN-1606 — the five-tab mobile navigation.
  *
- * How this spec runs today: on demand, with
- *   npx playwright test e2e/mobile-bottom-nav.spec.ts --project=chromium
- * It is deliberately **not** wired into `test:e2e:deterministic` (or the `local-chromium`
- * project): that script is a required CI gate, and changing what a required gate runs needs the
- * owner's explicit approval. Wiring it in is a one-line change to the npm script once approved; a
- * reviewer should not have to guess how the journey is verified meanwhile, which is why this note
- * exists. The phone navigation is additionally covered by MOB-CK-001 (`real mobile composer`
- * lane) for the composer/bar geometry and by the SAN-1606 evidence script for the keyboard and
- * clearance contract.
+ * How this spec runs today: in the deterministic gate, with
+ *   npm run test:e2e:deterministic
+ * or directly with
+ *   npx playwright test e2e/mobile-bottom-nav.spec.ts --project=local-chromium
+ * It is wired into `test:e2e:deterministic` and the `local-chromium` project, and is excluded
+ * from the general `chromium` project. The phone navigation is additionally covered by MOB-CK-001
+ * (`real mobile composer` lane) for the composer/bar geometry and by the SAN-1606 evidence script
+ * for the keyboard and clearance contract.
  *
  * One bar, five real routes, no consumer tab bar anywhere it does not belong, and no growth at the
  * desktop breakpoint. Measured as rendered boxes: the bar is 64px tall inside 12px side margins,
@@ -30,18 +29,32 @@ const TABS = [
 ] as const;
 
 /**
- * Navigate with one retry. Cold `next dev` compiles each route on first visit and can drop a
- * connection under load (`ERR_EMPTY_RESPONSE`); that is a server hiccup, not a navigation defect,
- * so it gets exactly one second chance.
+ * One bounded recovery for a cold Next.js dev-server restart. Under memory pressure the
+ * server can briefly stop listening; retrying page.goto immediately races the restart.
+ * Only connection failures qualify. A persistently down server or a failing route stays red.
  */
 async function gotoWithRetry(page: Page, path: string) {
-  for (let attempt = 0; ; attempt += 1) {
-    try {
-      return await page.goto(path, { waitUntil: "domcontentloaded", timeout: 120_000 });
-    } catch (error) {
-      if (attempt >= 1) throw error;
-      await page.waitForLoadState("domcontentloaded").catch(() => {});
-    }
+  try {
+    return await page.goto(path, { waitUntil: "domcontentloaded", timeout: 120_000 });
+  } catch (error) {
+    if (!/net::ERR_(?:CONNECTION_REFUSED|EMPTY_RESPONSE)/.test(String(error))) throw error;
+    await expect
+      .poll(
+        async () => {
+          try {
+            return (await page.request.get(path, { timeout: 30_000 })).ok();
+          } catch {
+            return false;
+          }
+        },
+        {
+          timeout: 60_000,
+          intervals: [500, 1_000, 2_000],
+          message: `dev server recovers for ${path}`,
+        },
+      )
+      .toBe(true);
+    return page.goto(path, { waitUntil: "domcontentloaded", timeout: 120_000 });
   }
 }
 
@@ -304,8 +317,10 @@ test.describe("SAN-1606 mobile bottom navigation", () => {
     await open(page, "/chat");
     await expect(page.getByTestId("copilot-chat-region")).toBeVisible({ timeout: 30_000 });
 
-    // Nothing overlays the composer: the bar unmounts while the keyboard covers the viewport.
+    // Nothing overlays the composer: the bar unmounts while the keyboard covers the viewport, and
+    // the floating map control goes with it (it would otherwise sit on the lifted composer).
     await expect(page.locator(BAR)).toHaveCount(0);
+    await expect(page.getByTestId("map-sheet-trigger")).toBeHidden();
 
     // …and it must come back with the keyboard away (the reserved space too).
     await page.evaluate(() => {
@@ -313,6 +328,8 @@ test.describe("SAN-1606 mobile bottom navigation", () => {
     });
     await expect(page.locator(BAR)).toBeVisible({ timeout: 15_000 });
     await expect(page.getByTestId("mobile-nav-chat")).toHaveAttribute("aria-current", "page");
+    // The keyboard is gone, so the map control is reachable again.
+    await expect(page.getByTestId("map-sheet-trigger")).toBeVisible({ timeout: 15_000 });
     expect(
       await page.evaluate(() => document.documentElement.dataset.mdeNoNav ?? null),
       "the keyboard-only marker is cleaned up",

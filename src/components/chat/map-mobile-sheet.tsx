@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { Map, MapPin, XIcon } from "lucide-react";
+import { keyboardLiftPx } from "@/lib/hooks/use-chat-keyboard-height";
 import { ChatMap } from "@/components/maps/ChatMap";
 import { EmptyState } from "@/components/empty/empty-state";
 import { Button } from "@/components/ui/button";
@@ -111,9 +112,8 @@ export function MapMobileSheet() {
       // The rendered position already includes the overlay keyboard's lift, and the style below
       // adds that lift again, so measure the *unlifted* top; otherwise a measurement taken while
       // the keyboard is open (growth, remount) would push the trigger a whole keyboard too high.
-      const viewport = window.visualViewport;
-      const lift = viewport ? Math.max(0, Math.round(window.innerHeight - viewport.height)) : 0;
-      const unliftedTop = element.getBoundingClientRect().top + lift;
+      // Only a keyboard-sized gap is a lift (see keyboardLiftPx); a browser-UI gap is not.
+      const unliftedTop = element.getBoundingClientRect().top + keyboardLiftPx();
       const gap = Math.round(window.innerHeight - unliftedTop + 8);
       if (gap > 0) setComposerGap(gap);
       return gap > 0 ? gap : null;
@@ -188,10 +188,11 @@ export function MapMobileSheet() {
     <div
       data-testid="map-mobile-controls"
       data-right-column-mode="map"
-      // Pre-measurement (server render, or before the composer mounts) it sits directly above the
-      // bar, under the composer: that can cover part of the disclaimer but never the input, the
-      // Send control or the bar. The measured position then moves it above the composer.
-      className="pointer-events-none fixed bottom-[calc(var(--mde-mobile-nav-clearance)+0.5rem)] right-4 z-40 lg:hidden"
+      // Pre-measurement (server HTML, or a slow hydration on a cold runner) the trigger must already
+      // sit above the idle composer, never over it: the composer region is a fixed stack of the
+      // bar clearance + disclaimer + composer + padding, so a 9rem offset lands 8px above the
+      // composer for any phone height. The measured position then refines it.
+      className="pointer-events-none fixed bottom-[calc(var(--mde-mobile-nav-clearance)+9rem)] right-4 z-40 lg:hidden"
       // `--mde-keyboard-height` (published by useChatKeyboardHeight on /chat) is the overlay
       // keyboard's lift; the composer moves up by it without resizing, so the trigger adds it too.
       style={

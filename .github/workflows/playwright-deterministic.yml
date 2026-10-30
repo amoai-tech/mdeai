@@ -112,7 +112,11 @@ jobs:
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_test
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ""
           SMOKE_BASE_URL: http://localhost:3002
-          PLAYWRIGHT_WEB_SERVER_COMMAND: npm run dev:ui:worktree
+          # Run every deterministic shard on the same dev compiler. Webpack restarted
+          # at the memory threshold in CI and interrupted page navigation:
+          # https://github.com/amoai-tech/mdeai/actions/runs/41118981846/job/124280607289
+          # This tests dev-mode journeys; the Floor job separately verifies production builds.
+          PLAYWRIGHT_WEB_SERVER_COMMAND: npx next dev --turbopack -p 3002
         run: npm run test:e2e:deterministic -- --shard=${{ matrix.shard }}/3 --reporter=blob,list
 
       - name: Retain each shard's blob report (including failures)

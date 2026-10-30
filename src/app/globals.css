@@ -311,6 +311,12 @@ html {
   html[data-mde-no-nav] .mde-chat-viewport {
     --mde-mobile-nav-clearance: 0px;
   }
+  /* The floating map control is pointless and visually noisy while an on-screen keyboard is open:
+     the bar is gone, the composer has moved up, and the button would sit on the transcript/text.
+     Same marker as the bar, so it disappears with the keyboard and returns with it. */
+  html[data-mde-no-nav] .mde-chat-viewport [data-testid="map-mobile-controls"] {
+    display: none;
+  }
   /* Empty welcome screen: sit the composer directly above the bar instead of centring it. */
   .mde-chat-viewport [data-testid="copilot-welcome-screen"] {
     justify-content: flex-end;
