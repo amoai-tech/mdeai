@@ -19,6 +19,7 @@ import {
   checkCurrentMain,
   reconcilePromotion,
   checkStablePromotion,
+  verifyLiveMain,
 } from "../vercel-release-control.mjs";
 
 /**
@@ -467,4 +468,66 @@ test("stable alias monitoring succeeds only when both aliases and current main r
   await assert.rejects(() => checkStablePromotion(snapshot({
     attempts: 3, readMain: async () => "c".repeat(40),
   })), /superseded/);
+});
+
+// Canary F01: a schedule event may be pinned to an older workflow SHA even when the
+// current remote main and both live production aliases have correctly advanced.
+test("hourly monitor validates live main and active alias, independent of scheduled-event SHA", async () => {
+  const staleEventSha = "e".repeat(40);
+  let mainReads = 0;
+  const out = await verifyLiveMain({
+    readMain: async () => { mainReads += 1; return SHA; },
+    readAliases: async () => aliasesOf(),
+    readDeployment: async (id) => { assert.equal(id, ID); return promotedDeployment(); },
+  });
+  assert.deepEqual(out, { id: ID, sha: SHA });
+  assert.notEqual(staleEventSha, out.sha);
+  assert.equal(mainReads, 2);
+});
+
+test("hourly monitor fails closed for split aliases, wrong deployed SHA and not-READY build", async () => {
+  const opts = {
+    readMain: async () => SHA,
+    readAliases: async () => aliasesOf(),
+    readDeployment: async () => promotedDeployment(),
+  };
+  await assert.rejects(() => verifyLiveMain({ ...opts,
+    readAliases: async () => aliasesOf(ID, { "mdeai.co": domainAlias("mdeai.co", { deploymentId: OLD }) }),
+  }), /does not point/);
+  await assert.rejects(() => verifyLiveMain({ ...opts,
+    readDeployment: async () => promotedDeployment({ meta: { githubCommitSha: "e".repeat(40), githubCommitRef: "main" } }),
+  }), /commit sha/);
+  await assert.rejects(() => verifyLiveMain({ ...opts,
+    readDeployment: async () => promotedDeployment({ readyState: "BUILDING" }),
+  }), /READY/);
+});
+
+test("hourly monitor refuses success if main advances during live alias and deployment reads", async () => {
+  let reads = 0;
+  await assert.rejects(() => verifyLiveMain({
+    readMain: async () => ++reads === 1 ? SHA : "f".repeat(40),
+    readAliases: async () => aliasesOf(),
+    readDeployment: async () => promotedDeployment(),
+  }), /superseded/);
+  assert.equal(reads, 2);
+});
+
+// Canary F02: GitHub main can advance AFTER the first ref check but before returning success.
+test("409 reconciliation refuses a stale success after main advances during alias reads", async () => {
+  let reads = 0;
+  await assert.rejects(() => reconcilePromotion(snapshot({
+    attempts: 2,
+    readMain: async () => ++reads === 1 ? SHA : "d".repeat(40),
+    readAliases: async () => aliasesOf(),
+  })), /superseded/);
+  assert.equal(reads, 2, "fresh main must be read after alias and READY identity verification");
+});
+
+test("stability monitoring fails if main advances after the deployment and aliases pass", async () => {
+  let reads = 0;
+  await assert.rejects(() => checkStablePromotion(snapshot({
+    attempts: 1,
+    readMain: async () => ++reads === 1 ? SHA : "d".repeat(40),
+  })), /superseded/);
+  assert.equal(reads, 2);
 });

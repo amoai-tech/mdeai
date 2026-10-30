@@ -167,6 +167,8 @@ test("production is verified after promotion, and only if promotion succeeded", 
   const job = certifyJob(workflow());
   const verify = stepBody(job, "Verify www.mdeai.co serves the exact certified deployment");
   assert.match(verify, /node \.trusted\/scripts\/vercel-release-control\.mjs assert-promoted/);
+  assert.match(verify, /GH_TOKEN:\s*\$\{\{ secrets\.GITHUB_TOKEN \}\}/,
+    "post-promote verification re-reads live main, so it must have GitHub credentials");
   assert.match(verify, /if:\s*\$\{\{\s*success\(\)\s*\}\}/);
 });
 
@@ -337,7 +339,16 @@ test("scheduled late-drift detector only reads aliases and never runs promotion"
   assert.ok(start > 0 && end > start);
   const monitor = txt.slice(start, end);
   assert.match(monitor, /github\.event_name == 'schedule'/);
-  assert.match(monitor, /active-deployment/);
-  assert.match(monitor, /assert-current/);
+  assert.match(monitor, /assert-live-current/);
+  assert.doesNotMatch(monitor, /active-deployment/);
   assert.doesNotMatch(monitor, /vercel@|npx.*promote|request_promote/);
+});
+
+// Canary F01: schedule.github.sha can lag the already-promoted current main.
+test("scheduled monitor never passes event SHA as live-main expectation", () => {
+  const job = workflow().split("\n  monitor-production:")[1].split("\n  certify:")[0];
+  assert.doesNotMatch(job, /VERCEL_DEPLOYMENT_SHA:\s*\$\{\{\s*github\.sha\s*\}\}/);
+  assert.doesNotMatch(job, /active-deployment/, "use one atomic read-only monitor command");
+  assert.match(job, /assert-live-current/);
+  assert.match(job, /GH_TOKEN:\s*\$\{\{\s*secrets\.GITHUB_TOKEN\s*\}\}/);
 });

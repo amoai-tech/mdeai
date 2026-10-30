@@ -85,12 +85,7 @@ jobs:
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERCEL_DEPLOYMENT_SHA: ${{ github.sha }}
-        run: |
-          set -euo pipefail
-          VERCEL_DEPLOYMENT_ID="$(node scripts/vercel-release-control.mjs active-deployment)"
-          export VERCEL_DEPLOYMENT_ID
-          node scripts/vercel-release-control.mjs assert-current
+        run: node scripts/vercel-release-control.mjs assert-live-current
 
   certify:
     # SAN-1367: this job name is deliberately identical to the commit-status context
@@ -259,6 +254,7 @@ jobs:
         if: ${{ success() }}
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node .trusted/scripts/vercel-release-control.mjs assert-promoted
 
       # Three-minute post-promotion watch catches the observed ~2.5-minute delayed takeover;
