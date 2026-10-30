@@ -1,6 +1,6 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { createClient } from "@supabase/supabase-js";
-import { getTestSession, QA_HOST_EMAIL } from "./auth";
+import { getTestSession, QA_HOST_EMAIL, QA_SUPER_ADMIN_EMAIL } from "./auth";
 
 vi.mock("@supabase/supabase-js", () => ({ createClient: vi.fn() }));
 
@@ -52,6 +52,22 @@ describe("QA magic-link safety", () => {
 
     await expect(getTestSession(QA_HOST_EMAIL)).resolves.toEqual(session);
     expect(generateLink).toHaveBeenCalledWith({ type: "magiclink", email: QA_HOST_EMAIL });
+  });
+
+  it("refuses to auto-create the permanent Super Admin QA identity", async () => {
+    listUsers.mockResolvedValue({ data: { users: [], nextPage: null }, error: null });
+    await expect(getTestSession(QA_SUPER_ADMIN_EMAIL)).rejects.toThrow(
+      "refusing magic-link auto-creation",
+    );
+    expect(generateLink).not.toHaveBeenCalled();
+  });
+
+  it("accepts the already-existing Super Admin QA identity", async () => {
+    listUsers.mockResolvedValue({ data: { users: [{ email: QA_SUPER_ADMIN_EMAIL }], nextPage: null }, error: null });
+    generateLink.mockResolvedValue({ data: { properties: { email_otp: "test-otp" } }, error: null });
+    verifyOtp.mockResolvedValue({ data: { session: { access_token: "admin-test-jwt" } }, error: null });
+    await expect(getTestSession(QA_SUPER_ADMIN_EMAIL)).resolves.toHaveProperty("access_token", "admin-test-jwt");
+    expect(generateLink).toHaveBeenCalledWith({ type: "magiclink", email: QA_SUPER_ADMIN_EMAIL });
   });
 
   it("leaves explicitly provisioned throwaway accounts on the existing path", async () => {
