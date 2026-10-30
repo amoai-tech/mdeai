@@ -115,6 +115,7 @@ jobs:
 
       # Trusted validator, candidate working directory: `git rev-parse HEAD` is the candidate's.
       - name: Validate Vercel candidate trust boundary
+        id: validate
         run: |
           set -euo pipefail
           node .trusted/scripts/validate-vercel-deployment-event.mjs
@@ -170,34 +171,6 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: npm run test:e2e:prod-candidate-certification
 
-      # Diagnostic only. `if: always()` keeps a failed certification visible as `failure` on the
-      # commit; `target_url` points the "Details" link at this run, because the candidate is a
-      # throwaway URL that no longer exists once the deployment is cleaned up.
-      - name: Publish certification result
-        if: always()
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SHA: ${{ env.VERCEL_DEPLOYMENT_SHA }}
-          CERTIFY_OUTCOME: ${{ steps.certify.outcome }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          set -euo pipefail
-          if [ "${CERTIFY_OUTCOME}" = "success" ]; then
-            state=success
-            # SAN-1367: names exactly what passed (runtime) and exactly what was not evaluated
-            # (marketplace inventory). GitHub caps a commit-status description at 140 characters.
-            description="Candidate runtime certified. Marketplace inventory not evaluated."
-          else
-            state=failure
-            description="Candidate runtime certification failed — not promoted"
-          fi
-          gh api "repos/${GITHUB_REPOSITORY}/statuses/${SHA}" \
-            -f state="${state}" \
-            -f context=production-certification \
-            -f description="${description}" \
-            -f target_url="${RUN_URL}" >/dev/null
-          echo "published production-certification=${state} for ${SHA}"
-
       # The tests above take minutes. Re-read the domain records and the auto-assign setting right before
       # the one command that can change production, so a change made meanwhile stops the release (SAN-1402).
       - name: Re-confirm the candidate is still staged right before promotion
@@ -209,6 +182,7 @@ jobs:
       # The ONLY step that can put a candidate on www.mdeai.co. Default `if: success()` plus the
       # explicit certify outcome: any failed or skipped step above means no promotion command runs.
       - name: Promote the exact certified deployment
+        id: promote
         if: ${{ success() && steps.certify.outcome == 'success' }}
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -220,7 +194,39 @@ jobs:
             --yes --scope "${VERCEL_SCOPE}" --token "${VERCEL_TOKEN}"
 
       - name: Verify www.mdeai.co serves the exact certified deployment
+        id: verify
         if: ${{ success() }}
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: node .trusted/scripts/vercel-release-control.mjs assert-promoted
+
+      # This is the FINAL release result, not merely the Playwright outcome. Publishing success
+      # before the last staged check allowed manual early promotions to leave a false-green
+      # commit status even though GitHub correctly failed the job (2026-10-26 incident).
+      # Malformed/untrusted dispatches cannot write statuses for arbitrary SHAs: validation first.
+      - name: Publish certification result
+        if: ${{ always() && steps.validate.outcome == 'success' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHA: ${{ env.VERCEL_DEPLOYMENT_SHA }}
+          CERTIFY_OUTCOME: ${{ steps.certify.outcome }}
+          PROMOTE_OUTCOME: ${{ steps.promote.outcome }}
+          VERIFY_OUTCOME: ${{ steps.verify.outcome }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          if [ "${CERTIFY_OUTCOME}" = "success" ] &&
+             [ "${PROMOTE_OUTCOME}" = "success" ] &&
+             [ "${VERIFY_OUTCOME}" = "success" ]; then
+            state=success
+            description="Production certified, promoted, both domains verified. Marketplace inventory not evaluated."
+          else
+            state=failure
+            description="Production release incomplete or failed — check workflow; not certified as promoted."
+          fi
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${SHA}" \
+            -f state="${state}" \
+            -f context=production-certification \
+            -f description="${description}" \
+            -f target_url="${RUN_URL}" >/dev/null
+          echo "published final production-certification=${state} for ${SHA}"

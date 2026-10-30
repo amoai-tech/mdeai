@@ -141,6 +141,19 @@ export function checkDomainAlias(domain, record) {
   return record.deploymentId;
 }
 
+/** A successful release must leave custom production domains in staged-by-default mode. */
+export function checkAutoAssignDisabled(project) {
+  if (!project || typeof project !== "object" || project.error) {
+    fail("the Vercel project could not be read to confirm automatic domain assignment is off");
+  }
+  if (project.autoAssignCustomDomains !== false) {
+    fail(
+      "automatic production-domain assignment is not OFF — a new build could reach customers before it is " +
+        `certified; turn "Auto-assign Custom Production Domains" off (see ${RUNBOOK})`,
+    );
+  }
+}
+
 /**
  * Before certification AND again right before promotion (SAN-1402): production must still be on the
  * previous release. Automatic domain assignment must be OFF, and neither production domain may already
@@ -151,15 +164,7 @@ export function checkDomainAlias(domain, record) {
  * switched back on, which is why that setting is checked here too.
  */
 export function checkProductionDomains(project, domainAliases, candidateId) {
-  if (!project || typeof project !== "object" || project.error) {
-    fail("the Vercel project could not be read to confirm automatic domain assignment is off");
-  }
-  if (project.autoAssignCustomDomains !== false) {
-    fail(
-      "automatic production-domain assignment is not OFF — a new build could reach customers before it is " +
-        `certified; turn "Auto-assign Custom Production Domains" off (see ${RUNBOOK})`,
-    );
-  }
+  checkAutoAssignDisabled(project);
   const current = {};
   for (const domain of PRODUCTION_DOMAINS) {
     const servedId = checkDomainAlias(domain, domainAliases?.[domain]);
@@ -264,6 +269,9 @@ async function main(command) {
           expected,
           await readDomainAliases(),
         );
+        // Some recovery/promote operations can restore automatic domain assignment.
+        // Detect that drift before publishing the release's final green status.
+        checkAutoAssignDisabled(await vercelGet(`/v9/projects/${PROJECT_ID}?teamId=${TEAM_ID}`));
         console.log(
           `vercel-release: ${PRODUCTION_DOMAINS.join(" and ")} serve the certified ${expected.id} @ ${expected.sha.slice(0, 12)}`,
         );

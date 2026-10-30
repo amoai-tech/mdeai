@@ -8,6 +8,7 @@ import {
   PROJECT_ID,
   REQUIRED_PRODUCTION_ENV,
   TEAM_ID,
+  checkAutoAssignDisabled,
   checkCredential,
   checkDomainAlias,
   checkEnvNames,
@@ -249,6 +250,16 @@ test("staged: automatic production-domain assignment must be OFF", () => {
     assert.throws(() => checkProductionDomains(projectSetting(setting), aliasesOf(OLD), ID), /not OFF/);
   }
   assert.throws(() => checkProductionDomains(undefined, aliasesOf(OLD), ID), /project could not be read/);
+});
+
+test("post-promotion: a promote operation must not silently turn automatic production domains back on", () => {
+  assert.doesNotThrow(() => checkAutoAssignDisabled(projectSetting()));
+  assert.throws(() => checkAutoAssignDisabled(projectSetting({ autoAssignCustomDomains: true })), /not OFF/);
+  assert.throws(() => checkAutoAssignDisabled(null), /project could not be read/);
+  // The live post-promotion operation must invoke this check, not just the pre-release check.
+  const source = fs.readFileSync("scripts/vercel-release-control.mjs", "utf8");
+  const after = source.slice(source.indexOf('} else if (command === "assert-promoted")'));
+  assert.match(after, /checkPromoted\([\s\S]*?checkAutoAssignDisabled\(await vercelGet/);
 });
 
 test("staged: the stop messages point the operator at the rollback runbook", () => {
