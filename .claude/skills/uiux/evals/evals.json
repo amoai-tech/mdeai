@@ -4,7 +4,7 @@
   "evals": [
     {
       "id": 1,
-      "prompt": "Review the existing MDE rental results screen: filter chips are unclear, card and map selection are hard to follow, and no-match feedback is confusing. Recommend the smallest UX corrections using the current components. Do not edit code.",
+      "prompt": "MDE existing Rentals results UI has unclear filter chips on mobile. Give a short read-only UX triage based only on this description: two fixes, one way to verify. Do not inspect code or browse files, do not edit anything, and finish in 100 words.",
       "expected_output": "Audits the existing rental discovery journey and relevant states, separates observed problems from assumptions, proposes specific small fixes using current components and design tokens, and identifies browser/mobile verification without starting a redesign.",
       "files": [],
       "should_trigger": true,
@@ -36,7 +36,7 @@
     },
     {
       "id": 2,
-      "prompt": "Audit the existing MDE event-ticket checkout screen on mobile. Loading and payment-error feedback are confusing; evaluate primary actions and recovery states without redesigning the page or changing payments.",
+      "prompt": "An existing MDE mobile event checkout has confusing loading and failed-payment feedback. Based only on this description, give two small UX improvements and one safe verification in 100 words. Do not inspect code or files, charge anyone, or redesign the interface.",
       "expected_output": "Identifies user-impacting checkout UX problems and recovery states, preserves payment truth, proposes focused copy/layout fixes, and describes appropriate mobile/keyboard and safe checkout checks.",
       "files": [],
       "should_trigger": true,
@@ -68,7 +68,7 @@
     },
     {
       "id": 3,
-      "prompt": "Review the current Ask MDE chat-and-map screen for keyboard focus, screen-reader labels, empty search results, and responsive panel behavior; give a focused UX audit only, not a new visual identity.",
+      "prompt": "The existing MDE Ask MDE chat-and-map screen has unclear keyboard focus and empty results on mobile. Give two small accessibility/UX corrections and one keyboard check, based only on this description, in 100 words. Do not inspect files or change code.",
       "expected_output": "Examines the existing user journey and state matrix, identifies verifiable accessibility and responsive usability findings, reuses MDE UI primitives, and distinguishes browser proof from backend action proof.",
       "files": [],
       "should_trigger": true,
@@ -100,7 +100,7 @@
     },
     {
       "id": 4,
-      "prompt": "Create a brand-new MDE operator dashboard with a distinctive visual composition, premium typography hierarchy, and a completely new page layout. Design the new interface, not an audit of an existing screen; do not edit code yet.",
+      "prompt": "MDE needs a brand-new operator dashboard layout and visual concept, not an audit of an existing screen. Propose a brief visual composition and hierarchy using the existing MDE design tokens. Do not inspect code or change files; finish in 100 words.",
       "expected_output": "Routes substantial new-screen visual design to frontend-design rather than using the existing-screen uiux audit skill; preserves MDE design tokens unless the brief explicitly requests rebranding.",
       "files": [],
       "should_trigger": false,
@@ -138,7 +138,7 @@
     },
     {
       "id": 5,
-      "prompt": "Fix the Supabase RLS policy for rental leads because another user can read private viewing requests. This is a database authorization defect, not a screen redesign. Diagnose the policy without making changes.",
+      "prompt": "Use the existing Supabase skill to plan a read-only RLS authorization check: a renter might see another renter's private viewing request. Give two security checks and one verification step in 100 words; do not inspect files, query a database, change policies or discuss UI styling.",
       "expected_output": "Routes database RLS/security ownership to supabase and avoids treating a tenant-isolation failure as a cosmetic UIUX task.",
       "files": [],
       "should_trigger": false,
@@ -176,7 +176,7 @@
     },
     {
       "id": 6,
-      "prompt": "Run the existing Playwright browser tests for the signed-in rental viewing journey and report the actual pass/fail evidence. Do not propose visual changes; this is test execution only.",
+      "prompt": "Outline the exact browser E2E verification steps for a signed-in MDE renter requesting a viewing, including one negative case. This is a Playwright user-journey test task, not a UI critique. Do not inspect files, run tests, or change data; finish in 100 words.",
       "expected_output": "Routes browser test execution to e2e instead of uiux; reports real test evidence rather than asserting a visual opinion.",
       "files": [],
       "should_trigger": false,
