@@ -52,6 +52,8 @@ BEGIN
          OR NEW.confirmed_at IS NOT NULL
          OR NEW.payment_reference IS NOT NULL
          OR NEW.payment_method IS NOT NULL
+         OR NEW.unit_price IS NOT NULL
+         OR NEW.total_price IS NOT NULL
        ) THEN
       RAISE EXCEPTION 'Rental payment and booking confirmation are server controlled'
         USING ERRCODE = '23514';
@@ -62,6 +64,16 @@ BEGIN
     ) AND (
       NEW.booking_type IS DISTINCT FROM OLD.booking_type
       OR NEW.resource_id IS DISTINCT FROM OLD.resource_id
+      OR NEW.resource_title IS DISTINCT FROM OLD.resource_title
+      OR NEW.partner_id IS DISTINCT FROM OLD.partner_id
+      OR NEW.start_date IS DISTINCT FROM OLD.start_date
+      OR NEW.end_date IS DISTINCT FROM OLD.end_date
+      OR NEW.start_time IS DISTINCT FROM OLD.start_time
+      OR NEW.end_time IS DISTINCT FROM OLD.end_time
+      OR NEW.party_size IS DISTINCT FROM OLD.party_size
+      OR NEW.quantity IS DISTINCT FROM OLD.quantity
+      OR NEW.metadata IS DISTINCT FROM OLD.metadata
+      OR NEW.cancelled_at IS DISTINCT FROM OLD.cancelled_at
       OR NEW.user_id IS DISTINCT FROM OLD.user_id
       OR NEW.idempotency_key IS DISTINCT FROM OLD.idempotency_key
       OR NEW.status IS DISTINCT FROM OLD.status

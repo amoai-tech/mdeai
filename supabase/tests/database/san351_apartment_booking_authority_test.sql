@@ -121,6 +121,30 @@ BEGIN
 
   v_denied := false;
   BEGIN
+    UPDATE public.bookings SET start_date = CURRENT_DATE + 12 WHERE id = v_booking;
+  EXCEPTION WHEN check_violation THEN
+    v_denied := true;
+  END;
+  IF NOT v_denied THEN RAISE EXCEPTION 'Renter could change priced stay dates'; END IF;
+
+  v_denied := false;
+  BEGIN
+    INSERT INTO public.bookings (
+      user_id, booking_type, resource_id, resource_title, start_date, status,
+      total_price, idempotency_key
+    ) VALUES (
+      '35100000-0000-4000-8000-000000000001', 'apartment',
+      '35100000-0000-4000-8000-000000000002', 'Development apartment',
+      CURRENT_DATE + 1, 'pending', 1, 'san351-forged-price'
+    );
+  EXCEPTION WHEN check_violation THEN
+    v_denied := true;
+  END;
+  IF NOT v_denied THEN RAISE EXCEPTION 'Renter could insert a made-up price'; END IF;
+
+
+  v_denied := false;
+  BEGIN
     INSERT INTO public.bookings (
       user_id, booking_type, resource_id, resource_title, start_date, status,
       payment_status, idempotency_key
