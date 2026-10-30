@@ -216,3 +216,92 @@ for (const viewport of DEVELOPMENT_VIEWPORTS) {
     }
   });
 }
+
+/**
+ * Mobile layout regression (P1): on a 390px phone the page itself must never scroll
+ * sideways. Only the wide rental / development-access / audit tables may scroll inside
+ * their own containers, and every action button must stay reachable by scrolling the
+ * table (or tabbing into the scroll region).
+ *
+ * Read-only. Opt-in only because it needs a real administrator session; it writes no rows.
+ */
+const LAYOUT_VIEWPORTS = [
+  { name: "mobile-390", width: 390, height: 844, tableMustScroll: true },
+  { name: "desktop-1366", width: 1366, height: 900, tableMustScroll: false },
+] as const;
+
+for (const viewport of LAYOUT_VIEWPORTS) {
+  test(`admin rental layout: no page-level horizontal overflow (${viewport.name})`, async ({ page }) => {
+    test.skip(!optIn, "Requires an administrator session (MDE_ADMIN_RENTAL_E2E=1)");
+    if (!email) throw new Error("Admin layout E2E requires MDE_ADMIN_RENTAL_E2E_EMAIL");
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await signInAsOnOrigin(page, origin, email);
+    const rentalsLoaded = page.waitForResponse(
+      (response) => response.url().includes("/api/admin/rentals/test") && response.request().method() === "GET",
+    );
+    await page.goto("/admin/rentals");
+    await rentalsLoaded;
+    await expect(page.getByTestId("admin-rental-test-panel")).toBeVisible();
+    await expect(page.getByTestId("admin-rental-table")).toBeVisible();
+    // Let React commit the loaded rows before measuring layout.
+    await page.evaluate(
+      () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
+    );
+
+    const documentWidth = () =>
+      page.evaluate(() => ({
+        scrollWidth: document.documentElement.scrollWidth,
+        clientWidth: document.documentElement.clientWidth,
+      }));
+    const expectNoPageOverflow = async () => {
+      const { scrollWidth, clientWidth } = await documentWidth();
+      expect(scrollWidth).toBeLessThanOrEqual(clientWidth);
+    };
+
+    // The document never overflows, before or after scrolling a table sideways.
+    await expectNoPageOverflow();
+
+    for (const testId of ["admin-test-access-scroll", "admin-rental-table-scroll", "admin-test-events-scroll"]) {
+      const scroller = page.getByTestId(testId);
+      await expect(scroller).toBeVisible();
+      await expect(scroller).toHaveCSS("overflow-x", "auto");
+      // Keyboard users must be able to focus the scroll region to pan it.
+      await scroller.focus();
+      await expect(scroller).toBeFocused();
+    }
+
+    const rental = await page.getByTestId("admin-rental-table-scroll").evaluate((el) => ({
+      scrollWidth: el.scrollWidth,
+      clientWidth: el.clientWidth,
+    }));
+    if (viewport.tableMustScroll) {
+      expect(rental.scrollWidth).toBeGreaterThan(rental.clientWidth);
+    } else {
+      // Desktop keeps the existing full-width layout: nothing is hidden behind a scrollbar.
+      expect(rental.scrollWidth).toBeLessThanOrEqual(rental.clientWidth + 1);
+    }
+
+    // Every action button is reachable and fully visible inside the viewport once its
+    // cell is scrolled into view, and panning the table never widens the page.
+    const rowCount = await page.getByTestId("admin-rental-table").locator("tbody tr").count();
+    const buttons = page.getByTestId("admin-rental-table").locator("button");
+    const buttonCount = await buttons.count();
+    test.info().annotations.push(
+      { type: "rental rows", description: String(rowCount) },
+      { type: "action buttons", description: String(buttonCount) },
+    );
+    if (rowCount > 0) expect(buttonCount).toBeGreaterThan(0);
+    for (let index = 0; index < buttonCount; index += 1) {
+      const button = buttons.nth(index);
+      await button.scrollIntoViewIfNeeded();
+      const box = await button.boundingBox();
+      expect(box).not.toBeNull();
+      expect(box!.x).toBeGreaterThanOrEqual(-1);
+      expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width + 1);
+    }
+    await page.getByTestId("admin-rental-table-scroll").evaluate((el) => {
+      el.scrollLeft = 0;
+    });
+    await expectNoPageOverflow();
+  });
+}
