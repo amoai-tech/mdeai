@@ -31,6 +31,19 @@ import {
   useEventLocalChat,
 } from "@/components/chat/event-local-chat-context";
 
+async function renderWith(agent: unknown) {
+  mocks.state.agent = agent;
+  await act(async () => {
+    root.render(
+      React.createElement(
+        EventLocalChatProvider,
+        null,
+        React.createElement(Probe, { onReady: (next) => (api = next) }),
+      ),
+    );
+  });
+}
+
 function Probe({ onReady }: { onReady: (api: ReturnType<typeof useEventLocalChat>) => void }) {
   const api = useEventLocalChat();
   onReady(api);
@@ -105,20 +118,11 @@ describe("EventLocalChatProvider durable save", () => {
   });
 
   it("still saves the exchange when publishing to the agent throws", async () => {
-    mocks.state.agent = {
+    await renderWith({
       threadId: THREAD,
       addMessages: () => {
         throw new Error("agent not ready");
       },
-    };
-    await act(async () => {
-      root.render(
-        React.createElement(
-          EventLocalChatProvider,
-          null,
-          React.createElement(Probe, { onReady: (next) => (api = next) }),
-        ),
-      );
     });
 
     await act(async () => {
@@ -130,16 +134,7 @@ describe("EventLocalChatProvider durable save", () => {
   });
 
   it("saves the first answer once the agent assigns a thread id", async () => {
-    mocks.state.agent = { threadId: undefined, addMessages: vi.fn() };
-    await act(async () => {
-      root.render(
-        React.createElement(
-          EventLocalChatProvider,
-          null,
-          React.createElement(Probe, { onReady: (next) => (api = next) }),
-        ),
-      );
-    });
+    await renderWith({ threadId: undefined, addMessages: vi.fn() });
 
     await act(async () => {
       api!.showExchange("Find Italian restaurants in El Poblado.", "3 Italian spots in El Poblado.");
@@ -147,19 +142,49 @@ describe("EventLocalChatProvider durable save", () => {
     expect(fetchMock).not.toHaveBeenCalled();
 
     // CopilotKit assigns the thread id a moment later; the queued save must flush.
-    mocks.state.agent = { threadId: THREAD, addMessages: vi.fn() };
-    await act(async () => {
-      root.render(
-        React.createElement(
-          EventLocalChatProvider,
-          null,
-          React.createElement(Probe, { onReady: (next) => (api = next) }),
-        ),
-      );
-    });
+    await renderWith({ threadId: THREAD, addMessages: vi.fn() });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url] = fetchMock.mock.calls[0] as [string];
     expect(url).toBe(`/api/threads/${THREAD}/messages`);
+  });
+
+  it("retries a transient save failure once", async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response("boom", { status: 503 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ saved: 2 }), { status: 200 }));
+
+    await act(async () => {
+      api!.showExchange("Find Italian restaurants in El Poblado.", "3 Italian spots in El Poblado.");
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("never posts to a thread id that is not a uuid", async () => {
+    await renderWith({ threadId: "../../evil", addMessages: vi.fn() });
+
+    await act(async () => {
+      api!.showExchange("Hello", "Hi");
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("drops a queued save when New Chat starts a new conversation", async () => {
+    await renderWith({ threadId: undefined, addMessages: vi.fn() });
+    await act(async () => {
+      api!.showExchange("Find Italian restaurants in El Poblado.", "3 Italian spots in El Poblado.");
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    await act(async () => {
+      api!.clearLocalMessages();
+    });
+
+    // A later thread id must not resurrect the previous conversation's save.
+    await renderWith({ threadId: THREAD, addMessages: vi.fn() });
+
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

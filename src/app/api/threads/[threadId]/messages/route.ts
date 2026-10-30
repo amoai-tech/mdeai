@@ -182,6 +182,23 @@ export async function POST(
     return NextResponse.json({ error: "Forbidden" }, { status: 403, headers: NO_STORE });
   }
 
+  const requestedIds = parsed.rows.map((row) => row.id);
+  // Message ids are client-generated, so the same id can arrive from another thread. Never let
+  // that collide into a silent no-op: the reader would lose one of the two answers.
+  const { data: existingById, error: existingError } = await svc.service
+    .from("mastra_messages")
+    .select("id, thread_id")
+    .in("id", requestedIds);
+  if (existingError) {
+    console.error("[/api/threads/messages] id lookup", existingError.message);
+    return NextResponse.json({ error: "Could not save messages" }, { status: 500, headers: NO_STORE });
+  }
+  const foreignIds = new Set(
+    ((existingById ?? []) as Array<{ id: string; thread_id: string }>)
+      .filter((row) => row.thread_id !== threadId)
+      .map((row) => row.id),
+  );
+
   let createdThread = false;
   if (!thread) {
     // The first turn of a conversation can be a fast-path answer, before any agent run has created
@@ -215,23 +232,6 @@ export async function POST(
     }
   }
 
-  const requestedIds = parsed.rows.map((row) => row.id);
-  // Message ids are client-generated, so the same id can arrive from another thread. Never let
-  // that collide into a silent no-op: the reader would lose one of the two answers.
-  const { data: existingById, error: existingError } = await svc.service
-    .from("mastra_messages")
-    .select("id, thread_id")
-    .in("id", requestedIds);
-  if (existingError) {
-    console.error("[/api/threads/messages] id lookup", existingError.message);
-    return NextResponse.json({ error: "Could not save messages" }, { status: 500, headers: NO_STORE });
-  }
-  const foreignIds = new Set(
-    ((existingById ?? []) as Array<{ id: string; thread_id: string }>)
-      .filter((row) => row.thread_id !== threadId)
-      .map((row) => row.id),
-  );
-
   // One shared timestamp let the reader fall back to id order, which can put the assistant first.
   // A millisecond per message preserves the order the person actually saw.
   const base = Date.now();
@@ -255,9 +255,16 @@ export async function POST(
     .select("id");
   if (error) {
     console.error("[/api/threads/messages] save", error.message);
-    // Do not leave a brand-new empty conversation behind for a save that never landed.
+    // Do not leave a brand-new empty conversation behind for a save that never landed — but only
+    // remove it when it is still empty: a concurrent successful save must not lose its messages.
     if (createdThread) {
-      await svc.service.from("mastra_threads").delete().eq("id", threadId).eq("resourceId", auth.userId);
+      const { count } = await svc.service
+        .from("mastra_messages")
+        .select("id", { count: "exact", head: true })
+        .eq("thread_id", threadId);
+      if (!count) {
+        await svc.service.from("mastra_threads").delete().eq("id", threadId).eq("resourceId", auth.userId);
+      }
     }
     return NextResponse.json({ error: "Could not save messages" }, { status: 500, headers: NO_STORE });
   }

@@ -82,7 +82,16 @@ vi.mock("@/lib/supabase/service", () => ({
               },
               // The route pre-reads ids to spot a cross-thread collision, then awaits the upsert
               // result. Both go through `select`, so it answers to both shapes.
-              select: (columns?: string) => {
+              select: (columns?: string, options?: { count?: string; head?: boolean }) => {
+                if (options?.head) {
+                  // The empty-thread rollback counts messages before deleting the thread.
+                  return {
+                    eq: async (_column: string, value: string) => ({
+                      count: db.rows.filter((row) => row.thread_id === value).length,
+                      error: null,
+                    }),
+                  };
+                }
                 if (columns === "id") {
                   // The write happens here: the route awaits this promise.
                   return Promise.resolve().then(() => {
@@ -339,5 +348,18 @@ describe("SAN-1531 POST /api/threads/[threadId]/messages", () => {
       expect(await response.json()).toMatchObject({ saved: 2 });
       expect(db.rows.map((row) => row.id)).not.toContain("local-1-user");
     });
+
+  it("does not delete a thread that a concurrent save already filled", async () => {
+    signInAs(OWNER);
+    db.saveError = "connection reset";
+    // A concurrent writer already stored its message in the thread this request created.
+    db.rows.push({ id: "other-writer", thread_id: THREAD, role: "user", content: "{}" });
+
+    const response = await save(THREAD, exchange);
+
+    expect(response.status).toBe(500);
+    // The rollback only removes a thread that is still empty; this one kept rows from the winner.
+    expect(db.deletes).not.toContain("thread");
+  });
   });
 });

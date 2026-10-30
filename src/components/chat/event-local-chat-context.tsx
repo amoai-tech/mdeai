@@ -46,6 +46,9 @@ const EventLocalChatContext = createContext<EventLocalChatContextValue | null>(
   null,
 );
 
+/** Only a real thread uuid may become a request path. */
+const THREAD_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 function nextId() {
   return `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -96,17 +99,31 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
    * owner check) and stay silent on 401: a guest has no thread to save to.
    */
   const save = useCallback((threadId: string, batch: EventLocalChatMessage[]) => {
+    // Only a real thread uuid may become a request path; anything else is not one of ours.
+    if (!THREAD_ID_PATTERN.test(threadId)) {
+      console.warn("[EventLocalChat] refusing to save to a non-uuid thread id");
+      return;
+    }
     const messages = batch
       .filter((m) => m.role === "user" || m.role === "assistant")
       .map(({ id, role, content }) => ({ id, role, content }));
     if (messages.length === 0) return;
-    void fetch(`/api/threads/${encodeURIComponent(threadId)}/messages`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ messages }),
-      keepalive: true,
-    })
-      .then((response) => {
+    const post = () =>
+      fetch(`/api/threads/${encodeURIComponent(threadId)}/messages`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ messages }),
+        keepalive: true,
+      });
+
+    void post()
+      .then(async (response) => {
+        if (response.status >= 500) {
+          // One retry: a transient failure must not be the reason an answer disappears.
+          const retried = await post();
+          if (!retried.ok) console.warn(`[EventLocalChat] history save failed: ${retried.status}`);
+          return;
+        }
         if (!response.ok && response.status !== 401) {
           console.warn(`[EventLocalChat] history save failed: ${response.status}`);
         }
@@ -227,6 +244,8 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
 
   const clearLocalMessages = useCallback(() => {
     pendingAgentMessagesRef.current = [];
+    // A queued save belongs to the conversation that produced it; New Chat starts a new one.
+    pendingSavesRef.current = [];
     setSignInPrompt(false);
     setMessages([]);
     setClarifyPending(false);
