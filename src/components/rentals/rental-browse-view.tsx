@@ -28,7 +28,8 @@ import { useOptionalThreadNav } from "@/lib/chat/thread-nav-context";
 import type { DetailsCommand } from "@/lib/rentals/details-command";
 import { ScheduleViewingModal } from "@/components/modals/schedule-viewing-modal";
 import { EmptyState } from "@/components/empty/empty-state";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { useMapContext } from "@/platform/maps/map-context";
 import { useBrowseMapSync } from "@/hooks/use-browse-map-sync";
 import { useBrowseCardScroll } from "@/hooks/use-browse-card-scroll";
@@ -228,14 +229,12 @@ function RentalBrowseViewInner({
               data-testid="rentals-error"
             >
               <p className="text-sm text-destructive">{error}</p>
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-4"
-                render={<Link href={retryHref} />}
+              <Link
+                href={retryHref}
+                className={cn(buttonVariants({ variant: "outline", size: "sm" }), "mt-4")}
               >
                 Retry
-              </Button>
+              </Link>
             </div>
           ) : null}
 
