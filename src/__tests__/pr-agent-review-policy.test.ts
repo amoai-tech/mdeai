@@ -346,6 +346,44 @@ ${JSON.stringify({ findings: [], schema_version: 1, last_run: { head_sha: HEAD_A
     expect(result.code).toBe("INCOMPLETE_REVIEW");
   });
 
+  it("rejects a six-chunk review that explicitly excludes files even when the persistent state is absent", () => {
+    const footer = [
+      "",
+      "<hr>",
+      "ℹ️ **Chunked review:** the diff exceeded the model token budget, so it was reviewed in 6 chunks and the per-chunk results were merged.",
+      "<hr>",
+      "⚠️ **Review coverage:** The following files were not included in this review because of the token budget:",
+      "- `docs/progress/_work/features-and-pages.md`",
+      "- `docs/progress/_work/ai-architecture.md`",
+      "- `docs/progress/_work/database-inventory.md`",
+      "- `docs/progress/_work/release-and-runtime.md`",
+      "- `docs/progress/data/pr-files.json`",
+      "- `docs/progress-tracker.md`",
+      "<hr>",
+    ].join("\n");
+    const noState = envelopedCanonical().replace(/<!-- pr-agent-review-state:v1\n[\s\S]*?\n-->/, "");
+    const body = noState + footer;
+    const result = verifyReviewResult({ comments: [comment(body, "2026-09-20T01:00:05Z")], startedAt: RUN_STARTED, reviewCommand: "/review", baseSha: BASE_A, headSha: HEAD_A });
+    expect(result.ok).toBe(false);
+    expect(result.code).toBe("INCOMPLETE_REVIEW");
+    expect(result.reason).toContain("6 excluded");
+  });
+
+  it("rejects explicit excluded-file footer even when a stale/incorrect state claims full coverage", () => {
+    const body = envelopedCanonical() + "\n⚠️ **Review coverage:** The following files were not included in this review because of the token budget:\n- `src/ignored.ts`\n";
+    const result = verifyReviewResult({ comments: [comment(body, "2026-09-20T01:00:05Z")], startedAt: RUN_STARTED, reviewCommand: "/review", baseSha: BASE_A, headSha: HEAD_A });
+    expect(result.ok).toBe(false);
+    expect(result.code).toBe("INCOMPLETE_REVIEW");
+  });
+
+  it("does not confuse a complete-coverage footer with an excluded-file failure", () => {
+    const noState = envelopedCanonical().replace(/<!-- pr-agent-review-state:v1\n[\s\S]*?\n-->/, "");
+    const body = noState + "\nℹ️ **Review coverage:** All changed files were reviewed.\n";
+    const result = verifyReviewResult({ comments: [comment(body, "2026-09-20T01:00:05Z")], startedAt: RUN_STARTED, reviewCommand: "/review", baseSha: BASE_A, headSha: HEAD_A });
+    expect(result.ok).toBe(true);
+    expect(result).toHaveProperty("coverageConfirmed", false);
+  });
+
   it("keeps state-free clean PR-Agent reviews working without claiming complete diff coverage", () => {
     const body = envelopedCanonical().replace(/<!-- pr-agent-review-state:v1\n[\s\S]*?\n-->/, "");
     const result = verifyReviewResult({ comments: [comment(body, "2026-09-20T01:00:05Z")], startedAt: RUN_STARTED, reviewCommand: "/review", baseSha: BASE_A, headSha: HEAD_A });
