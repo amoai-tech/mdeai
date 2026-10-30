@@ -108,17 +108,21 @@ const REQUESTS_ALLOWED = [
 const CONSOLE_ALLOWED = [
   {
     test: (message, url) =>
-      /^Failed to load resource: the server responded with a status of 401\b/.test(message) &&
-      safePathname(url) === "/api/copilotkit",
+      message.startsWith(
+        "Failed to load resource: the server responded with a status of 401 ",
+      ) && safePathname(url) === "/api/copilotkit",
   },
   {
     test: (message) =>
-      /^Attempted to load a Vector Map, but failed\. Falling back to Raster\.$/.test(message),
+      message.startsWith(
+        "Attempted to load a Vector Map, but failed. Falling back to Raster.",
+      ),
   },
   {
     test: (message, url) =>
-      /^Failed to load resource: the server responded with a status of 404\b/.test(message) &&
-      safePathname(url).startsWith("/_vercel/insights/"),
+      message.startsWith(
+        "Failed to load resource: the server responded with a status of 404 ",
+      ) && safePathname(url).startsWith("/_vercel/insights/"),
   },
 ];
 
