@@ -68,6 +68,13 @@ describe("bookingIntentInputSchema", () => {
     expect(bookingIntentInputSchema.safeParse({ ...base, startDate: "2020-01-01" }).success).toBe(false);
   });
 
+  it("rejects non-existent calendar days and reversed booking ranges", () => {
+    expect(bookingIntentInputSchema.safeParse({ ...base, startDate: "2026-13-40" }).success).toBe(false);
+    expect(bookingIntentInputSchema.safeParse({ ...base, startDate: "2026-12-01", endDate: "2026-02-30" }).success).toBe(false);
+    expect(bookingIntentInputSchema.safeParse({ ...base, startDate: "2026-12-15", endDate: "2026-12-01" }).success).toBe(false);
+    expect(bookingIntentInputSchema.safeParse({ ...base, startDate: "2026-12-01", endDate: "2026-12-15" }).success).toBe(true);
+  });
+
   it("rejects a malformed date and a weak idempotency key", () => {
     expect(bookingIntentInputSchema.safeParse({ ...base, startDate: "12/01/2026" }).success).toBe(false);
     expect(

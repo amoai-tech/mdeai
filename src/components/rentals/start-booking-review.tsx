@@ -9,9 +9,25 @@ import { Button } from "@/components/ui/button";
  *
  * The idempotency key is generated once, on the renter's first submit, and reused for every
  * retry of that same review: a double-click, a slow network or a refresh-then-retry resumes
- * the same pending booking instead of creating a second one. Changing the dates on the page
- * does not silently re-aim that key — the server answers 409 and this screen says so.
+ * the same pending booking instead of creating a second one. A date change starts a
+ * separate intentional request; the server rejects reuse of a key with different data.
  */
+/** Persist one key for the same apartment/date across a full refresh in this browser tab. */
+function bookingKeyFor(apartmentId: string, startDate: string): string {
+  const newKey = () => `bi-${crypto.randomUUID()}`;
+  try {
+    const storageKey = `mde:booking-intent:${apartmentId}:${startDate}`;
+    const stored = window.sessionStorage.getItem(storageKey);
+    if (stored && /^bi-[0-9a-f-]{36}$/.test(stored)) return stored;
+    const key = newKey();
+    window.sessionStorage.setItem(storageKey, key);
+    return key;
+  } catch {
+    // Private-storage restrictions do not prevent a booking; in-memory retries still work.
+    return newKey();
+  }
+}
+
 export function StartBookingReview({
   apartmentId,
   defaultStartDate,
@@ -20,7 +36,7 @@ export function StartBookingReview({
   defaultStartDate?: string | null;
 }) {
   const router = useRouter();
-  const idempotencyKey = useRef<string | null>(null);
+  const currentAttempt = useRef<{ date: string; key: string } | null>(null);
   const [startDate, setStartDate] = useState(defaultStartDate ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -28,7 +44,10 @@ export function StartBookingReview({
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy) return;
-    idempotencyKey.current ??= `bi-${crypto.randomUUID()}`;
+    if (!currentAttempt.current || currentAttempt.current.date !== startDate) {
+      currentAttempt.current = { date: startDate, key: bookingKeyFor(apartmentId, startDate) };
+    }
+    const idempotencyKey = currentAttempt.current.key;
     setBusy(true);
     setError(null);
     try {
@@ -38,7 +57,7 @@ export function StartBookingReview({
         body: JSON.stringify({
           apartmentId,
           startDate,
-          idempotencyKey: idempotencyKey.current,
+          idempotencyKey,
         }),
       });
       const body = (await response.json().catch(() => ({}))) as {

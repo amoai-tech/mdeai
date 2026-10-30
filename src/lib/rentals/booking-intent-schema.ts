@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { rentalToday } from "./date-only";
+import { isOrderedStay, isRealCalendarDate, rentalToday } from "./date-only";
 
 /**
  * SAN-1234 / SAN-481 — the request contract for a rental booking intent.
@@ -21,7 +21,6 @@ export const BOOKING_INTENT_ERROR_MESSAGES = {
 
 export type BookingIntentErrorCode = keyof typeof BOOKING_INTENT_ERROR_MESSAGES;
 
-const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 /** Client-generated once per review attempt and reused on retry, so a retry resumes. */
 const IDEMPOTENCY_KEY_RE = /^[A-Za-z0-9._:-]{8,128}$/;
 
@@ -29,14 +28,17 @@ export const bookingIntentInputSchema = z.object({
   apartmentId: z.string().uuid("Choose a valid apartment."),
   startDate: z
     .string({ required_error: "Choose a move-in date." })
-    .regex(ISO_DATE_RE, "Choose a move-in date.")
+    .refine(isRealCalendarDate, "Choose a real move-in date.")
     // A move-in date in the past is not a booking anyone can act on. Compare calendar
     // dates in the rental timezone, never the server's UTC clock.
     .refine((value) => value >= rentalToday(), "Choose a move-in date today or later."),
-  endDate: z.string().regex(ISO_DATE_RE, "Choose a valid end date.").nullish(),
+  endDate: z.string().refine(isRealCalendarDate, "Choose a real end date.").nullish(),
   idempotencyKey: z
     .string({ required_error: "Refresh the page and try again." })
     .regex(IDEMPOTENCY_KEY_RE, "Refresh the page and try again."),
-});
+}).refine(
+  (value) => isOrderedStay(value.startDate, value.endDate ?? undefined),
+  { path: ["endDate"], message: "Move-out date cannot be before move-in." },
+);
 
 export type BookingIntentInput = z.infer<typeof bookingIntentInputSchema>;

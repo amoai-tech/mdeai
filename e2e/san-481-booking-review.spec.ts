@@ -61,7 +61,9 @@ test.describe("rental booking review", () => {
       await signInAsOnOrigin(page, origin, renter.email);
 
       // 1. The real UI: explicit submit creates the booking and lands on its review.
-      await page.goto(`/rentals/bookings/new?apartment=${apartment.id}`);
+      await page.goto(`/rentals/${apartment.id}`);
+      await expect(page.getByTestId("rental-detail-booking-review-link")).toBeVisible();
+      await page.getByTestId("rental-detail-booking-review-link").click();
       await expect(page.getByTestId("booking-review-new")).toBeVisible();
       await page.getByTestId("booking-start-date").fill(START_DATE);
       await page.getByTestId("booking-start-submit").click();
@@ -84,6 +86,16 @@ test.describe("rental booking review", () => {
       expect(afterSubmit.error).toBeNull();
       expect(afterSubmit.data).toHaveLength(1);
       expect(afterSubmit.data?.[0]?.id).toBe(uiBookingId);
+
+      // A full browser refresh must keep the *UI's* key: reopening the review for
+      // the same apartment/date should resume, not create a second booking.
+      await page.goto(`/rentals/bookings/new?apartment=${apartment.id}`);
+      await page.getByTestId("booking-start-date").fill(START_DATE);
+      await page.getByTestId("booking-start-submit").click();
+      await page.waitForURL(/\/rentals\/bookings\/[0-9a-f-]{36}$/, { timeout: 30_000 });
+      expect(page.url().split("/").pop()).toBe(uiBookingId);
+      const afterRefreshRetry = await admin.from("bookings").select("id").eq("user_id", renter.userId);
+      expect(afterRefreshRetry.data).toHaveLength(1);
 
       // 3. API: an identical retry with the same key returns the SAME booking.
       const key = `bi-${crypto.randomUUID()}`;
