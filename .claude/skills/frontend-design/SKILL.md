@@ -1,18 +1,18 @@
 ---
 name: frontend-design
-description: Use when creating or substantially reshaping a user-facing interface where visual direction, hierarchy, typography, responsive behavior, interaction quality, or a distinctive product identity materially affect the result.
+description: Use when creating a new UI or substantially redesigning an existing interface where visual composition, hierarchy, layout, or product identity must be designed and implemented; not for focused UX reviews or minor fixes.
 license: Complete terms in LICENSE.txt
 ---
 
 # Frontend Design
 
-Approach this as the design lead at a design studio known for giving every client a distinct visual identity that is not mistaken for anyone else's. This client has already rejected proposals that felt cliché or templated, and is paying for a distinctive point of view: make deliberate, opinionated choices about palette, typography, and layout that are specific to this brief, and take aesthetic risk if justified.
+Design with a distinctive, brief-specific point of view, without assuming the client rejected earlier designs or wants new branding. For MDE, deliver visual quality through thoughtful composition, hierarchy, imagery and interaction **within the existing design system**; change brand foundations only when the user explicitly requests it.
 
 ## Ground your designs in the subject matter
 
-For MDE product screens, read `references/ui-ux-patterns.md` before planning the design. It contains MDE-specific information hierarchy, workspace, responsive, state, typography, interaction, and AI-surface guidance. Keep detailed UX patterns there so this primary skill stays focused on visual direction.
+For MDE product screens, first consult [DESIGN.MD](../../../DESIGN.MD), current [semantic tokens](../../../src/app/globals.css), existing [UI primitives](../../../src/components/ui/), and [MDE UI/UX patterns](references/ui-ux-patterns.md). Reuse those fonts, colors and components; they outrank generic creative suggestions below. This skill owns substantial **visual design**; [uiux](../uiux/SKILL.md) owns existing-screen reviews and focused usability fixes. The [tasks UI review standard](../tasks/references/ui-review.md) owns required state/interaction verification.
 
-If the brief does not identify what the product or subject matter is, identify it yourself before designing, and confirm with the client. You can come up with one concrete subject, the design's audience, and the design's primary job, as a proposal. If there's any information in your memory about the client's preferences or context about what they're building, use that as a hint. The subject's industry, subject matter, materials, and vernacular are where distinctive visual choices come from — a design for a toy for girls aged 8–11 will be very aesthetically different from a dashboard for financial analysts. Build with the brief's real content and subject matter throughout.
+Identify the screen's audience, primary task and subject from the brief and current application. When the MDE context already answers these, proceed without requesting reconfirmation. If a material detail truly remains unknown, state the assumption or ask only when needed to avoid a wrong design. Do not invent client preferences or prior decisions.
 
 ## Design principles
 
@@ -20,7 +20,7 @@ For web designs, the hero is the first thing viewers will see. Open with the mos
 
 Typography carries the personality of the page. You don't need a different typeface for display or headline text and body content: use one family or two, and if two, make them clearly distinct.
 
-Choose your typefaces deliberately, not the default families you would reach for on any other project, and set a clear type scale following the default guidance of The Elements of Typographic Style with intentional weights, widths, and spacing. When type is used as a headline or visual element, use the type treatment itself as an active part of the design, not a neutral delivery vehicle for the content.
+On MDE, use the current font stacks and type scale from DESIGN.MD and globals.css. Make the hierarchy distinctive through weight, scale, spacing and composition before proposing another typeface. Only propose a new font family when the brief explicitly requests a brand/typography change.
 
 Default to line lengths of less than 80 characters. Serif typefaces can have slightly longer line lengths; give serif body text slightly more line-height than a sans-serif.
 
@@ -46,9 +46,9 @@ For calibration, AI-generated design right now clusters around some traits:
 
 All traits are legitimate for some briefs, but they are defaults rather than choices, and they appear regardless of subject. Where the brief pins down a visual direction, follow it exactly — the brief's own words always win, including when it asks for one of these looks. Where it leaves an axis free, don't spend that freedom on one of these defaults. As with a hired human designer, there's often a careful balance between doing what you're good at and taking each project as a chance to experiment and learn.
 
-Work in two passes. First, brainstorm a short design plan based on the client's design brief: create a compact token system with color, type, layout, and principles.
-- Color: describe the core base palette as 4–6 named hex values.
-- Type: the typefaces and their roles.
+Work in two passes. First, make a short design plan from the brief and the product's **existing** tokens, type, layout and principles. For MDE, do not invent a parallel token system.
+- Color: map the design to the existing semantic tokens. Propose new tokens or brand colors only if explicitly requested, then update the canonical design system as part of the authorized change.
+- Type: reuse current font stacks and hierarchy; specify their roles rather than introducing unrequested typefaces.
 - Layout: a layout concept, using one-sentence prose descriptions and ASCII wireframes to ideate and compare. Include alignment guidance; should the content be left aligned, center aligned, justified?
 - Principles: the high-level guidance for what makes this page unique.
 

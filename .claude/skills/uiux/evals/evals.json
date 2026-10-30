@@ -1,0 +1,216 @@
+{
+  "skill_name": "uiux",
+  "version": "1.0.0",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Review the existing MDE rental results screen: filter chips are unclear, card and map selection are hard to follow, and no-match feedback is confusing. Recommend the smallest UX corrections using the current components. Do not edit code.",
+      "expected_output": "Audits the existing rental discovery journey and relevant states, separates observed problems from assumptions, proposes specific small fixes using current components and design tokens, and identifies browser/mobile verification without starting a redesign.",
+      "files": [],
+      "should_trigger": true,
+      "expectations": [
+        {
+          "id": "catalog",
+          "kind": "deterministic",
+          "check": "catalog_contains",
+          "value": "uiux"
+        },
+        {
+          "id": "owner",
+          "kind": "deterministic",
+          "check": "skill_called",
+          "value": "uiux"
+        },
+        {
+          "id": "owner-read",
+          "kind": "deterministic",
+          "check": "skill_result_ok",
+          "value": "uiux"
+        },
+        {
+          "id": "completed",
+          "kind": "deterministic",
+          "check": "turn_completed"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Audit the existing MDE event-ticket checkout screen on mobile. Loading and payment-error feedback are confusing; evaluate primary actions and recovery states without redesigning the page or changing payments.",
+      "expected_output": "Identifies user-impacting checkout UX problems and recovery states, preserves payment truth, proposes focused copy/layout fixes, and describes appropriate mobile/keyboard and safe checkout checks.",
+      "files": [],
+      "should_trigger": true,
+      "expectations": [
+        {
+          "id": "catalog",
+          "kind": "deterministic",
+          "check": "catalog_contains",
+          "value": "uiux"
+        },
+        {
+          "id": "owner",
+          "kind": "deterministic",
+          "check": "skill_called",
+          "value": "uiux"
+        },
+        {
+          "id": "owner-read",
+          "kind": "deterministic",
+          "check": "skill_result_ok",
+          "value": "uiux"
+        },
+        {
+          "id": "completed",
+          "kind": "deterministic",
+          "check": "turn_completed"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Review the current Ask MDE chat-and-map screen for keyboard focus, screen-reader labels, empty search results, and responsive panel behavior; give a focused UX audit only, not a new visual identity.",
+      "expected_output": "Examines the existing user journey and state matrix, identifies verifiable accessibility and responsive usability findings, reuses MDE UI primitives, and distinguishes browser proof from backend action proof.",
+      "files": [],
+      "should_trigger": true,
+      "expectations": [
+        {
+          "id": "catalog",
+          "kind": "deterministic",
+          "check": "catalog_contains",
+          "value": "uiux"
+        },
+        {
+          "id": "owner",
+          "kind": "deterministic",
+          "check": "skill_called",
+          "value": "uiux"
+        },
+        {
+          "id": "owner-read",
+          "kind": "deterministic",
+          "check": "skill_result_ok",
+          "value": "uiux"
+        },
+        {
+          "id": "completed",
+          "kind": "deterministic",
+          "check": "turn_completed"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Create a brand-new MDE operator dashboard with a distinctive visual composition, premium typography hierarchy, and a completely new page layout. Design the new interface, not an audit of an existing screen; do not edit code yet.",
+      "expected_output": "Routes substantial new-screen visual design to frontend-design rather than using the existing-screen uiux audit skill; preserves MDE design tokens unless the brief explicitly requests rebranding.",
+      "files": [],
+      "should_trigger": false,
+      "expectations": [
+        {
+          "id": "catalog",
+          "kind": "deterministic",
+          "check": "catalog_contains",
+          "value": "uiux"
+        },
+        {
+          "id": "not-uiux",
+          "kind": "deterministic",
+          "check": "skill_not_called",
+          "value": "uiux"
+        },
+        {
+          "id": "owner",
+          "kind": "deterministic",
+          "check": "skill_called",
+          "value": "frontend-design"
+        },
+        {
+          "id": "owner-read",
+          "kind": "deterministic",
+          "check": "skill_result_ok",
+          "value": "frontend-design"
+        },
+        {
+          "id": "completed",
+          "kind": "deterministic",
+          "check": "turn_completed"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Fix the Supabase RLS policy for rental leads because another user can read private viewing requests. This is a database authorization defect, not a screen redesign. Diagnose the policy without making changes.",
+      "expected_output": "Routes database RLS/security ownership to supabase and avoids treating a tenant-isolation failure as a cosmetic UIUX task.",
+      "files": [],
+      "should_trigger": false,
+      "expectations": [
+        {
+          "id": "catalog",
+          "kind": "deterministic",
+          "check": "catalog_contains",
+          "value": "uiux"
+        },
+        {
+          "id": "not-uiux",
+          "kind": "deterministic",
+          "check": "skill_not_called",
+          "value": "uiux"
+        },
+        {
+          "id": "owner",
+          "kind": "deterministic",
+          "check": "skill_called",
+          "value": "supabase"
+        },
+        {
+          "id": "owner-read",
+          "kind": "deterministic",
+          "check": "skill_result_ok",
+          "value": "supabase"
+        },
+        {
+          "id": "completed",
+          "kind": "deterministic",
+          "check": "turn_completed"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Run the existing Playwright browser tests for the signed-in rental viewing journey and report the actual pass/fail evidence. Do not propose visual changes; this is test execution only.",
+      "expected_output": "Routes browser test execution to e2e instead of uiux; reports real test evidence rather than asserting a visual opinion.",
+      "files": [],
+      "should_trigger": false,
+      "expectations": [
+        {
+          "id": "catalog",
+          "kind": "deterministic",
+          "check": "catalog_contains",
+          "value": "uiux"
+        },
+        {
+          "id": "not-uiux",
+          "kind": "deterministic",
+          "check": "skill_not_called",
+          "value": "uiux"
+        },
+        {
+          "id": "owner",
+          "kind": "deterministic",
+          "check": "skill_called",
+          "value": "e2e"
+        },
+        {
+          "id": "owner-read",
+          "kind": "deterministic",
+          "check": "skill_result_ok",
+          "value": "e2e"
+        },
+        {
+          "id": "completed",
+          "kind": "deterministic",
+          "check": "turn_completed"
+        }
+      ]
+    }
+  ]
+}
