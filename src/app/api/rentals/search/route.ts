@@ -16,6 +16,7 @@ export const maxDuration = 10;
 const bodySchema = z.object({
   neighborhood: z.string().optional(),
   minBedrooms: z.number().int().min(0).optional(),
+  maxBedrooms: z.number().int().min(0).optional(),
   maxPricePerNight: z.number().positive().optional(),
   maxPriceMonthly: z.number().positive().safe().optional(),
   budgetCurrency: z.enum(["COP", "USD"]).optional(),
@@ -24,6 +25,9 @@ const bodySchema = z.object({
   checkIn: z.string().refine(isRealCalendarDate, "checkIn must be a real date, YYYY-MM-DD").optional(),
   checkOut: z.string().refine(isRealCalendarDate, "checkOut must be a real date, YYYY-MM-DD").optional(),
   stayType: z.enum(["nightly", "monthly", "total_trip"]).optional(),
+}).refine((b) => b.minBedrooms === undefined || b.maxBedrooms === undefined || b.minBedrooms <= b.maxBedrooms, {
+  message: "maxBedrooms must be greater than or equal to minBedrooms",
+  path: ["maxBedrooms"],
 }).refine((b) => isOrderedStay(b.checkIn, b.checkOut), {
   message: "checkOut must not be before checkIn",
   path: ["checkOut"],
@@ -49,7 +53,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const { neighborhood, minBedrooms, maxPricePerNight, maxPriceMonthly, budgetCurrency, limit, queryText, checkIn, checkOut, stayType } = parsed.data;
+  const { neighborhood, minBedrooms, maxBedrooms, maxPricePerNight, maxPriceMonthly, budgetCurrency, limit, queryText, checkIn, checkOut, stayType } = parsed.data;
   try {
     // SAN-1502 PR2: the caller's own RLS-governed client, so an authorized test
     // actor's results include published development fixtures and no one else's do.
@@ -67,6 +71,7 @@ export async function POST(req: Request) {
     } = await searchRentals({
       neighborhood,
       minBedrooms,
+      maxBedrooms,
       maxPricePerNight,
       maxPriceMonthly,
       budgetCurrency,

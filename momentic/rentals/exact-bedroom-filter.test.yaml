@@ -10,6 +10,13 @@ steps:
   - click: "Rentals in the public website navigation"
   - click:
       css: '[data-testid="rentals-filter-neighborhood-laureles"]:visible'
+  - assert: "The Rentals page navigation has completed and the current browser URL includes neighborhood=Laureles."
+  # Precondition: a 3+ BR card exists in the same neighborhood and can be excluded.
+  # If inventory changes and no such card exists, fail rather than report a false green.
+  - click:
+      css: '[data-testid="rentals-filter-beds-3"]:visible'
+  - assert: "The Rentals page navigation has completed and the current browser URL includes both neighborhood=Laureles and beds=3."
+  - assert: "The Laureles 3 BR+ filter is selected and the loaded rentals results DOM contains at least one Laureles apartment card with 3 or more bedrooms, including cards below the viewport. Inspect the result-card DOM, not only the screenshot. If the DOM contains no such card, fail because the counterexample is missing."
   - click:
       css: '[data-testid="rentals-filter-beds-2"]:visible'
   - assert: "The rentals results show at least one apartment card and every apartment card is labeled exactly 2 BR. No result is 3 BR, 1 BR or Studio."

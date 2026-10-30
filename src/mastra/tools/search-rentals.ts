@@ -629,13 +629,23 @@ export async function searchRentals(
       (!Number.isFinite(query.maxPriceMonthly) || query.maxPriceMonthly <= 0)) {
     throw new RangeError('Monthly budget must be a finite positive number');
   }
+  for (const [name, value] of [['minBedrooms', query.minBedrooms], ['maxBedrooms', query.maxBedrooms]] as const) {
+    if (value !== undefined && (!Number.isInteger(value) || value < 0)) {
+      throw new RangeError(`${name} must be a nonnegative integer`);
+    }
+  }
+  if (query.minBedrooms !== undefined && query.maxBedrooms !== undefined &&
+      query.minBedrooms > query.maxBedrooms) {
+    throw new RangeError('maxBedrooms must be greater than or equal to minBedrooms');
+  }
   const limit = query.limit ?? 8;
   const client = options?.client ?? getSupabaseClient();
   // Development inventory is already returned by canonical RLS-backed search.
   // Never add a second, allowlisted external search that can duplicate or hide it.
   const developmentMode = client ? await readRentalDevelopmentPhase(client) : false;
 
-  if (query.queryText?.trim()) {
+  // Exact browse/API ceilings use canonical SQL counting, not a truncated semantic candidate window.
+  if (query.queryText?.trim() && query.maxBedrooms === undefined) {
     try {
       const started = Date.now();
       // Load after tool initialization; intelligence search reuses our row-mapping helpers.
@@ -705,7 +715,6 @@ export const searchRentalsTool = createTool({
   inputSchema: z.object({
     neighborhood: z.string().optional().describe('e.g. Laureles, El Poblado, Envigado'),
     minBedrooms: z.number().int().min(0).optional(),
-    maxBedrooms: z.number().int().min(0).optional().describe('Inclusive bedroom ceiling when a user asks for an exact number.'),
     maxPricePerNight: z.number().positive().optional().describe('USD per night'),
     maxPriceMonthly: z
       .number()
@@ -756,7 +765,6 @@ export const searchRentalsTool = createTool({
     const {
       neighborhood,
       minBedrooms,
-      maxBedrooms,
       maxPricePerNight,
       maxPriceMonthly,
       stayType,
@@ -774,7 +782,7 @@ export const searchRentalsTool = createTool({
     const { results, source, budgetNote, hybridUsed, rankExplanation } = await runAuditedSearch(
       'search-rentals',
       (q: RentalQuery) => searchRentals(q, options),
-      { neighborhood, minBedrooms, maxBedrooms, maxPricePerNight, maxPriceMonthly, stayType, budgetCurrency, limit, queryText },
+      { neighborhood, minBedrooms, maxPricePerNight, maxPriceMonthly, stayType, budgetCurrency, limit, queryText },
       context,
     );
 
