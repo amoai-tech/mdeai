@@ -93,15 +93,23 @@ const READ = () => {
  * A console "Failed to load resource" line is accepted only when both its status token and its
  * source URL match one of those cases. All other console errors fail the run.
  */
+function safePathname(rawUrl) {
+  try {
+    return new URL(rawUrl).pathname;
+  } catch {
+    return "";
+  }
+}
+
 const REQUESTS_ALLOWED = [
-  (status, url) => status === 401 && /\/api\/copilotkit(?:\?|$)/.test(url),
-  (status, url) => status === 404 && /\/_vercel\/insights\//.test(url),
+  (status, url) => status === 401 && safePathname(url) === "/api/copilotkit",
+  (status, url) => status === 404 && safePathname(url).startsWith("/_vercel/insights/"),
 ];
 const CONSOLE_ALLOWED = [
   {
     test: (message, url) =>
       /^Failed to load resource: the server responded with a status of 401\b/.test(message) &&
-      /\/api\/copilotkit(?:\?|$)/.test(url),
+      safePathname(url) === "/api/copilotkit",
   },
   {
     test: (message) =>
@@ -110,7 +118,7 @@ const CONSOLE_ALLOWED = [
   {
     test: (message, url) =>
       /^Failed to load resource: the server responded with a status of 404\b/.test(message) &&
-      /\/_vercel\/insights\//.test(url),
+      safePathname(url).startsWith("/_vercel/insights/"),
   },
 ];
 
