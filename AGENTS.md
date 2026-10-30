@@ -48,7 +48,7 @@ npm run graphify:query -- "<question>"
 `npm run floor` is the canonical repository gate; see `package.json` for the current command chain.
 For auth changes, also run the signed-in QA smoke with credentials in ignored local environment files (never committed); keep anonymous tests unauthenticated. See [e2e/README.md](e2e/README.md#san-1549--one-command-signed-in-qa-smoke) for prerequisites, safe credential handling, and production-smoke commands.
 
-**Shared Super Admin QA:** Browser tests needing authorized admin access should import `test` from `e2e/fixtures.ts` and request `superAdminPage`. This opt-in fixture uses the existing `mde@socialmediaville.ca` account via `signInAsOnOrigin()`; it does not authenticate unrelated or anonymous tests. See [e2e/README.md](e2e/README.md#shared-super-admin-qa-fixture) for runnable commands and production-data precautions.
+**Shared Super Admin QA:** Browser tests needing authorized admin access must import `test` from `e2e/fixtures.ts`, set `test.use({ screenshot: "off", trace: "off", video: "off" })`, and request `superAdminPage`. This opt-in fixture uses the existing `mde@socialmediaville.ca` account via `signInAsOnOrigin()` and rejects unsafe recording settings before login; unrelated and anonymous tests stay unauthenticated. See [e2e/README.md](e2e/README.md#shared-super-admin-qa-fixture) for runnable commands and production-data precautions.
 
 Traps worth knowing before you debug them:
 

@@ -49,7 +49,12 @@ export const test = base.extend<SharedFixtures, SharedWorkerFixtures>({
     await context.setStorageState(authStorageState);
     await runFixture(page);
   },
-  superAdminPage: async ({ browser, contextOptions, baseURL }, runFixture) => {
+  superAdminPage: async ({ browser, contextOptions, baseURL, screenshot, trace, video }, runFixture) => {
+    // Fail before minting a privileged session if a consumer enables uploadable artifacts.
+    // Each privileged consumer must explicitly disable all recording in its spec.
+    if (screenshot !== "off" || trace !== "off" || video !== "off") {
+      throw new Error("Super Admin QA requires test.use({ screenshot: \"off\", trace: \"off\", video: \"off\" })");
+    }
     if (!baseURL) {
       throw new Error("Super Admin QA requires a Playwright baseURL");
     }

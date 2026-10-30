@@ -1,9 +1,9 @@
 import { expect, test } from "./fixtures";
 import { hasE2eEnv } from "./helpers/auth";
 
-// Authenticated browser results may contain private data: no trace, video or screenshots.
-// Playwright error-context reports must also stay local and private.
-test.use({ trace: "off", screenshot: "off", video: "off" });
+// Super Admin fixture refuses unsafe recording settings before creating a session.
+// Playwright error-context reports may still contain content: never upload these results.
+test.use({ screenshot: "off", trace: "off", video: "off" });
 
 test.describe("shared Super Admin QA fixture (read-only)", () => {
   test.skip(
@@ -16,6 +16,12 @@ test.describe("shared Super Admin QA fixture (read-only)", () => {
       hasE2eEnv(),
       "Super Admin QA needs existing Supabase URL, public key and trusted server-side admin credential",
     ).toBe(true);
+  });
+
+  test("Super Admin smoke explicitly disables sensitive recordings", async ({ screenshot, trace, video }) => {
+    expect(screenshot).toBe("off");
+    expect(trace).toBe("off");
+    expect(video).toBe("off");
   });
 
   test("opens protected admin data without authenticating the ordinary page", async ({
