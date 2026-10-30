@@ -4,6 +4,8 @@ import path from "node:path";
 import { test } from "node:test";
 import { spawnSync } from "node:child_process";
 import errorsBehavior from "../../.claude/skills/errors/evals/evals.json" with { type: "json" };
+import uiuxBehavior from "../../.claude/skills/uiux/evals/evals.json" with { type: "json" };
+import uiuxTriggers from "../../.claude/skills/uiux/evals/trigger-evals.json" with { type: "json" };
 import errorsTriggers from "../../.claude/skills/errors/evals/trigger-evals.json" with { type: "json" };
 import prauditBehavior from "../../.claude/skills/praudit/evals/evals.json" with { type: "json" };
 import prauditTriggers from "../../.claude/skills/praudit/evals/trigger-evals.json" with { type: "json" };
@@ -184,6 +186,26 @@ function assertTriggerCases(skill, triggers) {
     assert.equal(c.expected_owner === skill, c.should_trigger, `${skill}: conflicting owner`);
   }
 }
+
+test("uiux review skill routes existing-screen audits and excludes other owners", () => {
+  assert.equal(uiuxBehavior.skill_name, "uiux");
+  assert.equal(uiuxBehavior.evals.length, 6);
+  assertTriggerCases("uiux", uiuxTriggers);
+  for (const [index, behavior] of uiuxBehavior.evals.entries()) {
+    const trigger = uiuxTriggers[index];
+    assert.equal(behavior.id, index + 1);
+    assert.equal(behavior.prompt, trigger.prompt);
+    assert.equal(behavior.should_trigger, trigger.should_trigger);
+    assert.ok(behavior.expected_output.length > 40);
+    const checks = behavior.expectations.map((e) => e.check);
+    assert.ok(checks.includes("catalog_contains"));
+    assert.ok(checks.includes("turn_completed"));
+    assert.ok(checks.includes("skill_called"));
+    assert.ok(checks.includes("skill_result_ok"));
+    assert.equal(checks.includes("skill_not_called"), !trigger.should_trigger);
+    assert.ok(behavior.expectations.every((e) => e.kind === "deterministic"));
+  }
+});
 
 test("short execution skills cover routing positives, negatives, and behavior", () => {
   // Static imports are part of the test bundle: no user-derived path can reach file I/O.
