@@ -86,7 +86,7 @@ test("promotion is explicit, uses the exact deployment id, and is a pinned CLI c
 
   assert.match(promote, /vercel@\$\{VERCEL_CLI_VERSION\}\" promote \"\$\{VERCEL_DEPLOYMENT_ID\}\"/);
   assert.match(promote, /--scope "\$\{VERCEL_SCOPE\}"/);
-  assert.match(promote, /--token "\$\{VERCEL_TOKEN\}"/);
+  assert.doesNotMatch(promote, /--token/, "do not expose Vercel tokens in CLI arguments");
   assert.match(workflow(), /VERCEL_CLI_VERSION:\s*"\d+\.\d+\.\d+"/, "the Vercel CLI must be pinned to an exact version");
   assert.match(workflow(), /VERCEL_DEPLOYMENT_ID:\s*\$\{\{\s*github\.event\.client_payload\.id\s*\}\}/);
 
@@ -167,6 +167,8 @@ test("production is verified after promotion, and only if promotion succeeded", 
   const job = certifyJob(workflow());
   const verify = stepBody(job, "Verify www.mdeai.co serves the exact certified deployment");
   assert.match(verify, /node \.trusted\/scripts\/vercel-release-control\.mjs assert-promoted/);
+  assert.match(verify, /GH_TOKEN:\s*\$\{\{ secrets\.GITHUB_TOKEN \}\}/,
+    "post-promote verification re-reads live main, so it must have GitHub credentials");
   assert.match(verify, /if:\s*\$\{\{\s*success\(\)\s*\}\}/);
 });
 
@@ -299,4 +301,54 @@ test("secrets are only passed to the steps that need them", () => {
   assert.doesNotMatch(certify, /VERCEL_TOKEN/);
   const install = stepBody(job, "Install dependencies");
   assert.doesNotMatch(install, /secrets\./);
+});
+
+// SAN-1586: a checkout-based main check before the long E2E is not a final freshness check.
+test("promotion rechecks GitHub remote main in the same trusted step after certification", () => {
+  const job = certifyJob(workflow());
+  const promote = stepBody(job, "Promote the exact certified deployment");
+  const fresh = promote.indexOf("assert-current-main");
+  const cli = promote.indexOf("vercel@");
+  assert.ok(fresh >= 0 && cli > fresh, "fetch the current main before calling Vercel");
+  assert.match(promote, /GH_TOKEN:\s*\$\{\{ secrets\.GITHUB_TOKEN \}\}/);
+  assert.match(promote, /node \.trusted\/scripts\/vercel-release-control\.mjs assert-current-main/);
+  assert.match(promote, /set -euo pipefail/, "a moved main must stop the promotion");
+});
+
+test("Vercel 409 never grants a green release without exact-alias reconciliation", () => {
+  const promote = stepBody(certifyJob(workflow()), "Promote the exact certified deployment");
+  assert.match(promote, /grep -Eiq.*409/);
+  assert.match(promote, /reconcile-promote/);
+  assert.match(promote, /exit 1/, "all unrelated errors must fail");
+  assert.doesNotMatch(promote, /continue-on-error|always\(\)/);
+});
+
+test("release rechecks both aliases after a delayed second promotion, not only immediately", () => {
+  const job = certifyJob(workflow());
+  const verify = stepIndex(job, "Verify www.mdeai.co serves the exact certified deployment");
+  const stable = stepIndex(job, "Verify production aliases remain stable after promotion");
+  assert.ok(stable > verify, "stability window must follow the immediate verification");
+  assert.match(stepBody(job, "Verify production aliases remain stable after promotion"), /assert-stable/);
+});
+
+test("scheduled late-drift detector only reads aliases and never runs promotion", () => {
+  const txt = workflow();
+  assert.match(txt, /schedule:\s*\n\s*- cron:/);
+  const start = txt.indexOf("\n  monitor-production:");
+  const end = txt.indexOf("\n  certify:");
+  assert.ok(start > 0 && end > start);
+  const monitor = txt.slice(start, end);
+  assert.match(monitor, /github\.event_name == 'schedule'/);
+  assert.match(monitor, /assert-live-current/);
+  assert.doesNotMatch(monitor, /active-deployment/);
+  assert.doesNotMatch(monitor, /vercel@|npx.*promote|request_promote/);
+});
+
+// Canary F01: schedule.github.sha can lag the already-promoted current main.
+test("scheduled monitor never passes event SHA as live-main expectation", () => {
+  const job = workflow().split("\n  monitor-production:")[1].split("\n  certify:")[0];
+  assert.doesNotMatch(job, /VERCEL_DEPLOYMENT_SHA:\s*\$\{\{\s*github\.sha\s*\}\}/);
+  assert.doesNotMatch(job, /active-deployment/, "use one atomic read-only monitor command");
+  assert.match(job, /assert-live-current/);
+  assert.match(job, /GH_TOKEN:\s*\$\{\{\s*secrets\.GITHUB_TOKEN\s*\}\}/);
 });
