@@ -50,7 +50,7 @@ jobs:
             exit 0
           fi
           paths=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$pr/files?per_page=100" --jq '.[].filename')
-          if ! grep -Eq '^(src/app/rentals/|src/components/rentals/|src/lib/rentals/|src/mastra/tools/search-rentals\.ts$|src/mastra/lib/intelligence-rental-search\.ts$|momentic/rentals/|momentic\.config\.yaml$|\.github/workflows/momentic-rentals-preview\.yml$)' <<< "$paths"; then
+          if ! grep -Eq '^(src/app/rentals/|src/app/app/rentals/|src/app/app/me/saved/|src/app/api/leads/schedule-viewing/|src/components/rentals/|src/components/modals/schedule-viewing-modal\.tsx$|src/lib/rentals/|src/mastra/tools/search-rentals\.ts$|src/mastra/lib/intelligence-rental-search\.ts$|momentic/rentals/|momentic\.config\.yaml$|scripts/momentic-rentals-preview-url\.mjs$|\.github/workflows/momentic-rentals-preview\.yml$)' <<< "$paths"; then
             echo "PR #$pr does not affect Rentals; skip."
             exit 0
           fi
@@ -133,11 +133,25 @@ jobs:
         if: steps.accessible.outputs.public == 'true'
         id: installed
         run: |
-          if [[ -f momentic.config.yaml && -f momentic/rentals/exact-bedroom-filter.test.yaml ]]; then
-            echo 'present=true' >> "$GITHUB_OUTPUT"
-          else
-            echo 'Pilot YAML is not yet merged into main; cannot run the trusted test yet.'
+          tests=(
+            exact-bedroom-filter
+            broker-guest-redirect
+            renter-saved-guest-redirect
+            search-to-details
+            viewing-form-no-submit
+          )
+          if [[ ! -f momentic.config.yaml || ! -f scripts/momentic-rentals-preview-url.mjs ]]; then
+            echo 'Trusted Momentic setup not yet merged into main; pilot pending.'
+            exit 0
           fi
+          for test_name in "${tests[@]}"; do
+            if [[ ! -f "momentic/rentals/${test_name}.test.yaml" ]]; then
+              echo "Trusted ${test_name} test not yet merged into main; pilot pending."
+              exit 0
+            fi
+          done
+          node --test scripts/__tests__/momentic-rentals-preview-url.test.mjs
+          echo 'present=true' >> "$GITHUB_OUTPUT"
       - name: Install Momentic Chromium only
         if: steps.installed.outputs.present == 'true'
         run: npx --yes momentic@3.67.1 install-browsers chromium
@@ -149,12 +163,27 @@ jobs:
           MOMENTIC_API_KEY: ${{ secrets.MOMENTIC_API_KEY }}
         shell: bash
         run: |
-          args=(run momentic/rentals/exact-bedroom-filter.test.yaml
-            --url-override "$PREVIEW_URL"
-            --reporter steps --reporter junit --reporter-dir "$RUNNER_TEMP/momentic-junit"
-            --output-dir "$RUNNER_TEMP/momentic-rentals"
-            --upload-results --retries 0 -y)
-          npx --yes momentic@3.67.1 "${args[@]}"
+          # Use only committed, trusted tests from main. Each test has its own
+          # original route/query; overwriting every start URL with preview root
+          # would silently test the wrong page (login and Details routes).
+          tests=(
+            exact-bedroom-filter
+            broker-guest-redirect
+            renter-saved-guest-redirect
+            search-to-details
+            viewing-form-no-submit
+          )
+          npx --yes momentic@3.67.1 lint
+          for test_name in "${tests[@]}"; do
+            path="momentic/rentals/${test_name}.test.yaml"
+            start_url=$(node scripts/momentic-rentals-preview-url.mjs "$PREVIEW_URL" "$path")
+            npx --yes momentic@3.67.1 run "$path" \
+              --url-override "$start_url" \
+              --reporter steps --reporter junit \
+              --reporter-dir "$RUNNER_TEMP/momentic-junit/${test_name}" \
+              --output-dir "$RUNNER_TEMP/momentic-rentals/${test_name}" \
+              --upload-results --retries 0 -y
+          done
       - name: Publish neutral advisory PR check and summary
         if: always() && steps.scope.outputs.selected == 'true'
         env:
@@ -168,7 +197,7 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "$OUTCOME" == success ]]; then
-            result="PASS — 2 BR results"
+            result="PASS — 5 Rentals read-only journeys"
           elif [[ "$VERIFIED" != true ]]; then
             result="BLOCKED — preview verification"
           elif [[ "$ACCESSIBLE" != true ]]; then
@@ -182,10 +211,10 @@ jobs:
           {
             echo "### Momentic Rentals preview — advisory pilot"
             echo "PR #$PR_NUMBER · $HEAD_SHA · **$result**"
-            echo "Read-only: homepage → Rentals → Laureles → 2 BR → cards"
+            echo "Read-only: bedroom filter, guest auth redirects, search → Details, viewing/follow-up form"
             echo "Not a required merge check. [Run and evidence]($url)."
           } >> "$GITHUB_STEP_SUMMARY"
-          gh api "repos/$GITHUB_REPOSITORY/check-runs" -X POST             -f name='Momentic Rentals Preview (pilot)' -f head_sha="$HEAD_SHA"             -f status=completed -f conclusion=neutral -f details_url="$url"             -f "output[title]=$result (advisory)"             -f "output[summary]=Signed-out Rentals regression: $result. See Actions summary and private Momentic recording." >/dev/null
+          gh api "repos/$GITHUB_REPOSITORY/check-runs" -X POST             -f name='Momentic Rentals Preview (pilot)' -f head_sha="$HEAD_SHA"             -f status=completed -f conclusion=neutral -f details_url="$url"             -f "output[title]=$result (advisory)"             -f "output[summary]=Five read-only Rentals journeys: $result. See Actions summary and private Momentic recordings." >/dev/null
       - name: Upload JUnit evidence only (no protected-preview browser traces)
         if: always() && steps.scope.outputs.selected == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
