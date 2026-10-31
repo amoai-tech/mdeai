@@ -25,6 +25,21 @@ type SharedWorkerFixtures = {
   authStorageState: AuthStorageState;
 };
 
+/**
+ * The three values are built-in Playwright 1.61 WORKER option fixtures
+ * (see node_modules/playwright/lib/index.js), so the resolved test.use()
+ * values are injectable and can be checked before privileged login.
+ */
+export function assertSuperAdminRecordingOff(
+  screenshot: unknown,
+  trace: unknown,
+  video: unknown,
+): void {
+  if (screenshot !== "off" || trace !== "off" || video !== "off") {
+    throw new Error('Super Admin QA requires test.use({ screenshot: "off", trace: "off", video: "off" })');
+  }
+}
+
 export const test = base.extend<SharedFixtures, SharedWorkerFixtures>({
   authSession: [
     async ({}, runFixture) => runFixture(await getTestSession(QA_HOST_EMAIL)),
@@ -50,11 +65,8 @@ export const test = base.extend<SharedFixtures, SharedWorkerFixtures>({
     await runFixture(page);
   },
   superAdminPage: async ({ browser, contextOptions, baseURL, screenshot, trace, video }, runFixture) => {
-    // Fail before minting a privileged session if a consumer enables uploadable artifacts.
-    // Each privileged consumer must explicitly disable all recording in its spec.
-    if (screenshot !== "off" || trace !== "off" || video !== "off") {
-      throw new Error("Super Admin QA requires test.use({ screenshot: \"off\", trace: \"off\", video: \"off\" })");
-    }
+    // The real Playwright worker options are resolved before any admin session.
+    assertSuperAdminRecordingOff(screenshot, trace, video);
     if (!baseURL) {
       throw new Error("Super Admin QA requires a Playwright baseURL");
     }
