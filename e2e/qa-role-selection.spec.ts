@@ -6,8 +6,11 @@ import { hasE2eEnv } from "./helpers/auth";
 test.use({ screenshot: "off", trace: "off", video: "off" });
 test.describe("MDE role-selected, isolated QA sessions", () => {
   test.skip(process.env.MDE_ROLE_QA_E2E !== "1", "Opt-in trusted QA runner only");
-  test.beforeAll(() => {
-    expect(hasE2eEnv(), "Existing Supabase QA credentials are needed").toBe(true);
+  test.beforeEach(({ qaRole }) => {
+    // Anonymous guard tests must never require server-side Supabase credentials.
+    if (qaRole !== "anonymous") {
+      expect(hasE2eEnv(), "Existing Supabase QA credentials are needed").toBe(true);
+    }
   });
 
   test.describe("anonymous", () => {
