@@ -369,6 +369,26 @@ ${JSON.stringify({ findings: [], schema_version: 1, last_run: { head_sha: HEAD_A
     expect(result.reason).toContain("6 excluded");
   });
 
+  it.each(["```", "~~~", "````"])("ignores an excluded-file warning quoted inside a %s fenced block", (fence) => {
+    const body = envelopedCanonical() + `\n${fence}md\n⚠️ **Review coverage:** The following files were not included in this review because of the token budget:\n- \`src/example.ts\`\n${fence}\n`;
+    const result = verifyReviewResult({ comments: [comment(body, "2026-09-20T01:00:05Z")], startedAt: RUN_STARTED, reviewCommand: "/review", baseSha: BASE_A, headSha: HEAD_A });
+    expect(result.ok).toBe(true);
+  });
+
+  it("ignores exclusions appearing only in a Markdown blockquote or indented code block", () => {
+    const body = envelopedCanonical() + "\n> ⚠️ **Review coverage:** The following files were not included in this review because of the token budget:\n> - \`src/example.ts\`\n\n    ⚠️ **Review coverage:** The following files were not included in this review because of the token budget:\n    - \`src/indented.ts\`\n";
+    const result = verifyReviewResult({ comments: [comment(body, "2026-09-20T01:00:05Z")], startedAt: RUN_STARTED, reviewCommand: "/review", baseSha: BASE_A, headSha: HEAD_A });
+    expect(result.ok).toBe(true);
+  });
+
+  it("still rejects a real footer after a code fence contains a fake footer", () => {
+    const quoted = "\n```md\n⚠️ **Review coverage:** The following files were not included in this review because of the token budget:\n- \`src/quoted.ts\`\n```\n";
+    const real = "\n⚠️ **Review coverage:** The following files were not included in this review because of the token budget:\n- \`src/real.ts\`\n";
+    const result = verifyReviewResult({ comments: [comment(envelopedCanonical() + quoted + real, "2026-09-20T01:00:05Z")], startedAt: RUN_STARTED, reviewCommand: "/review", baseSha: BASE_A, headSha: HEAD_A });
+    expect(result.code).toBe("INCOMPLETE_REVIEW");
+    expect(result.reason).toContain("1 excluded");
+  });
+
   it("rejects explicit excluded-file footer even when a stale/incorrect state claims full coverage", () => {
     const body = envelopedCanonical() + "\n⚠️ **Review coverage:** The following files were not included in this review because of the token budget:\n- `src/ignored.ts`\n";
     const result = verifyReviewResult({ comments: [comment(body, "2026-09-20T01:00:05Z")], startedAt: RUN_STARTED, reviewCommand: "/review", baseSha: BASE_A, headSha: HEAD_A });
