@@ -197,22 +197,22 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "$OUTCOME" == success ]]; then
-            result="PASS — 5 Rentals read-only journeys"
+            result="PASS — 5/5 Rentals read-only journeys"
           elif [[ "$VERIFIED" != true ]]; then
-            result="BLOCKED — preview verification"
+            result="BLOCKED — no verified READY preview (0/5 executed)"
           elif [[ "$ACCESSIBLE" != true ]]; then
-            result="PILOT BLOCKED — protected preview; browser secrets withheld"
+            result="BLOCKED — SSO-protected preview (0/5 executed); browser secrets withheld"
           elif [[ "$INSTALLED" != true ]]; then
-            result="PILOT PENDING — trusted test not merged into main"
+            result="BLOCKED — trusted tests unavailable (0/5 executed)"
           else
-            result="FAIL — Momentic regression"
+            result="FAIL — Momentic regression; inspect individual JUnit cases"
           fi
           url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
           {
             echo "### Momentic Rentals preview — advisory pilot"
             echo "PR #$PR_NUMBER · $HEAD_SHA · **$result**"
             echo "Read-only: bedroom filter, guest auth redirects, search → Details, viewing/follow-up form"
-            echo "Not a required merge check. [Run and evidence]($url)."
+            echo "Advisory, not a required merge check. Skipped/protected previews are not test passes. [Run and evidence]($url)."
           } >> "$GITHUB_STEP_SUMMARY"
           gh api "repos/$GITHUB_REPOSITORY/check-runs" -X POST             -f name='Momentic Rentals Preview (pilot)' -f head_sha="$HEAD_SHA"             -f status=completed -f conclusion=neutral -f details_url="$url"             -f "output[title]=$result (advisory)"             -f "output[summary]=Five read-only Rentals journeys: $result. See Actions summary and private Momentic recordings." >/dev/null
       - name: Upload JUnit evidence only (no protected-preview browser traces)
