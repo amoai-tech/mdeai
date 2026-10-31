@@ -1,8 +1,9 @@
 import { test, expect } from "./fixtures";
 import { hasE2eEnv } from "./helpers/auth";
 
-// Authenticated QA pages must never save session-bearing traces or screenshots.
-test.use({ screenshot: "off", trace: "off", video: "off" });
+// Only qaRolePage signs in; regular page remains anonymous for the five guest cases.
+// The shared fixture marks authenticated test reports private before login.
+test.use({ qaRole: "event-host", screenshot: "off", trace: "off", video: "off" });
 
 test.describe("SAN-1610 · Homepage account navigation", { tag: ["@auth", "@smoke"] }, () => {
   for (const width of [320, 390, 768, 1280, 1440]) {
@@ -72,11 +73,15 @@ test.describe("SAN-1610 · Homepage account navigation", { tag: ["@auth", "@smok
   }
 
   test.describe("real Supabase session", () => {
-    // No synthetic user roles or client-side auth mocks. Shared QA fixture is read-only.
-    test.skip(!hasE2eEnv(), "Needs existing Supabase QA identity and service key in ignored local env");
+    // Normal no-secret CI skips real auth; explicitly requested production QA fails
+    // (rather than reporting green) if its existing QA account secrets are absent.
+    test.skip(
+      !hasE2eEnv() && process.env.MDE_REQUIRE_AUTH_QA !== "1",
+      "Needs existing Supabase QA identity and service key in ignored local env",
+    );
 
     for (const width of [390, 1440]) {
-      test(`signed-in account link opens /app at ${width}px`, async ({ authenticatedPage: page }) => {
+      test(`signed-in account link opens /app at ${width}px`, async ({ qaRolePage: page }) => {
         await page.setViewportSize({ width, height: 844 });
         await page.goto("/");
         const header = page.getByRole("banner");
