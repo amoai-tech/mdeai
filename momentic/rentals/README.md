@@ -35,7 +35,7 @@ qa version
 
 Use `--url-override` for an **exact trusted staged URL**, retaining the test's expected start route. Existing tests intentionally pin public URLs; setting `--env` alone does not change a test's explicit `url` (see Momentic's environment precedence). Never point a write-enabled test at production casually.
 
-The canonical CI is **`.github/workflows/momentic-rentals-preview.yml`** (advisory, exact READY preview verification, no reusable browser bypass credentials). It currently runs only `exact-bedroom-filter.test.yaml` for in-scope PRs. **Do not create a second mandatory CI release gate.** Expand selection after CLI execution is reliable.
+The canonical CI is **`.github/workflows/momentic-rentals-preview.yml`** (advisory, exact READY preview verification, no reusable browser bypass credentials). Once this PR merges, its **trusted main-branch** workflow runs all five signed-out Rentals Momentic specs. Each test gets the verified preview **origin plus its own original path/query** from `scripts/momentic-rentals-preview-url.mjs` (six negative/positive URL-contract tests). A protected preview without public access remains **BLOCKED**, not a false green; the privileged workflow never checks out untrusted PR source. New tests cannot run in that privileged workflow **before they reach main**. Retain existing Playwright for the required security/transaction gates; do not create a second mandatory CI release gate.
 
 ## Backend and user-journey proof — reuse the existing system
 
@@ -66,3 +66,23 @@ The CLI's `whoami`, HTTPS API authentication, Chrome/Chromium detection, and pro
 Official docs: https://momentic.ai/docs/llms.txt · https://momentic.ai/docs/core-concepts/file-format · https://momentic.ai/docs/running-tests/ci/github-actions · https://momentic.ai/docs/mo/brief
 
 Mo is separate from YAML Momentic tests; choose explicit effort and permitted test data before starting a billable hosted `qa start` session.
+
+## Reproducible QA listings and real booking evidence
+
+The browser-only Momentic cases inspect **real currently public inventory**; they deliberately do not create test accounts or apartment listings. An unavailable 2BR/3BR comparison is **a blocked test precondition, never PASS**. Production inventory can change. The **authoritative, predictable fixture** for the transaction journey is already `e2e/helpers/rental-journey-fixture.ts`, used by `e2e/rental-conversion-journey.spec.ts`: uniquely labeled `SAN1205` QA listing with owned broker and unrelated broker; it creates and deletes only its own rows and verifies no residue. Do not invent permanent production QA listings or create another fixture service just to make browser-only assertions green.
+
+Real-world evidence: SAN-1205 opt-in existing Playwright journey passed **1/1 in 28.1 seconds** on production deployed `40de33c7fb7e254981ce62f7983b205cdaed35d1`, covering actual UI → API → one persisted lead/showing → retry/refusal paths → broker/other-broker/390px view → DB-confirmed cleanup. This is not Momentic coverage and does not certify later releases. To repeat on an authorized environment with local/CI secrets already configured:
+
+```bash
+SAN1205_JOURNEY_E2E=1 SAN1205_ALLOW_PRODUCTION_WRITES=1 \
+  PROD_SMOKE_BASE_URL=https://www.mdeai.co PW_SKIP_WEBSERVER=1 \
+  npx playwright test e2e/rental-conversion-journey.spec.ts --project=prod-smoke --workers=1 --retries=0
+```
+
+**Mobile/AI tests (read-only UI):** `e2e/prod-rentals-mobile-form-map.spec.ts` validates 390px controls, genuine map marker IDs after async load, and opening/closing the real form without Submit; `e2e/prod-rentals-results-refresh.spec.ts` validates authenticated Ask MDE filtering, saved results/transcript, card/pin IDs, and opening the selected AI result in Details. Run these with explicit `PROD_SMOKE_BASE_URL` and `PW_SKIP_WEBSERVER=1`; the AI test reuses the existing temporary Supabase auth helper. The static tests are not substitutes for the SAN-1205 DB test.
+
+## Verification caveat for the live AI follow-up
+
+The opt-in authenticated production Ask MDE suite has an added assertion that a returned AI apartment card opens the **same** Details/selected map pin. On the October 31 live recheck, the existing two-turn AI flow did not advance to the second COP-budget response within 110 seconds, so the new Details assertion was **not reached**. Do not label that production AI flow PASS. Vercel recently reported a Gemini function-call turn-order error on a CopilotKit route, but whether it caused this specific failure remains unknown. Investigate the canonical agent/runtime separately; never change the test expectation to mask a stale answer. The deterministic chat rental Details test has additionally been tightened to compare the map pin and listing identity.
+
+The new real production 390px renter form/map smoke passed **2/2** after adjusting for asynchronous Google Maps marker loading (three mapped card IDs matched three real markers). The full codebase `npm run floor` passed with **4,352 tests passed, 51 skipped**, and the release-gate set passed **719, 4 skipped** in the isolated worktree. CI still needs to complete on the **pushed head**, and the existing advisory Momentic workflow will not begin running five trusted tests until these files merge to main.

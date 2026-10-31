@@ -100,6 +100,9 @@ test.describe("SAN-1341 deterministic critical journeys", { tag: ["@critical", "
     expect((await responsePromise).ok()).toBe(true);
 
     await expect(page.getByTestId("rental-card")).toHaveCount(1);
+    // The mocked agent search response is one grounded apartment: the visible
+    // card, marker identity, and the selected Details panel must all match.
+    await expect(page.getByTestId("map-pin").first()).toHaveAttribute("data-pin-id", `rental-${rental.id}`);
     await page.getByTestId("rental-details-cta").click();
     const panel = page.getByTestId("rental-details-panel");
     await expect(panel).toBeVisible();

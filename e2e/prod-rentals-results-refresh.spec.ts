@@ -127,6 +127,25 @@ test.describe("SAN-1421 — same-thread filtered cards survive production reload
     await expect.poll(async () => (await lines.allInnerTexts())
       .filter((s) => s.startsWith("You") && s.includes(budgetQuery)).length,
     { timeout: 30_000 }).toBe(1);
+    // AI result → real Details: same selected listing, not another search or a fake link.
+    const firstResult = before[0];
+    // The card also exposes a photo button with an accessible name beginning
+    // "Details:"; use the precise CTA rather than an ambiguous role/name match.
+    await page.getByTestId(`rental-details-cta-${firstResult.id}`).click();
+    const details = page.getByTestId("rental-details-panel");
+    await expect(details).toBeVisible();
+    // The source listing's canonical displayed price must not change in Details.
+    const firstPrice = firstResult.price[0];
+    if (firstPrice) {
+      const detailText = await details.innerText();
+      expect(detailText.replaceAll(",", "")).toContain(firstPrice.replaceAll(",", ""));
+    }
+    if (firstResult.pinId) {
+      await expect(page.locator(`[data-testid="map-pin"][data-pin-id="${firstResult.pinId}"][data-marker-selected="true"]`))
+        .toHaveCount(1);
+    }
+    await page.getByTestId("rental-details-close").click();
+    await expect(details).toHaveCount(0);
     await capture("02-restored");
 
     // A different URL scope cannot inherit old saved cards or their answer banner.
