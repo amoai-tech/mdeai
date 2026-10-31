@@ -183,3 +183,17 @@ describe("SAN-1609 Canary boundary regressions", () => {
     expect(job.steps[1].with?.script).toContain("validations[file.filename] = relationship");
   });
 });
+
+describe("SAN-1609 post-merge coverage smoke", () => {
+  it("requires UNKNOWN when a changed patch is missing despite claimed complete AI review", () => {
+    const report = buildCoverageReport({
+      repo: "amoai-tech/mdeai", number: 641, baseSha: BASE, headSha: HEAD,
+      files: [{ filename: "src/mastra/agents/event-agent.ts", status: "modified" }],
+      expectedCount: 1, reviewBody: complete,
+    });
+    expect(report.counts.aiReviewed).toBe(0);
+    expect(report.counts.unknown).toBe(1);
+    expect(report.status).toBe("UNKNOWN");
+    expect(report.details[0].patchDigest).toBeNull();
+  });
+});
