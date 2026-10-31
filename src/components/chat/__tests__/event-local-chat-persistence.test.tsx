@@ -111,6 +111,27 @@ describe("EventLocalChatProvider durable save", () => {
     expect(body.messages.every((m) => typeof m.id === "string" && m.id.length > 0)).toBe(true);
   });
 
+  it("reuses stable message IDs for a retry and generates distinct IDs for another submit", async () => {
+    // Test-only submission identifiers, not hardcoded UUID/key-looking literals.
+    const key1 = crypto.randomUUID();
+    const key2 = crypto.randomUUID();
+    await act(async () => {
+      api!.showExchange("Italian restaurants?", "Three choices", key1);
+      api!.showExchange("Italian restaurants?", "Three choices", key1);
+      api!.showExchange("Italian restaurants?", "Three choices", key2);
+    });
+    const bodies = fetchMock.mock.calls.map((call) =>
+      JSON.parse((call[1] as RequestInit).body as string) as { messages: Array<{ id: string }> },
+    );
+    expect(bodies).toHaveLength(3);
+    expect(bodies[0].messages.map((m) => m.id)).toEqual(bodies[1].messages.map((m) => m.id));
+    expect(bodies[2].messages[0].id).not.toBe(bodies[0].messages[0].id);
+    expect(bodies[0].messages[0].id).toContain(key1);
+    // The retry must not duplicate the local transcript or CopilotKit's messages.
+    expect(api!.messages).toHaveLength(4);
+    expect((mocks.state.agent as { addMessages: ReturnType<typeof vi.fn> }).addMessages).toHaveBeenCalledTimes(2);
+  });
+
   it("does not persist a signed-out sign-in prompt", async () => {
     await act(async () => {
       api!.showSignInPrompt("Find Italian restaurants in El Poblado.");

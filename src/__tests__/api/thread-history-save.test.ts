@@ -51,6 +51,7 @@ vi.mock("@/lib/supabase/service", () => ({
                     db.threads.set(String(row.id), { id: String(row.id), resourceId: db.raceOwner });
                     return { error: { message: 'duplicate key value violates unique constraint "mastra_threads_pkey"' } };
                   }
+                  if (db.threads.has(String(row.id))) return { error: { message: "duplicate key value violates unique constraint mastra_threads_pkey" } };
                   db.createdThreads.push(row);
                   db.threads.set(String(row.id), row as { id: string; resourceId: string });
                   return { error: null };
@@ -337,7 +338,63 @@ describe("SAN-1531 POST /api/threads/[threadId]/messages", () => {
       expect(JSON.parse(String(db.rows[0].content)).parts[0].text).toHaveLength(long.length);
     });
 
-    it("keeps content when another thread already uses the same client id", async () => {
+    it("retains two deliberately separate sends of identical text, even back-to-back", async () => {
+      signInAs(OWNER);
+      db.threads.set(THREAD, { id: THREAD, resourceId: OWNER });
+      await save(THREAD, exchange);
+      const second = await save(THREAD, { messages: [
+        { id: "local-second-user", role: "user", content: "Find Italian restaurants in El Poblado." },
+        { id: "local-second-assistant", role: "assistant", content: "3 Italian spots in El Poblado." },
+      ] });
+      expect(await second.json()).toMatchObject({ saved: 2 });
+      expect(db.rows).toHaveLength(4);
+    });
+
+    it("handles two concurrent identical retries atomically by stable message IDs", async () => {
+      signInAs(OWNER);
+      db.threads.set(THREAD, { id: THREAD, resourceId: OWNER });
+      const [a, b] = await Promise.all([save(THREAD, exchange), save(THREAD, exchange)]);
+      const results = await Promise.all([a.json(), b.json()]);
+      expect(results.map((r) => r.saved).sort()).toEqual([0, 2]);
+      expect(db.rows).toHaveLength(2);
+      expect(new Set(db.rows.map((r) => r.id)).size).toBe(2);
+    });
+
+    it("preserves concurrent independent sends with identical text but different IDs", async () => {
+      signInAs(OWNER);
+      db.threads.set(THREAD, { id: THREAD, resourceId: OWNER });
+      const separate = { messages: exchange.messages.map((m) => ({ ...m, id: m.id + "-new" })) };
+      const [a, b] = await Promise.all([save(THREAD, exchange), save(THREAD, separate)]);
+      expect((await a.json()).saved).toBe(2);
+      expect((await b.json()).saved).toBe(2);
+      expect(db.rows).toHaveLength(4);
+    });
+
+    it("creates only one first-turn thread when concurrent submissions race", async () => {
+      signInAs(OWNER);
+      const [a, b] = await Promise.all([save(THREAD, exchange), save(THREAD, exchange)]);
+      expect([a.status, b.status]).toEqual([200, 200]);
+      expect(db.createdThreads).toHaveLength(1);
+      expect(db.rows).toHaveLength(2);
+    });
+
+  it("saves a deliberate repeated question after a different turn", async () => {
+    signInAs(OWNER);
+    db.threads.set(THREAD, { id: THREAD, resourceId: OWNER });
+    await save(THREAD, exchange);
+    await save(THREAD, { messages: [
+      { id: "local-other-user", role: "user", content: "Which are affordable?" },
+      { id: "local-other-answer", role: "assistant", content: "Two are affordable." },
+    ] });
+    const again = await save(THREAD, { messages: [
+      { id: "local-again-user", role: "user", content: "Find Italian restaurants in El Poblado." },
+      { id: "local-again-answer", role: "assistant", content: "3 Italian spots in El Poblado." },
+    ] });
+    expect(await again.json()).toMatchObject({ saved: 2 });
+    expect(db.rows).toHaveLength(6);
+  });
+
+  it("keeps content when another thread already uses the same client id", async () => {
       signInAs(OWNER);
       db.threads.set(THREAD, { id: THREAD, resourceId: OWNER });
       db.otherThreadRows.push({ id: "local-1-user", thread_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" });

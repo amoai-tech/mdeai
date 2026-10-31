@@ -79,6 +79,7 @@ export function useGroundedSearchFastPath() {
     async (
       userText: string,
       params: CafeSearchApiParams,
+      submissionId?: string,
     ): Promise<boolean> => {
       if (busyRef.current) return false;
       busyRef.current = true;
@@ -88,6 +89,7 @@ export function useGroundedSearchFastPath() {
         showExchange(
           userText,
           fastPathCafeSummary(count, pinCount, params.neighborhood, userText),
+          submissionId,
         );
         return true;
       } catch (err) {
@@ -108,7 +110,7 @@ export function useGroundedSearchFastPath() {
   );
 
   const handleUserMessage = useCallback(
-    async (text: string): Promise<boolean> => {
+    async (text: string, submissionId?: string): Promise<boolean> => {
       const trimmed = text.trim();
       if (!trimmed) return false;
       if (!canFastPathCafeSearch(trimmed)) return false;
@@ -118,7 +120,7 @@ export function useGroundedSearchFastPath() {
 
       if (busyRef.current) return false;
       clearLocalMessages();
-      return runSearch(trimmed, params);
+      return runSearch(trimmed, params, submissionId);
     },
     [clearLocalMessages, runSearch],
   );

@@ -223,6 +223,9 @@ async function persistExchange(
     };
   });
 
+  // The client keeps the same message IDs when retrying one logical submission.
+  // The database's unique message ID enforces atomic idempotency, including concurrent POSTs.
+  // Never infer a retry from text: the visitor may deliberately ask the same question twice.
   const { data: inserted, error } = await service
     .from("mastra_messages")
     .upsert(rows, { onConflict: "id", ignoreDuplicates: true })

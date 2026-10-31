@@ -32,8 +32,9 @@ type EventLocalChatContextValue = {
     userText: string,
     assistantText: string,
     kind: LocalClarifyKind,
+    submissionId?: string,
   ) => void;
-  showExchange: (userText: string, assistantText: string) => void;
+  showExchange: (userText: string, assistantText: string, submissionId?: string) => void;
   /** An assistant-only line, for when the renter's own message is already in the transcript. */
   showNotice: (assistantText: string) => void;
   /** SAN-1507: true after a signed-out visitor asked the AI; the transcript then offers sign-in. */
@@ -89,6 +90,10 @@ function threadIdFor(
   return generated.current;
 }
 
+function exchangeMessageId(submissionId: string | undefined, role: "user" | "assistant") {
+  return submissionId ? `local-${submissionId}-${role}` : nextId();
+}
+
 function nextId() {
   return `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -103,6 +108,8 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
   const [clarifyKind, setClarifyKind] = useState<LocalClarifyKind | null>(null);
   const [signInPrompt, setSignInPrompt] = useState(false);
   const pendingAgentMessagesRef = useRef<EventLocalChatMessage[]>([]);
+  // A retried submit keeps the same ids; publish each logical message to CopilotKit once.
+  const publishedMessageIdsRef = useRef(new Set<string>());
   const generatedThreadIdRef = useRef<string | null>(null);
   // Declared as a ref because the flush effect runs above the callbacks that implement saving.
   const saveRef = useRef<(threadId: string, batch: EventLocalChatMessage[]) => void>(() => {});
@@ -114,9 +121,12 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!agent || pendingAgentMessagesRef.current.length === 0) return;
-    const pending = [...pendingAgentMessagesRef.current];
+    const pending = pendingAgentMessagesRef.current.filter(
+      (message) => !publishedMessageIdsRef.current.has(message.id),
+    );
     try {
-      agent.addMessages(pending);
+      if (pending.length > 0) agent.addMessages(pending);
+      pending.forEach((message) => publishedMessageIdsRef.current.add(message.id));
       pendingAgentMessagesRef.current = [];
     } catch (error) {
       console.error(
@@ -188,11 +198,17 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
 
   const publishOrQueue = useCallback(
     (nextMessages: EventLocalChatMessage[]) => {
+      const queuedIds = new Set(pendingAgentMessagesRef.current.map((m) => m.id));
+      const fresh = nextMessages.filter(
+        (message) => !publishedMessageIdsRef.current.has(message.id) && !queuedIds.has(message.id),
+      );
+      if (fresh.length === 0) return;
       if (agentRef.current) {
-        agentRef.current.addMessages(nextMessages);
+        agentRef.current.addMessages(fresh);
+        fresh.forEach((message) => publishedMessageIdsRef.current.add(message.id));
         return;
       }
-      pendingAgentMessagesRef.current.push(...nextMessages);
+      pendingAgentMessagesRef.current.push(...fresh);
     },
     [],
   );
@@ -214,11 +230,11 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
   );
 
   const showClarify = useCallback(
-    (userText: string, assistantText: string, kind: LocalClarifyKind) => {
+    (userText: string, assistantText: string, kind: LocalClarifyKind, submissionId?: string) => {
       const nextMessages: EventLocalChatMessage[] = [
-        { id: nextId(), role: "user", content: userText },
+        { id: exchangeMessageId(submissionId, "user"), role: "user", content: userText },
         {
-          id: nextId(),
+          id: exchangeMessageId(submissionId, "assistant"),
           role: "assistant",
           content: assistantText,
           isClarify: true,
@@ -235,13 +251,13 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
   );
 
   const showExchange = useCallback(
-    (userText: string, assistantText: string) => {
+    (userText: string, assistantText: string, submissionId?: string) => {
       const nextMessages: EventLocalChatMessage[] = [
-        { id: nextId(), role: "user", content: userText },
+        { id: exchangeMessageId(submissionId, "user"), role: "user", content: userText },
       ];
       if (assistantText.trim()) {
         nextMessages.push({
-          id: nextId(),
+          id: exchangeMessageId(submissionId, "assistant"),
           role: "assistant",
           content: assistantText,
         });
@@ -249,7 +265,10 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
       setClarifyPending(false);
       setClarifyKind(null);
       setSignInPrompt(false);
-      setMessages((prev) => [...prev, ...nextMessages]);
+      setMessages((prev) => {
+        const seen = new Set(prev.map((m) => m.id));
+        return [...prev, ...nextMessages.filter((m) => !seen.has(m.id))];
+      });
       publishSafely(nextMessages);
       persist(nextMessages);
     },

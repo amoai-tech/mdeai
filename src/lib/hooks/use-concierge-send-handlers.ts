@@ -55,7 +55,7 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
   // error signal at the start of every send, so a non-zero version here belongs to this run.
   /** Validate session, wait for the existing agent, and show an honest result. */
   const performAgentSend = useCallback(
-    async (text: string) => {
+    async (text: string, submissionId?: string) => {
       // A fast guest can send before the session check has finished. Ask once, now, instead of
       // letting that send reach the protected runtime (401 -> "try again"). If the check itself throws
       // (network down) we keep what we already know: no user yet means the sign-in offer, which heals
@@ -83,7 +83,7 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
           if (getConciergeErrorForThread(threadId).version === 0) return true;
           showNotice(AGENT_UNAVAILABLE_MESSAGE);
         } else {
-          showExchange(text, AGENT_UNAVAILABLE_MESSAGE);
+          showExchange(text, AGENT_UNAVAILABLE_MESSAGE, submissionId);
         }
       } catch (error) {
         console.error("[concierge-agent-send]", error);
@@ -103,10 +103,10 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
    * Coalesce identical in-flight questions and serialize distinct questions.
    * Release each key after completion so later deliberate repeats still work.
    */
-  const onAgentSend = useCallback((text: string): Promise<boolean> => {
+  const onAgentSend = useCallback((text: string, submissionId?: string): Promise<boolean> => {
     const existing = pendingAgentSendsRef.current.get(text);
     if (existing) return existing;
-    const pending = lastAgentSendRef.current.then(() => performAgentSend(text));
+    const pending = lastAgentSendRef.current.then(() => performAgentSend(text, submissionId));
     pendingAgentSendsRef.current.set(text, pending);
     lastAgentSendRef.current = pending.then(() => undefined, () => undefined);
     void pending.finally(() => {

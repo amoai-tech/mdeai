@@ -96,6 +96,7 @@ export function useRestaurantSearchFastPath() {
       params: RestaurantSearchApiParams,
       chip?: RestaurantFilterChip,
       propagateFailure = false,
+      submissionId?: string,
     ): Promise<boolean> => {
       if (busyRef.current) return false;
       busyRef.current = true;
@@ -128,6 +129,7 @@ export function useRestaurantSearchFastPath() {
           namedFact
             ? addressLine + ' Source: ' + record.sourceUrl
             : fastPathRestaurantSummary(cards.length, pinCount, params.neighborhood),
+          submissionId,
         );
         return true;
       } catch (err) {
@@ -149,7 +151,7 @@ export function useRestaurantSearchFastPath() {
   );
 
   const handleUserMessage = useCallback(
-    async (text: string): Promise<boolean> => {
+    async (text: string, submissionId?: string): Promise<boolean> => {
       const trimmed = text.trim();
       if (!trimmed) return false;
 
@@ -180,7 +182,7 @@ export function useRestaurantSearchFastPath() {
             ts: new Date().toISOString(),
           });
           setToolResult(null);
-          showClarify(trimmed, RESTAURANT_CLARIFY_MESSAGE, "restaurant");
+          showClarify(trimmed, RESTAURANT_CLARIFY_MESSAGE, "restaurant", submissionId);
           setState({
             ...memory,
             lastIntent: "restaurant_discovery",
@@ -200,7 +202,7 @@ export function useRestaurantSearchFastPath() {
       // Busy searches must be routed through the Concierge, never acknowledged as handled.
       if (busyRef.current) return false;
       clearLocalMessages();
-      return runSearch(trimmed, params, undefined, true);
+      return runSearch(trimmed, params, undefined, true, submissionId);
     },
     [
       clarifyKind,

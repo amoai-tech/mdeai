@@ -78,7 +78,7 @@ export function useEventVenueBookingFastPath() {
   );
 
   const handleUserMessage = useCallback(
-    async (text: string): Promise<boolean> => {
+    async (text: string, submissionId?: string): Promise<boolean> => {
       const trimmed = text.trim();
       if (!trimmed || !canFastPathEventVenueBooking(trimmed)) return false;
 
@@ -119,6 +119,7 @@ export function useEventVenueBookingFastPath() {
         showExchange(
           trimmed,
           eventVenueBookingAssistantSummary(cards.length, intent.partySize),
+          submissionId,
         );
         return true;
       } catch (err) {
@@ -127,6 +128,7 @@ export function useEventVenueBookingFastPath() {
         showExchange(
           trimmed,
           "Could not load venues right now — try again in a moment or pick a restaurant from Food & cafés.",
+          submissionId,
         );
         return true;
       } finally {

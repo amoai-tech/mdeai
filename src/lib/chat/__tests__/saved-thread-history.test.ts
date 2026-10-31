@@ -254,6 +254,35 @@ describe("mapSavedThreadHistory — repeats already saved before the fix", () =>
     ).toEqual(["user:ok", "assistant:first answer", "user:ok", "assistant:second answer"]);
   });
 
+  it("keeps consecutive identical fast-path questions and answers with separate submission IDs", () => {
+    // Both assistant answers are written immediately by the fast path (1 ms after
+    // the question), unlike a model response. Only the submission UUID differentiates them.
+    expect(
+      shown([
+        r("local-aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa-user", "user", "Show Italian restaurants", 0),
+        r("local-aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa-assistant", "assistant", "Found 5", 1),
+        r("local-bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb-user", "user", "Show Italian restaurants", 8_000),
+        r("local-bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb-assistant", "assistant", "Found 5", 8_001),
+      ]),
+    ).toEqual([
+      "user:Show Italian restaurants",
+      "assistant:Found 5",
+      "user:Show Italian restaurants",
+      "assistant:Found 5",
+    ]);
+  });
+
+  it("does not exempt malformed stable-looking IDs from legacy duplicate cleanup", () => {
+    const malformed = "local-" + "z".repeat(36) + "-user";
+    expect(shown([
+      r("old-user", "user", "q", 0),
+      r("old-assistant", "assistant", "a", 1_900),
+      r(malformed, "user", "q", 5_000),
+      r("another-old-assistant", "assistant", "a", 5_001),
+      r("next-user", "user", "next", 5_002),
+    ])).toEqual(["user:q", "assistant:a", "user:next"]);
+  });
+
   it("the same question asked twice with the same answer both times is kept (seconds apart)", () => {
     expect(
       shown([
