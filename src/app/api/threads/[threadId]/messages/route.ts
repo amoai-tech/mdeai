@@ -95,20 +95,6 @@ export async function GET(
   );
 }
 
-/** The text a stored row shows, for duplicate detection. */
-function storedText(raw: unknown): string {
-  if (typeof raw !== "string") return "";
-  try {
-    const parsed = JSON.parse(raw) as { parts?: Array<{ type?: string; text?: string }> };
-    return (parsed.parts ?? [])
-      .filter((part) => part.type === "text" && typeof part.text === "string")
-      .map((part) => part.text as string)
-      .join("");
-  } catch {
-    return "";
-  }
-}
-
 /** Mastra stores message parts in this shape; the history reader parses it. */
 function mastraTextContent(text: string): string {
   return JSON.stringify({ format: 2, parts: [{ type: "text", text }] });
@@ -237,27 +223,9 @@ async function persistExchange(
     };
   });
 
-  // A reconnect can submit the immediately preceding exchange with fresh local IDs.
-  // Compare the complete trailing exchange in order. Searching all recent text would
-  // silently discard a *new* question the user intentionally repeats after other turns.
-  const { data: recentRows, error: recentError } = await service
-    .from("mastra_messages")
-    .select("role, content")
-    .eq("thread_id", threadId)
-    .order("createdAt", { ascending: false })
-    .order("id", { ascending: false })
-    .limit(rows.length);
-  if (recentError) {
-    console.error("[/api/threads/messages] duplicate lookup", recentError.message);
-    return { error: "Could not save messages" };
-  }
-  const recent = (recentRows ?? []) as Array<{ role: string; content: unknown }>;
-  const sameLastExchange = recent.length === rows.length && rows.every((row, index) => {
-    const prior = recent[rows.length - index - 1];
-    return prior.role === row.role && storedText(prior.content).trim() === storedText(row.content).trim();
-  });
-  if (sameLastExchange) return { saved: 0, createdThread };
-
+  // The client keeps the same message IDs when retrying one logical submission.
+  // The database's unique message ID enforces atomic idempotency, including concurrent POSTs.
+  // Never infer a retry from text: the visitor may deliberately ask the same question twice.
   const { data: inserted, error } = await service
     .from("mastra_messages")
     .upsert(rows, { onConflict: "id", ignoreDuplicates: true })

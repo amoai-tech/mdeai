@@ -32,8 +32,9 @@ type EventLocalChatContextValue = {
     userText: string,
     assistantText: string,
     kind: LocalClarifyKind,
+    submissionId?: string,
   ) => void;
-  showExchange: (userText: string, assistantText: string) => void;
+  showExchange: (userText: string, assistantText: string, submissionId?: string) => void;
   /** An assistant-only line, for when the renter's own message is already in the transcript. */
   showNotice: (assistantText: string) => void;
   /** SAN-1507: true after a signed-out visitor asked the AI; the transcript then offers sign-in. */
@@ -87,6 +88,10 @@ function threadIdFor(
   if (agent?.threadId && isThreadUuid(agent.threadId)) return agent.threadId;
   if (!generated.current) generated.current = crypto.randomUUID();
   return generated.current;
+}
+
+function exchangeMessageId(submissionId: string | undefined, role: "user" | "assistant") {
+  return submissionId ? `local-${submissionId}-${role}` : nextId();
 }
 
 function nextId() {
@@ -214,11 +219,11 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
   );
 
   const showClarify = useCallback(
-    (userText: string, assistantText: string, kind: LocalClarifyKind) => {
+    (userText: string, assistantText: string, kind: LocalClarifyKind, submissionId?: string) => {
       const nextMessages: EventLocalChatMessage[] = [
-        { id: nextId(), role: "user", content: userText },
+        { id: exchangeMessageId(submissionId, "user"), role: "user", content: userText },
         {
-          id: nextId(),
+          id: exchangeMessageId(submissionId, "assistant"),
           role: "assistant",
           content: assistantText,
           isClarify: true,
@@ -235,13 +240,13 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
   );
 
   const showExchange = useCallback(
-    (userText: string, assistantText: string) => {
+    (userText: string, assistantText: string, submissionId?: string) => {
       const nextMessages: EventLocalChatMessage[] = [
-        { id: nextId(), role: "user", content: userText },
+        { id: exchangeMessageId(submissionId, "user"), role: "user", content: userText },
       ];
       if (assistantText.trim()) {
         nextMessages.push({
-          id: nextId(),
+          id: exchangeMessageId(submissionId, "assistant"),
           role: "assistant",
           content: assistantText,
         });
