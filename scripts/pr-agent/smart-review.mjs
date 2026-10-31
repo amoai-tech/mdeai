@@ -19,18 +19,23 @@ const digest = (value) => createHash("sha256").update(value).digest("hex");
 
 export function classifyFile(file) {
   const path = file?.filename;
-  if (typeof path !== "string" || !path || /[\r\n]/.test(path)) return { path: "", category: "unknown", priority: 6, patchDigest: null };
-  const category = critical.test(path) ? "critical" : ignore.test(path) ? "excluded" : generated.has(path) ? "generated" :
+  if (typeof path !== "string" || !path) return { path: String(path ?? ""), category: "unknown", priority: 6, patchDigest: null, patchBytes: null };
+  // Explicit ignore rules always win, even for an ignored security-named file.
+  // Narrative Markdown remains documentation, not a critical security source file.
+  const narrative = docs.test(path) && /\.(?:md|mdx)$/i.test(path);
+  const category = ignore.test(path) ? "excluded" : generated.has(path) ? "generated" :
+    narrative ? "low" : critical.test(path) ? "critical" :
     test.test(path) ? "normal" : src.test(path) || /\.(?:tsx?|jsx?|py|go|rs|sql|ya?ml)$/.test(path) ? "high" : docs.test(path) ? "low" : "unknown";
   return {
     path, category, priority: order[category], status: file.status ?? "unknown",
+    previousPath: typeof file.previous_filename === "string" ? file.previous_filename : null,
     patchDigest: typeof file.patch === "string" ? digest(file.patch) : null,
     patchBytes: typeof file.patch === "string" ? Buffer.byteLength(file.patch) : null,
   };
 }
 
 export function classifyFiles(files, expectedCount) {
-  const list = (files ?? []).map(classifyFile).sort((a, b) => a.priority - b.priority || a.path.localeCompare(b.path));
+  const list = (files ?? []).map(classifyFile).sort((a, b) => a.priority - b.priority || (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
   return { files: list, unknownInventory: !Number.isSafeInteger(expectedCount) || expectedCount !== list.length || list.length >= 3000 };
 }
 
@@ -85,15 +90,20 @@ export function reviewCoverageFromComment(body, baseSha, headSha) {
   } catch { return { status: "failed", excluded: warnings, reason: "invalid review-state JSON" }; }
 }
 
-const quotePath = (path) => "`" + String(path).replace(/[\r\n<>`|]/g, "_").slice(0, 180) + "`";
+// Render the exact path safely in a Markdown table. JSON makes embedded CR/LF
+// visible as escapes, and an HTML code element avoids altering literal backticks.
+const quotePath = (path) => "<code>" + JSON.stringify(String(path))
+  .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") + "</code>";
+const normalizedPath = (path) => typeof path === "string" ? path.replace(/^(?:\.\/)+/, "").trimEnd() : "";
 
 export function buildCoverageReport({ repo, number, baseSha, headSha, files, expectedCount, reviewBody = "", reviewJobResult = "success", validations = {} }) {
   const inventory = classifyFiles(files, expectedCount);
   const ai = reviewJobResult === "success" ? reviewCoverageFromComment(reviewBody, baseSha, headSha) : { status: "failed", excluded: [], reason: `review job ${reviewJobResult}` };
-  const excluded = new Set(ai.excluded);
+  const excluded = new Set(ai.excluded.map(normalizedPath));
   const details = inventory.files.map((file) => {
     const validation = validations[file.path] ?? { status: "unknown", reason: "no deterministic proof" };
-    const coverage = ["excluded", "generated"].includes(file.category) ? "policy-excluded" : excluded.has(file.path) ? "unreviewed" :
+    const coverage = ["excluded", "generated"].includes(file.category) ? "policy-excluded" :
+      excluded.has(normalizedPath(file.path)) || (file.previousPath && excluded.has(normalizedPath(file.previousPath))) ? "unreviewed" :
       ai.status === "failed" ? "failed" : ai.status === "complete" && file.patchDigest ? "ai-reviewed" : "unknown";
     return { ...file, coverage, validation };
   });
@@ -130,13 +140,17 @@ export function buildCoverageReport({ repo, number, baseSha, headSha, files, exp
  * @param {{baseSha?:string, headSha?:string, modelConfigDigest?:string, policyVersion?:string, maxBatches?:number, maxPatchBytes?:number, completed?:Array<{key:string,complete:boolean,baseSha:string,headSha:string,modelConfigDigest:string,policyVersion:string}>}} [opts]
  */
 export function planFollowupBatches(report, { baseSha, headSha, modelConfigDigest = "unverified", policyVersion = POLICY_VERSION, maxBatches = 6, maxPatchBytes = 35000, completed = [] } = {}) {
+  // Invalid limits must not silently disable budget checks (NaN, Infinity,
+  // fractional, negative or string inputs all fail closed to zero capacity).
+  const safeBatchLimit = Number.isSafeInteger(maxBatches) && maxBatches >= 0 ? maxBatches : 0;
+  const safePatchLimit = Number.isSafeInteger(maxPatchBytes) && maxPatchBytes >= 0 ? maxPatchBytes : 0;
   const done = new Set(completed.filter((c) => c.complete && c.baseSha === baseSha && c.headSha === headSha && c.modelConfigDigest === modelConfigDigest && c.policyVersion === policyVersion).map((c) => c.key));
   const batches = []; const deferred = [];
   for (const file of report.details.filter((f) => ["unknown", "unreviewed", "failed"].includes(f.coverage) && !["excluded", "generated"].includes(f.category))) {
     if (!baseSha || !headSha || !file.patchDigest) { deferred.push({ path: file.path, reason: "missing exact patch/SHA" }); continue; }
     const key = digest([baseSha, headSha, modelConfigDigest, policyVersion, file.path, file.patchDigest].join("\0"));
     if (done.has(key)) continue;
-    if (file.patchBytes > maxPatchBytes || batches.length >= maxBatches) { deferred.push({ path: file.path, reason: "bounded patch/call budget" }); continue; }
+    if (file.patchBytes > safePatchLimit || batches.length >= safeBatchLimit) { deferred.push({ path: file.path, reason: "bounded patch/call budget" }); continue; }
     batches.push({ key, baseSha, headSha, modelConfigDigest, policyVersion, paths: [file.path] });
   }
   return { batches, deferred }; // planning only: no LLM invocation or invented success

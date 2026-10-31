@@ -114,6 +114,12 @@ jobs:
                   if (references.includes(file.filename)) validations[file.filename] = relationship;
                 }
               } else if (relationship.status === "unknown") {
+                // A missing/oversized unchanged companion is not cross-file proof.
+                // Propagate UNKNOWN into changed snapshots rather than reporting
+                // a false COMPLETE merely because the local JSON parsed.
+                for (const file of changed) {
+                  if (references.includes(file.filename)) validations[file.filename] = relationship;
+                }
                 core.info(`Cross-file references unverified: ${relationship.reason}`);
               }
             }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   appendCertification,
+  excludedFilesFromReview,
   hasCertificationForBase,
   hasCertificationForHead,
   parseReviewEnvelope,
@@ -664,5 +665,16 @@ ${JSON.stringify({ findings: [], schema_version: 1, last_run: { head_sha: HEAD_A
     history = appendCertification(history, { baseSha: BASE_B, headSha: "d".repeat(40) });
     expect(hasCertificationForBase(history, BASE_A)).toBe(true);
     expect(hasCertificationForBase(history, BASE_B)).toBe(true);
+  });
+});
+
+describe("SAN-1609 canonical footer Markdown boundaries", () => {
+  const footer = (spaces = "") => `${spaces}⚠️ **Review coverage:** The following files were not included in this review because of the token budget:\n- \`src/a.ts\`\n`;
+  it.each(["", " ", "  ", "   "])("finds a real footer with %s indentation", (spaces) => {
+    expect(excludedFilesFromReview(footer(spaces))).toEqual(["src/a.ts"]);
+  });
+  it("ignores a lazy blockquote continuation, not just explicit > prefixes", () => {
+    expect(excludedFilesFromReview(`> quoted context\n${footer()}`)).toEqual([]);
+    expect(excludedFilesFromReview(`> quoted context\n\n${footer()}`)).toEqual(["src/a.ts"]);
   });
 });

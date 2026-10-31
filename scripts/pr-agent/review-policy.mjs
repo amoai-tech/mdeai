@@ -302,7 +302,13 @@ export function findFreshReviewCandidates({ comments, startedAt }) {
 function unquotedReviewMarkdown(body) {
   let fenceChar = null;
   let fenceLength = 0;
+  let quotedParagraph = false;
   return body.split(/\r?\n/).map((line) => {
+    // A Markdown blockquote may lazily continue a paragraph on following lines
+    // without another '>' prefix. A blank line ends that continuation.
+    if (/^ {0,3}>/.test(line)) { quotedParagraph = true; return ""; }
+    if (line.trim() === "") { quotedParagraph = false; return ""; }
+    if (quotedParagraph) return "";
     const match = line.match(/^ {0,3}(`{3,}|~{3,})/);
     if (fenceChar) {
       if (match && match[1][0] === fenceChar && match[1].length >= fenceLength &&
@@ -317,7 +323,7 @@ function unquotedReviewMarkdown(body) {
       fenceLength = match[1].length;
       return "";
     }
-    if (/^(?: {4}|\t| {0,3}>)/.test(line)) return "";
+    if (/^(?: {4}|\t)/.test(line)) return "";
     return line;
   }).join("\n");
 }
@@ -326,7 +332,7 @@ function unquotedReviewMarkdown(body) {
 // Quoted examples and fenced/indented code must never affect coverage.
 export function excludedFilesFromReview(body) {
   const matches = unquotedReviewMarkdown(body ?? "").match(
-    /(?:^|\r?\n)⚠️\s+\*\*Review coverage:\*\*\s+The following files were not included in this review because of the token budget:\s*\r?\n((?:[ \t]*-[ \t]+`[^`\r\n]+`[ \t]*\r?\n?)+)/,
+    /(?:^|\r?\n) {0,3}⚠️\s+\*\*Review coverage:\*\*\s+The following files were not included in this review because of the token budget:\s*\r?\n((?:[ \t]*-[ \t]+`[^`\r\n]+`[ \t]*\r?\n?)+)/,
   );
   return matches ? [...matches[1].matchAll(/^[ \t]*-[ \t]+`([^`\r\n]+)`/gm)].map((m) => m[1]) : [];
 }

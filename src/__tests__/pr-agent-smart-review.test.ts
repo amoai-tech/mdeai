@@ -99,3 +99,87 @@ describe("SAN-1609 smart coverage", () => {
     expect(source).toContain("pr-review-infra/.github/workflows/pr-agent.yml@f37cb4a98626d55d4b6c8709d9ab2a2c6843bd2f");
   });
 });
+
+describe("SAN-1609 Canary boundary regressions", () => {
+  const base = "a".repeat(40), head = "b".repeat(40);
+  const anchor = reviewEnvelope({ baseSha: base, headSha: head, command: "/review", type: "canonical" });
+  const footer = (name: string) => `${anchor}\n<!-- pr-agent:review:full -->\n⚠️ **Review coverage:** The following files were not included in this review because of the token budget:\n- \`${name}\`\n`;
+  const single = (filename: string, opts: Record<string, unknown> = {}) =>
+    buildCoverageReport({ repo: "amoai-tech/mdeai", number: 641, baseSha: base, headSha: head,
+      files: [{ filename, patch: "+x", ...opts }], expectedCount: 1, reviewBody: footer(filename) });
+
+  it("keeps narrative security docs low, but still prioritizes migrations and workflow config", () => {
+    expect(classifyFiles([{ filename: "docs/security.md" }], 1).files[0].category).toBe("low");
+    expect(single("docs/security.md").criticalPending).toHaveLength(0);
+    expect(classifyFiles([{ filename: ".github/workflows/security.yml" }, { filename: "supabase/migrations/2026.sql" }], 2).files.map((f: { category: string }) => f.category)).toEqual(["critical", "critical"]);
+  });
+
+  it("always applies policy exclusions before critical keywords", () => {
+    const file = { filename: "graphify-out/security/report.js", patch: "+x" };
+    const report = buildCoverageReport({ repo: "a/b", number: 1, baseSha: base, headSha: head,
+      files: [file], expectedCount: 1, reviewBody: complete });
+    expect(report.details[0].category).toBe("excluded");
+    expect(report.details[0].coverage).toBe("policy-excluded");
+    expect(report.counts.aiReviewed).toBe(0);
+    expect(report.counts.policyExcluded).toBe(1);
+  });
+
+  it("preserves unusual exact filenames, including newlines and backticks, without renaming them", () => {
+    const actual = "a\nb`c.ts";
+    const report = single(actual);
+    expect(report.details[0].path).toBe(actual);
+    expect(report.details[0].patchDigest).toMatch(/^[a-f0-9]{64}$/);
+    const plan = planFollowupBatches(report, { baseSha: base, headSha: head });
+    expect(plan.batches[0].paths).toEqual([actual]);
+    expect(report.body).toContain("a\\nb`c.ts");
+    expect(report.body).not.toContain("a_b_c.ts");
+  });
+
+  it("uses locale-independent code-point order for equal-priority files", () => {
+    const report = buildCoverageReport({ repo: "a/b", number: 1, baseSha: base, headSha: head,
+      files: [{ filename: "src/ä.ts", patch: "+x" }, { filename: "src/z.ts", patch: "+x" }], expectedCount: 2 });
+    expect(report.details.map((f: { path: string }) => f.path)).toEqual(["src/z.ts", "src/ä.ts"]);
+    expect(planFollowupBatches(report, { baseSha: base, headSha: head, maxBatches: 1 }).batches[0].paths).toEqual(["src/z.ts"]);
+  });
+
+  it.each(["./src/a.ts", "src/a.ts "])("normalizes equivalent omitted paths %s", (alias) => {
+    const report = buildCoverageReport({ repo: "a/b", number: 1, baseSha: base, headSha: head,
+      files: [{ filename: "src/a.ts", patch: "+x" }], expectedCount: 1, reviewBody: footer(alias) });
+    expect(report.counts.uncovered).toBe(1);
+    expect(report.details[0].coverage).toBe("unreviewed");
+  });
+
+  it("matches an omitted previous filename on a GitHub rename", () => {
+    const report = buildCoverageReport({ repo: "a/b", number: 1, baseSha: base, headSha: head,
+      files: [{ filename: "src/new.ts", previous_filename: "src/old.ts", status: "renamed", patch: "+x" }],
+      expectedCount: 1, reviewBody: footer("src/old.ts") });
+    expect(report.counts.uncovered).toBe(1);
+    expect(report.details[0].path).toBe("src/new.ts");
+  });
+
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, -1, 0.5, "2"])("does not bypass the batch count bound %s", (maxBatches) => {
+    const report = buildCoverageReport({ repo: "a/b", number: 1, baseSha: base, headSha: head,
+      files: [{ filename: "src/a.ts", patch: "+x" }], expectedCount: 1 });
+    expect(planFollowupBatches(report, { baseSha: base, headSha: head, maxBatches: maxBatches as number }).batches).toHaveLength(0);
+  });
+
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, -1, 0.5, "40000"])("does not bypass patch byte budget %s", (maxPatchBytes) => {
+    const report = buildCoverageReport({ repo: "a/b", number: 1, baseSha: base, headSha: head,
+      files: [{ filename: "src/oversized.ts", patch: "+x".repeat(18000) }], expectedCount: 1 });
+    const plan = planFollowupBatches(report, { baseSha: base, headSha: head, maxPatchBytes: maxPatchBytes as number });
+    expect(plan.batches).toHaveLength(0);
+    expect(plan.deferred).toHaveLength(1);
+  });
+
+  it("cannot silently treat an unavailable generated companion as validated", () => {
+    const report = buildCoverageReport({ repo: "a/b", number: 1, baseSha: base, headSha: head,
+      files: [{ filename: "docs/progress/data/pr-data.json", patch: "+x" }], expectedCount: 1,
+      reviewBody: complete, validations: { "docs/progress/data/pr-data.json": { status: "unknown", reason: "cross-file source unavailable" } } });
+    expect(report.status).toBe("UNKNOWN");
+    const yaml = parseDocument(readFileSync(".github/workflows/pr-agent.yml", "utf8"));
+    expect(yaml.errors).toEqual([]);
+    const job = (yaml.toJS() as { jobs: Record<string, { steps: Array<{with?: {script?: string}}> }> }).jobs["smart-coverage"];
+    expect(job.steps[1].with?.script).toContain('if (relationship.status === "unknown")');
+    expect(job.steps[1].with?.script).toContain("validations[file.filename] = relationship");
+  });
+});
