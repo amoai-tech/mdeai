@@ -1,0 +1,14 @@
+fileType: momentic/test/v2
+id: mde-rentals-viewing-form-no-submit
+description: "Read-only: renter can open a viewing request form for the correct apartment; do not submit production data."
+url: https://www.mdeai.co/rentals?neighborhood=Laureles&beds=2
+labels:
+  - rentals
+  - viewing
+  - read-only
+retries: 0
+steps:
+  - assert: "At least one actual two-bedroom Laureles apartment has finished loading in the public Rentals result cards."
+  - click: "Schedule viewing on the first actual two-bedroom Laureles apartment result card"
+  - assert: "The viewing request form or dialog is visible and refers to the same selected apartment, with appropriate renter contact and preferred viewing date or time inputs."
+  - assert: "The form allows the renter to review inputs before submitting. The test has not submitted, booked, or created a lead or showing."
