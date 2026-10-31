@@ -4,7 +4,7 @@ import { parseDocument } from "yaml";
 import { reviewEnvelope, excludedFilesFromReview } from "../../scripts/pr-agent/review-policy.mjs";
 import {
   buildCoverageReport, classifyFiles, planFollowupBatches,
-  reviewCoverageFromComment, validateGeneratedJson, validateSnapshotReferences, COVERAGE_MARKER,
+  reviewCoverageFromComment, parseReviewUsage, validateGeneratedJson, validateSnapshotReferences, COVERAGE_MARKER,
 } from "../../scripts/pr-agent/smart-review.mjs";
 
 const BASE = "a".repeat(40), HEAD = "b".repeat(40);
@@ -139,7 +139,7 @@ describe("SAN-1609 Canary boundary regressions", () => {
     const report = buildCoverageReport({ repo: "a/b", number: 1, baseSha: base, headSha: head,
       files: [{ filename: "src/ä.ts", patch: "+x" }, { filename: "src/z.ts", patch: "+x" }], expectedCount: 2 });
     expect(report.details.map((f: { path: string }) => f.path)).toEqual(["src/z.ts", "src/ä.ts"]);
-    expect(planFollowupBatches(report, { baseSha: base, headSha: head, maxBatches: 1 }).batches[0].paths).toEqual(["src/z.ts"]);
+    expect(planFollowupBatches(report, { baseSha: base, headSha: head, maxBatches: 1 }).batches[0].paths).toEqual(["src/z.ts", "src/ä.ts"]);
   });
 
   it.each(["./src/a.ts", "src/a.ts "])("normalizes equivalent omitted paths %s", (alias) => {
@@ -195,5 +195,59 @@ describe("SAN-1609 post-merge coverage smoke", () => {
     expect(report.counts.unknown).toBe(1);
     expect(report.status).toBe("UNKNOWN");
     expect(report.details[0].patchDigest).toBeNull();
+  });
+});
+
+describe("SAN-1609 quality, budget and provider run metrics", () => {
+  it("reads only exact-head official review usage; unknown API cost is not zero", () => {
+    const content = complete + "\n<details><summary><strong>⚙️ Agent run details</strong></summary>\n" +
+      "- Model: openai/nvidia/nemotron-3.5-lightning-30b-a3b\n" +
+      "- Tokens: 15,916 in / 5,188 out / 21,104 total\n" +
+      "- Time cost: 63.9s\n- AI calls: 1\n</details>";
+    const usage = parseReviewUsage(content, BASE, HEAD);
+    expect(usage).toEqual({ model: "openai/nvidia/nemotron-3.5-lightning-30b-a3b",
+      inputTokens: 15916, outputTokens: 5188, seconds: 63.9, calls: 1, estimatedUsd: null });
+    expect(parseReviewUsage(content, BASE, "c".repeat(40)).calls).toBeNull();
+    const report = buildCoverageReport({ repo: "a/b", number: 1, baseSha: BASE, headSha: HEAD,
+      files: [{ filename: "src/security/auth.ts", patch: "+x" }], expectedCount: 1, reviewBody: content });
+    expect(report.quality.verifiedFiles).toBe(1);
+    expect(report.quality.percentVerified).toBe(100);
+    expect(report.body).toContain("unknown (not $0)");
+    const priced = content.replace("- AI calls: 1", "- AI calls: 1\n- Estimated API cost: $0.0800 USD");
+    expect(parseReviewUsage(priced, BASE, HEAD).estimatedUsd).toBe(0.08);
+    expect(readFileSync(".pr_agent.toml", "utf8")).toContain("output_run_cost = true");
+  });
+  it("packs 100 unreviewed files into bounded batches without generating AI results", () => {
+    const files = Array.from({ length: 100 }, (_, i) => ({
+      filename: i === 0 ? "src/security/a.ts" : "src/components/Item" + String(i).padStart(3,"0") + ".tsx",
+      patch: "+" + "x".repeat(999) }));
+    const report = buildCoverageReport({ repo: "a/b", number: 1, baseSha: BASE, headSha: HEAD,
+      files, expectedCount: 100 });
+    expect(report.status).toBe("UNKNOWN");
+    expect(report.counts.aiReviewed).toBe(0);
+    expect(report.plan.batches.length).toBeGreaterThan(1);
+    expect(report.plan.batches.flatMap((batch: { paths: string[] }) => batch.paths)).toHaveLength(100);
+    expect(report.plan.deferred).toHaveLength(0);
+    expect(report.plan.batches.every((batch: { patchBytes: number }) => batch.patchBytes <= 35000)).toBe(true);
+    expect(report.plan.batches[0].paths[0]).toBe("src/security/a.ts");
+    expect(report.body).toContain("Planning only");
+    const done = [{ ...report.plan.batches[0], complete: true }];
+    expect(planFollowupBatches(report, { baseSha: BASE, headSha: HEAD, completed: done }).batches).toHaveLength(report.plan.batches.length - 1);
+  });
+  it("handles 300 large files without exceeding 6 calls or claiming complete coverage", () => {
+    const files = Array.from({ length: 300 }, (_, i) => ({
+      filename: "src/components/Component" + String(i).padStart(4,"0") + ".tsx",
+      patch: "+" + "x".repeat(3999) }));
+    const report = buildCoverageReport({ repo: "a/b", number: 1, baseSha: BASE, headSha: HEAD,
+      files, expectedCount: 300 });
+    expect(report.plan.batches).toHaveLength(6);
+    expect(report.plan.deferred.length).toBeGreaterThan(0);
+    expect(report.plan.batches.flatMap((batch: { paths: string[] }) => batch.paths).length + report.plan.deferred.length).toBe(300);
+    expect(report.plan.batches.every((batch: { patchBytes: number }) => batch.patchBytes <= 35000)).toBe(true);
+    expect(report.quality.percentVerified).toBe(0);
+    const incomplete = buildCoverageReport({ repo: "a/b", number: 1, baseSha: BASE, headSha: HEAD,
+      files, expectedCount: 301 });
+    expect(incomplete.status).toBe("UNKNOWN");
+    expect(incomplete.body).toContain("Inventory UNKNOWN");
   });
 });
