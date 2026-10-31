@@ -32,6 +32,10 @@ glob = [
   "*.db-shm",
   "*.db-wal",
   "package-lock.json",
+  # Known generated snapshots have trusted structural/duplicate checks in smart-coverage.
+  "docs/progress/data/linear-data.json",
+  "docs/progress/data/pr-data.json",
+  "docs/progress/data/pr-files.json",
   "commerce/mercur/node_modules/**",
   ".agents/**"
 ]
