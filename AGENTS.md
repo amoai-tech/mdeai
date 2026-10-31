@@ -48,7 +48,7 @@ npm run graphify:query -- "<question>"
 `npm run floor` is the canonical repository gate; see `package.json` for the current command chain.
 For auth changes, also run the signed-in QA smoke with credentials in ignored local environment files (never committed); keep anonymous tests unauthenticated. See [e2e/README.md](e2e/README.md#san-1549--one-command-signed-in-qa-smoke) for prerequisites, safe credential handling, and production-smoke commands.
 
-**Super Admin QA:** For privileged browser smoke, use the existing `superAdminPage` fixture with `test.use({ screenshot: "off", trace: "off", video: "off" })`; Playwright option checks reject recording before sign-in. If visual recordings are needed, use a **non-admin synthetic identity** in an isolated trusted run instead. See [e2e/README.md](e2e/README.md#shared-super-admin-qa-fixture) for setup, commands and private-artifact handling.
+**QA identity and artifacts:** Choose `qaRolePage` with e.g. `test.use({ qaRole: "renter" })`; supported roles are anonymous (default), super-admin, event-host, renter and broker, with no admin fallback. For authenticated tests set `screenshot/trace/video` to `"off"`; the existing fixture checks the effective Playwright options before login. Visual debugging can instead use a non-admin synthetic identity in an isolated trusted run. Commands, account setup and artifact sanitation live in [e2e/README.md](e2e/README.md#role-selected-qa-and-private-artifacts).
 
 Traps worth knowing before you debug them:
 
