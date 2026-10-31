@@ -2,6 +2,16 @@
 
 Use AGENTS.md as the repository-wide engineering contract. Exact-head deterministic CI and human review remain authoritative; PR-Agent is advisory.
 
+## Smart large PR review (SAN-1609)
+
+The existing pinned PR Agent remains the sole AI reviewer. A separate advisory job
+classifies changed files, validates three known generated snapshots as data, and
+reports real AI coverage separately from deterministic checks. Missing AI coverage
+is not a new required docs-only merge gate; high-risk gaps require human attention.
+See [large-PR reference](../../.claude/skills/code-review/references/large-pr-review.md)
+for the file taxonomy, exact-head evidence, coverage states, bounded follow-up
+planner, tests and official documentation.
+
 ## Universal review order
 
 1. Outcome — verify the requested user/business result.

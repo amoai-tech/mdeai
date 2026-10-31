@@ -322,17 +322,23 @@ function unquotedReviewMarkdown(body) {
   }).join("\n");
 }
 
+// One canonical parser for PR-Agent's top-level excluded-file footer.
+// Quoted examples and fenced/indented code must never affect coverage.
+export function excludedFilesFromReview(body) {
+  const matches = unquotedReviewMarkdown(body ?? "").match(
+    /(?:^|\r?\n)⚠️\s+\*\*Review coverage:\*\*\s+The following files were not included in this review because of the token budget:\s*\r?\n((?:[ \t]*-[ \t]+`[^`\r\n]+`[ \t]*\r?\n?)+)/,
+  );
+  return matches ? [...matches[1].matchAll(/^[ \t]*-[ \t]+`([^`\r\n]+)`/gm)].map((m) => m[1]) : [];
+}
+
 function coverageFailure(body, headSha) {
   // PR-Agent can omit persistent finding state on a clean review even when its
   // own six-chunk coverage footer explicitly lists files omitted by the token
   // budget. The footer is direct evidence of incompleteness, regardless of
   // whether a state marker exists or incorrectly claims complete=true.
-  const excludedFooter = unquotedReviewMarkdown(body).match(
-    /(?:^|\r?\n)⚠️\s+\*\*Review coverage:\*\*\s+The following files were not included in this review because of the token budget:\s*\r?\n((?:[ \t]*-[ \t]+`[^`\r\n]+`[ \t]*\r?\n?)+)/,
-  );
-  if (excludedFooter) {
-    const excludedCount = [...excludedFooter[1].matchAll(/^[ \t]*-[ \t]+`[^`\r\n]+`/gm)].length;
-    return { ok: false, code: "INCOMPLETE_REVIEW", reason: `PR-Agent review footer reports ${excludedCount} excluded file(s) after chunking` };
+  const footerExcluded = excludedFilesFromReview(body);
+  if (footerExcluded.length) {
+    return { ok: false, code: "INCOMPLETE_REVIEW", reason: `PR-Agent review footer reports ${footerExcluded.length} excluded file(s) after chunking` };
   }
   const markers = [...body.matchAll(/(?:^|\n)<!-- pr-agent-review-state:v1\n([\s\S]*?)\n-->/g)];
   if (markers.length === 0) return null; // Clean reviews may have no persisted findings.
