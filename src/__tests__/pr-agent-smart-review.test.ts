@@ -96,6 +96,6 @@ describe("SAN-1609 smart coverage", () => {
     expect(job.needs).toBe("review");
     expect(job.permissions).toEqual({ actions: "read", contents: "read", "pull-requests": "read", issues: "write" });
     expect(job.steps[0].with.ref).toBe("${{ github.event.pull_request.base.sha }}");
-    expect(source).toContain("pr-review-infra/.github/workflows/pr-agent.yml@901e85f5ba4dcce6b5d112ab63630a0da4bc1f1d");
+    expect(source).toContain("pr-review-infra/.github/workflows/pr-agent.yml@f37cb4a98626d55d4b6c8709d9ab2a2c6843bd2f");
   });
 });
