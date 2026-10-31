@@ -15,6 +15,8 @@ describe("SAN-737 explicit cleared selection", () => {
     "Based on the current browser state, no place is currently selected.",
     "No — there's no selected place.",
     "No, nothing is currently selected.",
+    "Current page: /rentals.\nSelected public item: NONE.",
+    "Current page: /restaurants.\nSelected public item: none",
 
   ])("accepts explicit %s", (reply) => expect(confirmsNothingSelected(reply)).toBe(true));
 
@@ -24,6 +26,8 @@ describe("SAN-737 explicit cleared selection", () => {
     "Notable restaurants",
     "No, the previously selected restaurant is still active.",
     "Apartment B is selected.",
+    "Current page: /rentals.\nSelected public item: Apartment B.",
+    "Selected public item: NONE.\nSelected public item: Apartment B.",
     "",
   ])("rejects ambiguous %s", (reply) => expect(confirmsNothingSelected(reply)).toBe(false));
 });
