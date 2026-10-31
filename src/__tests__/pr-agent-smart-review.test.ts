@@ -94,7 +94,7 @@ describe("SAN-1609 smart coverage", () => {
     const job = jobs.jobs["smart-coverage"];
     expect(job.name).toContain("advisory");
     expect(job.needs).toBe("review");
-    expect(job.permissions).toEqual({ actions: "read", contents: "read", "pull-requests": "read", issues: "write" });
+    expect(job.permissions).toEqual({ actions: "read", contents: "read", "pull-requests": "write", issues: "write" });
     expect(job.steps[0].with.ref).toBe("${{ github.event.pull_request.base.sha }}");
     expect(source).toContain("pr-review-infra/.github/workflows/pr-agent.yml@f37cb4a98626d55d4b6c8709d9ab2a2c6843bd2f");
   });
