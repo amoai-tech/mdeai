@@ -103,7 +103,7 @@ vi.mock("@/lib/supabase/service", () => ({
                 }
                 // Duplicate guard: select("role, content").eq(thread).order().limit()
                 const recent = (threadId: string) => ({
-                  data: [...db.rows, ...db.otherThreadRows].filter((row) => row.thread_id === threadId),
+                  data: [...db.rows, ...db.otherThreadRows].filter((row) => row.thread_id === threadId).sort((a, b) => String((b as Record<string, unknown>).createdAt ?? "").localeCompare(String((a as Record<string, unknown>).createdAt ?? ""))),
                   error: null,
                 });
                 return {
@@ -111,9 +111,13 @@ vi.mock("@/lib/supabase/service", () => ({
                     data: [...db.rows, ...db.otherThreadRows].filter((row) => ids.includes(String(row.id))),
                     error: null,
                   }),
-                  eq: (_column: string, value: string) => ({
-                    order: () => ({ limit: async () => recent(value) }),
-                  }),
+                  eq: (_column: string, value: string) => {
+                    const ordered = {
+                      order: () => ordered,
+                      limit: async (count: number) => ({ ...recent(value), data: recent(value).data.slice(0, count) }),
+                    };
+                    return ordered;
+                  },
                 };
               },
             };
@@ -361,6 +365,22 @@ describe("SAN-1531 POST /api/threads/[threadId]/messages", () => {
 
     expect(await response.json()).toMatchObject({ saved: 0 });
     expect(db.rows).toHaveLength(2);
+  });
+
+  it("saves a deliberate repeated question after a different turn", async () => {
+    signInAs(OWNER);
+    db.threads.set(THREAD, { id: THREAD, resourceId: OWNER });
+    await save(THREAD, exchange);
+    await save(THREAD, { messages: [
+      { id: "local-other-user", role: "user", content: "Which are affordable?" },
+      { id: "local-other-answer", role: "assistant", content: "Two are affordable." },
+    ] });
+    const again = await save(THREAD, { messages: [
+      { id: "local-again-user", role: "user", content: "Find Italian restaurants in El Poblado." },
+      { id: "local-again-answer", role: "assistant", content: "3 Italian spots in El Poblado." },
+    ] });
+    expect(await again.json()).toMatchObject({ saved: 2 });
+    expect(db.rows).toHaveLength(6);
   });
 
   it("keeps content when another thread already uses the same client id", async () => {

@@ -237,30 +237,30 @@ async function persistExchange(
     };
   });
 
-  // A retried submit creates fresh message ids for the same exchange, so id-only idempotency let
-  // the same question appear twice after a refresh (seen in production). Compare the text the
-  // thread already shows before inserting again.
+  // A reconnect can submit the immediately preceding exchange with fresh local IDs.
+  // Compare the complete trailing exchange in order. Searching all recent text would
+  // silently discard a *new* question the user intentionally repeats after other turns.
   const { data: recentRows, error: recentError } = await service
     .from("mastra_messages")
     .select("role, content")
     .eq("thread_id", threadId)
     .order("createdAt", { ascending: false })
-    .limit(50);
+    .order("id", { ascending: false })
+    .limit(rows.length);
   if (recentError) {
     console.error("[/api/threads/messages] duplicate lookup", recentError.message);
     return { error: "Could not save messages" };
   }
-  const alreadyShown = new Set(
-    ((recentRows ?? []) as Array<{ role: string; content: unknown }>).map(
-      (row) => `${row.role}:${storedText(row.content).trim()}`,
-    ),
-  );
-  const fresh = rows.filter((row) => !alreadyShown.has(`${row.role}:${storedText(row.content).trim()}`));
-  if (fresh.length === 0) return { saved: 0, createdThread };
+  const recent = (recentRows ?? []) as Array<{ role: string; content: unknown }>;
+  const sameLastExchange = recent.length === rows.length && rows.every((row, index) => {
+    const prior = recent[rows.length - index - 1];
+    return prior.role === row.role && storedText(prior.content).trim() === storedText(row.content).trim();
+  });
+  if (sameLastExchange) return { saved: 0, createdThread };
 
   const { data: inserted, error } = await service
     .from("mastra_messages")
-    .upsert(fresh, { onConflict: "id", ignoreDuplicates: true })
+    .upsert(rows, { onConflict: "id", ignoreDuplicates: true })
     .select("id");
   if (error) {
     console.error("[/api/threads/messages] save", error.message);
