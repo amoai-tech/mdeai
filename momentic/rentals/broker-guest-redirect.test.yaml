@@ -1,0 +1,13 @@
+fileType: momentic/test/v2
+id: mde-rentals-broker-guest-redirect
+description: "Read-only access check: anonymous users cannot see the private broker rental workspace."
+url: https://www.mdeai.co/app/rentals
+labels:
+  - rentals
+  - broker
+  - auth
+  - read-only
+retries: 0
+steps:
+  - assert: "The signed-out visitor is redirected to sign-in and cannot read private broker listings, viewing requests, renter details, or management controls."
+  - assert: "The sign-in destination retains a safe return to the Rentals broker workspace after authentication. Do not sign in, submit, or change data."
