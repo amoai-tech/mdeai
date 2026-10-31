@@ -2,6 +2,12 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+/* Preserve event-card action tap targets next to the fixed mobile Map control.
+   Plain CSS avoids depending on Tailwind detecting new classes in ignored worktrees. */
+@media (max-width: 639px) {
+  [data-testid="concierge-transcript-tail"] .mde-event-card-actions { padding-right: 9rem; }
+}
+
 @custom-variant dark (&:is(.dark *));
 
 /* SAN-1414 — /chat is a one-window-tall workspace at lg+ (chat-page-client, geo-chat-shell, chat-canvas).

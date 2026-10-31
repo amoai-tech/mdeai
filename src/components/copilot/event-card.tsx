@@ -135,7 +135,8 @@ export function EventCard({
               ? "Free"
               : `From ${formatEventCardPrice(pricePerTicket, currency)}`}
         </p>
-        <div className="mt-3 flex flex-wrap gap-2">
+        {/* Keep mobile actions clear of the fixed Map FAB at the right edge. */}
+        <div className="mde-event-card-actions mt-3 flex flex-wrap gap-2">
           {canBuyTickets && onBuyTickets ? (
             <Button
               type="button"
