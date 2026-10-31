@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import {
   CopilotChatMessageView,
   CopilotChatView,
@@ -14,8 +14,8 @@ import {
 import { useHydrated } from "@/hooks/use-hydrated";
 import { useSession } from "@/hooks/use-session";
 import { takeConciergeDraft } from "@/lib/concierge-draft-store";
-import { sendConciergeUserMessage } from "@/lib/concierge-send-user-message";
 import { useConciergeSendHandlers } from "@/lib/hooks/use-concierge-send-handlers";
+import { useConciergeSubmitHandler } from "@/lib/hooks/use-concierge-submit-handler";
 import { useOptionalThreadNav } from "@/lib/chat/thread-nav-context";
 
 /**
@@ -102,12 +102,7 @@ export function conciergeComposerInput(
 function ConciergeChatViewInner(props: CopilotChatViewProps) {
   const handlers = useConciergeSendHandlers();
   const hasTailContent = useTranscriptTailHasContent();
-  const onSubmitMessage = useCallback(
-    (text: string) => {
-      void sendConciergeUserMessage(text, handlers);
-    },
-    [handlers],
-  );
+  const onSubmitMessage = useConciergeSubmitHandler(handlers);
   // The composer is server-rendered, so it shows up before the page's JavaScript can act on it.
   // Typing or pressing Enter in that gap does nothing and the typed text is wiped when the page
   // finishes loading — a renter's first message was silently lost. Keep it disabled until the

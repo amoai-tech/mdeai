@@ -283,6 +283,20 @@ describe("mapSavedThreadHistory — repeats already saved before the fix", () =>
     ])).toEqual(["user:q", "assistant:a", "user:next"]);
   });
 
+  it("reopening history retains two intentional identical exchanges with distinct submit IDs", () => {
+    const a = crypto.randomUUID();
+    const b = crypto.randomUUID();
+    const saved = [
+      row(`local-${a}-user`, "user", text("Italian restaurants?"), "2026-10-01T10:00:00.000Z"),
+      row(`local-${a}-assistant`, "assistant", text("Three restaurants"), "2026-10-01T10:00:00.001Z"),
+      row(`local-${b}-user`, "user", text("Italian restaurants?"), "2026-10-01T10:00:00.020Z"),
+      row(`local-${b}-assistant`, "assistant", text("Three restaurants"), "2026-10-01T10:00:00.021Z"),
+    ];
+    const reload = () => mapSavedThreadHistory(saved);
+    expect(reload().map((item) => item.role)).toEqual(["user", "assistant", "user", "assistant"]);
+    expect(reload().map((item) => item.id)).toEqual(saved.map((item) => item.id));
+  });
+
   it("the same question asked twice with the same answer both times is kept (seconds apart)", () => {
     expect(
       shown([
