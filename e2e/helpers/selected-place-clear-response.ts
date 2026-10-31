@@ -5,6 +5,13 @@
  */
 export function confirmsNothingSelected(text: string): boolean {
   const answer = text.trim();
+  // A negative phrase must never override a later positive assertion. Strip
+  // explicit negative claims first, then reject remaining "X is selected" claims.
+  // This preserves the observed agent answer "say nothing is selected".
+  const remainingClaims = answer
+    .replace(/\b(?:nothing|none|no one|nobody)\s+(?:is|are)\s+(?:currently\s+)?selected\b/gi, "")
+    .replace(/\bno\s+(?:(?:currently|active|public|new)\s+){0,3}(?:place|item|record|listing|rental|apartment|venue|restaurant|event|caf[eé]|club)\s+(?:is\s+)?(?:currently\s+)?selected\b/gi, "");
+  if (/\b(?:is|remains|still)\s+(?:currently\s+)?selected\b/i.test(remainingClaims)) return false;
   // Some grounded agents use a structured, explicit current-state answer.
   // Only a single exact NONE field counts: a second selected item or an
   // item name must not be misclassified as a cleared selection.

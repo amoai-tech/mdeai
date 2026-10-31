@@ -30,6 +30,8 @@ describe("SAN-737 explicit cleared selection", () => {
     "Apartment B is selected.",
     "Current page: /rentals.\nSelected public item: Apartment B.",
     "Selected public item: NONE.\nSelected public item: Apartment B.",
+    "Current page: /rentals. Selected public item: NONE. Apartment B is selected now.",
+    "I don't have any currently selected place in memory. Apartment B is selected now.",
     "I don't have any currently selected place in memory, but apartment B is selected now.",
     "",
   ])("rejects ambiguous %s", (reply) => expect(confirmsNothingSelected(reply)).toBe(false));
