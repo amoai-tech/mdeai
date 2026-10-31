@@ -9,5 +9,7 @@ labels:
   - read-only
 retries: 0
 steps:
-  - assert: "The signed-out visitor is redirected to sign-in and cannot read private broker listings, viewing requests, renter details, or management controls."
-  - assert: "The sign-in destination retains a safe return to the Rentals broker workspace after authentication. Do not sign in, submit, or change data."
+  - waitForUrl:
+      substring: /login?next=%2Fapp%2Frentals
+      timeout: 12000
+  - assert: "The login screen is visible and does not disclose any private broker listings, viewing requests, renter details, or management controls. Do not sign in or submit anything."
