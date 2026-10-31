@@ -9,6 +9,6 @@ labels:
 retries: 0
 steps:
   - assert: "At least one actual two-bedroom Laureles apartment has finished loading in the public Rentals result cards."
-  - click: "Schedule viewing on the first actual two-bedroom Laureles apartment result card"
-  - assert: "The viewing request form or dialog is visible and refers to the same selected apartment, with appropriate renter contact and preferred viewing date or time inputs."
-  - assert: "The form allows the renter to review inputs before submitting. The test has not submitted, booked, or created a lead or showing."
+  - click: "The first visible Schedule viewing or Request MDE follow-up action on an actual two-bedroom Laureles apartment card. Do not click View original listing or Submit."
+  - assert: "The viewing request or MDE follow-up form is visible and refers to the apartment card whose action was clicked, with renter contact and preferred date/time inputs appropriate to this workflow."
+  - assert: "The form allows reviewing inputs before any submission. An external-ad follow-up is not presented as a confirmed appointment. No confirmation or booking success has been triggered."
