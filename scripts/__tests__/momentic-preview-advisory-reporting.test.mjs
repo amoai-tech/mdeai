@@ -11,9 +11,11 @@ test('advisory preview suite is selected only by pull-request Floor checks', () 
 });
 
 test('all five read-only Momentic journeys must finish before PASS is reported', () => {
-  for (const name of ['exact-bedroom-filter', 'broker-guest-redirect', 'renter-saved-guest-redirect', 'search-to-details', 'viewing-form-no-submit']) {
-    assert.match(workflow, new RegExp(`^\\s+${name}\\s*$`, 'm'));
-  }
+  assert.match(workflow, /^\s+exact-bedroom-filter\s*$/m);
+  assert.match(workflow, /^\s+broker-guest-redirect\s*$/m);
+  assert.match(workflow, /^\s+renter-saved-guest-redirect\s*$/m);
+  assert.match(workflow, /^\s+search-to-details\s*$/m);
+  assert.match(workflow, /^\s+viewing-form-no-submit\s*$/m);
   assert.match(workflow, /if \[\[ "\$OUTCOME" == success \]\]; then\s+result="PASS — 5\/5/);
   assert.match(workflow, /--retries 0/);
 });
