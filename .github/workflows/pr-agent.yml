@@ -46,7 +46,9 @@ jobs:
     permissions:
       actions: read
       contents: read
-      pull-requests: read
+      # PR issue comments need write scope under the repository integration policy.
+      # This job imports trusted base code only and never executes PR-head scripts.
+      pull-requests: write
       issues: write
     steps:
       - name: Checkout trusted base policy

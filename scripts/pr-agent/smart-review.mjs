@@ -117,8 +117,16 @@ export function buildCoverageReport({ repo, number, baseSha, headSha, files, exp
     failed: details.filter((f) => f.coverage === "failed" || f.validation.status === "failed").length,
   };
   const generatedUnvalidated = details.some((f) => f.category === "generated" && f.validation.status !== "validated");
+  // A missing GitHub patch is not evidence of review, even if the AI
+  // provider says the overall run was complete. Preserve PARTIAL for
+  // explicitly incomplete runs, but downgrade an otherwise COMPLETE
+  // assertion to UNKNOWN until the missing patch can be accounted for.
+  const unprovenPatch = ai.status === "complete" && details.some(
+    (file) => file.coverage === "unknown" && file.patchDigest === null &&
+      !["excluded", "generated"].includes(file.category),
+  );
   const status = counts.failed || ai.status === "failed" ? "FAILED" :
-    inventory.unknownInventory || ai.status === "unknown" || generatedUnvalidated ? "UNKNOWN" :
+    inventory.unknownInventory || ai.status === "unknown" || generatedUnvalidated || unprovenPatch ? "UNKNOWN" :
       counts.uncovered || counts.unknown ? "PARTIAL" : "COMPLETE";
   const pending = details.filter((f) => ["unknown", "unreviewed", "failed"].includes(f.coverage) && !["excluded", "generated"].includes(f.category));
   const criticalPending = pending.filter((f) => ["critical", "high"].includes(f.category));
