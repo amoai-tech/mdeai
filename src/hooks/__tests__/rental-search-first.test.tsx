@@ -89,7 +89,7 @@ beforeEach(() => {
   vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
     if (/^\/api\/threads\/[0-9a-f-]{36}\/messages$/i.test(url)) {
-      return historySaveMock(input, init);
+      return historySaveMock();
     }
     return fetchMock(input, init);
   });
