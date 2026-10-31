@@ -87,6 +87,21 @@ describe("BookingReviewSummary", () => {
     expect(text).toContain("listed monthly price");
   });
 
+  it("does not claim the price is unpublished when the listing itself is no longer visible", () => {
+    const text = renderSummary(null, false).textContent ?? "";
+    expect(text).toContain("listing no longer visible");
+    expect(text).toContain("can’t be confirmed");
+    expect(text).not.toContain("No price is published");
+    expect(text).not.toContain("Price not stated");
+  });
+
+  it("still reports an unpublished price on a readable listing", () => {
+    const text = renderSummary(listing({ priceNightly: null, priceMonthly: null })).textContent ?? "";
+    expect(text).toContain("Price not stated");
+    expect(text).toContain("No price is published");
+    expect(text).not.toContain("no longer visible");
+  });
+
   it("says the price is unavailable during an outage instead of claiming none is published", () => {
     const text = renderSummary(null, true).textContent ?? "";
     expect(text).toContain("Price unavailable right now");

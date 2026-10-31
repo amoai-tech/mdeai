@@ -41,10 +41,20 @@ export function BookingReviewSummary({
   const storedMonthly = detail?.priceMonthly != null;
   const storedNightly = detail?.priceNightly != null;
   const leadPrice = storedMonthly ? prices.monthlyLabel : storedNightly ? prices.nightlyLabel : null;
-  const priceText = detailUnavailable ? "Price unavailable right now" : (leadPrice ?? "Price not stated");
+  // Three distinct states, never conflated: the read failed (outage), the read succeeded but
+  // returned nothing (the listing is no longer visible — e.g. it went inactive after the
+  // booking was saved), or a readable listing that genuinely has no published price.
+  const listingNoLongerVisible = !detailUnavailable && detail === null;
+  const priceText = detailUnavailable
+    ? "Price unavailable right now"
+    : listingNoLongerVisible
+      ? "Price unavailable — listing no longer visible"
+      : (leadPrice ?? "Price not stated");
   const amountDueCopy = detailUnavailable
     ? "We can’t show the amount until the apartment details load again. Nothing has been charged."
-    : storedMonthly
+    : listingNoLongerVisible
+      ? "This apartment is no longer visible to renters, so its price can’t be confirmed here. Nothing has been charged."
+      : storedMonthly
       ? "The rent above is the advertiser’s listed monthly price. The exact payable amount and deposit are calculated and shown at the payment step, before any card is charged."
       : storedNightly
         ? "The nightly rate above is the advertiser’s listed price. The stay total and deposit are calculated and shown at the payment step, before any card is charged."
