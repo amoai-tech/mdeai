@@ -113,9 +113,8 @@ export function buildMatchReason(
   }
   const badges = rentalBenefitBadges(row);
   if (badges.length) parts.push(badges.slice(0, 2).join(" · "));
-  return parts.length
-    ? parts.join(" · ")
-    : "Matches your neighborhood and stay filters.";
+  // Never claim a match when no listing-backed reason is available.
+  return parts.join(" · ");
 }
 
 export function describeSearchCriteria(
