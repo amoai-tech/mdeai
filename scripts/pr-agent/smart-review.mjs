@@ -90,6 +90,34 @@ export function reviewCoverageFromComment(body, baseSha, headSha) {
   } catch { return { status: "failed", excluded: warnings, reason: "invalid review-state JSON" }; }
 }
 
+/**
+ * Only data published in a current-SHA PR Agent run-details block counts.
+ * Missing provider pricing is unknown, not a free ($0) review.
+ */
+export function parseReviewUsage(body, baseSha, headSha) {
+  const empty = { model: null, inputTokens: null, outputTokens: null,
+    seconds: null, calls: null, estimatedUsd: null };
+  const envelope = parseReviewEnvelope(body ?? "");
+  if (!envelope.valid || envelope.baseSha !== baseSha.toLowerCase() || envelope.headSha !== headSha.toLowerCase()) return empty;
+  const section = envelope.body.match(/<summary><strong>[^<]*Agent run details<\/strong><\/summary>([\s\S]*?)<\/details>/);
+  if (!section) return empty;
+  const bodyText = section[1];
+  const model = bodyText.match(/(?:^|\n)- Model: ([a-z0-9_.\/-]+)(?: \(fallback\))?(?:\r?\n|$)/i)?.[1] ?? null;
+  const tokens = bodyText.match(/(?:^|\n)- Tokens: ([\d,]+) in \/ ([\d,]+) out \/ ([\d,]+) total(?:\r?\n|$)/);
+  const seconds = bodyText.match(/(?:^|\n)- Time cost: (\d+(?:\.\d+)?)s(?:\r?\n|$)/)?.[1];
+  const calls = bodyText.match(/(?:^|\n)- AI calls: (\d+)(?:\r?\n|$)/)?.[1];
+  const usd = bodyText.match(/(?:^|\n)- Estimated API cost: \$(\d+(?:\.\d+)?) USD(?:\r?\n|$)/)?.[1];
+  const safe = (x) => x === undefined ? null : Number.isSafeInteger(Number(x.replaceAll(",", ""))) && Number(x.replaceAll(",", "")) >= 0 && Number(x.replaceAll(",", "")) < 1e10 ? Number(x.replaceAll(",", "")) : null;
+  const inputTokens = tokens ? safe(tokens[1]) : null, outputTokens = tokens ? safe(tokens[2]) : null;
+  const total = tokens ? safe(tokens[3]) : null;
+  return { model,
+    inputTokens: total !== null && inputTokens !== null && outputTokens !== null && inputTokens + outputTokens === total ? inputTokens : null,
+    outputTokens: total !== null && inputTokens !== null && outputTokens !== null && inputTokens + outputTokens === total ? outputTokens : null,
+    seconds: seconds !== undefined && Number.isFinite(Number(seconds)) && Number(seconds) >= 0 && Number(seconds) < 86400 ? Number(seconds) : null,
+    calls: calls === undefined ? null : safe(calls),
+    estimatedUsd: usd !== undefined && Number.isFinite(Number(usd)) && Number(usd) >= 0 ? Number(usd) : null };
+}
+
 // Render the exact path safely in a Markdown table. JSON makes embedded CR/LF
 // visible as escapes, and an HTML code element avoids altering literal backticks.
 const quotePath = (path) => "<code>" + JSON.stringify(String(path))
@@ -130,6 +158,11 @@ export function buildCoverageReport({ repo, number, baseSha, headSha, files, exp
       counts.uncovered || counts.unknown ? "PARTIAL" : "COMPLETE";
   const pending = details.filter((f) => ["unknown", "unreviewed", "failed"].includes(f.coverage) && !["excluded", "generated"].includes(f.category));
   const criticalPending = pending.filter((f) => ["critical", "high"].includes(f.category));
+  const verified = details.filter((f) => f.coverage === "ai-reviewed" || f.validation.status === "validated").length;
+  const percentVerified = details.length ? Math.round(100 * verified / details.length) : 100;
+  const usage = parseReviewUsage(reviewBody, baseSha, headSha);
+  const plan = planFollowupBatches({ details }, { baseSha, headSha, maxBatches: 6, maxPatchBytes: 35000 });
+  const plannedFiles = plan.batches.reduce((total, batch) => total + batch.paths.length, 0);
   const rows = details.slice(0, 70).map((f) => `| ${quotePath(f.path)} | ${f.category} | ${f.coverage} | ${f.validation.status} |`);
   const body = [COVERAGE_MARKER, "## MDE smart review coverage (advisory)", "",
     `**PR:** ${repo}#${number} · **Base:** ${quotePath(baseSha)} · **Head:** ${quotePath(headSha)}`,
@@ -139,9 +172,14 @@ export function buildCoverageReport({ repo, number, baseSha, headSha, files, exp
     ...(details.length > rows.length ? [`| … | ${details.length - rows.length} additional files | See GitHub diff | — |`] : []), "",
     criticalPending.length ? `**Needs independent human attention:** ${criticalPending.slice(0, 10).map((f) => quotePath(f.path)).join(", ")}` : "No uncovered critical/high-risk files established.", "",
     pending.length ? `**Follow-up:** ${pending.length} file(s) lack proven AI coverage. Plan a bounded file-specific review; this comment does not execute or certify one.` : "No actionable uncovered files identified from the available evidence.",
+    "**Quality (grounded):** " + verified + "/" + details.length + " files have confirmed AI or deterministic proof (" + percentVerified + "%); " + criticalPending.length + " critical/high-risk files still need human attention.",
+    "**Model usage (reported):** " + (usage.model ?? "unknown") + " · Calls: " + (usage.calls ?? "unknown") + " · Input/output tokens: " + (usage.inputTokens ?? "unknown") + "/" + (usage.outputTokens ?? "unknown") + " · Processing time: " + (usage.seconds === null ? "unknown" : usage.seconds + "s") + " · Estimated API cost: " + (usage.estimatedUsd === null ? "unknown (not $0)" : "$" + usage.estimatedUsd.toFixed(4) + " USD") + ".",
+    "**Follow-up budget:** " + plan.batches.length + "/6 risk-ordered patch batches plan " + plannedFiles + " files, capped at 35,000 patch bytes per batch; " + plan.deferred.length + " files deferred. Planning only: no extra model calls executed or certified.",
     ...(inventory.unknownInventory ? ["", "**Inventory UNKNOWN:** GitHub's changed-file listing is incomplete or exceeds its 3,000-file limit."] : []),
     "", "Required Floor, branch protection and human review remain authoritative. Missing AI coverage does not add a new docs-only merge gate."].join("\n");
-  return { status, counts, details, criticalPending, body };
+  return { status, counts, details, criticalPending, usage,
+    quality: { verifiedFiles: verified, percentVerified, highRiskPending: criticalPending.length },
+    plan, body };
 }
 
 /** @param {ReturnType<typeof buildCoverageReport>} report
@@ -154,12 +192,32 @@ export function planFollowupBatches(report, { baseSha, headSha, modelConfigDiges
   const safePatchLimit = Number.isSafeInteger(maxPatchBytes) && maxPatchBytes >= 0 ? maxPatchBytes : 0;
   const done = new Set(completed.filter((c) => c.complete && c.baseSha === baseSha && c.headSha === headSha && c.modelConfigDigest === modelConfigDigest && c.policyVersion === policyVersion).map((c) => c.key));
   const batches = []; const deferred = [];
+  let paths = [], patchDigests = [], totalBytes = 0;
+  const flush = () => {
+    if (!paths.length) return;
+    const key = digest([baseSha, headSha, modelConfigDigest, policyVersion,
+      ...paths.flatMap((path, i) => [path, patchDigests[i]])].join("\\0"));
+    if (!done.has(key)) {
+      if (batches.length < safeBatchLimit) {
+        batches.push({ key, baseSha, headSha, modelConfigDigest, policyVersion, paths, patchBytes: totalBytes });
+      } else {
+        deferred.push(...paths.map((path) => ({ path, reason: "bounded patch/call budget" })));
+      }
+    }
+    paths = []; patchDigests = []; totalBytes = 0;
+  };
   for (const file of report.details.filter((f) => ["unknown", "unreviewed", "failed"].includes(f.coverage) && !["excluded", "generated"].includes(f.category))) {
-    if (!baseSha || !headSha || !file.patchDigest) { deferred.push({ path: file.path, reason: "missing exact patch/SHA" }); continue; }
-    const key = digest([baseSha, headSha, modelConfigDigest, policyVersion, file.path, file.patchDigest].join("\0"));
-    if (done.has(key)) continue;
-    if (file.patchBytes > safePatchLimit || batches.length >= safeBatchLimit) { deferred.push({ path: file.path, reason: "bounded patch/call budget" }); continue; }
-    batches.push({ key, baseSha, headSha, modelConfigDigest, policyVersion, paths: [file.path] });
+    if (!baseSha || !headSha || !file.patchDigest || !Number.isSafeInteger(file.patchBytes)) {
+      deferred.push({ path: file.path, reason: "missing exact patch/SHA" });
+      continue;
+    }
+    if (!safePatchLimit || file.patchBytes > safePatchLimit) {
+      deferred.push({ path: file.path, reason: "bounded patch/call budget" });
+      continue;
+    }
+    if (paths.length && totalBytes + file.patchBytes > safePatchLimit) flush();
+    paths.push(file.path); patchDigests.push(file.patchDigest); totalBytes += file.patchBytes;
   }
+  flush();
   return { batches, deferred }; // planning only: no LLM invocation or invented success
 }
