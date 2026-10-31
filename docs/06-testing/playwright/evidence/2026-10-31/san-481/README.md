@@ -14,7 +14,7 @@ Reported result: 1 test passed (20.5s). Reported readback: pending apartment boo
 
 ## Artifact handling
 
-The original evidence PR attached screenshots from an authenticated production booking session. They were removed from the PR branch because [the repository E2E policy](../../../../../e2e/README.md) explicitly forbids committing authenticated screenshots, traces, session cookies or other sensitive QA artifacts.
+The original evidence PR attached screenshots from an authenticated production booking session. They were removed from the PR branch because [the repository E2E policy](https://github.com/amoai-tech/mdeai/blob/main/e2e/README.md) explicitly forbids committing authenticated screenshots, traces, session cookies or other sensitive QA artifacts.
 
 Keep any authenticated screenshots under the gitignored local `docs/screenshots/san-481/` directory or in appropriately access-controlled ephemeral evidence storage. Do not commit or attach them to public PRs, comments, or documentation. Public/anonymous screen captures can be prepared separately after a privacy review.
 
