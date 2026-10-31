@@ -3,6 +3,8 @@ import {
   type BrowserContext,
   type Page,
 } from "@playwright/test";
+import { writeFileSync } from "node:fs";
+import { resolveQaRoleEmail, type QaRole } from "./helpers/qa-roles";
 import type { Session } from "@supabase/supabase-js";
 import {
   getTestSession,
@@ -16,6 +18,9 @@ type AuthStorageState = Awaited<ReturnType<BrowserContext["storageState"]>>;
 
 type SharedFixtures = {
   authenticatedPage: Page;
+  /** Explicit role intent chooses the existing QA identity; default is anonymous. */
+  qaRole: QaRole;
+  qaRolePage: Page;
   /** Opt-in, per-test Super Admin browser context; never authenticates anonymous tests. */
   superAdminPage: Page;
 };
@@ -26,9 +31,8 @@ type SharedWorkerFixtures = {
 };
 
 /**
- * The three values are built-in Playwright 1.61 WORKER option fixtures
- * (see node_modules/playwright/lib/index.js), so the resolved test.use()
- * values are injectable and can be checked before privileged login.
+ * Resolved Playwright 1.61 worker options: do not remove these checks.
+ * They are real injectable fixtures, verified in the hermetic E2E regression.
  */
 export function assertSuperAdminRecordingOff(
   screenshot: unknown,
@@ -40,7 +44,13 @@ export function assertSuperAdminRecordingOff(
   }
 }
 
+/** Mark protected reports so CI removes them before uploading any artifacts. */
+function markPrivateQaOutput(outputPath: (file: string) => string): void {
+  writeFileSync(outputPath("mde-private-qa.marker"), "PRIVATE_QA_ARTIFACTS\n");
+}
+
 export const test = base.extend<SharedFixtures, SharedWorkerFixtures>({
+  qaRole: ["anonymous", { option: true }],
   authSession: [
     async ({}, runFixture) => runFixture(await getTestSession(QA_HOST_EMAIL)),
     { scope: "worker" },
@@ -60,13 +70,45 @@ export const test = base.extend<SharedFixtures, SharedWorkerFixtures>({
   authenticatedPage: async (
     { page, context, authStorageState },
     runFixture,
+    testInfo,
   ) => {
+    // Preserve the legacy signed-in fixture contract; flag reports for safe CI removal.
+    markPrivateQaOutput((name) => testInfo.outputPath(name));
     await context.setStorageState(authStorageState);
     await runFixture(page);
   },
-  superAdminPage: async ({ browser, contextOptions, baseURL, screenshot, trace, video }, runFixture) => {
-    // The real Playwright worker options are resolved before any admin session.
+  qaRolePage: async (
+    { browser, contextOptions, baseURL, qaRole, screenshot, trace, video },
+    runFixture,
+    testInfo,
+  ) => {
+    const email = resolveQaRoleEmail(qaRole);
+    if (email) {
+      assertSuperAdminRecordingOff(screenshot, trace, video);
+      markPrivateQaOutput((name) => testInfo.outputPath(name));
+    }
+    if (!baseURL) throw new Error("QA role fixture requires a Playwright baseURL");
+    const context = await browser.newContext({
+      ...contextOptions,
+      baseURL,
+      storageState: undefined,
+    });
+    try {
+      const page = await context.newPage();
+      if (email) {
+        const session = await signInAsOnOrigin(page, baseURL, email, { requireExisting: true });
+        if (session.user.email?.toLowerCase() !== email.toLowerCase()) {
+          throw new Error("QA role session identity mismatch");
+        }
+      }
+      await runFixture(page);
+    } finally {
+      await context.close();
+    }
+  },
+  superAdminPage: async ({ browser, contextOptions, baseURL, screenshot, trace, video }, runFixture, testInfo) => {
     assertSuperAdminRecordingOff(screenshot, trace, video);
+    markPrivateQaOutput((name) => testInfo.outputPath(name));
     if (!baseURL) {
       throw new Error("Super Admin QA requires a Playwright baseURL");
     }
