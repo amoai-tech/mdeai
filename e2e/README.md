@@ -86,15 +86,17 @@ For debugging, run:
 
 ## Shared Super Admin QA fixture
 
-Use the existing `e2e/fixtures.ts` and request `superAdminPage` in **only** the tests
-that require admin access. It calls `signInAsOnOrigin()` for the existing
-`mde@socialmediaville.ca` identity; no password, fake login, new user or
+Import `test` from `e2e/fixtures.ts`, disable screenshot/trace/video recording
+with `test.use`, and request `superAdminPage` **only** in tests requiring admin
+access. The fixture fails closed if recording is enabled, *before* generating a
+Super Admin session. It calls
+`signInAsOnOrigin()` for the existing `mde@socialmediaville.ca` identity; no password, fake login, new user or
 global auth setup is needed. Other tests remain signed out.
 
 ```ts
 import { expect, test } from "./fixtures";
 
-test.use({ trace: "off", screenshot: "off", video: "off" });
+test.use({ screenshot: "off", trace: "off", video: "off" });
 test("admin can manage rental test listings", async ({ superAdminPage }) => {
   await superAdminPage.goto("/admin/rentals");
   await expect(superAdminPage.getByTestId("admin-rental-table")).toBeVisible();
@@ -112,8 +114,25 @@ MDE_SUPER_ADMIN_QA=1 PW_SKIP_WEBSERVER=1 SMOKE_BASE_URL=https://www.mdeai.co \
   npx playwright test e2e/qa-super-admin-fixture.spec.ts --project=chromium --workers=1
 ```
 
+Playwright 1.61 defines `screenshot`, `trace` and `video` as injectable
+worker-scoped option fixtures. The safe/unsafe regression in
+`e2e/qa-playwright-artifact-options*.spec.ts` verifies the resolved values and
+the guard without signing into any account:
+
+```bash
+PW_SKIP_WEBSERVER=1 npx playwright test e2e/qa-playwright-artifact-options \
+  --project=chromium --workers=1 --retries=0
+```
+
+For debugging that needs screenshots, choose a non-admin synthetic identity in
+an isolated local run, not the privileged QA fixture. Do not upload those
+artifacts into ordinary CI reports.
+
 The existing Supabase helpers reject absent permanent QA accounts and never put
-privileged credentials in browser code. Keep these signed-in runs **read-only by
+privileged credentials in browser code. A consumer that omits
+`test.use({ screenshot: "off", trace: "off", video: "off" })` fails before login. Playwright may still create
+`error-context.md` on failure, so never publish authenticated `test-results/` or
+HTML reports even when recordings are disabled. Keep these runs **read-only by
 default**, and do not publish cookies, traces, screenshots or local error-context
 artifacts. For write tests, require an explicit task-specific opt-in, synthetic
 fixtures and verified cleanup; use separate identities for renter/broker and
