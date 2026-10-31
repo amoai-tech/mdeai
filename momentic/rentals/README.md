@@ -7,10 +7,10 @@ Momentic v2 YAML tests complement, **not replace**, MDE's existing Playwright in
 | User role | Route | Coverage owner | Current Momentic status |
 | --- | --- | --- | --- |
 | Renter (guest) | `/`, `/rentals` | Existing `exact-bedroom-filter.test.yaml` | Existing pilot; first real CLI run not yet proven complete |
-| Renter (guest) | `/rentals?neighborhood=Laureles&beds=2` → in-page Details panel/sheet | `search-to-details.test.yaml` | Authored; pending CLI execution; `/rentals/[id]` is a separate direct route |
-| Renter (guest) | Rentals card → Schedule viewing form | `viewing-form-no-submit.test.yaml` | Authored; pending CLI execution; **never submits** |
-| Renter (guest) | `/app/me/saved` → login return | `renter-saved-guest-redirect.test.yaml` | Authored; pending CLI execution |
-| Broker (guest) | `/app/rentals` → login return | `broker-guest-redirect.test.yaml` | Authored; pending CLI execution |
+| Renter (guest) | `/rentals?neighborhood=Laureles&beds=2` → in-page Details panel/sheet | `search-to-details.test.yaml` | **PASS on production**, `/rentals/[id]` is a separate direct route |
+| Renter (guest) | Rentals card → Schedule viewing or MDE follow-up form | `viewing-form-no-submit.test.yaml` | **PASS on production**; **never submits** |
+| Renter (guest) | `/app/me/saved` → login return | `renter-saved-guest-redirect.test.yaml` | **PASS on production** |
+| Broker (guest) | `/app/rentals` → login return | `broker-guest-redirect.test.yaml` | **PASS on production** |
 | Renter (authenticated) | `/app`, `/app/me`, `/app/me/saved`, `/saved` | Existing Playwright signed-in/production journeys | Not a Momentic auth test |
 | Broker / landlord (authenticated) | `/app/rentals`, `/app/rentals/listings`, `/app/rentals/onboarding` | Existing broker Playwright tests | Not a Momentic auth test |
 | Legacy broker (authenticated) | `/host/rentals`, `/host/rentals/dashboard`, `/host/rentals/listings`, `/host/rentals/onboarding` | Existing broker Playwright tests | Legacy aliases; verify current behavior before asserting |
@@ -18,7 +18,7 @@ Momentic v2 YAML tests complement, **not replace**, MDE's existing Playwright in
 | AI Concierge | `/chat`, Rentals inline Ask MDE | Existing production AI/rental Playwright test | Not a Momentic agent test |
 | Partner marketing | `/partners/rentals` | Route discovery | Not tested |
 
-**Do not mark unchecked rows PASS.** Test definition/lint != executed UI success.
+**Do not mark unchecked rows PASS.** Momentic CLI v3.67.1 lint passed and the four new read-only tests passed against `https://www.mdeai.co` on source revision `5902ea82ab965262304181a9e7c48b0fc3a3badf` (4/4, 97s). [Uploaded Momentic evidence](https://app.momentic.ai/run-groups/8eac9ddb-41a5-4df2-80e2-0654f37c1f12). The existing exact-bedroom pilot and other authenticated/DB flows were **not** included in that four-test run.
 
 ## Use the installed tools
 
@@ -61,7 +61,7 @@ Continue to use real 390px Playwright screenshot/overflow tests for the mobile b
 
 ## Known local execution issue
 
-The CLI's `whoami`, HTTPS API authentication, Chrome/Chromium detection and `lint` passed on the operator's Ubuntu system, but `momentic doctor` reported **WebSocket connection failure** to `https://api.momentic.ai` (likely a proxy/network problem). An actual `momentic run` began but a finished pass had not been observed when these additional test definitions were authored. Diagnose WSS connectivity or run from approved CI before claiming executed Momentic coverage. Never silently downgrade a failed check to green.
+The CLI's `whoami`, HTTPS API authentication, Chrome/Chromium detection, and project `lint` passed on the operator's Ubuntu system. Earlier, `momentic doctor` reported a **WebSocket connectivity warning**, but **actual Momentic browser execution now succeeded on all four new tests**. Investigate the diagnostic separately if it recurs; it did not block this recorded run. The existing exact-bedroom pilot is **not** part of the four-test evidence. Do not claim full rental booking/database coverage from read-only browser tests.
 
 Official docs: https://momentic.ai/docs/llms.txt · https://momentic.ai/docs/core-concepts/file-format · https://momentic.ai/docs/running-tests/ci/github-actions · https://momentic.ai/docs/mo/brief
 
