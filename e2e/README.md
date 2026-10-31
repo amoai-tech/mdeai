@@ -84,6 +84,120 @@ For debugging, run:
 `npx playwright test e2e/signed-in.spec.ts --project=chromium --headed`.
 
 
+## Role-selected QA and private artifacts
+
+Use the **same existing Supabase authentication helper**. A trusted agent declares the
+role with `test.use({ qaRole: "..." })` and receives `qaRolePage`:
+
+| Test intent | Selected existing identity |
+| --- | --- |
+| `anonymous` (default) | Signed out; independent browser context |
+| `super-admin` | `mde@socialmediaville.ca` |
+| `event-host` | `qa-landlord@mdeai.co` (existing host QA) |
+| `renter` | Existing dedicated account from `MDE_QA_RENTER_EMAIL` |
+| `broker` | Existing dedicated account from `MDE_QA_BROKER_EMAIL` |
+
+Renter and broker accounts must already exist, be named `qa-*@mdeai.co`, and
+have the intended **actual app role**. The fixture refuses a missing or
+unconfigured identity; it never creates a user or silently substitutes Super Admin.
+For authenticated tests, **explicitly disable screenshot, trace and video**:
+
+```ts
+import { test, expect } from "./fixtures";
+test.use({ qaRole: "event-host", screenshot: "off", trace: "off", video: "off" });
+test("host QA can open Saved", async ({ qaRolePage }) => {
+  await qaRolePage.goto("/saved");
+  await expect(qaRolePage.getByTestId("saved-page")).toBeVisible();
+});
+```
+
+Read-only browser verification with the configured existing accounts:
+
+```bash
+MDE_ROLE_QA_E2E=1 PW_SKIP_WEBSERVER=1 SMOKE_BASE_URL=https://www.mdeai.co \
+  npm run test:e2e:qa-roles
+```
+
+The fixture marks authenticated tests' private output directories. Before generic
+Playwright artifacts are uploaded, CI calls
+`scripts/sanitize-playwright-qa-artifacts.mjs`: on detecting **any** private
+session marker it removes all `test-results/`, HTML reports, and blob reports
+for that job. The loss of diagnostic artifacts is intentional: never publish
+tokens, cookies, protected DOM snapshots or test identities in GitHub Actions.
+No authenticated `test-results/` or `tmp/playwright-report/` should be
+uploaded through any alternate workflow. Do not share local reports either.
+
+**Canonical real rental journey — reuse SAN-1205, do not invent a second one.**
+`e2e/rental-conversion-journey.spec.ts` proves the real viewing form →
+exactly one persisted lead + showing → correct broker screen and isolation →
+idempotent replay → cleanup and zero residue. It uses its own controlled
+throwaway renter/brokers, *not* permanent Super Admin. It is a real Supabase
+write test and must be run only with explicit opt-in and authorized test cleanup:
+
+```bash
+SAN1205_JOURNEY_E2E=1 SAN1205_ALLOW_PRODUCTION_WRITES=1 \
+  PROD_SMOKE_BASE_URL=https://www.mdeai.co npm run test:e2e:rental-viewing
+```
+
+**Do not use the write command as a routine production smoke.** Check the
+current worktree, environment and persisted cleanup preconditions first; keep
+normal production checks read-only. A green local result is never a deployment
+receipt. Separate role permissions must still be proven by each journey.
+
+## Shared Super Admin QA fixture
+
+Import `test` from `e2e/fixtures.ts`, disable screenshot/trace/video recording
+with `test.use`, and request `superAdminPage` **only** in tests requiring admin
+access. The fixture fails closed if recording is enabled, *before* generating a
+Super Admin session. It calls
+`signInAsOnOrigin()` for the existing `mde@socialmediaville.ca` identity; no password, fake login, new user or
+global auth setup is needed. Other tests remain signed out.
+
+```ts
+import { expect, test } from "./fixtures";
+
+test.use({ screenshot: "off", trace: "off", video: "off" });
+test("admin can manage rental test listings", async ({ superAdminPage }) => {
+  await superAdminPage.goto("/admin/rentals");
+  await expect(superAdminPage.getByTestId("admin-rental-table")).toBeVisible();
+});
+```
+
+Run the **read-only** fixture proof from the repo root using ignored `.env.local`
+or trusted CI secrets (both commands intentionally opt in):
+
+```bash
+MDE_SUPER_ADMIN_QA=1 PW_SKIP_WEBSERVER=1 SMOKE_BASE_URL=http://localhost:3001 \
+  npx playwright test e2e/qa-super-admin-fixture.spec.ts --project=chromium --workers=1
+
+MDE_SUPER_ADMIN_QA=1 PW_SKIP_WEBSERVER=1 SMOKE_BASE_URL=https://www.mdeai.co \
+  npx playwright test e2e/qa-super-admin-fixture.spec.ts --project=chromium --workers=1
+```
+
+Playwright 1.61 defines `screenshot`, `trace` and `video` as injectable
+worker-scoped option fixtures. The safe/unsafe regression in
+`e2e/qa-playwright-artifact-options*.spec.ts` verifies the resolved values and
+the guard without signing into any account:
+
+```bash
+PW_SKIP_WEBSERVER=1 npx playwright test e2e/qa-playwright-artifact-options \
+  --project=chromium --workers=1 --retries=0
+```
+
+For debugging that needs screenshots, choose a non-admin synthetic identity in
+an isolated local run, not the privileged QA fixture. Do not upload those
+artifacts into ordinary CI reports.
+
+The existing Supabase helpers reject absent permanent QA accounts and never put
+privileged credentials in browser code. A consumer that omits
+`test.use({ screenshot: "off", trace: "off", video: "off" })` fails before login. Playwright may still create
+`error-context.md` on failure, so never publish authenticated `test-results/` or
+HTML reports even when recordings are disabled. Keep these runs **read-only by
+default**, and do not publish cookies, traces, screenshots or local error-context
+artifacts. For write tests, require an explicit task-specific opt-in, synthetic
+fixtures and verified cleanup; use separate identities for renter/broker and
+cross-user denial tests. A passing local test never proves production deployment.
+
 ## SAN-1193 — source-grounded live partner-signup smoke (opt-in)
 
 **Canonical issue:** [SAN-1193 · MDE Partner Signup — Autofill Business Details From a Website](https://linear.app/amo100/issue/SAN-1193). **Merged feature:** [PR #404](https://github.com/amoai-tech/mdeai/pull/404).
