@@ -1,0 +1,13 @@
+fileType: momentic/test/v2
+id: mde-rentals-renter-saved-guest-redirect
+description: "Read-only access check: guest cannot read another user's saved renter workspace."
+url: https://www.mdeai.co/app/me/saved
+labels:
+  - rentals
+  - renter
+  - auth
+  - read-only
+retries: 0
+steps:
+  - assert: "The signed-out visitor must sign in before opening private saved account content; no private saved listings or renter account details are exposed."
+  - assert: "The login route preserves a safe return destination for the saved renter area after authentication. Do not sign in or create data."
