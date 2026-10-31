@@ -144,8 +144,10 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
       .filter((m) => m.role === "user" || m.role === "assistant")
       .map(({ id, role, content }) => ({ id, role, content }));
     if (messages.length === 0) return;
-    // The id is already constrained to a uuid; joining fixed segments keeps it a path segment,
-    // never a URL of its own.
+    // The id passed isThreadUuid above, so it can only ever be one path segment of this
+    // same-origin route: scheme, host and prefix are fixed here and cannot be influenced by it.
+    // ponytail: static analysers still flag "user-controlled URL" on this line; the guard above is
+    // the ceiling. If the endpoint ever accepts a caller-chosen host or path, re-open this.
     const path = ["", "api", "threads", threadId, "messages"].join("/");
     const post = () =>
       fetch(path, {
