@@ -10,20 +10,38 @@ export function useSession() {
 
   useEffect(() => {
     const supabase = createClient();
+    let mounted = true;
+    let authRevision = 0;
 
-    supabase.auth.getUser().then(({ data: { user: current } }) => {
-      setUser(current);
-      setLoading(false);
-    });
-
+    // Subscribe first so an actual sign-in/sign-out cannot be lost while getUser runs.
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!mounted || event === "INITIAL_SESSION") return;
+      authRevision++;
       setUser(session?.user ?? null);
       setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    const initialRevision = authRevision;
+    void supabase.auth.getUser()
+      .then(({ data, error }) => {
+        // Never let the older initial read undo a newer auth event.
+        if (!mounted || authRevision !== initialRevision) return;
+        setUser(error ? null : data.user);
+        setLoading(false);
+      })
+      .catch(() => {
+        // A failed initial lookup must not hide guest navigation forever.
+        if (!mounted || authRevision !== initialRevision) return;
+        setUser(null);
+        setLoading(false);
+      });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   return { user, loading };

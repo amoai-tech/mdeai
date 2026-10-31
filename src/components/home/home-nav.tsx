@@ -92,7 +92,7 @@ export function HomeNav() {
 
         {/* Mobile authentication — visible without opening the menu. */}
         {!loading && (
-          <div className="ml-auto flex items-center gap-1 lg:hidden">
+          <div className="flex items-center gap-1 lg:hidden">
             {user ? (
               <Link
                 href="/app"
@@ -122,7 +122,7 @@ export function HomeNav() {
         {/* Mobile — Sheet handles animation + focus trap + Escape + aria-modal */}
         <Sheet open={open} onOpenChange={setOpen}>
           <SheetTrigger
-            className="flex size-11 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary lg:hidden"
+            className="ml-auto flex size-11 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary lg:hidden"
             aria-label="Open menu"
           >
             <MenuIcon className="size-5" aria-hidden="true" />

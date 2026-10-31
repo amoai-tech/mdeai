@@ -32,7 +32,14 @@ test.describe("SAN-1610 · Homepage account navigation", { tag: ["@auth", "@smok
       }
 
       if (width < 1024) {
-        await header.getByRole("button", { name: "Open menu" }).click();
+        const menuButton = header.getByRole("button", { name: "Open menu" });
+        const buttonBounds = await menuButton.boundingBox();
+        expect(buttonBounds, "Mobile menu must have a visible hit target").not.toBeNull();
+        expect(buttonBounds!.x).toBeGreaterThanOrEqual(0);
+        expect(buttonBounds!.x + buttonBounds!.width).toBeLessThanOrEqual(width);
+        expect(buttonBounds!.width).toBeGreaterThanOrEqual(44);
+        expect(buttonBounds!.height).toBeGreaterThanOrEqual(44);
+        await menuButton.click();
         const menu = page.getByRole("navigation", { name: "Mobile site verticals" });
         await expect(menu.getByRole("link", { name: "Saved" })).toBeVisible();
         await expect(menu.getByRole("link", { name: "Host an event" })).toBeVisible();
