@@ -30,10 +30,11 @@ test.describe("MDE role-selected, isolated QA sessions", () => {
 
   test.describe("event-host", () => {
     test.use({ qaRole: "event-host" });
-    test("uses the pre-existing standard QA account for ordinary signed-in navigation", async ({ qaRolePage }) => {
-      const response = await qaRolePage.goto("/saved");
+    test("uses the pre-existing QA host account for the actual event-host screen", async ({ qaRolePage }) => {
+      const response = await qaRolePage.goto("/host/events");
       expect(response?.status()).toBe(200);
-      await expect(qaRolePage.getByTestId("saved-page")).toBeVisible();
+      await expect(qaRolePage).toHaveURL(/\/host\/events$/);
+      await expect(qaRolePage.getByTestId("host-events")).toBeVisible();
     });
   });
 
