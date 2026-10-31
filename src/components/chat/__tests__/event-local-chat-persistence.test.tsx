@@ -26,6 +26,17 @@ vi.mock("@/components/chat/concierge-coagent-context", () => ({
   useConciergeCoAgent: () => ({ agent: mocks.state.agent }),
 }));
 
+const navigation = vi.hoisted(() => ({
+  current: null as null | {
+    sessionThreadId: string;
+    activeThreadId?: string;
+    markThreadSaved: (id: string) => void;
+  },
+}));
+vi.mock("@/lib/chat/thread-nav-context", () => ({
+  useOptionalThreadNav: () => navigation.current,
+}));
+
 import {
   EventLocalChatProvider,
   useEventLocalChat,
@@ -58,6 +69,7 @@ let fetchMock: ReturnType<typeof vi.fn>;
 beforeEach(() => {
   api = null;
   mocks.state.agent = { threadId: THREAD, addMessages: vi.fn() };
+  navigation.current = null;
   fetchMock = vi.fn(async () => new Response(JSON.stringify({ saved: 2 }), { status: 200 }));
   vi.stubGlobal("fetch", fetchMock);
   container = document.createElement("div");
@@ -148,6 +160,34 @@ describe("EventLocalChatProvider durable save", () => {
     expect(url).toMatch(/^\/api\/threads\/[0-9a-f-]{36}\/messages$/);
     // The agent object is not mutated; the generated id stays internal to this provider.
     expect(agent.threadId).toBeUndefined();
+  });
+
+  it("uses the tab's canonical thread when the agent has no id, and marks the saved chat", async () => {
+    const markThreadSaved = vi.fn();
+    navigation.current = { sessionThreadId: THREAD, markThreadSaved };
+    await renderWith({ threadId: undefined, addMessages: vi.fn() });
+
+    await act(async () => {
+      api!.showExchange("Find Italian restaurants", "3 restaurants found.");
+    });
+
+    expect(fetchMock.mock.calls[0][0]).toBe(`/api/threads/${THREAD}/messages`);
+    await vi.waitFor(() => expect(markThreadSaved).toHaveBeenCalledWith(THREAD));
+    expect(markThreadSaved).toHaveBeenCalledTimes(1);
+  });
+
+  it("never marks a failed history save as durable", async () => {
+    const markThreadSaved = vi.fn();
+    navigation.current = { sessionThreadId: THREAD, markThreadSaved };
+    await renderWith({ threadId: undefined, addMessages: vi.fn() });
+    fetchMock.mockResolvedValue(new Response("unavailable", { status: 503 }));
+
+    await act(async () => {
+      api!.showExchange("Find Italian restaurants", "3 restaurants found.");
+    });
+
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(markThreadSaved).not.toHaveBeenCalled();
   });
 
   it("retries a transient save failure once", async () => {

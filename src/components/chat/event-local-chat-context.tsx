@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import { useConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
+import { useOptionalThreadNav } from "@/lib/chat/thread-nav-context";
 
 export type EventLocalChatMessage = {
   id: string;
@@ -79,7 +80,10 @@ function isThreadUuid(value: string): boolean {
 function threadIdFor(
   agent: { threadId?: string } | undefined,
   generated: { current: string | null },
+  selectedThreadId?: string,
 ): string | null {
+  // The authenticated tab owns the canonical conversation ID, including the very first turn.
+  if (selectedThreadId && isThreadUuid(selectedThreadId)) return selectedThreadId;
   if (agent?.threadId && isThreadUuid(agent.threadId)) return agent.threadId;
   if (!generated.current) generated.current = crypto.randomUUID();
   return generated.current;
@@ -91,6 +95,9 @@ function nextId() {
 
 export function EventLocalChatProvider({ children }: { children: ReactNode }) {
   const { agent } = useConciergeCoAgent();
+  const threadNav = useOptionalThreadNav();
+  const selectedThreadId = threadNav?.activeThreadId ?? threadNav?.sessionThreadId;
+  const markThreadSaved = threadNav?.markThreadSaved;
   const [messages, setMessages] = useState<EventLocalChatMessage[]>([]);
   const [clarifyPending, setClarifyPending] = useState(false);
   const [clarifyKind, setClarifyKind] = useState<LocalClarifyKind | null>(null);
@@ -153,15 +160,17 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
         if (response.status >= 500) {
           // One retry: a transient failure must not be the reason an answer disappears.
           const retried = await post();
-          if (!retried.ok) console.warn(`[EventLocalChat] history save failed: ${retried.status}`);
+          if (retried.ok) markThreadSaved?.(threadId);
+          else console.warn(`[EventLocalChat] history save failed: ${retried.status}`);
           return;
         }
+        if (response.ok) markThreadSaved?.(threadId);
         if (!response.ok && response.status !== 401) {
           console.warn(`[EventLocalChat] history save failed: ${response.status}`);
         }
       })
       .catch((error) => console.warn("[EventLocalChat] history save failed", error));
-  }, []);
+  }, [markThreadSaved]);
 
   useEffect(() => {
     saveRef.current = save;
@@ -169,10 +178,10 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
 
   const persist = useCallback(
     (batch: EventLocalChatMessage[]) => {
-      const threadId = threadIdFor(agentRef.current, generatedThreadIdRef);
+      const threadId = threadIdFor(agentRef.current, generatedThreadIdRef, selectedThreadId);
       if (threadId) save(threadId, batch);
     },
-    [save],
+    [save, selectedThreadId],
   );
 
   const publishOrQueue = useCallback(
