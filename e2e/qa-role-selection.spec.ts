@@ -51,9 +51,11 @@ test.describe("MDE role-selected, isolated QA sessions", () => {
   test.describe("broker", () => {
     test.use({ qaRole: "broker" });
     test.skip(!process.env.MDE_QA_BROKER_EMAIL, "Configure an existing dedicated broker QA identity");
-    test("broker reaches the existing rental workspace", async ({ qaRolePage }) => {
+    test("broker sees the existing authorized rental workspace", async ({ qaRolePage }) => {
       const response = await qaRolePage.goto("/host/rentals");
       expect(response?.status()).toBe(200);
+      await expect(qaRolePage).toHaveURL(/\/host\/rentals$/);
+      await expect(qaRolePage.getByTestId("rentals-broker-workspace")).toBeVisible();
     });
   });
 });
