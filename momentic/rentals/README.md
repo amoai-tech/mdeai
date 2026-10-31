@@ -7,7 +7,7 @@ Momentic v2 YAML tests complement, **not replace**, MDE's existing Playwright in
 | User role | Route | Coverage owner | Current Momentic status |
 | --- | --- | --- | --- |
 | Renter (guest) | `/`, `/rentals` | Existing `exact-bedroom-filter.test.yaml` | Existing pilot; first real CLI run not yet proven complete |
-| Renter (guest) | `/rentals?neighborhood=Laureles&beds=2` → `/rentals/[id]` | `search-to-details.test.yaml` | Authored; pending CLI execution |
+| Renter (guest) | `/rentals?neighborhood=Laureles&beds=2` → in-page Details panel/sheet | `search-to-details.test.yaml` | Authored; pending CLI execution; `/rentals/[id]` is a separate direct route |
 | Renter (guest) | Rentals card → Schedule viewing form | `viewing-form-no-submit.test.yaml` | Authored; pending CLI execution; **never submits** |
 | Renter (guest) | `/app/me/saved` → login return | `renter-saved-guest-redirect.test.yaml` | Authored; pending CLI execution |
 | Broker (guest) | `/app/rentals` → login return | `broker-guest-redirect.test.yaml` | Authored; pending CLI execution |
