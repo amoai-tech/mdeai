@@ -9,5 +9,7 @@ labels:
   - read-only
 retries: 0
 steps:
-  - assert: "The signed-out visitor must sign in before opening private saved account content; no private saved listings or renter account details are exposed."
-  - assert: "The login route preserves a safe return destination for the saved renter area after authentication. Do not sign in or create data."
+  - waitForUrl:
+      substring: /login?next=%2Fapp%2Fme%2Fsaved
+      timeout: 12000
+  - assert: "The login screen is visible and does not expose private saved listings or renter account details. Do not sign in, create data, or submit anything."
