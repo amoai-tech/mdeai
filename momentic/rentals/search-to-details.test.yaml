@@ -1,0 +1,15 @@
+fileType: momentic/test/v2
+id: mde-rentals-search-to-details
+description: "Read-only renter journey: exact Laureles search results open matching apartment details."
+url: https://www.mdeai.co/rentals?neighborhood=Laureles&beds=2
+labels:
+  - rentals
+  - renter
+  - read-only
+retries: 0
+steps:
+  - assert: "The Rentals search page has loaded with Laureles and 2 bedrooms selected, and at least one rental result is visible. Do not pass based on skeleton/loading cards."
+  - assert: "Every loaded apartment result has exactly 2 bedrooms. The card text does not claim confirmed availability when availability is unconfirmed."
+  - click: "Details on the first actual 2 bedroom apartment result card in the Rentals results"
+  - assert: "The selected apartment's Details view is open. Its bedrooms, name, and neighborhood are consistent with the apartment card selected, not another listing."
+  - assert: "A renter can find a Schedule viewing action or a clearly labeled original-source listing action. Do not claim a viewing was booked."
