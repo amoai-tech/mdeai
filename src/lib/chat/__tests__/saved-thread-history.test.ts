@@ -254,6 +254,24 @@ describe("mapSavedThreadHistory — repeats already saved before the fix", () =>
     ).toEqual(["user:ok", "assistant:first answer", "user:ok", "assistant:second answer"]);
   });
 
+  it("keeps consecutive identical fast-path questions and answers with separate submission IDs", () => {
+    // Both assistant answers are written immediately by the fast path (1 ms after
+    // the question), unlike a model response. Only the submission UUID differentiates them.
+    expect(
+      shown([
+        r("local-aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa-user", "user", "Show Italian restaurants", 0),
+        r("local-aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa-assistant", "assistant", "Found 5", 1),
+        r("local-bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb-user", "user", "Show Italian restaurants", 8_000),
+        r("local-bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb-assistant", "assistant", "Found 5", 8_001),
+      ]),
+    ).toEqual([
+      "user:Show Italian restaurants",
+      "assistant:Found 5",
+      "user:Show Italian restaurants",
+      "assistant:Found 5",
+    ]);
+  });
+
   it("the same question asked twice with the same answer both times is kept (seconds apart)", () => {
     expect(
       shown([

@@ -164,6 +164,12 @@ export function mapSavedThreadHistory(
  */
 const SAME_BATCH_MS = 500;
 
+// New Ask MDE submissions carry a unique UUID shared by their user/assistant messages.
+// The DB already enforces unique message IDs for retries; unlike legacy re-saved history,
+// two different UUIDs represent two different user actions, even when their text matches.
+const STABLE_SUBMISSION_MESSAGE_ID =
+  /^local-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-(user|assistant)$/i;
+
 /** What makes two stored messages "the same message", ignoring their ids. */
 function messageKey(m: SavedThreadMessage): string {
   if (m.role === "tool") return `tool\u0000${m.content}`;
@@ -196,6 +202,10 @@ function dropRepeatedTurns(
   const seenAt = new Map<string, number[]>();
   const keep = messages.map((_, i) => {
     const earlier = seenAt.get(keys[i]) ?? [];
+    if (STABLE_SUBMISSION_MESSAGE_ID.test(messages[i].id)) {
+      seenAt.set(keys[i], [...earlier, i]);
+      return true; // distinct submission UUID; never apply legacy text-based collapse
+    }
     const repeat = earlier.some(
       (j) =>
         (i > 0 && j > 0 && keys[i - 1] === keys[j - 1] && sameBatch(i, i - 1)) ||

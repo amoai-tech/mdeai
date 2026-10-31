@@ -126,6 +126,9 @@ describe("EventLocalChatProvider durable save", () => {
     expect(bodies[0].messages.map((m) => m.id)).toEqual(bodies[1].messages.map((m) => m.id));
     expect(bodies[2].messages[0].id).not.toBe(bodies[0].messages[0].id);
     expect(bodies[0].messages[0].id).toContain(key1);
+    // The retry must not duplicate the local transcript or CopilotKit's messages.
+    expect(api!.messages).toHaveLength(4);
+    expect((mocks.state.agent as { addMessages: ReturnType<typeof vi.fn> }).addMessages).toHaveBeenCalledTimes(2);
   });
 
   it("does not persist a signed-out sign-in prompt", async () => {

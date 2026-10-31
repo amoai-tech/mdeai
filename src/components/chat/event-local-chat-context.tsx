@@ -108,6 +108,8 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
   const [clarifyKind, setClarifyKind] = useState<LocalClarifyKind | null>(null);
   const [signInPrompt, setSignInPrompt] = useState(false);
   const pendingAgentMessagesRef = useRef<EventLocalChatMessage[]>([]);
+  // A retried submit keeps the same ids; publish each logical message to CopilotKit once.
+  const publishedMessageIdsRef = useRef(new Set<string>());
   const generatedThreadIdRef = useRef<string | null>(null);
   // Declared as a ref because the flush effect runs above the callbacks that implement saving.
   const saveRef = useRef<(threadId: string, batch: EventLocalChatMessage[]) => void>(() => {});
@@ -119,9 +121,12 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!agent || pendingAgentMessagesRef.current.length === 0) return;
-    const pending = [...pendingAgentMessagesRef.current];
+    const pending = pendingAgentMessagesRef.current.filter(
+      (message) => !publishedMessageIdsRef.current.has(message.id),
+    );
     try {
-      agent.addMessages(pending);
+      if (pending.length > 0) agent.addMessages(pending);
+      pending.forEach((message) => publishedMessageIdsRef.current.add(message.id));
       pendingAgentMessagesRef.current = [];
     } catch (error) {
       console.error(
@@ -193,11 +198,17 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
 
   const publishOrQueue = useCallback(
     (nextMessages: EventLocalChatMessage[]) => {
+      const queuedIds = new Set(pendingAgentMessagesRef.current.map((m) => m.id));
+      const fresh = nextMessages.filter(
+        (message) => !publishedMessageIdsRef.current.has(message.id) && !queuedIds.has(message.id),
+      );
+      if (fresh.length === 0) return;
       if (agentRef.current) {
-        agentRef.current.addMessages(nextMessages);
+        agentRef.current.addMessages(fresh);
+        fresh.forEach((message) => publishedMessageIdsRef.current.add(message.id));
         return;
       }
-      pendingAgentMessagesRef.current.push(...nextMessages);
+      pendingAgentMessagesRef.current.push(...fresh);
     },
     [],
   );
@@ -254,7 +265,10 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
       setClarifyPending(false);
       setClarifyKind(null);
       setSignInPrompt(false);
-      setMessages((prev) => [...prev, ...nextMessages]);
+      setMessages((prev) => {
+        const seen = new Set(prev.map((m) => m.id));
+        return [...prev, ...nextMessages.filter((m) => !seen.has(m.id))];
+      });
       publishSafely(nextMessages);
       persist(nextMessages);
     },
