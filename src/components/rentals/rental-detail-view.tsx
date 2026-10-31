@@ -362,6 +362,17 @@ function RentalDetailInner({ detail, backHref }: { detail: RentalDetail; backHre
 
           <RentalSpecs detail={detail} />
 
+          {/* A persisted apartment can start a draft booking review without any payment. */}
+          {detail.status !== "development-preview" ? (
+            <Link
+              href={`/rentals/bookings/new?apartment=${encodeURIComponent(detail.id)}`}
+              data-testid="rental-detail-booking-review-link"
+              className="inline-flex max-w-full items-center rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted"
+            >
+              Review booking (no payment yet)
+            </Link>
+          ) : null}
+
           <RentalDescription description={detail.description} />
 
           <section aria-label="Amenities">
