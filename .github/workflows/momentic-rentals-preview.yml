@@ -201,7 +201,7 @@ jobs:
           elif [[ "$VERIFIED" != true ]]; then
             result="BLOCKED — no verified READY preview (0/5 executed)"
           elif [[ "$ACCESSIBLE" != true ]]; then
-            result="BLOCKED — SSO-protected preview (0/5 executed); browser secrets withheld"
+            result="BLOCKED — preview protected or unavailable (0/5 executed); browser secrets withheld"
           elif [[ "$INSTALLED" != true ]]; then
             result="BLOCKED — trusted tests unavailable (0/5 executed)"
           else

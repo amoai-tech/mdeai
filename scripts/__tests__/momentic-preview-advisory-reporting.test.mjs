@@ -19,8 +19,9 @@ test('all five read-only Momentic journeys must finish before PASS is reported',
 });
 
 test('an inaccessible preview is reported BLOCKED, not a passing browser test', () => {
-  assert.match(workflow, /BLOCKED — SSO-protected preview \(0\/5 executed\)/);
+  assert.match(workflow, /BLOCKED — preview protected or unavailable \(0\/5 executed\)/);
   assert.match(workflow, /BLOCKED — no verified READY preview \(0\/5 executed\)/);
+  assert.doesNotMatch(workflow, /BLOCKED — SSO-protected preview/, "network/HTTP failures are not proof of SSO");
   assert.match(workflow, /Advisory, not a required merge check/);
   assert.match(workflow, /-f conclusion=neutral/);
 });
