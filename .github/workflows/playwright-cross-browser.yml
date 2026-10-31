@@ -50,6 +50,9 @@ jobs:
             --project=critical-cross-browser-webkit \
             --workers=1
 
+      - name: Remove private authenticated QA outputs before artifact upload
+        if: always()
+        run: node scripts/sanitize-playwright-qa-artifacts.mjs
       - name: Upload Playwright failure artifacts
         if: failure()
         uses: actions/upload-artifact@v4
