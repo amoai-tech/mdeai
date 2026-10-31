@@ -92,7 +92,12 @@ export function DiscoveryWorkspace(props: DiscoveryWorkspaceProps) {
         </div>
 
         {notice}
-        <div className="px-4 pb-24 sm:px-6 lg:pb-6">{children}</div>
+        {/* Extra phone scroll room lets the last card's buttons move above the
+            sticky composer + floating tab bar instead of being covered. */}
+        <div className={cn(
+          "px-4 sm:px-6 lg:pb-6",
+          hasMobileNav && askComposer ? "pb-64 sm:pb-24" : "pb-24",
+        )}>{children}</div>
 
         {askComposer ? (
           <div
