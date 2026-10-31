@@ -101,10 +101,18 @@ vi.mock("@/lib/supabase/service", () => ({
                     return { data: inserted.map((row) => ({ id: row.id })), error: null };
                   });
                 }
+                // Duplicate guard: select("role, content").eq(thread).order().limit()
+                const recent = (threadId: string) => ({
+                  data: [...db.rows, ...db.otherThreadRows].filter((row) => row.thread_id === threadId),
+                  error: null,
+                });
                 return {
                   in: async (_column: string, ids: string[]) => ({
                     data: [...db.rows, ...db.otherThreadRows].filter((row) => ids.includes(String(row.id))),
                     error: null,
+                  }),
+                  eq: (_column: string, value: string) => ({
+                    order: () => ({ limit: async () => recent(value) }),
                   }),
                 };
               },
@@ -337,7 +345,25 @@ describe("SAN-1531 POST /api/threads/[threadId]/messages", () => {
       expect(JSON.parse(String(db.rows[0].content)).parts[0].text).toHaveLength(long.length);
     });
 
-    it("keeps content when another thread already uses the same client id", async () => {
+    it("does not store the same exchange twice when a retry uses new ids", async () => {
+    signInAs(OWNER);
+    db.threads.set(THREAD, { id: THREAD, resourceId: OWNER });
+
+    await save(THREAD, exchange);
+    // A client retry after a reconnect re-generates ids for the very same text.
+    const retried = {
+      messages: [
+        { id: "local-9-user", role: "user", content: "Find Italian restaurants in El Poblado." },
+        { id: "local-9-assistant", role: "assistant", content: "3 Italian spots in El Poblado." },
+      ],
+    };
+    const response = await save(THREAD, retried);
+
+    expect(await response.json()).toMatchObject({ saved: 0 });
+    expect(db.rows).toHaveLength(2);
+  });
+
+  it("keeps content when another thread already uses the same client id", async () => {
       signInAs(OWNER);
       db.threads.set(THREAD, { id: THREAD, resourceId: OWNER });
       db.otherThreadRows.push({ id: "local-1-user", thread_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" });

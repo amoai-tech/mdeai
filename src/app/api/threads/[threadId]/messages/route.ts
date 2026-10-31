@@ -95,6 +95,20 @@ export async function GET(
   );
 }
 
+/** The text a stored row shows, for duplicate detection. */
+function storedText(raw: unknown): string {
+  if (typeof raw !== "string") return "";
+  try {
+    const parsed = JSON.parse(raw) as { parts?: Array<{ type?: string; text?: string }> };
+    return (parsed.parts ?? [])
+      .filter((part) => part.type === "text" && typeof part.text === "string")
+      .map((part) => part.text as string)
+      .join("");
+  } catch {
+    return "";
+  }
+}
+
 /** Mastra stores message parts in this shape; the history reader parses it. */
 function mastraTextContent(text: string): string {
   return JSON.stringify({ format: 2, parts: [{ type: "text", text }] });
@@ -223,9 +237,30 @@ async function persistExchange(
     };
   });
 
+  // A retried submit creates fresh message ids for the same exchange, so id-only idempotency let
+  // the same question appear twice after a refresh (seen in production). Compare the text the
+  // thread already shows before inserting again.
+  const { data: recentRows, error: recentError } = await service
+    .from("mastra_messages")
+    .select("role, content")
+    .eq("thread_id", threadId)
+    .order("createdAt", { ascending: false })
+    .limit(50);
+  if (recentError) {
+    console.error("[/api/threads/messages] duplicate lookup", recentError.message);
+    return { error: "Could not save messages" };
+  }
+  const alreadyShown = new Set(
+    ((recentRows ?? []) as Array<{ role: string; content: unknown }>).map(
+      (row) => `${row.role}:${storedText(row.content).trim()}`,
+    ),
+  );
+  const fresh = rows.filter((row) => !alreadyShown.has(`${row.role}:${storedText(row.content).trim()}`));
+  if (fresh.length === 0) return { saved: 0, createdThread };
+
   const { data: inserted, error } = await service
     .from("mastra_messages")
-    .upsert(rows, { onConflict: "id", ignoreDuplicates: true })
+    .upsert(fresh, { onConflict: "id", ignoreDuplicates: true })
     .select("id");
   if (error) {
     console.error("[/api/threads/messages] save", error.message);
