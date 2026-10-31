@@ -179,6 +179,13 @@ for (const size of [{ name: "desktop", width: 1440, height: 900 }, { name: "mobi
           "What is the exact name of the place I have selected NOW? Use its verified current record, not the previous item.", 2);
         expect(secondReply.toLocaleLowerCase()).toContain(b.toLocaleLowerCase());
 
+        // After a mobile AI reply, the sticky composer/nav can cover the selected
+        // card's Clear button. Emulate a real user's deliberate scroll back to
+        // the card; Playwright's automatic viewport visibility does not account
+        // for sticky overlays. Do not force-click or bypass pointer hit testing.
+        if (size.width === 390) {
+          await select(second).evaluate((button) => button.scrollIntoView({ block: "center", inline: "nearest" }));
+        }
         await select(second).click();
         await expect(select(second)).toHaveAttribute("aria-pressed", "false");
         const clearedReply = await ask(page, scenario.route,
