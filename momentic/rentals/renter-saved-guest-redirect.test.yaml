@@ -1,5 +1,5 @@
 fileType: momentic/test/v2
-id: mde-rentals-renter-saved-guest-redirect
+id: mde-rentals-saved-guest-redirect
 description: "Read-only access check: guest cannot read another user's saved renter workspace."
 url: https://www.mdeai.co/app/me/saved
 labels:
