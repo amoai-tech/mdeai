@@ -167,8 +167,24 @@ const SAME_BATCH_MS = 500;
 // New Ask MDE submissions carry a unique UUID shared by their user/assistant messages.
 // The DB already enforces unique message IDs for retries; unlike legacy re-saved history,
 // two different UUIDs represent two different user actions, even when their text matches.
-const STABLE_SUBMISSION_MESSAGE_ID =
-  /^local-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-(user|assistant)$/i;
+function isStableSubmissionMessageId(id: string): boolean {
+  const suffix = id.endsWith("-user") ? "-user" : id.endsWith("-assistant") ? "-assistant" : null;
+  const prefix = "local-";
+  if (!suffix || !id.startsWith(prefix) || id.length !== prefix.length + 36 + suffix.length) return false;
+
+  // Fixed-size UUID check; no regex on message IDs received from storage.
+  let cursor = prefix.length;
+  for (const partLength of [8, 4, 4, 4, 12]) {
+    for (let index = 0; index < partLength; index++) {
+      const code = id.charCodeAt(cursor++);
+      const isHex =
+        (code >= 48 && code <= 57) || (code >= 65 && code <= 70) || (code >= 97 && code <= 102);
+      if (!isHex) return false;
+    }
+    if (cursor < prefix.length + 36 && id[cursor++] !== "-") return false;
+  }
+  return true;
+}
 
 /** What makes two stored messages "the same message", ignoring their ids. */
 function messageKey(m: SavedThreadMessage): string {
@@ -202,7 +218,7 @@ function dropRepeatedTurns(
   const seenAt = new Map<string, number[]>();
   const keep = messages.map((_, i) => {
     const earlier = seenAt.get(keys[i]) ?? [];
-    if (STABLE_SUBMISSION_MESSAGE_ID.test(messages[i].id)) {
+    if (isStableSubmissionMessageId(messages[i].id)) {
       seenAt.set(keys[i], [...earlier, i]);
       return true; // distinct submission UUID; never apply legacy text-based collapse
     }

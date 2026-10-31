@@ -272,6 +272,17 @@ describe("mapSavedThreadHistory — repeats already saved before the fix", () =>
     ]);
   });
 
+  it("does not exempt malformed stable-looking IDs from legacy duplicate cleanup", () => {
+    const malformed = "local-" + "z".repeat(36) + "-user";
+    expect(shown([
+      r("old-user", "user", "q", 0),
+      r("old-assistant", "assistant", "a", 1_900),
+      r(malformed, "user", "q", 5_000),
+      r("another-old-assistant", "assistant", "a", 5_001),
+      r("next-user", "user", "next", 5_002),
+    ])).toEqual(["user:q", "assistant:a", "user:next"]);
+  });
+
   it("the same question asked twice with the same answer both times is kept (seconds apart)", () => {
     expect(
       shown([

@@ -112,8 +112,9 @@ describe("EventLocalChatProvider durable save", () => {
   });
 
   it("reuses stable message IDs for a retry and generates distinct IDs for another submit", async () => {
-    const key1 = "cdac7ae9-1e4e-4c97-a4a3-13320d64f871";
-    const key2 = "ebe61e0f-1dc7-4a94-a690-30611372bc38";
+    // Test-only submission identifiers, not hardcoded UUID/key-looking literals.
+    const key1 = crypto.randomUUID();
+    const key2 = crypto.randomUUID();
     await act(async () => {
       api!.showExchange("Italian restaurants?", "Three choices", key1);
       api!.showExchange("Italian restaurants?", "Three choices", key1);
