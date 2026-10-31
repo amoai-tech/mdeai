@@ -225,9 +225,12 @@ export function RentalCard({
         <p className="mt-1 text-xs text-muted-foreground">{availability}</p>
       ) : null}
 
-      <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">
-        {matchReason}
-      </p>
+      {matchReason ? (
+        <p className="mt-2 line-clamp-2 text-xs text-muted-foreground" data-testid="rental-match-reason">
+          <span className="font-medium text-foreground">Why it may fit:</span>{" "}
+          {matchReason}
+        </p>
+      ) : null}
 
       {tags?.includes("self-attested") ? (
         <div className="mt-2 flex flex-wrap gap-1">
