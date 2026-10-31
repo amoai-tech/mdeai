@@ -5,7 +5,7 @@ export type QaRole = "anonymous" | "super-admin" | "event-host" | "renter" | "br
 
 export function resolveQaRoleEmail(
   role: QaRole,
-  env: Pick<NodeJS.ProcessEnv, "MDE_QA_RENTER_EMAIL" | "MDE_QA_BROKER_EMAIL"> = process.env,
+  env: Partial<Pick<NodeJS.ProcessEnv, "MDE_QA_RENTER_EMAIL" | "MDE_QA_BROKER_EMAIL">> = process.env,
 ): string | null {
   if (role === "anonymous") return null;
   if (role === "super-admin") return QA_SUPER_ADMIN_EMAIL;
