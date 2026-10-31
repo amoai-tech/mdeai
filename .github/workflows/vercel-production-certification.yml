@@ -189,37 +189,10 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: npm run test:e2e:prod-candidate-certification
 
-      # Diagnostic only. `if: always()` keeps a failed certification visible as `failure` on the
-      # commit; `target_url` points the "Details" link at this run, because the candidate is a
-      # throwaway URL that no longer exists once the deployment is cleaned up.
-      - name: Publish certification result
-        if: always()
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SHA: ${{ env.VERCEL_DEPLOYMENT_SHA }}
-          CERTIFY_OUTCOME: ${{ steps.certify.outcome }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          set -euo pipefail
-          if [ "${CERTIFY_OUTCOME}" = "success" ]; then
-            state=success
-            # SAN-1367: names exactly what passed (runtime) and exactly what was not evaluated
-            # (marketplace inventory). GitHub caps a commit-status description at 140 characters.
-            description="Candidate runtime certified. Marketplace inventory not evaluated."
-          else
-            state=failure
-            description="Candidate runtime certification failed — not promoted"
-          fi
-          gh api "repos/${GITHUB_REPOSITORY}/statuses/${SHA}" \
-            -f state="${state}" \
-            -f context=production-certification \
-            -f description="${description}" \
-            -f target_url="${RUN_URL}" >/dev/null
-          echo "published production-certification=${state} for ${SHA}"
-
       # The tests above take minutes. Re-read the domain records and the auto-assign setting right before
       # the one command that can change production, so a change made meanwhile stops the release (SAN-1402).
       - name: Re-confirm the candidate is still staged right before promotion
+        id: final_staged
         if: ${{ success() && steps.certify.outcome == 'success' }}
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -228,6 +201,7 @@ jobs:
       # Fresh GitHub main check INSIDE the promotion step: the trusted checkout may be minutes old.
       # This step alone can change production aliases, and only after exact-candidate certification.
       - name: Promote the exact certified deployment
+        id: promote
         if: ${{ success() && steps.certify.outcome == 'success' }}
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -251,6 +225,7 @@ jobs:
           fi
 
       - name: Verify www.mdeai.co serves the exact certified deployment
+        id: verify_promoted
         if: ${{ success() }}
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -260,8 +235,42 @@ jobs:
       # Three-minute post-promotion watch catches the observed ~2.5-minute delayed takeover;
       # the hourly read-only monitor detects later drift without a second promotion system.
       - name: Verify production aliases remain stable after promotion
+        id: verify_stable
         if: ${{ success() }}
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node .trusted/scripts/vercel-release-control.mjs assert-stable
+
+      # Publish once, AFTER the final staged check, actual promotion, both domain checks,
+      # and the stability window. Previously this was posted immediately after the runtime
+      # test, so GitHub could show success even though assert-staged later failed.
+      # The commit status is diagnostic; the canonical release owner remains this job.
+      - name: Publish final release certification result
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHA: ${{ env.VERCEL_DEPLOYMENT_SHA }}
+          CERTIFY_OUTCOME: ${{ steps.certify.outcome }}
+          STAGED_OUTCOME: ${{ steps.final_staged.outcome }}
+          PROMOTE_OUTCOME: ${{ steps.promote.outcome }}
+          VERIFIED_OUTCOME: ${{ steps.verify_promoted.outcome }}
+          STABLE_OUTCOME: ${{ steps.verify_stable.outcome }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          if [[ "$CERTIFY_OUTCOME" == success && "$STAGED_OUTCOME" == success &&
+                "$PROMOTE_OUTCOME" == success && "$VERIFIED_OUTCOME" == success &&
+                "$STABLE_OUTCOME" == success ]]; then
+            state=success
+            description="Runtime certified, exact deployment promoted and domains stable; marketplace not evaluated."
+          else
+            state=failure
+            description="Release verification incomplete or failed; inspect workflow before reporting success."
+          fi
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${SHA}" \
+            -f state="${state}" \
+            -f context=production-certification \
+            -f description="${description}" \
+            -f target_url="${RUN_URL}" >/dev/null
+          echo "published final production-certification=${state} for ${SHA}"
