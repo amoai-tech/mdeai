@@ -30,15 +30,23 @@ type SharedWorkerFixtures = {
   authStorageState: AuthStorageState;
 };
 
+/**
+ * Resolved Playwright 1.61 worker options: do not remove these checks.
+ * They are real injectable fixtures, verified in the hermetic E2E regression.
+ */
+export function assertSuperAdminRecordingOff(
+  screenshot: unknown,
+  trace: unknown,
+  video: unknown,
+): void {
+  if (screenshot !== "off" || trace !== "off" || video !== "off") {
+    throw new Error('Super Admin QA requires test.use({ screenshot: "off", trace: "off", video: "off" })');
+  }
+}
+
 /** Mark protected reports so CI removes them before uploading any artifacts. */
 function markPrivateQaOutput(outputPath: (file: string) => string): void {
   writeFileSync(outputPath("mde-private-qa.marker"), "PRIVATE_QA_ARTIFACTS\n");
-}
-
-function requireNoRecording(screenshot: unknown, trace: unknown, video: unknown): void {
-  if (screenshot !== "off" || trace !== "off" || video !== "off") {
-    throw new Error('Authenticated QA requires test.use({ screenshot: "off", trace: "off", video: "off" })');
-  }
 }
 
 export const test = base.extend<SharedFixtures, SharedWorkerFixtures>({
@@ -76,7 +84,7 @@ export const test = base.extend<SharedFixtures, SharedWorkerFixtures>({
   ) => {
     const email = resolveQaRoleEmail(qaRole);
     if (email) {
-      requireNoRecording(screenshot, trace, video);
+      assertSuperAdminRecordingOff(screenshot, trace, video);
       markPrivateQaOutput((name) => testInfo.outputPath(name));
     }
     if (!baseURL) throw new Error("QA role fixture requires a Playwright baseURL");
@@ -99,7 +107,7 @@ export const test = base.extend<SharedFixtures, SharedWorkerFixtures>({
     }
   },
   superAdminPage: async ({ browser, contextOptions, baseURL, screenshot, trace, video }, runFixture, testInfo) => {
-    requireNoRecording(screenshot, trace, video);
+    assertSuperAdminRecordingOff(screenshot, trace, video);
     markPrivateQaOutput((name) => testInfo.outputPath(name));
     if (!baseURL) {
       throw new Error("Super Admin QA requires a Playwright baseURL");

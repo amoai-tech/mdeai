@@ -174,6 +174,20 @@ MDE_SUPER_ADMIN_QA=1 PW_SKIP_WEBSERVER=1 SMOKE_BASE_URL=https://www.mdeai.co \
   npx playwright test e2e/qa-super-admin-fixture.spec.ts --project=chromium --workers=1
 ```
 
+Playwright 1.61 defines `screenshot`, `trace` and `video` as injectable
+worker-scoped option fixtures. The safe/unsafe regression in
+`e2e/qa-playwright-artifact-options*.spec.ts` verifies the resolved values and
+the guard without signing into any account:
+
+```bash
+PW_SKIP_WEBSERVER=1 npx playwright test e2e/qa-playwright-artifact-options \
+  --project=chromium --workers=1 --retries=0
+```
+
+For debugging that needs screenshots, choose a non-admin synthetic identity in
+an isolated local run, not the privileged QA fixture. Do not upload those
+artifacts into ordinary CI reports.
+
 The existing Supabase helpers reject absent permanent QA accounts and never put
 privileged credentials in browser code. A consumer that omits
 `test.use({ screenshot: "off", trace: "off", video: "off" })` fails before login. Playwright may still create

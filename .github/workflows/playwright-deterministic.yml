@@ -315,6 +315,15 @@ jobs:
           PLAYWRIGHT_WEB_SERVER_COMMAND: npm run dev:ui:worktree
         run: npm run test:e2e:auth
 
+      # Playwright's screenshot/trace/video are real worker option fixtures.
+      # Prove both safe and unsafe modes without any user session or web server.
+      - name: Prove Super Admin recording guard with real Playwright option fixtures
+        env:
+          PW_SKIP_WEBSERVER: "1"
+        run: >-
+          npx playwright test e2e/qa-playwright-artifact-options
+          --project=chromium --workers=1 --retries=0 --reporter=list
+
       # This job has no production credentials, but limit retained diagnostics.
       - name: Remove private authenticated QA outputs before artifact upload
         if: always()
