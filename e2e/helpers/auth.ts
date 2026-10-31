@@ -306,7 +306,10 @@ export async function deleteThrowawayIdentity(identity: ThrowawayIdentity): Prom
  * Mint a real Supabase session for a test user via admin magic-link → verifyOtp.
  * Retries to absorb magic-link flakiness. Never logs key values.
  */
-export async function getTestSession(email = QA_HOST_EMAIL): Promise<Session> {
+export async function getTestSession(
+  email = QA_HOST_EMAIL,
+  options: { requireExisting?: boolean } = {},
+): Promise<Session> {
   const { url, anon } = supabaseEnv();
   if (!url || !anon) {
     throw new Error("E2E Supabase env missing (url/anon)");
@@ -318,7 +321,7 @@ export async function getTestSession(email = QA_HOST_EMAIL): Promise<Session> {
   // silently create an auth user. Explicitly provisioned throwaway identities
   // are handled by their existing creation/cleanup flows.
   const permanentQaEmails = [QA_HOST_EMAIL, QA_SUPER_ADMIN_EMAIL];
-  if (permanentQaEmails.includes(email.toLowerCase())) {
+  if (options.requireExisting || permanentQaEmails.includes(email.toLowerCase())) {
     let page = 1;
     let found = false;
     while (true) {
@@ -421,10 +424,11 @@ export async function signInAsOnOrigin(
   page: Page,
   origin: string,
   email = QA_HOST_EMAIL,
+  options: { requireExisting?: boolean } = {},
 ): Promise<Session> {
   // Accept a bare host as well as a full origin; default to https.
   const parsed = new URL(origin.includes("://") ? origin : `https://${origin}`);
-  const session = await getTestSession(email);
+  const session = await getTestSession(email, options);
   await injectSession(page.context(), session, {
     host: parsed.hostname,
     secure: parsed.protocol === "https:",
