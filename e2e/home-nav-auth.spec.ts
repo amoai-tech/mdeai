@@ -1,5 +1,5 @@
-import { test, expect } from "./fixtures";
-import { hasE2eEnv } from "./helpers/auth";
+import { test, expect } from "@playwright/test";
+import { hasE2eEnv, signInAsOnOrigin } from "./helpers/auth";
 
 // Authenticated QA pages must never save session-bearing traces or screenshots.
 test.use({ screenshot: "off", trace: "off", video: "off" });
@@ -72,11 +72,14 @@ test.describe("SAN-1610 · Homepage account navigation", { tag: ["@auth", "@smok
   }
 
   test.describe("real Supabase session", () => {
-    // No synthetic user roles or client-side auth mocks. Shared QA fixture is read-only.
+    // Use a real existing QA identity. Scope its session cookie to the tested origin,
+    // not the localhost-only authenticatedPage fixture.
     test.skip(!hasE2eEnv(), "Needs existing Supabase QA identity and service key in ignored local env");
 
     for (const width of [390, 1440]) {
-      test(`signed-in account link opens /app at ${width}px`, async ({ authenticatedPage: page }) => {
+      test(`signed-in account link opens /app at ${width}px`, async ({ page, baseURL }) => {
+        if (!baseURL) throw new Error("Signed-in header QA needs a configured baseURL");
+        await signInAsOnOrigin(page, baseURL);
         await page.setViewportSize({ width, height: 844 });
         await page.goto("/");
         const header = page.getByRole("banner");
