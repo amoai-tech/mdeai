@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 
 const MARKER = "mde-private-qa.marker";
 
-function hasPrivateMarker(directory: string): boolean {
+function hasPrivateMarker(directory) {
   if (!existsSync(directory)) return false;
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
     if (entry.name === MARKER && entry.isFile()) return true;
@@ -19,7 +19,7 @@ function hasPrivateMarker(directory: string): boolean {
   return false;
 }
 
-export function sanitizePlaywrightQaArtifacts(root: string): boolean {
+export function sanitizePlaywrightQaArtifacts(root) {
   const target = resolve(root);
   if (!hasPrivateMarker(join(target, "test-results"))) return false;
   for (const rel of ["test-results", "tmp/playwright-report", "blob-report"]) {
