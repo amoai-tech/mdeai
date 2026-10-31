@@ -67,16 +67,20 @@ export async function createApartmentBookingIntent(
   userId: string,
   input: BookingIntentInput,
 ): Promise<BookingIntentResult> {
-  // Read the listing first so an unknown apartment answers 404 rather than a bare insert
-  // failure, and so the booking keeps the listing's own title at creation time.
-  const apartment = await store.findApartment(input.apartmentId);
-  if (!apartment) {
-    return { ok: false, code: "APARTMENT_NOT_FOUND" };
-  }
-
+  // Resolve an already-committed intent BEFORE reading the listing. A retry must resume the
+  // booking it created even if the apartment has since become unreadable (unpublished,
+  // deleted, or temporarily RLS-hidden), and reusing the key for another apartment must be a
+  // conflict rather than a misleading 404.
   const existing = await store.findBookingByKey(userId, input.idempotencyKey);
   if (existing) {
     return sameRequest(existing, input) ? replay(existing) : { ok: false, code: "IDEMPOTENCY_CONFLICT" };
+  }
+
+  // Only a genuinely new intent needs the listing: reading it proves the renter can see it,
+  // and its title is captured on the booking at creation time.
+  const apartment = await store.findApartment(input.apartmentId);
+  if (!apartment) {
+    return { ok: false, code: "APARTMENT_NOT_FOUND" };
   }
 
   const inserted = await store.insertBooking({

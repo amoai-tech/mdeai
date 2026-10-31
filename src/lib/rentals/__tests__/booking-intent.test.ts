@@ -9,14 +9,27 @@ import {
 import { bookingIntentInputSchema, type BookingIntentInput } from "../booking-intent-schema";
 import { rentalToday } from "../date-only";
 
+/** Derived so the suite never depends on a calendar date that has already passed. */
+const isoFromToday = (days: number): string => {
+  const date = new Date();
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+};
+
+const START = isoFromToday(30);
+const LATER = isoFromToday(44);
+const EARLIER = isoFromToday(20);
+/** Deliberately not secret-shaped: this is a request-correlation key, not a credential. */
+const IDEMPOTENCY_KEY = "notasecret-retry-key-1";
+
 const APARTMENT = { id: "11111111-1111-4111-8111-111111111111", title: "Laureles 2BR" };
 const OTHER_APARTMENT = { id: "22222222-2222-4222-8222-222222222222", title: "Poblado 1BR" };
 const USER = "33333333-3333-4333-8333-333333333333";
 
 const input = (overrides: Partial<BookingIntentInput> = {}): BookingIntentInput => ({
   apartmentId: APARTMENT.id,
-  startDate: "2026-12-01",
-  idempotencyKey: "bi-4f6c0a1e-2b3d-4c5e-8f90-123456789abc",
+  startDate: START,
+  idempotencyKey: IDEMPOTENCY_KEY,
   ...overrides,
 });
 
@@ -60,7 +73,7 @@ function makeStore(apartments = [APARTMENT, OTHER_APARTMENT]) {
 describe("bookingIntentInputSchema", () => {
   const base = {
     apartmentId: APARTMENT.id,
-    idempotencyKey: "bi-4f6c0a1e-2b3d-4c5e-8f90-123456789abc",
+    idempotencyKey: IDEMPOTENCY_KEY,
   };
 
   it("accepts today and later in the rental timezone, rejects a past move-in date", () => {
@@ -70,9 +83,9 @@ describe("bookingIntentInputSchema", () => {
 
   it("rejects non-existent calendar days and reversed booking ranges", () => {
     expect(bookingIntentInputSchema.safeParse({ ...base, startDate: "2026-13-40" }).success).toBe(false);
-    expect(bookingIntentInputSchema.safeParse({ ...base, startDate: "2026-12-01", endDate: "2026-02-30" }).success).toBe(false);
-    expect(bookingIntentInputSchema.safeParse({ ...base, startDate: "2026-12-15", endDate: "2026-12-01" }).success).toBe(false);
-    expect(bookingIntentInputSchema.safeParse({ ...base, startDate: "2026-12-01", endDate: "2026-12-15" }).success).toBe(true);
+    expect(bookingIntentInputSchema.safeParse({ ...base, startDate: START, endDate: "2026-02-30" }).success).toBe(false);
+    expect(bookingIntentInputSchema.safeParse({ ...base, startDate: LATER, endDate: EARLIER }).success).toBe(false);
+    expect(bookingIntentInputSchema.safeParse({ ...base, startDate: START, endDate: LATER }).success).toBe(true);
   });
 
   it("rejects a malformed date and a weak idempotency key", () => {
@@ -95,7 +108,7 @@ describe("createApartmentBookingIntent", () => {
     expect(result.booking).toMatchObject({
       resourceId: APARTMENT.id,
       resourceTitle: APARTMENT.title,
-      startDate: "2026-12-01",
+      startDate: START,
       endDate: null,
       status: "pending",
       paymentStatus: "pending",
@@ -127,7 +140,7 @@ describe("createApartmentBookingIntent", () => {
     const conflict = await createApartmentBookingIntent(
       store,
       USER,
-      input({ startDate: "2026-12-05" }),
+      input({ startDate: LATER }),
     );
 
     expect(conflict).toEqual({ ok: false, code: "IDEMPOTENCY_CONFLICT" });
@@ -175,6 +188,32 @@ describe("createApartmentBookingIntent", () => {
     if (!result.ok) return;
     expect(result.replayed).toBe(true);
     expect(result.booking.id).toBe("booking-1");
+    expect(bookings).toHaveLength(1);
+  });
+
+  it("replays the committed booking even when the apartment is no longer readable", async () => {
+    const { store, bookings } = makeStore();
+    const first = await createApartmentBookingIntent(store, USER, input());
+    expect(first.ok).toBe(true);
+
+    // The listing later becomes RLS-hidden (unpublished/deleted/temporary outage).
+    store.findApartment = async () => null;
+
+    const retry = await createApartmentBookingIntent(store, USER, input());
+    expect(retry.ok).toBe(true);
+    if (!retry.ok) return;
+    expect(retry.replayed).toBe(true);
+    expect(bookings).toHaveLength(1);
+  });
+
+  it("answers a conflict, not a 404, when a key is reused for an unreadable apartment", async () => {
+    const { store, bookings } = makeStore([APARTMENT]);
+    await createApartmentBookingIntent(store, USER, input());
+
+    const hidden = "77777777-7777-4777-8777-777777777777";
+    const reuse = await createApartmentBookingIntent(store, USER, input({ apartmentId: hidden }));
+
+    expect(reuse).toEqual({ ok: false, code: "IDEMPOTENCY_CONFLICT" });
     expect(bookings).toHaveLength(1);
   });
 
@@ -239,7 +278,7 @@ describe("createSupabaseBookingIntentStore.insertBooking", () => {
       userId: USER,
       apartmentId: APARTMENT.id,
       apartmentTitle: APARTMENT.title,
-      startDate: "2026-12-01",
+      startDate: START,
       endDate: null,
       idempotencyKey: input().idempotencyKey,
     });
@@ -250,7 +289,7 @@ describe("createSupabaseBookingIntentStore.insertBooking", () => {
       booking_type: "apartment",
       resource_id: APARTMENT.id,
       resource_title: APARTMENT.title,
-      start_date: "2026-12-01",
+      start_date: START,
       end_date: null,
       status: "pending",
       payment_status: "pending",

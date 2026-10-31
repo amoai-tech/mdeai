@@ -85,10 +85,13 @@ export default async function BookingReviewPage({ params }: Props) {
   }
 
   let detail: RentalDetail | null = null;
+  let detailUnavailable = false;
   try {
     detail = await getRentalDetail(booking.resource_id, { client: supabase });
   } catch {
-    detail = null;
+    // The booking itself is authoritative and stays visible; only the listing detail failed.
+    // Say so, rather than rendering "Price not stated" as if the listing had no price.
+    detailUnavailable = true;
   }
 
   const status = String(booking.status);
@@ -112,11 +115,32 @@ export default async function BookingReviewPage({ params }: Props) {
       </p>
 
       <div className="mt-4">
+        {detailUnavailable ? (
+          <div
+            className="mb-3 rounded-lg border border-amber-500/60 bg-amber-500/5 p-3 text-sm"
+            role="status"
+            data-testid="booking-review-detail-unavailable"
+          >
+            <p className="font-medium">We couldn’t load the apartment details just now.</p>
+            <p className="mt-1 text-muted-foreground">
+              Your booking is safe and unchanged. The price below is not shown until the listing
+              reads again.
+            </p>
+            <Link
+              href={`/rentals/bookings/${booking.id}`}
+              className="mt-2 inline-block font-medium text-primary hover:underline"
+              data-testid="booking-review-detail-retry"
+            >
+              Retry
+            </Link>
+          </div>
+        ) : null}
         <BookingReviewSummary
           detail={detail}
           fallbackTitle={booking.resource_title}
           startDate={booking.start_date}
           endDate={booking.end_date}
+          detailUnavailable={detailUnavailable}
         />
       </div>
 

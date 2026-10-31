@@ -59,10 +59,32 @@ export default async function NewBookingReviewPage({ searchParams }: Props) {
   }
 
   let detail: RentalDetail | null = null;
+  let detailUnavailable = false;
   try {
     detail = await getRentalDetail(apartmentId, { client: supabase });
   } catch {
-    detail = null;
+    // A rejected read is an outage, not proof that the apartment is gone. "Not found" here
+    // would tell a renter their listing disappeared because our database blinked.
+    detailUnavailable = true;
+  }
+
+  if (detailUnavailable) {
+    return (
+      <main className="mx-auto max-w-3xl px-4 py-10" data-testid="booking-review-detail-unavailable">
+        <h1 className="font-serif text-2xl font-semibold">This apartment is temporarily unavailable</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          We couldn’t load the apartment details just now. The apartment still exists — nothing
+          was booked or charged. Please try again.
+        </p>
+        <Link
+          href={returnTo}
+          className="mt-4 inline-block text-sm font-medium text-primary hover:underline"
+          data-testid="booking-review-detail-retry"
+        >
+          Retry
+        </Link>
+      </main>
+    );
   }
   if (!detail) notFound();
 

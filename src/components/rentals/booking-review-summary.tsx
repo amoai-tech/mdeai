@@ -18,6 +18,8 @@ type Props = {
   fallbackTitle: string;
   startDate: string;
   endDate: string | null;
+  /** The listing read failed (outage) — distinct from a listing with no published price. */
+  detailUnavailable?: boolean;
 };
 
 /**
@@ -25,9 +27,28 @@ type Props = {
  * own currency. Known facts only: an unpublished price stays "not stated" and the payable
  * amount is never estimated here (the server prices it at payment time, SAN-1240).
  */
-export function BookingReviewSummary({ detail, fallbackTitle, startDate, endDate }: Props) {
+export function BookingReviewSummary({
+  detail,
+  fallbackTitle,
+  startDate,
+  endDate,
+  detailUnavailable = false,
+}: Props) {
   const prices = formatRentalPrices(detail?.priceNightly, detail?.priceMonthly, detail?.currency);
-  const leadPrice = prices.monthlyLabel ?? prices.nightlyLabel;
+  // Lead with a price the advertiser actually stored. `formatRentalPrices` derives a `~monthly`
+  // figure from a nightly-only listing; that estimate must never be presented as their listed
+  // monthly rent, so a nightly-only listing leads with its nightly rate instead.
+  const storedMonthly = detail?.priceMonthly != null;
+  const storedNightly = detail?.priceNightly != null;
+  const leadPrice = storedMonthly ? prices.monthlyLabel : storedNightly ? prices.nightlyLabel : null;
+  const priceText = detailUnavailable ? "Price unavailable right now" : (leadPrice ?? "Price not stated");
+  const amountDueCopy = detailUnavailable
+    ? "We can’t show the amount until the apartment details load again. Nothing has been charged."
+    : storedMonthly
+      ? "The rent above is the advertiser’s listed monthly price. The exact payable amount and deposit are calculated and shown at the payment step, before any card is charged."
+      : storedNightly
+        ? "The nightly rate above is the advertiser’s listed price. The stay total and deposit are calculated and shown at the payment step, before any card is charged."
+        : "No price is published for this listing, so no payment can be started.";
 
   return (
     <section
@@ -53,7 +74,7 @@ export function BookingReviewSummary({ detail, fallbackTitle, startDate, endDate
             <p className="text-sm text-muted-foreground">{detail.neighborhood}</p>
           ) : null}
           <p className="mt-2 text-sm" data-testid="booking-review-price">
-            {leadPrice ?? "Price not stated"}
+            {priceText}
             {detail && detail.deposit != null ? (
               <span className="text-muted-foreground">
                 {" "}
@@ -76,7 +97,9 @@ export function BookingReviewSummary({ detail, fallbackTitle, startDate, endDate
         <div>
           <dt className="text-xs uppercase text-muted-foreground">Minimum stay</dt>
           <dd className="font-medium">
-            {detail?.minimumStayDays != null ? `${detail.minimumStayDays} days` : "Not specified"}
+            {detail?.minimumStayDays != null
+              ? `${detail.minimumStayDays} ${detail.minimumStayDays === 1 ? "night" : "nights"}`
+              : "Not specified"}
           </dd>
         </div>
         <div>
@@ -95,9 +118,7 @@ export function BookingReviewSummary({ detail, fallbackTitle, startDate, endDate
       <div className="mt-4 rounded-lg bg-muted/40 p-3 text-sm" data-testid="booking-review-amount-due">
         <p className="font-medium">Amount due</p>
         <p className="mt-1 text-muted-foreground">
-          {leadPrice
-            ? "The rent above is the advertiser’s listed price. The exact payable amount and deposit are calculated and shown at the payment step, before any card is charged."
-            : "No price is published for this listing, so no payment can be started."}
+          {amountDueCopy}
         </p>
       </div>
     </section>
