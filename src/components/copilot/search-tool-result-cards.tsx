@@ -29,21 +29,6 @@ import { duplicateListingNotes } from "@/lib/rentals/duplicate-listings";
 import { normalizeToolOutput } from "@/platform/maps/normalize-tool-output";
 import { parseGroundedToolResult } from "@/lib/parse-grounded-tool-result";
 
-const CUSTOMER_VISIBLE_RENTAL_RANK_FACTORS = new Set([
-  "hybrid_semantic",
-  "neighborhood_profile",
-  "neighborhood",
-  "digital_nomad_score",
-]);
-
-export function filterCustomerVisibleRentalRankExplanation<
-  T extends { factor: string },
->(entries: T[]): T[] {
-  return entries.filter((entry) =>
-    CUSTOMER_VISIBLE_RENTAL_RANK_FACTORS.has(entry.factor),
-  );
-}
-
 function rentalPinId(listingId: string) {
   return `rental-${listingId}`;
 }
@@ -280,9 +265,6 @@ export function RentalResults({
   const emptyUnappliedNote = rows.length
     ? ""
     : emptyRentalNotice(unappliedRequests);
-  const rankExplanation = filterCustomerVisibleRentalRankExplanation(
-    envelope.rankExplanation ?? [],
-  );
   const searchParams = searchMeta?.params;
   // Intelligent search ranks a bounded candidate pool; only the structured
   // Supabase count is exact. Never present a candidate count as exhaustive.
@@ -339,21 +321,6 @@ export function RentalResults({
         <p className="text-xs text-muted-foreground" data-testid="rental-unapplied-requests-note">
           {unappliedNote}
         </p>
-      ) : null}
-      {rows.length > 0 && rankExplanation.length > 0 ? (
-        <div
-          className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
-          data-testid="rank-explanation-rental"
-        >
-          <p className="font-medium text-foreground">Why these rentals</p>
-          <ul className="mt-1 list-inside list-disc">
-            {rankExplanation.map((entry) => (
-              <li key={`${entry.factor}-${entry.note}`}>
-                {entry.factor}: {entry.note}
-              </li>
-            ))}
-          </ul>
-        </div>
       ) : null}
       {rows.length === 0 ? (
         <EmptyState

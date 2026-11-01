@@ -96,7 +96,7 @@ export function RentalCard({
     tags,
   });
   const matchReason = buildMatchReason(
-    { id, title, neighborhood, nightly_price, bedrooms, wifi, amenities, tags },
+    { id, title, neighborhood, nightly_price, price_monthly, currency, bedrooms, bedrooms_unknown, wifi, amenities, tags },
     searchParams,
   );
 
@@ -225,9 +225,12 @@ export function RentalCard({
         <p className="mt-1 text-xs text-muted-foreground">{availability}</p>
       ) : null}
 
-      <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">
-        {matchReason}
-      </p>
+      {matchReason ? (
+        <p className="mt-2 min-w-0 break-words text-xs leading-relaxed text-muted-foreground" data-testid="rental-match-reason">
+          <span className="font-medium text-foreground">Why it may fit:</span>{" "}
+          {matchReason}
+        </p>
+      ) : null}
 
       {tags?.includes("self-attested") ? (
         <div className="mt-2 flex flex-wrap gap-1">
