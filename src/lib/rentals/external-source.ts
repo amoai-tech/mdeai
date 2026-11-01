@@ -54,10 +54,6 @@ export function externalListingLink(
 ): { href: string; hostname: string } | null {
   const href = approvedExternalSourceUrl(value);
   if (!href) return null;
-  try {
-    // `hostname` (not `host`) so the disclosure never shows a port.
-    return { href, hostname: new URL(href).hostname.replace(/^www\./, "") };
-  } catch {
-    return null;
-  }
+  // `hostname` (not `host`) so the disclosure never shows a port.
+  return { href, hostname: new URL(href).hostname.replace(/^www\./, "") };
 }
