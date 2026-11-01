@@ -38,6 +38,14 @@ async function openDetails(button: Locator, opened: Locator) {
   }).toPass({ timeout: 20_000 });
 }
 
+/**
+ * Provenance as the component itself decides it: the panel renders the external disclosure only
+ * for a sourced ad. Deriving it from structure (not from the label we are about to assert) keeps
+ * this honest, and works for a listing that has no provider name or source link.
+ */
+const detailsAreExternal = async (page: Page) =>
+  (await page.getByTestId("rental-details-external-note").count()) > 0;
+
 /** The card's own id (its slug), so a locator survives the grid re-rendering. */
 const detailsFor = (page: Page, slug: string) => page.getByTestId(`rental-details-cta-${slug}`);
 
@@ -82,17 +90,17 @@ test.describe("/rentals Details — desktop 1440px", () => {
     await expect(page.getByTestId("rental-details-price")).toHaveText(/^COP [\d,]+\/mo$/);
     await expect(panel.locator("h2")).not.toBeEmpty();
 
-    // Exactly one CTA, and its label is one of the two truthful ones the app can show.
-    // SAN-1504: a managed listing offers "Schedule viewing"; a sourced ad offers "Request MDE
-    // follow-up". Neither may claim an appointment the advertiser has confirmed. Asserting the
-    // label against provenance (not against a fixed card position) keeps this true when the
-    // catalogue order changes.
+    // The viewing CTA is capability-gated: `can_schedule_viewing` decides whether it exists at
+    // all, and provenance decides its label. So never require it to be visible — require that at
+    // most one exists, and that when it does it matches this record.
     const scheduleCta = page.getByTestId("rental-details-schedule-cta");
-    await expect(scheduleCta).toBeVisible();
-    const ctaLabel = (await scheduleCta.innerText()).trim();
-    expect(["Schedule viewing", "Request MDE follow-up"]).toContain(ctaLabel);
-    if (ctaLabel === "Request MDE follow-up") {
-      await expect(page.getByTestId("rental-details-external-note")).toContainText("is not a confirmed viewing");
+    const isExternal = await detailsAreExternal(page);
+    expect(await scheduleCta.count()).toBeLessThanOrEqual(1);
+    if ((await scheduleCta.count()) === 1) {
+      await expect(scheduleCta).toHaveText(isExternal ? /Request MDE follow-up/ : /Schedule viewing/);
+      if (isExternal) {
+        await expect(page.getByTestId("rental-details-external-note")).toContainText("is not a confirmed viewing");
+      }
     }
 
     // An original-listing link, when one is offered, is a safe outbound link in a new tab.
@@ -155,8 +163,11 @@ test.describe("/rentals Details — desktop 1440px", () => {
 
   test("a sourced ad offers an MDE follow-up and a safe original link, never a confirmed viewing", async ({ page }) => {
     await gotoRentals(page);
-    // Pick a genuinely sourced ad by its own label, not by list position.
-    const sourced = cards(page).filter({ hasText: "Source:" }).first();
+    // Pick a genuinely sourced ad by the outbound control it renders — not by list position, and
+    // not by the "Source: <provider>" copy, which a sourced ad without a provider name omits.
+    const sourced = page
+      .locator('[data-testid^="rental-card-"][data-result-kind="rental"]:has([data-testid^="rental-card-source-"])')
+      .first();
     test.skip((await sourced.count()) === 0, "no sourced ad in the current results");
     const slug = ((await sourced.getAttribute("data-testid")) ?? "").replace("rental-card-", "");
     const panel = page.getByTestId("rental-details-panel");
@@ -212,11 +223,14 @@ test.describe("/rentals Details — phone 390px", () => {
     await expect(sheet).toHaveAttribute("role", "dialog");
     await expect(page.getByTestId("rental-details-panel")).toHaveCount(0); // not the desktop panel
     await expect(page.getByTestId("rental-details-price")).toHaveText(/^COP [\d,]+\/mo$/);
-    // Exactly one truthful action label for whichever provenance this record has. A panel with no
-    // requestable action renders no CTA at all — covered in rental-details.test.tsx.
-    await expect(page.getByTestId("rental-details-schedule-cta")).toHaveText(
-      /^(Schedule viewing|Request MDE follow-up)$/,
-    );
+    // Same capability and provenance rule as desktop: the record decides both whether the CTA
+    // exists and what it says. A non-requestable listing shows none, which is correct.
+    const sheetCta = page.getByTestId("rental-details-schedule-cta");
+    const isExternal = await detailsAreExternal(page);
+    expect(await sheetCta.count()).toBeLessThanOrEqual(1);
+    if ((await sheetCta.count()) === 1) {
+      await expect(sheetCta).toHaveText(isExternal ? /Request MDE follow-up/ : /Schedule viewing/);
+    }
     const close = page.getByTestId("rental-details-close");
     const box = await close.boundingBox();
     expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
