@@ -381,7 +381,7 @@ function RentalDetailInner({
               What would you like to do?
             </h2>
             <div className="flex flex-wrap gap-2">
-              {detail.status !== "development-preview" ? (
+              {detail.status !== "development-preview" && !detail.isExternalSource ? (
                 <Link
                   href={bookingReviewHref ?? `/rentals/bookings/new?apartment=${encodeURIComponent(detail.id)}`}
                   data-testid="rental-detail-booking-review-link"

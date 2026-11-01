@@ -128,8 +128,11 @@ describe("rental detail — external preview fields", () => {
       rental_can_request_viewing: true,
     });
     await render(external);
+    expect(external.isExternalSource).toBe(true);
     expect(document.querySelector('[data-testid="rental-detail-source-link"]')?.getAttribute("href"))
       .toBe("https://www.fincaraiz.com.co/apartaestudio/193916988");
+    // Native booking review belongs to MDE-managed rentals, not third-party advertisements.
+    expect(document.querySelector('[data-testid="rental-detail-booking-review-link"]')).toBeNull();
   });
 
   it("does not offer a fake AI question or inert Save action", async () => {
@@ -140,6 +143,8 @@ describe("rental detail — external preview fields", () => {
       rental_can_request_viewing: true,
     });
     await render(managed);
+    expect(managed.isExternalSource).toBe(false);
+    expect(document.querySelector('[data-testid="rental-detail-booking-review-link"]')).not.toBeNull();
     const labels = Array.from(document.querySelectorAll("button")).map((button) => button.textContent ?? "");
     expect(labels.some((label) => /ask a question/i.test(label))).toBe(false);
     expect(labels.some((label) => /^\s*save\s*$/i.test(label))).toBe(false);
