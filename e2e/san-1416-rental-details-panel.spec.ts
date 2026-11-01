@@ -166,7 +166,7 @@ test.describe("/rentals Details — desktop 1440px", () => {
     // Pick a genuinely sourced ad by the outbound control it renders — not by list position, and
     // not by the "Source: <provider>" copy, which a sourced ad without a provider name omits.
     const sourced = page
-      .locator('[data-testid^="rental-card-"][data-result-kind="rental"]:has([data-testid^="rental-card-source-"])')
+      .locator('[data-testid^="rental-card-"][data-result-kind="rental"]:has(a[data-testid^="rental-card-source-"])')
       .first();
     test.skip((await sourced.count()) === 0, "no sourced ad in the current results");
     const slug = ((await sourced.getAttribute("data-testid")) ?? "").replace("rental-card-", "");
