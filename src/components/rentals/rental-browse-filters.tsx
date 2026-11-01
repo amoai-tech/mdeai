@@ -1,6 +1,6 @@
 "use client";
 
-import { useId } from "react";
+import { useId, useRef, useState } from "react";
 import Link from "next/link";
 import { toggleVariants } from "@/components/ui/toggle";
 import { cn } from "@/lib/utils";
@@ -52,6 +52,15 @@ export function RentalBrowseFilters({
 }: RentalBrowseFiltersProps) {
   // The filter bar is rendered once per layout (desktop and mobile), so the error id must be unique.
   const errorId = useId();
+  // SAN-1611: the date form is an uncontrolled GET form whose inputs start at the applied
+  // values. "Cancel" therefore only has to reset the fields — no navigation, no draft store,
+  // and the renter keeps their neighborhood/bedroom chips and results.
+  const formRef = useRef<HTMLFormElement>(null);
+  const [datesEdited, setDatesEdited] = useState(false);
+  const cancelDraftDates = () => {
+    formRef.current?.reset();
+    setDatesEdited(false);
+  };
   return (
     <>
       {/* Neighborhood */}
@@ -129,6 +138,7 @@ export function RentalBrowseFilters({
       <div>
         <p className="mb-2 text-xs font-medium text-muted-foreground">Stay dates</p>
         <form
+          ref={formRef}
           key={`${from ?? ""}|${through ?? ""}`}
           method="get"
           action="/rentals"
@@ -143,6 +153,7 @@ export function RentalBrowseFilters({
               type="date"
               name="from"
               defaultValue={from ?? ""}
+              onChange={() => setDatesEdited(true)}
               data-testid="rentals-date-from"
               aria-invalid={dateError ? true : undefined}
               aria-describedby={dateError ? errorId : undefined}
@@ -155,6 +166,7 @@ export function RentalBrowseFilters({
               type="date"
               name="through"
               defaultValue={through ?? ""}
+              onChange={() => setDatesEdited(true)}
               data-testid="rentals-date-through"
               aria-invalid={dateError ? true : undefined}
               aria-describedby={dateError ? errorId : undefined}
@@ -168,6 +180,16 @@ export function RentalBrowseFilters({
           >
             Apply dates
           </button>
+          {datesEdited ? (
+            <button
+              type="button"
+              onClick={cancelDraftDates}
+              data-testid="rentals-dates-cancel"
+              className={cn(chip, "min-h-11 px-4")}
+            >
+              Cancel
+            </button>
+          ) : null}
           {from || through || dateError ? (
             <Link
               href={buildRentalsUrl({ neighborhood, beds })}
