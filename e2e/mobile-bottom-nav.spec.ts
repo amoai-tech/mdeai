@@ -37,7 +37,7 @@ async function gotoWithRetry(page: Page, path: string) {
   try {
     return await page.goto(path, { waitUntil: "domcontentloaded", timeout: 120_000 });
   } catch (error) {
-    if (!/net::ERR_(?:CONNECTION_REFUSED|EMPTY_RESPONSE)/.test(String(error))) throw error;
+    if (!/net::ERR_(?:CONNECTION_REFUSED|CONNECTION_RESET|EMPTY_RESPONSE)/.test(String(error))) throw error;
     await expect
       .poll(
         async () => {
