@@ -382,7 +382,7 @@ async function fillFixture(
 
 /** Create the request through the real atomic RPC, not by hand, then capture its exact ids. */
 async function seedRequest(admin: Admin, fixture: Fixture, run: string): Promise<void> {
-  const { error: rpcError } = await admin.rpc("p1_schedule_tour_atomic", {
+  const viewingInput = {
     p_listing_id: fixture.slug,
     p_user_id: null,
     p_idempotency_key: fixture.idempotencyKey,
@@ -394,8 +394,13 @@ async function seedRequest(admin: Admin, fixture: Fixture, run: string): Promise
     p_scheduled_at: SCHEDULED_AT,
     p_lead_metadata: {},
     p_showing_metadata: {},
-  });
+  };
+  const { error: rpcError } = await admin.rpc("p1_schedule_tour_atomic", viewingInput);
   if (rpcError) throw new Error(`p1_schedule_tour_atomic failed: ${rpcError.message}`);
+
+  // An actual same-key submit retry must not create a second lead or showing.
+  const { error: duplicateError } = await admin.rpc("p1_schedule_tour_atomic", viewingInput);
+  if (duplicateError) throw new Error(`idempotent viewing retry failed: ${duplicateError.message}`);
 
   // Retried on purpose: cleanup deletes by these ids, so a transient Supabase failure here would
   // leave leadId/showingId null and strand the rows the RPC just committed.
@@ -404,12 +409,14 @@ async function seedRequest(admin: Admin, fixture: Fixture, run: string): Promise
   );
   fixture.leadId = leadResult.data?.[0]?.id ?? null;
   if (!fixture.leadId) throw new Error("the RPC must have committed one lead");
+  if (leadResult.data?.length !== 1) throw new Error("same-key retry created duplicate leads");
 
   const showingResult = await retryCall("showing lookup", () =>
     admin.from("showings").select("id").eq("lead_id", fixture.leadId!),
   );
   fixture.showingId = showingResult.data?.[0]?.id ?? null;
   if (!fixture.showingId) throw new Error("the RPC must have committed one showing");
+  if (showingResult.data?.length !== 1) throw new Error("same-key retry created duplicate showings");
 }
 
 /**

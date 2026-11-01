@@ -7,6 +7,7 @@
  */
 
 import { AdvancedMarker, Map } from "@vis.gl/react-google-maps";
+import { useEffect } from "react";
 import { MapCameraSync } from "@/components/maps/MapCameraSync";
 import { MapFocusController } from "@/components/maps/MapFocusController";
 import { MapFitBoundsController } from "@/components/maps/MapFitBoundsController";
@@ -32,11 +33,18 @@ import { shouldClusterMapPins } from "@/lib/map-clustering";
 export function ChatMap({
   mapResizeSignal = 0,
   mapDomId,
+  onTilesLoaded,
 }: {
   mapResizeSignal?: number;
   mapDomId?: string;
+  onTilesLoaded?: () => void;
 }) {
   const { pins, activeMapCategory, selectedPinId, panToPin } = useMapContext();
+  // Mock maps do not load network tiles; mark them ready immediately in E2E.
+  useEffect(() => {
+    if (isE2EMapsMockEnabled()) onTilesLoaded?.();
+  }, [onTilesLoaded]);
+
   const mapsStatus = useMapsStatus();
   const mapId = getGoogleMapsMapId();
   const renderablePins = filterRenderableMapPins(pins);
@@ -106,6 +114,7 @@ export function ChatMap({
       data-map-clustering={useClustering ? "true" : "false"}
     >
       <Map
+        onTilesLoaded={onTilesLoaded}
         mapId={mapId}
         // Google Maps agent-skill usage attribution; @vis.gl adds its own id alongside this one.
         internalUsageAttributionIds={["gmp_git_agentskills_v1"]}
