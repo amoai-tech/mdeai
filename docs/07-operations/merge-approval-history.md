@@ -422,6 +422,56 @@ broken journey; and are the 1023/1024/1280 boundaries correct.
 **Follow-up:** run the command against the deployed release after merge, then report the physical-device keyboard
 results to SAN-522 when hardware is available.
 
+## 2026-11-01 — PR #668 (SAN-1600 event header sign-in and saved-location map)
+
+**PR:** [#668](https://github.com/amoai-tech/mdeai/pull/668). **Reason:** amoai-tech is the repository's sole
+collaborator and the PR author; GitHub forbids self-approval. The owner's SAN-1600 implementation order asks for the
+event page to gain visible authentication and a truthful embedded map.
+
+**Exact-head proof:** head `e9fe1348bf9c4f45921e428e5ef2ef05bb2e467c`; `floor`, `mastra-schema-init`,
+`review / verify-review-result`, the deterministic chromium shards, `codacy-eslint` and the Maps contracts job all
+green; 0 unresolved review threads.
+
+**Change and review scope:** guest Sign in / Sign up with a validated `next` path, Account / My tickets when signed
+in, and a contained Google Map that draws only saved coordinates (linked venue point + directions, or a listed area
+with an explicit unconfirmed-meeting-point note and area search). Desktop becomes two independent columns. No schema,
+payment, agent or runtime change.
+
+**Evidence:** 97 focused tests, `npm run build` exit 0, and Playwright on the built app for both live test events at
+320/390/768/1024/1440 (no overflow, one `h1`, correct map state per event) — `docs/screenshots/san-1600/prA-*.png`.
+
+**What an independent reviewer would be asked:** does an unconfirmed venue ever produce a precise pin or turn-by-turn
+directions; does a failed or keyless map leave tickets, navigation and Ask MDE working; does `next` survive
+validation and return the visitor to the same event; does the header still fit 320px.
+
+**Follow-up:** the deployed readback on `www.mdeai.co` after the staged certification promotes this SHA.
+
+## 2026-11-01 — PR #670 (SAN-1600 in-page Ask MDE assistant)
+
+**PR:** [#670](https://github.com/amoai-tech/mdeai/pull/670). **Reason:** amoai-tech is the repository's sole
+collaborator and the PR author; GitHub forbids self-approval. The owner's SAN-1600 order asks for one native Ask MDE
+experience across eligible pages instead of a link that leaves the page.
+
+**Exact-head proof:** head `04ff0c938192d795a46c71b56b6a55474888174cdf859305f5626954dbdc4d1f174099` (rebased onto `7a3d855cc5` after #668 merged);
+`floor`, `mastra-schema-init`, `review / verify-review-result` green with 0 unresolved threads.
+
+**Change and review scope:** one drawer mounted in the root layout next to the phone tab bar, rendering the existing
+`DiscoveryAskComposer` inside the existing CopilotKit v2 provider — same agent, thread and saved history. Route
+ownership is one explicit list; browse pages keep their inline composer and `/chat`, auth, host and `/app` surfaces
+are untouched. The event page gives the drawer that event's real saved id. No new provider, agent, runtime, schema or
+payment change.
+
+**Evidence:** 301 focused tests green after the rebase, `npm run typecheck`, targeted ESLint and `npm run build` clean;
+Playwright on the built app shows the drawer opening on the event CTA and the restaurant launcher, with 0 launchers on
+`/events`, `/chat`, `/login` and `/rentals`, and 0 extra `/api/copilotkit` POSTs when the drawer opens.
+
+**What an independent reviewer would be asked:** can a page mount a second assistant; does opening the drawer start a
+model run; does a guest see an honest sign-in path rather than a dead control; does the event answer use that event's
+id rather than whatever was selected on another route.
+
+**Follow-up:** the signed-in live AI answer (no QA credentials in this worktree) and the deployed readback after
+certification.
+
 ## Adding an entry
 
 Record: the PRs, the date, the reason, which required checks had passed, what a reviewer would have
