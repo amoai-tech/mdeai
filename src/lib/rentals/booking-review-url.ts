@@ -8,9 +8,11 @@ import { isOrderedStay, isRealCalendarDate } from "./date-only";
  * dropped rather than silently corrected, so the review screen never prefills a date the
  * renter did not choose.
  *
- * `through` is passed to the booking as the end date without arithmetic. The browse filter
- * already treats it as the departure day (`searchRentals` receives it as `checkOut`), so the
- * review screen and the search agree on what "Nov 10–15" means.
+ * DATE MEANING (the one rule): `through` is the **last occupied day**, both inclusive — the
+ * availability filter computes `days = (checkOut - checkIn) / DAY + 1`, so Nov 10–15 is a
+ * six-day stay. A booking's end date is a **move-out**, i.e. the day after `through`, which is
+ * what `moveOutFromStayThrough` produces. Keeping the URL in browse semantics and converting
+ * once at the booking boundary avoids an off-by-one in nights and in any future pricing.
  */
 type RawParam = string | string[] | undefined;
 
@@ -26,19 +28,42 @@ const first = (value: RawParam): string | null => {
 export function parseStayRange(params: { from?: RawParam; through?: RawParam }): StayRange {
   const rawFrom = first(params.from);
   const rawThrough = first(params.through);
-  const from = rawFrom && isRealCalendarDate(rawFrom) ? rawFrom : null;
-  if (!from) return { from: null, through: null };
-  const through =
-    rawThrough && isRealCalendarDate(rawThrough) && isOrderedStay(from, rawThrough) ? rawThrough : null;
-  return { from, through };
+  if (!rawFrom || !isRealCalendarDate(rawFrom)) return { from: null, through: null };
+  // A move-out with no move-in is not a stay.
+  if (rawThrough === null) return { from: rawFrom, through: null };
+  // A range that is present but not real or not ordered is unusable as a whole. Dropping only the
+  // bad end would silently turn a two-date stay into a one-date one.
+  if (!isRealCalendarDate(rawThrough) || !isOrderedStay(rawFrom, rawThrough)) {
+    return { from: null, through: null };
+  }
+  return { from: rawFrom, through: rawThrough };
 }
 
 /** The booking-review URL for one apartment, carrying the stay when one was chosen. */
 export function bookingReviewHref(apartmentId: string, stay?: StayRange | null): string {
   const params = new URLSearchParams({ apartment: apartmentId });
-  if (stay?.from) {
-    params.set("from", stay.from);
-    if (stay.through) params.set("through", stay.through);
+  // Validate the whole range here too: callers hand over filters that may still carry a reversed
+  // pair (parseBrowseFilters keeps both values so the renter can correct them). Constructing a
+  // link from an impossible range would push it downstream where it gets dropped silently.
+  const from = stay?.from && isRealCalendarDate(stay.from) ? stay.from : null;
+  const through = stay?.through ?? null;
+  const throughUsable =
+    through === null || (isRealCalendarDate(through) && (from === null || isOrderedStay(from, through)));
+  if (from && throughUsable) {
+    params.set("from", from);
+    if (through) params.set("through", through);
   }
   return `/rentals/bookings/new?${params.toString()}`;
+}
+
+/**
+ * `through` is the last occupied day, so the day the renter leaves is the next calendar day.
+ * Pure calendar arithmetic in UTC: never `new Date("YYYY-MM-DD") + 1 day` through a local clock,
+ * which shifts across a DST boundary or a negative-offset timezone.
+ */
+export function moveOutFromStayThrough(through: string | null | undefined): string | null {
+  if (!through || !isRealCalendarDate(through)) return null;
+  const date = new Date(`${through}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + 1);
+  return date.toISOString().slice(0, 10);
 }

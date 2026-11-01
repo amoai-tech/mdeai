@@ -36,10 +36,13 @@ export function StartBookingReview({
   apartmentId,
   defaultStartDate,
   defaultEndDate,
+  onDatesChange,
 }: {
   apartmentId: string;
   defaultStartDate?: string | null;
   defaultEndDate?: string | null;
+  /** SAN-1611: lets the review summary show the same dates the renter is editing. */
+  onDatesChange?: (start: string, end: string) => void;
 }) {
   const router = useRouter();
   const currentAttempt = useRef<{ stay: string; key: string } | null>(null);
@@ -95,7 +98,10 @@ export function StartBookingReview({
           type="date"
           required
           value={startDate}
-          onChange={(event) => setStartDate(event.target.value)}
+          onChange={(event) => {
+            setStartDate(event.target.value);
+            onDatesChange?.(event.target.value, endDate);
+          }}
           data-testid="booking-start-date"
           className="mt-1 block w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
         />
@@ -107,7 +113,10 @@ export function StartBookingReview({
             type="date"
             value={endDate}
             min={startDate || undefined}
-            onChange={(event) => setEndDate(event.target.value)}
+            onChange={(event) => {
+              setEndDate(event.target.value);
+              onDatesChange?.(startDate, event.target.value);
+            }}
             data-testid="booking-start-end-date"
             className="mt-1 block w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
           />

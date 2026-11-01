@@ -1,10 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { SignInRequired } from "@/components/auth/sign-in-required";
-import { BookingReviewSummary } from "@/components/rentals/booking-review-summary";
-import { StartBookingReview } from "@/components/rentals/start-booking-review";
+import { BookingReviewStay } from "@/components/rentals/booking-review-stay";
 import { getRentalDetail, type RentalDetail } from "@/lib/rentals/get-rental-detail";
-import { bookingReviewHref, parseStayRange } from "@/lib/rentals/booking-review-url";
+import { bookingReviewHref, moveOutFromStayThrough, parseStayRange } from "@/lib/rentals/booking-review-url";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata = { title: "Review your booking · mdeai" };
@@ -32,6 +31,8 @@ export default async function NewBookingReviewPage({ searchParams }: Props) {
   const apartmentId = typeof requested === "string" ? requested : null;
   // Only a real, ordered stay is carried; anything malformed is dropped rather than corrected.
   const stay = parseStayRange(searchParamsResolved);
+  // `through` is the last occupied day; the booking stores the day they leave.
+  const moveOut = moveOutFromStayThrough(stay.through);
   const stayQuery = stay.from
     ? `?from=${stay.from}${stay.through ? `&through=${stay.through}` : ""}`
     : "";
@@ -116,19 +117,13 @@ export default async function NewBookingReviewPage({ searchParams }: Props) {
       </p>
 
       <div className="mt-4">
-        <BookingReviewSummary
+        <BookingReviewStay
           detail={detail}
           fallbackTitle={detail.title}
-          startDate={stay.from ?? ""}
-          endDate={stay.through}
+          initialStart={stay.from}
+          initialEnd={moveOut}
         />
       </div>
-
-      <StartBookingReview
-        apartmentId={detail.id}
-        defaultStartDate={stay.from}
-        defaultEndDate={stay.through}
-      />
     </main>
   );
 }

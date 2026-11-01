@@ -131,7 +131,8 @@ test.describe("SAN-486 /rentals stay dates", () => {
       // A signed-in session skips the gate: the form itself must then be prefilled.
       await settleReview();
       await expect(page.getByTestId("booking-start-date")).toHaveValue("2026-11-10");
-      await expect(page.getByTestId("booking-start-end-date")).toHaveValue("2026-11-15");
+      // `through` (15 Nov) is the last occupied day, so the move-out the booking stores is the 16th.
+      await expect(page.getByTestId("booking-start-end-date")).toHaveValue("2026-11-16");
     } else {
       expect(next).toContain("from=2026-11-10");
       expect(next).toContain("through=2026-11-15");
