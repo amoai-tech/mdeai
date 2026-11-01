@@ -134,8 +134,9 @@ export function RentalDateSelector({
   };
 
   const clear = () => {
-    router.push(buildRentalsUrl({ neighborhood, beds }));
-    setOpen(false);
+    // Clear edits only the draft; Update dates commits it, Cancel restores the applied URL.
+    setDraft(undefined);
+    setError(null);
   };
 
   const label = from

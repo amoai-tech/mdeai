@@ -72,9 +72,22 @@ test.describe("SAN-1611 /rentals stay dates", () => {
     await page.reload({ waitUntil: "domcontentloaded" });
     await expect(trigger(page)).toContainText("Nov 1, 2026");
 
-    // Clear removes the dates and keeps the bedroom chip.
+    // Clear is a draft edit. Cancel must preserve the previously applied stay.
+    await openCalendar(page);
+    const beforeClear = page.url();
+    await page.getByTestId("rentals-dates-clear").click();
+    await expect(dialog(page)).toBeVisible();
+    await expect(page.getByTestId("rentals-dates-summary")).toContainText("Choose your stay dates");
+    expect(page.url()).toBe(beforeClear);
+    await page.getByTestId("rentals-dates-cancel").click();
+    await expect(dialog(page)).toBeHidden();
+    expect(page.url()).toBe(beforeClear);
+    await expect(trigger(page)).toContainText("Nov 1, 2026");
+
+    // Explicit Update commits the cleared draft while keeping the bedroom chip.
     await openCalendar(page);
     await page.getByTestId("rentals-dates-clear").click();
+    await page.getByTestId("rentals-dates-apply").click();
     await expect(page).toHaveURL(/\/rentals\?beds=1$/);
     await expect(trigger(page)).toHaveText(/Any dates/);
   });
