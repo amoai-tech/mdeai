@@ -11,6 +11,7 @@ import { EventDetailAside } from "@/components/events/event-detail-aside";
 import { EventDetailNavigation, EventDetailHero } from "@/components/events/event-detail-chrome";
 import { EventDetailMap } from "@/components/events/event-detail-map";
 import { EventVenueSection } from "@/components/events/event-venue-section";
+import { DiscoveryPageContext } from "@/components/chat/discovery-page-context";
 import { formatEventSchedule, ticketsRemaining } from "@/lib/events/format-event";
 import type { PublicEventDetail, PublicEventTicket } from "@/lib/events/types";
 
@@ -41,8 +42,6 @@ export function EventDetailView({ event, backTo = "events" }: { event: PublicEve
     .filter(Boolean).join(" · ");
   const fromTier = useMemo(() => lowestAvailablePrice(event.tickets), [event.tickets]);
   const returnPath = `/events/${event.slug ?? event.id}`;
-  const conciergePrompt = `Help me with this MDE event (event ID: ${event.id}): ${event.name}. Check its actual schedule, ticket availability and directions; clearly say when details are unconfirmed.`;
-  const askUrl = `/chat?q=${encodeURIComponent(conciergePrompt)}`;
   const duration = event.endsAt ? Math.round(
     (new Date(event.endsAt).getTime() - new Date(event.startsAt).getTime()) / 60000,
   ) : 0;
@@ -62,6 +61,8 @@ export function EventDetailView({ event, backTo = "events" }: { event: PublicEve
     <>
       {/* SAN-1606 — clears the mobile buy bar and, below it, the floating tab bar. */}
       <div className="min-h-screen bg-background pb-[calc(7rem+var(--mde-mobile-nav-clearance))] lg:pb-8" data-testid="event-detail-page">
+        {/* SAN-1600 — the in-page assistant is grounded in this event's real saved id. */}
+        <DiscoveryPageContext page="events" filters={{}} selectedId={event.id} />
         <EventDetailNavigation eventName={event.name} returnPath={returnPath} backTo={backTo} />
         <div className="mx-auto max-w-6xl px-4 pt-6 md:pt-8">
           <nav aria-label="Breadcrumb" className="mb-5 hidden items-center gap-2 text-sm text-muted-foreground sm:flex">
@@ -102,7 +103,6 @@ export function EventDetailView({ event, backTo = "events" }: { event: PublicEve
               durationLabel={durationLabel}
               fromTier={fromTier}
               tiersRef={tiersRef}
-              askUrl={askUrl}
               notice={notice}
               onCheckout={setCheckout}
             />

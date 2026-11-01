@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { EventDetailView } from "../event-detail-view";
 import type { PublicEventDetail } from "@/lib/events/types";
 
@@ -46,7 +47,8 @@ describe("SAN-1600 public detail journeys", () => {
     expect(screen.getByText("Price TBD")).toBeTruthy();
     expect(screen.queryByText("Sold out")).toBeNull();
     expect(screen.getByRole("link", { name: /Back to Events/i }).getAttribute("href")).toBe("/events");
-    expect(screen.getByRole("link", { name: /Ask MDE about this event/i }).getAttribute("href")).toContain(encodeURIComponent(base.id));
+    // SAN-1600 — the page CTA now opens the shared assistant in place instead of leaving the page.
+    expect(screen.getByTestId("event-ask-mde").tagName).toBe("BUTTON");
     expect(screen.getByTestId("event-image-placeholder")).toBeTruthy();
     expect(screen.getByTestId("event-source-note")).toBeTruthy();
     expect(screen.getByTestId("event-listed-area-map").getAttribute("href")).toContain("query=Avenida");
@@ -219,5 +221,16 @@ describe("SAN-1600 event header authentication", () => {
     render(<EventDetailView event={base} />);
     expect(screen.queryByTestId("event-guest-auth")).toBeNull();
     expect(screen.queryByTestId("event-user-auth")).toBeNull();
+  });
+});
+
+describe("SAN-1600 in-page Ask MDE", () => {
+  it("asks the shared assistant to open without navigating away", async () => {
+    const opened = vi.fn();
+    window.addEventListener("mde:ask-mde:open", opened);
+    render(<EventDetailView event={base} />);
+    await userEvent.click(screen.getByTestId("event-ask-mde"));
+    expect(opened).toHaveBeenCalledTimes(1);
+    window.removeEventListener("mde:ask-mde:open", opened);
   });
 });
