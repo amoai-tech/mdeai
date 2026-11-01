@@ -25,5 +25,11 @@ test('an inaccessible preview is reported BLOCKED, not a passing browser test', 
   assert.match(workflow, /BLOCKED — no verified READY preview \(0\/5 executed\)/);
   assert.doesNotMatch(workflow, /BLOCKED — SSO-protected preview/, "network/HTTP failures are not proof of SSO");
   assert.match(workflow, /Advisory, not a required merge check/);
+  assert.match(workflow, /momentic-preview-link\\.mjs create/);
+  assert.match(workflow, /momentic-preview-link\\.mjs revoke/);
+  assert.match(workflow, /_vercel_share/);
+  assert.match(workflow, /temporary scoped preview access unavailable/);
+  assert.match(workflow, /started_at=/);
+  assert.match(workflow, /completed_at=/);
   assert.match(workflow, /-f conclusion=neutral/);
 });
