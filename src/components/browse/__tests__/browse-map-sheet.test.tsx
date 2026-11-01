@@ -11,9 +11,9 @@ import { BrowseMapFallback } from "../browse-map-fallback";
 
 vi.mock("@/components/maps/MapProvider", () => ({ MapsShell: ({ children }: { children: React.ReactNode }) => <>{children}</> }));
 vi.mock("@/components/maps/ChatMap", () => ({
-  ChatMap: ({ mapResizeSignal, onTilesLoaded }: { mapResizeSignal?: number; onTilesLoaded?: () => void }) => (
+  ChatMap: ({ mapResizeSignal, onMapSettled }: { mapResizeSignal?: number; onMapSettled?: () => void }) => (
     <div data-testid="chat-map-stub" data-resize-signal={String(mapResizeSignal)}>
-      <button type="button" data-testid="test-map-tiles-loaded" onClick={onTilesLoaded}>Tiles loaded</button>
+      <button type="button" data-testid="test-map-tiles-loaded" onClick={onMapSettled}>Tiles loaded</button>
     </div>
   ),
 }));

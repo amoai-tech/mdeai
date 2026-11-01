@@ -87,7 +87,7 @@ export function BrowseMapSheet({ raised = false, inline = false }: { raised?: bo
           <AppErrorBoundary fallback={<BrowseMapFallback />} label="browse-map-sheet">
             <div className="relative h-[min(70vh,520px)] min-h-[280px] w-full">
               <MapsShell>
-                <ChatMap mapDomId="browse-map-sheet" mapResizeSignal={open ? 1 : 0} onTilesLoaded={markLoaded} />
+                <ChatMap mapDomId="browse-map-sheet" mapResizeSignal={open ? 1 : 0} onMapSettled={markLoaded} />
               </MapsShell>
               {!mapLoaded ? (
                 <div

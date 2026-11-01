@@ -33,19 +33,20 @@ import { shouldClusterMapPins } from "@/lib/map-clustering";
 export function ChatMap({
   mapResizeSignal = 0,
   mapDomId,
-  onTilesLoaded,
+  onMapSettled,
 }: {
   mapResizeSignal?: number;
   mapDomId?: string;
-  onTilesLoaded?: () => void;
+  onMapSettled?: () => void;
 }) {
   const { pins, activeMapCategory, selectedPinId, panToPin } = useMapContext();
-  // Mock maps do not load network tiles; mark them ready immediately in E2E.
-  useEffect(() => {
-    if (isE2EMapsMockEnabled()) onTilesLoaded?.();
-  }, [onTilesLoaded]);
-
   const mapsStatus = useMapsStatus();
+  // Mock maps have no network tiles. Also settle when the existing Maps
+  // unavailable notice renders, or a permanent spinner would hide that notice.
+  useEffect(() => {
+    if (isE2EMapsMockEnabled() || mapsStatus !== "ok") onMapSettled?.();
+  }, [mapsStatus, onMapSettled]);
+
   const mapId = getGoogleMapsMapId();
   const renderablePins = filterRenderableMapPins(pins);
   const useClustering = shouldClusterMapPins(renderablePins.length);
@@ -114,7 +115,7 @@ export function ChatMap({
       data-map-clustering={useClustering ? "true" : "false"}
     >
       <Map
-        onTilesLoaded={onTilesLoaded}
+        onTilesLoaded={onMapSettled}
         mapId={mapId}
         // Google Maps agent-skill usage attribution; @vis.gl adds its own id alongside this one.
         internalUsageAttributionIds={["gmp_git_agentskills_v1"]}
