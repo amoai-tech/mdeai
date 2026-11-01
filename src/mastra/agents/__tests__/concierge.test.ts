@@ -241,6 +241,16 @@ describe("concierge updateWorkingMemory tolerates provider padding", () => {
     },
   );
 
+  it("does not reject an otherwise valid rental memory update for a model's zero monthly-budget placeholder", async () => {
+    const { out, saved } = await update({
+      lastIntent: "rental_search",
+      lastRentalQuery: { neighborhood: "Laureles", minBedrooms: 2, budgetType: "monthly", maxPriceMonthly: 0 },
+    });
+    expect(out.error).toBeUndefined();
+    expect(saved?.lastRentalQuery).toMatchObject({ neighborhood: "Laureles", minBedrooms: 2, budgetType: "monthly" });
+    expect((saved?.lastRentalQuery as { maxPriceMonthly?: number }).maxPriceMonthly).toBeUndefined();
+  });
+
   it("keeps only source-identifiable grounded rows when the model omits a title", async () => {
     const { out, saved } = await update({
       lastIntent: "restaurant_discovery",

@@ -198,6 +198,14 @@ function normalizeModelMemory(raw: unknown): unknown {
   const clean = omitPaddedMemoryFields(raw);
   if (!isPlainObject(clean)) return clean;
   const normalized = { ...clean };
+  // Gemini can output maxPriceMonthly: 0 to mean "monthly prices, no ceiling".
+  // Zero is NOT a valid budget; drop the placeholder rather than rejecting
+  // the entire working-memory update or inventing a zero-peso filter.
+  if (isPlainObject(clean.lastRentalQuery) && clean.lastRentalQuery.maxPriceMonthly === 0) {
+    const query = { ...clean.lastRentalQuery };
+    delete query.maxPriceMonthly;
+    normalized.lastRentalQuery = query;
+  }
   if (typeof clean.lastIntent === 'string' && GROUNDED_INTENT_ALIASES.has(clean.lastIntent)) {
     normalized.lastIntent = 'restaurant_discovery';
   }
@@ -233,7 +241,7 @@ const conciergeBaseInstructions = `You are the mdeAI Medellín concierge — a h
 # Working memory rules (very important)
 You have working memory with: lastIntent, lastRentalQuery, lastRentalResults, selectedListingId, lastEventQuery, lastEventResults, selectedEventId, lastGroundedResults (cafés/places shown in the latest grounded reply), mapUi (selectedPinId, pin counts, viewport lat/lng/zoom).
 - Update lastIntent every turn using EXACTLY one of the canonical router values: ${routerIntentSchema.options.join(', ')}. For cafés, bars, clubs, nightlife, and grounded place searches use restaurant_discovery. Tool intent "nightlife" / "cafe" is NOT a valid lastIntent value; never save labels such as nightlife_grounded, grounded_place_search, or grounded_places.
-- After any rental search, save lastRentalQuery (the filters you used, including budgetType) and lastRentalResults (id + title + neighborhood + nightly_price + amenities for each listing you showed). Copy amenities verbatim from the tool result; never add one.
+- After any rental search, save lastRentalQuery (the filters you used, including budgetType) and lastRentalResults (id + title + neighborhood + nightly_price + amenities for each listing you showed). Copy amenities verbatim from the tool result; never add one. Omit maxPriceMonthly entirely when the renter gave no price ceiling; never save maxPriceMonthly: 0 as a placeholder.
 - Amenity questions ("which of these has a balcony?", "any with parking?") on an existing result set: answer ONLY from lastRentalResults[].amenities for the exact listings returned. If a listing has no recorded amenity matching the question, say the listing does not specify it — never claim it has the amenity and never claim it lacks it. Do not call search-rentals again just to check an amenity.
 - After any event search, save lastEventQuery and lastEventResults (id + title + venue + date).
 - When the user references a specific listing/event (number, title, "the cheaper one", "that 2BR"), set selectedListingId / selectedEventId.

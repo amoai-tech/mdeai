@@ -55,6 +55,7 @@ describe("rental explanation factual boundaries", () => {
   it("omits bedroom match if listing marks bedroom count unknown or too small", () => {
     expect(buildMatchReason({ ...listing, bedrooms_unknown: true }, { minBedrooms: 2 })).toBe("Wi-Fi listed");
     expect(buildMatchReason({ ...listing, bedrooms: 1 }, { minBedrooms: 2 })).toBe("Wi-Fi listed");
+    expect(buildMatchReason({ ...listing, bedrooms: 3 }, { minBedrooms: 2, maxBedrooms: 2 })).toBe("Wi-Fi listed");
   });
   it("does not claim Wi-Fi when a listing explicitly says it is absent", () => {
     expect(buildMatchReason({ ...listing, wifi: false, amenities: ["wifi"] })).toBe("");
