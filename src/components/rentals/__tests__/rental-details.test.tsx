@@ -11,6 +11,12 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+// Retry uses App Router refresh; this isolated component test has no mounted Next router.
+vi.mock("next/navigation", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/navigation")>()),
+  useRouter: () => ({ refresh: vi.fn() }),
+}));
+
 vi.mock("@/components/maps/MapProvider", () => ({
   MapsShell: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));

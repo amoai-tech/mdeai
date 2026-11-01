@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Building2 } from "lucide-react";
 import { DiscoveryWorkspace } from "@/components/browse/DiscoveryWorkspace";
 import { DiscoveryPageContext } from "@/components/chat/discovery-page-context";
@@ -29,7 +30,8 @@ import { useOptionalThreadNav } from "@/lib/chat/thread-nav-context";
 import type { DetailsCommand } from "@/lib/rentals/details-command";
 import { ScheduleViewingModal } from "@/components/modals/schedule-viewing-modal";
 import { EmptyState } from "@/components/empty/empty-state";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { useMapContext } from "@/platform/maps/map-context";
 import { useBrowseMapSync } from "@/hooks/use-browse-map-sync";
 import { useBrowseCardScroll } from "@/hooks/use-browse-card-scroll";
@@ -75,6 +77,7 @@ function RentalBrowseViewInner({
   dateError = null,
   previewMode = false,
 }: RentalBrowseViewProps) {
+  const router = useRouter();
   const { selectedPinId, setSelectedPinId, panToPin } = useMapContext();
   // The inline composer and this Details tool share the one concierge provider. Without it
   // (previews, deterministic E2E, isolated tests) the tool is not registered at all.
@@ -236,14 +239,25 @@ function RentalBrowseViewInner({
               data-testid="rentals-error"
             >
               <p className="text-sm text-destructive">{error}</p>
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-4"
-                render={<Link href={retryHref} />}
+              <Link
+                href={retryHref}
+                prefetch={false}
+                className={cn(buttonVariants({ variant: "outline", size: "sm" }), "mt-4")}
+                onClick={(event) => {
+                  // A link to the current URL is navigation, not a guaranteed new server fetch.
+                  // Force an RSC refresh so Retry actually re-runs the failed rental search.
+                  if (
+                    !event.defaultPrevented && event.button === 0 &&
+                    !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey &&
+                    retryHref === window.location.pathname + window.location.search
+                  ) {
+                    event.preventDefault();
+                    router.refresh();
+                  }
+                }}
               >
                 Retry
-              </Button>
+              </Link>
             </div>
           ) : null}
 
