@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarDays } from "lucide-react";
 import type { DateRange } from "react-day-picker";
@@ -106,9 +106,17 @@ export function RentalDateSelector({
   }
 
   // Tell the owner the suggestion has been consumed so it can clear it. No local state here.
+  // The parent passes a fresh inline arrow on every render, so the callback lives in a ref:
+  // depending on it directly re-ran the notify effect on every render while a suggestion was
+  // live. The ref is synced in its own effect (never during render) and the notify effect then
+  // depends only on the suggestion key.
+  const onSuggestionHandledRef = useRef(onSuggestionHandled);
   useEffect(() => {
-    if (suggestionKey) onSuggestionHandled?.();
-  }, [suggestionKey, onSuggestionHandled]);
+    onSuggestionHandledRef.current = onSuggestionHandled;
+  }, [onSuggestionHandled]);
+  useEffect(() => {
+    if (suggestionKey) onSuggestionHandledRef.current?.();
+  }, [suggestionKey]);
 
   const apply = () => {
     const nextFrom = draft?.from ? toIsoDate(draft.from) : null;
@@ -201,7 +209,11 @@ export function RentalDateSelector({
           ) : null}
 
           {error ? (
-            <p role="alert" data-testid="rentals-dates-dialog-error" className="text-xs text-destructive">
+            <p
+              role="alert"
+              data-testid="rentals-dates-dialog-error"
+              className="px-5 pb-4 text-xs text-destructive sm:px-7"
+            >
               {error}
             </p>
           ) : null}
