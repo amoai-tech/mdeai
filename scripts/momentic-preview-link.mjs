@@ -22,19 +22,24 @@ const payload = mode === 'create'
   : { revoke: { secret: token, regenerate: false } };
 if (mode === 'revoke' && !token) throw new Error('Missing temporary share token to revoke');
 
-const response = await fetch(endpoint, {
-  method: 'PATCH',
-  headers: {
-    Authorization: 'Bearer ' + apiKey,
-    'Content-Type': 'application/json',
-  },
-  body: JSON.stringify(payload),
-  signal: AbortSignal.timeout(15000),
-});
-if (!response.ok) {
-  // Never emit response bodies: providers may include credential-bearing data.
-  throw new Error('Vercel scoped preview access ' + mode + ' failed with HTTP ' + response.status);
+async function requestBypass(body) {
+  const response = await fetch(endpoint, {
+    method: 'PATCH',
+    headers: {
+      Authorization: 'Bearer ' + apiKey,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!response.ok) {
+    // Never emit provider response bodies: they may contain credentials.
+    throw new Error('Vercel scoped preview access ' + mode + ' failed with HTTP ' + response.status);
+  }
+  return response;
 }
+
+const response = await requestBypass(payload);
 if (mode === 'create') {
   const raw = await response.json();
   const protectionBypass = (raw.result ?? raw).protectionBypass;
@@ -42,10 +47,20 @@ if (mode === 'create') {
   if (keys.length !== 1 || !/^[A-Za-z0-9_-]{32,}$/.test(keys[0])) {
     throw new Error('Vercel did not return exactly one shareable-link token');
   }
-  if (!output) throw new Error('GITHUB_OUTPUT is required');
-  // GitHub must mask the token before any later shell step uses it.
-  process.stdout.write('::add-mask::' + keys[0] + '\n');
-  appendFileSync(output, 'available=true\ntoken=' + keys[0] + '\n');
+  // A created link must not outlive a failed attempt to publish its token.
+  try {
+    if (!output) throw new Error('GITHUB_OUTPUT is required');
+    process.stdout.write('::add-mask::' + keys[0] + '\n');
+    // Report availability only after the complete token has been written.
+    appendFileSync(output, 'token=' + keys[0] + '\navailable=true\n');
+  } catch (publicationError) {
+    try {
+      await requestBypass({ revoke: { secret: keys[0], regenerate: false } });
+    } catch {
+      process.stderr.write('WARNING: Could not revoke unpublished temporary preview access\n');
+    }
+    throw publicationError;
+  }
   process.stdout.write('Created expiring, deployment-scoped Momentic preview access\n');
 } else {
   process.stdout.write('Revoked temporary Momentic preview access\n');
