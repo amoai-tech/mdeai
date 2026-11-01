@@ -161,7 +161,7 @@ test.describe("/rentals Details — desktop 1440px", () => {
     await expect(opener).toBeFocused();
   });
 
-  test("a sourced ad offers an MDE follow-up and a safe original link, never a confirmed viewing", async ({ page }) => {
+  test("a sourced ad keeps the original link without claiming a confirmed viewing", async ({ page }) => {
     await gotoRentals(page);
     // Pick a genuinely sourced ad by the outbound control it renders — not by list position, and
     // not by the "Source: <provider>" copy, which a sourced ad without a provider name omits.
@@ -173,9 +173,16 @@ test.describe("/rentals Details — desktop 1440px", () => {
     const panel = page.getByTestId("rental-details-panel");
     await openDetails(detailsFor(page, slug), panel);
 
-    // Phase A makes a sourced ad requestable, but only as an MDE follow-up — never as a
-    // provider-confirmed appointment.
-    await expect(page.getByTestId("rental-details-schedule-cta")).toHaveText(/Request MDE follow-up/);
+    // The database decides requestability. A sourced ad that is requestable offers only
+    // an MDE follow-up, while a non-requestable ad shows no CTA on either surface.
+    const cardCta = sourced.getByTestId("rental-schedule-cta");
+    const detailsCta = page.getByTestId("rental-details-schedule-cta");
+    if ((await cardCta.count()) === 0) {
+      await expect(detailsCta).toHaveCount(0);
+    } else {
+      await expect(cardCta).toHaveText("Request MDE follow-up");
+      await expect(detailsCta).toHaveText("Request MDE follow-up");
+    }
     await expect(page.getByTestId("rental-details-external-note")).toContainText("is not a confirmed viewing");
 
     const source = page.getByTestId("rental-details-source-link");
