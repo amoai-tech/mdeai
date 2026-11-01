@@ -19,6 +19,28 @@ async function open(page: Page, query = "") {
   await expect(trigger(page)).toBeVisible({ timeout: 60_000 });
 }
 
+/**
+ * Select a day without depending on which month the calendar opens on. DayPicker exposes its
+ * navigation as accessible "Go to the Next/Previous Month" buttons, so we walk to the target
+ * month only when the day is not already rendered. No fake clock: a frozen Date can stall
+ * hydration and animations in ways that make these tests flaky for the wrong reason.
+ */
+async function pickDay(page: Page, iso: string) {
+  const [year, month, dayOfMonth] = iso.split("-").map(Number);
+  const target = day(page, `${month}/${dayOfMonth}/${year}`);
+  if ((await target.count()) === 0) {
+    const today = new Date();
+    const delta = (year - today.getFullYear()) * 12 + (month - 1 - today.getMonth());
+    const direction = delta >= 0 ? /next month/i : /previous month/i;
+    for (let step = 0; step < 24; step += 1) {
+      await dialog(page).getByRole("button", { name: direction }).click();
+      if ((await target.count()) > 0) break;
+    }
+  }
+  await expect(target).toBeVisible();
+  await target.click();
+}
+
 async function openCalendar(page: Page) {
   await trigger(page).click();
   await expect(dialog(page)).toBeVisible();
@@ -60,8 +82,8 @@ test.describe("SAN-1611 /rentals stay dates", () => {
   test("picking a range in the calendar applies the inclusive stay", async ({ page }) => {
     await open(page);
     await openCalendar(page);
-    await day(page, "11/10/2026").click();
-    await day(page, "11/15/2026").click();
+    await pickDay(page, "2026-11-10");
+    await pickDay(page, "2026-11-15");
     await expect(page.getByTestId("rentals-dates-summary")).toContainText("Nov 10, 2026");
     await expect(page.getByTestId("rentals-dates-summary")).toContainText("Nov 15, 2026");
     await page.getByTestId("rentals-dates-apply").click();
@@ -74,7 +96,7 @@ test.describe("SAN-1611 /rentals stay dates", () => {
     await open(page, "?from=2026-11-10&through=2026-11-15");
     const before = page.url();
     await openCalendar(page);
-    await day(page, "11/20/2026").click();
+    await pickDay(page, "2026-11-20");
     await page.getByTestId("rentals-dates-cancel").click();
     await expect(dialog(page)).toBeHidden();
     expect(page.url()).toBe(before);
@@ -85,7 +107,7 @@ test.describe("SAN-1611 /rentals stay dates", () => {
     await open(page, "?from=2026-11-10&through=2026-11-15");
     const before = page.url();
     await openCalendar(page);
-    await day(page, "11/20/2026").click();
+    await pickDay(page, "2026-11-20");
     await page.keyboard.press("Escape");
     await expect(dialog(page)).toBeHidden();
     expect(page.url()).toBe(before);

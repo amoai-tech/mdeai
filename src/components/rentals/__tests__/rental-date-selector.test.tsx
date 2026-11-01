@@ -90,3 +90,36 @@ describe("RentalDateSelector — applied state", () => {
     expect(byId("rentals-dates-trigger")?.textContent).toContain("Any dates");
   });
 });
+
+describe("RentalDateSelector — a suggestion can be offered again", () => {
+  it("re-opens the calendar for the SAME suggestion after the owner clears it", async () => {
+    const handled = vi.fn();
+    const props = { neighborhood: null, beds: null, from: null, through: null } as const;
+
+    // 1. Offer it: the draft opens.
+    render({ ...props, suggestedStay: { from: "2026-11-12", through: "2026-11-18" }, onSuggestionHandled: handled });
+    expect(byId("rentals-dates-dialog")).not.toBeNull();
+    expect(handled).toHaveBeenCalled();
+
+    // 2. The renter closes it without applying.
+    await act(async () => { (byId("rentals-dates-cancel") as HTMLElement).click(); });
+    expect(byId("rentals-dates-dialog")).toBeNull();
+    expect(push).not.toHaveBeenCalled();
+
+    // 3. The owner clears the suggestion once it has been handled.
+    render({ ...props });
+
+    // 4. The SAME suggestion arrives again: it must open, not be swallowed by the stale key.
+    await act(async () => {
+      root.render(
+        <RentalDateSelector
+          {...props}
+          suggestedStay={{ from: "2026-11-12", through: "2026-11-18" }}
+          onSuggestionHandled={vi.fn()}
+        />,
+      );
+    });
+    expect(byId("rentals-dates-dialog")).not.toBeNull();
+    expect(push).not.toHaveBeenCalled();
+  });
+});

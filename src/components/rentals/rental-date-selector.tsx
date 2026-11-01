@@ -85,6 +85,11 @@ export function RentalDateSelector({
   const suggestionKey = suggestedStay
     ? `${suggestedStay.from}|${suggestedStay.through ?? ""}`
     : null;
+  // Forget a consumed suggestion once the owner clears it, so the SAME suggestion can open the
+  // calendar again later. Without this, a repeated identical suggestion is silently swallowed.
+  if (!suggestionKey && handledSuggestionKey) {
+    setHandledSuggestionKey(null);
+  }
   if (suggestionKey && suggestionKey !== handledSuggestionKey) {
     const next = {
       from: toLocalDate(suggestedStay!.from),
@@ -160,6 +165,9 @@ export function RentalDateSelector({
           <Calendar
             mode="range"
             numberOfMonths={1}
+            // Open on the month of the date we already have (applied stay or AI draft) instead of
+            // whatever month today happens to be in.
+            defaultMonth={draft?.from}
             selected={draft}
             onSelect={(next) => {
               setDraft(next);
