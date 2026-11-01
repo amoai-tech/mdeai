@@ -28,7 +28,7 @@ export function EventDetailAside({
   event, city, venueLine, schedule, durationLabel, fromTier, tiersRef, askUrl, notice, onCheckout,
 }: EventDetailAsideProps) {
   return (
-            <aside className="order-2 space-y-5 lg:col-start-2 lg:row-start-1 lg:row-span-4 lg:sticky lg:top-8 lg:self-start">
+            <aside className="order-2 space-y-5">
               <div className="space-y-3">
                 <p className="text-sm font-medium text-muted-foreground">{city || "Event details"}</p>
                 <h1 className="text-2xl font-semibold leading-tight tracking-tight md:text-3xl">{event.name}</h1>
