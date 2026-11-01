@@ -21,6 +21,7 @@ import { useOptionalConciergeCoAgent } from "@/components/chat/concierge-coagent
 import { RentalDetailsFrontendTool } from "@/components/rentals/rental-details-tool";
 import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 import { resolveRentalForDetails } from "@/lib/rentals/details-target";
+import { bookingReviewHref } from "@/lib/rentals/booking-review-url";
 import { duplicateListingNotes } from "@/lib/rentals/duplicate-listings";
 import { askFilterSignature } from "@/lib/rentals/ask-results-storage";
 import { useRentalAskResults } from "@/components/rentals/use-rental-ask-results";
@@ -206,6 +207,7 @@ function RentalBrowseViewInner({
                   rental={detailsRental}
                   onClose={closeDetails}
                   onSchedule={scheduleFor(detailsRental)}
+                  bookingReviewHref={bookingReviewHref(detailsRental.id, { from, through })}
                 />
               ) : undefined
             }
@@ -323,6 +325,7 @@ function RentalBrowseViewInner({
           rental={detailsRental}
           onClose={closeDetails}
           onSchedule={scheduleFor(detailsRental)}
+          bookingReviewHref={bookingReviewHref(detailsRental.id, { from, through })}
         />
       ) : null}
     </>

@@ -41,3 +41,23 @@ export function approvedExternalSourceUrl(value: string | null | undefined): str
   );
   return approved ? url.href : null;
 }
+
+/**
+ * SAN-1612 — one policy for "View original listing", used by the card, the Details panel and the
+ * full Details page. Before this, the detail page accepted any HTTPS host except MDE's own while
+ * the card/panel used the allowlist above, so the same record could offer a link in one place and
+ * not the other. The allowlist wins: it is the policy that cannot redirect a renter off-site to a
+ * host MDE does not source inventory from.
+ */
+export function externalListingLink(
+  value: string | null | undefined,
+): { href: string; hostname: string } | null {
+  const href = approvedExternalSourceUrl(value);
+  if (!href) return null;
+  try {
+    // `hostname` (not `host`) so the disclosure never shows a port.
+    return { href, hostname: new URL(href).hostname.replace(/^www\./, "") };
+  } catch {
+    return null;
+  }
+}

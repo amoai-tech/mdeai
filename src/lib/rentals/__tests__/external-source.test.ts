@@ -1,45 +1,44 @@
 import { describe, expect, it } from "vitest";
-import { approvedExternalSourceUrl } from "@/lib/rentals/external-source";
+import { approvedExternalSourceUrl, externalListingLink } from "../external-source";
 
-describe("approvedExternalSourceUrl — external-source allowlist (SAN-1502)", () => {
-  it("returns an approved advertiser's HTTPS URL", () => {
-    expect(approvedExternalSourceUrl("https://www.fincaraiz.com.co/property/123")).toBe(
-      "https://www.fincaraiz.com.co/property/123",
-    );
-    expect(approvedExternalSourceUrl("https://apartamento.mercadolibre.com.co/x")).toBe(
-      "https://apartamento.mercadolibre.com.co/x",
-    );
-    expect(approvedExternalSourceUrl("https://rentberry.com/listing/9")).toBe(
-      "https://rentberry.com/listing/9",
-    );
+const APPROVED = "https://www.fincaraiz.com.co/apartamento/123";
+
+describe("approvedExternalSourceUrl — the one allowlist", () => {
+  it("accepts an approved advertiser over HTTPS", () => {
+    expect(approvedExternalSourceUrl(APPROVED)).toBe("https://www.fincaraiz.com.co/apartamento/123");
   });
 
-  it("rejects an arbitrary HTTPS host — the open-redirect guard", () => {
-    expect(approvedExternalSourceUrl("https://evil.example.com/fake-listing")).toBeNull();
-    // A look-alike suffix must not pass.
-    expect(approvedExternalSourceUrl("https://fincaraiz.com.co.evil.example.com/x")).toBeNull();
+  it("accepts a subdomain of an approved advertiser", () => {
+    expect(approvedExternalSourceUrl("https://listings.rentberry.com/x")).toBe("https://listings.rentberry.com/x");
   });
 
-  it("rejects embedded credentials that would make the approved host look safe", () => {
-    // `new URL()` reports hostname fincaraiz.com.co while carrying "attacker" as the username.
-    expect(approvedExternalSourceUrl("https://attacker@fincaraiz.com.co/phishing")).toBeNull();
-    expect(approvedExternalSourceUrl("https://user:pass@www.fincaraiz.com.co/x")).toBeNull();
+  it.each([
+    ["plain HTTP", "http://www.fincaraiz.com.co/x"],
+    ["an unapproved host", "https://example.com/x"],
+    ["a look-alike host", "https://fincaraiz.com.co.evil.example.com/x"],
+    ["embedded credentials", "https://attacker@fincaraiz.com.co/x"],
+    ["a non-default port", "https://www.fincaraiz.com.co:8443/x"],
+    ["an MDE self-link", "https://www.mdeai.co/rentals"],
+    ["a relative path", "/rentals"],
+    ["empty", ""],
+  ])("rejects %s", (_label, value) => {
+    expect(approvedExternalSourceUrl(value)).toBeNull();
+  });
+});
+
+describe("externalListingLink — SAN-1612 shared display policy", () => {
+  it("returns the href and a readable hostname without www", () => {
+    expect(externalListingLink(APPROVED)).toEqual({
+      href: "https://www.fincaraiz.com.co/apartamento/123",
+      hostname: "fincaraiz.com.co",
+    });
   });
 
-  it("rejects an approved host on a non-default port", () => {
-    expect(approvedExternalSourceUrl("https://fincaraiz.com.co:8443/x")).toBeNull();
-    expect(approvedExternalSourceUrl("https://fincaraiz.com.co:443/x")).toBe(
-      "https://fincaraiz.com.co/x",
-    );
+  it("hides the link for a host the allowlist does not cover, exactly like the card", () => {
+    expect(externalListingLink("https://example.com/listing")).toBeNull();
   });
 
-  it("rejects non-HTTPS, MDE's own hosts, blanks and junk", () => {
-    expect(approvedExternalSourceUrl("http://www.fincaraiz.com.co/property/123")).toBeNull();
-    expect(approvedExternalSourceUrl("https://mdeai.co/rentals/x")).toBeNull();
-    expect(approvedExternalSourceUrl("https://www.mdeai.co/rentals/x")).toBeNull();
-    expect(approvedExternalSourceUrl("")).toBeNull();
-    expect(approvedExternalSourceUrl(null)).toBeNull();
-    expect(approvedExternalSourceUrl(undefined)).toBeNull();
-    expect(approvedExternalSourceUrl("not a url")).toBeNull();
+  it("never exposes a port in the disclosure", () => {
+    expect(externalListingLink("https://www.fincaraiz.com.co:8443/x")).toBeNull();
   });
 });
