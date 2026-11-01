@@ -75,7 +75,10 @@ env:
 jobs:
   supabase-acl:
     name: supabase-acl
-    runs-on: ubuntu-latest
+    # The CI-only port remapper imports stdlib tomllib (Python >=3.11).
+    # Ubuntu 24.04 ships system Python 3.12; pin the runner instead of relying on
+    # the moving ubuntu-latest label or installing an unnecessary tomli fallback.
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
 
     steps:
