@@ -26,29 +26,25 @@ afterEach(() => {
 
 const byId = (id: string) => document.querySelector(`[data-testid="${id}"]`) as HTMLInputElement | null;
 
+/** One way to mount the form, so every case renders the same component with the same props. */
+const renderForm = (props: { defaultStartDate?: string | null; defaultEndDate?: string | null } = {}) =>
+  act(() => root.render(<StartBookingReview apartmentId={APARTMENT} {...props} />));
+
 describe("StartBookingReview — SAN-1611 stay handoff", () => {
   it("prefills the move-in and move-out the renter already applied", () => {
-    act(() =>
-      root.render(
-        <StartBookingReview
-          apartmentId={APARTMENT}
-          defaultStartDate="2026-11-10"
-          defaultEndDate="2026-11-15"
-        />,
-      ),
-    );
+    renderForm({ defaultStartDate: "2026-11-10", defaultEndDate: "2026-11-15" });
     expect(byId("booking-start-date")?.value).toBe("2026-11-10");
     expect(byId("booking-start-end-date")?.value).toBe("2026-11-15");
   });
 
   it("shows no move-out field when the renter only chose a move-in date", () => {
-    act(() => root.render(<StartBookingReview apartmentId={APARTMENT} defaultStartDate="2026-11-10" />));
+    renderForm({ defaultStartDate: "2026-11-10" });
     expect(byId("booking-start-date")?.value).toBe("2026-11-10");
     expect(byId("booking-start-end-date")).toBeNull();
   });
 
   it("never invents a date when the stay was not carried", () => {
-    act(() => root.render(<StartBookingReview apartmentId={APARTMENT} />));
+    renderForm();
     expect(byId("booking-start-date")?.value).toBe("");
     expect(byId("booking-start-end-date")).toBeNull();
   });
@@ -86,15 +82,7 @@ describe("StartBookingReview — submitted payload (SAN-1611)", () => {
   const bodyOf = (call: number) => JSON.parse(fetchMock.mock.calls[call][1].body as string);
 
   it("sends the complete stay, not just a move-in date", async () => {
-    act(() =>
-      root.render(
-        <StartBookingReview
-          apartmentId={APARTMENT}
-          defaultStartDate="2026-11-10"
-          defaultEndDate="2026-11-16"
-        />,
-      ),
-    );
+    renderForm({ defaultStartDate: "2026-11-10", defaultEndDate: "2026-11-16" });
     await submit();
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url] = fetchMock.mock.calls[0] as [string];
@@ -108,11 +96,7 @@ describe("StartBookingReview — submitted payload (SAN-1611)", () => {
   });
 
   it("reuses the same key when the same stay is retried", async () => {
-    act(() =>
-      root.render(
-        <StartBookingReview apartmentId={APARTMENT} defaultStartDate="2026-11-10" defaultEndDate="2026-11-16" />,
-      ),
-    );
+    renderForm({ defaultStartDate: "2026-11-10", defaultEndDate: "2026-11-16" });
     await submit();
     await submit();
     expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -121,11 +105,7 @@ describe("StartBookingReview — submitted payload (SAN-1611)", () => {
   });
 
   it("starts a new intent when the stay changes, instead of colliding on a stale key", async () => {
-    act(() =>
-      root.render(
-        <StartBookingReview apartmentId={APARTMENT} defaultStartDate="2026-11-10" defaultEndDate="2026-11-16" />,
-      ),
-    );
+    renderForm({ defaultStartDate: "2026-11-10", defaultEndDate: "2026-11-16" });
     await submit();
     const endInput = byId("booking-start-end-date")!;
     await act(async () => {

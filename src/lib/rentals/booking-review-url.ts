@@ -24,18 +24,23 @@ const first = (value: RawParam): string | null => {
   return trimmed ? trimmed : null;
 };
 
+/**
+ * One rule for "is this a usable stay": a real move-in, and either no move-out or a real,
+ * non-reversed one. Both the parser and the link builder use it, so they cannot disagree.
+ */
+function isValidStay(from: string, through: string | null): boolean {
+  if (!isRealCalendarDate(from)) return false;
+  if (through === null) return true;
+  return isRealCalendarDate(through) && isOrderedStay(from, through);
+}
+
 /** A validated stay, or nulls. A move-out without a move-in is not a stay. */
 export function parseStayRange(params: { from?: RawParam; through?: RawParam }): StayRange {
   const rawFrom = first(params.from);
   const rawThrough = first(params.through);
-  if (!rawFrom || !isRealCalendarDate(rawFrom)) return { from: null, through: null };
-  // A move-out with no move-in is not a stay.
-  if (rawThrough === null) return { from: rawFrom, through: null };
   // A range that is present but not real or not ordered is unusable as a whole. Dropping only the
   // bad end would silently turn a two-date stay into a one-date one.
-  if (!isRealCalendarDate(rawThrough) || !isOrderedStay(rawFrom, rawThrough)) {
-    return { from: null, through: null };
-  }
+  if (!rawFrom || !isValidStay(rawFrom, rawThrough)) return { from: null, through: null };
   return { from: rawFrom, through: rawThrough };
 }
 
@@ -45,11 +50,9 @@ export function bookingReviewHref(apartmentId: string, stay?: StayRange | null):
   // Validate the whole range here too: callers hand over filters that may still carry a reversed
   // pair (parseBrowseFilters keeps both values so the renter can correct them). Constructing a
   // link from an impossible range would push it downstream where it gets dropped silently.
-  const from = stay?.from && isRealCalendarDate(stay.from) ? stay.from : null;
+  const from = stay?.from ?? null;
   const through = stay?.through ?? null;
-  const throughUsable =
-    through === null || (isRealCalendarDate(through) && (from === null || isOrderedStay(from, through)));
-  if (from && throughUsable) {
+  if (from && isValidStay(from, through)) {
     params.set("from", from);
     if (through) params.set("through", through);
   }

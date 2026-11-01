@@ -14,6 +14,17 @@ const visible = (page: Page, testId: string) => page.locator(`[data-testid="${te
 const dateInput = (page: Page, label: "From" | "Through") =>
   page.locator("label:visible").filter({ hasText: label }).locator("input");
 
+/**
+ * Slug of the first real rental result, or an honest skip when the catalogue returned none.
+ * Extracted so the two booking-handoff cases cannot drift apart.
+ */
+async function firstRentalSlug(page: Page): Promise<string> {
+  const card = page.locator('[data-testid^="rental-card-"][data-result-kind="rental"]').first();
+  test.skip((await card.count()) === 0, "no rental cards in the current results");
+  const testId = (await card.getAttribute("data-testid")) ?? "";
+  return testId.replace("rental-card-", "");
+}
+
 async function open(page: Page, query = "") {
   await page.goto(`/rentals${query}`, { waitUntil: "domcontentloaded" });
   await expect(visible(page, "rentals-date-form")).toBeVisible({ timeout: 60_000 });
@@ -88,25 +99,24 @@ test.describe("SAN-486 /rentals stay dates", () => {
 
   test("the applied stay follows the renter into the booking review", async ({ page }) => {
     await open(page);
-    const card = page.locator('[data-testid^="rental-card-"][data-result-kind="rental"]').first();
-    test.skip((await card.count()) === 0, "no rental cards in the current results");
-    const slug = ((await card.getAttribute("data-testid")) ?? "").replace("rental-card-", "");
+    const slug = await firstRentalSlug(page);
 
     await page.goto(`/rentals/${slug}?from=2026-11-10&through=2026-11-15`, {
       waitUntil: "domcontentloaded",
     });
     const review = page.getByTestId("rental-detail-booking-review-link");
     await expect(review).toBeVisible();
-    await expect(review).toHaveAttribute("href", new RegExp(`apartment=${slug}`));
-    await expect(review).toHaveAttribute("href", /from=2026-11-10/);
-    await expect(review).toHaveAttribute("href", /through=2026-11-15/);
+    // Read the href once and assert on the string: building a RegExp from a value that came from
+    // the page is both a CodeQL finding and needless dynamism for a substring check.
+    const href = (await review.getAttribute("href")) ?? "";
+    expect(href).toContain(`apartment=${slug}`);
+    expect(href).toMatch(/[?&]from=2026-11-10/);
+    expect(href).toMatch(/[?&]through=2026-11-15/);
   });
 
   test("signing in keeps the stay, and an impossible date is never carried", async ({ page }) => {
     await open(page);
-    const card = page.locator('[data-testid^="rental-card-"][data-result-kind="rental"]').first();
-    test.skip((await card.count()) === 0, "no rental cards in the current results");
-    const slug = ((await card.getAttribute("data-testid")) ?? "").replace("rental-card-", "");
+    const slug = await firstRentalSlug(page);
 
     // The review route decides between a sign-in gate and the form on the server, so wait for
     // whichever one this session gets before asking which it was.
