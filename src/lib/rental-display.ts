@@ -23,16 +23,13 @@ export type RentalResultRow = {
   host_name?: string;
 };
 
+// Facts explicitly supplied by the listing. Never infer speed, safety, quietness,
+// or a budget match from keywords in unverified description tags.
 const BENEFIT_MAP: Array<{ re: RegExp; label: string }> = [
-  { re: /\bwifi|wi-fi\b/i, label: "Fast WiFi" },
-  { re: /\bpet[- ]?friendly\b/i, label: "Pet-friendly" },
-  { re: /\bquiet\b/i, label: "Quiet" },
-  { re: /\bnightlife\b/i, label: "Near nightlife" },
-  { re: /\bcowork|workspace|remote\b/i, label: "Remote-work friendly" },
-  { re: /\blong[- ]?stay\b/i, label: "Long-stay" },
-  { re: /\bbudget\b/i, label: "Budget-friendly" },
-  { re: /\bparking\b/i, label: "Parking" },
-  { re: /\bsafe|security\b/i, label: "Secure building" },
+  { re: /\bwi-?fi\b/i, label: "Wi-Fi listed" },
+  { re: /\bpet[- ]?friendly\b/i, label: "Pet-friendly listed" },
+  { re: /\blong[- ]?stay\b/i, label: "Long-stay listed" },
+  { re: /\bparking\b/i, label: "Parking listed" },
 ];
 
 /** One whole-unit amount in its own currency: USD keeps the `$`, every other currency gets its code. */
@@ -81,39 +78,59 @@ export function rentalBenefitBadges(row: RentalResultRow): string[] {
   ].join(" ");
   const out: string[] = [];
   for (const { re, label } of BENEFIT_MAP) {
+    if (label === "Wi-Fi listed" && row.wifi === false) continue;
     if (re.test(haystack) && !out.includes(label)) out.push(label);
   }
-  if (row.wifi && !out.includes("Fast WiFi")) out.unshift("Fast WiFi");
+  if (row.wifi && !out.includes("Wi-Fi listed")) out.unshift("Wi-Fi listed");
   return out.slice(0, 5);
 }
 
+/** Listing-backed, customer-visible explanation. Search score/debug metadata is not evidence. */
 export function buildMatchReason(
   row: RentalResultRow,
   params?: RentalSearchApiParams,
 ): string {
   const parts: string[] = [];
-  if (params?.neighborhood && row.neighborhood) {
+  const normalizeNeighborhood = (value: string) =>
+    value.trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("en-US");
+  if (
+    params?.neighborhood && row.neighborhood &&
+    normalizeNeighborhood(params.neighborhood) === normalizeNeighborhood(row.neighborhood)
+  ) {
     parts.push(`In ${row.neighborhood}`);
   }
-  if (params?.minBedrooms != null && row.bedrooms != null) {
-    // The search asks for "at least N bedrooms", so a larger place can appear. Say what the
-    // renter is actually getting instead of calling a 3 BR a fit for a 1 BR request.
+  if (
+    params?.minBedrooms != null && row.bedrooms_unknown !== true &&
+    row.bedrooms != null && Number.isInteger(row.bedrooms) && row.bedrooms >= params.minBedrooms
+  ) {
     const size = row.bedrooms === 0 ? "Studio" : `${row.bedrooms} BR`;
     if (row.bedrooms === params.minBedrooms) {
       parts.push(`${size}, as you asked`);
-    } else if (row.bedrooms > params.minBedrooms) {
+    } else {
       const asked = params.minBedrooms === 0 ? "studio" : `${params.minBedrooms} BR`;
       parts.push(`${size} (bigger than the ${asked} you asked for)`);
     }
   }
-  if (params?.maxPricePerNight != null && row.nightly_price != null) {
-    if (row.nightly_price <= params.maxPricePerNight) {
-      parts.push(`Within ~$${params.maxPricePerNight}/night budget`);
-    }
+  // A nightly budget is USD. Never compare it to COP or to a monthly-only listing.
+  if (
+    params?.maxPricePerNight != null && row.price_monthly == null &&
+    row.currency?.toUpperCase() === "USD" &&
+    row.nightly_price != null && Number.isFinite(row.nightly_price) &&
+    row.nightly_price >= 0 && row.nightly_price <= params.maxPricePerNight
+  ) {
+    parts.push(`${formatListingMoney(row.nightly_price, "USD")}/night within your ${formatListingMoney(params.maxPricePerNight, "USD")}/night budget`);
+  } else if (
+    params?.maxPriceMonthly != null && row.price_monthly != null &&
+    row.currency?.toUpperCase() === (params.budgetCurrency ?? "COP").toUpperCase() &&
+    Number.isFinite(row.price_monthly) && row.price_monthly >= 0 &&
+    row.price_monthly <= params.maxPriceMonthly
+  ) {
+    const currency = row.currency.toUpperCase();
+    parts.push(`${formatListingMoney(row.price_monthly, currency)}/month within your ${formatListingMoney(params.maxPriceMonthly, currency)}/month budget`);
   }
+  // Amenity claims are labelled as listing-provided, not independently verified.
   const badges = rentalBenefitBadges(row);
   if (badges.length) parts.push(badges.slice(0, 2).join(" · "));
-  // Never claim a match when no listing-backed reason is available.
   return parts.join(" · ");
 }
 

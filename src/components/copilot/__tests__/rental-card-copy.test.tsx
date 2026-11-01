@@ -242,3 +242,38 @@ describe("SAN-1505 mobile rental photo presentation", () => {
     expect(html).not.toContain('data-testid="rental-schedule-cta"');
   });
 });
+
+describe("SAN-1226 customer match reasons on rendered cards", () => {
+  const listing = {
+    id: "rental-match",
+    listingId: "apt-match",
+    title: "Laureles 2BR",
+    neighborhood: "Laureles",
+    bedrooms: 2,
+    nightly_price: 75,
+    currency: "USD",
+    wifi: true,
+    amenities: ["parking"],
+  };
+
+  it("renders the actual listing price and a grounded, readable match explanation", () => {
+    const html = renderToStaticMarkup(
+      <RentalCard {...listing} searchParams={{ neighborhood: "Laureles", minBedrooms: 2, maxPricePerNight: 80 }} />,
+    );
+    expect(html).toContain('data-testid="rental-match-reason"');
+    expect(html).toContain("Why it may fit:");
+    expect(html).toContain("In Laureles");
+    expect(html).toContain("2 BR, as you asked");
+    expect(html).toContain("$75/night within your $80/night budget");
+    expect(html).toContain("Wi-Fi listed");
+    expect(html).not.toMatch(/hybrid_semantic|neighborhood_profile|hybrid_search_listings RPC|Fast WiFi/);
+  });
+
+  it("does not show a false cross-currency budget match", () => {
+    const html = renderToStaticMarkup(
+      <RentalCard {...listing} currency="COP" searchParams={{ maxPricePerNight: 80 }} />,
+    );
+    expect(html).not.toContain("within your");
+    expect(html).toContain("Wi-Fi listed");
+  });
+});

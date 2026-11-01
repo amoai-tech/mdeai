@@ -177,3 +177,20 @@ test.describe("SAN-1341 deterministic critical journeys", { tag: ["@critical", "
     await expect(trigger).toBeFocused();
   });
 });
+
+test.describe("SAN-1226 customer-facing rental explanations (desktop)", { tag: ["@deterministic"] }, () => {
+  test("listing facts are visible, debug ranking is hidden, and Details still opens", async ({ page }) => {
+    await mockFastPaths(page);
+    await gotoDeterministicChat(page);
+    const responsePromise = waitForPost(page, "/api/rentals/search");
+    await typeAndSubmit(page, RENTAL_QUERY);
+    expect((await responsePromise).ok()).toBe(true);
+    const card = page.getByTestId("rental-card").first();
+    await expect(card).toBeVisible();
+    await expect(card.getByTestId("rental-match-reason")).toContainText("Wi-Fi listed");
+    await expect(card).not.toContainText(/hybrid_semantic|hybrid_search_listings RPC|neighborhood_profile/);
+    await expect(page.getByTestId("rank-explanation-rental")).toHaveCount(0);
+    await card.getByTestId("rental-details-cta").click();
+    await expect(page.getByTestId("rental-details-panel")).toHaveAttribute("data-listing-id", rental.id);
+  });
+});
