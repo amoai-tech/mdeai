@@ -577,10 +577,16 @@ test.describe("SAN-1204 · the owning broker sees the real viewing request", () 
     try {
       await seedRequest(admin, fixture, run);
 
-      const owner = await assertOwnerSees(browser, fixture, run);
-      const other = await assertOtherDenied(browser, fixture);
-      const mobile = await assertMobileWorkspace(browser, fixture);
-      await assertAnonymousDenied(browser);
+      // Budget each browser stage so a blocked host Suspense page cannot consume
+      // the entire 600s test timeout and skip cleanup of real production rows.
+      const owner = await test.step("owning broker sees exactly one viewing", () =>
+        assertOwnerSees(browser, fixture, run), { timeout: 105_000 });
+      const other = await test.step("unrelated broker sees no viewing", () =>
+        assertOtherDenied(browser, fixture), { timeout: 105_000 });
+      const mobile = await test.step("mobile broker workspace shows viewing", () =>
+        assertMobileWorkspace(browser, fixture), { timeout: 105_000 });
+      await test.step("anonymous visitor is denied", () =>
+        assertAnonymousDenied(browser), { timeout: 40_000 });
 
       for (const [who, problems] of [
         ["owner", owner],
