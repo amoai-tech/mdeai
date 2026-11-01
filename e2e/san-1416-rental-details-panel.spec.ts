@@ -81,11 +81,26 @@ test.describe("/rentals Details — desktop 1440px", () => {
     // What a renter needs, and nothing invented.
     await expect(page.getByTestId("rental-details-price")).toHaveText(/^COP [\d,]+\/mo$/);
     await expect(panel.locator("h2")).not.toBeEmpty();
-    await expect(page.getByTestId("rental-details-schedule-cta")).toHaveCount(0);
-    await expect(page.getByTestId("rental-details-external-note")).toContainText("cannot schedule a viewing");
+
+    // Exactly one CTA, and its label is one of the two truthful ones the app can show.
+    // SAN-1504: a managed listing offers "Schedule viewing"; a sourced ad offers "Request MDE
+    // follow-up". Neither may claim an appointment the advertiser has confirmed. Asserting the
+    // label against provenance (not against a fixed card position) keeps this true when the
+    // catalogue order changes.
+    const scheduleCta = page.getByTestId("rental-details-schedule-cta");
+    await expect(scheduleCta).toBeVisible();
+    const ctaLabel = (await scheduleCta.innerText()).trim();
+    expect(["Schedule viewing", "Request MDE follow-up"]).toContain(ctaLabel);
+    if (ctaLabel === "Request MDE follow-up") {
+      await expect(page.getByTestId("rental-details-external-note")).toContainText("is not a confirmed viewing");
+    }
+
+    // An original-listing link, when one is offered, is a safe outbound link in a new tab.
     const source = page.getByTestId("rental-details-source-link");
-    await expect(source).toHaveAttribute("href", /fincaraiz\.com\.co/);
-    await expect(source).toHaveAttribute("target", "_blank");
+    if ((await source.count()) > 0) {
+      await expect(source).toHaveAttribute("href", /^https:\/\//);
+      await expect(source).toHaveAttribute("target", "_blank");
+    }
 
     // Photos: the first one really loads.
     await expect
@@ -138,6 +153,28 @@ test.describe("/rentals Details — desktop 1440px", () => {
     await expect(opener).toBeFocused();
   });
 
+  test("a sourced ad offers an MDE follow-up and a safe original link, never a confirmed viewing", async ({ page }) => {
+    await gotoRentals(page);
+    // Pick a genuinely sourced ad by its own label, not by list position.
+    const sourced = cards(page).filter({ hasText: "Source:" }).first();
+    test.skip((await sourced.count()) === 0, "no sourced ad in the current results");
+    const slug = ((await sourced.getAttribute("data-testid")) ?? "").replace("rental-card-", "");
+    const panel = page.getByTestId("rental-details-panel");
+    await openDetails(detailsFor(page, slug), panel);
+
+    // Phase A makes a sourced ad requestable, but only as an MDE follow-up — never as a
+    // provider-confirmed appointment.
+    await expect(page.getByTestId("rental-details-schedule-cta")).toHaveText(/Request MDE follow-up/);
+    await expect(page.getByTestId("rental-details-external-note")).toContainText("is not a confirmed viewing");
+
+    const source = page.getByTestId("rental-details-source-link");
+    await expect(source).toBeVisible();
+    await expect(source).toHaveAttribute("href", /^https:\/\//);
+    await expect(source).toHaveAttribute("target", "_blank");
+    expect((await source.getAttribute("rel")) ?? "").toContain("noopener");
+    expect(new URL(page.url()).pathname).toBe("/rentals");
+  });
+
   test("an ad with no coordinates opens Details with no map link and no invented pin", async ({ page }) => {
     await gotoRentals(page);
     const unmapped = page.locator('[data-testid^="rental-card-"][data-result-kind="rental"]:not([data-pin-id])').first();
@@ -175,7 +212,11 @@ test.describe("/rentals Details — phone 390px", () => {
     await expect(sheet).toHaveAttribute("role", "dialog");
     await expect(page.getByTestId("rental-details-panel")).toHaveCount(0); // not the desktop panel
     await expect(page.getByTestId("rental-details-price")).toHaveText(/^COP [\d,]+\/mo$/);
-    await expect(page.getByTestId("rental-details-schedule-cta")).toHaveCount(0);
+    // Exactly one truthful action label for whichever provenance this record has. A panel with no
+    // requestable action renders no CTA at all — covered in rental-details.test.tsx.
+    await expect(page.getByTestId("rental-details-schedule-cta")).toHaveText(
+      /^(Schedule viewing|Request MDE follow-up)$/,
+    );
     const close = page.getByTestId("rental-details-close");
     const box = await close.boundingBox();
     expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
