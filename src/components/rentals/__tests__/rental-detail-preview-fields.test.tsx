@@ -88,17 +88,24 @@ describe("rental detail — external preview fields", () => {
   });
 
   it("shows the real destination and requires confirmation before opening an external source", async () => {
-    await render(preview({ sourceUrl: "https://newsource.example/listing/42" }));
+    // SAN-1612: an outbound link is only offered for an approved advertiser host, the same rule
+    // the browse card and the map panel use. An unapproved host shows no link at all (next test).
+    await render(preview({ sourceUrl: "https://www.rentberry.com/listing/42" }));
     const link = document.querySelector<HTMLAnchorElement>('[data-testid="rental-detail-source-link"]');
-    expect(link?.getAttribute("href")).toBe("https://newsource.example/listing/42");
-    expect(link?.textContent).toContain("newsource.example");
+    expect(link?.getAttribute("href")).toBe("https://www.rentberry.com/listing/42");
+    expect(link?.textContent).toContain("rentberry.com");
     expect(link?.getAttribute("rel")).toContain("noopener");
     const confirmation = vi.spyOn(window, "confirm").mockReturnValue(false);
     const click = new MouseEvent("click", { bubbles: true, cancelable: true });
     await act(async () => { link?.dispatchEvent(click); });
-    expect(confirmation).toHaveBeenCalledWith(expect.stringContaining("newsource.example"));
+    expect(confirmation).toHaveBeenCalledWith(expect.stringContaining("rentberry.com"));
     expect(click.defaultPrevented).toBe(true);
     confirmation.mockRestore();
+  });
+
+  it("offers no outbound link for a host outside the approved advertiser allowlist", async () => {
+    await render(preview({ sourceUrl: "https://newsource.example/listing/42" }));
+    expect(document.querySelector('[data-testid="rental-detail-source-link"]')).toBeNull();
   });
 
   it.each([
@@ -121,8 +128,11 @@ describe("rental detail — external preview fields", () => {
       rental_can_request_viewing: true,
     });
     await render(external);
+    expect(external.isExternalSource).toBe(true);
     expect(document.querySelector('[data-testid="rental-detail-source-link"]')?.getAttribute("href"))
       .toBe("https://www.fincaraiz.com.co/apartaestudio/193916988");
+    // Native booking review belongs to MDE-managed rentals, not third-party advertisements.
+    expect(document.querySelector('[data-testid="rental-detail-booking-review-link"]')).toBeNull();
   });
 
   it("does not offer a fake AI question or inert Save action", async () => {
@@ -133,6 +143,8 @@ describe("rental detail — external preview fields", () => {
       rental_can_request_viewing: true,
     });
     await render(managed);
+    expect(managed.isExternalSource).toBe(false);
+    expect(document.querySelector('[data-testid="rental-detail-booking-review-link"]')).not.toBeNull();
     const labels = Array.from(document.querySelectorAll("button")).map((button) => button.textContent ?? "");
     expect(labels.some((label) => /ask a question/i.test(label))).toBe(false);
     expect(labels.some((label) => /^\s*save\s*$/i.test(label))).toBe(false);
