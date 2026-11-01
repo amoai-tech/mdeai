@@ -280,10 +280,19 @@ const externalListingLinkFor = (value: string | null): { href: string; hostname:
 
 /** SAN-1202 · RE-DES-007 — consumer rental detail page. */
 // skipcq: JS-0067 - ES module export; not browser global scope
-export function RentalDetailView({ detail, backHref = "/rentals" }: { detail: RentalDetail; backHref?: string }) {
+export function RentalDetailView({
+  detail,
+  backHref = "/rentals",
+  bookingReviewHref,
+}: {
+  detail: RentalDetail;
+  backHref?: string;
+  /** SAN-1611: the renter's already-applied stay, carried into the booking review. */
+  bookingReviewHref?: string;
+}) {
   return (
     <RentalUiProvider>
-      <RentalDetailInner detail={detail} backHref={backHref} />
+      <RentalDetailInner detail={detail} backHref={backHref} bookingReviewHref={bookingReviewHref} />
       <ScheduleViewingModal />
     </RentalUiProvider>
   );
@@ -321,7 +330,15 @@ function RentalDescription({ description }: { description?: string | null }) {
 }
 
 // skipcq: JS-0067, JS-R1005, JS-0415 - module-local helper with intentional UI composition complexity
-function RentalDetailInner({ detail, backHref }: { detail: RentalDetail; backHref: string }) {
+function RentalDetailInner({
+  detail,
+  backHref,
+  bookingReviewHref,
+}: {
+  detail: RentalDetail;
+  backHref: string;
+  bookingReviewHref?: string;
+}) {
   const { openScheduleViewing } = useRentalUi();
   // The HTML arrives before client event handlers do. Do not show a clickable
   // action that silently loses a renter's first tap before hydration.
@@ -365,7 +382,7 @@ function RentalDetailInner({ detail, backHref }: { detail: RentalDetail; backHre
           {/* A persisted apartment can start a draft booking review without any payment. */}
           {detail.status !== "development-preview" ? (
             <Link
-              href={`/rentals/bookings/new?apartment=${encodeURIComponent(detail.id)}`}
+              href={bookingReviewHref ?? `/rentals/bookings/new?apartment=${encodeURIComponent(detail.id)}`}
               data-testid="rental-detail-booking-review-link"
               className="inline-flex max-w-full items-center rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted"
             >
