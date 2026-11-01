@@ -223,6 +223,7 @@ function DetailsBody({
           >
             <ExternalLink data-icon="inline-start" aria-hidden />
             View original listing
+            <span className="sr-only">(opens in a new tab)</span>
           </a>
         ) : null}
       </div>

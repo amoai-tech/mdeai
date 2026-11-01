@@ -368,9 +368,10 @@ function RentalDetailInner({
           <RentalSpecs detail={detail} />
 
           {/*
-            SAN-1612 — one place for the choices a renter can take on this apartment. The primary
-            viewing CTA stays in the price column (desktop) and the fixed bar (phone) so there is
-            one request action per viewport, not two competing ones.
+            SAN-1612 — the secondary choices for this apartment. The primary viewing CTA is the one
+            in the price column (desktop) and the fixed bar (phone), so it is deliberately NOT
+            repeated here: two "Schedule viewing" buttons on one screen is worse than a truthful
+            heading. Hence "Other options", not "What would you like to do?".
           */}
           <section
             aria-labelledby="rental-actions-heading"
@@ -378,7 +379,7 @@ function RentalDetailInner({
             className="rounded-xl border border-border p-4"
           >
             <h2 id="rental-actions-heading" className="mb-3 font-serif text-base font-semibold">
-              What would you like to do?
+              Other options
             </h2>
             <div className="flex flex-wrap gap-2">
               {detail.status !== "development-preview" && !detail.isExternalSource ? (
@@ -405,6 +406,8 @@ function RentalDetailInner({
                 >
                   <ExternalLink className="size-3.5" aria-hidden /> View original listing
                   <span className="break-all text-xs text-muted-foreground">({sourceLink.hostname})</span>
+                  {/* The new tab is a real navigation change, so say it instead of only doing it. */}
+                  <span className="sr-only">(opens in a new tab)</span>
                 </a>
               ) : null}
             </div>
