@@ -101,7 +101,8 @@ export function buildMatchReason(
   }
   if (
     params?.minBedrooms != null && row.bedrooms_unknown !== true &&
-    row.bedrooms != null && Number.isInteger(row.bedrooms) && row.bedrooms >= params.minBedrooms
+    row.bedrooms != null && Number.isInteger(row.bedrooms) && row.bedrooms >= params.minBedrooms &&
+    (params.maxBedrooms == null || row.bedrooms <= params.maxBedrooms)
   ) {
     const size = row.bedrooms === 0 ? "Studio" : `${row.bedrooms} BR`;
     if (row.bedrooms === params.minBedrooms) {

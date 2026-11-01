@@ -38,6 +38,7 @@ import { buildRetryHref } from "@/lib/rentals/browse-retry-href";
 import type { Rental } from "@/mastra/tools/search-rentals";
 import { buildRentalsUrl, rentalsQueryString } from "@/lib/rentals/browse-filters";
 import { formatDateOnly } from "@/lib/rentals/date-only";
+import { buildRentalSearchParams } from "@/lib/rental-query-parser";
 
 function formatCountSubtitle(total: number, shown: number): string {
   if (total === 0) return "0 apartments";
@@ -93,6 +94,11 @@ function RentalBrowseViewInner({
   const { activeAsk, acceptResults, clearResults } = useRentalAskResults(threadId, askSignature);
   const shownResults = activeAsk?.results ?? results;
   const shownTotal = activeAsk?.total ?? total;
+  const matchParams = useMemo(() => {
+    if (activeAsk) return buildRentalSearchParams(activeAsk.query, {}) ?? undefined;
+    return { neighborhood: neighborhood ?? undefined, minBedrooms: beds != null ? Number(beds) : undefined,
+      maxBedrooms: beds != null && Number(beds) < 3 ? Number(beds) : undefined };
+  }, [activeAsk, neighborhood, beds]);
   const filterState = { neighborhood, beds, from, through };
   // A preview fixture failure must retry the preview, not send the user to the public browse.
   const retryHref = previewMode ? buildRetryHref({ neighborhood, beds }, true) : buildRentalsUrl(filterState);
@@ -297,6 +303,7 @@ function RentalBrowseViewInner({
                     key={r.id}
                     mediaLayout="inline"
                     rental={r}
+                    matchParams={matchParams}
                     detailSearch={detailSearch}
                     testId={`rental-card-${r.id}`}
                     selected={mappedIds.has(pinId) && selectedPinId === pinId}
