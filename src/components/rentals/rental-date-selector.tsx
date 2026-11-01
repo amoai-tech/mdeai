@@ -18,6 +18,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { buildRentalsUrl } from "@/lib/rentals/browse-filters";
 import { formatDateOnly, isOrderedStay, isRealCalendarDate } from "@/lib/rentals/date-only";
 
@@ -61,6 +62,7 @@ export function RentalDateSelector({
   onSuggestionHandled?: () => void;
 }) {
   const router = useRouter();
+  const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<DateRange | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
@@ -154,35 +156,45 @@ export function RentalDateSelector({
           {label}
         </DialogTrigger>
 
-        <DialogContent data-testid="rentals-dates-dialog" className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Choose your stay</DialogTitle>
-            <DialogDescription>
-              Pick the first and last day you’ll be there, then apply. Nothing is booked or charged.
+        <DialogContent
+          data-testid="rentals-dates-dialog"
+          className="flex max-h-[90dvh] w-full flex-col gap-0 overflow-y-auto rounded-2xl p-0"
+          style={{ maxWidth: "min(48rem, calc(100vw - 1.25rem))" }}
+        >
+          <DialogHeader className="gap-1 border-b px-5 pt-6 pb-5 text-center sm:px-7">
+            <DialogTitle className="text-xl font-semibold">When</DialogTitle>
+            <DialogDescription data-testid="rentals-dates-summary" className="min-h-5 text-sm">
+              {draft?.from
+                ? `${formatDateOnly(toIsoDate(draft.from))}${
+                    draft.to ? ` – ${formatDateOnly(toIsoDate(draft.to))}` : " · pick the last day"
+                  }`
+                : "Choose your stay dates"}
             </DialogDescription>
           </DialogHeader>
 
-          <Calendar
-            mode="range"
-            numberOfMonths={1}
-            // Open on the month of the date we already have (applied stay or AI draft) instead of
-            // whatever month today happens to be in.
-            defaultMonth={draft?.from}
-            selected={draft}
-            onSelect={(next) => {
-              setDraft(next);
-              setError(null);
-            }}
-            autoFocus
-          />
-
-          <p className="text-xs text-muted-foreground" data-testid="rentals-dates-summary">
-            {draft?.from
-              ? `${formatDateOnly(toIsoDate(draft.from))}${
-                  draft.to ? ` – ${formatDateOnly(toIsoDate(draft.to))}` : " · pick the last day"
-                }`
-              : "No dates selected"}
-          </p>
+          <div className="px-2 py-5 sm:px-6 sm:py-6">
+            <Calendar
+              mode="range"
+              numberOfMonths={isMobile ? 1 : 2}
+              // One month on a phone; two side-by-side on larger screens, as in the visual
+              // reference. Keep DayPicker's real month buttons and keyboard behavior.
+              className={cn(
+                "mx-auto w-full max-w-full [--cell-size:2.5rem] min-[390px]:[--cell-size:2.75rem]",
+                "[&_.rdp-months]:w-full [&_.rdp-months]:justify-center [&_.rdp-months]:gap-6",
+                "[&_.rdp-month]:min-w-0 [&_.rdp-month]:flex-1",
+                "[&_button[data-range-start=true]]:rounded-full [&_button[data-range-start=true]]:bg-foreground [&_button[data-range-start=true]]:text-background",
+                "[&_button[data-range-end=true]]:rounded-full [&_button[data-range-end=true]]:bg-foreground [&_button[data-range-end=true]]:text-background",
+              )}
+              // Applied date or AI draft determines the initial month (not today's month).
+              defaultMonth={draft?.from}
+              selected={draft}
+              onSelect={(next) => {
+                setDraft(next);
+                setError(null);
+              }}
+              autoFocus
+            />
+          </div>
 
           {guestsAvailable ? (
             <GuestCount max={maxGuests as number} initial={initialGuests ?? 1} />
@@ -194,18 +206,26 @@ export function RentalDateSelector({
             </p>
           ) : null}
 
-          <DialogFooter className="gap-2">
-            {from || through ? (
-              <Button type="button" variant="ghost" onClick={clear} data-testid="rentals-dates-clear" className="h-11 min-h-11">
-                Clear dates
-              </Button>
-            ) : null}
-            <DialogClose render={<Button type="button" variant="outline" data-testid="rentals-dates-cancel" className="h-11 min-h-11" />}>
-              Cancel
-            </DialogClose>
-            <Button type="button" onClick={apply} data-testid="rentals-dates-apply" className="h-11 min-h-11">
-              Apply dates
+          {/* Two groups, so Clear sits at the far left and the decision pair at the right. An
+              auto-margin on a single flex child resolved to 0 here, so the grouping is explicit. */}
+          <DialogFooter className="m-0 gap-2 rounded-b-2xl border-t bg-background px-5 py-4 sm:flex-row sm:justify-between sm:px-7">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={clear}
+              data-testid="rentals-dates-clear"
+              className="h-11 min-h-11"
+            >
+              Clear
             </Button>
+            <div className="flex flex-col-reverse gap-2 sm:flex-row">
+              <DialogClose render={<Button type="button" variant="outline" data-testid="rentals-dates-cancel" className="h-11 min-h-11" />}>
+                Cancel
+              </DialogClose>
+              <Button type="button" onClick={apply} data-testid="rentals-dates-apply" className="h-11 min-h-11">
+                Update dates
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>

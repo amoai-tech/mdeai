@@ -22,6 +22,21 @@ let root: Root;
 const byId = (id: string) => document.querySelector(`[data-testid="${id}"]`);
 
 beforeEach(() => {
+  // The selector picks one or two months via useIsMobile(), which reads matchMedia. jsdom does
+  // not implement it, so provide a desktop-shaped stub (matches: false => two months).
+  Object.defineProperty(window, "matchMedia", {
+    writable: true,
+    value: (query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    }),
+  });
   push.mockReset();
   container = document.createElement("div");
   document.body.appendChild(container);

@@ -133,6 +133,41 @@ test.describe("SAN-1611 /rentals stay dates", () => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
   });
 
+  test("desktop shows two months side by side, and the dialog fits the viewport", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await open(page, "?from=2026-11-10&through=2026-11-15");
+    await openCalendar(page);
+
+    const months = dialog(page).locator(".rdp-month");
+    await expect(months).toHaveCount(2);
+    // Both captions are real month names, not a repeated one.
+    const captions = await dialog(page).locator(".rdp-caption_label").allInnerTexts();
+    const labels = [...new Set(captions.map((c) => c.trim()).filter(Boolean))];
+    expect(labels.length).toBe(2);
+
+    // No month is squeezed: every day cell keeps a usable size, and the two months do not overlap.
+    const boxes = await months.evaluateAll((els) => els.map((el) => el.getBoundingClientRect()));
+    expect(boxes[1].left).toBeGreaterThanOrEqual(boxes[0].right - 1);
+    const cell = await dialog(page).locator("button[data-day]").first().boundingBox();
+    expect(cell?.height ?? 0).toBeGreaterThanOrEqual(40);
+
+    // The dialog fits the viewport rather than overflowing it.
+    const box = await dialog(page).boundingBox();
+    expect(box?.width ?? 0).toBeGreaterThanOrEqual(700);
+    expect(box?.width ?? 0).toBeLessThanOrEqual(1440);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
+  });
+
+  test("390px phone shows a single month that fits the screen", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await open(page);
+    await openCalendar(page);
+    await expect(dialog(page).locator(".rdp-month")).toHaveCount(1);
+    const box = await dialog(page).boundingBox();
+    expect(box?.width ?? 0).toBeLessThanOrEqual(390);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
+  });
+
   test("the applied stay follows the renter into the booking review", async ({ page }) => {
     await open(page);
     const card = page.locator('[data-testid^="rental-card-"][data-result-kind="rental"]').first();
