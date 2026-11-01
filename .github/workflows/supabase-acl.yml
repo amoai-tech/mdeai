@@ -97,6 +97,47 @@ jobs:
       - name: Install
         run: npm ci
 
+      # The checked-in 546xx ports remain correct for developer machines, but on Linux runners
+      # they fall inside the ephemeral TCP range (usually 32768-60999). Docker may then fail
+      # to bind :54622 after a dependency download briefly uses that port. Change ONLY the
+      # throwaway CI checkout; all subsequent Supabase CLI commands read the same config.
+      - name: Move CI-only Supabase ports below the Linux ephemeral range
+        run: |
+          python3 - <<'PYPORTS'
+          import re
+          import tomllib
+          from pathlib import Path
+
+          path = Path("supabase/config.toml")
+          original = path.read_text()
+          # Only the seven active, fixed Supabase service ports; leave commented examples alone.
+          ci_config, count = re.subn(
+              r"(?m)^((?:shadow_)?port[ \t]*=[ \t]*)546([0-9]{2})$",
+              r"\g<1>246\2",
+              original,
+          )
+          if count != 7:
+              raise SystemExit(f"Expected seven active 546xx port settings; found {count}")
+          parsed = tomllib.loads(ci_config)
+          expected = {
+              ("api", "port"): 24621,
+              ("db", "port"): 24622,
+              ("db", "shadow_port"): 24620,
+              ("db.pooler", "port"): 24629,
+              ("studio", "port"): 24623,
+              ("local_smtp", "port"): 24624,
+              ("analytics", "port"): 24627,
+          }
+          for (section, key), port in expected.items():
+              value = parsed
+              for part in section.split("."):
+                  value = value[part]
+              if value[key] != port:
+                  raise SystemExit(f"Incorrect {section}.{key} CI port: {value[key]}")
+          path.write_text(ci_config)
+          print("CI-only Supabase ports: API 24621, DB 24622, shadow 24620, others 24623-24629")
+          PYPORTS
+
       - name: Start local Supabase stack
         run: supabase start
 
