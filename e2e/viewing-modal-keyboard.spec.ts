@@ -1,4 +1,6 @@
 import { test, expect, type Locator, type Page } from "@playwright/test";
+import { chooseViewingDateTime, advanceViewingReview } from "./helpers/viewing-date-picker";
+import { nextMedellinTestViewingWallClock } from "@/lib/leads/schedule-viewing-time";
 import {
   gotoDeterministicChat,
   mockFastPaths,
@@ -95,7 +97,70 @@ async function expectInsideVisibleViewport(
 test.describe("SAN-1075 viewing modal on a phone", () => {
   test.use({ viewport: PHONE_390, isMobile: true, hasTouch: true });
 
-  test("focuses the first field, uses 16px inputs, and keeps Submit above the keyboard", async ({
+  test("desktop calendar and review fit without changing the listing", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const modal = await openViewingModal(page);
+    const before = page.url();
+    await modal.locator('input[name="name"]').fill("Camila Test");
+    await modal.locator('input[name="email"]').fill("camila@example.com");
+    await chooseViewingDateTime(page, nextMedellinTestViewingWallClock());
+    const box = await modal.getByRole("dialog").boundingBox();
+    expect(box?.width ?? 0).toBeLessThanOrEqual(530);
+    expect(box?.height ?? 0).toBeLessThanOrEqual(900);
+    await advanceViewingReview(page);
+    await expect(modal.getByTestId("schedule-viewing-review")).toContainText("Camila Test");
+    await modal.getByRole("button", { name: "Cancel" }).click();
+    await expect(modal).toBeHidden();
+    expect(page.url()).toBe(before);
+  });
+
+  test("calendar → review → edit → cancel makes no API write", async ({ page }) => {
+    let writes = 0;
+    await page.route("**/api/leads/schedule-viewing", async (route) => {
+      writes++;
+      await route.fulfill({ status: 500, body: "Unexpected request before confirmation" });
+    });
+    const modal = await openViewingModal(page);
+    await expect(modal.getByTestId("viewing-date-selection")).toContainText("No date selected");
+    await expect(modal.getByTestId("viewing-time")).toBeVisible();
+    await chooseViewingDateTime(page, nextMedellinTestViewingWallClock());
+    await modal.locator('input[name="name"]').fill("Camila Test");
+    await modal.locator('input[name="email"]').fill("camila@example.com");
+    await advanceViewingReview(page);
+    await expect(modal.getByTestId("schedule-viewing-review")).toContainText("Camila Test");
+    expect(writes).toBe(0);
+    await modal.getByTestId("schedule-viewing-edit").click();
+    await expect(modal.locator('input[name="name"]')).toHaveValue("Camila Test");
+    await advanceViewingReview(page);
+    await modal.getByRole("button", { name: "Cancel" }).click();
+    await expect(modal).toBeHidden();
+    expect(writes).toBe(0);
+  });
+
+  test("explicit final request shows receipt only after both IDs are acknowledged", async ({ page }) => {
+    let writes = 0;
+    await page.route("**/api/leads/schedule-viewing", async (route) => {
+      writes++;
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+        success: true,
+        leadId: "11111111-1111-1111-1111-000000000001",
+        showingId: "22222222-2222-2222-2222-000000000002",
+        message: "Viewing request received — awaiting host confirmation.",
+      }) });
+    });
+    const modal = await openViewingModal(page);
+    await modal.locator('input[name="name"]').fill("Camila Test");
+    await modal.locator('input[name="email"]').fill("camila@example.com");
+    await chooseViewingDateTime(page, nextMedellinTestViewingWallClock());
+    await advanceViewingReview(page);
+    expect(writes).toBe(0);
+    await modal.getByTestId("schedule-viewing-submit").click();
+    await expect(modal).toBeHidden();
+    await expect(page.getByTestId("lead-confirmation-card")).toContainText("awaiting host confirmation");
+    expect(writes).toBe(1);
+  });
+
+  test("focuses the first field, uses 16px inputs, and keeps Review above the keyboard", async ({
     page,
   }) => {
     await installKeyboardModel(page);
@@ -104,7 +169,7 @@ test.describe("SAN-1075 viewing modal on a phone", () => {
     await expect(page.locator('input[name="name"]')).toBeFocused();
 
     for (const [label, action] of [
-      ["Submit", page.getByTestId("schedule-viewing-submit")],
+      ["Review", page.getByTestId("schedule-viewing-review-button")],
       ["Cancel", page.getByRole("button", { name: "Cancel" })],
     ] as const) {
       await expect
@@ -127,8 +192,8 @@ test.describe("SAN-1075 viewing modal on a phone", () => {
     await setKeyboard(page, 320);
     await expectInsideVisibleViewport(
       page,
-      page.getByTestId("schedule-viewing-submit"),
-      "Submit",
+      page.getByTestId("schedule-viewing-review-button"),
+      "Review",
     );
   });
 
@@ -145,9 +210,9 @@ test.describe("SAN-1075 viewing modal on a phone", () => {
     expect(box!.y).toBeGreaterThanOrEqual(-1);
     expect(box!.y + box!.height).toBeLessThanOrEqual(LANDSCAPE.height + 1);
 
-    const submit = page.getByTestId("schedule-viewing-submit");
+    const submit = page.getByTestId("schedule-viewing-review-button");
     await submit.scrollIntoViewIfNeeded();
-    await expectInsideVisibleViewport(page, submit, "Submit in landscape");
+    await expectInsideVisibleViewport(page, submit, "Review in landscape");
   });
 
   test("a short phone with a keyboard can still scroll to Submit", async ({ page }) => {
@@ -156,8 +221,8 @@ test.describe("SAN-1075 viewing modal on a phone", () => {
     await openViewingModal(page);
 
     await setKeyboard(page, 300);
-    const submit = page.getByTestId("schedule-viewing-submit");
+    const submit = page.getByTestId("schedule-viewing-review-button");
     await submit.scrollIntoViewIfNeeded();
-    await expectInsideVisibleViewport(page, submit, "Submit on a short phone");
+    await expectInsideVisibleViewport(page, submit, "Review on a short phone");
   });
 });
