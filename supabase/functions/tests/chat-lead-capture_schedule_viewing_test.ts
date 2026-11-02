@@ -133,6 +133,26 @@ Deno.test("createScheduleViewingBridge — maps RPC validation errors", async ()
   });
 });
 
+Deno.test("createScheduleViewingBridge — classifies the stable P1287 without reading prose", async () => {
+  const client = {
+    rpc: () => Promise.resolve({
+      data: null,
+      // Deliberately unhelpful message: classification must come from the SQLSTATE alone.
+      error: { code: "P1287", message: "unavailable" },
+    }),
+  } as unknown as Parameters<typeof createScheduleViewingBridge>[0];
+
+  const result = await createScheduleViewingBridge(client, {
+    listingId: "inactive",
+    preferredAt: "2026-10-15T14:00:00.000Z",
+    idempotencyKey: "sv-test-1287-123",
+    email: "camila@example.com",
+  });
+
+  assertEquals(result.ok, false);
+  if (!result.ok) assertEquals(result.code, "LISTING_UNAVAILABLE");
+});
+
 Deno.test("createScheduleViewingBridge — resolves a differently-cased listing id", async () => {
   const calls: Array<Record<string, unknown>> = [];
   const client = {

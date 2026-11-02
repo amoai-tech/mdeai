@@ -147,9 +147,13 @@ export async function createScheduleViewingBridge(
       error.message.startsWith("p1_schedule_tour_atomic:");
     // A real apartment can still be un-requestable (source ad, withdrawn, or an id that no
     // longer resolves). That is not the renter's mistake, so it gets its own code and copy.
+    //
+    // SAN-1059: the RPC raises SQLSTATE P1287 for exactly this branch, so classification no
+    // longer depends on the wording of the message. The message match stays as a fallback for
+    // the window where this function is deployed ahead of the migration (and vice versa).
     const isListingUnavailable =
-      isValidationError &&
-      /(?:listing|rental) is not requestable/i.test(error.message);
+      error.code === "P1287" ||
+      (isValidationError && /(?:listing|rental) is not requestable/i.test(error.message));
     return {
       ok: false,
       code: isListingUnavailable
