@@ -37,7 +37,8 @@ const RequestSchema = z.object({
 });
 const HUMAN_REASONS = {
   consumed: "Welcome!",
-  unknown_token: "No ticket on file with that code (refunded or cancelled?)",
+  unknown_token:
+    "No matching ticket found. Ask the host to check the purchase.",
   already_used: "Ticket was already scanned",
   refunded: "Ticket was refunded",
   cancelled: "Ticket was cancelled",
