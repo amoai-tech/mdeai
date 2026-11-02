@@ -492,10 +492,7 @@ export function sortForMonthlyStay<T extends Rental>(results: T[]): T[] {
     const aLong = a.tags.includes('long-stay') ? 0 : 1;
     const bLong = b.tags.includes('long-stay') ? 0 : 1;
     if (aLong !== bLong) return aLong - bLong;
-    const aPrice = Number.isFinite(a.nightly_price) ? a.nightly_price : Number.POSITIVE_INFINITY;
-    const bPrice = Number.isFinite(b.nightly_price) ? b.nightly_price : Number.POSITIVE_INFINITY;
-    if (aPrice !== bPrice) return aPrice - bPrice;
-    return a.id.localeCompare(b.id);
+    return a.nightly_price - b.nightly_price;
   });
 }
 
@@ -577,7 +574,6 @@ async function searchRentalsFromSupabase(
           ascending: true,
           nullsFirst: false,
         })
-        .order('id', { ascending: true })
         .limit(limit),
     );
     const remaining = Math.max(0, limit - confirmed.rows.length);
@@ -600,7 +596,6 @@ async function searchRentalsFromSupabase(
               .neq('currency', budgetCurrency)
               .or(predicate)
               .order('price_daily', { ascending: true, nullsFirst: false })
-              .order('id', { ascending: true })
               .limit(remaining),
           );
     confirmedRows = confirmed.rows;
@@ -608,7 +603,7 @@ async function searchRentalsFromSupabase(
     total = confirmed.count + alternatives.count;
   } else {
     const all = await runQuery(
-      baseQuery().order('price_daily', { ascending: true, nullsFirst: false }).order('id', { ascending: true }).limit(limit),
+      baseQuery().order('price_daily', { ascending: true, nullsFirst: false }).limit(limit),
     );
     confirmedRows = all.rows;
     total = all.count;

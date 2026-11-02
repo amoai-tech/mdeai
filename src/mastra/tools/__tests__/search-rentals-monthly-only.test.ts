@@ -522,12 +522,12 @@ describe("ordering must not truncate the matches a monthly budget asks for (SAN-
   it("orders the monthly figure first when a monthly budget is applied", async () => {
     await search({ maxPriceMonthly: 3_000_000, budgetCurrency: "COP" });
     // Monthly matches have no nightly price, so a nightly-first sort would push them past .limit().
-    expect(orderCalls.map((o) => o.column)).toEqual(["price_monthly", "id", "price_daily", "id"]);
+    expect(orderCalls.map((o) => o.column)).toEqual(["price_monthly", "price_daily"]);
   });
 
   it("keeps the stored nightly order when no monthly budget is applied", async () => {
     await search({});
-    expect(orderCalls.map((o) => o.column)).toEqual(["price_daily", "id"]);
+    expect(orderCalls.map((o) => o.column)).toEqual(["price_daily"]);
   });
 });
 

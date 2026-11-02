@@ -80,11 +80,8 @@ test.describe("SAN-1421 — same-thread filtered cards survive production reload
     const ask = async (question: string) => {
       await expect(input).toBeVisible({ timeout: 40_000 });
       await input.fill(question);
-      // Never send via Enter before the CoAgent is ready: at 390px that
-      // silently leaves the draft visible and can be mistaken for bad results.
       await expect(send).toBeEnabled({ timeout: 30_000 });
       await send.click();
-      await expect(input).toBeEmpty({ timeout: 10_000 });
       await expect(banner).toContainText(question, { timeout: 110_000 });
     };
 

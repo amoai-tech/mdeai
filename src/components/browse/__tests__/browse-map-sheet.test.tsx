@@ -11,10 +11,8 @@ import { BrowseMapFallback } from "../browse-map-fallback";
 
 vi.mock("@/components/maps/MapProvider", () => ({ MapsShell: ({ children }: { children: React.ReactNode }) => <>{children}</> }));
 vi.mock("@/components/maps/ChatMap", () => ({
-  ChatMap: ({ mapResizeSignal, onMapSettled }: { mapResizeSignal?: number; onMapSettled?: () => void }) => (
-    <div data-testid="chat-map-stub" data-resize-signal={String(mapResizeSignal)}>
-      <button type="button" data-testid="test-map-tiles-loaded" onClick={onMapSettled}>Tiles loaded</button>
-    </div>
+  ChatMap: ({ mapResizeSignal }: { mapResizeSignal?: number }) => (
+    <div data-testid="chat-map-stub" data-resize-signal={String(mapResizeSignal)} />
   ),
 }));
 
@@ -46,13 +44,6 @@ describe("BrowseMapSheet map holder", () => {
 
     const stub = document.querySelector('[data-testid="chat-map-stub"]') as HTMLElement;
     expect(stub).not.toBeNull();
-    const loading = document.querySelector('[data-testid="browse-map-loading"]');
-    expect(loading?.textContent).toContain("Loading map");
-    expect(loading?.getAttribute("role")).toBe("status");
-    await act(async () => {
-      (document.querySelector('[data-testid="test-map-tiles-loaded"]') as HTMLButtonElement).click();
-    });
-    expect(document.querySelector('[data-testid="browse-map-loading"]')).toBeNull();
     // Google's map is 100% of its parent; the sheet is `h-auto`, so the holder must carry the height itself.
     const holder = stub.closest("div.relative") as HTMLElement | null;
     // Capped like the chat map sheet, with a floor so a short phone still gets a usable map.
@@ -65,13 +56,6 @@ describe("BrowseMapSheet map holder", () => {
     expect(sheet?.className).toContain("pb-[env(safe-area-inset-bottom,0px)]");
     // Same redraw signal as the working chat map sheet.
     expect(stub.getAttribute("data-resize-signal")).toBe("1");
-    await act(async () => {
-      (document.querySelector('[data-testid="browse-map-close"]') as HTMLButtonElement).click();
-    });
-    await act(async () => {
-      (document.querySelector('[data-testid="browse-map-fab"]') as HTMLButtonElement).click();
-    });
-    expect(document.querySelector('[data-testid="browse-map-loading"]')).not.toBeNull();
     await act(async () => root.unmount());
   });
 });

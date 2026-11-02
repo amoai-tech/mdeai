@@ -114,14 +114,6 @@ describe("sortForMonthlyStay", () => {
     expect(sorted[0].id).toBe("b");
   });
 
-  it("has deterministic ID order when monthly tier and prices are tied", () => {
-    const a = makeRental("a", 60, ["long-stay"]);
-    const b = makeRental("b", 60, ["long-stay"]);
-    const c = makeRental("c", 60, ["long-stay"]);
-    expect(sortForMonthlyStay([c, a, b]).map((x) => x.id)).toEqual(["a", "b", "c"]);
-    expect(sortForMonthlyStay([b, c, a]).map((x) => x.id)).toEqual(["a", "b", "c"]);
-  });
-
   it("preserves original array (returns a new sorted copy)", () => {
     const orig = [makeRental("a", 80, []), makeRental("b", 60, ["long-stay"])];
     const sorted = sortForMonthlyStay(orig);
