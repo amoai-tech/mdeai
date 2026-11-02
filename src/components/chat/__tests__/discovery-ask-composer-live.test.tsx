@@ -21,7 +21,7 @@ const agent = {
   messages: [], isRunning: false, threadId: "thread-1",
   subscribe: (s: { onMessagesChanged?: () => void; onRunFinalized?: () => void }) => {
     h.subscribers.push(s);
-    return { unsubscribe: () => {} };
+    return { unsubscribe: vi.fn() };
   },
 };
 vi.mock("@/components/chat/concierge-coagent-context", () => ({
@@ -74,11 +74,11 @@ describe("SAN-1145 shared Ask MDE composer — signed-in send outcomes", () => {
   });
 
   it("does not let a run that failed replace the cards, even if the run finalizes before the check", async () => {
-    h.appendMessage.mockImplementation(async () => {
+    h.appendMessage.mockImplementation(() => {
       reportConciergeError("thread-1");
       // The agent finalizes with a tool result already in the thread, then runAgent resolves.
       h.subscribers.forEach((s) => s.onRunFinalized?.());
-      return true;
+      return Promise.resolve(true);
     });
     const onAgentResults = vi.fn();
     render(<DiscoveryAskComposer page="restaurants" onAgentResults={onAgentResults} />);
@@ -89,7 +89,7 @@ describe("SAN-1145 shared Ask MDE composer — signed-in send outcomes", () => {
 
   it("shows Retry only after a failed existing turn and never re-appends the user question", async () => {
     agent.messages = [{ id: "u1", role: "user", content: "What time?" }] as typeof agent.messages;
-    h.appendMessage.mockImplementation(async () => { reportConciergeError("thread-1"); return true; });
+    h.appendMessage.mockImplementation(() => { reportConciergeError("thread-1"); return Promise.resolve(true); });
     h.retryLastTurn.mockResolvedValue(true);
     render(<DiscoveryAskComposer page="restaurants" />);
     ask("What time?");
@@ -110,7 +110,7 @@ describe("SAN-1145 shared Ask MDE composer — signed-in send outcomes", () => {
   });
 
   it("ignores another conversation's error: a successful reply is not reported as interrupted", async () => {
-    h.appendMessage.mockImplementation(async () => { reportConciergeError("some-other-thread"); return true; });
+    h.appendMessage.mockImplementation(() => { reportConciergeError("some-other-thread"); return Promise.resolve(true); });
     const onAgentResults = vi.fn();
     render(<DiscoveryAskComposer page="restaurants" onAgentResults={onAgentResults} />);
     ask("Italian in El Poblado");
@@ -120,7 +120,7 @@ describe("SAN-1145 shared Ask MDE composer — signed-in send outcomes", () => {
 
   it("tells the visitor when the server fails mid-reply instead of showing nothing, and publishes no results", async () => {
     // CopilotKit reports a failed stream through the error store and still resolves runAgent.
-    h.appendMessage.mockImplementation(async () => { reportConciergeError("thread-1"); return true; });
+    h.appendMessage.mockImplementation(() => { reportConciergeError("thread-1"); return Promise.resolve(true); });
     const onAgentResults = vi.fn();
     render(<DiscoveryAskComposer page="cafes" onAgentResults={onAgentResults} />);
     ask("Quiet cafés for work");
@@ -180,4 +180,16 @@ describe("SAN-1145 shared Ask MDE composer — signed-in send outcomes", () => {
     expect(screen.queryByTestId("discovery-ask-input")).toBeNull();
     expect(h.appendMessage).not.toHaveBeenCalled();
   });
+  it("retries a failed event starter-question without appending another user turn", async () => {
+    agent.messages = [{ id: "u1", role: "user", content: "Are tickets available?" }] as typeof agent.messages;
+    h.appendMessage.mockImplementation(() => { reportConciergeError("thread-1"); return Promise.resolve(true); });
+    h.retryLastTurn.mockResolvedValue(true);
+    render(<DiscoveryAskComposer page="events" suggestions={["Are tickets available?"]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Are tickets available?" }));
+    expect((await screen.findByRole("alert")).textContent).toContain("interrupted");
+    fireEvent.click(screen.getByTestId("discovery-ask-retry"));
+    await waitFor(() => expect(h.retryLastTurn).toHaveBeenCalledTimes(1));
+    expect(h.appendMessage).toHaveBeenCalledTimes(1);
+  });
+
 });

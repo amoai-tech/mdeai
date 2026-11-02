@@ -60,11 +60,22 @@ function GuestEventComposer({ options }: { options: EventGuestOptions }) {
     <div className="flex items-end gap-2">
       <label htmlFor="guest-event-question" className="sr-only">Search events</label>
       <textarea id="guest-event-question" rows={1} value={question} onChange={(e) => setQuestion(e.target.value)} className="min-h-11 flex-1 resize-none rounded-lg border bg-background px-3 py-2.5 text-base" placeholder="Find music events this weekend" onKeyDown={(e) => { if(e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send(); } }} />
-      <button type="button" data-testid="guest-event-send" className="flex size-11 items-center justify-center rounded-lg bg-primary text-primary-foreground disabled:opacity-40" disabled={!question.trim() || busy} onClick={() => void send()} aria-label="Search events"><ArrowUp className="size-4" /></button>
+      <button type="button" data-testid="guest-event-send" className="flex size-11 items-center justify-center rounded-lg bg-primary text-primary-foreground disabled:opacity-40" disabled={!question.trim() || busy} onClick={send} aria-label="Search events"><ArrowUp className="size-4" /></button>
     </div>
     {error ? <p role="alert" className="text-xs text-destructive">{error}</p> : null}
   </div>;
 }
+
+/**
+ * Questions an event detail visitor actually has before buying. They are prompts only:
+ * a click sends one real turn through this composer, and the existing concierge answers
+ * it from the selected event. Nothing here claims an answer or starts a run on mount.
+ */
+export const EVENT_DETAIL_ASK_SUGGESTIONS = [
+  "Are tickets available?",
+  "Where is the meeting point?",
+  "When does it start?",
+] as const;
 
 const INTERRUPTED_COPY = "The response was interrupted. Check the conversation before retrying.";
 
@@ -72,13 +83,50 @@ const INTERRUPTED_COPY = "The response was interrupted. Check the conversation b
 const runFailedSince = (threadId: string | undefined, before: number) =>
   getConciergeErrorForThread(threadId).version > before || getConciergeErrorForThread(null).version > before;
 
+/** Starter questions: one real turn per click, using the same path as a typed question. */
+// skipcq: JS-0067 - module-local React component; not browser global scope
+function AskSuggestions({ questions, onPick }: { questions: readonly string[]; onPick: (question: string) => void }) {
+  return (
+    <div role="group" aria-label="Suggested questions" data-testid="discovery-ask-suggestions" className="mb-2 flex flex-wrap gap-2">
+      {questions.map((question) => (
+        <button
+          key={question}
+          type="button"
+          data-testid="discovery-ask-suggestion"
+          onClick={() => onPick(question)}
+          // min-h-11 is the 44px touch target the rest of this composer uses.
+          className="inline-flex min-h-11 items-center rounded-full border border-border bg-background px-3 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none"
+        >
+          {question}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** The visible transcript: one <li> per turn, announced politely. */
+function AskHistory({ turns, open }: { turns: Array<{ id: string; role: string; text: string }>; open: boolean }) {
+  if (!open || turns.length === 0) return null;
+  return (
+    <ol data-testid="discovery-ask-history" role="log" aria-live="polite" className="mb-2 max-h-52 space-y-2 overflow-auto rounded-lg border p-3">
+      {turns.map((t) => <li key={t.id} className="text-sm"><span className="mr-2 text-xs font-medium text-muted-foreground">{t.role === "user" ? "You" : "MDE"}:</span>{t.text}</li>)}
+    </ol>
+  );
+}
+
+/** Nothing to do with a rejection that runTurn already surfaced to the visitor. */
+const ignoreRejection = () => undefined;
+
 /** One composer on every non-rental browse page; Rentals retains its richer search adapter. */
-function LiveComposer({ page, guestEvents, onAgentResults, hideHeading = false }: {
+// skipcq: JS-0067 - module-local React component; not browser global scope
+function LiveComposer({ page, guestEvents, onAgentResults, hideHeading = false, suggestions }: {
   page: Exclude<DiscoveryPage, "rentals">;
   guestEvents?: EventGuestOptions;
   onAgentResults?: (result: DiscoveryAgentResult) => void;
   /** The shared drawer supplies its own title and full-chat link. */
   hideHeading?: boolean;
+  /** Optional starter questions; a click sends one normal turn, never a canned answer. */
+  suggestions?: readonly string[];
 }) {
   const { user, loading: sessionLoading } = useSession();
   const { agent, isReady } = useConciergeCoAgent();
@@ -121,14 +169,23 @@ function LiveComposer({ page, guestEvents, onAgentResults, hideHeading = false }
   }, [agent, page]);
   const signedOut = !sessionLoading && !user;
   const busy = sending || isLoading;
-  const send = useCallback(async () => {
-    const message = draft.trim();
+  const starters = suggestions ?? [];
+  // Starter questions are only shown when a click can really send: guests keep the
+  // existing sign-in state, and an in-flight or not-yet-ready composer offers none.
+  const showSuggestions = starters.length > 0 && !signedOut && !busy && isReady;
+  /**
+   * One send path for typed questions and starter questions. `origin` only decides
+   * whether the visible draft is consumed/restored; the agent call is identical, so a
+   * clicked question is a real user turn and never a local shortcut.
+   */
+  const runTurn = useCallback(async (raw: string, origin: "composer" | "suggestion") => {
+    const message = raw.trim();
     if (!message || inFlight.current || busy || !isReady || signedOut || isRuntimeUnavailable()) return;
     inFlight.current = true;
     cancelled.current = false;
     setSending(true);
     setError(null);
-    setDraft("");
+    if (origin === "composer") setDraft("");
     const startIndex = agent?.messages.length ?? 0;
     const errorVersionBefore = getConciergeErrorVersion();
     pendingResult.current = onAgentResults ? { since: startIndex, errorVersion: errorVersionBefore, emit: onAgentResults } : null;
@@ -136,7 +193,8 @@ function LiveComposer({ page, guestEvents, onAgentResults, hideHeading = false }
       const saved = await appendMessage(message);
       if (!saved && !cancelled.current) {
         setError("MDE could not send your question. Please try again.");
-        setDraft((current) => current || message);
+        // A typed draft is the visitor's text, so give it back; a suggestion is one shot.
+        if (origin === "composer") setDraft((current) => current || message);
       } else if (!cancelled.current && runFailedSince(agent?.threadId, errorVersionBefore)) {
         // CopilotKit reports a failed stream through the error store and still resolves runAgent.
         // The question is already in the thread, so say so instead of showing nothing.
@@ -163,8 +221,10 @@ function LiveComposer({ page, guestEvents, onAgentResults, hideHeading = false }
       inFlight.current = false;
       setSending(false);
     }
-  }, [agent, appendMessage, busy, draft, isReady, isRuntimeUnavailable, onAgentResults, page, signedOut]);
-  // Retry the existing last user turn; never append it a second time.
+  }, [agent, appendMessage, busy, isReady, isRuntimeUnavailable, onAgentResults, page, signedOut]);
+  // Sending a starter question and typing a question use the same guarded turn path.
+  const send = useCallback(() => { runTurn(draft, "composer").catch(ignoreRejection); }, [draft, runTurn]);
+  // PR #695: retry the existing user turn rather than appending it a second time.
   // The chat controller enforces one retry per agent and the current thread ID.
   const retry = async () => {
     if (!agent?.messages.some((message) => message.role === "user") ||
@@ -198,10 +258,12 @@ function LiveComposer({ page, guestEvents, onAgentResults, hideHeading = false }
         </div>
       </div>
       )}
-      {showHistory && turns.length > 0 ? (
-        <ol data-testid="discovery-ask-history" role="log" aria-live="polite" className="mb-2 max-h-52 space-y-2 overflow-auto rounded-lg border p-3">
-          {turns.map((t) => <li key={t.id} className="text-sm"><span className="mr-2 text-xs font-medium text-muted-foreground">{t.role === "user" ? "You" : "MDE"}:</span>{t.text}</li>)}
-        </ol>
+      <AskHistory turns={turns} open={showHistory} />
+      {showSuggestions ? (
+        <AskSuggestions
+          questions={starters}
+          onPick={(question) => { runTurn(question, "suggestion").catch(ignoreRejection); }}
+        />
       ) : null}
       {signedOut && page === "events" && guestEvents ? <GuestEventComposer options={guestEvents} /> : signedOut ? (
         <div className="flex items-center justify-between gap-3"><p className="text-sm text-muted-foreground">Sign in to ask about {page}.</p><Link className="inline-flex min-h-11 shrink-0 items-center whitespace-nowrap rounded-lg bg-primary px-4 text-sm text-primary-foreground" href={`/login?next=${encodeURIComponent(path)}`}>Sign in</Link></div>
@@ -210,7 +272,7 @@ function LiveComposer({ page, guestEvents, onAgentResults, hideHeading = false }
           <label className="sr-only" htmlFor={`discovery-ask-input-${page}`}>Ask MDE about {page}</label>
           <textarea id={`discovery-ask-input-${page}`} data-testid="discovery-ask-input" value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={onKeyDown} rows={1} placeholder={`Ask about ${page}…`} className="min-h-11 flex-1 resize-none rounded-lg border border-border bg-background px-3 py-2.5 text-base focus-visible:ring-2 focus-visible:ring-ring sm:text-sm" />
           {busy ? <button type="button" data-testid="discovery-ask-stop" className="flex size-11 items-center justify-center rounded-lg border" aria-label="Stop response" onClick={() => { cancelled.current = true; pendingResult.current = null; stopActiveRun(); }}><Square className="size-4" /></button>
-            : <button type="button" data-testid="discovery-ask-send" className="flex size-11 items-center justify-center rounded-lg bg-primary text-primary-foreground disabled:opacity-40" disabled={!draft.trim() || !isReady} aria-label="Send question" onClick={() => void send()}><ArrowUp className="size-4" /></button>}
+            : <button type="button" data-testid="discovery-ask-send" className="flex size-11 items-center justify-center rounded-lg bg-primary text-primary-foreground disabled:opacity-40" disabled={!draft.trim() || !isReady} aria-label="Send question" onClick={send}><ArrowUp className="size-4" /></button>}
         </div>
       )}
       {busy && draft.trim() ? <p className="mt-2 text-xs text-muted-foreground" role="status">Not sent yet. Finish or stop the current reply, then press Enter to send this question.</p> : null}
@@ -230,15 +292,17 @@ function LiveComposer({ page, guestEvents, onAgentResults, hideHeading = false }
   );
 }
 
-export function DiscoveryAskComposer({ page, guestEvents, onAgentResults, hideHeading }: {
+// skipcq: JS-0067 - module-local React component; not browser global scope
+export function DiscoveryAskComposer({ page, guestEvents, onAgentResults, hideHeading, suggestions }: {
   page: Exclude<DiscoveryPage, "rentals">;
   guestEvents?: EventGuestOptions;
   onAgentResults?: (result: DiscoveryAgentResult) => void;
   hideHeading?: boolean;
+  suggestions?: readonly string[];
 }) {
   const coAgent = useOptionalConciergeCoAgent();
   if (isDeterministicE2E() || !coAgent) {
     return <div data-testid={`discovery-ask-${page}`} className="border-t p-4 text-sm text-muted-foreground">Ask MDE about {page} in the live application.</div>;
   }
-  return <LiveComposer page={page} guestEvents={guestEvents} onAgentResults={onAgentResults} hideHeading={hideHeading} />;
+  return <LiveComposer page={page} guestEvents={guestEvents} onAgentResults={onAgentResults} hideHeading={hideHeading} suggestions={suggestions} />;
 }
