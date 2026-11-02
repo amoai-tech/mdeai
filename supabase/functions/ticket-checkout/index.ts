@@ -40,14 +40,21 @@ import { deriveCheckoutAccessToken, duplicateCheckoutCode } from "../_shared/che
 // Initialise Stripe lazily so a missing key is reported via 500 CONFIG_ERROR
 // rather than crashing the function on cold-start before headers are sent.
 let _stripe: Stripe | null = null;
+let _stripeMode: "sandbox" | "live" | null = null;
 function getStripe(): Stripe | null {
-  if (_stripe) return _stripe;
-  const key = Deno.env.get("STRIPE_SECRET_KEY");
-  if (!key) return null;
+  // Require an explicit server choice: missing configuration must never charge live.
+  const mode = Deno.env.get("STRIPE_TICKET_CHECKOUT_MODE");
+  if (mode !== "live" && mode !== "sandbox") return null;
+  if (_stripe && _stripeMode === mode) return _stripe;
+  const key = Deno.env.get(mode === "sandbox"
+    ? "STRIPE_SANDBOX_SECRET_KEY"
+    : "STRIPE_SECRET_KEY");
+  if (!key || (mode === "sandbox" && !/^(rk|sk)_test_/.test(key))) return null;
   _stripe = new Stripe(key, {
     apiVersion: "2026-04-22.dahlia",
     httpClient: Stripe.createFetchHttpClient(),
   });
+  _stripeMode = mode;
   return _stripe;
 }
 // Zod schema. quantity 1-10 enforced both here and in the RPC's
@@ -147,7 +154,7 @@ Deno.serve(async (req) => {
   }
   const stripe = getStripe();
   if (!stripe) {
-    console.error("STRIPE_SECRET_KEY is not configured");
+    console.error("ticket-checkout: Stripe payment mode or matching API key is not configured");
     return jsonResponse(
       errorBody("CONFIG_ERROR", "Server is missing Stripe credentials"),
       500,
