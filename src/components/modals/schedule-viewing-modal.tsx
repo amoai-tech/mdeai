@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useReducer, useRef, useState } from "react";
-import { Button, buttonVariants } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import { useRentalUi } from "@/components/chat/rental-ui-context";
 import { submitScheduleViewing } from "@/lib/leads/submit-schedule-viewing";
 import { buildSchedulePrefill, type SchedulePrefill } from "@/lib/leads/schedule-prefill";
@@ -12,6 +11,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useKeyboardInset } from "@/lib/hooks/use-chat-keyboard-height";
 import { useModalA11y } from "@/lib/use-modal-a11y";
 import { contactReducer, INITIAL_CONTACT } from "./contact-fields";
+import { ScheduleViewingRecovery } from "./schedule-viewing-recovery";
 
 /**
  * Look up the signed-in user + profile and build their contact prefill.
@@ -209,38 +209,12 @@ export const ScheduleViewingModal = () => {
             </p>
           ) : null}
           {errorCode === "LISTING_UNAVAILABLE" ? (
-            // The renter's details are still in the form. Never swap the apartment behind their
-            // back: they either re-check this one or go back to the results themselves.
-            <div
-              className="flex flex-col gap-2 rounded-lg border p-3"
-              data-testid="schedule-viewing-recovery"
-            >
-              <p className="text-sm text-muted-foreground">
-                Your details are still here. Re-check this apartment, or choose another one.
-              </p>
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="min-h-11 lg:min-h-0"
-                  data-testid="schedule-viewing-refresh"
-                  onClick={() => void submitRequest()}
-                  disabled={submitting}
-                >
-                  {submitting ? "Checking…" : "Refresh apartment"}
-                </Button>
-                {/* A real link: no router context, no client state to lose, works with the
-                    keyboard and with JS disabled on the results page it lands on. */}
-                <a
-                  href={resultsHref}
-                  data-testid="schedule-viewing-choose-another"
-                  className={cn(buttonVariants(), "min-h-11 lg:min-h-0")}
-                  onClick={() => closeScheduleViewing()}
-                >
-                  Choose another apartment
-                </a>
-              </div>
-            </div>
+            <ScheduleViewingRecovery
+              submitting={submitting}
+              resultsHref={resultsHref}
+              onRecheck={() => void submitRequest()}
+              onChooseAnother={closeScheduleViewing}
+            />
           ) : null}
           <div className="flex justify-end gap-2 pt-2">
             <Button
