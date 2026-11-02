@@ -130,10 +130,17 @@ export function currentSelectedNameOnly<T extends { role: string; content: unkno
     // category noun. A request aimed at the item on screen ("show me the venue",
     // "search for tickets") has no category noun and is still trimmed.
     && !(/\b(?:find|search|show|recommend|suggest|list)\b/i.test(question)
-      && /\b(?:events|places|venues|rentals|apartments|restaurants|caf[eé]s|clubs|nightlife|attractions|things to do|options)\b/i.test(question))
+      && /\b(?:events|places|venues|rentals|apartments|restaurants|caf[eé]s|clubs|nightlife|attractions|things to do|options|concerts?|gigs?|parties?|festivals?|markets?|activities|meetups?|workshops?|classes)\b/i.test(question))
     // A real comparison needs both records; never trim it away.
     && !/\b(?:compare|compared|comparison|versus|vs\.?|difference|between|previous|prior|earlier|the other)\b/i.test(question);
-  if (asksAboutSelectedItem) return messages.slice(lastUser);
+  // "Can you explain that price further?" is about the earlier answer, not a
+  // fresh fact lookup, so the explanation it refers to must stay. The rule needs
+  // both a follow-up verb and a reference to the prior turn: "Where is it?" is
+  // still a current-fact question and is trimmed.
+  const asksToExplainPriorTurn =
+    /\b(?:explain|elaborate|clarify|why|what do you mean|tell me more|in more detail)\b/i.test(question)
+    && /\b(?:that|this|it|those|these|previous|above)\b/i.test(question);
+  if (asksAboutSelectedItem && !asksToExplainPriorTurn) return messages.slice(lastUser);
 
   const asksDirectly = /^(?:please\s+)?(?:what(?:'s| is| was)|(?:can|could|would) you tell me|(?:tell|give|show|remind) me|name\b)/i.test(question);
   // "not the previous item" explicitly excludes stale history; it is not

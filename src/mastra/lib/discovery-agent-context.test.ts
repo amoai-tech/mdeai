@@ -304,3 +304,39 @@ describe("SAN-1600 — discovery requests keep their filters, item questions do 
     expect(hint).toContain("compares two items");
   });
 });
+
+describe("SAN-1600 — reviewer's conversation-history decision table", () => {
+  const page = ctx({ route: "/events", selectedPublicEntityId: b });
+  const priorTurn = [
+    { role: "user", content: "Show me free events near Laureles" },
+    { role: "assistant", content: "The Reina de Antioquia 2026 Finals is at Hotel Intercontinental — Salón Real, GA COP 40,000." },
+  ];
+  const run = (question: string) => currentSelectedNameOnly([...priorTurn, { role: "user", content: question }], page);
+  const trimmed = (question: string) => run(question).length === 1;
+
+  it.each([
+    "Are tickets available?",
+    "Where is the meeting point?",
+    "What is the venue?",
+  ])("trims a current-event fact question: %s", (question) => {
+    expect(trimmed(question)).toBe(true);
+    expect(JSON.stringify(run(question))).not.toContain("Reina");
+  });
+
+  it.each([
+    "Show free events nearby",
+    "Show accessible concerts this weekend",
+    "Compare this event with the previous one",
+    "Find restaurants in Laureles",
+  ])("preserves history for a discovery or comparison request: %s", (question) => {
+    expect(trimmed(question)).toBe(false);
+  });
+
+  it("preserves the prior explanation for a conversational follow-up", () => {
+    expect(trimmed("Can you explain that price further?")).toBe(false);
+  });
+
+  it("still trims a bare location question (no spillover from the follow-up rule)", () => {
+    expect(trimmed("Where is it?")).toBe(true);
+  });
+});
