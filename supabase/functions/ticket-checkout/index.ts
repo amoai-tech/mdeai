@@ -31,7 +31,7 @@
  *        webhook finalize (or cancel). Prevents 50-concurrent-buyer
  *        oversell.
  */
-import Stripe from "https://esm.sh/stripe@14.21.0?target=denonext";
+import Stripe from "npm:stripe@23.0.0";
 import { z } from "https://esm.sh/zod@3.23.8";
 import { errorBody, getCorsHeaders, jsonResponse } from "../_shared/http.ts";
 import { getServiceClient } from "../_shared/supabase-clients.ts";
@@ -52,7 +52,7 @@ function getStripe(): Stripe | null {
     : "STRIPE_SECRET_KEY");
   if (!key || (mode === "sandbox" && !/^(rk|sk)_test_/.test(key))) return null;
   _stripe = new Stripe(key, {
-    apiVersion: "2026-04-22.dahlia",
+    apiVersion: "2026-09-30.endive",
     httpClient: Stripe.createFetchHttpClient(),
   });
   _stripeMode = mode;
