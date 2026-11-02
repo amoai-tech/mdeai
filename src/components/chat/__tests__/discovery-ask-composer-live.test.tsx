@@ -74,11 +74,11 @@ describe("SAN-1145 shared Ask MDE composer — signed-in send outcomes", () => {
   });
 
   it("does not let a run that failed replace the cards, even if the run finalizes before the check", async () => {
-    h.appendMessage.mockImplementation(async () => {
+    h.appendMessage.mockImplementation(() => {
       reportConciergeError("thread-1");
       // The agent finalizes with a tool result already in the thread, then runAgent resolves.
       h.subscribers.forEach((s) => s.onRunFinalized?.());
-      return true;
+      return Promise.resolve(true);
     });
     const onAgentResults = vi.fn();
     render(<DiscoveryAskComposer page="restaurants" onAgentResults={onAgentResults} />);
