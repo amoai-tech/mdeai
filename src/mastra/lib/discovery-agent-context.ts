@@ -101,21 +101,22 @@ function messageText(content: unknown): string {
   return "";
 }
 
-/** Only the fields a comparison needs: the full row (and its relations) can blow the token budget. */
+/**
+ * One short line per item. The full row — and even a JSON summary — exceeded this
+ * agent's token budget, so a comparison carries names and prices only.
+ */
 function compactPublicRecord(data: Record<string, unknown>): string {
-  const pick = (key: string) => (key in data ? data[key] : undefined);
-  const tickets = Array.isArray(data.event_tickets)
-    ? data.event_tickets.map((tier) => {
-        const row = tier as Record<string, unknown>;
-        return { name: row.name, price: row.price, currency: row.currency, sold: row.qty_sold, total: row.qty_total };
-      })
-    : undefined;
-  return JSON.stringify({
-    id: pick("id"), name: pick("name") ?? pick("title"), address: pick("address"),
-    startsAt: pick("event_start_time"), currency: pick("currency"),
-    venue: pick("event_venues") ?? undefined, tickets,
-    neighborhood: pick("neighborhood"), bedrooms: pick("bedrooms"), priceMonthly: pick("price_monthly"),
-  });
+  const name = String(data.name ?? data.title ?? "Unknown item");
+  const tiers = Array.isArray(data.event_tickets) ? data.event_tickets : [];
+  if (tiers.length === 0) {
+    const price = data.price_monthly ?? data.price;
+    return price != null ? `${name} — ${price} ${String(data.currency ?? "")}`.trim() : `${name} — no ticket tiers listed`;
+  }
+  const prices = tiers.map((tier) => {
+    const row = tier as Record<string, unknown>;
+    return `${String(row.name)} ${String(row.price ?? "")} ${String(row.currency ?? "")}`.trim();
+  }).join("; ");
+  return `${name} — ${prices}`;
 }
 
 const COMPARISON_REQUEST = /\b(?:compare|compared|comparison|versus|vs\.?|difference|between)\b/i;
