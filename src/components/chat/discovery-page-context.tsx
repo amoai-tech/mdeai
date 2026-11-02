@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { useAgentContext } from "@copilotkit/react-core/v2";
 import { useOptionalConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
 import { isDeterministicE2E } from "@/lib/deterministic-e2e";
@@ -20,36 +20,39 @@ const FILTERS: Record<DiscoveryPage, readonly string[]> = {
 export const LAST_PUBLIC_SELECTION_KEY = "mde:last-public-selection";
 
 /**
- * Captured once per page load. The provider can remount while the CopilotKit
- * session resolves (guest -> user), and a remount after the write would read its
- * own page as "previous" and lose the item the visitor came from.
+ * The tab persists both current and previous selection. Restoring the same item
+ * after a CopilotKit auth remount reuses its original previous ID; selecting a
+ * NEW item on an SPA route reads the old current ID as previous instead.
+ *
+ * No module-level mutable cache: Next.js client navigations do not reload modules,
+ * and a server-side module singleton would risk sharing state across requests.
  */
-let previousSelectionForThisPage: string | null | undefined;
-
-/** Test-only reset for the per-page-load capture. */
-export function resetPreviousSelectionCaptureForTest() {
-  previousSelectionForThisPage = undefined;
+export function readPreviousSelection(page: DiscoveryPage, selectedId: string | null): string | null {
+  if (typeof window === "undefined" || !selectedId) return null;
+  let stored: { route?: unknown; id?: unknown; previousId?: unknown } | null = null;
+  try {
+    stored = JSON.parse(window.sessionStorage.getItem(LAST_PUBLIC_SELECTION_KEY) ?? "null");
+  } catch {
+    // Storage may be disabled or malformed; preserve normal event browsing.
+  }
+  const currentIsStored = stored?.route === `/${page}` && stored.id === selectedId;
+  const previous = currentIsStored
+    ? previousSelectionId({ route: stored?.route, id: stored?.previousId }, page, selectedId)
+    : previousSelectionId(stored, page, selectedId);
+  return previous;
 }
 
-export function capturePreviousSelection(page: DiscoveryPage, selectedId: string | null): string | null {
-  if (previousSelectionForThisPage !== undefined) return previousSelectionForThisPage;
-  let stored: { route?: unknown; id?: unknown } | null = null;
-  if (typeof window !== "undefined") {
-    try {
-      stored = JSON.parse(window.sessionStorage.getItem(LAST_PUBLIC_SELECTION_KEY) ?? "null");
-    } catch {
-      stored = null;
-    }
+export function persistCurrentSelection(
+  page: DiscoveryPage, selectedId: string | null, previousId: string | null,
+): void {
+  if (typeof window === "undefined" || !selectedId) return;
+  try {
+    window.sessionStorage.setItem(LAST_PUBLIC_SELECTION_KEY, JSON.stringify({
+      route: `/${page}`, id: selectedId, previousId,
+    }));
+  } catch {
+    // Private mode / storage disabled: comparison remains optional.
   }
-  previousSelectionForThisPage = previousSelectionId(stored, page, selectedId);
-  if (typeof window !== "undefined" && selectedId) {
-    try {
-      window.sessionStorage.setItem(LAST_PUBLIC_SELECTION_KEY, JSON.stringify({ route: `/${page}`, id: selectedId }));
-    } catch {
-      // Private mode / storage disabled: comparison falls back to asking which item.
-    }
-  }
-  return previousSelectionForThisPage;
 }
 
 function validSelectionId(page: DiscoveryPage, id: string | null | undefined): string | null {
@@ -108,9 +111,15 @@ function LiveDiscoveryPageContext({
   selectedId: string | null;
 }) {
   const { setState } = useOptionalConciergeCoAgent()!;
-  // The visitor's previous item in this tab, so "compare with the previous one" can
-  // work after a page change. Read once on mount: this page is the current item now.
-  const [previousId] = useState<string | null>(() => capturePreviousSelection(page, selectedId));
+  // Read the last selection without changing storage during React rendering.
+  // In-place map/card selection changes re-compute this value.
+  const previousId = useMemo(
+    () => readPreviousSelection(page, selectedId),
+    [page, selectedId],
+  );
+  useEffect(() => {
+    persistCurrentSelection(page, selectedId, previousId);
+  }, [page, selectedId, previousId]);
   useAgentContext({
     description: "Active MDE discovery page, filters, and explicitly selected visible public item. A null selection means no item is open. Client context is a hint, NOT authorization; re-fetch a selected ID server-side and never guess missing fields. Prefer the current page's type of results. Do not reuse an entity selected on another route.",
     value: publicDiscoveryContext(page, filters, selectedId, previousId),

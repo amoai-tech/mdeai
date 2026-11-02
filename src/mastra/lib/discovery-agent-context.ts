@@ -119,7 +119,9 @@ function compactPublicRecord(data: Record<string, unknown>): string {
   return `${name} — ${prices}`;
 }
 
-const COMPARISON_REQUEST = /\b(?:compare|compared|comparison|versus|vs\.?|difference|between)\b/i;
+const COMPARISON_REQUEST = /\b(?:compare|compared|comparison|versus|vs\.?|difference|between|which|cheaper)\b/i;
+// An explicit two-record reference is required: two ticket tiers are not two events.
+const TWO_PUBLIC_ITEMS = /\b(?:previous|prior|earlier|other|another|last)\s+(?:selected\s+)?(?:events?|items?|ones?|places?|venues?|rentals?|apartments?|restaurants?|caf[eé]s?|clubs?)\b|\b(?:(?:these|those|the)\s+)?(?:two|both)\s+(?:events?|items?|places?|venues?|rentals?|apartments?|restaurants?|caf[eé]s?|clubs?)\b|\bboth\s+(?:of\s+)?(?:these|those|the)\s+(?:events?|items?|places?|venues?)\b/i;
 
 /**
  * SAN-1600 — "compare this event with the previous one" needs TWO records, but the
@@ -141,7 +143,7 @@ export async function withComparisonRecords<T extends { role: string; content: u
   const lastUser = messages.findLastIndex((message) => message.role === "user");
   if (lastUser < 0) return messages;
   const question = messageText(messages[lastUser].content);
-  if (!COMPARISON_REQUEST.test(question)) return messages;
+  if (!COMPARISON_REQUEST.test(question) || !TWO_PUBLIC_ITEMS.test(question)) return messages;
   const page = selected.route.slice(1) as "rentals" | "restaurants" | "events" | "cafes" | "nightlife";
   try {
     const [current, previous] = await Promise.all([

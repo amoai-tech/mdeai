@@ -367,6 +367,18 @@ describe("SAN-1600 — comparing two items resolves both records server-side", (
     expect(last).toContain("never move one record's facts onto the other");
   });
 
+  it("does not confuse two ticket tiers within one event with two different events", async () => {
+    const input = turn("What is the difference between ticket tiers for this event?");
+    expect(await withComparisonRecords(input, withPrevious(feria, reina), lookup)).toBe(input);
+  });
+
+  it("understands an explicit comparison of these two events even without the word compare", async () => {
+    const input = turn("Which of these two events is cheaper?");
+    const output = await withComparisonRecords(input, withPrevious(feria, reina), lookup);
+    expect(String(output.at(-1)?.content)).toContain("Reina de Antioquia 2026 Finals");
+    expect(String(output.at(-1)?.content)).toContain("Feria de las Flores Preview Parade");
+  });
+
   it("does nothing for a current-event question", async () => {
     const input = turn("Where is the meeting point?");
     expect(await withComparisonRecords(input, withPrevious(feria, reina), lookup)).toBe(input);
