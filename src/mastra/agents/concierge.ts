@@ -500,7 +500,8 @@ export const conciergeAgent = new Agent({
     requestVenueBooking: requestVenueBookingTool,
   },
   inputProcessors: [
-    ...getDefaultInputProcessors(),
+    // The verified current event + tool schemas must fit before the first step.
+    ...getDefaultInputProcessors(12_288),
     // The model sometimes repeats restaurant search instead of issuing the
     // proposal. Once the current run grounded the exact named venue and the
     // customer already supplied every mandatory field, require the *existing*

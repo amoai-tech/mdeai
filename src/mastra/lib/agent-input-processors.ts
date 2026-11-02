@@ -18,8 +18,10 @@ import { ACTIVE_TEXT_MODEL } from "./models";
  *
  * To re-enable the guard for a deploy: set MASTRA_PROMPT_INJECTION_GUARD=true.
  */
-export function getDefaultInputProcessors(): InputProcessor[] {
-  const processors: InputProcessor[] = [new TokenLimiter(8192)];
+export function getDefaultInputProcessors(inputTokenLimit = 8192): InputProcessor[] {
+  // The concierge's verified event context plus tool schemas can exceed 8192
+  // system tokens. Keep other agents at 8192; scope extra room to concierge.
+  const processors: InputProcessor[] = [new TokenLimiter(inputTokenLimit)];
 
   if (process.env.MASTRA_PROMPT_INJECTION_GUARD === "true") {
     processors.unshift(new PromptInjectionDetector({ model: ACTIVE_TEXT_MODEL }));

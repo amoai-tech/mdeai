@@ -6,6 +6,13 @@ describe("getDefaultInputProcessors", () => {
     vi.unstubAllEnvs();
   });
 
+  it("supports the concierge's scoped 12k context budget", () => {
+    expect(getDefaultInputProcessors(12_288)).toHaveLength(1);
+    expect(getDefaultInputProcessors()).toHaveLength(1);
+    expect(getDefaultInputProcessors(12_288)[0]).toMatchObject({ maxTokens: 12_288 });
+    expect(getDefaultInputProcessors()[0]).toMatchObject({ maxTokens: 8192 });
+  });
+
   it("skips PromptInjectionDetector in development by default", () => {
     vi.stubEnv("NODE_ENV", "development");
     vi.stubEnv("MASTRA_PROMPT_INJECTION_GUARD", "");
