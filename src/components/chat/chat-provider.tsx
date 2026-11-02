@@ -29,6 +29,10 @@ import { isDeterministicE2E } from "@/lib/deterministic-e2e";
  * several seconds, and a spurious error is worse than a longer "Loading…".
  */
 const RECONNECT_SETTLE_TIMEOUT_MS = 30_000;
+// An idle (already-connected) agent does not emit a new run-finalized event.
+// Do not make returning users stare at an empty transcript for 30 seconds.
+const QUIET_RECONNECT_GRACE_MS = 2_500;
+
 
 type SavedHistoryValue = {
   /** `idle` = nothing to wait for (fresh chat, or history is in place). */
@@ -136,12 +140,34 @@ export function SavedThreadHistory({
         // First attempt: the watch started when the chat opened. A Retry cannot
         // reuse a finished (timed-out) watch, so it waits again if the reconnect
         // is still running, and carries on if it has ended.
-        const settled =
-          attempt === 0
-            ? await connect.current
-            : agent.isRunning
-              ? await watchConnectCycle(agent, signal)
-              : "done";
+        // On a healthy warm tab there may be no agent/connect run to finalize.
+        // Give a late reconnect a short chance to start; if the agent remains
+        // idle, restore its persisted transcript now instead of waiting 30s.
+        const connection = connect.current;
+        const first = attempt === 0
+          ? await Promise.race<ConnectOutcome | "idle">([
+              connection,
+              new Promise<"idle">((resolve) => {
+                setTimeout(() => resolve("idle"), QUIET_RECONNECT_GRACE_MS);
+              }),
+            ])
+          : agent.isRunning ? await watchConnectCycle(agent, signal) : "done";
+        const settled = first === "idle" && agent.isRunning
+          ? await connection
+          : first === "idle" ? "done" : first;
+        // If connect starts AFTER the quiet grace and clears the view, replay
+        // again after it finishes. Reconciliation is ID-based and preserves new
+        // turns; a late completion from another thread cannot change this one.
+        if (first === "idle" && body.messages?.length) {
+          void connection.then((outcome) => {
+            if (outcome !== "done" || signal.aborted || agent.threadId !== threadId) return;
+            const merged = reconcileSavedHistory(body.messages!, agent.messages);
+            if (merged.length !== agent.messages.length ||
+                merged.some((msg, i) => msg.id !== agent.messages[i]?.id)) {
+              agent.setMessages(merged as typeof agent.messages);
+            }
+          });
+        }
         if (settled === "aborted" || signal.aborted || agent.threadId !== threadId) return;
         // Timed out and still reconnecting: do not install into a moving agent.
         if (settled === "timeout" && agent.isRunning) throw new Error("reconnect did not finish");
