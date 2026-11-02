@@ -467,7 +467,7 @@ export function EventResults({ result }: { result: unknown }) {
   const isCurrent = useCurrentSearchToolResult();
   const listRef = useRef<HTMLDivElement>(null);
   const raw = unwrapAgUiToolPayload(result);
-  const validEnvelope = !!raw && typeof raw === "object" && !Array.isArray(raw) &&
+  const validEnvelope = Boolean(raw) && typeof raw === "object" && !Array.isArray(raw) &&
     Array.isArray((raw as { results?: unknown }).results);
   const envelope = normalizeToolEnvelope(result);
   const reasons = visibleEventSearchReasons(envelope.rankExplanation ?? []);

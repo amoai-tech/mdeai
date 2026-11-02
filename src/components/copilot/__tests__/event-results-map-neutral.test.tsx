@@ -14,7 +14,7 @@ const ui = vi.hoisted(() => ({
   setRows: vi.fn(),
   selectedPinId: null as string | null,
   addMessage: vi.fn(),
-  runAgent: vi.fn(async () => {}),
+  runAgent: vi.fn(() => Promise.resolve()),
   liveAgent: true,
 }));
 
