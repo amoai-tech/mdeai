@@ -245,3 +245,26 @@ describe("SAN-1600 — a page switch must retire the previous event's record", (
     expect(currentSelectedNameOnly(history, none)).toEqual(history);
   });
 });
+
+describe("SAN-1600 — attribute vocabulary must actually match the words people type", () => {
+  const page = ctx({ route: "/events", selectedPublicEntityId: b });
+  const history = [
+    { role: "user", content: "What venue is saved for this event?" },
+    { role: "assistant", content: "The Reina de Antioquia 2026 Finals is at Hotel Intercontinental — Salón Real, GA COP 40,000." },
+  ];
+  // Each one must drop the previous event's answer; a truncated alternative
+  // (e.g. "accessib" against "accessible") silently fails the guard.
+  it.each([
+    "Is it accessible?",
+    "Is the venue accessible for a wheelchair?",
+    "What is the accessibility like?",
+    "What tiers are available?",
+    "When does it start?",
+    "What does an open tier cost?",
+  ])("trims the previous event for: %s", (question) => {
+    const kept = currentSelectedNameOnly([...history, { role: "user", content: question }], page);
+    expect(kept).toEqual([{ role: "user", content: question }]);
+    expect(JSON.stringify(kept)).not.toContain("Reina");
+    expect(JSON.stringify(kept)).not.toContain("Intercontinental");
+  });
+});

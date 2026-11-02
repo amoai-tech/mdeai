@@ -120,7 +120,10 @@ export function currentSelectedNameOnly<T extends { role: string; content: unkno
   // answered from the previous page's record. Live run: a Feria page answer
   // repeated Reina's venue and invented a meeting point from the earlier turn.
   // Comparisons and new-discovery requests still keep their history below.
-  const asksAboutSelectedItem = /\b(?:tickets?|tier|price|prices|cost|how much|venue|location|address|directions|where is it|when is it|schedule|start(?:s|ing)?|ends?|meeting point|confirmed|available|availability|sold out|open|opens|free|entry|dress|parking|accessib)/i.test(question)
+  // Leading \b only: these are deliberately PREFIX matches, so "accessib" covers
+  // accessible/accessibility and "tier" covers tiers. Do not add a trailing \b —
+  // it would silently stop matching the words people actually type.
+  const asksAboutSelectedItem = /\b(?:tickets?|tiers?|prices?|cost|how much|venue|location|address|directions|where is it|when is it|schedules?|start(?:s|ing|ed)?|ends?|meeting point|confirmed|availab(?:le|ility)|sold out|opens?|free|entry|dress|parking|accessib(?:le|ility))/i.test(question)
     && !/\b(?:other|another|different|similar|elsewhere|nearby|new)\s+(?:events?|places?|venues?|rentals?|restaurants?|caf[eé]s?|clubs?)\b/i.test(question)
     && !/\b(?:find|search|show me|recommend|suggest)\b/i.test(question)
     // A real comparison needs both records; never trim it away.
