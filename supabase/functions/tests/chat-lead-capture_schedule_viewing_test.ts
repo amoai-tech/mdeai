@@ -125,11 +125,40 @@ Deno.test("createScheduleViewingBridge — maps RPC validation errors", async ()
     email: "camila@example.com",
   });
 
+  // A valid apartment that cannot take a request is not the renter's input mistake.
   assertEquals(result, {
     ok: false,
-    code: "VALIDATION_ERROR",
+    code: "LISTING_UNAVAILABLE",
     message: "p1_schedule_tour_atomic: listing is not requestable",
   });
+});
+
+Deno.test("createScheduleViewingBridge — resolves a differently-cased listing id", async () => {
+  const calls: Array<Record<string, unknown>> = [];
+  const client = {
+    rpc: (_name: string, args: Record<string, unknown>) => {
+      calls.push(args);
+      return Promise.resolve({
+        data: {
+          lead: { id: "lead-1" },
+          showing: { id: "showing-1" },
+          idempotent_replay: false,
+        },
+        error: null,
+      });
+    },
+  } as unknown as Parameters<typeof createScheduleViewingBridge>[0];
+
+  const result = await createScheduleViewingBridge(client, {
+    listingId: "  MDE-GRAND-BY-LINARES-1612  ",
+    preferredAt: "2026-10-15T14:00:00.000Z",
+    idempotencyKey: "sv-test-case-123",
+    email: "camila@example.com",
+  });
+
+  assertEquals(result.ok, true);
+  // p1_schedule_tour_atomic matches slugs exactly and every stored slug is lowercase.
+  assertEquals(calls[0]?.p_listing_id, "mde-grand-by-linares-1612");
 });
 
 Deno.test("createScheduleViewingBridge — keeps internal P0001 failures as DB errors", async () => {

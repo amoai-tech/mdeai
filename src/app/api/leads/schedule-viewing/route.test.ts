@@ -206,6 +206,46 @@ describe("POST /api/leads/schedule-viewing (SAN-1203)", () => {
     expect(first.idempotency_key).not.toBe(third.idempotency_key);
   });
 
+  it("sends a lowercased listing id, so a differently-cased one still books", async () => {
+    // p1_schedule_tour_atomic matches slugs exactly and every stored slug is lowercase.
+    fetchMock.mockResolvedValue(
+      edgeResponse(200, {
+        success: true,
+        data: { lead_id: "lead-1", showing_id: "showing-1" },
+      }),
+    );
+
+    const res = await post(validBody({ listingId: "  MDE-Grand-By-Linares-1612  " }));
+    expect(res.status).toBe(200);
+
+    const sent = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body ?? "{}"));
+    expect(sent.listing_id).toBe("mde-grand-by-linares-1612");
+  });
+
+  it("tells the renter the apartment cannot take a request, not that their details are wrong", async () => {
+    // The bridge classifies an un-requestable listing separately from bad input. Sending the
+    // renter back to "check your details" leaves them retrying a form that can never succeed.
+    fetchMock.mockResolvedValue(
+      edgeResponse(400, {
+        success: false,
+        error: {
+          code: "LISTING_UNAVAILABLE",
+          message: "p1_schedule_tour_atomic: listing is not requestable",
+        },
+      }),
+    );
+
+    const res = await post(validBody());
+    const json = await res.json();
+
+    expect(res.status).toBe(409);
+    expect(json.error.code).toBe("LISTING_UNAVAILABLE");
+    expect(json.error.message).toBe(SCHEDULE_VIEWING_ERROR_MESSAGES.LISTING_UNAVAILABLE);
+    expect(json.error.message).not.toMatch(/check your viewing details/i);
+    expect(JSON.stringify(json)).not.toContain("p1_schedule_tour_atomic");
+    expect(serverLog()).toContain("listing_unavailable");
+  });
+
   it("keeps the edge's technical validation prose out of the renter's response", async () => {
     fetchMock.mockResolvedValue(
       edgeResponse(400, {
