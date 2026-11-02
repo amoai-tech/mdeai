@@ -170,6 +170,28 @@ describe("ScheduleViewingModal submit behaviour (SAN-1203)", () => {
     ).toBe("Camila Test");
   });
 
+  it("shows an unavailable-apartment error without closing or falsely confirming a viewing", async () => {
+    vi.mocked(submitScheduleViewing).mockRejectedValue(
+      new Error("This home isn't accepting viewing requests right now. Pick another apartment from the results."),
+    );
+
+    await renderModalAndFill();
+    await act(async () => {
+      submitForm();
+    });
+
+    expect(container.querySelector('[data-testid="schedule-viewing-modal"]')).not.toBeNull();
+    expect(
+      container.querySelector('[data-testid="schedule-viewing-error"]')?.textContent,
+    ).toContain("isn't accepting viewing requests");
+    expect(
+      (container.querySelector('input[name="name"]') as HTMLInputElement).value,
+    ).toBe("Camila Test");
+    const { setLeadConfirmation } = vi.mocked(useRentalUi).mock.results[0]
+      .value as unknown as { setLeadConfirmation: ReturnType<typeof vi.fn> };
+    expect(setLeadConfirmation).not.toHaveBeenCalled();
+  });
+
   it("releases the lock after a failure so the renter can retry", async () => {
     vi.mocked(submitScheduleViewing).mockRejectedValueOnce(new Error("boom"));
     await renderModalAndFill();

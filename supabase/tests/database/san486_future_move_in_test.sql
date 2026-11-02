@@ -196,7 +196,7 @@ select throws_ok($q$
     'san486-renter@example.com', 'SAN486 Renter', null, null::uuid,
     (now() + interval '1 day')::timestamptz, '{}'::jsonb, '{}'::jsonb
   )
-$q$, 'P0001', 'p1_schedule_tour_atomic: listing is not requestable',
+$q$, 'P1287', 'p1_schedule_tour_atomic: listing is not requestable',
   'A8: a listing with no available_from cannot be requested');
 
 -- A9 · the RPC refuses a published listing with a reversed window.
@@ -206,7 +206,7 @@ select throws_ok($q$
     'san486-renter@example.com', 'SAN486 Renter', null, null::uuid,
     (now() + interval '1 day')::timestamptz, '{}'::jsonb, '{}'::jsonb
   )
-$q$, 'P0001', 'p1_schedule_tour_atomic: listing is not requestable',
+$q$, 'P1287', 'p1_schedule_tour_atomic: listing is not requestable',
   'A9: a listing with a reversed window cannot be requested');
 reset role;
 
@@ -312,7 +312,7 @@ select throws_ok($q$
   select public.p1_schedule_tour_atomic('f4860000-0000-4000-8000-000000000036'::text, null::uuid,
     'san486-viewing-key-revoked', 'form', 'san486-renter@example.com', 'SAN486 Renter', null, null::uuid,
     (now() + interval '1 day')::timestamptz, '{}'::jsonb, '{}'::jsonb)
-$q$, 'P0001', 'p1_schedule_tour_atomic: listing is not requestable',
+$q$, 'P1287', 'p1_schedule_tour_atomic: listing is not requestable',
   'G3: no viewing can be requested once the permission is revoked');
 reset role;
 
@@ -322,7 +322,7 @@ select throws_ok($q$
   select public.p1_schedule_tour_atomic('f4860000-0000-4000-8000-000000000021'::text, null::uuid,
     'san486-viewing-key-withdrawn', 'form', 'san486-renter@example.com', 'SAN486 Renter', null, null::uuid,
     (now() + interval '3 day')::timestamptz, '{}'::jsonb, '{}'::jsonb)
-$q$, 'P0001', 'p1_schedule_tour_atomic: listing is not requestable',
+$q$, 'P1287', 'p1_schedule_tour_atomic: listing is not requestable',
   'G4: a withdrawn listing cannot receive a new viewing request');
 reset role;
 
