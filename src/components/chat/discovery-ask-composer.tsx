@@ -84,6 +84,7 @@ const runFailedSince = (threadId: string | undefined, before: number) =>
   getConciergeErrorForThread(threadId).version > before || getConciergeErrorForThread(null).version > before;
 
 /** Starter questions: one real turn per click, using the same path as a typed question. */
+// skipcq: JS-0067 - module-local React component; not browser global scope
 function AskSuggestions({ questions, onPick }: { questions: readonly string[]; onPick: (question: string) => void }) {
   return (
     <div role="group" aria-label="Suggested questions" data-testid="discovery-ask-suggestions" className="mb-2 flex flex-wrap gap-2">
@@ -100,6 +101,16 @@ function AskSuggestions({ questions, onPick }: { questions: readonly string[]; o
         </button>
       ))}
     </div>
+  );
+}
+
+/** The visible transcript: one <li> per turn, announced politely. */
+function AskHistory({ turns, open }: { turns: Array<{ id: string; role: string; text: string }>; open: boolean }) {
+  if (!open || turns.length === 0) return null;
+  return (
+    <ol data-testid="discovery-ask-history" role="log" aria-live="polite" className="mb-2 max-h-52 space-y-2 overflow-auto rounded-lg border p-3">
+      {turns.map((t) => <li key={t.id} className="text-sm"><span className="mr-2 text-xs font-medium text-muted-foreground">{t.role === "user" ? "You" : "MDE"}:</span>{t.text}</li>)}
+    </ol>
   );
 }
 
@@ -230,11 +241,7 @@ function LiveComposer({ page, guestEvents, onAgentResults, hideHeading = false, 
         </div>
       </div>
       )}
-      {showHistory && turns.length > 0 ? (
-        <ol data-testid="discovery-ask-history" role="log" aria-live="polite" className="mb-2 max-h-52 space-y-2 overflow-auto rounded-lg border p-3">
-          {turns.map((t) => <li key={t.id} className="text-sm"><span className="mr-2 text-xs font-medium text-muted-foreground">{t.role === "user" ? "You" : "MDE"}:</span>{t.text}</li>)}
-        </ol>
-      ) : null}
+      <AskHistory turns={turns} open={showHistory} />
       {showSuggestions ? (
         <AskSuggestions
           questions={starters}

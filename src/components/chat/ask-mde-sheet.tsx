@@ -29,17 +29,18 @@ type AssistantRoute = {
   ownsSelection: boolean;
 };
 
-/** Route -> assistant ownership. Pure so the component itself stays a thin shell. */
-export function matchAssistantRoute(pathname: string): AssistantRoute | null {
-  return ROUTES.find((candidate) => candidate.pattern.test(pathname)) ?? null;
-}
-
 const ROUTES: AssistantRoute[] = [
   // Browse pages (/events, /restaurants, …) already render this same composer inline
   // and are intentionally absent: one assistant per page, not two.
   { pattern: /^\/events\/[^/]+\/?$/, page: "events", title: "Ask about this event", entry: "page-action", ownsSelection: true },
   { pattern: /^\/restaurants\/[^/]+\/?$/, page: "restaurants", title: "Ask about this restaurant", entry: "bubble", ownsSelection: false },
 ];
+
+/** Route -> assistant ownership. Pure so the component itself stays a thin shell. */
+// skipcq: JS-0067 - module-local helper; not browser global scope
+export function matchAssistantRoute(pathname: string): AssistantRoute | null {
+  return ROUTES.find((candidate) => candidate.pattern.test(pathname)) ?? null;
+}
 
 /**
  * The single customer-facing Ask MDE surface.
@@ -49,6 +50,7 @@ const ROUTES: AssistantRoute[] = [
  * provider, no second conversation store, and no model run on mount: a turn starts
  * only when the visitor sends one.
  */
+// skipcq: JS-0067 - module-local React component; not browser global scope
 export function AskMdeSheet() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
