@@ -256,7 +256,6 @@ export function RentalBrowseCard({
               variant="outline"
               data-testid={`rental-card-map-select-${rental.id}`}
               aria-label={`Show ${rental.title} on the map`}
-              aria-pressed={Boolean(selected)}
               className="min-h-11 lg:min-h-0"
               onClick={() => onSelect?.()}
               onFocus={preview}

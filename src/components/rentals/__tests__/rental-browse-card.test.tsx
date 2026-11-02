@@ -83,6 +83,7 @@ describe("RentalBrowseCard — SAN-1349 viewing CTA truthfulness", () => {
     );
     expect(html).toContain('data-testid="rental-card-map-select-rnt_lau_001"');
     expect(html).toContain('aria-label="Show Bright 2BR with Balcony in Laureles on the map"');
+    expect(html).not.toMatch(/data-testid="rental-card-map-select-rnt_lau_001"[^>]*aria-pressed=/);
     expect(html).not.toContain('role="button"');
     expect(html).toContain('data-testid="rental-card-link-rnt_lau_001"');
   });
