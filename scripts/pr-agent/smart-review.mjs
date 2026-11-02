@@ -159,7 +159,9 @@ export function buildCoverageReport({ repo, number, baseSha, headSha, files, exp
   const pending = details.filter((f) => ["unknown", "unreviewed", "failed"].includes(f.coverage) && !["excluded", "generated"].includes(f.category));
   const criticalPending = pending.filter((f) => ["critical", "high"].includes(f.category));
   const verified = details.filter((f) => f.coverage === "ai-reviewed" || f.validation.status === "validated").length;
-  const percentVerified = details.length ? Math.round(100 * verified / details.length) : 100;
+  // An empty inventory is not evidence of perfect coverage.
+  const percentVerified = details.length ? Math.round(100 * verified / details.length) : null;
+  const verifiedLabel = percentVerified === null ? "unknown (no changed files)" : percentVerified + "%";
   const usage = parseReviewUsage(reviewBody, baseSha, headSha);
   const plan = planFollowupBatches({ details }, { baseSha, headSha, maxBatches: 6, maxPatchBytes: 35000 });
   const plannedFiles = plan.batches.reduce((total, batch) => total + batch.paths.length, 0);
@@ -172,7 +174,7 @@ export function buildCoverageReport({ repo, number, baseSha, headSha, files, exp
     ...(details.length > rows.length ? [`| … | ${details.length - rows.length} additional files | See GitHub diff | — |`] : []), "",
     criticalPending.length ? `**Needs independent human attention:** ${criticalPending.slice(0, 10).map((f) => quotePath(f.path)).join(", ")}` : "No uncovered critical/high-risk files established.", "",
     pending.length ? `**Follow-up:** ${pending.length} file(s) lack proven AI coverage. Plan a bounded file-specific review; this comment does not execute or certify one.` : "No actionable uncovered files identified from the available evidence.",
-    "**Quality (grounded):** " + verified + "/" + details.length + " files have confirmed AI or deterministic proof (" + percentVerified + "%); " + criticalPending.length + " critical/high-risk files still need human attention.",
+    "**Quality (grounded):** " + verified + "/" + details.length + " files have confirmed AI or deterministic proof (" + verifiedLabel + "); " + criticalPending.length + " critical/high-risk files still need human attention.",
     "**Model usage (reported):** " + (usage.model ?? "unknown") + " · Calls: " + (usage.calls ?? "unknown") + " · Input/output tokens: " + (usage.inputTokens ?? "unknown") + "/" + (usage.outputTokens ?? "unknown") + " · Processing time: " + (usage.seconds === null ? "unknown" : usage.seconds + "s") + " · Estimated API cost: " + (usage.estimatedUsd === null ? "unknown (not $0)" : "$" + usage.estimatedUsd.toFixed(4) + " USD") + ".",
     "**Follow-up budget:** " + plan.batches.length + "/6 risk-ordered patch batches plan " + plannedFiles + " files, capped at 35,000 patch bytes per batch; " + plan.deferred.length + " files deferred. Planning only: no extra model calls executed or certified.",
     ...(inventory.unknownInventory ? ["", "**Inventory UNKNOWN:** GitHub's changed-file listing is incomplete or exceeds its 3,000-file limit."] : []),

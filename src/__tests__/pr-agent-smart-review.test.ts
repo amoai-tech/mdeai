@@ -199,6 +199,15 @@ describe("SAN-1609 post-merge coverage smoke", () => {
 });
 
 describe("SAN-1609 quality, budget and provider run metrics", () => {
+  it("does not report 100% proven coverage for an empty file inventory", () => {
+    const report = buildCoverageReport({ repo: "a/b", number: 1, baseSha: BASE, headSha: HEAD,
+      files: [], expectedCount: 0, reviewBody: complete });
+    expect(report.quality.verifiedFiles).toBe(0);
+    expect(report.quality.percentVerified).toBeNull();
+    expect(report.body).toContain("unknown (no changed files)");
+    expect(report.body).not.toContain("100%");
+  });
+
   it("reads only exact-head official review usage; unknown API cost is not zero", () => {
     const content = complete + "\n<details><summary><strong>⚙️ Agent run details</strong></summary>\n" +
       "- Model: openai/nvidia/nemotron-3.5-lightning-30b-a3b\n" +
