@@ -268,3 +268,39 @@ describe("SAN-1600 — attribute vocabulary must actually match the words people
     expect(JSON.stringify(kept)).not.toContain("Intercontinental");
   });
 });
+
+describe("SAN-1600 — discovery requests keep their filters, item questions do not", () => {
+  const page = ctx({ route: "/events", selectedPublicEntityId: b });
+  const history = [
+    { role: "user", content: "Show me free events near Laureles" },
+    { role: "assistant", content: "The Reina de Antioquia 2026 Finals is at Hotel Intercontinental — Salón Real." },
+  ];
+  it.each([
+    "Show free events nearby",
+    "Show me other events this weekend",
+    "Find restaurants in Laureles",
+  ])("keeps the earlier turn for a discovery request: %s", (question) => {
+    expect(currentSelectedNameOnly([...history, { role: "user", content: question }], page))
+      .toEqual([...history, { role: "user", content: question }]);
+  });
+
+  it.each([
+    "Show me the venue",
+    "Search for tickets",
+  ])("still trims for a question aimed at the item on screen: %s", (question) => {
+    const kept = currentSelectedNameOnly([...history, { role: "user", content: question }], page);
+    expect(kept).toEqual([{ role: "user", content: question }]);
+    expect(JSON.stringify(kept)).not.toContain("Reina");
+  });
+
+  it("scopes the supersede guidance to the selected item instead of voiding history outright", async () => {
+    const hint = await verifiedDiscoverySelectionHint(
+      ctx({ route: "/events", selectedPublicEntityId: b }),
+      async () => ({ found: true, data: { id: b, name: "Feria de las Flores Preview Parade" } }),
+    );
+    expect(hint).toContain("for questions about the item on screen");
+    // A comparison or discovery request must not be told the earlier turns are void.
+    expect(hint).not.toContain("VOID for this answer");
+    expect(hint).toContain("compares two items");
+  });
+});
