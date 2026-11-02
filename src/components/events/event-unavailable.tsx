@@ -20,8 +20,8 @@ export function EventUnavailable() {
       <p className="text-sm font-medium text-muted-foreground">Event page</p>
       <h1 className="text-2xl font-semibold tracking-tight">We couldn&apos;t load this event</h1>
       <p className="text-sm leading-6 text-muted-foreground" data-testid="event-unavailable-message">
-        The event page did not load because of a temporary problem on our side. The event itself has
-        not been deleted — try again in a moment.
+        We couldn&apos;t check this event&apos;s availability just now because of a temporary problem on our
+        side. Please try again in a moment.
       </p>
       <div className="flex flex-wrap items-center gap-3">
         <Button
