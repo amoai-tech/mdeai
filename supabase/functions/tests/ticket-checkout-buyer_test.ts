@@ -3,7 +3,7 @@ import { resolveCheckoutBuyer } from "../_shared/ticket-checkout-buyer.ts";
 
 Deno.test("ticket buyer: absent or public keys stay anonymous", async () => {
   let calls = 0;
-  const verify = async (_header: string) => {
+  const verify = async () => {
     calls++;
     return "unreachable";
   };
