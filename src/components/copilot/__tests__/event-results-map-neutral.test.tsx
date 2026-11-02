@@ -13,17 +13,16 @@ const ui = vi.hoisted(() => ({
   openVenueDetail: vi.fn(),
   setRows: vi.fn(),
   selectedPinId: null as string | null,
-  addMessage: vi.fn(),
-  runAgent: vi.fn(() => Promise.resolve()),
+  searchEvents: vi.fn(() => Promise.resolve(true)),
   liveAgent: true,
 }));
 
-vi.mock("@copilotkit/react-core/v2", () => ({
-  useCopilotKit: () => ({ copilotkit: { runAgent: ui.runAgent } }),
+vi.mock("@/hooks/use-event-search-fast-path", () => ({
+  useEventSearchFastPath: () => ({ handleUserMessage: ui.searchEvents }),
 }));
 vi.mock("@/components/chat/concierge-coagent-context", () => ({
   useOptionalConciergeCoAgent: () => ({
-    agent: ui.liveAgent ? { addMessage: ui.addMessage, isRunning: false } : undefined,
+    agent: ui.liveAgent ? { isRunning: false } : undefined,
     isReady: true,
   }),
 }));
@@ -54,6 +53,9 @@ const event = (id: string, coords?: { latitude: number; longitude: number }) => 
   ...coords,
 });
 
+// React 19 act() uses this flag to detect a properly configured jsdom test environment.
+(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
 let root: Root;
 let container: HTMLElement;
 
@@ -82,8 +84,8 @@ beforeEach(() => {
   Element.prototype.scrollIntoView = vi.fn();
   ui.panToPin.mockReset();
   ui.openVenueDetail.mockReset();
-  ui.addMessage.mockReset();
-  ui.runAgent.mockReset();
+  ui.searchEvents.mockReset();
+  ui.searchEvents.mockResolvedValue(true);
   ui.setRows.mockReset();
   ui.selectedPinId = null;
   ui.liveAgent = true;
@@ -166,17 +168,22 @@ describe("EventResults empty and unavailable states", () => {
     act(() => root.render(<EventResults result={result} />));
   }
 
-  it("shows a genuine empty state with follow-up suggestions that run the existing Concierge", async () => {
+  it("routes suggestions into the existing event-search handler instead of an AI-only turn", async () => {
     showResult({ results: [], total: 0, source: "supabase" });
     expect(container.querySelector('[data-testid="events-search-error"]')).toBeNull();
     const weekend = container.querySelector('[data-testid="events-empty-suggest-weekend"]');
     expect(weekend).toBeInstanceOf(HTMLButtonElement);
     await act(async () => (weekend as HTMLButtonElement).click());
-    expect(ui.addMessage).toHaveBeenCalledWith(expect.objectContaining({
-      role: "user",
-      content: "Show events this weekend in Medellín",
-    }));
-    expect(ui.runAgent).toHaveBeenCalledOnce();
+    expect(ui.searchEvents).toHaveBeenCalledOnce();
+    expect(ui.searchEvents).toHaveBeenCalledWith("Show events this weekend in Medellín");
+  });
+
+  it("reports failed suggestions rather than silently claiming a search completed", async () => {
+    ui.searchEvents.mockRejectedValueOnce(new Error("API 503"));
+    showResult({ results: [], total: 0, source: "supabase" });
+    const weekend = container.querySelector('[data-testid="events-empty-suggest-weekend"]');
+    await act(async () => (weekend as HTMLButtonElement).click());
+    expect(container.querySelector('[data-testid="events-suggestion-error"]')).not.toBeNull();
   });
 
   it("renders the empty state without calling provider-only hooks when no live agent is mounted", () => {
@@ -187,8 +194,7 @@ describe("EventResults empty and unavailable states", () => {
     expect(weekend).toBeInstanceOf(HTMLButtonElement);
     expect((weekend as HTMLButtonElement).disabled).toBe(true);
     act(() => (weekend as HTMLButtonElement).click());
-    expect(ui.addMessage).not.toHaveBeenCalled();
-    expect(ui.runAgent).not.toHaveBeenCalled();
+    expect(ui.searchEvents).not.toHaveBeenCalled();
   });
 
   it("does not disguise an unavailable database as a healthy empty market", () => {

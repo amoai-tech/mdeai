@@ -96,8 +96,8 @@ test.describe("SAN-546 · OPS-JOURNEY — prod matrix J05–J20", () => {
     test.setTimeout(240_000);
     await gotoHome(page);
     // Inventory-dependent: production may legitimately have no salsa event
-    // *this weekend*. Use a city-wide query so J09 proves the buy CTA whenever
-    // the catalog has any upcoming salsa event, without inventing inventory.
+    // *this weekend*. A generic citywide request now searches all upcoming
+    // categories instead of forcing an unnecessary clarification turn.
     await sendConciergeMessage(page, "events in Medellín");
     await waitForCopilotIdle(page, 150_000);
 
@@ -115,7 +115,19 @@ test.describe("SAN-546 · OPS-JOURNEY — prod matrix J05–J20", () => {
     } else {
       await expect(page.getByTestId("events-empty").first()).toContainText(/no events/i);
       // These suggestions are actionable buttons, not decorative chips.
-      await expect(page.getByTestId("events-empty-suggest-weekend").first()).toBeEnabled();
+      const followUp = page.getByTestId("events-empty-suggest-weekend").first();
+      await expect(followUp).toBeEnabled();
+      // A suggestion has not worked merely because an agent started: the same
+      // existing event-search API must finish and replace the result state.
+      const nextSearch = page.waitForResponse(
+        (response) => response.url().includes("/api/events/search") &&
+          response.request().method() === "POST",
+        { timeout: 30_000 },
+      );
+      await followUp.click();
+      const response = await nextSearch;
+      expect(response.ok()).toBe(true);
+      await waitForVerticalTerminalState(page, "events", 60_000);
     }
     await page.screenshot({ path: path.join(outDir, "j09-event-cta.png") });
   });

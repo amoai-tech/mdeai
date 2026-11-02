@@ -43,13 +43,14 @@ function attachEventQueryText(
   return params;
 }
 
-/** Show canned clarify without calling conciergeAgent. */
+/** Only a bare "events?" needs clarification; a citywide event request can search all categories. */
 export function shouldInstantEventClarify(
   text: string,
   memory: ConciergeWorkingMemory,
 ): boolean {
   return (
-    isGenericEventQuery(text) && memory.lastEventQuery?.genericAskPending !== true
+    /^events?[?.!]*$/i.test(text.trim()) &&
+    memory.lastEventQuery?.genericAskPending !== true
   );
 }
 
@@ -92,6 +93,12 @@ export function buildEventSearchParams(
       text,
       s,
     );
+  }
+
+  // A real citywide browse is actionable without choosing a category first.
+  // Do not inherit filters from an unrelated previous event search.
+  if (isGenericEventQuery(text) && !shouldInstantEventClarify(text, memory)) {
+    return { dateWindow: "any", limit: FAST_PATH_LIMIT };
   }
 
   if (q?.genericAskPending) {

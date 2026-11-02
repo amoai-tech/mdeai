@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import Link from "next/link";
-import { useCopilotKit, type AbstractAgent } from "@copilotkit/react-core/v2";
+import type { AbstractAgent } from "@copilotkit/react-core/v2";
 import { useOptionalConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
+import { useEventSearchFastPath } from "@/hooks/use-event-search-fast-path";
 import { ToolErrorChip } from "@/components/copilot/tool-error-chip";
 import { CafeResultCard } from "@/components/copilot/cafe-result-card";
 import { RentalCard } from "@/components/copilot/rental-card";
@@ -411,16 +412,24 @@ export function RentalResults({
 
 /** Provider-required hooks live only in this child, which is never rendered in deterministic E2E. */
 function LiveEventSearchSuggestions({ agent, isReady }: { agent: AbstractAgent; isReady: boolean }) {
-  const { copilotkit } = useCopilotKit();
+  // Use the same event fast path as the chat composer, so clicking a suggestion
+  // finishes a real search and updates cards, pins and transcript (not just an agent turn).
+  const { handleUserMessage } = useEventSearchFastPath();
+  const pendingRef = useRef(false);
+  const [searching, setSearching] = useState(false);
   const [failed, setFailed] = useState(false);
   const sendQuery = async (query: string) => {
-    if (!isReady || agent.isRunning) return;
+    if (!isReady || agent.isRunning || pendingRef.current) return;
+    pendingRef.current = true;
+    setSearching(true);
     setFailed(false);
     try {
-      agent.addMessage({ id: crypto.randomUUID(), role: "user", content: query });
-      await copilotkit.runAgent({ agent });
+      if (!(await handleUserMessage(query))) setFailed(true);
     } catch {
       setFailed(true);
+    } finally {
+      pendingRef.current = false;
+      setSearching(false);
     }
   };
 
@@ -431,11 +440,11 @@ function LiveEventSearchSuggestions({ agent, isReady }: { agent: AbstractAgent; 
         title="No events found"
         description="Try a different date range or neighborhood."
         suggestions={[
-          { label: "Events this weekend", testId: "events-empty-suggest-weekend", disabled: !isReady || agent.isRunning, onClick: () => void sendQuery("Show events this weekend in Medellín") },
-          { label: "Salsa in Poblado", testId: "events-empty-suggest-salsa", disabled: !isReady || agent.isRunning, onClick: () => void sendQuery("Show salsa events in El Poblado") },
+          { label: "Events this weekend", testId: "events-empty-suggest-weekend", disabled: !isReady || agent.isRunning || searching, onClick: () => void sendQuery("Show events this weekend in Medellín") },
+          { label: "Salsa in Poblado", testId: "events-empty-suggest-salsa", disabled: !isReady || agent.isRunning || searching, onClick: () => void sendQuery("Show salsa events in El Poblado") },
         ]}
       />
-      {!isReady || agent.isRunning ? <p className="text-xs text-muted-foreground">Searching…</p> : null}
+      {searching || !isReady || agent.isRunning ? <p className="text-xs text-muted-foreground">Searching…</p> : null}
       {failed ? <ToolErrorChip testId="events-suggestion-error" message="Couldn't run that search. Please try again." /> : null}
     </>
   );

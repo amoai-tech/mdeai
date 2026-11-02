@@ -352,14 +352,9 @@
       "note": "Mocks the v2 useFrontendTool hook to prove the openRentalDetails registration and resolver behavior. Mounts no provider."
     },
     {
-      "file": "src/components/copilot/__tests__/event-results-map-neutral.test.tsx",
-      "classification": "test-only",
-      "note": "SAN-546 J09 tests live-agent suggestions and the provider-free deterministic fallback, plus malformed and unavailable event results."
-    },
-    {
       "file": "src/components/copilot/search-tool-result-cards.tsx",
       "classification": "keep",
-      "note": "SAN-546 J09: provider-safe empty event suggestions reuse the existing concierge agent and optional context; no extra provider."
+      "note": "SAN-546 J09: provider-safe empty event suggestions reuse the canonical event fast path; optional concierge context guards the provider boundary."
     },
     {
       "file": "src/components/host/rentals/rentals-concierge-center.tsx",
