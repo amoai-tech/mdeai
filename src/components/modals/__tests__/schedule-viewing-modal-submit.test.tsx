@@ -176,14 +176,22 @@ describe("ScheduleViewingModal submit behaviour (SAN-1203)", () => {
     });
     expect(useRentalUi().closeScheduleViewing).toHaveBeenCalled();
 
-    // "Refresh apartment" re-runs the request rather than reloading the page, so the typed
-    // values survive a re-check.
+    // "Retry viewing request" is a WRITE, so it must re-send the identical request: same
+    // apartment, same contact details, same time. That is what makes the server treat it as one
+    // request rather than a second booking.
+    const firstCall = vi.mocked(submitScheduleViewing).mock.calls[0]?.[0];
     vi.mocked(submitScheduleViewing).mockClear();
     await act(() => {
-      (container.querySelector('[data-testid="schedule-viewing-refresh"]') as HTMLButtonElement).click();
+      (container.querySelector('[data-testid="schedule-viewing-retry"]') as HTMLButtonElement).click();
       return Promise.resolve();
     });
     expect(submitScheduleViewing).toHaveBeenCalledTimes(1);
+    // Same payload as the first attempt: the route derives the idempotency key from it, so a
+    // retry collapses onto the same request instead of creating a second viewing.
+    expect(vi.mocked(submitScheduleViewing).mock.calls[0]?.[0]).toEqual(firstCall);
+    expect((container.querySelector('[data-testid="schedule-viewing-retry"]') as HTMLButtonElement).textContent).toContain(
+      "Retry viewing request",
+    );
   });
 
   it("does not carry one apartment's unavailable error onto the next apartment", async () => {
