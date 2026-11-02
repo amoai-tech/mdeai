@@ -56,7 +56,7 @@ import { EVENT_DETAIL_ASK_SUGGESTIONS } from "../discovery-ask-composer";
 const QUESTIONS = [
   "Are tickets available?",
   "Where is the meeting point?",
-  "What time does it start?",
+  "When does it start?",
 ];
 
 const openEventDrawer = async () => {
@@ -104,7 +104,7 @@ describe("SAN-1620 S7 event-start questions", () => {
   it("hides the questions while a reply is in flight", async () => {
     h.appendMessage.mockReturnValue(new Promise<boolean>(() => {}));
     const group = await openEventDrawer();
-    await userEvent.click(within(group).getByRole("button", { name: "What time does it start?" }));
+    await userEvent.click(within(group).getByRole("button", { name: "When does it start?" }));
     await waitFor(() => expect(screen.queryByTestId("discovery-ask-suggestions")).toBeNull());
     expect(screen.getByTestId("discovery-ask-stop")).toBeTruthy();
     expect(h.appendMessage).toHaveBeenCalledTimes(1);
@@ -121,14 +121,14 @@ describe("SAN-1620 S7 event-start questions", () => {
 
   it("is keyboard reachable: the chip takes focus and Enter sends one turn", async () => {
     await openEventDrawer();
-    const chip = screen.getByRole("button", { name: "What time does it start?" });
+    const chip = screen.getByRole("button", { name: "When does it start?" });
     chip.focus();
     expect(document.activeElement).toBe(chip);
     // jsdom has no layout, so the 44px target is asserted on the shared token the
     // composer already uses for its other touch targets (min-h-11 = 2.75rem).
     expect(chip.className).toContain("min-h-11");
     await userEvent.keyboard("{Enter}");
-    await waitFor(() => expect(h.appendMessage).toHaveBeenCalledWith("What time does it start?"));
+    await waitFor(() => expect(h.appendMessage).toHaveBeenCalledWith("When does it start?"));
     expect(h.appendMessage).toHaveBeenCalledTimes(1);
   });
 

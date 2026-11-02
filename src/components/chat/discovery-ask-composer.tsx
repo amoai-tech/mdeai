@@ -74,7 +74,7 @@ function GuestEventComposer({ options }: { options: EventGuestOptions }) {
 export const EVENT_DETAIL_ASK_SUGGESTIONS = [
   "Are tickets available?",
   "Where is the meeting point?",
-  "What time does it start?",
+  "When does it start?",
 ] as const;
 
 const INTERRUPTED_COPY = "The response was interrupted. Check the conversation before retrying.";
