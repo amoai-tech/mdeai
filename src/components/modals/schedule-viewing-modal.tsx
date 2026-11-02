@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useReducer, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { useRentalUi } from "@/components/chat/rental-ui-context";
 import { submitScheduleViewing } from "@/lib/leads/submit-schedule-viewing";
 import { buildSchedulePrefill, type SchedulePrefill } from "@/lib/leads/schedule-prefill";
-import { useRouter } from "next/navigation";
 import { ScheduleViewingError } from "@/lib/leads/submit-schedule-viewing";
 import type { ScheduleViewingErrorCode } from "@/lib/leads/schedule-viewing-schema";
 import { createClient } from "@/lib/supabase/client";
@@ -54,10 +54,12 @@ export const ScheduleViewingModal = () => {
   // SAN-1059 — the message alone cannot tell the renter what to do next. Keep the typed code so
   // "this apartment cannot take a request" gets a recovery action instead of a dead end.
   const [errorCode, setErrorCode] = useState<ScheduleViewingErrorCode | null>(null);
-  const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
 
   const isOpen = Boolean(scheduleTarget);
+  // Preserve the renter's filters; only the apartment changes. Rendered client-side only,
+  // because this block needs a selected apartment.
+  const resultsHref = `/rentals${typeof window === "undefined" ? "" : window.location.search}`;
 
   // When the modal opens, look up the signed-in user and seed blank contact fields from their
   // profile + auth account. The reducer decides ownership (see contact-fields.ts), so a slow
@@ -76,8 +78,12 @@ export const ScheduleViewingModal = () => {
 
   if (!scheduleTarget) return null;
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  /**
+   * The submit path, callable from the form and from "Refresh apartment". Re-running it is a
+   * real re-check against the server: if the apartment came back, the request completes without
+   * the renter retyping anything.
+   */
+  const submitRequest = async () => {
     if (submitLockRef.current) return;
     submitLockRef.current = true;
     setError(null);
@@ -112,6 +118,11 @@ export const ScheduleViewingModal = () => {
       submitLockRef.current = false;
       setSubmitting(false);
     }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await submitRequest();
   };
 
   return (
@@ -213,28 +224,21 @@ export const ScheduleViewingModal = () => {
                   variant="outline"
                   className="min-h-11 lg:min-h-0"
                   data-testid="schedule-viewing-refresh"
-                  onClick={() => {
-                    // Re-read the server data without losing what was typed.
-                    router.refresh();
-                    setError(null);
-                    setErrorCode(null);
-                  }}
+                  onClick={() => void submitRequest()}
                   disabled={submitting}
                 >
-                  Refresh apartment
+                  {submitting ? "Checking…" : "Refresh apartment"}
                 </Button>
-                <Button
-                  type="button"
-                  className="min-h-11 lg:min-h-0"
+                {/* A real link: no router context, no client state to lose, works with the
+                    keyboard and with JS disabled on the results page it lands on. */}
+                <a
+                  href={resultsHref}
                   data-testid="schedule-viewing-choose-another"
-                  onClick={() => {
-                    closeScheduleViewing();
-                    // Keep the renter's filters; only the apartment changes.
-                    router.push(`/rentals${window.location.search}`);
-                  }}
+                  className={cn(buttonVariants(), "min-h-11 lg:min-h-0")}
+                  onClick={() => closeScheduleViewing()}
                 >
                   Choose another apartment
-                </Button>
+                </a>
               </div>
             </div>
           ) : null}

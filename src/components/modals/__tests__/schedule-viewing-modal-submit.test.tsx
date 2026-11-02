@@ -16,8 +16,6 @@ vi.mock("@/lib/leads/submit-schedule-viewing", () => ({
   ScheduleViewingError: class extends Error {},
 }));
 vi.mock("@/lib/use-modal-a11y", () => ({ useModalA11y: vi.fn() }));
-const { pushMock, refreshMock } = vi.hoisted(() => ({ pushMock: vi.fn(), refreshMock: vi.fn() }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: pushMock, refresh: refreshMock }) }));
 vi.mock("@/lib/supabase/client", () => ({
   createClient: () => ({
     auth: { getUser: () => Promise.resolve({ data: { user: null } }) },
@@ -142,10 +140,10 @@ describe("ScheduleViewingModal submit behaviour (SAN-1203)", () => {
     vi.mocked(submitScheduleViewing).mockRejectedValue(unavailable);
 
     await renderModalAndFill();
-    await act(async () => {
+    await act(() => {
       submitForm();
+      return Promise.resolve();
     });
-    await act(() => Promise.resolve());
 
     // The message is shown, and so is a way forward.
     expect(container.querySelector('[data-testid="schedule-viewing-error"]')?.textContent).toContain(
@@ -163,12 +161,29 @@ describe("ScheduleViewingModal submit behaviour (SAN-1203)", () => {
       "2099-06-01T15:00",
     );
 
-    // "Choose another apartment" leaves for the results and closes the modal.
-    await act(async () => {
-      (container.querySelector('[data-testid="schedule-viewing-choose-another"]') as HTMLButtonElement).click();
+    // "Choose another apartment" is a real link to the results, so it needs no router and works
+    // without JavaScript; clicking it closes the modal.
+    const chooseAnother = container.querySelector(
+      '[data-testid="schedule-viewing-choose-another"]',
+    ) as HTMLAnchorElement;
+    expect(chooseAnother.tagName).toBe("A");
+    expect(chooseAnother.getAttribute("href")).toMatch(/^\/rentals/);
+    // jsdom cannot navigate; prevent the default so the test can still assert the handler ran.
+    chooseAnother.addEventListener("click", (event) => event.preventDefault(), { once: true });
+    await act(() => {
+      chooseAnother.click();
+      return Promise.resolve();
     });
-    expect(pushMock).toHaveBeenCalledWith(expect.stringMatching(/^\/rentals/));
     expect(useRentalUi().closeScheduleViewing).toHaveBeenCalled();
+
+    // "Refresh apartment" re-runs the request rather than reloading the page, so the typed
+    // values survive a re-check.
+    vi.mocked(submitScheduleViewing).mockClear();
+    await act(() => {
+      (container.querySelector('[data-testid="schedule-viewing-refresh"]') as HTMLButtonElement).click();
+      return Promise.resolve();
+    });
+    expect(submitScheduleViewing).toHaveBeenCalledTimes(1);
   });
 
   it("shows no recovery action for an ordinary validation error", async () => {
@@ -179,10 +194,10 @@ describe("ScheduleViewingModal submit behaviour (SAN-1203)", () => {
     vi.mocked(submitScheduleViewing).mockRejectedValue(invalid);
 
     await renderModalAndFill();
-    await act(async () => {
+    await act(() => {
       submitForm();
+      return Promise.resolve();
     });
-    await act(() => Promise.resolve());
 
     expect(container.querySelector('[data-testid="schedule-viewing-recovery"]')).toBeNull();
   });
