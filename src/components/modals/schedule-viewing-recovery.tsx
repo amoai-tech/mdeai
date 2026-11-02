@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
  * one job (the recovery). Nothing here changes the selected apartment: the renter either
  * re-checks this one or leaves for the results themselves.
  */
-export function ScheduleViewingRecovery({
+export const ScheduleViewingRecovery = ({
   submitting,
   resultsHref,
   onRecheck,
@@ -20,7 +20,7 @@ export function ScheduleViewingRecovery({
   resultsHref: string;
   onRecheck: () => void;
   onChooseAnother: () => void;
-}) {
+}) => {
   return (
     <div
       className="flex flex-col gap-2 rounded-lg border p-3"
@@ -53,4 +53,4 @@ export function ScheduleViewingRecovery({
       </div>
     </div>
   );
-}
+};

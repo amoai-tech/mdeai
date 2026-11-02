@@ -186,6 +186,37 @@ describe("ScheduleViewingModal submit behaviour (SAN-1203)", () => {
     expect(submitScheduleViewing).toHaveBeenCalledTimes(1);
   });
 
+  it("does not carry one apartment's unavailable error onto the next apartment", async () => {
+    const { ScheduleViewingError: MockedError } = await import("@/lib/leads/submit-schedule-viewing");
+    const unavailable = new (MockedError as unknown as new () => Error & { code: string; message: string })();
+    unavailable.code = "LISTING_UNAVAILABLE";
+    unavailable.message = "This home isn't accepting viewing requests right now.";
+    vi.mocked(submitScheduleViewing).mockRejectedValue(unavailable);
+
+    await renderModalAndFill();
+    await act(() => {
+      submitForm();
+      return Promise.resolve();
+    });
+    expect(container.querySelector('[data-testid="schedule-viewing-recovery"]')).not.toBeNull();
+
+    // The renter gives up on this one and opens another apartment.
+    vi.mocked(useRentalUi).mockReturnValue({
+      scheduleTarget: { ...TARGET, listingId: "apt-otro-002", title: "Another Apartment" },
+      closeScheduleViewing: vi.fn(),
+      setLeadConfirmation: vi.fn(),
+    } as unknown as ReturnType<typeof useRentalUi>);
+
+    await act(() => {
+      root.render(<ScheduleViewingModal />);
+      return Promise.resolve();
+    });
+
+    // The previous apartment's failure must not follow the renter here.
+    expect(container.querySelector('[data-testid="schedule-viewing-recovery"]')).toBeNull();
+    expect(container.querySelector('[data-testid="schedule-viewing-error"]')).toBeNull();
+  });
+
   it("shows no recovery action for an ordinary validation error", async () => {
     const { ScheduleViewingError: MockedError } = await import("@/lib/leads/submit-schedule-viewing");
     const invalid = new (MockedError as unknown as new () => Error & { code: string })();

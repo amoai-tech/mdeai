@@ -50,13 +50,20 @@ export const ScheduleViewingModal = () => {
   const submitLockRef = useRef(false);
   const [contact, dispatchContact] = useReducer(contactReducer, INITIAL_CONTACT);
   const [preferredAt, setPreferredAt] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  // SAN-1059 — the message alone cannot tell the renter what to do next. Keep the typed code so
-  // "this apartment cannot take a request" gets a recovery action instead of a dead end.
-  const [errorCode, setErrorCode] = useState<ScheduleViewingErrorCode | null>(null);
+  // SAN-1059 — the message alone cannot tell the renter what to do next, so the failure carries
+  // the typed code as well. It also carries the apartment it belongs to: opening a different
+  // apartment must never inherit the previous one's "not accepting requests" error.
+  const [failure, setFailure] = useState<{
+    listingId: string;
+    message: string;
+    code: ScheduleViewingErrorCode | null;
+  } | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const isOpen = Boolean(scheduleTarget);
+  // Derived, not stored: a failure is only ever shown for the apartment that produced it.
+  const activeFailure =
+    failure && scheduleTarget && failure.listingId === scheduleTarget.listingId ? failure : null;
   // Preserve the renter's filters; only the apartment changes. Rendered client-side only,
   // because this block needs a selected apartment.
   const resultsHref = `/rentals${typeof window === "undefined" ? "" : window.location.search}`;
@@ -86,8 +93,7 @@ export const ScheduleViewingModal = () => {
   const submitRequest = async () => {
     if (submitLockRef.current) return;
     submitLockRef.current = true;
-    setError(null);
-    setErrorCode(null);
+    setFailure(null);
     setSubmitting(true);
     try {
       const result = await submitScheduleViewing({
@@ -112,8 +118,11 @@ export const ScheduleViewingModal = () => {
     } catch (err) {
       // The modal stays open with the typed values intact so the renter can fix
       // the time or retry rather than losing the request.
-      setError(err instanceof Error ? err.message : "Submit failed");
-      setErrorCode(err instanceof ScheduleViewingError ? err.code : null);
+      setFailure({
+        listingId: scheduleTarget.listingId,
+        message: err instanceof Error ? err.message : "Submit failed",
+        code: err instanceof ScheduleViewingError ? err.code : null,
+      });
     } finally {
       submitLockRef.current = false;
       setSubmitting(false);
@@ -199,20 +208,20 @@ export const ScheduleViewingModal = () => {
               disabled={submitting}
             />
           </label>
-          {error ? (
+          {activeFailure ? (
             <p
               role="alert"
               className="text-sm text-destructive"
               data-testid="schedule-viewing-error"
             >
-              {error}
+              {activeFailure.message}
             </p>
           ) : null}
-          {errorCode === "LISTING_UNAVAILABLE" ? (
+          {activeFailure?.code === "LISTING_UNAVAILABLE" ? (
             <ScheduleViewingRecovery
               submitting={submitting}
               resultsHref={resultsHref}
-              onRecheck={() => void submitRequest()}
+              onRecheck={submitRequest}
               onChooseAnother={closeScheduleViewing}
             />
           ) : null}
