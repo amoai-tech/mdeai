@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { publicDiscoveryContext } from "../discovery-page-context";
+import { publicDiscoveryContext, previousSelectionId } from "../discovery-page-context";
 
 describe("public MDE page context (SAN-737)", () => {
   it("includes only allowlisted public filters and a selected UUID", () => {
@@ -36,5 +36,27 @@ describe("public MDE page context (SAN-737)", () => {
     expect(publicDiscoveryContext("nightlife", { feature: "workspace", vibe: "salsa" })).toEqual({
       route: "/nightlife", filters: { vibe: "salsa" }, selectedPublicEntityId: null,
     });
+  });
+});
+
+describe("SAN-1600 — previous selection for an explicit comparison", () => {
+  const reina = "22222222-2222-2222-2222-000000000001";
+  const feria = "a1b2c3d4-0001-0001-0001-000000000003";
+
+  it("carries the previous item of the same route, and never the current one", () => {
+    expect(previousSelectionId({ route: "/events", id: reina }, "events", feria)).toBe(reina);
+    expect(previousSelectionId({ route: "/events", id: feria }, "events", feria)).toBeNull();
+  });
+
+  it("ignores an id from another route or a non-id value", () => {
+    expect(previousSelectionId({ route: "/rentals", id: reina }, "events", feria)).toBeNull();
+    expect(previousSelectionId({ route: "/events", id: "not-a-uuid" }, "events", feria)).toBeNull();
+    expect(previousSelectionId(null, "events", feria)).toBeNull();
+  });
+
+  it("puts the hint in the context only when it is usable", () => {
+    expect(publicDiscoveryContext("events", {}, feria, reina))
+      .toMatchObject({ selectedPublicEntityId: feria, previousPublicEntityId: reina });
+    expect(publicDiscoveryContext("events", {}, feria)).not.toHaveProperty("previousPublicEntityId");
   });
 });

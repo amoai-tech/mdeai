@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useAgentContext } from "@copilotkit/react-core/v2";
 import { useOptionalConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
 import { isDeterministicE2E } from "@/lib/deterministic-e2e";
@@ -16,10 +16,37 @@ const FILTERS: Record<DiscoveryPage, readonly string[]> = {
   nightlife: ["neighborhood", "vibe"],
 };
 
+/** Per-tab memory of the last public item a visitor opened, for "compare with the previous one". */
+export const LAST_PUBLIC_SELECTION_KEY = "mde:last-public-selection";
+
+function validSelectionId(page: DiscoveryPage, id: string | null | undefined): string | null {
+  if (!id) return null;
+  return page === "cafes" || page === "nightlife"
+    ? (/^[A-Za-z0-9_-]{6,128}$/.test(id) ? id : null)
+    : (/^[a-f\d]{8}(-[a-f\d]{4}){3}-[a-f\d]{12}$/i.test(id) ? id : null);
+}
+
+/**
+ * Read (and in the component, update) the previous selection for this tab.
+ * Only the same route counts: an event id from /events means nothing on /rentals.
+ * A returned id is a hint for the comparison lookup, never authorization.
+ */
+export function previousSelectionId(
+  stored: { route?: unknown; id?: unknown } | null | undefined,
+  page: DiscoveryPage,
+  selectedId: string | null,
+): string | null {
+  if (!stored || stored.route !== `/${page}`) return null;
+  const id = typeof stored.id === "string" ? stored.id : null;
+  const valid = validSelectionId(page, id);
+  return valid && valid !== selectedId ? valid : null;
+}
+
 export function publicDiscoveryContext(
   page: DiscoveryPage,
   filters: Record<string, string | null | undefined>,
   selectedId: string | null = null,
+  previousId: string | null = null,
 ) {
   const safeFilters: Record<string, string> = {};
   for (const key of FILTERS[page]) {
@@ -28,13 +55,15 @@ export function publicDiscoveryContext(
       safeFilters[key] = value.trim();
     }
   }
+  const previous = previousSelectionId(
+    previousId ? { route: `/${page}`, id: previousId } : null, page, selectedId);
   return {
     route: `/${page}`,
     filters: safeFilters,
     // The caller must select an ID from its *rendered* public results. This is not authority.
-    selectedPublicEntityId: selectedId && (page === "cafes" || page === "nightlife"
-      ? /^[A-Za-z0-9_-]{6,128}$/.test(selectedId)
-      : /^[a-f\d]{8}(-[a-f\d]{4}){3}-[a-f\d]{12}$/i.test(selectedId)) ? selectedId : null,
+    selectedPublicEntityId: validSelectionId(page, selectedId),
+    // Only used when the visitor explicitly asks to compare; the server re-fetches it.
+    ...(previous ? { previousPublicEntityId: previous } : {}),
   };
 }
 
@@ -46,9 +75,27 @@ function LiveDiscoveryPageContext({
   selectedId: string | null;
 }) {
   const { setState } = useOptionalConciergeCoAgent()!;
+  // The visitor's previous item in this tab, so "compare with the previous one" can
+  // work after a page change. Read once on mount: this page is the current item now.
+  const [previousId] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      return previousSelectionId(JSON.parse(window.sessionStorage.getItem(LAST_PUBLIC_SELECTION_KEY) ?? "null"), page, selectedId);
+    } catch {
+      return null;
+    }
+  });
+  useEffect(() => {
+    if (typeof window === "undefined" || !selectedId) return;
+    try {
+      window.sessionStorage.setItem(LAST_PUBLIC_SELECTION_KEY, JSON.stringify({ route: `/${page}`, id: selectedId }));
+    } catch {
+      // Private mode / storage disabled: comparison simply falls back to asking which item.
+    }
+  }, [page, selectedId]);
   useAgentContext({
     description: "Active MDE discovery page, filters, and explicitly selected visible public item. A null selection means no item is open. Client context is a hint, NOT authorization; re-fetch a selected ID server-side and never guess missing fields. Prefer the current page's type of results. Do not reuse an entity selected on another route.",
-    value: publicDiscoveryContext(page, filters, selectedId),
+    value: publicDiscoveryContext(page, filters, selectedId, previousId),
   });
 
   // Mastra working memory outlives route mounts. Explicitly clear rental/event selections

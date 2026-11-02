@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { currentSelectedNameOnly, discoveryAgentSelectionHint, verifiedDiscoverySelectionHint } from "./discovery-agent-context";
+import { currentSelectedNameOnly, discoveryAgentSelectionHint, verifiedDiscoverySelectionHint, withComparisonRecords } from "./discovery-agent-context";
 const description = "Active MDE discovery page, filters, and explicitly selected visible public item. A null selection means no item is open.";
 const ctx = (value: unknown) => ({ context: [{ description, value: JSON.stringify(value) }] });
 const a = "5247d1e6-407f-4822-969f-4f7799ef7124";
@@ -338,5 +338,55 @@ describe("SAN-1600 — reviewer's conversation-history decision table", () => {
 
   it("still trims a bare location question (no spillover from the follow-up rule)", () => {
     expect(trimmed("Where is it?")).toBe(true);
+  });
+});
+
+describe("SAN-1600 — comparing two items resolves both records server-side", () => {
+  const reina = a, feria = b;
+  const withPrevious = (current: string, previous: string | null) => ctx({
+    route: "/events", selectedPublicEntityId: current, previousPublicEntityId: previous,
+  });
+  const records: Record<string, Record<string, unknown>> = {
+    [reina]: { id: reina, name: "Reina de Antioquia 2026 Finals", event_tickets: [{ name: "GA", price: 40000, currency: "COP" }] },
+    [feria]: { id: feria, name: "Feria de las Flores Preview Parade", event_tickets: [] },
+  };
+  const lookup = async ({ id }: { id: string }) =>
+    records[id] ? { found: true, data: records[id] } : { found: false, data: null };
+  const turn = (question: string) => [
+    { role: "user", content: "What venue is saved for this event?" },
+    { role: "assistant", content: "The Reina de Antioquia 2026 Finals is at Hotel Intercontinental." },
+    { role: "user", content: question },
+  ];
+
+  it("attaches both verified records for an explicit comparison", async () => {
+    const out = await withComparisonRecords(turn("Compare this event with the previous one"), withPrevious(feria, reina), lookup);
+    const last = String(out[out.length - 1].content);
+    expect(last).toContain("Compare this event with the previous one");
+    expect(last).toContain("Reina de Antioquia 2026 Finals");
+    expect(last).toContain("Feria de las Flores Preview Parade");
+    expect(last).toContain("never move one record's facts onto the other");
+  });
+
+  it("does nothing for a current-event question", async () => {
+    const input = turn("Where is the meeting point?");
+    expect(await withComparisonRecords(input, withPrevious(feria, reina), lookup)).toBe(input);
+  });
+
+  it("does nothing without a previous selection or when both ids are the same", async () => {
+    const input = turn("Compare this event with the previous one");
+    expect(await withComparisonRecords(input, withPrevious(feria, null), lookup)).toBe(input);
+    expect(await withComparisonRecords(input, withPrevious(feria, feria), lookup)).toBe(input);
+  });
+
+  it("does nothing when either record is not publicly readable", async () => {
+    const input = turn("Compare this event with the previous one");
+    expect(await withComparisonRecords(input, withPrevious(feria, "00000000-0000-0000-0000-000000000000"), lookup)).toBe(input);
+  });
+
+  it("ignores a client-supplied previous id that is not an id shape", async () => {
+    const out = await withComparisonRecords(turn("Compare this event with the previous one"), withPrevious(feria, "../../etc/passwd"), lookup);
+    const last = String(out[out.length - 1].content);
+    expect(last).not.toContain("/etc/passwd");
+    expect(last).not.toContain("Previous item:");
   });
 });
