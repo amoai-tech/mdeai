@@ -19,6 +19,39 @@ const FILTERS: Record<DiscoveryPage, readonly string[]> = {
 /** Per-tab memory of the last public item a visitor opened, for "compare with the previous one". */
 export const LAST_PUBLIC_SELECTION_KEY = "mde:last-public-selection";
 
+/**
+ * Captured once per page load. The provider can remount while the CopilotKit
+ * session resolves (guest -> user), and a remount after the write would read its
+ * own page as "previous" and lose the item the visitor came from.
+ */
+let previousSelectionForThisPage: string | null | undefined;
+
+/** Test-only reset for the per-page-load capture. */
+export function resetPreviousSelectionCaptureForTest() {
+  previousSelectionForThisPage = undefined;
+}
+
+export function capturePreviousSelection(page: DiscoveryPage, selectedId: string | null): string | null {
+  if (previousSelectionForThisPage !== undefined) return previousSelectionForThisPage;
+  let stored: { route?: unknown; id?: unknown } | null = null;
+  if (typeof window !== "undefined") {
+    try {
+      stored = JSON.parse(window.sessionStorage.getItem(LAST_PUBLIC_SELECTION_KEY) ?? "null");
+    } catch {
+      stored = null;
+    }
+  }
+  previousSelectionForThisPage = previousSelectionId(stored, page, selectedId);
+  if (typeof window !== "undefined" && selectedId) {
+    try {
+      window.sessionStorage.setItem(LAST_PUBLIC_SELECTION_KEY, JSON.stringify({ route: `/${page}`, id: selectedId }));
+    } catch {
+      // Private mode / storage disabled: comparison falls back to asking which item.
+    }
+  }
+  return previousSelectionForThisPage;
+}
+
 function validSelectionId(page: DiscoveryPage, id: string | null | undefined): string | null {
   if (!id) return null;
   return page === "cafes" || page === "nightlife"
@@ -77,22 +110,7 @@ function LiveDiscoveryPageContext({
   const { setState } = useOptionalConciergeCoAgent()!;
   // The visitor's previous item in this tab, so "compare with the previous one" can
   // work after a page change. Read once on mount: this page is the current item now.
-  const [previousId] = useState<string | null>(() => {
-    if (typeof window === "undefined") return null;
-    try {
-      return previousSelectionId(JSON.parse(window.sessionStorage.getItem(LAST_PUBLIC_SELECTION_KEY) ?? "null"), page, selectedId);
-    } catch {
-      return null;
-    }
-  });
-  useEffect(() => {
-    if (typeof window === "undefined" || !selectedId) return;
-    try {
-      window.sessionStorage.setItem(LAST_PUBLIC_SELECTION_KEY, JSON.stringify({ route: `/${page}`, id: selectedId }));
-    } catch {
-      // Private mode / storage disabled: comparison simply falls back to asking which item.
-    }
-  }, [page, selectedId]);
+  const [previousId] = useState<string | null>(() => capturePreviousSelection(page, selectedId));
   useAgentContext({
     description: "Active MDE discovery page, filters, and explicitly selected visible public item. A null selection means no item is open. Client context is a hint, NOT authorization; re-fetch a selected ID server-side and never guess missing fields. Prefer the current page's type of results. Do not reuse an entity selected on another route.",
     value: publicDiscoveryContext(page, filters, selectedId, previousId),
