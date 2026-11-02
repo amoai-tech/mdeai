@@ -34,7 +34,8 @@
 import Stripe from "https://esm.sh/stripe@14.21.0?target=denonext";
 import { z } from "https://esm.sh/zod@3.23.8";
 import { errorBody, getCorsHeaders, jsonResponse } from "../_shared/http.ts";
-import { getServiceClient } from "../_shared/supabase-clients.ts";
+import { getServiceClient, getUserId } from "../_shared/supabase-clients.ts";
+import { resolveCheckoutBuyer } from "../_shared/ticket-checkout-buyer.ts";
 import { signJwtHs256 } from "../_shared/jwt.ts";
 import { deriveCheckoutAccessToken, duplicateCheckoutCode } from "../_shared/checkout-access-token.ts";
 // Initialise Stripe lazily so a missing key is reported via 500 CONFIG_ERROR
@@ -110,12 +111,22 @@ Deno.serve(async (req) => {
       req,
     );
   }
-  // A reused checkout key must refer to the same cart and buyer.
+  // A verified user JWT is the only authority for linking an order to an account.
+  // The public publishable/anon key is intentionally allowed for guest Checkout.
+  const { buyerUserId, invalidSession } = await resolveCheckoutBuyer(
+    req.headers.get("Authorization"), req.headers.get("apikey"),
+    Deno.env.get("SUPABASE_ANON_KEY") ?? null, getUserId,
+  );
+  if (invalidSession) {
+    return jsonResponse(errorBody("INVALID_USER_SESSION", "Please sign in again"), 401, req);
+  }
+  // A reused checkout key must refer to the same cart and *verified* buyer.
   const service = getServiceClient();
   const requestIdentity = JSON.stringify({
     event_id: body.event_id, ticket_id: body.ticket_id,
     quantity: body.quantity, buyer_email: body.buyer_email.toLowerCase(),
     buyer_name: body.buyer_name, attendees: body.attendees,
+    ...(buyerUserId ? { buyer_user_id: buyerUserId } : {}),
   });
   const requestHash = Array.from(new Uint8Array(
     await crypto.subtle.digest("SHA-256", new TextEncoder().encode(requestIdentity)),
@@ -193,6 +204,7 @@ Deno.serve(async (req) => {
       p_buyer_name: body.buyer_name,
       p_access_token: accessToken,
       p_attendees: attendeesWithJwts,
+      p_buyer_user_id: buyerUserId,
     },
   );
   if (rpcError) {
