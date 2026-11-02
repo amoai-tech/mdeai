@@ -3,12 +3,12 @@
 import Link from "next/link";
 import type { RefObject } from "react";
 import { CalendarDays, Info, MapPin, Sparkles } from "lucide-react";
-import { buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { EventTicketTiers } from "@/components/events/event-ticket-tiers";
 import type { BookingCheckoutTarget } from "@/components/modals/booking-checkout-modal";
 import { formatTicketPrice } from "@/lib/events/format-event";
 import type { PublicEventDetail, PublicEventTicket } from "@/lib/events/types";
-import { cn } from "@/lib/utils";
+import { openAskMde } from "@/lib/chat/ask-mde-bridge";
 
 type EventDetailAsideProps = {
   event: PublicEventDetail;
@@ -18,17 +18,16 @@ type EventDetailAsideProps = {
   durationLabel: string | null;
   fromTier: PublicEventTicket | null;
   tiersRef: RefObject<HTMLDivElement | null>;
-  askUrl: string;
   notice: string | null;
   onCheckout: (target: BookingCheckoutTarget) => void;
 };
 
 /** Visitor decision panel: event facts, one canonical ticket picker and existing AI handoff. */
 export function EventDetailAside({
-  event, city, venueLine, schedule, durationLabel, fromTier, tiersRef, askUrl, notice, onCheckout,
+  event, city, venueLine, schedule, durationLabel, fromTier, tiersRef, notice, onCheckout,
 }: EventDetailAsideProps) {
   return (
-            <aside className="order-2 space-y-5 lg:col-start-2 lg:row-start-1 lg:row-span-4 lg:sticky lg:top-8 lg:self-start">
+            <aside className="order-2 space-y-5">
               <div className="space-y-3">
                 <p className="text-sm font-medium text-muted-foreground">{city || "Event details"}</p>
                 <h1 className="text-2xl font-semibold leading-tight tracking-tight md:text-3xl">{event.name}</h1>
@@ -75,11 +74,14 @@ export function EventDetailAside({
                   </div>
                 ) : null}
               </div>
-              <Link href={askUrl} data-testid="event-ask-mde"
-                className={cn(buttonVariants({ variant: fromTier ? "outline" : "default" }), "w-full justify-start gap-2 whitespace-normal text-left")}>
+              {/* Opens the shared assistant in place: no navigation, no second conversation. */}
+              <Button type="button" data-testid="event-ask-mde" onClick={openAskMde}
+                aria-haspopup="dialog"
+                variant={fromTier ? "outline" : "default"}
+                className="w-full justify-start gap-2 whitespace-normal text-left">
                 <Sparkles className="size-4 shrink-0" aria-hidden />
                 Ask MDE about this event
-              </Link>
+              </Button>
             </aside>
   );
 }

@@ -73,7 +73,13 @@ const runFailedSince = (threadId: string | undefined, before: number) =>
   getConciergeErrorForThread(threadId).version > before || getConciergeErrorForThread(null).version > before;
 
 /** One composer on every non-rental browse page; Rentals retains its richer search adapter. */
-function LiveComposer({ page, guestEvents, onAgentResults }: { page: Exclude<DiscoveryPage, "rentals">; guestEvents?: EventGuestOptions; onAgentResults?: (result: DiscoveryAgentResult) => void }) {
+function LiveComposer({ page, guestEvents, onAgentResults, hideHeading = false }: {
+  page: Exclude<DiscoveryPage, "rentals">;
+  guestEvents?: EventGuestOptions;
+  onAgentResults?: (result: DiscoveryAgentResult) => void;
+  /** The shared drawer supplies its own title and full-chat link. */
+  hideHeading?: boolean;
+}) {
   const { user, loading: sessionLoading } = useSession();
   const { agent, isReady } = useConciergeCoAgent();
   const { appendMessage, stopActiveRun, isLoading, isRuntimeUnavailable } = useConciergeChat();
@@ -166,6 +172,7 @@ function LiveComposer({ page, guestEvents, onAgentResults }: { page: Exclude<Dis
   };
   return (
     <section data-ready={isReady ? "true" : "false"} aria-busy={busy} data-testid={`discovery-ask-${page}`} aria-label={`Ask MDE about ${page}`} className="px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 sm:px-6">
+      {hideHeading ? null : (
       <div className="mb-2 flex items-center justify-between gap-3">
         <strong className="text-sm">Ask MDE</strong>
         <div className="flex items-center gap-3 text-xs">
@@ -173,13 +180,14 @@ function LiveComposer({ page, guestEvents, onAgentResults }: { page: Exclude<Dis
           <Link href="/chat" className="inline-flex min-h-11 items-center text-primary">Open full chat</Link>
         </div>
       </div>
+      )}
       {showHistory && turns.length > 0 ? (
         <ol data-testid="discovery-ask-history" role="log" aria-live="polite" className="mb-2 max-h-52 space-y-2 overflow-auto rounded-lg border p-3">
           {turns.map((t) => <li key={t.id} className="text-sm"><span className="mr-2 text-xs font-medium text-muted-foreground">{t.role === "user" ? "You" : "MDE"}:</span>{t.text}</li>)}
         </ol>
       ) : null}
       {signedOut && page === "events" && guestEvents ? <GuestEventComposer options={guestEvents} /> : signedOut ? (
-        <div className="flex items-center justify-between gap-3"><p className="text-sm text-muted-foreground">Sign in to ask about {page}.</p><Link className="inline-flex min-h-11 items-center rounded-lg bg-primary px-4 text-sm text-primary-foreground" href={`/login?next=${encodeURIComponent(path)}`}>Sign in</Link></div>
+        <div className="flex items-center justify-between gap-3"><p className="text-sm text-muted-foreground">Sign in to ask about {page}.</p><Link className="inline-flex min-h-11 shrink-0 items-center whitespace-nowrap rounded-lg bg-primary px-4 text-sm text-primary-foreground" href={`/login?next=${encodeURIComponent(path)}`}>Sign in</Link></div>
       ) : (
         <div className="flex items-end gap-2">
           <label className="sr-only" htmlFor={`discovery-ask-input-${page}`}>Ask MDE about {page}</label>
@@ -195,10 +203,15 @@ function LiveComposer({ page, guestEvents, onAgentResults }: { page: Exclude<Dis
   );
 }
 
-export function DiscoveryAskComposer({ page, guestEvents, onAgentResults }: { page: Exclude<DiscoveryPage, "rentals">; guestEvents?: EventGuestOptions; onAgentResults?: (result: DiscoveryAgentResult) => void }) {
+export function DiscoveryAskComposer({ page, guestEvents, onAgentResults, hideHeading }: {
+  page: Exclude<DiscoveryPage, "rentals">;
+  guestEvents?: EventGuestOptions;
+  onAgentResults?: (result: DiscoveryAgentResult) => void;
+  hideHeading?: boolean;
+}) {
   const coAgent = useOptionalConciergeCoAgent();
   if (isDeterministicE2E() || !coAgent) {
     return <div data-testid={`discovery-ask-${page}`} className="border-t p-4 text-sm text-muted-foreground">Ask MDE about {page} in the live application.</div>;
   }
-  return <LiveComposer page={page} guestEvents={guestEvents} onAgentResults={onAgentResults} />;
+  return <LiveComposer page={page} guestEvents={guestEvents} onAgentResults={onAgentResults} hideHeading={hideHeading} />;
 }

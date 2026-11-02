@@ -9,7 +9,9 @@ import { EventFactsBlock } from "@/components/events/event-facts-block";
 import { EventHostBlock } from "@/components/events/event-host-block";
 import { EventDetailAside } from "@/components/events/event-detail-aside";
 import { EventDetailNavigation, EventDetailHero } from "@/components/events/event-detail-chrome";
+import { EventDetailMap } from "@/components/events/event-detail-map";
 import { EventVenueSection } from "@/components/events/event-venue-section";
+import { DiscoveryPageContext } from "@/components/chat/discovery-page-context";
 import { formatEventSchedule, ticketsRemaining } from "@/lib/events/format-event";
 import type { PublicEventDetail, PublicEventTicket } from "@/lib/events/types";
 
@@ -40,8 +42,6 @@ export function EventDetailView({ event, backTo = "events" }: { event: PublicEve
     .filter(Boolean).join(" · ");
   const fromTier = useMemo(() => lowestAvailablePrice(event.tickets), [event.tickets]);
   const returnPath = `/events/${event.slug ?? event.id}`;
-  const conciergePrompt = `Help me with this MDE event (event ID: ${event.id}): ${event.name}. Check its actual schedule, ticket availability and directions; clearly say when details are unconfirmed.`;
-  const askUrl = `/chat?q=${encodeURIComponent(conciergePrompt)}`;
   const duration = event.endsAt ? Math.round(
     (new Date(event.endsAt).getTime() - new Date(event.startsAt).getTime()) / 60000,
   ) : 0;
@@ -61,6 +61,8 @@ export function EventDetailView({ event, backTo = "events" }: { event: PublicEve
     <>
       {/* SAN-1606 — clears the mobile buy bar and, below it, the floating tab bar. */}
       <div className="min-h-screen bg-background pb-[calc(7rem+var(--mde-mobile-nav-clearance))] lg:pb-8" data-testid="event-detail-page">
+        {/* SAN-1600 — the in-page assistant is grounded in this event's real saved id. */}
+        <DiscoveryPageContext page="events" filters={{}} selectedId={event.id} />
         <EventDetailNavigation eventName={event.name} returnPath={returnPath} backTo={backTo} />
         <div className="mx-auto max-w-6xl px-4 pt-6 md:pt-8">
           <nav aria-label="Breadcrumb" className="mb-5 hidden items-center gap-2 text-sm text-muted-foreground sm:flex">
@@ -68,8 +70,31 @@ export function EventDetailView({ event, backTo = "events" }: { event: PublicEve
             <ChevronRight aria-hidden className="size-3.5" />
             <span aria-current="page" className="truncate">{event.name}</span>
           </nav>
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(300px,380px)] lg:gap-x-9 lg:gap-y-8">
+          {/* Two independent columns on desktop: the event story on the left, tickets and the
+              saved-location map on the right, each stacking without stretching the other.
+              On a phone both wrappers are `contents`, so the children become one flex column in
+              reading order: title and tickets, then the story, then the map. */}
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-x-9">
+            <div className="contents lg:flex lg:min-w-0 lg:flex-1 lg:flex-col lg:gap-8">
             <EventDetailHero imageUrl={event.imageUrl} eventName={event.name} startsAt={event.startsAt} />
+            {event.host ? <EventHostBlock host={event.host} className="order-3" /> : null}
+            <section className="order-4 space-y-2" aria-labelledby="event-about-heading">
+              <h2 id="event-about-heading" className="text-lg font-semibold tracking-tight">About this experience</h2>
+              {about ? (
+                <p className="whitespace-pre-wrap text-sm leading-7 text-muted-foreground">{about}</p>
+              ) : (
+                <p className="text-sm text-muted-foreground">The organizer has not provided a detailed description yet.</p>
+              )}
+            </section>
+            <EventFactsBlock facts={event.facts} className="order-5" />
+            {street || event.venue ? (
+              <EventVenueSection className="order-6"
+                venue={event.venue ?? { name: street || city || "Event location", address: street, city: city ?? null }}
+                latitude={event.latitude} longitude={event.longitude}
+                listedAreaOnly={!event.venue} />
+            ) : null}
+            </div>
+            <div className="contents lg:flex lg:w-[380px] lg:shrink-0 lg:flex-col lg:gap-5">
             <EventDetailAside
               event={event}
               city={city}
@@ -78,26 +103,15 @@ export function EventDetailView({ event, backTo = "events" }: { event: PublicEve
               durationLabel={durationLabel}
               fromTier={fromTier}
               tiersRef={tiersRef}
-              askUrl={askUrl}
               notice={notice}
               onCheckout={setCheckout}
             />
-            {event.host ? <EventHostBlock host={event.host} className="order-3 lg:col-start-1" /> : null}
-            <section className="order-4 space-y-2 lg:col-start-1" aria-labelledby="event-about-heading">
-              <h2 id="event-about-heading" className="text-lg font-semibold tracking-tight">About this experience</h2>
-              {about ? (
-                <p className="whitespace-pre-wrap text-sm leading-7 text-muted-foreground">{about}</p>
-              ) : (
-                <p className="text-sm text-muted-foreground">The organizer has not provided a detailed description yet.</p>
-              )}
-            </section>
-            <EventFactsBlock facts={event.facts} className="order-4 lg:col-start-1" />
-            {street || event.venue ? (
-              <EventVenueSection className="order-5 lg:col-start-1"
-                venue={event.venue ?? { name: street || city || "Event location", address: street, city: city ?? null }}
-                latitude={event.latitude} longitude={event.longitude}
-                listedAreaOnly={!event.venue} />
-            ) : null}
+            <EventDetailMap className="order-7"
+              latitude={event.latitude} longitude={event.longitude}
+              exact={Boolean(event.venue)}
+              label={event.venue?.name ?? street ?? city ?? event.name}
+              address={event.venue?.address ?? event.address} />
+            </div>
           </div>
         </div>
         {fromTier ? (

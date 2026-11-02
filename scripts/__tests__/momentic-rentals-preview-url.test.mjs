@@ -30,3 +30,22 @@ test('rejects unverified origins, unsafe paths and foreign test URLs', () => {
   assert.throws(() => previewStartUrl(preview, yaml, '../secrets.yaml'));
   assert.throws(() => previewStartUrl(preview, 'steps: []', path));
 });
+
+test('scoped access is appended without dropping the trusted test route or filters', () => {
+  const path = 'momentic/rentals/search-to-details.test.yaml';
+  const yaml = readFileSync(path, 'utf8');
+  const previous = process.env.MOMENTIC_PREVIEW_SHARE_TOKEN;
+  try {
+    process.env.MOMENTIC_PREVIEW_SHARE_TOKEN = 'a'.repeat(32);
+    const url = new URL(previewStartUrl(preview, yaml, path));
+    assert.equal(url.pathname, '/rentals');
+    assert.equal(url.searchParams.get('neighborhood'), 'Laureles');
+    assert.equal(url.searchParams.get('beds'), '2');
+    assert.equal(url.searchParams.get('_vercel_share'), 'a'.repeat(32));
+    process.env.MOMENTIC_PREVIEW_SHARE_TOKEN = 'invalid';
+    assert.throws(() => previewStartUrl(preview, yaml, path), /Invalid scoped/);
+  } finally {
+    if (previous === undefined) delete process.env.MOMENTIC_PREVIEW_SHARE_TOKEN;
+    else process.env.MOMENTIC_PREVIEW_SHARE_TOKEN = previous;
+  }
+});

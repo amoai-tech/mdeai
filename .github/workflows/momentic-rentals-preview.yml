@@ -55,6 +55,7 @@ jobs:
             exit 0
           fi
           echo "selected=true" >> "$GITHUB_OUTPUT"
+          echo "started=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
           echo "pr=$pr" >> "$GITHUB_OUTPUT"
           echo "sha=$DEPLOY_SHA" >> "$GITHUB_OUTPUT"
 
@@ -97,40 +98,27 @@ jobs:
                   !/^[a-z0-9-]+\.vercel\.app$/.test(d.url)) {
                 throw new Error('Deployment is not the exact MDE PR preview');
               }
-              found = d.url;
+              found = { url: d.url, id: candidate.uid };
               break;
             }
             if (attempt < 7) await new Promise(resolve => setTimeout(resolve, 15_000));
           }
           if (found) {
-            appendFileSync(process.env.GITHUB_OUTPUT, 'verified=true\nurl=https://' + found + '/\n');
+            appendFileSync(process.env.GITHUB_OUTPUT, 'verified=true\nurl=https://' + found.url + '/\nid=' + found.id + '\n');
             console.log('Verified READY preview belongs to the requested MDE PR commit');
           } else {
             console.log('No READY preview for this exact commit; advisory pilot skipped');
           }
           JS
-      - name: Require publicly accessible verified preview
+      - name: Create expiring deployment-scoped Momentic access
         if: steps.preview.outputs.verified == 'true'
-        id: accessible
+        id: share
         env:
-          PREVIEW_URL: ${{ steps.preview.outputs.url }}
-        shell: bash
-        run: |
-          # Do not expose reusable bypass credentials to a browser or preview code.
-          if node --input-type=module <<'JS'
-          const u = new URL(process.env.PREVIEW_URL);
-          try {
-            const r = await fetch(u, { redirect: 'manual', signal: AbortSignal.timeout(8000) });
-            if (!r.ok) process.exitCode = 2;
-          } catch { process.exitCode = 2; }
-          JS
-          then
-            echo 'public=true' >> "$GITHUB_OUTPUT"
-          else
-            echo 'Preview protected or unavailable; no browser test without origin-scoped auth.'
-          fi
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_DEPLOYMENT_ID: ${{ steps.preview.outputs.id }}
+        run: node scripts/momentic-preview-link.mjs create
       - name: Require trusted Momentic test from main
-        if: steps.accessible.outputs.public == 'true'
+        if: steps.share.outputs.available == 'true'
         id: installed
         run: |
           tests=(
@@ -161,8 +149,11 @@ jobs:
         env:
           PREVIEW_URL: ${{ steps.preview.outputs.url }}
           MOMENTIC_API_KEY: ${{ secrets.MOMENTIC_API_KEY }}
+          MOMENTIC_PREVIEW_SHARE_TOKEN: ${{ steps.share.outputs.token }}
         shell: bash
         run: |
+          # The real Momentic browser, not a runner-side HTTP preflight, proves
+          # the preview is accessible. GitHub runner fetch responses can differ.
           # Use only committed, trusted tests from main. Each test has its own
           # original route/query; overwriting every start URL with preview root
           # would silently test the wrong page (login and Details routes).
@@ -193,15 +184,16 @@ jobs:
           OUTCOME: ${{ steps.momentic.outcome }}
           VERIFIED: ${{ steps.preview.outputs.verified }}
           INSTALLED: ${{ steps.installed.outputs.present }}
-          ACCESSIBLE: ${{ steps.accessible.outputs.public }}
+          SHARED: ${{ steps.share.outputs.available }}
+          STARTED_AT: ${{ steps.scope.outputs.started }}
         run: |
           set -euo pipefail
           if [[ "$OUTCOME" == success ]]; then
             result="PASS — 5/5 Rentals read-only journeys"
           elif [[ "$VERIFIED" != true ]]; then
             result="BLOCKED — no verified READY preview (0/5 executed)"
-          elif [[ "$ACCESSIBLE" != true ]]; then
-            result="BLOCKED — preview protected or unavailable (0/5 executed); browser secrets withheld"
+          elif [[ "$SHARED" != true ]]; then
+            result="BLOCKED — temporary scoped preview access unavailable (0/5 executed)"
           elif [[ "$INSTALLED" != true ]]; then
             result="BLOCKED — trusted tests unavailable (0/5 executed)"
           else
@@ -214,7 +206,14 @@ jobs:
             echo "Read-only: bedroom filter, guest auth redirects, search → Details, viewing/follow-up form"
             echo "Advisory, not a required merge check. Skipped/protected previews are not test passes. [Run and evidence]($url)."
           } >> "$GITHUB_STEP_SUMMARY"
-          gh api "repos/$GITHUB_REPOSITORY/check-runs" -X POST             -f name='Momentic Rentals Preview (pilot)' -f head_sha="$HEAD_SHA"             -f status=completed -f conclusion=neutral -f details_url="$url"             -f "output[title]=$result (advisory)"             -f "output[summary]=Five read-only Rentals journeys: $result. See Actions summary and private Momentic recordings." >/dev/null
+          gh api "repos/$GITHUB_REPOSITORY/check-runs" -X POST             -f name='Momentic Rentals Preview (pilot)' -f head_sha="$HEAD_SHA"             -f status=completed -f conclusion=neutral -f started_at="$STARTED_AT" -f completed_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)" -f details_url="$url"             -f "output[title]=$result (advisory)"             -f "output[summary]=Five read-only Rentals journeys: $result. See Actions summary and private Momentic recordings." >/dev/null
+      - name: Revoke temporary preview access
+        if: always() && steps.share.outputs.available == 'true'
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_DEPLOYMENT_ID: ${{ steps.preview.outputs.id }}
+          MOMENTIC_PREVIEW_SHARE_TOKEN: ${{ steps.share.outputs.token }}
+        run: node scripts/momentic-preview-link.mjs revoke
       - name: Upload JUnit evidence only (no protected-preview browser traces)
         if: always() && steps.scope.outputs.selected == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

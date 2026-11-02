@@ -20,10 +20,19 @@ test('all five read-only Momentic journeys must finish before PASS is reported',
   assert.match(workflow, /--retries 0/);
 });
 
-test('an inaccessible preview is reported BLOCKED, not a passing browser test', () => {
-  assert.match(workflow, /BLOCKED — preview protected or unavailable \(0\/5 executed\)/);
+test('unavailable scoped access is BLOCKED and a failed browser test is never PASS', () => {
   assert.match(workflow, /BLOCKED — no verified READY preview \(0\/5 executed\)/);
   assert.doesNotMatch(workflow, /BLOCKED — SSO-protected preview/, "network/HTTP failures are not proof of SSO");
   assert.match(workflow, /Advisory, not a required merge check/);
+  assert.match(workflow, /BLOCKED — temporary scoped preview access unavailable/);
+  assert.doesNotMatch(workflow, /Validate scoped preview access/);
+  assert.match(workflow, /if: steps\.share\.outputs\.available == 'true'\s+id: installed/);
+  assert.match(workflow, /momentic-preview-link\.mjs create/);
+  assert.match(workflow, /momentic-preview-link\.mjs revoke/);
+  assert.match(workflow, /MOMENTIC_PREVIEW_SHARE_TOKEN/);
+  assert.match(workflow, /--url-override/);
+  assert.match(workflow, /temporary scoped preview access unavailable/);
+  assert.match(workflow, /started_at=/);
+  assert.match(workflow, /completed_at=/);
   assert.match(workflow, /-f conclusion=neutral/);
 });
