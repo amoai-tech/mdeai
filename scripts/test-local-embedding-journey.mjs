@@ -148,10 +148,11 @@ async function main() {
   } finally {
     if (attemptedCreate) {
       try {
+        // Explicitly clear all fixture-owned records; the vector also has an ON DELETE CASCADE FK.
         sql(db, `BEGIN;
           DELETE FROM public.embedding_jobs WHERE entity_id=:'fixture_id'::uuid;
+          DELETE FROM public.listing_embeddings WHERE listing_id=:'fixture_id'::uuid;
           DELETE FROM public.apartments WHERE id=:'fixture_id'::uuid;
-          DELETE FROM public.embedding_jobs WHERE entity_id=:'fixture_id'::uuid;
           COMMIT;`, { fixture_id: fixtureId });
         const remaining = sql(db, `SELECT
           (SELECT count(*) FROM public.apartments WHERE id=:'fixture_id'::uuid)
