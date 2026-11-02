@@ -82,7 +82,7 @@ function LiveComposer({ page, guestEvents, onAgentResults, hideHeading = false }
 }) {
   const { user, loading: sessionLoading } = useSession();
   const { agent, isReady } = useConciergeCoAgent();
-  const { appendMessage, stopActiveRun, isLoading, isRuntimeUnavailable } = useConciergeChat();
+  const { appendMessage, stopActiveRun, retryLastTurn, isLoading, isRuntimeUnavailable } = useConciergeChat();
   const turns = useTurns(agent);
   const path = usePathname();
   const [draft, setDraft] = useState("");
@@ -164,6 +164,23 @@ function LiveComposer({ page, guestEvents, onAgentResults, hideHeading = false }
       setSending(false);
     }
   }, [agent, appendMessage, busy, draft, isReady, isRuntimeUnavailable, onAgentResults, page, signedOut]);
+  // Retry the existing last user turn; never append it a second time.
+  // The chat controller enforces one retry per agent and the current thread ID.
+  const retry = async () => {
+    if (!agent?.messages.some((message) => message.role === "user") ||
+        busy || inFlight.current) return;
+    inFlight.current = true;
+    setSending(true);
+    setError(null);
+    try {
+      const ok = await retryLastTurn();
+      if (!ok) setError(INTERRUPTED_COPY);
+      setShowHistory(true);
+    } finally {
+      inFlight.current = false;
+      setSending(false);
+    }
+  };
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
       event.preventDefault();
@@ -198,7 +215,17 @@ function LiveComposer({ page, guestEvents, onAgentResults, hideHeading = false }
       )}
       {busy && draft.trim() ? <p className="mt-2 text-xs text-muted-foreground" role="status">Not sent yet. Finish or stop the current reply, then press Enter to send this question.</p> : null}
       {!signedOut && !isReady ? <p className="mt-2 text-xs text-muted-foreground" role="status">Connecting to MDE…</p> : null}
-      {error ? <p role="alert" className="mt-2 text-xs text-destructive">{error}</p> : null}
+      {error ? (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <p role="alert" className="text-xs text-destructive">{error}</p>
+          {agent?.messages.some((message) => message.role === "user") && !busy ? (
+            <button type="button" data-testid="discovery-ask-retry" onClick={() => void retry()}
+              className="min-h-11 rounded-md border border-border px-3 text-sm font-medium">
+              Retry response
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </section>
   );
 }
