@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { hasE2eEnv, signInAsOnOrigin } from "./helpers/auth";
+import { getSupabaseAdmin, hasE2eEnv, signInAsOnOrigin } from "./helpers/auth";
 
 /**
  * SAN-1263 — production-backed, authenticated ticket wallet smoke.
@@ -87,7 +87,25 @@ test.describe("SAN-1263 live authenticated ticket wallet", () => {
     expect(paidOrderId).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
     );
-    await signInAsOnOrigin(page, origin);
+    const session = await signInAsOnOrigin(page, origin);
+    // Verify durable paid/ownership truth first: a QR-shaped UI alone is not payment proof.
+    const admin = await getSupabaseAdmin();
+    const { data: order, error: orderError } = await admin.from("event_orders")
+      .select("id,status,buyer_user_id,quantity,stripe_session_id,stripe_payment_intent")
+      .eq("id", paidOrderId).single();
+    expect(orderError).toBeNull();
+    expect(order?.status).toBe("paid");
+    expect(order?.buyer_user_id).toBe(session.user.id);
+    expect(order?.stripe_session_id).toMatch(/^cs_test_/);
+    expect(order?.stripe_payment_intent).toMatch(/^pi_/);
+    const { data: attendees, error: attendeeError } = await admin.from("event_attendees")
+      .select("id,status,qr_token").eq("order_id", paidOrderId);
+    expect(attendeeError).toBeNull();
+    expect(attendees).toHaveLength(order?.quantity ?? -1);
+    for (const attendee of attendees ?? []) {
+      expect(attendee.status).toBe("active");
+      expect(attendee.qr_token).toBeTruthy();
+    }
     const detailUrl = url(`/app/me/tickets/${paidOrderId}`);
     const response = await page.goto(detailUrl, { waitUntil: "domcontentloaded" });
     expect(response?.status()).toBe(200);
