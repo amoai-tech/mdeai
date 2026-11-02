@@ -11,8 +11,10 @@ const stripe = new Stripe("rk_test_fixture_not_a_real_key", {
   apiVersion: "2026-04-22.dahlia",
   httpClient: Stripe.createFetchHttpClient(),
 });
-const sandboxSecret = "whsec_test_fixture_sandbox";
-const liveSecret = "whsec_test_fixture_live";
+// Generate ephemeral fixture signing keys: never hardcode Stripe-shaped secrets.
+// These values exist only during this unit test and never leave the test process.
+const sandboxSecret = crypto.randomUUID();
+const liveSecret = crypto.randomUUID();
 
 async function signedEvent(livemode: boolean, signingSecret: string) {
   const payload = JSON.stringify({
@@ -30,25 +32,41 @@ async function signedEvent(livemode: boolean, signingSecret: string) {
     false,
     ["sign"],
   );
-  const bytes = new Uint8Array(await crypto.subtle.sign(
-    "HMAC", key, new TextEncoder().encode(`${timestamp}.${payload}`),
-  ));
-  const signature = Array.from(bytes).map((v) => v.toString(16).padStart(2, "0")).join("");
+  const bytes = new Uint8Array(
+    await crypto.subtle.sign(
+      "HMAC",
+      key,
+      new TextEncoder().encode(`${timestamp}.${payload}`),
+    ),
+  );
+  const signature = Array.from(bytes).map((v) =>
+    v.toString(16).padStart(2, "0")
+  ).join("");
   const header = `t=${timestamp},v1=${signature}`;
   return { payload, header };
 }
 
 Deno.test("valid sandbox signature still requires sandbox livemode", async () => {
   const { payload, header } = await signedEvent(false, sandboxSecret);
-  const event = await stripe.webhooks.constructEventAsync(payload, header, sandboxSecret);
+  const event = await stripe.webhooks.constructEventAsync(
+    payload,
+    header,
+    sandboxSecret,
+  );
   assert(webhookEventMatchesMode("sandbox", event.livemode));
   assertEquals(webhookEventMatchesMode("live", event.livemode), false);
-  await assertRejects(() => stripe.webhooks.constructEventAsync(payload, header, liveSecret));
+  await assertRejects(() =>
+    stripe.webhooks.constructEventAsync(payload, header, liveSecret)
+  );
 });
 
 Deno.test("valid live signature requires livemode true, even if secrets accidentally match", async () => {
   const { payload, header } = await signedEvent(true, liveSecret);
-  const event = await stripe.webhooks.constructEventAsync(payload, header, liveSecret);
+  const event = await stripe.webhooks.constructEventAsync(
+    payload,
+    header,
+    liveSecret,
+  );
   assert(webhookEventMatchesMode("live", event.livemode));
   assertEquals(webhookEventMatchesMode("sandbox", event.livemode), false);
   assertEquals(webhookSecretsAreDistinct(liveSecret, liveSecret), false);
@@ -57,26 +75,41 @@ Deno.test("valid live signature requires livemode true, even if secrets accident
 
 Deno.test("signed sandbox event cannot pass the live-mode guard, including when both secrets match", async () => {
   const { payload, header } = await signedEvent(false, liveSecret);
-  const event = await stripe.webhooks.constructEventAsync(payload, header, liveSecret);
+  const event = await stripe.webhooks.constructEventAsync(
+    payload,
+    header,
+    liveSecret,
+  );
   assertEquals(webhookEventMatchesMode("live", event.livemode), false);
   assertEquals(webhookSecretsAreDistinct(liveSecret, liveSecret), false);
 });
 
 Deno.test("tampering with signed event payload is rejected", async () => {
   const { payload, header } = await signedEvent(false, sandboxSecret);
-  await assertRejects(() => stripe.webhooks.constructEventAsync(
-    payload.replace("evt_fixture", "evt_modified"),
-    header,
-    sandboxSecret,
-  ));
+  await assertRejects(() =>
+    stripe.webhooks.constructEventAsync(
+      payload.replace("evt_fixture", "evt_modified"),
+      header,
+      sandboxSecret,
+    )
+  );
 });
 
 Deno.test("expiry only cancels matching persisted Session in the matching mode", () => {
   assert(expiredSessionMatchesOrder("cs_test_own", "cs_test_own", "sandbox"));
   assert(expiredSessionMatchesOrder("cs_live_own", "cs_live_own", "live"));
   for (const saved of ["cs_test_other", "cs_live_other", null, undefined]) {
-    assertEquals(expiredSessionMatchesOrder(saved, "cs_test_own", "sandbox"), false);
+    assertEquals(
+      expiredSessionMatchesOrder(saved, "cs_test_own", "sandbox"),
+      false,
+    );
   }
-  assertEquals(expiredSessionMatchesOrder("cs_test_own", "cs_test_own", "live"), false);
-  assertEquals(expiredSessionMatchesOrder("cs_live_own", "cs_live_own", "sandbox"), false);
+  assertEquals(
+    expiredSessionMatchesOrder("cs_test_own", "cs_test_own", "live"),
+    false,
+  );
+  assertEquals(
+    expiredSessionMatchesOrder("cs_live_own", "cs_live_own", "sandbox"),
+    false,
+  );
 });
