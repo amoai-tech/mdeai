@@ -66,8 +66,12 @@ describe("concierge date-proposal routing", () => {
 
   it("sends a date-purpose request to the calendar and not to search", async () => {
     const line = await ruleLine();
-    expect(line).toMatch(/purpose is the dates/i);
-    expect(line).toMatch(/suggestRentalDates is ONLY/i);
+    expect(line).toMatch(/stay-DATE intent/i);
+    expect(line).toMatch(/suggest a rental stay starting Nov 12/i);
+    expect(line).toMatch(/CALL suggestRentalDates with from as YYYY-MM-DD/i);
+    expect(line).toMatch(/then STOP/i);
+    expect(line).toMatch(/do NOT call search-rentals/i);
+    expect(line).toMatch(/do NOT.*ask clarifying questions/i);
   });
 
   it("keeps a listing search a search even when it names dates", async () => {
@@ -75,8 +79,10 @@ describe("concierge date-proposal routing", () => {
     // must search with the dates as filters, not open the calendar.
     const line = await ruleLine();
     expect(line).toMatch(/it is a SEARCH/i);
-    expect(line).toMatch(/never open the calendar/i);
-    expect(line).toMatch(/bedrooms, price, neighbourhood/i);
+    expect(line).toMatch(/NEVER open the calendar/i);
+    expect(line).toMatch(/find me a two-bedroom in Laureles for Nov 12-18/i);
+    expect(line).toMatch(/show cheaper options for those dates/i);
+    expect(line).toMatch(/call search-rentals with dates as filters/i);
     // Precedence must be explicit, or the model picks the calendar on "apartments for Nov 12–18".
     expect(line).toMatch(/listing request wins/i);
   });
