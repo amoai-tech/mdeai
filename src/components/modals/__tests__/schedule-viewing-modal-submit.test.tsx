@@ -161,21 +161,6 @@ describe("ScheduleViewingModal submit behaviour (SAN-1203)", () => {
       "2099-06-01T15:00",
     );
 
-    // "Choose another apartment" is a real link to the results, so it needs no router and works
-    // without JavaScript; clicking it closes the modal.
-    const chooseAnother = container.querySelector(
-      '[data-testid="schedule-viewing-choose-another"]',
-    ) as HTMLAnchorElement;
-    expect(chooseAnother.tagName).toBe("A");
-    expect(chooseAnother.getAttribute("href")).toMatch(/^\/rentals/);
-    // jsdom cannot navigate; prevent the default so the test can still assert the handler ran.
-    chooseAnother.addEventListener("click", (event) => event.preventDefault(), { once: true });
-    await act(() => {
-      chooseAnother.click();
-      return Promise.resolve();
-    });
-    expect(useRentalUi().closeScheduleViewing).toHaveBeenCalled();
-
     // "Retry viewing request" is a WRITE, so it must re-send the identical request: same
     // apartment, same contact details, same time. That is what makes the server treat it as one
     // request rather than a second booking.
@@ -192,6 +177,54 @@ describe("ScheduleViewingModal submit behaviour (SAN-1203)", () => {
     expect((container.querySelector('[data-testid="schedule-viewing-retry"]') as HTMLButtonElement).textContent).toContain(
       "Retry viewing request",
     );
+
+    // "Choose another apartment" is a real link to the results, so it needs no router and works
+    // without JavaScript; clicking it closes the modal.
+    const chooseAnother = container.querySelector(
+      '[data-testid="schedule-viewing-choose-another"]',
+    ) as HTMLAnchorElement;
+    expect(chooseAnother.tagName).toBe("A");
+    expect(chooseAnother.getAttribute("href")).toMatch(/^\/rentals/);
+    // jsdom cannot navigate; prevent the default so the test can still assert the handler ran.
+    chooseAnother.addEventListener("click", (event) => event.preventDefault(), { once: true });
+    await act(() => {
+      chooseAnother.click();
+      return Promise.resolve();
+    });
+    expect(useRentalUi().closeScheduleViewing).toHaveBeenCalled();
+
+  });
+
+  it("keeps Retry visible and disabled while the resubmission is pending", async () => {
+    const { ScheduleViewingError: MockedError } = await import("@/lib/leads/submit-schedule-viewing");
+    const unavailable = new (MockedError as unknown as new () => Error & { code: string })();
+    unavailable.code = "LISTING_UNAVAILABLE";
+    unavailable.message = "This home isn't accepting viewing requests right now.";
+
+    let rejectRetry!: (error: Error) => void;
+    const pendingRetry = new Promise<ScheduleViewingResult>((_resolve, reject) => {
+      rejectRetry = reject;
+    });
+    vi.mocked(submitScheduleViewing)
+      .mockRejectedValueOnce(unavailable)
+      .mockReturnValueOnce(pendingRetry);
+
+    await renderModalAndFill();
+    await act(async () => { submitForm(); });
+    expect(container.querySelector('[data-testid="schedule-viewing-retry"]')).not.toBeNull();
+
+    await act(async () => {
+      (container.querySelector('[data-testid="schedule-viewing-retry"]') as HTMLButtonElement).click();
+    });
+    const retry = container.querySelector('[data-testid="schedule-viewing-retry"]') as HTMLButtonElement;
+    expect(retry).not.toBeNull();
+    expect(retry.textContent).toContain("Retrying");
+    expect(retry.disabled).toBe(true);
+    expect(submitScheduleViewing).toHaveBeenCalledTimes(2);
+
+    await act(async () => { rejectRetry(unavailable); });
+    expect(container.querySelector('[data-testid="schedule-viewing-retry"]')).not.toBeNull();
+    expect((container.querySelector('input[name="name"]') as HTMLInputElement).value).toBe("Camila Test");
   });
 
   it("does not carry one apartment's unavailable error onto the next apartment", async () => {
