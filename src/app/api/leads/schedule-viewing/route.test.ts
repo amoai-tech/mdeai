@@ -222,6 +222,24 @@ describe("POST /api/leads/schedule-viewing (SAN-1203)", () => {
     expect(sent.listing_id).toBe("mde-grand-by-linares-1612");
   });
 
+  it("generates the same idempotency key for mixed-case and padded versions of one slug", async () => {
+    fetchMock.mockResolvedValue(
+      edgeResponse(200, {
+        success: true,
+        data: { lead_id: "lead-1", showing_id: "showing-1" },
+      }),
+    );
+
+    await post(validBody({ listingId: " MDE-Grand-By-Linares-1612 " }));
+    await post(validBody({ listingId: "mde-grand-by-linares-1612" }));
+
+    const first = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body ?? "{}"));
+    const second = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body ?? "{}"));
+    expect(first.listing_id).toBe("mde-grand-by-linares-1612");
+    expect(second.listing_id).toBe(first.listing_id);
+    expect(first.idempotency_key).toBe(second.idempotency_key);
+  });
+
   it("tells the renter the apartment cannot take a request, not that their details are wrong", async () => {
     // The bridge classifies an un-requestable listing separately from bad input. Sending the
     // renter back to "check your details" leaves them retrying a form that can never succeed.
