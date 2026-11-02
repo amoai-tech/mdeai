@@ -10,12 +10,45 @@ const inputSchema = z.object({ page: publicPageSchema, id: z.string().min(1).max
 const SOURCE = {
   rentals: { table: "apartments", fields: "id, title, neighborhood, bedrooms, amenities, currency, price_monthly" },
   restaurants: { table: "restaurants", fields: "id, name, neighborhood, cuisine_types, price_level, rating" },
-  events: { table: "events", fields: "id, name, address, event_start_time, currency" },
+  // SAN-1600 — a question about "tickets for this event" is unanswerable from a
+  // record without tiers or a linked venue, so the model either guesses or
+  // refuses. Both relations are public (anonymous RLS) and small.
+  events: {
+    table: "events",
+    fields: "id, name, address, event_start_time, currency, event_venues ( name, address, city ), event_tickets ( name, price_cents, currency, qty_total, qty_sold )",
+    projection: ["id", "name", "address", "event_start_time", "currency", "event_venues", "event_tickets"] as string[],
+  },
   cafes: { table: "venue_anchors", fields: "id, name, kind, neighborhood, tags" },
   nightlife: { table: "venue_anchors", fields: "id, name, kind, neighborhood, tags" },
 } as const;
 
 export type PublicSelection = z.infer<typeof inputSchema>;
+
+/**
+ * Columns copied out of a public row. Nested relations keep their own key, so the
+ * projection cannot be derived by splitting the select string on commas.
+ */
+function publicProjection(page: PublicSelection["page"]): string[] {
+  if (page === "events") return SOURCE.events.projection;
+  return SOURCE[page].fields.split(", ");
+}
+
+/**
+ * Ticket rows store minor units (`price_cents`). A model that reads "8000000" and
+ * says "COP 8,000,000" is 100x wrong on a public page, so expose the amount people
+ * actually pay as `price` beside the tier's own `currency`, and drop the raw cents.
+ */
+function publicEventTickets(rows: unknown): unknown {
+  if (!Array.isArray(rows)) return rows;
+  return rows.map((row) => {
+    if (!row || typeof row !== "object") return row;
+    const tier = row as Record<string, unknown>;
+    const cents = typeof tier.price_cents === "number" ? tier.price_cents : null;
+    const next = { ...tier };
+    delete next.price_cents;
+    return { ...next, price: cents === null ? null : cents / 100 };
+  });
+}
 
 /** Return only the fixed public projection, even when a mocked/client row has extra fields. */
 function projectPublicRow(row: Record<string, unknown>, fields: string[]) {
@@ -58,7 +91,14 @@ export async function lookupPublicDiscoveryItem(
   }
   const { data, error } = await query.maybeSingle();
   if (error) return { found: false, data: null };
-  if (data) return projectPublicRow(data as unknown as Record<string, unknown>, cfg.fields.split(", "));
+  if (data) {
+    const projected = projectPublicRow(data as unknown as Record<string, unknown>, publicProjection(input.page));
+    if (input.page === "events" && projected.data) {
+      const event = projected.data as Record<string, unknown>;
+      return { found: true, data: { ...event, event_tickets: publicEventTickets(event.event_tickets) } };
+    }
+    return projected;
+  }
 
   // Curated café grounding can fall back to `searchRestaurants` after the
   // venue-anchor search finds no rows. Verify an actual public restaurant UUID
