@@ -1,26 +1,12 @@
 import { getPublicEventResult } from "@/lib/events/get-public-event";
 import { getSiteOrigin } from "@/lib/auth/site-url";
+import { canonicalPublicOrigin } from "@/lib/events/canonical-public-origin";
 import {
   CALENDAR_CONTENT_TYPE,
   buildEventCalendar,
 } from "@/lib/events/event-calendar";
 
 type RouteContext = { params: Promise<{ slug: string }> };
-
-/**
- * The apex host redirects to www, so a calendar saved from the apex would carry a URL
- * that costs every recipient a redirect. Pin the canonical public host.
- */
-export function canonicalPublicOrigin(origin: string | null): string | null {
-  if (!origin) return null;
-  try {
-    const url = new URL(origin);
-    if (url.hostname === "mdeai.co") url.hostname = "www.mdeai.co";
-    return url.origin;
-  } catch {
-    return null;
-  }
-}
 
 /**
  * `/events/<slug-or-id>/calendar` — download the saved schedule as an RFC 5545 calendar file.

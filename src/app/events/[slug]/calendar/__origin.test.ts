@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canonicalPublicOrigin } from "./route";
+import { canonicalPublicOrigin } from "@/lib/events/canonical-public-origin";
 
 describe("SAN-1620 — the saved calendar points at the canonical host", () => {
   it("upgrades the apex to www so recipients skip the redirect", () => {
