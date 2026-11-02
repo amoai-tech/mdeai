@@ -82,6 +82,16 @@ export function conciergeComposerInput(
   return {
     ...inputProps,
     onSubmitMessage,
+    // CopilotKit v2 exposes button slots: name the stock icon-only controls without
+    // replacing the composer or breaking its disabled/loading behavior.
+    sendButton: {
+      ...(typeof inputProps.sendButton === "object" && inputProps.sendButton ? inputProps.sendButton : {}),
+      "aria-label": "Send message",
+    },
+    addMenuButton: {
+      ...(typeof inputProps.addMenuButton === "object" && inputProps.addMenuButton ? inputProps.addMenuButton : {}),
+      "aria-label": "Add attachment",
+    },
     textArea: {
       ...textAreaProps,
       enterKeyHint: "send",

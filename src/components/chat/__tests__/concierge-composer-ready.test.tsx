@@ -51,6 +51,18 @@ describe("conciergeComposerInput", () => {
     expect(build({ textArea: { disabled: true } }, true).textArea.disabled).toBe(true);
   });
 
+  it("gives the stock CopilotKit icon buttons accessible names without replacing their slots", () => {
+    const input = conciergeComposerInput({
+      sendButton: { className: "existing-send" },
+      addMenuButton: { title: "Existing menu" },
+    } as never, vi.fn(), true) as unknown as {
+      sendButton: Record<string, unknown>;
+      addMenuButton: Record<string, unknown>;
+    };
+    expect(input.sendButton).toMatchObject({ "aria-label": "Send message", className: "existing-send" });
+    expect(input.addMenuButton).toMatchObject({ "aria-label": "Add attachment", title: "Existing menu" });
+  });
+
   it("always wires our submit handler", () => {
     const onSubmit = vi.fn();
     const input = conciergeComposerInput(undefined, onSubmit, false) as unknown as { onSubmitMessage: unknown };

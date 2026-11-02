@@ -73,6 +73,20 @@ function renderCard(
 }
 
 describe("RentalBrowseCard — SAN-1349 viewing CTA truthfulness", () => {
+  it("offers map selection in its own button instead of nesting links inside a role=button", () => {
+    const html = renderToStaticMarkup(
+      <RentalBrowseCard
+        rental={rowToRental(apartmentRow({ latitude: 6.245, longitude: -75.579 }))}
+        onSelect={vi.fn()}
+        onDetails={vi.fn()}
+      />,
+    );
+    expect(html).toContain('data-testid="rental-card-map-select-rnt_lau_001"');
+    expect(html).toContain('aria-label="Show Bright 2BR with Balcony in Laureles on the map"');
+    expect(html).not.toContain('role="button"');
+    expect(html).toContain('data-testid="rental-card-link-rnt_lau_001"');
+  });
+
   it("treats inherited object keys as ordinary amenity text, not object properties", () => {
     const html = renderCard({ amenities: ["constructor"] });
     expect(html).toContain("Constructor");
@@ -214,7 +228,8 @@ describe("RentalBrowseCard — SAN-1349 viewing CTA truthfulness", () => {
     const html = renderCard({ latitude: 6.244, longitude: -75.592 }, { selected: true });
     expect(html).toContain('data-pin-id="rental-rnt_lau_001"');
     expect(html).toContain('data-selected="true"');
-    expect(html).toContain('role="button"');
+    expect(html).toContain('data-testid="rental-card-map-select-rnt_lau_001"');
+    expect(html).not.toContain('role="button"');
   });
 });
 
@@ -346,7 +361,7 @@ describe("SAN-472: hover highlights while clicking requests map focus", () => {
     expect(onPreview).toHaveBeenCalledTimes(1);
     expect(onSelect).not.toHaveBeenCalled();
     act(() => {
-      (card.querySelector('[role="button"]') as HTMLElement).click();
+      (card.querySelector('[data-testid="rental-card-map-select-rnt_lau_001"]') as HTMLElement).click();
     });
     expect(onSelect).toHaveBeenCalledTimes(1);
     act(() => root.unmount());
