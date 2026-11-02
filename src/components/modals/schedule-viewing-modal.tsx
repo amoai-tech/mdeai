@@ -86,14 +86,16 @@ export const ScheduleViewingModal = () => {
   if (!scheduleTarget) return null;
 
   /**
-   * The submit path, callable from the form and from "Refresh apartment". Re-running it is a
-   * real re-check against the server: if the apartment came back, the request completes without
-   * the renter retyping anything.
+   * The submit path, callable from the form and from "Retry viewing request". Re-running it
+   * re-sends the same request (same idempotency key), so it either creates the one request or
+   * replays the one that already exists — never a second one.
    */
-  const submitRequest = async () => {
+  const submitRequest = async (isRetry = false) => {
     if (submitLockRef.current) return;
     submitLockRef.current = true;
-    setFailure(null);
+    // Keep the retry action visible while pending so its disabled/loading state is real.
+    // An ordinary form submit clears the previous error while it is sent.
+    if (!isRetry) setFailure(null);
     setSubmitting(true);
     try {
       const result = await submitScheduleViewing({
@@ -221,7 +223,7 @@ export const ScheduleViewingModal = () => {
             <ScheduleViewingRecovery
               submitting={submitting}
               resultsHref={resultsHref}
-              onRecheck={submitRequest}
+              onRetry={() => void submitRequest(true)}
               onChooseAnother={closeScheduleViewing}
             />
           ) : null}
