@@ -53,6 +53,7 @@ export function discoveryAgentSelectionHint(agui: unknown): string {
  * letting the model answer. Model tool-choice alone is not a reliable lookup
  * guarantee (the live Events acceptance returned the raw selected ID).
  * Missing/invalid selections do not query the database. */
+// skipcq: JS-0067 - exported function is scoped to this ES module, not the global object
 export async function verifiedDiscoverySelectionHint(
   agui: unknown,
   lookup: (selection: { page: "rentals" | "restaurants" | "events" | "cafes" | "nightlife"; id: string }) =>
