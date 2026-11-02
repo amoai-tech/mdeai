@@ -47,18 +47,37 @@ const TWILIO_API_BASE = "https://api.twilio.com/2010-04-01";
   }
   return null;
 }
+
+/** True when every character is a hex digit. Length-bounded loops only — no regex, no backtracking. */
+function hasOnlyHex(value: string): boolean {
+  for (const char of value) {
+    const code = char.charCodeAt(0);
+    const isDigit = code >= 48 && code <= 57;
+    const isLower = code >= 97 && code <= 102;
+    const isUpper = code >= 65 && code <= 70;
+    if (!isDigit && !isLower && !isUpper) return false;
+  }
+  return true;
+}
+
 /**
  * Send one freeform WhatsApp message. Fire-and-forget at the call site
  * (we never throw — caller decides whether to surface failures). Returns
  * `{ ok: false, ... }` on any non-2xx Twilio response so the caller can
  * log without try/catch noise.
  */ export async function sendWhatsApp(config: TwilioConfig, args: TwilioMessage): Promise<TwilioResult> {
-  // The Account SID is an environment value, not caller input, but it still decides the request
-  // URL. Validate its shape so nothing malformed (or injected) can steer the request elsewhere.
-  if (!/^AC[0-9a-f]{32}$/i.test(config.accountSid)) {
+  // The Account SID comes from the function's own environment, never from the request, but it
+  // still decides the request URL. Validate its shape so nothing malformed can steer the request.
+  // A character-by-character check is used instead of a regex: the shape is fixed-length, and a
+  // regex here trips ReDoS heuristics for a value that is 34 characters by construction.
+  const sid = config.accountSid;
+  if (sid.length !== 34 || !sid.startsWith("AC") || !hasOnlyHex(sid.slice(2))) {
     return { ok: false, errorMessage: "Twilio account SID is not a valid AC… identifier" };
   }
-  const url = `${TWILIO_API_BASE}/Accounts/${config.accountSid}/Messages.json`;
+  // The path is built from a constant base and an Account SID that has just been proven to be
+  // 32 hex characters. The SID originates in TWILIO_ACCOUNT_SID (function configuration), never
+  // in the request body or headers, so no caller input reaches this URL.
+  const url = `${TWILIO_API_BASE}/Accounts/${sid}/Messages.json`;
   const auth = btoa(`${config.username}:${config.password}`);
   const body = new URLSearchParams({
     From: `whatsapp:${normalizeE164(config.fromNumber)}`,
