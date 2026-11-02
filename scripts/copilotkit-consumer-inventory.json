@@ -352,6 +352,11 @@
       "note": "Mocks the v2 useFrontendTool hook to prove the openRentalDetails registration and resolver behavior. Mounts no provider."
     },
     {
+      "file": "src/components/copilot/search-tool-result-cards.tsx",
+      "classification": "keep",
+      "note": "SAN-546 J09: provider-safe empty event suggestions reuse the canonical event fast path; optional concierge context guards the provider boundary."
+    },
+    {
       "file": "src/components/host/rentals/rentals-concierge-center.tsx",
       "classification": "keep",
       "note": "SAN-1124: existing CopilotKit v2 CopilotChat under the single ChatProvider on broker routes; no second broker runtime."

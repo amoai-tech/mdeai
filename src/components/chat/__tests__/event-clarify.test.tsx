@@ -8,7 +8,8 @@ describe("event clarify local UI", () => {
     expect(EVENT_CLARIFY_MESSAGE).toContain("Music");
   });
 
-  it("generic query triggers instant clarify gate", () => {
-    expect(shouldInstantEventClarify("list events in medellin", {})).toBe(true);
+  it("citywide query searches immediately; only a bare event prompt clarifies", () => {
+    expect(shouldInstantEventClarify("list events in medellin", {})).toBe(false);
+    expect(shouldInstantEventClarify("events?", {})).toBe(true);
   });
 });
