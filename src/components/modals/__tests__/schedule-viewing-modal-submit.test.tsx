@@ -8,6 +8,13 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act } from "react";
+vi.mock("@/components/ui/calendar", () => ({
+  Calendar: ({ onSelect }: { onSelect: (date: Date | undefined) => void }) => (
+    <button type="button" data-testid="viewing-date-mock"
+      onClick={() => onSelect(new Date('2099-06-01T12:00:00'))}>Select date</button>
+  ),
+}));
+
 import { createRoot, type Root } from "react-dom/client";
 
 vi.mock("@/components/chat/rental-ui-context", () => ({ useRentalUi: vi.fn() }));
@@ -91,11 +98,17 @@ async function renderModalAndFill() {
       container.querySelector('input[name="email"]') as HTMLInputElement,
       "camila@example.com",
     );
-    setNativeValue(
-      container.querySelector('input[name="preferredAt"]') as HTMLInputElement,
-      "2099-06-01T15:00",
-    );
+    (container.querySelector('[data-testid="viewing-date-trigger"]') as HTMLButtonElement).click();
+    setNativeValue(container.querySelector('input[name="viewingTime"]') as HTMLInputElement, "15:00");
   });
+  await act(() => {
+    (container.querySelector('[data-testid="viewing-date-mock"]') as HTMLButtonElement).click();
+  });
+  await act(() => {
+    container.querySelector("form")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    return Promise.resolve();
+  });
+  expect(container.querySelector('[data-testid="schedule-viewing-review"]')).not.toBeNull();
 }
 
 function submitForm() {
@@ -153,13 +166,9 @@ describe("ScheduleViewingModal submit behaviour (SAN-1203)", () => {
     expect(recovery).not.toBeNull();
 
     // Nothing the renter typed was thrown away.
-    expect((container.querySelector('input[name="name"]') as HTMLInputElement).value).toBe("Camila Test");
-    expect((container.querySelector('input[name="email"]') as HTMLInputElement).value).toBe(
-      "camila@example.com",
-    );
-    expect((container.querySelector('input[name="preferredAt"]') as HTMLInputElement).value).toBe(
-      "2099-06-01T15:00",
-    );
+    expect(container.textContent).toContain("Camila Test");
+    expect(container.textContent).toContain("camila@example.com");
+    expect(container.querySelector('[data-testid="schedule-viewing-review"]')?.textContent).toContain("2099-06-01 at 15:00");
 
     // "Retry viewing request" is a WRITE, so it must re-send the identical request: same
     // apartment, same contact details, same time. That is what makes the server treat it as one
@@ -224,7 +233,17 @@ describe("ScheduleViewingModal submit behaviour (SAN-1203)", () => {
 
     await act(async () => { rejectRetry(unavailable); });
     expect(container.querySelector('[data-testid="schedule-viewing-retry"]')).not.toBeNull();
-    expect((container.querySelector('input[name="name"]') as HTMLInputElement).value).toBe("Camila Test");
+    // A failed retry keeps the renter on Review; editable inputs are not mounted there.
+    // Verify the draft survives the failure, then that Edit restores the typed value.
+    const review = container.querySelector('[data-testid="schedule-viewing-review"]');
+    expect(review).not.toBeNull();
+    expect(review?.textContent).toContain("Camila Test");
+    await act(async () => {
+      const edit = container.querySelector('[data-testid="schedule-viewing-edit"]');
+      expect(edit).not.toBeNull();
+      (edit as HTMLButtonElement).click();
+    });
+    expect((container.querySelector('input[name="name"]') as HTMLInputElement | null)?.value).toBe("Camila Test");
   });
 
   it("does not carry one apartment's unavailable error onto the next apartment", async () => {
@@ -313,8 +332,8 @@ it("forwards the typed wall clock and the committed showing id", async () => {
     ).toContain("not committed");
     // Typed values survive so the renter can retry without retyping.
     expect(
-      (container.querySelector('input[name="name"]') as HTMLInputElement).value,
-    ).toBe("Camila Test");
+      container.textContent,
+    ).toContain("Camila Test");
   });
 
   it("shows an unavailable-apartment error without closing or falsely confirming a viewing", async () => {
@@ -332,8 +351,8 @@ it("forwards the typed wall clock and the committed showing id", async () => {
       container.querySelector('[data-testid="schedule-viewing-error"]')?.textContent,
     ).toContain("isn't accepting viewing requests");
     expect(
-      (container.querySelector('input[name="name"]') as HTMLInputElement).value,
-    ).toBe("Camila Test");
+      container.textContent,
+    ).toContain("Camila Test");
     const { setLeadConfirmation } = vi.mocked(useRentalUi).mock.results[0]
       .value as unknown as { setLeadConfirmation: ReturnType<typeof vi.fn> };
     expect(setLeadConfirmation).not.toHaveBeenCalled();
