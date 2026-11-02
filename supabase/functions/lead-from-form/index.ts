@@ -20,6 +20,9 @@
  * platform). Bumps if real-world traffic flags it as too tight.
  */ import { z } from "https://esm.sh/zod@3.23.8";
 import { getCorsHeaders, jsonResponse, errorBody } from "../_shared/http.ts";
+
+/** Provided by the Supabase Edge runtime; declared here because it is not in the Deno types. */
+declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void };
 import { getServiceClient } from "../_shared/supabase-clients.ts";
 import { allowRateDurable } from "../_shared/rate-limit.ts";
 import { loadTwilioConfig, sendWhatsApp } from "../_shared/twilio-whatsapp.ts";
@@ -28,7 +31,7 @@ const PayloadSchema = z.object({
   apartment_id: z.string().uuid(),
   request_id: z.string().uuid(),
   email: z.string().email().max(254),
-  /** Renter's name. Falls back to "Anonymous" if omitted. */ name: z.string().min(1).max(60),
+  /** Renter's name. Falls back to "Anonymous" if omitted. */ name: z.string().trim().min(1).max(60),
   /** When they want to move. Maps to landlord_inbox.structured_profile.move_when. */ move_when: z.enum([
     "now",
     "soon",
@@ -41,9 +44,15 @@ const PayloadSchema = z.object({
   /** Anon-session id from the client (header-or-body), used for per-session rate limit. */ anon_session_id: z.string().max(60).optional()
 });
 function clientIp(req: Request) {
+  // Prefer the header the edge proxy sets itself; it cannot be spoofed by the caller.
+  const cf = req.headers.get("cf-connecting-ip")?.trim();
+  if (cf) return cf;
   const fwd = req.headers.get("x-forwarded-for");
-  if (fwd) return fwd.split(",")[0].trim();
-  return req.headers.get("cf-connecting-ip") ?? "unknown";
+  if (!fwd) return "unknown";
+  // Leftmost is client-controlled. The rightmost entry is the address the closest trusted proxy
+  // observed, so a caller cannot mint a fresh rate-limit bucket per request.
+  const hops = fwd.split(",").map((h) => h.trim()).filter(Boolean);
+  return hops.length ? hops[hops.length - 1] : "unknown";
 }
 async function handleRequest(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") {
@@ -95,14 +104,14 @@ async function handleRequest(req: Request): Promise<Response> {
     return jsonResponse({ success: true, data: { lead_id: previous.id, replayed: true } }, 200, req);
   }
   const ip = clientIp(req);
-  const ipRate = await allowRateDurable(service, `lead-from-form:ip:${ip}`, 5, 900);
+  const ipRate = await allowRateDurable(service, `lead-from-form:ip:${ip}`, 5, 900, { failClosed: true });
   if (!ipRate.allowed) {
     return jsonResponse(errorBody("RATE_LIMITED", "Too many inquiries from this network. Wait 15 minutes.", {
       retry_after_seconds: ipRate.retry_after_seconds
     }), 429, req);
   }
   if (payload.anon_session_id) {
-    const sessRate = await allowRateDurable(service, `lead-from-form:sess:${payload.anon_session_id}`, 20, 3600);
+    const sessRate = await allowRateDurable(service, `lead-from-form:sess:${payload.anon_session_id}`, 20, 3600, { failClosed: true });
     if (!sessRate.allowed) {
       return jsonResponse(errorBody("RATE_LIMITED", "Too many inquiries from this session. Wait an hour.", {
         retry_after_seconds: sessRate.retry_after_seconds
@@ -129,7 +138,7 @@ async function createInquiry(
   const { data: apt, error: aptErr } = await service.from("apartments").select("id, title, neighborhood, city, landlord_id").eq("id", payload.apartment_id).maybeSingle();
   if (aptErr) {
     console.error("lead-from-form apartment lookup error:", aptErr);
-    return jsonResponse(errorBody("APARTMENT_LOOKUP_FAILED", aptErr.message), 500, req);
+    return jsonResponse(errorBody("APARTMENT_LOOKUP_FAILED", "Could not look up the listing"), 500, req);
   }
   if (!apt) {
     return jsonResponse(errorBody("APARTMENT_NOT_FOUND", "Listing was deleted or never existed"), 404, req);
@@ -142,7 +151,7 @@ async function createInquiry(
     : { data: null, error: null };
   if (landlordErr) {
     console.error("lead-from-form landlord lookup error:", landlordErr);
-    return jsonResponse(errorBody("LANDLORD_LOOKUP_FAILED", landlordErr.message), 500, req);
+    return jsonResponse(errorBody("LANDLORD_LOOKUP_FAILED", "Could not look up the host"), 500, req);
   }
   // A host with no WhatsApp number is still a host with an inbox. Saving the inquiry is the
   // product requirement; notifying is best-effort. Rejecting here lost the renter's message
@@ -187,7 +196,7 @@ async function createInquiry(
   // 6. Fire WhatsApp notification fire-and-forget. Failures are LOGGED
   // ONLY — never block the request, never retry. The lead is already in
   // the inbox; landlord sees it on next dashboard open as a fallback.
-  if (notifyPhone) fireWhatsAppNotification({
+  const notifyTask = notifyPhone ? fireWhatsAppNotification({
     landlordPhone: notifyPhone,
     landlordName: landlord?.display_name ?? "Anfitrión",
     renterName,
@@ -199,7 +208,10 @@ async function createInquiry(
     service
   }).catch((err)=>{
     console.warn("[lead-from-form] WhatsApp dispatch failed:", err);
-  });
+  }) : null;
+  // Supabase may shut the instance down once the response is returned; register the task so the
+  // send (and the whatsapp_sent_at stamp) can finish.
+  if (notifyTask) EdgeRuntime.waitUntil(notifyTask);
   return jsonResponse({
     success: true,
     data: {
@@ -227,7 +239,7 @@ async function fireWhatsAppNotification(args: {
   leadId: string;
   service: ReturnType<typeof getServiceClient>;
 }) {
-  const config = loadTwilioConfig(/* useSandbox */ true);
+  const config = loadTwilioConfig(Deno.env.get("TWILIO_USE_SANDBOX") === "true");
   if (!config) {
     console.warn("[lead-from-form] Twilio config missing — skipping WhatsApp send");
     return;
@@ -235,7 +247,7 @@ async function fireWhatsAppNotification(args: {
   const baseUrl = Deno.env.get("MDEAI_PUBLIC_URL") ?? "https://mdeai.co";
   const leadUrl = `${baseUrl}/app/rentals/inbox`;
   const body = renderNewLeadMessage({
-    landlordFirstName: args.landlordName.split(" ")[0] ?? "Anfitrión",
+    landlordFirstName: args.landlordName.trim().split(/\s+/)[0] || "Anfitrión",
     renterName: args.renterName,
     apartmentTitle: args.apartmentTitle,
     apartmentNeighborhood: args.apartmentNeighborhood,

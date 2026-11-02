@@ -383,7 +383,7 @@ function RentalDetailInner({
               Other options
             </h2>
             <div className="flex flex-wrap gap-2">
-              {!detail.isExternalSource ? (
+              {detail.status !== "development-preview" && !detail.isExternalSource ? (
                 <ContactHostDialog apartmentId={detail.id} title={detail.title} />
               ) : null}
               {detail.status !== "development-preview" && !detail.isExternalSource ? (

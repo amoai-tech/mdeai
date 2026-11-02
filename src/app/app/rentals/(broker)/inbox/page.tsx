@@ -12,7 +12,7 @@ export default async function RentalHostInboxPage() {
   if (ctx.state !== "authorized") return null;
   const supabase = await createClient();
   const { data, error } = await supabase.from("landlord_inbox")
-    .select("id, apartment_id, renter_name, renter_email, raw_message, status, created_at")
+    .select("id, apartment_id, renter_name, renter_email, raw_message, status, created_at, structured_profile")
     .eq("landlord_id", ctx.landlordProfile.id)
     .order("created_at", { ascending: false }).limit(100);
   return (

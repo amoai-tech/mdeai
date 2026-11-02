@@ -17,7 +17,7 @@ export default async function AdminRentalInboxPage() {
     return <main data-testid="admin-inbox-denied" className="p-6">Admin access required.</main>;
   }
   const { data, error } = await supabase.from("landlord_inbox")
-    .select("id, apartment_id, renter_name, renter_email, raw_message, status, created_at")
+    .select("id, apartment_id, renter_name, renter_email, raw_message, status, created_at, structured_profile")
     .order("created_at", { ascending: false }).limit(100);
   return (
     <main className="mx-auto max-w-3xl space-y-5 px-4 py-6" data-testid="admin-rental-inbox">
