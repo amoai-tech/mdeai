@@ -42,6 +42,9 @@ vi.mock("@/components/chat/concierge-coagent-context", () => ({
 /** Capture the provider's onError so the test can deliver exact CopilotKit events. */
 const captured = vi.hoisted(() => ({
   onError: undefined as undefined | ((event: unknown) => void),
+  mounts: 0,
+  unmounts: 0,
+  agents: [] as object[],
 }));
 vi.mock("@copilotkit/react-core/v2", () => ({
   CopilotKitProvider: ({
@@ -51,6 +54,13 @@ vi.mock("@copilotkit/react-core/v2", () => ({
     children: React.ReactNode;
     onError?: (event: unknown) => void;
   }) => {
+    // This token models the CopilotKit runtime instance owned by each provider.
+    const agent = React.useRef<object>({});
+    React.useEffect(() => {
+      captured.mounts += 1;
+      captured.agents.push(agent.current);
+      return () => { captured.unmounts += 1; };
+    }, []);
     captured.onError = onError;
     return <>{children}</>;
   },
@@ -106,6 +116,9 @@ beforeEach(() => {
   session.loading = false;
   navigation.pathname = "/restaurants";
   captured.onError = undefined;
+  captured.mounts = 0;
+  captured.unmounts = 0;
+  captured.agents = [];
   clearConciergeError();
 });
 
@@ -124,6 +137,52 @@ describe("DiscoveryConciergeProvider guest startup 401 (SAN-1592)", () => {
     expect(getConciergeErrorForThread(undefined).version).toBe(0);
   });
 
+  it("defers the cold connection, preserves the agent through loading toggles, and replaces it on identity change", () => {
+    const rerender = () => act(() => root.render(
+      <MdeCopilotKitProvider><div>page</div></MdeCopilotKitProvider>,
+    ));
+    session.loading = true;
+    renderProvider();
+    expect(captured.mounts).toBe(0); // no guest /info probe while restoring
+
+    session.loading = false;
+    session.userId = "signed-in-owner";
+    rerender();
+    expect(captured.mounts).toBe(1);
+    const signedInAgent = captured.agents[0];
+
+    session.loading = true; // transient status refresh, SAME owner
+    rerender();
+    expect(captured.mounts).toBe(1);
+    expect(captured.unmounts).toBe(0);
+    session.loading = false;
+    rerender();
+    expect(captured.agents.at(-1)).toBe(signedInAgent);
+
+    session.userId = "another-owner";
+    rerender();
+    expect(captured.mounts).toBe(2);
+    expect(captured.unmounts).toBe(1);
+    expect(captured.agents[1]).not.toBe(signedInAgent);
+  });
+
+  it("rebinds guest to authenticated identity without sharing its prior agent", () => {
+    renderProvider();
+    const guestAgent = captured.agents[0];
+    session.userId = "signed-in-owner";
+    act(() => root.render(<MdeCopilotKitProvider><div>page</div></MdeCopilotKitProvider>));
+    expect(captured.agents).toHaveLength(2);
+    expect(captured.agents[1]).not.toBe(guestAgent);
+  });
+
+  it("does not remount for the same authenticated user on a normal re-render", () => {
+    session.userId = "stable-owner";
+    renderProvider();
+    act(() => root.render(<MdeCopilotKitProvider><div>page</div></MdeCopilotKitProvider>));
+    expect(captured.mounts).toBe(1);
+    expect(captured.unmounts).toBe(0);
+  });
+
   it("still records a startup failure for a signed-in user", () => {
     session.userId = "user-1";
     renderProvider();
@@ -140,12 +199,12 @@ describe("DiscoveryConciergeProvider guest startup 401 (SAN-1592)", () => {
     expect(getConciergeErrorVersion()).toBeGreaterThan(0);
   });
 
-  it("reports while the session is still loading, so a cold failure is never silently dropped", () => {
+  it("does not mount an unauthenticated runtime while restoring a cold session", () => {
     session.loading = true;
     renderProvider();
-    emit(runtimeInfoError(401));
-
-    expect(getConciergeErrorVersion()).toBeGreaterThan(0);
+    expect(captured.mounts).toBe(0);
+    expect(captured.onError).toBeUndefined();
+    expect(getConciergeErrorVersion()).toBe(0);
   });
 
   it("records a guest agent-run failure, not only startup probes", () => {

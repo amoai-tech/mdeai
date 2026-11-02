@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { PartnerSignupWizard } from "@/components/partners/partner-signup-wizard";
+import { PartnerSignupAssistant } from "@/components/partners/partner-signup-assistant";
 import { PartnerSignupNav } from "@/components/partners/partner-signup-nav";
 import { PartnerSignupTypePicker } from "@/components/partners/partner-signup-type-picker";
 import { getServerUser } from "@/lib/auth/session";
@@ -62,7 +62,7 @@ export default async function PartnerSignupPage({
         signInHref={loginHref}
       />
       <main className="flex flex-1 items-center justify-center p-4 sm:p-8">
-        <PartnerSignupWizard
+        <PartnerSignupAssistant
           // Remount when the signup context (type/category) changes so the
           // prefilled category never goes stale across soft navigations.
           key={`${type}:${category ?? ""}`}

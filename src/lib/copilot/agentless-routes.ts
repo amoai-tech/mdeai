@@ -20,13 +20,16 @@ import { isHostOsShellRoute } from "@/lib/host/host-os-nav";
  */
 export function isAgentlessRoute(pathname: string): boolean {
   return (
+    // Home search and FAB navigate to /chat, not in-place AI.
+    pathname === "/" ||
     pathname === "/login" ||
     pathname === "/signup" ||
     pathname.startsWith("/auth/") ||
     pathname === "/chat" ||
-    pathname === "/partners/profile" ||
     pathname === "/me/tickets" ||
     pathname.startsWith("/me/tickets/") ||
+    pathname === "/partners/profile" ||
+    pathname === "/partners/signup" ||
     pathname === "/host/event" ||
     pathname.startsWith("/host/event/") ||
     isHostOsShellRoute(pathname) ||

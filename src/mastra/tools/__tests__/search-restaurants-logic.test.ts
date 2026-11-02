@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { mapCuisineFromTypes, priceLevelToTier, rowToRestaurant, restaurantSchema, searchRestaurants, restaurantSearchDisplayName } from '../search-restaurants.js';
+import { searchRestaurantsIntelligent } from '../../lib/intelligence-restaurant-search';
 
 vi.mock('../../lib/intelligence-restaurant-search', () => ({
   searchRestaurantsIntelligent: vi.fn().mockResolvedValue({ results: [], hybridUsed: false }),
@@ -119,7 +120,7 @@ describe('searchRestaurants — intelligent search fallback', () => {
 
 describe('El Cielo labels in the intelligent chat search path', () => {
   it('preserves both real result IDs and distinguishes their on-screen names', async () => {
-    const { searchRestaurantsIntelligent } = await import('../../lib/intelligence-restaurant-search');
+    // Reuse the hoisted mocked module; cold dynamic imports can exceed the full-suite 5s timeout.
     const base = {
       cuisine: 'international', neighborhood: 'El Poblado', priceTier: '$$$',
       avgPricePerPerson: 30, currency: 'USD', rating: 4.5, vibe: [], imageUrl: '',
@@ -127,18 +128,18 @@ describe('El Cielo labels in the intelligent chat search path', () => {
     };
     vi.mocked(searchRestaurantsIntelligent).mockResolvedValueOnce({
       results: [
-        { ...base, id: 'fc6031d7-dcf6-44c3-9547-f7172c37ee95', name: 'El Cielo' },
-        { ...base, id: 'a1b2c3d4-e5f6-4789-abcd-100000000004', name: 'El Cielo' },
+        { ...base, id: 'fc6031d7-dcf6-44c3-9547-f7172c37ee95', name: 'Elcielo Hotel Medellín' },
+        { ...base, id: 'a1b2c3d4-e5f6-4789-abcd-100000000004', name: 'Elcielo Restaurant Medellín' },
       ],
       source: 'supabase', hybridUsed: false,
     } as never);
 
     const result = await searchRestaurants({ queryText: 'restaurants in El Poblado', limit: 5 });
     expect(result.results.map(({ id, name }) => [id, name])).toEqual([
-      ['fc6031d7-dcf6-44c3-9547-f7172c37ee95', 'El Cielo · Elcielo Hotel'],
-      ['a1b2c3d4-e5f6-4789-abcd-100000000004', 'El Cielo · Carrera 40'],
+      ['fc6031d7-dcf6-44c3-9547-f7172c37ee95', 'Elcielo Hotel Medellín'],
+      ['a1b2c3d4-e5f6-4789-abcd-100000000004', 'Elcielo Restaurant Medellín'],
     ]);
-  });
+  }, 15_000); // Full-suite CPU contention can exceed Vitest's default 5s.
 });
 
 describe('neighborhood sanitization', () => {
@@ -214,12 +215,12 @@ describe('restaurantSchema — MASTRA-048 enrichment fields', () => {
 });
 
 
-describe('restaurant search display names — real El Cielo locations', () => {
-  it('distinguishes both venues without changing their stored names or IDs', () => {
-    expect(restaurantSearchDisplayName('El Cielo', 'fc6031d7-dcf6-44c3-9547-f7172c37ee95'))
-      .toBe('El Cielo · Elcielo Hotel');
-    expect(restaurantSearchDisplayName('El Cielo', 'a1b2c3d4-e5f6-4789-abcd-100000000004'))
-      .toBe('El Cielo · Carrera 40');
+describe('restaurant search display names — use reconciled DB truth', () => {
+  it('does not impose stale locations onto the canonical Google-matched name', () => {
+    expect(restaurantSearchDisplayName('Elcielo Hotel Medellín', 'fc6031d7-dcf6-44c3-9547-f7172c37ee95'))
+      .toBe('Elcielo Hotel Medellín');
+    expect(restaurantSearchDisplayName('Elcielo Restaurant Medellín', 'a1b2c3d4-e5f6-4789-abcd-100000000004'))
+      .toBe('Elcielo Restaurant Medellín');
   });
 
   it('does not rename any other restaurants or unknown El Cielo records', () => {

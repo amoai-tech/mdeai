@@ -56,7 +56,7 @@ export function RentalsConciergeShell({
             "lg:block",
           )}
         >
-          <RentalsConversationHistory />
+          <RentalsConversationHistory dashboard={dashboard} />
         </div>
 
         <div

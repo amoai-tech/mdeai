@@ -25,8 +25,8 @@ const groundedPlaceResultSchema = z
   .object({
     id: z.string(),
     title: z.string(),
-    latitude: z.number(),
-    longitude: z.number(),
+    latitude: z.number().optional(),
+    longitude: z.number().optional(),
     placeId: z.string().optional(),
     mapsUrl: z.string().url().optional(),
     directionsUrl: z.string().url().optional(),
@@ -159,10 +159,6 @@ type GroundedAttributionSource = {
   title?: string;
 };
 
-// Medellín city center — used when a restaurant has no stored coordinates.
-const MDE_LAT = 6.2442;
-const MDE_LNG = -75.5812;
-
 /** Extract a neighborhood hint from a free-text grounding query. */
 function neighborhoodFromGroundingQuery(query: string): string | undefined {
   const m = query.match(
@@ -179,8 +175,8 @@ function restaurantToGroundedRow(r: Restaurant): GroundedPlaceResult {
   return {
     id: r.id,
     title: r.name,
-    latitude: r.latitude ?? MDE_LAT,
-    longitude: r.longitude ?? MDE_LNG,
+    latitude: r.latitude ?? undefined,
+    longitude: r.longitude ?? undefined,
     placeId: r.placeId ?? undefined,
     mapsUrl: (r.mapsUrl ?? undefined) as string | undefined,
     rating: r.rating != null && r.rating > 0 ? r.rating : undefined,
@@ -204,8 +200,8 @@ function anchorToGroundedRow(
   return {
     id: row.id,
     title: row.name,
-    latitude,
-    longitude,
+    latitude: latitude ?? undefined,
+    longitude: longitude ?? undefined,
     placeId: row.google_place_id,
     mapsUrl: venueAnchorMapsUrl(row.google_place_id),
     summary,

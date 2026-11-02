@@ -8,6 +8,7 @@ import {
 } from "@copilotkit/react-core/v2";
 import { getCopilotKitClientProps } from "@/lib/copilotkit-client-props";
 import { HostContextProvider } from "@/components/host/host-context-provider";
+import { SavedThreadHistory } from "@/components/chat/chat-provider";
 import { useSession } from "@/hooks/use-session";
 import { selectHostThread, type HostThreadSelection } from "@/lib/host/host-thread-id";
 
@@ -56,7 +57,13 @@ function HostOsRuntimeProvider({
         threadId={selection?.threadId}
         hasExplicitThreadId={selection?.restored ?? false}
       >
-        <HostContextProvider>{children}</HostContextProvider>
+        {selection?.restored ? (
+          <SavedThreadHistory threadId={selection.threadId} agentId="hostOpsAgent">
+            <HostContextProvider>{children}</HostContextProvider>
+          </SavedThreadHistory>
+        ) : (
+          <HostContextProvider>{children}</HostContextProvider>
+        )}
       </CopilotChatConfigurationProvider>
     </CopilotKitProvider>
   );

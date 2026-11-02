@@ -24,7 +24,8 @@ export type ActivatePartnerError = {
     | "draft_type_mismatch"
     | "insert_failed"
     | "member_failed"
-    | "draft_link_failed";
+    | "draft_link_failed"
+    | "patch_forbidden";
   message: string;
 };
 
@@ -112,7 +113,7 @@ async function findExistingPartner(
 ) {
   return db
     .from("partners")
-    .select("id, type, status")
+    .select("id, type, status, settings")
     .eq("profile_id", profileId)
     .eq("type", partnerType)
     .maybeSingle();
@@ -122,6 +123,7 @@ export async function activatePartner(
   db: SupabaseClient<Database>,
   profileId: string,
   input: ActivatePartnerInput,
+  userScopedDb: SupabaseClient<Database>,
 ): Promise<
   | { ok: true; data: ActivatePartnerSuccess }
   | { ok: false; error: ActivatePartnerError }
@@ -207,6 +209,27 @@ export async function activatePartner(
       ok: false,
       error: { code: "member_failed", message: memberError.message },
     };
+  }
+
+  // On retries (including a concurrent insert race), patch only submitted
+  // fields *after* membership exists. The signed-in request client supplies
+  // auth.uid() to the existing SQL RPC, which authorizes the membership and
+  // atomically merges settings. Service-role read/merge/update loses writes.
+  const acceptedSettings = sanitizePartnerSettings(input.settings);
+  if (!created && Object.keys(acceptedSettings).length > 0) {
+    const { data: patched, error: patchError } = await userScopedDb.rpc(
+      "partner_profile_patch",
+      { p_patch: acceptedSettings as Json, p_partner_id: partnerId },
+    );
+    if (patchError || (patched as { partnerId?: string } | null)?.partnerId !== partnerId) {
+      return {
+        ok: false,
+        error: {
+          code: patchError?.code === "42501" ? "patch_forbidden" : "insert_failed",
+          message: patchError?.message ?? "Partner profile patch did not confirm a write",
+        },
+      };
+    }
   }
 
   if (input.draftId) {

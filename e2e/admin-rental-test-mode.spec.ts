@@ -216,3 +216,144 @@ for (const viewport of DEVELOPMENT_VIEWPORTS) {
     }
   });
 }
+
+/**
+ * Mobile layout regression (P1): on a 390px phone the page itself must never scroll
+ * sideways. Only the wide rental / development-access / audit tables may scroll inside
+ * their own containers, and every action button must stay reachable by scrolling the
+ * table (or tabbing into the scroll region).
+ *
+ * Read-only. Opt-in only because it needs a real administrator session; it writes no rows.
+ */
+const LAYOUT_VIEWPORTS = [
+  { name: "mobile-390", width: 390, height: 844, tableMustScroll: true },
+  { name: "desktop-1366", width: 1366, height: 900, tableMustScroll: false },
+] as const;
+
+for (const viewport of LAYOUT_VIEWPORTS) {
+  test(`admin rental layout: no page-level horizontal overflow (${viewport.name})`, async ({ page }) => {
+    test.skip(!optIn, "Requires an administrator session (MDE_ADMIN_RENTAL_E2E=1)");
+    if (!email) throw new Error("Admin layout E2E requires MDE_ADMIN_RENTAL_E2E_EMAIL");
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await signInAsOnOrigin(page, origin, email);
+
+    // This is a read-only layout test: keep real admin auth + page, but use
+    // deterministic API rows so an empty database or failed load cannot pass.
+    const fixtureId = "00000000-0000-4000-8000-000000000001";
+    await page.route("**/api/admin/rentals/test", async (route) => {
+      if (route.request().method() !== "GET") {
+        await route.continue();
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        json: {
+          rentals: [{
+            id: fixtureId, title: "Layout fixture — Laureles apartment",
+            neighborhood: "Laureles", address: "Calle 10",
+            price_monthly: 2400000, currency: "COP",
+            available_from: "2026-11-01", status: "inactive",
+            moderation_status: "pending", listing_workflow_status: "draft",
+            verified: false, metadata: { is_test_fixture: "true" },
+          }],
+          counts: { [fixtureId]: { leads: 0, showings: 0 } },
+          testAccess: [{
+            id: "00000000-0000-4000-8000-000000000011",
+            user_id: "00000000-0000-4000-8000-000000000012",
+            access_role: "renter", granted_by: null,
+            granted_at: "2026-10-30T12:00:00Z",
+            expires_at: null, revoked_at: null, active: true,
+          }],
+          testEvents: [{
+            id: 1, apartment_id: fixtureId,
+            actor_id: "00000000-0000-4000-8000-000000000012",
+            event_type: "test_listing_created",
+            details: null, created_at: "2026-10-30T12:00:00Z",
+          }],
+        },
+      });
+    });
+    const rentalsLoaded = page.waitForResponse(
+      (response) => response.ok()
+        && response.url().includes("/api/admin/rentals/test")
+        && response.request().method() === "GET",
+    );
+    await page.goto("/admin/rentals");
+    expect((await rentalsLoaded).ok()).toBe(true);
+    await expect(page.getByTestId("admin-rental-test-panel")).toBeVisible();
+    const rentalRows = page.getByTestId("admin-rental-table").locator("tbody tr");
+    const buttons = page.getByTestId("admin-rental-table").locator("button");
+    await expect(rentalRows).toHaveCount(1);
+    await expect(page.getByTestId(`admin-test-publish-${fixtureId}`)).toBeVisible();
+    await expect(buttons).not.toHaveCount(0);
+    await expect(page.getByTestId("admin-test-access-list").locator("tbody tr")).toHaveCount(1);
+    await expect(page.getByTestId("admin-test-events").locator("tbody tr")).toHaveCount(1);
+    // Let React commit the loaded rows before measuring layout.
+    await page.evaluate(
+      () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
+    );
+
+    const documentWidth = () =>
+      page.evaluate(() => ({
+        scrollWidth: document.documentElement.scrollWidth,
+        clientWidth: document.documentElement.clientWidth,
+      }));
+    const expectNoPageOverflow = async () => {
+      const { scrollWidth, clientWidth } = await documentWidth();
+      expect(scrollWidth).toBeLessThanOrEqual(clientWidth);
+    };
+
+    // The document never overflows, before or after scrolling a table sideways.
+    await expectNoPageOverflow();
+
+    for (const testId of ["admin-test-access-scroll", "admin-rental-table-scroll", "admin-test-events-scroll"]) {
+      const scroller = page.getByTestId(testId);
+      await expect(scroller).toBeVisible();
+      await expect(scroller).toHaveCSS("overflow-x", "auto");
+      // Keyboard users must be able to focus the scroll region to pan it.
+      await scroller.focus();
+      await expect(scroller).toBeFocused();
+      if (viewport.tableMustScroll) {
+        const dimensions = await scroller.evaluate((el) => ({
+          scrollWidth: el.scrollWidth,
+          clientWidth: el.clientWidth,
+        }));
+        expect(dimensions.scrollWidth, testId).toBeGreaterThan(dimensions.clientWidth);
+      }
+    }
+
+    const rental = await page.getByTestId("admin-rental-table-scroll").evaluate((el) => ({
+      scrollWidth: el.scrollWidth,
+      clientWidth: el.clientWidth,
+    }));
+    if (viewport.tableMustScroll) {
+      expect(rental.scrollWidth).toBeGreaterThan(rental.clientWidth);
+    } else {
+      // Desktop keeps the existing full-width layout: nothing is hidden behind a scrollbar.
+      expect(rental.scrollWidth).toBeLessThanOrEqual(rental.clientWidth + 1);
+    }
+
+    // Every action button is reachable and fully visible inside the viewport once its
+    // cell is scrolled into view, and panning the table never widens the page.
+    const rowCount = await rentalRows.count();
+    const buttonCount = await buttons.count();
+    test.info().annotations.push(
+      { type: "rental rows", description: String(rowCount) },
+      { type: "action buttons", description: String(buttonCount) },
+    );
+    expect(rowCount).toBe(1);
+    expect(buttonCount).toBeGreaterThan(0);
+    for (let index = 0; index < buttonCount; index += 1) {
+      const button = buttons.nth(index);
+      await button.scrollIntoViewIfNeeded();
+      const box = await button.boundingBox();
+      expect(box).not.toBeNull();
+      expect(box!.x).toBeGreaterThanOrEqual(-1);
+      expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width + 1);
+    }
+    await page.getByTestId("admin-rental-table-scroll").evaluate((el) => {
+      el.scrollLeft = 0;
+    });
+    await expectNoPageOverflow();
+  });
+}

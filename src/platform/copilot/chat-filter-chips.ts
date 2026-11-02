@@ -14,6 +14,8 @@ export type FilterChipDef = {
   neighborhood?: string;
   minBedrooms?: number;
   maxPricePerNight?: number;
+  maxPriceMonthly?: number;
+  budgetCurrency?: "COP" | "USD";
   intent?: ConciergeWorkingMemory["lastIntent"];
   eventCategory?: EventCategory;
   eventDateWindow?: EventDateWindow;
@@ -24,7 +26,7 @@ export const CHAT_FILTER_CHIPS: readonly FilterChipDef[] = [
   { id: "laureles", label: "Laureles", group: "neighborhood", neighborhood: "Laureles", intent: "rental_search" },
   { id: "poblado", label: "Poblado", group: "neighborhood", neighborhood: "Poblado", intent: "rental_search" },
   { id: "2br", label: "2 BR", group: "bedrooms", minBedrooms: 2, intent: "rental_search" },
-  { id: "under-80", label: "Under $80/night", group: "price", maxPricePerNight: 80, intent: "rental_search" },
+  { id: "under-4m", label: "Under COP 4M/month", group: "price", maxPriceMonthly: 4_000_000, budgetCurrency: "COP", intent: "rental_search" },
   { id: "events", label: "Events", group: "intent", intent: "event_discovery" },
   { id: "food", label: "Food & cafés", group: "intent", intent: "chitchat" },
 ] as const;
@@ -57,7 +59,13 @@ export function isChipActive(
   const q = memory.lastRentalQuery;
   if (chip.group === "neighborhood") return q?.neighborhood === chip.neighborhood;
   if (chip.group === "bedrooms") return q?.minBedrooms === chip.minBedrooms;
-  if (chip.group === "price") return q?.maxPricePerNight === chip.maxPricePerNight;
+  if (chip.group === "price") {
+    return chip.maxPriceMonthly != null &&
+      q?.maxPriceMonthly === chip.maxPriceMonthly &&
+      q?.budgetCurrency === chip.budgetCurrency &&
+      q?.budgetType === "monthly" &&
+      q?.maxPricePerNight == null;
+  }
   return false;
 }
 
@@ -108,8 +116,18 @@ export function applyChipToggle(
   if (chip.group === "bedrooms") {
     q.minBedrooms = nextActive ? chip.minBedrooms : q.minBedrooms === chip.minBedrooms ? undefined : q.minBedrooms;
   }
-  if (chip.group === "price") {
-    q.maxPricePerNight = nextActive ? chip.maxPricePerNight : q.maxPricePerNight === chip.maxPricePerNight ? undefined : q.maxPricePerNight;
+  if (chip.group === "price" && chip.maxPriceMonthly != null) {
+    if (nextActive) {
+      // One exact COP/month ceiling replaces, never converts, a previous nightly cap.
+      q.maxPricePerNight = undefined;
+      q.maxPriceMonthly = chip.maxPriceMonthly;
+      q.budgetCurrency = chip.budgetCurrency;
+      q.budgetType = "monthly";
+    } else if (q.maxPriceMonthly === chip.maxPriceMonthly && q.budgetCurrency === chip.budgetCurrency) {
+      q.maxPriceMonthly = undefined;
+      q.budgetCurrency = undefined;
+      if (q.budgetType === "monthly") q.budgetType = undefined;
+    }
   }
 
   return {

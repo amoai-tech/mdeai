@@ -366,7 +366,7 @@ select throws_ok(
       'san1502-viewing-ordinary@example.com', 'Ordinary Renter',
       null, null, current_setting('san1502.scheduled_at')::timestamptz,
       '{}'::jsonb, '{}'::jsonb)$q$,
-  'P0001', 'p1_schedule_tour_atomic: listing is not requestable',
+  'P1287', 'p1_schedule_tour_atomic: listing is not requestable',
   'a private/internal apartment is denied');
 
 select is(
@@ -553,7 +553,7 @@ select throws_ok(
       'san1502-viewing-slug@example.com', 'Slug Renter',
       null, null, current_setting('san1502.scheduled_at')::timestamptz,
       '{}'::jsonb, '{}'::jsonb)$q$,
-  'P0001', 'p1_schedule_tour_atomic: listing is not requestable',
+  'P1287', 'p1_schedule_tour_atomic: listing is not requestable',
   'launch mode denies a pending development apartment');
 
 select throws_ok(

@@ -26,6 +26,7 @@ const bodySchema = z
       ])
       .optional(),
     queryText: z.string().optional(),
+    namedVenueOnly: z.boolean().optional(),
     priceTier: z.enum(["$", "$$", "$$$", "$$$$"]).optional(),
     userLatitude: z.number().optional(),
     userLongitude: z.number().optional(),
@@ -60,17 +61,24 @@ export async function POST(req: Request) {
     );
   }
 
-  const { neighborhood, cuisine, queryText, priceTier, userLatitude, userLongitude, limit } =
+  const { neighborhood, cuisine, queryText, namedVenueOnly, priceTier, userLatitude, userLongitude, limit } =
     parsed.data;
   const { results, total, source } = await searchRestaurants({
     neighborhood,
     cuisine,
     queryText,
+    namedVenueOnly,
     priceTier,
     userLatitude,
     userLongitude,
     limit,
   });
+
+  // Do not claim "no matching restaurants" when the catalog was unreachable.
+  // The existing client treats non-2xx as a retryable search error.
+  if (source === 'unavailable') {
+    return NextResponse.json({ error: 'Restaurant catalog temporarily unavailable' }, { status: 503 });
+  }
 
   const enriched = await prepareRestaurantSearchResults(results);
 

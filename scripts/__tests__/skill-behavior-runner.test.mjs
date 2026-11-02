@@ -37,6 +37,31 @@ function grade(input, id = 1, skill = "errors") {
   return { exit: proc.status, report: JSON.parse(proc.stdout), stderr: proc.stderr };
 }
 
+test("stale checkout reports the missing UIUX eval file and a safe worktree fix", () => {
+  const python = [
+    "from importlib.util import spec_from_file_location, module_from_spec",
+    "from pathlib import Path",
+    "from tempfile import TemporaryDirectory",
+    "spec = spec_from_file_location('skill_eval', 'scripts/run-skill-behavior-eval.py')",
+    "runner = module_from_spec(spec)",
+    "spec.loader.exec_module(runner)",
+    "with TemporaryDirectory() as tmp:",
+    "    runner.ROOT = Path(tmp)",
+    "    for fn in (lambda: runner.load_case('uiux', 1), lambda: runner.load_trigger_case('uiux', 1)):",
+    "        try: fn()",
+    "        except ValueError as exc:",
+    "            message = str(exc)",
+    "            assert 'skill evaluation file missing in this checkout' in message",
+    "            assert 'clean, updated main worktree' in message",
+    "            assert 'do not reset a dirty branch' in message",
+    "        else: raise AssertionError('missing pack should fail')",
+  ].join("\n");
+  const result = spawnSync("python3", ["-c", python], {
+    cwd: root, encoding: "utf8", timeout: 10000,
+  });
+  assert.equal(result.status, 0, result.stderr);
+});
+
 test("real trace grader passes only when native skill call, result and catalog are present", () => {
   const got = grade(makeTrace(goodPrompt));
   assert.equal(got.exit, 0);

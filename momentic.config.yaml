@@ -1,0 +1,10 @@
+name: mde-rentals
+include:
+  - "momentic/**/*.test.yaml"
+gitMainBranch: main
+fileFormat: v2
+parallel: 1
+browser:
+  disableSecondaryCacheResolution: true
+ai:
+  useMemory: true

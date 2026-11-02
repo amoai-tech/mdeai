@@ -28,12 +28,29 @@ export function formatEventCardPrice(
   return currency?.toUpperCase() === "COP" ? `$${formatted} COP` : `$${formatted}`;
 }
 
+/** Short Medellín-local start, e.g. "Mon, Oct 19, 4:00 PM". Shared by the browse card and its map pin. */
+export function formatEventStartsAt(iso: string): string {
+  try {
+    return new Intl.DateTimeFormat("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      timeZone: EVENT_TIME_ZONE,
+    }).format(new Date(iso));
+  } catch {
+    return iso;
+  }
+}
+
 export function formatEventSchedule(startsAt: string, endsAt: string | null): string {
   const start = new Date(startsAt);
   const startLabel = new Intl.DateTimeFormat("en-US", {
     weekday: "short",
     month: "short",
     day: "numeric",
+    year: "numeric",
     hour: "numeric",
     minute: "2-digit",
     timeZone: EVENT_TIME_ZONE,
@@ -50,13 +67,15 @@ export function formatEventSchedule(startsAt: string, endsAt: string | null): st
   });
   const sameDay = localDay.format(start) === localDay.format(end);
 
-  const endLabel = new Intl.DateTimeFormat("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone: EVENT_TIME_ZONE,
-  }).format(end);
+  // A different end day repeats the start's date style ("Wed, Feb 24, 12:30 AM"), not a raw locale string.
+  const endLabel = sameDay
+    ? new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZone: EVENT_TIME_ZONE }).format(end)
+    : new Intl.DateTimeFormat("en-US", {
+        weekday: "short", month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit",
+        timeZone: EVENT_TIME_ZONE,
+      }).format(end);
 
-  return sameDay ? `${startLabel} – ${endLabel}` : `${startLabel} – ${end.toLocaleString("en-US", { timeZone: EVENT_TIME_ZONE })}`;
+  return `${startLabel} – ${endLabel}`;
 }
 
 export function ticketsRemaining(qtyTotal: number, qtySold: number): number {

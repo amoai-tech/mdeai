@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { SignInRequired } from "@/components/auth/sign-in-required";
 import { AccountLoadError } from "@/components/app/load-error";
 import {
@@ -28,6 +29,11 @@ export default async function AppContestsPage() {
         MDE Team · Contests
       </p>
       <ContestAdminHeading />
+      {gate.status === "ok" ? (
+        <Link href="/app/admin/restaurants" className="mb-4 inline-flex min-h-11 items-center text-sm font-semibold text-primary underline-offset-4 hover:underline">
+          Restaurant Management
+        </Link>
+      ) : null}
 
       {gate.status === "guest" ? (
         <SignInRequired

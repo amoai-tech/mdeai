@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { VenueCardShell } from "@/components/browse/venue-card-shell";
 import { VenueCardPlaceholder } from "@/components/browse/venue-card-placeholder";
-import { formatRentalPrices } from "@/lib/rental-display";
+import { buildMatchReason, formatRentalPrices } from "@/lib/rental-display";
+import type { RentalSearchApiParams } from "@/lib/rental-query-parser";
 import { approvedExternalSourceUrl } from "@/lib/rentals/external-source";
 import { rentalToMapPin } from "@/lib/browse/browse-pin-converters";
 import { cn } from "@/lib/utils";
@@ -72,6 +73,8 @@ export function externalSourceUrlFor(rental: Rental): string | null {
 
 type RentalBrowseCardProps = {
   rental: Rental;
+  /** Grounded, optional customer query; never a search-score/debug field. */
+  matchParams?: RentalSearchApiParams;
   /** SAN-478 / REAL-011 — per-listing id for Playwright (`rental-card-${id}`). */
   testId?: string;
   /** Query string (with leading `?`) appended to the detail link so the renter's filters survive the trip. */
@@ -97,8 +100,12 @@ type RentalBrowseCardProps = {
    * external ad, to the advertiser's listing.
    */
   onDetails?: () => void;
+  selectedForAsk?: boolean;
+  onAskSelect?: () => void;
   /** A later row with the same title/area/size/price as an earlier one; labels it instead of hiding it. */
   duplicateNote?: string;
+  /** Compact /chat-style browse feed, or existing cover layout. */
+  mediaLayout?: "inline" | "cover";
 };
 
 function RentalBrowseCardMedia({
@@ -107,19 +114,21 @@ function RentalBrowseCardMedia({
   neighborhood,
   nightlyLabel,
   currency,
+  mediaLayout,
 }: {
   imageUrl?: string;
   title: string;
   neighborhood: string;
   nightlyLabel: string | null;
   currency?: string;
+  mediaLayout: "inline" | "cover";
 }) {
   // A failed Storage request must fall back to the normal placeholder, not a broken image.
   const [imageFailed, setImageFailed] = useState(false);
   return (
     <div className="relative">
       {imageUrl && !imageFailed ? (
-        <div className="relative aspect-[16/10] w-full overflow-hidden rounded-xl bg-muted">
+        <div className={cn("relative aspect-[16/10] overflow-hidden rounded-xl bg-muted", mediaLayout === "inline" ? "w-24" : "w-full")}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={imageUrl}
@@ -134,11 +143,11 @@ function RentalBrowseCardMedia({
         <VenueCardPlaceholder
           label="Apartment"
           icon={<Building2 className="size-5" aria-hidden />}  
-          mediaLayout="cover"
+          mediaLayout={mediaLayout}
           testId="rental-browse-card-photo-placeholder"
         />
       )}
-      {nightlyLabel ? (
+      {nightlyLabel && mediaLayout === "cover" ? (
         <span className="absolute bottom-2 right-2 flex items-center gap-1 rounded-full bg-background/90 px-2.5 py-0.5 font-mono text-xs font-semibold text-foreground backdrop-blur-sm">
           {nightlyLabel}
           {currency?.toUpperCase() === "USD" ? (
@@ -159,6 +168,7 @@ function RentalBrowseCardMedia({
 /** Show a real rental card; map controls require coordinates and viewing requires authorization. */
 export function RentalBrowseCard({
   rental,
+  matchParams,
   testId,
   detailSearch,
   selected,
@@ -166,7 +176,10 @@ export function RentalBrowseCard({
   onPreview,
   onSchedule,
   onDetails,
+  selectedForAsk,
+  onAskSelect,
   duplicateNote,
+  mediaLayout = "cover",
 }: RentalBrowseCardProps) {
   // Pass the listing's own currency: a COP monthly rent must not be labelled with a USD symbol.
   // A listing that stores a monthly rent leads with that rent. Its nightly figure is only rent ÷ 30,
@@ -180,6 +193,7 @@ export function RentalBrowseCard({
     rental.currency,
   );
   const chips = topAmenities(rental.amenities);
+  const matchReason = buildMatchReason(rental, matchParams);
   const hasWifi = rental.wifi || rental.amenities?.some((a) => a.toLowerCase().includes("wifi"));
   const pinId = rentalToMapPin(rental)?.id;
   // SAN-1349: the viewing action requires the explicit requestability proof.
@@ -207,7 +221,7 @@ export function RentalBrowseCard({
       resultKind="rental"
       pinId={pinId}
       composition="nova"
-      mediaLayout="cover"
+      mediaLayout={mediaLayout}
       selected={selected}
       ariaLabel={`Rental: ${rental.title}, ${rental.neighborhood}`}
       onPreview={interactive ? preview : undefined}
@@ -223,7 +237,7 @@ export function RentalBrowseCard({
             onClick={onDetails}
             data-testid={`rental-card-photo-details-${rental.id}`}
             aria-label={`Details: ${rental.title}`}
-            className="block w-full rounded-xl text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            className={cn("block rounded-xl text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring", mediaLayout === "inline" ? "w-24 shrink-0 self-start" : "w-full")}
           >
             <RentalBrowseCardMedia
               imageUrl={rental.image || undefined}
@@ -231,6 +245,7 @@ export function RentalBrowseCard({
               neighborhood={rental.neighborhood}
               nightlyLabel={nightlyLabel}
               currency={rental.currency}
+              mediaLayout={mediaLayout}
             />
           </button>
         ) : (
@@ -240,11 +255,16 @@ export function RentalBrowseCard({
             neighborhood={rental.neighborhood}
             nightlyLabel={nightlyLabel}
             currency={rental.currency}
+            mediaLayout={mediaLayout}
           />
         )
       }
       footer={
         <div className="flex w-full flex-wrap items-center justify-between gap-2">
+          {onAskSelect ? <Button type="button" size="sm" variant={selectedForAsk ? "secondary" : "outline"}
+            aria-pressed={Boolean(selectedForAsk)} data-testid="rental-ask-select" onClick={onAskSelect}>
+            {selectedForAsk ? "Clear selection" : "Ask about this"}
+          </Button> : null}
           {onDetails ? (
             <Button
               type="button"
@@ -378,7 +398,19 @@ export function RentalBrowseCard({
         )}
       </div>
 
-      {monthlyLabel ? (
+      {mediaLayout === "inline" && nightlyLabel ? (
+        // Inline cards have no photo overlay, so the stored nightly price is shown here. Checked
+        // before `monthlyLabel`: that label is always set when a nightly price exists (derived,
+        // marked "~"), which made this branch unreachable and showed "~$2,340/mo" for $78/night.
+        <div className="mt-1.5 flex flex-wrap items-center gap-2">
+          <p className="text-xs font-medium">{nightlyLabel}</p>
+          {rental.currency?.toUpperCase() === "USD" ? (
+            <Badge variant="outline" className="font-normal text-[10px]" data-testid="rental-card-currency">
+              USD
+            </Badge>
+          ) : null}
+        </div>
+      ) : monthlyLabel ? (
         <div className="mt-1.5 flex flex-wrap items-center gap-2">
           <p className="text-xs text-muted-foreground">{monthlyLabel}</p>
           {rental.currency?.toUpperCase() === "USD" ? (
@@ -389,6 +421,12 @@ export function RentalBrowseCard({
         </div>
       ) : !nightlyLabel ? (
         <p className="mt-1.5 text-xs text-muted-foreground">Price not provided</p>
+      ) : null}
+
+      {matchReason ? (
+        <p className="mt-1.5 min-w-0 break-words text-xs leading-relaxed text-muted-foreground" data-testid="rental-match-reason">
+          <span className="font-medium text-foreground">Why it may fit:</span>{" "}{matchReason}
+        </p>
       ) : null}
 
       {rental.availability ? (

@@ -23,7 +23,7 @@ export const AGENT_UNAVAILABLE_MESSAGE =
 
 /** Fast-path + agent handlers for sendConciergeUserMessage (CopilotChat + ?q=). */
 export function useConciergeSendHandlers(): ConciergeSendHandlers {
-  const { appendMessage, isRuntimeUnavailable, retryLastTurn } = useConciergeChat();
+  const { appendMessage, waitForRuntimeReady, retryLastTurn } = useConciergeChat();
   const nav = useOptionalThreadNav();
   const threadId = nav?.activeThreadId ?? nav?.sessionThreadId;
   const { showExchange, showNotice, showSignInPrompt } = useEventLocalChat();
@@ -53,8 +53,9 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
   // (CopilotKit reports that through onError and still resolves, or it rejects), the question is
   // already in the transcript, so only the notice is added. sendConciergeUserMessage clears the
   // error signal at the start of every send, so a non-zero version here belongs to this run.
-  const onAgentSend = useCallback(
-    async (text: string) => {
+  /** Validate session, wait for the existing agent, and show an honest result. */
+  const performAgentSend = useCallback(
+    async (text: string, submissionId?: string) => {
       // A fast guest can send before the session check has finished. Ask once, now, instead of
       // letting that send reach the protected runtime (401 -> "try again"). If the check itself throws
       // (network down) we keep what we already know: no user yet means the sign-in offer, which heals
@@ -76,13 +77,13 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
         return true;
       }
       try {
-        if (!isRuntimeUnavailable() && (await appendMessage(text))) {
+        if ((await waitForRuntimeReady()) && (await appendMessage(text))) {
           // Another conversation can report a late error during this run.
           // Only this conversation's stream failure should trigger its notice.
           if (getConciergeErrorForThread(threadId).version === 0) return true;
           showNotice(AGENT_UNAVAILABLE_MESSAGE);
         } else {
-          showExchange(text, AGENT_UNAVAILABLE_MESSAGE);
+          showExchange(text, AGENT_UNAVAILABLE_MESSAGE, submissionId);
         }
       } catch (error) {
         console.error("[concierge-agent-send]", error);
@@ -92,8 +93,29 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
       clearConciergePendingSend();
       return true;
     },
-    [appendMessage, isRuntimeUnavailable, retryLastTurn, threadId, showExchange, showNotice, showSignInPrompt, signedIn, sessionLoading],
+    [appendMessage, waitForRuntimeReady, retryLastTurn, threadId, showExchange, showNotice, showSignInPrompt, signedIn, sessionLoading],
   );
+
+  // A cold-runtime wait must not turn two clicks into two agent runs.
+  const pendingAgentSendsRef = useRef(new Map<string, Promise<boolean>>());
+  const lastAgentSendRef = useRef<Promise<void>>(Promise.resolve());
+  /**
+   * Coalesce identical in-flight questions and serialize distinct questions.
+   * Release each key after completion so later deliberate repeats still work.
+   */
+  const onAgentSend = useCallback((text: string, submissionId?: string): Promise<boolean> => {
+    const existing = pendingAgentSendsRef.current.get(text);
+    if (existing) return existing;
+    const pending = lastAgentSendRef.current.then(() => performAgentSend(text, submissionId));
+    pendingAgentSendsRef.current.set(text, pending);
+    lastAgentSendRef.current = pending.then(() => undefined, () => undefined);
+    void pending.finally(() => {
+      if (pendingAgentSendsRef.current.get(text) === pending) {
+        pendingAgentSendsRef.current.delete(text);
+      }
+    }).catch(() => undefined);
+    return pending;
+  }, [performAgentSend]);
 
   useEffect(() => {
     agentSendRef.current = onAgentSend;

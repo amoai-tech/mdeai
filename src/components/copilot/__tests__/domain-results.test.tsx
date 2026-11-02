@@ -3,6 +3,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
   categoryPinId,
+  restaurantUuidSchema,
   DomainResults,
 } from "@/components/copilot/domain-results";
 
@@ -35,6 +36,13 @@ describe("DomainResults", () => {
   it("categoryPinId matches normalizeToolOutput pin ids", () => {
     expect(categoryPinId("restaurant", "abc")).toBe("restaurant-abc");
     expect(categoryPinId("attraction", "xyz")).toBe("attraction-xyz");
+  });
+
+  it("only passes canonical MDE restaurant UUIDs to booking (never external IDs)", () => {
+    const uuid = "a1b2c3d4-e5f6-4789-abcd-100000000005";
+    expect(restaurantUuidSchema.safeParse(uuid).success).toBe(true);
+    expect(restaurantUuidSchema.safeParse("ChIJqWx0yikoRI4R62vONfeQ86M").success).toBe(false);
+    expect(restaurantUuidSchema.safeParse("a".repeat(50000)).success).toBe(false);
   });
 
   it("renders RestaurantCard with pin sync for restaurant rows", () => {

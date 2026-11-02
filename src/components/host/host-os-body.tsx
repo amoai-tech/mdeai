@@ -105,7 +105,10 @@ export function HostOsBody({
             />
           </div>
         </HostErrorBoundary>
-        <HostInboxPlaceholder />
+        {/* A placeholder inbox must not squeeze the real conversation off a phone. */}
+        <div className="hidden md:block">
+          <HostInboxPlaceholder />
+        </div>
       </aside>
     </div>
   );

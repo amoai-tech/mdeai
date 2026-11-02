@@ -33,6 +33,23 @@ describe("mapEventRowToBrowseItem", () => {
     expect(item.canBuyTickets).toBe(false);
     expect(item.neighborhood).toBe("Laureles");
   });
+  it("exposes saved coordinates (numeric strings from Postgres) and a valid Maps URL, never a guess", () => {
+    const row = {
+      id: "e3", slug: "s", name: "N", event_type: "music", address: "Calle 10", city: "Medellín",
+      event_start_time: "2027-01-01T01:00:00.000Z", ticket_price_min: null, currency: "COP",
+      primary_image_url: null, ticket_url: null, status: "published",
+    };
+    const located = mapEventRowToBrowseItem({ ...row, latitude: "6.21364660", longitude: "-75.55820350", maps_url: "https://maps.google.com/?cid=1" });
+    expect(located).toMatchObject({ latitude: 6.2136466, longitude: -75.5582035, mapsUrl: "https://maps.google.com/?cid=1" });
+    for (const bad of ["  abc ", "0x10", "1e3", "NaN", ""]) {
+      expect(mapEventRowToBrowseItem({ ...row, latitude: bad, longitude: "-75.5" }).latitude).toBeUndefined();
+    }
+    const bare = mapEventRowToBrowseItem({ ...row, latitude: null, longitude: "", maps_url: "javascript:alert(1)" });
+    expect(bare.latitude).toBeUndefined();
+    expect(bare.longitude).toBeUndefined();
+    expect(bare.mapsUrl).toBeUndefined();
+  });
+
   it("uses active tier minor units and tier currency, not stale event summary", () => {
     const item = mapEventRowToBrowseItem({
       id: "e2",

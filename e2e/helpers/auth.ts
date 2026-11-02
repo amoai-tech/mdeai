@@ -5,6 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 export const QA_HOST_EMAIL = "qa-landlord@mdeai.co";
+export const QA_SUPER_ADMIN_EMAIL = "mde@socialmediaville.ca";
 
 /** Load `.env.local` into process.env for e2e helpers (Playwright doesn't read it). */
 export function loadEnvLocalForE2E(): void {
@@ -39,10 +40,22 @@ function supabaseEnv() {
   return { url, anon, serviceKey };
 }
 
-/** True only when the Supabase env required for authed e2e is present. */
+/** Reject fake CI backend credentials before trying authenticated QA journeys. */
 export function hasE2eEnv(): boolean {
   const { url, anon, serviceKey } = supabaseEnv();
-  return Boolean(url && anon && serviceKey);
+  if (!url || !anon || !serviceKey || anon === "sb_publishable_test") return false;
+  try {
+    const parsed = new URL(url);
+    if ((parsed.hostname === "127.0.0.1" || parsed.hostname === "localhost") && parsed.port === "9") {
+      return false;
+    }
+    // Never send a service-role QA request over plaintext to an arbitrary remote host.
+    // Local Supabase CLI is the only supported HTTP exception.
+    return parsed.protocol === "https:" ||
+      (parsed.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(parsed.hostname));
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -127,14 +140,15 @@ function isMissingMastraTable(error: { code?: string; message?: string } | null)
  */
 async function waitForSettledThreads(admin: AdminClient, userId: string, timeoutMs = 90_000): Promise<void> {
   const readCount = async (): Promise<number> => {
-    const { data, error } = await admin.from("mastra_threads").select("id").eq("resourceId", userId);
+    const { data, error } = await retryTransientDb(
+      () => admin.from("mastra_threads").select("id").eq("resourceId", userId),
+    );
     if (error) throw new Error("select threads: " + error.message);
     const ids = (data ?? []).map((row) => (row as { id: string }).id);
     if (ids.length === 0) return 0;
-    const { count, error: countError } = await admin
-      .from("mastra_messages")
-      .select("id", { count: "exact", head: true })
-      .in("thread_id", ids);
+    const { count, error: countError } = await retryTransientDb(
+      () => admin.from("mastra_messages").select("id", { count: "exact", head: true }).in("thread_id", ids),
+    );
     if (countError) throw new Error("count messages: " + countError.message);
     return count ?? 0;
   };
@@ -150,6 +164,47 @@ async function waitForSettledThreads(admin: AdminClient, userId: string, timeout
   throw new Error("persistence did not settle for " + userId + " within " + timeoutMs + "ms");
 }
 
+/** Gateway/edge blips (Cloudflare 502/503/504) are retried, not reported as a leak. */
+const TRANSIENT_DB_ERROR = /(502|503|504|Bad Gateway|ETIMEDOUT|ECONNRESET|fetch failed)/i;
+
+/** Bounded retries only for transport failures; these test-only deletes are idempotent. */
+async function retryTransientDb<T extends { error: { message: string } | null }>(
+  operation: () => PromiseLike<T>,
+): Promise<T> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const result = await operation();
+      if (!result.error || !TRANSIENT_DB_ERROR.test(result.error.message) || attempt === 2) {
+        return result;
+      }
+    } catch (error) {
+      if (!TRANSIENT_DB_ERROR.test(String(error)) || attempt === 2) throw error;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 350 * (attempt + 1)));
+  }
+  throw new Error("transient database retry exhausted");
+}
+
+async function selectThreadIds(
+  admin: Awaited<ReturnType<typeof getSupabaseAdmin>>,
+  userId: string,
+): Promise<{ data: Array<{ id: string }> | null; error: { message: string } | null }> {
+  let last: { data: Array<{ id: string }> | null; error: { message: string } | null } = {
+    data: null,
+    error: null,
+  };
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const result = await admin.from("mastra_threads").select("id").eq("resourceId", userId);
+    last = {
+      data: (result.data as Array<{ id: string }> | null) ?? null,
+      error: result.error,
+    };
+    if (!result.error || !TRANSIENT_DB_ERROR.test(result.error.message)) return last;
+    await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
+  }
+  return last;
+}
+
 /**
  * Delete a throwaway identity, its durable AI memory, and — unlike the auth
  * delete alone — every thread/message the run created under it.
@@ -158,12 +213,34 @@ async function waitForSettledThreads(admin: AdminClient, userId: string, timeout
  * A partial cleanup throws instead of passing green: swallowing it here is what let
  * an earlier run leave orphaned messages behind.
  */
-export async function deleteThrowawayIdentity(identity: ThrowawayIdentity): Promise<void> {
+/**
+ * Mastra's completion event can precede its fire-and-forget ai_runs write.
+ * When a QA test completed a turn, wait for its audit row BEFORE removing the
+ * profiles FK target, otherwise the audit insert races with auth cleanup.
+ */
+async function waitForQaRunAudit(admin: AdminClient, userId: string): Promise<void> {
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const { count, error } = await admin.from("ai_runs")
+      .select("id", { count: "exact", head: true }).eq("user_id", userId);
+    if (error) throw new Error("QA run audit read failed: " + error.message);
+    if ((count ?? 0) > 0) return;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  throw new Error("QA agent turn finished but ai_runs audit did not persist before cleanup");
+}
+
+export async function deleteThrowawayIdentity(
+  identity: ThrowawayIdentity,
+  options: { waitForAiRunAudit?: boolean } = {},
+): Promise<void> {
+  if (!identity.email.endsWith("@qa-isolation.mdeai.co")) {
+    throw new Error("refusing to delete a non-disposable QA identity");
+  }
   const admin = await getSupabaseAdmin();
   const failures: string[] = [];
 
-  // A local stack with no Mastra tables has no rows to clean, only the identity.
-  const probe = await admin.from("mastra_threads").select("id").eq("resourceId", identity.userId);
+  // Mastra may save messages just after the final browser event. Settle before cleanup.
+  const probe = await selectThreadIds(admin, identity.userId);
   const mastraAbsent = isMissingMastraTable(probe.error);
   if (probe.error && !mastraAbsent) failures.push("select threads: " + probe.error.message);
 
@@ -174,59 +251,94 @@ export async function deleteThrowawayIdentity(identity: ThrowawayIdentity): Prom
       failures.push(error instanceof Error ? error.message : String(error));
     }
 
-    // Re-read AFTER settling: a turn that finished during the wait may have created a
-    // new thread, and its messages must be removed too.
-    const { data: threads, error: selectError } = await admin
-      .from("mastra_threads")
-      .select("id")
-      .eq("resourceId", identity.userId);
-    if (selectError && !isMissingMastraTable(selectError)) {
-      failures.push("select threads: " + selectError.message);
-    }
-    const ids = (threads ?? []).map((row) => (row as { id: string }).id);
+    // Reconcile again if a late persisted turn appeared during the first delete. Do not
+    // assume success from a delete response; re-read both tables and require zero.
+    for (let attempt = 0; attempt < 3 && failures.length === 0; attempt++) {
+      const { data: threads, error: selectError } = await selectThreadIds(admin, identity.userId);
+      if (selectError) {
+        failures.push("select threads: " + selectError.message);
+        break;
+      }
+      const ids = (threads ?? []).map((row) => row.id);
 
-    if (ids.length > 0) {
-      const { error: messagesError } = await admin.from("mastra_messages").delete().in("thread_id", ids);
-      if (messagesError) failures.push("delete messages: " + messagesError.message);
-    }
+      if (ids.length > 0) {
+        const { error } = await retryTransientDb(
+          () => admin.from("mastra_messages").delete().in("thread_id", ids),
+        );
+        if (error) { failures.push("delete messages: " + error.message); break; }
+      }
+      const { error: threadsError } = await retryTransientDb(
+        () => admin.from("mastra_threads").delete().eq("resourceId", identity.userId),
+      );
+      if (threadsError) { failures.push("delete threads: " + threadsError.message); break; }
 
-    const { error: threadsError } = await admin
-      .from("mastra_threads")
-      .delete()
-      .eq("resourceId", identity.userId);
-    if (threadsError) failures.push("delete threads: " + threadsError.message);
-
-    // Prove the outcome rather than assume the deletes worked.
-    const remaining = await admin.from("mastra_threads").select("id").eq("resourceId", identity.userId);
-    if (remaining.error && !isMissingMastraTable(remaining.error)) {
-      failures.push("verify threads: " + remaining.error.message);
-    } else if ((remaining.data ?? []).length > 0) {
-      failures.push("threads remain after cleanup: " + (remaining.data ?? []).length);
-    }
-    if (ids.length > 0) {
-      const remainingMessages = await admin.from("mastra_messages").select("id").in("thread_id", ids);
-      if (remainingMessages.error && !isMissingMastraTable(remainingMessages.error)) {
+      const remaining = await retryTransientDb(
+        () => admin.from("mastra_threads").select("id").eq("resourceId", identity.userId),
+      );
+      if (remaining.error) {
+        failures.push("verify threads: " + remaining.error.message);
+        break;
+      }
+      const remainingMessages = ids.length
+        ? await retryTransientDb(() => admin.from("mastra_messages").select("id").in("thread_id", ids))
+        : { data: [] as Array<{ id: string }>, error: null };
+      if (remainingMessages.error) {
         failures.push("verify messages: " + remainingMessages.error.message);
-      } else if ((remainingMessages.data ?? []).length > 0) {
-        failures.push("messages remain after cleanup: " + (remainingMessages.data ?? []).length);
+        break;
+      }
+      if ((remaining.data ?? []).length === 0 && (remainingMessages.data ?? []).length === 0) {
+        break;
+      }
+      if (attempt === 2) {
+        failures.push("Mastra rows remain after 3 cleanup attempts");
+      } else {
+        await new Promise((resolve) => setTimeout(resolve, 700 * (attempt + 1)));
       }
     }
   }
 
-  const { error: userError } = await admin.auth.admin.deleteUser(identity.userId);
-  if (userError) failures.push("delete identity: " + userError.message);
+  // The test can prove its AI audit is durable before the FK target disappears.
+  // Keep cleanup best-effort even when the audit is missing, but fail the test.
+  let auditFailure: string | null = null;
+  if (options.waitForAiRunAudit) {
+    try {
+      await waitForQaRunAudit(admin, identity.userId);
+    } catch (error) {
+      auditFailure = error instanceof Error ? error.message : String(error);
+    }
+  }
 
-  // Deleting the auth user leaves the public.profiles row behind (no cascade), so a run that
-  // trusted identity deletion alone left a real user profile in the database. Delete it and
-  // prove it is gone, like every other row this helper owns.
-  const { error: profileDeleteError } = await admin.from("profiles").delete().eq("id", identity.userId);
+  // Never delete the auth owner while its private Mastra rows might remain.
+  // Keep the disposable identity available for a later safe cleanup retry.
+  if (failures.length > 0) {
+    throw new Error("cleanup failed for " + identity.email + " — " + failures.join("; "));
+  }
+
+  const { error: userError } = await retryTransientDb(
+    () => admin.auth.admin.deleteUser(identity.userId),
+  );
+  if (userError) {
+    // An earlier delete may have succeeded before its HTTP response was lost.
+    // Check the actual account instead of reporting a false leak or deleting a different user.
+    const lookup = await retryTransientDb(() => admin.auth.admin.getUserById(identity.userId));
+    if (lookup.data.user || (lookup.error && lookup.error.status !== 404)) {
+      failures.push("delete identity: " + userError.message);
+    }
+  }
+
+  const { error: profileDeleteError } = await retryTransientDb(
+    () => admin.from("profiles").delete().eq("id", identity.userId),
+  );
   if (profileDeleteError) failures.push("delete profile: " + profileDeleteError.message);
-  const profileLeft = await admin.from("profiles").select("id").eq("id", identity.userId);
+  const profileLeft = await retryTransientDb(
+    () => admin.from("profiles").select("id").eq("id", identity.userId),
+  );
   if (profileLeft.error) {
     failures.push("verify profile: " + profileLeft.error.message);
   } else if ((profileLeft.data ?? []).length > 0) {
     failures.push("profile remains after cleanup");
   }
+  if (auditFailure) failures.push(auditFailure);
 
   if (failures.length > 0) {
     throw new Error("cleanup failed for " + identity.email + " — " + failures.join("; "));
@@ -237,7 +349,10 @@ export async function deleteThrowawayIdentity(identity: ThrowawayIdentity): Prom
  * Mint a real Supabase session for a test user via admin magic-link → verifyOtp.
  * Retries to absorb magic-link flakiness. Never logs key values.
  */
-export async function getTestSession(email = QA_HOST_EMAIL): Promise<Session> {
+export async function getTestSession(
+  email = QA_HOST_EMAIL,
+  options: { requireExisting?: boolean } = {},
+): Promise<Session> {
   const { url, anon } = supabaseEnv();
   if (!url || !anon) {
     throw new Error("E2E Supabase env missing (url/anon)");
@@ -245,10 +360,11 @@ export async function getTestSession(email = QA_HOST_EMAIL): Promise<Session> {
   const admin = await getSupabaseAdmin();
 
   // Supabase admin.generateLink(type: "magiclink") creates missing users.
-  // The shared QA identity must already exist: a smoke run must never silently
-  // provision a new account in the real project if the QA account was deleted.
-  // Throwaway identities are created explicitly elsewhere before this helper.
-  if (email.toLowerCase() === QA_HOST_EMAIL.toLowerCase()) {
+  // Both permanent QA identities must already exist: a smoke run must never
+  // silently create an auth user. Explicitly provisioned throwaway identities
+  // are handled by their existing creation/cleanup flows.
+  const permanentQaEmails = [QA_HOST_EMAIL, QA_SUPER_ADMIN_EMAIL];
+  if (options.requireExisting || permanentQaEmails.includes(email.toLowerCase())) {
     let page = 1;
     let found = false;
     while (true) {
@@ -257,12 +373,12 @@ export async function getTestSession(email = QA_HOST_EMAIL): Promise<Session> {
         perPage: 1000,
       });
       if (error) throw new Error(`QA account lookup failed: ${error.message}`);
-      found = data.users.some((user) => user.email?.toLowerCase() === QA_HOST_EMAIL);
+      found = data.users.some((user) => user.email?.toLowerCase() === email.toLowerCase());
       if (found || !data.nextPage) break;
       page = data.nextPage;
     }
     if (!found) {
-      throw new Error(`Existing QA account ${QA_HOST_EMAIL} not found; refusing magic-link auto-creation`);
+      throw new Error(`Existing QA account ${email} not found; refusing magic-link auto-creation`);
     }
   }
 
@@ -351,10 +467,11 @@ export async function signInAsOnOrigin(
   page: Page,
   origin: string,
   email = QA_HOST_EMAIL,
+  options: { requireExisting?: boolean } = {},
 ): Promise<Session> {
   // Accept a bare host as well as a full origin; default to https.
   const parsed = new URL(origin.includes("://") ? origin : `https://${origin}`);
-  const session = await getTestSession(email);
+  const session = await getTestSession(email, options);
   await injectSession(page.context(), session, {
     host: parsed.hostname,
     secure: parsed.protocol === "https:",

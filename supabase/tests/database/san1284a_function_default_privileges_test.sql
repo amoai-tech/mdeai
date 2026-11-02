@@ -156,8 +156,8 @@ select ok(
 select is(
   (select has_function_privilege('anon', p.oid, 'EXECUTE') from pg_proc p
     where p.pronamespace = 'public'::regnamespace and p.proname = 'decide_approval'),
-  true,
-  'D: decide_approval ACL untouched by Batch 0A (still anon-executable; Batch 0C owns it)');
+  false,
+  'D: later targeted ACL migration denies direct anonymous decide_approval execution');
 
 select * from finish();
 rollback;

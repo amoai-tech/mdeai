@@ -1,4 +1,5 @@
 import { google } from "@ai-sdk/google";
+import { APICallError, LoadAPIKeyError } from "@ai-sdk/provider";
 import { RequestContext } from "@mastra/core/request-context";
 import { describe, expect, it, vi } from "vitest";
 import { GEMINI_FLASH_MODEL_ID, NVIDIA_MODEL_ID } from "@/lib/ai-model-ids";
@@ -39,6 +40,23 @@ describe("classifyAgentError / describeAgentError (OBS-002)", () => {
       classifyAgentError(new Error("NVIDIA integrate.api.nvidia.com 500")),
     ).toBe("model_failure");
     expect(classifyAgentError(new Error("nvcf upstream unavailable"))).toBe("model_failure");
+    // SAN-1396: provider generation faults are model failures, not "unknown".
+    expect(
+      classifyAgentError({ message: 'provider reported "MALFORMED_FUNCTION_CALL"' }),
+    ).toBe("model_failure");
+    expect(classifyAgentError(new Error("AI_APICallError: function call turn comes immediately after a user turn"))).toBe("model_failure");
+    // Genuine SDK error objects: identity lives in `name`, not in the message.
+    expect(
+      classifyAgentError(new APICallError({
+        message: "Please ensure that function call turn comes immediately after a user turn",
+        url: "https://generativelanguage.googleapis.com",
+        requestBodyValues: {},
+        statusCode: 400,
+      })),
+    ).toBe("model_failure");
+    expect(
+      classifyAgentError(new LoadAPIKeyError({ message: "Google Generative AI API key is missing." })),
+    ).toBe("auth");
     expect(classifyAgentError(new Error("something weird"))).toBe("unknown");
   });
 
@@ -168,6 +186,8 @@ describe("buildTurnTelemetryMetadata (AGT-00C)", () => {
 describe("logTurnTelemetryDebug", () => {
   const samplePayload: TurnTelemetryPayload = {
     telemetry_version: TELEMETRY_SCHEMA_VERSION,
+    server_environment: "local",
+    deployment_sha: "local",
     agent_map_key: "conciergeAgent",
     model_name: "gemini-3.5-flash",
     turn_status: "success",

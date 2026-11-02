@@ -1,7 +1,8 @@
 import { Agent } from "@mastra/core/agent";
 import { hostOpsMemorySchema } from "@/lib/types/host-dashboard";
 import { createThreadMemory } from "@/mastra/lib/agent-memory";
-import { FLASH_MODEL } from "@/mastra/lib/models";
+import { ACTIVE_TEXT_MODEL } from "@/mastra/lib/models";
+import { geminiMalformedFirstStepRetry } from "@/mastra/lib/gemini-malformed-retry";
 import { HOST_OPS_INSTRUCTIONS } from "./host-ops-prompt";
 import {
   listHostEventsTool,
@@ -21,7 +22,11 @@ export const hostOpsAgent = new Agent({
   id: "host-ops-agent",
   name: "Host Ops Agent",
   tools: { listHostEventsTool, getSalesSummaryTool, getSalesInsightsTool },
-  model: FLASH_MODEL,
+  model: ACTIVE_TEXT_MODEL,
+  // SAN-1396: same bounded first-step recovery as the concierge (never after a tool ran).
+  errorProcessors: [geminiMalformedFirstStepRetry],
+  // One carefully scoped first-step correction, not up to three implicit replays (same as the concierge).
+  maxProcessorRetries: 1,
   instructions: HOST_OPS_INSTRUCTIONS,
   memory: createThreadMemory(hostOpsMemorySchema),
 });

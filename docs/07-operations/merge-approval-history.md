@@ -6,6 +6,14 @@ accumulate incident history.
 
 Current rule: `main` requires one approving review. **Sole-collaborator exception:** while the repository has exactly one collaborator and that account is also the PR author, GitHub cannot record the required approval because self-approval is forbidden. In that exact case an administrator merge is allowed only when the exact PR head has `floor` and `mastra-schema-init` green, the canonical MDE review (`review / verify-review-result`) is green on that head with no verified blocking finding, every review thread is resolved, and the PR body records the exception and exact head SHA. Each use is recorded below and in the PR. The exception ends when a second collaborator with write access exists.
 
+## 2026-10-28 — PR #610 · NVIDIA specialist selection (sole-collaborator exception)
+
+PR [#610](https://github.com/amoai-tech/mdeai/pull/610) fixes seven existing Mastra specialist/default agents and associated optional AI evaluators to use MDE's configured NVIDIA model. GitHub's collaborators endpoint returned exactly one collaborator (`amoai-tech`), also the PR author; the one-review requirement cannot be met by self-approval. No GitHub branch rule or technical security control is changed.
+
+**Pre-merge evidence:** The isolated feature branch was merged conflict-free with `main` at `4c6e48f658e7083c7e127ec5d75b92ba82df4cef`; local focused agent selection/Partner tests passed (18 passed, 2 opt-in live tests skipped), and the full merged-tree `npm run floor` exited 0 (528 test files / 4,086 tests passed; 12 files / 39 tests skipped, including opt-in NVIDIA live runs). Earlier, real NVIDIA capability/agent/scorer and signed-in local 390px/1440px browser proofs passed on the feature source commit. Neither local browser success nor green Floor alone proves a deployed specialist end-to-end transaction.
+
+**Conditional override:** Do not administrator-merge until the *final pushed PR head* has successful required `floor` and `mastra-schema-init`, successful canonical `review / verify-review-result`, no verified blocking review finding, and zero unresolved threads. Record exact final head SHA and these checks in PR #610 before any override. After merge, use the existing single Vercel production release pipeline, check `/api/version`, and verify affected signed-in specialist user journeys with persisted readback/authorization/retry evidence before marking SAN-1589 Done. If a second collaborator exists at merge time, this exception is invalid.
+
 ## 2026-10-20 — PR #472 · El Cielo Details labels (sole-collaborator exception)
 
 The owner requested completion of [PR #472](https://github.com/amoai-tech/mdeai/pull/472), which reuses the existing display-label helper from #465 in restaurant Details lookup; no database changes or booking/vote permission changes. Current GitHub collaborator query showed exactly one repository collaborator, `amoai-tech`, who also authored the PR. The normal approving-review rule is structurally unsatisfiable because GitHub disallows self-approval.
@@ -338,6 +346,132 @@ A prior production Auth failure (`Database error finding users`) had been repair
 token columns on one orphan test user; admin lookup and signed-in routes now succeed.
 
 **Nothing unreviewed rode along:** one test file.
+## 2026-10-28 — PR #608 (NVIDIA-only PR Agent caller)
+
+**PR:** [#608](https://github.com/amoai-tech/mdeai/pull/608). **Reason:** At the time of this change, amoai-tech is the repository's sole collaborator and PR author; GitHub disallows self-approval. This note records the limited sole-collaborator exception under AGENTS.md, not a general bypass of review or CI.
+
+**Exact-head proof:** The final PR head SHA, successful floor and mastra-schema-init checks, review / verify-review-result, and unresolved review-thread count must all be recorded on PR #608 **before** any administrator merge. The admin override must not be used if any of those conditions fails. GitHub's required checks and review guard remain configured.
+
+**Change and review scope:** Switch one existing GitHub Actions caller from the previous shared PR-Agent SHA to merged NVIDIA-only review-infra SHA 75233d4cdd1e6b041b8bdb497450dee6fd513cb3, and remove the obsolete Gemini secret mapping. The accompanying change to this history is solely the required merge-exception record; no application, database, payments or end-user behavior is altered.
+
+**Evidence:** Shared [infra PR #14](https://github.com/amoai-tech/pr-review-infra/pull/14) merged; 24/24 focused tests passed; MDE test [PR #606](https://github.com/amoai-tech/mdeai/pull/606) completed three consecutive 26-file, 2-chunk NVIDIA reviews with zero excluded files and passing exact-head verification.
+
+**What an independent reviewer would be asked:** Does this SHA pin match the merged shared workflow, is removal of the Gemini mapping atomic with the pin, does the callable interface still accept the NVIDIA secret, and is the existing exact-head review verification unchanged?
+
+**Follow-up:** Recruit a second reviewer to eliminate reliance on this structural exception. Check that a subsequent ordinary MDE PR runs on the new pin; clean up temporary test PRs and branches after proof.
+
+## 2026-10-29 — PR #623 (SAN-1606 five-tab phone navigation)
+
+**PR:** [#623](https://github.com/amoai-tech/mdeai/pull/623). **Reason:** at the time of this change amoai-tech is the
+repository's sole collaborator and the PR author; GitHub forbids self-approval. This note records the limited
+sole-collaborator exception under AGENTS.md, not a general bypass of review or CI.
+
+**Exact-head proof:** the exact head SHA, green `floor` and `mastra-schema-init`, the green
+`review / verify-review-result` result and the unresolved-thread count (0) are recorded on PR #623 before any
+administrator merge. The override must not be used if any of those conditions fails, and the required checks and
+review guard stay configured.
+
+**Change and review scope:** one new route-aware client component (`src/components/navigation/mobile-bottom-nav.tsx`)
+mounted once in `src/app/layout.tsx`, one shared clearance token plus phone-only composer CSS in `src/app/globals.css`,
+`/chat` chip-strip hiding, and clearance offsets in the existing surface owners (Home, chat centre column,
+`DiscoveryWorkspace`, rental/event detail CTA bars, restaurant detail, `/chat` map trigger, HomeFab). No schema, RLS,
+RPC, API, agent, provider, dependency or payment change; authentication and data isolation are untouched. Tests: the
+nav unit contract, a new `e2e/mobile-bottom-nav.spec.ts`, extended `MOB-CK-001`, rewritten `SCREEN-003` mobile block,
+and updated unit expectations whose contracts moved (discovery Ask bar pinning, rental CTA safe-area ownership).
+
+**Evidence:** nav unit 32/32; full Vitest 4325 passed / 0 failed; `mobile-bottom-nav` 8/8; `MOB-CK-001` 8/8;
+`SCREEN-003` 6/6; `mobile-header` + `maps-layout-mobile` + `browse-map-close-touch` 15/15; `san-1469` 2/2; typecheck,
+lint, build, `check:mastra` and the CopilotKit v2 audits exit 0; 138/138 rendered-geometry checks with before/after
+screenshots in `docs/tasks/evidence/SAN-1606/`. Locally unrunnable: `pr-agent-pinned-loader`, because the pinned
+container reads the checkout as uid 65534 and this worktree sits under a 750 home directory — CI runs it from
+`/github/workspace`.
+
+**What an independent reviewer would be asked:** does the allowlist admit exactly the five consumer routes plus
+one-segment consumer details and nothing protected or transactional; does the bar hold 64px/12px/480px/44px with a
+visible active and focus state; is the chip strip's state genuinely still mounted for desktop; is the compact
+composer the same CopilotKit textarea (no second input) with Send, auth, error/retry and draft behaviour intact; and
+does every fixed surface clear the bar without covering a composer, map control or card CTA.
+
+**Follow-up:** recruit a second reviewer so this structural exception can retire; re-measure the scoped composer CSS
+when CopilotKit v2 changes its input DOM.
+
+## 2026-10-30 — PR #625 (SAN-1606 mobile navigation completion)
+
+**PR:** [#625](https://github.com/amoai-tech/mdeai/pull/625). **Reason:** amoai-tech is the repository's sole
+collaborator and the PR author; GitHub forbids self-approval. The owner's SAN-1606 completion work order asks for the
+focused PR to be reviewed, merged and deployed, and explicitly authorizes adding the existing mobile navigation
+Playwright test to one required CI job.
+
+**Exact-head proof:** the PR body records the head SHA, the green `floor`, `mastra-schema-init`, `review / verify-review-result`
+(0 unresolved threads) and the deterministic shards — which now execute the mobile navigation journey itself.
+
+**Change and review scope:** hide the floating map control while an on-screen keyboard is open (one CSS rule on the
+existing `html[data-mde-no-nav]` marker) plus the regression assertion that it hides and returns; wire
+`e2e/mobile-bottom-nav.spec.ts` into the existing deterministic Playwright job and out of the general `chromium`
+project; add `scripts/verify-mobile-nav.mjs` (`npm run verify:mobile-nav -- <url> <expected-sha>`) and its evidence.
+No navigation architecture, business gate, schema or API change.
+
+**Evidence:** production build of the tested tree `2630adff53fd5efa2a4acfc3f63d5887abdf0366` → **35/35** checks in
+34s (`docs/tasks/evidence/SAN-1606/deployed/`); the same command against the pre-fix deployed release `bdac360e72`
+reports **34/36**, failing exactly on the map control this PR fixes.
+
+**What an independent reviewer would be asked:** does the map control genuinely return after the keyboard closes; is
+the spec executed once (deterministic lane) rather than duplicated; does the command fail loudly on a wrong SHA or a
+broken journey; and are the 1023/1024/1280 boundaries correct.
+
+**Follow-up:** run the command against the deployed release after merge, then report the physical-device keyboard
+results to SAN-522 when hardware is available.
+
+## 2026-11-01 — PR #668 (SAN-1600 event header sign-in and saved-location map)
+
+**PR:** [#668](https://github.com/amoai-tech/mdeai/pull/668). **Reason:** amoai-tech is the repository's sole
+collaborator and the PR author; GitHub forbids self-approval. The owner's SAN-1600 implementation order asks for the
+event page to gain visible authentication and a truthful embedded map.
+
+**Exact-head proof:** head `e9fe1348bf9c4f45921e428e5ef2ef05bb2e467c`; `floor`, `mastra-schema-init`,
+`review / verify-review-result`, the deterministic chromium shards, `codacy-eslint` and the Maps contracts job all
+green; 0 unresolved review threads.
+
+**Change and review scope:** guest Sign in / Sign up with a validated `next` path, Account / My tickets when signed
+in, and a contained Google Map that draws only saved coordinates (linked venue point + directions, or a listed area
+with an explicit unconfirmed-meeting-point note and area search). Desktop becomes two independent columns. No schema,
+payment, agent or runtime change.
+
+**Evidence:** 97 focused tests, `npm run build` exit 0, and Playwright on the built app for both live test events at
+320/390/768/1024/1440 (no overflow, one `h1`, correct map state per event) — `docs/screenshots/san-1600/prA-*.png`.
+
+**What an independent reviewer would be asked:** does an unconfirmed venue ever produce a precise pin or turn-by-turn
+directions; does a failed or keyless map leave tickets, navigation and Ask MDE working; does `next` survive
+validation and return the visitor to the same event; does the header still fit 320px.
+
+**Follow-up:** the deployed readback on `www.mdeai.co` after the staged certification promotes this SHA.
+
+## 2026-11-01 — PR #670 (SAN-1600 in-page Ask MDE assistant)
+
+**PR:** [#670](https://github.com/amoai-tech/mdeai/pull/670). **Reason:** amoai-tech is the repository's sole
+collaborator and the PR author; GitHub forbids self-approval. The owner's SAN-1600 order asks for one native Ask MDE
+experience across eligible pages instead of a link that leaves the page.
+
+**Exact-head proof:** head `04ff0c938192d795a46c71b56b6a55474888174cdf859305f5626954dbdc4d1f174099` (rebased onto `7a3d855cc5` after #668 merged);
+`floor`, `mastra-schema-init`, `review / verify-review-result` green with 0 unresolved threads.
+
+**Change and review scope:** one drawer mounted in the root layout next to the phone tab bar, rendering the existing
+`DiscoveryAskComposer` inside the existing CopilotKit v2 provider — same agent, thread and saved history. Route
+ownership is one explicit list; browse pages keep their inline composer and `/chat`, auth, host and `/app` surfaces
+are untouched. The event page gives the drawer that event's real saved id. No new provider, agent, runtime, schema or
+payment change.
+
+**Evidence:** 301 focused tests green after the rebase, `npm run typecheck`, targeted ESLint and `npm run build` clean;
+Playwright on the built app shows the drawer opening on the event CTA and the restaurant launcher, with 0 launchers on
+`/events`, `/chat`, `/login` and `/rentals`, and 0 extra `/api/copilotkit` POSTs when the drawer opens.
+
+**What an independent reviewer would be asked:** can a page mount a second assistant; does opening the drawer start a
+model run; does a guest see an honest sign-in path rather than a dead control; does the event answer use that event's
+id rather than whatever was selected on another route.
+
+**Follow-up:** the signed-in live AI answer (no QA credentials in this worktree) and the deployed readback after
+certification.
+
 ## Adding an entry
 
 Record: the PRs, the date, the reason, which required checks had passed, what a reviewer would have

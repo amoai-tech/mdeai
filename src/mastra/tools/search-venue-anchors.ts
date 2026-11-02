@@ -337,11 +337,22 @@ export function venueAnchorMapsUrl(placeId: string): string {
   return `https://www.google.com/maps/search/?api=1&query_place_id=${encodeURIComponent(placeId)}`;
 }
 
+/**
+ * The venue's own saved coordinates, or `null` when it has none (or they are out of range /
+ * only half present). Never a stand-in point: a made-up city-center pin sends the visitor to
+ * the wrong place. Callers show the place without a pin when this is `null`.
+ */
 export function venueAnchorToCoordinates(row: VenueAnchorRow): {
-  latitude: number;
-  longitude: number;
+  latitude: number | null;
+  longitude: number | null;
 } {
-  const latitude = num(row.latitude) ?? 6.2442;
-  const longitude = num(row.longitude) ?? -75.5812;
+  const latitude = num(row.latitude);
+  const longitude = num(row.longitude);
+  if (
+    latitude === undefined || longitude === undefined ||
+    Math.abs(latitude) > 90 || Math.abs(longitude) > 180
+  ) {
+    return { latitude: null, longitude: null };
+  }
   return { latitude, longitude };
 }

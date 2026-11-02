@@ -260,29 +260,31 @@ test.describe(
       });
       await page.mouse.move(box.x, box.y);
 
-      // Wheel events do not wait for scrolling or React's virtual window to settle.
-      // Send the real input once, then poll the resulting rendered state separately.
-      // Sending a new wheel on every poll can starve painting on slower CI runners:
-      // the failed CI screenshot showed message 1 visible despite this assertion failing.
-      await page.mouse.wheel(0, -100_000);
+      // An oversized wheel event can stop part-way through 500 dynamically measured rows:
+      // CI showed rows 416-420 after a single -100_000 event. Real users scroll through
+      // multiple gestures. Keep the input real, bounded, and check that each edge is visible.
+      async function reachEdge(index: number, deltaY: number) {
+        for (let gesture = 0; gesture < 20; gesture++) {
+          if (await rowInViewport(scroller, index)) return;
+          await page.mouse.wheel(0, deltaY);
+          // A wheel event resolves before the virtualizer commits its next window.
+          // Wait for two browser frames, not an arbitrary test-wide timeout.
+          await page.evaluate(() => new Promise<void>((resolve) => {
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+          }));
+        }
+        const layout = await readLayout(page);
+        const scroll = await scroller.evaluate((node) => node && ({
+          top: node.scrollTop,
+          height: node.scrollHeight,
+          clientHeight: node.clientHeight,
+        }));
+        throw new Error(`Wheel gestures could not reach row ${index}: ${JSON.stringify({ layout, scroll })}`);
+      }
 
-      // Up: the first logical row must become reachable again, with its text rendered.
-      await expect
-        .poll(() => rowInViewport(scroller, 0), {
-          timeout: 30_000,
-          intervals: [250],
-        })
-        .toBe(true);
+      await reachEdge(0, -12_000);
       await expect(page.getByText(FIRST, { exact: true })).toBeVisible({ timeout: 20_000 });
-
-      // Down: the final logical row must become reachable again.
-      await page.mouse.wheel(0, 100_000);
-      await expect
-        .poll(() => rowInViewport(scroller, LAST_INDEX), {
-          timeout: 30_000,
-          intervals: [250],
-        })
-        .toBe(true);
+      await reachEdge(LAST_INDEX, 12_000);
     });
 
     test("virtualization is enabled, the agent resolved, and the browser is clean", async ({

@@ -1,0 +1,129 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { SignInRequired } from "@/components/auth/sign-in-required";
+import { BookingReviewStay } from "@/components/rentals/booking-review-stay";
+import { getRentalDetail, type RentalDetail } from "@/lib/rentals/get-rental-detail";
+import { bookingReviewHref, moveOutFromStayThrough, parseStayRange } from "@/lib/rentals/booking-review-url";
+import { createClient } from "@/lib/supabase/server";
+
+export const metadata = { title: "Review your booking · mdeai" };
+
+type Props = {
+  searchParams?: Promise<{
+    apartment?: string | string[];
+    /** SAN-1611: the stay the renter already applied on /rentals. */
+    from?: string | string[];
+    through?: string | string[];
+  }>;
+};
+
+/**
+ * SAN-481 — the booking review screen a renter reaches from an apartment.
+ *
+ * It shows only what is actually known: the listing's own details and the dates the renter
+ * picks. Choosing a move-in date and submitting creates (or resumes) exactly one pending
+ * booking through /api/rentals/bookings, then shows the persisted state at
+ * /rentals/bookings/[id]. Nothing here starts a payment or invents an amount.
+ */
+export default async function NewBookingReviewPage({ searchParams }: Props) {
+  const searchParamsResolved = (await searchParams) ?? {};
+  const requested = searchParamsResolved.apartment;
+  const apartmentId = typeof requested === "string" ? requested : null;
+  // Only a real, ordered stay is carried; anything malformed is dropped rather than corrected.
+  const stay = parseStayRange(searchParamsResolved);
+  // `through` is the last occupied day; the booking stores the day they leave.
+  const moveOut = moveOutFromStayThrough(stay.through);
+  const stayQuery = stay.from
+    ? `?from=${stay.from}${stay.through ? `&through=${stay.through}` : ""}`
+    : "";
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  // Keep the stay through the sign-in round trip, so signing in never loses the dates.
+  const returnTo = apartmentId ? bookingReviewHref(apartmentId, stay) : "/rentals/bookings/new";
+
+  if (!user) {
+    return (
+      <main className="mx-auto max-w-3xl px-4 py-10" data-testid="booking-review-auth-required">
+        <SignInRequired
+          returnTo={returnTo}
+          title="Sign in to review a booking"
+          description="A booking review is tied to your account so it can be resumed and paid exactly once."
+          buttonLabel="Sign in to continue"
+          testId="booking-review-sign-in"
+        />
+      </main>
+    );
+  }
+
+  if (!apartmentId) {
+    return (
+      <main className="mx-auto max-w-3xl px-4 py-10" data-testid="booking-review-missing-apartment">
+        <h1 className="font-serif text-2xl font-semibold">Choose an apartment first</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Open the apartment you want, then start the booking review from its page.
+        </p>
+        <Link href="/rentals" className="mt-4 inline-block text-sm font-medium text-primary hover:underline">
+          Browse rentals
+        </Link>
+      </main>
+    );
+  }
+
+  let detail: RentalDetail | null = null;
+  let detailUnavailable = false;
+  try {
+    detail = await getRentalDetail(apartmentId, { client: supabase });
+  } catch {
+    // A rejected read is an outage, not proof that the apartment is gone. "Not found" here
+    // would tell a renter their listing disappeared because our database blinked.
+    detailUnavailable = true;
+  }
+
+  if (detailUnavailable) {
+    return (
+      <main className="mx-auto max-w-3xl px-4 py-10" data-testid="booking-review-detail-unavailable">
+        <h1 className="font-serif text-2xl font-semibold">This apartment is temporarily unavailable</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          We couldn’t load the apartment details just now. The apartment still exists — nothing
+          was booked or charged. Please try again.
+        </p>
+        <Link
+          href={returnTo}
+          className="mt-4 inline-block text-sm font-medium text-primary hover:underline"
+          data-testid="booking-review-detail-retry"
+        >
+          Retry
+        </Link>
+      </main>
+    );
+  }
+  if (!detail) notFound();
+
+  return (
+    <main className="mx-auto max-w-3xl px-4 pb-24 pt-6" data-testid="booking-review-new">
+      <Link
+        href={`/rentals/${encodeURIComponent(detail.id)}${stayQuery}`}
+        className="text-sm text-muted-foreground hover:text-foreground"
+        data-testid="booking-review-back"
+      >
+        ← Back to apartment
+      </Link>
+      <h1 className="mt-3 font-serif text-2xl font-semibold">Review your booking</h1>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Check the apartment and your move-in date. Nothing is charged yet.
+      </p>
+
+      <div className="mt-4">
+        <BookingReviewStay
+          detail={detail}
+          fallbackTitle={detail.title}
+          initialStart={stay.from}
+          initialEnd={moveOut}
+        />
+      </div>
+    </main>
+  );
+}

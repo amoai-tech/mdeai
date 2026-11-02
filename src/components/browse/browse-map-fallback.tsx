@@ -1,7 +1,4 @@
-/**
- * Shown when the map slot itself fails to render. It must never imply that the restaurant
- * list is incomplete: the map is an aid, the ballot is the product.
- */
+/** Keep the map-failure message true on rentals, restaurants, cafés and nightlife. */
 export function BrowseMapFallback() {
   return (
     <div
@@ -10,7 +7,7 @@ export function BrowseMapFallback() {
     >
       <p className="text-sm font-medium text-foreground">The map isn&apos;t available right now.</p>
       <p className="text-xs leading-relaxed text-muted-foreground">
-        The restaurant list is complete — every place is still listed.
+        You can still explore the listings and open their details.
       </p>
     </div>
   );

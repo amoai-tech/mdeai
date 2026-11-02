@@ -1,5 +1,7 @@
 import { createTool } from '@mastra/core/tools';
 import { createClient } from '@supabase/supabase-js';
+import { restaurantNameMentioned, restaurantNameCandidateTsQuery } from '../lib/restaurant-name-match';
+export { restaurantNameMentioned } from '../lib/restaurant-name-match';
 import { getSupabaseServerAnonEnv } from '@/lib/supabase/server-env';
 import { isDeterministicE2E } from '@/lib/deterministic-e2e';
 import { z } from 'zod';
@@ -44,6 +46,8 @@ export const restaurantSchema = z.object({
   vibe: z.array(z.string()),
   imageUrl: z.string(),
   sourceUrl: z.string(),
+  /** Actual catalog address, never generated from an AI summary. */
+  address: z.string().optional(),
   latitude: z.number().optional(),
   longitude: z.number().optional(),
   // MASTRA-048 enrichment fields (populated by scripts/enrich-places.ts)
@@ -149,6 +153,7 @@ export type RestaurantQuery = {
   userLongitude?: number;
   /** Natural-language query — enables hybrid + venue_signals (SEARCH-003). */
   queryText?: string;
+  namedVenueOnly?: boolean;
 };
 
 /**
@@ -227,14 +232,11 @@ function num(v: number | string | null | undefined): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
-/** Distinct public card/map labels for the two active El Cielo locations.
- * Keep canonical restaurant names and Google place IDs untouched in Supabase.
- * IDs and address distinctions were verified against the live rows (2026-10-20).
+/** Use canonical DB names; SAN-1539 reconciles the two former El Cielo identities.
+ * The historical hardcoded location labels no longer match source-backed data.
  */
 export function restaurantSearchDisplayName(name: string, id: string): string {
-  if (name !== 'El Cielo') return name;
-  if (id === 'fc6031d7-dcf6-44c3-9547-f7172c37ee95') return 'El Cielo · Elcielo Hotel';
-  if (id === 'a1b2c3d4-e5f6-4789-abcd-100000000004') return 'El Cielo · Carrera 40';
+  void id; // Keep the existing search contract without stale hardcoded labels.
   return name;
 }
 
@@ -261,6 +263,7 @@ export function rowToRestaurant(row: RestaurantRow): Restaurant {
     vibe: row.tags?.length ? row.tags : row.cuisine_types ?? [],
     imageUrl: row.primary_image_url ?? '',
     sourceUrl: `https://mdeai.co/restaurants/${row.id}`,
+    address: row.address ?? undefined,
     latitude: lat,
     longitude: lng,
     // MASTRA-048 enrichment fields — null until enrich-places.ts + cache-ai-summaries.ts run
@@ -327,6 +330,67 @@ function applyRestaurantFilters(rows: Restaurant[], query: RestaurantQuery): Res
       .map(({ r }) => r);
   }
   return results;
+}
+
+/**
+ * Resolve named venues before the hybrid top-N limit. Read the existing
+ * public catalog under its canonical RLS and preserve real card/map fields.
+ * Returning null means no named match; ordinary discovery uses hybrid search.
+ */
+async function findNamedRestaurants(
+  query: RestaurantQuery,
+): Promise<RestaurantSearchResult | null> {
+  const text = query.queryText?.trim();
+  if (!text) return null;
+  const client = getSupabaseClient();
+  if (!client) {
+    return query.namedVenueOnly ? { results: [], total: 0, source: 'unavailable' } : null;
+  }
+
+  const candidateQuery = restaurantNameCandidateTsQuery(text);
+  if (!candidateQuery) {
+    // We cannot verify a no-match without a meaningful name candidate.
+    return query.namedVenueOnly ? { results: [], total: 0, source: 'unavailable' } : null;
+  }
+
+  // Indexed candidate retrieval (restaurants_fts_idx), NOT a 500-row table
+  // download. One extra row detects ambiguous truncation; never call that
+  // situation a verified no-match or silently lose an additional branch.
+  const NAME_CANDIDATE_CAP = 80;
+  const { data, error } = await client
+    .from('restaurants')
+    .select('id, name, cuisine_types, price_level, address, city, neighborhood, latitude, longitude, primary_image_url, rating, tags, google_place_id, maps_url, ai_summary')
+    .textSearch('fts_content', candidateQuery, { config: 'spanish' })
+    .order('name')
+    .limit(NAME_CANDIDATE_CAP + 1);
+
+  if (error) {
+    console.warn('[search-restaurants] named lookup unavailable:', error.code);
+    return query.namedVenueOnly ? { results: [], total: 0, source: 'unavailable' } : null;
+  }
+
+  const candidates = (data ?? []) as RestaurantRow[];
+  if (candidates.length > NAME_CANDIDATE_CAP) {
+    console.warn('[search-restaurants] named lookup candidate cap exceeded');
+    return query.namedVenueOnly ? { results: [], total: 0, source: 'unavailable' } : null;
+  }
+  const matches = candidates.filter((row) => restaurantNameMentioned(text, row.name));
+  if (!matches.length) {
+    // A catalog-backed no-match is not a semantic recommendation. For an
+    // explicitly requested venue, never substitute unrelated rated venues.
+    return query.namedVenueOnly ? { results: [], total: 0, source: 'supabase' } : null;
+  }
+
+  const matched = applyRestaurantFilters(matches.map(rowToRestaurant), query);
+  // A definite name hit with conflicting constraints must not return unrelated
+  // restaurants from the highly rated default fallback.
+  return {
+    results: withRestaurantDisplayNames(matched.slice(0, query.limit ?? 5)),
+    total: matched.length,
+    source: 'supabase',
+    hybridUsed: false,
+    rankExplanation: [{ factor: 'exact_catalog_name', score: 1, note: 'RLS-protected restaurants.name' }],
+  };
 }
 
 export type RestaurantSearchResult = {
@@ -412,7 +476,25 @@ export async function searchRestaurants(
     };
   }
 
+  if (query.namedVenueOnly && !query.queryText?.trim()) {
+    return { results: [], total: 0, source: 'unavailable' };
+  }
+
   if (query.queryText?.trim()) {
+    const named = await findNamedRestaurants(query);
+    if (named) {
+      await writeSearchLog({
+        queryText: query.queryText,
+        toolName: 'search-restaurants',
+        resultsCount: named.total,
+        latencyMs: 0,
+        hybridUsed: false,
+        groundingUsed: named.source === 'supabase',
+        rankExplanation: named.rankExplanation,
+      });
+      return named;
+    }
+
     const started = Date.now();
     let intel: Awaited<ReturnType<typeof import('../lib/intelligence-restaurant-search').searchRestaurantsIntelligent>> | null = null;
     try {
@@ -482,6 +564,7 @@ export const searchRestaurantsTool = createTool({
       .string()
       .optional()
       .describe('Natural-language search e.g. quiet rooftop dinner in Provenza'),
+    namedVenueOnly: z.boolean().optional().describe('For a specific named restaurant: return only canonical name matches, never generic suggestions'),
   }),
   outputSchema: z.object({
     results: z.array(
@@ -513,7 +596,7 @@ export const searchRestaurantsTool = createTool({
   }),
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   execute: async (inputData: RestaurantQuery, context?: any) => {
-    const { cuisine, neighborhood, minRating, limit = 5, queryText } = inputData;
+    const { cuisine, neighborhood, minRating, limit = 5, queryText, namedVenueOnly } = inputData;
     const { results, total, source, hybridUsed, rankExplanation } = await runAuditedSearch(
       'search-restaurants',
       searchRestaurants,
@@ -523,6 +606,7 @@ export const searchRestaurantsTool = createTool({
         minRating,
         limit,
         queryText,
+        namedVenueOnly,
       },
       context,
     );

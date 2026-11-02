@@ -33,6 +33,9 @@ describe("HostEventCard", () => {
   it("shows the Published chip + a view link for published events with a slug", () => {
     const html = renderToStaticMarkup(<HostEventCard {...base} />);
     expect(html).toContain("Published");
+    // Medellín time stays stable for hosts browsing outside Colombia.
+    expect(html).toContain("5:00 PM");
+
     expect(html).toContain('data-testid="host-event-view-link"');
     expect(html).toContain("/events/salsa-night");
   });

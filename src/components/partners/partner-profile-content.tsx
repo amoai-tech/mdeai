@@ -1,22 +1,22 @@
 import Link from "next/link";
 
 import { PartnerProfileForm } from "@/components/partners/partner-profile-form";
+import { PartnerBusinessSwitcher } from "@/components/partners/partner-business-switcher";
+import { PartnerWorkspaceChat } from "@/components/partners/partner-workspace-chat";
 import type { PartnerProfileLoad } from "@/lib/partners/partner-profile-load";
 import { profileValuesFromSettings } from "@/lib/partners/partner-profile-patch";
 
 type PartnerProfileContentProps = {
   /** Result of the single server loader; all five states are rendered honestly. */
   profile: PartnerProfileLoad;
+  /** Verified server session user ID; never inferred from business selection. */
+  userId: string;
   /**
    * Route that owns this screen. Business-selection links stay on the same
    * surface, so the legacy page and the /app page never bounce between shells.
    */
   basePath: string;
 };
-
-function profileHref(basePath: string, partnerId: string): string {
-  return `${basePath}?partner=${encodeURIComponent(partnerId)}`;
-}
 
 function ProfileLoadError({
   message,
@@ -56,6 +56,7 @@ function ProfileLoadError({
 export function PartnerProfileContent({
   profile,
   basePath,
+  userId,
 }: PartnerProfileContentProps) {
   // A failed query is not the same as "no membership". Never send a partner
   // back to signup because Supabase had a transient failure.
@@ -91,23 +92,13 @@ export function PartnerProfileContent({
       </p>
 
       {options.length > 1 ? (
-        <nav aria-label="Choose your business" className="mt-6 flex flex-wrap gap-2">
-          {options.map((option) => {
-            const label =
-              profileValuesFromSettings(option.settings).businessName ||
-              option.type;
-            return (
-              <Link
-                key={option.id}
-                href={profileHref(basePath, option.id)}
-                aria-current={option.id === partner?.id ? "page" : undefined}
-                className={`inline-flex min-h-11 items-center rounded-lg border px-4 text-sm font-medium ${option.id === partner?.id ? "border-accent text-accent" : "border-border text-foreground"}`}
-              >
-                {label}
-              </Link>
-            );
-          })}
-        </nav>
+        <div className="mt-6">
+          <PartnerBusinessSwitcher
+            basePath={basePath}
+            options={options}
+            selectedId={partner?.id}
+          />
+        </div>
       ) : null}
 
       {profile.status === "selection_required" ? (
@@ -116,6 +107,23 @@ export function PartnerProfileContent({
         </p>
       ) : partner ? (
         <div className="mt-8">
+          <Link
+            href={`/app/partners/restaurants?partner=${encodeURIComponent(partner.id)}`}
+            data-testid="partner-manage-restaurants"
+            className="mb-6 flex min-h-14 flex-wrap items-center justify-between gap-2 rounded-2xl border border-border bg-background-elevated px-5 py-3 transition-colors hover:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            <span>
+              <span className="block text-sm font-semibold text-foreground">
+                Manage Restaurants
+              </span>
+              <span className="block text-sm text-muted-foreground">
+                Edit your assigned restaurant listings, menu and reservation requests.
+              </span>
+            </span>
+            <span aria-hidden className="text-sm font-semibold text-accent">
+              Open →
+            </span>
+          </Link>
           <PartnerProfileForm
             key={partner.id}
             partnerId={partner.id}
@@ -123,6 +131,19 @@ export function PartnerProfileContent({
             partnerStatus={partner.status}
             initial={values}
           />
+          <section
+            aria-label="Partner assistant"
+            data-testid="partner-assistant"
+            className="mt-10 flex h-[60vh] min-h-[26rem] flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-sm sm:h-[34rem]"
+          >
+            <PartnerWorkspaceChat
+              key={userId + ":" + partner.id}
+              userId={userId}
+              partnerId={partner.id}
+              businessName={values.businessName || null}
+              partnerType={partner.type}
+            />
+          </section>
         </div>
       ) : (
         <div

@@ -16,10 +16,11 @@ describe("workflow-steps", () => {
     expect(WORKFLOW_STEP_LABELS.rental).toHaveLength(3);
   });
 
-  it("advances running step index over elapsed time", () => {
-    expect(activeWorkflowStepIndex("running", 3, 0)).toBe(0);
-    expect(activeWorkflowStepIndex("running", 3, 900)).toBe(1);
-    expect(activeWorkflowStepIndex("complete", 3, 0)).toBe(2);
-    expect(activeWorkflowStepIndex("idle", 3, 5000)).toBe(-1);
+  it("does not claim intermediate progress based on elapsed time", () => {
+    expect(activeWorkflowStepIndex("running", 3)).toBe(0);
+    expect(activeWorkflowStepIndex("running", 1)).toBe(0);
+    expect(activeWorkflowStepIndex("running", 10)).toBe(0);
+    expect(activeWorkflowStepIndex("complete", 3)).toBe(2);
+    expect(activeWorkflowStepIndex("idle", 3)).toBe(-1);
   });
 });

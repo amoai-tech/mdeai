@@ -3,6 +3,8 @@ import Script from "next/script";
 import { VercelAnalyticsClient } from "@/components/analytics/vercel-analytics-client";
 import { MdeAppProviders } from "@/components/app-providers";
 import { MdeCopilotKitProvider } from "@/components/copilot/copilot-kit-provider";
+import { AskMdeSheet } from "@/components/chat/ask-mde-sheet";
+import { MobileBottomNav } from "@/components/navigation/mobile-bottom-nav";
 import "./globals.css";
 import "@copilotkit/react-core/v2/styles.css";
 
@@ -48,6 +50,12 @@ export default function RootLayout({
         <MdeAppProviders>
           <MdeCopilotKitProvider>
             {children}
+            {/* SAN-1606 — one route-aware mount for the five-tab phone navigation. The component
+                resolves its own allowlist from the pathname and renders nothing elsewhere. */}
+            <MobileBottomNav />
+            {/* SAN-1600 — one Ask MDE assistant for customer pages; it resolves its own
+                route allowlist and renders nothing where a page already owns its surface. */}
+            <AskMdeSheet />
           </MdeCopilotKitProvider>
         </MdeAppProviders>
         <VercelAnalyticsClient />

@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import Link from "next/link";
-import { useAgent, useCopilotKit } from "@copilotkit/react-core/v2";
+import { useCopilotKit, type AbstractAgent } from "@copilotkit/react-core/v2";
+import { useOptionalConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
 import { ToolErrorChip } from "@/components/copilot/tool-error-chip";
 import { CafeResultCard } from "@/components/copilot/cafe-result-card";
 import { RentalCard } from "@/components/copilot/rental-card";
@@ -10,6 +11,7 @@ import type { RentalSearchMeta } from "@/components/chat/rental-fast-path-contex
 import { EventCard } from "@/components/copilot/event-card";
 import { DomainResults } from "@/components/copilot/domain-results";
 import { ToolPinsSync } from "@/components/copilot/tool-pins-sync";
+import { useCurrentSearchToolResult } from "@/components/copilot/search-tool-result-ownership";
 import { EmptyState } from "@/components/empty/empty-state";
 import { WebCitationList } from "@/components/copilot/web-citation-list";
 import {
@@ -26,23 +28,9 @@ import { normalizeToolEnvelope, unwrapAgUiToolPayload } from "@/lib/normalize-to
 import { visibleEventSearchReasons } from "@/lib/event-search-fast-path";
 import { toDetailRental } from "@/lib/rentals/chat-rental-detail";
 import { emptyRentalNotice, unappliedRentalNotice } from "@/lib/rental-display";
+import { duplicateListingNotes } from "@/lib/rentals/duplicate-listings";
 import { normalizeToolOutput } from "@/platform/maps/normalize-tool-output";
 import { parseGroundedToolResult } from "@/lib/parse-grounded-tool-result";
-
-const CUSTOMER_VISIBLE_RENTAL_RANK_FACTORS = new Set([
-  "hybrid_semantic",
-  "neighborhood_profile",
-  "neighborhood",
-  "digital_nomad_score",
-]);
-
-export function filterCustomerVisibleRentalRankExplanation<
-  T extends { factor: string },
->(entries: T[]): T[] {
-  return entries.filter((entry) =>
-    CUSTOMER_VISIBLE_RENTAL_RANK_FACTORS.has(entry.factor),
-  );
-}
 
 function rentalPinId(listingId: string) {
   return `rental-${listingId}`;
@@ -125,6 +113,7 @@ export function GroundedNightlifeResults({ result }: { result: unknown }) {
   const nightlifeRows = rows.map((r, index) =>
     toNightlifeVenueDetail(r, index + 1),
   );
+  const mappedPinIds = new Set(normalizeToolOutput("grounded", result).pins.map((pin) => pin.id));
 
   useGroundedListScroll(listRef);
 
@@ -148,7 +137,7 @@ export function GroundedNightlifeResults({ result }: { result: unknown }) {
               detailsTestId="nightlife-details-cta"
               bookingTestId="nightlife-booking-cta"
               mediaPlaceholderLabel="Bar"
-              pinId={detail.pinId}
+              pinId={mappedPinIds.has(detail.pinId) ? detail.pinId : undefined}
               rank={detail.rank ?? 1}
               title={detail.title}
               mapsUrl={detail.mapsUrl}
@@ -167,7 +156,7 @@ export function GroundedNightlifeResults({ result }: { result: unknown }) {
               fieldMaskVersion={detail.fieldMaskVersion}
               groundingSource={detail.groundingSource}
               selected={selectedPinId === detail.pinId}
-              onSelect={() => panToPin(detail.pinId)}
+              onSelect={mappedPinIds.has(detail.pinId) ? () => panToPin(detail.pinId) : undefined}
               onOpenDetails={() =>
                 openNightlifeDetail(detail, nightlifeRows)
               }
@@ -186,6 +175,7 @@ export function GroundedCafeResults({ result }: { result: unknown }) {
   const listRef = useRef<HTMLDivElement>(null);
   const { results: rows } = parseGroundedToolResult(result);
   const cafeRows = rows.map((r, index) => toCafeVenueDetail(r, index + 1));
+  const mappedPinIds = new Set(normalizeToolOutput("grounded", result).pins.map((pin) => pin.id));
 
   useGroundedListScroll(listRef);
 
@@ -206,7 +196,7 @@ export function GroundedCafeResults({ result }: { result: unknown }) {
               key={detail.pinId}
               testId="grounded-card"
               resultKind="cafe"
-              pinId={detail.pinId}
+              pinId={mappedPinIds.has(detail.pinId) ? detail.pinId : undefined}
               rank={detail.rank ?? 1}
               title={detail.title}
               mapsUrl={detail.mapsUrl}
@@ -225,7 +215,7 @@ export function GroundedCafeResults({ result }: { result: unknown }) {
               fieldMaskVersion={detail.fieldMaskVersion}
               groundingSource={detail.groundingSource}
               selected={selectedPinId === detail.pinId}
-              onSelect={() => panToPin(detail.pinId)}
+              onSelect={mappedPinIds.has(detail.pinId) ? () => panToPin(detail.pinId) : undefined}
               onOpenDetails={() => openCafeDetail(detail, cafeRows)}
               onBookRequest={() => openCafeBooking(detail)}
             />
@@ -278,9 +268,6 @@ export function RentalResults({
   const emptyUnappliedNote = rows.length
     ? ""
     : emptyRentalNotice(unappliedRequests);
-  const rankExplanation = filterCustomerVisibleRentalRankExplanation(
-    envelope.rankExplanation ?? [],
-  );
   const searchParams = searchMeta?.params;
   // Intelligent search ranks a bounded candidate pool; only the structured
   // Supabase count is exact. Never present a candidate count as exhaustive.
@@ -294,6 +281,9 @@ export function RentalResults({
     () => new Set(normalizeToolOutput("rental", result).pins.map((pin) => pin.id)),
     [result],
   );
+  // SAN-1235 — the same duplicate rule the /rentals page uses. Two feeds for one home must not
+  // look like two apartments in a chat answer, which is exactly what the production envelope did.
+  const duplicateNotes = duplicateListingNotes(rows);
 
   useEffect(() => {
     if (!selectedPinId || !listRef.current) return;
@@ -334,21 +324,6 @@ export function RentalResults({
         <p className="text-xs text-muted-foreground" data-testid="rental-unapplied-requests-note">
           {unappliedNote}
         </p>
-      ) : null}
-      {rows.length > 0 && rankExplanation.length > 0 ? (
-        <div
-          className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
-          data-testid="rank-explanation-rental"
-        >
-          <p className="font-medium text-foreground">Why these rentals</p>
-          <ul className="mt-1 list-inside list-disc">
-            {rankExplanation.map((entry) => (
-              <li key={`${entry.factor}-${entry.note}`}>
-                {entry.factor}: {entry.note}
-              </li>
-            ))}
-          </ul>
-        </div>
       ) : null}
       {rows.length === 0 ? (
         <EmptyState
@@ -409,6 +384,7 @@ export function RentalResults({
               amenities={r.amenities}
               tags={r.tags}
               availability={r.availability}
+              duplicateNote={duplicateNotes.get(r.id)}
               featured={index === 0}
               searchParams={searchParams}
               selected={hasPin && selectedPinId === pinId}
@@ -433,9 +409,8 @@ export function RentalResults({
   );
 }
 
-/** Real follow-up actions for empty event results, using the existing Concierge agent. */
-function EventSearchEmptyState() {
-  const { agent, isReady } = useAgent({ agentId: "conciergeAgent" });
+/** Provider-required hooks live only in this child, which is never rendered in deterministic E2E. */
+function LiveEventSearchSuggestions({ agent, isReady }: { agent: AbstractAgent; isReady: boolean }) {
   const { copilotkit } = useCopilotKit();
   const [failed, setFailed] = useState(false);
   const sendQuery = async (query: string) => {
@@ -448,6 +423,7 @@ function EventSearchEmptyState() {
       setFailed(true);
     }
   };
+
   return (
     <>
       <EmptyState
@@ -465,10 +441,30 @@ function EventSearchEmptyState() {
   );
 }
 
+/** The deterministic chat shares this UI but intentionally has no CopilotKitProvider. */
+function EventSearchEmptyState() {
+  const concierge = useOptionalConciergeCoAgent();
+  if (concierge?.agent) {
+    return <LiveEventSearchSuggestions agent={concierge.agent} isReady={concierge.isReady} />;
+  }
+  return (
+    <EmptyState
+      testId="events-empty"
+      title="No events found"
+      description="Try a different date range or neighborhood."
+      suggestions={[
+        { label: "Events this weekend", testId: "events-empty-suggest-weekend", disabled: true },
+        { label: "Salsa in Poblado", testId: "events-empty-suggest-salsa", disabled: true },
+      ]}
+    />
+  );
+}
+
 export function EventResults({ result }: { result: unknown }) {
   const { selectedPinId, panToPin } = useMapContext();
   const { openVenueDetail } = useRentalUi();
   const { setRows, setWebCitations } = useEventSearchResults();
+  const isCurrent = useCurrentSearchToolResult();
   const listRef = useRef<HTMLDivElement>(null);
   const raw = unwrapAgUiToolPayload(result);
   const validEnvelope = !!raw && typeof raw === "object" && !Array.isArray(raw) &&
@@ -489,13 +485,16 @@ export function EventResults({ result }: { result: unknown }) {
     venue: string;
     neighborhood: string;
     startsAt: string;
-    pricePerTicket: number;
+    pricePerTicket: number | null;
+    canBuyTickets?: boolean;
+    ticketUrl?: string;
     currency?: string;
     imageUrl?: string;
     sourceUrl?: string;
   }>;
 
   useEffect(() => {
+    if (!isCurrent) return;
     const parsed = normalizeToolEnvelope(result);
     const list = (parsed.results ?? []) as Array<{
       id: string;
@@ -503,7 +502,10 @@ export function EventResults({ result }: { result: unknown }) {
       venue?: string;
       neighborhood?: string;
       startsAt: string;
-      pricePerTicket?: number;
+      pricePerTicket?: number | null;
+      currency?: string;
+      canBuyTickets?: boolean;
+      ticketUrl?: string;
       imageUrl?: string;
       sourceUrl?: string;
       mapsUrl?: string | null;
@@ -526,13 +528,16 @@ export function EventResults({ result }: { result: unknown }) {
         venue: e.venue ?? "Medellín",
         neighborhood: e.neighborhood ?? "Medellín",
         startsAt: e.startsAt,
-        pricePerTicket: e.pricePerTicket ?? 0,
+        pricePerTicket: e.pricePerTicket ?? null,
+        currency: e.currency,
+        canBuyTickets: e.canBuyTickets,
+        ticketUrl: e.ticketUrl,
         imageUrl: e.imageUrl,
         sourceUrl: e.sourceUrl ?? e.mapsUrl ?? undefined,
       })),
     );
     setWebCitations(validCitations);
-  }, [result, setRows, setWebCitations]);
+  }, [result, setRows, setWebCitations, isCurrent]);
 
   useEffect(() => {
     if (!selectedPinId || !listRef.current) return;
@@ -569,7 +574,7 @@ export function EventResults({ result }: { result: unknown }) {
           {rows.map((e) => {
           const pinId = eventPinId(e.id);
           const hasPin = pinnedIds.has(pinId);
-          const ticketUrl = `/events/${e.id}`;
+          const ticketUrl = e.ticketUrl ?? `/events/${e.id}`;
           const selectOnMap = () => {
             if (hasPin) panToPin(pinId);
           };
@@ -584,6 +589,8 @@ export function EventResults({ result }: { result: unknown }) {
               venue: e.venue,
               startsAt: e.startsAt,
               pricePerTicket: e.pricePerTicket,
+              currency: e.currency,
+              canBuyTickets: e.canBuyTickets === true,
               imageUrl: e.imageUrl,
               ticketUrl,
             });
@@ -598,6 +605,7 @@ export function EventResults({ result }: { result: unknown }) {
               neighborhood={e.neighborhood}
               startsAt={e.startsAt}
               pricePerTicket={e.pricePerTicket}
+              canBuyTickets={e.canBuyTickets === true}
               currency={e.currency}
               imageUrl={e.imageUrl}
               ticketUrl={ticketUrl}

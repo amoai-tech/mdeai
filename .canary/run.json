@@ -1,0 +1,27 @@
+{
+  "setup": {
+    "services": [
+      {
+        "name": "mastra",
+        "exec": "bash",
+        "args": [
+          "-c",
+          "cd /workspace && nohup npm run dev:agent > /tmp/mde-canary-mastra.log 2>&1 < /dev/null & disown"
+        ],
+        "port": 4111,
+        "healthCheck": "/"
+      },
+      {
+        "name": "web",
+        "exec": "bash",
+        "args": [
+          "-c",
+          "cd /workspace && nohup npm run dev:ui > /tmp/mde-canary-web.log 2>&1 < /dev/null & disown"
+        ],
+        "port": 3001,
+        "healthCheck": "/",
+        "entrypoint": true
+      }
+    ]
+  }
+}

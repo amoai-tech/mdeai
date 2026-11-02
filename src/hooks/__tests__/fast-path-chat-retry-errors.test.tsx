@@ -5,6 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { useEventSearchFastPath } from "@/hooks/use-event-search-fast-path";
 import { useRestaurantSearchFastPath } from "@/hooks/use-restaurant-search-fast-path";
 import { useGroundedSearchFastPath } from "@/hooks/use-grounded-search-fast-path";
+import { useEventVenueBookingFastPath } from "@/hooks/use-event-venue-booking-fast-path";
 
 const mocks = vi.hoisted(() => ({
   setToolResult: vi.fn(),
@@ -24,6 +25,9 @@ vi.mock("@/components/chat/event-local-chat-context", () => ({
     showExchange: mocks.showExchange,
     clearLocalMessages: mocks.clearLocalMessages,
   }),
+}));
+vi.mock("@/components/chat/rental-fast-path-context", () => ({
+  useRentalFastPath: () => ({ setToolResult: mocks.setToolResult, setSearchMeta: vi.fn() }),
 }));
 vi.mock("@/components/chat/event-fast-path-context", () => ({
   useEventFastPath: () => ({ setToolResult: mocks.setToolResult }),
@@ -121,4 +125,35 @@ describe("chat fast-path failures reach operation-specific Retry", () => {
       await expect(hook.handleRestaurantChip({ id: "test", label: "Italian", group: "cuisine", cuisine: "Italian" } as Parameters<typeof hook.handleRestaurantChip>[0])).resolves.toMatchObject({ handled: false });
     });
   });
+});
+
+/** SAN-1559: a busy fast-path must not silently acknowledge a second chat send. */
+describe("SAN-1559 busy chat sends", () => {
+  const cases = [
+    { name: "event", useHook: useEventSearchFastPath, first: "salsa events this weekend", second: "music events tonight" },
+    { name: "restaurant", useHook: useRestaurantSearchFastPath, first: "fine dining modern poblado", second: "Italian restaurants in Poblado" },
+    { name: "grounded café", useHook: useGroundedSearchFastPath, first: "good specialty coffee in Laureles", second: "best cafes in Poblado" },
+    { name: "private event venue", useHook: useEventVenueBookingFastPath, first: "need a venue for a birthday in Poblado", second: "venue for a wedding in Laureles" },
+  ];
+
+  for (const scenario of cases) {
+    it(`${scenario.name}: declines a busy second message for Concierge fallback without clearing current results`, async () => {
+      let finish!: (response: Response) => void;
+      const inflight = new Promise<Response>((resolve) => { finish = resolve; });
+      const fetchMock = vi.fn().mockReturnValueOnce(inflight).mockResolvedValue(new Response(JSON.stringify({ results: [] }), { status: 200 }));
+      vi.stubGlobal("fetch", fetchMock);
+      const hook = renderHook(scenario.useHook);
+      let first!: Promise<boolean>;
+      act(() => { first = hook.handleUserMessage(scenario.first); });
+      await act(async () => {
+        expect(await hook.handleUserMessage(scenario.second)).toBe(false);
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(mocks.clearLocalMessages).toHaveBeenCalledTimes(1);
+      await act(async () => {
+        finish(new Response(JSON.stringify({ results: [] }), { status: 200 }));
+        await first;
+      });
+    });
+  }
 });

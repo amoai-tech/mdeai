@@ -2,6 +2,21 @@ import { describe, expect, it } from "vitest";
 import { mapAdkGroundingPins } from "./map-adk-grounding-pins";
 
 describe("mapAdkGroundingPins", () => {
+  it("does not invent equator coordinates for missing, partial, or nonfinite provider positions", () => {
+    const rows = mapAdkGroundingPins({
+      places: [],
+      pins: [
+        { id: "missing", title: "Missing", latitude: null, longitude: -75.58 },
+        { id: "partial", title: "Partial", latitude: 6.24 },
+        { id: "invalid", title: "Invalid", latitude: 91, longitude: -75.58 },
+        { id: "real-zero", title: "Equator", latitude: 0, longitude: 0 },
+      ],
+      attribution: [], citations: [], confidence: 0, metadata: {},
+    });
+    expect(rows.map((r) => r.id)).toEqual(["real-zero"]);
+    expect(rows[0]).toMatchObject({ latitude: 0, longitude: 0 });
+  });
+
   it("maps MCP pins with real titles", () => {
     const rows = mapAdkGroundingPins({
       places: [],

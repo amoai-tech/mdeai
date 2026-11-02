@@ -42,6 +42,39 @@ describe("VenueBrowseCard", () => {
     expect(heroIndex).toBeLessThan(headingIndex);
   });
 
+  it.each(["cafe", "nightlife"] as const)("offers an Ask selection even without map coordinates for %s", (kind) => {
+    const listing = kind === "cafe" ? cafe : nightlife;
+    const html = renderToStaticMarkup(<VenueBrowseCard kind={kind} listing={listing} onAskSelect={() => {}} selectedForAsk />);
+    expect(html).toContain('data-testid="venue-ask-select"');
+    expect(html).toContain('aria-pressed="true"');
+    expect(html).toContain('Clear selection');
+  });
+
+  it.each(["cafe", "nightlife"] as const)("keeps %s compact in inline Nova feed", (kind) => {
+    const html = renderToStaticMarkup(<VenueBrowseCard kind={kind} listing={kind === "cafe" ? cafe : nightlife} mediaLayout="inline" />);
+    expect(html).toContain("w-24");
+    expect(html).toContain("aspect-[16/10]");
+    expect(html).not.toContain('px-3 pt-3');
+  });
+
+  it("shows map selection only when a real pin exists", () => {
+    const mapped = renderToStaticMarkup(<VenueBrowseCard kind="cafe" listing={cafe}
+      pinId="venue-cafe-1" selectedForMap onMapSelect={() => {}} />);
+    expect(mapped).toContain('data-pin-id="venue-cafe-1"');
+    expect(mapped).toContain('data-testid="venue-map-select"');
+    expect(mapped).toContain("Selected on map");
+    expect(mapped).toContain('aria-pressed="true"');
+
+    const dangling = renderToStaticMarkup(<VenueBrowseCard kind="cafe" listing={cafe}
+      onMapSelect={() => {}} onAskSelect={() => {}} />);
+    expect(dangling).not.toContain('data-testid="venue-map-select"');
+
+    const unmapped = renderToStaticMarkup(<VenueBrowseCard kind="cafe" listing={cafe}
+      onAskSelect={() => {}} />);
+    expect(unmapped).not.toContain('data-testid="venue-map-select"');
+    expect(unmapped).toContain('data-testid="venue-ask-select"');
+  });
+
   it("renders the nightlife contract with its own test ids", () => {
     const html = renderToStaticMarkup(
       <VenueBrowseCard kind="nightlife" listing={nightlife} />,

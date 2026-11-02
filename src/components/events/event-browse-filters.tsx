@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useId, useState, type ReactNode } from "react";
+import { ChevronDown } from "lucide-react";
 import { toggleVariants } from "@/components/ui/toggle";
 import { cn } from "@/lib/utils";
 import type { DateWindow, EventCategory } from "@/mastra/tools/search-events";
@@ -62,6 +64,21 @@ const filterChipClass = cn(
   toggleVariants({ variant: "outline", size: "sm" }),
   "min-h-9 rounded-full px-3",
 );
+const activeChipClass = "border-primary bg-primary/10 text-primary";
+
+/** One labelled chip row. Chips are navigation links, so the active one is `aria-current`, not `aria-pressed`. */
+function FilterGroup({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div
+      role="group"
+      aria-label={`${label} filters`}
+      className="flex flex-wrap items-center gap-x-2 gap-y-1.5"
+    >
+      <span className="mr-1 text-xs font-medium text-muted-foreground">{label}</span>
+      {children}
+    </div>
+  );
+}
 
 type EventBrowseFiltersProps = {
   category: EventCategory | null;
@@ -79,84 +96,75 @@ export function EventBrowseFilters({
   const activeDateWindow = dateWindow ?? "any";
   const dateForUrl =
     activeDateWindow === "any" ? null : activeDateWindow;
+  const moreId = useId();
+  // Secondary filters collapse on phones only; an applied one keeps the panel open so it is never hidden.
+  const hasSecondary = Boolean(neighborhood || price);
+  const [moreOpen, setMoreOpen] = useState(hasSecondary);
+  const showMore = moreOpen || hasSecondary;
+  const hasAny = Boolean(category || hasSecondary || dateForUrl);
 
   return (
-    <>
-      <div>
-        <p className="mb-2 text-xs font-medium text-muted-foreground">Date</p>
-        <div
-          role="group"
-          aria-label="Date filters"
-          className="flex flex-wrap gap-2"
-        >
-          {DATE_WINDOWS.map(({ value, label }) => {
-            const active = activeDateWindow === value;
-            return (
-              <Link
-                key={value}
-                href={buildFilterUrl({
-                  category,
-                  neighborhood,
-                  dateWindow: toggleDateWindow(dateWindow, value),
-                  price,
-                })}
-                aria-pressed={active}
-                data-testid={`events-filter-date-${value.replace(/_/g, "-")}`}
-                className={cn(
-                  filterChipClass,
-                  active && "border-primary bg-primary/10 text-primary",
-                )}
-              >
-                {label}
-              </Link>
-            );
-          })}
-        </div>
-      </div>
+    <div className="flex flex-wrap items-center gap-x-6 gap-y-2" data-testid="events-filters">
+      <FilterGroup label="Date">
+        {DATE_WINDOWS.map(({ value, label }) => {
+          const active = activeDateWindow === value;
+          return (
+            <Link
+              key={value}
+              href={buildFilterUrl({
+                category,
+                neighborhood,
+                dateWindow: toggleDateWindow(dateWindow, value),
+                price,
+              })}
+              aria-current={active ? "true" : undefined}
+              data-testid={`events-filter-date-${value.replace(/_/g, "-")}`}
+              className={cn(filterChipClass, active && activeChipClass)}
+            >
+              {label}
+            </Link>
+          );
+        })}
+      </FilterGroup>
 
-      <div>
-        <p className="mb-2 text-xs font-medium text-muted-foreground">
-          Category
-        </p>
-        <div
-          role="group"
-          aria-label="Category filters"
-          className="flex flex-wrap gap-2"
-        >
-          {CATEGORIES.map(({ value, label }) => {
-            const active = category === value;
-            return (
-              <Link
-                key={value}
-                href={buildFilterUrl({
-                  category: toggleChip(category, value),
-                  neighborhood,
-                  dateWindow: dateForUrl,
-                  price,
-                })}
-                aria-pressed={active}
-                data-testid={`events-filter-category-${value}`}
-                className={cn(
-                  filterChipClass,
-                  active && "border-primary bg-primary/10 text-primary",
-                )}
-              >
-                {label}
-              </Link>
-            );
-          })}
-        </div>
-      </div>
+      <FilterGroup label="Category">
+        {CATEGORIES.map(({ value, label }) => {
+          const active = category === value;
+          return (
+            <Link
+              key={value}
+              href={buildFilterUrl({
+                category: toggleChip(category, value),
+                neighborhood,
+                dateWindow: dateForUrl,
+                price,
+              })}
+              aria-current={active ? "true" : undefined}
+              data-testid={`events-filter-category-${value}`}
+              className={cn(filterChipClass, active && activeChipClass)}
+            >
+              {label}
+            </Link>
+          );
+        })}
+      </FilterGroup>
 
-      <div>
-        <p className="mb-2 text-xs font-medium text-muted-foreground">
-          Neighborhood
-        </p>
-        <div
-          role="group"
-          aria-label="Neighborhood filters"
-          className="flex flex-wrap gap-2"
+      {hasSecondary ? null : (
+        <button
+          type="button"
+          aria-expanded={moreOpen}
+          aria-controls={moreId}
+          data-testid="events-filter-more"
+          onClick={() => setMoreOpen((open) => !open)}
+          className={cn(filterChipClass, "gap-1 sm:hidden")}
         >
+          More filters
+          <ChevronDown className={cn("size-4 transition-transform", moreOpen && "rotate-180")} aria-hidden />
+        </button>
+      )}
+
+      <div id={moreId} className={cn(showMore ? "flex" : "hidden", "w-full flex-col gap-2 sm:contents")}>
+        <FilterGroup label="Neighborhood">
           {NEIGHBORHOODS.map((n) => {
             const active = neighborhood === n;
             return (
@@ -168,27 +176,17 @@ export function EventBrowseFilters({
                   dateWindow: dateForUrl,
                   price,
                 })}
-                aria-pressed={active}
+                aria-current={active ? "true" : undefined}
                 data-testid={`events-filter-neighborhood-${n.toLowerCase().replace(/\s+/g, "-")}`}
-                className={cn(
-                  filterChipClass,
-                  active && "border-primary bg-primary/10 text-primary",
-                )}
+                className={cn(filterChipClass, active && activeChipClass)}
               >
                 {n}
               </Link>
             );
           })}
-        </div>
-      </div>
+        </FilterGroup>
 
-      <div>
-        <p className="mb-2 text-xs font-medium text-muted-foreground">Price</p>
-        <div
-          role="group"
-          aria-label="Price filters"
-          className="flex flex-wrap gap-2"
-        >
+        <FilterGroup label="Price">
           {PRICES.map(({ value, label }) => {
             const active = price === value;
             return (
@@ -200,19 +198,26 @@ export function EventBrowseFilters({
                   dateWindow: dateForUrl,
                   price: toggleChip(price, value),
                 })}
-                aria-pressed={active}
+                aria-current={active ? "true" : undefined}
                 data-testid={`events-filter-price-${value}`}
-                className={cn(
-                  filterChipClass,
-                  active && "border-primary bg-primary/10 text-primary",
-                )}
+                className={cn(filterChipClass, active && activeChipClass)}
               >
                 {label}
               </Link>
             );
           })}
-        </div>
+        </FilterGroup>
       </div>
-    </>
+
+      {hasAny ? (
+        <Link
+          href="/events"
+          data-testid="events-filter-clear"
+          className="text-sm text-primary underline-offset-4 hover:underline"
+        >
+          Clear filters
+        </Link>
+      ) : null}
+    </div>
   );
 }

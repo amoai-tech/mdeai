@@ -16,6 +16,29 @@ loadEnvLocalForE2E();
 // Local OS Chrome fallback; CI uses its pinned Playwright browser by default.
 test.use({ launchOptions: process.env.MDE_E2E_CHROME_PATH
   ? { executablePath: process.env.MDE_E2E_CHROME_PATH } : {} });
+/**
+ * Inject a real signed-in session for the current Playwright target.
+ * localhost works in local CI; production requires the www.mdeai.co cookie scope.
+ * An absent target must fail explicitly instead of making auth tests false-green.
+ */
+async function injectSessionForTestOrigin(
+  context: Parameters<typeof injectSession>[0],
+  session: Awaited<ReturnType<typeof getTestSession>>,
+): Promise<void> {
+  const baseURL = test.info().project.use.baseURL;
+  if (!baseURL) throw new Error("Voting E2E requires an explicit Playwright baseURL");
+  const origin = new URL(baseURL);
+  await injectSession(context, session, {
+    host: origin.hostname,
+    secure: origin.protocol === "https:",
+  });
+  const cookies = await context.cookies(origin.origin);
+  expect(
+    cookies.some((cookie) => cookie.name.startsWith("sb-") && cookie.name.endsWith("-auth-token")),
+    "the signed-in QA cookie must be readable by the tested site",
+  ).toBe(true);
+}
+
 const restaurantId = process.env.SAN1469_TEST_RESTAURANT_ID;
 const contestId = process.env.SAN1469_TEST_CONTEST_ID;
 const entityId = process.env.SAN1469_TEST_ENTITY_ID;
@@ -88,7 +111,7 @@ async function proveSecondBrowserRecovery(
     baseURL: test.info().project.use.baseURL as string,
   });
   try {
-    await injectSession(secondContext, session);
+    await injectSessionForTestOrigin(secondContext, session);
     const secondPage = await secondContext.newPage();
     await secondPage.goto("/restaurants/" + ids.restaurantId + "?contest_id=" + ids.contestId);
     const secondKey = await secondPage.evaluate(({ contest, entity, user }) =>
@@ -257,7 +280,7 @@ test.skip(!configured, "Needs linked SAN-1483 restaurant/entry IDs, E2E Auth key
       // redirect. Wait for the form to exist before reloading.
       await expect(page.locator('input[name="email"]')).toBeVisible({ timeout: 30_000 });
       const session = await getTestSession(identity.email);
-      await injectSession(page.context(), session);
+      await injectSessionForTestOrigin(page.context(), session);
       await page.reload(); // /login recognizes the real Supabase session and redirects back.
       // Predicate instead of a constructed RegExp: no dynamic pattern to backtrack on.
       await expect(page).toHaveURL((url) => url.pathname === "/restaurants/" + restaurantId && url.searchParams.get("contest_id") === contestId);

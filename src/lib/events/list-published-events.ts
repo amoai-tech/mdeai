@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { summarizeEventTicketOffer, type EventTicketTier } from "./event-ticket-offer";
 import { NON_QA_EVENT_SLUG_FILTER, QA_EVENT_NAME_SQL_PATTERN } from "./public-event-fixtures";
 import type { DateWindow, EventCategory } from "@/mastra/tools/search-events";
 import {
@@ -26,9 +27,16 @@ export type PublishedEventListItem = {
   ticketUrl: string;
   category: EventCategory;
   status: "published";
+  /** Saved venue position; absent when the event has no valid coordinates. Never derived. */
+  latitude?: number;
+  longitude?: number;
+  /** Real Google Maps link saved on the event, when it is a valid http(s) URL. */
+  mapsUrl?: string;
 };
 
 export type ListPublishedEventsQuery = {
+  /** Exact public event IDs, for rendering the same catalog cards after Ask MDE. */
+  ids?: string[];
   category?: EventCategory;
   neighborhood?: string;
   dateWindow?: DateWindow;
@@ -58,35 +66,38 @@ type EventBrowseRow = {
   primary_image_url: string | null;
   ticket_url: string | null;
   status: string;
-  event_tickets?: {
-    price_cents: number;
-    currency: string;
-    qty_total: number;
-    qty_sold: number;
-    qty_pending: number;
-    sale_starts_at: string | null;
-    sale_ends_at: string | null;
-  }[];
+  latitude?: number | string | null;
+  longitude?: number | string | null;
+  maps_url?: string | null;
+  event_tickets?: EventTicketTier[];
 };
 
 const EVENT_LIST_SELECT =
-  "id, slug, name, event_type, address, city, event_start_time, currency, primary_image_url, ticket_url, status";
+  "id, slug, name, event_type, address, city, event_start_time, currency, primary_image_url, ticket_url, status, latitude, longitude, maps_url";
+
+/** Postgres numeric arrives as a string; only finite numbers are coordinates. */
+function toCoordinate(value: number | string | null | undefined): number | undefined {
+  if (value == null) return undefined;
+  // Plain decimals only: Number() would also accept hex ("0x10"), exponents and padding.
+  if (typeof value === "string" && !/^-?\d+(\.\d+)?$/.test(value.trim())) return undefined;
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+function toHttpUrl(value: string | null | undefined): string | undefined {
+  if (!value) return undefined;
+  try {
+    const { protocol } = new URL(value);
+    return protocol === "https:" || protocol === "http:" ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 export function mapEventRowToBrowseItem(row: EventBrowseRow): PublishedEventListItem {
   const slug = row.slug?.trim() || row.id;
   const ticketUrl = row.ticket_url?.trim() || `/events/${slug}`;
-  const tiers = [...(row.event_tickets ?? [])].sort(
-    (a, b) => a.price_cents - b.price_cents,
-  );
-  const now = Date.now();
-  const availableTiers = tiers.filter(
-    (tier) =>
-      tier.qty_total > tier.qty_sold + tier.qty_pending &&
-      (!tier.sale_starts_at || Date.parse(tier.sale_starts_at) <= now) &&
-      (!tier.sale_ends_at || Date.parse(tier.sale_ends_at) >= now),
-  );
-  const cheapest = availableTiers[0] ?? tiers[0];
-  const canBuyTickets = availableTiers.length > 0;
+  const offer = summarizeEventTicketOffer(row.event_tickets);
 
   return {
     id: row.id,
@@ -96,13 +107,16 @@ export function mapEventRowToBrowseItem(row: EventBrowseRow): PublishedEventList
     venue: row.address ?? "Medellín",
     neighborhood: extractNeighborhood(row.address, row.city),
     startsAt: row.event_start_time,
-    pricePerTicket: cheapest ? cheapest.price_cents / 100 : null,
-    canBuyTickets,
-    currency: normalizeEventCurrency(cheapest?.currency ?? row.currency),
+    pricePerTicket: offer.pricePerTicket,
+    canBuyTickets: offer.canBuyTickets,
+    currency: normalizeEventCurrency(offer.currency ?? row.currency),
     imageUrl: row.primary_image_url ?? undefined,
     ticketUrl,
     category: mapCategory(row.event_type),
     status: "published",
+    latitude: toCoordinate(row.latitude),
+    longitude: toCoordinate(row.longitude),
+    mapsUrl: toHttpUrl(row.maps_url),
   };
 }
 
@@ -130,6 +144,8 @@ export async function listPublishedEvents(
     .or(NON_QA_EVENT_SLUG_FILTER)
     .eq("event_tickets.is_active", true)
     .eq("event_tickets.is_hidden", false);
+
+  if (query.ids) q = q.in("id", query.ids);
 
   if (query.category) {
     q = q.in("event_type", dbEventTypesForCategory(query.category));

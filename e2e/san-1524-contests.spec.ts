@@ -72,7 +72,10 @@ test.describe("public contest discovery", { tag: ["@contests"] }, () => {
 
   test("restaurant directory links to contest discovery", async ({ page }) => {
     await page.goto("/restaurants");
-    await expect(page.getByRole("link", { name: "Explore restaurant contests" })).toHaveAttribute("href", "/contests");
+    const contestLink = page.getByRole("link", { name: "Explore restaurant contests" });
+    await expect(contestLink).toHaveAttribute("href", "/contests");
+    // WCAG 2.5.3: speech-input users must be able to speak the *visible* label.
+    await expect(contestLink).toHaveText("Explore restaurant contests");
   });
 
   test("lists real contests and opens one", async ({ page }) => {

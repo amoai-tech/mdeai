@@ -221,7 +221,9 @@ export function hybridRowToEventCard( // skipcq: JS-R1005, JS-0067
     venue: row.address ?? "Medellin",
     neighborhood: extractNeighborhood(row.address, row.city),
     startsAt: row.event_start_time ?? new Date().toISOString(),
-    pricePerTicket: num(row.ticket_price_min) ?? 0,
+    // Hydrated from real active ticket tiers by searchEvents before display.
+    pricePerTicket: null,
+    canBuyTickets: false,
     currency: normalizeEventCurrency(row.currency),
     imageUrl: row.primary_image_url ?? "",
     latitude: num(row.latitude),

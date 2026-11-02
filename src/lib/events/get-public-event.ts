@@ -1,9 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { isEventLookupUuid } from "./event-lookup";
 import { NON_QA_EVENT_SLUG_FILTER, QA_EVENT_NAME_SQL_PATTERN } from "./public-event-fixtures";
+import { parseEventFacts } from "./parse-event-facts";
 import { parseEventHostDisplay } from "./parse-host-display";
 import type {
   PublicEventDetail,
+  PublicEventFacts,
   PublicEventHost,
   PublicEventTicket,
   PublicEventVenue,
@@ -19,6 +21,8 @@ type EventRow = {
   event_start_time: string;
   event_end_time: string | null;
   primary_image_url: string | null;
+  source: string | null;
+  maps_url: string | null;
   currency: string | null;
   latitude: number | string | null;
   longitude: number | string | null;
@@ -83,6 +87,7 @@ function mapEvent(
   tickets: PublicEventTicket[],
   host: PublicEventHost | null,
   venue: PublicEventVenue | null,
+  facts: PublicEventFacts | null,
 ): PublicEventDetail {
   return {
     id: row.id,
@@ -94,25 +99,38 @@ function mapEvent(
     startsAt: row.event_start_time,
     endsAt: row.event_end_time,
     imageUrl: row.primary_image_url,
+    source: row.source,
+    mapsUrl: row.maps_url,
     currency: row.currency,
     latitude: toNumber(row.latitude),
     longitude: toNumber(row.longitude),
     host,
     venue,
+    facts,
     tickets,
   };
 }
 
+/**
+ * Why the public event could not be shown. "A database hiccup" and "this event
+ * does not exist" are different answers: the page must 404 only for the second,
+ * otherwise a failed ticket query looks like a deleted event.
+ */
+export type PublicEventResult =
+  | { status: "ok"; event: PublicEventDetail }
+  | { status: "not-found" }
+  | { status: "unavailable" };
+
 /** Public event page fetch — slug or UUID, published/live + active only. */
-export async function getPublicEvent(
+export async function getPublicEventResult(
   slugOrId: string,
-): Promise<PublicEventDetail | null> {
+): Promise<PublicEventResult> {
   const supabase = await createClient();
 
   let eventQuery = supabase
     .from("events")
     .select(
-      "id, slug, name, description, address, city, event_start_time, event_end_time, primary_image_url, currency, latitude, longitude, status, is_active, details, event_venues ( name, address, city )",
+      "id, slug, name, description, address, city, event_start_time, event_end_time, primary_image_url, source, maps_url, currency, latitude, longitude, status, is_active, details, event_venues ( name, address, city )",
     )
     .in("status", ["published", "live"])
     .eq("is_active", true)
@@ -126,7 +144,8 @@ export async function getPublicEvent(
 
   const { data: eventRow, error: eventError } = await eventQuery.maybeSingle();
 
-  if (eventError || !eventRow) return null;
+  if (eventError) return { status: "unavailable" };
+  if (!eventRow) return { status: "not-found" };
 
   const row = eventRow as EventRow;
   const host = parseEventHostDisplay(row.details);
@@ -139,7 +158,18 @@ export async function getPublicEvent(
     .eq("is_active", true)
     .order("position", { ascending: true });
 
-  if (ticketError) return null;
+  if (ticketError) return { status: "unavailable" };
 
-  return mapEvent(row, (ticketRows ?? []).map(mapTicket), host, venue);
+  return {
+    status: "ok",
+    event: mapEvent(row, (ticketRows ?? []).map(mapTicket), host, venue, parseEventFacts(row.details)),
+  };
+}
+
+/** Compatibility wrapper for callers that only need the event (API route, tests). */
+export async function getPublicEvent(
+  slugOrId: string,
+): Promise<PublicEventDetail | null> {
+  const result = await getPublicEventResult(slugOrId);
+  return result.status === "ok" ? result.event : null;
 }

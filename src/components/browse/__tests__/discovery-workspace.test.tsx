@@ -10,6 +10,7 @@ import { DiscoveryWorkspace } from "../DiscoveryWorkspace";
 function render(askComposer?: ReactNode) {
   return renderToStaticMarkup(
     <DiscoveryWorkspace
+      mobileMapTrigger={<button type="button" data-testid="map-trigger-stub">Map</button>}
       testId="rentals-browse"
       activeSlug="rentals"
       title="Rentals in Medellín"
@@ -53,6 +54,17 @@ describe("DiscoveryWorkspace (SAN-1421)", () => {
     expect(html).toContain("lg:h-dvh");
   });
 
+  it("places mobile Map inside the sticky header before filters and cards", () => {
+    const html = render();
+    const header = html.indexOf("<header ");
+    const map = html.indexOf('data-testid="map-trigger-stub"');
+    const filters = html.indexOf('data-testid="filters"');
+    expect(header).toBeGreaterThanOrEqual(0);
+    expect(map).toBeGreaterThan(header);
+    expect(map).toBeLessThan(filters);
+    expect(html).toContain('data-testid="workspace-mobile-map-trigger"');
+  });
+
   it("gives phones a menu button", () => {
     expect(render()).toContain('data-testid="nav-drawer-trigger"');
   });
@@ -64,8 +76,11 @@ describe("DiscoveryWorkspace (SAN-1421)", () => {
 
     expect(composerAt).toBeGreaterThan(resultsAt);
     expect(html).toContain('data-testid="ask-composer"');
-    // Sticky inside the results scroll area, so it stays reachable while the cards scroll.
-    expect(html).toMatch(/data-testid="workspace-ask-composer"[^>]*class="[^"]*sticky bottom-0/);
+    // Sticky inside the results scroll area, so it stays reachable while the cards scroll…
+    expect(html).toMatch(/data-testid="workspace-ask-composer"[^>]*class="[^"]*sticky /);
+    // …pinned above the phone tab bar there (SAN-1606), and back at the edge on desktop.
+    expect(html).toMatch(/data-testid="workspace-ask-composer"[^>]*bottom-\[var\(--mde-mobile-nav-clearance\)\]/);
+    expect(html).toMatch(/data-testid="workspace-ask-composer"[^>]*lg:bottom-0/);
     // The map column is still last on screen.
     expect(html.indexOf('data-testid="workspace-right-column"')).toBeGreaterThan(composerAt);
   });

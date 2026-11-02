@@ -78,6 +78,78 @@ describe("RentalBrowseCard — SAN-1349 viewing CTA truthfulness", () => {
     expect(html).toContain("Constructor");
   });
 
+  it("renders inline 96px photo, honest price and existing viewing action", () => {
+    const html = renderToStaticMarkup(<RentalBrowseCard
+      rental={rowToRental(apartmentRow())}
+      mediaLayout="inline"
+      onSchedule={vi.fn()}
+      onDetails={vi.fn()}
+    />);
+    expect(html).toContain('data-testid="rental-browse-card-photo"');
+    expect(html).toContain("w-24");
+    expect(html).toContain("USD");
+    expect(html).toContain('data-testid="rental-schedule-cta"');
+    expect(html).toContain('data-testid="rental-card-link-rnt_lau_001"');
+  });
+
+  it("explains an exact Laureles 2BR match with real listing evidence", () => {
+    const html = renderToStaticMarkup(<RentalBrowseCard
+      rental={rowToRental(apartmentRow({ price_daily: null, price_monthly: 3_200_000, currency: "COP" }))}
+      matchParams={{ neighborhood: "Laureles", minBedrooms: 2, maxBedrooms: 2, maxPriceMonthly: 3_500_000, budgetCurrency: "COP" }}
+      mediaLayout="inline"
+    />);
+    expect(html).toContain("Why it may fit:");
+    expect(html).toContain("In Laureles");
+    expect(html).toContain("2 BR, as you asked");
+    expect(html).toContain("COP 3,200,000");
+    expect(html).toContain("Wi-Fi listed");
+    expect(html).not.toMatch(/hybrid_semantic|hybrid_search_listings RPC|neighborhood_profile/);
+  });
+
+  it("never claims a mismatched location, bedrooms, or currency is within budget", () => {
+    const html = renderToStaticMarkup(<RentalBrowseCard
+      rental={rowToRental(apartmentRow({ neighborhood: "Envigado", bedrooms: 3, price_monthly: 1200, currency: "USD", amenities: [], wifi_speed: null }))}
+      matchParams={{ neighborhood: "Laureles", minBedrooms: 2, maxBedrooms: 2, maxPriceMonthly: 3_500_000, budgetCurrency: "COP" }}
+    />);
+    expect(html).toContain("Long-stay listed");
+    expect(html).not.toContain("within your");
+    expect(html).not.toContain("as you asked");
+  });
+
+  it("inline card shows the stored $78/night price, never a derived monthly estimate", () => {
+    const html = renderToStaticMarkup(<RentalBrowseCard
+      rental={rowToRental(apartmentRow())}
+      mediaLayout="inline"
+      onSchedule={vi.fn()}
+      onDetails={vi.fn()}
+    />);
+    expect(html).toContain("$78/night");
+    expect(html).not.toContain("~$2,340/mo");
+  });
+
+  it("inline card with a stored monthly price shows only that price, never a derived nightly", () => {
+    const html = renderToStaticMarkup(<RentalBrowseCard
+      rental={rowToRental(apartmentRow({ price_monthly: 2100 }))}
+      mediaLayout="inline"
+      onSchedule={vi.fn()}
+      onDetails={vi.fn()}
+    />);
+    expect(html).toContain("$2,100/mo");
+    expect(html).not.toContain("/night");
+    expect(html).not.toContain("~$");
+  });
+
+  it("inline card with only a stored monthly price shows that price", () => {
+    const html = renderToStaticMarkup(<RentalBrowseCard
+      rental={rowToRental(apartmentRow({ price_daily: null, price_monthly: 2100 }))}
+      mediaLayout="inline"
+      onSchedule={vi.fn()}
+      onDetails={vi.fn()}
+    />);
+    expect(html).toContain("$2,100/mo");
+    expect(html).not.toContain("/night");
+  });
+
   it("shows the schedule CTA exactly when the database computed the listing requestable", () => {
     const html = renderCard({ rental_can_request_viewing: true });
     expect(html).toContain('data-testid="rental-schedule-cta"');

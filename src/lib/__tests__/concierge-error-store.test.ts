@@ -3,6 +3,7 @@ import {
   clearConciergeError,
   getConciergeErrorForThread,
   isExpectedGuestStartup401,
+  classifyConciergeStartupError,
   getConciergeErrorSnapshot,
   reportConciergeError,
 } from "@/lib/concierge-error-store";
@@ -65,6 +66,14 @@ describe("guest startup authorization classification", () => {
       error: { runtimeInfoStatus: 401, message: "Runtime info request failed with status 401" },
     }, false)).toBe(true);
     expect(isExpectedGuestStartup401(probe401, true)).toBe(false);
+  });
+
+  it("defers only a guest startup 401 until authentication settles", () => {
+    expect(classifyConciergeStartupError(probe401, false, true)).toBe("defer");
+    expect(classifyConciergeStartupError(probe401, false, false)).toBe("ignore");
+    expect(classifyConciergeStartupError(probe401, true, false)).toBe("report");
+    expect(classifyConciergeStartupError({ code: "agent_run_failed" }, false, true)).toBe("report");
+    expect(classifyConciergeStartupError({ code: "runtime_info_fetch_failed", context: { runtimeStatus: 500 } }, false, true)).toBe("report");
   });
 
   it("never suppresses while the session is still resolving", () => {

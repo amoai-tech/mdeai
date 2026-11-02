@@ -38,7 +38,8 @@ export type CafeResultCardProps = {
   bookingTestId?: string;
   mediaPlaceholderLabel?: string;
   onBookRequest?: () => void;
-} & CardInteractionProps & {
+} & Omit<CardInteractionProps, "pinId"> & {
+  pinId?: string;
   /** Café rows use `data-result-kind="cafe"`; defaults to cafe when omitted. */
   resultKind?: ResultKind;
 };
@@ -194,11 +195,11 @@ export function CafeResultCard({
       resultKind={resultKind}
       pinId={pinId}
       selected={selected}
-      onPreview={preview}
+      onPreview={onSelect ? preview : undefined}
       bodyRole={onOpenDetails ? "button" : undefined}
       bodyTabIndex={onOpenDetails ? 0 : undefined}
       bodyAriaLabel={`Open details for ${title}`}
-      onBodyClick={onOpenDetails ? openDetails : preview}
+      onBodyClick={onOpenDetails ? openDetails : onSelect ? preview : undefined}
       onBodyKeyDown={
         onOpenDetails
           ? (e) => {

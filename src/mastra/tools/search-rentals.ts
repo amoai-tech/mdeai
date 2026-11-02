@@ -18,6 +18,7 @@ import {
   isRentalSearchUnavailable,
 } from '../lib/rental-search-unavailable';
 import { unappliedRentalRequests } from '@/lib/rental-display';
+import { exactBedroomsFromQueryText } from '@/lib/rental-query-parser';
 import { writeSearchLog, type EmbedStatus } from '../lib/search-logs';
 import type { EmbedFailureReason } from '../lib/query-embedding';
 
@@ -91,6 +92,8 @@ export const RENTAL_PANEL_PHOTO_LIMIT = 12;
 export type RentalQuery = {
   neighborhood?: string;
   minBedrooms?: number;
+  /** Optional inclusive ceiling; browse chips 0/1/2 BR specify both bounds. */
+  maxBedrooms?: number;
   maxPricePerNight?: number;
   /**
    * A monthly budget in the LISTING's own currency (e.g. COP 3,500,000 per month). Applied only
@@ -489,7 +492,10 @@ export function sortForMonthlyStay<T extends Rental>(results: T[]): T[] {
     const aLong = a.tags.includes('long-stay') ? 0 : 1;
     const bLong = b.tags.includes('long-stay') ? 0 : 1;
     if (aLong !== bLong) return aLong - bLong;
-    return a.nightly_price - b.nightly_price;
+    const aPrice = Number.isFinite(a.nightly_price) ? a.nightly_price : Number.POSITIVE_INFINITY;
+    const bPrice = Number.isFinite(b.nightly_price) ? b.nightly_price : Number.POSITIVE_INFINITY;
+    if (aPrice !== bPrice) return aPrice - bPrice;
+    return a.id.localeCompare(b.id);
   });
 }
 
@@ -528,6 +534,9 @@ async function searchRentalsFromSupabase(
     }
     if (typeof query.minBedrooms === 'number') {
       b = b.gte('bedrooms', query.minBedrooms);
+    }
+    if (typeof query.maxBedrooms === 'number') {
+      b = b.lte('bedrooms', query.maxBedrooms);
     }
     // SAN-486 / SAN-1349: one shared availability rule (known move-in date, full-stay coverage or
     // not expired), with "today" as the America/Bogota date the viewing RPC uses.
@@ -568,6 +577,7 @@ async function searchRentalsFromSupabase(
           ascending: true,
           nullsFirst: false,
         })
+        .order('id', { ascending: true })
         .limit(limit),
     );
     const remaining = Math.max(0, limit - confirmed.rows.length);
@@ -590,6 +600,7 @@ async function searchRentalsFromSupabase(
               .neq('currency', budgetCurrency)
               .or(predicate)
               .order('price_daily', { ascending: true, nullsFirst: false })
+              .order('id', { ascending: true })
               .limit(remaining),
           );
     confirmedRows = confirmed.rows;
@@ -597,7 +608,7 @@ async function searchRentalsFromSupabase(
     total = confirmed.count + alternatives.count;
   } else {
     const all = await runQuery(
-      baseQuery().order('price_daily', { ascending: true, nullsFirst: false }).limit(limit),
+      baseQuery().order('price_daily', { ascending: true, nullsFirst: false }).order('id', { ascending: true }).limit(limit),
     );
     confirmedRows = all.rows;
     total = all.count;
@@ -624,13 +635,23 @@ export async function searchRentals(
       (!Number.isFinite(query.maxPriceMonthly) || query.maxPriceMonthly <= 0)) {
     throw new RangeError('Monthly budget must be a finite positive number');
   }
+  for (const [name, value] of [['minBedrooms', query.minBedrooms], ['maxBedrooms', query.maxBedrooms]] as const) {
+    if (value !== undefined && (!Number.isInteger(value) || value < 0)) {
+      throw new RangeError(`${name} must be a nonnegative integer`);
+    }
+  }
+  if (query.minBedrooms !== undefined && query.maxBedrooms !== undefined &&
+      query.minBedrooms > query.maxBedrooms) {
+    throw new RangeError('maxBedrooms must be greater than or equal to minBedrooms');
+  }
   const limit = query.limit ?? 8;
   const client = options?.client ?? getSupabaseClient();
   // Development inventory is already returned by canonical RLS-backed search.
   // Never add a second, allowlisted external search that can duplicate or hide it.
   const developmentMode = client ? await readRentalDevelopmentPhase(client) : false;
 
-  if (query.queryText?.trim()) {
+  // Exact browse/API ceilings use canonical SQL counting, not a truncated semantic candidate window.
+  if (query.queryText?.trim() && query.maxBedrooms === undefined) {
     try {
       const started = Date.now();
       // Load after tool initialization; intelligence search reuses our row-mapping helpers.
@@ -696,10 +717,11 @@ export async function searchRentals(
 export const searchRentalsTool = createTool({
   id: 'search-rentals',
   description:
-    'Search real Supabase Medellín apartment records using phase-aware RLS. Returns cards and the database-computed can_schedule_viewing contract; unpriced listings are shown as price not provided. Development follow-up requests for external-source records are not provider-confirmed appointments. Never invent listing facts or claim a showing is confirmed. Database outages are errors, never no-results.',
+    'For exactly N bedrooms (e.g. two-bedroom), set both minBedrooms=N and maxBedrooms=N; for N+ or at least N, set only minBedrooms. Search real Supabase Medellín apartment records using phase-aware RLS. Returns cards and the database-computed can_schedule_viewing contract; unpriced listings are shown as price not provided. Development follow-up requests for external-source records are not provider-confirmed appointments. Never invent listing facts or claim a showing is confirmed. Database outages are errors, never no-results.',
   inputSchema: z.object({
     neighborhood: z.string().optional().describe('e.g. Laureles, El Poblado, Envigado'),
-    minBedrooms: z.number().int().min(0).optional(),
+    minBedrooms: z.number().int().min(0).optional().describe('Minimum bedrooms. For exactly 2 bedrooms, set minBedrooms=2 AND maxBedrooms=2.'),
+    maxBedrooms: z.number().int().min(0).optional().describe('Maximum bedrooms, inclusive. For a specific bedroom count (e.g. two-bedroom), use the same value as minBedrooms; omit for 2+ or at least 2.'),
     maxPricePerNight: z.number().positive().optional().describe('USD per night'),
     maxPriceMonthly: z
       .number()
@@ -750,6 +772,7 @@ export const searchRentalsTool = createTool({
     const {
       neighborhood,
       minBedrooms,
+      maxBedrooms,
       maxPricePerNight,
       maxPriceMonthly,
       stayType,
@@ -760,6 +783,12 @@ export const searchRentalsTool = createTool({
     // SAN-1502 PR2: use the caller's own RLS-governed client when the runtime
     // supplied one, so an authorized test actor sees development fixtures and
     // everyone else is unchanged.
+    // Prefer an explicit exact bedroom request in the renter's original words over
+    // a model's accidentally broader minimum. The canonical search applies both
+    // constraints in SQL; never remove valid rows in a second UI filter.
+    const exactBedrooms = queryText ? exactBedroomsFromQueryText(queryText) : undefined;
+    const requestedMinBedrooms = exactBedrooms ?? minBedrooms;
+    const requestedMaxBedrooms = exactBedrooms ?? maxBedrooms;
     const rentalClient = context?.requestContext?.get(RENTAL_SUPABASE_KEY) as
       | SupabaseClient
       | undefined;
@@ -767,7 +796,7 @@ export const searchRentalsTool = createTool({
     const { results, source, budgetNote, hybridUsed, rankExplanation } = await runAuditedSearch(
       'search-rentals',
       (q: RentalQuery) => searchRentals(q, options),
-      { neighborhood, minBedrooms, maxPricePerNight, maxPriceMonthly, stayType, budgetCurrency, limit, queryText },
+      { neighborhood, minBedrooms: requestedMinBedrooms, maxBedrooms: requestedMaxBedrooms, maxPricePerNight, maxPriceMonthly, stayType, budgetCurrency, limit, queryText },
       context,
     );
 

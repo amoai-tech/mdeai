@@ -165,6 +165,8 @@ export function eventCardsToToolEnvelope(
       neighborhood: e.neighborhood,
       startsAt: e.startsAt,
       pricePerTicket: e.pricePerTicket,
+      canBuyTickets: e.canBuyTickets,
+      ticketUrl: e.ticketUrl,
       currency: e.currency,
       imageUrl: e.imageUrl,
       sourceUrl: e.sourceUrl ?? e.mapsUrl ?? undefined,

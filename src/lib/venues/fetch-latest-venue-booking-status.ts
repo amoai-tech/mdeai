@@ -11,19 +11,27 @@ export type LatestVenueBookingStatus = {
 
 export async function fetchLatestVenueBookingStatus(
   supabase: SupabaseClient<Database>,
-  input: { placeId: string; venueKind: VenueBookingKind },
+  input: { userId: string; placeId?: string; restaurantId?: string; venueKind: VenueBookingKind },
 ): Promise<
   | { ok: true; data: LatestVenueBookingStatus | null }
   | { ok: false; message: string }
 > {
-  if (!input.placeId || input.placeId.length < 8) {
+  // MDE restaurants use their stable UUID even when Google identity is absent
+  // or changes. External restaurants, cafés and clubs continue using Place ID.
+  const restaurantId = input.venueKind === "restaurant" ? input.restaurantId?.trim() : undefined;
+  const resourceColumn = restaurantId ? "restaurant_id" : "place_id";
+  const resourceId = restaurantId ?? input.placeId?.trim();
+  if (!input.userId || !resourceId || resourceId.length < 8) {
     return { ok: true, data: null };
   }
 
   const { data, error } = await supabase
     .from("venue_booking_requests")
     .select("id, status, created_at")
-    .eq("place_id", input.placeId)
+    // Partner/admin RLS also grants read access, so the customer chip must
+    // explicitly scope to the signed-in user's own request.
+    .eq("user_id", input.userId)
+    .eq(resourceColumn, resourceId)
     .eq("venue_kind", input.venueKind)
     .order("created_at", { ascending: false })
     .limit(1)

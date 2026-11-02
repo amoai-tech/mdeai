@@ -21,6 +21,7 @@ describe("isAgentlessRoute", () => {
 
   it("keeps every route that owns an agent surface excluded", () => {
     for (const pathname of [
+      "/", // Home does not mount discovery AI.
       "/login",
       "/signup",
       "/auth/callback",
@@ -34,6 +35,7 @@ describe("isAgentlessRoute", () => {
       "/host/rentals/listings",
       "/host/rentals/onboarding",
       "/partners/profile",
+      "/partners/signup",
       "/me/tickets",
       "/me/tickets/abc",
       "/admin",
@@ -45,14 +47,25 @@ describe("isAgentlessRoute", () => {
     }
   });
 
+  it("keeps legacy wallet list and QR detail off the discovery provider", () => {
+    for (const pathname of [
+      "/me/tickets",
+      "/me/tickets/",
+      "/me/tickets/order-123",
+    ]) {
+      expect(isAgentlessRoute(pathname), pathname).toBe(true);
+    }
+  });
+
   it("leaves discovery routes on the root concierge provider", () => {
     for (const pathname of [
-      "/",
       "/rentals",
       "/restaurants",
       "/nightlife",
       "/trips",
       "/saved",
+      "/me",
+      "/me/tickets-help",
       "/host",
       "/host/rentals-report",
     ]) {

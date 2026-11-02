@@ -67,7 +67,12 @@ function Harness() {
 
 let root: Root;
 let container: HTMLElement;
+// SAN-1531 persists local chat messages in a separate background POST.
+// Count only the actual rental-search endpoint in these SAN-407 assertions.
 const fetchMock = vi.fn();
+const historySaveMock = vi.fn(async () =>
+  new Response(JSON.stringify({ saved: 2 }), { status: 200 }),
+);
 
 function respond(status: number, body: unknown) {
   fetchMock.mockImplementation(
@@ -80,7 +85,14 @@ beforeEach(() => {
   unhandled.length = 0;
   handoffThrows = false;
   fetchMock.mockReset();
-  vi.stubGlobal("fetch", fetchMock);
+  historySaveMock.mockClear();
+  vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    if (/^\/api\/threads\/[0-9a-f-]{36}\/messages$/i.test(url)) {
+      return historySaveMock();
+    }
+    return fetchMock(input, init);
+  });
   vi.spyOn(console, "error").mockImplementation(() => undefined);
   container = document.createElement("div");
   document.body.appendChild(container);

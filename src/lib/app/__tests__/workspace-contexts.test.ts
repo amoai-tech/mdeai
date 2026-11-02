@@ -122,6 +122,17 @@ describe("activeWorkspaceContext", () => {
     expect(activeWorkspaceContext("/app/partners/profile", contexts)?.kind).toBe(
       "partners",
     );
+    // SAN-1540: the restaurant workspace is a Partners destination, not a new
+    // sixth workspace, and it keeps the same switcher context.
+    expect(
+      activeWorkspaceContext("/app/partners/restaurants", contexts)?.kind,
+    ).toBe("partners");
+    expect(
+      activeWorkspaceContext(
+        "/app/partners/restaurants/7c9e6679-7425-40de-944b-e07fc1f90ae7",
+        contexts,
+      )?.kind,
+    ).toBe("partners");
     expect(activeWorkspaceContext("/app/contests", contexts)?.kind).toBe("team");
     expect(activeWorkspaceContext("/app/unknown", contexts)).toBeNull();
   });
