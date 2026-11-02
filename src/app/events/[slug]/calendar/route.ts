@@ -1,5 +1,6 @@
 import { getPublicEventResult } from "@/lib/events/get-public-event";
 import { getSiteOrigin } from "@/lib/auth/site-url";
+import { canonicalPublicOrigin } from "@/lib/events/canonical-public-origin";
 import {
   CALENDAR_CONTENT_TYPE,
   buildEventCalendar,
@@ -29,7 +30,7 @@ export async function GET(_request: Request, context: RouteContext) {
 
   const calendar = buildEventCalendar(result.event, {
     // Use the application's trusted configured origin, not a request-controlled Host.
-    siteOrigin: await getSiteOrigin().catch(() => null),
+    siteOrigin: canonicalPublicOrigin(await getSiteOrigin().catch(() => null)),
   });
   // Only a stored start time that cannot be parsed lands here; a calendar with a guessed
   // start would be a fabricated fact.
