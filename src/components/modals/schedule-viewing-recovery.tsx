@@ -7,18 +7,23 @@ import { cn } from "@/lib/utils";
  * SAN-1059 — the way forward when an apartment cannot take a viewing request.
  *
  * Kept out of {@link ScheduleViewingModal} so the modal keeps one job (the form) and this keeps
- * one job (the recovery). Nothing here changes the selected apartment: the renter either
- * re-checks this one or leaves for the results themselves.
+ * one job (the recovery). Nothing here changes the selected apartment: the renter either retries
+ * this one or leaves for the results themselves.
+ *
+ * The retry action is a WRITE, not a refresh: it re-sends the viewing request. It is safe to
+ * press because the request is idempotent — the key is derived from the apartment, the renter's
+ * details and the chosen time, so a retry either creates the one request or replays the same
+ * lead and showing. It is labelled "Retry viewing request" so nobody expects a read-only check.
  */
 export const ScheduleViewingRecovery = ({
   submitting,
   resultsHref,
-  onRecheck,
+  onRetry,
   onChooseAnother,
 }: {
   submitting: boolean;
   resultsHref: string;
-  onRecheck: () => void;
+  onRetry: () => void;
   onChooseAnother: () => void;
 }) => {
   return (
@@ -27,18 +32,18 @@ export const ScheduleViewingRecovery = ({
       data-testid="schedule-viewing-recovery"
     >
       <p className="text-sm text-muted-foreground">
-        Your details are still here. Re-check this apartment, or choose another one.
+        Your details are still here. Retry this viewing request, or choose another one.
       </p>
       <div className="flex flex-col gap-2 sm:flex-row">
         <Button
           type="button"
           variant="outline"
           className="min-h-11 lg:min-h-0"
-          data-testid="schedule-viewing-refresh"
-          onClick={onRecheck}
+          data-testid="schedule-viewing-retry"
+          onClick={onRetry}
           disabled={submitting}
         >
-          {submitting ? "Checking…" : "Refresh apartment"}
+          {submitting ? "Retrying…" : "Retry viewing request"}
         </Button>
         {/* A real link: no router context, nothing typed is lost, and the destination works
             without JavaScript. */}

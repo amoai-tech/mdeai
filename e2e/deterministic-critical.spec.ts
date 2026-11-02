@@ -6,6 +6,7 @@ import {
 } from "./helpers/maps-layout";
 import {
   RENTAL_QUERY,
+  EVENT_QUERY,
   RESTAURANT_QUERY,
   chooseRestaurantFilter,
   gotoDeterministicChat,
@@ -70,6 +71,32 @@ test.describe("SAN-1341 deterministic critical journeys", { tag: ["@critical", "
     await expect(page.getByTestId("restaurant-card")).toHaveCount(1);
     await expect(page.getByTestId("event-card")).toHaveCount(0);
     await expect(page.getByTestId("restaurant-fast-path-panel")).toBeVisible();
+  });
+
+  test("empty event search does not crash without a CopilotKit provider", async ({ page }) => {
+    const uncaught: string[] = [];
+    page.on("pageerror", (error) => uncaught.push(error.message));
+    let emptySearchRequests = 0;
+    // Registered after mockFastPaths: Playwright uses last-registered route first.
+    await page.route("**/api/events/search", async (route) => {
+      emptySearchRequests += 1;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ results: [], total: 0, source: "supabase" }),
+      });
+    });
+
+    await gotoDeterministicChat(page);
+    const response = waitForPost(page, "/api/events/search");
+    await typeAndSubmit(page, EVENT_QUERY);
+    expect((await response).ok()).toBe(true);
+    await expect(page.getByTestId("events-empty")).toBeVisible();
+    await expect(page.getByTestId("event-card")).toHaveCount(0);
+    await expect(page.getByTestId("events-empty-suggest-weekend")).toBeDisabled();
+    // This regression proves provider-safe rendering; request coalescing belongs to the send pipeline.
+    expect(emptySearchRequests).toBeGreaterThanOrEqual(1);
+    expect(uncaught).toEqual([]);
   });
 
   test("rental fast path renders rental card and map pin state", async ({

@@ -312,7 +312,7 @@ Decision rules (in order):
 1. lastEventQuery EXISTS with category, dateWindow, or neighborhood → refine and search.
 2. genericAskPending is true in working memory → user already saw clarify; search on this reply using whatever they gave (category chip, date, or "show all").
 3. hasShowAll OR hasCategory OR hasDateWindow OR hasNeighborhood → call search-events immediately (pass queryText for salsa/live music/fashion/networking phrases).
-4. Generic city-only request ("list events medellin", "events in Medellín" with no category/date/neighborhood) → send exactly ONE clarify message, set genericAskPending=true, do NOT call search-events in the same turn.
+4. Generic citywide request ("list events medellin", "events in Medellín" with no category/date/neighborhood) → call search-events immediately across all upcoming event categories. Only an ambiguous bare "events?" request may ask for clarification.
 
 Clarification format (one message):
   What kind of events are you looking for?
