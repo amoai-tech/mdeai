@@ -33,7 +33,7 @@ import { getServiceClient } from "../_shared/supabase-clients.ts";
 import { assertCheckoutSessionBindsPayment, assertPaidOrderMatches } from "../_shared/ticket-payment-verification.ts";
 // Lazy Stripe init so missing-key configurations surface as 500 CONFIG_ERROR
 // rather than crashing on cold-start before headers are sent.
-let _stripe: Stripe | null = null;
+const stripeClients = new Map<string, Stripe>();
 interface TicketFinalizeData {
   order?: {
     id?: string;
@@ -48,15 +48,19 @@ interface TicketFinalizeData {
   attendees?: unknown[];
 }
 
-function getStripe(): Stripe | null {
-  if (_stripe) return _stripe;
-  const key = Deno.env.get("STRIPE_SECRET_KEY");
-  if (!key) return null;
-  _stripe = new Stripe(key, {
+function getStripe(mode: "live" | "sandbox"): Stripe | null {
+  const existing = stripeClients.get(mode);
+  if (existing) return existing;
+  const key = Deno.env.get(mode === "sandbox"
+    ? "STRIPE_SANDBOX_SECRET_KEY"
+    : "STRIPE_SECRET_KEY");
+  if (!key || (mode === "sandbox" && !/^(rk|sk)_test_/.test(key))) return null;
+  const client = new Stripe(key, {
     apiVersion: "2026-04-22.dahlia",
     httpClient: Stripe.createFetchHttpClient(),
   });
-  return _stripe;
+  stripeClients.set(mode, client);
+  return client;
 }
 const ENDPOINT = "ticket-payment-webhook";
 Deno.serve(async (req) => {
@@ -68,47 +72,40 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") {
     return jsonResponse(errorBody("METHOD_NOT_ALLOWED", "Use POST"), 405, req);
   }
-  const stripe = getStripe();
-  const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET");
-  if (!stripe || !webhookSecret) {
-    console.error(
-      "ticket-payment-webhook: missing STRIPE_SECRET_KEY or STRIPE_WEBHOOK_SECRET",
-    );
-    return jsonResponse(
-      errorBody("CONFIG_ERROR", "Server is missing Stripe credentials"),
-      500,
-      req,
-    );
-  }
-  // 1. Verify Stripe signature using the RAW body. We MUST NOT call req.json()
-  //    before this — JSON-parsing-and-re-stringifying changes whitespace and
-  //    breaks the HMAC verification.
+  // Authenticate the raw payload using the independent endpoint secrets.
+  // Only a verified signature determines which Stripe account handles an event.
   const rawBody = await req.text();
   const sig = req.headers.get("stripe-signature");
   if (!sig) {
-    return jsonResponse(
-      errorBody("BAD_SIGNATURE", "Missing stripe-signature header"),
-      400,
-      req,
-    );
+    return jsonResponse(errorBody("BAD_SIGNATURE", "Missing stripe-signature header"), 400, req);
   }
-  let event: Stripe.Event;
-  try {
-    event = await stripe.webhooks.constructEventAsync(
-      rawBody,
-      sig,
-      webhookSecret,
-    );
-  } catch (err) {
-    console.error(
-      "ticket-payment-webhook: signature verification failed",
-      err instanceof Error ? err.message : err,
-    );
-    return jsonResponse(
-      errorBody("BAD_SIGNATURE", "Stripe signature did not match"),
-      400,
-      req,
-    );
+  const configurations = [
+    { mode: "live" as const, secret: Deno.env.get("STRIPE_WEBHOOK_SECRET") },
+    { mode: "sandbox" as const, secret: Deno.env.get("STRIPE_SANDBOX_WEBHOOK_SECRET") },
+  ];
+  if (!configurations.some(({ mode, secret }) => !!secret && !!getStripe(mode))) {
+    console.error("ticket-payment-webhook: no complete Stripe webhook configuration");
+    return jsonResponse(errorBody("CONFIG_ERROR", "Server is missing Stripe credentials"), 500, req);
+  }
+  let event: Stripe.Event | null = null;
+  let stripe: Stripe | null = null;
+  for (const { mode, secret } of configurations) {
+    const candidate = getStripe(mode);
+    if (!secret || !candidate) continue;
+    try {
+      const verified = await candidate.webhooks.constructEventAsync(rawBody, sig, secret);
+      // Sandbox signatures must never authorize an event claiming live money.
+      if (mode === "sandbox" && verified.livemode !== false) break;
+      event = verified;
+      stripe = candidate;
+      break;
+    } catch {
+      // Another environment may have signed this request; never trust raw JSON.
+    }
+  }
+  if (!event || !stripe) {
+    console.error("ticket-payment-webhook: signature verification failed");
+    return jsonResponse(errorBody("BAD_SIGNATURE", "Stripe signature did not match"), 400, req);
   }
   // 2. Idempotency — Stripe retries on 5xx. Same event.id = no-op success.
   const service = getServiceClient();
@@ -144,7 +141,7 @@ Deno.serve(async (req) => {
         service,
       );
     } else if (event.type === "payment_intent.succeeded") {
-      await handlePaymentSucceeded(event.data.object as Stripe.PaymentIntent, service);
+      await handlePaymentSucceeded(event.data.object as Stripe.PaymentIntent, service, stripe);
     } else if (event.type === "charge.refunded") {
       await handleRefund(event.data.object as Stripe.Charge, service);
     } else {
@@ -283,7 +280,7 @@ async function handleCheckoutSessionExpired(
   }
 }
 
-async function handlePaymentSucceeded(pi: Stripe.PaymentIntent, service: SupabaseClient) {
+async function handlePaymentSucceeded(pi: Stripe.PaymentIntent, service: SupabaseClient, stripe: Stripe) {
   const orderId = pi.metadata?.order_id;
   if (!orderId) {
     console.log(
@@ -302,8 +299,7 @@ async function handlePaymentSucceeded(pi: Stripe.PaymentIntent, service: Supabas
     // Session ID. Return 500 so Stripe retries; NEVER fulfill unbound PI data.
     throw new Error("PAYMENT_SESSION_NOT_READY");
   }
-  const stripe = getStripe();
-  if (!stripe) throw new Error("PAYMENT_STRIPE_NOT_CONFIGURED");
+  // Use the same account that authenticated the signed webhook.
   const session = await stripe.checkout.sessions.retrieve(order.stripe_session_id);
   assertCheckoutSessionBindsPayment(session, {
     sessionId: order.stripe_session_id,

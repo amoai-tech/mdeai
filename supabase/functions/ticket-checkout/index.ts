@@ -42,8 +42,13 @@ import { deriveCheckoutAccessToken, duplicateCheckoutCode } from "../_shared/che
 let _stripe: Stripe | null = null;
 function getStripe(): Stripe | null {
   if (_stripe) return _stripe;
-  const key = Deno.env.get("STRIPE_SECRET_KEY");
-  if (!key) return null;
+  // Server-controlled payment environment; live remains the default.
+  const mode = Deno.env.get("STRIPE_TICKET_CHECKOUT_MODE") ?? "live";
+  if (mode !== "live" && mode !== "sandbox") return null;
+  const key = Deno.env.get(mode === "sandbox"
+    ? "STRIPE_SANDBOX_SECRET_KEY"
+    : "STRIPE_SECRET_KEY");
+  if (!key || (mode === "sandbox" && !/^(rk|sk)_test_/.test(key))) return null;
   _stripe = new Stripe(key, {
     apiVersion: "2026-04-22.dahlia",
     httpClient: Stripe.createFetchHttpClient(),
