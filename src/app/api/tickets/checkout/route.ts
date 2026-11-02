@@ -44,13 +44,21 @@ export async function POST(req: Request) {
       origin, data.returnPath,
     ));
   } catch (error) {
-    const invalidPath = error instanceof Error &&
-      error.message === "CHECKOUT_RETURN_PATH_INVALID";
+    const code = error instanceof Error &&
+      ["CHECKOUT_RETURN_PATH_INVALID", "CHECKOUT_ORIGIN_NOT_CONFIGURED",
+        "CHECKOUT_ORIGIN_INVALID"].includes(error.message)
+      ? error.message : "CHECKOUT_ORIGIN_INVALID";
     return NextResponse.json({
       success: false,
-      error: { code: invalidPath ? "CHECKOUT_RETURN_PATH_INVALID" : "CHECKOUT_ORIGIN_INVALID",
-        message: invalidPath ? "Invalid event return path" : "Checkout return origin is not configured" },
-    }, { status: invalidPath ? 400 : 503 });
+      error: {
+        code,
+        message: code === "CHECKOUT_RETURN_PATH_INVALID"
+          ? "Invalid event return path"
+          : code === "CHECKOUT_ORIGIN_NOT_CONFIGURED"
+            ? "Checkout return origin is not configured"
+            : "Checkout return origin is invalid",
+      },
+    }, { status: code === "CHECKOUT_RETURN_PATH_INVALID" ? 400 : 503 });
   }
 
   const edgeRes = await fetch(`${getSupabaseFunctionsBaseUrl()}/ticket-checkout`, {
