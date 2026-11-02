@@ -53,6 +53,11 @@ const TWILIO_API_BASE = "https://api.twilio.com/2010-04-01";
  * `{ ok: false, ... }` on any non-2xx Twilio response so the caller can
  * log without try/catch noise.
  */ export async function sendWhatsApp(config: TwilioConfig, args: TwilioMessage): Promise<TwilioResult> {
+  // The Account SID is an environment value, not caller input, but it still decides the request
+  // URL. Validate its shape so nothing malformed (or injected) can steer the request elsewhere.
+  if (!/^AC[0-9a-f]{32}$/i.test(config.accountSid)) {
+    return { ok: false, errorMessage: "Twilio account SID is not a valid AC… identifier" };
+  }
   const url = `${TWILIO_API_BASE}/Accounts/${config.accountSid}/Messages.json`;
   const auth = btoa(`${config.username}:${config.password}`);
   const body = new URLSearchParams({

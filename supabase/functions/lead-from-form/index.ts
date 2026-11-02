@@ -45,7 +45,7 @@ function clientIp(req: Request) {
   if (fwd) return fwd.split(",")[0].trim();
   return req.headers.get("cf-connecting-ip") ?? "unknown";
 }
-Deno.serve(async (req)=>{
+async function handleRequest(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") {
     return new Response("ok", {
       headers: getCorsHeaders(req)
@@ -109,6 +109,20 @@ Deno.serve(async (req)=>{
       }), 429, req);
     }
   }
+  return createInquiry(req, payload, service, replyEmail);
+}
+
+/**
+ * Everything after request validation: resolve the apartment and its host, persist the inquiry,
+ * and attempt the optional notification. Split out of handleRequest so each function stays small
+ * enough to review in one screen.
+ */
+async function createInquiry(
+  req: Request,
+  payload: z.infer<typeof PayloadSchema>,
+  service: ReturnType<typeof getServiceClient>,
+  replyEmail: string,
+): Promise<Response> {
   // 4. Look up the apartment + its landlord. Service role because the
   // caller is anon and the renter shouldn't need read access to
   // landlord_profiles.whatsapp_e164.
@@ -201,7 +215,7 @@ Deno.serve(async (req)=>{
       }
     }
   }, 201, req);
-});
+}
 async function fireWhatsAppNotification(args: {
   landlordPhone: string;
   landlordName: string;
@@ -244,3 +258,5 @@ async function fireWhatsAppNotification(args: {
     console.warn(`[lead-from-form] WhatsApp send failed — code=${result.errorCode} msg=${result.errorMessage}`);
   }
 }
+
+Deno.serve(handleRequest);
