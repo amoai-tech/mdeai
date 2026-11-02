@@ -11,7 +11,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { DiscoveryAskComposer } from "@/components/chat/discovery-ask-composer";
+import { DiscoveryAskComposer, EVENT_DETAIL_ASK_SUGGESTIONS } from "@/components/chat/discovery-ask-composer";
 import { DiscoveryPageContext, type DiscoveryPage } from "@/components/chat/discovery-page-context";
 import { ASK_MDE_OPEN_EVENT } from "@/lib/chat/ask-mde-bridge";
 
@@ -96,7 +96,13 @@ export function AskMdeSheet() {
           </SheetHeader>
           <div className="min-h-0 flex-1 overflow-y-auto">
             {route.ownsSelection ? null : <DiscoveryPageContext page={route.page} filters={{}} />}
-            <DiscoveryAskComposer page={route.page} hideHeading />
+            {/* Only the event drawer offers starter questions: they assume this event's
+                tickets, meeting point and start time, which other pages cannot promise. */}
+            <DiscoveryAskComposer
+              page={route.page}
+              suggestions={route.page === "events" ? EVENT_DETAIL_ASK_SUGGESTIONS : undefined}
+              hideHeading
+            />
           </div>
         </SheetContent>
       </Sheet>
