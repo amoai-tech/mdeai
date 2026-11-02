@@ -183,10 +183,10 @@ describe("buildEventCalendar", () => {
   });
 
   it("omits LOCATION when no address or venue was saved", () => {
-    const calendar = buildEventCalendar(
+    const calendar = makeCalendar(
       event({ address: null, city: null, venue: null }),
       { now: NOW },
-    )!;
+    );
     expect(unfold(calendar.body)).not.toContain("LOCATION:");
   });
 
@@ -196,10 +196,10 @@ describe("buildEventCalendar", () => {
   });
 
   it("escapes the stored name so commas and newlines stay inside SUMMARY", () => {
-    const calendar = buildEventCalendar(
+    const calendar = makeCalendar(
       event({ name: "Noche, música; y más\nSegunda línea" }),
       { now: NOW },
-    )!;
+    );
     const body = unfold(calendar.body);
     expect(body).toContain("SUMMARY:Noche\\, música\\; y más\\nSegunda línea\r\n");
     // The newline must not become a real calendar line boundary.
@@ -229,7 +229,7 @@ describe("buildEventCalendar", () => {
   });
 
   it("uses CRLF line endings and folds every physical line to 75 octets or fewer", () => {
-    const calendar = buildEventCalendar(
+    const calendar = makeCalendar(
       event({
         name: "Festival Internacional de Música y Cultura de Medellín ".repeat(3),
         venue: {
@@ -239,7 +239,7 @@ describe("buildEventCalendar", () => {
         },
       }),
       { siteOrigin: "https://www.mdeai.co", now: NOW },
-    )!;
+    );
     const physical = calendar.body.split("\r\n");
     for (const line of physical) expect(octets(line)).toBeLessThanOrEqual(75);
     expect(calendar.body.endsWith("\r\n")).toBe(true);
