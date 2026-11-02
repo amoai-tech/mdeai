@@ -204,3 +204,139 @@ describe("SAN-737 selected-name history freshness", () => {
     expect(currentSelectedNameOnly([old, current], ctx({ route: "/rentals", selectedPublicEntityId: null }))).toEqual([old, current]);
   });
 });
+
+describe("SAN-1600 — a page switch must retire the previous event's record", () => {
+  // Replay of the live defect: Reina answered, then the visitor opened Feria and
+  // asked about tickets. The Feria answer repeated Reina's venue and invented a
+  // meeting point from the earlier turn.
+  const reinaPage = ctx({ route: "/events", selectedPublicEntityId: a });
+  const feriaPage = ctx({ route: "/events", selectedPublicEntityId: b });
+  const history = [
+    { role: "user", content: "What ticket prices and venue are saved for this event?" },
+    { role: "assistant", content: "The Reina de Antioquia 2026 Finals will be held at Hotel Intercontinental — Salón Real. GA COP 40,000." },
+    { role: "user", content: "Are tickets available and is the meeting point confirmed?" },
+  ];
+
+  it("drops the previous event's answer for an attribute question on the new page", () => {
+    const kept = currentSelectedNameOnly(history, feriaPage);
+    expect(kept).toEqual([history[2]]);
+    expect(JSON.stringify(kept)).not.toContain("Reina");
+    expect(JSON.stringify(kept)).not.toContain("Hotel Intercontinental");
+  });
+
+  it("answers from the current record on an unchanged page too", () => {
+    // The verified record, not a previous answer, is the source for an attribute
+    // question; this keeps continuity stable instead of depending on the page change.
+    expect(currentSelectedNameOnly(history, reinaPage)).toEqual([history[2]]);
+  });
+
+  it("never trims a real comparison between two items", () => {
+    const comparison = [...history.slice(0, 2), { role: "user", content: "Compare this event's venue and prices with the previous one" }];
+    expect(currentSelectedNameOnly(comparison, feriaPage)).toEqual(comparison);
+  });
+
+  it("never trims a new-discovery request", () => {
+    const discovery = [...history.slice(0, 2), { role: "user", content: "Show me other events this weekend" }];
+    expect(currentSelectedNameOnly(discovery, feriaPage)).toEqual(discovery);
+  });
+
+  it("keeps history when the page has no selected item", () => {
+    const none = ctx({ route: "/events", selectedPublicEntityId: null });
+    expect(currentSelectedNameOnly(history, none)).toEqual(history);
+  });
+});
+
+describe("SAN-1600 — attribute vocabulary must actually match the words people type", () => {
+  const page = ctx({ route: "/events", selectedPublicEntityId: b });
+  const history = [
+    { role: "user", content: "What venue is saved for this event?" },
+    { role: "assistant", content: "The Reina de Antioquia 2026 Finals is at Hotel Intercontinental — Salón Real, GA COP 40,000." },
+  ];
+  // Each one must drop the previous event's answer; a truncated alternative
+  // (e.g. "accessib" against "accessible") silently fails the guard.
+  it.each([
+    "Is it accessible?",
+    "Is the venue accessible for a wheelchair?",
+    "What is the accessibility like?",
+    "What tiers are available?",
+    "When does it start?",
+    "What does an open tier cost?",
+  ])("trims the previous event for: %s", (question) => {
+    const kept = currentSelectedNameOnly([...history, { role: "user", content: question }], page);
+    expect(kept).toEqual([{ role: "user", content: question }]);
+    expect(JSON.stringify(kept)).not.toContain("Reina");
+    expect(JSON.stringify(kept)).not.toContain("Intercontinental");
+  });
+});
+
+describe("SAN-1600 — discovery requests keep their filters, item questions do not", () => {
+  const page = ctx({ route: "/events", selectedPublicEntityId: b });
+  const history = [
+    { role: "user", content: "Show me free events near Laureles" },
+    { role: "assistant", content: "The Reina de Antioquia 2026 Finals is at Hotel Intercontinental — Salón Real." },
+  ];
+  it.each([
+    "Show free events nearby",
+    "Show me other events this weekend",
+    "Find restaurants in Laureles",
+  ])("keeps the earlier turn for a discovery request: %s", (question) => {
+    expect(currentSelectedNameOnly([...history, { role: "user", content: question }], page))
+      .toEqual([...history, { role: "user", content: question }]);
+  });
+
+  it.each([
+    "Show me the venue",
+    "Search for tickets",
+  ])("still trims for a question aimed at the item on screen: %s", (question) => {
+    const kept = currentSelectedNameOnly([...history, { role: "user", content: question }], page);
+    expect(kept).toEqual([{ role: "user", content: question }]);
+    expect(JSON.stringify(kept)).not.toContain("Reina");
+  });
+
+  it("scopes the supersede guidance to the selected item instead of voiding history outright", async () => {
+    const hint = await verifiedDiscoverySelectionHint(
+      ctx({ route: "/events", selectedPublicEntityId: b }),
+      async () => ({ found: true, data: { id: b, name: "Feria de las Flores Preview Parade" } }),
+    );
+    expect(hint).toContain("for questions about the item on screen");
+    // A comparison or discovery request must not be told the earlier turns are void.
+    expect(hint).not.toContain("VOID for this answer");
+    expect(hint).toContain("compares two items");
+  });
+});
+
+describe("SAN-1600 — reviewer's conversation-history decision table", () => {
+  const page = ctx({ route: "/events", selectedPublicEntityId: b });
+  const priorTurn = [
+    { role: "user", content: "Show me free events near Laureles" },
+    { role: "assistant", content: "The Reina de Antioquia 2026 Finals is at Hotel Intercontinental — Salón Real, GA COP 40,000." },
+  ];
+  const run = (question: string) => currentSelectedNameOnly([...priorTurn, { role: "user", content: question }], page);
+  const trimmed = (question: string) => run(question).length === 1;
+
+  it.each([
+    "Are tickets available?",
+    "Where is the meeting point?",
+    "What is the venue?",
+  ])("trims a current-event fact question: %s", (question) => {
+    expect(trimmed(question)).toBe(true);
+    expect(JSON.stringify(run(question))).not.toContain("Reina");
+  });
+
+  it.each([
+    "Show free events nearby",
+    "Show accessible concerts this weekend",
+    "Compare this event with the previous one",
+    "Find restaurants in Laureles",
+  ])("preserves history for a discovery or comparison request: %s", (question) => {
+    expect(trimmed(question)).toBe(false);
+  });
+
+  it("preserves the prior explanation for a conversational follow-up", () => {
+    expect(trimmed("Can you explain that price further?")).toBe(false);
+  });
+
+  it("still trims a bare location question (no spillover from the follow-up rule)", () => {
+    expect(trimmed("Where is it?")).toBe(true);
+  });
+});
