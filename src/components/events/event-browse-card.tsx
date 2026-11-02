@@ -77,7 +77,8 @@ export function EventBrowseCard({
   const detailsHref = `/events/${event.slug}`;
   const priceLabel =
     event.pricePerTicket === null
-      ? "See tickets"
+      // A card must not imply tickets exist: the detail page shows "Price TBD" for the same event.
+      ? "Price TBD"
       : event.pricePerTicket === 0
         ? "Free"
         : `From ${formatEventCardPrice(event.pricePerTicket, event.currency)}`;
