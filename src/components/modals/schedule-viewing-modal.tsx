@@ -5,6 +5,9 @@ import { Button } from "@/components/ui/button";
 import { useRentalUi } from "@/components/chat/rental-ui-context";
 import { submitScheduleViewing } from "@/lib/leads/submit-schedule-viewing";
 import { buildSchedulePrefill, type SchedulePrefill } from "@/lib/leads/schedule-prefill";
+import { useRouter } from "next/navigation";
+import { ScheduleViewingError } from "@/lib/leads/submit-schedule-viewing";
+import type { ScheduleViewingErrorCode } from "@/lib/leads/schedule-viewing-schema";
 import { createClient } from "@/lib/supabase/client";
 import { useKeyboardInset } from "@/lib/hooks/use-chat-keyboard-height";
 import { useModalA11y } from "@/lib/use-modal-a11y";
@@ -48,6 +51,10 @@ export const ScheduleViewingModal = () => {
   const [contact, dispatchContact] = useReducer(contactReducer, INITIAL_CONTACT);
   const [preferredAt, setPreferredAt] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // SAN-1059 — the message alone cannot tell the renter what to do next. Keep the typed code so
+  // "this apartment cannot take a request" gets a recovery action instead of a dead end.
+  const [errorCode, setErrorCode] = useState<ScheduleViewingErrorCode | null>(null);
+  const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
 
   const isOpen = Boolean(scheduleTarget);
@@ -74,6 +81,7 @@ export const ScheduleViewingModal = () => {
     if (submitLockRef.current) return;
     submitLockRef.current = true;
     setError(null);
+    setErrorCode(null);
     setSubmitting(true);
     try {
       const result = await submitScheduleViewing({
@@ -99,6 +107,7 @@ export const ScheduleViewingModal = () => {
       // The modal stays open with the typed values intact so the renter can fix
       // the time or retry rather than losing the request.
       setError(err instanceof Error ? err.message : "Submit failed");
+      setErrorCode(err instanceof ScheduleViewingError ? err.code : null);
     } finally {
       submitLockRef.current = false;
       setSubmitting(false);
@@ -187,6 +196,47 @@ export const ScheduleViewingModal = () => {
             >
               {error}
             </p>
+          ) : null}
+          {errorCode === "LISTING_UNAVAILABLE" ? (
+            // The renter's details are still in the form. Never swap the apartment behind their
+            // back: they either re-check this one or go back to the results themselves.
+            <div
+              className="flex flex-col gap-2 rounded-lg border p-3"
+              data-testid="schedule-viewing-recovery"
+            >
+              <p className="text-sm text-muted-foreground">
+                Your details are still here. Re-check this apartment, or choose another one.
+              </p>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="min-h-11 lg:min-h-0"
+                  data-testid="schedule-viewing-refresh"
+                  onClick={() => {
+                    // Re-read the server data without losing what was typed.
+                    router.refresh();
+                    setError(null);
+                    setErrorCode(null);
+                  }}
+                  disabled={submitting}
+                >
+                  Refresh apartment
+                </Button>
+                <Button
+                  type="button"
+                  className="min-h-11 lg:min-h-0"
+                  data-testid="schedule-viewing-choose-another"
+                  onClick={() => {
+                    closeScheduleViewing();
+                    // Keep the renter's filters; only the apartment changes.
+                    router.push(`/rentals${window.location.search}`);
+                  }}
+                >
+                  Choose another apartment
+                </Button>
+              </div>
+            </div>
           ) : null}
           <div className="flex justify-end gap-2 pt-2">
             <Button
