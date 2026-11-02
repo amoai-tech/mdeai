@@ -1,113 +1,197 @@
-import { test, expect, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 /**
- * SAN-486 · /rentals From/Through stay dates live in the URL.
+ * SAN-486 / SAN-1611 — the renter's stay, from the calendar to the booking review.
  *
- * Data-independent on purpose (it must pass with or without apartments): bad dates fail closed with
- * a clear, announced message and no results; real dates survive the form, the filter chips, refresh
- * and Clear; the phone layout fits with touch-sized controls. Which apartments match which dates is
- * covered by unit tests of the shared filter and the page.
+ * SAN-1611 replaced the native date inputs with the shadcn Calendar in an accessible dialog, so
+ * these cases now drive the calendar. The URL remains the single owner of the applied dates: the
+ * calendar edits a DRAFT, and only Apply commits.
  *
- * The filter bar renders once per layout (desktop and phone), so locators target the visible copy.
+ * Data-independent where possible (it must pass with or without apartments): bad dates fail
+ * closed, real dates survive the dialog, chips and refresh, and Cancel leaves the URL untouched.
  */
-const visible = (page: Page, testId: string) => page.locator(`[data-testid="${testId}"]:visible`);
-const dateInput = (page: Page, label: "From" | "Through") =>
-  page.locator("label:visible").filter({ hasText: label }).locator("input");
-
-/**
- * Slug of the first real rental result, or an honest skip when the catalogue returned none.
- * Extracted so the two booking-handoff cases cannot drift apart.
- */
-async function firstRentalSlug(page: Page): Promise<string> {
-  const card = page.locator('[data-testid^="rental-card-"][data-result-kind="rental"]').first();
-  test.skip((await card.count()) === 0, "no rental cards in the current results");
-  const testId = (await card.getAttribute("data-testid")) ?? "";
-  return testId.replace("rental-card-", "");
-}
+const trigger = (page: Page) => page.getByTestId("rentals-dates-trigger").first();
+const dialog = (page: Page) => page.getByTestId("rentals-dates-dialog");
+const day = (page: Page, compact: string) => dialog(page).locator(`button[data-day="${compact}"]`);
 
 async function open(page: Page, query = "") {
   await page.goto(`/rentals${query}`, { waitUntil: "domcontentloaded" });
-  await expect(visible(page, "rentals-date-form")).toBeVisible({ timeout: 60_000 });
+  await expect(trigger(page)).toBeVisible({ timeout: 60_000 });
 }
 
-test.describe("SAN-486 /rentals stay dates", () => {
+/**
+ * Select a day without depending on which month the calendar opens on. DayPicker exposes its
+ * navigation as accessible "Go to the Next/Previous Month" buttons, so we walk to the target
+ * month only when the day is not already rendered. No fake clock: a frozen Date can stall
+ * hydration and animations in ways that make these tests flaky for the wrong reason.
+ */
+async function pickDay(page: Page, iso: string) {
+  const [year, month, dayOfMonth] = iso.split("-").map(Number);
+  const target = day(page, `${month}/${dayOfMonth}/${year}`);
+  if ((await target.count()) === 0) {
+    const today = new Date();
+    const delta = (year - today.getFullYear()) * 12 + (month - 1 - today.getMonth());
+    const direction = delta >= 0 ? /next month/i : /previous month/i;
+    for (let step = 0; step < 24; step += 1) {
+      await dialog(page).getByRole("button", { name: direction }).click();
+      if ((await target.count()) > 0) break;
+    }
+  }
+  await expect(target).toBeVisible();
+  await target.click();
+}
+
+async function openCalendar(page: Page) {
+  await trigger(page).click();
+  await expect(dialog(page)).toBeVisible();
+}
+
+test.describe("SAN-1611 /rentals stay dates", () => {
   for (const [label, query] of [
     ["an impossible date", "?from=2026-02-31"],
     ["a reversed stay", "?from=2026-11-30&through=2026-11-01"],
   ] as const) {
     test(`${label} fails closed: an announced message and no apartments`, async ({ page }) => {
       await open(page, query);
-      const alert = visible(page, "rentals-date-error");
+      const alert = page.getByTestId("rentals-date-error");
       await expect(alert).toBeVisible();
       await expect(alert).toHaveAttribute("role", "alert");
-      await expect(visible(page, "rentals-date-invalid")).toBeVisible();
       await expect(page.locator('[data-testid^="rental-card-"][data-pin-id]')).toHaveCount(0);
     });
   }
 
-  test("real dates survive the form, a filter chip, a refresh, and Clear removes only the dates", async ({ page }) => {
-    await open(page);
-    await dateInput(page, "From").fill("2026-11-01");
-    await dateInput(page, "Through").fill("2026-11-30");
-    await visible(page, "rentals-dates-apply").click();
-    await expect(page).toHaveURL(/from=2026-11-01&through=2026-11-30/);
+  test("real dates survive the calendar, a filter chip, a refresh, and Clear removes only the dates", async ({ page }) => {
+    await open(page, "?from=2026-11-01&through=2026-11-30");
+    // The applied stay is what the trigger reports, before any interaction.
+    await expect(trigger(page)).toContainText("Nov 1, 2026");
+    await expect(trigger(page)).toContainText("Nov 30, 2026");
 
-    await visible(page, "rentals-filter-beds-1").click();
+    // A chip keeps the dates, and so does a refresh.
+    await page.getByTestId("rentals-filter-beds-1").first().click();
     await expect(page).toHaveURL(/beds=1&from=2026-11-01&through=2026-11-30/);
-
     await page.reload({ waitUntil: "domcontentloaded" });
-    await expect(dateInput(page, "From")).toHaveValue("2026-11-01");
-    await expect(dateInput(page, "Through")).toHaveValue("2026-11-30");
+    await expect(trigger(page)).toContainText("Nov 1, 2026");
 
-    await visible(page, "rentals-dates-clear").click();
+    // Clear is a draft edit. Cancel must preserve the previously applied stay.
+    await openCalendar(page);
+    const beforeClear = page.url();
+    await page.getByTestId("rentals-dates-clear").click();
+    await expect(dialog(page)).toBeVisible();
+    await expect(page.getByTestId("rentals-dates-summary")).toContainText("Choose your stay dates");
+    expect(page.url()).toBe(beforeClear);
+    await page.getByTestId("rentals-dates-cancel").click();
+    await expect(dialog(page)).toBeHidden();
+    expect(page.url()).toBe(beforeClear);
+    await expect(trigger(page)).toContainText("Nov 1, 2026");
+
+    // Explicit Update commits the cleared draft while keeping the bedroom chip.
+    await openCalendar(page);
+    await page.getByTestId("rentals-dates-clear").click();
+    await page.getByTestId("rentals-dates-apply").click();
     await expect(page).toHaveURL(/\/rentals\?beds=1$/);
-    await expect(dateInput(page, "From")).toHaveValue("");
+    await expect(trigger(page)).toHaveText(/Any dates/);
   });
 
-  test("390px phone: no sideways scroll and touch-sized date controls", async ({ page }) => {
+  test("picking a range in the calendar applies the inclusive stay", async ({ page }) => {
+    await open(page);
+    await openCalendar(page);
+    await pickDay(page, "2026-11-10");
+    await pickDay(page, "2026-11-15");
+    await expect(page.getByTestId("rentals-dates-summary")).toContainText("Nov 10, 2026");
+    await expect(page.getByTestId("rentals-dates-summary")).toContainText("Nov 15, 2026");
+    await page.getByTestId("rentals-dates-apply").click();
+    // Inclusive: both ends are kept, exactly as the search contract expects.
+    await expect(page).toHaveURL(/from=2026-11-10&through=2026-11-15/);
+    await expect(trigger(page)).toContainText("Nov 10, 2026");
+  });
+
+  test("Cancel discards the draft and leaves the applied stay untouched", async ({ page }) => {
+    await open(page, "?from=2026-11-10&through=2026-11-15");
+    const before = page.url();
+    await openCalendar(page);
+    await pickDay(page, "2026-11-20");
+    await page.getByTestId("rentals-dates-cancel").click();
+    await expect(dialog(page)).toBeHidden();
+    expect(page.url()).toBe(before);
+    await expect(trigger(page)).toContainText("Nov 10, 2026");
+  });
+
+  test("Escape closes the draft without applying it", async ({ page }) => {
+    await open(page, "?from=2026-11-10&through=2026-11-15");
+    const before = page.url();
+    await openCalendar(page);
+    await pickDay(page, "2026-11-20");
+    await page.keyboard.press("Escape");
+    await expect(dialog(page)).toBeHidden();
+    expect(page.url()).toBe(before);
+  });
+
+  test("390px phone: no sideways scroll and touch-sized calendar controls", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await open(page, "?from=2026-11-01&through=2026-11-30");
     expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
-    for (const control of [dateInput(page, "From"), dateInput(page, "Through"), visible(page, "rentals-dates-apply")]) {
-      await expect(control).toBeVisible();
-      // Route hydration can replace the input between locator resolution and layout.
-      // Poll the actual rendered target rather than dereferencing a transient null bounding box.
-      await expect.poll(async () => (await control.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+    await expect(trigger(page)).toBeVisible();
+
+    await openCalendar(page);
+    // The dialog scales in, so measure with a retrying poll rather than one transient box.
+    for (const id of ["rentals-dates-apply", "rentals-dates-cancel"]) {
+      await expect(page.getByTestId(id)).toBeVisible();
+      await expect
+        .poll(async () => (await page.getByTestId(id).boundingBox())?.height ?? 0)
+        .toBeGreaterThanOrEqual(44);
     }
+    await expect
+      .poll(async () => (await trigger(page).boundingBox())?.height ?? 0)
+      .toBeGreaterThanOrEqual(44);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
   });
 
-  test("Cancel puts the applied dates back without losing the other filters", async ({ page }) => {
-    await open(page, "?neighborhood=Laureles&from=2026-11-01&through=2026-11-30");
-    // Nothing edited yet: there is no draft to cancel.
-    await expect(visible(page, "rentals-dates-cancel")).toHaveCount(0);
+  test("desktop shows two months side by side, and the dialog fits the viewport", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await open(page, "?from=2026-11-10&through=2026-11-15");
+    await openCalendar(page);
 
-    await dateInput(page, "From").fill("2026-12-05");
-    const cancel = visible(page, "rentals-dates-cancel");
-    await expect(cancel).toBeVisible();
-    await expect(cancel).toHaveText("Cancel");
+    const months = dialog(page).locator(".rdp-month");
+    await expect(months).toHaveCount(2);
+    // Both captions are real month names, not a repeated one.
+    const captions = await dialog(page).locator(".rdp-caption_label").allInnerTexts();
+    const labels = [...new Set(captions.map((c) => c.trim()).filter(Boolean))];
+    expect(labels.length).toBe(2);
 
-    await cancel.click();
-    // The applied pair is restored, the chips survive, and the draft is gone.
-    await expect(dateInput(page, "From")).toHaveValue("2026-11-01");
-    await expect(dateInput(page, "Through")).toHaveValue("2026-11-30");
-    await expect(page).toHaveURL(/neighborhood=Laureles/);
-    await expect(page).toHaveURL(/from=2026-11-01/);
-    await expect(visible(page, "rentals-dates-cancel")).toHaveCount(0);
-    // Cancel never submits: the results are the same ones the renter already had.
-    await expect(visible(page, "rentals-date-form")).toBeVisible();
+    // No month is squeezed: every day cell keeps a usable size, and the two months do not overlap.
+    const boxes = await months.evaluateAll((els) => els.map((el) => el.getBoundingClientRect()));
+    expect(boxes[1].left).toBeGreaterThanOrEqual(boxes[0].right - 1);
+    const cell = await dialog(page).locator("button[data-day]").first().boundingBox();
+    expect(cell?.height ?? 0).toBeGreaterThanOrEqual(40);
+
+    // The dialog fits the viewport rather than overflowing it.
+    const box = await dialog(page).boundingBox();
+    expect(box?.width ?? 0).toBeGreaterThanOrEqual(700);
+    expect(box?.width ?? 0).toBeLessThanOrEqual(1440);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
+  });
+
+  test("390px phone shows a single month that fits the screen", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await open(page);
+    await openCalendar(page);
+    await expect(dialog(page).locator(".rdp-month")).toHaveCount(1);
+    const box = await dialog(page).boundingBox();
+    expect(box?.width ?? 0).toBeLessThanOrEqual(390);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
   });
 
   test("the applied stay follows the renter into the booking review", async ({ page }) => {
     await open(page);
-    const slug = await firstRentalSlug(page);
+    const card = page.locator('[data-testid^="rental-card-"][data-result-kind="rental"]').first();
+    test.skip((await card.count()) === 0, "no rental cards in the current results");
+    const slug = ((await card.getAttribute("data-testid")) ?? "").replace("rental-card-", "");
 
     await page.goto(`/rentals/${slug}?from=2026-11-10&through=2026-11-15`, {
       waitUntil: "domcontentloaded",
     });
     const review = page.getByTestId("rental-detail-booking-review-link");
     await expect(review).toBeVisible();
-    // Read the href once and assert on the string: building a RegExp from a value that came from
-    // the page is both a CodeQL finding and needless dynamism for a substring check.
     const href = (await review.getAttribute("href")) ?? "";
     expect(href).toContain(`apartment=${slug}`);
     expect(href).toMatch(/[?&]from=2026-11-10/);
@@ -116,10 +200,10 @@ test.describe("SAN-486 /rentals stay dates", () => {
 
   test("signing in keeps the stay, and an impossible date is never carried", async ({ page }) => {
     await open(page);
-    const slug = await firstRentalSlug(page);
+    const card = page.locator('[data-testid^="rental-card-"][data-result-kind="rental"]').first();
+    test.skip((await card.count()) === 0, "no rental cards in the current results");
+    const slug = ((await card.getAttribute("data-testid")) ?? "").replace("rental-card-", "");
 
-    // The review route decides between a sign-in gate and the form on the server, so wait for
-    // whichever one this session gets before asking which it was.
     const settleReview = () =>
       page.waitForSelector(
         '[data-testid="booking-review-auth-required"], [data-testid="booking-start-date"]',
@@ -138,17 +222,15 @@ test.describe("SAN-486 /rentals stay dates", () => {
     });
     const next = await signInNext();
     if (next === null) {
-      // A signed-in session skips the gate: the form itself must then be prefilled.
       await settleReview();
       await expect(page.getByTestId("booking-start-date")).toHaveValue("2026-11-10");
-      // `through` (15 Nov) is the last occupied day, so the move-out the booking stores is the 16th.
+      // `through` is the last occupied day; the booking stores the day they leave.
       await expect(page.getByTestId("booking-start-end-date")).toHaveValue("2026-11-16");
     } else {
       expect(next).toContain("from=2026-11-10");
       expect(next).toContain("through=2026-11-15");
     }
 
-    // A calendar date that does not exist must not survive into the prefill.
     await page.goto(`/rentals/bookings/new?apartment=${slug}&from=2026-02-31&through=2026-11-15`, {
       waitUntil: "domcontentloaded",
     });

@@ -11,6 +11,8 @@ import { BrowseMapPanel } from "@/components/browse/BrowseMapPanel";
 import { BrowseMapSheet } from "@/components/browse/BrowseMapSheet";
 import { RentalBrowseCard } from "@/components/rentals/rental-browse-card";
 import { RentalBrowseFilters } from "@/components/rentals/rental-browse-filters";
+import { RentalDateSuggestionTool } from "@/components/rentals/rental-date-suggestion-tool";
+import type { SuggestedStay } from "@/components/rentals/rental-date-selector";
 import { RentalDetailsPanel, RentalDetailsSheet } from "@/components/rentals/rental-details-panel";
 import {
   RentalAskComposer,
@@ -134,6 +136,9 @@ function RentalBrowseViewInner({
   // If a new search drops the open rental, `detailsRental` becomes null and the panel closes.
   const isLgUp = useIsLgUp();
   const [detailsId, setDetailsId] = useState<string | null>(null);
+  // SAN-1611 — an AI-proposed stay. One owner for the tool: this view mounts once, while the
+  // filter bar (and therefore the calendar) mounts twice for desktop and phone.
+  const [suggestedStay, setSuggestedStay] = useState<SuggestedStay | null>(null);
   const [askSelectedId, setAskSelectedId] = useState<string | null>(null);
   const selectedForAskId = shownResults.some((r) => r.id === askSelectedId) ? askSelectedId : null;
   const detailsRental = useMemo(
@@ -198,13 +203,21 @@ function RentalBrowseViewInner({
           previewMode ? (
             <p className="text-sm text-muted-foreground">Preview only — filters and bookings are disabled.</p>
           ) : (
-            <RentalBrowseFilters
-              neighborhood={neighborhood}
-              beds={beds}
-              from={from}
-              through={through}
-              dateError={dateError}
-            />
+            <>
+              {/* Same guard as the existing Details tool: a frontend tool needs a live co-agent. */}
+              {coAgent && !isDeterministicE2E() ? (
+                <RentalDateSuggestionTool onSuggest={setSuggestedStay} />
+              ) : null}
+              <RentalBrowseFilters
+                neighborhood={neighborhood}
+                beds={beds}
+                from={from}
+                through={through}
+                dateError={dateError}
+                suggestedStay={suggestedStay}
+                onSuggestionHandled={() => setSuggestedStay(null)}
+              />
+            </>
           )
         }
         rightPanel={
