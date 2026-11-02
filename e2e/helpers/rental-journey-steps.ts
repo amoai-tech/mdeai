@@ -266,6 +266,10 @@ export async function expectUnsavedRequestIsHonest(
     page.locator('[data-testid="schedule-viewing-modal"]'),
     "the form must stay open after a failure",
   ).toBeVisible();
+  // A failed final submit stays on the read-only Review step. Confirm the draft is
+  // preserved there AND still editable; the old input is not mounted until Edit.
+  await expect(page.getByTestId("schedule-viewing-review")).toContainText(retryEmail);
+  await page.getByTestId("schedule-viewing-edit").click();
   await expect(page.locator('input[name="email"]')).toHaveValue(retryEmail);
   await expect(
     page.getByText(/viewing request(ed| received)/i),

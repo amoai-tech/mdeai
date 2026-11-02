@@ -1,7 +1,7 @@
 import { expect, type Page } from "@playwright/test";
 
 /** Select a listing-local wall-clock via the real shared shadcn Calendar + native time field. */
-export async function chooseViewingDateTime(page: Page, localWallClock: string): Promise<void> {
+export const chooseViewingDateTime = async (page: Page, localWallClock: string): Promise<void> => {
   const [iso, time] = localWallClock.split("T");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(iso) || !/^\d{2}:\d{2}$/.test(time)) {
     throw new Error("Expected a Medellín-local YYYY-MM-DDTHH:mm value");
@@ -18,10 +18,10 @@ export async function chooseViewingDateTime(page: Page, localWallClock: string):
   await dayButton.click();
   await modal.getByTestId("viewing-time").fill(time);
   await expect(modal.getByTestId("viewing-date-selection")).toContainText(iso);
-}
+};
 
-export async function advanceViewingReview(page: Page): Promise<void> {
+export const advanceViewingReview = async (page: Page): Promise<void> => {
   const modal = page.getByTestId("schedule-viewing-modal");
   await modal.getByTestId("schedule-viewing-review-button").click();
   await expect(modal.getByTestId("schedule-viewing-review")).toBeVisible();
-}
+};

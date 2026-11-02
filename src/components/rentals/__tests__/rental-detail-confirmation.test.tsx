@@ -108,11 +108,13 @@ async function requestViewing() {
   await act(() => {
     (document.querySelector('[data-testid="viewing-date-mock"]') as HTMLButtonElement).click();
   });
-  await act(async () => {
+  await act(() => {
     (document.querySelector("form") as HTMLFormElement).dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    return Promise.resolve();
   });
-  await act(async () => {
+  await act(() => {
     (document.querySelector("form") as HTMLFormElement).dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    return Promise.resolve();
   });
   await act(() => Promise.resolve());
 }

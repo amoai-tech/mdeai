@@ -40,23 +40,23 @@ const loadPrefillForCurrentUser = async (): Promise<SchedulePrefill | null> => {
 };
 
 /** Calendar dates are date-only Medellín wall dates, never UTC timestamps. */
-function dateOnly(date: Date): string {
+const dateOnly = (date: Date): string => {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-}
+};
 
-function localDate(iso: string): Date {
+const localDate = (iso: string): Date => {
   const [y, m, d] = iso.split("-").map(Number);
   return new Date(y, m - 1, d);
-}
+};
 
-function medellinToday(): string {
+const medellinToday = (): string => {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: LISTING_TIME_ZONE,
     year: "numeric", month: "2-digit", day: "2-digit",
   }).formatToParts(new Date());
   const value = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
   return `${value("year")}-${value("month")}-${value("day")}`;
-}
+};
 
 /** SCREEN-008 / SAN-262 — local viewing draft → review → original atomic write. */
 export const ScheduleViewingModal = () => {

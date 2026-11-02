@@ -104,8 +104,9 @@ async function renderModalAndFill() {
   await act(() => {
     (container.querySelector('[data-testid="viewing-date-mock"]') as HTMLButtonElement).click();
   });
-  await act(async () => {
+  await act(() => {
     container.querySelector("form")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    return Promise.resolve();
   });
   expect(container.querySelector('[data-testid="schedule-viewing-review"]')).not.toBeNull();
 }
