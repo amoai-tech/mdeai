@@ -204,3 +204,44 @@ describe("SAN-737 selected-name history freshness", () => {
     expect(currentSelectedNameOnly([old, current], ctx({ route: "/rentals", selectedPublicEntityId: null }))).toEqual([old, current]);
   });
 });
+
+describe("SAN-1600 — a page switch must retire the previous event's record", () => {
+  // Replay of the live defect: Reina answered, then the visitor opened Feria and
+  // asked about tickets. The Feria answer repeated Reina's venue and invented a
+  // meeting point from the earlier turn.
+  const reinaPage = ctx({ route: "/events", selectedPublicEntityId: a });
+  const feriaPage = ctx({ route: "/events", selectedPublicEntityId: b });
+  const history = [
+    { role: "user", content: "What ticket prices and venue are saved for this event?" },
+    { role: "assistant", content: "The Reina de Antioquia 2026 Finals will be held at Hotel Intercontinental — Salón Real. GA COP 40,000." },
+    { role: "user", content: "Are tickets available and is the meeting point confirmed?" },
+  ];
+
+  it("drops the previous event's answer for an attribute question on the new page", () => {
+    const kept = currentSelectedNameOnly(history, feriaPage);
+    expect(kept).toEqual([history[2]]);
+    expect(JSON.stringify(kept)).not.toContain("Reina");
+    expect(JSON.stringify(kept)).not.toContain("Hotel Intercontinental");
+  });
+
+  it("answers from the current record on an unchanged page too", () => {
+    // The verified record, not a previous answer, is the source for an attribute
+    // question; this keeps continuity stable instead of depending on the page change.
+    expect(currentSelectedNameOnly(history, reinaPage)).toEqual([history[2]]);
+  });
+
+  it("never trims a real comparison between two items", () => {
+    const comparison = [...history.slice(0, 2), { role: "user", content: "Compare this event's venue and prices with the previous one" }];
+    expect(currentSelectedNameOnly(comparison, feriaPage)).toEqual(comparison);
+  });
+
+  it("never trims a new-discovery request", () => {
+    const discovery = [...history.slice(0, 2), { role: "user", content: "Show me other events this weekend" }];
+    expect(currentSelectedNameOnly(discovery, feriaPage)).toEqual(discovery);
+  });
+
+  it("keeps history when the page has no selected item", () => {
+    const none = ctx({ route: "/events", selectedPublicEntityId: null });
+    expect(currentSelectedNameOnly(history, none)).toEqual(history);
+  });
+});
