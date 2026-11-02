@@ -29,6 +29,11 @@ type AssistantRoute = {
   ownsSelection: boolean;
 };
 
+/** Route -> assistant ownership. Pure so the component itself stays a thin shell. */
+export function matchAssistantRoute(pathname: string): AssistantRoute | null {
+  return ROUTES.find((candidate) => candidate.pattern.test(pathname)) ?? null;
+}
+
 const ROUTES: AssistantRoute[] = [
   // Browse pages (/events, /restaurants, …) already render this same composer inline
   // and are intentionally absent: one assistant per page, not two.
@@ -47,7 +52,7 @@ const ROUTES: AssistantRoute[] = [
 export function AskMdeSheet() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
-  const route = ROUTES.find((candidate) => candidate.pattern.test(pathname ?? "")) ?? null;
+  const route = matchAssistantRoute(pathname ?? "");
 
   useEffect(() => {
     if (!route) return;

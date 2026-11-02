@@ -60,7 +60,7 @@ function GuestEventComposer({ options }: { options: EventGuestOptions }) {
     <div className="flex items-end gap-2">
       <label htmlFor="guest-event-question" className="sr-only">Search events</label>
       <textarea id="guest-event-question" rows={1} value={question} onChange={(e) => setQuestion(e.target.value)} className="min-h-11 flex-1 resize-none rounded-lg border bg-background px-3 py-2.5 text-base" placeholder="Find music events this weekend" onKeyDown={(e) => { if(e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send(); } }} />
-      <button type="button" data-testid="guest-event-send" className="flex size-11 items-center justify-center rounded-lg bg-primary text-primary-foreground disabled:opacity-40" disabled={!question.trim() || busy} onClick={() => void send()} aria-label="Search events"><ArrowUp className="size-4" /></button>
+      <button type="button" data-testid="guest-event-send" className="flex size-11 items-center justify-center rounded-lg bg-primary text-primary-foreground disabled:opacity-40" disabled={!question.trim() || busy} onClick={send} aria-label="Search events"><ArrowUp className="size-4" /></button>
     </div>
     {error ? <p role="alert" className="text-xs text-destructive">{error}</p> : null}
   </div>;
@@ -83,7 +83,31 @@ const INTERRUPTED_COPY = "The response was interrupted. Check the conversation b
 const runFailedSince = (threadId: string | undefined, before: number) =>
   getConciergeErrorForThread(threadId).version > before || getConciergeErrorForThread(null).version > before;
 
+/** Starter questions: one real turn per click, using the same path as a typed question. */
+function AskSuggestions({ questions, onPick }: { questions: readonly string[]; onPick: (question: string) => void }) {
+  return (
+    <div role="group" aria-label="Suggested questions" data-testid="discovery-ask-suggestions" className="mb-2 flex flex-wrap gap-2">
+      {questions.map((question) => (
+        <button
+          key={question}
+          type="button"
+          data-testid="discovery-ask-suggestion"
+          onClick={() => onPick(question)}
+          // min-h-11 is the 44px touch target the rest of this composer uses.
+          className="inline-flex min-h-11 items-center rounded-full border border-border bg-background px-3 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none"
+        >
+          {question}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Nothing to do with a rejection that runTurn already surfaced to the visitor. */
+const ignoreRejection = () => undefined;
+
 /** One composer on every non-rental browse page; Rentals retains its richer search adapter. */
+// skipcq: JS-0067 - module-local React component; not browser global scope
 function LiveComposer({ page, guestEvents, onAgentResults, hideHeading = false, suggestions }: {
   page: Exclude<DiscoveryPage, "rentals">;
   guestEvents?: EventGuestOptions;
@@ -187,7 +211,8 @@ function LiveComposer({ page, guestEvents, onAgentResults, hideHeading = false, 
       setSending(false);
     }
   }, [agent, appendMessage, busy, isReady, isRuntimeUnavailable, onAgentResults, page, signedOut]);
-  const send = useCallback(() => void runTurn(draft, "composer"), [draft, runTurn]);
+  // runTurn already reports its own failures; ignore a rejection so no click is unhandled.
+  const send = useCallback(() => { runTurn(draft, "composer").catch(ignoreRejection); }, [draft, runTurn]);
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
       event.preventDefault();
@@ -211,20 +236,10 @@ function LiveComposer({ page, guestEvents, onAgentResults, hideHeading = false, 
         </ol>
       ) : null}
       {showSuggestions ? (
-        <div role="group" aria-label="Suggested questions" data-testid="discovery-ask-suggestions" className="mb-2 flex flex-wrap gap-2">
-          {starters.map((question) => (
-            <button
-              key={question}
-              type="button"
-              data-testid="discovery-ask-suggestion"
-              onClick={() => void runTurn(question, "suggestion")}
-              // min-h-11 is the 44px touch target the rest of this composer uses.
-              className="inline-flex min-h-11 items-center rounded-full border border-border bg-background px-3 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none"
-            >
-              {question}
-            </button>
-          ))}
-        </div>
+        <AskSuggestions
+          questions={starters}
+          onPick={(question) => { runTurn(question, "suggestion").catch(ignoreRejection); }}
+        />
       ) : null}
       {signedOut && page === "events" && guestEvents ? <GuestEventComposer options={guestEvents} /> : signedOut ? (
         <div className="flex items-center justify-between gap-3"><p className="text-sm text-muted-foreground">Sign in to ask about {page}.</p><Link className="inline-flex min-h-11 shrink-0 items-center whitespace-nowrap rounded-lg bg-primary px-4 text-sm text-primary-foreground" href={`/login?next=${encodeURIComponent(path)}`}>Sign in</Link></div>
@@ -233,7 +248,7 @@ function LiveComposer({ page, guestEvents, onAgentResults, hideHeading = false, 
           <label className="sr-only" htmlFor={`discovery-ask-input-${page}`}>Ask MDE about {page}</label>
           <textarea id={`discovery-ask-input-${page}`} data-testid="discovery-ask-input" value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={onKeyDown} rows={1} placeholder={`Ask about ${page}…`} className="min-h-11 flex-1 resize-none rounded-lg border border-border bg-background px-3 py-2.5 text-base focus-visible:ring-2 focus-visible:ring-ring sm:text-sm" />
           {busy ? <button type="button" data-testid="discovery-ask-stop" className="flex size-11 items-center justify-center rounded-lg border" aria-label="Stop response" onClick={() => { cancelled.current = true; pendingResult.current = null; stopActiveRun(); }}><Square className="size-4" /></button>
-            : <button type="button" data-testid="discovery-ask-send" className="flex size-11 items-center justify-center rounded-lg bg-primary text-primary-foreground disabled:opacity-40" disabled={!draft.trim() || !isReady} aria-label="Send question" onClick={() => void send()}><ArrowUp className="size-4" /></button>}
+            : <button type="button" data-testid="discovery-ask-send" className="flex size-11 items-center justify-center rounded-lg bg-primary text-primary-foreground disabled:opacity-40" disabled={!draft.trim() || !isReady} aria-label="Send question" onClick={send}><ArrowUp className="size-4" /></button>}
         </div>
       )}
       {busy && draft.trim() ? <p className="mt-2 text-xs text-muted-foreground" role="status">Not sent yet. Finish or stop the current reply, then press Enter to send this question.</p> : null}
@@ -243,6 +258,7 @@ function LiveComposer({ page, guestEvents, onAgentResults, hideHeading = false, 
   );
 }
 
+// skipcq: JS-0067 - module-local React component; not browser global scope
 export function DiscoveryAskComposer({ page, guestEvents, onAgentResults, hideHeading, suggestions }: {
   page: Exclude<DiscoveryPage, "rentals">;
   guestEvents?: EventGuestOptions;
