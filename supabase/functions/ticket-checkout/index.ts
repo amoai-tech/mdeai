@@ -356,7 +356,7 @@ Deno.serve(async (req) => {
   // Reuse this object (and the same idempotency key) after any lost response.
   const stripeParams: Stripe.Checkout.SessionCreateParams = {
     mode: "payment",
-    payment_method_types: ["card"],
+    // Stripe automatically selects eligible methods from Dashboard settings.
     line_items: [{
       price_data: {
         currency: chargeCurrency,

@@ -1,22 +1,13 @@
 import { NextResponse } from "next/server";
-import { headers } from "next/headers";
 import {
   buildAttendeePayload,
   ticketCheckoutInputSchema,
 } from "@/lib/tickets/ticket-checkout-schema";
+import { buildTicketCheckoutReturnUrls, trustedCheckoutOrigin } from "@/lib/tickets/checkout-return-url";
 import {
   getSupabaseAnonAuthHeaders,
   getSupabaseFunctionsBaseUrl,
 } from "@/lib/supabase/edge-functions";
-
-function siteOriginFromHeaders(headerList: Headers): string {
-  const configured = process.env.NEXT_PUBLIC_SITE_URL;
-  if (configured) return configured.replace(/\/$/, "");
-  const host = headerList.get("x-forwarded-host") ?? headerList.get("host");
-  const proto = headerList.get("x-forwarded-proto") ?? "http";
-  if (host) return `${proto}://${host}`;
-  return "http://localhost:3001";
-}
 
 export async function POST(req: Request) {
   let body: unknown;
@@ -41,11 +32,26 @@ export async function POST(req: Request) {
   }
 
   const data = parsed.data;
-  const headerList = await headers();
-  const origin = siteOriginFromHeaders(headerList);
-  const returnBase = `${origin}${data.returnPath.startsWith("/") ? data.returnPath : `/${data.returnPath}`}`;
-  const successUrl = `${returnBase}${returnBase.includes("?") ? "&" : "?"}checkout=success&session_id={CHECKOUT_SESSION_ID}`;
-  const cancelUrl = `${returnBase}${returnBase.includes("?") ? "&" : "?"}checkout=cancelled`;
+  let successUrl: string;
+  let cancelUrl: string;
+  try {
+    const origin = trustedCheckoutOrigin(
+      process.env.NEXT_PUBLIC_SITE_URL,
+      process.env.VERCEL_URL,
+      process.env.NODE_ENV === "production",
+    );
+    ({ successUrl, cancelUrl } = buildTicketCheckoutReturnUrls(
+      origin, data.returnPath,
+    ));
+  } catch (error) {
+    const invalidPath = error instanceof Error &&
+      error.message === "CHECKOUT_RETURN_PATH_INVALID";
+    return NextResponse.json({
+      success: false,
+      error: { code: invalidPath ? "CHECKOUT_RETURN_PATH_INVALID" : "CHECKOUT_ORIGIN_INVALID",
+        message: invalidPath ? "Invalid event return path" : "Checkout return origin is not configured" },
+    }, { status: invalidPath ? 400 : 503 });
+  }
 
   const edgeRes = await fetch(`${getSupabaseFunctionsBaseUrl()}/ticket-checkout`, {
     method: "POST",
