@@ -48,3 +48,24 @@ describe.each([
     expect(text).toMatch(/never say or imply/i);
   });
 });
+
+/**
+ * SAN-1611 — a date-proposal message is about the stay, not a listing search. The rentals page
+ * registers the `suggestRentalDates` frontend tool, and the concierge used to answer the natural
+ * "suggest a rental stay starting November 12" with a rental search plus clarifying questions, so
+ * the editable date draft never opened. Pins the instruction; a live model still has to obey it
+ * (proven against a running app, not by this test).
+ */
+describe("concierge date-proposal routing", () => {
+  it("routes a stay-date request to the frontend tool instead of a rental search", async () => {
+    const text = await instructionsOf(conciergeAgent as unknown as { getInstructions: () => unknown });
+    expect(text).toContain("suggestRentalDates");
+    // The rule must name the tool and forbid the search it used to start.
+    const rule = text
+      .split("\n")
+      .find((line) => line.includes("suggestRentalDates") && line.includes("FRONTEND ACTION"));
+    expect(rule, "no date-proposal instruction naming suggestRentalDates").toBeTruthy();
+    expect(rule).toMatch(/do NOT call search-rentals/i);
+    expect(rule).toMatch(/do NOT ask clarifying questions/i);
+  });
+});
