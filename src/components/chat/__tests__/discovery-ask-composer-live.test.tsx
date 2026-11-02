@@ -6,6 +6,7 @@ const h = vi.hoisted(() => ({
   user: { id: "u1" } as { id: string } | null,
   appendMessage: vi.fn(),
   stopActiveRun: vi.fn(),
+  retryLastTurn: vi.fn(),
   latestResult: vi.fn(),
   subscribers: [] as Array<{ onMessagesChanged?: () => void; onRunFinalized?: () => void }>,
 }));
@@ -30,7 +31,7 @@ vi.mock("@/components/chat/concierge-coagent-context", () => ({
 vi.mock("@/components/rentals/rental-ask-tool-results", () => ({ useTurns: () => [] }));
 vi.mock("@/lib/hooks/use-concierge-chat", () => ({
   useConciergeChat: () => ({
-    appendMessage: h.appendMessage, stopActiveRun: h.stopActiveRun, isLoading: false, isRuntimeUnavailable: () => false,
+    appendMessage: h.appendMessage, stopActiveRun: h.stopActiveRun, retryLastTurn: h.retryLastTurn, isLoading: false, isRuntimeUnavailable: () => false,
   }),
 }));
 vi.mock("../discovery-tool-results", () => ({ getLatestDiscoveryToolResult: h.latestResult }));
@@ -49,6 +50,8 @@ beforeEach(() => {
   h.user = { id: "u1" };
   h.appendMessage.mockReset();
   h.stopActiveRun.mockReset();
+  h.retryLastTurn.mockReset();
+  agent.messages = [];
   // Like the real extractor: only results from the submitted page/start index count.
   h.latestResult.mockReset().mockImplementation((_messages: unknown, page: string, since: number) =>
     page === "restaurants" && since === 0 ? result : null);
@@ -82,6 +85,28 @@ describe("SAN-1145 shared Ask MDE composer — signed-in send outcomes", () => {
     ask("Italian in El Poblado");
     expect((await screen.findByRole("alert")).textContent).toContain("The response was interrupted");
     expect(onAgentResults).not.toHaveBeenCalled();
+  });
+
+  it("shows Retry only after a failed existing turn and never re-appends the user question", async () => {
+    agent.messages = [{ id: "u1", role: "user", content: "What time?" }] as typeof agent.messages;
+    h.appendMessage.mockImplementation(async () => { reportConciergeError("thread-1"); return true; });
+    h.retryLastTurn.mockResolvedValue(true);
+    render(<DiscoveryAskComposer page="restaurants" />);
+    ask("What time?");
+    expect(await screen.findByTestId("discovery-ask-retry")).toBeTruthy();
+    fireEvent.click(screen.getByTestId("discovery-ask-retry"));
+    await waitFor(() => expect(h.retryLastTurn).toHaveBeenCalledTimes(1));
+    expect(h.appendMessage).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(screen.queryByTestId("discovery-ask-retry")).toBeNull());
+  });
+
+  it("does not offer Retry if the question was never appended to the thread", async () => {
+    h.appendMessage.mockResolvedValue(false);
+    render(<DiscoveryAskComposer page="restaurants" />);
+    ask("What time?");
+    expect(await screen.findByRole("alert")).toBeTruthy();
+    expect(screen.queryByTestId("discovery-ask-retry")).toBeNull();
+    expect(h.retryLastTurn).not.toHaveBeenCalled();
   });
 
   it("ignores another conversation's error: a successful reply is not reported as interrupted", async () => {
