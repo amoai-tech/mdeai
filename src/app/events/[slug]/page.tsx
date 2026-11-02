@@ -6,11 +6,6 @@ import { EventDetailView } from "@/components/events/event-detail-view";
 import { getPublicEventResult } from "@/lib/events/get-public-event";
 import { EventUnavailable } from "@/components/events/event-unavailable";
 import { EventCalendarLink } from "@/components/events/event-calendar-link";
-import { getSiteOrigin } from "@/lib/auth/site-url";
-import {
-  buildEventStructuredData,
-  serializeEventStructuredData,
-} from "@/lib/events/event-structured-data";
 
 type EventDetailPageProps = {
   params: Promise<{ slug: string }>;
@@ -39,15 +34,6 @@ export async function generateMetadata({
   };
 }
 
-/** Absolute origin for structured data; a preview without one still renders the page. */
-async function structuredDataOrigin(): Promise<string | null> {
-  try {
-    return await getSiteOrigin();
-  } catch {
-    return null;
-  }
-}
-
 export default async function EventDetailPage({ params, searchParams }: EventDetailPageProps) {
   const { slug } = await params;
   // Allowlist, not a redirect target: only the literal "chat" changes the back link.
@@ -57,18 +43,9 @@ export default async function EventDetailPage({ params, searchParams }: EventDet
   if (result.status === "not-found") notFound();
   if (result.status === "unavailable") return <EventUnavailable />;
   const event = result.event;
-  // Structured data describes only stored facts, and only for a real event.
-  const structuredData = buildEventStructuredData(event, {
-    siteOrigin: await structuredDataOrigin(),
-  });
 
   return (
     <>
-      <script
-        type="application/ld+json"
-        // Escaped by serializeEventStructuredData so stored text cannot close the tag.
-        dangerouslySetInnerHTML={{ __html: serializeEventStructuredData(structuredData) }}
-      />
       <Suspense fallback={null}>
         <EventCheckoutNotice />
       </Suspense>

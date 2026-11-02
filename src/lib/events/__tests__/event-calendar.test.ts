@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { BuildEventCalendarOptions } from "../event-calendar";
 import {
   buildEventCalendar,
   escapeCalendarText,
@@ -24,6 +25,13 @@ function event(overrides: Partial<CalendarEventSource> = {}): CalendarEventSourc
     venue: null,
     ...overrides,
   };
+}
+
+/** Build a calendar that must exist; a null here is a broken fixture, not an expected value. */
+function makeCalendar(event: CalendarEventSource, options?: BuildEventCalendarOptions) {
+  const built = buildEventCalendar(event, options);
+  if (!built) throw new Error("expected a calendar file for this event");
+  return built;
 }
 
 function unfold(body: string): string {
@@ -139,12 +147,11 @@ describe("eventCalendarLocation", () => {
 
 describe("buildEventCalendar", () => {
   it("writes a UTC VEVENT with the stored window, a stable UID and the canonical URL", () => {
-    const calendar = buildEventCalendar(event(), {
+    const calendar = makeCalendar(event(), {
       siteOrigin: "https://www.mdeai.co",
       now: NOW,
     });
-    expect(calendar).not.toBeNull();
-    const body = unfold(calendar!.body);
+    const body = unfold(calendar.body);
 
     expect(body).toContain("BEGIN:VCALENDAR\r\nVERSION:2.0\r\n");
     expect(body).toContain("UID:a1b2c3d4-0001-0001-0001-000000000003@mdeai.co\r\n");
@@ -156,15 +163,15 @@ describe("buildEventCalendar", () => {
     expect(body).toContain("URL:https://www.mdeai.co/events/feria-de-las-flores\r\n");
     // No invented claims about attendance, booking or organizer.
     expect(body).not.toMatch(/ATTENDEE|ORGANIZER|BOOKING|CONFIRMED/i);
-    expect(calendar!.filename).toBe("mdeai-event-feria-de-las-flores.ics");
+    expect(calendar.filename).toBe("mdeai-event-feria-de-las-flores.ics");
   });
 
   it("keeps one UID per event id so a re-import updates instead of duplicating", () => {
-    const first = buildEventCalendar(event(), { now: NOW })!.body;
-    const second = buildEventCalendar(
+    const first = makeCalendar(event(), { now: NOW }).body;
+    const second = makeCalendar(
       event({ name: "Feria de las Flores (renamed)", startsAt: "2026-12-07T19:00:00+00:00" }),
       { now: NOW },
-    )!.body;
+    ).body;
     const uid = (body: string) => body.match(/UID:(.*)\r\n/)?.[1];
     expect(uid(first)).toBe(uid(second));
   });
@@ -178,7 +185,7 @@ describe("buildEventCalendar", () => {
   });
 
   it("omits URL when no site origin is known instead of emitting a broken one", () => {
-    const calendar = buildEventCalendar(event(), { now: NOW })!;
+    const calendar = makeCalendar(event(), { now: NOW });
     expect(unfold(calendar.body)).not.toContain("URL:");
   });
 
@@ -194,7 +201,7 @@ describe("buildEventCalendar", () => {
   });
 
   it("uses a 2-hour fallback and says so when the end time is missing", () => {
-    const calendar = buildEventCalendar(event({ endsAt: null }), { now: NOW })!;
+    const calendar = makeCalendar(event({ endsAt: null }), { now: NOW });
     const body = unfold(calendar.body);
     expect(body).toContain("DTSTART:20261206T190000Z\r\n");
     expect(body).toContain("DTEND:20261206T210000Z\r\n");
@@ -203,7 +210,7 @@ describe("buildEventCalendar", () => {
   });
 
   it("never invents a duration longer than 2 hours", () => {
-    const body = unfold(buildEventCalendar(event({ endsAt: null }), { now: NOW })!.body);
+    const body = unfold(makeCalendar(event({ endsAt: null }), { now: NOW }).body);
     const startMs = Date.parse("2026-12-06T19:00:00Z");
     const endMs = Date.parse("2026-12-06T21:00:00Z");
     expect(body).toContain("DTEND:20261206T210000Z\r\n");
@@ -245,10 +252,10 @@ describe("buildEventCalendar", () => {
   });
 
   it("ignores an unusable site origin rather than writing a bad URL", () => {
-    const calendar = buildEventCalendar(event(), {
-      siteOrigin: "javascript:alert(1)",
+    const calendar = makeCalendar(event(), {
+      siteOrigin: "ht!tp://not a url",
       now: NOW,
-    })!;
+    });
     expect(unfold(calendar.body)).not.toContain("URL:");
   });
 });
