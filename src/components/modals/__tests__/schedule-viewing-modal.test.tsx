@@ -2,6 +2,12 @@ import { describe, expect, it, vi } from "vitest";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn(), refresh: vi.fn(), prefetch: vi.fn() }),
+  usePathname: () => "/rentals",
+  useSearchParams: () => new URLSearchParams(),
+}));
+
 vi.mock("@/components/chat/rental-ui-context", () => ({
   useRentalUi: vi.fn(),
 }));

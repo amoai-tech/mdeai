@@ -5,10 +5,13 @@ import { Button } from "@/components/ui/button";
 import { useRentalUi } from "@/components/chat/rental-ui-context";
 import { submitScheduleViewing } from "@/lib/leads/submit-schedule-viewing";
 import { buildSchedulePrefill, type SchedulePrefill } from "@/lib/leads/schedule-prefill";
+import { ScheduleViewingError } from "@/lib/leads/submit-schedule-viewing";
+import type { ScheduleViewingErrorCode } from "@/lib/leads/schedule-viewing-schema";
 import { createClient } from "@/lib/supabase/client";
 import { useKeyboardInset } from "@/lib/hooks/use-chat-keyboard-height";
 import { useModalA11y } from "@/lib/use-modal-a11y";
 import { contactReducer, INITIAL_CONTACT } from "./contact-fields";
+import { ScheduleViewingRecovery } from "./schedule-viewing-recovery";
 
 /**
  * Look up the signed-in user + profile and build their contact prefill.
@@ -47,10 +50,23 @@ export const ScheduleViewingModal = () => {
   const submitLockRef = useRef(false);
   const [contact, dispatchContact] = useReducer(contactReducer, INITIAL_CONTACT);
   const [preferredAt, setPreferredAt] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  // SAN-1059 — the message alone cannot tell the renter what to do next, so the failure carries
+  // the typed code as well. It also carries the apartment it belongs to: opening a different
+  // apartment must never inherit the previous one's "not accepting requests" error.
+  const [failure, setFailure] = useState<{
+    listingId: string;
+    message: string;
+    code: ScheduleViewingErrorCode | null;
+  } | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const isOpen = Boolean(scheduleTarget);
+  // Derived, not stored: a failure is only ever shown for the apartment that produced it.
+  const activeFailure =
+    failure && scheduleTarget && failure.listingId === scheduleTarget.listingId ? failure : null;
+  // Preserve the renter's filters; only the apartment changes. Rendered client-side only,
+  // because this block needs a selected apartment.
+  const resultsHref = `/rentals${typeof window === "undefined" ? "" : window.location.search}`;
 
   // When the modal opens, look up the signed-in user and seed blank contact fields from their
   // profile + auth account. The reducer decides ownership (see contact-fields.ts), so a slow
@@ -69,11 +85,15 @@ export const ScheduleViewingModal = () => {
 
   if (!scheduleTarget) return null;
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  /**
+   * The submit path, callable from the form and from "Refresh apartment". Re-running it is a
+   * real re-check against the server: if the apartment came back, the request completes without
+   * the renter retyping anything.
+   */
+  const submitRequest = async () => {
     if (submitLockRef.current) return;
     submitLockRef.current = true;
-    setError(null);
+    setFailure(null);
     setSubmitting(true);
     try {
       const result = await submitScheduleViewing({
@@ -98,11 +118,20 @@ export const ScheduleViewingModal = () => {
     } catch (err) {
       // The modal stays open with the typed values intact so the renter can fix
       // the time or retry rather than losing the request.
-      setError(err instanceof Error ? err.message : "Submit failed");
+      setFailure({
+        listingId: scheduleTarget.listingId,
+        message: err instanceof Error ? err.message : "Submit failed",
+        code: err instanceof ScheduleViewingError ? err.code : null,
+      });
     } finally {
       submitLockRef.current = false;
       setSubmitting(false);
     }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await submitRequest();
   };
 
   return (
@@ -179,14 +208,22 @@ export const ScheduleViewingModal = () => {
               disabled={submitting}
             />
           </label>
-          {error ? (
+          {activeFailure ? (
             <p
               role="alert"
               className="text-sm text-destructive"
               data-testid="schedule-viewing-error"
             >
-              {error}
+              {activeFailure.message}
             </p>
+          ) : null}
+          {activeFailure?.code === "LISTING_UNAVAILABLE" ? (
+            <ScheduleViewingRecovery
+              submitting={submitting}
+              resultsHref={resultsHref}
+              onRecheck={submitRequest}
+              onChooseAnother={closeScheduleViewing}
+            />
           ) : null}
           <div className="flex justify-end gap-2 pt-2">
             <Button
