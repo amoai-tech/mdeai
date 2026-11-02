@@ -20,7 +20,7 @@ const agent = {
   messages: [] as unknown[],
   isRunning: false,
   threadId: "thread-1",
-  subscribe: () => ({ unsubscribe: () => {} }),
+  subscribe: () => ({ unsubscribe: vi.fn() }),
 };
 
 vi.mock("next/navigation", () => ({
@@ -61,7 +61,7 @@ const QUESTIONS = [
 
 const openEventDrawer = async () => {
   render(<AskMdeSheet />);
-  act(() => openAskMde());
+  act(() => { openAskMde(); });
   return screen.findByTestId("discovery-ask-suggestions");
 };
 
@@ -91,18 +91,20 @@ describe("SAN-1620 S7 event-start questions", () => {
   });
 
   it("does not duplicate the turn when the same question is clicked twice before it starts", async () => {
-    let finish: (saved: boolean) => void = () => {};
+    let finish!: (saved: boolean) => void;
     h.appendMessage.mockReturnValue(new Promise<boolean>((resolve) => { finish = resolve; }));
     await openEventDrawer();
     const chip = screen.getByRole("button", { name: "Are tickets available?" });
     // Two clicks in the same tick: the in-flight guard must accept only the first.
-    await act(async () => { chip.click(); chip.click(); });
+    act(() => { chip.click(); chip.click(); });
     expect(h.appendMessage).toHaveBeenCalledTimes(1);
-    await act(async () => { finish(true); });
+    act(() => { finish(true); });
   });
 
   it("hides the questions while a reply is in flight", async () => {
-    h.appendMessage.mockReturnValue(new Promise<boolean>(() => {}));
+    h.appendMessage.mockReturnValue(new Promise<boolean>(() => {
+      // Intentionally never settles: the reply stays in flight for this test.
+    }));
     const group = await openEventDrawer();
     await userEvent.click(within(group).getByRole("button", { name: "When does it start?" }));
     await waitFor(() => expect(screen.queryByTestId("discovery-ask-suggestions")).toBeNull());
@@ -113,7 +115,7 @@ describe("SAN-1620 S7 event-start questions", () => {
   it("keeps guests on the existing sign-in state with no questions", async () => {
     h.user = null;
     render(<AskMdeSheet />);
-    act(() => openAskMde());
+    act(() => { openAskMde(); });
     expect(await screen.findByText("Sign in to ask about events.")).toBeTruthy();
     expect(screen.queryByTestId("discovery-ask-suggestions")).toBeNull();
     expect(h.appendMessage).not.toHaveBeenCalled();
