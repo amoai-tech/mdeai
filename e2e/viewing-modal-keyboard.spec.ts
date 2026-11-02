@@ -215,6 +215,26 @@ test.describe("SAN-1075 viewing modal on a phone", () => {
     await expectInsideVisibleViewport(page, submit, "Review in landscape");
   });
 
+  // DayPicker returns the clicked cell as a browser-local calendar Date. We persist its
+  // year/month/day components as a listing-local date-only string; interpreting the instant
+  // through the Bogotá timezone would incorrectly shift midnight on users' other devices.
+  for (const timezoneId of ["Europe/Madrid", "America/New_York"] as const) {
+    test.describe(`calendar choice in ${timezoneId}`, () => {
+      test.use({ timezoneId });
+      test("preserves the clicked calendar day as the Medellín viewing day", async ({ page }) => {
+        const modal = await openViewingModal(page);
+        const slot = nextMedellinTestViewingWallClock();
+        const [chosenDate] = slot.split("T");
+        await modal.locator('input[name="name"]').fill("Camila Test");
+        await modal.locator('input[name="email"]').fill("camila@example.com");
+        await chooseViewingDateTime(page, slot);
+        await expect(modal.getByTestId("viewing-date-selection")).toContainText(chosenDate);
+        await advanceViewingReview(page);
+        await expect(modal.getByTestId("schedule-viewing-review")).toContainText(chosenDate);
+      });
+    });
+  }
+
   test("a short phone with a keyboard can still scroll to Submit", async ({ page }) => {
     await page.setViewportSize(PHONE_360_SHORT);
     await installKeyboardModel(page);
