@@ -32,9 +32,9 @@ type ReminderNotification = {
   leadUrl: string;
 };
 const PROMPT_LABEL = "📬 Ver y responder";
-function truncate(s: string, max: number) {
-  const t = s.trim();
-  return t.length > max ? `${t.slice(0, max - 1).trim()}…` : t;
+function truncate(value: string, max: number) {
+  const trimmed = value.trim();
+  return trimmed.length > max ? `${trimmed.slice(0, max - 1).trim()}…` : trimmed;
 }
 /** Body for the FIRST send (when the lead lands). */ export function renderNewLeadMessage(input: NewLeadNotification) {
   const greeting = `Hola ${input.landlordFirstName.trim() || "Anfitrión"} 👋`;
@@ -44,24 +44,24 @@ function truncate(s: string, max: number) {
   const message = truncate(input.messageSnippet, 200);
   return [
     `${greeting} — tienes una nueva consulta en mdeai 🏠`,
-    ``,
+    "",
     `📍 ${where}`,
     `👤 ${renter} pregunta:`,
     `"${message}"`,
-    ``,
+    "",
     moveLine,
-    ``,
+    "",
     `${PROMPT_LABEL}: ${input.leadUrl}`
   ].join("\n");
 }
 /** Body for the 30-minute reminder. */ export function renderReminderMessage(input: ReminderNotification) {
   return [
     `⏰ Recordatorio (${input.ageLabel})`,
-    ``,
+    "",
     `${input.renterName} aún espera respuesta sobre "${truncate(input.apartmentTitle, 60)}".`,
-    ``,
-    `Las primeras horas son las más importantes — los renters comparan 3-5 anuncios y reservan rápido.`,
-    ``,
+    "",
+    "Las primeras horas son las más importantes — los renters comparan 3-5 anuncios y reservan rápido.",
+    "",
     `${PROMPT_LABEL}: ${input.leadUrl}`
   ].join("\n");
 }
