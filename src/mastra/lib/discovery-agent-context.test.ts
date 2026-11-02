@@ -40,6 +40,13 @@ describe("SAN-737 Concierge instructions agree about verified lookup ownership",
     expect(source).toContain("do NOT call the lookup tool again for the same ID");
     expect(source).toContain("For an unrelated new discovery request, use the appropriate search tool normally");
     expect(source).not.toContain("selectedPublicEntityId from the active discovery-page context BEFORE answering concrete facts");
+    // Internal server-grounding labels and schema fields must not leak into
+    // user-visible answers; they still remain available for truthful grounding.
+    expect(source).toContain('Never start a reply with "Current selection:"');
+    expect(source).toContain('Do NOT say "event_tickets is empty"');
+    expect(source).toContain('No tickets are currently listed for Feria de las Flores Preview Parade.');
+    expect(source).toContain('never transfer details from another event');
+    expect(source).toContain('these presentation rules do not hide requested technical facts');
   });
 });
 
