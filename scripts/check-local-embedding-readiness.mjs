@@ -8,6 +8,7 @@
  * Optional: SUPABASE_LOCAL_DB_CONTAINER=supabase_db_<project-id> npm run test:local:embedding
  */
 import { execFileSync } from 'node:child_process';
+import { request } from 'node:http';
 
 const run = (binary, args) =>
   execFileSync(binary, args, { encoding: 'utf8', timeout: 12_000 }).trim();
@@ -49,16 +50,22 @@ async function main() {
   const ipv4 = bindings.split('\n').find((s) => /^0\.0\.0\.0:|^127\.0\.0\.1:/.test(s));
   if (!ipv4) throw new Error('Could not find local HTTP port for Supabase Kong');
   const port = Number(ipv4.match(/:(\d+)$/)?.[1]);
-  if (!Number.isSafeInteger(port)) throw new Error('Invalid local Supabase port');
+  if (!Number.isInteger(port) || port < 1 || port > 65535)
+    throw new Error('Invalid local Supabase port');
 
-  // GET is never allowed to claim work: the worker must reply with HTTP 405.
-  let functionHttpStatus = null;
-  try {
-    const response = await fetch(`http://127.0.0.1:${port}/functions/v1/process-embedding-jobs`, {
-      method: 'GET', signal: AbortSignal.timeout(5_000),
+  // Fixed loopback host and endpoint, not a user-provided URL. A GET cannot claim jobs.
+  const functionHttpStatus = await new Promise((resolve) => {
+    const req = request({
+      hostname: '127.0.0.1', port, path: '/functions/v1/process-embedding-jobs',
+      method: 'GET', timeout: 5_000,
+    }, (response) => {
+      response.resume();
+      resolve(response.statusCode);
     });
-    functionHttpStatus = response.status;
-  } catch { /* the summary below reports the unreachable worker */ }
+    req.on('timeout', () => req.destroy());
+    req.on('error', () => resolve(null));
+    req.end();
+  });
 
   const sql = `BEGIN READ ONLY;
     SELECT
