@@ -1,4 +1,5 @@
 import { getPublicEventResult } from "@/lib/events/get-public-event";
+import { getSiteOrigin } from "@/lib/auth/site-url";
 import {
   CALENDAR_CONTENT_TYPE,
   buildEventCalendar,
@@ -12,7 +13,7 @@ type RouteContext = { params: Promise<{ slug: string }> };
  * Same visibility rules as the public event page: only published/live, active events resolve.
  * A temporary read failure is a retryable 503, never a false 404.
  */
-export async function GET(request: Request, context: RouteContext) {
+export async function GET(_request: Request, context: RouteContext) {
   const { slug } = await context.params;
   const result = await getPublicEventResult(slug);
 
@@ -27,8 +28,8 @@ export async function GET(request: Request, context: RouteContext) {
   }
 
   const calendar = buildEventCalendar(result.event, {
-    // The origin the visitor actually reached, so the URL property opens the page they are on.
-    siteOrigin: new URL(request.url).origin,
+    // Use the application's trusted configured origin, not a request-controlled Host.
+    siteOrigin: await getSiteOrigin().catch(() => null),
   });
   // Only a stored start time that cannot be parsed lands here; a calendar with a guessed
   // start would be a fabricated fact.

@@ -127,7 +127,113 @@ describe("ScheduleViewingModal submit behaviour (SAN-1203)", () => {
     });
   });
 
-  it("forwards the typed wall clock and the committed showing id", async () => {
+  it("keeps the renter's details and offers recovery when the apartment cannot take a request", async () => {
+    const { ScheduleViewingError: MockedError } = await import("@/lib/leads/submit-schedule-viewing");
+    // The module is mocked with a bare `class extends Error`, so set the fields the modal reads.
+    const unavailable = new (MockedError as unknown as new () => Error & {
+      code: string;
+      message: string;
+    })();
+    unavailable.code = "LISTING_UNAVAILABLE";
+    unavailable.message =
+      "This home isn't accepting viewing requests right now. Pick another apartment from the results.";
+    vi.mocked(submitScheduleViewing).mockRejectedValue(unavailable);
+
+    await renderModalAndFill();
+    await act(() => {
+      submitForm();
+      return Promise.resolve();
+    });
+
+    // The message is shown, and so is a way forward.
+    expect(container.querySelector('[data-testid="schedule-viewing-error"]')?.textContent).toContain(
+      "isn't accepting viewing requests",
+    );
+    const recovery = container.querySelector('[data-testid="schedule-viewing-recovery"]');
+    expect(recovery).not.toBeNull();
+
+    // Nothing the renter typed was thrown away.
+    expect((container.querySelector('input[name="name"]') as HTMLInputElement).value).toBe("Camila Test");
+    expect((container.querySelector('input[name="email"]') as HTMLInputElement).value).toBe(
+      "camila@example.com",
+    );
+    expect((container.querySelector('input[name="preferredAt"]') as HTMLInputElement).value).toBe(
+      "2099-06-01T15:00",
+    );
+
+    // "Choose another apartment" is a real link to the results, so it needs no router and works
+    // without JavaScript; clicking it closes the modal.
+    const chooseAnother = container.querySelector(
+      '[data-testid="schedule-viewing-choose-another"]',
+    ) as HTMLAnchorElement;
+    expect(chooseAnother.tagName).toBe("A");
+    expect(chooseAnother.getAttribute("href")).toMatch(/^\/rentals/);
+    // jsdom cannot navigate; prevent the default so the test can still assert the handler ran.
+    chooseAnother.addEventListener("click", (event) => event.preventDefault(), { once: true });
+    await act(() => {
+      chooseAnother.click();
+      return Promise.resolve();
+    });
+    expect(useRentalUi().closeScheduleViewing).toHaveBeenCalled();
+
+    // "Refresh apartment" re-runs the request rather than reloading the page, so the typed
+    // values survive a re-check.
+    vi.mocked(submitScheduleViewing).mockClear();
+    await act(() => {
+      (container.querySelector('[data-testid="schedule-viewing-refresh"]') as HTMLButtonElement).click();
+      return Promise.resolve();
+    });
+    expect(submitScheduleViewing).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not carry one apartment's unavailable error onto the next apartment", async () => {
+    const { ScheduleViewingError: MockedError } = await import("@/lib/leads/submit-schedule-viewing");
+    const unavailable = new (MockedError as unknown as new () => Error & { code: string; message: string })();
+    unavailable.code = "LISTING_UNAVAILABLE";
+    unavailable.message = "This home isn't accepting viewing requests right now.";
+    vi.mocked(submitScheduleViewing).mockRejectedValue(unavailable);
+
+    await renderModalAndFill();
+    await act(() => {
+      submitForm();
+      return Promise.resolve();
+    });
+    expect(container.querySelector('[data-testid="schedule-viewing-recovery"]')).not.toBeNull();
+
+    // The renter gives up on this one and opens another apartment.
+    vi.mocked(useRentalUi).mockReturnValue({
+      scheduleTarget: { ...TARGET, listingId: "apt-otro-002", title: "Another Apartment" },
+      closeScheduleViewing: vi.fn(),
+      setLeadConfirmation: vi.fn(),
+    } as unknown as ReturnType<typeof useRentalUi>);
+
+    await act(() => {
+      root.render(<ScheduleViewingModal />);
+      return Promise.resolve();
+    });
+
+    // The previous apartment's failure must not follow the renter here.
+    expect(container.querySelector('[data-testid="schedule-viewing-recovery"]')).toBeNull();
+    expect(container.querySelector('[data-testid="schedule-viewing-error"]')).toBeNull();
+  });
+
+  it("shows no recovery action for an ordinary validation error", async () => {
+    const { ScheduleViewingError: MockedError } = await import("@/lib/leads/submit-schedule-viewing");
+    const invalid = new (MockedError as unknown as new () => Error & { code: string })();
+    invalid.code = "VALIDATION_ERROR";
+    invalid.message = "Please check your viewing details and try again.";
+    vi.mocked(submitScheduleViewing).mockRejectedValue(invalid);
+
+    await renderModalAndFill();
+    await act(() => {
+      submitForm();
+      return Promise.resolve();
+    });
+
+    expect(container.querySelector('[data-testid="schedule-viewing-recovery"]')).toBeNull();
+  });
+
+it("forwards the typed wall clock and the committed showing id", async () => {
     vi.mocked(submitScheduleViewing).mockResolvedValue({
       leadId: "lead-1",
       showingId: "showing-1",

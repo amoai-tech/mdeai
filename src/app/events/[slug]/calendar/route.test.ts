@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mock = vi.hoisted(() => ({ getPublicEventResult: vi.fn() }));
+const mock = vi.hoisted(() => ({ getPublicEventResult: vi.fn(), getSiteOrigin: vi.fn() }));
 vi.mock("@/lib/events/get-public-event", () => ({
   getPublicEventResult: mock.getPublicEventResult,
 }));
+vi.mock("@/lib/auth/site-url", () => ({ getSiteOrigin: mock.getSiteOrigin }));
 import { GET } from "./route";
 import type { PublicEventDetail } from "@/lib/events/types";
 
@@ -30,6 +31,7 @@ const request = () => new Request("https://www.mdeai.co/events/feria-de-las-flor
 
 beforeEach(() => {
   mock.getPublicEventResult.mockReset();
+  mock.getSiteOrigin.mockReset().mockResolvedValue("https://www.mdeai.co");
 });
 
 describe("GET /events/[slug]/calendar", () => {
@@ -51,6 +53,14 @@ describe("GET /events/[slug]/calendar", () => {
     // The URL property uses the origin the visitor actually reached.
     expect(body).toContain("URL:https://www.mdeai.co/events/feria-de-las-flores\r\n");
     expect(body.trimEnd().endsWith("END:VCALENDAR")).toBe(true);
+  });
+
+  it("never uses an attacker-controlled request host as the event URL", async () => {
+    mock.getPublicEventResult.mockResolvedValue({ status: "ok", event });
+    const response = await GET(new Request("https://other.example/events/feria/calendar"), context);
+    const body = await response.text();
+    expect(body).toContain("URL:https://www.mdeai.co/events/feria-de-las-flores");
+    expect(body).not.toContain("other.example");
   });
 
   it("returns 404 only when the event genuinely does not exist", async () => {

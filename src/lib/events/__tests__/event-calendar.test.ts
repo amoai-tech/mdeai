@@ -128,6 +128,12 @@ describe("eventCalendarLocation", () => {
     ).toBeNull();
   });
 
+  it("never labels a city alone as the event meeting location", () => {
+    expect(eventCalendarLocation(event({ address: null, venue: null, city: "Medellín" }))).toBeNull();
+    const calendar = makeCalendar(event({ address: null, venue: null, city: "Medellín" }), { now: NOW });
+    expect(unfold(calendar.body)).not.toContain("LOCATION:");
+  });
+
   it("uses the saved venue and does not repeat a city already in the street", () => {
     expect(
       eventCalendarLocation(
@@ -200,32 +206,22 @@ describe("buildEventCalendar", () => {
     expect(body).not.toContain("\r\nSegunda línea");
   });
 
-  it("uses a 2-hour fallback and says so when the end time is missing", () => {
+  it("omits an unknown end time instead of reserving a made-up two-hour block", () => {
     const calendar = makeCalendar(event({ endsAt: null }), { now: NOW });
     const body = unfold(calendar.body);
     expect(body).toContain("DTSTART:20261206T190000Z\r\n");
-    expect(body).toContain("DTEND:20261206T210000Z\r\n");
-    expect(body).toContain("COMMENT:");
-    expect(body).toMatch(/COMMENT:.*two hours/);
+    expect(body).not.toContain("DTEND:");
+    expect(body).not.toContain("DURATION:");
+    expect(body).toContain("COMMENT:No confirmed end time is available for this event.");
   });
 
-  it("never invents a duration longer than 2 hours", () => {
-    const body = unfold(makeCalendar(event({ endsAt: null }), { now: NOW }).body);
-    const startMs = Date.parse("2026-12-06T19:00:00Z");
-    const endMs = Date.parse("2026-12-06T21:00:00Z");
-    expect(body).toContain("DTEND:20261206T210000Z\r\n");
-    expect(endMs - startMs).toBeLessThanOrEqual(2 * 60 * 60 * 1000);
-  });
-
-  it("honours a stored end that is earlier than the start by falling back, never emitting a backwards window", () => {
-    const calendar = buildEventCalendar(
-      event({ endsAt: "2026-12-06T18:00:00+00:00" }),
-      { now: NOW },
-    )!;
-    const body = unfold(calendar.body);
-    expect(body).toContain("DTSTART:20261206T190000Z\r\n");
-    expect(body).toContain("DTEND:20261206T210000Z\r\n");
-    expect(body).toContain("COMMENT:");
+  it("omits an invalid or backwards end time, rather than silently replacing it", () => {
+    for (const endsAt of ["bad-time", "2026-12-06T18:00:00+00:00"]) {
+      const body = unfold(makeCalendar(event({ endsAt }), { now: NOW }).body);
+      expect(body).not.toContain("DTEND:");
+      expect(body).not.toContain("DURATION:");
+      expect(body).toContain("COMMENT:No confirmed end time");
+    }
   });
 
   it("refuses to guess a start time that cannot be parsed", () => {

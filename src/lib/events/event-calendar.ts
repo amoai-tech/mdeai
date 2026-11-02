@@ -5,8 +5,8 @@
  * - DTSTART/DTEND come from the stored `event_start_time` / `event_end_time`, converted to UTC.
  * - The event name becomes SUMMARY; nothing is renamed or embellished.
  * - LOCATION is emitted only when the event has a saved venue name or street address.
- * - No duration is invented beyond the documented 2-hour fallback, which is announced to the
- *   calendar client with an in-file COMMENT (RFC 5545 §3.8.1.4) when the end time is missing.
+ * - A missing/invalid end time omits DTEND/DURATION, as RFC 5545 permits.
+ *   No organizer-confirmed duration is inferred.
  * - The file never claims attendance, a booking, or a confirmed organizer.
  */
 
@@ -39,14 +39,7 @@ export type BuildEventCalendarOptions = {
 /** RFC 5545 §3.1: physical lines are capped at 75 octets, excluding the CRLF. */
 const MAX_LINE_OCTETS = 75;
 
-/**
- * Missing end times fall back to this duration so calendar clients show a block instead of a
- * point. It is announced with a COMMENT and is never presented as the organizer's data.
- */
-const FALLBACK_DURATION_MS = 2 * 60 * 60 * 1000;
-
-const FALLBACK_END_COMMENT =
-  "The organizer has not published an end time. This calendar entry assumes two hours after the start.";
+const UNKNOWN_END_COMMENT = "No confirmed end time is available for this event.";
 
 const encoder = new TextEncoder();
 
@@ -139,7 +132,8 @@ export function eventCalendarLocation(event: CalendarEventSource): string | null
   const parts = [name, street, cityIsInStreet ? null : city].filter(
     (part): part is string => Boolean(part),
   );
-  return parts.length > 0 ? parts.join(", ") : null;
+  // A city alone is an area, not an event meeting location.
+  return name || street ? parts.join(", ") : null;
 }
 
 function absoluteSiteOrigin(siteOrigin: string | null | undefined): string | null {
@@ -173,10 +167,8 @@ export function buildEventCalendar(
   if (!start) return null;
 
   const storedEnd = parseStoredDate(event.endsAt);
-  // DTEND must be later than DTSTART (RFC 5545 §3.8.2.2); a missing, unparseable or
-  // non-increasing stored end is announced, not silently rewritten.
+  // RFC 5545 permits a VEVENT without DTEND; do not fabricate an end time.
   const endIsUsable = storedEnd !== null && storedEnd.getTime() > start.getTime();
-  const end = endIsUsable ? storedEnd : new Date(start.getTime() + FALLBACK_DURATION_MS);
 
   const now = options.now ?? new Date();
   const origin = absoluteSiteOrigin(options.siteOrigin);
@@ -195,11 +187,11 @@ export function buildEventCalendar(
     `UID:${event.id}@mdeai.co`,
     `DTSTAMP:${formatCalendarUtc(now)}`,
     `DTSTART:${formatCalendarUtc(start)}`,
-    `DTEND:${formatCalendarUtc(end)}`,
     `SUMMARY:${escapeCalendarText(event.name)}`,
   ];
 
-  if (!endIsUsable) lines.push(`COMMENT:${escapeCalendarText(FALLBACK_END_COMMENT)}`);
+  if (endIsUsable && storedEnd) lines.push(`DTEND:${formatCalendarUtc(storedEnd)}`);
+  else lines.push(`COMMENT:${escapeCalendarText(UNKNOWN_END_COMMENT)}`);
   if (location) lines.push(`LOCATION:${escapeCalendarText(location)}`);
   if (url) lines.push(`URL:${url}`);
 

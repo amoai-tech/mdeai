@@ -6,6 +6,8 @@ import { EventDetailView } from "@/components/events/event-detail-view";
 import { getPublicEventResult } from "@/lib/events/get-public-event";
 import { EventUnavailable } from "@/components/events/event-unavailable";
 import { EventCalendarLink } from "@/components/events/event-calendar-link";
+import { getSiteOrigin } from "@/lib/auth/site-url";
+import { buildEventStructuredData, serializeEventStructuredData } from "@/lib/events/event-structured-data";
 
 type EventDetailPageProps = {
   params: Promise<{ slug: string }>;
@@ -43,9 +45,14 @@ export default async function EventDetailPage({ params, searchParams }: EventDet
   if (result.status === "not-found") notFound();
   if (result.status === "unavailable") return <EventUnavailable />;
   const event = result.event;
+  // Avoid untrusted inline HTML: the JSON is escaped before use as script text.
+  // React 19 emits script text children verbatim (verified by server render).
+  const origin = await getSiteOrigin().catch(() => null);
+  const jsonLd = serializeEventStructuredData(buildEventStructuredData(event, { siteOrigin: origin }));
 
   return (
     <>
+      <script type="application/ld+json">{jsonLd}</script>
       <Suspense fallback={null}>
         <EventCheckoutNotice />
       </Suspense>
