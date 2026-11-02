@@ -1,15 +1,14 @@
 /**
  * lead-from-form — Landlord V1 D7.5.
  *
- * Renter clicks "Contact Host" on /apartments/:id, fills 3 fields
+ * Renter clicks "Contact Host" on a rental Details surface, fills the reply fields
  * (name, when-moving, optional message), and submits. We:
  *
  *   1. Validate (Zod) + honeypot check + rate limit.
  *   2. Look up apartment → landlord_id → landlord_profiles.whatsapp_e164.
  *   3. Insert a `landlord_inbox` row (channel='form', structured_profile
  *      with the move-when answer + name).
- *   4. Return the listing_url + landlord whatsapp number so the client
- *      can build the wa.me link and open it in a new tab.
+ *   4. Return a saved lead ID; never expose the host phone to the renter.
  *
  * Auth: verify_jwt: false. Anon renters need to message hosts without
  * having to sign up first — that's a key insight from §1 of the V1 plan
@@ -27,6 +26,8 @@ import { loadTwilioConfig, sendWhatsApp } from "../_shared/twilio-whatsapp.ts";
 import { renderNewLeadMessage } from "../_shared/lead-notify-templates.ts";
 const PayloadSchema = z.object({
   apartment_id: z.string().uuid(),
+  request_id: z.string().uuid(),
+  email: z.string().email().max(254),
   /** Renter's name. Falls back to "Anonymous" if omitted. */ name: z.string().min(1).max(60),
   /** When they want to move. Maps to landlord_inbox.structured_profile.move_when. */ move_when: z.enum([
     "now",
@@ -39,7 +40,7 @@ const PayloadSchema = z.object({
    * the suppress logic below handles non-empty values silently. */ website: z.string().optional(),
   /** Anon-session id from the client (header-or-body), used for per-session rate limit. */ anon_session_id: z.string().max(60).optional()
 });
-function clientIp(req) {
+function clientIp(req: Request) {
   const fwd = req.headers.get("x-forwarded-for");
   if (fwd) return fwd.split(",")[0].trim();
   return req.headers.get("cf-connecting-ip") ?? "unknown";
@@ -74,9 +75,25 @@ Deno.serve(async (req)=>{
       }
     }, 200, req);
   }
-  // 3. Rate limit. Two keys: per-IP (covers most bots) and per
+  // 3. Rate limit for new submissions. Two keys: per-IP (covers most bots) and per
   // anon-session (covers shared-IP cases like coworking + university WiFi).
   const service = getServiceClient();
+  const replyEmail = payload.email.trim().toLowerCase();
+  // Retries can follow a lost HTTP response even when the first insert committed.
+  // A durable unique ID means we never send a second notification for the same inquiry.
+  const { data: previous, error: priorErr } = await service.from("landlord_inbox")
+    .select("id, apartment_id, renter_email")
+    .eq("form_request_id", payload.request_id).maybeSingle();
+  if (priorErr) {
+    console.error("[lead-from-form] replay lookup failed:", priorErr);
+    return jsonResponse(errorBody("REPLAY_LOOKUP_FAILED", "Could not check inquiry status"), 500, req);
+  }
+  if (previous) {
+    if (previous.apartment_id !== payload.apartment_id || previous.renter_email !== replyEmail) {
+      return jsonResponse(errorBody("REQUEST_ID_CONFLICT", "Inquiry identity mismatch"), 409, req);
+    }
+    return jsonResponse({ success: true, data: { lead_id: previous.id, replayed: true } }, 200, req);
+  }
   const ip = clientIp(req);
   const ipRate = await allowRateDurable(service, `lead-from-form:ip:${ip}`, 5, 900);
   if (!ipRate.allowed) {
@@ -103,13 +120,12 @@ Deno.serve(async (req)=>{
   if (!apt) {
     return jsonResponse(errorBody("APARTMENT_NOT_FOUND", "Listing was deleted or never existed"), 404, req);
   }
-  if (!apt.landlord_id) {
-    // Legacy seeded apartments don't have a landlord_id. The frontend
-    // should never call us for those; if it does, surface a clear error
-    // so we can fix the routing instead of silently failing.
-    return jsonResponse(errorBody("NO_DIRECT_LANDLORD", "This listing isn't part of the V1 landlord cohort yet. Use the chat to ask the mdeai team."), 409, req);
-  }
-  const { data: landlord, error: landlordErr } = await service.from("landlord_profiles").select("id, whatsapp_e164, display_name").eq("id", apt.landlord_id).maybeSingle();
+  // A development listing without a landlord still accepts an inquiry.
+  // The nullable landlord_id makes it visible to admins for assignment/follow-up.
+  const { data: landlord, error: landlordErr } = apt.landlord_id
+    ? await service.from("landlord_profiles")
+      .select("id, whatsapp_e164, display_name").eq("id", apt.landlord_id).maybeSingle()
+    : { data: null, error: null };
   if (landlordErr) {
     console.error("lead-from-form landlord lookup error:", landlordErr);
     return jsonResponse(errorBody("LANDLORD_LOOKUP_FAILED", landlordErr.message), 500, req);
@@ -127,8 +143,10 @@ Deno.serve(async (req)=>{
   const { data: inboxRow, error: insertErr } = await service.from("landlord_inbox").insert({
     landlord_id: apt.landlord_id,
     apartment_id: apt.id,
+    form_request_id: payload.request_id,
     channel: "form",
     renter_name: renterName,
+    renter_email: replyEmail,
     raw_message: rawMessage,
     structured_profile: {
       source: "contact-host-form",
@@ -140,8 +158,17 @@ Deno.serve(async (req)=>{
     status: "new"
   }).select("id").single();
   if (insertErr) {
+    if (insertErr.code === "23505") {
+      // Concurrent retry raced the first insert. Read back the committed row.
+      const { data: replay } = await service.from("landlord_inbox")
+        .select("id, apartment_id, renter_email").eq("form_request_id", payload.request_id).maybeSingle();
+      if (replay && replay.apartment_id === apt.id && replay.renter_email === replyEmail) {
+        return jsonResponse({ success: true, data: { lead_id: replay.id, replayed: true } }, 200, req);
+      }
+      return jsonResponse(errorBody("REQUEST_ID_CONFLICT", "Inquiry identity mismatch"), 409, req);
+    }
     console.error("lead-from-form insert error:", insertErr);
-    return jsonResponse(errorBody("INSERT_FAILED", insertErr.message), 500, req);
+    return jsonResponse(errorBody("INSERT_FAILED", "Inquiry could not be saved"), 500, req);
   }
   // 6. Fire WhatsApp notification fire-and-forget. Failures are LOGGED
   // ONLY — never block the request, never retry. The lead is already in
@@ -165,7 +192,7 @@ Deno.serve(async (req)=>{
       lead_id: inboxRow.id,
       // The host's number is not returned to an anonymous caller: it is personal data and the
       // renter does not need it — MDE delivers the inquiry to the host's inbox.
-      notified: Boolean(notifyPhone),
+      notification_requested: Boolean(notifyPhone),
       landlord_display_name: landlord?.display_name ?? null,
       apartment: {
         id: apt.id,
@@ -175,14 +202,24 @@ Deno.serve(async (req)=>{
     }
   }, 201, req);
 });
-async function fireWhatsAppNotification(args) {
+async function fireWhatsAppNotification(args: {
+  landlordPhone: string;
+  landlordName: string;
+  renterName: string;
+  apartmentTitle: string;
+  apartmentNeighborhood: string | null;
+  moveWhen: "now" | "soon" | "later";
+  messageSnippet: string;
+  leadId: string;
+  service: ReturnType<typeof getServiceClient>;
+}) {
   const config = loadTwilioConfig(/* useSandbox */ true);
   if (!config) {
     console.warn("[lead-from-form] Twilio config missing — skipping WhatsApp send");
     return;
   }
   const baseUrl = Deno.env.get("MDEAI_PUBLIC_URL") ?? "https://mdeai.co";
-  const leadUrl = `${baseUrl}/host/leads`;
+  const leadUrl = `${baseUrl}/app/rentals/inbox`;
   const body = renderNewLeadMessage({
     landlordFirstName: args.landlordName.split(" ")[0] ?? "Anfitrión",
     renterName: args.renterName,
@@ -197,7 +234,7 @@ async function fireWhatsAppNotification(args) {
     body
   });
   if (result.ok) {
-    console.log(`[lead-from-form] WhatsApp sent — sid=${result.sid} to=${args.landlordPhone}`);
+    console.log(`[lead-from-form] WhatsApp provider accepted notification — sid=${result.sid}`);
     // Stamp whatsapp_sent_at so the reminder tick won't re-fire as a
     // first-send. Best-effort; failure here is fine.
     await args.service.from("landlord_inbox").update({

@@ -16,9 +16,12 @@
  * tracking. Caller logs `whatsapp_sent_at` on its own UPDATE-RETURNING
  * for idempotency. If Twilio returns 4xx the lead is still in the
  * inbox — the landlord sees it on next dashboard open.
- */ const TWILIO_API_BASE = "https://api.twilio.com/2010-04-01";
+ */ type TwilioConfig = { accountSid: string; username: string; password: string; fromNumber: string };
+type TwilioMessage = { toE164: string; body: string };
+type TwilioResult = { ok: boolean; sid?: string; status?: string; httpStatus?: number; errorCode?: number; errorMessage?: string };
+const TWILIO_API_BASE = "https://api.twilio.com/2010-04-01";
 /** Pull config from edge-fn env. Caller decides sandbox vs production.
- * Auth precedence: API Key + Secret > Account SID + Auth Token. */ export function loadTwilioConfig(useSandbox) {
+ * Auth precedence: API Key + Secret > Account SID + Auth Token. */ export function loadTwilioConfig(useSandbox: boolean): TwilioConfig | null {
   const accountSid = Deno.env.get("TWILIO_ACCOUNT_SID");
   if (!accountSid) return null;
   const fromNumber = useSandbox ? Deno.env.get("TWILIO_SANDBOX_NUMBER") : Deno.env.get("TWILIO_PHONE_NUMBER");
@@ -49,7 +52,7 @@
  * (we never throw — caller decides whether to surface failures). Returns
  * `{ ok: false, ... }` on any non-2xx Twilio response so the caller can
  * log without try/catch noise.
- */ export async function sendWhatsApp(config, args) {
+ */ export async function sendWhatsApp(config: TwilioConfig, args: TwilioMessage): Promise<TwilioResult> {
   const url = `${TWILIO_API_BASE}/Accounts/${config.accountSid}/Messages.json`;
   const auth = btoa(`${config.username}:${config.password}`);
   const body = new URLSearchParams({
@@ -73,7 +76,7 @@
       errorMessage: `Twilio fetch failed: ${err instanceof Error ? err.message : String(err)}`
     };
   }
-  let json = null;
+  let json: { sid?: string; status?: string; code?: number; message?: string } | null = null;
   try {
     json = await response.json();
   } catch  {
@@ -95,7 +98,7 @@
     httpStatus: response.status
   };
 }
-/** Normalize "+57 300 123 4567" / "(+57) 300-123-4567" → "+573001234567". */ function normalizeE164(input) {
+/** Normalize "+57 300 123 4567" / "(+57) 300-123-4567" → "+573001234567". */ function normalizeE164(input: string) {
   const trimmed = input.trim();
   const hasPlus = trimmed.startsWith("+");
   const digits = trimmed.replace(/\D+/g, "");

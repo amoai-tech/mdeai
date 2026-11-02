@@ -15,12 +15,28 @@
   soon: "pronto (1-3 meses)",
   later: "más adelante (sin apuro)"
 };
+type MoveWhen = "now" | "soon" | "later";
+type NewLeadNotification = {
+  landlordFirstName: string;
+  apartmentTitle: string;
+  apartmentNeighborhood: string | null;
+  renterName: string;
+  moveWhen: MoveWhen | null;
+  messageSnippet: string;
+  leadUrl: string;
+};
+type ReminderNotification = {
+  ageLabel: string;
+  renterName: string;
+  apartmentTitle: string;
+  leadUrl: string;
+};
 const PROMPT_LABEL = "📬 Ver y responder";
-function truncate(s, max) {
+function truncate(s: string, max: number) {
   const t = s.trim();
   return t.length > max ? `${t.slice(0, max - 1).trim()}…` : t;
 }
-/** Body for the FIRST send (when the lead lands). */ export function renderNewLeadMessage(input) {
+/** Body for the FIRST send (when the lead lands). */ export function renderNewLeadMessage(input: NewLeadNotification) {
   const greeting = `Hola ${input.landlordFirstName.trim() || "Anfitrión"} 👋`;
   const where = input.apartmentNeighborhood ? `${truncate(input.apartmentTitle, 60)} (${input.apartmentNeighborhood})` : truncate(input.apartmentTitle, 60);
   const renter = truncate(input.renterName, 40);
@@ -38,7 +54,7 @@ function truncate(s, max) {
     `${PROMPT_LABEL}: ${input.leadUrl}`
   ].join("\n");
 }
-/** Body for the 30-minute reminder. */ export function renderReminderMessage(input) {
+/** Body for the 30-minute reminder. */ export function renderReminderMessage(input: ReminderNotification) {
   return [
     `⏰ Recordatorio (${input.ageLabel})`,
     ``,

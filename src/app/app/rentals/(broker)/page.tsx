@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import Link from "next/link";
 import { RentalsConciergeShell } from "@/components/host/rentals/rentals-concierge-shell";
 import type { RentalsWorkspaceMode } from "@/components/host/rentals/rentals-dynamic-workspace";
 import { fetchBrokerDashboard } from "@/lib/rentals/fetch-broker-dashboard";
@@ -53,6 +54,11 @@ export default async function AppRentalsHomePage({ searchParams }: PageProps) {
 
   return (
     <div data-testid="rentals-broker-workspace">
+      <div className="px-4 pt-3">
+        <Link href="/app/rentals/inbox" className="text-sm font-medium text-primary underline-offset-2 hover:underline">
+          View host inquiries
+        </Link>
+      </div>
       <Suspense
         fallback={<div className="p-4 text-sm text-muted-foreground">Loading…</div>}
       >

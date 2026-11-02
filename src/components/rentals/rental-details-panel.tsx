@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/carousel";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { GalleryImage } from "@/components/rentals/gallery-image";
+import { ContactHostDialog } from "@/components/rentals/contact-host-dialog";
 import { bedroomLabel, externalSourceUrlFor, isExternalAd } from "@/components/rentals/rental-browse-card";
 import { formatRentalPrices } from "@/lib/rental-display";
 import type { Rental } from "@/mastra/tools/search-rentals";
@@ -202,6 +203,7 @@ function DetailsBody({
             {external ? "Request MDE follow-up" : "Schedule viewing"}
           </Button>
         ) : null}
+        {!external ? <ContactHostDialog key={rental.id} apartmentId={rental.id} title={rental.title} /> : null}
         {!external && bookingReviewHref ? (
           <Link
             href={bookingReviewHref}

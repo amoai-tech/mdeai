@@ -11,3 +11,12 @@ alter table public.landlord_inbox
 
 comment on column public.landlord_inbox.whatsapp_sent_at is
   'When a WhatsApp notification for this inquiry was accepted by the provider. NULL = not notified (no host number, or the send failed). The inquiry itself is stored regardless.';
+
+
+-- A stable client-generated ID makes retries/concurrent submits save exactly one inquiry.
+-- Nullable for legacy chat leads; only the Contact Host form supplies the UUID.
+alter table public.landlord_inbox
+  add column if not exists form_request_id uuid;
+
+create unique index if not exists landlord_inbox_form_request_id_unique
+  on public.landlord_inbox (form_request_id) where form_request_id is not null;
