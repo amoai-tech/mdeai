@@ -31,6 +31,7 @@ import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { errorBody, getCorsHeaders, jsonResponse } from "../_shared/http.ts";
 import { getServiceClient } from "../_shared/supabase-clients.ts";
 import { assertCheckoutSessionBindsPayment, assertPaidOrderMatches } from "../_shared/ticket-payment-verification.ts";
+import { expiredSessionMatchesOrder, webhookEventMatchesMode, webhookSecretsAreDistinct, type TicketStripeMode } from "../_shared/ticket-stripe-webhook-guards.ts";
 // Lazy Stripe init so missing-key configurations surface as 500 CONFIG_ERROR
 // rather than crashing on cold-start before headers are sent.
 const stripeClients = new Map<string, Stripe>();
@@ -83,27 +84,33 @@ Deno.serve(async (req) => {
     { mode: "live" as const, secret: Deno.env.get("STRIPE_WEBHOOK_SECRET") },
     { mode: "sandbox" as const, secret: Deno.env.get("STRIPE_SANDBOX_WEBHOOK_SECRET") },
   ];
+  if (!webhookSecretsAreDistinct(configurations[0].secret, configurations[1].secret)) {
+    console.error("ticket-payment-webhook: live and sandbox signing secrets must differ");
+    return jsonResponse(errorBody("CONFIG_ERROR", "Stripe signing configuration is invalid"), 500, req);
+  }
   if (!configurations.some(({ mode, secret }) => !!secret && !!getStripe(mode))) {
     console.error("ticket-payment-webhook: no complete Stripe webhook configuration");
     return jsonResponse(errorBody("CONFIG_ERROR", "Server is missing Stripe credentials"), 500, req);
   }
   let event: Stripe.Event | null = null;
   let stripe: Stripe | null = null;
+  let verifiedMode: TicketStripeMode | null = null;
   for (const { mode, secret } of configurations) {
     const candidate = getStripe(mode);
     if (!secret || !candidate) continue;
     try {
       const verified = await candidate.webhooks.constructEventAsync(rawBody, sig, secret);
-      // Sandbox signatures must never authorize an event claiming live money.
-      if (mode === "sandbox" && verified.livemode !== false) break;
+      // Both directions must agree. A valid signature alone does not establish payment mode.
+      if (!webhookEventMatchesMode(mode, verified.livemode)) continue;
       event = verified;
       stripe = candidate;
+      verifiedMode = mode;
       break;
     } catch {
       // Another environment may have signed this request; never trust raw JSON.
     }
   }
-  if (!event || !stripe) {
+  if (!event || !stripe || !verifiedMode) {
     console.error("ticket-payment-webhook: signature verification failed");
     return jsonResponse(errorBody("BAD_SIGNATURE", "Stripe signature did not match"), 400, req);
   }
@@ -135,10 +142,14 @@ Deno.serve(async (req) => {
         event.data.object as Stripe.Checkout.Session,
         service,
       );
-    } else if (event.type === "checkout.session.expired") {
-      await handleCheckoutSessionExpired(
+    } else if (
+      event.type === "checkout.session.expired" ||
+      event.type === "checkout.session.async_payment_failed"
+    ) {
+      await handleCheckoutSessionUnpaid(
         event.data.object as Stripe.Checkout.Session,
         service,
+        verifiedMode,
       );
     } else if (event.type === "payment_intent.succeeded") {
       await handlePaymentSucceeded(event.data.object as Stripe.PaymentIntent, service, stripe);
@@ -254,16 +265,26 @@ async function handleCheckoutSessionPaid(
   await finalizePaidOrder(orderId, piId, session.amount_total, session.currency, service, session.id);
 }
 
-async function handleCheckoutSessionExpired(
+async function handleCheckoutSessionUnpaid(
   session: Stripe.Checkout.Session,
   service: SupabaseClient,
+  mode: TicketStripeMode,
 ) {
+  if (session.payment_status === "paid") throw new Error("PAID_SESSION_CANNOT_CANCEL");
   const orderId = session.metadata?.order_id;
   if (!orderId) {
     console.log(
       `checkout.session.expired missing order_id; ignoring session=${session.id}`,
     );
     return;
+  }
+  // A signed Stripe event is not authorization to cancel an arbitrary order
+  // named in its metadata. Only its own persisted Session may release seats.
+  const { data: order, error: lookupError } = await service.from("event_orders")
+    .select("stripe_session_id").eq("id", orderId).maybeSingle();
+  if (lookupError || !order) throw new Error("EXPIRY_ORDER_LOOKUP_FAILED");
+  if (!expiredSessionMatchesOrder(order.stripe_session_id, session.id, mode)) {
+    throw new Error("EXPIRY_SESSION_MISMATCH");
   }
   const { error } = await service.rpc("ticket_checkout_cancel", {
     p_order_id: orderId,
