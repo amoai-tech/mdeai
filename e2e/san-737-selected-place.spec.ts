@@ -206,7 +206,7 @@ for (const size of [{ name: "desktop", width: 1440, height: 900 }, { name: "mobi
         const clearedReply = await ask(page, scenario.route,
           "Is any place currently selected? Do not assume the previous place is still selected.", 3);
         expect(confirmsNothingSelected(clearedReply),
-          "the finished reply must explicitly confirm the current selection is empty").toBe(true);
+          `the finished reply must explicitly confirm the current selection is empty. Reply: ${clearedReply}`).toBe(true);
         expect(copilotPosts.filter((status) => status === 200).length).toBeGreaterThanOrEqual(3);
         expect(copilotPosts.some((status) => status >= 400 && status !== 401)).toBe(false);
         expect(errors).toEqual([]);
