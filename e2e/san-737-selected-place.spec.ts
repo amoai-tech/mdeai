@@ -81,12 +81,19 @@ for (const size of [{ name: "desktop", width: 1440, height: 900 }, { name: "mobi
   test.describe(`SAN-737 ${size.name}: selected A → B → Clear and saved thread`, () => {
     test.use({ viewport: { width: size.width, height: size.height } });
     test.skip(!base, "Set SAN737_BASE_URL to explicitly exercise the real app");
+    // One throwaway identity per route/viewport. The CopilotKit per-user rate
+    // limit is 120 requests; five routes × three turns + runtime polling from a
+    // single identity exhausted it on Nightlife. Fresh identities keep each
+    // route independent and cleanup exact.
     let identity: ThrowawayIdentity | undefined;
-    test.beforeAll(async () => {
+    test.beforeEach(async () => {
       expect(hasE2eEnv()).toBe(true);
       identity = await createThrowawayIdentity("qa-san737-selected-context");
     });
-    test.afterAll(async () => { if (identity) await deleteThrowawayIdentity(identity); });
+    test.afterEach(async () => {
+      if (identity) await deleteThrowawayIdentity(identity);
+      identity = undefined;
+    });
 
     for (const scenario of routes) {
       test(`${scenario.route}: changes grounded selection and clears it`, async ({ page }) => {
