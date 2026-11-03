@@ -16,4 +16,4 @@ alter table public.event_check_ins
       'refunded',
       'cancelled',
       'pending_payment'
-    ));
+    )) not valid;
