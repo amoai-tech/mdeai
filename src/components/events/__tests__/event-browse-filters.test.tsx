@@ -8,6 +8,7 @@ const none = { category: null, neighborhood: null, dateWindow: null, price: null
 
 afterEach(cleanup);
 
+// Active chips need stronger foreground contrast than text-primary on bg-primary/10.
 describe("EventBrowseFilters", () => {
   it("marks the active links with aria-current and never uses aria-pressed on a link", () => {
     const { container } = render(<EventBrowseFilters {...none} category="music" />);
@@ -56,4 +57,12 @@ describe("EventBrowseFilters", () => {
     expect(unPaid).toContain("neighborhood=Laureles");
     expect(unPaid).not.toContain("price=");
   });
+});
+
+import { renderToStaticMarkup as renderEventFilters } from "react-dom/server";
+
+it("uses readable active event filter text", () => {
+  const html = renderEventFilters(<EventBrowseFilters category={null} neighborhood={null} dateWindow={null} price={null} />);
+  expect(html).toContain("text-emerald-800");
+  expect(html).not.toContain("border-primary bg-primary/10 text-primary");
 });
