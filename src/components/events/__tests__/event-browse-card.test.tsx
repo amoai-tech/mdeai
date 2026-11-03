@@ -61,7 +61,8 @@ describe("EventBrowseCard", () => {
     const html = renderToStaticMarkup(
       <EventBrowseCard event={{ ...event, pricePerTicket: null, canBuyTickets: false }} />,
     );
-    expect(html).toContain("See tickets");
+    expect(html).toContain("Price TBD");
+    expect(html).not.toContain("See tickets");
     expect(html).not.toContain(">Free<");
     expect(html).not.toContain('data-testid="event-buy-cta"');
     expect(html).toContain('data-testid="event-details-cta"');

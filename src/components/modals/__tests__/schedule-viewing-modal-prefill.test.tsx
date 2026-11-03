@@ -11,6 +11,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn(), refresh: vi.fn(), prefetch: vi.fn() }),
+  usePathname: () => "/rentals",
+  useSearchParams: () => new URLSearchParams(),
+}));
+
 vi.mock("@/components/chat/rental-ui-context", () => ({ useRentalUi: vi.fn() }));
 vi.mock("@/lib/leads/submit-schedule-viewing", () => ({
   submitScheduleViewing: vi.fn(),

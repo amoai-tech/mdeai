@@ -70,6 +70,32 @@ describe("QA magic-link safety", () => {
     expect(generateLink).toHaveBeenCalledWith({ type: "magiclink", email: QA_SUPER_ADMIN_EMAIL });
   });
 
+  it("refuses to create a missing dedicated renter account", async () => {
+    listUsers.mockResolvedValue({
+      data: { users: [], nextPage: null },
+      error: null,
+    });
+
+    await expect(getTestSession("qa-renter@mdeai.co", { requireExisting: true }))
+      .rejects.toThrow("refusing magic-link auto-creation");
+    expect(generateLink).not.toHaveBeenCalled();
+  });
+
+  it("accepts a separately configured existing broker QA account", async () => {
+    const email = "qa-broker@mdeai.co";
+    listUsers.mockResolvedValue({
+      data: { users: [{ email }], nextPage: null },
+      error: null,
+    });
+    generateLink.mockResolvedValue({
+      data: { properties: { email_otp: "test-otp" } }, error: null,
+    });
+    verifyOtp.mockResolvedValue({ data: { session: { access_token: "broker-test-jwt" } }, error: null });
+
+    await expect(getTestSession(email, { requireExisting: true }))
+      .resolves.toHaveProperty("access_token", "broker-test-jwt");
+  });
+
   it("leaves explicitly provisioned throwaway accounts on the existing path", async () => {
     const email = "temporary-test@qa-isolation.mdeai.co";
     generateLink.mockResolvedValue({

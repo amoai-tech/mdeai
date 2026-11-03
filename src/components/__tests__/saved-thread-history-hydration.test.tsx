@@ -155,6 +155,22 @@ describe("saved chat history", () => {
     expect(seen.history.status).toBe("idle");
   });
 
+  it("restores an idle saved thread before the 30-second reconnect timeout", async () => {
+    await select(A, { connect: false });
+    await act(async () => requests[A].resolve(msgs("A")));
+    await tick();
+    expect(agent.messages).toEqual([]);
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 2700)); });
+    expect(agent.messages).toEqual(msgs("A"));
+    expect(seen.history.status).toBe("idle");
+    // A late reconnect can still clear the view; when it finalizes the saved
+    // record must be reconciled back without duplicating any messages.
+    agent.beginConnect();
+    await act(async () => agent.finishRun());
+    await tick();
+    expect(agent.messages).toEqual(msgs("A"));
+  });
+
   it("history that arrives BEFORE CopilotKit starts connecting is not wiped by it", async () => {
     // The real cold reopen: the fetch can win the race, and connectAgent then
     // clears the view as it starts. Watching "is it running right now" would have

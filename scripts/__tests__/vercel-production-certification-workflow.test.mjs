@@ -109,7 +109,7 @@ test("promotion cannot run after any failed step", () => {
   assert.doesNotMatch(before, /continue-on-error:\s*true/, "a step that may fail must not precede promotion");
 });
 
-test("order: validate, credential, names, staged, certify, publish, re-confirm staged, promote, verify", () => {
+test("order: validate, staged, certify, re-confirm staged, promote, verify, stability, THEN publish final status", () => {
   const job = certifyJob(workflow());
   const order = [
     "Checkout exact deployed commit",
@@ -119,10 +119,11 @@ test("order: validate, credential, names, staged, certify, publish, re-confirm s
     "Verify Production defines the required variable names",
     "Confirm the candidate is staged",
     "Certify exact staged candidate",
-    "Publish certification result",
     "Re-confirm the candidate is still staged right before promotion",
     "Promote the exact certified deployment",
     "Verify www.mdeai.co serves the exact certified deployment",
+    "Verify production aliases remain stable after promotion",
+    "Publish final release certification result",
   ].map((name) => stepIndex(job, name));
   assert.deepEqual([...order].sort((a, b) => a - b), order, "steps must run in the safe order");
 });
@@ -153,14 +154,24 @@ test("certification runs on the exact candidate URL, before and never after prom
   );
 });
 
-test("publishes success only from the certification step's own outcome", () => {
+test("publishes success only after certification, staged recheck, promotion, domain and stability all passed", () => {
   const job = certifyJob(workflow());
-  const result = stepBody(job, "Publish certification result");
+  const result = stepBody(job, "Publish final release certification result");
   assert.match(result, /if: always\(\)/);
-  assert.match(result, /CERTIFY_OUTCOME: \$\{\{ steps\.certify\.outcome \}\}/);
-  assert.match(result, /if \[ "\$\{CERTIFY_OUTCOME\}" = "success" \]; then[\s\S]*?state=success/);
-  assert.match(result, /state=failure/, "any other outcome must publish failure");
+  for (const [key, stepId] of [
+    ["CERTIFY_OUTCOME", "certify"],
+    ["STAGED_OUTCOME", "final_staged"],
+    ["PROMOTE_OUTCOME", "promote"],
+    ["VERIFIED_OUTCOME", "verify_promoted"],
+    ["STABLE_OUTCOME", "verify_stable"],
+  ]) {
+    assert.ok(result.includes(`${key}: \${{ steps.${stepId}.outcome }}`), `${key} must come from its exact step`);
+    assert.ok(result.includes(`"$${key}" == success`), `${key} must gate success`);
+  }
+  assert.match(result, /state=failure/, "any skipped, failed, or cancelled gate must publish failure");
   assert.match(result, /-f target_url="\$\{RUN_URL\}"/, "the status must stay diagnosable");
+  assert.ok(stepIndex(job, "Verify production aliases remain stable after promotion") < stepIndex(job, "Publish final release certification result"));
+  assert.doesNotMatch(job.slice(0, stepIndex(job, "Publish final release certification result")), /-f context=production-certification/, "success must not be prepublished");
 });
 
 test("production is verified after promotion, and only if promotion succeeded", () => {

@@ -23,7 +23,7 @@ describe("rental-display", () => {
       amenities: ["WiFi", "AC"],
       tags: ["pet-friendly", "long-stay"],
     });
-    expect(badges).toContain("Fast WiFi");
+    expect(badges).toContain("Wi-Fi listed");
     expect(badges.some((b) => /pet/i.test(b))).toBe(true);
   });
 
@@ -34,6 +34,7 @@ describe("rental-display", () => {
         title: "Loft",
         neighborhood: "Laureles",
         nightly_price: 70,
+        currency: "USD",
         bedrooms: 1,
         wifi: true,
       },

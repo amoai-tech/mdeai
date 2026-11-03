@@ -119,6 +119,9 @@ jobs:
           PLAYWRIGHT_WEB_SERVER_COMMAND: npx next dev --turbopack -p 3002
         run: npm run test:e2e:deterministic -- --shard=${{ matrix.shard }}/3 --reporter=blob,list
 
+      - name: Remove private authenticated QA outputs before artifact upload
+        if: always()
+        run: node scripts/sanitize-playwright-qa-artifacts.mjs
       - name: Retain each shard's blob report (including failures)
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
@@ -131,6 +134,9 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+      - name: Remove private authenticated QA outputs before artifact upload
+        if: always()
+        run: node scripts/sanitize-playwright-qa-artifacts.mjs
       - name: Upload Playwright failure artifacts
         if: failure()
         uses: actions/upload-artifact@v4
@@ -185,6 +191,9 @@ jobs:
           PLAYWRIGHT_WEB_SERVER_COMMAND: npm run dev:ui:worktree
         run: npm run test:e2e:mobile-composer -- --reporter=blob,list
 
+      - name: Remove private authenticated QA outputs before artifact upload
+        if: always()
+        run: node scripts/sanitize-playwright-qa-artifacts.mjs
       - name: Retain real-composer blob report (including failures)
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
@@ -194,6 +203,9 @@ jobs:
           path: blob-report/*.zip
           if-no-files-found: error
           retention-days: 7
+      - name: Remove private authenticated QA outputs before artifact upload
+        if: always()
+        run: node scripts/sanitize-playwright-qa-artifacts.mjs
       - name: Upload real-composer failure traces
         if: failure()
         uses: actions/upload-artifact@v4
@@ -236,6 +248,9 @@ jobs:
         env:
           PLAYWRIGHT_HTML_OUTPUT_DIR: tmp/playwright-merged-report
         run: npx playwright merge-reports --reporter html ./all-blob-reports
+      - name: Remove private authenticated QA outputs before artifact upload
+        if: always()
+        run: node scripts/sanitize-playwright-qa-artifacts.mjs
       - name: Upload combined HTML report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
@@ -300,7 +315,19 @@ jobs:
           PLAYWRIGHT_WEB_SERVER_COMMAND: npm run dev:ui:worktree
         run: npm run test:e2e:auth
 
+      # Playwright's screenshot/trace/video are real worker option fixtures.
+      # Prove both safe and unsafe modes without any user session or web server.
+      - name: Prove Super Admin recording guard with real Playwright option fixtures
+        env:
+          PW_SKIP_WEBSERVER: "1"
+        run: >-
+          npx playwright test e2e/qa-playwright-artifact-options
+          --project=chromium --workers=1 --retries=0 --reporter=list
+
       # This job has no production credentials, but limit retained diagnostics.
+      - name: Remove private authenticated QA outputs before artifact upload
+        if: always()
+        run: node scripts/sanitize-playwright-qa-artifacts.mjs
       - name: Upload auth failure artifacts
         if: failure()
         uses: actions/upload-artifact@v4

@@ -34,20 +34,28 @@
 import Stripe from "https://esm.sh/stripe@14.21.0?target=denonext";
 import { z } from "https://esm.sh/zod@3.23.8";
 import { errorBody, getCorsHeaders, jsonResponse } from "../_shared/http.ts";
-import { getServiceClient } from "../_shared/supabase-clients.ts";
+import { getServiceClient, getUserId } from "../_shared/supabase-clients.ts";
+import { resolveCheckoutBuyer } from "../_shared/ticket-checkout-buyer.ts";
 import { signJwtHs256 } from "../_shared/jwt.ts";
 import { deriveCheckoutAccessToken, duplicateCheckoutCode } from "../_shared/checkout-access-token.ts";
 // Initialise Stripe lazily so a missing key is reported via 500 CONFIG_ERROR
 // rather than crashing the function on cold-start before headers are sent.
 let _stripe: Stripe | null = null;
+let _stripeMode: "sandbox" | "live" | null = null;
 function getStripe(): Stripe | null {
-  if (_stripe) return _stripe;
-  const key = Deno.env.get("STRIPE_SECRET_KEY");
-  if (!key) return null;
+  // Require an explicit server choice: missing configuration must never charge live.
+  const mode = Deno.env.get("STRIPE_TICKET_CHECKOUT_MODE");
+  if (mode !== "live" && mode !== "sandbox") return null;
+  if (_stripe && _stripeMode === mode) return _stripe;
+  const key = Deno.env.get(mode === "sandbox"
+    ? "STRIPE_SANDBOX_SECRET_KEY"
+    : "STRIPE_SECRET_KEY");
+  if (!key || (mode === "sandbox" && !/^(rk|sk)_test_/.test(key))) return null;
   _stripe = new Stripe(key, {
     apiVersion: "2026-04-22.dahlia",
     httpClient: Stripe.createFetchHttpClient(),
   });
+  _stripeMode = mode;
   return _stripe;
 }
 // Zod schema. quantity 1-10 enforced both here and in the RPC's
@@ -103,12 +111,22 @@ Deno.serve(async (req) => {
       req,
     );
   }
-  // A reused checkout key must refer to the same cart and buyer.
+  // A verified user JWT is the only authority for linking an order to an account.
+  // The public publishable/anon key is intentionally allowed for guest Checkout.
+  const { buyerUserId, invalidSession } = await resolveCheckoutBuyer(
+    req.headers.get("Authorization"), req.headers.get("apikey"),
+    Deno.env.get("SUPABASE_ANON_KEY") ?? null, getUserId,
+  );
+  if (invalidSession) {
+    return jsonResponse(errorBody("INVALID_USER_SESSION", "Please sign in again"), 401, req);
+  }
+  // A reused checkout key must refer to the same cart and *verified* buyer.
   const service = getServiceClient();
   const requestIdentity = JSON.stringify({
     event_id: body.event_id, ticket_id: body.ticket_id,
     quantity: body.quantity, buyer_email: body.buyer_email.toLowerCase(),
     buyer_name: body.buyer_name, attendees: body.attendees,
+    ...(buyerUserId ? { buyer_user_id: buyerUserId } : {}),
   });
   const requestHash = Array.from(new Uint8Array(
     await crypto.subtle.digest("SHA-256", new TextEncoder().encode(requestIdentity)),
@@ -147,7 +165,7 @@ Deno.serve(async (req) => {
   }
   const stripe = getStripe();
   if (!stripe) {
-    console.error("STRIPE_SECRET_KEY is not configured");
+    console.error("ticket-checkout: Stripe payment mode or matching API key is not configured");
     return jsonResponse(
       errorBody("CONFIG_ERROR", "Server is missing Stripe credentials"),
       500,
@@ -186,6 +204,7 @@ Deno.serve(async (req) => {
       p_buyer_name: body.buyer_name,
       p_access_token: accessToken,
       p_attendees: attendeesWithJwts,
+      p_buyer_user_id: buyerUserId,
     },
   );
   if (rpcError) {

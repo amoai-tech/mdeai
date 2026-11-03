@@ -6,6 +6,8 @@ import type { ConciergeWorkingMemory } from "@/lib/types";
 export type RentalSearchApiParams = {
   neighborhood?: string;
   minBedrooms?: number;
+  /** Inclusive upper bound for exact bedroom searches. */
+  maxBedrooms?: number;
   maxPricePerNight?: number;
   /** Exact monthly ceiling, never a guessed nightly conversion. */
   maxPriceMonthly?: number;
@@ -349,6 +351,22 @@ function parseBedrooms(text: string): number | undefined {
   const raw = m[1].toLowerCase();
   const n = Number(raw);
   return Number.isFinite(n) ? n : BEDROOM_WORDS[raw];
+}
+
+/**
+ * An explicit bedroom size means exactly that size. "At least 2" and "2+"
+ * instead mean a minimum. Reuse the canonical bedroom parser; no second
+ * frontend-only filter or natural-language ranking engine.
+ */
+export function exactBedroomsFromQueryText(text: string): number | undefined {
+  if (text.length > MAX_RENTAL_TEXT_CHARS) return undefined;
+  const match = BEDROOM_RE.exec(text);
+  if (!match) return undefined;
+  const before = text.slice(Math.max(0, match.index - 30), match.index);
+  const after = text.slice(match.index + match[0].length, match.index + match[0].length + 22);
+  if (/\b(?:at least|minimum of|minimum|min\.?|more than|over)\s*$/i.test(before)) return undefined;
+  if (/^\s*(?:\+|or more\b|or larger\b|and up\b|and above\b)/i.test(after)) return undefined;
+  return parseBedrooms(text);
 }
 
 /** User message is clearly about rentals, not events or cafés. */

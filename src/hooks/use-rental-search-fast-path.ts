@@ -112,7 +112,7 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
   const busyRef = useRef(false);
   // Messages sent while a search is running wait here and are answered one at a time, in the
   // order they were sent, as each search ends — instead of being reported "handled" and dropped.
-  const pendingRef = useRef<string[]>([]);
+  const pendingRef = useRef<Array<{ text: string; submissionId?: string }>>([]);
   // The working memory the last successful search wrote. React has not re-rendered yet when a
   // search ends, so `state` is still the pre-search value at that moment; the replay of a queued
   // message starts from this instead, so a refinement keeps the first search's filters.
@@ -156,6 +156,7 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
       userText: string,
       params: RentalSearchApiParams,
       memory: ConciergeWorkingMemory,
+      submissionId?: string,
     ): Promise<boolean> => {
       if (busyRef.current) return true;
       busyRef.current = true;
@@ -173,7 +174,7 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
           // SAN-407: a real outage is its own answer. Returning false here used to hand the same
           // message to the agent, which then gave a second, conflicting reply. Retrying is just
           // sending the message again; no write happens on this path.
-          showExchange(userText, RENTAL_SEARCH_UNAVAILABLE_SUMMARY);
+          showExchange(userText, RENTAL_SEARCH_UNAVAILABLE_SUMMARY, submissionId);
           return true;
         }
         const { results: cards, total, hybridUsed, rankExplanation, budgetNote } = response;
@@ -220,6 +221,7 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
             appliedBudget,
             unappliedRequests: unappliedRentalRequests(userText),
           }),
+          submissionId,
         );
         return true;
       } catch (err) {
@@ -237,7 +239,7 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
   );
 
   const dispatchMessage = useCallback(
-    async (text: string, baseMemory?: ConciergeWorkingMemory | null): Promise<boolean> => {
+    async (text: string, submissionId?: string, baseMemory?: ConciergeWorkingMemory | null): Promise<boolean> => {
       const trimmed = text.trim();
       if (!trimmed) return false;
 
@@ -255,12 +257,12 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
         // A full queue declines the message (false), so the sender routes it to the concierge
         // rather than it being lost.
         if (pendingRef.current.length >= MAX_WAITING_MESSAGES) return false;
-        pendingRef.current.push(trimmed);
+        pendingRef.current.push({ text: trimmed, submissionId });
         return true;
       }
 
       clearLocalMessages();
-      return runSearch(trimmed, params, memory);
+      return runSearch(trimmed, params, memory, submissionId);
     },
     [
       clarifyKind,
@@ -272,7 +274,7 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
   );
 
   const handleUserMessage = useCallback(
-    (text: string): Promise<boolean> => dispatchMessage(text),
+    (text: string, submissionId?: string): Promise<boolean> => dispatchMessage(text, submissionId),
     [dispatchMessage],
   );
 
@@ -289,17 +291,17 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
       try {
         let handled = false;
         try {
-          handled = await dispatchMessage(next, latestMemoryRef.current);
+          handled = await dispatchMessage(next.text, next.submissionId, latestMemoryRef.current);
         } catch (err) {
           console.error("[rental-fast-path] replay failed", err);
         }
-        if (!handled) await onUnhandled?.(next);
+        if (!handled) await onUnhandled?.(next.text);
       } catch (err) {
         // The concierge hand-off itself failed. Log it, tell the renter (their message was already
         // acknowledged, so silence would read as "ignored"), and keep draining the queue rather
         // than leaving an unhandled rejection that stalls the messages behind this one.
         console.error("[rental-fast-path] hand-off to the concierge failed", err);
-        showExchange(next, RENTAL_HANDOFF_FAILED_SUMMARY);
+        showExchange(next.text, RENTAL_HANDOFF_FAILED_SUMMARY, next.submissionId);
       } finally {
         // A replay that never reached a search (declined) leaves no search to schedule the next
         // one, so continue the chain here.

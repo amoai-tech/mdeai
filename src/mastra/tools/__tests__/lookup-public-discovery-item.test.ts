@@ -89,7 +89,13 @@ describe("server-side public selection lookup", () => {
     expect(fake.trace).toContainEqual({ or: NON_QA_EVENT_SLUG_FILTER });
     expect(result.data).toMatchObject({ id, name: "Real concert" });
     expect(result.data).not.toHaveProperty("organizer_email");
-    expect(fake.trace.find((t) => t.fields)?.fields).toBe("id, name, address, event_start_time, currency");
+    // SAN-1600 — the fixed public projection now also carries the saved venue and tiers,
+    // so "tickets for this event?" is answerable from data instead of a guess.
+    const eventFields = String(fake.trace.find((t) => t.fields)?.fields ?? "");
+    expect(eventFields.startsWith("id, name, address, event_start_time, currency")).toBe(true);
+    expect(eventFields).toContain("event_venues");
+    expect(eventFields).toContain("event_tickets");
+    expect(eventFields).not.toContain("*");
     const hidden = client(null);
     expect(await lookupPublicDiscoveryItem({ page: "events", id }, hidden.db)).toEqual({ found: false, data: null });
   });
@@ -101,4 +107,58 @@ describe("server-side public selection lookup", () => {
     await lookupPublicDiscoveryItem({ page: "nightlife", id: "a" }, other.db);
     expect(other.trace).toContainEqual({ kind: "nightclub" });
   });
+});
+
+describe("SAN-1600 event selection carries the answerable public facts", () => {
+  it("keeps saved venue and ticket tiers while dropping every other column", async () => {
+    const fake = client({
+      id: "22222222-2222-2222-2222-000000000001",
+      name: "Reina de Antioquia 2026 Finals",
+      address: "Hotel Intercontinental, Calle 16 #28-51, El Poblado, Medellín",
+      event_start_time: "2027-02-24T01:00:00+00:00",
+      currency: "COP",
+      event_venues: { name: "Hotel Intercontinental — Salón Real", address: "Calle 16 #28-51, El Poblado", city: "Medellín" },
+      event_tickets: [
+        { name: "GA", price_cents: 4000000, currency: "COP", qty_total: 300, qty_sold: 0 },
+        { name: "VIP", price_cents: 12000000, currency: "COP", qty_total: 100, qty_sold: 0 },
+      ],
+      organizer_private_email: "must-not-leak",
+    });
+    const result = await lookupPublicDiscoveryItem(
+      { page: "events", id: "22222222-2222-2222-2222-000000000001" }, fake.db);
+    expect(result.found).toBe(true);
+    expect(result.data).toMatchObject({
+      name: "Reina de Antioquia 2026 Finals",
+      event_venues: { name: "Hotel Intercontinental — Salón Real" },
+    });
+    expect(result.data).not.toHaveProperty("organizer_private_email");
+    expect((result.data?.event_tickets as unknown[]).length).toBe(2);
+    const select = String(fake.trace.find((t) => t.fields)?.fields ?? "");
+    expect(select).toContain("event_tickets");
+    expect(select).toContain("event_venues");
+    expect(select).not.toContain("*");
+  });
+
+  it("still reports a missing event as not found", async () => {
+    const fake = client(null);
+    const result = await lookupPublicDiscoveryItem({ page: "events", id: "00000000-0000-0000-0000-000000000000" }, fake.db);
+    expect(result).toEqual({ found: false, data: null });
+  });
+});
+
+it("exposes the amount people pay, not the raw minor units", async () => {
+  const fake = client({
+    id: "22222222-2222-2222-2222-000000000001",
+    name: "Reina de Antioquia 2026 Finals",
+    address: "Hotel Intercontinental", event_start_time: "2027-02-24T01:00:00+00:00", currency: "COP",
+    event_venues: null,
+    event_tickets: [{ name: "Frontrow", price_cents: 8000000, currency: "COP", qty_total: 70, qty_sold: 3 }],
+  });
+  const result = await lookupPublicDiscoveryItem({ page: "events", id: "22222222-2222-2222-2222-000000000001" }, fake.db);
+  const tiers = result.data?.event_tickets as Array<Record<string, unknown>>;
+  // $80,000 COP, not "8,000,000 COP" — a 100x error on a public page.
+  expect(tiers[0].price).toBe(80000);
+  expect(tiers[0]).not.toHaveProperty("price_cents");
+  expect(tiers[0]).not.toHaveProperty("price_major");
+  expect(tiers[0].currency).toBe("COP");
 });

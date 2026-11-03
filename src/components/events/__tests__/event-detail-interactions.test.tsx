@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { EventDetailView } from "../event-detail-view";
 import type { PublicEventDetail } from "@/lib/events/types";
 
@@ -9,6 +10,10 @@ vi.mock("next/link", () => ({
     <a href={href} {...props}>{children}</a>
   ),
 }));
+// The header reads the live session; these journeys cover guest and signed-in states.
+const session = { user: null as null | { id: string; email?: string }, loading: false };
+vi.mock("@/hooks/use-session", () => ({ useSession: () => session }));
+
 vi.mock("@/components/modals/booking-checkout-modal", () => ({
   BookingCheckoutModal: ({ target }: {
     target: { tier: { id: string }; quantity: number } | null
@@ -29,6 +34,8 @@ const a = { id: "tier-ga", name: "General", priceCents: 3000000, currency: "COP"
 const b = { id: "tier-vip", name: "VIP", priceCents: 9000000, currency: "COP", qtyTotal: 20, qtySold: 0, position: 2 };
 
 beforeEach(() => {
+  session.user = null;
+  session.loading = false;
   Element.prototype.scrollIntoView = vi.fn();
   Object.defineProperty(navigator, "share", { configurable: true, value: undefined });
 });
@@ -40,7 +47,8 @@ describe("SAN-1600 public detail journeys", () => {
     expect(screen.getByText("Price TBD")).toBeTruthy();
     expect(screen.queryByText("Sold out")).toBeNull();
     expect(screen.getByRole("link", { name: /Back to Events/i }).getAttribute("href")).toBe("/events");
-    expect(screen.getByRole("link", { name: /Ask MDE about this event/i }).getAttribute("href")).toContain(encodeURIComponent(base.id));
+    // SAN-1600 — the page CTA now opens the shared assistant in place instead of leaving the page.
+    expect(screen.getByTestId("event-ask-mde").tagName).toBe("BUTTON");
     expect(screen.getByTestId("event-image-placeholder")).toBeTruthy();
     expect(screen.getByTestId("event-source-note")).toBeTruthy();
     expect(screen.getByTestId("event-listed-area-map").getAttribute("href")).toContain("query=Avenida");
@@ -49,7 +57,11 @@ describe("SAN-1600 public detail journeys", () => {
     expect(screen.getByTestId("event-image-placeholder").textContent).toContain("photo not available");
     expect(screen.getByRole("heading", { name: "Tickets" }).className).toContain("sr-only");
     expect(screen.getByTestId("event-tier-empty").textContent).toContain("No ticket tiers are listed");
-    expect(screen.getByRole("navigation", { name: "Event navigation" }).className).toContain("pr-20");
+    // SAN-1600 — the header now carries real controls instead of reserving an empty right edge.
+    const headerNav = screen.getByRole("navigation", { name: "Event navigation" });
+    expect(headerNav.className).toContain("justify-between");
+    expect(headerNav.querySelector("[data-testid='event-share']")).toBeTruthy();
+    expect(headerNav.querySelector("[data-testid='event-sign-in']")).toBeTruthy();
     expect(screen.queryByText("Event photo coming soon")).toBeNull();
   });
 
@@ -180,5 +192,45 @@ describe("SAN-1600 public detail journeys", () => {
     expect(screen.getAllByText("Sold out").length).toBeGreaterThan(0);
     expect(screen.queryByText(/Join the waitlist/i)).toBeNull();
     expect(screen.queryByTestId("event-detail-mobile-buy-bar")).toBeNull();
+  });
+});
+
+describe("SAN-1600 event header authentication", () => {
+  it("shows a guest Sign in and Sign up that return to this event", () => {
+    render(<EventDetailView event={base} />);
+    const signIn = screen.getByTestId("event-sign-in");
+    const signUp = screen.getByTestId("event-sign-up");
+    expect(signIn.getAttribute("href")).toBe(`/login?next=${encodeURIComponent(`/events/${base.id}`)}`);
+    expect(signUp.getAttribute("href")).toBe(`/signup?next=${encodeURIComponent(`/events/${base.id}`)}`);
+    expect(screen.queryByTestId("event-account")).toBeNull();
+    // The existing back and share controls stay reachable next to them.
+    expect(screen.getByTestId("event-back")).toBeTruthy();
+    expect(screen.getByTestId("event-share")).toBeTruthy();
+  });
+
+  it("shows account and ticket controls instead of signup once signed in", () => {
+    session.user = { id: "u-1" };
+    render(<EventDetailView event={base} />);
+    expect(screen.getByTestId("event-account").getAttribute("href")).toBe("/app");
+    expect(screen.getByTestId("event-my-tickets").getAttribute("href")).toBe("/app/me/tickets");
+    expect(screen.queryByTestId("event-sign-up")).toBeNull();
+  });
+
+  it("does not flash a wrong auth state while the session is still loading", () => {
+    session.loading = true;
+    render(<EventDetailView event={base} />);
+    expect(screen.queryByTestId("event-guest-auth")).toBeNull();
+    expect(screen.queryByTestId("event-user-auth")).toBeNull();
+  });
+});
+
+describe("SAN-1600 in-page Ask MDE", () => {
+  it("asks the shared assistant to open without navigating away", async () => {
+    const opened = vi.fn();
+    window.addEventListener("mde:ask-mde:open", opened);
+    render(<EventDetailView event={base} />);
+    await userEvent.click(screen.getByTestId("event-ask-mde"));
+    expect(opened).toHaveBeenCalledTimes(1);
+    window.removeEventListener("mde:ask-mde:open", opened);
   });
 });

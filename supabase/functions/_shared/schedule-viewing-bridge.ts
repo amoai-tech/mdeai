@@ -119,8 +119,12 @@ export async function createScheduleViewingBridge(
     };
   }
 
+  // p1_schedule_tour_atomic compares a UUID case-insensitively but a slug exactly, and every
+  // stored slug is lowercase, so a differently-cased id was rejected as not requestable.
+  const listingId = payload.listingId.trim().toLowerCase();
+
   const { data, error } = await client.rpc("p1_schedule_tour_atomic", {
-    p_listing_id: payload.listingId,
+    p_listing_id: listingId,
     p_user_id: payload.userId ?? null,
     p_idempotency_key: idempotencyKey,
     p_source: payload.source ?? "form",
@@ -132,7 +136,7 @@ export async function createScheduleViewingBridge(
     p_lead_metadata: payload.metadata ?? {},
     p_showing_metadata: {
       source: "chat-lead-capture",
-      listing_id: payload.listingId,
+      listing_id: listingId,
     },
   });
 
@@ -141,9 +145,22 @@ export async function createScheduleViewingBridge(
     const isValidationError =
       error.code === "P0001" &&
       error.message.startsWith("p1_schedule_tour_atomic:");
+    // A real apartment can still be un-requestable (source ad, withdrawn, or an id that no
+    // longer resolves). That is not the renter's mistake, so it gets its own code and copy.
+    //
+    // SAN-1059: the RPC raises SQLSTATE P1287 for exactly this branch, so classification no
+    // longer depends on the wording of the message. The message match stays as a fallback for
+    // the window where this function is deployed ahead of the migration (and vice versa).
+    const isListingUnavailable =
+      error.code === "P1287" ||
+      (isValidationError && /(?:listing|rental) is not requestable/i.test(error.message));
     return {
       ok: false,
-      code: isValidationError ? "VALIDATION_ERROR" : "DB_ERROR",
+      code: isListingUnavailable
+        ? "LISTING_UNAVAILABLE"
+        : isValidationError
+          ? "VALIDATION_ERROR"
+          : "DB_ERROR",
       message: isValidationError
         ? error.message
         : "Failed to save viewing request",

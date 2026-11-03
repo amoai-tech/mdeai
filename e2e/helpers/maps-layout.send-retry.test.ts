@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   CONCIERGE_ACCEPT_GRACE_MS,
+  isConciergeTurnRequest,
   submitConciergeMessageWithRetry,
   type ConciergeSubmitPort,
 } from "./maps-layout";
@@ -145,5 +146,29 @@ describe("submitConciergeMessageWithRetry", () => {
     await submitConciergeMessageWithRetry(port, "anything", 1_250);
 
     expect(armReactionWatch).toHaveBeenCalledWith(1_250);
+  });
+});
+
+
+describe("concierge accepted-turn request detection", () => {
+  it("accepts only real search and CopilotKit POST requests", () => {
+    for (const path of [
+      "/api/rentals/search",
+      "/api/restaurants/search",
+      "/api/events/search",
+      "/api/grounded/search",
+      "/api/copilotkit",
+      "/api/copilotkit/agent/run",
+    ]) {
+      expect(isConciergeTurnRequest(path, "POST")).toBe(true);
+    }
+  });
+
+  it("ignores history saves, unrelated API work and read-only requests", () => {
+    expect(isConciergeTurnRequest("/api/threads/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/messages", "POST")).toBe(false);
+    expect(isConciergeTurnRequest("/api/rentals/search", "GET")).toBe(false);
+    expect(isConciergeTurnRequest("/api/threads", "POST")).toBe(false);
+    expect(isConciergeTurnRequest("/api/analytics", "POST")).toBe(false);
+    expect(isConciergeTurnRequest("/chat", "POST")).toBe(false);
   });
 });
