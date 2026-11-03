@@ -5,6 +5,7 @@ import type { PublicEventDetail } from "@/lib/events/types";
 const mocks = vi.hoisted(() => ({
   getPublicEventResult: vi.fn(),
   getSiteOrigin: vi.fn(),
+  getEventInterest: vi.fn(),
   notFound: vi.fn((): never => { throw new Error("NEXT_HTTP_ERROR_FALLBACK;404"); }),
 }));
 
@@ -12,6 +13,7 @@ vi.mock("@/lib/events/get-public-event", () => ({
   getPublicEventResult: mocks.getPublicEventResult,
 }));
 vi.mock("@/lib/auth/site-url", () => ({ getSiteOrigin: mocks.getSiteOrigin }));
+vi.mock("@/lib/events/event-interest-server", () => ({ getEventInterest: mocks.getEventInterest }));
 vi.mock("next/navigation", () => ({ notFound: mocks.notFound }));
 vi.mock("@/components/events/event-checkout-notice", () => ({
   EventCheckoutNotice: () => null,
@@ -50,6 +52,7 @@ const props = {
 beforeEach(() => {
   mocks.getPublicEventResult.mockReset();
   mocks.getSiteOrigin.mockReset().mockResolvedValue("https://www.mdeai.co");
+  mocks.getEventInterest.mockReset().mockResolvedValue({ signedIn: false, following: false });
   mocks.notFound.mockClear();
 });
 
@@ -57,6 +60,7 @@ describe("event page structured data integration", () => {
   it("renders one parseable, script-safe Event JSON-LD only for a real event", async () => {
     mocks.getPublicEventResult.mockResolvedValue({ status: "ok", event });
     const html = renderToStaticMarkup(await EventDetailPage(props));
+    expect(mocks.getEventInterest).toHaveBeenCalledWith(event.id);
     const blocks = [...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/gu)];
     expect(blocks).toHaveLength(1);
     const jsonLd = JSON.parse(blocks[0][1]);
