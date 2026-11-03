@@ -11,7 +11,7 @@ Use the domain that owns the questioned behavior. Load the skill before changing
 | Next.js routing/RSC/cache/actions | `nextjs-developer` | current app + installed Next.js behavior + official docs |
 | React/UI/performance | relevant UI/React skill | current components + targeted browser/perf evidence |
 | Security/tenant boundary | domain skill + `task-verifier` | current server auth + live RLS/runtime proof |
-| Generic repo architecture | `graphify` | current `origin/main` + dependency graph |
+| Generic repo architecture | `graphify` | fresh graph from the active PR/feature checkout + exact source; use `origin/main` only for a deliberate baseline comparison |
 | legacy/reference migration | `tasks` migration reference | pinned Reference source + current MDE architecture |
 
 ## Cross-domain findings
