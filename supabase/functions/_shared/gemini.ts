@@ -72,10 +72,21 @@ export type GeminiTool = Record<string, unknown>;
 
 let _ai: GoogleGenAI | null = null;
 
+// MDE production already provisions GOOGLE_GENERATIVE_AI_API_KEY for Mastra.
+// Edge functions prefer GEMINI_API_KEY when explicitly configured, and reuse
+// the existing key otherwise. Never expose either key in errors or logs.
+export function getGeminiApiKey(
+  getEnv: (name: string) => string | undefined = (name) => Deno.env.get(name),
+): string {
+  const key = getEnv("GEMINI_API_KEY") ||
+    getEnv("GOOGLE_GENERATIVE_AI_API_KEY");
+  if (!key) throw new Error("Gemini API key is not configured");
+  return key;
+}
+
 export function geminiClient(): GoogleGenAI {
   if (_ai) return _ai;
-  const key = Deno.env.get("GEMINI_API_KEY");
-  if (!key) throw new Error("GEMINI_API_KEY environment variable not set");
+  const key = getGeminiApiKey();
   _ai = new GoogleGenAI({ apiKey: key });
   return _ai;
 }
@@ -403,8 +414,7 @@ export async function fetchGemini(
   body: Record<string, unknown>,
   timeoutMs = 30_000,
 ): Promise<Response> {
-  const key = Deno.env.get("GEMINI_API_KEY");
-  if (!key) throw new Error("GEMINI_API_KEY environment variable not set");
+  const key = getGeminiApiKey();
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
