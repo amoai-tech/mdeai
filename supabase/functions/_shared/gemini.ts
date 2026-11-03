@@ -345,7 +345,7 @@ export async function withRetry<T>(
 // ---------------------------------------------------------------------------
 
 function extractCitations(response: unknown): Citation[] {
-  const r = response as {
+  const responseData = response as {
     candidates?: Array<{
       groundingMetadata?: {
         groundingChunks?: Array<{
@@ -354,7 +354,8 @@ function extractCitations(response: unknown): Citation[] {
       };
     }>;
   };
-  const chunks = r.candidates?.[0]?.groundingMetadata?.groundingChunks ?? [];
+  const chunks =
+    responseData.candidates?.[0]?.groundingMetadata?.groundingChunks ?? [];
   return chunks.flatMap((chunk) => {
     const web = chunk.web;
     return web?.uri ? [{ url: web.uri, title: web.title ?? "" }] : [];
@@ -362,7 +363,7 @@ function extractCitations(response: unknown): Citation[] {
 }
 
 function extractUsage(response: unknown): UsageStats {
-  const r = response as {
+  const responseData = response as {
     usageMetadata?: {
       promptTokenCount?: number;
       candidatesTokenCount?: number;
@@ -370,12 +371,12 @@ function extractUsage(response: unknown): UsageStats {
       totalTokenCount?: number;
     };
   };
-  const m = r.usageMetadata ?? {};
+  const usageMetadata = responseData.usageMetadata ?? {};
   return {
-    input_tokens: m.promptTokenCount ?? 0,
-    output_tokens: m.candidatesTokenCount ?? 0,
-    thoughts_tokens: m.thoughtsTokenCount ?? 0,
-    total_tokens: m.totalTokenCount ?? 0,
+    input_tokens: usageMetadata.promptTokenCount ?? 0,
+    output_tokens: usageMetadata.candidatesTokenCount ?? 0,
+    thoughts_tokens: usageMetadata.thoughtsTokenCount ?? 0,
+    total_tokens: usageMetadata.totalTokenCount ?? 0,
   };
 }
 
@@ -429,7 +430,7 @@ export async function fetchGemini(
  *
  * Fetch from Gemini's OpenAI-compat endpoint with streaming + timeout.
  */
-export async function fetchGeminiStream(
+export function fetchGeminiStream(
   body: Record<string, unknown>,
   timeoutMs = 30_000,
 ): Promise<Response> {

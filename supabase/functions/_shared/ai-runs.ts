@@ -76,12 +76,12 @@ export function extractUsage(
   output_tokens: number | null;
   total_tokens: number | null;
 } {
-  const u = (body as { usage?: Record<string, unknown> } | null)?.usage;
-  const n = (v: unknown): number | null =>
-    typeof v === "number" && Number.isFinite(v) ? v : null;
+  const usage = (body as { usage?: Record<string, unknown> } | null)?.usage;
+  const numericTokenCount = (value: unknown): number | null =>
+    typeof value === "number" && Number.isFinite(value) ? value : null;
   return {
-    input_tokens: n(u?.prompt_tokens),
-    output_tokens: n(u?.completion_tokens),
-    total_tokens: n(u?.total_tokens),
+    input_tokens: numericTokenCount(usage?.prompt_tokens),
+    output_tokens: numericTokenCount(usage?.completion_tokens),
+    total_tokens: numericTokenCount(usage?.total_tokens),
   };
 }

@@ -233,9 +233,13 @@ Deno.serve(async (req) => {
     mimeType: asset.mime_type as string,
     data: encodeBase64(await imageBlob.arrayBuffer()),
   };
-  const systemPrompt = SYSTEM_PROMPTS[asset.asset_type] ?? SYSTEM_PROMPTS.other;
-  const userPrompt = "Event: " + event.name +
-    ". Analyze the attached stored image. Asset type: " + asset.asset_type;
+  // DB asset types can contain new/legacy values not present in this map.
+  // Own-key checking also rejects inherited Object properties such as __proto__.
+  const systemPrompt = Object.hasOwn(SYSTEM_PROMPTS, asset.asset_type)
+    ? SYSTEM_PROMPTS[asset.asset_type]
+    : SYSTEM_PROMPTS.other;
+  const userPrompt =
+    `Event: ${event.name}. Analyze the attached stored image. Asset type: ${asset.asset_type}`;
 
   const startTime = Date.now();
   try {
@@ -299,7 +303,8 @@ Deno.serve(async (req) => {
       err.message.startsWith("SCHEMA_VIOLATION");
     const errMsg = err instanceof Error ? err.message : String(err);
 
-    console.error(`${AGENT_NAME} error:`, errMsg);
+    // The log label is constant; keep the actual error in a separate argument.
+    console.error("event-photo-moderate error:", errMsg);
 
     await insertAiRun(serviceClient, {
       user_id: userId,

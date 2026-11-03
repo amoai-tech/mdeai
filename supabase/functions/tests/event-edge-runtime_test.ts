@@ -29,6 +29,7 @@ Deno.test("recovered event handlers: reject cross-user photos; scan through atom
   let ownerlessEvent = false;
   let adminRole = false;
   let modelScore: number | null = 0.82;
+  let assetType = "hero_photo";
   let currentStaffVersion = 0;
   const calls: Array<
     { path: string; body: string; authorization: string | null }
@@ -46,6 +47,7 @@ Deno.test("recovered event handlers: reject cross-user photos; scan through atom
       return {} as Deno.HttpServer;
     }) as typeof Deno.serve;
     let scanResult = "consumed";
+    // skipcq: JS-0116 -- this fetch stub intentionally implements the Promise-based Fetch API.
     globalThis.fetch = (async (
       input: Request | URL | string,
       init?: RequestInit,
@@ -79,7 +81,7 @@ Deno.test("recovered event handlers: reject cross-user photos; scan through atom
         return json({
           id: assetId,
           event_id: eventId,
-          asset_type: "hero_photo",
+          asset_type: assetType,
           storage_bucket: "event-media",
           storage_path: "legitimate/photo.png",
           mime_type: "image/png",
@@ -149,7 +151,7 @@ Deno.test("recovered event handlers: reject cross-user photos; scan through atom
       }
       if (url.pathname.endsWith("/rest/v1/ai_runs")) return json({}, 201);
       throw new Error(
-        "Unexpected outgoing fetch: " + url.origin + url.pathname,
+        `Unexpected outgoing fetch: ${url.origin}${url.pathname}`,
       );
     }) as typeof fetch;
 
@@ -243,6 +245,20 @@ Deno.test("recovered event handlers: reject cross-user photos; scan through atom
     assertStringIncludes(geminiCalls[0].body, "iVBORwECAwQ=");
     assertEquals(geminiCalls[0].body.includes("127.0.0.1:5432"), false);
 
+    // An unknown (or inherited prototype) asset type safely uses the generic
+    // prompt, instead of passing a non-string to Gemini or skipping analysis.
+    assetType = "__proto__";
+    const unknownTypePhoto = await handlers[1](ownedPhotoRequest());
+    assertEquals(unknownTypePhoto.status, 200);
+    const genericPromptCall = calls.filter((c) =>
+      c.path.includes("generateContent")
+    ).at(-1);
+    assertStringIncludes(
+      genericPromptCall?.body ?? "",
+      "Review this event-related image.",
+    );
+    assetType = "hero_photo";
+
     // Even if the SDK returns a malformed score, the endpoint cannot
     // pretend that an image received a clean verdict.
     modelScore = null;
@@ -291,7 +307,7 @@ Deno.test("recovered event handlers: reject cross-user photos; scan through atom
     assertEquals(linkBody.success, true);
     assertStringIncludes(
       linkBody.data.staff_link_url,
-      "/staff/check-in/" + eventId,
+      `/staff/check-in/${eventId}`,
     );
     assertEquals(linkBody.data.staff_link_version, 0);
 
@@ -311,7 +327,7 @@ Deno.test("recovered event handlers: reject cross-user photos; scan through atom
       new Request("http://localhost/functions/v1/ticket-validate", {
         method: "POST",
         headers: {
-          Authorization: "Bearer " + staffToken,
+          Authorization: `Bearer ${staffToken}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ qr_token: qrToken, scanner_event_id: eventId }),
@@ -353,7 +369,7 @@ Deno.test("recovered event handlers: reject cross-user photos; scan through atom
       {
         method: "POST",
         headers: {
-          Authorization: "Bearer " + staffToken,
+          Authorization: `Bearer ${staffToken}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
