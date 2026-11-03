@@ -1,6 +1,11 @@
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   appendCertification,
+  excludedCoverageFromReview,
   excludedFilesFromReview,
   hasCertificationForBase,
   hasCertificationForHead,
@@ -301,14 +306,63 @@ describe("PR-Agent certified-review selection for a head", () => {
 });
 
 describe("PR-Agent review policy", () => {
-  it("uses incremental review only when the current base was previously certified", () => {
+  it("always selects current full PR diff even after same-base certification", () => {
     const history = appendCertification("", { baseSha: BASE_A, headSha: HEAD_A });
-    expect(selectReviewCommand({ action: "synchronize", certificationBodies: [history], baseSha: BASE_A })).toBe("/review -i");
-    expect(selectReviewCommand({ action: "synchronize", certificationBodies: [history], baseSha: BASE_B })).toBe("/review");
+    for (const action of ["opened", "reopened", "ready_for_review", "synchronize"]) {
+      expect(selectReviewCommand({ action, certificationBodies: [history], baseSha: BASE_A })).toBe("/review");
+      expect(selectReviewCommand({ action, certificationBodies: [history], baseSha: BASE_B })).toBe("/review");
+    }
   });
 
-  it("uses a full review when no prior certification exists", () => {
-    expect(selectReviewCommand({ action: "synchronize", certificationBodies: [], baseSha: BASE_A })).toBe("/review");
+  it("malformed, missing, or hostile history cannot enable historical incremental mode", () => {
+    for (const bodies of [[], ["untrusted"], [null], [appendCertification("", { baseSha: BASE_A, headSha: HEAD_A })]]) {
+      expect(selectReviewCommand({ action: "synchronize", certificationBodies: bodies, baseSha: BASE_A })).toBe("/review");
+    }
+  });
+
+  it("regression: ordinary-titled two-parent merge adds history outside a six-file Chat PR diff", () => {
+    const dir = mkdtempSync(join(tmpdir(), "mde-san1628-merge-"));
+    const git = (...args: string[]) => execFileSync("git", args, { cwd: dir, encoding: "utf8" }).trim();
+    const write = (path: string, content: string) => {
+      mkdirSync(join(dir, path.substring(0, path.lastIndexOf("/"))), { recursive: true });
+      writeFileSync(join(dir, path), content);
+    };
+    try {
+      git("init", "-q", "-b", "main");
+      git("config", "user.name", "MDE fixture");
+      git("config", "user.email", "fixture@example.invalid");
+      write("docs/root.md", "main");
+      git("add", "."); git("commit", "-qm", "initial");
+      git("switch", "-q", "-c", "chat-fix");
+      for (let i = 0; i < 6; i++) write(`src/chat/file-${i}.tsx`, `// change ${i}`);
+      git("add", "."); git("commit", "-qm", "fix: six chat files");
+      git("switch", "-q", "main");
+      write("src/rentals/unrelated.ts", "historical rentals change");
+      write("src/events/unrelated.ts", "historical events change");
+      git("add", "."); git("commit", "-qm", "feat: unrelated work on main");
+      git("switch", "-q", "chat-fix");
+      git("merge", "--no-ff", "-m", "chore: synchronize chat branch", "main");
+      expect(git("rev-list", "--parents", "-n", "1", "HEAD").split(" ")).toHaveLength(3);
+      const fullDiff = git("diff", "--name-only", "main...chat-fix").split("\n");
+      expect(fullDiff).toHaveLength(6);
+      expect(fullDiff.every((path) => path.startsWith("src/chat/"))).toBe(true);
+      expect(git("diff", "--name-only", "HEAD^1", "HEAD")).toContain("src/rentals/unrelated.ts");
+      expect(selectReviewCommand({ action: "synchronize", certificationBodies: [appendCertification("", { baseSha: BASE_A, headSha: HEAD_A })], baseSha: BASE_A })).toBe("/review");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("counts named and unlisted excluded files without inventing paths (PR #490)", () => {
+    const footer = "\n⚠️ **Review coverage:** The following files were not included in this review because of the token budget:\n" +
+      Array.from({ length: 50 }, (_, i) => `- \`src/unrelated-${i}.ts\`\n`).join("") + "... and 903 more\n";
+    expect(excludedCoverageFromReview(footer)).toMatchObject({ unlistedCount: 903, total: 953 });
+    expect(excludedFilesFromReview(footer)).toHaveLength(50);
+    const result = verifyReviewResult({ comments: [comment(envelopedCanonical() + footer, "2026-09-20T01:00:05Z")],
+      startedAt: RUN_STARTED, reviewCommand: "/review", baseSha: BASE_A, headSha: HEAD_A });
+    expect(result.code).toBe("INCOMPLETE_REVIEW");
+    expect(result.reason).toContain("953 excluded");
+    expect(result.reason).toContain("50 named, 903 unnamed");
   });
 
   it("rejects the actual PR #342 false-green: partial review excluded 17 of 20 changed files", () => {

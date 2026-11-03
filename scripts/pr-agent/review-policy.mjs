@@ -253,10 +253,14 @@ export function appendCertification(body, { baseSha, headSha }) {
   return `${prefix}\n${marker}\n`;
 }
 
-export function selectReviewCommand({ action, certificationBodies, baseSha }) {
-  if (action !== "synchronize") return "/review";
-  const sameBase = certificationBodies.some((body) => hasCertificationForBase(body, baseSha));
-  return sameBase ? "/review -i" : "/review";
+// SAN-1628: Always review the current PR diff. Upstream incremental mode walks
+// commit history and can include two-parent merges with ordinary commit titles,
+// importing unrelated historical files. SAN-1415 owns any future safe opt-in.
+export function selectReviewCommand(_context) {
+  // Preserve the caller contract for SAN-1415 while intentionally ignoring
+  // prior review history until merge-aware incremental scope is proven safe.
+  void _context;
+  return "/review";
 }
 
 function isBotComment(comment) {
@@ -330,11 +334,19 @@ function unquotedReviewMarkdown(body) {
 
 // One canonical parser for PR-Agent's top-level excluded-file footer.
 // Quoted examples and fenced/indented code must never affect coverage.
-export function excludedFilesFromReview(body) {
+export function excludedCoverageFromReview(body) {
   const matches = unquotedReviewMarkdown(body ?? "").match(
-    /(?:^|\r?\n) {0,3}⚠️\s+\*\*Review coverage:\*\*\s+The following files were not included in this review because of the token budget:\s*\r?\n((?:[ \t]*-[ \t]+`[^`\r\n]+`[ \t]*\r?\n?)+)/,
+    /(?:^|\r?\n) {0,3}⚠️\s+\*\*Review coverage:\*\*\s+The following files were not included in this review because of the token budget:\s*\r?\n((?:[ \t]*-[ \t]+`[^`\r\n]+`[ \t]*\r?\n?)+)(?:[ \t]*\.{3}\s+and\s+(\d+)\s+more)?/,
   );
-  return matches ? [...matches[1].matchAll(/^[ \t]*-[ \t]+`([^`\r\n]+)`/gm)].map((m) => m[1]) : [];
+  const files = matches ? [...matches[1].matchAll(/^[ \t]*-[ \t]+`([^`\r\n]+)`/gm)].map((m) => m[1]) : [];
+  const more = matches?.[2] ? Number(matches[2]) : 0;
+  // A displayed truncation count is not an inventory of identifiable paths.
+  const unlistedCount = Number.isSafeInteger(more) && more >= 0 ? more : 0;
+  return { files, unlistedCount, total: files.length + unlistedCount };
+}
+
+export function excludedFilesFromReview(body) {
+  return excludedCoverageFromReview(body).files;
 }
 
 function coverageFailure(body, headSha) {
@@ -342,9 +354,10 @@ function coverageFailure(body, headSha) {
   // own six-chunk coverage footer explicitly lists files omitted by the token
   // budget. The footer is direct evidence of incompleteness, regardless of
   // whether a state marker exists or incorrectly claims complete=true.
-  const footerExcluded = excludedFilesFromReview(body);
-  if (footerExcluded.length) {
-    return { ok: false, code: "INCOMPLETE_REVIEW", reason: `PR-Agent review footer reports ${footerExcluded.length} excluded file(s) after chunking` };
+  const footerExcluded = excludedCoverageFromReview(body);
+  if (footerExcluded.total > 0) {
+    return { ok: false, code: "INCOMPLETE_REVIEW",
+      reason: `PR-Agent review footer reports ${footerExcluded.total} excluded file(s) after chunking (${footerExcluded.files.length} named, ${footerExcluded.unlistedCount} unnamed)` };
   }
   const markers = [...body.matchAll(/(?:^|\n)<!-- pr-agent-review-state:v1\n([\s\S]*?)\n-->/g)];
   if (markers.length === 0) return null; // Clean reviews may have no persisted findings.

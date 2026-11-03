@@ -2,6 +2,37 @@
 
 Use AGENTS.md as the repository-wide engineering contract. Exact-head deterministic CI and human review remain authoritative; PR-Agent is advisory.
 
+## Current-PR-only review after merges (SAN-1628)
+
+Automatic opened/reopened/ready_for_review/**synchronize** reviews always run
+`/review` against GitHub's *current PR file diff*. Do not automatically use
+`/review -i`: the pinned upstream implementation walks commits and may treat
+an ordinary-titled two-parent merge as a normal commit, expanding a small diff
+into unrelated history. SAN-1415 owns any future independently proven incremental
+mode; the existing verifier still rejects stale, incomplete, or wrong-command
+reviews.
+
+Before AI inference, the pinned shared workflow retrieves the current PR file
+manifest from GitHub, verifies its size against `changed_files`, checks distinct
+paths/rename provenance, and rechecks base/head after pagination. A 3,000-file
+inventory is ambiguous under GitHub's API cap, so it fails closed. This preflight
+proves the **GitHub manifest**, not every internal token seen by the model;
+unmodified context files may still be supplied as reference material. The
+review's exact-head verifier remains authoritative.
+
+Historical bad canary: [PR #490](https://github.com/amoai-tech/mdeai/pull/490)
+changed six Chat files, but [failed review verification](https://github.com/amoai-tech/mdeai/actions/runs/41698752387)
+after incremental history expansion. The model's excluded-file footer listed
+50 paths plus 903 unnamed paths: **953 excluded in total**, not 50. The
+caller now reports total versus named/unnamed counts without inventing paths.
+Current-run proof requires a **new** PR reviewed with the updated shared SHA
+and a base revision containing the updated policy; replaying #490 is not proof.
+
+Scope and status: GitHub Actions reviewer CI only. No application workflow,
+CopilotKit/Mastra service, Supabase schema, or new AI review engine. See
+[SAN-1609](https://linear.app/amo100/issue/SAN-1609) for richer per-file
+coverage reporting; this change does not duplicate its planning logic.
+
 ## Smart large PR review (SAN-1609)
 
 The existing pinned PR Agent remains the sole AI reviewer. A separate advisory job
