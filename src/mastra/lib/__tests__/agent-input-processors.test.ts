@@ -21,6 +21,11 @@ describe("getDefaultInputProcessors", () => {
     expect(getDefaultInputProcessors()).toHaveLength(1);
   });
 
+  it("keeps enough room for the verified selection and follow-up memory", () => {
+    const [limiter] = getDefaultInputProcessors();
+    expect((limiter as unknown as { maxTokens: number }).maxTokens).toBeGreaterThanOrEqual(32768);
+  });
+
   it("enables PromptInjectionDetector only when MASTRA_PROMPT_INJECTION_GUARD=true", () => {
     vi.stubEnv("NODE_ENV", "development");
     vi.stubEnv("MASTRA_PROMPT_INJECTION_GUARD", "true");
