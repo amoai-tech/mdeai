@@ -77,7 +77,7 @@ function stripNegativeClaims(text: string): string {
 
 function firstWordOf(text: string): string {
   let end = 0;
-  while (end < text.length && !" \t\r\n".includes(text[end] ?? "")) end += 1;
+  while (end < text.length && !" \t\r\n".includes(text.charAt(end))) end += 1;
   let word = text.slice(0, end);
   while (word.length > 0 && ".,!?;:".includes(word[word.length - 1] ?? "")) {
     word = word.slice(0, -1);
@@ -90,16 +90,14 @@ function hasSelectedPlaceClaim(text: string): boolean {
     for (const qualifier of ["", "public ", "currently ", "currently public "]) {
       for (const verb of ["is", "remains", "still"]) {
         const marker = `selected ${qualifier}${noun} ${verb} `;
-        let from = 0;
-        while (true) {
-          const index = text.indexOf(marker, from);
-          if (index < 0) break;
+        let index = text.indexOf(marker);
+        while (index >= 0) {
           let rest = text.slice(index + marker.length).trimStart();
           if (rest.startsWith("currently ")) rest = rest.slice("currently ".length).trimStart();
           if (rest.startsWith("the ")) rest = rest.slice("the ".length).trimStart();
           const firstWord = firstWordOf(rest);
           if (!NEGATIVE_FIRST_WORDS.has(firstWord)) return true;
-          from = index + marker.length;
+          index = text.indexOf(marker, index + marker.length);
         }
       }
     }
@@ -110,20 +108,18 @@ function hasSelectedPlaceClaim(text: string): boolean {
 function selectedPublicItemFields(text: string): string[] {
   const marker = "selected public item:";
   const values: string[] = [];
-  let from = 0;
-  while (true) {
-    const index = text.indexOf(marker, from);
-    if (index < 0) break;
+  let index = text.indexOf(marker);
+  while (index >= 0) {
     const rest = text.slice(index + marker.length);
     let end = rest.length;
     for (let i = 0; i < rest.length; i += 1) {
-      if (".!?\r\n".includes(rest[i] ?? "")) {
+      if (".!?\r\n".includes(rest.charAt(i))) {
         end = i;
         break;
       }
     }
     values.push(rest.slice(0, end).trim());
-    from = index + marker.length;
+    index = text.indexOf(marker, index + marker.length);
   }
   return values;
 }
