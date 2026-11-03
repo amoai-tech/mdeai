@@ -401,6 +401,34 @@ ${JSON.stringify({ findings: [], schema_version: 1, last_run: { head_sha: HEAD_A
     expect(result.code).toBe("INCOMPLETE_REVIEW");
   });
 
+  it("rejects partial input coverage when no review state marker is published", () => {
+    const noState = envelopedCanonical().replace(/<!-- pr-agent-review-state:v1\n[\s\S]*?\n-->/, "");
+    const partial = "\n<hr>\n⚠️ **Review coverage:** The following files had patches clipped before analysis to fit the token budget (partial input coverage):\n" +
+      "- `src/events/checkout.ts`\n... and 12 more\n";
+    const result = verifyReviewResult({ comments: [comment(noState + partial, "2026-09-20T01:00:05Z")],
+      startedAt: RUN_STARTED, reviewCommand: "/review", baseSha: BASE_A, headSha: HEAD_A });
+    expect(result.code).toBe("INCOMPLETE_REVIEW");
+    expect(result.reason).toContain("partial input coverage");
+  });
+
+  it("rejects failed review chunks even when no files are explicitly excluded", () => {
+    const noState = envelopedCanonical().replace(/<!-- pr-agent-review-state:v1\n[\s\S]*?\n-->/, "");
+    const chunked = "\n<hr>\nℹ️ **Chunked review:** the diff exceeded the model token budget, so it was reviewed in 6 chunks and the per-chunk results were merged. 2 chunk(s) failed and are not covered by this review.\n";
+    const result = verifyReviewResult({ comments: [comment(noState + chunked, "2026-09-20T01:00:05Z")],
+      startedAt: RUN_STARTED, reviewCommand: "/review", baseSha: BASE_A, headSha: HEAD_A });
+    expect(result.code).toBe("INCOMPLETE_REVIEW");
+    expect(result.reason).toContain("2 failed chunk(s)");
+  });
+
+  it("ignores examples of chunk/partial input warnings inside Markdown fences or quoted blocks", () => {
+    const noState = envelopedCanonical().replace(/<!-- pr-agent-review-state:v1\n[\s\S]*?\n-->/, "");
+    const example = "\n```md\nℹ️ **Chunked review:** reviewed in 6 chunks. 2 chunk(s) failed and are not covered by this review.\n" +
+      "⚠️ **Review coverage:** The following files had patches clipped before analysis to fit the token budget (partial input coverage):\n- `src/example.ts`\n```\n";
+    const result = verifyReviewResult({ comments: [comment(noState + example, "2026-09-20T01:00:05Z")],
+      startedAt: RUN_STARTED, reviewCommand: "/review", baseSha: BASE_A, headSha: HEAD_A });
+    expect(result.ok).toBe(true);
+  });
+
   it("rejects a six-chunk review that explicitly excludes files even when the persistent state is absent", () => {
     const footer = [
       "",

@@ -18,7 +18,10 @@ paths/rename provenance, and rechecks base/head after pagination. A 3,000-file
 inventory is ambiguous under GitHub's API cap, so it fails closed. This preflight
 proves the **GitHub manifest**, not every internal token seen by the model;
 unmodified context files may still be supplied as reference material. The
-review's exact-head verifier remains authoritative.
+review's exact-head verifier remains authoritative. It rejects explicit excluded-file
+footers (including truncated hidden-name totals), v0.49.0 **partial input
+coverage** warnings (clipped patches), and **failed-chunk** notices even when
+PR-Agent omitted its persistent review-state marker.
 
 Historical bad canary: [PR #490](https://github.com/amoai-tech/mdeai/pull/490)
 changed six Chat files, but [failed review verification](https://github.com/amoai-tech/mdeai/actions/runs/41698752387)

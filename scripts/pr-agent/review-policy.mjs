@@ -350,6 +350,20 @@ export function excludedFilesFromReview(body) {
 }
 
 function coverageFailure(body, headSha) {
+  // The pinned PR-Agent v0.49.0 also reports failed chunks and clipped patches
+  // outside the excluded-files footer. Missing persistent state must not turn
+  // either explicit partial-review signal into a successful certification.
+  const visible = unquotedReviewMarkdown(body);
+  const failedChunk = visible.match(/(?:^|\n) {0,3}ℹ️\s+\*\*Chunked review:\*\*[^\n]*?\b(\d+) chunk\(s\) failed and are not covered by this review\./);
+  if (failedChunk && Number(failedChunk[1]) > 0) {
+    return { ok: false, code: "INCOMPLETE_REVIEW",
+      reason: `PR-Agent reported ${failedChunk[1]} failed chunk(s); review coverage is incomplete` };
+  }
+  const partialInput = /(?:^|\n) {0,3}⚠️\s+\*\*Review coverage:\*\*\s+The following files had patches clipped before analysis to fit the token budget \(partial input coverage\):/;
+  if (partialInput.test(visible)) {
+    return { ok: false, code: "INCOMPLETE_REVIEW",
+      reason: "PR-Agent reported patches clipped before analysis (partial input coverage)" };
+  }
   // PR-Agent can omit persistent finding state on a clean review even when its
   // own six-chunk coverage footer explicitly lists files omitted by the token
   // budget. The footer is direct evidence of incompleteness, regardless of
