@@ -21,8 +21,9 @@ export async function setEventInterest(eventId: string, follow: boolean): Promis
     const { error } = await supabase
       .from("event_interest_subscriptions")
       .insert({ event_id: eventId, user_id: user.id });
-    revalidatePath(`/events/${eventId}`);
-    return interestOutcome(true, error);
+    const result = interestOutcome(true, error);
+    if (result.ok) revalidatePath(`/events/${eventId}`);
+    return result;
   }
 
   const { error } = await supabase
@@ -30,6 +31,7 @@ export async function setEventInterest(eventId: string, follow: boolean): Promis
     .delete()
     .eq("event_id", eventId)
     .eq("user_id", user.id);
-  revalidatePath(`/events/${eventId}`);
-  return interestOutcome(false, error);
+  const result = interestOutcome(false, error);
+  if (result.ok) revalidatePath(`/events/${eventId}`);
+  return result;
 }
