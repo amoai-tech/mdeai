@@ -39,7 +39,7 @@ fi
 
 # The SQL grammar is an optional extra. Do not silently build incomplete SQL
 # graphs when the required parser is absent from this Graphify environment.
-if [[ "${1:-}" == "update" || "${1:-}" == "extract" ]]; then
+if [[ "${1:-}" = "update" || "${1:-}" = "extract" ]]; then
   RESOLVED_BIN="$(readlink -f "$GRAPHIFY")"
   TOOL_PYTHON="$(dirname "$RESOLVED_BIN")/python"
   if [[ ! -x "$TOOL_PYTHON" ]] || ! "$TOOL_PYTHON" -c 'import tree_sitter_sql' >/dev/null 2>&1; then
