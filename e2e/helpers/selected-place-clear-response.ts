@@ -8,7 +8,15 @@ export function confirmsNothingSelected(text: string): boolean {
   // A negative phrase must never override a later positive assertion. Strip
   // explicit negative claims first, then reject remaining "X is selected" claims.
   // This preserves the observed agent answer "say nothing is selected".
-  const remainingClaims = answer
+  const currentState = answer
+    // A future or hypothetical selection is not a claim about the current item.
+    .replace(/\b(?:once|if|when)\s+(?:a|an|the)\s+(?:place|item|listing|event|venue|rental|apartment|restaurant|caf[eé]|club)\s+(?:is|are)\s+(?:currently\s+)?selected\b/gi, "")
+    // A past selection is not a claim about the current item.
+    .replace(/\b(?:previously|formerly|last|earlier|old)\s+(?:public\s+)?selected\s+(?:place|item|record|listing|rental|apartment|venue|restaurant|event|caf[eé]|club)s?\b/gi, "");
+  // Reject the other word order before removing explicit negatives: "The
+  // selected place is Apartment B" never contains "is selected".
+  if (/\b(?:selected|current(?:ly)?\s+selected)\s+(?:public\s+)?(?:place|item|record|listing|rental|apartment|venue|restaurant|event|caf[eé]|club)\s+(?:is|remains|still)\s+(?!none\b|no\b|not\b|nothing\b)(?:currently\s+)?(?:the\s+)?[a-z0-9áéíóúñ]/i.test(currentState)) return false;
+  const remainingClaims = currentState
     .replace(/\b(?:nothing|none|no one|nobody)\s+(?:is|are)\s+(?:currently\s+)?selected\b/gi, "")
     .replace(/\bno\s+(?:(?:currently|active|public|new)\s+){0,3}(?:place|item|record|listing|rental|apartment|venue|restaurant|event|caf[eé]|club)\s+(?:is\s+)?(?:currently\s+)?selected\b/gi, "");
   if (/\b(?:is|remains|still)\s+(?:currently\s+)?selected\b/i.test(remainingClaims)) return false;
@@ -22,9 +30,10 @@ export function confirmsNothingSelected(text: string): boolean {
     .map((match) => match[1].trim().toLowerCase());
   if (states.length > 0) return states.length === 1 && states[0] === "none";
   // Another exact negative form observed from the real Events agent on mobile.
-  // Do not accept a sentence that subsequently contradicts the absence of selection.
+  // The earlier current-state check rejects contradictory "B is selected" claims;
+  // mentions of previously selected places are not a contradiction.
   if (/^i (?:do not|don't) have any currently selected (?:place|item|listing|event|venue)\b/i.test(answer)) {
-    return !/\b(?:but|however)\b[^.!?]*\bselected\b/i.test(answer);
+    return true;
   }
   const startsAsConfirmation =
     /^(?:no(?=[\s,.!?:—–-])|nothing\b|none\b|there\s+(?:is|are)\b|selection\b|currently[,\s]|right now[,\s]|based on (?:the )?current (?:browser )?state[,\s])/i.test(answer);
