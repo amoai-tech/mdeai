@@ -1,13 +1,26 @@
-import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+// @vitest-environment jsdom
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
 import { RestaurantBrowseFilters } from "../restaurant-browse-filters";
+
+afterEach(cleanup);
 
 describe("RestaurantBrowseFilters accessibility", () => {
   it("uses aria-current only on selected navigation links, never aria-pressed", () => {
-    const html = renderToStaticMarkup(<RestaurantBrowseFilters neighborhood="Laureles" cuisine="colombian" />);
-    expect(html).not.toMatch(/\saria-pressed=/);
-    expect(html).toContain('data-testid="restaurants-filter-neighborhood-laureles"');
-    expect(html).toContain('aria-current="true"');
-    expect((html.match(/aria-current="true"/g) ?? []).length).toBeGreaterThanOrEqual(1);
+    const { container } = render(
+      <RestaurantBrowseFilters neighborhood="Laureles" cuisine="colombian" />,
+    );
+
+    expect(container.querySelector("[aria-pressed]")).toBeNull();
+    expect(
+      screen.getByTestId("restaurants-filter-neighborhood-laureles").getAttribute("aria-current"),
+    ).toBe("true");
+    expect(
+      screen.getByTestId("restaurants-filter-cuisine-colombian").getAttribute("aria-current"),
+    ).toBe("true");
+    expect(
+      screen.getByTestId("restaurants-filter-neighborhood-envigado").hasAttribute("aria-current"),
+    ).toBe(false);
+    expect(container.querySelectorAll('[aria-current="true"]')).toHaveLength(2);
   });
 });
