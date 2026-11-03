@@ -22,9 +22,8 @@ export function isExpectedGuestStartup401(
   isAuthenticated: boolean,
   sessionLoading = false,
 ): boolean {
-  // An unresolved session cannot be classified as a guest: a cold 401 may
-  // precede getUser(). The caller defers only the known runtime-info 401;
-  // genuine run failures stay visible immediately.
+  // The provider waits for initial auth resolution before mounting. During an
+  // existing signed-in session refresh, never suppress a real provider failure.
   if (sessionLoading) return false;
   if (isAuthenticated || !event || typeof event !== "object") return false;
   const candidate = event as { code?: unknown; context?: unknown; error?: unknown };
@@ -38,22 +37,6 @@ export function isExpectedGuestStartup401(
   const statusFromError = typeof cause === "object" && cause !== null &&
     "runtimeInfoStatus" in cause ? cause.runtimeInfoStatus : undefined;
   return statusFromContext === 401 || statusFromError === 401;
-}
-
-/**
- * A guest's expected runtime-info 401 can arrive before getUser() finishes.
- * Defer only that startup probe; once auth settles, discard it for a guest
- * or report it for a signed-in user. Never defer a real agent-run failure.
- */
-export function classifyConciergeStartupError(
-  event: unknown,
-  isAuthenticated: boolean,
-  sessionLoading: boolean,
-): "ignore" | "defer" | "report" {
-  if (sessionLoading && !isAuthenticated && isExpectedGuestStartup401(event, false)) {
-    return "defer";
-  }
-  return isExpectedGuestStartup401(event, isAuthenticated, sessionLoading) ? "ignore" : "report";
 }
 
 export type ConciergeErrorSnapshot = {

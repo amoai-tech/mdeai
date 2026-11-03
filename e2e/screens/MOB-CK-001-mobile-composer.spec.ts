@@ -12,16 +12,16 @@ async function gotoComposer(page: Page) {
   const response = await page.goto("/chat", { waitUntil: "domcontentloaded" });
   expect(response?.ok(), "GET /chat").toBe(true);
 
-  await expect(page.getByTestId("concierge-chat-view-mounted")).toHaveCount(1, {
-    timeout: 30_000,
-  });
-
+  // Verify the user-visible v2 composer, not a custom chat-view mount marker.
+  // A guest runtime-info 401 can leave the stock composer visible while the
+  // internal view slot is still reconnecting. Its marker is not a UI contract.
   const region = page.getByTestId("copilot-chat-region");
   const input = region.getByTestId("copilot-chat-textarea");
   const send = region.getByTestId("copilot-send-button");
 
   await expect(region).toBeVisible({ timeout: 30_000 });
   await expect(input).toBeVisible({ timeout: 30_000 });
+  await expect(input).toBeEnabled({ timeout: 30_000 });
   await expect(send).toBeVisible({ timeout: 30_000 });
 
   return {

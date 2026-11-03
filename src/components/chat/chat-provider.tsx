@@ -19,7 +19,7 @@ import {
 import { reconcileSavedHistory, type SavedThreadMessage } from "@/lib/chat/saved-thread-history";
 import { useThreadNav } from "@/lib/chat/thread-nav-context";
 import { getCopilotKitClientProps } from "@/lib/copilotkit-client-props";
-import { classifyConciergeStartupError, reportConciergeError } from "@/lib/concierge-error-store";
+import { isExpectedGuestStartup401, reportConciergeError } from "@/lib/concierge-error-store";
 import { useSession } from "@/hooks/use-session";
 import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 
@@ -248,27 +248,21 @@ function LiveChatProvider({ children }: { children: ReactNode }) {
   const shouldReplay = Boolean(activeThreadId || restoredThread ||
     (hasPersistedThread && initialRestorableThread === sessionThreadId));
 
-  // The runtime-info 401 may arrive before the guest session finishes loading.
-  // Don't show a false failed-turn notice or hide a signed-in auth failure.
-  const pendingStartup401 = useRef<string | undefined | null>(null);
-  useEffect(() => {
-    if (sessionLoading || pendingStartup401.current === null) return;
-    const failedThreadId = pendingStartup401.current;
-    pendingStartup401.current = null;
-    if (user && failedThreadId === threadId) reportConciergeError(failedThreadId);
-  }, [sessionLoading, user, threadId]);
+  // A provider mounted before auth settles can send a guest /info request which
+  // returns after sign-in, making a *guest* 401 look like a signed-in failure.
+  // Match the discovery provider: start only with a resolved identity, and
+  // remount on actual user changes so old requests keep their original context.
+  if (sessionLoading && !user) return null;
 
   return (
     <CopilotKitProvider
+      key={user?.id ?? "guest"}
       {...getCopilotKitClientProps("conciergeAgent")}
       enableInspector={false}
       onError={(event) => {
-        const decision = classifyConciergeStartupError(event, Boolean(user), sessionLoading);
-        if (decision === "ignore") return;
-        if (decision === "defer") {
-          pendingStartup401.current = threadId;
-          return;
-        }
+        if (isExpectedGuestStartup401(event, Boolean(user), sessionLoading)) return;
+        // Never drop a real failure, including a run failure during a session
+        // refresh while the existing signed-in identity remains available.
         reportConciergeError(threadId);
       }}
     >
