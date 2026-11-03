@@ -227,9 +227,9 @@ Deno.serve(async (req) => {
     await safeLogScan(service, {
       event_id: body.scanner_event_id,
       qr_token: body.qr_token,
-      // Existing CHECK constraint only accepts invalid_signature. The precise
-      // revocation reason remains available for authorized audit inspection.
-      result: "invalid_signature",
+      // SAN-1622: first deploy the forward CHECK-constraint migration so
+      // revoked links are counted separately from forged QR signatures.
+      result: "staff_token_revoked",
       scanner_device: body.scanner_device ?? null,
       ip_address: clientIp,
       details: {

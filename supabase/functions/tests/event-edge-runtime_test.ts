@@ -159,6 +159,35 @@ Deno.test("recovered event handlers: reject cross-user photos; scan through atom
     await import("../event-staff-link-generator/index.ts");
     assertEquals(handlers.length, 3);
 
+    // The scanner uses a custom staff JWT, but never permits an unsigned
+    // request. The generator requires the authenticated caller's user JWT.
+    const noAuthScan = await handlers[0](
+      new Request("http://localhost/functions/v1/ticket-validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          qr_token: "invalid-qr-token-long-enough",
+          scanner_event_id: eventId,
+        }),
+      }),
+    );
+    assertEquals(noAuthScan.status, 401);
+    assertEquals((await noAuthScan.json()).error.code, "STAFF_TOKEN_INVALID");
+    const noAuthLink = await handlers[2](
+      new Request("http://localhost/functions/v1/event-staff-link-generator", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ event_id: eventId, ttl_hours: 24 }),
+      }),
+    );
+    assertEquals(noAuthLink.status, 401);
+    assertEquals(
+      calls.filter((c) =>
+        c.path.endsWith("/rest/v1/rpc/bump_staff_link_version")
+      ).length,
+      0,
+    );
+
     const photo = await handlers[1](
       new Request("http://localhost/functions/v1/event-photo-moderate", {
         method: "POST",
@@ -307,16 +336,46 @@ Deno.test("recovered event handlers: reject cross-user photos; scan through atom
       calls.filter((c) => c.path.endsWith("/event_check_ins")).length,
       0,
     );
-    // A revoked link is rejected and logged using the existing CHECK-safe
-    // result invalid_signature, with precise details for staff_token_revoked.
+    // Revocation and invalid QR signature must have different audit results,
+    // without ever consuming a ticket on either rejected request.
     currentStaffVersion = 1;
     const revoked = await handlers[0](scanRequest());
     assertEquals(revoked.status, 401);
     assertStringIncludes(await revoked.text(), "STAFF_TOKEN_REVOKED");
     const scanLogs = calls.filter((c) => c.path.endsWith("/event_check_ins"));
     assertEquals(scanLogs.length, 1);
-    assertStringIncludes(scanLogs[0].body, "staff_token_revoked");
-    assertStringIncludes(scanLogs[0].body, "invalid_signature");
+    const revokedAudit = JSON.parse(scanLogs[0].body);
+    assertEquals(revokedAudit.result, "staff_token_revoked");
+    assertEquals(revokedAudit.details.reason, "staff_token_revoked");
+
+    const forgedQrRequest = new Request(
+      "http://localhost/functions/v1/ticket-validate",
+      {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + staffToken,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          qr_token: "not-a-real-qr-signature-but-long-enough",
+          scanner_event_id: eventId,
+        }),
+      },
+    );
+    const forged = await handlers[0](forgedQrRequest);
+    assertEquals(forged.status, 200);
+    assertEquals((await forged.json()).error.code, "INVALID_SIGNATURE");
+    const failureAudits = calls.filter((c) =>
+      c.path.endsWith("/event_check_ins")
+    );
+    assertEquals(failureAudits.length, 2);
+    assertEquals(JSON.parse(failureAudits[1].body).result, "invalid_signature");
+    assertEquals(
+      failureAudits.filter((record) =>
+        JSON.parse(record.body).result === "staff_token_revoked"
+      ).length,
+      1,
+    );
 
     // Organizer and Super Admin must revoke through the JWT-scoped RPC.
     const revokeRequest = () =>
