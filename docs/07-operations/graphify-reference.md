@@ -2,7 +2,7 @@
 title: Graphify Reference — MDE AI
 description: Canonical Graphify usage, repository intelligence workflow, and limitations for MDE agents.
 status: current
-updated: 2026-09-20
+updated: 2026-11-03
 source_of_truth: current repository code and tests
 ---
 
@@ -10,11 +10,13 @@ source_of_truth: current repository code and tests
 
 Knowledge graph tool for codebase + docs analysis. Builds a queryable graph of every function, component, file, and document and the connections between them.
 
-**Package:** `graphifyy` 0.8.36
-**Venv:** `~/.venvs/graphify`
-**Output:** `graphify-out/` (gitignored)
-**Builder:** `scripts/graphify-run.sh` (thin wrapper over the `graphify` CLI)
-**Current baseline:** [`docs/ai-second-brain/GRAPHIFY-BASELINE.md`](../_archive/legacy-active-docs-2026-09-18/task-130/ai-second-brain/GRAPHIFY-BASELINE.md)
+**Verified CLI:** `graphifyy[sql]==0.9.101` (November 3, 2026); command `graphify`
+**Install:** isolated `uv tool`, normally `~/.local/bin/graphify` (no activation required)
+**Output:** `graphify-out/` (gitignored, per checkout/worktree)
+**Builder:** `npm run graphify:update` (code-only AST, no LLM or clustering)
+**Historical baseline:** [Phase 2 snapshot](../_archive/legacy-active-docs-2026-09-18/task-130/ai-second-brain/GRAPHIFY-BASELINE.md) — not the current code graph.
+
+**Important:** a graph describes the checkout that generated it, **not** automatically current GitHub `main`. Rebuild on the branch/worktree you intend to inspect. Check the timestamp and confirm the exact symbol against current source before trusting dependency conclusions.
 
 
 ## Contents
@@ -46,7 +48,7 @@ Knowledge graph tool for codebase + docs analysis. Builds a queryable graph of e
 npm run graphify:explain -- "conciergeAgent"          # locate + immediate neighbors
 npm run graphify:explain -- "HostOpsCopilotBridge"
 npm run graphify:explain -- "HostDashboardState"
-npm run graphify:path -- "useConciergeCoAgent" "concierge.ts"   # how A connects to B
+npm run graphify:path -- "useConciergeCoAgent" "concierge.ts" --undirected # how A connects to B
 ```
 
 **Do not use graphify for vague natural-language discovery** — it keyword-matches and
@@ -70,13 +72,18 @@ you have an exact identifier to anchor on.
 ## Quick Start
 
 ```bash
-# Activate the venv (required before every graphify command)
-source ~/.venvs/graphify/bin/activate
+# Official PyPI package is graphifyy (double y). Pin the verified version + SQL support.
+uv tool install --reinstall --force 'graphifyy[sql]==0.9.101'
+graphify --version                         # expect 0.9.101
+uv tool list
 
-# Run from the current Git checkout root
-repo_root="$(git rev-parse --show-toplevel)"
-cd "$repo_root"
+# Run from the checkout containing the code you are editing.
+cd "$(git rev-parse --show-toplevel)"
+npm run graphify:update                    # regenerate code index for this checkout
+npm run graphify:explain -- conciergeAgent
 ```
+
+If `graphify --version` fails with `ModuleNotFoundError`, reinstall with the `uv tool` command above. The wrapper prefers `GRAPHIFY_BIN` when set, otherwise the executable on `PATH`, then a legacy venv fallback. It defaults `GRAPHIFY_NO_AUTO_REFRESH=1` to avoid modifying agent skill files on ordinary queries.
 
 ---
 
@@ -85,10 +92,12 @@ cd "$repo_root"
 ### path — shortest path between two things
 
 ```bash
-npm run graphify:path -- "useConciergeCoAgent" "concierge.ts"
+npm run graphify:path -- "useConciergeCoAgent" "concierge.ts" --undirected
 graphify path "createClient" "venue_booking_requests"
 graphify path "CafeBrowseFilters" "buildFilterUrl"
 ```
+
+Paths are directed by default. For imports between the client and server subgraphs, an **undirected** path may exist even when a directed path does not. The verified `useConciergeCoAgent` to `concierge.ts` lookup needs `--undirected`; a missing directed path is not a broken installation.
 
 Use actual function/file names from the graph, not conceptual names. If unsure of the exact name, search first:
 
@@ -123,50 +132,33 @@ graphify query "Mastra tool registration" --dfs
 
 ### Blast radius — what depends on X
 
-> There is **no `affected` command** (it is not in the `graphify` CLI nor in
-> `scripts/graphify-run.sh`). Earlier docs that referenced `graphify affected …` were wrong.
-
-To see what a change might break, use `explain` (lists a node's neighbors, including
-importers) or `path` (how two symbols connect):
+Graphify **v0.9.101 includes `affected`**, which performs bounded reverse dependency traversal:
 
 ```bash
-graphify explain "createClient"                       # neighbors + importers of the symbol
-graphify path "useMapContext" "RentalsMapShell"       # is B reachable from A, and how
+graphify affected "conciergeAgent" --depth 1
+npm run graphify:explain -- "conciergeAgent"          # immediate neighbors
+npm run graphify:path -- "useConciergeCoAgent" "concierge.ts" --undirected
 ```
 
-These return BFS **neighbors**, not a guaranteed-complete caller list. Before any breaking
-change, confirm the full caller set with `grep` — the graph only captures static imports
-(dynamic imports, `require()`, string lookups, and Next.js routing are invisible to it).
+`affected` is a static dependency aid, **not** a guaranteed complete set of callers. Check results with source search and tests: runtime routing, dynamic imports, strings and external service calls may not appear as edges.
 
 ---
 
 ## Rebuild the Graph
 
-Run the builder from the current repository root:
+The canonical npm script builds a **code-only AST graph** for the current checkout:
 
 ```bash
-bash scripts/graphify-run.sh update .
+npm run graphify:update
+stat -c '%y %s %n' graphify-out/graph.json
+npm run graphify:explain -- conciergeAgent
 ```
 
-This takes ~1 minute (AST-only, **$0, no LLM**). It:
-1. Re-extracts changed code + docs via the `graphify` CLI (respecting `.graphifyignore`)
-2. Runs clustering into communities
-3. Writes `GRAPH_REPORT.md`, `manifest.json`, and `graph.json` into `graphify-out/`
+This extracts code (including SQL when installed with `[sql]`), without an LLM or clustering. It writes the current checkout's `graphify-out/graph.json`. It does **not** refresh a historical semantic document graph, communities, or old `GRAPH_REPORT.md`. Generate a tree visualization separately with `npm run graphify:tree`; use the official `/graphify --update` assistant workflow only if semantic documents are needed.
 
-Regenerate the HTML viz with `bash scripts/graphify-run.sh tree` → `graphify-out/GRAPH_TREE.html`.
-Current measured node/edge/build-time numbers live in
-[`docs/ai-second-brain/GRAPHIFY-BASELINE.md`](../_archive/legacy-active-docs-2026-09-18/task-130/ai-second-brain/GRAPHIFY-BASELINE.md).
+**One-time migration:** If the old combined graph is much larger, Graphify refuses to overwrite it. Preserve `graph.json`, `GRAPH_REPORT.md` and `manifest.json` first. Only when deliberately replacing the default graph with a code-only graph, set `GRAPHIFY_FORCE=1 npm run graphify:update`. Never force an unexplained decrease in nodes.
 
-**When to rebuild:**
-- After significant new code (new features, major refactors)
-- After adding or archiving planning docs
-- Before running an architecture audit
-
-**To rebuild code AST only** (faster, no doc re-extraction):
-
-```bash
-graphify update src/
-```
+**Freshness:** Graphify indexes the **local checkout**, including its branch-specific state, not GitHub `main`. Check `git rev-parse --short HEAD`, the graph timestamp and a known symbol against local source. Rebuild after significant changes or branch switches. A historical backup is for reference, not current dependency proof.
 
 ---
 
@@ -177,7 +169,7 @@ graphify update src/
 |---|---|---|
 | `src/` | 591 TS/TSX | AST extraction, zero LLM calls |
 
-### Phase 2 — Code + Docs (current)
+### Phase 2 — Code + Docs (historical; not refreshed by `graphify:update`)
 | Source | Files | Notes |
 |---|---|---|
 | `src/` | 591 TS/TSX | Reused from Phase 1 |
@@ -238,7 +230,6 @@ Cross-check before acting. The graph only captures static imports. Dynamic impor
 ### Community is just "Community N" with no label
 The LLM only labeled the top 40 communities. To label more:
 ```bash
-source ~/.venvs/graphify/bin/activate
 python3 -c "
 import json
 from graphify.llm import label_communities
@@ -285,24 +276,25 @@ These are hard rules learned during Phase 1/2 setup:
 - **Do NOT run `graphify uninstall --purge`** — deletes `graphify-out/`
 - **Do not include `tasks/design/`** in the corpus — it's 11 GB of images
 - **Do not include `tasks/archive/` or `tasks/backup/`** — adds noise without value
-- **`graphify update <path>`** only rebuilds code AST, skips docs — use the build script for full rebuilds
+- **`graphify update <path>`** and `npm run graphify:update` rebuild code AST without full semantic docs; the assistant `/graphify --update` workflow is separate.
 - **`_archive/` dirs are excluded** from doc extraction (build script filters `"_archive" not in f.parts`) — move obsolete docs there to clean the corpus without deleting them
 - **Commerce `src/app/api/commerce/` routes ARE live** — the graph showed low connectivity for `src/lib/commerce/` but the routes exist and the shop page imports the client
 
 ---
 
-## Graph Stats (current build)
+## Graph Stats (verified example, not a shared current index)
+
+Clean `origin/main` at `84a2f719` was indexed on 2026-11-03 with Graphify 0.9.101 and the SQL extra:
 
 ```
-Nodes:       17,080
-Edges:       19,416
-Communities: 1,527 (40 labeled)
-Import cycles: 0
-LLM calls:   0 (all local extraction)
-API cost:    $0
-graph.json:  13 MB
-Build time:  ~3 min
+Nodes:             18,124
+Relationships:     36,682
+SQL-related nodes: 1,319
+Clustering:        not run (--no-cluster)
+LLM calls:         0
 ```
+
+The active feature checkout had 20,282 nodes / 36,670 edges. Counts vary with branch, uncommitted files and exclusions; do not treat these as a permanent baseline. The archived June/September semantic graph is not interchangeable with the current AST-only index.
 
 ---
 
@@ -311,12 +303,11 @@ Build time:  ~3 min
 ```
 ./
   graphify-out/               ← gitignored, all derived outputs
-    graph.json                ← queryable graph (13 MB)
-    GRAPH_REPORT.md           ← human-readable report (413 KB)
-    .graphify_ast.json        ← Phase 1 code extraction (2.7 MB)
-    .graphify_semantic.json   ← Phase 2 doc extraction (8 MB)
-    .graphify_labels.json     ← community labels
-    .graphify_analysis.json   ← god nodes, surprises, cycles
+    graph.json                ← current checkout's code graph after `npm run graphify:update`
+    archive/                  ← optional operator-preserved historical semantic graph
+    GRAPH_REPORT.md           ← may belong to an earlier clustering/semantic snapshot
+    cache/                    ← local extractor cache
+    manifest.json             ← local extraction manifest
   scripts/
     graphify-run.sh           ← canonical builder (run this to rebuild)
 ```
