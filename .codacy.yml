@@ -1,18 +1,11 @@
 ---
-# This repository is PostgreSQL-only (Supabase migrations, pgTAP tests, seeds).
+# SQL dialect policy: Supabase SQL in this repository is PostgreSQL.
 #
-# TSQLLint is the SQL Server linter. Its rules reported here —
-#   * Expected SET ANSI_NULLS ON near top of file
-#   * Expected SET NOCOUNT ON near top of file
-#   * Expected SET QUOTED_IDENTIFIER ON near top of file
-#   * Expected SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED near top of file
-# — are T-SQL directives with no PostgreSQL equivalent. Applied to a Postgres migration they
-# are false positives, and they fire on every new migration file, which is why they recurred
-# across SAN-1284 migrations.
+# TSQLLint is SQL Server-only and is disabled in the current Codacy Cloud configuration.
+# Keep the per-tool SQL exclusion below as defense in depth if it is enabled again: T-SQL
+# directives such as ANSI_NULLS and NOCOUNT are not valid PostgreSQL requirements.
 #
-# A tool cannot be enabled/disabled from this file (that is the Code patterns page), so the
-# correct lever is a per-tool path exclusion. SQLint — the PostgreSQL linter — is deliberately
-# left enabled so Postgres SQL is still analysed; only the SQL Server linter is scoped out.
+# SQLFluff is the active SQL analyzer in Codacy Cloud. SQLint is currently disabled.
 exclude_paths:
   - "scripts/pr-agent/evals/fixtures/semver-boundary-canary-source.mjs"
   - "scripts/pr-agent/evals/fixtures/semver-boundary-canary-test.mjs"
