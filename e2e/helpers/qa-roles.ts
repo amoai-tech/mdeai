@@ -9,6 +9,8 @@ export function resolveQaRoleEmail(
 ): string | null {
   if (role === "anonymous") return null;
   if (role === "super-admin") return QA_SUPER_ADMIN_EMAIL;
+  // The legacy event-host fixture currently uses the Super Admin QA default.
+  // Use a dedicated host/throwaway identity to prove non-admin role restrictions.
   if (role === "event-host") return QA_HOST_EMAIL;
 
   const key = role === "renter" ? "MDE_QA_RENTER_EMAIL" : "MDE_QA_BROKER_EMAIL";
