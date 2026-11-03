@@ -12,6 +12,7 @@ import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 import { ArrowUp, Square } from "lucide-react";
 import type { DiscoveryPage } from "@/components/chat/discovery-page-context";
 import { getLatestDiscoveryToolResult, type DiscoveryAgentResult } from "./discovery-tool-results";
+import { SelectedItemClearAction } from "./selected-item-clear-action";
 
 type EventGuestOptions = {
   category?: "music" | "food" | "culture" | "sport" | "nightlife" | null;
@@ -119,7 +120,7 @@ const ignoreRejection = () => undefined;
 
 /** One composer on every non-rental browse page; Rentals retains its richer search adapter. */
 // skipcq: JS-0067 - module-local React component; not browser global scope
-function LiveComposer({ page, guestEvents, onAgentResults, hideHeading = false, suggestions }: {
+function LiveComposer({ page, guestEvents, onAgentResults, hideHeading = false, suggestions, hasSelectedItem, onClearSelection }: {
   page: Exclude<DiscoveryPage, "rentals">;
   guestEvents?: EventGuestOptions;
   onAgentResults?: (result: DiscoveryAgentResult) => void;
@@ -127,6 +128,9 @@ function LiveComposer({ page, guestEvents, onAgentResults, hideHeading = false, 
   hideHeading?: boolean;
   /** Optional starter questions; a click sends one normal turn, never a canned answer. */
   suggestions?: readonly string[];
+  /** The page already owns this item and this clear handler; no second selection state. */
+  hasSelectedItem?: boolean;
+  onClearSelection?: () => void;
 }) {
   const { user, loading: sessionLoading } = useSession();
   const { agent, isReady } = useConciergeCoAgent();
@@ -258,6 +262,13 @@ function LiveComposer({ page, guestEvents, onAgentResults, hideHeading = false, 
         </div>
       </div>
       )}
+      {hasSelectedItem ? (
+        <SelectedItemClearAction
+          label="Place selected"
+          onClear={onClearSelection}
+          testId="discovery-ask-clear-selection"
+        />
+      ) : null}
       <AskHistory turns={turns} open={showHistory} />
       {showSuggestions ? (
         <AskSuggestions
@@ -293,16 +304,18 @@ function LiveComposer({ page, guestEvents, onAgentResults, hideHeading = false, 
 }
 
 // skipcq: JS-0067 - module-local React component; not browser global scope
-export function DiscoveryAskComposer({ page, guestEvents, onAgentResults, hideHeading, suggestions }: {
+export function DiscoveryAskComposer({ page, guestEvents, onAgentResults, hideHeading, suggestions, hasSelectedItem, onClearSelection }: {
   page: Exclude<DiscoveryPage, "rentals">;
   guestEvents?: EventGuestOptions;
   onAgentResults?: (result: DiscoveryAgentResult) => void;
   hideHeading?: boolean;
   suggestions?: readonly string[];
+  hasSelectedItem?: boolean;
+  onClearSelection?: () => void;
 }) {
   const coAgent = useOptionalConciergeCoAgent();
   if (isDeterministicE2E() || !coAgent) {
     return <div data-testid={`discovery-ask-${page}`} className="border-t p-4 text-sm text-muted-foreground">Ask MDE about {page} in the live application.</div>;
   }
-  return <LiveComposer page={page} guestEvents={guestEvents} onAgentResults={onAgentResults} hideHeading={hideHeading} suggestions={suggestions} />;
+  return <LiveComposer page={page} guestEvents={guestEvents} onAgentResults={onAgentResults} hideHeading={hideHeading} suggestions={suggestions} hasSelectedItem={hasSelectedItem} onClearSelection={onClearSelection} />;
 }

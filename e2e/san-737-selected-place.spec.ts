@@ -170,6 +170,15 @@ for (const size of [{ name: "desktop", width: 1440, height: 900 }, { name: "mobi
         const b = afterFirst.find((name) => name !== a);
         if (!b) throw new Error("a distinct currently visible B must exist");
         const second = cardNamed(b);
+        if (size.width === 390) {
+          // B may sit under the sticky composer in the initial scroll position.
+          // Scroll it into the upper-middle like a person would, then click normally.
+          await select(second).evaluate((button) => {
+            const top = button.getBoundingClientRect().top + window.scrollY;
+            window.scrollTo({ top: Math.max(0, top - 300), behavior: "auto" });
+          });
+          await page.waitForTimeout(150);
+        }
         await select(second).click();
         await expect(select(second)).toHaveAttribute("aria-pressed", "true");
         if (await first.count()) {
@@ -179,14 +188,20 @@ for (const size of [{ name: "desktop", width: 1440, height: 900 }, { name: "mobi
           "What is the exact name of the place I have selected NOW? Use its verified current record, not the previous item.", 2);
         expect(secondReply.toLocaleLowerCase()).toContain(b.toLocaleLowerCase());
 
-        // After a mobile AI reply, the sticky composer/nav can cover the selected
-        // card's Clear button. Emulate a real user's deliberate scroll back to
-        // the card; Playwright's automatic viewport visibility does not account
-        // for sticky overlays. Do not force-click or bypass pointer hit testing.
+        // On a phone, the growing Ask MDE transcript can cover a card's own Clear
+        // button. The composer exposes the SAME selected-item handler in its
+        // always-reachable sticky area; click that normally, never force-click.
         if (size.width === 390) {
-          await select(second).evaluate((button) => button.scrollIntoView({ block: "center", inline: "nearest" }));
+          const stickyClear = page.getByTestId(
+            scenario.route === "rentals"
+              ? "rental-ask-clear-selection"
+              : "discovery-ask-clear-selection",
+          );
+          await expect(stickyClear).toBeVisible();
+          await stickyClear.click();
+        } else {
+          await select(second).click();
         }
-        await select(second).click();
         await expect(select(second)).toHaveAttribute("aria-pressed", "false");
         const clearedReply = await ask(page, scenario.route,
           "Is any place currently selected? Do not assume the previous place is still selected.", 3);

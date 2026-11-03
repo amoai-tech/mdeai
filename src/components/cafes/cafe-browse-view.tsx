@@ -77,7 +77,7 @@ function CafeBrowseViewInner({
     <DiscoveryPageContext page="cafes" filters={{ neighborhood, feature }} selectedId={selectedId} />
     <DiscoveryWorkspace
       activeSlug="cafes"
-      askComposer={<DiscoveryAskComposer page="cafes" onAgentResults={onAgentResults} />}
+      askComposer={<DiscoveryAskComposer page="cafes" onAgentResults={onAgentResults} hasSelectedItem={Boolean(selectedId)} onClearSelection={clearAskSelection} />}
       rightPanel={hasMap ? <BrowseMapPanel fill /> : undefined}
       testId="cafes-browse"
       title="Cafés"

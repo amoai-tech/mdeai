@@ -174,7 +174,7 @@ function EventBrowseViewInner({
     <DiscoveryPageContext page="events" filters={{ category, neighborhood, dateWindow, price }} selectedId={selectedId} />
     <DiscoveryWorkspace
       activeSlug="events"
-      askComposer={<DiscoveryAskComposer page="events" onAgentResults={onAgentResults} guestEvents={{
+      askComposer={<DiscoveryAskComposer page="events" onAgentResults={onAgentResults} hasSelectedItem={Boolean(selectedId)} onClearSelection={() => selectEvent(null)} guestEvents={{
         category, neighborhood, dateWindow,
         onEventIds: (ids) => void resolveIds(ids),
       }} />}
