@@ -62,7 +62,32 @@ export function conciergeWelcomeScreen<T>(hasTailContent: boolean, welcomeScreen
   return hasTailContent ? false : welcomeScreen;
 }
 
-/** Props for the composer: our submit handler wired unconditionally, and the textarea locked until the page is live. */
+/**
+ * Keep every supported CopilotKit v2 composer-slot shape intact while adding a
+ * name to the stock icon-only control. A slot may be a class-name string, a
+ * partial props object, or a custom React component; replacing all three with
+ * `{ "aria-label": ... }` silently discarded the caller's customization.
+ */
+function labelledComposerSlot(slot: unknown, label: string): unknown {
+  if (typeof slot === "string") {
+    // CopilotKit treats a string as a className to merge onto the stock control.
+    // A props object preserving that className is the equivalent supported form.
+    return { className: slot, "aria-label": label };
+  }
+  if (typeof slot === "function") return slot;
+  if (typeof slot === "object" && slot !== null && "$$typeof" in slot) return slot;
+  if (typeof slot === "object" && slot !== null) {
+    const props = slot as Record<string, unknown>;
+    const existing = props["aria-label"];
+    return {
+      ...props,
+      "aria-label":
+        typeof existing === "string" && existing.trim() ? existing : label,
+    };
+  }
+  return { "aria-label": label };
+}
+
 export function conciergeComposerInput(
   baseInput: CopilotChatViewProps["input"],
   onSubmitMessage: (text: string) => void,
@@ -82,6 +107,10 @@ export function conciergeComposerInput(
   return {
     ...inputProps,
     onSubmitMessage,
+    // CopilotKit v2 exposes button slots: name the stock icon-only controls without
+    // replacing a class-string, props-object, or custom-component slot.
+    sendButton: labelledComposerSlot(inputProps.sendButton, "Send message"),
+    addMenuButton: labelledComposerSlot(inputProps.addMenuButton, "Add attachment"),
     textArea: {
       ...textAreaProps,
       enterKeyHint: "send",

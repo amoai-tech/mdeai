@@ -37,9 +37,17 @@ describe("SAN-737 Concierge instructions agree about verified lookup ownership",
   it("uses the already-verified current selection and still allows new discovery searches", () => {
     const source = readFileSync(new URL("../agents/concierge.ts", import.meta.url), "utf8");
     expect(source).toContain("server-side public RLS lookup ALREADY completed");
+    expect(source).toContain("getDefaultInputProcessors(12_288)");
     expect(source).toContain("do NOT call the lookup tool again for the same ID");
     expect(source).toContain("For an unrelated new discovery request, use the appropriate search tool normally");
     expect(source).not.toContain("selectedPublicEntityId from the active discovery-page context BEFORE answering concrete facts");
+    // Keep these output rules within the existing event instruction; the
+    // system prompt is near the model's token cap on Preview.
+    expect(source).toContain('no "Current selection" prefix');
+    expect(source).toContain('"event_tickets" table names');
+    expect(source).toContain('No tickets are currently listed for [event name]');
+    expect(source).toContain('each compared event’s verified facts separate');
+    expect(source).toContain('explain technical fields only if asked');
   });
 });
 

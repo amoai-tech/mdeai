@@ -173,7 +173,7 @@ export function MobileBottomNav() {
                   "flex min-h-11 min-w-11 flex-1 flex-col items-center justify-center gap-0.5 rounded-2xl text-xs font-medium leading-none transition-colors motion-reduce:transition-none",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                   active
-                    ? "text-primary"
+                    ? "text-emerald-800 dark:text-emerald-200"
                     : "text-muted-foreground hover:text-foreground",
                 )}
               >

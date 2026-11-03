@@ -25,7 +25,19 @@ function splitListingNotice(description: string | null): { about: string | null;
   return { about: about || null, notice: notice?.trim() ?? null };
 }
 
-export function EventDetailView({ event, backTo = "events" }: { event: PublicEventDetail; backTo?: "events" | "chat" }) {
+type EventDetailViewProps = {
+  event: PublicEventDetail;
+  backTo?: "events" | "chat";
+  /** Whether this visitor already follows the event; guests get a sign-in path. */
+  interest?: { signedIn: boolean; following: boolean };
+};
+
+export function EventDetailView({
+  event,
+  backTo = "events",
+  // Default to a guest: rendering without server session data must not claim a follow.
+  interest = { signedIn: false, following: false },
+}: EventDetailViewProps) {
   const [checkout, setCheckout] = useState<BookingCheckoutTarget | null>(null);
   const tiersRef = useRef<HTMLDivElement>(null);
   const schedule = formatEventSchedule(event.startsAt, event.endsAt);
@@ -98,6 +110,7 @@ export function EventDetailView({ event, backTo = "events" }: { event: PublicEve
               schedule={schedule}
               durationLabel={durationLabel}
               fromTier={fromTier}
+              interest={interest}
               tiersRef={tiersRef}
               notice={notice}
               onCheckout={setCheckout}
