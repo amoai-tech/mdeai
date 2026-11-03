@@ -29,6 +29,7 @@ describe("getDefaultInputProcessors", () => {
   });
 
   it("allows the concierge to reserve room for the verified selection and follow-up memory", () => {
+    vi.stubEnv("MASTRA_PROMPT_INJECTION_GUARD", "");
     const [limiter] = getDefaultInputProcessors(32_768);
     expect((limiter as unknown as { maxTokens: number }).maxTokens).toBeGreaterThanOrEqual(32768);
   });

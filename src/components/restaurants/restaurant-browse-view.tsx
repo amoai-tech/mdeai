@@ -87,7 +87,7 @@ function RestaurantBrowseViewInner({
       />
       <DiscoveryWorkspace
         activeSlug="restaurants"
-        askComposer={<DiscoveryAskComposer page="restaurants" onAgentResults={onAgentResults} hasSelectedItem={Boolean(selectedForAsk)} onClearSelection={() => setSelectedForAskId(null)} />}
+        askComposer={<DiscoveryAskComposer page="restaurants" onAgentResults={onAgentResults} hasSelectedItem={Boolean(selectedForAsk ?? selectedRestaurant)} onClearSelection={() => { setSelectedForAskId(null); setSelectedPinId(null); }} />}
         rightPanel={<BrowseMapPanel fill overlay={selectedRestaurant && desktop ? <RestaurantDetailsPanel restaurant={selectedRestaurant} onClose={closeDetails} /> : undefined} />}
         testId="restaurants-browse"
         title="Restaurants"

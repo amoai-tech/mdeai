@@ -70,6 +70,9 @@ function stripNegativeClaims(text: string): string {
       next = replaceAll(next, `no ${qualifier}${noun} is selected`);
       next = replaceAll(next, `no ${qualifier}${noun} is currently selected`);
       next = replaceAll(next, `no ${qualifier}${noun} are selected`);
+      // Compound negative observed from the real Rentals agent:
+      // "no public place or rental listing is currently selected".
+      next = replaceAll(next, `no ${qualifier}${noun} or rental listing is currently selected`);
     }
   }
   return next;
@@ -166,6 +169,7 @@ export function confirmsNothingSelected(input: string): boolean {
   const remainingClaims = stripNegativeClaims(currentState);
   if (
     remainingClaims.includes(" is selected") ||
+    remainingClaims.includes(" is currently selected") ||
     remainingClaims.includes(" remains selected") ||
     remainingClaims.includes(" still selected")
   ) {
