@@ -139,7 +139,7 @@ select throws_ok($$select public.p1_start_rental_application_atomic('00000000-00
 
 -- ...but it MUST still reach the two intentional contracts.
 select lives_ok($$select public.acting_landlord_ids()$$, 'X: authenticated ALLOWED acting_landlord_ids (RLS helper)');
-select throws_ok($select public.bump_staff_link_version('00000000-0000-0000-0000-000000000000'::uuid)$, '42501', 'UNAUTHORIZED', 'X: authenticated ALLOWED bump_staff_link_version, body rejects missing caller identity');
+select throws_ok($$select public.bump_staff_link_version('00000000-0000-0000-0000-000000000000'::uuid)$$, '42501', 'UNAUTHORIZED', 'X: authenticated ALLOWED bump_staff_link_version, body rejects missing caller identity');
 reset role;
 
 -- ═══════════════════════════════════════════════════════════════════════════════
