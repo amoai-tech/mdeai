@@ -91,9 +91,10 @@ export function EventDetailAside({
                   </div>
                 ) : null}
               </div>
-              {/* Opens the shared assistant in place: no navigation, no second conversation. */}
+              {/* Scrolls to the one assistant already on the page: no dialog, no second
+                  conversation, so it must not advertise a popup. */}
               <Button type="button" data-testid="event-ask-mde" onClick={focusInlineAsk}
-                aria-haspopup="dialog"
+                aria-controls="event-ask-mde-inline"
                 variant={fromTier ? "outline" : "default"}
                 className="w-full justify-start gap-2 whitespace-normal text-left">
                 <Sparkles className="size-4 shrink-0" aria-hidden />
