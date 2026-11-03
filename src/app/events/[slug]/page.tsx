@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { EventCheckoutNotice } from "@/components/events/event-checkout-notice";
 import { EventDetailView } from "@/components/events/event-detail-view";
+import { getEventInterest } from "@/lib/events/event-interest-server";
 import { getPublicEventResult } from "@/lib/events/get-public-event";
 import { EventUnavailable } from "@/components/events/event-unavailable";
 import { EventCalendarLink } from "@/components/events/event-calendar-link";
@@ -59,7 +60,11 @@ export default async function EventDetailPage({ params, searchParams }: EventDet
       <div className="mx-auto flex max-w-6xl justify-end px-4 pt-4">
         <EventCalendarLink event={event} />
       </div>
-      <EventDetailView event={event} backTo={from === "chat" ? "chat" : "events"} />
+      <EventDetailView
+        event={event}
+        backTo={from === "chat" ? "chat" : "events"}
+        interest={await getEventInterest(event.id)}
+      />
     </>
   );
 }

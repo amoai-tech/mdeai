@@ -70,7 +70,7 @@ export function RestaurantBrowseFilters({
                   neighborhood: toggleNeighborhood(neighborhood, n),
                   cuisine,
                 })}
-                aria-pressed={active}
+                aria-current={active ? "true" : undefined}
                 data-testid={`restaurants-filter-neighborhood-${n.toLowerCase().replace(/\s+/g, "-")}`}
                 className={cn(
                   filterChipClass,
@@ -100,7 +100,7 @@ export function RestaurantBrowseFilters({
                   neighborhood,
                   cuisine: toggleCuisine(cuisine, value),
                 })}
-                aria-pressed={active}
+                aria-current={active ? "true" : undefined}
                 data-testid={`restaurants-filter-cuisine-${value}`}
                 className={cn(
                   filterChipClass,

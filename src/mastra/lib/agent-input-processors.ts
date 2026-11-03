@@ -18,14 +18,9 @@ import { ACTIVE_TEXT_MODEL } from "./models";
  *
  * To re-enable the guard for a deploy: set MASTRA_PROMPT_INJECTION_GUARD=true.
  */
-export function getDefaultInputProcessors(): InputProcessor[] {
-  // SAN-737: an 8,192-token ceiling counted the concierge's full system prompt,
-  // its tool schemas, the server-verified current selection and working memory as
-  // "system messages alone" on a second turn. That threw a TripWire before the
-  // model could answer, so A→B→Clear failed even though the selection was right.
-  // 32,768 leaves room for those system inputs and stays well inside the active
-  // Gemini/NVIDIA model context windows.
-  const processors: InputProcessor[] = [new TokenLimiter(32768)];
+// skipcq: JS-0067 - exported function is scoped to this ES module, not the global object
+export function getDefaultInputProcessors(inputTokenLimit = 8192): InputProcessor[] {
+  const processors: InputProcessor[] = [new TokenLimiter(inputTokenLimit)];
 
   if (process.env.MASTRA_PROMPT_INJECTION_GUARD === "true") {
     processors.unshift(new PromptInjectionDetector({ model: ACTIVE_TEXT_MODEL }));

@@ -64,7 +64,7 @@ const filterChipClass = cn(
   toggleVariants({ variant: "outline", size: "sm" }),
   "min-h-9 rounded-full px-3",
 );
-const activeChipClass = "border-primary bg-primary/10 text-primary";
+const activeChipClass = "border-primary bg-primary/10 text-emerald-800 dark:text-emerald-200";
 
 /** One labelled chip row. Chips are navigation links, so the active one is `aria-current`, not `aria-pressed`. */
 function FilterGroup({ label, children }: { label: string; children: ReactNode }) {

@@ -455,7 +455,7 @@ Conversion boundary (do NOT cross):
 - When the user asks to show a listing on the map ("focus the second one", "pan to that apartment"), call the frontend tool focusMapPin with the pin/listing id from lastRentalResults or mapUi.selectedPinId.
 - When a RENTER/consumer asks for rental listings (neighborhood, price, bedrooms), ALWAYS call search-rentals first; for the signed-in broker asking about OWN listings, use read-broker-workspace instead — never describe specific listings from memory without a tool result in the same turn.
 - Tool results are the only truth — never invent event names, venues, rental listings, prices, hosts, or URLs. If the tool returns nothing, say so and offer alternatives.
-- An event record with no ticket tiers means no tickets are listed right now. Say exactly that and suggest checking with the organizer; never claim entry is free, not required, or sold out, and never invent a price.
+- For event answers, use visitor-friendly wording: no "Current selection" prefix, "event_tickets" table names or raw context JSON. No tiers: "No tickets are currently listed for [event name]"; do not infer free entry, sold out, or a price. If the exact meeting point is unconfirmed, say so. Keep each compared event’s verified facts separate; explain technical fields only if asked.
 - Never claim to book or charge — only propose options.
 - can_schedule_viewing is the only source of truth for viewing requestability. If it is false, or schedule_viewing_url is null, never tell the user that rental can be scheduled and never print a "Schedule viewing" link for it.
 - Never answer "rentals or events?" if lastIntent=rental_search and the user is continuing.
@@ -500,7 +500,10 @@ export const conciergeAgent = new Agent({
     requestVenueBooking: requestVenueBookingTool,
   },
   inputProcessors: [
-    ...getDefaultInputProcessors(),
+    // SAN-737: the verified current selection, tool schemas and working memory must
+    // fit on a follow-up turn. 8,192 threw "system messages alone exceed token limit"
+    // before the model could answer; 32,768 stays inside the active model context.
+    ...getDefaultInputProcessors(32_768),
     // The model sometimes repeats restaurant search instead of issuing the
     // proposal. Once the current run grounded the exact named venue and the
     // customer already supplied every mandatory field, require the *existing*

@@ -8,6 +8,7 @@ const h = vi.hoisted(() => ({
   stopActiveRun: vi.fn(),
   retryLastTurn: vi.fn(),
   latestResult: vi.fn(),
+  turns: [] as Array<{ id: string; role: "user" | "assistant"; text: string }>,
   subscribers: [] as Array<{ onMessagesChanged?: () => void; onRunFinalized?: () => void }>,
 }));
 
@@ -28,7 +29,7 @@ vi.mock("@/components/chat/concierge-coagent-context", () => ({
   useOptionalConciergeCoAgent: () => ({ agent, isReady: true }),
   useConciergeCoAgent: () => ({ agent, isReady: true }),
 }));
-vi.mock("@/components/rentals/rental-ask-tool-results", () => ({ useTurns: () => [] }));
+vi.mock("@/components/rentals/rental-ask-tool-results", () => ({ useTurns: () => h.turns }));
 vi.mock("@/lib/hooks/use-concierge-chat", () => ({
   useConciergeChat: () => ({
     appendMessage: h.appendMessage, stopActiveRun: h.stopActiveRun, retryLastTurn: h.retryLastTurn, isLoading: false, isRuntimeUnavailable: () => false,
@@ -56,6 +57,7 @@ beforeEach(() => {
   h.latestResult.mockReset().mockImplementation((_messages: unknown, page: string, since: number) =>
     page === "restaurants" && since === 0 ? result : null);
   h.subscribers.length = 0;
+  h.turns = [];
   clearConciergeError();
 });
 afterEach(cleanup);
@@ -192,4 +194,71 @@ describe("SAN-1145 shared Ask MDE composer — signed-in send outcomes", () => {
     expect(h.appendMessage).toHaveBeenCalledTimes(1);
   });
 
+});
+
+describe("Ask MDE compact history — latest answer and intentional scrolling", () => {
+  it("follows three sequential replies, renders Markdown, and pauses while reading earlier messages", () => {
+    const originalHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollHeight");
+    const originalClient = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientHeight");
+    Object.defineProperty(HTMLElement.prototype, "scrollHeight", {
+      configurable: true,
+      get: function (this: HTMLElement) { return this.getAttribute("data-testid") === "discovery-ask-history" ? 250 + h.turns.length * 125 : 0; },
+    });
+    Object.defineProperty(HTMLElement.prototype, "clientHeight", {
+      configurable: true,
+      get: function (this: HTMLElement) { return this.getAttribute("data-testid") === "discovery-ask-history" ? 120 : 0; },
+    });
+    try {
+      const { rerender } = render(<DiscoveryAskComposer page="events" />);
+      const addAnswer = (index: number, question: string, answer: string) => {
+        h.turns = [...h.turns,
+          { id: `q-${index}`, role: "user" as const, text: question },
+          { id: `a-${index}`, role: "assistant" as const, text: answer },
+        ];
+        rerender(<DiscoveryAskComposer page="events" />);
+        return screen.getByTestId("discovery-ask-history") as HTMLOListElement;
+      };
+
+      const first = addAnswer(1, "Reina prices?", "Tickets: **VIP COP 120,000**\n\n- General Admission COP 40,000");
+      expect(first.scrollTop).toBe(first.scrollHeight);
+      expect(first.querySelector("strong")?.textContent).toContain("VIP COP 120,000");
+      expect(first.querySelector("li li")?.textContent).toContain("General Admission COP 40,000");
+
+      const second = addAnswer(2, "Feria tickets?", "**No tickets are currently listed** for Feria.");
+      expect(second.scrollTop).toBe(second.scrollHeight);
+      expect(second.lastElementChild?.textContent).toContain("No tickets are currently listed");
+      expect(second.lastElementChild?.textContent).not.toContain("**");
+
+      // A reader who intentionally scrolls up must not be pulled away by a new message.
+      second.scrollTop = 0;
+      fireEvent.scroll(second);
+      const third = addAnswer(3, "Compare the events", "Reina lists VIP, but Feria has **no listed tiers**.");
+      expect(third.scrollTop).toBe(0);
+      expect(third.lastElementChild?.textContent).toContain("no listed tiers");
+
+      // Once the reader returns to the bottom, streaming updates should follow again.
+      third.scrollTop = third.scrollHeight - third.clientHeight;
+      fireEvent.scroll(third);
+      h.turns = h.turns.map((t) => t.id === "a-3"
+        ? { ...t, text: "Reina lists VIP, but Feria has **no listed tiers**. The meeting point is unconfirmed.\n\n| Event | Ticket |\n| --- | --- |\n| Reina | VIP COP 120,000 |\n| Feria | Not listed |" }
+        : t);
+      rerender(<DiscoveryAskComposer page="events" />);
+      expect(third.scrollTop).toBe(third.scrollHeight);
+      expect(third.lastElementChild?.textContent).toContain("meeting point is unconfirmed");
+      expect(third.querySelector("table")?.textContent).toContain("VIP COP 120,000");
+      // Explicitly hiding then reopening the history returns to the newest response.
+      third.scrollTop = 0;
+      fireEvent.scroll(third);
+      fireEvent.click(screen.getByTestId("discovery-ask-history-toggle"));
+      expect(screen.queryByTestId("discovery-ask-history")).toBeNull();
+      fireEvent.click(screen.getByTestId("discovery-ask-history-toggle"));
+      const reopened = screen.getByTestId("discovery-ask-history") as HTMLOListElement;
+      expect(reopened.scrollTop).toBe(reopened.scrollHeight);
+    } finally {
+      if (originalHeight) Object.defineProperty(HTMLElement.prototype, "scrollHeight", originalHeight);
+      else Reflect.deleteProperty(HTMLElement.prototype, "scrollHeight");
+      if (originalClient) Object.defineProperty(HTMLElement.prototype, "clientHeight", originalClient);
+      else Reflect.deleteProperty(HTMLElement.prototype, "clientHeight");
+    }
+  });
 });
