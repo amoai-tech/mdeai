@@ -9,9 +9,8 @@ create table if not exists public.event_interest_subscriptions (
   event_id uuid not null references public.events(id) on delete cascade,
   user_id uuid not null references auth.users(id) on delete cascade,
   created_at timestamptz not null default now(),
-  -- The last tier that produced a notification for this follower. Retries of the same
-  -- tier therefore cannot notify twice.
-  last_notified_tier_id uuid references public.event_tickets(id) on delete set null,
+  -- At most one notification per follow lifecycle, regardless of tier edits or retries.
+  first_notified_at timestamptz,
   constraint event_interest_subscriptions_event_user_key unique (event_id, user_id)
 );
 
@@ -39,14 +38,13 @@ create policy event_interest_delete_own on public.event_interest_subscriptions
 grant select, insert, delete on public.event_interest_subscriptions to authenticated;
 revoke all on public.event_interest_subscriptions from anon;
 
--- One notification per follower per newly available tier. The trigger is the canonical
--- place: it covers every writer (host UI, admin, AI draft publish, migrations) instead
--- of one server action that the next writer would forget.
+-- One notification per follow lifecycle when tickets first become available.
+-- One canonical trigger covers all writers, with an atomic per-follower latch.
 create or replace function public.notify_event_interest_on_tier_available()
 returns trigger
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   became_available boolean;
@@ -67,9 +65,9 @@ begin
 
   with notified as (
     update public.event_interest_subscriptions s
-       set last_notified_tier_id = new.id
+       set first_notified_at = now()
      where s.event_id = new.event_id
-       and (s.last_notified_tier_id is null or s.last_notified_tier_id <> new.id)
+       and s.first_notified_at is null
     returning s.user_id
   )
   insert into public.notifications (user_id, type, title, body, metadata)
@@ -83,7 +81,12 @@ begin
 
   return new;
 end;
-$$;
+$;
+
+-- Internal SECURITY DEFINER trigger: no public/end-user EXECUTE grant.
+-- Preserve service_role EXECUTE as required by the canonical SAN-1284C ACL contract.
+revoke all on function public.notify_event_interest_on_tier_available() from public, anon, authenticated;
+grant execute on function public.notify_event_interest_on_tier_available() to service_role;
 
 drop trigger if exists event_ticket_notify_interested on public.event_tickets;
 create trigger event_ticket_notify_interested
