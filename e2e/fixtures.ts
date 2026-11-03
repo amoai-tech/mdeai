@@ -72,7 +72,9 @@ export const test = base.extend<SharedFixtures, SharedWorkerFixtures>({
     runFixture,
     testInfo,
   ) => {
-    // Preserve the legacy signed-in fixture contract; flag reports for safe CI removal.
+    // Legacy signed-in smoke uses Super Admin QA and does not prove host-only access.
+    // Use qaRole: "event-host" with a dedicated non-admin identity for host authorization.
+    // Flag private reports for safe CI removal.
     markPrivateQaOutput((name) => testInfo.outputPath(name));
     await context.setStorageState(authStorageState);
     await runFixture(page);

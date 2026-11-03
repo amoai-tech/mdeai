@@ -145,7 +145,7 @@ const ignoreRejection = () => undefined;
 
 /** One composer on every non-rental browse page; Rentals retains its richer search adapter. */
 // skipcq: JS-0067 - module-local React component; not browser global scope
-function LiveComposer({ page, guestEvents, onAgentResults, hideHeading = false, suggestions, hasSelectedItem, onClearSelection }: {
+function LiveComposer({ page, guestEvents, onAgentResults, hideHeading = false, suggestions, historyNote, hasSelectedItem, onClearSelection }: {
   page: Exclude<DiscoveryPage, "rentals">;
   guestEvents?: EventGuestOptions;
   onAgentResults?: (result: DiscoveryAgentResult) => void;
@@ -153,7 +153,9 @@ function LiveComposer({ page, guestEvents, onAgentResults, hideHeading = false, 
   hideHeading?: boolean;
   /** Optional starter questions; a click sends one normal turn, never a canned answer. */
   suggestions?: readonly string[];
-  /** The page already owns this item and this clear handler; no second selection state. */
+  /** Label restored turns from earlier events without clearing the shared thread. */
+  historyNote?: string;
+  /** The page owns this selected place and its clear handler. */
   hasSelectedItem?: boolean;
   onClearSelection?: () => void;
 }) {
@@ -294,6 +296,11 @@ function LiveComposer({ page, guestEvents, onAgentResults, hideHeading = false, 
           testId="discovery-ask-clear-selection"
         />
       ) : null}
+      {historyNote && turns.length > 0 ? (
+        <p role="note" data-testid="discovery-ask-history-context" className="mb-2 text-xs text-muted-foreground">
+          {historyNote}
+        </p>
+      ) : null}
       <AskHistory turns={turns} open={showHistory} />
       {showSuggestions ? (
         <AskSuggestions
@@ -329,12 +336,13 @@ function LiveComposer({ page, guestEvents, onAgentResults, hideHeading = false, 
 }
 
 // skipcq: JS-0067 - module-local React component; not browser global scope
-export function DiscoveryAskComposer({ page, guestEvents, onAgentResults, hideHeading, suggestions, hasSelectedItem, onClearSelection }: {
+export function DiscoveryAskComposer({ page, guestEvents, onAgentResults, hideHeading, suggestions, historyNote, hasSelectedItem, onClearSelection }: {
   page: Exclude<DiscoveryPage, "rentals">;
   guestEvents?: EventGuestOptions;
   onAgentResults?: (result: DiscoveryAgentResult) => void;
   hideHeading?: boolean;
   suggestions?: readonly string[];
+  historyNote?: string;
   hasSelectedItem?: boolean;
   onClearSelection?: () => void;
 }) {
@@ -342,5 +350,5 @@ export function DiscoveryAskComposer({ page, guestEvents, onAgentResults, hideHe
   if (isDeterministicE2E() || !coAgent) {
     return <div data-testid={`discovery-ask-${page}`} className="border-t p-4 text-sm text-muted-foreground">Ask MDE about {page} in the live application.</div>;
   }
-  return <LiveComposer page={page} guestEvents={guestEvents} onAgentResults={onAgentResults} hideHeading={hideHeading} suggestions={suggestions} hasSelectedItem={hasSelectedItem} onClearSelection={onClearSelection} />;
+  return <LiveComposer page={page} guestEvents={guestEvents} onAgentResults={onAgentResults} hideHeading={hideHeading} suggestions={suggestions} historyNote={historyNote} hasSelectedItem={hasSelectedItem} onClearSelection={onClearSelection} />;
 }

@@ -10,7 +10,6 @@ import type { BookingCheckoutTarget } from "@/components/modals/booking-checkout
 import { formatTicketPrice } from "@/lib/events/format-event";
 import { eventDetailAction } from "@/lib/events/event-detail-action";
 import type { PublicEventDetail, PublicEventTicket } from "@/lib/events/types";
-import { openAskMde } from "@/lib/chat/ask-mde-bridge";
 
 type EventDetailAsideProps = {
   event: PublicEventDetail;
@@ -24,6 +23,17 @@ type EventDetailAsideProps = {
   notice: string | null;
   onCheckout: (target: BookingCheckoutTarget) => void;
 };
+
+/** The assistant now lives under the location: bring it into view instead of opening a drawer. */
+function focusInlineAsk() {
+  const section = document.getElementById("event-ask-mde-inline");
+  if (!section) return;
+  section.scrollIntoView({ behavior: "smooth", block: "start" });
+  const field = section.querySelector<HTMLTextAreaElement>("textarea")
+    ?? section.querySelector<HTMLAnchorElement>('a[href*="/login"]')
+    ?? section;
+  field.focus({ preventScroll: true });
+}
 
 /** Visitor decision panel: event facts, one canonical ticket picker and existing AI handoff. */
 export function EventDetailAside({
@@ -83,9 +93,10 @@ export function EventDetailAside({
                   </div>
                 ) : null}
               </div>
-              {/* Opens the shared assistant in place: no navigation, no second conversation. */}
-              <Button type="button" data-testid="event-ask-mde" onClick={openAskMde}
-                aria-haspopup="dialog"
+              {/* Scrolls to the one assistant already on the page: no dialog, no second
+                  conversation, so it must not advertise a popup. */}
+              <Button type="button" data-testid="event-ask-mde" onClick={focusInlineAsk}
+                aria-controls="event-ask-mde-inline"
                 variant={fromTier ? "outline" : "default"}
                 className="w-full justify-start gap-2 whitespace-normal text-left">
                 <Sparkles className="size-4 shrink-0" aria-hidden />
