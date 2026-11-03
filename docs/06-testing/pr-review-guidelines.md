@@ -5,7 +5,10 @@ Use AGENTS.md as the repository-wide engineering contract. Exact-head determinis
 ## Current-PR-only review after merges (SAN-1628)
 
 Automatic opened/reopened/ready_for_review/**synchronize** reviews always run
-`/review` against GitHub's *current PR file diff*. Do not automatically use
+`/review` against GitHub's *current PR file diff*. The **pinned shared
+workflow** is the canonical command owner, including on PR synchronize when
+the trusted MDE base still has an old selector; it no longer reads prior
+certification comments to choose review mode. Do not automatically use
 `/review -i`: the pinned upstream implementation walks commits and may treat
 an ordinary-titled two-parent merge as a normal commit, expanding a small diff
 into unrelated history. SAN-1415 owns any future independently proven incremental
