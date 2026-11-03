@@ -258,10 +258,14 @@ function LiveComposer({
   onResults,
   context,
   onOpenDetails,
+  hasSelectedListing,
+  onClearSelection,
 }: {
   onResults?: (results: RentalAskResults) => void;
   context?: RentalAskContext;
   onOpenDetails?: (target: DetailsCommand) => RentalAskDetailsOutcome;
+  hasSelectedListing?: boolean;
+  onClearSelection?: () => void;
 }) {
   const { agent, isReady, setState } = useConciergeCoAgent();
   const { appendMessage, isLoading, stopActiveRun } = useConciergeChat();
@@ -553,6 +557,8 @@ function LiveComposer({
         turnCount={turns.length}
         showTranscript={showTranscript}
         onToggle={() => setShowTranscript((open) => !open)}
+        hasSelectedListing={hasSelectedListing}
+        onClearSelection={onClearSelection}
       />
 
       {signedOut ? (
@@ -599,14 +605,26 @@ export function RentalAskComposer({
   onResults,
   context,
   onOpenDetails,
+  hasSelectedListing,
+  onClearSelection,
 }: {
   onResults?: (results: RentalAskResults) => void;
   context?: RentalAskContext;
   onOpenDetails?: (target: DetailsCommand) => RentalAskDetailsOutcome;
+  hasSelectedListing?: boolean;
+  onClearSelection?: () => void;
 } = {}) {
   // Read the context without throwing: previews, isolated tests and deterministic E2E render this
   // page with no chat stack, and must get an inert box instead of an error.
   const coAgent = useOptionalConciergeCoAgent();
   if (isDeterministicE2E() || !coAgent) return <InertComposer />;
-  return <LiveComposer onResults={onResults} context={context} onOpenDetails={onOpenDetails} />;
+  return (
+    <LiveComposer
+      onResults={onResults}
+      context={context}
+      onOpenDetails={onOpenDetails}
+      hasSelectedListing={hasSelectedListing}
+      onClearSelection={onClearSelection}
+    />
+  );
 }

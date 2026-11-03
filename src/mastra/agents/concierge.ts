@@ -500,8 +500,10 @@ export const conciergeAgent = new Agent({
     requestVenueBooking: requestVenueBookingTool,
   },
   inputProcessors: [
-    // The verified current event + tool schemas must fit before the first step.
-    ...getDefaultInputProcessors(12_288),
+    // SAN-737: the verified current selection, tool schemas and working memory must
+    // fit on a follow-up turn. 8,192 threw "system messages alone exceed token limit"
+    // before the model could answer; 32,768 stays inside the active model context.
+    ...getDefaultInputProcessors(32_768),
     // The model sometimes repeats restaurant search instead of issuing the
     // proposal. Once the current run grounded the exact named venue and the
     // customer already supplied every mandatory field, require the *existing*

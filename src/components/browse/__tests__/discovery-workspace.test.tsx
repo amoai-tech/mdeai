@@ -85,6 +85,11 @@ describe("DiscoveryWorkspace (SAN-1421)", () => {
     expect(html.indexOf('data-testid="workspace-right-column"')).toBeGreaterThan(composerAt);
   });
 
+  it("keeps last-card controls scrollable above the sticky composer and mobile nav", () => {
+    expect(render(<div data-testid="ask-composer" />)).toContain("pb-[calc(var(--mde-ask-composer-height,18rem)_+_5rem)]");
+    expect(render()).not.toContain("pb-[calc(var(--mde-ask-composer-height,18rem)_+_5rem)]");
+  });
+
   it("renders no ask composer when the page has no conversation to show", () => {
     expect(render()).not.toContain('data-testid="workspace-ask-composer"');
   });

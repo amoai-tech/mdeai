@@ -329,6 +329,7 @@ export function RentalResults({
       {rows.length === 0 ? (
         <EmptyState
           testId="rentals-empty"
+          className="mde-map-fab-safe"
           title="No rentals matched"
           description={
             [envelope.budgetNote, emptyUnappliedNote].filter(Boolean).join(" ") ||
@@ -438,6 +439,7 @@ function LiveEventSearchSuggestions({ agent, isReady }: { agent: AbstractAgent; 
       <EmptyState
         testId="events-empty"
         title="No events found"
+        className="mde-map-fab-safe"
         description="Try a different date range or neighborhood."
         suggestions={[
           { label: "Events this weekend", testId: "events-empty-suggest-weekend", disabled: !isReady || agent.isRunning || searching, onClick: () => void sendQuery("Show events this weekend in Medellín") },
@@ -460,6 +462,7 @@ function EventSearchEmptyState() {
     <EmptyState
       testId="events-empty"
       title="No events found"
+      className="mde-map-fab-safe"
       description="Try a different date range or neighborhood."
       suggestions={[
         { label: "Events this weekend", testId: "events-empty-suggest-weekend", disabled: true },

@@ -5,7 +5,8 @@ on:
     branches: [main]
     paths:
       - "src/**"
-      - "e2e/argos-visual.spec.ts"
+      - "e2e/argos-visual*.spec.ts"
+      - "e2e/helpers/deterministic-chat.ts"
       - "playwright.config.ts"
       - "package.json"
       - "package-lock.json"
@@ -48,6 +49,8 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ""
           NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: test
           NEXT_PUBLIC_E2E_MOCK_MAPS: "1"
+          NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT: "1"
+          ARGOS_VISUAL_TEST: "1"
           SMOKE_BASE_URL: http://localhost:3002
           PLAYWRIGHT_WEB_SERVER_COMMAND: npm run dev:ui:worktree
-        run: npx playwright test e2e/argos-visual.spec.ts --project=chromium --workers=1
+        run: npx playwright test e2e/argos-visual.spec.ts e2e/argos-visual-expanded.spec.ts --project=chromium --workers=1

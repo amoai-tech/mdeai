@@ -20,8 +20,6 @@ import { ACTIVE_TEXT_MODEL } from "./models";
  */
 // skipcq: JS-0067 - exported function is scoped to this ES module, not the global object
 export function getDefaultInputProcessors(inputTokenLimit = 8192): InputProcessor[] {
-  // The concierge's verified event context plus tool schemas can exceed 8192
-  // system tokens. Keep other agents at 8192; scope extra room to concierge.
   const processors: InputProcessor[] = [new TokenLimiter(inputTokenLimit)];
 
   if (process.env.MASTRA_PROMPT_INJECTION_GUARD === "true") {

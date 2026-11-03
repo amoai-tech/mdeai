@@ -28,6 +28,12 @@ describe("getDefaultInputProcessors", () => {
     expect(getDefaultInputProcessors()).toHaveLength(1);
   });
 
+  it("allows the concierge to reserve room for the verified selection and follow-up memory", () => {
+    vi.stubEnv("MASTRA_PROMPT_INJECTION_GUARD", "");
+    const [limiter] = getDefaultInputProcessors(32_768);
+    expect((limiter as unknown as { maxTokens: number }).maxTokens).toBeGreaterThanOrEqual(32768);
+  });
+
   it("enables PromptInjectionDetector only when MASTRA_PROMPT_INJECTION_GUARD=true", () => {
     vi.stubEnv("NODE_ENV", "development");
     vi.stubEnv("MASTRA_PROMPT_INJECTION_GUARD", "true");

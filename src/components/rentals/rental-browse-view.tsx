@@ -240,6 +240,11 @@ function RentalBrowseViewInner({
             onResults={acceptResults}
             onOpenDetails={openDetailsFromCommand}
             context={{ neighborhood, beds, from, through, selectedListingId: selectedForAskId ?? detailsRental?.id ?? null }}
+            hasSelectedListing={Boolean(selectedForAskId ?? detailsRental?.id)}
+            onClearSelection={() => {
+              setDetailsId(null);
+              setAskSelectedId(null);
+            }}
           />
         }
       >
