@@ -1,6 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession } from "@/hooks/use-session";
@@ -104,12 +106,35 @@ function AskSuggestions({ questions, onPick }: { questions: readonly string[]; o
   );
 }
 
-/** The visible transcript: one <li> per turn, announced politely. */
+/** The compact transcript: follow the newest answer unless the visitor scrolls up to read. */
 function AskHistory({ turns, open }: { turns: Array<{ id: string; role: string; text: string }>; open: boolean }) {
+  const historyRef = useRef<HTMLOListElement>(null);
+  const followLatestRef = useRef(true);
+  useLayoutEffect(() => {
+    // Reopening a hidden transcript should reveal the newest reply again.
+    if (!open) {
+      followLatestRef.current = true;
+      return;
+    }
+    const history = historyRef.current;
+    if (history && followLatestRef.current) history.scrollTop = history.scrollHeight;
+  }, [open, turns]);
   if (!open || turns.length === 0) return null;
   return (
-    <ol data-testid="discovery-ask-history" role="log" aria-live="polite" className="mb-2 max-h-52 space-y-2 overflow-auto rounded-lg border p-3">
-      {turns.map((t) => <li key={t.id} className="text-sm"><span className="mr-2 text-xs font-medium text-muted-foreground">{t.role === "user" ? "You" : "MDE"}:</span>{t.text}</li>)}
+    <ol ref={historyRef} data-testid="discovery-ask-history" role="log" aria-live="polite"
+      onScroll={(event) => {
+        const el = event.currentTarget;
+        followLatestRef.current = el.scrollHeight - el.clientHeight - el.scrollTop <= 28;
+      }}
+      className="mb-2 max-h-52 space-y-2 overflow-auto rounded-lg border p-3">
+      {turns.map((t) => <li key={t.id} className="min-w-0 text-sm">
+        <span className="mr-2 text-xs font-medium text-muted-foreground">{t.role === "user" ? "You" : "MDE"}:</span>
+        {t.role === "assistant" ? (
+          <div className="min-w-0 break-words [&_p]:my-1 [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-0.5 [&_a]:text-primary [&_a]:underline [&_pre]:overflow-x-auto [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto [&_th]:p-1 [&_td]:p-1">
+            <ReactMarkdown skipHtml remarkPlugins={[remarkGfm]}>{t.text}</ReactMarkdown>
+          </div>
+        ) : <span className="whitespace-pre-wrap break-words">{t.text}</span>}
+      </li>)}
     </ol>
   );
 }
