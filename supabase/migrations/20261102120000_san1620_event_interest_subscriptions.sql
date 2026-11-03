@@ -81,7 +81,7 @@ begin
 
   return new;
 end;
-$;
+$$;
 
 -- Internal SECURITY DEFINER trigger: no public/end-user EXECUTE grant.
 -- Preserve service_role EXECUTE as required by the canonical SAN-1284C ACL contract.
