@@ -1,5 +1,4 @@
 import {
-  assert,
   assertEquals,
   assertStringIncludes,
 } from "https://deno.land/std@0.224.0/assert/mod.ts";
@@ -315,8 +314,9 @@ Deno.test("recovered event handlers: reject cross-user photos; scan through atom
     globalThis.fetch = oldFetch;
     Deno.serve = oldServe;
     keys.forEach((key, i) => {
-      if (originals[i] === undefined) Deno.env.delete(key);
-      else Deno.env.set(key, originals[i]!);
+      const original = originals[i];
+      if (original === undefined) Deno.env.delete(key);
+      else Deno.env.set(key, original);
     });
   }
 });

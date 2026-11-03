@@ -355,12 +355,10 @@ function extractCitations(response: unknown): Citation[] {
     }>;
   };
   const chunks = r.candidates?.[0]?.groundingMetadata?.groundingChunks ?? [];
-  return chunks
-    .filter((c) => c.web?.uri)
-    .map((c) => ({
-      url: c.web!.uri!,
-      title: c.web!.title ?? "",
-    }));
+  return chunks.flatMap((chunk) => {
+    const web = chunk.web;
+    return web?.uri ? [{ url: web.uri, title: web.title ?? "" }] : [];
+  });
 }
 
 function extractUsage(response: unknown): UsageStats {
