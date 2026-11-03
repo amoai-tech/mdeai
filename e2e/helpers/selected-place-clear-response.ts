@@ -58,6 +58,16 @@ function stripHistoricalSelections(text: string): string {
 
 function stripNegativeClaims(text: string): string {
   let next = text;
+  // "I'm checking whether any place is currently selected" is a description
+  // of the check being performed, not a claim that an item is selected.
+  for (const phrase of [
+    "checking whether any place is currently selected",
+    "checking whether any place is selected",
+    "whether any place is currently selected",
+    "whether any place is selected",
+  ]) {
+    next = replaceAll(next, phrase);
+  }
   for (const subject of ["nothing", "none", "no one", "nobody"]) {
     for (const verb of ["is", "are"]) {
       next = replaceAll(next, `${subject} ${verb} selected`);
@@ -187,6 +197,27 @@ export function confirmsNothingSelected(input: string): boolean {
     answer.startsWith("i don't have any currently selected") ||
     answer.startsWith("i do not have any currently selected")
   ) {
+    return true;
+  }
+
+  // Real agents answer in more than one sentence: the negative can come after
+  // "Based on your request..." or "You don't have...". Accept any explicit
+  // negative statement, but keep the known ambiguous "I know..." form rejected.
+  if (hasNegativeSelectedStatement(currentState)) {
+    // Ambiguous, uncertain or conditional statements are not a current-state
+    // confirmation. “I know nothing is selected” can mean the user believes it,
+    // and “If no place is selected…” describes a branch, not the current state.
+    const uncertain =
+      answer.startsWith("i know") ||
+      answer.startsWith("if ") ||
+      answer.startsWith("whether ") ||
+      answer.startsWith("maybe ") ||
+      answer.startsWith("perhaps ") ||
+      answer.startsWith("i think ") ||
+      answer.startsWith("i believe ") ||
+      answer.startsWith("i'm not sure") ||
+      answer.startsWith("i am not sure");
+    if (uncertain) return false;
     return true;
   }
 
