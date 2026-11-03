@@ -202,6 +202,9 @@ export function confirmsNothingSelected(input: string): boolean {
     answer.startsWith("there are") ||
     answer.startsWith("selection") ||
     answer.startsWith("currently") ||
+    answer.startsWith("i've checked") ||
+    answer.startsWith("i have checked") ||
+    answer.startsWith("i checked") ||
     answer.startsWith("right now") ||
     answer.startsWith("based on the current browser state") ||
     answer.startsWith("based on current browser state") ||
