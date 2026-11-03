@@ -1,6 +1,6 @@
 {
   "skill_name": "ponytail",
-  "version": "1.0.0",
+  "version": "1.1.0-mde.1",
   "evals": [
     {
       "id": 1,
@@ -46,6 +46,30 @@
         "checks the installed version before copying the example",
         "prefers versioned docs or repository source at the matching commit",
         "does not apply a current upstream API to an older pinned version"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Fix a shared Mastra tool used by both rental search and event search, but the report only mentions rental search.",
+      "expected_output": "Inspects the shared tool and all callers before making one minimal fix, updates affected tests and reports any unchecked paths.",
+      "files": [],
+      "expectations": [
+        "traces all callers, affected imports and tests before choosing a patch",
+        "fixes the shared root cause rather than adding per-caller duplicate logic",
+        "does not leave the event path broken to save lines",
+        "states what was not checked and remaining risk"
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Simplify the MDE rental viewing booking code, but it currently checks authentication and prevents duplicate submissions.",
+      "expected_output": "Reuses existing booking code and removes unnecessary complexity without weakening auth, atomic persistence, retry idempotency or error recovery.",
+      "files": [],
+      "expectations": [
+        "reads the complete request to persisted record flow",
+        "preserves authentication and idempotency even if extra code is required",
+        "avoids unrelated abstractions and speculative options",
+        "leaves focused regression proof of the real booking journey"
       ]
     }
   ]

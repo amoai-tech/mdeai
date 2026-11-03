@@ -16,6 +16,15 @@ gathering, and the stack skills own implementation. This skill owns the decision
 Upstream: `references/official/ponytail/ponytail.md` (vendored read-only, pinned in `upstream.yaml`).
 The ladder and discipline below are the MDE form of it; the source receipt is our addition.
 
+## Scope the complete change before minimizing
+
+Read the actual code and trace the affected user/runtime path before deciding on a solution.
+Check every caller, test, fixture, configuration, export and persisted data flow the change can
+affect. Identify user-facing failures, unauthorized access and potential data loss. The smallest
+change is the **smallest complete, safe change** — not a one-line patch that leaves other callers
+or regression tests broken. Preserve existing interfaces, validation and error handling when moving
+or consolidating code. End the report with what was not checked and any material remaining risk.
+
 ## The ladder
 
 Read the task and the code it touches, trace the real flow end to end, **then** stop at the first
@@ -37,7 +46,9 @@ version compatibility, and automation**. A dashboard-only configuration is not s
 must be reproducible from Git — a setting that has to replay in every environment belongs in a
 migration or committed config, not a console.
 
-Do not build a custom abstraction merely because it is easy to write.
+Do not build a custom abstraction merely because it is easy to write. Do not add speculative
+options, wrappers, conversions, configuration, dependencies or "for later" code. A one-liner is
+good only when the next reader can understand it at a glance; prefer the clearer small solution.
 
 **Not lazy about:** understanding the problem first, input validation at trust boundaries, error
 handling that prevents data loss, security, accessibility, and anything explicitly requested. Never
@@ -76,6 +87,8 @@ When you knowingly cut a corner — a global lock, an O(n²) scan, a naive heuri
 ```
 
 Name the ceiling and the upgrade path. An unmarked shortcut is indistinguishable from an oversight.
+Upstream Ponytail 5 calls this marker `shortcut:`; MDE deliberately retains its existing
+`ponytail:` convention so current code and tools keep a single searchable marker.
 
 ## One runnable check
 
