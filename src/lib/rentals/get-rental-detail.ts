@@ -1,8 +1,13 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseServerAnonEnv } from "@/lib/supabase/server-env";
 import { RentalSearchUnavailableError } from "@/mastra/lib/rental-search-unavailable";
-import { isRentalRequestable, readRentalDevelopmentPhase } from "@/mastra/tools/search-rentals";
-import { isAvailabilityUnconfirmed, isSelfAttested, isUnverifiedExternalSource } from "@/lib/rentals/provenance";
+import { readRentalDevelopmentPhase } from "@/mastra/tools/search-rentals";
+import {
+  isAvailabilityUnconfirmed,
+  isSelfAttested,
+  isExternalSourceListing,
+  externalSourceProvider,
+} from "@/lib/rentals/provenance";
 
 /**
  * SAN-1202 · RE-DES-007 — consumer rental detail.
@@ -37,6 +42,10 @@ export type RentalDetail = {
   status: string | null;
   /** The advertiser's own listing, when this is an external candidate (never for MDE-owned rows). */
   sourceUrl: string | null;
+  /** Preserved advertiser name for a third-party-source listing (e.g. "Fincaraíz"). */
+  sourceProvider: string | null;
+  /** External-source listing (Phase A keeps it requestable, but the CTA must be truthful). */
+  isExternalSource: boolean;
   /**
    * SAN-1349 — whether this listing may be requested for a viewing, derived from the same
    * ownership + workflow + availability proof the database enforces. Every scheduling
@@ -110,19 +119,11 @@ export function mapApartmentRowToDetail(row: Record<string, unknown>): RentalDet
     longitude: num(row.longitude),
     status: str(row.status),
     sourceUrl: str(row.source_url),
-    // Fail closed: fields the query did not return map to `null`, which isRentalRequestable
-    // treats as unproven rather than as a reason to offer the CTA.
-    canScheduleViewing: typeof row.rental_can_request_viewing === "boolean"
-      ? row.rental_can_request_viewing : isRentalRequestable({
-      landlord_id: str(row.landlord_id),
-      status: str(row.status),
-      moderation_status: str(row.moderation_status),
-      listing_workflow_status: str(row.listing_workflow_status),
-      available_from: str(row.available_from),
-      available_to: str(row.available_to),
-      metadata: row.metadata,
-    }),
-    isNotIndependentlyVerified: isSelfAttested(row.metadata) || isUnverifiedExternalSource(row.metadata),
+    sourceProvider: externalSourceProvider(row.metadata),
+    isExternalSource: isExternalSourceListing(row.metadata),
+    // Computed by Supabase under the server-controlled phase, not mirrored in UI.
+    canScheduleViewing: row.rental_can_request_viewing === true,
+    isNotIndependentlyVerified: isSelfAttested(row.metadata) || isExternalSourceListing(row.metadata),
   };
 }
 

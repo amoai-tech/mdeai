@@ -128,6 +128,47 @@ test.describe("SAN-966 results stay above the message box", { tag: ["@critical",
     );
   });
 
+  test("a failed first event search offers Retry outside the empty transcript", async ({ page }) => {
+    let eventRequests = 0;
+    const agentRequests: string[] = [];
+    page.on("request", (request) => {
+      if (new URL(request.url()).pathname.startsWith("/api/copilotkit")) {
+        agentRequests.push(request.method());
+      }
+    });
+    // Override the default success fixture: initial 503, then recovered event search.
+    await page.route("**/api/events/search", async (route) => {
+      eventRequests += 1;
+      await route.fulfill({
+        status: eventRequests === 1 ? 503 : 200,
+        contentType: "application/json",
+        body: JSON.stringify(
+          eventRequests === 1
+            ? { error: "temporarily unavailable" }
+            : { results: [event], total: 1, source: "mock" },
+        ),
+      });
+    });
+
+    await gotoDeterministicChat(page);
+    await expect(page.getByTestId("concierge-run-feedback")).toHaveCount(0);
+    await typeAndSubmit(page, EVENT_QUERY);
+
+    const feedback = page.getByTestId("concierge-run-feedback");
+    await expect(feedback.getByRole("button", { name: /try again/i })).toBeVisible();
+    // Guard the actual PR contract: Retry belongs to the permanently mounted panel,
+    // not to the transcript tail (which CopilotKit omits on a first-message failure).
+    expect(await feedback.evaluate(
+      (el) => el.closest('[data-testid="concierge-transcript-tail"]') === null,
+    )).toBe(true);
+    expect(eventRequests, "one initial failed event request").toBe(1);
+    await feedback.getByRole("button", { name: /try again/i }).click();
+
+    await expect(page.getByTestId("event-card")).toHaveCount(1);
+    expect(eventRequests, "one failed request plus one Retry request").toBe(2);
+    expect(agentRequests, "the event retry must not call the AI agent").toEqual([]);
+  });
+
   test("grounded-place results are above the composer", async ({ page }) => {
     await gotoDeterministicChat(page);
     const response = waitForPost(page, "/api/grounded/search");

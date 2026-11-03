@@ -226,6 +226,17 @@ describe("public external source cards", () => {
 });
 
 describe("public external rental search date filtering", () => {
+  it("respects an exact two-bedroom browse choice, while 3 BR+ remains a minimum", async () => {
+    searchMock.rows = [
+      { ...base, bedrooms: 2 },
+      { ...base, slug: "candidate-fincaraiz-192658136", bedrooms: 3 },
+    ];
+    const two = await searchPublicExternalRentals({ minBedrooms: 2, maxBedrooms: 2 });
+    expect(two.map((row) => row.bedrooms)).toEqual([2]);
+    const threePlus = await searchPublicExternalRentals({ minBedrooms: 3 });
+    expect(threePlus.map((row) => row.bedrooms)).toEqual([3]);
+  });
+
   it("finds all nine already-published source ads, including mixed verified booleans", async () => {
     const slugs = [
       "candidate-fincaraiz-193916988", "candidate-fincaraiz-192658136",

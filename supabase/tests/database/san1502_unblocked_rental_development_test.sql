@@ -1,7 +1,7 @@
 -- SAN-1502: internal development discovery is not a public-launch eligibility check.
 -- Published customer eligibility and private-user access remain separate.
 begin;
-select plan(5);
+select plan(6);
 
 select is(
   public.rental_test_listing_is_available('active','pending','draft','{"is_test_fixture":true}'::jsonb),
@@ -16,8 +16,8 @@ select is(
 );
 select is(
   public.rental_test_listing_is_available('inactive','approved','published','{"is_test_fixture":true}'::jsonb),
-  false,
-  'inactive remains a deliberate operator visibility toggle'
+  true,
+  'inactive development fixtures stay available to authenticated test operators'
 );
 select is(
   public.rental_test_listing_is_available('active','approved','published','{}'::jsonb),
@@ -29,6 +29,12 @@ select is(
      '11111111-1111-4111-8111-111111111111'::uuid,'{"is_test_fixture":true}'::jsonb),
   false,
   'development fixture is not accidentally public even if approved and published'
+);
+
+update public.rental_runtime_settings set phase='launch' where singleton;
+select is(
+  public.rental_test_listing_is_available('inactive','approved','published','{"is_test_fixture":true}'::jsonb),
+  false, 'inactive fixture remains unavailable at public launch'
 );
 
 select * from finish();

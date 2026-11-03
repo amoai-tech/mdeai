@@ -139,18 +139,18 @@ select throws_ok($$select public.p1_start_rental_application_atomic('00000000-00
 
 -- ...but it MUST still reach the two intentional contracts.
 select lives_ok($$select public.acting_landlord_ids()$$, 'X: authenticated ALLOWED acting_landlord_ids (RLS helper)');
-select throws_ok($$select public.bump_staff_link_version('00000000-0000-0000-0000-000000000000'::uuid)$$, 'P0001', 'NOT_ORGANIZER', 'X: authenticated ALLOWED bump_staff_link_version, internal ownership guard rejects non-organizer');
+select throws_ok($$select public.bump_staff_link_version('00000000-0000-0000-0000-000000000000'::uuid)$$, '42501', 'UNAUTHORIZED', 'X: authenticated ALLOWED bump_staff_link_version, body rejects missing caller identity');
 reset role;
 
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- Scope guards — this batch must not create or touch anything else
 -- ═══════════════════════════════════════════════════════════════════════════════
 
--- SAN-1305 owns these; they are production-only today and must NOT be recreated here.
+-- SAN-1305 restored these in its own recovery migration (20261017020000); this batch still does not create them.
 select is((select count(*)::int from pg_proc
             where pronamespace = 'public'::regnamespace
               and proname in ('hybrid_search_listings','hybrid_search_events','hybrid_search_restaurants')),
-          0, 'S: hybrid_search_* NOT created (SAN-1305 owns them)');
+          3, 'S: hybrid_search_* are created by the SAN-1305 recovery migration, not by this batch');
 
 -- The 6 production-only functions are classified separately and must NOT be recreated here.
 select is((select count(*)::int from pg_proc

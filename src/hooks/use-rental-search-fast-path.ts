@@ -15,8 +15,12 @@ import {
   type RentalSearchApiParams,
 } from "@/lib/rental-search-fast-path";
 import { logRoutingDecision } from "@/lib/intelligence-telemetry";
-import { scoreRentalQuery, statesBudget } from "@/lib/rental-query-parser";
-import { RENTAL_HANDOFF_FAILED_SUMMARY, RENTAL_SEARCH_UNAVAILABLE_SUMMARY } from "@/lib/rental-display";
+import { budgetNotApplied, scoreRentalQuery } from "@/lib/rental-query-parser";
+import {
+  RENTAL_HANDOFF_FAILED_SUMMARY,
+  RENTAL_SEARCH_UNAVAILABLE_SUMMARY,
+  unappliedRentalRequests,
+} from "@/lib/rental-display";
 import type { ConciergeWorkingMemory } from "@/lib/types";
 import { useMapContext } from "@/platform/maps/map-context";
 import { normalizeToolOutput } from "@/platform/maps/normalize-tool-output";
@@ -40,6 +44,7 @@ function buildRentalSlots(
 
 type RentalSearchResponse = {
   results: Rental[];
+  total?: number;
   budgetNote?: string;
   hybridUsed?: boolean;
   rankExplanation?: Array<{ factor: string; score: number; note: string }>;
@@ -107,7 +112,7 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
   const busyRef = useRef(false);
   // Messages sent while a search is running wait here and are answered one at a time, in the
   // order they were sent, as each search ends — instead of being reported "handled" and dropped.
-  const pendingRef = useRef<string[]>([]);
+  const pendingRef = useRef<Array<{ text: string; submissionId?: string }>>([]);
   // The working memory the last successful search wrote. React has not re-rendered yet when a
   // search ends, so `state` is still the pre-search value at that moment; the replay of a queued
   // message starts from this instead, so a refinement keeps the first search's filters.
@@ -121,6 +126,7 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
       query: ConciergeWorkingMemory["lastRentalQuery"],
       memory: ConciergeWorkingMemory,
       meta?: {
+        total?: number;
         hybridUsed?: boolean;
         rankExplanation?: Array<{ factor: string; score: number; note: string }>;
         budgetNote?: string;
@@ -150,6 +156,7 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
       userText: string,
       params: RentalSearchApiParams,
       memory: ConciergeWorkingMemory,
+      submissionId?: string,
     ): Promise<boolean> => {
       if (busyRef.current) return true;
       busyRef.current = true;
@@ -167,14 +174,16 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
           // SAN-407: a real outage is its own answer. Returning false here used to hand the same
           // message to the agent, which then gave a second, conflicting reply. Retrying is just
           // sending the message again; no write happens on this path.
-          showExchange(userText, RENTAL_SEARCH_UNAVAILABLE_SUMMARY);
+          showExchange(userText, RENTAL_SEARCH_UNAVAILABLE_SUMMARY, submissionId);
           return true;
         }
-        const { results: cards, hybridUsed, rankExplanation, budgetNote } = response;
+        const { results: cards, total, hybridUsed, rankExplanation, budgetNote } = response;
         const query: ConciergeWorkingMemory["lastRentalQuery"] = {
           neighborhood: params.neighborhood,
           minBedrooms: params.minBedrooms,
           maxPricePerNight: params.maxPricePerNight,
+          maxPriceMonthly: params.maxPriceMonthly,
+          budgetCurrency: params.budgetCurrency,
           // Keep the monthly/trip meaning of the budget so a refinement ("Only Laureles") still
           // searches as a monthly stay instead of silently becoming a nightly one.
           budgetType: params.stayType,
@@ -193,15 +202,26 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
           ts: new Date().toISOString(),
         });
         setSearchMeta({ userText, params });
-        const pinCount = applySearchResults(cards, query, memory, { hybridUsed, rankExplanation, budgetNote });
+        const pinCount = applySearchResults(cards, query, memory, { total, hybridUsed, rankExplanation, budgetNote });
+        // SAN-1502 follow-up: when a monthly budget was applied, say so. A truthful empty
+        // state must not leave the renter guessing whether the 2,000,000 ceiling was used.
+        // Never claim a monthly ceiling was applied when the request also carries a nightly cap:
+        // that would describe a superseded value instead of the search actually executed.
+        const appliedBudget =
+          params.maxPriceMonthly != null && params.maxPricePerNight == null
+            ? `${params.budgetCurrency ?? "COP"} ${params.maxPriceMonthly.toLocaleString("en-US")} per month`
+            : undefined;
         showExchange(
           userText,
           fastPathRentalSummary(cards.length, pinCount, {
             generic:
               !sig.hasNeighborhood && !sig.hasBedrooms && !sig.hasBudget && !sig.hasDateRange &&
               !sig.hasVibeOrUseCase,
-            budgetNotApplied: params.maxPricePerNight == null && statesBudget(userText),
+            budgetNotApplied: budgetNotApplied(userText, params),
+            appliedBudget,
+            unappliedRequests: unappliedRentalRequests(userText),
           }),
+          submissionId,
         );
         return true;
       } catch (err) {
@@ -219,7 +239,7 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
   );
 
   const dispatchMessage = useCallback(
-    async (text: string, baseMemory?: ConciergeWorkingMemory | null): Promise<boolean> => {
+    async (text: string, submissionId?: string, baseMemory?: ConciergeWorkingMemory | null): Promise<boolean> => {
       const trimmed = text.trim();
       if (!trimmed) return false;
 
@@ -237,12 +257,12 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
         // A full queue declines the message (false), so the sender routes it to the concierge
         // rather than it being lost.
         if (pendingRef.current.length >= MAX_WAITING_MESSAGES) return false;
-        pendingRef.current.push(trimmed);
+        pendingRef.current.push({ text: trimmed, submissionId });
         return true;
       }
 
       clearLocalMessages();
-      return runSearch(trimmed, params, memory);
+      return runSearch(trimmed, params, memory, submissionId);
     },
     [
       clarifyKind,
@@ -254,7 +274,7 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
   );
 
   const handleUserMessage = useCallback(
-    (text: string): Promise<boolean> => dispatchMessage(text),
+    (text: string, submissionId?: string): Promise<boolean> => dispatchMessage(text, submissionId),
     [dispatchMessage],
   );
 
@@ -271,17 +291,17 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
       try {
         let handled = false;
         try {
-          handled = await dispatchMessage(next, latestMemoryRef.current);
+          handled = await dispatchMessage(next.text, next.submissionId, latestMemoryRef.current);
         } catch (err) {
           console.error("[rental-fast-path] replay failed", err);
         }
-        if (!handled) await onUnhandled?.(next);
+        if (!handled) await onUnhandled?.(next.text);
       } catch (err) {
         // The concierge hand-off itself failed. Log it, tell the renter (their message was already
         // acknowledged, so silence would read as "ignored"), and keep draining the queue rather
         // than leaving an unhandled rejection that stalls the messages behind this one.
         console.error("[rental-fast-path] hand-off to the concierge failed", err);
-        showExchange(next, RENTAL_HANDOFF_FAILED_SUMMARY);
+        showExchange(next.text, RENTAL_HANDOFF_FAILED_SUMMARY, next.submissionId);
       } finally {
         // A replay that never reached a search (declined) leaves no search to schedule the next
         // one, so continue the chain here.

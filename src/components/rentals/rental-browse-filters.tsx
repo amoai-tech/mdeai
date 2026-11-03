@@ -5,6 +5,7 @@ import Link from "next/link";
 import { toggleVariants } from "@/components/ui/toggle";
 import { cn } from "@/lib/utils";
 import { buildRentalsUrl } from "@/lib/rentals/browse-filters";
+import { RentalDateSelector, type SuggestedStay } from "@/components/rentals/rental-date-selector";
 
 const NEIGHBORHOODS = [
   "Laureles",
@@ -38,10 +39,10 @@ type RentalBrowseFiltersProps = {
   through?: string | null;
   /** Why the dates were refused, or null. */
   dateError?: string | null;
+  /** SAN-1611 — an AI-proposed stay, shown as a draft the renter must still apply. */
+  suggestedStay?: SuggestedStay | null;
+  onSuggestionHandled?: () => void;
 };
-
-const dateInput =
-  "mt-1 min-h-11 rounded-md border border-input bg-background px-3 text-sm text-foreground";
 
 export function RentalBrowseFilters({
   neighborhood,
@@ -49,6 +50,8 @@ export function RentalBrowseFilters({
   from = null,
   through = null,
   dateError = null,
+  suggestedStay = null,
+  onSuggestionHandled,
 }: RentalBrowseFiltersProps) {
   // The filter bar is rendered once per layout (desktop and mobile), so the error id must be unique.
   const errorId = useId();
@@ -75,11 +78,11 @@ export function RentalBrowseFilters({
                   from,
                   through,
                 })}
-                aria-pressed={active}
+                aria-current={active ? "true" : undefined}
                 data-testid={`rentals-filter-neighborhood-${n.toLowerCase().replace(/\s+/g, "-")}`}
                 className={cn(
                   chip,
-                  active && "border-primary bg-primary/10 text-primary",
+                  active && "border-primary bg-primary/5 text-primary",
                 )}
               >
                 {n}
@@ -110,11 +113,11 @@ export function RentalBrowseFilters({
                   from,
                   through,
                 })}
-                aria-pressed={active}
+                aria-current={active ? "true" : undefined}
                 data-testid={`rentals-filter-beds-${value}`}
                 className={cn(
                   chip,
-                  active && "border-primary bg-primary/10 text-primary",
+                  active && "border-primary bg-primary/5 text-primary",
                 )}
               >
                 {label}
@@ -124,66 +127,22 @@ export function RentalBrowseFilters({
         </div>
       </div>
 
-      {/* Stay dates (SAN-486): a plain GET form, so it works without JavaScript, survives refresh and
-          Back, and keeps the other filters through hidden fields. */}
-      <div>
-        <p className="mb-2 text-xs font-medium text-muted-foreground">Stay dates</p>
-        <form
-          key={`${from ?? ""}|${through ?? ""}`}
-          method="get"
-          action="/rentals"
-          data-testid="rentals-date-form"
-          className="flex flex-wrap items-end gap-2"
-        >
-          {neighborhood ? <input type="hidden" name="neighborhood" value={neighborhood} /> : null}
-          {beds ? <input type="hidden" name="beds" value={beds} /> : null}
-          <label className="flex flex-col text-xs text-muted-foreground">
-            From
-            <input
-              type="date"
-              name="from"
-              defaultValue={from ?? ""}
-              data-testid="rentals-date-from"
-              aria-invalid={dateError ? true : undefined}
-              aria-describedby={dateError ? errorId : undefined}
-              className={dateInput}
-            />
-          </label>
-          <label className="flex flex-col text-xs text-muted-foreground">
-            Through
-            <input
-              type="date"
-              name="through"
-              defaultValue={through ?? ""}
-              data-testid="rentals-date-through"
-              aria-invalid={dateError ? true : undefined}
-              aria-describedby={dateError ? errorId : undefined}
-              className={dateInput}
-            />
-          </label>
-          <button
-            type="submit"
-            data-testid="rentals-dates-apply"
-            className={cn(chip, "min-h-11 border-primary bg-primary/10 px-4 text-primary")}
-          >
-            Apply dates
-          </button>
-          {from || through || dateError ? (
-            <Link
-              href={buildRentalsUrl({ neighborhood, beds })}
-              data-testid="rentals-dates-clear"
-              className="min-h-11 content-center text-xs text-muted-foreground underline-offset-2 hover:underline"
-            >
-              Clear dates
-            </Link>
-          ) : null}
-        </form>
-        {dateError ? (
-          <p id={errorId} role="alert" data-testid="rentals-date-error" className="mt-2 text-xs text-destructive">
-            {dateError}
-          </p>
-        ) : null}
-      </div>
+      {/* SAN-1611 — the calendar owns a draft; only Apply commits to the URL. */}
+      <RentalDateSelector
+        neighborhood={neighborhood}
+        beds={beds}
+        from={from}
+        through={through}
+        errorId={errorId}
+        invalid={Boolean(dateError)}
+        suggestedStay={suggestedStay}
+        onSuggestionHandled={onSuggestionHandled}
+      />
+      {dateError ? (
+        <p id={errorId} role="alert" data-testid="rentals-date-error" className="mt-2 text-xs text-destructive">
+          {dateError}
+        </p>
+      ) : null}
     </>
   );
 }

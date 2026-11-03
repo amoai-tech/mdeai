@@ -65,12 +65,14 @@ test.describe("SAN-478 · browse-card schedule viewing", () => {
       timeout: 60_000,
     });
 
-    const cta = page.locator(CTA).filter({ visible: true });
+    // SAN-1502: the database's computed requestability now makes MANY cards requestable at once
+    // (development phase), so assert at least one visible CTA rather than exactly one.
+    const cta = page.locator(CTA).filter({ visible: true }).first();
     await expect(
       cta,
       "no requestable listing on this target — the CTA would be absent, so this proof " +
         "cannot run. Seed or publish a requestable listing rather than accepting a skip.",
-    ).toHaveCount(1, { timeout: 60_000 });
+    ).toBeVisible({ timeout: 60_000 });
 
     // The card must not carry the dead route anywhere in its markup or hrefs.
     const cardHtml = await page.locator('[data-testid="rentals-grid"]').innerHTML();
@@ -83,7 +85,7 @@ test.describe("SAN-478 · browse-card schedule viewing", () => {
     const modal = page.locator(MODAL);
     for (let attempt = 0; attempt < 15; attempt += 1) {
       if (await modal.isVisible().catch(() => false)) break;
-      await cta.click({ timeout: 10_000 }).catch(() => {});
+      await cta.click({ timeout: 10_000 }).catch(() => {}); // the first requestable card
       if (
         await modal
           .waitFor({ state: "visible", timeout: 3_000 })

@@ -1,11 +1,27 @@
 import type { NextConfig } from "next";
+import { remoteImageRules } from "./src/lib/images/remote-image-hosts";
+
+// The allowed remote image hosts live in src/lib/images/remote-image-hosts so that components
+// rendering a database-supplied URL check the same list this config declares. NEXT_PUBLIC_* is
+// inlined at build time, so the Supabase host follows whichever project the build targets.
+// Without it, every next/image pointing at Supabase Storage throws "hostname is not configured"
+// and the page fails to render — restaurant photos are stored exactly there.
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // Next.js dev toolbar and issue badge change independently of MDE UI, causing
+  // false Argos diffs. Disable them only for the dedicated visual-test server.
+  ...(process.env.ARGOS_VISUAL_TEST === "1" ? { devIndicators: false } : {}),
+  experimental: {
+    // Reduce peak Webpack compilation memory in dev and build; may slightly increase compile time.
+    webpackMemoryOptimizations: true,
+  },
   turbopack: {
     root: __dirname,
   },
-  serverExternalPackages: ["@copilotkit/runtime"],
+  // Google Places uses protobufjs dynamic requires; keep its Node runtime native
+  // instead of asking Webpack to statically resolve that optional import.
+  serverExternalPackages: ["@copilotkit/runtime", "@googlemaps/places"],
   webpack: (config, { dev }) => {
     // Production builds must not reuse webpack's persistent cache. With it, Tailwind v4's CSS came
     // back stale: a utility class added to a file the previous build had already compiled never
@@ -15,11 +31,11 @@ const nextConfig: NextConfig = {
     return config;
   },
   images: {
-    remotePatterns: [
-      { protocol: "https", hostname: "images.unsplash.com" },
-      // Apartment seed images (SAN-718 live data)
-      { protocol: "https", hostname: "picsum.photos" },
-    ],
+    remotePatterns: remoteImageRules().map((rule) =>
+      rule.pathPrefix
+        ? { protocol: rule.protocol, hostname: rule.hostname, pathname: rule.pathPrefix + "**" }
+        : { protocol: rule.protocol, hostname: rule.hostname },
+    ),
   },
 };
 

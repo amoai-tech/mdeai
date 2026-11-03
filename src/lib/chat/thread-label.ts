@@ -1,3 +1,5 @@
+import { isMeaningfulThreadTitle } from "@/lib/chat/thread-title";
+
 /**
  * What the chat sidebar shows for a saved chat.
  *
@@ -6,9 +8,12 @@
  * viewer's own time zone (the server runs in UTC, Medellín is UTC-5).
  */
 
-/** A stored title when it is a nonblank string; otherwise `null` (never the text "null"). */
+/**
+ * A stored title when it is a real one; otherwise `null` (never the text "null"). The placeholder
+ * "Untitled Thread" counts as no title, so it shows the dated fallback until it is repaired (SAN-1412).
+ */
 export function normalizeThreadTitle(raw: unknown): string | null {
-  return typeof raw === "string" && raw.trim() !== "" ? raw : null;
+  return isMeaningfulThreadTitle(raw) ? raw : null;
 }
 
 /** The stored title, or `Chat · Oct 2, 4:32 PM` from `updatedAt`, or `Chat` if the date is unusable. */

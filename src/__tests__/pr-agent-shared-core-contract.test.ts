@@ -1,15 +1,39 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { parseDocument } from "yaml";
 
 const workflow = readFileSync(".github/workflows/pr-agent.yml", "utf8");
 const evidenceBuilder = readFileSync("scripts/pr-agent/build-evidence.mjs", "utf8");
-const sharedSha = "cbe940313ee26dda2d53c0e708d3ff605caf9a28";
+const sharedSha = "a6c54ca51704cc1aadd8e844d3548c3e51e4d66a";
 
 describe("IPI-1246 shared PR-Agent caller contract", () => {
   it("pins MDE to the immutable shared workflow", () => {
     expect(workflow).toContain(`amoai-tech/pr-review-infra/.github/workflows/pr-agent.yml@${sharedSha}`);
     expect(workflow).toContain("evidence_title: MDE PR-Agent Evidence");
     expect(workflow).toContain("NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}");
+    expect(workflow).not.toContain("GOOGLE_GENERATIVE_AI_API_KEY");
+  });
+
+  it("parses only the NVIDIA secret under the reusable workflow secrets mapping", () => {
+    const readNestedSecrets = (source: string) => {
+      const parsed = parseDocument(source);
+      expect(parsed.errors).toEqual([]);
+      const jobs = parsed.toJS() as {
+        jobs: { review: { secrets: Record<string, string> } };
+      };
+      return jobs.jobs.review.secrets;
+    };
+
+    expect(readNestedSecrets(workflow)).toEqual({
+      NVIDIA_API_KEY: "${{ secrets.NVIDIA_API_KEY }}",
+    });
+
+    // Reject incorrectly indented NVIDIA secret mapping; Gemini must remain absent.
+    const wrongIndent = workflow.replace(
+      /^      NVIDIA_API_KEY:/m,
+      "    NVIDIA_API_KEY:",
+    );
+    expect(readNestedSecrets(wrongIndent)).toBeNull();
   });
 
   it("keeps the caller security boundary explicit", () => {

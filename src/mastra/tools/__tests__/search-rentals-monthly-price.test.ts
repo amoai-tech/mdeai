@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => {
-  const state = { projection: "" };
+  const state = { projection: "", bedroomFilters: [] as string[] };
   const row = {
     id: "apt-1",
     title: "Centro Budget Studio · 300 USD",
@@ -36,8 +36,8 @@ const mocks = vi.hoisted(() => {
     order: passthrough,
     limit: passthrough,
     ilike: passthrough,
-    gte: passthrough,
-    lte: passthrough,
+    gte: vi.fn((key: string, value: number) => { if (key === "bedrooms") state.bedroomFilters.push(`gte:${value}`); return chain; }),
+    lte: vi.fn((key: string, value: number) => { if (key === "bedrooms") state.bedroomFilters.push(`lte:${value}`); return chain; }),
     or: passthrough,
     then: (resolve: (value: unknown) => unknown, reject?: (reason: unknown) => unknown) => {
       const projectedRow = state.projection.includes("price_monthly")
@@ -75,6 +75,55 @@ describe("searchRentals — SAN-1356 monthly price projection", () => {
 
     expect(mocks.state.projection).toContain("price_monthly");
     expect(result.results[0]?.price_monthly).toBe(300);
+  });
+
+  it("passes an exact bedroom interval through the existing Mastra tool to Supabase", async () => {
+    const { searchRentalsTool } = await import("../search-rentals");
+    mocks.state.bedroomFilters.length = 0;
+    const parsed = (searchRentalsTool.inputSchema as unknown as import("zod").ZodType)
+      .parse({ neighborhood: "Laureles", minBedrooms: 2, maxBedrooms: 2, limit: 8 });
+    await searchRentalsTool.execute!(parsed, {} as never);
+    expect(mocks.state.bedroomFilters).toEqual(["gte:2", "lte:2"]);
+    expect(() => (searchRentalsTool.inputSchema as unknown as import("zod").ZodType)
+      .parse({ minBedrooms: 2, maxBedrooms: -1 })).toThrow();
+  });
+
+  it("preserves exact two-bedroom intent even if the model only supplied a minimum", async () => {
+    const { searchRentalsTool } = await import("../search-rentals");
+    mocks.state.bedroomFilters.length = 0;
+    await searchRentalsTool.execute!({
+      minBedrooms: 2, queryText: "Find exactly two-bedroom apartments in Laureles", limit: 8,
+    }, {} as never);
+    expect(mocks.state.bedroomFilters).toEqual(["gte:2", "lte:2"]);
+  });
+
+  it("keeps an at-least-two-bedroom request broad", async () => {
+    const { searchRentalsTool } = await import("../search-rentals");
+    mocks.state.bedroomFilters.length = 0;
+    await searchRentalsTool.execute!({
+      minBedrooms: 2, queryText: "Apartments with at least two bedrooms in Laureles", limit: 8,
+    }, {} as never);
+    expect(mocks.state.bedroomFilters).toEqual(["gte:2"]);
+  });
+
+  it("adds a grounded rental reply only for a WhatsApp tool context", async () => {
+    const { searchRentalsTool } = await import("../search-rentals");
+    const args = { neighborhood: "Centro", stayType: "monthly" as const, limit: 5 };
+    const whatsappContext = {
+      requestContext: {
+        get: (name: string) => name === "channel" ? { platform: "whatsapp" } : undefined,
+        set: () => undefined, // the audited-search wrapper also stores timing spans
+      },
+    };
+    const whatsapp = await searchRentalsTool.execute!(args, whatsappContext as never) as {
+      whatsapp_reply?: string;
+    };
+    expect(whatsapp.whatsapp_reply).toContain("Centro Budget Studio");
+    expect(whatsapp.whatsapp_reply).toContain("USD 300/month");
+    expect(whatsapp.whatsapp_reply).toContain("https://mdeai.co/rentals/apt-1");
+
+    const web = await searchRentalsTool.execute!(args, {} as never) as { whatsapp_reply?: string };
+    expect(web.whatsapp_reply).toBeUndefined();
   });
 
   it("preserves price_monthly through the Mastra tool output envelope", async () => {

@@ -1,0 +1,106 @@
+[
+  {
+    "name": "signup",
+    "width": 320,
+    "status": 200,
+    "url": "http://localhost:3287/partners/signup?type=host",
+    "metrics": {
+      "documentWidth": 320,
+      "viewport": 320
+    },
+    "priceTBD": false,
+    "soldOut": false,
+    "overflows": false
+  },
+  {
+    "name": "no-tiers",
+    "width": 320,
+    "status": 200,
+    "url": "http://localhost:3287/events/a1b2c3d4-0001-0001-0001-000000000003",
+    "metrics": {
+      "documentWidth": 320,
+      "viewport": 320
+    },
+    "priceTBD": true,
+    "soldOut": false,
+    "overflows": false
+  },
+  {
+    "name": "signup",
+    "width": 390,
+    "status": 200,
+    "url": "http://localhost:3287/partners/signup?type=host",
+    "metrics": {
+      "documentWidth": 390,
+      "viewport": 390
+    },
+    "priceTBD": false,
+    "soldOut": false,
+    "overflows": false
+  },
+  {
+    "name": "no-tiers",
+    "width": 390,
+    "status": 200,
+    "url": "http://localhost:3287/events/a1b2c3d4-0001-0001-0001-000000000003",
+    "metrics": {
+      "documentWidth": 390,
+      "viewport": 390
+    },
+    "priceTBD": true,
+    "soldOut": false,
+    "overflows": false
+  },
+  {
+    "name": "signup",
+    "width": 768,
+    "status": 200,
+    "url": "http://localhost:3287/partners/signup?type=host",
+    "metrics": {
+      "documentWidth": 768,
+      "viewport": 768
+    },
+    "priceTBD": false,
+    "soldOut": false,
+    "overflows": false
+  },
+  {
+    "name": "no-tiers",
+    "width": 768,
+    "status": 200,
+    "url": "http://localhost:3287/events/a1b2c3d4-0001-0001-0001-000000000003",
+    "metrics": {
+      "documentWidth": 768,
+      "viewport": 768
+    },
+    "priceTBD": true,
+    "soldOut": false,
+    "overflows": false
+  },
+  {
+    "name": "signup",
+    "width": 1440,
+    "status": 200,
+    "url": "http://localhost:3287/partners/signup?type=host",
+    "metrics": {
+      "documentWidth": 1440,
+      "viewport": 1440
+    },
+    "priceTBD": false,
+    "soldOut": false,
+    "overflows": false
+  },
+  {
+    "name": "no-tiers",
+    "width": 1440,
+    "status": 200,
+    "url": "http://localhost:3287/events/a1b2c3d4-0001-0001-0001-000000000003",
+    "metrics": {
+      "documentWidth": 1440,
+      "viewport": 1440
+    },
+    "priceTBD": true,
+    "soldOut": false,
+    "overflows": false
+  }
+]

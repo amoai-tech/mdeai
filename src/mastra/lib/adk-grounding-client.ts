@@ -5,7 +5,9 @@ import {
 } from "./adk-grounding-types";
 
 const DEFAULT_URL = "http://localhost:8000";
-const TIMEOUT_MS = 30_000;
+const TIMEOUT_MS = 30_000; // Places requests keep their established budget.
+// Event web search is a second hop in an event chat turn; stay below the 15s route cap.
+const SEARCH_TIMEOUT_MS = 8_000;
 
 function adkGroundingHeaders(): Record<string, string> {
   const headers: Record<string, string> = {
@@ -79,7 +81,7 @@ export async function invokeAdkSearchGrounding(
   });
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), SEARCH_TIMEOUT_MS);
 
   try {
     const res = await fetch(`${base}/v1/grounding/invoke`, {
@@ -100,7 +102,7 @@ export async function invokeAdkSearchGrounding(
     return {
       citations: [],
       confidence: 0,
-      metadata: { reason: "adk_unavailable" },
+      metadata: { reason: controller.signal.aborted ? "adk_timeout" : "adk_unavailable" },
     };
   } finally {
     clearTimeout(timer);

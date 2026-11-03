@@ -42,7 +42,12 @@ export function useMapsAuthFailure(): boolean {
  * `MapsUnavailable` instead of a `<Map>`. `MapsUnavailable` lives in
  * map-referer-help.tsx, next to the UI it reuses.
  */
-export type MapsUnavailableReason = "no-key" | "auth-failed";
+/**
+ * "load-failed": the Maps script never arrived (an ad blocker, a corporate network, an outage). It is a
+ * different cause from a rejected key, but the visitor needs the same thing: a notice in the map slot,
+ * not an empty box.
+ */
+export type MapsUnavailableReason = "no-key" | "auth-failed" | "load-failed";
 export type MapsStatus = "ok" | MapsUnavailableReason;
 
 const MapsStatusContext = createContext<MapsStatus | null>(null);

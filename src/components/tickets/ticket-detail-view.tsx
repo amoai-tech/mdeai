@@ -4,11 +4,14 @@ import { TicketDetailClient } from "@/components/tickets/ticket-detail-client";
 type TicketDetailViewProps = {
   orderId: string;
   accessToken: string | null;
+  /** Wallet list to return to; defaults to the legacy public route. */
+  ticketsHref?: string;
 };
 
 export function TicketDetailView({
   orderId,
   accessToken,
+  ticketsHref = "/me/tickets",
 }: TicketDetailViewProps) {
   if (!accessToken) {
     return (
@@ -16,7 +19,7 @@ export function TicketDetailView({
         <p className="text-sm text-muted-foreground">
           Open this page from your ticket email link (includes access token), or sign
           in and browse from{" "}
-          <Link href="/me/tickets" className="text-primary underline">
+          <Link href={ticketsHref} className="text-primary underline">
             My tickets
           </Link>
           .

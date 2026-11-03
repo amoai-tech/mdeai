@@ -1,3 +1,4 @@
+import { SignInRequired } from "@/components/auth/sign-in-required";
 import { createClient } from "@/lib/supabase/server";
 import { EventBookingsQueue } from "@/components/admin/event-bookings-queue";
 
@@ -35,9 +36,13 @@ export default async function AdminEventBookingsPage() {
       </header>
 
       {!user ? (
-        <p className="text-sm text-muted-foreground">
-          Sign in as an admin to review event requests.
-        </p>
+        <SignInRequired
+          buttonLabel="Sign in to review event requests"
+          description="Sign in to approve, decline, or ask for more info on event venue proposals."
+          returnTo="/admin/event-bookings"
+          testId="admin-sign-in-required"
+          title="Admin sign-in required"
+        />
       ) : !isAdmin ? (
         <p
           data-testid="admin-not-authorized"

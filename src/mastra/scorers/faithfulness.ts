@@ -1,7 +1,7 @@
 import { createScorer } from "@mastra/core/evals";
 import { generateObject } from "ai";
 import { z } from "zod";
-import { FLASH_MODEL } from "../lib/models";
+import { ACTIVE_AI_PROVIDER, ACTIVE_TEXT_MODEL } from "../lib/models";
 import {
   evaluateFaithfulness,
   extractClaims,
@@ -19,12 +19,12 @@ import {
  * and the prod `GET /api/scorers` route. Pipeline:
  *
  *   preprocess  → deterministic claim extraction + support check (LLM-free)
- *   analyze     → optional Gemini judge that DEMOTES false-positive unsupported
+ *   analyze     → optional provider-selected judge that DEMOTES false-positive unsupported
  *                 claims (paraphrases / derived facts). Never adds claims.
  *   generateScore → supported / total checkable claims (0..1)
  *   generateReason → one concrete sentence
  *
- * The judge is best-effort: with no `GOOGLE_GENERATIVE_AI_API_KEY` (CI/offline)
+ * The judge is best-effort: with no selected provider key (CI/offline)
  * or `requestContext.faithfulnessJudge === false`, the score is the pure
  * heuristic — so the floor stays deterministic and free.
  */
@@ -50,7 +50,11 @@ function getInput(input: FaithfulnessInput | undefined): FaithfulnessInput {
 }
 
 function judgeEnabled(requestContext: unknown): boolean {
-  if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) return false;
+  // A judge uses the configured provider; do not require a Google key for NVIDIA.
+  const key = ACTIVE_AI_PROVIDER === "nvidia"
+    ? process.env.NVIDIA_API_KEY
+    : process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+  if (!key?.trim()) return false;
   const ctx = requestContext as { get?: (k: string) => unknown } | undefined;
   const flag = typeof ctx?.get === "function" ? ctx.get(JUDGE_CONTEXT_KEY) : undefined;
   return flag !== false;
@@ -76,8 +80,22 @@ function normalizeClaim(claim: string): string {
     .trim();
 }
 
+/** Keep absent exact prices and IDs flagged even when a non-deterministic judge
+ * returns an empty or incomplete list. The judge can still clear a false-positive
+ * entity alias/paraphrase, but cannot make an invented price or booking ID look grounded.
+ */
+export function reconcileJudgeVerdict(
+  unsupported: FaithfulnessClaim[],
+  judgeFabricated: string[],
+): FaithfulnessClaim[] {
+  const fabricatedSet = new Set(judgeFabricated.map(normalizeClaim));
+  return unsupported.filter((claim) =>
+    claim.type === "price" || claim.type === "id" || fabricatedSet.has(normalizeClaim(claim.claim)),
+  );
+}
+
 /**
- * Ask Gemini which heuristically-unsupported claims are GENUINELY fabricated vs a
+ * Ask the selected provider which heuristically-unsupported claims are GENUINELY fabricated vs a
  * paraphrase/derivation of tool output. Returns the subset to keep flagged. On any
  * error, falls back to trusting the heuristic (fail-closed: keep all flagged).
  */
@@ -87,7 +105,7 @@ async function judgeFabrications(
 ): Promise<FaithfulnessClaim[]> {
   try {
     const { object } = await generateObject({
-      model: FLASH_MODEL,
+      model: ACTIVE_TEXT_MODEL,
       schema: z.object({
         fabricated: z
           .array(z.string())
@@ -107,8 +125,7 @@ async function judgeFabrications(
         "Repeat each fabricated claim verbatim, without the [type] prefix.",
       ].join("\n"),
     });
-    const fabricatedSet = new Set(object.fabricated.map(normalizeClaim));
-    return unsupported.filter((c) => fabricatedSet.has(normalizeClaim(c.claim)));
+    return reconcileJudgeVerdict(unsupported, object.fabricated);
   } catch {
     return unsupported;
   }

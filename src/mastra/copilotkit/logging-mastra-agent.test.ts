@@ -16,6 +16,7 @@ describe("getLocalAgentsWithLogging — runtime allowlist (SAN-591)", () => {
       "evaluationAgent",
       "hostEventAgent",
       "hostOpsAgent",
+      "partnerAgent",
     ] as const;
     const agents = Object.fromEntries(allKeys.map((key) => [key, { id: key }]));
     const mastra = { listAgents: () => agents } as unknown as Mastra;

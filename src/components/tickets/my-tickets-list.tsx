@@ -13,10 +13,17 @@ type MyTicketsListProps = {
   orders: BuyerOrderListItem[];
   upcoming: BuyerOrderListItem[];
   past: BuyerOrderListItem[];
+  /** Where a signed-in wallet card opens; legacy stays at /me/tickets. */
+  detailBasePath?: string;
 };
 
 // skipcq: JS-0067
-export function MyTicketsList({ orders, upcoming, past }: MyTicketsListProps) {
+export function MyTicketsList({
+  orders,
+  upcoming,
+  past,
+  detailBasePath = "/me/tickets",
+}: MyTicketsListProps) {
   if (orders.length === 0) {
     return (
       <div
@@ -49,10 +56,19 @@ export function MyTicketsList({ orders, upcoming, past }: MyTicketsListProps) {
       </TabsList>
 
       <TabsContent value="upcoming" className="mt-4">
-        <OrderSection orders={upcoming} emptyLabel="No upcoming tickets." />
+        <OrderSection
+          orders={upcoming}
+          emptyLabel="No upcoming tickets."
+          detailBasePath={detailBasePath}
+        />
       </TabsContent>
       <TabsContent value="past" className="mt-4">
-        <OrderSection orders={past} emptyLabel="No past tickets." dimmed />
+        <OrderSection
+          orders={past}
+          emptyLabel="No past tickets."
+          dimmed
+          detailBasePath={detailBasePath}
+        />
       </TabsContent>
     </Tabs>
   );
@@ -62,10 +78,12 @@ export function MyTicketsList({ orders, upcoming, past }: MyTicketsListProps) {
 function OrderSection({
   orders,
   emptyLabel,
+  detailBasePath,
   dimmed = false,
 }: {
   orders: BuyerOrderListItem[];
   emptyLabel: string;
+  detailBasePath: string;
   dimmed?: boolean;
 }) {
   if (orders.length === 0) {
@@ -79,7 +97,12 @@ function OrderSection({
   return (
     <ul className="space-y-3">
       {orders.map((order) => (
-        <OrderCard key={order.id} order={order} dimmed={dimmed} />
+        <OrderCard
+          key={order.id}
+          order={order}
+          dimmed={dimmed}
+          detailBasePath={detailBasePath}
+        />
       ))}
     </ul>
   );
@@ -89,9 +112,11 @@ function OrderSection({
 function OrderCard({
   order,
   dimmed,
+  detailBasePath,
 }: {
   order: BuyerOrderListItem;
   dimmed: boolean;
+  detailBasePath: string;
 }) {
   const paid = order.status === "paid";
   return (
@@ -131,13 +156,13 @@ function OrderCard({
         <p className="mt-2 text-sm">
           {order.quantity} ticket{order.quantity === 1 ? "" : "s"} ·{" "}
           {order.shortId ?? order.id.slice(0, 8)} ·{" "}
-          {paid ? "Paid ✓" : order.status}
+          {paid ? (order.isSandbox ? "TEST payment ✓" : "Paid ✓") : order.status}
           {" · "}
           {formatWalletMoney(order.totalCents, order.currency)}
         </p>
         {paid ? (
           <Link
-            href={`/me/tickets/${order.id}`}
+            href={`${detailBasePath}/${order.id}`}
             className={cn(
               buttonVariants({ size: "sm" }),
               "mt-3 inline-flex min-h-11",

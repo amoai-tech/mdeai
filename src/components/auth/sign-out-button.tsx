@@ -2,10 +2,15 @@
 
 import { Button } from "@/components/ui/button";
 
-export function SignOutButton() {
+type SignOutButtonProps = {
+  /** Optional sizing class for the host chrome; the action never changes. */
+  className?: string;
+};
+
+export function SignOutButton({ className }: SignOutButtonProps = {}) {
   return (
     <form action="/auth/signout" method="post">
-      <Button type="submit" variant="outline" size="sm">
+      <Button type="submit" variant="outline" size="sm" className={className}>
         Sign out
       </Button>
     </form>

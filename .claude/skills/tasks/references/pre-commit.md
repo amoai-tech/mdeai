@@ -6,7 +6,7 @@ Run this before every substantial task commit. The goal is to catch review findi
 
 ```text
 exact Git diff / scope check
-→ Graphify before any Read/Grep/Glob/exploratory Bash
+→ Graphify for substantial code work with a current index; direct read for known docs
 → load domain skills
 → verify external contracts
 → static defect scan
@@ -16,13 +16,13 @@ exact Git diff / scope check
 → commit
 ```
 
-`git diff`, `git status`, and other Git-only scope checks may run before Graphify because they inspect the current change set rather than explore the codebase. Any subsequent file/code exploration must start with Graphify when `graphify-out/graph.json` exists.
+`git diff`, `git status`, and other Git-only scope checks may run before Graphify because they inspect the current change set rather than explore the codebase. For substantial code/caller discovery, use Graphify when its index is current. Known docs-only files may be read directly (`Graphify: N/A — exact known Markdown scope`).
 
 ## Required checks
 
 - [ ] Every changed file belongs to this task.
-- [ ] No unrelated generated, dirty, or untracked files are staged.
-- [ ] No stale Lumina route/auth/data/runtime assumption was copied.
+- [ ] Review staged, unstaged and untracked paths; stage only task files, and never reset/clean or overwrite unrelated work.
+- [ ] No stale iPix/Lumina/Brand/Planner/Shoot assumptions were copied into MDE code or instructions.
 - [ ] No duplicate source of truth was introduced.
 - [ ] No browser-provided org/user identifier is treated as authorization authority.
 - [ ] No service-role key, secret, token, or sensitive URL can reach the browser.
@@ -33,7 +33,7 @@ exact Git diff / scope check
 - [ ] Every external API used is supported by the installed package version.
 - [ ] Official docs/source were checked for load-bearing API, auth, security, or lifecycle assumptions.
 - [ ] Empty, loading, error, negative, and tenant-isolation states are covered when applicable.
-- [ ] Consequential writes retain required human review/approval.
+- [ ] Consequential writes preserve authenticated server authorization, user consent/confirmation when actually required, idempotency and independent S4 engineering review. **Never impose Phase A landlord/partner/ownership/moderation/publication business approvals as prerequisites.**
 - [ ] Targeted tests prove behavior, not just implementation details.
 
 ## Evidence hierarchy
@@ -84,5 +84,5 @@ After this gate passes, use [pre-merge-tests.md](pre-merge-tests.md) to select t
 ## Agent prompt
 
 ```text
-Review the exact Git diff/scope first. Before any Read, Grep, Glob, or exploratory Bash codebase inspection, run Graphify when graphify-out/graph.json exists and use the scoped result to choose affected callers/dependencies. Confirm scope, secrets safety, current domain contracts, and installed API versions. Run local automated review when available, classify findings by severity, fix verified blocker/warning issues, and rerun review. Then run the cheapest targeted tests, typecheck/build/browser proof only when risk requires them. Do not commit with unexplained critical findings, fake data, dead routes, duplicate sources of truth, tenant/auth regressions, or known flaky P0 tests.
+Review the exact Git diff/scope first. Use Graphify for substantial code/blast-radius work when the index is current; inspect exact known documentation files directly. Confirm scope, secrets safety, current domain contracts, and installed API versions. Run local automated review when available, classify findings by severity, fix verified blocker/warning issues, and rerun review. Then run the cheapest targeted tests, typecheck/build/browser proof only when risk requires them. Do not commit with unexplained critical findings, fake data, dead routes, duplicate sources of truth, tenant/auth regressions, or known flaky P0 tests.
 ```

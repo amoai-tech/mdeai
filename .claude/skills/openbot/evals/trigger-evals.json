@@ -1,0 +1,56 @@
+[
+  {
+    "id": "openbot-1",
+    "prompt": "A broker must click through a third-party listing portal without an API; evaluate optional OpenBot computer actions and audit trail.",
+    "should_trigger": true,
+    "expected_owner": "openbot"
+  },
+  {
+    "id": "openbot-2",
+    "prompt": "Compare official OpenBot release to our pinned baseline, prove its Mastra bridge and rollback before connecting MDE.",
+    "should_trigger": true,
+    "expected_owner": "openbot"
+  },
+  {
+    "id": "openbot-3",
+    "prompt": "Adapt an OpenBot computer action gateway with server-resolved targets, deny policy and audited external clicks.",
+    "should_trigger": true,
+    "expected_owner": "openbot"
+  },
+  {
+    "id": "openbot-4",
+    "prompt": "Find me apartments using our existing MDE concierge and Supabase rental search, no external browser.",
+    "should_trigger": false,
+    "expected_owner": "real-estate"
+  },
+  {
+    "id": "openbot-5",
+    "prompt": "Optimize the MDE restaurant landing page spacing and mobile typography only.",
+    "should_trigger": false,
+    "expected_owner": "uiux"
+  },
+  {
+    "id": "openbot-6",
+    "prompt": "Fix the current Mastra rentalAgent internal tool return schema; there is no OpenBot integration.",
+    "should_trigger": false,
+    "expected_owner": "mastra"
+  },
+  {
+    "id": "openbot-7",
+    "prompt": "Verify OpenBot v0.2.0 migration 0052 and account visibility after downgrade for optional browser action.",
+    "should_trigger": true,
+    "expected_owner": "openbot"
+  },
+  {
+    "id": "openbot-8",
+    "prompt": "External website Submit timed out; do not replay until the bot can prove the outcome.",
+    "should_trigger": true,
+    "expected_owner": "openbot"
+  },
+  {
+    "id": "openbot-9",
+    "prompt": "A renter needs a PostGIS rental distance query with no external browser task.",
+    "should_trigger": false,
+    "expected_owner": "real-estate"
+  }
+]

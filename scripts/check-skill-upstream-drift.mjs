@@ -70,7 +70,7 @@ export function classifyError(error) {
   if (["ENOTFOUND", "ECONNRESET", "ETIMEDOUT", "EAI_AGAIN", "ECONNREFUSED"].includes(code)) {
     return CLASSES.UPSTREAM_UNAVAILABLE;
   }
-  if (error?.name === "AbortError") return CLASSES.UPSTREAM_UNAVAILABLE;
+  if (error?.name === "AbortError" || error?.name === "TimeoutError") return CLASSES.UPSTREAM_UNAVAILABLE;
   return CLASSES.DRIFT;
 }
 
@@ -118,14 +118,30 @@ export function loadPins(root) {
   return pins;
 }
 
-async function fetchComparison(slug, reviewed) {
+export async function fetchComparison(slug, reviewed) {
   const hasToken = Boolean(process.env.GITHUB_TOKEN);
   const headers = { Accept: "application/vnd.github+json", "User-Agent": "mdeai-skill-drift" };
   if (hasToken) headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
   const url = `https://api.github.com/repos/${slug}/compare/${reviewed}...HEAD`;
-  const response = await fetch(url, { headers });
-  if (!response.ok) return { classification: classifyHttpStatus(response.status, { hasToken }) };
-  const body = await response.json();
+  const response = await fetch(url, {
+    headers,
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!response.ok) {
+    return {
+      classification: classifyHttpStatus(response.status, { hasToken }),
+      reason: `HTTP_${response.status}`,
+    };
+  }
+  let body;
+  try {
+    body = await response.json();
+  } catch {
+    return { classification: CLASSES.UPSTREAM_UNAVAILABLE, reason: "MALFORMED_RESPONSE" };
+  }
+  if (!body || !["identical", "ahead", "behind", "diverged"].includes(body.status)) {
+    return { classification: CLASSES.UPSTREAM_UNAVAILABLE, reason: "MALFORMED_RESPONSE" };
+  }
   return {
     classification: classifyComparison(body.status),
     headSha: body.commits?.at(-1)?.sha ?? body.sha,

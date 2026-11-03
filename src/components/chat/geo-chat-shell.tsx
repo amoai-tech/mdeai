@@ -17,7 +17,7 @@ import { RentalUiProvider } from "@/components/chat/rental-ui-context";
 import { RestaurantFastPathProvider } from "@/components/chat/restaurant-fast-path-context";
 import { RichCardResultsProvider } from "@/components/chat/rich-card-results-context";
 import { VenueBookingConfirmationBanner } from "@/components/chat/venue-booking-confirmation-banner";
-import { VenueBookingDirectHitlProvider } from "@/components/chat/venue-booking-direct-hitl-context";
+import { VenueBookingDirectHitlPanel, VenueBookingDirectHitlProvider } from "@/components/chat/venue-booking-direct-hitl-context";
 import { FocusMapPinAction } from "@/components/copilot/focus-map-pin-action";
 import { EventWebCitationFetch } from "@/components/copilot/event-web-citation-fetch";
 import { MapUiSync } from "@/components/copilot/map-ui-sync";
@@ -135,14 +135,16 @@ export function GeoChatShell() {
                                 data-testid="geo-chat-shell"
                                 className="flex h-full min-h-0 flex-col"
                               >
-                                <header className="flex shrink-0 items-center justify-between gap-4 border-b border-border px-4 py-3 sm:px-6">
+                                <header className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-4 py-2 sm:gap-4 sm:px-6 sm:py-3">
                                   <div className="flex min-w-0 items-center gap-3">
                                     <ChatNavDrawer />
                                     <div className="min-w-0">
                                       <h1 className="text-lg font-semibold sm:text-xl">
                                         mdeai
                                       </h1>
-                                      <p className="truncate text-xs text-muted-foreground sm:text-sm">
+                                      {/* Phones keep the bar to two lines: brand + account.
+                                          The subtitle returns when there is room for it. */}
+                                      <p className="hidden truncate text-xs text-muted-foreground sm:block sm:text-sm">
                                         Concierge — rentals, events, food, map
                                       </p>
                                     </div>
@@ -158,6 +160,7 @@ export function GeoChatShell() {
                                   <div className="flex min-h-0 flex-1 flex-col">
                                     <LeadConfirmationBanner />
                                     <VenueBookingConfirmationBanner />
+                                    <VenueBookingDirectHitlPanel />
                                     <ChatCanvas />
                                   </div>
                                 </MapsShell>

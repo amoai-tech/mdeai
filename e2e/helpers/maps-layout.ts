@@ -190,6 +190,20 @@ async function submitConciergeMessageOnce(page: Page, text: string) {
   await input.press("Enter");
 }
 
+/**
+ * Fill and submit one message WITHOUT waiting for the app to issue a request.
+ *
+ * A signed-out visitor's AI follow-up is refused by design (SAN-1507): the app keeps the
+ * message and shows a sign-in offer instead of calling the runtime. Requiring a request
+ * there would report the product's correct refusal as a harness failure.
+ */
+export async function submitConciergeMessageExpectingNoTurn(
+  page: Page,
+  text: string,
+): Promise<void> {
+  await submitConciergeMessageOnce(page, text);
+}
+
 /** How long an accepted submit has to make the app issue its own API request. */
 export const CONCIERGE_ACCEPT_GRACE_MS = 6_000;
 
@@ -245,9 +259,19 @@ export async function submitConciergeMessageWithRetry(
 }
 
 /**
- * Resolve true once the page issues its own non-GET `/api/*` request, which is
- * the observable consequence of an accepted submit. Resolves false on timeout.
+ * SAN-1531 history-save POSTs are background work, not evidence a new chat turn
+ * was accepted. Only requests that begin an actual search or concierge run count.
  */
+export function isConciergeTurnRequest(pathname: string, method: string): boolean {
+  if (method !== "POST") return false;
+  return pathname === "/api/rentals/search" ||
+    pathname === "/api/restaurants/search" ||
+    pathname === "/api/events/search" ||
+    pathname === "/api/grounded/search" ||
+    pathname === "/api/copilotkit" || pathname.startsWith("/api/copilotkit/");
+}
+
+/** Resolve true on an accepted search or agent request, false on timeout. */
 function watchForAppApiRequest(
   page: Page,
   timeoutMs: number,
@@ -265,8 +289,7 @@ function watchForAppApiRequest(
           const url = new URL(request.url());
           return (
             url.origin === origin &&
-            url.pathname.startsWith("/api/") &&
-            request.method() !== "GET"
+            isConciergeTurnRequest(url.pathname, request.method())
           );
         } catch {
           return false;
@@ -287,13 +310,16 @@ function watchForAppApiRequest(
 }
 
 /** Type into the concierge composer and submit, retrying once (see above). */
-export async function sendConciergeMessage(page: Page, text: string) {
+export async function sendConciergeMessage(
+  page: Page, text: string, graceMs: number = CONCIERGE_ACCEPT_GRACE_MS,
+) {
   await submitConciergeMessageWithRetry(
     {
       armReactionWatch: (timeoutMs) => watchForAppApiRequest(page, timeoutMs),
       submit: () => submitConciergeMessageOnce(page, text),
     },
     text,
+    graceMs,
   );
 }
 

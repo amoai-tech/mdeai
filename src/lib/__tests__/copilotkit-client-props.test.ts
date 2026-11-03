@@ -57,7 +57,7 @@ describe("getCopilotKitClientProps", () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("NEXT_PUBLIC_COPILOTKIT_PUBLIC_API_KEY", "ck_pub_live_value");
 
-    for (const agent of ["conciergeAgent", "hostEventAgent"] as const) {
+    for (const agent of ["conciergeAgent", "hostEventAgent", "partnerAgent"] as const) {
       const props = getCopilotKitClientProps(agent);
       expect("publicApiKey" in props).toBe(false);
       expect(props.runtimeUrl).toBe("/api/copilotkit");

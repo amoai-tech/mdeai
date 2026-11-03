@@ -34,6 +34,43 @@ describe("parseSearchGroundedSidecarPayload", () => {
     expect(out.metadata.reason).toBe("no_grounding_metadata");
   });
 
+  it("rejects response citations with missing or forged Google provenance", () => {
+    for (const metadata of [undefined, { source: "cached" }, { source: "google-search-grounding", reason: "adk_unavailable" }]) {
+      const out = parseSearchGroundedSidecarPayload({
+        citations: [{ url: "https://example.com/unverified", title: "Unverified" }],
+        confidence: 0.9,
+        metadata,
+      });
+      expect(out.citations).toEqual([]);
+      expect(out.confidence).toBe(0);
+      expect(out.metadata.source).toBe("unverified");
+      expect(out.metadata.reason).toBeTruthy();
+    }
+  });
+
+  it("does not manufacture confidence or allow malformed URLs", () => {
+    const out = parseSearchGroundedSidecarPayload({
+      citations: [
+        { url: "http-not-a-url", title: "Bad" },
+        { url: "https://example.com/real", title: "Actual" },
+      ],
+      metadata: { source: "google-search-grounding", reason: null },
+    });
+    expect(out.citations.map((citation) => citation.url)).toEqual(["https://example.com/real"]);
+    expect(out.confidence).toBe(0);
+    expect(out.metadata.source).toBe("google-search-grounding");
+  });
+
+  it("does not surface links when the sidecar says Search was disabled", () => {
+    const out = parseSearchGroundedSidecarPayload({
+      citations: [{ url: "https://example.com/old", title: "Old" }],
+      confidence: 1,
+      metadata: { source: "google-search-grounding", reason: "search_disabled", searchDisabled: true },
+    });
+    expect(out.citations).toEqual([]);
+    expect(out.metadata.source).toBe("unverified");
+  });
+
   it("handles search_disabled stub", () => {
     const out = parseSearchGroundedSidecarPayload({
       citations: [],

@@ -3,6 +3,12 @@ import React, { act, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+// The navigation owner waits for a verified auth identity. Test the anonymous path
+// without making Supabase network calls during provider lifecycle unit tests.
+vi.mock("@/hooks/use-session", () => ({
+  useSession: () => ({ user: null, loading: false }),
+}));
+
 import { ChatProvider, useSavedThreadHistory } from "@/components/chat/chat-provider";
 import { ThreadNavProvider, useThreadNav } from "@/lib/chat/thread-nav-context";
 
@@ -88,6 +94,8 @@ const select = async (id: string | undefined, opts: { connect?: boolean } = {}) 
 };
 
 beforeEach(async () => {
+  window.sessionStorage.clear();
+  window.history.replaceState(null, "", "/");
   agent = new FakeAgent();
   fakeAgent.current = agent;
   requests = {};
@@ -145,6 +153,22 @@ describe("saved chat history", () => {
     await tick();
     expect(agent.messages).toEqual(msgs("A"));
     expect(seen.history.status).toBe("idle");
+  });
+
+  it("restores an idle saved thread before the 30-second reconnect timeout", async () => {
+    await select(A, { connect: false });
+    await act(async () => requests[A].resolve(msgs("A")));
+    await tick();
+    expect(agent.messages).toEqual([]);
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 2700)); });
+    expect(agent.messages).toEqual(msgs("A"));
+    expect(seen.history.status).toBe("idle");
+    // A late reconnect can still clear the view; when it finalizes the saved
+    // record must be reconciled back without duplicating any messages.
+    agent.beginConnect();
+    await act(async () => agent.finishRun());
+    await tick();
+    expect(agent.messages).toEqual(msgs("A"));
   });
 
   it("history that arrives BEFORE CopilotKit starts connecting is not wiped by it", async () => {

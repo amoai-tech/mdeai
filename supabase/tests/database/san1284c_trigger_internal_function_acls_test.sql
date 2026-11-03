@@ -16,7 +16,7 @@
 -- Run with: supabase test db
 begin;
 
-select plan(18);
+select plan(19);
 
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- CATCH-ALL: no trigger-returning public function is executable by an end-user role.
@@ -92,7 +92,9 @@ create table public.__acl_probe (id int primary key, v int, updated_at timestamp
 create trigger __acl_probe_trg before update on public.__acl_probe
   for each row execute function public.update_updated_at();
 insert into public.__acl_probe(id, v) values (1, 1);
-grant update on public.__acl_probe to authenticated;
+-- SAN-1562 removes broad default table grants. This probe needs explicit READ
+-- as well as UPDATE so the test exercises trigger EXECUTE, not table ACLs.
+grant select, update on public.__acl_probe to authenticated;
 
 set local role authenticated;
 update public.__acl_probe set v = 2 where id = 1;
@@ -135,8 +137,10 @@ select is(has_function_privilege('authenticated', to_regprocedure('public.acting
           true, 'S: acting_landlord_ids keeps authenticated (RLS depends on it)');
 select is(has_function_privilege('authenticated', to_regprocedure('public.bump_staff_link_version(uuid)'), 'EXECUTE'),
           true, 'S: bump_staff_link_version keeps authenticated');
-select is(has_function_privilege('authenticated', to_regprocedure('public.ticket_payment_refund_v2(uuid,integer,text,text,uuid,text,uuid[])'), 'EXECUTE'),
-          true, 'S: ticket_payment_refund_v2 keeps authenticated (SB-002 contract)');
+select is(has_function_privilege('authenticated', to_regprocedure('public.ticket_payment_refund_v2(uuid,bigint,text,text,uuid,text,uuid[])'), 'EXECUTE'),
+          false, 'S: ticket_payment_refund_v2 is service_role only (SAN-1562 boundary)');
+select is(has_function_privilege('service_role', to_regprocedure('public.ticket_payment_refund_v2(uuid,bigint,text,text,uuid,text,uuid[])'), 'EXECUTE'),
+          true, 'S: ticket_payment_refund_v2 keeps service_role');
 
 select * from finish();
 rollback;

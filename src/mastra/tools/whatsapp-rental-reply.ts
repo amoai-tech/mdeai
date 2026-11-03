@@ -148,14 +148,14 @@ export function formatWhatsAppRentalReply(items: WhatsAppRentalItem[], budget: M
 
   if (shown.length === 0 && extras.length === 0) {
     return budget
-      ? `I could not find an eligible listing at or below ${formatMonthlyPrice(budget.amount, budget.currency)}/month right now.`
-      : 'I could not find an eligible listing that matches those filters right now.';
+      ? `I could not find an matching listing at or below ${formatMonthlyPrice(budget.amount, budget.currency)}/month right now.`
+      : 'I could not find an matching listing that matches those filters right now.';
   }
 
   const where = shown[0]?.neighborhood ? ` in ${shown[0].neighborhood}` : '';
   const budgetLabel = budget ? ` under ${formatMonthlyPrice(budget.amount, budget.currency)}/month` : '';
   const header = shown.length > 0
-    ? `Here ${shown.length === 1 ? 'is' : 'are'} ${shown.length} eligible option${shown.length === 1 ? '' : 's'}${where}${budgetLabel}:`
+    ? `Here ${shown.length === 1 ? 'is' : 'are'} ${shown.length} matching option${shown.length === 1 ? '' : 's'}${where}${budgetLabel}:`
     : 'I did not find a listing in that currency within your budget, but here is what else is available:';
 
   const out = [header, '', ...shown.flatMap((item, i) => (i === 0 ? renderItem(item, i + 1) : ['', ...renderItem(item, i + 1)]))];

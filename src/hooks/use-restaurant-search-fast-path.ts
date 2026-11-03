@@ -16,6 +16,7 @@ import {
   buildRestaurantSearchParams,
   canFastPathRestaurantSearch,
   fastPathRestaurantSummary,
+  isRestaurantVenueFactQuery,
   restaurantsToToolEnvelope,
   shouldInstantRestaurantClarify,
   type RestaurantSearchApiParams,
@@ -94,8 +95,10 @@ export function useRestaurantSearchFastPath() {
       userText: string,
       params: RestaurantSearchApiParams,
       chip?: RestaurantFilterChip,
+      propagateFailure = false,
+      submissionId?: string,
     ): Promise<boolean> => {
-      if (busyRef.current) return true;
+      if (busyRef.current) return false;
       busyRef.current = true;
       try {
         const cards = await fetchRestaurantSearch(params);
@@ -114,14 +117,27 @@ export function useRestaurantSearchFastPath() {
           ts: new Date().toISOString(),
         });
         const pinCount = applySearchResults(cards, params, chip);
+        const namedFact =
+          isRestaurantVenueFactQuery(userText) && cards.length === 1 &&
+          cards[0]?.sourceUrl?.startsWith('https://mdeai.co/restaurants/');
+        const record = cards[0];
+        const addressLine = record?.address?.trim()
+          ? record.name + ' is at ' + record.address.trim() + '.'
+          : record?.name + ': street address not available in the catalog.';
         showExchange(
           userText,
-          fastPathRestaurantSummary(cards.length, pinCount, params.neighborhood),
+          namedFact
+            ? addressLine + ' Source: ' + record.sourceUrl
+            : fastPathRestaurantSummary(cards.length, pinCount, params.neighborhood),
+          submissionId,
         );
         return true;
       } catch (err) {
         console.error("[restaurant-fast-path]", err);
         setToolResult(null);
+        // Chat sends report failures through operation-aware Retry;
+        // filter-chip searches keep their non-throwing failure result.
+        if (propagateFailure) throw err;
         return false;
       } finally {
         busyRef.current = false;
@@ -135,7 +151,7 @@ export function useRestaurantSearchFastPath() {
   );
 
   const handleUserMessage = useCallback(
-    async (text: string): Promise<boolean> => {
+    async (text: string, submissionId?: string): Promise<boolean> => {
       const trimmed = text.trim();
       if (!trimmed) return false;
 
@@ -154,7 +170,7 @@ export function useRestaurantSearchFastPath() {
       };
 
       if (shouldInstantRestaurantClarify(trimmed, memory)) {
-        if (busyRef.current) return true;
+        if (busyRef.current) return false;
         busyRef.current = true;
         try {
           logRoutingDecision({
@@ -166,7 +182,7 @@ export function useRestaurantSearchFastPath() {
             ts: new Date().toISOString(),
           });
           setToolResult(null);
-          showClarify(trimmed, RESTAURANT_CLARIFY_MESSAGE, "restaurant");
+          showClarify(trimmed, RESTAURANT_CLARIFY_MESSAGE, "restaurant", submissionId);
           setState({
             ...memory,
             lastIntent: "restaurant_discovery",
@@ -183,8 +199,10 @@ export function useRestaurantSearchFastPath() {
       const params = buildRestaurantSearchParams(trimmed, memory);
       if (!params) return false;
 
+      // Busy searches must be routed through the Concierge, never acknowledged as handled.
+      if (busyRef.current) return false;
       clearLocalMessages();
-      return runSearch(trimmed, params);
+      return runSearch(trimmed, params, undefined, true, submissionId);
     },
     [
       clarifyKind,
@@ -215,7 +233,7 @@ export function useRestaurantSearchFastPath() {
     async (
       chip: RestaurantFilterChip,
     ): Promise<{ handled: boolean; geoDenied?: boolean }> => {
-      if (busyRef.current) return { handled: true };
+      if (busyRef.current) return { handled: false };
 
       let geo: { latitude: number; longitude: number } | undefined;
       if (chip.nearMe) {
@@ -231,6 +249,8 @@ export function useRestaurantSearchFastPath() {
 
       const prompt = restaurantChipSearchPrompt(chip);
       const params = restaurantSearchParamsFromChip(chip, geo);
+      // The location lookup can finish while another search starts: do not clear its UI.
+      if (busyRef.current) return { handled: false };
       clearLocalMessages();
       const handled = await runSearch(prompt, params, chip);
       return { handled };

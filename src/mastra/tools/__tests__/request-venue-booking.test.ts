@@ -19,8 +19,6 @@ vi.mock("@/lib/supabase/service", () => ({
 
 import { requestVenueBookingTool } from "../request-venue-booking";
 
-const bookingRequestId = "11111111-1111-4111-8111-111111111111";
-
 const validInput = {
   venueKind: "restaurant" as const,
   placeId: "ChIJtest12345678",
@@ -64,47 +62,26 @@ describe("requestVenueBookingTool", () => {
     expect(insertVenueBookingRequest).not.toHaveBeenCalled();
   });
 
-  it("inserts pending row for authenticated user", async () => {
-    insertVenueBookingRequest.mockResolvedValue({
-      ok: true,
-      data: {
-        requestId: bookingRequestId,
-        message:
-          "Request sent — we'll confirm by WhatsApp. This is not a confirmed reservation yet.",
-      },
-    });
-
+  it("never inserts from an AI tool invocation, even with an authenticated actor", async () => {
     const result = await requestVenueBookingTool.execute!(
       validInput,
       execContext("user-abc"),
     );
-
-    expect(result).toMatchObject({
-      success: true,
-      requestId: bookingRequestId,
-    });
-    expect(insertVenueBookingRequest).toHaveBeenCalledWith(
-      expect.anything(),
-      "user-abc",
-      expect.objectContaining(validInput),
-    );
-  });
-
-  it("surfaces idempotency conflict", async () => {
-    insertVenueBookingRequest.mockResolvedValue({
-      ok: false,
-      status: 409,
-      message: "You already submitted this booking request.",
-    });
-
-    const result = await requestVenueBookingTool.execute!(
-      validInput,
-      execContext("user-abc"),
-    );
-
     expect(result).toEqual({
       success: false,
-      message: "You already submitted this booking request.",
+      message: expect.stringContaining("no request has been saved"),
     });
+    expect(insertVenueBookingRequest).not.toHaveBeenCalled();
+    expect(createServiceRoleClient).not.toHaveBeenCalled();
+  });
+
+  it("returns validation error without creating a booking", async () => {
+    const result = await requestVenueBookingTool.execute!(
+      { ...validInput, partySize: 0 },
+      execContext("user-abc"),
+    );
+    // Mastra may reject malformed inputs before execute() runs.
+    expect(result).not.toMatchObject({ success: true });
+    expect(insertVenueBookingRequest).not.toHaveBeenCalled();
   });
 });

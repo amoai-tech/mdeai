@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
 const mockGetPlace = vi.hoisted(() => vi.fn());
 
@@ -72,7 +72,19 @@ describe("enrichRestaurantsWithPlacePhotos", () => {
   });
 });
 
+afterEach(() => vi.unstubAllEnvs());
+
 describe("prepareRestaurantSearchResults", () => {
+  it("skips remote restaurant photo enrichment in deterministic CI", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT", "1");
+    const rows = [{ id: "r1", imageUrl: "", placeId: "ChIJabc" }];
+    const result = await prepareRestaurantSearchResults(rows as Parameters<typeof prepareRestaurantSearchResults>[0]);
+    expect(result).toEqual(rows);
+    expect(mockGetPlace).not.toHaveBeenCalled();
+  });
+
+
   beforeEach(() => {
     mockGetPlace.mockReset();
     process.env.SUPABASE_URL = "https://example.supabase.co";

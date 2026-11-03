@@ -63,11 +63,20 @@ export function activeHostWizardStep(
   return "basics";
 }
 
+// Accept the host wizard's local ISO datetime and the agent's offset/Z form.
+// The server also accepts both; do not drop otherwise valid agent edits because
+// the host entered a local datetime. Database timezone normalization is separate.
+const publishEventDate = z.string().datetime({ offset: true, local: true });
+
+export function isValidEventDraftDate(value: string | undefined): boolean {
+  return publishEventDate.safeParse(value).success;
+}
+
 export function isDraftReadyForPublish(draft: EventDraftState): boolean {
   return (
     draft.title.trim().length > 0 &&
     draft.neighborhood.trim().length > 0 &&
-    Boolean(draft.dateIso) &&
+    isValidEventDraftDate(draft.dateIso) &&
     draft.venue.trim().length > 0 &&
     draft.capacity > 0 &&
     (draft.ticketTiers.length > 0 || draft.priceMinCop > 0)

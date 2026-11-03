@@ -91,6 +91,8 @@ function num(v: number | string | null | undefined): number | undefined {
 
 /** Overscan limit for keyword fallback search — 6x the default API limit (8) to allow ranking/filtering headroom. */
 const RENTAL_KEYWORD_OVERSCAN_LIMIT = 48;
+/** Bound the hybrid RPC wait separately from the Gemini embedding request. */
+const RENTAL_HYBRID_RPC_TIMEOUT_MS = 5000;
 
 export function parseRentalIntelligenceSlots(queryText: string): RentalIntelligenceSlots {
   const q = queryText.toLowerCase();
@@ -116,7 +118,11 @@ function rentalSignalBoost(slots: RentalIntelligenceSlots, s: RentalSignalRow): 
 }
 
 /** SAN-1502 PR2: optional per-request, RLS-governed client. */
-export type IntelligenceSearchOptions = { client?: SupabaseClient | null };
+export type IntelligenceSearchOptions = {
+  client?: SupabaseClient | null;
+  /** SAN-1502 — pre-computed phase so one search performs a single phase lookup. */
+  developmentPhase?: boolean;
+};
 
 export async function searchRentalsIntelligent(
   query: RentalQuery & { queryText?: string },
@@ -145,7 +151,7 @@ export async function searchRentalsIntelligent(
     throw new RentalSearchUnavailableError("client_unavailable");
   }
 
-  const developmentMode = await readRentalDevelopmentPhase(client);
+  const developmentMode = options?.developmentPhase ?? await readRentalDevelopmentPhase(client);
 
   /**
    * The canonical keyword/list query, shared by the normal path and the
@@ -161,19 +167,15 @@ export async function searchRentalsIntelligent(
       .select(
         "id, title, neighborhood, bedrooms, price_daily, price_monthly, currency, wifi_speed, amenities, images, host_name, source_url, metadata, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status, rental_can_request_viewing",
       )
-      // One shared predicate with `search-rentals.ts`, so the two paths cannot disagree about
-      // which listings are priced or how a nightly budget applies across currencies.
-      .or(
-        rentalBudgetPredicate(
-          typeof query.maxPricePerNight === "number" ? query.maxPricePerNight : null,
-          monthlyBudgetFromQuery(query),
-        ),
-      )
       .order("price_daily", { ascending: true, nullsFirst: false })
       .limit(RENTAL_KEYWORD_OVERSCAN_LIMIT);
+    if (query.maxPricePerNight != null || query.maxPriceMonthly != null) {
+      q = q.or(rentalBudgetPredicate(query.maxPricePerNight ?? null, monthlyBudgetFromQuery(query)));
+    }
     if (!developmentMode) q = q.eq("status", "active").not("landlord_id", "is", null);
     if (neighborhood) q = q.ilike("neighborhood", `%${neighborhood}%`);
     if (typeof query.minBedrooms === "number") q = q.gte("bedrooms", query.minBedrooms);
+    if (typeof query.maxBedrooms === "number") q = q.lte("bedrooms", query.maxBedrooms);
     // SAN-486 / SAN-1349: the shared availability rule (known move-in date, full-stay coverage or
     // not expired), "today" being the America/Bogota date the viewing RPC uses.
     q = applyAvailabilityFilters(q, {
@@ -204,7 +206,7 @@ export async function searchRentalsIntelligent(
       amenities: r.amenities as string[] | null,
       pet_friendly: null,
       furnished: null,
-      status: "active",
+      status: (r.status as string | null) ?? null,
       similarity: 0,
     }));
     return { rows, apartments };
@@ -216,6 +218,9 @@ export async function searchRentalsIntelligent(
   let embedFailureReason: EmbedFailureReason | undefined;
   let embedHttpStatus: number | undefined;
 
+  // Use the same hybrid RPC in both phases. Development visibility belongs to
+  // canonical Supabase RLS, not a second AI-only eligibility switch. When the
+  // embedding or RPC is unavailable, the shared keyword path still works.
   if (queryText) {
     const embedResult = await embedQueryTextDetailed(queryText);
     if (embedResult.ok) {
@@ -224,7 +229,7 @@ export async function searchRentalsIntelligent(
         query_text: queryText,
         query_embedding: vectorLiteral(embedResult.values),
         match_count: Math.max(limit * 4, 20),
-      });
+      }).abortSignal(AbortSignal.timeout(RENTAL_HYBRID_RPC_TIMEOUT_MS));
       if (error) {
         // Supabase JS retries transient PostgREST failures. If the RPC still
         // fails, preserve search availability by degrading to the keyword path.
@@ -279,17 +284,14 @@ export async function searchRentalsIntelligent(
       .in("id", ids)
       // RLS applies customer eligibility and authorized development visibility.
       // Preserve the shared status and budget filters without reimposing publication gates.
-      // One shared budget predicate with the structured path, so a hybrid result
-      // can never bypass the caller's price filter.
-      .or(
-        rentalBudgetPredicate(
-          typeof query.maxPricePerNight === "number" ? query.maxPricePerNight : null,
-          monthlyBudgetFromQuery(query),
-        ),
-      );
+;
+    if (query.maxPricePerNight != null || query.maxPriceMonthly != null) {
+      aptQ = aptQ.or(rentalBudgetPredicate(query.maxPricePerNight ?? null, monthlyBudgetFromQuery(query)));
+    }
     if (!developmentMode) aptQ = aptQ.eq("status", "active").not("landlord_id", "is", null);
     if (neighborhood) aptQ = aptQ.ilike("neighborhood", `%${neighborhood}%`);
     if (typeof query.minBedrooms === "number") aptQ = aptQ.gte("bedrooms", query.minBedrooms);
+    if (typeof query.maxBedrooms === "number") aptQ = aptQ.lte("bedrooms", query.maxBedrooms);
     // SAN-486 / SAN-1349: the shared availability rule (known move-in date, full-stay coverage or
     // not expired), "today" being the America/Bogota date the viewing RPC uses.
     aptQ = applyAvailabilityFilters(aptQ, {

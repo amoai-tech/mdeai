@@ -1,0 +1,1 @@
+../../../.claude/skills/openbot/SKILL.md

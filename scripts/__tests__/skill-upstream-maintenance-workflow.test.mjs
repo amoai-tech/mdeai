@@ -88,3 +88,12 @@ test("does not leave the token in .git/config and cannot overlap itself", () => 
   assert.match(text, /^concurrency:/m);
   assert.match(text, /group:\s*skill-upstream-maintenance-/);
 });
+
+test("AI reference job is independent from strict skill drift", () => {
+  const text = workflow();
+  const ai = text.split("ai-reference-upstreams:")[1];
+  assert.ok(ai, "AI reference job is missing");
+  assert.match(ai, /check-ai-reference-upstreams\.mjs/);
+  assert.doesNotMatch(ai, /check-skill-upstream-drift\.mjs/);
+  assert.match(ai, /contents: read|permissions:/);
+});

@@ -97,6 +97,35 @@ describe("invokeAdkSearchGrounding", () => {
     vi.unstubAllGlobals();
   });
 
+  it("times out an unresponsive event search before the 15s API route limit", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchMock = vi.fn().mockImplementation((_url: string, options: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          options.signal?.addEventListener("abort", () => reject(new Error("aborted")));
+        }),
+      );
+      vi.stubGlobal("fetch", fetchMock);
+      const pending = invokeAdkSearchGrounding({ query: "salsa events tonight" });
+      await vi.advanceTimersByTimeAsync(8_000);
+      const out = await pending as { citations: unknown[]; metadata: { reason: string } };
+      expect(out.citations).toEqual([]);
+      expect(out.metadata.reason).toBe("adk_timeout");
+      expect(fetchMock).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("returns unavailable rather than uncaught error when ADK fails", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+    const out = await invokeAdkSearchGrounding({ query: "salsa events tonight" }) as {
+      citations: unknown[]; metadata: { reason: string; status: number };
+    };
+    expect(out.citations).toEqual([]);
+    expect(out.metadata).toEqual({ reason: "adk_unavailable", status: 500 });
+  });
+
   it("posts search_grounded_events tool", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,

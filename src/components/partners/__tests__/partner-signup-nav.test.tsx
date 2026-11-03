@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { renderToStaticMarkup } from "react-dom/server";
+import { render } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { PartnerSignupNav } from "@/components/partners/partner-signup-nav";
@@ -30,6 +31,23 @@ describe("PartnerSignupNav", () => {
     expect(html).toContain(
       'href="/partners/signup?draft=22222222-2222-4222-a222-222222222222"',
     );
+  });
+
+  it("keeps mobile navigation compact and preserves both destinations", () => {
+    const { container } = render(<PartnerSignupNav showBackToPicker />);
+
+    const back = container.querySelector('a[aria-label="All partner types"]');
+    expect(back?.getAttribute("href")).toBe("/partners/signup");
+    expect(back?.classList.contains("shrink-0")).toBe(true);
+    const backLabel = back?.querySelector("span");
+    expect(backLabel?.textContent).toBe("All partner types");
+    expect(backLabel?.classList.contains("hidden")).toBe(true);
+    expect(backLabel?.classList.contains("sm:inline")).toBe(true);
+
+    const explore = container.querySelector('a[href="/chat"]');
+    expect(explore?.classList.contains("hidden")).toBe(true);
+    expect(explore?.classList.contains("sm:inline-flex")).toBe(true);
+    expect(container.querySelector('a[href="/login"]')?.textContent).toContain("Sign in");
   });
 
   it("sign-in uses next redirect when provided", () => {

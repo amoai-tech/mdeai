@@ -32,7 +32,7 @@ export function BrowseLayout({
       <header className="sticky top-0 z-10 -mx-4 border-b border-border bg-background/95 px-4 py-4 backdrop-blur sm:-mx-6 sm:px-6">
         <div className="flex items-start gap-3">
           <Link
-            href="/"
+            href="/chat"
             aria-label="Back to chat"
             className="mt-1 inline-flex min-h-10 min-w-10 items-center justify-center rounded-md border border-border hover:bg-muted"
           >
@@ -43,7 +43,7 @@ export function BrowseLayout({
             <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
           </div>
           <Link
-            href="/"
+            href="/chat"
             className="hidden text-sm text-primary hover:underline sm:inline"
           >
             Ask concierge

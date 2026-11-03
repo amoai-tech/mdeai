@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Read-only upstream reference inventory. Changes are reviewed and adapted into MDE, never installed or automatically merged.",
+  "sources": [
+    {
+      "name": "OpenMuse",
+      "repository": "CopilotKit/openmuse",
+      "reviewedCommit": "1ac68f3909f2478ab6280883f1ab5ea65eb5719d",
+      "strategy": "MODEL",
+      "linear": "SAN-1554",
+      "focus": "Chat send/stop, retained composer, sourced tool cards and mobile",
+      "destinations": [
+        "src/components/chat/",
+        "src/components/copilot/search-tool-renders.tsx"
+      ],
+      "baselineProof": "source-reference review only; not MDE end-to-end proof"
+    },
+    {
+      "name": "OpenDots",
+      "repository": "CopilotKit/OpenDots",
+      "reviewedCommit": "ab39f2508f3fd23a949837622456f3d61a108e9a",
+      "strategy": "ADAPT",
+      "linear": "SAN-1555",
+      "focus": "Reviewable proposal, exact-draft binding, save receipt and retry/conflict",
+      "destinations": [
+        "src/components/onboarding/",
+        "src/components/host/"
+      ],
+      "baselineProof": "source-reference review only; not MDE end-to-end proof"
+    },
+    {
+      "name": "OpenBot",
+      "repository": "CopilotKit/openbot",
+      "reviewedCommit": "e01a7c2fe65f4828c1696ee32e9724eb2b327384",
+      "reviewedRelease": "v0.0.14",
+      "strategy": "REFERENCE ONLY",
+      "linear": "SAN-1324",
+      "focus": "Optional external broker computer: version-proof, governed actions, audits; no MDE runtime dependency",
+      "destinations": [
+        "docs/03-platform/copilotkit-mastra/"
+      ],
+      "baselineProof": "unverified isolated runtime"
+    }
+  ]
+}

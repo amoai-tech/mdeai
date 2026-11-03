@@ -3,7 +3,15 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getSupabaseEnv } from "./env";
 
 // /host marketing landing (SAN-660) is public; wizard + host dashboard paths stay auth-gated.
-const PROTECTED_PREFIXES = ["/host/events", "/host/event", "/trips", "/saved"];
+// SAN-1575: /app is the unified account shell. It is guarded here so a forgotten
+// layout cannot expose account routes; destination layouts still re-check.
+const PROTECTED_PREFIXES = [
+  "/host/events",
+  "/host/event",
+  "/trips",
+  "/saved",
+  "/app",
+];
 // Exact paths that require a session without protecting their subpaths.
 // /me/tickets (wallet list) needs auth, but /me/tickets/[id]?token= is the
 // guest ticket-view flow and must stay reachable without a session.
@@ -56,8 +64,10 @@ export async function updateSession(request: NextRequest) {
     return authRelay;
   }
 
+  // A misconfigured production deployment must never activate the test-only bypass.
   const e2eAuthBypass =
     process.env.NODE_ENV !== "production" &&
+    process.env.VERCEL_ENV !== "production" &&
     process.env.E2E_BYPASS_AUTH === "1";
 
   if (e2eAuthBypass) {

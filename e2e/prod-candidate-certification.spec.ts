@@ -98,6 +98,7 @@ test.describe("SAN-1330 staged production candidate certification", () => {
     ).toBe(404);
 
     let identity: ThrowawayIdentity | undefined;
+    let agentRunCompleted = false;
     try {
       identity = await createThrowawayIdentity("qa-san1330");
       await signInAsOnOrigin(page, baseUrl, identity.email);
@@ -180,6 +181,7 @@ test.describe("SAN-1330 staged production candidate certification", () => {
       // closing without RUN_FINISHED. Identity matters too, or a completed stream
       // for another thread/run would certify a turn that never happened.
       assertRunCompleted(events, { threadId, runId });
+      agentRunCompleted = true;
 
       // Separate durability assertion, and it names the EXACT thread: the
       // completed turn was persisted under the throwaway user AND under the
@@ -191,7 +193,7 @@ test.describe("SAN-1330 staged production candidate certification", () => {
     } finally {
       if (identity) {
         const userId = identity.userId;
-        await deleteThrowawayIdentity(identity);
+        await deleteThrowawayIdentity(identity, { waitForAiRunAudit: agentRunCompleted });
         await expect.poll(() => threadCount(userId), { timeout: 30_000 }).toBe(0);
       }
     }

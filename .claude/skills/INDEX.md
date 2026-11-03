@@ -2,7 +2,7 @@
 
 Canonical: [`.claude/skills/`](./) · Codex exposure: [`.agents/skills/`](../../.agents/skills/) · Ownership: [`AGENTS.md`](../../AGENTS.md).
 
-**Snapshot:** PR routing-eval candidate built from `main` at `18bc3669fe13ae4acbcf8575c374e1cba91c727a` (2026-10-14). Refresh counts from the repository before citing them on later commits. This index documents current ownership and available *definitions*, not agent evaluation pass rates.
+**Snapshot:** SAN-1557 skill catalog based on reviewed `origin/main` `01d29fe83f` (2026-10-20). Counts below are definitions and mechanical structure only, not executed agent success rates. Recompute on later commits.
 
 ## Inventory
 
@@ -12,6 +12,7 @@ Each name below is an active canonical skill, exposed through a corresponding re
 - **Review, assurance, and release (11):** [`code-review`](./code-review/SKILL.md), [`review`](./review/SKILL.md), [`praudit`](./praudit/SKILL.md), [`task-verifier`](./task-verifier/SKILL.md), [`merge`](./merge/SKILL.md), [`prod`](./prod/SKILL.md), [`launch`](./launch/SKILL.md), [`progress`](./progress/SKILL.md), [`errors`](./errors/SKILL.md), [`systematic-debugging`](./systematic-debugging/SKILL.md), [`e2e`](./e2e/SKILL.md).
 - **Testing and browser tooling (3):** [`tests`](./tests/SKILL.md), [`testing`](./testing/SKILL.md), [`playwright-cli`](./playwright-cli/SKILL.md).
 - **Business and platform domains (10):** [`real-estate`](./real-estate/SKILL.md), [`events`](./events/SKILL.md), [`supabase`](./supabase/SKILL.md), [`mastra`](./mastra/SKILL.md), [`copilotkit`](./copilotkit/SKILL.md), [`gemini`](./gemini/SKILL.md), [`maps`](./maps/SKILL.md), [`cloudinary`](./cloudinary/SKILL.md), [`stripe`](./stripe/SKILL.md), [`nextjs`](./nextjs/SKILL.md).
+- **Upstream interaction-pattern adapters (3):** [`openmuse`](./openmuse/SKILL.md) for chat/cards/maps/mobile, [`opendots`](./opendots/SKILL.md) for review/edit/receipt, [`openbot`](./openbot/SKILL.md) for optional external computer-use coworker. Each augments the existing `copilotkit`/`mastra`/domain skills; none installs a new runtime.
 - **Product design, docs, and authoring (11):** [`frontend-design`](./frontend-design/SKILL.md), [`uiux`](./uiux/SKILL.md), [`wireframe`](./wireframe/SKILL.md), [`mermaid`](./mermaid/SKILL.md), [`mermaid-diagrams`](./mermaid-diagrams/SKILL.md), [`docs`](./docs/SKILL.md), [`research`](./research/SKILL.md), [`prompt`](./prompt/SKILL.md), [`skills`](./skills/SKILL.md), [`writing-skills`](./writing-skills/SKILL.md), [`whatsapp`](./whatsapp/SKILL.md).
 - **Issue lifecycle, migration, and analysis (4):** [`linear-task`](./linear-task/SKILL.md), [`linear-audit`](./linear-audit/SKILL.md), [`migration`](./migration/SKILL.md), [`codacy`](./codacy/SKILL.md).
 
@@ -33,12 +34,12 @@ Each name below is an active canonical skill, exposed through a corresponding re
 
 | Metric | Current candidate | What is actually verified |
 | --- | ---: | --- |
-| Canonical active skills | **50** | Exists as `SKILL.md` with metadata |
-| Mirrored symlink entries | **151** | File/directory exposures point back to canonical owners |
-| Skills with behavioral `evals.json` | **29/50** | JSON definitions, not executed behavior tests |
-| Skills with `trigger-evals.json` | **17/50** | Positive and near-miss case definitions, not routing pass rate |
-| Defined trigger probes | **132** | Parsed cases across trigger files |
-| Defined behavioral probes | **109** | Parsed cases across behavior files |
+| Canonical active skills | **53** | Exists as `SKILL.md` with metadata |
+| Mirrored symlink entries | **160** | File/directory exposures point back to canonical owners |
+| Skills with behavioral `evals.json` | **32/53** | JSON definitions, not executed behavior tests |
+| Skills with `trigger-evals.json` | **20/53** | Positive and near-miss case definitions, not routing pass rate |
+| Defined trigger probes | **150** | Parsed cases across trigger files |
+| Defined behavioral probes | **123** | Parsed cases across behavior files |
 | Router `routing-evals.json` cases | **110** | Separate historical router-case format, not counted as trigger files |
 
 The `npm run check:skills` command enforces skill/mirror layout and vendored upstream integrity. `node --test scripts/__tests__/skill-evals-conformance.test.mjs` checks case-file structure. Neither command actually invokes Claude/Codex for each case or establishes routing accuracy; that needs an agent-run benchmark on a stable commit.

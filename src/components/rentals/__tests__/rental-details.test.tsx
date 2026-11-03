@@ -7,9 +7,24 @@
  * rather than on hand-written cards: COP/month, the photo list, unknown bedrooms, two ads with
  * no coordinates, and no viewing action for any of them.
  */
+// SAN-1611: the date selector navigates with the app router, which a bare createRoot lacks.
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn(), refresh: vi.fn(), prefetch: vi.fn() }),
+  usePathname: () => "/rentals",
+  useSearchParams: () => new URLSearchParams(),
+  notFound: () => { throw new Error("NEXT_NOT_FOUND"); },
+  redirect: (url: string) => { throw new Error(`NEXT_REDIRECT:${url}`); },
+}));
+
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+// Retry uses App Router refresh; this isolated component test has no mounted Next router.
+vi.mock("next/navigation", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/navigation")>()),
+  useRouter: () => ({ refresh: vi.fn() }),
+}));
 
 vi.mock("@/components/maps/MapProvider", () => ({
   MapsShell: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -32,6 +47,8 @@ vi.mock("@/components/maps/ChatMap", async () => {
   };
 });
 vi.mock("@/components/modals/schedule-viewing-modal", () => ({ ScheduleViewingModal: () => null }));
+// The workspace header shows the sign-in status; it needs a Supabase client, which these tests do not use.
+vi.mock("@/components/auth/auth-status", () => ({ AuthStatus: () => null }));
 
 import { RentalBrowseView } from "@/components/rentals/rental-browse-view";
 import { RentalDetailsPanel } from "@/components/rentals/rental-details-panel";
@@ -151,6 +168,19 @@ afterEach(async () => {
 });
 
 describe("/rentals Details panel — desktop", () => {
+  it("clears the old Details selection when rental URL filters change", async () => {
+    await mount();
+    await click(detailsButton(MAPPED_SLUG));
+    expect(byId("rental-details-panel")).not.toBeNull();
+
+    // Next App Router navigation can update props without remounting the component tree.
+    // The old rental selection must not survive a new catalogue/filter context.
+    act(() => {
+      root.render(<RentalBrowseView {...viewProps(NINE)} neighborhood="Laureles" />);
+    });
+    expect(byId("rental-details-panel")).toBeNull();
+  });
+
   it("fixtures are the nine approved ads: seven mapped, two not, four approved photos each", () => {
     expect(NINE).toHaveLength(9);
     expect(NINE.filter((r) => r.latitude != null)).toHaveLength(MAPPED);
@@ -195,12 +225,13 @@ describe("/rentals Details panel — desktop", () => {
     expect(source.href).toContain("fincaraiz.com.co");
   });
 
-  it("keeps unknown values unknown and never offers a viewing for an external ad", async () => {
+  it("keeps unknown values unknown and follows the database flag for an external ad", async () => {
     await mount();
     await click(detailsButton(MAPPED_SLUG)); // index 0: bedrooms not stated
     expect(byId("rental-details-bedrooms")?.textContent).toBe("Bedrooms unknown");
     expect(byId("rental-details-bedrooms")?.textContent).not.toMatch(/studio/i);
-    expect(byId("rental-details-external-note")?.textContent).toMatch(/cannot schedule a viewing/);
+    expect(byId("rental-details-external-note")?.textContent).toMatch(/not a confirmed viewing/);
+    // The database says this ad is not requestable, so there is no CTA: the flag decides, not `external`.
     expect(byId("rental-details-schedule-cta")).toBeNull();
     expect(byId("rental-details-availability")?.textContent).toMatch(/unverified/i);
     expect(q('[data-testid="rental-details-panel"] a[href*="fincaraiz.com.co"]')?.textContent).toContain(
@@ -243,7 +274,7 @@ describe("/rentals Details panel — desktop", () => {
     await mount();
     const mapBefore = byId("chat-map-stub");
     const cardsBefore = container.querySelectorAll('[data-testid^="rental-card-"][data-result-kind="rental"]').length;
-    const filters = byId("rentals-browse")?.querySelectorAll("a[aria-pressed]").length;
+    const filters = byId("rentals-browse")?.querySelectorAll("a[aria-current]").length;
     await click(detailsButton(MAPPED_SLUG));
     expect(byId("browse-map-panel")?.querySelector("[inert]")).not.toBeNull(); // map is inert under the panel
     expect(byId("browse-map-panel")?.className).toMatch(/\bz-20\b/); // above the sticky filter header
@@ -254,7 +285,7 @@ describe("/rentals Details panel — desktop", () => {
     expect(byId("browse-map-panel")?.className).not.toMatch(/\bz-20\b/); // restaurants/map-only layout unchanged
     expect(container.querySelectorAll('[data-testid^="rental-card-"][data-result-kind="rental"]').length).toBe(cardsBefore);
     expect(cardsBefore).toBe(9);
-    expect(byId("rentals-browse")?.querySelectorAll("a[aria-pressed]").length).toBe(filters);
+    expect(byId("rentals-browse")?.querySelectorAll("a[aria-current]").length).toBe(filters);
   });
 
   it("Escape closes the panel and returns focus to the Details button that opened it", async () => {
@@ -361,6 +392,12 @@ describe("RentalDetailsPanel — states", () => {
     });
   }
 
+  it("exposes the exact listing id on the panel for card/pin/Details parity", async () => {
+    await renderPanel(baseRentalOf());
+    const panel = container.querySelector('[data-testid="rental-details-panel"]');
+    expect(panel?.getAttribute("data-listing-id")).toBe(baseRentalOf().id);
+  });
+
   it("shows a placeholder, not a broken image, when there are no photos", async () => {
     await renderPanel({ ...baseRentalOf(), image: "", images: [] });
     expect(byId("rental-details-no-photos")).not.toBeNull();
@@ -383,7 +420,7 @@ describe("RentalDetailsPanel — states", () => {
     expect(byId("rental-details-photo-1-unavailable")?.textContent).toContain("Photo unavailable");
   });
 
-  it("offers Schedule viewing only for a server-approved listing, and never for an external ad", async () => {
+  it("offers one CTA decided by the database flag, labeled a follow-up for an external ad", async () => {
     const onSchedule = vi.fn();
     const owned: Rental = {
       ...baseRentalOf(),
@@ -400,13 +437,45 @@ describe("RentalDetailsPanel — states", () => {
 
     await renderPanel({ ...owned, can_schedule_viewing: false }, onSchedule);
     expect(byId("rental-details-schedule-cta")).toBeNull();
-    await renderPanel({ ...baseRentalOf(), can_schedule_viewing: true }, onSchedule); // external ad, even if mis-flagged
+    await renderPanel({ ...baseRentalOf(), can_schedule_viewing: true }, onSchedule); // external, DB-requestable
     expect(byId("rental-details-external-note")).not.toBeNull();
-    expect(byId("rental-details-schedule-cta")).toBeNull();
+    expect(byId("rental-details-schedule-cta")?.textContent).toContain("Request MDE follow-up");
+    expect(byId("rental-details-schedule-cta")?.textContent).not.toContain("Schedule viewing");
   });
 
-  it("states a missing price as pending instead of showing zero", async () => {
+  it("identifies USD explicitly beside the price, but does not duplicate COP", async () => {
+    await renderPanel({ ...baseRentalOf(), currency: "USD", price_monthly: 1900 });
+    expect(byId("rental-details-price")?.textContent).toBe("$1,900/mo");
+    expect(byId("rental-details-currency")?.textContent).toBe("USD");
+    await renderPanel(baseRentalOf());
+    expect(byId("rental-details-price")?.textContent).toContain("COP ");
+    expect(byId("rental-details-currency")).toBeNull();
+  });
+
+  it("identifies USD on a nightly-only price too, and leaves COP nightly unbadged", async () => {
+    // NINE are source-linked ads, which never show a nightly price. Use a managed listing.
+    const managed = { ...baseRentalOf(), tags: [] as string[] };
+    await renderPanel({
+      ...managed,
+      currency: "USD",
+      price_monthly: undefined,
+      nightly_price: 78,
+    });
+    expect(byId("rental-details-price")?.textContent).toBe("~$2,340/mo");
+    expect(byId("rental-details-currency")?.textContent).toBe("USD");
+
+    await renderPanel({
+      ...managed,
+      currency: "COP",
+      price_monthly: undefined,
+      nightly_price: 80_000,
+    });
+    expect(byId("rental-details-price")?.textContent).toBe("~COP 2,400,000/mo");
+    expect(byId("rental-details-currency")).toBeNull();
+  });
+
+  it("states a missing price as not provided instead of showing zero", async () => {
     await renderPanel({ ...baseRentalOf(), price_monthly: undefined });
-    expect(byId("rental-details-price")?.textContent).toBe("Price data pending");
+    expect(byId("rental-details-price")?.textContent).toBe("Price not provided");
   });
 });

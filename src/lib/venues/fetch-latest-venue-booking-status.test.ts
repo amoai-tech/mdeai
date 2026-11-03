@@ -9,9 +9,11 @@ function mockSupabase(row: { id: string; status: string; created_at: string } | 
   const order = vi.fn(() => ({ limit }));
   const eqKind = vi.fn(() => ({ order }));
   const eqPlace = vi.fn(() => ({ eq: eqKind }));
-  const select = vi.fn(() => ({ eq: eqPlace }));
+  const eqUser = vi.fn(() => ({ eq: eqPlace }));
+  const select = vi.fn(() => ({ eq: eqUser }));
   const from = vi.fn(() => ({ select }));
-  return { from, eqPlace, eqKind } as unknown as SupabaseClient<Database> & {
+  return { from, eqUser, eqPlace, eqKind } as unknown as SupabaseClient<Database> & {
+    eqUser: ReturnType<typeof vi.fn>;
     eqPlace: ReturnType<typeof vi.fn>;
     eqKind: ReturnType<typeof vi.fn>;
   };
@@ -26,6 +28,7 @@ describe("fetchLatestVenueBookingStatus", () => {
     });
 
     const result = await fetchLatestVenueBookingStatus(supabase, {
+      userId: "customer-1",
       placeId: "ChIJven021proof01",
       venueKind: "nightclub",
     });
@@ -40,12 +43,29 @@ describe("fetchLatestVenueBookingStatus", () => {
       "place_id",
       "ChIJven021proof01",
     );
+    expect(supabase.eqUser).toHaveBeenCalledWith("user_id", "customer-1");
     expect(supabase.eqKind).toHaveBeenCalledWith("venue_kind", "nightclub");
+  });
+
+  it("uses the canonical restaurant UUID to read pending status without Google ID", async () => {
+    const supabase = mockSupabase({
+      id: "uuid-only-receipt", status: "pending", created_at: "2026-10-28T00:00:00Z",
+    });
+    const result = await fetchLatestVenueBookingStatus(supabase, {
+      userId: "customer-1",
+      restaurantId: "a1b2c3d4-e5f6-4789-abcd-100000000005",
+      venueKind: "restaurant",
+    });
+    expect(result).toMatchObject({ ok: true, data: { requestId: "uuid-only-receipt", status: "pending" } });
+    expect(supabase.eqPlace).toHaveBeenCalledWith("restaurant_id", "a1b2c3d4-e5f6-4789-abcd-100000000005");
+    expect(supabase.eqUser).toHaveBeenCalledWith("user_id", "customer-1");
+    expect(supabase.eqKind).toHaveBeenCalledWith("venue_kind", "restaurant");
   });
 
   it("returns null when no row", async () => {
     const supabase = mockSupabase(null);
     const result = await fetchLatestVenueBookingStatus(supabase, {
+      userId: "customer-1",
       placeId: "ChIJabcdefghijklmnop",
       venueKind: "cafe",
     });

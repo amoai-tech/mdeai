@@ -32,7 +32,8 @@ test.describe(`${SCREEN_ID} rental card polish`, () => {
       expect(await cards.count()).toBeGreaterThanOrEqual(3);
 
       await expect(page.locator('[data-testid="rental-schedule-cta"]').first()).toBeVisible();
-      await expect(page.locator('[data-testid="rental-save-cta"]').first()).toBeDisabled();
+      // SAN-1075: the disabled Save control was removed rather than enlarged.
+      await expect(page.locator('[data-testid="rental-save-cta"]')).toHaveCount(0);
 
       await captureScreenEvidence(page, SCREEN_ID, "desktop-rental-cards.png");
 

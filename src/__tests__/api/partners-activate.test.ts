@@ -50,6 +50,13 @@ function makeMockDb(state: {
     from(table: string) {
       if (table === "partners") {
         return {
+          update: (patch: Partial<PartnerRow>) => ({
+            eq: async (column: string, value: string) => {
+              const row = partners.find((partner) => column === "id" && partner.id === value);
+              if (row) Object.assign(row, patch);
+              return { error: row ? null : { message: "Partner not found" } };
+            },
+          }),
           select: () => ({
             eq: (col: string, val: string) => ({
               eq: (_col2: string, val2: string) => ({
@@ -60,7 +67,7 @@ function makeMockDb(state: {
                   );
                   return {
                     data: row
-                      ? { id: row.id, type: row.type, status: row.status }
+                      ? { id: row.id, type: row.type, status: row.status, settings: row.settings }
                       : null,
                     error: null,
                   };
@@ -162,6 +169,14 @@ function makeMockDb(state: {
 
       throw new Error(`Unexpected table ${table}`);
     },
+    rpc: async (name: string, args: { p_patch: Record<string, string>; p_partner_id: string }) => {
+      if (name !== "partner_profile_patch") throw new Error("Unexpected RPC");
+      const row = partners.find((p) => p.id === args.p_partner_id);
+      const member = members.find((m) => m.partner_id === args.p_partner_id && m.profile_id === PROFILE_ID);
+      if (!row || !member) return { data: null, error: { code: "42501", message: "No membership" } };
+      row.settings = { ...row.settings, ...args.p_patch };
+      return { data: { partnerId: row.id, settings: row.settings }, error: null };
+    },
     _state: { partners, members, drafts },
   };
 
@@ -249,7 +264,7 @@ describe("sanitizePartnerSettings", () => {
 describe("activatePartner", () => {
   it("creates partner and owner member", async () => {
     const db = makeMockDb({});
-    const result = await activatePartner(db, PROFILE_ID, { type: "host" });
+    const result = await activatePartner(db, PROFILE_ID, { type: "host" }, db);
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -276,7 +291,7 @@ describe("activatePartner", () => {
       ],
     });
 
-    const result = await activatePartner(db, PROFILE_ID, { type: "host" });
+    const result = await activatePartner(db, PROFILE_ID, { type: "host" }, db);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.data.created).toBe(false);
@@ -289,7 +304,7 @@ describe("activatePartner", () => {
     const result = await activatePartner(db, PROFILE_ID, {
       type: "host",
       draftId: DRAFT_ID,
-    });
+    }, db);
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -314,7 +329,7 @@ describe("activatePartner", () => {
     const result = await activatePartner(db, PROFILE_ID, {
       type: "host",
       draftId: DRAFT_ID,
-    });
+    }, db);
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -380,12 +395,68 @@ describe("activatePartner", () => {
       _state: { partners: PartnerRow[]; members: MemberRow[]; drafts: DraftRow[] };
     };
 
-    const result = await activatePartner(db, PROFILE_ID, { type: "host" });
+    const result = await activatePartner(db, PROFILE_ID, { type: "host" }, db);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.data.created).toBe(false);
     expect(result.data.partnerId).toBe(PARTNER_ID);
     expect(partners).toHaveLength(1);
+  });
+
+  it("retries with sanitized settings and retains unrelated existing values", async () => {
+    const db = makeMockDb({
+      partners: [{
+        id: PARTNER_ID,
+        profile_id: PROFILE_ID,
+        type: "host",
+        status: "draft",
+        completion_score: 0,
+        settings: { website: "https://existing.example.com", customField: "keep" },
+      }],
+    });
+
+    const result = await activatePartner(db, PROFILE_ID, {
+      type: "host",
+      settings: {
+        description: " Edited description ",
+        website: "javascript:alert(1)",
+        status: "active",
+        category: 123,
+      },
+    }, db);
+
+    expect(result.ok).toBe(true);
+    expect(db._state.partners).toHaveLength(1);
+    expect(db._state.partners[0]?.settings).toEqual({
+      website: "https://existing.example.com",
+      customField: "keep",
+      description: "Edited description",
+    });
+  });
+
+  it("atomically patches independent reviewed fields on two existing-partner retries", async () => {
+    const db = makeMockDb({
+      partners: [{
+        id: PARTNER_ID,
+        profile_id: PROFILE_ID,
+        type: "host",
+        status: "draft",
+        completion_score: 0,
+        settings: { customField: "preserve" },
+      }],
+    });
+    const [first, second] = await Promise.all([
+      activatePartner(db, PROFILE_ID, { type: "host", settings: { description: "Edited description" } }, db),
+      activatePartner(db, PROFILE_ID, { type: "host", settings: { neighborhood: "Laureles" } }, db),
+    ]);
+    expect(first.ok).toBe(true);
+    expect(second.ok).toBe(true);
+    expect(db._state.partners).toHaveLength(1);
+    expect(db._state.partners[0]?.settings).toEqual({
+      customField: "preserve",
+      description: "Edited description",
+      neighborhood: "Laureles",
+    });
   });
 
   it("links draft when draftId provided", async () => {
@@ -404,7 +475,7 @@ describe("activatePartner", () => {
     const result = await activatePartner(db, PROFILE_ID, {
       type: "host",
       draftId: DRAFT_ID,
-    });
+    }, db);
 
     expect(result.ok).toBe(true);
     expect(db._state.drafts[0]?.partner_id).toBe(PARTNER_ID);

@@ -1,7 +1,11 @@
-import { GEMINI_FLASH_MODEL_ID } from "@/lib/ai-model-ids";
+import {
+  activeModelIdFromEnv,
+  providerForModelId,
+} from "@/lib/ai-model-ids";
 import { calculateModelCost } from "./model-cost";
+import { LoadAPIKeyError } from "@ai-sdk/provider";
 import type { ToolSpanSummary } from "./tool-audit-context";
-import { getTokenUsage, type TokenUsage } from "./tool-audit-context";
+import { getTokenUsage, getMalformedRetryDecisions, type MalformedRetryDecision, type TokenUsage } from "./tool-audit-context";
 
 /** Schema version stamped on every `ai_runs.metadata` telemetry payload (AGT-00C). */
 export const TELEMETRY_SCHEMA_VERSION = "agt-00c-v1";
@@ -38,7 +42,7 @@ export interface TurnTelemetryPayload extends ToolSpanSummary {
   input_tokens: number;
   output_tokens: number;
   total_tokens: number;
-  /** COST-001 — model provider id (currently always "google"/Gemini). */
+  /** COST-001 — model provider id ("google" for Gemini, "nvidia"). */
   provider: string;
   /** COST-001 — estimated USD cost of this turn from token counts × rate. */
   estimated_cost_usd: number;
@@ -48,6 +52,15 @@ export interface TurnTelemetryPayload extends ToolSpanSummary {
   error_type?: AgentErrorType;
   /** Trimmed human-readable cause; never the full stack. */
   error_message?: string;
+  /** Request-context decisions correlated to this final turn (not a separate insert). */
+  gemini_malformed_retry?: {
+    decisions: MalformedRetryDecision[];
+    /** Transport-level final status, not proof the model answer was correct. */
+    final_turn_status: TurnStatus;
+  };
+  /** Server-derived provenance; no user-provided environment or SHA. */
+  server_environment: string;
+  deployment_sha: string;
 }
 
 /** Normalize an unknown thrown value into a short, log-safe message. */
@@ -72,21 +85,36 @@ export function classifyAgentError(err: unknown): AgentErrorType {
   const status = (err as { status?: number; statusCode?: number } | null)?.status
     ?? (err as { statusCode?: number } | null)?.statusCode;
 
-  if (name === "aborterror" || msg.includes("abort") || msg.includes("cancel"))
-    return "client_abort";
+  // Timeout first: AbortSignal.timeout rejects with "The operation was aborted
+  // due to timeout", which the generic abort branch would otherwise mislabel as
+  // the user leaving the page.
   if (name === "timeouterror" || msg.includes("timeout") || msg.includes("timed out"))
     return "timeout";
+  if (name === "aborterror" || msg.includes("abort") || msg.includes("cancel"))
+    return "client_abort";
   if (status === 429 || msg.includes("rate limit") || msg.includes("too many requests") || msg.includes("resource_exhausted"))
     return "rate_limit";
   if (status === 401 || status === 403 || msg.includes("unauthorized") || msg.includes("permission") || msg.includes("forbidden"))
     return "auth";
+  // A missing API key is server configuration/auth, never a model-generation
+  // incident; do not attribute deployment mistakes to Gemini reliability.
+  if (LoadAPIKeyError.isInstance(err)) return "auth";
+  // SAN-1396: provider-side generation faults (unparsable function call,
+  // broken turn order) were landing in `unknown`.
+  // Real AI SDK errors carry their identity in `name` (AI_APICallError,
+  // AI_LoadAPIKeyError); the message prefix only appears once logged as text.
+  if (
+    msg.includes("malformed_function_call") ||
+    name === "ai_apicallerror" || msg.includes("ai_apicallerror")
+  )
+    return "model_failure";
   if (msg.includes("tool") && (msg.includes("fail") || msg.includes("error")))
     return "tool_failure";
   if (msg.includes("zod") || msg.includes("invalid") || msg.includes("validation") || msg.includes("schema"))
     return "validation";
   if (msg.includes("supabase") || msg.includes("postgres") || msg.includes("rpc") || msg.includes("relation") || msg.includes("database"))
     return "database";
-  if (msg.includes("gemini") || msg.includes("model") || msg.includes("generativelanguage") || (typeof status === "number" && status >= 500))
+  if (msg.includes("gemini") || msg.includes("model") || msg.includes("generativelanguage") || msg.includes("nvidia") || msg.includes("integrate.api.nvidia.com") || msg.includes("nvcf") || (typeof status === "number" && status >= 500))
     return "model_failure";
   return "unknown";
 }
@@ -97,11 +125,14 @@ export function resolveAgentModelName(
   // This fallback is a *label*, not only a default rate: when the agent's model
   // is uninspectable the turn is recorded under this name and
   // `calculateModelCost` prices it by that name. It must therefore name the
-  // model MDE actually runs, or the identity is wrong for exactly the turns we
-  // cannot attribute any other way.
-  fallback = GEMINI_FLASH_MODEL_ID,
+  // model MDE actually runs (MDE_AI_PROVIDER), or the identity is wrong for
+  // exactly the turns we cannot attribute any other way.
+  fallback = activeModelIdFromEnv(),
 ): string {
   const model = (agent as { model?: unknown })?.model;
+  // Mastra accepts a router string as well as a model object. Record the string
+  // rather than attributing an NVIDIA turn to Gemini.
+  if (typeof model === "string" && model.trim()) return model.trim();
   if (
     model &&
     typeof model === "object" &&
@@ -167,6 +198,7 @@ export function buildTurnTelemetryMetadata(opts: {
       : getTokenUsage(toTelemetryContext(opts.requestContext)),
   );
   const modelName = resolveAgentModelName(opts.agent);
+  const retryDecisions = getMalformedRetryDecisions(toTelemetryContext(opts.requestContext));
   const cost = calculateModelCost({
     modelName,
     inputTokens: tokens.input_tokens,
@@ -174,6 +206,11 @@ export function buildTurnTelemetryMetadata(opts: {
   });
   return {
     telemetry_version: TELEMETRY_SCHEMA_VERSION,
+    server_environment: process.env.VERCEL_ENV ?? "local",
+    deployment_sha: process.env.VERCEL_GIT_COMMIT_SHA ?? "local",
+    ...(retryDecisions.length > 0
+      ? { gemini_malformed_retry: { decisions: retryDecisions, final_turn_status: opts.status } }
+      : {}),
     agent_map_key: opts.agentMapKey,
     model_name: modelName,
     turn_status: opts.status,
@@ -181,7 +218,9 @@ export function buildTurnTelemetryMetadata(opts: {
     thread_id: opts.threadId,
     run_id: opts.runId,
     integration: "copilotkit-pattern-1",
-    provider: "google",
+    // Existing dashboards filter on "google"; keep that label for Gemini and add
+    // "nvidia" only when that provider actually served the turn.
+    provider: providerForModelId(modelName) === "nvidia" ? "nvidia" : "google",
     estimated_cost_usd: cost.estimatedCostUsd,
     ...(cost.rateFallback ? { cost_rate_fallback: true } : {}),
     ...opts.toolSummary,

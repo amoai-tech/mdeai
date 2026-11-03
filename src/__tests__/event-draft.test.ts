@@ -21,6 +21,28 @@ describe("EventDraftStateSchema", () => {
     ).toThrow();
   });
 
+  it("publish readiness accepts ISO local and offset datetimes but rejects invalid dates", () => {
+    const valid = {
+      ...EMPTY_EVENT_DRAFT,
+      title: "Salsa Night",
+      neighborhood: "Laureles",
+      venue: "Son Havana",
+      capacity: 60,
+      priceMinCop: 40000,
+    };
+    for (const dateIso of [
+      "2026-12-15T20:00",
+      "2026-12-15T20:00:00",
+      "2026-12-15T20:00:00-05:00",
+      "2026-12-16T01:00:00Z",
+    ]) {
+      expect(isDraftReadyForPublish({ ...valid, dateIso })).toBe(true);
+    }
+    for (const dateIso of ["not-a-date", "2026-99-99T20:00:00-05:00", "2026-02-30T20:00"]) {
+      expect(isDraftReadyForPublish({ ...valid, dateIso })).toBe(false);
+    }
+  });
+
   it("mergeEventDraft applies patches", () => {
     const next = mergeEventDraft(EMPTY_EVENT_DRAFT, {
       title: "Salsa Night",

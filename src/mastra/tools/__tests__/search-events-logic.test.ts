@@ -18,7 +18,22 @@ import {
   extractNeighborhood,
   dateWindow,
   BOGOTA_OFFSET_MS,
+  searchEventsTool,
 } from '../search-events.js';
+
+describe('Mastra event-search tool input date contract', () => {
+  it('leaves missing dateWindow unset for natural-language inference', async () => {
+    const result = await searchEventsTool.inputSchema!['~standard'].validate({ queryText: 'salsa this weekend' });
+    expect('value' in result).toBe(true);
+    if ('value' in result) expect(result.value.dateWindow).toBeUndefined();
+  });
+
+  it('preserves an explicitly selected show-all date window', async () => {
+    const result = await searchEventsTool.inputSchema!['~standard'].validate({ queryText: 'salsa tonight', dateWindow: 'any' });
+    expect('value' in result).toBe(true);
+    if ('value' in result) expect(result.value.dateWindow).toBe('any');
+  });
+});
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

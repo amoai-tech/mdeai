@@ -12,7 +12,7 @@ const eventSchema = z.object({
   venue: z.string(),
   neighborhood: z.string(),
   startsAt: z.string(),
-  pricePerTicket: z.number(),
+  pricePerTicket: z.number().nullable(),
   currency: z.enum(['USD', 'COP']),
   imageUrl: z.string(),
 });
@@ -67,7 +67,11 @@ const formatStep = createStep({
       id: e.id,
       headline: e.title,
       subline: `${e.venue} · ${e.neighborhood} · ${e.category}`,
-      priceLabel: `From ${formatEventCardPrice(e.pricePerTicket, e.currency)}`,
+      priceLabel: e.pricePerTicket === null
+        ? "Price TBD"
+        : e.pricePerTicket === 0
+          ? "Free"
+          : `From ${formatEventCardPrice(e.pricePerTicket, e.currency)}`,
       imageUrl: e.imageUrl,
     }));
     return { cards, total: inputData.total };

@@ -78,14 +78,15 @@ export function useEventVenueBookingFastPath() {
   );
 
   const handleUserMessage = useCallback(
-    async (text: string): Promise<boolean> => {
+    async (text: string, submissionId?: string): Promise<boolean> => {
       const trimmed = text.trim();
       if (!trimmed || !canFastPathEventVenueBooking(trimmed)) return false;
 
       const params = buildEventVenueBookingSearchParams(trimmed);
       if (!params) return false;
 
-      if (busyRef.current) return true;
+      // Let the Concierge own the second turn instead of silently discarding it.
+      if (busyRef.current) return false;
       busyRef.current = true;
       try {
         setEventToolResult(null);
@@ -118,6 +119,7 @@ export function useEventVenueBookingFastPath() {
         showExchange(
           trimmed,
           eventVenueBookingAssistantSummary(cards.length, intent.partySize),
+          submissionId,
         );
         return true;
       } catch (err) {
@@ -126,6 +128,7 @@ export function useEventVenueBookingFastPath() {
         showExchange(
           trimmed,
           "Could not load venues right now — try again in a moment or pick a restaurant from Food & cafés.",
+          submissionId,
         );
         return true;
       } finally {

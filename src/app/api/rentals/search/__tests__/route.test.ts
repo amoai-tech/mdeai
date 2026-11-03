@@ -3,6 +3,7 @@
  * marketplace (HTTP 200 + results: []). The chat fast path keys off this status.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { buildRentalSearchParams } from "@/lib/rental-query-parser";
 import { RentalSearchUnavailableError } from "@/mastra/lib/rental-search-unavailable";
 
 const searchRentals = vi.fn();
@@ -57,6 +58,71 @@ describe("POST /api/rentals/search", () => {
       expect.objectContaining({ maxPricePerNight: 80 }),
       expect.objectContaining({ client: expect.anything() }),
     );
+  });
+
+  it("forwards a precise COP monthly ceiling to existing search", async () => {
+    searchRentals.mockResolvedValue({ results: [], total: 0, source: "supabase" });
+    const res = await POST(post({
+      neighborhood: "Laureles", minBedrooms: 2,
+      maxPriceMonthly: 3_500_000, budgetCurrency: "COP", stayType: "monthly",
+    }));
+    expect(res.status).toBe(200);
+    expect(searchRentals).toHaveBeenCalledWith(
+      expect.objectContaining({ maxPriceMonthly: 3_500_000, budgetCurrency: "COP" }),
+      expect.objectContaining({ client: expect.anything() }),
+    );
+  });
+
+  it("forwards an explicit exact bedroom ceiling to canonical search", async () => {
+    searchRentals.mockResolvedValue({ results: [], total: 0, source: "supabase" });
+    const res = await POST(post({ neighborhood: "Laureles", minBedrooms: 2, maxBedrooms: 2 }));
+    expect(res.status).toBe(200);
+    expect(searchRentals).toHaveBeenCalledWith(
+      expect.objectContaining({ minBedrooms: 2, maxBedrooms: 2 }),
+      expect.objectContaining({ client: expect.anything() }),
+    );
+  });
+
+  it("rejects contradictory bounds without querying Supabase", async () => {
+    const res = await POST(post({ minBedrooms: 3, maxBedrooms: 2 }));
+    expect(res.status).toBe(400);
+    expect(searchRentals).not.toHaveBeenCalled();
+  });
+
+  it("forwards the monthly cap parsed from the renter's sentence", async () => {
+    searchRentals.mockResolvedValue({ results: [], total: 0, source: "supabase" });
+    const params = buildRentalSearchParams(
+      "Find a 2-bedroom apartment in Laureles under COP 3 million.",
+      {},
+    );
+    expect(params).toMatchObject({
+      neighborhood: "Laureles",
+      minBedrooms: 2,
+      maxPriceMonthly: 3_000_000,
+      budgetCurrency: "COP",
+      stayType: "monthly",
+    });
+    const res = await POST(post(params));
+    expect(res.status).toBe(200);
+    expect(searchRentals).toHaveBeenCalledWith(
+      expect.objectContaining({
+        neighborhood: "Laureles",
+        minBedrooms: 2,
+        maxPriceMonthly: 3_000_000,
+        budgetCurrency: "COP",
+        stayType: "monthly",
+      }),
+      expect.objectContaining({ client: expect.anything() }),
+    );
+  });
+
+  it("rejects a malformed currency at the HTTP boundary without searching", async () => {
+    const res = await POST(post({
+      maxPriceMonthly: 3_500_000,
+      budgetCurrency: "COP) or price_monthly.lte.999999999",
+    }));
+    expect(res.status).toBe(400);
+    expect(searchRentals).not.toHaveBeenCalled();
   });
 
   it("returns 503 rental_search_unavailable when the database cannot be read", async () => {

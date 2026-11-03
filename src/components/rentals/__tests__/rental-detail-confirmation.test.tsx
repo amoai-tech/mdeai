@@ -10,6 +10,14 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act } from "react";
+vi.mock("@/components/ui/calendar", () => ({
+  Calendar: ({ onSelect }: { onSelect: (date: Date | undefined) => void }) => (
+    <button type="button" data-testid="viewing-date-mock"
+      onClick={() => onSelect(new Date('2099-01-02T12:00:00'))}>Select date</button>
+  ),
+}));
+
+import { renderToString } from "react-dom/server";
 import { createRoot, type Root } from "react-dom/client";
 
 vi.mock("@/lib/leads/submit-schedule-viewing", () => ({
@@ -45,6 +53,8 @@ const detail = mapApartmentRowToDetail({
   moderation_status: "approved",
   listing_workflow_status: "published",
   landlord_id: "landlord-1",
+  // SAN-1502: the database's computed requestability decides the CTA.
+  rental_can_request_viewing: true,
   // A known move-in date, as the viewing RPC requires (SAN-486); without one the page offers no viewing.
   available_from: "2000-01-01",
 });
@@ -82,8 +92,9 @@ async function requestViewing() {
     /request viewing/i.test(b.textContent ?? ""),
   );
   expect(open).toBeTruthy();
+  if (!open) throw new Error("Request viewing button is missing");
   await act(async () => {
-    open!.click();
+    open.click();
   });
   const modal = document.querySelector('[data-testid="schedule-viewing-modal"]');
   expect(modal).toBeTruthy();
@@ -91,13 +102,49 @@ async function requestViewing() {
   await act(() => {
     setNativeValue(document.querySelector('input[name="name"]') as HTMLInputElement, "Camila Test");
     setNativeValue(document.querySelector('input[name="email"]') as HTMLInputElement, "camila@example.invalid");
-    setNativeValue(document.querySelector('input[name="preferredAt"]') as HTMLInputElement, "2099-01-02T15:00");
+    (document.querySelector('[data-testid="viewing-date-trigger"]') as HTMLButtonElement).click();
+    setNativeValue(document.querySelector('input[name="viewingTime"]') as HTMLInputElement, "15:00");
   });
-  await act(async () => {
-    (document.querySelector("form") as HTMLFormElement).requestSubmit();
+  await act(() => {
+    (document.querySelector('[data-testid="viewing-date-mock"]') as HTMLButtonElement).click();
+  });
+  await act(() => {
+    (document.querySelector("form") as HTMLFormElement).dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    return Promise.resolve();
+  });
+  await act(() => {
+    (document.querySelector("form") as HTMLFormElement).dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    return Promise.resolve();
   });
   await act(() => Promise.resolve());
 }
+
+describe("rental detail page — first-interaction hydration safety", () => {
+  it("renders request controls disabled in server HTML until event handlers are attached", () => {
+    const html = renderToString(<RentalDetailView detail={detail} />);
+    // Parse SSR button markup using a fixed regex. Building a RegExp from
+    // interpolated strings is unnecessary in a regression test and triggers
+    // Codacy's dynamic-regex/XSS rules.
+    const buttons = [...html.matchAll(/<button\b[^>]*>/g)].map(([markup]) => markup);
+    for (const testId of ["rental-detail-request-cta", "rental-detail-request-cta-mobile"]) {
+      const markup = buttons.find((button) => button.includes('data-testid="' + testId + '"'));
+      expect(markup, testId + ' should be present in server HTML').toBeDefined();
+      expect(markup).toContain("disabled");
+    }
+    // SAN-479 removed the "Ask a question" button (it opened the viewing form, which is misleading).
+    expect(buttons.some((button) => button.includes('data-testid="rental-detail-ask-cta"'))).toBe(false);
+  });
+
+  it("enables the viewing button when hydrated, without any business approval", async () => {
+    await act(async () => {
+      root.render(<RentalDetailView detail={detail} />);
+    });
+    const cta = document.querySelector('[data-testid="rental-detail-request-cta-mobile"]') as HTMLButtonElement;
+    expect(cta.disabled).toBe(false);
+    await act(async () => { cta.click(); });
+    expect(document.querySelector('[data-testid="schedule-viewing-modal"]')).toBeTruthy();
+  });
+});
 
 describe("rental detail page — viewing confirmation", () => {
   it("shows 'Viewing request received' after a saved request, and closes the form", async () => {
@@ -111,10 +158,11 @@ describe("rental detail page — viewing confirmation", () => {
     expect(document.querySelector('[data-testid="schedule-viewing-modal"]')).toBeNull();
     const banner = document.querySelector('[data-testid="lead-confirmation-card"]');
     expect(banner).toBeTruthy();
-    expect(banner!.textContent).toContain("Viewing request received");
-    expect(banner!.textContent).toContain("awaiting host confirmation");
-    expect(banner!.textContent).toContain("Envigado Modern Tower");
-    expect(banner!.getAttribute("data-showing-id")).toBe("66666666-7777-8888-9999-000000000000");
+    if (!(banner instanceof HTMLElement)) throw new Error("Lead confirmation banner is missing");
+    expect(banner.textContent).toContain("Viewing request received");
+    expect(banner.textContent).toContain("awaiting host confirmation");
+    expect(banner.textContent).toContain("Envigado Modern Tower");
+    expect(banner.getAttribute("data-showing-id")).toBe("66666666-7777-8888-9999-000000000000");
   });
 
   const saved = {
@@ -150,7 +198,7 @@ describe("rental detail page — viewing confirmation", () => {
   });
 
   it("shows NO confirmation when the request failed, and keeps the form open", async () => {
-    vi.mocked(submitScheduleViewing).mockRejectedValue(new Error("Lead capture failed"));
+    vi.mocked(submitScheduleViewing).mockRejectedValue(new Error("We couldn't send your viewing request. Please try again."));
     await requestViewing();
 
     expect(document.querySelector('[data-testid="lead-confirmation-card"]')).toBeNull();

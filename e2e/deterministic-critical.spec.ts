@@ -1,10 +1,12 @@
 import { test, expect } from "@playwright/test";
+
 import {
   gotoMarketingHome,
   submitHomeHeroQuery,
 } from "./helpers/maps-layout";
 import {
   RENTAL_QUERY,
+  EVENT_QUERY,
   RESTAURANT_QUERY,
   chooseRestaurantFilter,
   gotoDeterministicChat,
@@ -17,6 +19,25 @@ import {
 test.describe("SAN-1341 deterministic critical journeys", { tag: ["@critical", "@deterministic"] }, () => {
   test.beforeEach(async ({ page }) => {
     await mockFastPaths(page);
+  });
+
+  test("shared fast-path mocks intercept the nav rail thread fetch without Supabase", async ({ page }) => {
+    // A cold Next.js compile can take longer than the default 30s network wait.
+    // Keep this test-specific budget above the 45s hydration timeout.
+    test.setTimeout(90_000);
+    // Prove the fixture itself supplied this response. A 200 from an external
+    // service (or a quiet catch in useNavThreads) must not satisfy this test.
+    const threadResponse = page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === "/api/threads" &&
+        response.request().method() === "GET",
+      { timeout: 60_000 },
+    );
+    await gotoDeterministicChat(page);
+    const response = await threadResponse;
+    expect(response.status()).toBe(200);
+    expect(response.headers()["x-mde-e2e-fixture"]).toBe("threads");
+    expect(await response.json()).toEqual({ threads: [] });
   });
 
   test("Home → Chat sends one restaurant query and renders mocked results", async ({
@@ -52,6 +73,32 @@ test.describe("SAN-1341 deterministic critical journeys", { tag: ["@critical", "
     await expect(page.getByTestId("restaurant-fast-path-panel")).toBeVisible();
   });
 
+  test("empty event search does not crash without a CopilotKit provider", async ({ page }) => {
+    const uncaught: string[] = [];
+    page.on("pageerror", (error) => uncaught.push(error.message));
+    let emptySearchRequests = 0;
+    // Registered after mockFastPaths: Playwright uses last-registered route first.
+    await page.route("**/api/events/search", async (route) => {
+      emptySearchRequests += 1;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ results: [], total: 0, source: "supabase" }),
+      });
+    });
+
+    await gotoDeterministicChat(page);
+    const response = waitForPost(page, "/api/events/search");
+    await typeAndSubmit(page, EVENT_QUERY);
+    expect((await response).ok()).toBe(true);
+    await expect(page.getByTestId("events-empty")).toBeVisible();
+    await expect(page.getByTestId("event-card")).toHaveCount(0);
+    await expect(page.getByTestId("events-empty-suggest-weekend")).toBeDisabled();
+    // This regression proves provider-safe rendering; request coalescing belongs to the send pipeline.
+    expect(emptySearchRequests).toBeGreaterThanOrEqual(1);
+    expect(uncaught).toEqual([]);
+  });
+
   test("rental fast path renders rental card and map pin state", async ({
     page,
   }) => {
@@ -69,6 +116,24 @@ test.describe("SAN-1341 deterministic critical journeys", { tag: ["@critical", "
     // expose the viewing action. Paired with the unowned case below, this pins both directions
     // of the requestability contract on the chat surface.
     await expect(page.getByTestId("rental-schedule-cta")).toHaveCount(1);
+  });
+
+  // SAN-1421 post-merge: the Details panel must expose the exact listing id, so the card,
+  // map pin and panel can be proven to refer to the same apartment.
+  test("rental Details opens the panel for the exact listing id", async ({ page }) => {
+    await gotoDeterministicChat(page);
+    const responsePromise = waitForPost(page, "/api/rentals/search");
+    await typeAndSubmit(page, RENTAL_QUERY);
+    expect((await responsePromise).ok()).toBe(true);
+
+    await expect(page.getByTestId("rental-card")).toHaveCount(1);
+    // The mocked agent search response is one grounded apartment: the visible
+    // card, marker identity, and the selected Details panel must all match.
+    await expect(page.getByTestId("map-pin").first()).toHaveAttribute("data-pin-id", `rental-${rental.id}`);
+    await page.getByTestId("rental-details-cta").click();
+    const panel = page.getByTestId("rental-details-panel");
+    await expect(panel).toBeVisible();
+    await expect(panel).toHaveAttribute("data-listing-id", rental.id);
   });
 
   // SAN-1349: an unowned / non-requestable listing stays browseable but must never expose a
@@ -137,5 +202,22 @@ test.describe("SAN-1341 deterministic critical journeys", { tag: ["@critical", "
 
     await expect(sheet).toBeHidden({ timeout: 10_000 });
     await expect(trigger).toBeFocused();
+  });
+});
+
+test.describe("SAN-1226 customer-facing rental explanations (desktop)", { tag: ["@deterministic"] }, () => {
+  test("listing facts are visible, debug ranking is hidden, and Details still opens", async ({ page }) => {
+    await mockFastPaths(page);
+    await gotoDeterministicChat(page);
+    const responsePromise = waitForPost(page, "/api/rentals/search");
+    await typeAndSubmit(page, RENTAL_QUERY);
+    expect((await responsePromise).ok()).toBe(true);
+    const card = page.getByTestId("rental-card").first();
+    await expect(card).toBeVisible();
+    await expect(card.getByTestId("rental-match-reason")).toContainText("Wi-Fi listed");
+    await expect(card).not.toContainText(/hybrid_semantic|hybrid_search_listings RPC|neighborhood_profile/);
+    await expect(page.getByTestId("rank-explanation-rental")).toHaveCount(0);
+    await card.getByTestId("rental-details-cta").click();
+    await expect(page.getByTestId("rental-details-panel")).toHaveAttribute("data-listing-id", rental.id);
   });
 });

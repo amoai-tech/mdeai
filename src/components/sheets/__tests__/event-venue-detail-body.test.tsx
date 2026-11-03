@@ -29,6 +29,8 @@ const detail: EventVenueDetail = {
   venue: "Parque Lleras",
   startsAt: "2026-05-23T22:00:00.000Z",
   pricePerTicket: 25,
+  currency: "USD",
+  canBuyTickets: true,
   ticketUrl: "/events/evt-1",
   sourceUrl: "https://maps.google.com/?cid=123",
 };
@@ -78,6 +80,38 @@ describe("EventVenueDetailBody", () => {
     expect(html).toContain('data-testid="venue-detail-buy-cta"');
     expect(html).toContain('data-testid="event-sheet-full-page-link"');
     expect(html).toContain("Live band");
+  });
+
+  it("hides Buy when the event has no confirmed sellable tier", () => {
+    const html = renderToStaticMarkup(
+      <EventVenueDetailBody
+        detail={{ ...detail, canBuyTickets: false }}
+        step="detail"
+        loadState="ready"
+        publicEvent={publicEvent}
+        loadError={null}
+        onStepChange={() => {}}
+      />,
+    );
+    expect(html).toContain("From");
+    expect(html).not.toContain('data-testid="venue-detail-buy-cta"');
+    expect(html).toContain('data-testid="event-sheet-full-page-link"');
+  });
+
+  it("keeps unknown prices unknown rather than inventing free tickets", () => {
+    const html = renderToStaticMarkup(
+      <EventVenueDetailBody
+        detail={{ ...detail, pricePerTicket: null, canBuyTickets: false }}
+        step="detail"
+        loadState="ready"
+        publicEvent={null}
+        loadError={null}
+        onStepChange={() => {}}
+      />,
+    );
+    expect(html).toContain("Price TBD");
+    expect(html).not.toContain('data-testid="venue-detail-buy-cta"');
+    expect(html).toContain('data-testid="event-sheet-full-page-link"');
   });
 
   it("checkout step renders ticket tiers and back control", () => {

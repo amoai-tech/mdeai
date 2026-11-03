@@ -65,7 +65,7 @@ select col_type_is('public', 'user_preferences', 'whatsapp_opted_in',       'boo
 select col_type_is('public', 'user_preferences', 'whatsapp_phone',          'text',      'B: user_preferences.whatsapp_phone is text');
 
 select col_type_is('public', 'event_orders', 'buyer_anon_id',   'text',      'B: event_orders.buyer_anon_id is text');
-select col_type_is('public', 'event_orders', 'discount_cents',  'integer',   'B: event_orders.discount_cents is integer');
+select col_type_is('public', 'event_orders', 'discount_cents',  'bigint',    'B: event_orders.discount_cents is bigint (SAN-1285 minor units)');
 select col_type_is('public', 'event_orders', 'promo_code_id',   'uuid',      'B: event_orders.promo_code_id is uuid');
 
 select col_type_is('public', 'event_tickets', 'is_hidden',      'boolean',   'B: event_tickets.is_hidden is boolean');
@@ -234,17 +234,17 @@ select is(
 -- H. Scope guards — Increment A must not overreach
 -- ═══════════════════════════════════════════════════════════════════════════════
 
-select hasnt_column('public', 'apartments', 'fts_content', 'H: apartments.fts_content NOT added (SAN-1305 owns it)');
+select has_column('public', 'apartments', 'fts_content', 'H: apartments.fts_content is restored by SAN-1305, not by Increment A');
 
 select is(
   (select count(*)::int from information_schema.columns
     where table_schema = 'public' and table_name = 'events' and column_name = 'fts_content'),
-  0, 'H: events.fts_content NOT added (SAN-1305 owns it)');
+  1, 'H: events.fts_content is restored by SAN-1305, not by Increment A');
 
 select is(
   (select count(*)::int from information_schema.columns
     where table_schema = 'public' and table_name = 'restaurants' and column_name = 'fts_content'),
-  0, 'H: restaurants.fts_content NOT added (SAN-1305 owns it)');
+  1, 'H: restaurants.fts_content is restored by SAN-1305, not by Increment A');
 
 -- Increment B owns the embedding surrogate PK conversion; A must not touch it.
 select is(

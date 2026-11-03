@@ -1,4 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { summarizeEventTicketOffer, type EventTicketTier } from "./event-ticket-offer";
+import { NON_QA_EVENT_SLUG_FILTER, QA_EVENT_NAME_SQL_PATTERN } from "./public-event-fixtures";
 import type { DateWindow, EventCategory } from "@/mastra/tools/search-events";
 import {
   dateWindow,
@@ -17,15 +19,24 @@ export type PublishedEventListItem = {
   venue: string;
   neighborhood: string;
   startsAt: string;
-  pricePerTicket: number;
+  /** Derived from a real active ticket tier; null means price unknown. */
+  pricePerTicket: number | null;
+  canBuyTickets: boolean;
   currency: string;
   imageUrl?: string;
   ticketUrl: string;
   category: EventCategory;
   status: "published";
+  /** Saved venue position; absent when the event has no valid coordinates. Never derived. */
+  latitude?: number;
+  longitude?: number;
+  /** Real Google Maps link saved on the event, when it is a valid http(s) URL. */
+  mapsUrl?: string;
 };
 
 export type ListPublishedEventsQuery = {
+  /** Exact public event IDs, for rendering the same catalog cards after Ask MDE. */
+  ids?: string[];
   category?: EventCategory;
   neighborhood?: string;
   dateWindow?: DateWindow;
@@ -55,14 +66,38 @@ type EventBrowseRow = {
   primary_image_url: string | null;
   ticket_url: string | null;
   status: string;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
+  maps_url?: string | null;
+  event_tickets?: EventTicketTier[];
 };
 
 const EVENT_LIST_SELECT =
-  "id, slug, name, event_type, address, city, event_start_time, ticket_price_min, currency, primary_image_url, ticket_url, status";
+  "id, slug, name, event_type, address, city, event_start_time, currency, primary_image_url, ticket_url, status, latitude, longitude, maps_url";
+
+/** Postgres numeric arrives as a string; only finite numbers are coordinates. */
+function toCoordinate(value: number | string | null | undefined): number | undefined {
+  if (value == null) return undefined;
+  // Plain decimals only: Number() would also accept hex ("0x10"), exponents and padding.
+  if (typeof value === "string" && !/^-?\d+(\.\d+)?$/.test(value.trim())) return undefined;
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+function toHttpUrl(value: string | null | undefined): string | undefined {
+  if (!value) return undefined;
+  try {
+    const { protocol } = new URL(value);
+    return protocol === "https:" || protocol === "http:" ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 export function mapEventRowToBrowseItem(row: EventBrowseRow): PublishedEventListItem {
   const slug = row.slug?.trim() || row.id;
   const ticketUrl = row.ticket_url?.trim() || `/events/${slug}`;
+  const offer = summarizeEventTicketOffer(row.event_tickets);
 
   return {
     id: row.id,
@@ -72,12 +107,16 @@ export function mapEventRowToBrowseItem(row: EventBrowseRow): PublishedEventList
     venue: row.address ?? "Medellín",
     neighborhood: extractNeighborhood(row.address, row.city),
     startsAt: row.event_start_time,
-    pricePerTicket: row.ticket_price_min ?? 0,
-    currency: normalizeEventCurrency(row.currency),
+    pricePerTicket: offer.pricePerTicket,
+    canBuyTickets: offer.canBuyTickets,
+    currency: normalizeEventCurrency(offer.currency ?? row.currency),
     imageUrl: row.primary_image_url ?? undefined,
     ticketUrl,
     category: mapCategory(row.event_type),
     status: "published",
+    latitude: toCoordinate(row.latitude),
+    longitude: toCoordinate(row.longitude),
+    mapsUrl: toHttpUrl(row.maps_url),
   };
 }
 
@@ -89,11 +128,24 @@ export async function listPublishedEvents(
   const limit = Math.min(Math.max(query.limit ?? 24, 1), 50);
   const offset = Math.max(query.offset ?? 0, 0);
 
+  // Embed only active, visible tiers. !inner keeps price filters and pagination
+  // correct at the database level; the ordinary catalog includes tierless events.
+  const ticketsJoin = query.price ? "event_tickets!inner" : "event_tickets";
   let q = supabase
     .from("events")
-    .select(EVENT_LIST_SELECT, { count: "exact" })
+    .select(
+      `${EVENT_LIST_SELECT}, ${ticketsJoin}(price_cents, currency, qty_total, qty_sold, qty_pending, sale_starts_at, sale_ends_at)`,
+      { count: "exact" },
+    )
     .eq("is_active", true)
-    .in("status", ["published", "live"]);
+    .in("status", ["published", "live"])
+    // Public presentation filter only: no gate on dev publishing or admin reads.
+    .not("name", "imatch", QA_EVENT_NAME_SQL_PATTERN)
+    .or(NON_QA_EVENT_SLUG_FILTER)
+    .eq("event_tickets.is_active", true)
+    .eq("event_tickets.is_hidden", false);
+
+  if (query.ids) q = q.in("id", query.ids);
 
   if (query.category) {
     q = q.in("event_type", dbEventTypesForCategory(query.category));
@@ -104,13 +156,18 @@ export async function listPublishedEvents(
   }
 
   if (query.price === "free") {
-    q = q.or("ticket_price_min.is.null,ticket_price_min.eq.0");
+    q = q.eq("event_tickets.price_cents", 0);
   } else if (query.price === "paid") {
-    q = q.gt("ticket_price_min", 0);
+    q = q.gt("event_tickets.price_cents", 0);
   }
 
   const window = dateWindow(query.dateWindow);
-  if (window.gte) q = q.gte("event_start_time", window.gte);
+  // Even an explicit "this week" must not include events that already started.
+  const nowIso = new Date().toISOString();
+  q = q.gte(
+    "event_start_time",
+    window.gte && window.gte > nowIso ? window.gte : nowIso,
+  );
   if (window.lte) q = q.lte("event_start_time", window.lte);
 
   q = q

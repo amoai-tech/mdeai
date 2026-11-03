@@ -21,6 +21,17 @@ describe("BrowseLayout", () => {
     expect(html).toContain("Restaurants");
   });
 
+  it("returns to the actual /chat workspace from every browse page (SAN-1088)", () => {
+    const html = renderToStaticMarkup(
+      <BrowseLayout testId="events-browse" title="Events" subtitle="In Medellín" filterBar={<div />}>
+        <section />
+      </BrowseLayout>,
+    );
+    expect(html).toMatch(/<a(?=[^>]*aria-label="Back to chat")(?=[^>]*href="\/chat")[^>]*>/);
+    expect(html).toMatch(/<a[^>]*href="\/chat"[^>]*>Ask concierge<\/a>/);
+    expect(html).not.toContain('href="/"');
+  });
+
   it("stretches the map column's wrapper to the list height so the sticky map can actually stick (SAN-1416)", () => {
     const html = renderToStaticMarkup(
       <BrowseLayout

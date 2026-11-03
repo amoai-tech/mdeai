@@ -38,6 +38,14 @@ async function openDetails(button: Locator, opened: Locator) {
   }).toPass({ timeout: 20_000 });
 }
 
+/**
+ * Provenance as the component itself decides it: the panel renders the external disclosure only
+ * for a sourced ad. Deriving it from structure (not from the label we are about to assert) keeps
+ * this honest, and works for a listing that has no provider name or source link.
+ */
+const detailsAreExternal = async (page: Page) =>
+  (await page.getByTestId("rental-details-external-note").count()) > 0;
+
 /** The card's own id (its slug), so a locator survives the grid re-rendering. */
 const detailsFor = (page: Page, slug: string) => page.getByTestId(`rental-details-cta-${slug}`);
 
@@ -47,6 +55,13 @@ async function cardSlug(page: Page, index: number): Promise<string> {
   if (!testId) throw new Error(`rental card ${index} has no test id`);
   return testId.replace("rental-card-", "");
 }
+
+/**
+ * SAN-1421: on a desktop the results column scrolls, not the page, so that is the scroll position to
+ * compare. (The page itself must not scroll; the map and menu stay put.)
+ */
+const listScroll = (page: Page) =>
+  page.evaluate(() => document.querySelector('[data-testid="workspace-results-column"]')?.scrollTop ?? -1);
 
 test.describe("/rentals Details — desktop 1440px", () => {
   test.use({ viewport: { width: 1440, height: 900 } });
@@ -62,7 +77,10 @@ test.describe("/rentals Details — desktop 1440px", () => {
     const button = detailsFor(page, slug);
     const panel = page.getByTestId("rental-details-panel");
     await openDetails(button, panel);
-    const scrollWhenOpen = await page.evaluate(() => window.scrollY);
+    const scrollWhenOpen = await listScroll(page);
+    // A card well down the list means the column really has scrolled; 0 would make this check empty.
+    if (total > 4) expect(scrollWhenOpen).toBeGreaterThan(0);
+    expect(await page.evaluate(() => window.scrollY)).toBe(0);
 
     // In the page: same URL, no new tab.
     expect(new URL(page.url()).pathname).toBe("/rentals");
@@ -71,11 +89,26 @@ test.describe("/rentals Details — desktop 1440px", () => {
     // What a renter needs, and nothing invented.
     await expect(page.getByTestId("rental-details-price")).toHaveText(/^COP [\d,]+\/mo$/);
     await expect(panel.locator("h2")).not.toBeEmpty();
-    await expect(page.getByTestId("rental-details-schedule-cta")).toHaveCount(0);
-    await expect(page.getByTestId("rental-details-external-note")).toContainText("cannot schedule a viewing");
+
+    // The viewing CTA is capability-gated: `can_schedule_viewing` decides whether it exists at
+    // all, and provenance decides its label. So never require it to be visible — require that at
+    // most one exists, and that when it does it matches this record.
+    const scheduleCta = page.getByTestId("rental-details-schedule-cta");
+    const isExternal = await detailsAreExternal(page);
+    expect(await scheduleCta.count()).toBeLessThanOrEqual(1);
+    if ((await scheduleCta.count()) === 1) {
+      await expect(scheduleCta).toHaveText(isExternal ? /Request MDE follow-up/ : /Schedule viewing/);
+      if (isExternal) {
+        await expect(page.getByTestId("rental-details-external-note")).toContainText("is not a confirmed viewing");
+      }
+    }
+
+    // An original-listing link, when one is offered, is a safe outbound link in a new tab.
     const source = page.getByTestId("rental-details-source-link");
-    await expect(source).toHaveAttribute("href", /fincaraiz\.com\.co/);
-    await expect(source).toHaveAttribute("target", "_blank");
+    if ((await source.count()) > 0) {
+      await expect(source).toHaveAttribute("href", /^https:\/\//);
+      await expect(source).toHaveAttribute("target", "_blank");
+    }
 
     // Photos: the first one really loads.
     await expect
@@ -99,7 +132,7 @@ test.describe("/rentals Details — desktop 1440px", () => {
     await expect(panel).toBeHidden();
     await expect(button).toBeFocused();
     expect(await cards(page).count()).toBe(total);
-    expect(Math.abs((await page.evaluate(() => window.scrollY)) - scrollWhenOpen)).toBeLessThan(5);
+    expect(Math.abs((await listScroll(page)) - scrollWhenOpen)).toBeLessThan(5);
     expect(new URL(page.url()).pathname).toBe("/rentals");
   });
 
@@ -126,6 +159,38 @@ test.describe("/rentals Details — desktop 1440px", () => {
     await page.keyboard.press("Escape");
     await expect(page.getByTestId("rental-details-panel")).toBeHidden();
     await expect(opener).toBeFocused();
+  });
+
+  test("a sourced ad keeps the original link without claiming a confirmed viewing", async ({ page }) => {
+    await gotoRentals(page);
+    // Pick a genuinely sourced ad by the outbound control it renders — not by list position, and
+    // not by the "Source: <provider>" copy, which a sourced ad without a provider name omits.
+    const sourced = page
+      .locator('[data-testid^="rental-card-"][data-result-kind="rental"]:has(a[data-testid^="rental-card-source-"])')
+      .first();
+    test.skip((await sourced.count()) === 0, "no sourced ad in the current results");
+    const slug = ((await sourced.getAttribute("data-testid")) ?? "").replace("rental-card-", "");
+    const panel = page.getByTestId("rental-details-panel");
+    await openDetails(detailsFor(page, slug), panel);
+
+    // The database decides requestability. A sourced ad that is requestable offers only
+    // an MDE follow-up, while a non-requestable ad shows no CTA on either surface.
+    const cardCta = sourced.getByTestId("rental-schedule-cta");
+    const detailsCta = page.getByTestId("rental-details-schedule-cta");
+    if ((await cardCta.count()) === 0) {
+      await expect(detailsCta).toHaveCount(0);
+    } else {
+      await expect(cardCta).toHaveText("Request MDE follow-up");
+      await expect(detailsCta).toHaveText("Request MDE follow-up");
+    }
+    await expect(page.getByTestId("rental-details-external-note")).toContainText("is not a confirmed viewing");
+
+    const source = page.getByTestId("rental-details-source-link");
+    await expect(source).toBeVisible();
+    await expect(source).toHaveAttribute("href", /^https:\/\//);
+    await expect(source).toHaveAttribute("target", "_blank");
+    expect((await source.getAttribute("rel")) ?? "").toContain("noopener");
+    expect(new URL(page.url()).pathname).toBe("/rentals");
   });
 
   test("an ad with no coordinates opens Details with no map link and no invented pin", async ({ page }) => {
@@ -165,7 +230,14 @@ test.describe("/rentals Details — phone 390px", () => {
     await expect(sheet).toHaveAttribute("role", "dialog");
     await expect(page.getByTestId("rental-details-panel")).toHaveCount(0); // not the desktop panel
     await expect(page.getByTestId("rental-details-price")).toHaveText(/^COP [\d,]+\/mo$/);
-    await expect(page.getByTestId("rental-details-schedule-cta")).toHaveCount(0);
+    // Same capability and provenance rule as desktop: the record decides both whether the CTA
+    // exists and what it says. A non-requestable listing shows none, which is correct.
+    const sheetCta = page.getByTestId("rental-details-schedule-cta");
+    const isExternal = await detailsAreExternal(page);
+    expect(await sheetCta.count()).toBeLessThanOrEqual(1);
+    if ((await sheetCta.count()) === 1) {
+      await expect(sheetCta).toHaveText(isExternal ? /Request MDE follow-up/ : /Schedule viewing/);
+    }
     const close = page.getByTestId("rental-details-close");
     const box = await close.boundingBox();
     expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
@@ -174,6 +246,62 @@ test.describe("/rentals Details — phone 390px", () => {
     await close.click();
     await expect(sheet).toBeHidden();
     expect(await cards(page).count()).toBe(total);
+    expect(new URL(page.url()).pathname).toBe("/rentals");
+  });
+});
+
+
+test.describe("/rentals workspace — laptop 1024px", () => {
+  test.use({ viewport: { width: 1024, height: 768 } });
+
+  test("results scroll independently while the map stays in place and cards fit", async ({ page }) => {
+    await gotoRentals(page);
+    const results = page.getByTestId("workspace-results-column");
+    const map = page.getByTestId("browse-map-panel");
+    const grid = page.getByTestId("rentals-grid");
+
+    await expect(results).toBeVisible();
+    await expect(map).toBeVisible();
+    await expect(grid).toBeVisible();
+    // A laptop's middle column is too narrow for two apartment cards.
+    await expect.poll(() => grid.evaluate((el) => getComputedStyle(el).gridTemplateColumns.split(" ").length))
+      .toBe(1);
+
+    const before = await map.boundingBox();
+    expect(before).not.toBeNull();
+    // Scroll the results pane, not the outer page. A fixed map must not move.
+    await results.evaluate((el) => { el.scrollTop = Math.min(400, el.scrollHeight - el.clientHeight); });
+    await expect.poll(() => results.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+    const after = await map.boundingBox();
+    expect(after).not.toBeNull();
+    expect(Math.abs(after!.y - before!.y)).toBeLessThan(2);
+    expect(await page.evaluate(() => window.scrollY)).toBe(0);
+
+    const firstCard = await cards(page).first().boundingBox();
+    const bounds = await results.boundingBox();
+    expect(firstCard).not.toBeNull();
+    expect(bounds).not.toBeNull();
+    expect(firstCard!.width).toBeLessThanOrEqual(bounds!.width);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+  });
+});
+
+test.describe("/rentals workspace — tablet 768px", () => {
+  test.use({ viewport: { width: 768, height: 900 } });
+
+  test("navigation opens and closes on a tablet without losing the results", async ({ page }) => {
+    await gotoRentals(page);
+    const count = await cards(page).count();
+    const menu = page.getByTestId("nav-drawer-trigger");
+    const drawer = page.getByTestId("nav-drawer-content");
+    await expect(menu).toBeVisible();
+    await menu.click();
+    await expect(drawer).toBeVisible();
+    await expect(drawer.getByTestId("nav-rentals-link")).toHaveAttribute("aria-current", "page");
+    await page.keyboard.press("Escape");
+    await expect(drawer).toBeHidden();
+    await expect(menu).toBeFocused();
+    expect(await cards(page).count()).toBe(count);
     expect(new URL(page.url()).pathname).toBe("/rentals");
   });
 });

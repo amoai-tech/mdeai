@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Heart } from "lucide-react";
+import { AccountLoadError } from "@/components/app/load-error";
 import { EmptyState } from "@/components/empty/empty-state";
 import {
   SavedCollectionsGrid,
@@ -18,7 +19,9 @@ export default async function SavedPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const collections = user ? await loadUserCollections(user.id) : [];
+  const collectionsResult = user ? await loadUserCollections(user.id) : null;
+  const collections =
+    collectionsResult?.status === "ok" ? collectionsResult.value : [];
 
   return (
     <main
@@ -46,7 +49,14 @@ export default async function SavedPage() {
           suggestions={[{ label: "Go to chat", testId: "saved-empty-chat" }]}
         />
       ) : null}
-      {user && !collections.length ? (
+      {collectionsResult?.status === "error" ? (
+        <AccountLoadError
+          message={collectionsResult.message}
+          retryHref="/saved"
+          title="Your saved collections are temporarily unavailable"
+        />
+      ) : null}
+      {collectionsResult?.status === "ok" && !collections.length ? (
         <>
           <EmptyState
             testId="saved-empty-collections"
@@ -65,7 +75,7 @@ export default async function SavedPage() {
           </div>
         </>
       ) : null}
-      {user && collections.length > 0 ? (
+      {collectionsResult?.status === "ok" && collections.length > 0 ? (
         <SavedCollectionsGrid collections={collections} />
       ) : null}
       {!user ? (

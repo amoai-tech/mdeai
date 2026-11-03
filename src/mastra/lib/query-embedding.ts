@@ -1,5 +1,7 @@
 const EMBED_MODEL = "gemini-embedding-001";
 const EMBED_DIM = 768;
+/** A stalled Gemini call must not hang rental search; expiry is reported as network_error so the keyword fallback runs. */
+const EMBED_TIMEOUT_MS = 5000;
 
 export type EmbedFailureReason =
   | "missing_key"
@@ -30,10 +32,11 @@ export async function embedQueryTextDetailed(text: string): Promise<EmbedQueryRe
 
   try {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${EMBED_MODEL}:embedContent?key=${key}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${EMBED_MODEL}:embedContent`,
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+        signal: AbortSignal.timeout(EMBED_TIMEOUT_MS),
         body: JSON.stringify({
           model: `models/${EMBED_MODEL}`,
           content: { parts: [{ text: text.trim() }] },
@@ -52,9 +55,9 @@ export async function embedQueryTextDetailed(text: string): Promise<EmbedQueryRe
 
     const json = (await res.json()) as { embedding?: { values?: number[] } };
     const values = json.embedding?.values;
-    if (!values?.length) {
+    if (!Array.isArray(values) || values.length !== EMBED_DIM || !values.every((value) => typeof value === "number" && Number.isFinite(value))) {
       console.warn(
-        "[query-embedding] empty embedding response — hybrid search will use keyword fallback",
+        "[query-embedding] invalid embedding response — hybrid search will use keyword fallback",
       );
       return { ok: false, reason: "empty_response" };
     }

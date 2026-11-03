@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
  * shown when a listing has no photo. Category is conveyed by glyph + label,
  * never by colour — never a grey box or a broken `<img>`.
  */
-const TEAL_GRADIENT =
+export const VENUE_PLACEHOLDER_GRADIENT =
   "linear-gradient(150deg, oklch(0.970 0.015 180), oklch(0.926 0.030 184))";
 
 export type VenueCardPlaceholderProps = {
@@ -18,6 +18,8 @@ export type VenueCardPlaceholderProps = {
   mediaLayout?: "inline" | "cover";
   /** Preserve each card's existing placeholder test id. */
   testId?: string;
+  /** Fill a host frame that owns its own aspect ratio (contest nominees use 4:3). */
+  className?: string;
 };
 
 export function VenueCardPlaceholder({
@@ -25,6 +27,7 @@ export function VenueCardPlaceholder({
   icon,
   mediaLayout = "cover",
   testId,
+  className,
 }: VenueCardPlaceholderProps) {
   return (
     <div
@@ -33,8 +36,9 @@ export function VenueCardPlaceholder({
         mediaLayout === "cover"
           ? "aspect-[16/10] w-full"
           : "aspect-[16/10] w-24 shrink-0 self-start",
+        className,
       )}
-      style={{ background: TEAL_GRADIENT }}
+      style={{ background: VENUE_PLACEHOLDER_GRADIENT }}
       data-testid={testId}
       aria-hidden
     >

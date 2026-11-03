@@ -19,7 +19,8 @@ import {
 import { reconcileSavedHistory, type SavedThreadMessage } from "@/lib/chat/saved-thread-history";
 import { useThreadNav } from "@/lib/chat/thread-nav-context";
 import { getCopilotKitClientProps } from "@/lib/copilotkit-client-props";
-import { reportConciergeError } from "@/lib/concierge-error-store";
+import { isExpectedGuestStartup401, reportConciergeError } from "@/lib/concierge-error-store";
+import { useSession } from "@/hooks/use-session";
 import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 
 /**
@@ -28,6 +29,10 @@ import { isDeterministicE2E } from "@/lib/deterministic-e2e";
  * several seconds, and a spurious error is worse than a longer "Loading…".
  */
 const RECONNECT_SETTLE_TIMEOUT_MS = 30_000;
+// An idle (already-connected) agent does not emit a new run-finalized event.
+// Do not make returning users stare at an empty transcript for 30 seconds.
+const QUIET_RECONNECT_GRACE_MS = 2_500;
+
 
 type SavedHistoryValue = {
   /** `idle` = nothing to wait for (fresh chat, or history is in place). */
@@ -89,14 +94,16 @@ function watchConnectCycle(agent: AbstractAgent, signal: AbortSignal): Promise<C
  *    the `agent.threadId` check). If the reconnect never finishes, history is
  *    NOT installed: the chat shows the retryable error instead.
  */
-function SavedThreadHistory({
+export function SavedThreadHistory({
   threadId,
   children,
+  agentId = "conciergeAgent",
 }: {
   threadId: string;
   children: ReactNode;
+  agentId?: "conciergeAgent" | "hostOpsAgent";
 }) {
-  const { agent } = useAgent({ agentId: "conciergeAgent", updates: [UseAgentUpdate.OnRunStatusChanged] });
+  const { agent } = useAgent({ agentId, updates: [UseAgentUpdate.OnRunStatusChanged] });
   const [attempt, setAttempt] = useState(0);
   const [outcome, setOutcome] = useState<{
     threadId: string;
@@ -133,12 +140,34 @@ function SavedThreadHistory({
         // First attempt: the watch started when the chat opened. A Retry cannot
         // reuse a finished (timed-out) watch, so it waits again if the reconnect
         // is still running, and carries on if it has ended.
-        const settled =
-          attempt === 0
-            ? await connect.current
-            : agent.isRunning
-              ? await watchConnectCycle(agent, signal)
-              : "done";
+        // On a healthy warm tab there may be no agent/connect run to finalize.
+        // Give a late reconnect a short chance to start; if the agent remains
+        // idle, restore its persisted transcript now instead of waiting 30s.
+        const connection = connect.current;
+        const first = attempt === 0
+          ? await Promise.race<ConnectOutcome | "idle">([
+              connection,
+              new Promise<"idle">((resolve) => {
+                setTimeout(() => resolve("idle"), QUIET_RECONNECT_GRACE_MS);
+              }),
+            ])
+          : agent.isRunning ? await watchConnectCycle(agent, signal) : "done";
+        const settled = first === "idle" && agent.isRunning
+          ? await connection
+          : first === "idle" ? "done" : first;
+        // If connect starts AFTER the quiet grace and clears the view, replay
+        // again after it finishes. Reconciliation is ID-based and preserves new
+        // turns; a late completion from another thread cannot change this one.
+        if (first === "idle" && body.messages?.length) {
+          void connection.then((outcome) => {
+            if (outcome !== "done" || signal.aborted || agent.threadId !== threadId) return;
+            const merged = reconcileSavedHistory(body.messages!, agent.messages);
+            if (merged.length !== agent.messages.length ||
+                merged.some((msg, i) => msg.id !== agent.messages[i]?.id)) {
+              agent.setMessages(merged as typeof agent.messages);
+            }
+          });
+        }
         if (settled === "aborted" || signal.aborted || agent.threadId !== threadId) return;
         // Timed out and still reconnecting: do not install into a moving agent.
         if (settled === "timeout" && agent.isRunning) throw new Error("reconnect did not finish");
@@ -172,13 +201,31 @@ function SavedThreadHistory({
 }
 
 /**
+ * Replay a saved thread's messages inside an already-configured CopilotKit provider.
+ *
+ * `/chat` owns its provider; discovery routes (Rentals, Events, Restaurants…) already get
+ * `CopilotChatConfigurationProvider` from `copilot-kit-provider`, so they only need the history
+ * replay. Without this, the thread id survives a refresh but the inline Ask MDE transcript comes
+ * back empty and the page shows the plain catalogue.
+ */
+export function SavedThreadReplay({
+  threadId,
+  children,
+}: {
+  threadId: string;
+  children: ReactNode;
+}) {
+  if (isDeterministicE2E()) return <>{children}</>;
+  return <SavedThreadHistory threadId={threadId}>{children}</SavedThreadHistory>;
+}
+
+/**
  * The /chat concierge surface, and the one place its thread is decided.
  *
  * - A saved thread picked in the nav rail is bound as EXPLICIT, so the chat
  *   continues that exact thread.
- * - Otherwise the chat runs on a fresh, NON-explicit thread: new on every visit
- *   to /chat and on every New Chat, so a new conversation never writes into an
- *   old one and does not try to reconnect to a thread that has never run.
+ * - Otherwise the chat uses the root per-tab thread, shared with other pages.
+ *   New Chat mints a fresh ID; only a persisted thread is reconnected.
  *
  * One `CopilotChatConfigurationProvider` owns that choice for every consumer on
  * the page (chat, map sync, tools), so they cannot drift onto different threads.
@@ -188,31 +235,44 @@ function SavedThreadHistory({
  * configuration provider's imperative setters.
  */
 function LiveChatProvider({ children }: { children: ReactNode }) {
-  const { activeThreadId, newChatCount } = useThreadNav();
+  const { user, loading: sessionLoading } = useSession();
+  const { sessionThreadId, activeThreadId, hasPersistedThread, restoredThread } = useThreadNav();
+  const threadId = activeThreadId ?? sessionThreadId;
+  // A successfully saved live turn must NOT immediately reconnect/replay itself.
+  // Remember whether this tab's thread was already saved when /chat mounted;
+  // when the user returns after visiting Rentals, it is now safe to replay.
+  const [initialRestorableThread] = useState(() => hasPersistedThread ? sessionThreadId : undefined);
+  // A refresh/reopen adopts the stored conversation AFTER auth resolves, which
+  // is later than the mount-time capture above; that stored conversation is
+  // exactly what must be replayed.
+  const shouldReplay = Boolean(activeThreadId || restoredThread ||
+    (hasPersistedThread && initialRestorableThread === sessionThreadId));
 
-  // React's "adjust state when a prop changes" pattern: a new id the moment
-  // New Chat is pressed, with no intermediate render on the old thread.
-  const [fresh, setFresh] = useState(() => ({
-    newChatCount,
-    threadId: crypto.randomUUID(),
-  }));
-  if (fresh.newChatCount !== newChatCount) {
-    setFresh({ newChatCount, threadId: crypto.randomUUID() });
-  }
+  // A provider mounted before auth settles can send a guest /info request which
+  // returns after sign-in, making a *guest* 401 look like a signed-in failure.
+  // Match the discovery provider: start only with a resolved identity, and
+  // remount on actual user changes so old requests keep their original context.
+  if (sessionLoading && !user) return null;
 
   return (
     <CopilotKitProvider
+      key={user?.id ?? "guest"}
       {...getCopilotKitClientProps("conciergeAgent")}
       enableInspector={false}
-      onError={reportConciergeError}
+      onError={(event) => {
+        if (isExpectedGuestStartup401(event, Boolean(user), sessionLoading)) return;
+        // Never drop a real failure, including a run failure during a session
+        // refresh while the existing signed-in identity remains available.
+        reportConciergeError(threadId);
+      }}
     >
       <CopilotChatConfigurationProvider
         agentId="conciergeAgent"
-        threadId={activeThreadId ?? fresh.threadId}
-        hasExplicitThreadId={activeThreadId !== undefined}
+        threadId={threadId}
+        hasExplicitThreadId={shouldReplay}
       >
-        {activeThreadId !== undefined && !isDeterministicE2E() ? (
-          <SavedThreadHistory threadId={activeThreadId}>{children}</SavedThreadHistory>
+        {threadId && shouldReplay && !isDeterministicE2E() ? (
+          <SavedThreadHistory threadId={threadId}>{children}</SavedThreadHistory>
         ) : (
           children
         )}

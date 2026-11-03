@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "tools": [
+    {
+      "toolId": "ESLint9",
+      "localConfigurationFile": "eslint.config.mjs",
+      "useLocalConfigurationFile": true,
+      "patterns": []
+    }
+  ]
+}

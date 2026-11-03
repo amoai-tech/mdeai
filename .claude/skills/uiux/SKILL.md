@@ -1,12 +1,16 @@
 ---
 name: uiux
-description: Use when evaluating or improving screens, interactions, user flows, loading/error states, mobile layouts, or visual hierarchy; reviews product UI and UX for clarity, usability, accessibility, responsive behavior, and design-system consistency.
+description: Use when auditing an existing MDE screen or user journey for usability, interaction states, mobile/accessibility problems, or small UX corrections; identifies focused fixes using existing components, not a new visual identity or substantial redesign.
 ---
 
 **UIUX — Product UI/UX Review**
 
 **Goal**
-Find the smallest UI/UX changes that make the real user journey clearer, faster, accessible, and consistent.
+Find the smallest UI/UX changes that make the **existing** user journey clearer, faster, accessible, and consistent.
+
+**Owner and boundary:** Review current screens, prioritize observable usability problems and propose focused changes. For a new screen or substantial visual redesign, use [frontend-design](../frontend-design/SKILL.md) as the visual owner; this skill can provide a read-only UX critique without becoming a second implementation workflow. [tasks](../tasks/SKILL.md) owns implementation and PR execution.
+
+**Grounding:** Check [DESIGN.MD](../../../DESIGN.MD), [current tokens](../../../src/app/globals.css) and existing components. For UI-heavy work, use the canonical [UI review/state-matrix standard](../tasks/references/ui-review.md) and [pre-merge proof matrix](../tasks/references/pre-merge-tests.md) instead of copying those standards into this skill.
 
 **1. Define the journey**
 State:
@@ -21,7 +25,7 @@ Review only the load-bearing screens/states:
 - hierarchy/content
 - navigation
 - forms/actions
-- loading/empty/error/success
+- loading, distinct empty/no-match, error/recovery, success and unavailable states where relevant
 - responsive/mobile
 - accessibility
 - consistency with existing design system
@@ -47,8 +51,7 @@ Ensure UI does not:
 - hide failure/retry state
 
 **6. Verify**
-Use screenshots/browser checks plus real workflow testing when interaction changes.
-Check mobile and keyboard/accessibility when relevant.
+Verify findings against the current browser/UI and actual user journey rather than treating screenshots as proof of persistence. For changed interaction/state behavior, use a focused component regression plus Playwright where applicable; follow the linked canonical test matrix. Check responsive layouts, keyboard/focus and accessibility for the affected UI, and record what was not tested.
 
 **Output**
 

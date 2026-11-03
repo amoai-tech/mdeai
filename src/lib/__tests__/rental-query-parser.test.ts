@@ -1,5 +1,104 @@
 import { describe, expect, it } from "vitest";
-import { scoreRentalQuery, buildRentalSearchParams } from "@/lib/rental-query-parser";
+import {
+  budgetNotApplied,
+  buildRentalSearchParams,
+  scoreRentalQuery,
+} from "@/lib/rental-query-parser";
+
+describe("SAN-1502 postmerge — real COP monthly budget", () => {
+  it.each([
+    ["Furnished 2BR in Laureles under COP 3.5 million per month", 3_500_000],
+    ["2BR Laureles under COP 4M/month", 4_000_000],
+    ["apartments in Laureles up to 3.500.000 pesos/mes", 3_500_000],
+    ["2BR Laureles bajo COP 3,5 millones por mes", 3_500_000],
+  ])("preserves exact monthly COP budget: %s", (query, amount) => {
+    const signals = scoreRentalQuery(query);
+    expect(signals.maxPriceMonthly).toBe(amount);
+    expect(signals.budgetCurrency).toBe("COP");
+    const params = buildRentalSearchParams(query, {});
+    expect(params?.maxPriceMonthly).toBe(amount);
+    expect(params?.budgetCurrency).toBe("COP");
+    expect(params?.maxPricePerNight).toBeUndefined();
+    expect(params?.stayType).toBe("monthly");
+  });
+
+  it("reads a COP amount written in millions as a monthly budget, never a $2/night cap", () => {
+    const text = "2BR in Laureles under 2 million pesos";
+    const params = buildRentalSearchParams(text, {});
+    // "2 million pesos" is a monthly COP budget, not two US dollars a night.
+    expect(params?.maxPriceMonthly).toBe(2_000_000);
+    expect(params?.budgetCurrency).toBe("COP");
+    expect(params?.maxPricePerNight).toBeUndefined();
+    expect(params?.stayType).toBe("monthly");
+    expect(budgetNotApplied(text, params ?? {})).toBe(false);
+  });
+
+  it("applies the acceptance sentence without needing the word 'month'", () => {
+    const text = "Find a 2-bedroom apartment in Laureles under COP 3 million.";
+    const params = buildRentalSearchParams(text, {});
+    expect(params).toMatchObject({
+      neighborhood: "Laureles",
+      minBedrooms: 2,
+      maxPriceMonthly: 3_000_000,
+      budgetCurrency: "COP",
+      stayType: "monthly",
+    });
+    expect(params?.maxPricePerNight).toBeUndefined();
+    expect(budgetNotApplied(text, params ?? {})).toBe(false);
+  });
+
+  it("does not guess a monthly COP budget from an ambiguous small amount or a nightly phrase", () => {
+    expect(
+      buildRentalSearchParams("2BR in Laureles under COP 300,000", {})?.maxPriceMonthly,
+    ).toBeUndefined();
+    expect(
+      buildRentalSearchParams("2BR in Laureles under COP 80/night", {})?.maxPriceMonthly,
+    ).toBeUndefined();
+  });
+
+  it("still reads an explicit dollar amount with a magnitude", () => {
+    expect(buildRentalSearchParams("1BR in Laureles under $2k/night", {})?.maxPricePerNight).toBe(2000);
+  });
+
+  it("does not tell a renter their monthly budget was ignored when the search applied it", () => {
+    const text = "Furnished 2BR in Laureles under COP 3.5 million per month";
+    const params = buildRentalSearchParams(text, {});
+    expect(params?.maxPriceMonthly).toBe(3_500_000);
+    expect(budgetNotApplied(text, params!)).toBe(false);
+  });
+
+  it("treats a nightly budget as applied", () => {
+    const text = "1BR in Laureles under $80/night";
+    const params = buildRentalSearchParams(text, {});
+    expect(params?.maxPricePerNight).toBe(80);
+    expect(budgetNotApplied(text, params!)).toBe(false);
+  });
+
+  it("still reports a stated budget the parser could not apply", () => {
+    expect(budgetNotApplied("2BR in Laureles under $80/night", {})).toBe(true);
+    expect(budgetNotApplied("2BR in Laureles", {})).toBe(false);
+  });
+
+  it("retains budget across neighborhood refinements", () => {
+    const first = buildRentalSearchParams("2BR apartments in Laureles under COP 3.5 million per month", {});
+    expect(first?.maxPriceMonthly).toBe(3_500_000);
+    const second = buildRentalSearchParams("also in El Poblado", {
+      lastRentalQuery: { ...first, genericAskPending: false },
+    });
+    expect(second?.maxPriceMonthly).toBe(3_500_000);
+    expect(second?.budgetCurrency).toBe("COP");
+  });
+
+  it("never mis-groups a malformed thousands amount", () => {
+    const params = buildRentalSearchParams("apartments in Laureles up to COP 3.50.000 per month", {});
+    expect(params?.maxPriceMonthly).not.toBe(3_500_000);
+  });
+
+  it("does not turn USD nightly or vague cheap into COP monthly caps", () => {
+    expect(buildRentalSearchParams("2BR Laureles under $80/night", {})?.maxPriceMonthly).toBeUndefined();
+    expect(buildRentalSearchParams("cheap rentals in Laureles", {})?.maxPriceMonthly).toBeUndefined();
+  });
+});
 
 describe("rental-query-parser — budget wording", () => {
   it("parses '$80/night' as nightly with neighborhood + bedrooms", () => {
@@ -174,5 +273,205 @@ describe("rental-query-parser — SAN-1356 explicit result count (top N)", () =>
     const params2 = buildRentalSearchParams("search top 5 rentals laureles", memory);
     expect(params1?.limit).toBe(params2?.limit);
     expect(params1?.neighborhood).toBe(params2?.neighborhood);
+  });
+});
+
+describe("rental-query-parser — refinements keep the applied budget", () => {
+  it("preserves a monthly ceiling when the next message only refines the neighborhood", () => {
+    const params = buildRentalSearchParams("only Laureles", {
+      lastRentalQuery: {
+        neighborhood: "Laureles",
+        minBedrooms: 2,
+        maxPriceMonthly: 2_000_000,
+        budgetCurrency: "COP",
+        budgetType: "monthly",
+      },
+    });
+    expect(params?.maxPriceMonthly).toBe(2_000_000);
+    expect(params?.budgetCurrency).toBe("COP");
+    expect(params?.maxPricePerNight).toBeUndefined();
+    expect(params?.stayType).toBe("monthly");
+  });
+
+  it("drops the stored monthly ceiling when the renter asks for a nightly budget", () => {
+    const params = buildRentalSearchParams("actually under $80 per night", {
+      lastRentalQuery: {
+        neighborhood: "Laureles",
+        minBedrooms: 2,
+        maxPriceMonthly: 2_000_000,
+        budgetCurrency: "COP",
+        budgetType: "monthly",
+      },
+    });
+    expect(params?.maxPricePerNight).toBe(80);
+    expect(params?.maxPriceMonthly).toBeUndefined();
+    expect(params?.budgetCurrency).toBeUndefined();
+  });
+});
+
+describe("rental-query-parser — a new budget always replaces the stored one", () => {
+  it("clears a stored monthly ceiling when the renter asks for a whole-trip budget", () => {
+    const params = buildRentalSearchParams("2BR in Laureles under $2000 total for the trip", {
+      lastRentalQuery: {
+        neighborhood: "Laureles",
+        minBedrooms: 2,
+        maxPriceMonthly: 2_000_000,
+        budgetCurrency: "COP",
+        budgetType: "monthly",
+      },
+    });
+    expect(params?.stayType).toBe("total_trip");
+    expect(params?.maxPriceMonthly).toBeUndefined();
+    expect(params?.budgetCurrency).toBeUndefined();
+    expect(params?.maxPricePerNight).toBeUndefined();
+  });
+
+  it("clears a stored nightly cap when the renter asks for a monthly budget", () => {
+    const params = buildRentalSearchParams("2BR in Laureles under COP 3 million per month", {
+      lastRentalQuery: {
+        neighborhood: "Laureles",
+        minBedrooms: 2,
+        maxPricePerNight: 80,
+        budgetType: "nightly",
+      },
+    });
+    expect(params?.maxPriceMonthly).toBe(3_000_000);
+    expect(params?.budgetCurrency).toBe("COP");
+    expect(params?.maxPricePerNight).toBeUndefined();
+    expect(params?.stayType).toBe("monthly");
+  });
+});
+
+describe("rental-query-parser — vague preferences keep the saved ceiling", () => {
+  it("keeps a saved monthly ceiling for 'affordable apartments in Laureles'", () => {
+    const params = buildRentalSearchParams("affordable apartments in Laureles", {
+      lastRentalQuery: {
+        neighborhood: "Laureles",
+        minBedrooms: 2,
+        maxPriceMonthly: 2_000_000,
+        budgetCurrency: "COP",
+        budgetType: "monthly",
+      },
+    });
+    expect(params?.maxPriceMonthly).toBe(2_000_000);
+    expect(params?.budgetCurrency).toBe("COP");
+    expect(params?.stayType).toBe("monthly");
+  });
+
+  it("keeps a saved nightly ceiling for 'budget apartments in Laureles'", () => {
+    const params = buildRentalSearchParams("budget apartments in Laureles", {
+      lastRentalQuery: {
+        neighborhood: "Laureles",
+        minBedrooms: 2,
+        maxPricePerNight: 80,
+        budgetType: "nightly",
+      },
+    });
+    expect(params?.maxPricePerNight).toBe(80);
+    expect(params?.maxPriceMonthly).toBeUndefined();
+  });
+});
+
+describe("rental-query-parser — explicit replacements that cannot be applied", () => {
+  it("clears a saved monthly ceiling for a euro budget the parser cannot apply", () => {
+    const text = "my budget is €1500 per month";
+    const params = buildRentalSearchParams(text, {
+      lastRentalQuery: {
+        neighborhood: "Laureles",
+        minBedrooms: 2,
+        maxPriceMonthly: 2_000_000,
+        budgetCurrency: "COP",
+        budgetType: "monthly",
+      },
+    });
+    expect(params?.maxPriceMonthly).toBeUndefined();
+    expect(params?.budgetCurrency).toBeUndefined();
+    expect(budgetNotApplied(text, params ?? {})).toBe(true);
+  });
+
+  it("clears the saved ceiling in a whole-city refinement with a new unparsable budget", () => {
+    const text = "anywhere in Medellín under €1500 per month";
+    const params = buildRentalSearchParams(text, {
+      lastRentalQuery: {
+        neighborhood: "Laureles",
+        minBedrooms: 2,
+        maxPriceMonthly: 2_000_000,
+        budgetCurrency: "COP",
+        budgetType: "monthly",
+      },
+    });
+    expect(params?.maxPriceMonthly).toBeUndefined();
+    expect(params?.budgetCurrency).toBeUndefined();
+    expect(budgetNotApplied(text, params ?? {})).toBe(true);
+  });
+
+  it("keeps the saved ceiling for a whole-city reply with no new budget", () => {
+    const params = buildRentalSearchParams("anywhere is fine", {
+      lastRentalQuery: {
+        neighborhood: "Laureles",
+        minBedrooms: 2,
+        maxPriceMonthly: 2_000_000,
+        budgetCurrency: "COP",
+        budgetType: "monthly",
+      },
+    });
+    expect(params?.maxPriceMonthly).toBe(2_000_000);
+    expect(params?.budgetCurrency).toBe("COP");
+  });
+});
+
+describe("rental-query-parser — replacement and preference boundaries", () => {
+  const monthlyMemory = {
+    lastRentalQuery: {
+      neighborhood: "Laureles",
+      minBedrooms: 2,
+      maxPriceMonthly: 2_000_000,
+      budgetCurrency: "COP" as const,
+      budgetType: "monthly" as const,
+    },
+  };
+  const nightlyMemory = {
+    lastRentalQuery: {
+      neighborhood: "Laureles",
+      minBedrooms: 2,
+      maxPricePerNight: 80,
+      budgetType: "nightly" as const,
+    },
+  };
+
+  it("does not mistake a bedroom number for an explicit replacement budget", () => {
+    const params = buildRentalSearchParams("budget 2BR apartments in Laureles", monthlyMemory);
+    expect(params?.maxPriceMonthly).toBe(2_000_000);
+    expect(params?.budgetCurrency).toBe("COP");
+    expect(params?.stayType).toBe("monthly");
+  });
+
+  it("keeps saved budget for a vague bedroom preference", () => {
+    const params = buildRentalSearchParams("budget 2 bedrooms in Laureles", monthlyMemory);
+    expect(params?.maxPriceMonthly).toBe(2_000_000);
+    expect(params?.stayType).toBe("monthly");
+  });
+
+  it("clears an obsolete nightly stay type after an unsupported euro replacement", () => {
+    const query = "anywhere in Medellín under €1500 per month";
+    const params = buildRentalSearchParams(query, nightlyMemory);
+    expect(params?.maxPricePerNight).toBeUndefined();
+    expect(params?.maxPriceMonthly).toBeUndefined();
+    expect(params?.stayType).toBeUndefined();
+    expect(budgetNotApplied(query, params ?? {})).toBe(true);
+  });
+
+  it("clears an obsolete monthly stay type after an unsupported euro replacement", () => {
+    const query = "my budget is €1500 per month";
+    const params = buildRentalSearchParams(query, monthlyMemory);
+    expect(params?.maxPriceMonthly).toBeUndefined();
+    expect(params?.budgetCurrency).toBeUndefined();
+    expect(params?.stayType).toBeUndefined();
+  });
+
+  it("still retains stay type when the renter only widens to the entire city", () => {
+    const params = buildRentalSearchParams("anywhere is fine", nightlyMemory);
+    expect(params?.maxPricePerNight).toBe(80);
+    expect(params?.stayType).toBe("nightly");
   });
 });

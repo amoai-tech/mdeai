@@ -1,7 +1,7 @@
 import { Agent } from '@mastra/core/agent';
 import { z } from 'zod';
 import { searchRentalsTool } from '../tools/search-rentals';
-import { FLASH_MODEL } from '../lib/models';
+import { ACTIVE_TEXT_MODEL } from '../lib/models';
 import { createThreadMemory } from '../lib/agent-memory';
 
 const rentalWorkingMemorySchema = z.object({
@@ -38,6 +38,7 @@ export const rentalAgent = new Agent({
 
 # Tool
 - search-rentals: search the rental catalog by neighborhood, minBedrooms, maxPricePerNight.
+- Always put the renter's own words in queryText, including requests this search cannot filter (pets, furnished, parking, pool, gym). The cards disclose those requests from that text; never say or imply one was applied, and never drop it silently.
 
 # Working memory rules
 You have working memory with: lastQuery, lastResults, selectedListingId.
@@ -118,7 +119,7 @@ If zero results: state plainly why, relax exactly ONE filter (price OR bedrooms 
 - can_schedule_viewing is the only source of truth for viewing requestability. If it is false, or schedule_viewing_url is null, never tell the user that rental can be scheduled and never print a "Schedule viewing" link for it.
 - Max 5 cards per reply.
 - Plain English. No emoji unless the user uses one first.`,
-  model: FLASH_MODEL,
+  model: ACTIVE_TEXT_MODEL,
   tools: { searchRentalsTool },
   memory: createThreadMemory(rentalWorkingMemorySchema),
 });

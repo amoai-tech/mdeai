@@ -38,4 +38,52 @@ describe.each([
     expect(text).toMatch(/only AFTER the results/i);
     expect(text).toMatch(/Never ask before searching/i); // exact rule, not an alternative that a contradictory prompt could also satisfy
   });
+
+  it("puts requests the search cannot filter into queryText, so the cards can disclose them", async () => {
+    const text = await instructionsOf(agent as unknown as { getInstructions: () => unknown });
+    // The card renderer reads the requests from queryText; words the model drops are
+    // never disclosed to the renter.
+    expect(text).toMatch(/pets, furnished, parking/i);
+    expect(text).toMatch(/queryText/i);
+    expect(text).toMatch(/never say or imply/i);
+  });
+});
+
+/**
+ * SAN-1611 — a date-proposal message is about the stay, not a listing search. The rentals page
+ * registers the `suggestRentalDates` frontend tool, and the concierge used to answer the natural
+ * "suggest a rental stay starting November 12" with a rental search plus clarifying questions, so
+ * the editable date draft never opened. Pins the instruction; a live model still has to obey it
+ * (proven against a running app, not by this test).
+ */
+describe("concierge date-proposal routing", () => {
+  async function ruleLine(): Promise<string> {
+    const text = await instructionsOf(conciergeAgent as unknown as { getInstructions: () => unknown });
+    const line = text.split("\n").find((l) => l.includes("suggestRentalDates"));
+    expect(line, "no instruction naming suggestRentalDates").toBeTruthy();
+    return line as string;
+  }
+
+  it("sends a date-purpose request to the calendar and not to search", async () => {
+    const line = await ruleLine();
+    expect(line).toMatch(/stay-DATE intent/i);
+    expect(line).toMatch(/suggest a rental stay starting Nov 12/i);
+    expect(line).toMatch(/CALL suggestRentalDates with from as YYYY-MM-DD/i);
+    expect(line).toMatch(/then STOP/i);
+    expect(line).toMatch(/do NOT call search-rentals/i);
+    expect(line).toMatch(/do NOT.*ask clarifying questions/i);
+  });
+
+  it("keeps a listing search a search even when it names dates", async () => {
+    // The over-trigger this guards: "find me a 2-bedroom in Laureles for Nov 12-18"
+    // must search with the dates as filters, not open the calendar.
+    const line = await ruleLine();
+    expect(line).toMatch(/it is a SEARCH/i);
+    expect(line).toMatch(/NEVER open the calendar/i);
+    expect(line).toMatch(/find me a two-bedroom in Laureles for Nov 12-18/i);
+    expect(line).toMatch(/show cheaper options for those dates/i);
+    expect(line).toMatch(/call search-rentals with dates as filters/i);
+    // Precedence must be explicit, or the model picks the calendar on "apartments for Nov 12–18".
+    expect(line).toMatch(/listing request wins/i);
+  });
 });

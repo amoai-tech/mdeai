@@ -19,15 +19,21 @@ export function AuthStatus() {
 
   if (!user) {
     return (
-      <p className="text-xs text-muted-foreground">
-        <Link href="/login" className="text-primary underline-offset-4 hover:underline">
+      <div className="flex shrink-0 items-center gap-1 whitespace-nowrap text-xs text-muted-foreground">
+        <Link
+          href="/login"
+          className="inline-flex min-h-11 items-center px-1 -mx-1 text-primary underline-offset-4 hover:underline lg:min-h-0"
+        >
           Sign in
         </Link>
-        {" · "}
-        <Link href="/signup" className="text-primary underline-offset-4 hover:underline">
+        <span aria-hidden>·</span>
+        <Link
+          href="/signup"
+          className="inline-flex min-h-11 items-center px-1 -mx-1 text-primary underline-offset-4 hover:underline lg:min-h-0"
+        >
           Sign up
         </Link>
-      </p>
+      </div>
     );
   }
 

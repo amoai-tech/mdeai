@@ -53,6 +53,7 @@ Local URLs: UI `http://localhost:3001` · CopilotKit runtime `…/api/copilotkit
 | [`CLAUDE.md`](./CLAUDE.md) | Project instructions for Claude Code — hard rules, architecture, commands. **Read first.** |
 | [`index.md`](./index.md) | This file — repo map. |
 | [`lean.md`](./lean.md) | Lean orchestrator (class D/C/U/S, verify gates, pairing). |
+| [`leanuiux.md`](./leanuiux.md) | **UI/UX Fast Path** — one owner, clear UI states, accessible responsive checks, focused tests and evidence. |
 | [`prd.md`](./prd.md) · [`roadmap.md`](./roadmap.md) · [`mvp.md`](./mvp.md) · [`plan.md`](./plan.md) | PRD index, roadmap, **launch definition** (what must be true to launch; live status stays in Linear), plan snapshot. |
 | [`DESIGN.MD`](./DESIGN.MD) | Color tokens (oklch), typography, layout, component anatomy, do/don't. **Read before any UI work.** |
 | [`LESSONS.md`](./LESSONS.md) | Past mistakes + hooks that guard each area. |
@@ -150,4 +151,5 @@ Local URLs: UI `http://localhost:3001` · CopilotKit runtime `…/api/copilotkit
 | Understand the agent | [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) → `src/mastra/` |
 | Pick up a task | [`docs/index-docs.md`](./docs/index-docs.md) → [`docs/tasks/INDEX.md`](./docs/tasks/INDEX.md) · [`todo.md`](./todo.md) |
 | Lean workflow / verify class | [`lean.md`](./lean.md) |
+| Fast UI/UX delivery and review | [`leanuiux.md`](./leanuiux.md) → [UI review standard](./.claude/skills/tasks/references/ui-review.md) |
 | File a Linear issue | [`linear.md`](./linear.md) |

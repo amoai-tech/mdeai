@@ -170,9 +170,11 @@ export function RestaurantCard({
         : null;
   const blurb = aiSummary?.trim() || neighborhood?.trim() || null;
 
-  const preview = () => onSelect?.();
+  // Selection is a click/activation concern. Hover and focus must not select: a pointer preview
+  // would toggle an already-selected card off, and a click right after preview would clear it.
+  const select = () => onSelect?.();
   const openDetails = () => {
-    preview();
+    select();
     onOpenDetails?.();
   };
 
@@ -231,7 +233,7 @@ export function RestaurantCard({
             data-testid={bookingTestId}
             onClick={(e) => {
               e.stopPropagation();
-              preview();
+              select();
               onBookRequest();
             }}
           >
@@ -252,17 +254,25 @@ export function RestaurantCard({
       composition={composition}
       mediaLayout={mediaLayout}
       ariaLabel={`Restaurant: ${title}${neighborhood ? `, ${neighborhood}` : ""}`}
-      onPreview={preview}
-      bodyRole={onOpenDetails ? "button" : undefined}
-      bodyTabIndex={onOpenDetails ? 0 : undefined}
-      bodyAriaLabel={onOpenDetails ? `Open details for ${title}` : undefined}
-      onBodyClick={onOpenDetails ? openDetails : preview}
-      onBodyKeyDown={
+      // Pointer hover no longer selects, so the body itself stays the keyboard path: Enter/Space
+      // opens details when they exist, and otherwise selects this card on the map exactly once.
+      bodyRole={onOpenDetails || onSelect ? "button" : undefined}
+      bodyTabIndex={onOpenDetails || onSelect ? 0 : undefined}
+      bodyAriaLabel={
         onOpenDetails
+          ? `Open details for ${title}`
+          : onSelect
+            ? `Select ${title} on the map`
+            : undefined
+      }
+      onBodyClick={onOpenDetails ? openDetails : select}
+      onBodyKeyDown={
+        onOpenDetails || onSelect
           ? (e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
-                openDetails();
+                if (onOpenDetails) openDetails();
+                else select();
               }
             }
           : undefined
@@ -290,7 +300,7 @@ export function RestaurantCard({
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             {composition === "nova" ? (
-              <p className="min-h-[15px] text-[11px] font-medium text-muted-foreground">
+              <p className={cn("text-[11px] font-medium text-muted-foreground", mediaLayout === "cover" && "min-h-[15px]")}>
                 {neighborhood ?? "\u00A0"}
               </p>
             ) : neighborhood ? (
@@ -301,7 +311,7 @@ export function RestaurantCard({
             <h3
               className={cn(
                 "font-medium leading-snug",
-                composition === "nova" && "line-clamp-2 min-h-[2.5rem]",
+                composition === "nova" && mediaLayout === "cover" && "line-clamp-2 min-h-[2.5rem]",
               )}
             >
               {title}
@@ -322,7 +332,7 @@ export function RestaurantCard({
         <div
           className={cn(
             "mt-1.5 flex flex-wrap gap-1.5",
-            composition === "nova" && "min-h-6",
+            composition === "nova" && mediaLayout === "cover" && "min-h-6",
           )}
         >
           <Badge variant="secondary">{typeLabel}</Badge>
@@ -338,7 +348,7 @@ export function RestaurantCard({
         </div>
 
         {composition === "nova" ? (
-          <p className="mt-2 line-clamp-2 min-h-10 flex-1 text-xs leading-5 text-muted-foreground">
+          <p className={cn("mt-2 line-clamp-2 flex-1 text-xs leading-5 text-muted-foreground", mediaLayout === "cover" && "min-h-10")}>
             {summaryText ?? "\u00A0"}
           </p>
         ) : summaryText ? (

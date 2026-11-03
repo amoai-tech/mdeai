@@ -22,14 +22,18 @@ const mocks = vi.hoisted(() => {
     return chain;
   };
   const client = {
-    rpc: vi.fn(async () => ({
-      data: state.hybridIds.map((id, i) => ({
-        id, title: id, description: null, neighborhood: "Laureles", city: "Medellín",
-        price_monthly: 900, bedrooms: 1, bathrooms: 1, rating: null, images: [], amenities: [],
-        pet_friendly: false, furnished: true, status: "active", similarity: 0.9 - i / 100,
-      })),
-      error: null,
-    })),
+    rpc: vi.fn((name: string) => {
+      const result = {
+        data: state.hybridIds.map((id, i) => ({
+          id, title: id, description: null, neighborhood: "Laureles", city: "Medellín",
+          price_monthly: 900, bedrooms: 1, bathrooms: 1, rating: null, images: [], amenities: [],
+          pet_friendly: false, furnished: true, status: "active", similarity: 0.9 - i / 100,
+        })),
+        error: null,
+      };
+      if (name !== "hybrid_search_listings") return Promise.resolve(result);
+      return { abortSignal: () => Promise.resolve(result) };
+    }),
     from: vi.fn((table: string) =>
       makeThenable(() => (table === "apartments" ? state.aptRows : [])),
     ),
@@ -70,6 +74,8 @@ const baseRow = (over: Record<string, unknown>) => ({
   status: "active",
   moderation_status: "approved",
   listing_workflow_status: "published",
+  // SAN-1502: the database's computed column decides requestability.
+  rental_can_request_viewing: true,
   ...over,
 });
 
@@ -78,6 +84,16 @@ describe("searchRentalsIntelligent — future move-in (SAN-486)", () => {
     mocks.state.aptRows = [];
     mocks.state.hybridIds = [];
     mocks.state.filters = [];
+  });
+
+  it("does not claim an inactive development apartment is available for rent", () => {
+    const row = baseRow({
+      status: "inactive",
+      available_from: "2099-11-01",
+      rental_can_request_viewing: false,
+    });
+    const rental = rowToRental(row as unknown as ApartmentRow);
+    expect(rental.availability).toBe("Availability unconfirmed");
   });
 
   it("shows a future move-in as upcoming, requestable, and identical to the structured mapper", async () => {
@@ -100,8 +116,8 @@ describe("searchRentalsIntelligent — future move-in (SAN-486)", () => {
     expect(free.schedule_viewing_url).toBe(structured.schedule_viewing_url);
   });
 
-  it("offers no viewing for a listing with no move-in date", async () => {
-    const row = baseRow({ available_from: null });
+  it("offers no viewing when the database computed the listing not requestable", async () => {
+    const row = baseRow({ available_from: null, rental_can_request_viewing: false });
     mocks.state.aptRows = [row];
     mocks.state.hybridIds = [row.id as string];
     const { searchRentalsIntelligent } = await import("../intelligence-rental-search");

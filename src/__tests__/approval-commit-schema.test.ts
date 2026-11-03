@@ -25,6 +25,23 @@ describe("approval-commit schema", () => {
     });
     expect(result.success).toBe(true);
   });
+
+  it("accepts the shared proposal fields and rejects a malformed hash", () => {
+    const ok = ApprovalCommitInputSchema.safeParse({
+      decision: "approved",
+      draft: { title: "Mixer" },
+      proposalId: "proposal-1",
+      baseVersion: "draft",
+      draftHash: "a".repeat(64),
+    });
+    expect(ok.success).toBe(true);
+    const bad = ApprovalCommitInputSchema.safeParse({
+      decision: "approved",
+      draft: { title: "Mixer" },
+      draftHash: "short",
+    });
+    expect(bad.success).toBe(false);
+  });
 });
 
 describe("slugifyEventTitle", () => {

@@ -8,7 +8,8 @@ import {
   type RentalResultRow,
 } from "@/lib/rental-display";
 import type { RentalSearchApiParams } from "@/lib/rental-query-parser";
-import { Calendar, Heart } from "lucide-react";
+import { approvedExternalSourceUrl } from "@/lib/rentals/external-source";
+import { Calendar } from "lucide-react";
 import type { CardInteractionProps, ResultKind } from "@/components/cards/card-interaction-props";
 
 export type RentalCardProps = RentalResultRow & {
@@ -36,6 +37,11 @@ export type RentalCardProps = RentalResultRow & {
    * would reject.
    */
   canScheduleViewing?: boolean;
+  /**
+   * SAN-1235 — set when another result row looks like this same apartment ("Also listed as #1").
+   * Labelled, never hidden: the rows may be two real feeds for one home.
+   */
+  duplicateNote?: string;
 } & Omit<CardInteractionProps, "onSelect" | "pinId"> & {
   /** Unifies to `() => void` in UX-024; callers pass listing id today. */
   onSelect?: (id: string) => void;
@@ -65,9 +71,9 @@ export function RentalCard({
   searchParams,
   onSelect,
   onSchedule,
-  onSave,
   onOpenDetails,
   canScheduleViewing,
+  duplicateNote,
 }: RentalCardProps) {
   // The listing's own currency — never assumed USD. A stored monthly rent leads: the nightly figure
   // would only be rent ÷ 30, so it is not shown as an offer (same rule as the /rentals browse card).
@@ -76,6 +82,9 @@ export function RentalCard({
     price_monthly,
     currency,
   );
+  // SAN-1502: the validated, normalized URL is BOTH the guard and the destination. Rendering the
+  // raw `source_url` would let the checked value and the linked value differ.
+  const externalSourceUrl = approvedExternalSourceUrl(source_url);
   const benefits = rentalBenefitBadges({
     id,
     title,
@@ -87,7 +96,7 @@ export function RentalCard({
     tags,
   });
   const matchReason = buildMatchReason(
-    { id, title, neighborhood, nightly_price, bedrooms, wifi, amenities, tags },
+    { id, title, neighborhood, nightly_price, price_monthly, currency, bedrooms, bedrooms_unknown, wifi, amenities, tags },
     searchParams,
   );
 
@@ -172,6 +181,19 @@ export function RentalCard({
         <h3 className="min-w-0 flex-1 font-medium leading-snug">{title}</h3>
       </div>
 
+      {duplicateNote ? (
+        <div className="mt-1">
+          <Badge
+            variant="outline"
+            className="text-[10px] font-normal"
+            data-testid={`rental-card-duplicate-${id}`}
+            title={duplicateNote}
+          >
+            {duplicateNote}
+          </Badge>
+        </div>
+      ) : null}
+
       <p className="mt-0.5 text-xs text-muted-foreground">
         {neighborhood}
         {bedrooms_unknown ? " · Bedrooms unknown" : bedrooms != null
@@ -203,9 +225,12 @@ export function RentalCard({
         <p className="mt-1 text-xs text-muted-foreground">{availability}</p>
       ) : null}
 
-      <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">
-        {matchReason}
-      </p>
+      {matchReason ? (
+        <p className="mt-2 min-w-0 break-words text-xs leading-relaxed text-muted-foreground" data-testid="rental-match-reason">
+          <span className="font-medium text-foreground">Why it may fit:</span>{" "}
+          {matchReason}
+        </p>
+      ) : null}
 
       {tags?.includes("self-attested") ? (
         <div className="mt-2 flex flex-wrap gap-1">
@@ -233,12 +258,13 @@ export function RentalCard({
         </div>
       ) : null}
 
-      <div className="mt-3 flex flex-wrap gap-2">
+      <div className="mde-rental-card-actions mt-3 flex flex-wrap gap-2">
         {onOpenDetails ? (
           <Button
             type="button"
             size="sm"
             variant="outline"
+            className="min-h-11 lg:min-h-0"
             data-testid="rental-details-cta"
             onClick={(e) => {
               e.stopPropagation();
@@ -248,13 +274,13 @@ export function RentalCard({
             Details
           </Button>
         ) : null}
-        {tags?.includes("external-source") && source_url && /^https:\/\/(?:www\.)?fincaraiz\.com\.co\//i.test(source_url) ? (
+        {tags?.includes("external-source") && externalSourceUrl ? (
           <a
-            href={source_url}
+            href={externalSourceUrl}
             target="_blank"
             rel="nofollow noopener noreferrer"
             data-testid="rental-original-listing-cta"
-            className="inline-flex h-8 items-center rounded-md border px-3 text-sm"
+            className="inline-flex h-8 min-h-11 items-center rounded-md border px-3 text-sm lg:min-h-0"
           >
             View original listing
           </a>
@@ -264,6 +290,7 @@ export function RentalCard({
             type="button"
             size="sm"
             variant="default"
+            className="min-h-11 lg:min-h-0"
             data-testid="rental-schedule-cta"
             onClick={(e) => {
               e.stopPropagation();
@@ -274,21 +301,6 @@ export function RentalCard({
             Schedule viewing
           </Button>
         ) : null}
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          data-testid="rental-save-cta"
-          disabled
-          title="Save for later (coming soon)"
-          onClick={(e) => {
-            e.stopPropagation();
-            onSave?.();
-          }}
-        >
-          <Heart className="size-3.5" aria-hidden />
-          Save
-        </Button>
       </div>
     </VenueCardShell>
   );

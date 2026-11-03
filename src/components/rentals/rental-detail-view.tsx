@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Bed, Bath, Users, Building2, ExternalLink, MapPin, Heart } from "lucide-react";
+import { ArrowLeft, Bed, Bath, Users, Building2, ExternalLink, MapPin } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { LeadConfirmationBanner } from "@/components/chat/lead-confirmation-banner";
@@ -17,7 +17,9 @@ import {
   CarouselPrevious,
 } from "@/components/ui/carousel";
 import { GalleryImage } from "@/components/rentals/gallery-image";
+import { useHydrated } from "@/hooks/use-hydrated";
 import { formatRentalPrices } from "@/lib/rental-display";
+import { externalListingLink } from "@/lib/rentals/external-source";
 import type { RentalDetail } from "@/lib/rentals/get-rental-detail";
 
 const REQUEST_ONLY = "Request only — payment is handled directly with the host.";
@@ -168,6 +170,8 @@ const RentalPriceSidebar = ({
   hostName,
   onRequest,
   canRequestViewing,
+  isInteractive,
+  isExternalSource = false,
   isDevelopmentPreview = false,
 }: {
   prices: PriceLabels;
@@ -175,6 +179,10 @@ const RentalPriceSidebar = ({
   onRequest: () => void;
   /** SAN-1349 — server-proven requestability; the viewing CTA is withheld when false. */
   canRequestViewing: boolean;
+  /** Avoid rendering an apparently clickable CTA before React hydrates. */
+  isInteractive: boolean;
+  /** SAN-1502 — an external-source record is offered as an MDE follow-up, not a booking. */
+  isExternalSource?: boolean;
   isDevelopmentPreview?: boolean;
 }) => {
   const primary = prices.monthlyLabel ?? prices.nightlyLabel;
@@ -189,24 +197,12 @@ const RentalPriceSidebar = ({
           ) : null}
         </div>
         {canRequestViewing ? (
-          <Button type="button" className="w-full" data-testid="rental-detail-request-cta" onClick={onRequest}>
-            Request viewing
+          <Button type="button" className="w-full" data-testid="rental-detail-request-cta" disabled={!isInteractive} onClick={onRequest}>
+            {isExternalSource ? "Request MDE follow-up" : "Request viewing"}
           </Button>
         ) : null}
-        {!isDevelopmentPreview ? (
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full"
-            data-testid="rental-detail-ask-cta"
-            onClick={onRequest}
-          >
-            Ask a question
-          </Button>
-        ) : null}
-        <Button type="button" variant="ghost" className="w-full" disabled title="Save (coming soon)">
-          <Heart className="size-4" aria-hidden /> Save
-        </Button>
+        {/* SAN-479: do not show an inert Save or an “Ask” button that opens a viewing form.
+            Restore them only when their existing owning workflows are actually wired. */}
         <p className="text-center text-xs text-muted-foreground">{isDevelopmentPreview ? "Preview only — real inquiries disabled" : REQUEST_ONLY}</p>
         <p className="text-center text-xs text-muted-foreground">Host: {hostName ?? <Pending />}</p>
       </div>
@@ -219,18 +215,26 @@ const RentalMobileCta = ({
   prices,
   onRequest,
   canRequestViewing,
+  isInteractive,
+  isExternalSource = false,
   isDevelopmentPreview = false,
 }: {
   prices: PriceLabels;
   onRequest: () => void;
   /** SAN-1349 — server-proven requestability; the viewing CTA is withheld when false. */
   canRequestViewing: boolean;
+  /** Avoid rendering an apparently clickable CTA before React hydrates. */
+  isInteractive: boolean;
+  /** SAN-1502 — an external-source record is offered as an MDE follow-up, not a booking. */
+  isExternalSource?: boolean;
   /** Preview details must not imply that payment is handled with an unverified host. */
   isDevelopmentPreview?: boolean;
 }) => (
   <div
     data-testid="rental-detail-mobile-cta"
-    className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 p-3 backdrop-blur lg:hidden"
+    // SAN-1606 — this bar used to own the bottom edge; the phone tab bar does now, so the request
+    // action moves up above it (the shared clearance includes the home-indicator inset).
+    className="fixed inset-x-0 bottom-[var(--mde-mobile-nav-clearance)] z-20 border-t border-border bg-background/95 p-3 backdrop-blur lg:hidden"
   >
     <div className="mx-auto flex max-w-6xl items-center gap-2">
       <div className="min-w-0 flex-1">
@@ -242,8 +246,8 @@ const RentalMobileCta = ({
         </div>
       </div>
       {canRequestViewing ? (
-        <Button type="button" size="sm" data-testid="rental-detail-request-cta-mobile" onClick={onRequest}>
-          Request viewing
+        <Button type="button" size="sm" data-testid="rental-detail-request-cta-mobile" disabled={!isInteractive} onClick={onRequest}>
+          {isExternalSource ? "Request MDE follow-up" : "Request viewing"}
         </Button>
       ) : null}
     </div>
@@ -256,12 +260,27 @@ const mapsHrefFor = (detail: RentalDetail): string | null => {
   return `https://www.google.com/maps/search/?api=1&query=${detail.latitude},${detail.longitude}`;
 };
 
+/**
+ * A source link is an untrusted external destination, not proof that the advertiser
+ * is verified. Only permit a parsed HTTPS URL without embedded credentials.
+ * A hostname allowlist would hide legitimate new development inventory; instead
+ * show the exact host and ask the renter before navigating off MDE.
+ */
 /** SAN-1202 · RE-DES-007 — consumer rental detail page. */
 // skipcq: JS-0067 - ES module export; not browser global scope
-export function RentalDetailView({ detail, backHref = "/rentals" }: { detail: RentalDetail; backHref?: string }) {
+export function RentalDetailView({
+  detail,
+  backHref = "/rentals",
+  bookingReviewHref,
+}: {
+  detail: RentalDetail;
+  backHref?: string;
+  /** SAN-1611: the renter's already-applied stay, carried into the booking review. */
+  bookingReviewHref?: string;
+}) {
   return (
     <RentalUiProvider>
-      <RentalDetailInner detail={detail} backHref={backHref} />
+      <RentalDetailInner detail={detail} backHref={backHref} bookingReviewHref={bookingReviewHref} />
       <ScheduleViewingModal />
     </RentalUiProvider>
   );
@@ -299,16 +318,31 @@ function RentalDescription({ description }: { description?: string | null }) {
 }
 
 // skipcq: JS-0067, JS-R1005, JS-0415 - module-local helper with intentional UI composition complexity
-function RentalDetailInner({ detail, backHref }: { detail: RentalDetail; backHref: string }) {
+function RentalDetailInner({
+  detail,
+  backHref,
+  bookingReviewHref,
+}: {
+  detail: RentalDetail;
+  backHref: string;
+  bookingReviewHref?: string;
+}) {
   const { openScheduleViewing } = useRentalUi();
+  // The HTML arrives before client event handlers do. Do not show a clickable
+  // action that silently loses a renter's first tap before hydration.
+  const isInteractive = useHydrated();
   const prices = formatRentalPrices(detail.priceNightly, detail.priceMonthly, detail.currency);
   const mapsHref = mapsHrefFor(detail);
+  const sourceLink = (detail.status === "development-preview" || detail.isNotIndependentlyVerified)
+    ? externalListingLink(detail.sourceUrl)
+    : null;
   const requestViewing = () =>
     openScheduleViewing({ listingId: detail.id, title: detail.title, neighborhood: detail.neighborhood });
 
   return (
+    // SAN-1606 — phone content also clears the floating tab bar below the fixed request bar.
     // skipcq: JS-0415 - detailed sectioned layout is intentional for readability and stable test selectors
-    <main data-testid="rental-detail" className="mx-auto max-w-6xl px-4 pb-28 pt-6 sm:px-6 lg:pb-10">
+    <main data-testid="rental-detail" className="mx-auto max-w-6xl px-4 pb-[calc(7rem+var(--mde-mobile-nav-clearance))] pt-6 sm:px-6 lg:pb-10">
       {/* A saved viewing request must be visible where it was made, not only in the chat. */}
       <LeadConfirmationBanner />
       <Link
@@ -332,6 +366,52 @@ function RentalDetailInner({ detail, backHref }: { detail: RentalDetail; backHre
           />
 
           <RentalSpecs detail={detail} />
+
+          {/*
+            SAN-1612 — the secondary choices for this apartment. The primary viewing CTA is the one
+            in the price column (desktop) and the fixed bar (phone), so it is deliberately NOT
+            repeated here: two "Schedule viewing" buttons on one screen is worse than a truthful
+            heading. Hence "Other options", not "What would you like to do?".
+          */}
+          <section
+            aria-labelledby="rental-actions-heading"
+            data-testid="rental-detail-actions"
+            className="rounded-xl border border-border p-4"
+          >
+            <h2 id="rental-actions-heading" className="mb-3 font-serif text-base font-semibold">
+              Other options
+            </h2>
+            <div className="flex flex-wrap gap-2">
+              {detail.status !== "development-preview" && !detail.isExternalSource ? (
+                <Link
+                  href={bookingReviewHref ?? `/rentals/bookings/new?apartment=${encodeURIComponent(detail.id)}`}
+                  data-testid="rental-detail-booking-review-link"
+                  className="inline-flex max-w-full items-center rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted"
+                >
+                  Review booking (no payment yet)
+                </Link>
+              ) : null}
+              {sourceLink ? (
+                <a
+                  href={sourceLink.href}
+                  target="_blank"
+                  rel="nofollow noopener noreferrer"
+                  data-testid="rental-detail-source-link"
+                  onClick={(event) => {
+                    if (!window.confirm("You are leaving MDE AI for " + sourceLink.hostname + ". Continue to the external listing?")) {
+                      event.preventDefault();
+                    }
+                  }}
+                  className="inline-flex max-w-full flex-wrap items-center gap-1 rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted"
+                >
+                  <ExternalLink className="size-3.5" aria-hidden /> View original listing
+                  <span className="break-all text-xs text-muted-foreground">({sourceLink.hostname})</span>
+                  {/* The new tab is a real navigation change, so say it instead of only doing it. */}
+                  <span className="sr-only">(opens in a new tab)</span>
+                </a>
+              ) : null}
+            </div>
+          </section>
 
           <RentalDescription description={detail.description} />
 
@@ -380,16 +460,10 @@ function RentalDetailInner({ detail, backHref }: { detail: RentalDetail; backHre
               ) : (
                 <p className="text-xs text-muted-foreground">Map location {PENDING.toLowerCase()}.</p>
               )}
-              {(detail.status === "development-preview" || detail.isNotIndependentlyVerified) && detail.sourceUrl?.startsWith("https://") && !/^https:\/\/(?:www\.)?mdeai\.co(?:[/:]|$)/i.test(detail.sourceUrl) ? (
-                <a
-                  href={detail.sourceUrl}
-                  target="_blank"
-                  rel="nofollow noopener noreferrer"
-                  data-testid="rental-detail-source-link"
-                  className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
-                >
-                  <ExternalLink className="size-3.5" aria-hidden /> View original listing
-                </a>
+              {detail.sourceProvider ? (
+                <p className="mt-1 text-xs text-muted-foreground" data-testid="rental-detail-source-label">
+                  Source: {detail.sourceProvider}
+                </p>
               ) : null}
             </div>
           </section>
@@ -400,6 +474,8 @@ function RentalDetailInner({ detail, backHref }: { detail: RentalDetail; backHre
           hostName={detail.hostName}
           onRequest={requestViewing}
           canRequestViewing={detail.canScheduleViewing}
+          isInteractive={isInteractive}
+          isExternalSource={detail.isExternalSource}
           isDevelopmentPreview={detail.status === "development-preview"}
         />
       </div>
@@ -408,6 +484,8 @@ function RentalDetailInner({ detail, backHref }: { detail: RentalDetail; backHre
         prices={prices}
         onRequest={requestViewing}
         canRequestViewing={detail.canScheduleViewing}
+        isInteractive={isInteractive}
+        isExternalSource={detail.isExternalSource}
         isDevelopmentPreview={detail.status === "development-preview"}
       />
     </main>

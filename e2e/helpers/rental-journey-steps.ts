@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { chooseViewingDateTime, advanceViewingReview } from "./viewing-date-picker";
 import { expect, type Browser, type Locator, type Page } from "@playwright/test";
 import { establishVercelAutomationBypass, validateVercelCandidateOrigin } from "../fixtures/vercel-bypass";
 import { getTestSession, signInAsOnOrigin } from "./auth";
@@ -94,10 +95,11 @@ export async function fillRequestForm(
   await page.locator('input[name="name"]').fill(renter.name);
   await page.locator('input[name="email"]').fill(renter.email);
   await page.locator('input[name="phone"]').fill(renter.phone);
-  await page.locator('input[name="preferredAt"]').fill(preferredAt);
+  await chooseViewingDateTime(page, preferredAt);
 }
 
 export async function submitRequest(page: Page): Promise<{ status: number; body: ScheduleBody }> {
+  await advanceViewingReview(page);
   const [response] = await Promise.all([
     page.waitForResponse(
       (r) => r.url().includes("/api/leads/schedule-viewing") && r.request().method() === "POST",
@@ -264,6 +266,10 @@ export async function expectUnsavedRequestIsHonest(
     page.locator('[data-testid="schedule-viewing-modal"]'),
     "the form must stay open after a failure",
   ).toBeVisible();
+  // A failed final submit stays on the read-only Review step. Confirm the draft is
+  // preserved there AND still editable; the old input is not mounted until Edit.
+  await expect(page.getByTestId("schedule-viewing-review")).toContainText(retryEmail);
+  await page.getByTestId("schedule-viewing-edit").click();
   await expect(page.locator('input[name="email"]')).toHaveValue(retryEmail);
   await expect(
     page.getByText(/viewing request(ed| received)/i),

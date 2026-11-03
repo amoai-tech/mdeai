@@ -36,7 +36,7 @@ function rateLimited(retryAfterSeconds: number, req: Request) {
 export function createVoteNonceHandler(deps: VoteNonceDeps) {
   return async function handler(req: Request): Promise<Response> {
     const cors = getCorsHeaders(req);
-    if (req.method === "OPTIONS") return new Response("ok", { status: 204, headers: cors });
+    if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
     if (req.method !== "POST") return jsonResponse(errorBody("METHOD_NOT_ALLOWED", "POST only"), 405, req);
 
     const ip = clientIp(req);

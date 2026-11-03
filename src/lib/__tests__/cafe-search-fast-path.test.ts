@@ -13,6 +13,18 @@ describe("cafe-search-fast-path", () => {
     expect(params?.query).toContain("specialty coffee");
   });
 
+  it("does not fast-path a follow-up about the cards already on screen", () => {
+    expect(
+      canFastPathCafeSearch(
+        "Which of these cafés would you recommend for working with a laptop?",
+      ),
+    ).toBe(false);
+    expect(canFastPathCafeSearch("Which one is quietest?")).toBe(false);
+    expect(canFastPathCafeSearch("What about the first one?")).toBe(false);
+    // A new discovery request still uses the fast path.
+    expect(canFastPathCafeSearch("Quiet cafés near Laureles")).toBe(true);
+  });
+
   it("does not match generic restaurant discovery", () => {
     expect(canFastPathCafeSearch("suggest restaurants medellin")).toBe(false);
   });

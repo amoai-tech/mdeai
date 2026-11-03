@@ -6148,6 +6148,56 @@ export type Database = {
           },
         ]
       }
+      restaurant_menu_items: {
+        Row: {
+          created_at: string
+          currency: string
+          description: string | null
+          id: string
+          name: string
+          position: number
+          price_amount: number | null
+          restaurant_id: string
+          section: string | null
+          source_url: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          currency?: string
+          description?: string | null
+          id?: string
+          name: string
+          position?: number
+          price_amount?: number | null
+          restaurant_id: string
+          section?: string | null
+          source_url?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          currency?: string
+          description?: string | null
+          id?: string
+          name?: string
+          position?: number
+          price_amount?: number | null
+          restaurant_id?: string
+          section?: string | null
+          source_url?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "restaurant_menu_items_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       restaurants: {
         Row: {
           address: string | null
@@ -6178,6 +6228,7 @@ export type Database = {
           maps_url: string | null
           name: string
           neighborhood: string | null
+          partner_id: string | null
           phone: string | null
           postal_code: string | null
           price_level: number | null
@@ -6221,6 +6272,7 @@ export type Database = {
           maps_url?: string | null
           name: string
           neighborhood?: string | null
+          partner_id?: string | null
           phone?: string | null
           postal_code?: string | null
           price_level?: number | null
@@ -6264,6 +6316,7 @@ export type Database = {
           maps_url?: string | null
           name?: string
           neighborhood?: string | null
+          partner_id?: string | null
           phone?: string | null
           postal_code?: string | null
           price_level?: number | null
@@ -7225,7 +7278,7 @@ export type Database = {
           metadata: Json
           notes: string | null
           party_size: number | null
-          place_id: string
+          place_id: string | null
           requested_at: string
           restaurant_id: string | null
           source: string
@@ -7245,7 +7298,7 @@ export type Database = {
           metadata?: Json
           notes?: string | null
           party_size?: number | null
-          place_id: string
+          place_id?: string | null
           requested_at: string
           restaurant_id?: string | null
           source?: string
@@ -7265,7 +7318,7 @@ export type Database = {
           metadata?: Json
           notes?: string | null
           party_size?: number | null
-          place_id?: string
+          place_id?: string | null
           requested_at?: string
           restaurant_id?: string | null
           source?: string
@@ -7857,6 +7910,114 @@ export type Database = {
       }
     }
     Functions: {
+      partner_profile_patch: {
+        Args: { p_patch: Json; p_partner_id?: string | null }
+        Returns: Json
+      }
+      restaurant_admin_transfer: {
+        Args: {
+          p_restaurant_id: string
+          p_partner_id: string | null
+          p_expected_partner_id: string | null
+          p_reason: string
+        }
+        Returns: Json
+      }
+      restaurant_assign_partner: {
+        Args: { p_restaurant_id: string; p_partner_id: string | null }
+        Returns: Json
+      }
+      restaurant_create_for_partner: {
+        Args: {
+          p_partner_id: string
+          p_name: string
+          p_google_place_id?: string | null
+        }
+        Returns: Json
+      }
+      restaurant_owner_patch: {
+        Args: {
+          p_restaurant_id: string
+          p_patch: Json
+          p_partner_id?: string | null
+        }
+        Returns: Json
+      }
+      admin_contest_create: {
+        Args: {
+          p_actor: string
+          p_title: string
+          p_slug?: string | null
+          p_description?: string | null
+          p_starts_at?: string
+          p_ends_at?: string
+          p_origin?: string
+          p_request_id?: string | null
+        }
+        Returns: Json
+      }
+      admin_contest_get: {
+        Args: { p_actor: string; p_contest_id: string }
+        Returns: Json
+      }
+      admin_contest_link_restaurant: {
+        Args: {
+          p_actor: string
+          p_contest_id: string
+          p_restaurant_id: string
+          p_origin?: string
+          p_request_id?: string | null
+        }
+        Returns: Json
+      }
+      admin_contest_list: {
+        Args: { p_actor: string }
+        Returns: Json
+      }
+      admin_contest_unlink_restaurant: {
+        Args: {
+          p_actor: string
+          p_contest_id: string
+          p_restaurant_id: string
+          p_origin?: string
+          p_request_id?: string | null
+        }
+        Returns: Json
+      }
+      admin_contest_update: {
+        Args: {
+          p_actor: string
+          p_contest_id: string
+          p_title?: string | null
+          p_description?: string | null
+          p_status?: string | null
+          p_starts_at?: string | null
+          p_ends_at?: string | null
+          p_origin?: string
+          p_request_id?: string | null
+        }
+        Returns: Json
+      }
+      vote_my_receipt: {
+        Args: { p_contest_id: string; p_user_id: string }
+        Returns: Json
+      }
+      vote_restaurant_target: {
+        Args: { p_restaurant_id: string; p_contest_id?: string }
+        Returns: Json
+      }
+      vote_restaurant_contest_options: {
+        Args: { p_restaurant_id: string }
+        Returns: Json
+      }
+      contest_public_list: {
+        Args: Record<string, never>
+        Returns: Json
+      }
+      contest_public_get: {
+        Args: { p_ref: string }
+        Returns: Json
+      }
       _postgis_deprecate: {
         Args: { newname: string; oldname: string; version: string }
         Returns: undefined
@@ -9977,7 +10138,21 @@ export type Database = {
         }
         Returns: string
       }
+      admin_event_set_state: {
+        Args: { p_event_id: string; p_action: string }
+        Returns: Json
+      }
       ticket_validate_consume: { Args: { p_qr_token: string }; Returns: Json }
+      ticket_validate_consume_audited: {
+        Args: {
+          p_event_id: string
+          p_qr_token: string
+          p_scanned_by: string
+          p_scanner_device: string | null
+          p_ip_address: unknown | null
+        }
+        Returns: Json
+      }
       transition_listing_workflow: {
         Args: {
           p_apartment_id: string

@@ -6,7 +6,7 @@ Use the cheapest reliable proof first, but do not stop before the task's observa
 
 ```text
 exact Git diff / scope check
-→ Graphify before any Read/Grep/Glob/exploratory Bash code review
+→ Graphify for substantial code changes with a current index; known docs-only files can be read directly
 → static/diff review
 → targeted Vitest/component/contract tests
 → typecheck
@@ -45,20 +45,24 @@ Official guidance supports this split: Next.js recommends unit/component tests f
 
 ## Current MDE commands — verify before using
 
-Current root scripts include `npm test`, `npm run typecheck`, `npm run build`, `npm run e2e`, `npm run e2e:production`, and Playwright debug/report commands. Do not invent commands; re-read `package.json` and CI if they change.
-
-Use targeted Vitest first, for example:
+Consult `package.json` and CI **at the target commit**. The checked main supports:
 
 ```bash
-npx vitest run <relevant-test-file...>
+npx vitest run <relevant-test-file...>   # focused logic and contract tests
+npm run lint                             # existing ESLint script
 npm run typecheck
-npm run build                    # when applicable
-npm run e2e -- <relevant-spec>   # when a focused browser proof is sufficient
+npm run build                            # when build/runtime contracts change
+npm run test:e2e -- <relevant-spec>      # UI/browser changes only
+npm run test:e2e:deterministic           # targeted deterministic suite
+npx supabase test db                     # SQL/RLS changes in local test DB
+npm run floor                            # repository gate
 ```
+
+There is no `npm run e2e` or `npm run e2e:production` script at this revision. Do not invent them or omit the existing lint command. For a documentation-only PR, use documentation/skill checks plus repository-required exact-head CI; application E2E is not a relevant local prerequisite.
 
 ## Browser proof ladder
 
-1. **Localhost** — fastest proof for route, auth, interaction, responsive and negative states. Current Playwright owns `:3015` and does not reuse the developer's `:3000` server.
+1. **Localhost** — fastest proof for route, auth, interaction, responsive and negative states. Playwright uses `SMOKE_BASE_URL`; the `test:e2e` npm wrapper defaults to localhost `:3002` while other scripts use `:3001`. Verify the actual selected script/project/port.
 2. **Preview** — use when deployment wiring, environment variables, middleware, edge/runtime behavior, asset delivery, or hosted integrations could differ from localhost. Use only the project's allowlisted preview host.
 3. **Production smoke** — post-merge/live certification only unless the task explicitly authorizes otherwise. Never use production to manufacture fixture state.
 
@@ -86,7 +90,7 @@ Stop and update the task if the failure exposes a changed source of truth, new m
 
 Retries are diagnostic evidence, not permission to merge instability. For critical journeys, a test that fails and only passes on retry is a failure until the root cause is understood. Prefer Playwright `failOnFlakyTests: true` or `--fail-on-flaky-tests` for critical CI lanes. Record flaky/race findings separately from deterministic product failures.
 
-Critical MDE journeys should include auth, tenant isolation, Brand → Shoot → Planner, approval/save paths, and any task-specific P0 journey. Do not globally enable a stricter flaky gate without first auditing the current suite and owning existing flakes; apply it to a dedicated critical lane first when necessary.
+For affected MDE features test Rentals discovery → viewing → lead/showing, Events publish → test-mode checkout → webhook → ticket, and AI Concierge grounded results → authorized action; include auth, cross-tenant/private fixture denial and retry when applicable. Do not globally enable a stricter flaky gate without first auditing the current suite and owning existing flakes; apply it to a dedicated critical lane first when necessary.
 
 ## Production-build and preview browser strategy
 
@@ -98,27 +102,21 @@ Use browser proof in three levels:
 
 Do not run preview/browser certification for pure helpers or isolated server logic already proved by cheaper tests. Preview failures must be classified as code, deployment/config, secrets/env, external service, or flake before changing product code.
 
-## Current MDE pre-merge gaps to assess — do not silently change CI
+## Current pre-merge risk checks — reverify rather than quoting stale observations
 
-**These are a point-in-time snapshot, not a live fact.** Before citing any gap below as still true, re-verify it directly (`package.json`, `playwright.config.ts`, current CI workflow) — the repo changes independently of this file, and a gap fixed elsewhere without updating this list would otherwise be cited as still-open.
-
-These are verified observations from the current repo and should become explicit follow-up decisions when relevant:
-
-1. **No root lint script.** `package.json` has no `lint`; do not invent one in task instructions. Typecheck/tests/build are the current static gates. If linting is desired, create/own that change separately.
-2. **Normal E2E uses a Next dev server.** Current Playwright owns `localhost:3015` via `next dev --turbopack`. Next.js recommends E2E against production code for closer production behavior. For route/config/Server Component regressions, consider a separate build→start browser smoke or preview lane rather than assuming dev E2E proves production build behavior.
-3. **CI retries can hide flakiness.** Current Playwright uses 2 CI retries but does not enable `failOnFlakyTests`. Playwright can fail CI on any flaky retry with `failOnFlakyTests: true` / `--fail-on-flaky-tests`. Consider this for critical journeys so retry-success is not treated as clean.
-4. **Planner E2E has a real hosted model dependency.** A required test that depends on model quota/network can fail independently of deterministic code correctness. Keep deterministic runtime/tool/workflow tests as the primary merge gate; use live-model proof only for behavior that cannot be certified deterministically, and label external-provider failures distinctly.
-5. **Preview certification is not the same as localhost CI.** The current Playwright config supports allowlisted MDE Vercel previews through `E2E_BASE_URL`; use preview proof when env bindings, deployed middleware/runtime, asset delivery, or integration credentials are material to the task.
-6. **Database CI is already strong but mixed styles exist.** Current CI includes targeted SQL ACL/security fixtures and a full Supabase fresh replay. Prefer the existing targeted fixture for a small DB change; use fresh replay only when migration-chain/fresh-install behavior is actually at risk. Supabase's canonical CLI path is `supabase test db` with pgTAP for database tests.
-
-Do not put optional improvements on the critical path unless the task's risk requires them.
+1. **Scripts/ports:** Inspect current `package.json` and `playwright.config.ts`. Local `SMOKE_BASE_URL` and `PLAYWRIGHT_WEB_SERVER_COMMAND` may differ across scripts. Do not assume a fixed port.
+2. **Agent/model:** Separate live-provider quota/network failures from deterministic Mastra/CopilotKit tool failures; do not demand a paid model for a docs-only PR.
+3. **Flakes:** Retry-pass is diagnostic, not evidence of first-pass reliability. Keep meaningful critical assertions.
+4. **SQL:** Targeted pgTAP/ACL on narrow changes; fresh migration replay if migration chain/running new database is affected.
+5. **Phase A:** No business permission/landlord verification/publication gates before official launch. Keep authentication, private-fixture isolation, transaction integrity and independent S4 review.
+6. **Docs-only:** No unnecessary Graphify scan, Playwright, production writes or ticket checkout; use structural tests and skill evals if actually executable.
 
 ## Agent prompt
 
 ```text
-Choose the smallest pre-merge test set that proves the risks introduced by this change. Start with exact Git diff/scope. Before any Read, Grep, Glob, or exploratory Bash codebase inspection, run Graphify when graphify-out/graph.json exists and use the scoped result to choose the static review surface. Map changed behavior to the test matrix, run targeted unit/component/SQL/integration tests first, then typecheck/build, then localhost browser proof, production-build smoke, preview E2E, or live-provider tests only when the risk requires them. For auth/tenant changes include negative and Org A/Org B proof; for critical Playwright journeys treat retry-pass as flaky until understood. Before citing any "current MDE pre-merge gap" from this file, re-verify it against package.json/CI directly rather than assuming it is still true. Record each command, result, environment, tested SHA, and any skipped/N/A gate with reason. Stop merge readiness on unexplained P0/P1 failures or flakes.
+Choose the smallest pre-merge test set that proves the risks introduced by this change. Start with exact Git diff/scope. For substantial code inspection use Graphify when its index is current; for narrow known docs files inspect those files directly. Map changed behavior to the test matrix, run targeted unit/component/SQL/integration tests first, then typecheck/build, then localhost browser proof, production-build smoke, preview E2E, or live-provider tests only when the risk requires them. For auth/tenant changes include negative and Org A/Org B proof; for critical Playwright journeys treat retry-pass as flaky until understood. Before citing any "current MDE pre-merge gap" from this file, re-verify it against package.json/CI directly rather than assuming it is still true. Record each command, result, environment, tested SHA, and any skipped/N/A gate with reason. Stop merge readiness on unexplained P0/P1 failures or flakes.
 ```
 
 ## User-journey gate
 
-For user-facing or AI-native workflows, apply [user-journey-testing.md](user-journey-testing.md). Test the complete business outcome across UI, services, data, authorization, integrations, approvals, and persistence rather than certifying isolated pages. For AI-native journeys, Playwright alone is insufficient: add AI quality and guardrail evidence when applicable.
+For user-facing or AI-native workflows, apply [user-journey-testing.md](user-journey-testing.md). Test the affected MDE outcome across UI, services, data, authorization and persistence; no Phase A business approval prerequisites. Preserve user confirmation and independent S4 technical review when actually applicable. For AI-native journeys, Playwright alone is insufficient: add AI quality and guardrail evidence when applicable.

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import {
   CopilotChatMessageView,
   CopilotChatView,
@@ -12,8 +12,11 @@ import {
   useTranscriptTailHasContent,
 } from "@/components/chat/concierge-transcript-tail";
 import { useHydrated } from "@/hooks/use-hydrated";
-import { sendConciergeUserMessage } from "@/lib/concierge-send-user-message";
+import { useSession } from "@/hooks/use-session";
+import { takeConciergeDraft } from "@/lib/concierge-draft-store";
 import { useConciergeSendHandlers } from "@/lib/hooks/use-concierge-send-handlers";
+import { useConciergeSubmitHandler } from "@/lib/hooks/use-concierge-submit-handler";
+import { useOptionalThreadNav } from "@/lib/chat/thread-nav-context";
 
 /**
  * SAN-966 — the `messageView` slot: the stock CopilotKit message list, then the latest-turn
@@ -59,7 +62,32 @@ export function conciergeWelcomeScreen<T>(hasTailContent: boolean, welcomeScreen
   return hasTailContent ? false : welcomeScreen;
 }
 
-/** Props for the composer: our submit handler wired unconditionally, and the textarea locked until the page is live. */
+/**
+ * Keep every supported CopilotKit v2 composer-slot shape intact while adding a
+ * name to the stock icon-only control. A slot may be a class-name string, a
+ * partial props object, or a custom React component; replacing all three with
+ * `{ "aria-label": ... }` silently discarded the caller's customization.
+ */
+function labelledComposerSlot(slot: unknown, label: string): unknown {
+  if (typeof slot === "string") {
+    // CopilotKit treats a string as a className to merge onto the stock control.
+    // A props object preserving that className is the equivalent supported form.
+    return { className: slot, "aria-label": label };
+  }
+  if (typeof slot === "function") return slot;
+  if (typeof slot === "object" && slot !== null && "$$typeof" in slot) return slot;
+  if (typeof slot === "object" && slot !== null) {
+    const props = slot as Record<string, unknown>;
+    const existing = props["aria-label"];
+    return {
+      ...props,
+      "aria-label":
+        typeof existing === "string" && existing.trim() ? existing : label,
+    };
+  }
+  return { "aria-label": label };
+}
+
 export function conciergeComposerInput(
   baseInput: CopilotChatViewProps["input"],
   onSubmitMessage: (text: string) => void,
@@ -79,6 +107,10 @@ export function conciergeComposerInput(
   return {
     ...inputProps,
     onSubmitMessage,
+    // CopilotKit v2 exposes button slots: name the stock icon-only controls without
+    // replacing a class-string, props-object, or custom-component slot.
+    sendButton: labelledComposerSlot(inputProps.sendButton, "Send message"),
+    addMenuButton: labelledComposerSlot(inputProps.addMenuButton, "Add attachment"),
     textArea: {
       ...textAreaProps,
       enterKeyHint: "send",
@@ -99,21 +131,33 @@ export function conciergeComposerInput(
 function ConciergeChatViewInner(props: CopilotChatViewProps) {
   const handlers = useConciergeSendHandlers();
   const hasTailContent = useTranscriptTailHasContent();
-  const onSubmitMessage = useCallback(
-    (text: string) => {
-      void sendConciergeUserMessage(text, handlers);
-    },
-    [handlers],
-  );
+  const onSubmitMessage = useConciergeSubmitHandler(handlers);
   // The composer is server-rendered, so it shows up before the page's JavaScript can act on it.
   // Typing or pressing Enter in that gap does nothing and the typed text is wiped when the page
   // finishes loading — a renter's first message was silently lost. Keep it disabled until the
   // client has taken over.
   const hydrated = useHydrated();
+  // A saved conversation is only reattached once the verified owner is known.
+  // While that reattachment is pending the composer stays locked, so a first
+  // message cannot land in the thread it is about to leave. A fresh tab has
+  // nothing to restore and can type as soon as the client has hydrated.
+  const threadNav = useOptionalThreadNav();
+  const composerReady = hydrated && !threadNav?.restoringSavedThread;
   const input = useMemo(
-    () => conciergeComposerInput(props.input, onSubmitMessage, hydrated),
-    [onSubmitMessage, props.input, hydrated],
+    () => conciergeComposerInput(props.input, onSubmitMessage, composerReady),
+    [onSubmitMessage, props.input, composerReady],
   );
+  // SAN-1507: a visitor who asked the AI while signed out and then signed in gets that question back
+  // in the composer, editable and NOT sent. CopilotChat already owns the composer text and passes
+  // its setter down, so the normal typing path is untouched. The draft is read once, and only once
+  // there is a signed-in user, so going back from /login without signing in keeps it.
+  const { user } = useSession();
+  const setComposerText = props.onInputChange;
+  useEffect(() => {
+    if (!user || !setComposerText) return;
+    const draft = takeConciergeDraft();
+    if (draft) setComposerText(draft);
+  }, [user, setComposerText]);
 
   return (
     <div data-testid="concierge-chat-view-mounted" className="contents">

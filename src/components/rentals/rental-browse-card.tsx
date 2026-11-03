@@ -1,13 +1,15 @@
 "use client";
 
-import { useState, type KeyboardEvent } from "react";
+import { useState } from "react";
 import Link from "next/link";
-import { Bed, Building2, Calendar, ExternalLink, Heart, Wifi } from "lucide-react";
+import { Bed, Building2, Calendar, ExternalLink, Wifi } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { VenueCardShell } from "@/components/browse/venue-card-shell";
 import { VenueCardPlaceholder } from "@/components/browse/venue-card-placeholder";
-import { formatRentalPrices } from "@/lib/rental-display";
+import { buildMatchReason, formatRentalPrices } from "@/lib/rental-display";
+import type { RentalSearchApiParams } from "@/lib/rental-query-parser";
+import { approvedExternalSourceUrl } from "@/lib/rentals/external-source";
 import { rentalToMapPin } from "@/lib/browse/browse-pin-converters";
 import { cn } from "@/lib/utils";
 import type { Rental } from "@/mastra/tools/search-rentals";
@@ -59,15 +61,20 @@ export function isExternalAd(rental: Rental): boolean {
   return rental.tags.some((tag) => tag === "dev-preview" || tag === "external-source");
 }
 
-/** The advertiser's own listing, only for an external ad whose URL is on the approved domain. */
+/**
+ * The advertiser's own listing, only for an external ad whose URL is on the approved host
+ * allowlist. A blocklist of MDE's own domains would accept any other HTTPS URL, so a bad record
+ * could redirect a renter off-site to a phishing page through MDE's UI.
+ */
 export function externalSourceUrlFor(rental: Rental): string | null {
-  return isExternalAd(rental) && /^https:\/\/(?:www\.)?fincaraiz\.com\.co\//i.test(rental.source_url)
-    ? rental.source_url
-    : null;
+  if (!isExternalAd(rental)) return null;
+  return approvedExternalSourceUrl(rental.source_url);
 }
 
 type RentalBrowseCardProps = {
   rental: Rental;
+  /** Grounded, optional customer query; never a search-score/debug field. */
+  matchParams?: RentalSearchApiParams;
   /** SAN-478 / REAL-011 — per-listing id for Playwright (`rental-card-${id}`). */
   testId?: string;
   /** Query string (with leading `?`) appended to the detail link so the renter's filters survive the trip. */
@@ -93,6 +100,12 @@ type RentalBrowseCardProps = {
    * external ad, to the advertiser's listing.
    */
   onDetails?: () => void;
+  selectedForAsk?: boolean;
+  onAskSelect?: () => void;
+  /** A later row with the same title/area/size/price as an earlier one; labels it instead of hiding it. */
+  duplicateNote?: string;
+  /** Compact /chat-style browse feed, or existing cover layout. */
+  mediaLayout?: "inline" | "cover";
 };
 
 function RentalBrowseCardMedia({
@@ -100,18 +113,22 @@ function RentalBrowseCardMedia({
   title,
   neighborhood,
   nightlyLabel,
+  currency,
+  mediaLayout,
 }: {
   imageUrl?: string;
   title: string;
   neighborhood: string;
   nightlyLabel: string | null;
+  currency?: string;
+  mediaLayout: "inline" | "cover";
 }) {
   // A failed Storage request must fall back to the normal placeholder, not a broken image.
   const [imageFailed, setImageFailed] = useState(false);
   return (
     <div className="relative">
       {imageUrl && !imageFailed ? (
-        <div className="relative aspect-[16/10] w-full overflow-hidden rounded-xl bg-muted">
+        <div className={cn("relative aspect-[16/10] overflow-hidden rounded-xl bg-muted", mediaLayout === "inline" ? "w-24" : "w-full")}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={imageUrl}
@@ -126,13 +143,21 @@ function RentalBrowseCardMedia({
         <VenueCardPlaceholder
           label="Apartment"
           icon={<Building2 className="size-5" aria-hidden />}  
-          mediaLayout="cover"
+          mediaLayout={mediaLayout}
           testId="rental-browse-card-photo-placeholder"
         />
       )}
-      {nightlyLabel ? (
-        <span className="absolute bottom-2 right-2 rounded-full bg-background/90 px-2.5 py-0.5 font-mono text-xs font-semibold text-foreground backdrop-blur-sm">
+      {nightlyLabel && mediaLayout === "cover" ? (
+        <span className="absolute bottom-2 right-2 flex items-center gap-1 rounded-full bg-background/90 px-2.5 py-0.5 font-mono text-xs font-semibold text-foreground backdrop-blur-sm">
           {nightlyLabel}
+          {currency?.toUpperCase() === "USD" ? (
+            <span
+              className="rounded bg-foreground/10 px-1 text-[10px] font-normal"
+              data-testid="rental-card-nightly-currency"
+            >
+              USD
+            </span>
+          ) : null}
         </span>
       ) : null}
     </div>
@@ -143,6 +168,7 @@ function RentalBrowseCardMedia({
 /** Show a real rental card; map controls require coordinates and viewing requires authorization. */
 export function RentalBrowseCard({
   rental,
+  matchParams,
   testId,
   detailSearch,
   selected,
@@ -150,6 +176,10 @@ export function RentalBrowseCard({
   onPreview,
   onSchedule,
   onDetails,
+  selectedForAsk,
+  onAskSelect,
+  duplicateNote,
+  mediaLayout = "cover",
 }: RentalBrowseCardProps) {
   // Pass the listing's own currency: a COP monthly rent must not be labelled with a USD symbol.
   // A listing that stores a monthly rent leads with that rent. Its nightly figure is only rent ÷ 30,
@@ -158,11 +188,12 @@ export function RentalBrowseCard({
   // ponytail: a listing with BOTH a stored nightly and monthly price also shows only the monthly on
   // this long-stay page; add a `nightly_is_derived` flag to Rental if short-stay cards come back.
   const { nightlyLabel, monthlyLabel } = formatRentalPrices(
-    isExternalAd(rental) || rental.price_monthly != null ? null : rental.nightly_price,
+    isExternalAd(rental) || rental.price_monthly != null || rental.nightly_price <= 0 ? null : rental.nightly_price,
     rental.price_monthly,
     rental.currency,
   );
   const chips = topAmenities(rental.amenities);
+  const matchReason = buildMatchReason(rental, matchParams);
   const hasWifi = rental.wifi || rental.amenities?.some((a) => a.toLowerCase().includes("wifi"));
   const pinId = rentalToMapPin(rental)?.id;
   // SAN-1349: the viewing action requires the explicit requestability proof.
@@ -171,18 +202,11 @@ export function RentalBrowseCard({
   // an action the database will reject — and with no handler there is nothing to open.
   // Fail closed like the Details panel: an advertiser's listing is never requestable on MDE,
   // whatever its flag says.
-  const showScheduleCta = !isExternalAd(rental) && rental.can_schedule_viewing === true && Boolean(onSchedule);
+  const showScheduleCta = rental.can_schedule_viewing === true && Boolean(onSchedule);
   // The useful next action for an unrequestable external candidate is its source advert.
   const externalSourceUrl = externalSourceUrlFor(rental);
   const preview = () => (onPreview ?? onSelect)?.();
   const interactive = Boolean(onSelect && pinId);
-
-  const handleBodyKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      onSelect?.();
-    }
-  };
 
   return (
     <VenueCardShell
@@ -190,15 +214,10 @@ export function RentalBrowseCard({
       resultKind="rental"
       pinId={pinId}
       composition="nova"
-      mediaLayout="cover"
+      mediaLayout={mediaLayout}
       selected={selected}
       ariaLabel={`Rental: ${rental.title}, ${rental.neighborhood}`}
       onPreview={interactive ? preview : undefined}
-      bodyRole={interactive ? "button" : undefined}
-      bodyTabIndex={interactive ? 0 : undefined}
-      bodyAriaLabel={interactive ? `Select ${rental.title} on map` : undefined}
-      onBodyClick={interactive ? () => onSelect?.() : undefined}
-      onBodyKeyDown={interactive ? handleBodyKeyDown : undefined}
       media={
         onDetails ? (
           <button
@@ -206,13 +225,15 @@ export function RentalBrowseCard({
             onClick={onDetails}
             data-testid={`rental-card-photo-details-${rental.id}`}
             aria-label={`Details: ${rental.title}`}
-            className="block w-full rounded-xl text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            className={cn("block rounded-xl text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring", mediaLayout === "inline" ? "w-24 shrink-0 self-start" : "w-full")}
           >
             <RentalBrowseCardMedia
               imageUrl={rental.image || undefined}
               title={rental.title}
               neighborhood={rental.neighborhood}
               nightlyLabel={nightlyLabel}
+              currency={rental.currency}
+              mediaLayout={mediaLayout}
             />
           </button>
         ) : (
@@ -221,16 +242,37 @@ export function RentalBrowseCard({
             title={rental.title}
             neighborhood={rental.neighborhood}
             nightlyLabel={nightlyLabel}
+            currency={rental.currency}
+            mediaLayout={mediaLayout}
           />
         )
       }
       footer={
         <div className="flex w-full flex-wrap items-center justify-between gap-2">
+          {interactive ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              data-testid={`rental-card-map-select-${rental.id}`}
+              aria-label={`Show ${rental.title} on the map`}
+              className="min-h-11 lg:min-h-0"
+              onClick={() => onSelect?.()}
+              onFocus={preview}
+            >
+              Show on map
+            </Button>
+          ) : null}
+          {onAskSelect ? <Button type="button" size="sm" variant={selectedForAsk ? "secondary" : "outline"}
+            aria-pressed={Boolean(selectedForAsk)} data-testid="rental-ask-select" onClick={onAskSelect}>
+            {selectedForAsk ? "Clear selection" : "Ask about this"}
+          </Button> : null}
           {onDetails ? (
             <Button
               type="button"
               size="sm"
               variant="secondary"
+              className="min-h-11 lg:min-h-0"
               data-testid={`rental-details-cta-${rental.id}`}
               onClick={(event) => {
                 event.stopPropagation();
@@ -246,15 +288,23 @@ export function RentalBrowseCard({
               size="sm"
               variant="default"
               data-testid="rental-schedule-cta"
-              className={cn(buttonVariants({ size: "sm", variant: "default" }))}
+              className={cn(buttonVariants({ size: "sm", variant: "default" }), "min-h-11 lg:min-h-0")}
               onClick={(e) => {
                 e.stopPropagation();
                 onSchedule?.();
               }}
             >
               <Calendar data-icon="inline-start" aria-hidden />
-              Schedule viewing
+              {isExternalAd(rental) ? 'Request MDE follow-up' : 'Schedule viewing'}
             </Button>
+          ) : null}
+          {isExternalAd(rental) && rental.source_provider ? (
+            <span
+              data-testid={`rental-card-source-label-${rental.id}`}
+              className="self-center text-[11px] text-muted-foreground"
+            >
+              Source: {rental.source_provider}
+            </span>
           ) : null}
           {externalSourceUrl ? (
             <a
@@ -262,27 +312,29 @@ export function RentalBrowseCard({
               target="_blank"
               rel="nofollow noopener noreferrer"
               data-testid={`rental-card-source-${rental.id}`}
-              className={cn(buttonVariants({ size: "sm", variant: "outline" }))}
+              className={cn(buttonVariants({ size: "sm", variant: "outline" }), "min-h-11 lg:min-h-0")}
               onClick={(event) => event.stopPropagation()}
             >
               <ExternalLink data-icon="inline-start" aria-hidden />
               View original listing
             </a>
           ) : null}
-          <Button
-            size="sm"
-            variant="outline"
-            data-testid="rental-save-cta"
-            disabled
-            title="Save for later (coming soon)"
-          >
-            <Heart data-icon="inline-start" aria-hidden />
-            Save
-          </Button>
         </div>
       }
     >
-      <p className="text-[11px] font-medium text-muted-foreground">{rental.neighborhood}</p>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <p className="text-[11px] font-medium text-muted-foreground">{rental.neighborhood}</p>
+        {duplicateNote ? (
+          <Badge
+            variant="outline"
+            className="font-normal text-[10px]"
+            data-testid={`rental-card-duplicate-${rental.id}`}
+            title={duplicateNote}
+          >
+            {duplicateNote}
+          </Badge>
+        ) : null}
+      </div>
       <h3 className="mt-0.5 font-medium leading-snug">
         {onDetails ? (
           <button
@@ -348,8 +400,35 @@ export function RentalBrowseCard({
         )}
       </div>
 
-      {monthlyLabel ? (
-        <p className="mt-1.5 text-xs text-muted-foreground">{monthlyLabel}</p>
+      {mediaLayout === "inline" && nightlyLabel ? (
+        // Inline cards have no photo overlay, so the stored nightly price is shown here. Checked
+        // before `monthlyLabel`: that label is always set when a nightly price exists (derived,
+        // marked "~"), which made this branch unreachable and showed "~$2,340/mo" for $78/night.
+        <div className="mt-1.5 flex flex-wrap items-center gap-2">
+          <p className="text-xs font-medium">{nightlyLabel}</p>
+          {rental.currency?.toUpperCase() === "USD" ? (
+            <Badge variant="outline" className="font-normal text-[10px]" data-testid="rental-card-currency">
+              USD
+            </Badge>
+          ) : null}
+        </div>
+      ) : monthlyLabel ? (
+        <div className="mt-1.5 flex flex-wrap items-center gap-2">
+          <p className="text-xs text-muted-foreground">{monthlyLabel}</p>
+          {rental.currency?.toUpperCase() === "USD" ? (
+            <Badge variant="outline" className="font-normal text-[10px]" data-testid="rental-card-currency">
+              USD
+            </Badge>
+          ) : null}
+        </div>
+      ) : !nightlyLabel ? (
+        <p className="mt-1.5 text-xs text-muted-foreground">Price not provided</p>
+      ) : null}
+
+      {matchReason ? (
+        <p className="mt-1.5 min-w-0 break-words text-xs leading-relaxed text-muted-foreground" data-testid="rental-match-reason">
+          <span className="font-medium text-foreground">Why it may fit:</span>{" "}{matchReason}
+        </p>
       ) : null}
 
       {rental.availability ? (

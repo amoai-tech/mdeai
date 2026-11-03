@@ -9,6 +9,7 @@ import {
 } from "@/mastra/lib/rental-search-unavailable";
 import { RentalDetailView } from "@/components/rentals/rental-detail-view";
 import { buildRentalsUrl, parseBrowseFilters, type RentalBrowseSearchParams } from "@/lib/rentals/browse-filters";
+import { bookingReviewHref } from "@/lib/rentals/booking-review-url";
 import {
   getLocalPreviewDetail,
   isLocalPreviewRequest,
@@ -57,7 +58,8 @@ export async function generateMetadata({ params }: Props) {
 export default async function RentalDetailPage({ params, searchParams }: Props) {
   const { id } = await params;
   // Only recognised, validated filters are carried back; anything else in the URL is ignored.
-  const backHref = buildRentalsUrl(parseBrowseFilters((await searchParams) ?? {}).filters);
+  const { filters } = parseBrowseFilters((await searchParams) ?? {});
+  const backHref = buildRentalsUrl(filters);
   const preview = (await isLocalPreviewPage()) && id.startsWith("candidate-fincaraiz-");
 
   let detail;
@@ -105,7 +107,7 @@ export default async function RentalDetailPage({ params, searchParams }: Props) 
 
   if (!detail) notFound();
 
-  const view = <RentalDetailView detail={detail} backHref={backHref} />;
+  const view = <RentalDetailView detail={detail} backHref={backHref} bookingReviewHref={bookingReviewHref(detail.id, filters)} />;
   // Only a development preview wraps the view (with its banner); a real listing returns it as is.
   if (!preview) return view;
   return (

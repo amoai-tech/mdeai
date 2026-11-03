@@ -16,6 +16,11 @@ const run = (opts: { checkIn?: string; checkOut?: string }) => {
   applyAvailabilityFilters(builder, { ...opts, today: "2026-10-13" });
   return calls;
 };
+const runDev = (opts: { checkIn?: string; checkOut?: string }) => {
+  const { builder, calls } = recorder();
+  applyAvailabilityFilters(builder, { ...opts, today: "2026-10-13", developmentMode: true });
+  return calls;
+};
 
 describe("applyAvailabilityFilters — one rule for every search path (SAN-486)", () => {
   it("requires a known move-in date only when the user requests a dated stay", () => {
@@ -45,6 +50,51 @@ describe("applyAvailabilityFilters — one rule for every search path (SAN-486)"
       "or(available_from.lte.2026-11-01)",
       "or(available_to.is.null,available_to.gte.2026-11-01)",
     ]);
+  });
+});
+
+describe("applyAvailabilityFilters — development phase still honours explicit dates (SAN-486)", () => {
+  it("a full stay keeps known dates that cover it, plus unknown and metadata-flagged dates", () => {
+    const expr = runDev({ checkIn: "2026-11-01", checkOut: "2026-11-30" }).join(" ");
+    expect(expr).toContain("or(available_from.is.null,available_from.lte.2026-11-01");
+    // A stored date flagged by metadata must not be treated as a confirmed date.
+    expect(expr).toContain("metadata->>test_available_from_simulated.eq.true");
+    expect(expr).toContain("metadata->>availability_status.eq.unconfirmed");
+    expect(expr).toContain("metadata->>availability_status.eq.source_claim_unverified");
+    expect(expr).toContain("metadata->>available_from_basis.eq.source_for_rent_dates_unconfirmed");
+    expect(expr).toContain("or(available_to.is.null,available_to.gte.2026-11-30)");
+    expect(expr).toContain("minimum_stay_days.lte.30");
+    expect(expr).toContain("maximum_stay_days.gte.30");
+  });
+
+  it("a single day keeps the same shape without the length rules", () => {
+    const expr = runDev({ checkIn: "2026-11-01" }).join(" ");
+    expect(expr).toContain("or(available_from.is.null,available_from.lte.2026-11-01");
+    expect(expr).toContain("or(available_to.is.null,available_to.gte.2026-11-01)");
+    expect(expr).not.toContain("minimum_stay_days");
+  });
+
+  it("a rejected date still throws before adding any filter", () => {
+    const { builder, calls } = recorder();
+    expect(() =>
+      applyAvailabilityFilters(builder, { checkIn: "2026-02-31", today: "2026-10-13", developmentMode: true }),
+    ).toThrow(RangeError);
+    expect(calls).toEqual([]);
+  });
+
+  it("with no dates development only excludes expired listings", () => {
+    expect(runDev({})).toEqual(["or(available_to.is.null,available_to.gte.2026-10-13)"]);
+  });
+
+  it("an unknown start date must still respect a known end date and the stay length", () => {
+    const expr = runDev({ checkIn: "2026-11-01", checkOut: "2026-11-30" }).join(" ");
+    // The unknown-start case is INSIDE the and(...) with the end-date and length coverage, so a
+    // listing that ends on 15 Nov is excluded even though its move-in date is unknown.
+    expect(expr).not.toContain(",available_from.is.null)");
+    expect(expr).toContain("or(available_from.is.null,available_from.lte.2026-11-01");
+    expect(expr).toContain("or(available_to.is.null,available_to.gte.2026-11-30)");
+    expect(expr).toContain("minimum_stay_days.lte.30");
+    expect(expr).toContain("maximum_stay_days.gte.30");
   });
 });
 

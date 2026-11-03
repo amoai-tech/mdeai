@@ -6,9 +6,7 @@ type FooterColumn = {
 };
 
 // Live routes only — every href must resolve to an existing page.tsx.
-// Dead links (/about, /contact, /legal/privacy) removed per PR #131 review;
-// those routes are not built yet (own follow-up tasks). Do not add a link here
-// until its route ships.
+// Keep only real implemented routes. SAN-693 restores /contact here.
 const COLUMNS: FooterColumn[] = [
   {
     heading: "Explore",
@@ -33,6 +31,7 @@ const COLUMNS: FooterColumn[] = [
     links: [
       { href: "/partners", label: "Partner hub" },
       { href: "/partners/signup", label: "List with us" },
+      { href: "/contact", label: "Contact us" },
       { href: "/host/event/new", label: "Host an event" },
     ],
   },

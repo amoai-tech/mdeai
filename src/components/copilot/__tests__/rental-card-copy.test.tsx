@@ -14,7 +14,7 @@ describe("UX-027 rental card copy leaks (UX-T-027 / CU-P0-07)", () => {
     expect(src).not.toMatch(/Photo soon/i);
   });
 
-  it("rendered Save CTA uses user-facing tooltip, not internal ticket copy", () => {
+  it("does not render a dead Save CTA or internal ticket copy", () => {
     const html = renderToStaticMarkup(
       <RentalCard
         id="rental-1"
@@ -26,7 +26,8 @@ describe("UX-027 rental card copy leaks (UX-T-027 / CU-P0-07)", () => {
         onSelect={() => undefined}
       />,
     );
-    expect(html).toContain('title="Save for later (coming soon)"');
+    expect(html).not.toContain('data-testid="rental-save-cta"');
+    expect(html).not.toMatch(/Save for later/i);
     expect(html).not.toMatch(/SCREEN-/);
     expect(html).not.toMatch(/Photo soon/i);
   });
@@ -123,6 +124,65 @@ describe("external source rental cards", () => {
     expect(html).not.toContain("0 BR");
     expect(html).not.toContain("Schedule viewing");
   });
+
+  it("SAN-1502: never links an approved host smuggled behind userinfo", () => {
+    const html = renderToStaticMarkup(
+      <RentalCard
+        id="candidate-evil-1"
+        listingId="candidate-evil-1"
+        title="Phishing"
+        neighborhood="Laureles"
+        nightly_price={0}
+        price_monthly={2100000}
+        currency="COP"
+        bedrooms={1}
+        tags={["external-source"]}
+        source_url="https://attacker@fincaraiz.com.co/phishing"
+        canScheduleViewing={false}
+      />,
+    );
+    expect(html).not.toContain("View original listing");
+    expect(html).not.toContain("attacker@");
+  });
+
+  it("SAN-1502: links the validated, normalized URL rather than the raw value", () => {
+    const html = renderToStaticMarkup(
+      <RentalCard
+        id="candidate-fincaraiz-193916988"
+        listingId="candidate-fincaraiz-193916988"
+        title="Conquistadores"
+        neighborhood="Conquistadores"
+        nightly_price={0}
+        price_monthly={2100000}
+        currency="COP"
+        bedrooms={1}
+        tags={["external-source"]}
+        source_url="https://WWW.FINCARAIZ.COM.CO/property/123"
+        canScheduleViewing={false}
+      />,
+    );
+    expect(html).toContain("View original listing");
+    expect(html).toContain('href="https://www.fincaraiz.com.co/property/123"');
+  });
+
+  it("SAN-1502: never links an arbitrary host", () => {
+    const html = renderToStaticMarkup(
+      <RentalCard
+        id="candidate-evil-2"
+        listingId="candidate-evil-2"
+        title="Bad"
+        neighborhood="Laureles"
+        nightly_price={0}
+        price_monthly={2100000}
+        currency="COP"
+        bedrooms={1}
+        tags={["external-source"]}
+        source_url="https://evil.example.com/fake"
+        canScheduleViewing={false}
+      />,
+    );
+    expect(html).not.toContain("View original listing");
+  });
 });
 
 // SAN-1503 — WE Home rents for COP 14,500,000 a month. Its "nightly" figure is only rent ÷ 30, so the
@@ -180,5 +240,40 @@ describe("SAN-1505 mobile rental photo presentation", () => {
     expect(html).toContain("sm:flex");
     expect(html).toContain("Photo");
     expect(html).not.toContain('data-testid="rental-schedule-cta"');
+  });
+});
+
+describe("SAN-1226 customer match reasons on rendered cards", () => {
+  const listing = {
+    id: "rental-match",
+    listingId: "apt-match",
+    title: "Laureles 2BR",
+    neighborhood: "Laureles",
+    bedrooms: 2,
+    nightly_price: 75,
+    currency: "USD",
+    wifi: true,
+    amenities: ["parking"],
+  };
+
+  it("renders the actual listing price and a grounded, readable match explanation", () => {
+    const html = renderToStaticMarkup(
+      <RentalCard {...listing} searchParams={{ neighborhood: "Laureles", minBedrooms: 2, maxPricePerNight: 80 }} />,
+    );
+    expect(html).toContain('data-testid="rental-match-reason"');
+    expect(html).toContain("Why it may fit:");
+    expect(html).toContain("In Laureles");
+    expect(html).toContain("2 BR, as you asked");
+    expect(html).toContain("$75/night within your $80/night budget");
+    expect(html).toContain("Wi-Fi listed");
+    expect(html).not.toMatch(/hybrid_semantic|neighborhood_profile|hybrid_search_listings RPC|Fast WiFi/);
+  });
+
+  it("does not show a false cross-currency budget match", () => {
+    const html = renderToStaticMarkup(
+      <RentalCard {...listing} currency="COP" searchParams={{ maxPricePerNight: 80 }} />,
+    );
+    expect(html).not.toContain("within your");
+    expect(html).toContain("Wi-Fi listed");
   });
 });

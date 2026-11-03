@@ -118,9 +118,42 @@ test.describe("SAN-524 mobile map interaction — 390×844 touch", () => {
     hasTouch: true,
   });
 
+  test("map trigger is disabled in server HTML until hydrated", async ({
+    browser,
+    page,
+  }) => {
+    const withoutJs = await browser.newContext({
+      viewport: PHONE_390,
+      isMobile: true,
+      hasTouch: true,
+      javaScriptEnabled: false,
+    });
+    try {
+      const serverPage = await withoutJs.newPage();
+      await serverPage.goto("/chat", { waitUntil: "domcontentloaded" });
+      const serverTrigger = serverPage.getByTestId("map-sheet-trigger");
+      await expect(serverTrigger).toBeVisible({ timeout: 15_000 });
+      await expect(serverTrigger).toBeDisabled();
+      await expect(serverTrigger).toHaveAttribute("data-hydrated", "false");
+    } finally {
+      await withoutJs.close();
+    }
+
+    await gotoDeterministicChat(page);
+    const trigger = page.getByTestId("map-sheet-trigger");
+    await expect(trigger).toBeEnabled({ timeout: 15_000 });
+    await expect(trigger).toHaveAttribute("data-hydrated", "true");
+    await trigger.tap();
+    await expect(page.getByTestId("map-sheet-content")).toBeVisible();
+  });
+
   test("map close control and unselected pin meet the 44×44 touch target", async ({
     page,
   }) => {
+    // On a cold CI runner, /chat can take over 60s to compile and hydrate
+    // before the map opens. Keep the exact 44px assertion and its 5s poll;
+    // only extend this test's overall startup budget.
+    test.setTimeout(120_000);
     await seedRentalPin(page);
     await expectTouchContext(page, PHONE_390);
     const { sheet } = await openRentalMap(page);
@@ -349,6 +382,75 @@ test.describe("SAN-1505 rental photos on narrow chat cards", () => {
     const card = page.getByTestId("rental-card").first();
     await expect(card.locator("img")).toHaveCount(0);
     await expect(card.getByText("Photo", { exact: true })).toBeHidden();
+    await expectNoHorizontalOverflow(page);
+  });
+});
+
+// SAN-1075 — measured heights, not class names. The `sm` button size is only 28px high, so every
+// card action also carries `min-h-11`; this proves a thumb actually gets 44px at 390px.
+test.describe("SAN-1075 rental card actions at phone size", () => {
+  test.use({ isMobile: true, hasTouch: true });
+
+  test("Details, Schedule viewing and View original listing are at least 44px; no dead Save at 390px", async ({ page }) => {
+    await page.setViewportSize(PHONE_390);
+    await mockFastPaths(page);
+    await page.route("**/api/rentals/search", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          results: [{
+            ...rental,
+            can_schedule_viewing: true,
+            schedule_viewing_url: "/rentals/e2e-touch/schedule",
+            // The source link only renders for an allowlisted external listing.
+            tags: ["external-source"],
+            source_url: "https://www.fincaraiz.com.co/apartment/193916988",
+            source_provider: "fincaraiz",
+          }],
+          total: 1,
+          source: "mock",
+        }),
+      }),
+    );
+    await gotoDeterministicChat(page);
+    const responsePromise = waitForPost(page, "/api/rentals/search");
+    await typeAndSubmit(page, RENTAL_QUERY);
+    expect((await responsePromise).ok()).toBe(true);
+
+    const card = page.getByTestId("rental-card").first();
+    await expect(card).toBeVisible();
+    for (const [label, testId] of [
+      ["Details", "rental-details-cta"],
+      ["Schedule viewing", "rental-schedule-cta"],
+      ["View original listing", "rental-original-listing-cta"],
+    ] as const) {
+      const action = card.getByTestId(testId);
+      await expect(action, `${label} is on the card`).toBeVisible();
+      await expectMinimumTouchTarget(action, `${label} button`);
+    }
+    await expect(card.getByTestId("rental-save-cta")).toHaveCount(0);
+    await expectNoHorizontalOverflow(page);
+  });
+});
+
+// PR #659: exercise real React chat rendering at phone width, not only the pure helper.
+test.describe("SAN-1226 grounded rental reasons on mobile", { tag: ["@deterministic"] }, () => {
+  test.use({ isMobile: true, hasTouch: true });
+
+  test("390px: helpful rental reasons, usable actions and map without horizontal overflow", async ({ page }) => {
+    await page.setViewportSize(PHONE_390);
+    await seedRentalPin(page);
+    const card = page.getByTestId("rental-card").first();
+    await expect(card.getByTestId("rental-match-reason")).toBeVisible();
+    await expect(card.getByTestId("rental-match-reason")).toContainText("Wi-Fi listed");
+    expect(await card.getByTestId("rental-match-reason").evaluate((el) => el.scrollHeight <= el.clientHeight + 1)).toBe(true);
+    await expect(card).not.toContainText(/hybrid_semantic|hybrid_search_listings|neighborhood_profile|RPC/);
+    await expectMinimumTouchTarget(card.getByTestId("rental-details-cta"), "Details");
+    await expectMinimumTouchTarget(card.getByTestId("rental-schedule-cta"), "Schedule viewing");
+    await expectNoHorizontalOverflow(page);
+    const { sheet } = await openRentalMap(page);
+    await expect(sheet.getByTestId("chat-map")).toBeVisible();
     await expectNoHorizontalOverflow(page);
   });
 });

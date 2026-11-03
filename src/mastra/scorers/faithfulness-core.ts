@@ -100,7 +100,7 @@ const ENTITY_STOPWORDS = new Set<string>([
  * left to the Gemini judge — counting every capitalized word here produces false
  * "hallucinations" on sentence-initial words like "Sure" or "Here".
  */
-const MULTI_WORD_ENTITY = /\b([A-Z][a-zA-Z0-9'&]+(?:\s+[A-Z][a-zA-Z0-9'&]+)+)\b/g;
+const MULTI_WORD_ENTITY = /(?<![\p{L}\p{N}])([\p{Lu}][\p{L}\p{N}'&]+(?:\s+[\p{Lu}][\p{L}\p{N}'&]+)+)(?![\p{L}\p{N}])/gu;
 /** Money: "$4,200,000", "4.200.000 COP", "9,900,000 COP/month", "120 USD". */
 const PRICE =
   /(?:\$\s?[\d][\d.,]*|\b[\d][\d.,]{2,}\s?(?:cop|usd|\/night|\/mo|\/month|per night|per month|million|m)\b)/gi;

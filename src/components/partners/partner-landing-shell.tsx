@@ -322,11 +322,11 @@ export function PartnerLandingShell({
             className="mt-8"
             nativeButton={false}
             render={
-              <Link href="/contact" data-testid={`${testId}-pricing-cta`} />
+              <Link href={leadForm ? "#demo" : signupHref} data-testid={`${testId}-pricing-cta`} />
             }
           >
             <MessageSquareIcon data-icon="inline-start" aria-hidden="true" />
-            Talk to us about pricing
+            {leadForm ? "Ask about pricing" : "Get started"}
           </Button>
         </div>
       </section>
@@ -372,13 +372,13 @@ export function PartnerLandingShell({
                 nativeButton={false}
                 render={
                   <Link
-                    href="/contact"
+                    href={signupHref}
                     data-testid={`${testId}-demo-secondary-cta`}
                   />
                 }
               >
                 <PhoneIcon data-icon="inline-start" aria-hidden="true" />
-                Book a demo
+                Get started
               </Button>
             </div>
           )}

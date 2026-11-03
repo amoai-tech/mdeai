@@ -3,43 +3,38 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const ROOT = join(import.meta.dirname, "..");
-
-// skipcq: JS-0067 - module-local test helper; not browser global scope
 function readComponent(name: string): string {
   return readFileSync(join(ROOT, name), "utf8");
 }
 
-describe("SAN-1093 concierge shell contract", () => {
-  it("exposes kit testids across shell regions", () => {
-    const files = [
-      "rentals-concierge-shell.tsx",
-      "rentals-conversation-history.tsx",
-      "rentals-concierge-center.tsx",
-      "rentals-dynamic-workspace.tsx",
-    ];
-    const bundle = files.map(readComponent).join("\n");
-
-    for (const id of [
-      "rentals-concierge",
-      "rc-left",
-      "rc-center",
-      "rc-right",
-      "rc-empty",
-      "ctx-empty",
-      "rc-input",
-      "rc-send",
-    ]) {
-      expect(bundle).toContain(`data-testid="${id}"`);
-    }
-    expect(bundle).toContain("rc-opp-");
-    expect(bundle).toContain("rc-starter-");
-    expect(bundle).toContain("ctx-analytics");
-    expect(bundle).toContain("r1-kpi-0");
+describe("SAN-1124 broker concierge integration contract", () => {
+  it("mounts exactly one existing v2 CopilotKit chat on broker pages", () => {
+    const center = readComponent("rentals-concierge-center.tsx");
+    expect(center).toContain('from "@copilotkit/react-core/v2"');
+    expect(center).toContain("<ChatProvider>");
+    expect(center).toContain("<BrokerWorkspaceToolRenderer />");
+    expect(center).toContain("<CopilotChat");
+    expect(center).toContain('agentId="conciergeAgent"');
+    expect(center).not.toContain("brokerAgent not live");
+    expect(center).not.toContain("disabled\n");
+    expect(center).toContain('data-testid="rc-center"');
   });
 
-  it("labels Phase A as brokerAgent not live", () => {
-    const center = readComponent("rentals-concierge-center.tsx");
-    expect(center).toContain("brokerAgent not live");
-    expect(center).toContain("disabled");
+  it("uses real dashboard attention instead of invented opportunities", () => {
+    const shell = readComponent("rentals-concierge-shell.tsx");
+    const feed = readComponent("rentals-conversation-history.tsx");
+    expect(shell).toContain("<RentalsConversationHistory dashboard={dashboard}");
+    expect(feed).toContain("dashboard.attention");
+    expect(feed).not.toContain("PHASE_A_OPPORTUNITIES");
+  });
+});
+
+
+describe("SAN-1124 tool render key", () => {
+  it("registers the actual tool-map key, not the Mastra createTool id", () => {
+    const renderer = readComponent("broker-workspace-tool-renderer.tsx");
+    expect(renderer).toContain('name: "readBrokerWorkspaceTool"');
+    expect(renderer).toContain('agentId: "conciergeAgent"');
+    expect(renderer).not.toContain('name: "read-broker-workspace"');
   });
 });

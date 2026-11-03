@@ -12,6 +12,7 @@ const event: PublishedEventListItem = {
   neighborhood: "Laureles",
   startsAt: "2026-06-13T03:00:00+00:00",
   pricePerTicket: 25,
+  canBuyTickets: true,
   currency: "USD",
   ticketUrl: "https://example.com/tickets",
   category: "music",
@@ -48,6 +49,41 @@ describe("EventBrowseCard", () => {
     expect(heroIndex).toBeLessThan(headingIndex);
   });
 
+  it("renders a compact inline media card while preserving real ticket actions", () => {
+    const html = renderToStaticMarkup(<EventBrowseCard event={event} mediaLayout="inline" />);
+    expect(html).toContain('data-testid="event-details-cta"');
+    expect(html).toContain('data-testid="event-buy-cta"');
+    expect(html).toContain('w-24');
+    expect(html).not.toContain('px-3 pt-3');
+  });
+
+  it("never claims Free or Buy tickets when no active tier exists", () => {
+    const html = renderToStaticMarkup(
+      <EventBrowseCard event={{ ...event, pricePerTicket: null, canBuyTickets: false }} />,
+    );
+    expect(html).toContain("Price TBD");
+    expect(html).not.toContain("See tickets");
+    expect(html).not.toContain(">Free<");
+    expect(html).not.toContain('data-testid="event-buy-cta"');
+    expect(html).toContain('data-testid="event-details-cta"');
+  });
+
+  it("offers an explicit, accessible Ask selection without replacing event Details or tickets", () => {
+    const html = renderToStaticMarkup(<EventBrowseCard event={event} selectedForAsk onAskSelect={() => {}} />);
+    expect(html).toContain('data-testid="event-ask-select"');
+    expect(html).toContain('aria-pressed="true"');
+    expect(html).toContain('Clear selection');
+    expect(html).toContain('data-testid="event-details-cta"');
+    expect(html).toContain('data-testid="event-buy-cta"');
+  });
+
+  it("uses a real COP tier price instead of the event summary currency", () => {
+    const html = renderToStaticMarkup(
+      <EventBrowseCard event={{ ...event, pricePerTicket: 40000, currency: "COP" }} />,
+    );
+    expect(html).toContain("From $40,000 COP");
+  });
+
   it("renders image hero when imageUrl is set", () => {
     const html = renderToStaticMarkup(
       <EventBrowseCard
@@ -59,5 +95,35 @@ describe("EventBrowseCard", () => {
     expect(html).toContain('data-testid="event-browse-card-photo"');
     expect(html).toContain("https://cdn.example.com/event.jpg");
     expect(html).toContain('alt="Salsa Night"');
+  });
+
+  it("leads with the Medellín-local date, then title, venue and the real price", () => {
+    const html = renderToStaticMarkup(<EventBrowseCard event={{ ...event, startsAt: "2026-10-19T21:00:00.000Z" }} />);
+    const at = (needle: string) => html.indexOf(needle);
+    expect(at("Mon, Oct 19, 4:00 PM")).toBeGreaterThan(-1);
+    expect(at("Mon, Oct 19, 4:00 PM")).toBeLessThan(at("<h3"));
+    expect(at("<h3")).toBeLessThan(at("Club Social"));
+    expect(at("Club Social")).toBeLessThan(at('data-testid="event-price-label"'));
+    expect(html).toContain("Laureles");
+  });
+
+  it("shares one selection: the shared pin id is on the card, selecting highlights it, and there is no separate map button", () => {
+    const html = renderToStaticMarkup(<EventBrowseCard event={event} pinId="event-evt-1" selectedForAsk onAskSelect={() => {}} />);
+    expect(html).toContain('data-pin-id="event-evt-1"');
+    expect(html).toContain('data-selected="true"');
+    expect(html).not.toContain("event-map-select");
+    const without = renderToStaticMarkup(<EventBrowseCard event={event} />);
+    expect(without).not.toContain("data-pin-id");
+    expect(without).toContain('data-selected="false"');
+  });
+
+  it("keeps one dominant action: Buy beside an outline Details when tickets are real, Details alone otherwise", () => {
+    const withBuy = renderToStaticMarkup(<EventBrowseCard event={event} />);
+    const detailsTag = (html: string) => html.slice(html.lastIndexOf("<a", html.indexOf('data-testid="event-details-cta"')), html.indexOf(">", html.indexOf('data-testid="event-details-cta"')));
+    expect(withBuy).toContain('data-testid="event-buy-cta"');
+    expect(detailsTag(withBuy)).toContain("border-border");
+    const noBuy = renderToStaticMarkup(<EventBrowseCard event={{ ...event, pricePerTicket: null, canBuyTickets: false }} />);
+    expect(noBuy).not.toContain('data-testid="event-buy-cta"');
+    expect(detailsTag(noBuy)).not.toContain("border-border");
   });
 });

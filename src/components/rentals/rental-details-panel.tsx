@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useEffect, useRef, type KeyboardEvent } from "react";
 import { Building2, Calendar, ExternalLink, MapPin, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   Carousel,
   CarouselContent,
@@ -32,6 +33,11 @@ type DetailsProps = {
   onClose: () => void;
   /** Present only where a viewing can be requested; still gated on `can_schedule_viewing`. */
   onSchedule?: () => void;
+  /**
+   * SAN-1612 — the booking review for this apartment, carrying the renter's applied stay.
+   * Absent for a sourced ad: MDE cannot start a native booking there, so no native CTA is offered.
+   */
+  bookingReviewHref?: string;
 };
 
 /** Photos for the carousel: the approved list when present, else the single card photo. */
@@ -78,18 +84,25 @@ function PhotoCarousel({ rental }: { rental: Rental }) {
 }
 
 /** Facts, price, location and the allowed actions. The close control is supplied by the host. */
-function DetailsBody({ rental, onSchedule }: Pick<DetailsProps, "rental" | "onSchedule">) {
+function DetailsBody({
+  rental,
+  onSchedule,
+  bookingReviewHref,
+}: Pick<DetailsProps, "rental" | "onSchedule" | "bookingReviewHref">) {
   const external = isExternalAd(rental);
+  // One price rule everywhere: an external ad never shows a nightly price, a monthly price
+  // supersedes it, and a zero/nightly placeholder is unknown rather than a real rent.
   const { nightlyLabel, monthlyLabel } = formatRentalPrices(
-    external ? null : rental.nightly_price,
+    external || rental.price_monthly != null || rental.nightly_price <= 0 ? null : rental.nightly_price,
     rental.price_monthly,
     rental.currency,
   );
   const price = monthlyLabel ?? nightlyLabel;
   const sourceUrl = externalSourceUrlFor(rental);
   const hasCoordinates = rental.latitude != null && rental.longitude != null;
-  // Fail closed: an external ad is never requestable on MDE, whatever its flag says.
-  const showSchedule = !external && rental.can_schedule_viewing === true && Boolean(onSchedule);
+  // One rule everywhere: the database-computed requestability decides, external records included.
+  // An external record is labeled an MDE follow-up below and never implies a provider confirmation.
+  const showSchedule = rental.can_schedule_viewing === true && Boolean(onSchedule);
 
   return (
     <div className="space-y-4">
@@ -105,9 +118,16 @@ function DetailsBody({ rental, onSchedule }: Pick<DetailsProps, "rental" | "onSc
       ) : null}
 
       <div>
-        <p className="font-mono text-xl font-semibold" data-testid="rental-details-price">
-          {price ?? <span className="text-muted-foreground">Price data pending</span>}
-        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="font-mono text-xl font-semibold" data-testid="rental-details-price">
+            {price ?? <span className="text-muted-foreground">Price not provided</span>}
+          </p>
+          {price && rental.currency?.toUpperCase() === "USD" ? (
+            <Badge variant="outline" className="font-normal text-xs" data-testid="rental-details-currency">
+              USD
+            </Badge>
+          ) : null}
+        </div>
         {rental.availability ? (
           <p className="mt-1 text-xs text-muted-foreground" data-testid="rental-details-availability">
             {rental.availability}
@@ -167,34 +187,44 @@ function DetailsBody({ rental, onSchedule }: Pick<DetailsProps, "rental" | "onSc
           className="rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground"
           data-testid="rental-details-external-note"
         >
-          Listed by the original advertiser. MDE has not verified this listing and cannot schedule a
-          viewing for it.
+          Listed by the original advertiser
+          {rental.source_provider ? ` (${rental.source_provider})` : ""}. MDE has not independently
+          verified this listing, and no provider has confirmed an appointment. Requesting here
+          records your interest for MDE follow-up; it is not a confirmed viewing.
         </p>
       ) : null}
 
-      <div className="flex flex-wrap gap-2">
+      {/* SAN-1612 — one coherent choice block in the panel and in the phone sheet. */}
+      <div className="flex flex-wrap gap-2" data-testid="rental-details-actions">
         {showSchedule ? (
           <Button type="button" onClick={onSchedule} data-testid="rental-details-schedule-cta">
             <Calendar data-icon="inline-start" aria-hidden />
-            Schedule viewing
+            {external ? "Request MDE follow-up" : "Schedule viewing"}
           </Button>
         ) : null}
+        {!external && bookingReviewHref ? (
+          <Link
+            href={bookingReviewHref}
+            data-testid="rental-details-booking-review-link"
+            className={cn(buttonVariants({ variant: "outline" }), "min-h-11 gap-1")}
+          >
+            Review booking (no payment yet)
+          </Link>
+        ) : null}
         {sourceUrl ? (
-          <Button
-            variant="outline"
-            nativeButton={false}
-            render={
-              <a
-                href={sourceUrl}
-                target="_blank"
-                rel="nofollow noopener noreferrer"
-                data-testid="rental-details-source-link"
-              />
-            }
+          // SAN-1612 — a real anchor styled as a button: an external destination keeps link
+          // semantics (role=link, Enter activates) instead of announcing itself as a button.
+          <a
+            href={sourceUrl}
+            target="_blank"
+            rel="nofollow noopener noreferrer"
+            data-testid="rental-details-source-link"
+            className={cn(buttonVariants({ variant: "outline" }), "min-h-11 gap-1")}
           >
             <ExternalLink data-icon="inline-start" aria-hidden />
             View original listing
-          </Button>
+            <span className="sr-only">(opens in a new tab)</span>
+          </a>
         ) : null}
       </div>
     </div>
@@ -228,7 +258,7 @@ function CloseButton({
  * Desktop: fills the map column (drawn over the map by `BrowseMapPanel`'s `overlay` slot).
  * Escape or Close dismisses it, and focus returns to whatever opened it.
  */
-export function RentalDetailsPanel({ rental, onClose, onSchedule }: DetailsProps) {
+export function RentalDetailsPanel({ rental, onClose, onSchedule, bookingReviewHref }: DetailsProps) {
   const closeRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -252,6 +282,7 @@ export function RentalDetailsPanel({ rental, onClose, onSchedule }: DetailsProps
     <aside
       aria-labelledby="rental-details-title"
       data-testid="rental-details-panel"
+      data-listing-id={rental.id}
       className="absolute inset-0 z-10 overflow-y-auto bg-card p-4"
       onKeyDown={onKeyDown}
     >
@@ -264,13 +295,13 @@ export function RentalDetailsPanel({ rental, onClose, onSchedule }: DetailsProps
         </div>
         <CloseButton onClose={onClose} buttonRef={closeRef} />
       </div>
-      <DetailsBody rental={rental} onSchedule={onSchedule} />
+      <DetailsBody rental={rental} onSchedule={onSchedule} bookingReviewHref={bookingReviewHref} />
     </aside>
   );
 }
 
 /** Phone and tablet: a bottom sheet over the results. The sheet handles Escape and focus return. */
-export function RentalDetailsSheet({ rental, onClose, onSchedule }: DetailsProps) {
+export function RentalDetailsSheet({ rental, onClose, onSchedule, bookingReviewHref }: DetailsProps) {
   return (
     <Sheet open onOpenChange={(open) => {
         if (!open) onClose();
@@ -280,6 +311,7 @@ export function RentalDetailsSheet({ rental, onClose, onSchedule }: DetailsProps
         showCloseButton={false}
         className="max-h-[90vh] overflow-y-auto p-4"
         data-testid="rental-details-sheet"
+        data-listing-id={rental.id}
       >
         <div className="mb-3 flex items-start justify-between gap-2">
           <div className="min-w-0">
@@ -289,7 +321,7 @@ export function RentalDetailsSheet({ rental, onClose, onSchedule }: DetailsProps
           </div>
           <CloseButton onClose={onClose} />
         </div>
-        <DetailsBody rental={rental} onSchedule={onSchedule} />
+        <DetailsBody rental={rental} onSchedule={onSchedule} bookingReviewHref={bookingReviewHref} />
       </SheetContent>
     </Sheet>
   );

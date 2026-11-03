@@ -313,3 +313,7 @@ Before copying any CopilotKit example or Mastra template into MDE, read
 - **Identity and thread-authorization defects must be fixed before** adopting memory, MCP, channels, or
   workspaces — otherwise a collapsible `resourceId` (`?? "anonymous"`) contaminates every new durable store.
 - `examples/v1` and `examples/v2` are legacy; never copy from them.
+
+## Optional upstream references
+
+See [OpenMuse/OpenDots/OpenBot reference tracking](reference-upstreams.md) for pinned source commits, weekly read-only drift reports, and the manual upgrade policy. They are not extra MDE runtimes.
