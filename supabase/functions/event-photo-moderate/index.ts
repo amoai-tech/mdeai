@@ -22,6 +22,7 @@ import {
 import { callGeminiStructured } from "../_shared/gemini.ts";
 import { insertAiRun } from "../_shared/ai-runs.ts";
 import { canAnalyzeEventAsset, isValidModerationResult } from "./policy.ts";
+import { encodeBase64 } from "https://deno.land/std@0.224.0/encoding/base64.ts";
 
 const AGENT_NAME = "event-photo-moderate";
 const MODEL = "gemini-3-flash-preview" as const;
@@ -230,7 +231,7 @@ Deno.serve(async (req) => {
   }
   const inlineImage = {
     mimeType: asset.mime_type as string,
-    data: new Uint8Array(await imageBlob.arrayBuffer()).toBase64(),
+    data: encodeBase64(await imageBlob.arrayBuffer()),
   };
   const systemPrompt = SYSTEM_PROMPTS[asset.asset_type] ?? SYSTEM_PROMPTS.other;
   const userPrompt = "Event: " + event.name +

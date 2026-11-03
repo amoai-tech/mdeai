@@ -30,7 +30,9 @@ Deno.test("recovered event handlers: reject cross-user photos; scan through atom
   let adminRole = false;
   let modelScore: number | null = 0.82;
   let currentStaffVersion = 0;
-  const calls: Array<{ path: string; body: string }> = [];
+  const calls: Array<
+    { path: string; body: string; authorization: string | null }
+  > = [];
   try {
     Deno.env.set("SUPABASE_URL", "http://127.0.0.1:59999");
     Deno.env.set("SUPABASE_ANON_KEY", "testing-publishable-key");
@@ -56,7 +58,11 @@ Deno.test("recovered event handlers: reject cross-user photos; scan through atom
           : String(input),
       );
       const body = String(init?.body ?? "");
-      calls.push({ path: url.pathname, body });
+      calls.push({
+        path: url.pathname,
+        body,
+        authorization: new Headers(init?.headers).get("Authorization"),
+      });
       const json = (value: unknown, status = 200) =>
         new Response(JSON.stringify(value), {
           status,
@@ -97,6 +103,10 @@ Deno.test("recovered event handlers: reject cross-user photos; scan through atom
       }
       if (url.pathname.endsWith("/rest/v1/rpc/is_admin")) {
         return json(adminRole);
+      }
+      if (url.pathname.endsWith("/rest/v1/rpc/bump_staff_link_version")) {
+        currentStaffVersion++;
+        return json(currentStaffVersion);
       }
       if (
         url.pathname.endsWith("/rest/v1/rpc/ticket_validate_consume_audited")
@@ -199,6 +209,9 @@ Deno.test("recovered event handlers: reject cross-user photos; scan through atom
     const geminiCalls = calls.filter((c) => c.path.includes("generateContent"));
     assertEquals(geminiCalls.length, 1);
     assertStringIncludes(geminiCalls[0].body, "inlineData");
+    // The stored 8-byte PNG fixture is encoded correctly regardless of Deno
+    // runtime support for Uint8Array.prototype.toBase64().
+    assertStringIncludes(geminiCalls[0].body, "iVBORwECAwQ=");
     assertEquals(geminiCalls[0].body.includes("127.0.0.1:5432"), false);
 
     // Even if the SDK returns a malformed score, the endpoint cannot
@@ -304,6 +317,33 @@ Deno.test("recovered event handlers: reject cross-user photos; scan through atom
     assertEquals(scanLogs.length, 1);
     assertStringIncludes(scanLogs[0].body, "staff_token_revoked");
     assertStringIncludes(scanLogs[0].body, "invalid_signature");
+
+    // Organizer and Super Admin must revoke through the JWT-scoped RPC.
+    const revokeRequest = () =>
+      new Request("http://localhost/functions/v1/event-staff-link-generator", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer qa-token",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ event_id: eventId, revoke: true }),
+      });
+    actingUser = organizer;
+    const ownerRevoked = await handlers[2](revokeRequest());
+    assertEquals(ownerRevoked.status, 200);
+    assertEquals((await ownerRevoked.json()).data.staff_link_version, 2);
+    const revocation = calls.find((c) =>
+      c.path.endsWith("/rest/v1/rpc/bump_staff_link_version")
+    );
+    assertEquals(revocation?.authorization, "Bearer qa-token");
+    actingUser = stranger;
+    adminRole = false;
+    assertEquals((await handlers[2](revokeRequest())).status, 403);
+    adminRole = true;
+    ownerlessEvent = true;
+    const adminRevoked = await handlers[2](revokeRequest());
+    assertEquals(adminRevoked.status, 200);
+    assertEquals((await adminRevoked.json()).data.staff_link_version, 3);
     assertEquals(
       calls.filter((c) =>
         c.path.endsWith("/rpc/ticket_validate_consume_audited")

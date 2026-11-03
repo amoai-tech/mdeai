@@ -25,11 +25,7 @@
 
 import { z } from "https://esm.sh/zod@3.23.8";
 import { errorBody, getCorsHeaders, jsonResponse } from "../_shared/http.ts";
-import {
-  getServiceClient,
-  getUserClient,
-  getUserId,
-} from "../_shared/supabase-clients.ts";
+import { getUserClient, getUserId } from "../_shared/supabase-clients.ts";
 import { signJwtHs256 } from "../_shared/jwt.ts";
 
 const APP_BASE_URL = Deno.env.get("APP_BASE_URL") ?? "https://mdeai.co";
@@ -149,8 +145,9 @@ Deno.serve(async (req) => {
 
   // 4. Branch on `revoke` — invalidate outstanding JWTs for this event.
   if (body.revoke === true) {
-    const service = getServiceClient();
-    const { data: bumped, error: bumpErr } = await service.rpc(
+    // The RPC checks auth.uid() and trusted server-side admin status.
+    // Calling it through the service-role client loses the user's JWT identity.
+    const { data: bumped, error: bumpErr } = await userClient.rpc(
       "bump_staff_link_version",
       { p_event_id: body.event_id },
     );
