@@ -14,8 +14,10 @@ import {
 // Visual fixtures run in the real MDE UI with the repository's existing deterministic
 // API seam. No live Supabase, private conversations, ticket purchases or booking writes.
 // NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT=1 is required when launching the Next.js test server.
+const SMALL = { width: 320, height: 640 };
 const MOBILE = { width: 390, height: 844 };
 const TABLET = { width: 768, height: 1024 };
+const LAPTOP = { width: 1024, height: 768 };
 const DESKTOP = { width: 1440, height: 900 };
 
 async function noHorizontalOverflow(page: Page) {
@@ -133,6 +135,7 @@ test.describe("Argos expanded visual regression — read-only MDE journeys", () 
   }
 
   for (const [device, viewport] of [
+    ["mobile-320", SMALL],
     ["mobile-390", MOBILE],
     ["desktop-1440", DESKTOP],
   ] as const) {
@@ -255,11 +258,23 @@ test.describe("Argos expanded visual regression — read-only MDE journeys", () 
   }
 
   test("320px small-phone composer stays inside viewport", async ({ page }) => {
-    await openChat(page, { width: 320, height: 640 });
+    await openChat(page, SMALL);
     await argosScreenshot(page, "concierge-idle-mobile-320");
     await search(page, RENTAL_QUERY, "/api/rentals/search");
     await expect(page.getByTestId("rental-card")).toHaveCount(1);
     await noHorizontalOverflow(page);
     await argosScreenshot(page, "concierge-rental-results-mobile-320");
+  });
+
+  test("event actions stay clear at the 1024px desktop boundary", async ({ page }) => {
+    await openChat(page, LAPTOP);
+    await mockPublicEventDetail(page);
+    await search(page, EVENT_QUERY, "/api/events/search");
+    const card = page.getByTestId("event-card");
+    await expect(card).toHaveCount(1);
+    await expect(page.getByTestId("event-details-cta")).toBeVisible();
+    await expect(page.getByTestId("map-sheet-trigger")).toBeHidden();
+    await noHorizontalOverflow(page);
+    await argosScreenshot(page, "concierge-event-results-laptop-1024");
   });
 });
