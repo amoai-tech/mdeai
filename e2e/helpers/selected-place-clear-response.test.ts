@@ -14,6 +14,7 @@ describe("SAN-737 explicit cleared selection", () => {
     "I've checked the system and no place is currently selected.",
     "Based on your request, I'm checking whether any place is currently selected. No public item is currently selected. Each search starts fresh.",
     "You don't have a place currently selected. If you'd like, I can help. No place is currently selected.",
+    "Known state: no place is currently selected.",
     "No, I checked — there is no public item selected right now.",
     "Currently, no public item is selected.",
     "No. The previously selected item no longer holds, and there is no new item selected.",
@@ -33,6 +34,8 @@ describe("SAN-737 explicit cleared selection", () => {
   it.each([
     "I know nothing is selected",
     "Known restaurants are popular",
+    "If no place is selected, ask the user which one they mean.",
+    "Maybe no place is selected.",
     "Notable restaurants",
     "No, the previously selected restaurant is still active.",
     "Apartment B is selected.",

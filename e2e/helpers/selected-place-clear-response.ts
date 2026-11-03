@@ -204,7 +204,20 @@ export function confirmsNothingSelected(input: string): boolean {
   // "Based on your request..." or "You don't have...". Accept any explicit
   // negative statement, but keep the known ambiguous "I know..." form rejected.
   if (hasNegativeSelectedStatement(currentState)) {
-    if (answer.startsWith("i know") || answer.startsWith("known")) return false;
+    // Ambiguous, uncertain or conditional statements are not a current-state
+    // confirmation. “I know nothing is selected” can mean the user believes it,
+    // and “If no place is selected…” describes a branch, not the current state.
+    const uncertain =
+      answer.startsWith("i know") ||
+      answer.startsWith("if ") ||
+      answer.startsWith("whether ") ||
+      answer.startsWith("maybe ") ||
+      answer.startsWith("perhaps ") ||
+      answer.startsWith("i think ") ||
+      answer.startsWith("i believe ") ||
+      answer.startsWith("i'm not sure") ||
+      answer.startsWith("i am not sure");
+    if (uncertain) return false;
     return true;
   }
 
