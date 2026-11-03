@@ -266,6 +266,45 @@ test.describe("Argos expanded visual regression — read-only MDE journeys", () 
     await argosScreenshot(page, "concierge-rental-results-mobile-320");
   });
 
+  test("rental actions stay clear of the floating map control at 390px", async ({ page }) => {
+    await openChat(page, MOBILE);
+    await search(page, RENTAL_QUERY, "/api/rentals/search");
+    await expect(page.getByTestId("rental-card")).toHaveCount(1);
+
+    const actions = page.locator(".mde-rental-card-actions").first();
+    const map = page.getByTestId("map-sheet-trigger");
+    const mapBox = await map.boundingBox();
+    expect(mapBox).not.toBeNull();
+    // The padded action row spans under the floating control, but each real
+    // button/link must stay outside it. Test the interactive rectangles, not
+    // the container padding.
+    const actionBoxes = await actions.locator("button, a").evaluateAll((nodes) =>
+      nodes.map((node) => {
+        const r = node.getBoundingClientRect();
+        return { x: r.x, y: r.y, width: r.width, height: r.height };
+      }),
+    );
+    expect(actionBoxes.length).toBeGreaterThan(0);
+    for (const actionBox of actionBoxes) {
+      const intersects =
+        actionBox.x < mapBox!.x + mapBox!.width &&
+        actionBox.x + actionBox.width > mapBox!.x &&
+        actionBox.y < mapBox!.y + mapBox!.height &&
+        actionBox.y + actionBox.height > mapBox!.y;
+      expect(intersects, "Open map must not cover rental card actions").toBe(false);
+    }
+
+    // Normal pointer actions, no force click.
+    await page.getByTestId("rental-schedule-cta").click();
+    await expect(page.getByTestId("schedule-viewing-modal")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("schedule-viewing-modal")).toBeHidden();
+    await map.click();
+    await expect(page.getByTestId("map-sheet-content")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("map-sheet-content")).toBeHidden();
+  });
+
   test("event actions stay clear at the 1024px desktop boundary", async ({ page }) => {
     await openChat(page, LAPTOP);
     await mockPublicEventDetail(page);
