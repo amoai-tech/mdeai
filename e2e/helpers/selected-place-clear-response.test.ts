@@ -12,6 +12,8 @@ describe("SAN-737 explicit cleared selection", () => {
     "No — no public place or rental listing is currently selected.",
     "Based on my current state, no place is selected. Let me verify this.",
     "I've checked the system and no place is currently selected.",
+    "Based on your request, I'm checking whether any place is currently selected. No public item is currently selected. Each search starts fresh.",
+    "You don't have a place currently selected. If you'd like, I can help. No place is currently selected.",
     "No, I checked — there is no public item selected right now.",
     "Currently, no public item is selected.",
     "No. The previously selected item no longer holds, and there is no new item selected.",

@@ -58,6 +58,16 @@ function stripHistoricalSelections(text: string): string {
 
 function stripNegativeClaims(text: string): string {
   let next = text;
+  // "I'm checking whether any place is currently selected" is a description
+  // of the check being performed, not a claim that an item is selected.
+  for (const phrase of [
+    "checking whether any place is currently selected",
+    "checking whether any place is selected",
+    "whether any place is currently selected",
+    "whether any place is selected",
+  ]) {
+    next = replaceAll(next, phrase);
+  }
   for (const subject of ["nothing", "none", "no one", "nobody"]) {
     for (const verb of ["is", "are"]) {
       next = replaceAll(next, `${subject} ${verb} selected`);
@@ -187,6 +197,14 @@ export function confirmsNothingSelected(input: string): boolean {
     answer.startsWith("i don't have any currently selected") ||
     answer.startsWith("i do not have any currently selected")
   ) {
+    return true;
+  }
+
+  // Real agents answer in more than one sentence: the negative can come after
+  // "Based on your request..." or "You don't have...". Accept any explicit
+  // negative statement, but keep the known ambiguous "I know..." form rejected.
+  if (hasNegativeSelectedStatement(currentState)) {
+    if (answer.startsWith("i know") || answer.startsWith("known")) return false;
     return true;
   }
 
