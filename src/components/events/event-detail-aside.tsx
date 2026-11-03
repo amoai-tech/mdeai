@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { RefObject } from "react";
 import { CalendarDays, Info, MapPin, Sparkles } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { EventInterestButton } from "@/components/events/event-interest-button";
 import { EventTicketTiers } from "@/components/events/event-ticket-tiers";
 import type { BookingCheckoutTarget } from "@/components/modals/booking-checkout-modal";
 import { formatTicketPrice } from "@/lib/events/format-event";
@@ -18,6 +19,7 @@ type EventDetailAsideProps = {
   schedule: string;
   durationLabel: string | null;
   fromTier: PublicEventTicket | null;
+  interest: { signedIn: boolean; following: boolean };
   tiersRef: RefObject<HTMLDivElement | null>;
   notice: string | null;
   onCheckout: (target: BookingCheckoutTarget) => void;
@@ -25,7 +27,7 @@ type EventDetailAsideProps = {
 
 /** Visitor decision panel: event facts, one canonical ticket picker and existing AI handoff. */
 export function EventDetailAside({
-  event, city, venueLine, schedule, durationLabel, fromTier, tiersRef, notice, onCheckout,
+  event, city, venueLine, schedule, durationLabel, fromTier, tiersRef, notice, onCheckout, interest,
 }: EventDetailAsideProps) {
   return (
             <aside className="order-2 space-y-5">
@@ -68,7 +70,13 @@ export function EventDetailAside({
                   <EventTicketTiers event={event} onCheckout={onCheckout} />
                 </div>
                 {!fromTier ? (
-                  <div className="mt-4 flex flex-wrap gap-2">
+                  <div className="mt-4 space-y-2">
+                    {/* Consent to updates, never a ticket: sold-out and no-tier events both offer it. */}
+                    <EventInterestButton
+                      eventId={event.id}
+                      following={Boolean(interest.following)}
+                      signedIn={Boolean(interest.signedIn)}
+                    />
                     <Link className={buttonVariants({ variant: "outline", size: "sm" })} href="/events">
                       Explore other events
                     </Link>
