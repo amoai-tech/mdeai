@@ -7,7 +7,9 @@
    Plain CSS avoids depending on Tailwind detecting new classes in ignored worktrees;
    the component class, not the test id, is the production styling contract. */
 @media (max-width: 639px) {
-  .mde-concierge-transcript-tail .mde-event-card-actions { padding-right: 9rem; }
+  .mde-concierge-transcript-tail .mde-event-card-actions,
+  .mde-concierge-transcript-tail .mde-rental-card-actions,
+  .mde-concierge-transcript-tail .mde-map-fab-safe { padding-right: 9rem; }
 }
 
 @custom-variant dark (&:is(.dark *));
