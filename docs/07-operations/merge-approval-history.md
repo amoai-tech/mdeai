@@ -472,6 +472,22 @@ id rather than whatever was selected on another route.
 **Follow-up:** the signed-in live AI answer (no QA credentials in this worktree) and the deployed readback after
 certification.
 
+## 2026-11-03 — PR #705 (accessible discovery and chat controls)
+
+**PR:** [#705](https://github.com/amoai-tech/mdeai/pull/705) · **Head:** `b4abaa3d3bd94730b1df314a42812c49f6e3d061` · **Merge:** `9d791c658655a13b2c728d730ffb984d93daec05`
+
+**Why:** the repository had exactly one collaborator, `amoai-tech`, who also authored the PR; GitHub cannot record a self-approval.
+
+**Green on the exact head:** `floor`, `mastra-schema-init`, `review / verify-review-result`, deterministic Chromium, real mobile composer, Argos, Codacy static analysis and Vercel. Unresolved review threads: **0**.
+
+**Scope:** 10 files across the chat composer, rental browse card, event/restaurant filters and mobile navigation. Added accessible names to the existing CopilotKit v2 Send/attachment slots while preserving class-string, props-object and custom-component slot values; made “Show on map” a native button; corrected link semantics to `aria-current`; raised active-chip contrast. No auth, RLS, database, payment or workflow change.
+
+**Evidence:** focused Vitest 94/94; protected preview audit 16/16 pages at 390/768/1024/1440 with **0 axe WCAG 2.0/2.1/2.2 A/AA violations**, 0 overflow and 0 page exceptions; keyboard map selection and filter navigation passed. Five initial Codacy findings were test-only `no-mixed-html` false positives; those lines were replaced and Codacy passed.
+
+**Post-merge:** production `/api/version` later reached `6e6a46e53be6f659c9682972beadd23570ce9582`, which contains `9d791c65`. Production smoke at 390/1440 for `/chat`, `/rentals`, `/events`, `/restaurants` returned 200 with 0 overflow, 0 page errors, correct Send/Add labels, keyboard map selection and event filtering. SAN-546 remains In Progress because this was the accessibility slice, not the full J05–J20 matrix.
+
+**Nothing unreviewed rode along:** no workflow, migration, RLS, payment or release-gate change.
+
 ## Adding an entry
 
 Record: the PRs, the date, the reason, which required checks had passed, what a reviewer would have
