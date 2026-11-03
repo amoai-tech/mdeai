@@ -184,7 +184,6 @@ for (const size of [{ name: "desktop", width: 1440, height: 900 }, { name: "mobi
             const top = button.getBoundingClientRect().top + window.scrollY;
             window.scrollTo({ top: Math.max(0, top - 300), behavior: "auto" });
           });
-          await page.waitForTimeout(150);
         }
         await select(second).click();
         await expect(select(second)).toHaveAttribute("aria-pressed", "true");
