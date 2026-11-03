@@ -41,19 +41,27 @@ function stateMarkerStartsOutsideFences(body) {
   const text = String(body ?? "");
   const starts = [];
   let fence = null;
+  let offset = 0;
 
-  for (let index = 0; index < text.length; index += 1) {
-    const token = text.startsWith("```", index) ? "```" : text.startsWith("~~~", index) ? "~~~" : null;
-    if (token) {
-      if (fence === token) fence = null;
-      else if (fence === null) fence = token;
-      index += 2;
-      continue;
+  for (const line of text.split("\n")) {
+    const trimmed = line.trim();
+    // Keep the same fence contract as stateFieldValue: a close requires the
+    // opening character, at least its length, and whitespace-only trailing text.
+    const run = /^(\x60{3,}|~{3,})(.*)$/.exec(trimmed);
+    if (fence !== null) {
+      if (run && run[1][0] === fence.char && run[1].length >= fence.length && run[2].trim() === "") {
+        fence = null;
+      }
+    } else if (run) {
+      fence = { char: run[1][0], length: run[1].length };
+    } else {
+      let index = line.indexOf(STATE_MARKER_NAMESPACE);
+      while (index >= 0) {
+        starts.push(offset + index);
+        index = line.indexOf(STATE_MARKER_NAMESPACE, index + STATE_MARKER_NAMESPACE.length);
+      }
     }
-    if (fence === null && text.startsWith(STATE_MARKER_NAMESPACE, index)) {
-      starts.push(index);
-      index += STATE_MARKER_NAMESPACE.length - 1;
-    }
+    offset += line.length + 1;
   }
 
   return starts;
