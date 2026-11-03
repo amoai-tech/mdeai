@@ -225,12 +225,20 @@ describe("SAN-1600 event header authentication", () => {
 });
 
 describe("SAN-1600 in-page Ask MDE", () => {
-  it("asks the shared assistant to open without navigating away", async () => {
+  it("keeps one assistant on the page, directly below the location, and scrolls to it", async () => {
+    // SAN-1624: the drawer is gone; the composer lives under Listed location and the
+    // aside button only brings it into view — it never opens a second conversation.
     const opened = vi.fn();
     window.addEventListener("mde:ask-mde:open", opened);
     render(<EventDetailView event={base} interest={{ signedIn: false, following: false }} />);
+
+    const inline = screen.getByTestId("event-ask-mde-inline");
+    expect(inline).toBeTruthy();
+    expect(screen.getAllByTestId("event-ask-mde-inline")).toHaveLength(1);
+
     await userEvent.click(screen.getByTestId("event-ask-mde"));
-    expect(opened).toHaveBeenCalledTimes(1);
+    // No drawer event is dispatched any more.
+    expect(opened).not.toHaveBeenCalled();
     window.removeEventListener("mde:ask-mde:open", opened);
   });
 });

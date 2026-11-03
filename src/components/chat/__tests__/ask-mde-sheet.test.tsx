@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AskMdeSheet } from "../ask-mde-sheet";
@@ -47,34 +47,22 @@ describe("AskMdeSheet — one assistant, mounted where a page needs it", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
-  it("opens on the event page from that page's own Ask MDE button", async () => {
+  it("never mounts a drawer on an event page, because the composer is inline there", async () => {
+    // SAN-1624: the event page renders the shared composer below its location, so the
+    // sheet must not claim that route and must not answer the open event.
     render(<AskMdeSheet />);
     expect(screen.queryByTestId("ask-mde-launcher")).toBeNull();
     openAskMde();
-    await waitFor(() => expect(screen.getByTestId("shared-composer")).toBeTruthy());
-    expect(screen.getByTestId("shared-composer").getAttribute("data-page")).toBe("events");
-    // The event page owns the exact selected id; the drawer must not claim one.
-    expect(screen.queryByTestId("page-context")).toBeNull();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(screen.queryByTestId("shared-composer")).toBeNull();
   });
 
-  it("hands the event drawer its starter questions and no other page any", async () => {
+  it("keeps the restaurant drawer and gives it no event questions", async () => {
+    mocks.pathname = "/restaurants/la-cocina";
     render(<AskMdeSheet />);
     openAskMde();
-    await waitFor(() => expect(composerProps).toHaveLength(1));
-    expect(composerProps[0].suggestions).toEqual([
-      "Are tickets available?",
-      "Where is the meeting point?",
-      "What time does it start?",
-    ]);
-
-    cleanup();
-    composerProps.length = 0;
-    mocks.pathname = "/restaurants/41d0b0aa-0000-4000-8000-000000000001";
-    render(<AskMdeSheet />);
-    await userEvent.click(screen.getByTestId("ask-mde-launcher"));
-    await waitFor(() => expect(composerProps).toHaveLength(1));
-    expect(composerProps[0].page).toBe("restaurants");
-    expect(composerProps[0].suggestions).toBeUndefined();
+    await waitFor(() => expect(composerProps.length).toBeGreaterThan(0));
+    expect(composerProps[composerProps.length - 1].suggestions).toBeUndefined();
   });
 
   it("offers its own launcher where no other Ask MDE control exists", async () => {

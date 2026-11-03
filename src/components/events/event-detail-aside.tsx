@@ -10,7 +10,6 @@ import type { BookingCheckoutTarget } from "@/components/modals/booking-checkout
 import { formatTicketPrice } from "@/lib/events/format-event";
 import { eventDetailAction } from "@/lib/events/event-detail-action";
 import type { PublicEventDetail, PublicEventTicket } from "@/lib/events/types";
-import { openAskMde } from "@/lib/chat/ask-mde-bridge";
 
 type EventDetailAsideProps = {
   event: PublicEventDetail;
@@ -24,6 +23,15 @@ type EventDetailAsideProps = {
   notice: string | null;
   onCheckout: (target: BookingCheckoutTarget) => void;
 };
+
+/** The assistant now lives under the location: bring it into view instead of opening a drawer. */
+function focusInlineAsk() {
+  const section = document.getElementById("event-ask-mde-inline");
+  if (!section) return;
+  section.scrollIntoView({ behavior: "smooth", block: "start" });
+  const field = section.querySelector<HTMLTextAreaElement>("textarea, a, button");
+  field?.focus({ preventScroll: true });
+}
 
 /** Visitor decision panel: event facts, one canonical ticket picker and existing AI handoff. */
 export function EventDetailAside({
@@ -84,7 +92,7 @@ export function EventDetailAside({
                 ) : null}
               </div>
               {/* Opens the shared assistant in place: no navigation, no second conversation. */}
-              <Button type="button" data-testid="event-ask-mde" onClick={openAskMde}
+              <Button type="button" data-testid="event-ask-mde" onClick={focusInlineAsk}
                 aria-haspopup="dialog"
                 variant={fromTier ? "outline" : "default"}
                 className="w-full justify-start gap-2 whitespace-normal text-left">

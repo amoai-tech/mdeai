@@ -11,6 +11,10 @@ import { EventDetailAside } from "@/components/events/event-detail-aside";
 import { EventDetailNavigation, EventDetailHero } from "@/components/events/event-detail-chrome";
 import { EventDetailMap } from "@/components/events/event-detail-map";
 import { EventVenueSection } from "@/components/events/event-venue-section";
+import {
+  DiscoveryAskComposer,
+  EVENT_DETAIL_ASK_SUGGESTIONS,
+} from "@/components/chat/discovery-ask-composer";
 import { DiscoveryPageContext } from "@/components/chat/discovery-page-context";
 import { formatEventSchedule } from "@/lib/events/format-event";
 import { eventDetailAction } from "@/lib/events/event-detail-action";
@@ -101,6 +105,27 @@ export function EventDetailView({
                 latitude={event.latitude} longitude={event.longitude}
                 listedAreaOnly={!event.venue} />
             ) : null}
+              {/* SAN-1624: one assistant, immediately below the location the visitor just
+                  read. No drawer and no second conversation store; the aside button only
+                  scrolls here. */}
+              <section
+                id="event-ask-mde-inline"
+                aria-label="Ask MDE about this event"
+                data-testid="event-ask-mde-inline"
+                className="order-7 scroll-mt-24 rounded-xl border border-border bg-card"
+              >
+                <div className="border-b border-border px-4 pt-3">
+                  <h2 className="text-sm font-semibold">Ask MDE about this event</h2>
+                  <p className="pb-2 text-xs text-muted-foreground">
+                    Answers use this event&apos;s saved tickets, times and location.
+                  </p>
+                </div>
+                <DiscoveryAskComposer
+                  page="events"
+                  suggestions={EVENT_DETAIL_ASK_SUGGESTIONS}
+                  hideHeading
+                />
+              </section>
             </div>
             <div className="contents lg:flex lg:w-[380px] lg:shrink-0 lg:flex-col lg:gap-5">
             <EventDetailAside

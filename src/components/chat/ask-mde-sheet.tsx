@@ -32,7 +32,6 @@ type AssistantRoute = {
 const ROUTES: AssistantRoute[] = [
   // Browse pages (/events, /restaurants, …) already render this same composer inline
   // and are intentionally absent: one assistant per page, not two.
-  { pattern: /^\/events\/[^/]+\/?$/, page: "events", title: "Ask about this event", entry: "page-action", ownsSelection: true },
   { pattern: /^\/restaurants\/[^/]+\/?$/, page: "restaurants", title: "Ask about this restaurant", entry: "bubble", ownsSelection: false },
 ];
 
