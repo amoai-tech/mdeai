@@ -45,6 +45,7 @@ export type ScheduleViewingInput = z.infer<typeof scheduleViewingInputSchema>;
 /** Typed failure vocabulary shared by the API route and its browser caller. */
 export const scheduleViewingErrorCodes = [
   "VALIDATION_ERROR",
+  "LISTING_UNAVAILABLE",
   "RATE_LIMITED",
   "SHOWING_NOT_COMMITTED",
   "UPSTREAM_ERROR",
@@ -62,6 +63,10 @@ export type ScheduleViewingErrorCode = (typeof scheduleViewingErrorCodes)[number
  */
 export const SCHEDULE_VIEWING_ERROR_MESSAGES = {
   VALIDATION_ERROR: "Please check your viewing details and try again.",
+  // The renter's input was fine; the apartment is what cannot be requested. Telling them to
+  // "check your details" sends them round the same loop forever.
+  LISTING_UNAVAILABLE:
+    "This home isn't accepting viewing requests right now. Pick another apartment from the results.",
   RATE_LIMITED: "Too many viewing requests — please wait a minute and try again.",
   SHOWING_NOT_COMMITTED: "We couldn't confirm your viewing was saved. Please try again.",
   UPSTREAM_ERROR: "We couldn't send your viewing request. Please try again.",

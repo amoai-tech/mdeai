@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Building2 } from "lucide-react";
 import { DiscoveryWorkspace } from "@/components/browse/DiscoveryWorkspace";
 import { DiscoveryPageContext } from "@/components/chat/discovery-page-context";
@@ -10,6 +11,8 @@ import { BrowseMapPanel } from "@/components/browse/BrowseMapPanel";
 import { BrowseMapSheet } from "@/components/browse/BrowseMapSheet";
 import { RentalBrowseCard } from "@/components/rentals/rental-browse-card";
 import { RentalBrowseFilters } from "@/components/rentals/rental-browse-filters";
+import { RentalDateSuggestionTool } from "@/components/rentals/rental-date-suggestion-tool";
+import type { SuggestedStay } from "@/components/rentals/rental-date-selector";
 import { RentalDetailsPanel, RentalDetailsSheet } from "@/components/rentals/rental-details-panel";
 import {
   RentalAskComposer,
@@ -21,6 +24,7 @@ import { useOptionalConciergeCoAgent } from "@/components/chat/concierge-coagent
 import { RentalDetailsFrontendTool } from "@/components/rentals/rental-details-tool";
 import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 import { resolveRentalForDetails } from "@/lib/rentals/details-target";
+import { bookingReviewHref } from "@/lib/rentals/booking-review-url";
 import { duplicateListingNotes } from "@/lib/rentals/duplicate-listings";
 import { askFilterSignature } from "@/lib/rentals/ask-results-storage";
 import { useRentalAskResults } from "@/components/rentals/use-rental-ask-results";
@@ -28,7 +32,8 @@ import { useOptionalThreadNav } from "@/lib/chat/thread-nav-context";
 import type { DetailsCommand } from "@/lib/rentals/details-command";
 import { ScheduleViewingModal } from "@/components/modals/schedule-viewing-modal";
 import { EmptyState } from "@/components/empty/empty-state";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { useMapContext } from "@/platform/maps/map-context";
 import { useBrowseMapSync } from "@/hooks/use-browse-map-sync";
 import { useBrowseCardScroll } from "@/hooks/use-browse-card-scroll";
@@ -38,6 +43,7 @@ import { buildRetryHref } from "@/lib/rentals/browse-retry-href";
 import type { Rental } from "@/mastra/tools/search-rentals";
 import { buildRentalsUrl, rentalsQueryString } from "@/lib/rentals/browse-filters";
 import { formatDateOnly } from "@/lib/rentals/date-only";
+import { buildRentalSearchParams } from "@/lib/rental-query-parser";
 
 function formatCountSubtitle(total: number, shown: number): string {
   if (total === 0) return "0 apartments";
@@ -73,6 +79,7 @@ function RentalBrowseViewInner({
   dateError = null,
   previewMode = false,
 }: RentalBrowseViewProps) {
+  const router = useRouter();
   const { selectedPinId, setSelectedPinId, panToPin } = useMapContext();
   // The inline composer and this Details tool share the one concierge provider. Without it
   // (previews, deterministic E2E, isolated tests) the tool is not registered at all.
@@ -93,6 +100,11 @@ function RentalBrowseViewInner({
   const { activeAsk, acceptResults, clearResults } = useRentalAskResults(threadId, askSignature);
   const shownResults = activeAsk?.results ?? results;
   const shownTotal = activeAsk?.total ?? total;
+  const matchParams = useMemo(() => {
+    if (activeAsk) return buildRentalSearchParams(activeAsk.query, {}) ?? undefined;
+    return { neighborhood: neighborhood ?? undefined, minBedrooms: beds != null ? Number(beds) : undefined,
+      maxBedrooms: beds != null && Number(beds) < 3 ? Number(beds) : undefined };
+  }, [activeAsk, neighborhood, beds]);
   const filterState = { neighborhood, beds, from, through };
   // A preview fixture failure must retry the preview, not send the user to the public browse.
   const retryHref = previewMode ? buildRetryHref({ neighborhood, beds }, true) : buildRentalsUrl(filterState);
@@ -124,6 +136,9 @@ function RentalBrowseViewInner({
   // If a new search drops the open rental, `detailsRental` becomes null and the panel closes.
   const isLgUp = useIsLgUp();
   const [detailsId, setDetailsId] = useState<string | null>(null);
+  // SAN-1611 — an AI-proposed stay. One owner for the tool: this view mounts once, while the
+  // filter bar (and therefore the calendar) mounts twice for desktop and phone.
+  const [suggestedStay, setSuggestedStay] = useState<SuggestedStay | null>(null);
   const [askSelectedId, setAskSelectedId] = useState<string | null>(null);
   const selectedForAskId = shownResults.some((r) => r.id === askSelectedId) ? askSelectedId : null;
   const detailsRental = useMemo(
@@ -188,13 +203,21 @@ function RentalBrowseViewInner({
           previewMode ? (
             <p className="text-sm text-muted-foreground">Preview only — filters and bookings are disabled.</p>
           ) : (
-            <RentalBrowseFilters
-              neighborhood={neighborhood}
-              beds={beds}
-              from={from}
-              through={through}
-              dateError={dateError}
-            />
+            <>
+              {/* Same guard as the existing Details tool: a frontend tool needs a live co-agent. */}
+              {coAgent && !isDeterministicE2E() ? (
+                <RentalDateSuggestionTool onSuggest={setSuggestedStay} />
+              ) : null}
+              <RentalBrowseFilters
+                neighborhood={neighborhood}
+                beds={beds}
+                from={from}
+                through={through}
+                dateError={dateError}
+                suggestedStay={suggestedStay}
+                onSuggestionHandled={() => setSuggestedStay(null)}
+              />
+            </>
           )
         }
         rightPanel={
@@ -206,6 +229,7 @@ function RentalBrowseViewInner({
                   rental={detailsRental}
                   onClose={closeDetails}
                   onSchedule={scheduleFor(detailsRental)}
+                  bookingReviewHref={bookingReviewHref(detailsRental.id, { from, through })}
                 />
               ) : undefined
             }
@@ -228,14 +252,25 @@ function RentalBrowseViewInner({
               data-testid="rentals-error"
             >
               <p className="text-sm text-destructive">{error}</p>
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-4"
-                render={<Link href={retryHref} />}
+              <Link
+                href={retryHref}
+                prefetch={false}
+                className={cn(buttonVariants({ variant: "outline", size: "sm" }), "mt-4")}
+                onClick={(event) => {
+                  // A link to the current URL is navigation, not a guaranteed new server fetch.
+                  // Force an RSC refresh so Retry actually re-runs the failed rental search.
+                  if (
+                    !event.defaultPrevented && event.button === 0 &&
+                    !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey &&
+                    retryHref === window.location.pathname + window.location.search
+                  ) {
+                    event.preventDefault();
+                    router.refresh();
+                  }
+                }}
               >
                 Retry
-              </Button>
+              </Link>
             </div>
           ) : null}
 
@@ -297,6 +332,7 @@ function RentalBrowseViewInner({
                     key={r.id}
                     mediaLayout="inline"
                     rental={r}
+                    matchParams={matchParams}
                     detailSearch={detailSearch}
                     testId={`rental-card-${r.id}`}
                     selected={mappedIds.has(pinId) && selectedPinId === pinId}
@@ -323,6 +359,7 @@ function RentalBrowseViewInner({
           rental={detailsRental}
           onClose={closeDetails}
           onSchedule={scheduleFor(detailsRental)}
+          bookingReviewHref={bookingReviewHref(detailsRental.id, { from, through })}
         />
       ) : null}
     </>

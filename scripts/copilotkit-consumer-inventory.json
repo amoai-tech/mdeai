@@ -342,9 +342,19 @@
       "note": "SAN-1421 post-merge frontend tool: openRentalDetails opens the in-page Details panel for an apartment already in the current results. v2 useFrontendTool only; mounts no provider and starts no run."
     },
     {
+      "file": "src/components/rentals/rental-date-suggestion-tool.tsx",
+      "classification": "keep",
+      "note": "SAN-1611 v2 useFrontendTool suggests validated date-only values into the renter's editable draft; it never applies filters, submits a booking, or creates a new CopilotKit provider."
+    },
+    {
       "file": "src/components/rentals/__tests__/rental-details-tool.test.tsx",
       "classification": "test-only",
       "note": "Mocks the v2 useFrontendTool hook to prove the openRentalDetails registration and resolver behavior. Mounts no provider."
+    },
+    {
+      "file": "src/components/copilot/search-tool-result-cards.tsx",
+      "classification": "keep",
+      "note": "SAN-546 J09: provider-safe empty event suggestions reuse the canonical event fast path; optional concierge context guards the provider boundary."
     },
     {
       "file": "src/components/host/rentals/rentals-concierge-center.tsx",

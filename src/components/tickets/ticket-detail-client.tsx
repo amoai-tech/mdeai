@@ -144,6 +144,11 @@ export function TicketDetailClient({
       </Link>
 
       <div className="space-y-1 pb-5 text-center">
+        {order.stripe_session_id?.startsWith("cs_test_") ? (
+          <p data-testid="test-ticket-label" className="text-sm font-semibold text-muted-foreground">
+            TEST TICKET · No real payment collected
+          </p>
+        ) : null}
         <h1 className="font-serif text-xl font-semibold">{event.name}</h1>
         <p className="text-sm text-muted-foreground">
           {formatEventWhen(event.event_start_time)}
@@ -170,7 +175,7 @@ export function TicketDetailClient({
           value={order.short_id ?? order.id.slice(0, 8)}
         />
         <PassRow
-          label="Paid"
+          label={order.stripe_session_id?.startsWith("cs_test_") ? "TEST payment" : "Paid"}
           value={formatWalletMoney(order.total_cents, order.currency)}
         />
       </dl>

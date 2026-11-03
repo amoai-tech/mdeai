@@ -17,7 +17,13 @@ export function previewStartUrl(previewUrl, yaml, testPath) {
   if (expected.origin !== 'https://www.mdeai.co' || expected.username || expected.password || expected.hash) {
     throw new Error(`Test URL must be under the public MDE origin: ${testPath}`);
   }
-  return new URL(expected.pathname + expected.search, preview.origin).href;
+  const start = new URL(expected.pathname + expected.search, preview.origin);
+  const share = process.env.MOMENTIC_PREVIEW_SHARE_TOKEN;
+  if (share) {
+    if (!/^[A-Za-z0-9_-]{32,}$/.test(share)) throw new Error('Invalid scoped preview link token');
+    start.searchParams.set('_vercel_share', share);
+  }
+  return start.href;
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {

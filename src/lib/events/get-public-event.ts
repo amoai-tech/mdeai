@@ -111,10 +111,20 @@ function mapEvent(
   };
 }
 
+/**
+ * Why the public event could not be shown. "A database hiccup" and "this event
+ * does not exist" are different answers: the page must 404 only for the second,
+ * otherwise a failed ticket query looks like a deleted event.
+ */
+export type PublicEventResult =
+  | { status: "ok"; event: PublicEventDetail }
+  | { status: "not-found" }
+  | { status: "unavailable" };
+
 /** Public event page fetch — slug or UUID, published/live + active only. */
-export async function getPublicEvent(
+export async function getPublicEventResult(
   slugOrId: string,
-): Promise<PublicEventDetail | null> {
+): Promise<PublicEventResult> {
   const supabase = await createClient();
 
   let eventQuery = supabase
@@ -134,7 +144,8 @@ export async function getPublicEvent(
 
   const { data: eventRow, error: eventError } = await eventQuery.maybeSingle();
 
-  if (eventError || !eventRow) return null;
+  if (eventError) return { status: "unavailable" };
+  if (!eventRow) return { status: "not-found" };
 
   const row = eventRow as EventRow;
   const host = parseEventHostDisplay(row.details);
@@ -147,7 +158,18 @@ export async function getPublicEvent(
     .eq("is_active", true)
     .order("position", { ascending: true });
 
-  if (ticketError) return null;
+  if (ticketError) return { status: "unavailable" };
 
-  return mapEvent(row, (ticketRows ?? []).map(mapTicket), host, venue, parseEventFacts(row.details));
+  return {
+    status: "ok",
+    event: mapEvent(row, (ticketRows ?? []).map(mapTicket), host, venue, parseEventFacts(row.details)),
+  };
+}
+
+/** Compatibility wrapper for callers that only need the event (API route, tests). */
+export async function getPublicEvent(
+  slugOrId: string,
+): Promise<PublicEventDetail | null> {
+  const result = await getPublicEventResult(slugOrId);
+  return result.status === "ok" ? result.event : null;
 }

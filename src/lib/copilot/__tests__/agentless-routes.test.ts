@@ -21,6 +21,7 @@ describe("isAgentlessRoute", () => {
 
   it("keeps every route that owns an agent surface excluded", () => {
     for (const pathname of [
+      "/", // Home does not mount discovery AI.
       "/login",
       "/signup",
       "/auth/callback",
@@ -58,7 +59,6 @@ describe("isAgentlessRoute", () => {
 
   it("leaves discovery routes on the root concierge provider", () => {
     for (const pathname of [
-      "/",
       "/rentals",
       "/restaurants",
       "/nightlife",

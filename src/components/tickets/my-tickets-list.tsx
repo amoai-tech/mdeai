@@ -156,7 +156,7 @@ function OrderCard({
         <p className="mt-2 text-sm">
           {order.quantity} ticket{order.quantity === 1 ? "" : "s"} ·{" "}
           {order.shortId ?? order.id.slice(0, 8)} ·{" "}
-          {paid ? "Paid ✓" : order.status}
+          {paid ? (order.isSandbox ? "TEST payment ✓" : "Paid ✓") : order.status}
           {" · "}
           {formatWalletMoney(order.totalCents, order.currency)}
         </p>

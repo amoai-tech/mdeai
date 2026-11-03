@@ -49,10 +49,8 @@ require_ticket_analysis_review = false
 require_risk_assessment = true
 require_merge_recommendation = true
 require_priority_files = true
-# `publish_error_details` is a v0.46+ key. The shared workflow pins v0.45.0, where no reader
-# exists for it, so setting it here would be a silent no-op that claims a feature MDE does not
-# have. Re-add it in the same change that adopts v0.46 by immutable digest.
-# publish_error_details = true
+# The shared host pins v0.49.0 and sets publish_error_details=true.
+# Keep this behavior host-owned to avoid duplicate configuration.
 persistent_comment = true
 persistent_finding_state = true
 num_max_findings = 6
@@ -66,7 +64,7 @@ Act as a forensic senior engineer reviewing production MDE code. Deterministic C
 
 Apply these universal checks in order on every PR: Outcome, Truth, Reuse, Architecture, Security, Data integrity, Failure modes, Integration correctness, Real workflow, Proof. Verify the requested outcome against current repository evidence; distrust stale PR prose. Inspect unchanged surrounding callers, contracts, tests, and configuration when needed to prove integration behavior, but report only defects introduced or exposed by this PR.
 
-Before safe_to_merge, perform an adversarial falsification pass: assume the PR is subtly wrong and try to falsify its claims. Search for false-green tests, silent skips, exit-code mistakes, missing negative tests, stale assumptions, permission checks in the wrong layer, retry/replay/concurrency duplicate effects, partial writes, and incorrectly named env vars, APIs, RPCs, webhooks, events, provider IDs, or schemas.
+Before recommending no_concerns_found, perform an adversarial falsification pass: assume the PR is subtly wrong and try to falsify its claims. Search for false-green tests, silent skips, exit-code mistakes, missing negative tests, stale assumptions, permission checks in the wrong layer, retry/replay/concurrency duplicate effects, partial writes, and incorrectly named env vars, APIs, RPCs, webhooks, events, provider IDs, or schemas.
 
 A green test is evidence only when it exercises the changed failure path. Missing deterministic negative proof is material for security, authorization/RLS, payments, migrations, release/deployment gates, and irreversible side effects.
 
@@ -78,7 +76,7 @@ Reviewer skills are loaded only from github.event.pull_request.base.sha; do not 
 
 For dependency/API/version claims, consult the MDE exact-version verification evidence artifact first. Exact version evidence alone does not prove a specific API claim. A claim is VERIFIED only when the artifact plus diff/trusted repository/skill/type evidence proves the relevant exact-version behavior. If evidence is missing, conflicting, or marked NEEDS VERIFICATION, label the claim NEEDS VERIFICATION, keep it advisory, and it cannot independently block merge. Never upgrade an unsupported framework/API claim to BLOCKER/HIGH from memory or stale examples.
 
-YAML serialization requirement: the PR-Agent review must remain valid YAML. For every free-text field in the PR-Agent review, always use a YAML block scalar (`|`) with indented content. Never start an unquoted YAML scalar with a backtick. This is an output-format requirement, not a style preference.
+YAML serialization requirement: the PR-Agent review must remain valid YAML. For every free-text field in the PR-Agent review, always use a YAML block scalar (`|`) with indented content. Never start an unquoted YAML scalar with a backtick. This is an output-format requirement, not a style preference. The `relevant_tests` field is a literal enum: ALWAYS quote it as `relevant_tests: "Yes"` or `relevant_tests: "No"`, never `relevant_tests: No` (YAML converts bare No to boolean false and the PRReview schema rejects it).
 
 For EVERY finding, write for BOTH an engineer and a product owner. PR-Agent's schema requires each finding inside `key_issues_to_review[].issue_content`. Therefore issue_content itself MUST be a YAML block scalar whose literal Markdown contains all eight fields below, in this order, with one blank line between fields. Never return an unstructured paragraph for issue_content.
 

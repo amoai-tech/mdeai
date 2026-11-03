@@ -16,7 +16,9 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: __dirname,
   },
-  serverExternalPackages: ["@copilotkit/runtime"],
+  // Google Places uses protobufjs dynamic requires; keep its Node runtime native
+  // instead of asking Webpack to statically resolve that optional import.
+  serverExternalPackages: ["@copilotkit/runtime", "@googlemaps/places"],
   webpack: (config, { dev }) => {
     // Production builds must not reuse webpack's persistent cache. With it, Tailwind v4's CSS came
     // back stale: a utility class added to a file the previous build had already compiled never

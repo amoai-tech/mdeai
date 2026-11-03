@@ -19,6 +19,7 @@ import {
 import { GalleryImage } from "@/components/rentals/gallery-image";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { formatRentalPrices } from "@/lib/rental-display";
+import { externalListingLink } from "@/lib/rentals/external-source";
 import type { RentalDetail } from "@/lib/rentals/get-rental-detail";
 
 const REQUEST_ONLY = "Request only — payment is handled directly with the host.";
@@ -265,25 +266,21 @@ const mapsHrefFor = (detail: RentalDetail): string | null => {
  * A hostname allowlist would hide legitimate new development inventory; instead
  * show the exact host and ask the renter before navigating off MDE.
  */
-const externalListingLinkFor = (value: string | null): { href: string; hostname: string } | null => {
-  if (!value) return null;
-  try {
-    const url = new URL(value);
-    const hostname = url.hostname.toLowerCase();
-    if (url.protocol !== "https:" || url.username || url.password || url.port !== "") return null;
-    if (hostname === "mdeai.co" || hostname.endsWith(".mdeai.co")) return null;
-    return { href: url.href, hostname: url.host };
-  } catch {
-    return null;
-  }
-};
-
 /** SAN-1202 · RE-DES-007 — consumer rental detail page. */
 // skipcq: JS-0067 - ES module export; not browser global scope
-export function RentalDetailView({ detail, backHref = "/rentals" }: { detail: RentalDetail; backHref?: string }) {
+export function RentalDetailView({
+  detail,
+  backHref = "/rentals",
+  bookingReviewHref,
+}: {
+  detail: RentalDetail;
+  backHref?: string;
+  /** SAN-1611: the renter's already-applied stay, carried into the booking review. */
+  bookingReviewHref?: string;
+}) {
   return (
     <RentalUiProvider>
-      <RentalDetailInner detail={detail} backHref={backHref} />
+      <RentalDetailInner detail={detail} backHref={backHref} bookingReviewHref={bookingReviewHref} />
       <ScheduleViewingModal />
     </RentalUiProvider>
   );
@@ -321,7 +318,15 @@ function RentalDescription({ description }: { description?: string | null }) {
 }
 
 // skipcq: JS-0067, JS-R1005, JS-0415 - module-local helper with intentional UI composition complexity
-function RentalDetailInner({ detail, backHref }: { detail: RentalDetail; backHref: string }) {
+function RentalDetailInner({
+  detail,
+  backHref,
+  bookingReviewHref,
+}: {
+  detail: RentalDetail;
+  backHref: string;
+  bookingReviewHref?: string;
+}) {
   const { openScheduleViewing } = useRentalUi();
   // The HTML arrives before client event handlers do. Do not show a clickable
   // action that silently loses a renter's first tap before hydration.
@@ -329,7 +334,7 @@ function RentalDetailInner({ detail, backHref }: { detail: RentalDetail; backHre
   const prices = formatRentalPrices(detail.priceNightly, detail.priceMonthly, detail.currency);
   const mapsHref = mapsHrefFor(detail);
   const sourceLink = (detail.status === "development-preview" || detail.isNotIndependentlyVerified)
-    ? externalListingLinkFor(detail.sourceUrl)
+    ? externalListingLink(detail.sourceUrl)
     : null;
   const requestViewing = () =>
     openScheduleViewing({ listingId: detail.id, title: detail.title, neighborhood: detail.neighborhood });
@@ -362,16 +367,51 @@ function RentalDetailInner({ detail, backHref }: { detail: RentalDetail; backHre
 
           <RentalSpecs detail={detail} />
 
-          {/* A persisted apartment can start a draft booking review without any payment. */}
-          {detail.status !== "development-preview" ? (
-            <Link
-              href={`/rentals/bookings/new?apartment=${encodeURIComponent(detail.id)}`}
-              data-testid="rental-detail-booking-review-link"
-              className="inline-flex max-w-full items-center rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted"
-            >
-              Review booking (no payment yet)
-            </Link>
-          ) : null}
+          {/*
+            SAN-1612 — the secondary choices for this apartment. The primary viewing CTA is the one
+            in the price column (desktop) and the fixed bar (phone), so it is deliberately NOT
+            repeated here: two "Schedule viewing" buttons on one screen is worse than a truthful
+            heading. Hence "Other options", not "What would you like to do?".
+          */}
+          <section
+            aria-labelledby="rental-actions-heading"
+            data-testid="rental-detail-actions"
+            className="rounded-xl border border-border p-4"
+          >
+            <h2 id="rental-actions-heading" className="mb-3 font-serif text-base font-semibold">
+              Other options
+            </h2>
+            <div className="flex flex-wrap gap-2">
+              {detail.status !== "development-preview" && !detail.isExternalSource ? (
+                <Link
+                  href={bookingReviewHref ?? `/rentals/bookings/new?apartment=${encodeURIComponent(detail.id)}`}
+                  data-testid="rental-detail-booking-review-link"
+                  className="inline-flex max-w-full items-center rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted"
+                >
+                  Review booking (no payment yet)
+                </Link>
+              ) : null}
+              {sourceLink ? (
+                <a
+                  href={sourceLink.href}
+                  target="_blank"
+                  rel="nofollow noopener noreferrer"
+                  data-testid="rental-detail-source-link"
+                  onClick={(event) => {
+                    if (!window.confirm("You are leaving MDE AI for " + sourceLink.hostname + ". Continue to the external listing?")) {
+                      event.preventDefault();
+                    }
+                  }}
+                  className="inline-flex max-w-full flex-wrap items-center gap-1 rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted"
+                >
+                  <ExternalLink className="size-3.5" aria-hidden /> View original listing
+                  <span className="break-all text-xs text-muted-foreground">({sourceLink.hostname})</span>
+                  {/* The new tab is a real navigation change, so say it instead of only doing it. */}
+                  <span className="sr-only">(opens in a new tab)</span>
+                </a>
+              ) : null}
+            </div>
+          </section>
 
           <RentalDescription description={detail.description} />
 
@@ -420,23 +460,6 @@ function RentalDetailInner({ detail, backHref }: { detail: RentalDetail; backHre
               ) : (
                 <p className="text-xs text-muted-foreground">Map location {PENDING.toLowerCase()}.</p>
               )}
-              {sourceLink ? (
-                <a
-                  href={sourceLink.href}
-                  target="_blank"
-                  rel="nofollow noopener noreferrer"
-                  data-testid="rental-detail-source-link"
-                  onClick={(event) => {
-                    if (!window.confirm("You are leaving MDE AI for " + sourceLink.hostname + ". Continue to the external listing?")) {
-                      event.preventDefault();
-                    }
-                  }}
-                  className="inline-flex max-w-full flex-wrap items-center gap-1 text-sm text-primary hover:underline"
-                >
-                  <ExternalLink className="size-3.5" aria-hidden /> View original listing
-                  <span className="break-all text-xs text-muted-foreground">({sourceLink.hostname})</span>
-                </a>
-              ) : null}
               {detail.sourceProvider ? (
                 <p className="mt-1 text-xs text-muted-foreground" data-testid="rental-detail-source-label">
                   Source: {detail.sourceProvider}

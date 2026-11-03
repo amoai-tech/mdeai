@@ -433,3 +433,24 @@ test.describe("SAN-1075 rental card actions at phone size", () => {
     await expectNoHorizontalOverflow(page);
   });
 });
+
+// PR #659: exercise real React chat rendering at phone width, not only the pure helper.
+test.describe("SAN-1226 grounded rental reasons on mobile", { tag: ["@deterministic"] }, () => {
+  test.use({ isMobile: true, hasTouch: true });
+
+  test("390px: helpful rental reasons, usable actions and map without horizontal overflow", async ({ page }) => {
+    await page.setViewportSize(PHONE_390);
+    await seedRentalPin(page);
+    const card = page.getByTestId("rental-card").first();
+    await expect(card.getByTestId("rental-match-reason")).toBeVisible();
+    await expect(card.getByTestId("rental-match-reason")).toContainText("Wi-Fi listed");
+    expect(await card.getByTestId("rental-match-reason").evaluate((el) => el.scrollHeight <= el.clientHeight + 1)).toBe(true);
+    await expect(card).not.toContainText(/hybrid_semantic|hybrid_search_listings|neighborhood_profile|RPC/);
+    await expectMinimumTouchTarget(card.getByTestId("rental-details-cta"), "Details");
+    await expectMinimumTouchTarget(card.getByTestId("rental-schedule-cta"), "Schedule viewing");
+    await expectNoHorizontalOverflow(page);
+    const { sheet } = await openRentalMap(page);
+    await expect(sheet.getByTestId("chat-map")).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+  });
+});

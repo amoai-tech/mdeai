@@ -23,7 +23,7 @@ jobs:
       issues: write
       pull-requests: write
     # Shared infra merged #17/#18: 300s model timeout and 16K output budget.
-    uses: amoai-tech/pr-review-infra/.github/workflows/pr-agent.yml@f37cb4a98626d55d4b6c8709d9ab2a2c6843bd2f
+    uses: amoai-tech/pr-review-infra/.github/workflows/pr-agent.yml@a6c54ca51704cc1aadd8e844d3548c3e51e4d66a
     with:
       evidence_title: MDE PR-Agent Evidence
     secrets:
@@ -46,7 +46,9 @@ jobs:
     permissions:
       actions: read
       contents: read
-      pull-requests: read
+      # PR issue comments need write scope under the repository integration policy.
+      # This job imports trusted base code only and never executes PR-head scripts.
+      pull-requests: write
       issues: write
     steps:
       - name: Checkout trusted base policy

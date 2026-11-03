@@ -4,7 +4,15 @@
  * validated amount + currency + period contract there must be no price chip at all.
  */
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+// The date selector navigates with the app router; static rendering has no router.
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn(), refresh: vi.fn(), prefetch: vi.fn() }),
+  usePathname: () => "/rentals",
+  useSearchParams: () => new URLSearchParams(),
+  notFound: () => { throw new Error("NEXT_NOT_FOUND"); },
+  redirect: (url: string) => { throw new Error(`NEXT_REDIRECT:${url}`); },
+}));
 import { RentalBrowseFilters } from "@/components/rentals/rental-browse-filters";
 
 describe("RentalBrowseFilters", () => {
@@ -35,26 +43,21 @@ describe("RentalBrowseFilters", () => {
   });
 });
 
-describe("RentalBrowseFilters — stay dates (SAN-486)", () => {
+describe("RentalBrowseFilters — stay dates (SAN-1611)", () => {
   const withDates = renderToStaticMarkup(
     <RentalBrowseFilters neighborhood="Laureles" beds="2" from="2026-11-01" through="2026-11-30" />,
   );
 
-  it("renders labelled From and Through date inputs holding the URL values", () => {
-    expect(withDates).toMatch(/From\s*<input[^>]*type="date"[^>]*name="from"[^>]*value="2026-11-01"/);
-    expect(withDates).toMatch(/Through\s*<input[^>]*type="date"[^>]*name="through"[^>]*value="2026-11-30"/);
-  });
-
-  it("is a plain GET form that keeps the other filters in hidden fields", () => {
-    expect(withDates).toContain('method="get"');
-    expect(withDates).toContain('action="/rentals"');
-    expect(withDates).toMatch(/<input type="hidden" name="neighborhood" value="Laureles"/);
-    expect(withDates).toMatch(/<input type="hidden" name="beds" value="2"/);
+  it("shows the applied stay on a calendar trigger instead of two raw date inputs", () => {
+    expect(withDates).toContain('data-testid="rentals-dates-trigger"');
+    expect(withDates).toContain("Nov 1, 2026");
+    expect(withDates).toContain("Nov 30, 2026");
+    // One date input surface only: no second, competing pair of inputs in the bar.
+    expect(withDates).not.toContain('type="date"');
+    expect(withDates).not.toContain('name="from"');
   });
 
   it("neighborhood and bedroom chips keep the chosen dates", () => {
-    // Read the actual link from the rendered markup rather than slicing the HTML string,
-    // so the assertion does not depend on attribute order and parses real DOM.
     const parsed = new DOMParser().parseFromString(withDates, "text/html");
     const href = (testId: string) =>
       parsed.querySelector(`[data-testid="${testId}"]`)?.getAttribute("href") ?? "";
@@ -63,19 +66,17 @@ describe("RentalBrowseFilters — stay dates (SAN-486)", () => {
     expect(href("rentals-filter-beds-1")).toContain("from=2026-11-01");
   });
 
-  it("offers Clear dates only when dates or an error are present, and the link drops them", () => {
-    expect(withDates).toContain("rentals-dates-clear");
-    expect(renderToStaticMarkup(<RentalBrowseFilters neighborhood={null} beds={null} />)).not.toContain("rentals-dates-clear");
-    expect(withDates).toMatch(/<a [^>]*data-testid="rentals-dates-clear"[^>]*href="\/rentals\?neighborhood=Laureles&amp;beds=2"/);
+  it("keeps Clear inside the dialog, so a closed calendar offers no destructive control", () => {
+    // Apply/Cancel/Clear are asserted end-to-end in e2e/rentals-date-filters.spec.ts.
+    expect(withDates).not.toContain("rentals-dates-clear");
   });
 
-  it("announces a date problem to assistive technology and marks the inputs invalid", () => {
+  it("announces a date problem to assistive technology and marks the trigger invalid", () => {
     const bad = renderToStaticMarkup(
       <RentalBrowseFilters neighborhood={null} beds={null} dateError="Dates must be real calendar dates." />,
     );
     expect(bad).toMatch(/role="alert"[^>]*>Dates must be real calendar dates\./);
     expect(bad).toContain('aria-invalid="true"');
-    // The error element's id is generated (the bar renders twice, so a fixed id would be duplicated).
     const id = bad.match(/<p id="([^"]+)" role="alert"/)?.[1];
     expect(id).toBeTruthy();
     expect(bad).toContain(`aria-describedby="${id}"`);
@@ -94,6 +95,7 @@ describe("RentalBrowseFilters — contrast (workspace background)", () => {
   it("keeps the chosen chip and the Apply dates button readable: tint under 10% (text-primary on bg-primary/10 measured 4.4:1, needs 4.5:1)", () => {
     const chosen = renderToStaticMarkup(<RentalBrowseFilters neighborhood="Laureles" beds="2" />);
     expect(chosen).not.toContain("bg-primary/10");
-    expect(chosen.match(/bg-primary\/5/g)?.length).toBe(3); // chosen neighborhood, chosen bedrooms, Apply dates
+    // Apply dates now lives in the dialog, so the tint covers the two chosen chips.
+    expect(chosen.match(/bg-primary\/5/g)?.length).toBe(2);
   });
 });

@@ -6,6 +6,7 @@ import {
 } from "./helpers/maps-layout";
 import {
   RENTAL_QUERY,
+  EVENT_QUERY,
   RESTAURANT_QUERY,
   chooseRestaurantFilter,
   gotoDeterministicChat,
@@ -70,6 +71,32 @@ test.describe("SAN-1341 deterministic critical journeys", { tag: ["@critical", "
     await expect(page.getByTestId("restaurant-card")).toHaveCount(1);
     await expect(page.getByTestId("event-card")).toHaveCount(0);
     await expect(page.getByTestId("restaurant-fast-path-panel")).toBeVisible();
+  });
+
+  test("empty event search does not crash without a CopilotKit provider", async ({ page }) => {
+    const uncaught: string[] = [];
+    page.on("pageerror", (error) => uncaught.push(error.message));
+    let emptySearchRequests = 0;
+    // Registered after mockFastPaths: Playwright uses last-registered route first.
+    await page.route("**/api/events/search", async (route) => {
+      emptySearchRequests += 1;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ results: [], total: 0, source: "supabase" }),
+      });
+    });
+
+    await gotoDeterministicChat(page);
+    const response = waitForPost(page, "/api/events/search");
+    await typeAndSubmit(page, EVENT_QUERY);
+    expect((await response).ok()).toBe(true);
+    await expect(page.getByTestId("events-empty")).toBeVisible();
+    await expect(page.getByTestId("event-card")).toHaveCount(0);
+    await expect(page.getByTestId("events-empty-suggest-weekend")).toBeDisabled();
+    // This regression proves provider-safe rendering; request coalescing belongs to the send pipeline.
+    expect(emptySearchRequests).toBeGreaterThanOrEqual(1);
+    expect(uncaught).toEqual([]);
   });
 
   test("rental fast path renders rental card and map pin state", async ({
@@ -175,5 +202,22 @@ test.describe("SAN-1341 deterministic critical journeys", { tag: ["@critical", "
 
     await expect(sheet).toBeHidden({ timeout: 10_000 });
     await expect(trigger).toBeFocused();
+  });
+});
+
+test.describe("SAN-1226 customer-facing rental explanations (desktop)", { tag: ["@deterministic"] }, () => {
+  test("listing facts are visible, debug ranking is hidden, and Details still opens", async ({ page }) => {
+    await mockFastPaths(page);
+    await gotoDeterministicChat(page);
+    const responsePromise = waitForPost(page, "/api/rentals/search");
+    await typeAndSubmit(page, RENTAL_QUERY);
+    expect((await responsePromise).ok()).toBe(true);
+    const card = page.getByTestId("rental-card").first();
+    await expect(card).toBeVisible();
+    await expect(card.getByTestId("rental-match-reason")).toContainText("Wi-Fi listed");
+    await expect(card).not.toContainText(/hybrid_semantic|hybrid_search_listings RPC|neighborhood_profile/);
+    await expect(page.getByTestId("rank-explanation-rental")).toHaveCount(0);
+    await card.getByTestId("rental-details-cta").click();
+    await expect(page.getByTestId("rental-details-panel")).toHaveAttribute("data-listing-id", rental.id);
   });
 });

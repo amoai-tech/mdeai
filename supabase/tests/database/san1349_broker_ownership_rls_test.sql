@@ -349,7 +349,7 @@ select throws_ok($q$
     'unapproved@example.com', 'Unapproved', null, null::uuid,
     '2099-11-11 14:00:00+00'::timestamptz, '{}'::jsonb, '{}'::jsonb
   )
-$q$, 'P0001', 'p1_schedule_tour_atomic: listing is not requestable',
+$q$, 'P1287', 'p1_schedule_tour_atomic: listing is not requestable',
       'H2: owned but unapproved listing is rejected before any write');
 
 select throws_ok($q$
@@ -358,7 +358,7 @@ select throws_ok($q$
     'unpublished@example.com', 'Unpublished', null, null::uuid,
     '2099-11-12 14:00:00+00'::timestamptz, '{}'::jsonb, '{}'::jsonb
   )
-$q$, 'P0001', 'p1_schedule_tour_atomic: listing is not requestable',
+$q$, 'P1287', 'p1_schedule_tour_atomic: listing is not requestable',
       'H3: owned but unpublished listing is rejected before any write');
 
 select throws_ok($q$
@@ -367,7 +367,7 @@ select throws_ok($q$
     'unowned@example.com', 'Unowned', null, null::uuid,
     '2099-11-13 14:00:00+00'::timestamptz, '{}'::jsonb, '{}'::jsonb
   )
-$q$, 'P0001', 'p1_schedule_tour_atomic: listing is not requestable',
+$q$, 'P1287', 'p1_schedule_tour_atomic: listing is not requestable',
       'H4: active but OWNERLESS listing is rejected before any write');
 
 select throws_ok($q$
@@ -376,7 +376,7 @@ select throws_ok($q$
     'inactive@example.com', 'Inactive', null, null::uuid,
     '2099-11-14 14:00:00+00'::timestamptz, '{}'::jsonb, '{}'::jsonb
   )
-$q$, 'P0001', 'p1_schedule_tour_atomic: listing is not requestable',
+$q$, 'P1287', 'p1_schedule_tour_atomic: listing is not requestable',
       'H5: inactive listing is rejected before any write');
 
 reset role;

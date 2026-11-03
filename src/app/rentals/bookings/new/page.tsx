@@ -1,14 +1,21 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { SignInRequired } from "@/components/auth/sign-in-required";
-import { BookingReviewSummary } from "@/components/rentals/booking-review-summary";
-import { StartBookingReview } from "@/components/rentals/start-booking-review";
+import { BookingReviewStay } from "@/components/rentals/booking-review-stay";
 import { getRentalDetail, type RentalDetail } from "@/lib/rentals/get-rental-detail";
+import { bookingReviewHref, moveOutFromStayThrough, parseStayRange } from "@/lib/rentals/booking-review-url";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata = { title: "Review your booking · mdeai" };
 
-type Props = { searchParams?: Promise<{ apartment?: string | string[] }> };
+type Props = {
+  searchParams?: Promise<{
+    apartment?: string | string[];
+    /** SAN-1611: the stay the renter already applied on /rentals. */
+    from?: string | string[];
+    through?: string | string[];
+  }>;
+};
 
 /**
  * SAN-481 — the booking review screen a renter reaches from an apartment.
@@ -19,16 +26,23 @@ type Props = { searchParams?: Promise<{ apartment?: string | string[] }> };
  * /rentals/bookings/[id]. Nothing here starts a payment or invents an amount.
  */
 export default async function NewBookingReviewPage({ searchParams }: Props) {
-  const requested = (await searchParams)?.apartment;
+  const searchParamsResolved = (await searchParams) ?? {};
+  const requested = searchParamsResolved.apartment;
   const apartmentId = typeof requested === "string" ? requested : null;
+  // Only a real, ordered stay is carried; anything malformed is dropped rather than corrected.
+  const stay = parseStayRange(searchParamsResolved);
+  // `through` is the last occupied day; the booking stores the day they leave.
+  const moveOut = moveOutFromStayThrough(stay.through);
+  const stayQuery = stay.from
+    ? `?from=${stay.from}${stay.through ? `&through=${stay.through}` : ""}`
+    : "";
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const returnTo = apartmentId
-    ? `/rentals/bookings/new?apartment=${encodeURIComponent(apartmentId)}`
-    : "/rentals/bookings/new";
+  // Keep the stay through the sign-in round trip, so signing in never loses the dates.
+  const returnTo = apartmentId ? bookingReviewHref(apartmentId, stay) : "/rentals/bookings/new";
 
   if (!user) {
     return (
@@ -91,7 +105,7 @@ export default async function NewBookingReviewPage({ searchParams }: Props) {
   return (
     <main className="mx-auto max-w-3xl px-4 pb-24 pt-6" data-testid="booking-review-new">
       <Link
-        href={`/rentals/${encodeURIComponent(detail.id)}`}
+        href={`/rentals/${encodeURIComponent(detail.id)}${stayQuery}`}
         className="text-sm text-muted-foreground hover:text-foreground"
         data-testid="booking-review-back"
       >
@@ -103,15 +117,13 @@ export default async function NewBookingReviewPage({ searchParams }: Props) {
       </p>
 
       <div className="mt-4">
-        <BookingReviewSummary
+        <BookingReviewStay
           detail={detail}
           fallbackTitle={detail.title}
-          startDate=""
-          endDate={null}
+          initialStart={stay.from}
+          initialEnd={moveOut}
         />
       </div>
-
-      <StartBookingReview apartmentId={detail.id} />
     </main>
   );
 }

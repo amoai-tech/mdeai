@@ -25,7 +25,7 @@ planner, tests and official documentation.
 9. Real workflow — trace the affected end-to-end user/system journey.
 10. Proof — verify tests/build/E2E/pgTAP actually exercise the changed behavior.
 
-Inspect surrounding repository contracts when needed, while keeping findings scoped to defects introduced or exposed by the PR. Before `safe_to_merge`, try to falsify the PR's claims through silent skips, false-green tests, wrong exit codes, stale assumptions, missing negative tests, and retry/replay/concurrency failures.
+Inspect surrounding repository contracts when needed, while keeping findings scoped to defects introduced or exposed by the PR. Before recommending `no_concerns_found`, try to falsify the PR's claims through silent skips, false-green tests, wrong exit codes, stale assumptions, missing negative tests, and retry/replay/concurrency failures.
 
 A green test is evidence only if it exercises the changed failure path. For security/RLS/payments/migrations/deployment gates, missing deterministic negative proof is material.
 
