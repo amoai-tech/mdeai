@@ -37,7 +37,7 @@ describe("SAN-737 Concierge instructions agree about verified lookup ownership",
   it("uses the already-verified current selection and still allows new discovery searches", () => {
     const source = readFileSync(new URL("../agents/concierge.ts", import.meta.url), "utf8");
     expect(source).toContain("server-side public RLS lookup ALREADY completed");
-    expect(source).toContain("getDefaultInputProcessors(12_288)");
+    expect(source).toContain("getDefaultInputProcessors(32_768)");
     expect(source).toContain("do NOT call the lookup tool again for the same ID");
     expect(source).toContain("For an unrelated new discovery request, use the appropriate search tool normally");
     expect(source).not.toContain("selectedPublicEntityId from the active discovery-page context BEFORE answering concrete facts");
