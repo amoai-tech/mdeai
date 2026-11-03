@@ -311,7 +311,7 @@ describe("Concierge transcript ownership", () => {
     expect(typeof input.onSubmitMessage).toBe("function");
     expect(input.autoFocus).toBe(true);
     input.onSubmitMessage?.("1BR in Laureles");
-    expect(mocks.sendConciergeUserMessage).toHaveBeenCalledWith("1BR in Laureles", expect.anything());
+    expect(mocks.sendConciergeUserMessage).toHaveBeenCalledWith("1BR in Laureles", expect.anything(), expect.any(String));
     unmount();
   });
 

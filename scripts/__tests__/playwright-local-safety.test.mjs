@@ -59,6 +59,9 @@ function configuredProjects(extraEnv = {}) {
       chromiumBaseURL: config.projects.find((p) => p.name === "chromium").use.baseURL,
       productionPresent: config.projects.some((p) => p.name === "prod-smoke"),
       reuseExistingServer: config.webServer?.reuseExistingServer ?? false,
+      webServerPort: config.webServer?.port ?? null,
+      webServerURL: config.webServer?.url ?? null,
+      webServerStdout: config.webServer?.stdout ?? null,
     })))`;
   return JSON.parse(execFileSync(process.execPath, ["--experimental-strip-types", "--input-type=module", "-e", script], {
     env,
@@ -77,6 +80,20 @@ test("remote URL variables never redirect local Chromium to a remote server", ()
     assert.equal(loaded.chromiumBaseURL, "http://localhost:3099");
     assert.equal(loaded.productionPresent, remoteEnv.PW_SKIP_WEBSERVER === "1");
   }
+});
+
+test("local browser startup checks the listening port, not an expensive home page", () => {
+  const local = configuredProjects({ SMOKE_BASE_URL: "http://localhost:3099" });
+  assert.equal(local.webServerPort, 3099);
+  assert.equal(local.webServerURL, null);
+  assert.equal(local.webServerStdout, "pipe");
+
+  // Explicit production smoke remains remote-only and never starts a local server.
+  const production = configuredProjects({
+    PROD_SMOKE_BASE_URL: "https://example.invalid",
+    PW_SKIP_WEBSERVER: "1",
+  });
+  assert.equal(production.webServerPort, null);
 });
 
 test("CI never reuses a developer server even with the reuse opt-in variable", () => {

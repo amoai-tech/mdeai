@@ -164,6 +164,31 @@ describe("rental-search-fast-path", () => {
     expect(canFastPathRentalSearch("2BR poblado under $900", {})).toBe(true);
   });
 
+  it.each([
+    "I am visiting Medellín. In two short sentences explain how you can help me find a place to stay in Laureles, then ask me one useful question. Do not search for listings, create a lead, or make a booking.",
+    "I'm visiting Medellín and deciding where to stay. Explain briefly how you can help me find an apartment in Laureles, then ask me one useful follow-up question.",
+    "What can you do to help me find apartments in Laureles?",
+    "What can MDE do to help me find apartments in Laureles?",
+    "How can MDE help me find an apartment in Laureles?",
+    "Do not show me apartments in Laureles",
+    "Don’t show me listings",
+    "Don't show us rentals in Laureles",
+    "Find an apartment in Laureles. Do not search for listings.",
+  ])("SAN-1589: %j goes to the Concierge, not the rental fast path", (prompt) => {
+    expect(canFastPathRentalSearch(prompt, {})).toBe(false);
+    // A direct caller must not silently bypass the intent guard either.
+    expect(buildRentalSearchParams(prompt, {})).toBeNull();
+  });
+
+  it.each([
+    "Find me a 2BR apartment in Laureles under COP 4 million/month",
+    "Show apartments in Laureles, but don't search outside Laureles",
+    "Search apartments in Medellín",
+  ])("SAN-1589: %j still uses real rental search", (prompt) => {
+    expect(canFastPathRentalSearch(prompt, {})).toBe(true);
+    expect(buildRentalSearchParams(prompt, {})).not.toBeNull();
+  });
+
   it("SAN-823 / SAN-407: genuinely ambiguous housing talk still goes to the concierge", () => {
     expect(canFastPathRentalSearch("help me find a place", {})).toBe(false);
     expect(canFastPathRentalSearch("I am moving soon", {})).toBe(false);

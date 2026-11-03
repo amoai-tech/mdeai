@@ -19,6 +19,9 @@ name: Prod deploy freshness
 on:
   push:
     branches: [main]
+  # Also run daily so a domain that drifts after a promotion cannot stay stale silently.
+  schedule:
+    - cron: "27 3 * * *"
   workflow_dispatch:
 
 permissions:

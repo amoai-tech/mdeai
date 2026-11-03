@@ -69,6 +69,41 @@ describe("SAN-1421 · tab thread identity on first live send", () => {
     expect(mock.nav.markThreadSaved).toHaveBeenCalledWith(SELECTED_ID);
   });
 
+  it("does not append a stale question after the user selects a different saved thread", async () => {
+    const { result, rerender } = renderHook(() => useConciergeChat());
+    const staleAppend = result.current.appendMessage;
+    mock.nav.activeThreadId = SELECTED_ID;
+    mock.nav.hasPersistedThread = true;
+    mock.agent.threadId = SELECTED_ID;
+    rerender();
+    await expect(staleAppend("old conversation question")).resolves.toBe(false);
+    expect(mock.agent.addMessage).not.toHaveBeenCalled();
+    expect(mock.runtime.runAgent).not.toHaveBeenCalled();
+  });
+
+  it("cancels a pending cold-start wait on thread selection change", async () => {
+    mock.runtime.runtimeConnectionStatus = "connecting";
+    const { result, rerender } = renderHook(() => useConciergeChat());
+    const pending = result.current.waitForRuntimeReady(500);
+    mock.nav.activeThreadId = SELECTED_ID;
+    rerender();
+    mock.runtime.runtimeConnectionStatus = "connected";
+    await expect(pending).resolves.toBe(false);
+    expect(mock.runtime.runAgent).not.toHaveBeenCalled();
+  });
+
+  it("does not run an abandoned send after the chat unmounts", async () => {
+    mock.runtime.runtimeConnectionStatus = "connecting";
+    const { result, unmount } = renderHook(() => useConciergeChat());
+    const pending = result.current.waitForRuntimeReady(500);
+    const append = result.current.appendMessage;
+    unmount();
+    mock.runtime.runtimeConnectionStatus = "connected";
+    await expect(pending).resolves.toBe(false);
+    await expect(append("abandoned")).resolves.toBe(false);
+    expect(mock.agent.addMessage).not.toHaveBeenCalled();
+  });
+
   it("never marks a failed agent run as saved", async () => {
     mock.runtime.runAgent.mockRejectedValueOnce(new Error("failure"));
     const { result } = renderHook(() => useConciergeChat());

@@ -178,7 +178,9 @@ export function PartnerProfileForm({ partnerId, partnerType, partnerStatus, init
       <Button
         type="submit"
         size="lg"
-        className="w-full sm:w-auto"
+        // SAN-1579: the shared size is 36px tall; the primary save action must
+        // stay a 44px touch target at 390px, like the rest of the workspace.
+        className="min-h-11 w-full sm:w-auto"
         data-testid="partner-profile-save"
         disabled={saving || !hydrated || Object.keys(dirty).length === 0}
       >

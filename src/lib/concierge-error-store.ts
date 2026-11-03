@@ -10,6 +10,36 @@
  * error can show Retry in a different chat and replay the wrong turn.
  */
 
+/**
+ * CopilotKit v2 reports a refused runtime-info probe via onError even when no
+ * assistant turn ran. A guest's 401 is expected; real connection and run
+ * failures (including authenticated 401s) must remain visible.
+ * Status comes from event.error.runtimeInfoStatus in our pinned CopilotKit
+ * 1.75 provider; some core paths also supply context.runtimeStatus.
+ */
+export function isExpectedGuestStartup401(
+  event: unknown,
+  isAuthenticated: boolean,
+  sessionLoading = false,
+): boolean {
+  // An unresolved session cannot be classified as a guest: a cold 401 may
+  // precede getUser(). The caller defers only the known runtime-info 401;
+  // genuine run failures stay visible immediately.
+  if (sessionLoading) return false;
+  if (isAuthenticated || !event || typeof event !== "object") return false;
+  const candidate = event as { code?: unknown; context?: unknown; error?: unknown };
+  if (candidate.code !== "runtime_info_fetch_failed") return false;
+  const context = candidate.context;
+  const cause = candidate.error;
+  // CopilotKit 1.75 emits the status on error.runtimeInfoStatus for the
+  // single-route /info probe; other pinned core paths put it in context.
+  const statusFromContext = typeof context === "object" && context !== null &&
+    "runtimeStatus" in context ? context.runtimeStatus : undefined;
+  const statusFromError = typeof cause === "object" && cause !== null &&
+    "runtimeInfoStatus" in cause ? cause.runtimeInfoStatus : undefined;
+  return statusFromContext === 401 || statusFromError === 401;
+}
+
 export type ConciergeErrorSnapshot = {
   version: number;
   threadId: string | null;

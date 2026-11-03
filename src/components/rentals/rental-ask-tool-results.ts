@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import type { AbstractAgent } from "@copilotkit/react-core/v2";
 import type { Rental } from "@/mastra/tools/search-rentals";
 import type { RentalAskResults } from "@/components/rentals/rental-ask-composer";
+import { toDetailRental } from "@/lib/rentals/chat-rental-detail";
+import { unappliedRentalRequests } from "@/lib/rental-display";
 
 /**
  * Reading the agent's rental search out of the thread.
@@ -82,21 +84,41 @@ function latestRentalToolResult(
         continue;
       }
     }
-    const envelope = data as { results?: unknown; budgetNote?: string } | null;
+    const envelope = data as {
+      results?: unknown;
+      budgetNote?: unknown;
+      unappliedRequests?: unknown;
+    } | null;
     if (!envelope || !Array.isArray(envelope.results) || envelope.results.length === 0) continue;
     const toolName = callNames.get(message.toolCallId ?? "") ?? "";
     if (toolName ? !RENTAL_TOOL.test(toolName) : !looksLikeRentalRows(envelope.results)) continue;
+    // The tool validated its output server-side, but this is still a trust boundary in the browser:
+    // one malformed row must not become a card, a price or a pin.
+    const rows = envelope.results.map((row) => toDetailRental(row));
+    if (rows.some((row) => row === null)) continue;
+    const resultRows = rows as Rental[];
     const question = [...messages.slice(0, index)]
       .reverse()
       .find((candidate) => candidate.role === "user");
-    const resultRows = envelope.results as (Rental & { id?: string })[];
+    const questionText = messageText(question);
+    // The tool can only disclose requests that reached it in `queryText`; the renter's own words
+    // are the reliable source, so the page names them even when the agent omitted that argument.
+    const unapplied = [
+      ...new Set([
+        ...(Array.isArray(envelope.unappliedRequests)
+          ? envelope.unappliedRequests.filter((label): label is string => typeof label === "string")
+          : []),
+        ...unappliedRentalRequests(questionText),
+      ]),
+    ];
     return {
       signature: `${message.toolCallId ?? index}:${resultRows.length}:${resultRows[0]?.id ?? ""}`,
       payload: {
         results: resultRows,
         total: resultRows.length,
-        query: messageText(question),
-        budgetNotice: envelope.budgetNote,
+        query: questionText,
+        budgetNotice: typeof envelope.budgetNote === "string" ? envelope.budgetNote : undefined,
+        unappliedRequests: unapplied,
       },
     };
   }
@@ -109,6 +131,8 @@ export const payloadRows = (payload: RentalAskResults) =>
     title: r.title,
     neighborhood: r.neighborhood,
     nightly_price: r.nightly_price,
+    // Verbatim from the listing; empty stays empty so the answer can say "not specified".
+    amenities: Array.isArray(r.amenities) ? r.amenities : undefined,
   }));
 
 /** Keep only turns that have text, so tool/state-only messages do not leave blank rows. */

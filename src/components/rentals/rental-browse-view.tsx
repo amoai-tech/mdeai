@@ -2,30 +2,48 @@
 
 import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Building2 } from "lucide-react";
 import { DiscoveryWorkspace } from "@/components/browse/DiscoveryWorkspace";
+import { DiscoveryPageContext } from "@/components/chat/discovery-page-context";
 import { BrowseMapContextShell } from "@/components/browse/BrowseMapContextShell";
 import { BrowseMapPanel } from "@/components/browse/BrowseMapPanel";
 import { BrowseMapSheet } from "@/components/browse/BrowseMapSheet";
 import { RentalBrowseCard } from "@/components/rentals/rental-browse-card";
 import { RentalBrowseFilters } from "@/components/rentals/rental-browse-filters";
+import { RentalDateSuggestionTool } from "@/components/rentals/rental-date-suggestion-tool";
+import type { SuggestedStay } from "@/components/rentals/rental-date-selector";
 import { RentalDetailsPanel, RentalDetailsSheet } from "@/components/rentals/rental-details-panel";
-import { RentalAskComposer, type RentalAskResults } from "@/components/rentals/rental-ask-composer";
+import {
+  RentalAskComposer,
+  type RentalAskDetailsOutcome,
+} from "@/components/rentals/rental-ask-composer";
 import { LeadConfirmationBanner } from "@/components/chat/lead-confirmation-banner";
 import { RentalUiProvider, useRentalUi } from "@/components/chat/rental-ui-context";
+import { useOptionalConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
+import { RentalDetailsFrontendTool } from "@/components/rentals/rental-details-tool";
+import { isDeterministicE2E } from "@/lib/deterministic-e2e";
+import { resolveRentalForDetails } from "@/lib/rentals/details-target";
+import { bookingReviewHref } from "@/lib/rentals/booking-review-url";
+import { duplicateListingNotes } from "@/lib/rentals/duplicate-listings";
+import { askFilterSignature } from "@/lib/rentals/ask-results-storage";
+import { useRentalAskResults } from "@/components/rentals/use-rental-ask-results";
+import { useOptionalThreadNav } from "@/lib/chat/thread-nav-context";
+import type { DetailsCommand } from "@/lib/rentals/details-command";
 import { ScheduleViewingModal } from "@/components/modals/schedule-viewing-modal";
 import { EmptyState } from "@/components/empty/empty-state";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { useMapContext } from "@/platform/maps/map-context";
 import { useBrowseMapSync } from "@/hooks/use-browse-map-sync";
 import { useBrowseCardScroll } from "@/hooks/use-browse-card-scroll";
 import { useIsLgUp } from "@/hooks/use-is-lg-up";
 import { rentalToMapPin } from "@/lib/browse/browse-pin-converters";
-import { RENTAL_RESULTS_GRID } from "@/lib/rentals/browse-grid";
 import { buildRetryHref } from "@/lib/rentals/browse-retry-href";
 import type { Rental } from "@/mastra/tools/search-rentals";
 import { buildRentalsUrl, rentalsQueryString } from "@/lib/rentals/browse-filters";
 import { formatDateOnly } from "@/lib/rentals/date-only";
+import { buildRentalSearchParams } from "@/lib/rental-query-parser";
 
 function formatCountSubtitle(total: number, shown: number): string {
   if (total === 0) return "0 apartments";
@@ -61,15 +79,32 @@ function RentalBrowseViewInner({
   dateError = null,
   previewMode = false,
 }: RentalBrowseViewProps) {
+  const router = useRouter();
   const { selectedPinId, setSelectedPinId, panToPin } = useMapContext();
+  // The inline composer and this Details tool share the one concierge provider. Without it
+  // (previews, deterministic E2E, isolated tests) the tool is not registered at all.
+  const coAgent = useOptionalConciergeCoAgent();
   // SAN-478 — the browse card requests a viewing through the same shared modal the detail
   // page and the chat card use, instead of navigating to a route that does not exist.
   const { openScheduleViewing } = useRentalUi();
   // SAN-1421 — an answer asked for on this page replaces the list and its pins until the renter
   // clears it, so the cards always describe the question they can still see.
-  const [ask, setAsk] = useState<RentalAskResults | null>(null);
-  const shownResults = ask?.results ?? results;
-  const shownTotal = ask?.total ?? total;
+  const nav = useOptionalThreadNav();
+  // The provider uses the active saved thread when selected, not always the tab's
+  // original session ID. Keep the result cache attached to that same conversation.
+  const threadId = nav?.activeThreadId ?? nav?.sessionThreadId;
+  const askSignature = useMemo(
+    () => askFilterSignature({ neighborhood, beds, from, through }),
+    [neighborhood, beds, from, through],
+  );
+  const { activeAsk, acceptResults, clearResults } = useRentalAskResults(threadId, askSignature);
+  const shownResults = activeAsk?.results ?? results;
+  const shownTotal = activeAsk?.total ?? total;
+  const matchParams = useMemo(() => {
+    if (activeAsk) return buildRentalSearchParams(activeAsk.query, {}) ?? undefined;
+    return { neighborhood: neighborhood ?? undefined, minBedrooms: beds != null ? Number(beds) : undefined,
+      maxBedrooms: beds != null && Number(beds) < 3 ? Number(beds) : undefined };
+  }, [activeAsk, neighborhood, beds]);
   const filterState = { neighborhood, beds, from, through };
   // A preview fixture failure must retry the preview, not send the user to the public browse.
   const retryHref = previewMode ? buildRetryHref({ neighborhood, beds }, true) : buildRentalsUrl(filterState);
@@ -91,6 +126,7 @@ function RentalBrowseViewInner({
     [shownResults],
   );
 
+  const duplicateNotes = useMemo(() => duplicateListingNotes(shownResults), [shownResults]);
   useBrowseMapSync(pins, "rental");
   const mappedIds = useMemo(() => new Set(pins.map((pin) => pin.id)), [pins]);
   useBrowseCardScroll();
@@ -100,17 +136,48 @@ function RentalBrowseViewInner({
   // If a new search drops the open rental, `detailsRental` becomes null and the panel closes.
   const isLgUp = useIsLgUp();
   const [detailsId, setDetailsId] = useState<string | null>(null);
+  // SAN-1611 — an AI-proposed stay. One owner for the tool: this view mounts once, while the
+  // filter bar (and therefore the calendar) mounts twice for desktop and phone.
+  const [suggestedStay, setSuggestedStay] = useState<SuggestedStay | null>(null);
+  const [askSelectedId, setAskSelectedId] = useState<string | null>(null);
+  const selectedForAskId = shownResults.some((r) => r.id === askSelectedId) ? askSelectedId : null;
   const detailsRental = useMemo(
     () => (detailsId ? (shownResults.find((r) => r.id === detailsId) ?? null) : null),
     [detailsId, shownResults],
   );
-  const closeDetails = useCallback(() => setDetailsId(null), []);
+  const closeDetails = useCallback(() => { setDetailsId(null); setAskSelectedId(null); }, []);
+  // One path for a card click and for the agent's "show me the details": the same panel, the same
+  // selected pin, and the same `selectedListingId` the next question carries.
+  const openDetailsFor = useCallback(
+    (rental: Rental) => {
+      setDetailsId(rental.id);
+      setAskSelectedId(rental.id);
+      const pinId = `rental-${rental.id}`;
+      if (mappedIds.has(pinId)) panToPin(pinId);
+    },
+    [mappedIds, panToPin],
+  );
+  // The composer's deterministic "show me the details" path uses the same panel and resolver.
+  const openDetailsFromCommand = useCallback(
+    (target: DetailsCommand): RentalAskDetailsOutcome => {
+      if (shownResults.length === 0) {
+        return { ok: false, message: "No apartments are shown yet. Ask MDE to search first." };
+      }
+      const rental = resolveRentalForDetails(shownResults, target);
+      if (!rental) {
+        return { ok: false, message: `There is no apartment ${target.index} in the current results.` };
+      }
+      openDetailsFor(rental);
+      return { ok: true };
+    },
+    [shownResults, openDetailsFor],
+  );
   const scheduleFor = (r: Rental) => () =>
     openScheduleViewing({ listingId: r.id, title: r.title, neighborhood: r.neighborhood });
 
   // Public browse includes source-linked external ads alongside verified inventory.
   // Do not claim every result is verified or available for MDE viewing requests.
-  const subtitle = ask
+  const subtitle = activeAsk
     ? `Ask MDE — ${formatCountSubtitle(shownTotal, shownResults.length)}`
     : previewMode
     ? `Development-only rental candidates — ${formatCountSubtitle(total, results.length)}`
@@ -122,22 +189,35 @@ function RentalBrowseViewInner({
 
   return (
     <>
+      {coAgent && !isDeterministicE2E() ? (
+        <RentalDetailsFrontendTool results={shownResults} onOpen={openDetailsFor} />
+      ) : null}
+      <DiscoveryPageContext page="rentals" filters={filterState} selectedId={selectedForAskId ?? detailsRental?.id ?? null} />
       <DiscoveryWorkspace
         testId="rentals-browse"
         activeSlug="rentals"
         title="Rentals in Medellín"
         subtitle={subtitle}
+        mobileMapTrigger={<BrowseMapSheet inline />}
         filterBar={
           previewMode ? (
             <p className="text-sm text-muted-foreground">Preview only — filters and bookings are disabled.</p>
           ) : (
-            <RentalBrowseFilters
-              neighborhood={neighborhood}
-              beds={beds}
-              from={from}
-              through={through}
-              dateError={dateError}
-            />
+            <>
+              {/* Same guard as the existing Details tool: a frontend tool needs a live co-agent. */}
+              {coAgent && !isDeterministicE2E() ? (
+                <RentalDateSuggestionTool onSuggest={setSuggestedStay} />
+              ) : null}
+              <RentalBrowseFilters
+                neighborhood={neighborhood}
+                beds={beds}
+                from={from}
+                through={through}
+                dateError={dateError}
+                suggestedStay={suggestedStay}
+                onSuggestionHandled={() => setSuggestedStay(null)}
+              />
+            </>
           )
         }
         rightPanel={
@@ -149,6 +229,7 @@ function RentalBrowseViewInner({
                   rental={detailsRental}
                   onClose={closeDetails}
                   onSchedule={scheduleFor(detailsRental)}
+                  bookingReviewHref={bookingReviewHref(detailsRental.id, { from, through })}
                 />
               ) : undefined
             }
@@ -156,8 +237,9 @@ function RentalBrowseViewInner({
         }
         askComposer={
           <RentalAskComposer
-            onResults={setAsk}
-            context={{ neighborhood, beds, from, through, selectedListingId: detailsId }}
+            onResults={acceptResults}
+            onOpenDetails={openDetailsFromCommand}
+            context={{ neighborhood, beds, from, through, selectedListingId: selectedForAskId ?? detailsRental?.id ?? null }}
           />
         }
       >
@@ -170,14 +252,25 @@ function RentalBrowseViewInner({
               data-testid="rentals-error"
             >
               <p className="text-sm text-destructive">{error}</p>
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-4"
-                render={<Link href={retryHref} />}
+              <Link
+                href={retryHref}
+                prefetch={false}
+                className={cn(buttonVariants({ variant: "outline", size: "sm" }), "mt-4")}
+                onClick={(event) => {
+                  // A link to the current URL is navigation, not a guaranteed new server fetch.
+                  // Force an RSC refresh so Retry actually re-runs the failed rental search.
+                  if (
+                    !event.defaultPrevented && event.button === 0 &&
+                    !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey &&
+                    retryHref === window.location.pathname + window.location.search
+                  ) {
+                    event.preventDefault();
+                    router.refresh();
+                  }
+                }}
               >
                 Retry
-              </Button>
+              </Link>
             </div>
           ) : null}
 
@@ -190,19 +283,24 @@ function RentalBrowseViewInner({
             />
           ) : null}
 
-          {ask ? (
+          {activeAsk ? (
             <div
               data-testid="rental-ask-answer"
               className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm"
             >
               <span className="min-w-0 flex-1">
                 <span className="text-muted-foreground">Answer to: </span>
-                <span className="font-medium">{ask.query}</span>
+                <span className="font-medium">{activeAsk.query}</span>
               </span>
-              {ask.budgetNotice ? (
-                <span className="w-full text-xs text-muted-foreground">{ask.budgetNotice}</span>
+              {activeAsk.budgetNotice ? (
+                <span className="w-full text-xs text-muted-foreground">{activeAsk.budgetNotice}</span>
               ) : null}
-              <Button variant="ghost" size="sm" onClick={() => setAsk(null)} data-testid="rental-ask-answer-clear">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={clearResults}
+                data-testid="rental-ask-answer-clear"
+              >
                 Clear
               </Button>
             </div>
@@ -223,7 +321,7 @@ function RentalBrowseViewInner({
 
           {!error && !dateError && shownResults.length > 0 ? (
             <div
-              className={RENTAL_RESULTS_GRID}
+              className="flex flex-col gap-3"
               aria-label={`${shownResults.length} rentals`}
               data-testid="rentals-grid"
             >
@@ -232,17 +330,21 @@ function RentalBrowseViewInner({
                 return (
                   <RentalBrowseCard
                     key={r.id}
+                    mediaLayout="inline"
                     rental={r}
+                    matchParams={matchParams}
                     detailSearch={detailSearch}
                     testId={`rental-card-${r.id}`}
                     selected={mappedIds.has(pinId) && selectedPinId === pinId}
                     onSelect={mappedIds.has(pinId) ? () => panToPin(pinId) : undefined}
                     onPreview={mappedIds.has(pinId) ? () => setSelectedPinId(pinId) : undefined}
                     onSchedule={scheduleFor(r)}
-                    onDetails={() => {
-                      setDetailsId(r.id);
-                      // A mapped rental also becomes the selected pin; an unmapped one gets none.
-                      if (mappedIds.has(pinId)) panToPin(pinId);
+                    duplicateNote={duplicateNotes.get(r.id)}
+                    onDetails={() => openDetailsFor(r)}
+                    selectedForAsk={selectedForAskId === r.id}
+                    onAskSelect={() => {
+                      setDetailsId(null);
+                      setAskSelectedId((previous) => previous === r.id ? null : r.id);
                     }}
                   />
                 );
@@ -252,12 +354,12 @@ function RentalBrowseViewInner({
         </section>
       </DiscoveryWorkspace>
 
-      <BrowseMapSheet raised />
       {detailsRental && !isLgUp ? (
         <RentalDetailsSheet
           rental={detailsRental}
           onClose={closeDetails}
           onSchedule={scheduleFor(detailsRental)}
+          bookingReviewHref={bookingReviewHref(detailsRental.id, { from, through })}
         />
       ) : null}
     </>
@@ -266,11 +368,13 @@ function RentalBrowseViewInner({
 
 /** Supply the shared rental UI and map contexts for the browse workspace. */
 export function RentalBrowseView(props: RentalBrowseViewProps) {
+  const nav = useOptionalThreadNav();
+  const threadId = nav?.activeThreadId ?? nav?.sessionThreadId;
   return (
     <RentalUiProvider>
       <BrowseMapContextShell>
         <RentalBrowseViewInner
-          key={JSON.stringify([props.neighborhood, props.beds, props.from, props.through, props.previewMode, props.dateError])}
+          key={JSON.stringify([threadId, props.neighborhood, props.beds, props.from, props.through, props.previewMode, props.dateError])}
           {...props}
         />
       </BrowseMapContextShell>

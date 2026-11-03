@@ -129,6 +129,23 @@ describe("Step 11 · STOP-4 stop body integrity", () => {
     expect(runtimeSawScopedStop()).toBe(true);
   });
 
+  it("lets an authorized partnerAgent stop its existing run without a business selector", async () => {
+    setup(async () => ({
+      kind: "existing",
+      threadId: "partner-thread",
+      resourceId: "stop-body-user",
+    }));
+    const body = JSON.stringify({
+      method: "agent/stop",
+      params: { agentId: "partnerAgent", threadId: "partner-thread" },
+      body: { runId: "11111111-1111-4111-8111-111111111111" },
+    });
+    const response = await POST(stopRequest(body) as never);
+    expect(response.status).toBe(200);
+    expect(handleRequestMock).toHaveBeenCalledTimes(1);
+    expect(receivedBody).toBe(body);
+  });
+
   it("carries runId and no other key, so the runtime cannot reject or widen it", async () => {
     await POST(stopRequest() as never);
 

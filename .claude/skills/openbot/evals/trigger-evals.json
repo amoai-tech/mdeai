@@ -34,5 +34,23 @@
     "prompt": "Fix the current Mastra rentalAgent internal tool return schema; there is no OpenBot integration.",
     "should_trigger": false,
     "expected_owner": "mastra"
+  },
+  {
+    "id": "openbot-7",
+    "prompt": "Verify OpenBot v0.2.0 migration 0052 and account visibility after downgrade for optional browser action.",
+    "should_trigger": true,
+    "expected_owner": "openbot"
+  },
+  {
+    "id": "openbot-8",
+    "prompt": "External website Submit timed out; do not replay until the bot can prove the outcome.",
+    "should_trigger": true,
+    "expected_owner": "openbot"
+  },
+  {
+    "id": "openbot-9",
+    "prompt": "A renter needs a PostGIS rental distance query with no external browser task.",
+    "should_trigger": false,
+    "expected_owner": "real-estate"
   }
 ]

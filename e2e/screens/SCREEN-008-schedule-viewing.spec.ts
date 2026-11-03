@@ -1,4 +1,6 @@
 import { test, expect } from "@playwright/test";
+import { nextMedellinTestViewingWallClock } from "@/lib/leads/schedule-viewing-time";
+import { chooseViewingDateTime, advanceViewingReview } from "../helpers/viewing-date-picker";
 import {
   gotoHome,
   RENTAL_QUERY,
@@ -17,7 +19,7 @@ const SCREEN_ID = "SCREEN-008";
 const MOCK_LEAD_ID = "11111111-1111-1111-1111-000000000001";
 const MOCK_SHOWING_ID = "22222222-2222-2222-2222-000000000002";
 // SAN-1203 — the modal now requires a future viewing time.
-const FUTURE_LOCAL_TIME = "2099-06-01T15:00";
+const FUTURE_LOCAL_TIME = nextMedellinTestViewingWallClock();
 const ACK_MESSAGE = "Viewing request received — awaiting host confirmation.";
 
 test.describe.configure({ mode: "serial" });
@@ -26,7 +28,8 @@ async function fillAndSubmitViewing(page: import("@playwright/test").Page) {
   const modal = page.locator('[data-testid="schedule-viewing-modal"]');
   await modal.locator('input[name="name"]').fill("Camila Test");
   await modal.locator('input[name="email"]').fill("camila.test@mdeai.co");
-  await modal.locator('input[name="preferredAt"]').fill(FUTURE_LOCAL_TIME);
+  await chooseViewingDateTime(page, FUTURE_LOCAL_TIME);
+  await advanceViewingReview(page);
   await page.locator('[data-testid="schedule-viewing-submit"]').click();
 }
 

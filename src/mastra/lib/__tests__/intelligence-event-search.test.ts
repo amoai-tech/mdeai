@@ -128,6 +128,16 @@ describe("hybridRowToEventCard", () => {
 });
 
 describe("filterHybridEventRows", () => {
+  it("filters QA fixtures from hybrid results before ranking", () => {
+    const rows = [
+      { ...sampleRow, id: "qa", name: "QA HITL approved", slug: "qa-hitl-123" },
+      { ...sampleRow, id: "bracket", name: "[QA DEMO] Warehouse", slug: null },
+      { ...sampleRow, id: "hidden", slug: "qa-probe" },
+      { ...sampleRow, id: "real", name: "Salsa Night", slug: null },
+    ];
+    expect(filterHybridEventRows(rows).map((row) => row.id)).toEqual(["real"]);
+  });
+
   const nightlifeRow = { ...sampleRow, id: "e2", event_type: "nightlife", ticket_price_min: 80 };
   const rows = [sampleRow, nightlifeRow];
 

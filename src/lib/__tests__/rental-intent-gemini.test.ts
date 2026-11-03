@@ -38,6 +38,19 @@ describe("GEM-RE-002 · parseRentalIntentWithGemini", () => {
     );
   });
 
+  it("keeps a stated COP monthly ceiling when Lightning omits it", async () => {
+    mockedGenerateObject.mockResolvedValueOnce({ object: {
+      neighborhood: "Laureles", minBedrooms: 2, confidence: 0.8,
+      action: "search_now", stayType: "monthly",
+    } } as never);
+    const intent = await parseRentalIntentWithGemini(
+      "Find 2 bedroom apartments in Laureles under COP 3000000 per month",
+    );
+    expect(intent?.maxPriceMonthly).toBe(3000000);
+    expect(intent?.budgetCurrency).toBe("COP");
+    expect(intent?.maxPricePerNight).toBeUndefined();
+  });
+
   it("does not force search_now on impossible query", async () => {
     mockedGenerateObject.mockResolvedValueOnce({
       object: {

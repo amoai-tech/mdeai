@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { getSupabaseServerAnonEnv } from "@/lib/supabase/server-env";
+import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 import { createServiceRoleClient } from "@/lib/supabase/service";
 import {
   rankVenueAnchorRows,
@@ -31,6 +32,9 @@ const ANCHOR_SIGNAL_SELECT =
 let _client: ReturnType<typeof createClient> | null = null;
 
 function getSupabaseClient() {
+  // Treat fake database credentials as unavailable in local deterministic CI;
+  // use the existing empty/error path rather than waiting for network timeouts.
+  if (isDeterministicE2E()) return null;
   if (_client) return _client;
   const env = getSupabaseServerAnonEnv();
   if (!env) return null;
@@ -333,11 +337,22 @@ export function venueAnchorMapsUrl(placeId: string): string {
   return `https://www.google.com/maps/search/?api=1&query_place_id=${encodeURIComponent(placeId)}`;
 }
 
+/**
+ * The venue's own saved coordinates, or `null` when it has none (or they are out of range /
+ * only half present). Never a stand-in point: a made-up city-center pin sends the visitor to
+ * the wrong place. Callers show the place without a pin when this is `null`.
+ */
 export function venueAnchorToCoordinates(row: VenueAnchorRow): {
-  latitude: number;
-  longitude: number;
+  latitude: number | null;
+  longitude: number | null;
 } {
-  const latitude = num(row.latitude) ?? 6.2442;
-  const longitude = num(row.longitude) ?? -75.5812;
+  const latitude = num(row.latitude);
+  const longitude = num(row.longitude);
+  if (
+    latitude === undefined || longitude === undefined ||
+    Math.abs(latitude) > 90 || Math.abs(longitude) > 180
+  ) {
+    return { latitude: null, longitude: null };
+  }
   return { latitude, longitude };
 }

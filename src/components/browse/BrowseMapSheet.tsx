@@ -1,31 +1,50 @@
 "use client";
 
-import { useState } from "react";
-import { MapIcon, XIcon } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { LoaderCircle, MapIcon, XIcon } from "lucide-react";
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import { BrowseMapFallback } from "@/components/browse/browse-map-fallback";
+import { AppErrorBoundary } from "@/components/errors/error-boundary";
 import { MapsShell } from "@/components/maps/MapProvider";
 import { ChatMap } from "@/components/maps/ChatMap";
 
-export function BrowseMapSheet({ raised = false }: { raised?: boolean }) {
+export function BrowseMapSheet({ raised = false, inline = false }: { raised?: boolean; inline?: boolean }) {
   const [open, setOpen] = useState(false);
+  const [mapLoaded, setMapLoaded] = useState(false);
+  const markLoaded = useCallback(() => setMapLoaded(true), []);
+  const onOpenChange = (next: boolean) => { setOpen(next); if (next) setMapLoaded(false); };
+  const [composerHeight, setComposerHeight] = useState<number | null>(null);
+  // The inline conversation grows as turns arrive. Measure the actual composer
+  // instead of assuming its height is always six rem (which overlays chat text).
+  useEffect(() => {
+    if (!raised || inline) return;
+    const composer = document.querySelector('[data-testid="workspace-ask-composer"]');
+    if (!composer) return;
+    const measure = () => setComposerHeight(Math.ceil(composer.getBoundingClientRect().height));
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(composer);
+    return () => observer.disconnect();
+  }, [raised, inline]);
   return (
-    <div className="lg:hidden">
+    <div className={inline ? "flex justify-end lg:hidden" : "lg:hidden"}>
       <Button
         variant="default"
         size="sm"
         // SAN-1421: on a page with a pinned Ask MDE composer, the phone FAB sits above that bar —
         // measured, so an expanded transcript or an error row cannot end up underneath the button.
-        className={raised ? "fixed right-4 z-50 gap-2 shadow-lg" : "fixed bottom-6 right-4 z-50 gap-2 shadow-lg"}
-        style={raised ? { bottom: "calc(1rem + var(--mde-ask-composer-height, 6rem))" } : undefined}
-        onClick={() => setOpen(true)}
+        className={inline ? "min-h-11 gap-2" : raised ? "fixed right-4 z-50 gap-2 shadow-lg" : "fixed bottom-6 right-4 z-50 gap-2 shadow-lg"}
+        style={raised && !inline ? { bottom: composerHeight == null ? "calc(1rem + var(--mde-ask-composer-height, 6rem))" : `calc(1rem + ${composerHeight}px)` } : undefined}
+        onClick={() => onOpenChange(true)}
         aria-label="Open map"
         data-testid="browse-map-fab"
       >
         <MapIcon className="size-4" aria-hidden />
         Map
       </Button>
-      <Sheet open={open} onOpenChange={setOpen}>
+      <Sheet open={open} onOpenChange={onOpenChange}>
         {/* The default close button is 28px; rentals and restaurants use this shared
             browse map sheet, with a 44px phone target (SAN-524). */}
         {/* pb: keep the sheet's bottom edge clear of the home indicator on notched phones. */}
@@ -65,11 +84,24 @@ export function BrowseMapSheet({ raised = false }: { raised?: boolean }) {
               map once the sheet has finished sliding in. Capped at 520px with a 280px floor, like the chat
               map sheet; `vh` rather than `dvh` so an older browser cannot drop the declaration and blank
               the map again. */}
-          <div className="relative h-[min(70vh,520px)] min-h-[280px] w-full">
-            <MapsShell>
-              <ChatMap mapDomId="browse-map-sheet" mapResizeSignal={open ? 1 : 0} />
-            </MapsShell>
-          </div>
+          <AppErrorBoundary fallback={<BrowseMapFallback />} label="browse-map-sheet">
+            <div className="relative h-[min(70vh,520px)] min-h-[280px] w-full">
+              <MapsShell>
+                <ChatMap mapDomId="browse-map-sheet" mapResizeSignal={open ? 1 : 0} onMapSettled={markLoaded} />
+              </MapsShell>
+              {!mapLoaded ? (
+                <div
+                  role="status"
+                  aria-live="polite"
+                  data-testid="browse-map-loading"
+                  className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center gap-2 bg-background/90 text-sm text-muted-foreground"
+                >
+                  <LoaderCircle className="size-5 animate-spin" aria-hidden />
+                  Loading map…
+                </div>
+              ) : null}
+            </div>
+          </AppErrorBoundary>
         </SheetContent>
       </Sheet>
     </div>

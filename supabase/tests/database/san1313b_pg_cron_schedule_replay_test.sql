@@ -1,7 +1,7 @@
 -- SAN-1313 · B2 regression suite — the approved cron manifest, exactly
 --
 -- WHAT THIS LOCKS IN
---   1. A fresh replay ends with EXACTLY the four approved named jobs — as a set, not a count.
+--   1. A fresh replay ends with EXACTLY the five approved named jobs — as a set, not a count.
 --      (SAN-1523 added `mdeai_embedding_jobs_tick`; the broken `mdeai_lead_reminder_tick` was
 --      retired by 20261019120000, so the list is four again.)
 --   2. Each job carries its approved schedule, and all four are active.
@@ -13,7 +13,7 @@
 --      command that would fail the moment pg_cron ran it.
 --
 -- WHY SET EQUALITY AND NOT A COUNT
--- `count(*) = 4` passes when one approved job is missing and a stray fifth job has appeared.
+-- `count(*) = 5` passes when one approved job is missing and a stray fifth job has appeared.
 -- Assertion 2 compares the sorted jobname array against the approved manifest, so an extra job
 -- and a missing job both fail. Assertions 3–4 explicitly guard retired jobs; assertions
 -- 12–15 verify retained direct-SQL job dependencies.
@@ -32,7 +32,7 @@
 
 begin;
 
-select plan(15);
+select plan(18);
 
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- A · The exact approved manifest
@@ -40,12 +40,13 @@ select plan(15);
 
 select is(
   (select count(*)::int from cron.job),
-  4,
-  'B2: exactly four cron jobs exist after a fresh replay');
+  5,
+  'B2: exactly five cron jobs exist after a fresh replay');
 
 select is(
   (select array_agg(jobname order by jobname) from cron.job),
   array['chat-lead-followup-check',
+        'mde_cron_history_retention',
         'mdeai_analytics_daily_snapshot',
         'mdeai_embedding_jobs_tick',
         'wait_list_expire_holds'],
@@ -80,20 +81,38 @@ select is(
   '0 14 * * *',
   'B2: chat-lead-followup-check runs at 14:00 daily');
 
+-- Daily history cleanup preserves failed runs in a private archive before pruning.
+select is(
+  (select schedule from cron.job where jobname = 'mde_cron_history_retention'),
+  '30 2 * * *',
+  'B2: history retention runs once daily at 02:30 UTC');
+
+select ok(
+  to_regprocedure('mde_maintenance.prune_cron_history()') is not null,
+  'B2: scheduled retention function exists');
+
+select ok(
+  (select relrowsecurity from pg_class
+   where oid = 'mde_maintenance.cron_failure_archive'::regclass)
+    and not has_schema_privilege('anon', 'mde_maintenance', 'usage')
+    and not has_function_privilege('anon',
+      'mde_maintenance.prune_cron_history()', 'execute'),
+  'B2: failed-run archive is private and not callable anonymously');
+
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- C · Runtime contract — active, correct database/role, unchanged timezone
 -- ═══════════════════════════════════════════════════════════════════════════════
 
 select is(
   (select count(*)::int from cron.job where active),
-  4,
-  'B2: all four approved jobs are active');
+  5,
+  'B2: all five approved jobs are active');
 
 select is(
   (select count(*)::int from cron.job
     where database = 'postgres' and username = 'postgres'),
-  4,
-  'B2: all four jobs run as postgres on the postgres database');
+  5,
+  'B2: all five jobs run as postgres on the postgres database');
 
 -- pg_cron timezone is GLOBAL, not per job. Pinned because changing it would shift every
 -- business-hour schedule at once.

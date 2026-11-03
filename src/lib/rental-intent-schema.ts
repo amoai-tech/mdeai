@@ -14,6 +14,9 @@ export const rentalIntentSchema = z.object({
   neighborhood: z.string().optional(),
   minBedrooms: z.number().int().min(0).optional(),
   maxPricePerNight: z.number().positive().optional(),
+  /** Exact monthly cap; never approximate a nightly limit by dividing by 30. */
+  maxPriceMonthly: z.number().positive().optional(),
+  budgetCurrency: z.enum(["COP", "USD"]).optional(),
   stayType: z.enum(["nightly", "monthly", "total_trip"]).optional(),
   checkIn: z
     .string()
@@ -55,7 +58,9 @@ export const parseRentalIntentFromText = (
     return rentalIntentSchema.parse({
       neighborhood: signals.neighborhood,
       minBedrooms: signals.minBedrooms,
-      maxPricePerNight: signals.maxPricePerNight,
+      maxPricePerNight: signals.budgetType === "monthly" ? undefined : signals.maxPricePerNight,
+      maxPriceMonthly: signals.maxPriceMonthly,
+      budgetCurrency: signals.budgetCurrency,
       stayType: signals.budgetType,
       checkIn: signals.checkIn,
       checkOut: signals.checkOut,
@@ -68,6 +73,8 @@ export const parseRentalIntentFromText = (
     neighborhood: params.neighborhood,
     minBedrooms: params.minBedrooms,
     maxPricePerNight: params.maxPricePerNight,
+    maxPriceMonthly: params.maxPriceMonthly,
+    budgetCurrency: params.budgetCurrency,
     stayType: params.stayType,
     checkIn: params.checkIn,
     checkOut: params.checkOut,
@@ -85,6 +92,8 @@ export const rentalIntentToSearchParams = (
     neighborhood: intent.neighborhood,
     minBedrooms: intent.minBedrooms,
     maxPricePerNight: intent.maxPricePerNight,
+    maxPriceMonthly: intent.maxPriceMonthly,
+    budgetCurrency: intent.budgetCurrency,
     checkIn: intent.checkIn,
     checkOut: intent.checkOut,
     stayType: intent.stayType,

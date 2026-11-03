@@ -46,4 +46,28 @@ describe("SelectedPlaceOverlayCard", () => {
     expect(html).toContain('data-testid="selected-place-overlay-photo-placeholder"');
     expect(html).toContain("☕");
   });
+
+  it("links an event pin to its own Details page, and ignores external or protocol-relative paths", () => {
+    const eventPin: MapPin = { ...groundedPin, id: "event-1", category: "event", meta: { detailsPath: "/events/salsa-night" } };
+    expect(renderToStaticMarkup(<SelectedPlaceOverlayCard pin={eventPin} />)).toContain('href="/events/salsa-night"');
+    for (const detailsPath of ["//evil.example/x", "https://evil.example/x", "/events/x?next=https://evil.example", "/events/x#frag", "/events/../admin", "/events\\x"]) {
+      const html = renderToStaticMarkup(<SelectedPlaceOverlayCard pin={{ ...eventPin, meta: { detailsPath } }} />);
+      expect(html).not.toContain("selected-place-overlay-details");
+    }
+  });
+
+  it("hides the unsupported Save and Add to trip buttons for events only", () => {
+    const eventHtml = renderToStaticMarkup(<SelectedPlaceOverlayCard pin={{ ...groundedPin, id: "event-2", category: "event", meta: {} }} />);
+    expect(eventHtml).not.toContain("selected-place-overlay-save");
+    expect(eventHtml).not.toContain("selected-place-overlay-add-trip");
+    const groundedHtml = renderToStaticMarkup(<SelectedPlaceOverlayCard pin={groundedPin} />);
+    expect(groundedHtml).toContain("selected-place-overlay-save");
+    expect(groundedHtml).toContain("selected-place-overlay-add-trip");
+  });
+
+  it("uses a short placeholder strip for events and the full one for other places", () => {
+    const strip = (pin: MapPin) => renderToStaticMarkup(<SelectedPlaceOverlayCard pin={{ ...pin, meta: {} }} />);
+    expect(strip({ ...groundedPin, id: "event-3", category: "event" })).toContain("h-14");
+    expect(strip(groundedPin)).toContain("h-32");
+  });
 });

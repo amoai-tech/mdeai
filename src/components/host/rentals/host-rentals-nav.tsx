@@ -2,40 +2,48 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { BROKER_OVERVIEW_PATH } from "@/lib/rentals/broker-route-gate";
 import { cn } from "@/lib/utils";
 
-const NAV_ITEMS = [
-  {
-    href: "/host/rentals",
-    label: "Concierge",
-    testId: "host-rentals-nav-concierge",
-    match: "concierge" as const,
-  },
-  {
-    href: "/host/rentals/listings",
-    label: "Listings",
-    testId: "host-rentals-nav-listings",
-    match: "listings" as const,
-  },
-  {
-    href: BROKER_OVERVIEW_PATH,
-    label: "Overview",
-    testId: "host-rentals-nav-overview",
-    match: "overview" as const,
-  },
-] as const;
+type HostRentalsNavProps = {
+  /**
+   * Route family the nav points at. Legacy `/host/rentals` is the default so
+   * both trees keep working while `/app/rentals` is introduced.
+   */
+  basePath?: string;
+};
 
 // skipcq: JS-0067 - ES module export; not browser global scope
-export function HostRentalsNav() {
+export function HostRentalsNav({ basePath = "/host/rentals" }: HostRentalsNavProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const isOverview = pathname === "/host/rentals" && searchParams.get("mode") === "overview";
+  const overviewHref = `${basePath}?mode=overview`;
+  const isOverview = pathname === basePath && searchParams.get("mode") === "overview";
 
-  function isActive(match: (typeof NAV_ITEMS)[number]["match"]): boolean {
+  const navItems = [
+    {
+      href: basePath,
+      label: "Concierge",
+      testId: "host-rentals-nav-concierge",
+      match: "concierge" as const,
+    },
+    {
+      href: `${basePath}/listings`,
+      label: "Listings",
+      testId: "host-rentals-nav-listings",
+      match: "listings" as const,
+    },
+    {
+      href: overviewHref,
+      label: "Overview",
+      testId: "host-rentals-nav-overview",
+      match: "overview" as const,
+    },
+  ];
+
+  function isActive(match: (typeof navItems)[number]["match"]): boolean {
     if (match === "overview") return isOverview;
-    if (match === "concierge") return pathname === "/host/rentals" && !isOverview;
-    return pathname.startsWith("/host/rentals/listings");
+    if (match === "concierge") return pathname === basePath && !isOverview;
+    return pathname.startsWith(`${basePath}/listings`);
   }
 
   return (
@@ -44,7 +52,7 @@ export function HostRentalsNav() {
       className="flex flex-wrap items-center gap-2 border-b border-border pb-3"
       aria-label="Rentals host navigation"
     >
-      {NAV_ITEMS.map((item) => {
+      {navItems.map((item) => {
         const active = isActive(item.match);
         return (
           <Link

@@ -10,6 +10,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { readFileSync } from "node:fs";
 
 vi.mock("@/lib/leads/submit-schedule-viewing", () => ({
   submitScheduleViewing: vi.fn(),
@@ -86,6 +87,40 @@ describe("rental detail — external preview fields", () => {
     expect(link?.getAttribute("rel")).toContain("nofollow");
   });
 
+  it("shows the real destination and requires confirmation before opening an external source", async () => {
+    // SAN-1612: an outbound link is only offered for an approved advertiser host, the same rule
+    // the browse card and the map panel use. An unapproved host shows no link at all (next test).
+    await render(preview({ sourceUrl: "https://www.rentberry.com/listing/42" }));
+    const link = document.querySelector<HTMLAnchorElement>('[data-testid="rental-detail-source-link"]');
+    expect(link?.getAttribute("href")).toBe("https://www.rentberry.com/listing/42");
+    expect(link?.textContent).toContain("rentberry.com");
+    expect(link?.getAttribute("rel")).toContain("noopener");
+    const confirmation = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const click = new MouseEvent("click", { bubbles: true, cancelable: true });
+    await act(async () => { link?.dispatchEvent(click); });
+    expect(confirmation).toHaveBeenCalledWith(expect.stringContaining("rentberry.com"));
+    expect(click.defaultPrevented).toBe(true);
+    confirmation.mockRestore();
+  });
+
+  it("offers no outbound link for a host outside the approved advertiser allowlist", async () => {
+    await render(preview({ sourceUrl: "https://newsource.example/listing/42" }));
+    expect(document.querySelector('[data-testid="rental-detail-source-link"]')).toBeNull();
+  });
+
+  it.each([
+    "http://external.example/listing",
+    "https://attacker@newsource.example/listing",
+    "https://user:pass@newsource.example/listing",
+    "https://mdeai.co/rentals/1",
+    "https://www.mdeai.co/rentals/1",
+    "javascript:alert(1)",
+    "not-a-url",
+  ])("rejects malformed or misleading original listing URL %s", async (sourceUrl) => {
+    await render(preview({ sourceUrl }));
+    expect(document.querySelector('[data-testid="rental-detail-source-link"]')).toBeNull();
+  });
+
   it("links to the original advertisement on an active, attributed external listing", async () => {
     const external = mapApartmentRowToDetail({
       ...row, status: "active", source_url: "https://www.fincaraiz.com.co/apartaestudio/193916988",
@@ -93,8 +128,39 @@ describe("rental detail — external preview fields", () => {
       rental_can_request_viewing: true,
     });
     await render(external);
+    expect(external.isExternalSource).toBe(true);
     expect(document.querySelector('[data-testid="rental-detail-source-link"]')?.getAttribute("href"))
       .toBe("https://www.fincaraiz.com.co/apartaestudio/193916988");
+    // Native booking review belongs to MDE-managed rentals, not third-party advertisements.
+    expect(document.querySelector('[data-testid="rental-detail-booking-review-link"]')).toBeNull();
+  });
+
+  it("does not offer a fake AI question or inert Save action", async () => {
+    const managed = mapApartmentRowToDetail({
+      ...row,
+      status: "active",
+      available_from: "2026-10-01",
+      rental_can_request_viewing: true,
+    });
+    await render(managed);
+    expect(managed.isExternalSource).toBe(false);
+    expect(document.querySelector('[data-testid="rental-detail-booking-review-link"]')).not.toBeNull();
+    const labels = Array.from(document.querySelectorAll("button")).map((button) => button.textContent ?? "");
+    expect(labels.some((label) => /ask a question/i.test(label))).toBe(false);
+    expect(labels.some((label) => /^\s*save\s*$/i.test(label))).toBe(false);
+    expect(labels.some((label) => /request viewing/i.test(label))).toBe(true);
+  });
+
+  it("reserves device safe-area space under the fixed mobile action", async () => {
+    await render(preview());
+    const bar = document.querySelector('[data-testid="rental-detail-mobile-cta"]');
+    expect(bar).not.toBeNull();
+    // SAN-1606: the action moved above the phone tab bar, so the shared clearance token — which
+    // folds in the home-indicator inset — owns the bottom geometry instead of a per-bar padding.
+    expect(bar?.className).toContain("bottom-[var(--mde-mobile-nav-clearance)]");
+    const css = readFileSync("src/app/globals.css", "utf8");
+    expect(css).toContain("env(safe-area-inset-bottom");
+    expect(css).toMatch(/--mde-mobile-nav-clearance:[\s\S]*?--mde-mobile-nav-inset/);
   });
 
   it("keeps a real bedroom count", async () => {

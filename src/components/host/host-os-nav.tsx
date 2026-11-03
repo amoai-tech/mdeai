@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  HOST_OS_NAV_ITEMS,
   HOST_OS_NAV_PLACEHOLDERS,
+  hostOsNavItems,
   isHostOsNavActive,
+  type HostOsBasePath,
   type HostOsNavItem,
 } from "@/lib/host/host-os-nav";
 import { cn } from "@/lib/utils";
@@ -26,7 +27,15 @@ const linkClassName = (active: boolean) =>
   );
 
 // skipcq: JS-0067 - module-local helper; not browser global scope
-function NavLink({ item, pathname }: { item: HostOsNavItem; pathname: string }) {
+function NavLink({
+  item,
+  pathname,
+  basePath,
+}: {
+  item: HostOsNavItem;
+  pathname: string;
+  basePath: HostOsBasePath;
+}) {
   if (item.disabled) {
     return (
       <span
@@ -39,7 +48,7 @@ function NavLink({ item, pathname }: { item: HostOsNavItem; pathname: string }) 
       </span>
     );
   }
-  const active = isHostOsNavActive(pathname, item.href);
+  const active = isHostOsNavActive(pathname, item.href, basePath);
   return (
     <Link
       href={item.href}
@@ -53,8 +62,13 @@ function NavLink({ item, pathname }: { item: HostOsNavItem; pathname: string }) 
 }
 
 // skipcq: JS-0067 - ES module export; not browser global scope
-export function HostOsNav() {
+export function HostOsNav({
+  basePath = "/host",
+}: {
+  basePath?: HostOsBasePath;
+} = {}) {
   const pathname = usePathname();
+  const items = hostOsNavItems(basePath);
 
   return (
     <nav
@@ -66,9 +80,9 @@ export function HostOsNav() {
         Host OS
       </p>
       <ul className="flex gap-1 overflow-x-auto md:flex-col md:gap-0 md:space-y-1 md:overflow-visible">
-        {HOST_OS_NAV_ITEMS.map((item) => (
+        {items.map((item) => (
           <li key={item.label} className="shrink-0 md:shrink">
-            <NavLink item={item} pathname={pathname} />
+            <NavLink item={item} pathname={pathname} basePath={basePath} />
           </li>
         ))}
       </ul>
@@ -79,7 +93,7 @@ export function HostOsNav() {
         <ul className="space-y-1">
           {HOST_OS_NAV_PLACEHOLDERS.map((item) => (
             <li key={item.label}>
-              <NavLink item={item} pathname={pathname} />
+              <NavLink item={item} pathname={pathname} basePath={basePath} />
             </li>
           ))}
         </ul>

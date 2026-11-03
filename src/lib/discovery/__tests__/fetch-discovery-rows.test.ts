@@ -7,6 +7,7 @@ import {
   fetchLiveRestaurants,
 } from "@/lib/discovery/fetch-discovery-rows";
 import { HomeDiscoverySectionsUI, type DiscoveryData } from "@/components/home/home-discovery-rows";
+import { NON_QA_EVENT_SLUG_FILTER, QA_EVENT_NAME_SQL_PATTERN } from "@/lib/events/public-event-fixtures";
 
 /** Records every chained filter and resolves with the given rows, whatever the method. */
 function fakeClient(rows: Array<Record<string, unknown>>) {
@@ -47,7 +48,8 @@ describe("homepage events (SAN-1556): only real, upcoming, honestly described", 
   it("excludes QA/test events in the query itself, so they cannot crowd real events out of the first rows", async () => {
     const { client, calls } = fakeClient([]);
     await fetchLiveEvents(client);
-    expect(calls).toContain("not(name,imatch,^\\s*(qa|test)\\y)");
+    expect(calls).toContain(`not(name,imatch,${QA_EVENT_NAME_SQL_PATTERN})`);
+    expect(calls).toContain(`or(${NON_QA_EVENT_SLUG_FILTER})`);
     expect(calls).toContain("limit(4)");
   });
 
@@ -79,10 +81,12 @@ describe("homepage events (SAN-1556): only real, upcoming, honestly described", 
 });
 
 describe("homepage restaurants (SAN-1556)", () => {
-  it("filters is_active itself, because the development read policy also returns inactive rows", async () => {
+  it("leaves phase-aware visibility to the catalog RLS policy (SAN-1468)", async () => {
     const { client, calls } = fakeClient([]);
     await fetchLiveRestaurants(client);
-    expect(calls).toContain("eq(is_active,true)");
+    // The read policy is `is_active = true OR phase = 'development'`. A second
+    // local predicate only hid development restaurants from legitimate readers.
+    expect(calls).not.toContain("eq(is_active,true)");
   });
 
   it("leaves an unrated restaurant unrated and adds no 'Highly rated' filler", async () => {

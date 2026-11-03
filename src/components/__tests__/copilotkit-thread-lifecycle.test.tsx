@@ -13,6 +13,7 @@ vi.mock("@/hooks/use-session", () => ({
 
 import { HostEventProvider } from "@/components/host/host-event-provider";
 import { HostOsShell } from "@/components/host/host-os-shell";
+import { HostOsWorkspace } from "@/components/host/host-os-workspace";
 import { ChatProvider } from "@/components/chat/chat-provider";
 import { ThreadNavProvider, useThreadNav } from "@/lib/chat/thread-nav-context";
 import { MdeCopilotKitProvider } from "@/components/copilot/copilot-kit-provider";
@@ -149,6 +150,29 @@ describe("HostOsShell — one persistent host workspace thread", () => {
         </HostOsShell>,
       );
       expect(seen.header.threadId).toBe(seen.page.threadId);
+      ids.push(seen.page.threadId);
+    }
+
+    expect(ids[0]).toMatch(/^[0-9a-f-]{36}$/);
+    expect(new Set(ids).size).toBe(1);
+    expect(seen.page.explicit).toBe(false);
+  });
+});
+
+describe("HostOsWorkspace — one persistent thread under /app/events", () => {
+  it("shares one thread across Events, Overview and Analytics", async () => {
+    const ids: (string | undefined)[] = [];
+    for (const pathname of [
+      "/app/events",
+      "/app/events/overview",
+      "/app/events/analytics",
+    ]) {
+      navigation.pathname = pathname;
+      await render(
+        <HostOsWorkspace>
+          <Probe name="page" />
+        </HostOsWorkspace>,
+      );
       ids.push(seen.page.threadId);
     }
 
@@ -308,6 +332,19 @@ describe("MdeCopilotKitProvider — root provider on non-chat pages", () => {
     }
     expect(new Set(ids).size).toBe(1);
     expect(seen.journey.explicit).toBe(false); // No saved turn yet.
+  });
+
+  it("does not start the concierge runtime on /app/events (it owns hostOpsAgent)", async () => {
+    navigation.pathname = "/app/events";
+    const fetchMock = vi.mocked(globalThis.fetch);
+    fetchMock.mockClear();
+    await render(
+      <MdeCopilotKitProvider>
+        <Probe name="appEvents" />
+      </MdeCopilotKitProvider>,
+    );
+    expect(seen.appEvents.threadId).toBeUndefined();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("does not start the concierge runtime on login or signup pages", async () => {

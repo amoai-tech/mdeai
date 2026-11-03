@@ -23,7 +23,6 @@ const INITIAL: BrokerOnboardingFormInput = {
   bathrooms: 1,
   monthlyRentCop: 0,
   photoUrl: "",
-  confirmedListingRights: false,
   placeId: "",
   formattedAddress: "",
   latitude: null,
@@ -73,7 +72,7 @@ function toggleNeighborhood(current: string[], value: string): string[] {
 
 // skipcq: JS-0067 - JS-R1005 wizard step UI
 // skipcq: JS-R1005
-export function RentalsOnboardingWizard() {
+export function RentalsOnboardingWizard({ destination = "host" }: { destination?: "host" | "app" }) {
   const [step, setStep] = useState<Step>(1);
   const [form, setForm] = useState<BrokerOnboardingFormInput>(INITIAL);
   const [pending, startTransition] = useTransition();
@@ -111,7 +110,7 @@ export function RentalsOnboardingWizard() {
 
   function handleSubmit() {
     startTransition(async () => {
-      const result = await submitBrokerOnboarding(form);
+      const result = await submitBrokerOnboarding(form, destination);
       if (!result.ok) {
         toast.error(result.message);
       }
@@ -293,16 +292,6 @@ export function RentalsOnboardingWizard() {
               </p>
             ) : null}
           </div>
-          <label className="flex cursor-pointer items-start gap-3 text-sm">
-            <input
-              data-testid="ro-ack"
-              type="checkbox"
-              className="mt-1 size-4 rounded border-border"
-              checked={form.confirmedListingRights}
-              onChange={(e) => patch("confirmedListingRights", e.target.checked)}
-            />
-            <span>I confirm I can list this property</span>
-          </label>
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-between">
             <Button type="button" variant="outline" onClick={() => setStep(2)}>
               ← Back
@@ -310,7 +299,7 @@ export function RentalsOnboardingWizard() {
             <Button
               data-testid="ro-submit"
               type="button"
-              disabled={!form.confirmedListingRights || pending}
+              disabled={pending}
               onClick={handleSubmit}
             >
               {pending ? "Saving…" : "Save draft & go to listings"}

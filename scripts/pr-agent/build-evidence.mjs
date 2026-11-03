@@ -18,7 +18,8 @@ const DOMAIN_PACKAGES = {
 const DOMAIN_MATCHERS = {
   nextjs: (p) => /(^src\/app\/|next\.config\.|^src\/(proxy|middleware)\.)/i.test(p),
   // src/proxy.ts delegates MDE's request/session boundary to the Supabase auth middleware.
-  supabase: (p) => /(^supabase\/|(^|\/)supabase([\/_.-]|$)|^src\/app\/auth\/|^src\/proxy\.ts$)/i.test(p),
+  // Standalone SQL can change RLS, privileges or schema outside the supabase/ tree.
+  supabase: (p) => /\.sql$/i.test(p) || /(^supabase\/|(^|\/)supabase([\/_.-]|$)|^src\/app\/auth\/|^src\/proxy\.ts$)/i.test(p),
   mastra: (p) => /(^|\/)mastra(\/|[-_.])|requestcontext/i.test(p),
   copilotkit: (p) => /copilotkit|ag-ui/i.test(p),
   maps: (p) => /(^|\/)(map|maps|places?|geocod|grounding)(\/|[-_.])/i.test(p),

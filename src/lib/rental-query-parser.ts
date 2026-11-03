@@ -6,6 +6,8 @@ import type { ConciergeWorkingMemory } from "@/lib/types";
 export type RentalSearchApiParams = {
   neighborhood?: string;
   minBedrooms?: number;
+  /** Inclusive upper bound for exact bedroom searches. */
+  maxBedrooms?: number;
   maxPricePerNight?: number;
   /** Exact monthly ceiling, never a guessed nightly conversion. */
   maxPriceMonthly?: number;
@@ -351,6 +353,22 @@ function parseBedrooms(text: string): number | undefined {
   return Number.isFinite(n) ? n : BEDROOM_WORDS[raw];
 }
 
+/**
+ * An explicit bedroom size means exactly that size. "At least 2" and "2+"
+ * instead mean a minimum. Reuse the canonical bedroom parser; no second
+ * frontend-only filter or natural-language ranking engine.
+ */
+export function exactBedroomsFromQueryText(text: string): number | undefined {
+  if (text.length > MAX_RENTAL_TEXT_CHARS) return undefined;
+  const match = BEDROOM_RE.exec(text);
+  if (!match) return undefined;
+  const before = text.slice(Math.max(0, match.index - 30), match.index);
+  const after = text.slice(match.index + match[0].length, match.index + match[0].length + 22);
+  if (/\b(?:at least|minimum of|minimum|min\.?|more than|over)\s*$/i.test(before)) return undefined;
+  if (/^\s*(?:\+|or more\b|or larger\b|and up\b|and above\b)/i.test(after)) return undefined;
+  return parseBedrooms(text);
+}
+
 /** User message is clearly about rentals, not events or cafés. */
 export function looksLikeRentalSearch(text: string): boolean {
   const t = text.trim();
@@ -368,6 +386,16 @@ export function hasRentalSignals(text: string): boolean {
 
 export function looksLikeNonRentalSearch(text: string): boolean {
   const t = text.trim();
+  // Explicit "do not search for listings" and requests to explain the assistant's
+  // capabilities are conversations, even when a neighborhood/rental noun appears.
+  // Do not mistake "don't search outside Laureles" for a ban on searching rentals.
+  if (/\b(?:do\s+not|don['’]?t)\s+(?:search\s+for|list|show|look\s+up)\s+(?:(?:me|us)\s+)?(?:listings?|rentals?|apartments?|properties?|homes?)\b/i.test(t)) {
+    return true;
+  }
+  if (/\bexplain\s+(?:briefly\s+)?how\s+(?:you|mde)\s+can\b/i.test(t) ||
+      /\b(?:what|how)\s+can\s+(?:you|mde)\s+(?:do|help)\b/i.test(t)) {
+    return true;
+  }
   if (looksLikeRentalSearch(t)) return false;
   return EVENT_INTENT_RE.test(t);
 }

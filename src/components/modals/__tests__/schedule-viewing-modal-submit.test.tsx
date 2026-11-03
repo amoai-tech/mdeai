@@ -8,6 +8,13 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act } from "react";
+vi.mock("@/components/ui/calendar", () => ({
+  Calendar: ({ onSelect }: { onSelect: (date: Date | undefined) => void }) => (
+    <button type="button" data-testid="viewing-date-mock"
+      onClick={() => onSelect(new Date('2099-06-01T12:00:00'))}>Select date</button>
+  ),
+}));
+
 import { createRoot, type Root } from "react-dom/client";
 
 vi.mock("@/components/chat/rental-ui-context", () => ({ useRentalUi: vi.fn() }));
@@ -91,11 +98,17 @@ async function renderModalAndFill() {
       container.querySelector('input[name="email"]') as HTMLInputElement,
       "camila@example.com",
     );
-    setNativeValue(
-      container.querySelector('input[name="preferredAt"]') as HTMLInputElement,
-      "2099-06-01T15:00",
-    );
+    (container.querySelector('[data-testid="viewing-date-trigger"]') as HTMLButtonElement).click();
+    setNativeValue(container.querySelector('input[name="viewingTime"]') as HTMLInputElement, "15:00");
   });
+  await act(() => {
+    (container.querySelector('[data-testid="viewing-date-mock"]') as HTMLButtonElement).click();
+  });
+  await act(() => {
+    container.querySelector("form")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    return Promise.resolve();
+  });
+  expect(container.querySelector('[data-testid="schedule-viewing-review"]')).not.toBeNull();
 }
 
 function submitForm() {
@@ -127,7 +140,160 @@ describe("ScheduleViewingModal submit behaviour (SAN-1203)", () => {
     });
   });
 
-  it("forwards the typed wall clock and the committed showing id", async () => {
+  it("keeps the renter's details and offers recovery when the apartment cannot take a request", async () => {
+    const { ScheduleViewingError: MockedError } = await import("@/lib/leads/submit-schedule-viewing");
+    // The module is mocked with a bare `class extends Error`, so set the fields the modal reads.
+    const unavailable = new (MockedError as unknown as new () => Error & {
+      code: string;
+      message: string;
+    })();
+    unavailable.code = "LISTING_UNAVAILABLE";
+    unavailable.message =
+      "This home isn't accepting viewing requests right now. Pick another apartment from the results.";
+    vi.mocked(submitScheduleViewing).mockRejectedValue(unavailable);
+
+    await renderModalAndFill();
+    await act(() => {
+      submitForm();
+      return Promise.resolve();
+    });
+
+    // The message is shown, and so is a way forward.
+    expect(container.querySelector('[data-testid="schedule-viewing-error"]')?.textContent).toContain(
+      "isn't accepting viewing requests",
+    );
+    const recovery = container.querySelector('[data-testid="schedule-viewing-recovery"]');
+    expect(recovery).not.toBeNull();
+
+    // Nothing the renter typed was thrown away.
+    expect(container.textContent).toContain("Camila Test");
+    expect(container.textContent).toContain("camila@example.com");
+    expect(container.querySelector('[data-testid="schedule-viewing-review"]')?.textContent).toContain("2099-06-01 at 15:00");
+
+    // "Retry viewing request" is a WRITE, so it must re-send the identical request: same
+    // apartment, same contact details, same time. That is what makes the server treat it as one
+    // request rather than a second booking.
+    const firstCall = vi.mocked(submitScheduleViewing).mock.calls[0]?.[0];
+    vi.mocked(submitScheduleViewing).mockClear();
+    await act(() => {
+      (container.querySelector('[data-testid="schedule-viewing-retry"]') as HTMLButtonElement).click();
+      return Promise.resolve();
+    });
+    expect(submitScheduleViewing).toHaveBeenCalledTimes(1);
+    // Same payload as the first attempt: the route derives the idempotency key from it, so a
+    // retry collapses onto the same request instead of creating a second viewing.
+    expect(vi.mocked(submitScheduleViewing).mock.calls[0]?.[0]).toEqual(firstCall);
+    expect((container.querySelector('[data-testid="schedule-viewing-retry"]') as HTMLButtonElement).textContent).toContain(
+      "Retry viewing request",
+    );
+
+    // "Choose another apartment" is a real link to the results, so it needs no router and works
+    // without JavaScript; clicking it closes the modal.
+    const chooseAnother = container.querySelector(
+      '[data-testid="schedule-viewing-choose-another"]',
+    ) as HTMLAnchorElement;
+    expect(chooseAnother.tagName).toBe("A");
+    expect(chooseAnother.getAttribute("href")).toMatch(/^\/rentals/);
+    // jsdom cannot navigate; prevent the default so the test can still assert the handler ran.
+    chooseAnother.addEventListener("click", (event) => event.preventDefault(), { once: true });
+    await act(() => {
+      chooseAnother.click();
+      return Promise.resolve();
+    });
+    expect(useRentalUi().closeScheduleViewing).toHaveBeenCalled();
+
+  });
+
+  it("keeps Retry visible and disabled while the resubmission is pending", async () => {
+    const { ScheduleViewingError: MockedError } = await import("@/lib/leads/submit-schedule-viewing");
+    const unavailable = new (MockedError as unknown as new () => Error & { code: string })();
+    unavailable.code = "LISTING_UNAVAILABLE";
+    unavailable.message = "This home isn't accepting viewing requests right now.";
+
+    let rejectRetry!: (error: Error) => void;
+    const pendingRetry = new Promise<ScheduleViewingResult>((_resolve, reject) => {
+      rejectRetry = reject;
+    });
+    vi.mocked(submitScheduleViewing)
+      .mockRejectedValueOnce(unavailable)
+      .mockReturnValueOnce(pendingRetry);
+
+    await renderModalAndFill();
+    await act(async () => { submitForm(); });
+    expect(container.querySelector('[data-testid="schedule-viewing-retry"]')).not.toBeNull();
+
+    await act(async () => {
+      (container.querySelector('[data-testid="schedule-viewing-retry"]') as HTMLButtonElement).click();
+    });
+    const retry = container.querySelector('[data-testid="schedule-viewing-retry"]') as HTMLButtonElement;
+    expect(retry).not.toBeNull();
+    expect(retry.textContent).toContain("Retrying");
+    expect(retry.disabled).toBe(true);
+    expect(submitScheduleViewing).toHaveBeenCalledTimes(2);
+
+    await act(async () => { rejectRetry(unavailable); });
+    expect(container.querySelector('[data-testid="schedule-viewing-retry"]')).not.toBeNull();
+    // A failed retry keeps the renter on Review; editable inputs are not mounted there.
+    // Verify the draft survives the failure, then that Edit restores the typed value.
+    const review = container.querySelector('[data-testid="schedule-viewing-review"]');
+    expect(review).not.toBeNull();
+    expect(review?.textContent).toContain("Camila Test");
+    await act(async () => {
+      const edit = container.querySelector('[data-testid="schedule-viewing-edit"]');
+      expect(edit).not.toBeNull();
+      (edit as HTMLButtonElement).click();
+    });
+    expect((container.querySelector('input[name="name"]') as HTMLInputElement | null)?.value).toBe("Camila Test");
+  });
+
+  it("does not carry one apartment's unavailable error onto the next apartment", async () => {
+    const { ScheduleViewingError: MockedError } = await import("@/lib/leads/submit-schedule-viewing");
+    const unavailable = new (MockedError as unknown as new () => Error & { code: string; message: string })();
+    unavailable.code = "LISTING_UNAVAILABLE";
+    unavailable.message = "This home isn't accepting viewing requests right now.";
+    vi.mocked(submitScheduleViewing).mockRejectedValue(unavailable);
+
+    await renderModalAndFill();
+    await act(() => {
+      submitForm();
+      return Promise.resolve();
+    });
+    expect(container.querySelector('[data-testid="schedule-viewing-recovery"]')).not.toBeNull();
+
+    // The renter gives up on this one and opens another apartment.
+    vi.mocked(useRentalUi).mockReturnValue({
+      scheduleTarget: { ...TARGET, listingId: "apt-otro-002", title: "Another Apartment" },
+      closeScheduleViewing: vi.fn(),
+      setLeadConfirmation: vi.fn(),
+    } as unknown as ReturnType<typeof useRentalUi>);
+
+    await act(() => {
+      root.render(<ScheduleViewingModal />);
+      return Promise.resolve();
+    });
+
+    // The previous apartment's failure must not follow the renter here.
+    expect(container.querySelector('[data-testid="schedule-viewing-recovery"]')).toBeNull();
+    expect(container.querySelector('[data-testid="schedule-viewing-error"]')).toBeNull();
+  });
+
+  it("shows no recovery action for an ordinary validation error", async () => {
+    const { ScheduleViewingError: MockedError } = await import("@/lib/leads/submit-schedule-viewing");
+    const invalid = new (MockedError as unknown as new () => Error & { code: string })();
+    invalid.code = "VALIDATION_ERROR";
+    invalid.message = "Please check your viewing details and try again.";
+    vi.mocked(submitScheduleViewing).mockRejectedValue(invalid);
+
+    await renderModalAndFill();
+    await act(() => {
+      submitForm();
+      return Promise.resolve();
+    });
+
+    expect(container.querySelector('[data-testid="schedule-viewing-recovery"]')).toBeNull();
+  });
+
+it("forwards the typed wall clock and the committed showing id", async () => {
     vi.mocked(submitScheduleViewing).mockResolvedValue({
       leadId: "lead-1",
       showingId: "showing-1",
@@ -166,8 +332,30 @@ describe("ScheduleViewingModal submit behaviour (SAN-1203)", () => {
     ).toContain("not committed");
     // Typed values survive so the renter can retry without retyping.
     expect(
-      (container.querySelector('input[name="name"]') as HTMLInputElement).value,
-    ).toBe("Camila Test");
+      container.textContent,
+    ).toContain("Camila Test");
+  });
+
+  it("shows an unavailable-apartment error without closing or falsely confirming a viewing", async () => {
+    vi.mocked(submitScheduleViewing).mockRejectedValue(
+      new Error("This home isn't accepting viewing requests right now. Pick another apartment from the results."),
+    );
+
+    await renderModalAndFill();
+    await act(async () => {
+      submitForm();
+    });
+
+    expect(container.querySelector('[data-testid="schedule-viewing-modal"]')).not.toBeNull();
+    expect(
+      container.querySelector('[data-testid="schedule-viewing-error"]')?.textContent,
+    ).toContain("isn't accepting viewing requests");
+    expect(
+      container.textContent,
+    ).toContain("Camila Test");
+    const { setLeadConfirmation } = vi.mocked(useRentalUi).mock.results[0]
+      .value as unknown as { setLeadConfirmation: ReturnType<typeof vi.fn> };
+    expect(setLeadConfirmation).not.toHaveBeenCalled();
   });
 
   it("releases the lock after a failure so the renter can retry", async () => {

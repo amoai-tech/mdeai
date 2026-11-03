@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { RunAgentInput } from "@ag-ui/core";
 import { test, expect, type Page } from "@playwright/test";
 import {
   createThrowawayIdentity,
@@ -62,7 +63,7 @@ const privateMarker = `${runMarker}-private-${randomUUID().slice(0, 8)}`;
  * from live production traffic:
  *
  *   {"method":"agent/connect","params":{"agentId":"conciergeAgent"},
- *    "body":{"threadId":"…","runId":"…","messages":[…],"tools":[…]}}
+ *    "body":{"threadId":"…","runId":"…","messages":[…],"tools":[…],"context":[]}}
  *
  * The AG-UI run input — and therefore `threadId` — is nested under `body`. A
  * probe that puts `threadId` at the top level exercises a shape the product never
@@ -70,10 +71,14 @@ const privateMarker = `${runMarker}-private-${randomUUID().slice(0, 8)}`;
  * real user. These probes must use the real shape to be worth anything.
  */
 function realRunBody(threadId: string) {
+  // Compile-time AG-UI contract: context/tools are required even when empty.
+  const body = {
+    threadId, runId: randomUUID(), messages: [], tools: [], context: [],
+  } satisfies RunAgentInput;
   return {
     method: "agent/connect",
     params: { agentId: "conciergeAgent" },
-    body: { threadId, runId: randomUUID(), messages: [], tools: [] },
+    body,
   };
 }
 

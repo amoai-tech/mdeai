@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { getEncoding } from "js-tiktoken";
+import { selectSkills, toRepoPath } from "../../scripts/select-pr-agent-skills.mjs";
 
 const read = (path: string) =>
   readFileSync(path, "utf8");
@@ -31,17 +32,17 @@ const skills = [
   ".claude/skills/copilotkit/references/review.md",
   ".claude/skills/mastra/references/review.md",
   ".claude/skills/supabase/references/review.md",
-  ".claude/skills/maps/SKILL.md",
+  ".claude/skills/maps/references/review.md",
   ".claude/skills/stripe/references/review.md",
   ".claude/skills/nextjs/references/review.md",
 ];
 
 describe("SAN-1312 PR-Agent review contract", () => {
   it("delegates runtime to the immutable shared core and keeps the caller trust boundary", () => {
-    expect(workflow).toContain("amoai-tech/pr-review-infra/.github/workflows/pr-agent.yml@5517c46e706cc0d08d4a2301fa3870cb2f292971");
+    expect(workflow).toMatch(/^    uses: amoai-tech\/pr-review-infra\/\.github\/workflows\/pr-agent\.yml@[0-9a-f]{40}$/m);
     expect(workflow).toContain("github.event.pull_request.head.repo.full_name == github.repository");
     expect(workflow).toContain('NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}');
-    expect(workflow).toContain('GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}');
+    expect(workflow).not.toContain("GOOGLE_GENERATIVE_AI_API_KEY");
     expect(workflow).toContain("actions: read");
     expect(workflow).toContain("contents: read");
     expect(workflow).toContain("issues: write");
@@ -113,6 +114,16 @@ describe("SAN-1312 PR-Agent review contract", () => {
       expect(body.toLowerCase()).toContain("review invariants");
       const owner = path.replace(".claude/skills/", "").split("/")[0];
       expect(routing).toContain(owner);
+    }
+
+    // Assert the selected discoverable wrappers, not only their source references.
+    const selected = selectSkills(["package.json"]);
+    expect(selected.paths).toHaveLength(skills.length);
+    for (const containerPath of selected.paths.slice(1)) {
+      const entrypoint = toRepoPath(containerPath);
+      expect(entrypoint).toMatch(/scripts\/pr-agent\/skills\/[a-z-]+\/SKILL\.md$/);
+      expect(read(entrypoint)).toContain("review.md");
+      expect(existsSync(entrypoint.replace(/\/SKILL\.md$/, "/review.md"))).toBe(true);
     }
   });
 
@@ -247,14 +258,10 @@ describe("SAN-1312 PR-Agent review contract", () => {
     expect(read("scripts/pr-agent/evals/README.md")).not.toContain("sort_by(.updatedAt)");
   });
 
-  it("does not configure keys the pinned PR-Agent cannot read", () => {
-    // Verified against the shipped binary: `publish_error_details` first appears in the
-    // v0.46.0 `settings/configuration.toml` and has no reader in v0.45.0. On the pinned
-    // image it is a silent no-op, so the config must not claim the feature is active.
-    if (workflow.includes("v0.45.0")) {
-      expect(config).not.toMatch(/^\s*publish_error_details\s*=/m);
-    }
-    expect(config).toContain("publish_error_details` is a v0.46+ key");
+  it("keeps supported PR-Agent error publishing host-owned", () => {
+    // The v0.49.0 shared workflow enables this setting on the trusted host.
+    // Do not duplicate host settings in repository-controlled configuration.
+    expect(config).not.toMatch(/^\s*publish_error_details\s*=/m);
   });
 
   it("keeps repo-local routing while shared core owns review orchestration", () => {
@@ -286,20 +293,27 @@ describe("SAN-1332 evidence-backed review contract", () => {
 });
 
 describe("SAN-1332 skill-budget checkpoint", () => {
-  it("keeps every package.json review skill inside the configured budget", () => {
-    const rendered = [
-      read(".claude/skills/code-review/SKILL.md"),
-      read(".claude/skills/copilotkit/references/review.md"),
-      read(".claude/skills/mastra/references/review.md"),
-      read(".claude/skills/supabase/references/review.md"),
-      read(".claude/skills/maps/SKILL.md"),
-      read(".claude/skills/stripe/references/review.md"),
-      read(".claude/skills/nextjs/references/review.md"),
-    ].join("\n\n---\n\n");
+  it("keeps the actually selected package.json skills and bundled references inside budget", () => {
+    const selection = selectSkills(["package.json"]);
+    expect(selection.maxTokens).toBe(6000);
+    expect(selection.paths).toHaveLength(skills.length);
+    // Use the paths the router really provides to the pinned loader. Every wrapper
+    // bundles a sibling review.md; the universal skill is loaded as-is.
+    const rendered = selection.paths.flatMap((containerPath, index) => {
+      const entry = toRepoPath(containerPath);
+      if (index === 0) return [read(entry)];
+      const review = entry.replace(/\/SKILL\.md$/, "/review.md");
+      expect(existsSync(review)).toBe(true);
+      return [read(entry), read(review)];
+    }).join("\n\n---\n\n");
     const tokenCounts = REVIEW_ENCODINGS.map((encoding) => encoding.encode(rendered).length);
-    expect(Math.max(...tokenCounts)).toBeLessThanOrEqual(6000);
-    const packageJson = JSON.parse(read("package.json")) as { devDependencies?: Record<string, string> };
+    expect(Math.max(...tokenCounts)).toBeLessThanOrEqual(selection.maxTokens);
+    const packageJson = JSON.parse(read("package.json")) as {
+      devDependencies?: Record<string, string>;
+      scripts?: Record<string, string>;
+    };
     expect(packageJson.devDependencies?.["js-tiktoken"]).toBe("1.0.21");
-    expect(routing).toContain("return 6000");
+    expect(packageJson.scripts?.["check:release-gates"]).toContain("scripts/__tests__/*.test.mjs");
+    expect(packageJson.scripts?.["check:pr-agent-pinned-loader"]).toContain("pr-agent-pinned-loader.test.mjs");
   });
 });

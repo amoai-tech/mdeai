@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   appendCertification,
+  excludedFilesFromReview,
   hasCertificationForBase,
   hasCertificationForHead,
   parseReviewEnvelope,
@@ -346,6 +347,64 @@ ${JSON.stringify({ findings: [], schema_version: 1, last_run: { head_sha: HEAD_A
     expect(result.code).toBe("INCOMPLETE_REVIEW");
   });
 
+  it("rejects a six-chunk review that explicitly excludes files even when the persistent state is absent", () => {
+    const footer = [
+      "",
+      "<hr>",
+      "ℹ️ **Chunked review:** the diff exceeded the model token budget, so it was reviewed in 6 chunks and the per-chunk results were merged.",
+      "<hr>",
+      "⚠️ **Review coverage:** The following files were not included in this review because of the token budget:",
+      "- `docs/progress/_work/features-and-pages.md`",
+      "- `docs/progress/_work/ai-architecture.md`",
+      "- `docs/progress/_work/database-inventory.md`",
+      "- `docs/progress/_work/release-and-runtime.md`",
+      "- `docs/progress/data/pr-files.json`",
+      "- `docs/progress-tracker.md`",
+      "<hr>",
+    ].join("\n");
+    const noState = envelopedCanonical().replace(/<!-- pr-agent-review-state:v1\n[\s\S]*?\n-->/, "");
+    const body = noState + footer;
+    const result = verifyReviewResult({ comments: [comment(body, "2026-09-20T01:00:05Z")], startedAt: RUN_STARTED, reviewCommand: "/review", baseSha: BASE_A, headSha: HEAD_A });
+    expect(result.ok).toBe(false);
+    expect(result.code).toBe("INCOMPLETE_REVIEW");
+    expect(result.reason).toContain("6 excluded");
+  });
+
+  it.each(["```", "~~~", "````"])("ignores an excluded-file warning quoted inside a %s fenced block", (fence) => {
+    const body = envelopedCanonical() + `\n${fence}md\n⚠️ **Review coverage:** The following files were not included in this review because of the token budget:\n- \`src/example.ts\`\n${fence}\n`;
+    const result = verifyReviewResult({ comments: [comment(body, "2026-09-20T01:00:05Z")], startedAt: RUN_STARTED, reviewCommand: "/review", baseSha: BASE_A, headSha: HEAD_A });
+    expect(result.ok).toBe(true);
+  });
+
+  it("ignores exclusions appearing only in a Markdown blockquote or indented code block", () => {
+    const body = envelopedCanonical() + "\n> ⚠️ **Review coverage:** The following files were not included in this review because of the token budget:\n> - \`src/example.ts\`\n\n    ⚠️ **Review coverage:** The following files were not included in this review because of the token budget:\n    - \`src/indented.ts\`\n";
+    const result = verifyReviewResult({ comments: [comment(body, "2026-09-20T01:00:05Z")], startedAt: RUN_STARTED, reviewCommand: "/review", baseSha: BASE_A, headSha: HEAD_A });
+    expect(result.ok).toBe(true);
+  });
+
+  it("still rejects a real footer after a code fence contains a fake footer", () => {
+    const quoted = "\n```md\n⚠️ **Review coverage:** The following files were not included in this review because of the token budget:\n- \`src/quoted.ts\`\n```\n";
+    const real = "\n⚠️ **Review coverage:** The following files were not included in this review because of the token budget:\n- \`src/real.ts\`\n";
+    const result = verifyReviewResult({ comments: [comment(envelopedCanonical() + quoted + real, "2026-09-20T01:00:05Z")], startedAt: RUN_STARTED, reviewCommand: "/review", baseSha: BASE_A, headSha: HEAD_A });
+    expect(result.code).toBe("INCOMPLETE_REVIEW");
+    expect(result.reason).toContain("1 excluded");
+  });
+
+  it("rejects explicit excluded-file footer even when a stale/incorrect state claims full coverage", () => {
+    const body = envelopedCanonical() + "\n⚠️ **Review coverage:** The following files were not included in this review because of the token budget:\n- `src/ignored.ts`\n";
+    const result = verifyReviewResult({ comments: [comment(body, "2026-09-20T01:00:05Z")], startedAt: RUN_STARTED, reviewCommand: "/review", baseSha: BASE_A, headSha: HEAD_A });
+    expect(result.ok).toBe(false);
+    expect(result.code).toBe("INCOMPLETE_REVIEW");
+  });
+
+  it("does not confuse a complete-coverage footer with an excluded-file failure", () => {
+    const noState = envelopedCanonical().replace(/<!-- pr-agent-review-state:v1\n[\s\S]*?\n-->/, "");
+    const body = noState + "\nℹ️ **Review coverage:** All changed files were reviewed.\n";
+    const result = verifyReviewResult({ comments: [comment(body, "2026-09-20T01:00:05Z")], startedAt: RUN_STARTED, reviewCommand: "/review", baseSha: BASE_A, headSha: HEAD_A });
+    expect(result.ok).toBe(true);
+    expect(result).toHaveProperty("coverageConfirmed", false);
+  });
+
   it("keeps state-free clean PR-Agent reviews working without claiming complete diff coverage", () => {
     const body = envelopedCanonical().replace(/<!-- pr-agent-review-state:v1\n[\s\S]*?\n-->/, "");
     const result = verifyReviewResult({ comments: [comment(body, "2026-09-20T01:00:05Z")], startedAt: RUN_STARTED, reviewCommand: "/review", baseSha: BASE_A, headSha: HEAD_A });
@@ -606,5 +665,16 @@ ${JSON.stringify({ findings: [], schema_version: 1, last_run: { head_sha: HEAD_A
     history = appendCertification(history, { baseSha: BASE_B, headSha: "d".repeat(40) });
     expect(hasCertificationForBase(history, BASE_A)).toBe(true);
     expect(hasCertificationForBase(history, BASE_B)).toBe(true);
+  });
+});
+
+describe("SAN-1609 canonical footer Markdown boundaries", () => {
+  const footer = (spaces = "") => `${spaces}⚠️ **Review coverage:** The following files were not included in this review because of the token budget:\n- \`src/a.ts\`\n`;
+  it.each(["", " ", "  ", "   "])("finds a real footer with %s indentation", (spaces) => {
+    expect(excludedFilesFromReview(footer(spaces))).toEqual(["src/a.ts"]);
+  });
+  it("ignores a lazy blockquote continuation, not just explicit > prefixes", () => {
+    expect(excludedFilesFromReview(`> quoted context\n${footer()}`)).toEqual([]);
+    expect(excludedFilesFromReview(`> quoted context\n\n${footer()}`)).toEqual(["src/a.ts"]);
   });
 });

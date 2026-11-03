@@ -35,7 +35,7 @@ vi.mock("../search-venue-anchors", () => ({
 
 import { invokeAdkGrounding } from "../../lib/adk-grounding-client";
 import { searchRestaurants } from "../search-restaurants";
-import { searchCafeVenueAnchors } from "../search-venue-anchors";
+import { searchCafeVenueAnchors, venueAnchorToCoordinates } from "../search-venue-anchors";
 import { searchGroundedPlacesTool } from "../search-grounded-places";
 import { adkUnavailableMock } from "./grounded-places-test-helpers";
 
@@ -85,6 +85,18 @@ describe("searchGroundedPlacesTool café venue_anchors fallback (UX-T-013)", () 
     expect(out.results[0]?.title).toBe("Pergamino Café Laureles");
     expect(out.results[0]?.placeId).toBe("ChIJtest");
     expect(out.metadata?.fallback).toBe("curated");
+  });
+
+  it("keeps a venue with no saved coordinates in the answer but gives it no pin position", async () => {
+    vi.mocked(invokeAdkGrounding).mockResolvedValue(adkUnavailableMock());
+    vi.mocked(searchCafeVenueAnchors).mockResolvedValue([{ ...anchorRow, latitude: null, longitude: null }]);
+    vi.mocked(venueAnchorToCoordinates).mockReturnValueOnce({ latitude: null, longitude: null });
+
+    const out = await runGrounded("good specialty coffee in Laureles");
+
+    expect(out.results[0]?.title).toBe("Pergamino Café Laureles");
+    expect(out.results[0]?.latitude).toBeUndefined();
+    expect(out.results[0]?.longitude).toBeUndefined();
   });
 
   it("falls through to searchRestaurants when anchors empty", async () => {

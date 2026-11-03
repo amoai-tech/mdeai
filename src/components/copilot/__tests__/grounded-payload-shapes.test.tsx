@@ -69,6 +69,9 @@ describe.each(SHAPES)("%s", (_name, build) => {
     act(() => root.render(<GroundedCafeResults result={build(rowsFor(coverage))} />));
 
     expect(container.querySelectorAll('[data-testid="grounded-card"]')).toHaveLength(cards);
+    if (coverage === "coordinate-less") {
+      expect(container.querySelector('[data-pin-id="grounded-ChIJcafe"]')).toBeNull();
+    }
     const groundedCalls = ui.merge.mock.calls.filter(([category]) => category === "grounded");
     expect(groundedCalls, "the finished result reaches the map exactly once").toHaveLength(1);
     expect(groundedCalls[0]?.[1]).toHaveLength(pins);

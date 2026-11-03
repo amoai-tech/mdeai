@@ -5,6 +5,7 @@ import { isFinishedToolPayload } from "@/lib/normalize-tool-envelope";
 import { useMapContext } from "@/platform/maps/map-context";
 import { normalizeToolOutput } from "@/platform/maps/normalize-tool-output";
 import type { MapPinCategory } from "@/platform/contracts";
+import { useCurrentSearchToolResult } from "@/components/copilot/search-tool-result-ownership";
 
 export function ToolPinsSync({
   category,
@@ -14,13 +15,14 @@ export function ToolPinsSync({
   result: unknown;
 }) {
   const { mergePinsByCategory } = useMapContext();
+  const isCurrent = useCurrentSearchToolResult();
   const lastMergedKeyRef = useRef("");
 
   useEffect(() => {
     // SAN-1422 — only a missing or still-streaming result is a no-op. A finished result always
     // replaces its category, including with no pins, so a coordinate-less search can't leave the
     // previous search's pins on the map.
-    if (!isFinishedToolPayload(result, { rowArray: category === "grounded" })) return;
+    if (!isCurrent || !isFinishedToolPayload(result, { rowArray: category === "grounded" })) return;
     const { pins } = normalizeToolOutput(category, result);
     // The location is part of the key: the same pin id with corrected coordinates is a real update.
     const key = `${category}:${pins
@@ -36,7 +38,7 @@ export function ToolPinsSync({
       mergePinsByCategory("event", []);
     }
     mergePinsByCategory(category, pins);
-  }, [category, result, mergePinsByCategory]);
+  }, [category, result, mergePinsByCategory, isCurrent]);
 
   return null;
 }

@@ -77,4 +77,24 @@ describe("submitBrokerOnboarding place verification branches", () => {
     expect(result.message).toContain("temporarily unavailable");
     spy.mockRestore();
   });
+  it("returns new /app onboarding to its own listings after saving", async () => {
+    verifyPlaceId.mockResolvedValue({
+      formattedAddress: "Calle 10 #42-15, Laureles",
+      latitude: 6.2447,
+      longitude: -75.5916,
+    });
+    await submitBrokerOnboarding({ ...input, confirmedListingRights: false }, "app");
+    expect(redirect).toHaveBeenCalledWith("/app/rentals/listings");
+  });
+
+  it("preserves the legacy listings destination", async () => {
+    verifyPlaceId.mockResolvedValue({
+      formattedAddress: "Calle 10 #42-15, Laureles",
+      latitude: 6.2447,
+      longitude: -75.5916,
+    });
+    await submitBrokerOnboarding(input);
+    expect(redirect).toHaveBeenCalledWith("/host/rentals/listings");
+  });
+
 });

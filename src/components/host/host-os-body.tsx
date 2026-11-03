@@ -7,12 +7,15 @@ import { HostOsNav } from "@/components/host/host-os-nav";
 import { HostInboxPlaceholder } from "@/components/host/host-inbox-placeholder";
 import { HOST_OS_CHAT_LABELS, HostOsChatTitle } from "@/components/host/host-os-chat-title";
 import { HostErrorBoundary } from "@/components/host/host-error-boundary";
+import type { HostOsBasePath } from "@/lib/host/host-os-nav";
 
 export const CHAT_REGION_ID = "host-os-chat-region";
 
 type HostOsBodyProps = {
   children: ReactNode;
   routeLabel: string;
+  /** Which URL family the workspace nav should link to. */
+  basePath?: HostOsBasePath;
 };
 
 /** Shown when the page body subtree throws — body must never blank silently. */
@@ -54,7 +57,11 @@ function HostRailFallback() {
 }
 
 // skipcq: JS-0067 - ES module export; not browser global scope
-export function HostOsBody({ children, routeLabel }: HostOsBodyProps) {
+export function HostOsBody({
+  children,
+  routeLabel,
+  basePath = "/host",
+}: HostOsBodyProps) {
   // The Host OS shell (and this boundary) stays mounted across /host/* route
   // changes, so a sticky `hasError` would keep blanking every later screen.
   // Keying the page-body boundary by pathname remounts it (fresh state) on each
@@ -64,7 +71,7 @@ export function HostOsBody({ children, routeLabel }: HostOsBodyProps) {
   const pathname = usePathname();
   return (
     <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-      <HostOsNav />
+      <HostOsNav basePath={basePath} />
       <section
         aria-label={`${routeLabel} workspace`}
         className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto"
@@ -98,7 +105,10 @@ export function HostOsBody({ children, routeLabel }: HostOsBodyProps) {
             />
           </div>
         </HostErrorBoundary>
-        <HostInboxPlaceholder />
+        {/* A placeholder inbox must not squeeze the real conversation off a phone. */}
+        <div className="hidden md:block">
+          <HostInboxPlaceholder />
+        </div>
       </aside>
     </div>
   );

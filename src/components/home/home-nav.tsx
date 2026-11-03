@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { MenuIcon, BookmarkIcon } from "lucide-react";
+import { useSession } from "@/hooks/use-session";
 import {
   Sheet,
   SheetContent,
@@ -19,6 +20,7 @@ const verticals = [
 
 export function HomeNav() {
   const [open, setOpen] = useState(false);
+  const { user, loading } = useSession();
 
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur-md">
@@ -35,7 +37,7 @@ export function HomeNav() {
         {/* Desktop verticals */}
         <nav
           aria-label="Site verticals"
-          className="hidden flex-1 items-center justify-center gap-1 sm:flex"
+          className="hidden flex-1 items-center justify-center gap-1 lg:flex"
         >
           {verticals.map(({ label, href }) => (
             <Link
@@ -49,7 +51,7 @@ export function HomeNav() {
         </nav>
 
         {/* Desktop right actions */}
-        <div className="ml-auto hidden items-center gap-2 sm:flex">
+        <div className="ml-auto hidden items-center gap-2 lg:flex">
           <Link
             href="/saved"
             className="flex min-h-[44px] items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary motion-reduce:transition-none"
@@ -63,12 +65,64 @@ export function HomeNav() {
           >
             Host
           </Link>
+          {!loading && (user ? (
+            <Link
+              href="/app"
+              className="inline-flex min-h-11 items-center rounded-full border border-border px-3 text-sm font-semibold text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              My account
+            </Link>
+          ) : (
+            <>
+              <Link
+                href="/login"
+                className="inline-flex min-h-11 items-center rounded-full px-3 text-sm font-medium text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                Log in
+              </Link>
+              <Link
+                href="/signup"
+                className="inline-flex min-h-11 items-center rounded-full border border-primary px-3 text-sm font-semibold text-primary hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                Sign up
+              </Link>
+            </>
+          ))}
         </div>
+
+        {/* Mobile authentication — visible without opening the menu. */}
+        {!loading && (
+          <div className="flex items-center gap-1 lg:hidden">
+            {user ? (
+              <Link
+                href="/app"
+                className="inline-flex min-h-11 items-center rounded-full px-2 text-sm font-semibold text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                My account
+              </Link>
+            ) : (
+              <>
+                <Link
+                  href="/login"
+                  className="inline-flex min-h-11 items-center rounded-full px-2 text-sm font-medium text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                >
+                  Log in
+                </Link>
+                <Link
+                  href="/signup"
+                  className="inline-flex min-h-11 items-center rounded-full border border-primary px-3 text-sm font-semibold text-primary hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                >
+                  Sign up
+                </Link>
+              </>
+            )}
+          </div>
+        )}
 
         {/* Mobile — Sheet handles animation + focus trap + Escape + aria-modal */}
         <Sheet open={open} onOpenChange={setOpen}>
           <SheetTrigger
-            className="ml-auto flex size-11 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:hidden"
+            className="ml-auto flex size-11 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary lg:hidden"
             aria-label="Open menu"
           >
             <MenuIcon className="size-5" aria-hidden="true" />
@@ -77,7 +131,7 @@ export function HomeNav() {
           <SheetContent
             side="top"
             showCloseButton={true}
-            className="sm:hidden px-4 pb-6 pt-14"
+            className="lg:hidden px-4 pb-6 pt-14"
           >
             <nav aria-label="Mobile site verticals" className="flex flex-col gap-1">
               {verticals.map(({ label, href }) => (

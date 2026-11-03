@@ -379,46 +379,55 @@ export function RentalTestModePanel() {
           Grant access
         </Button>
 
-        <table className="mt-3 w-full text-left text-xs" data-testid="admin-test-access-list">
-          <thead className="border-b border-border text-muted-foreground">
-            <tr>
-              <th className="p-2">User</th>
-              <th className="p-2">Role</th>
-              <th className="p-2">Granted</th>
-              <th className="p-2">Expires</th>
-              <th className="p-2">State</th>
-              <th className="p-2">Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {testAccess.length === 0 ? (
-              <tr><td className="p-2 text-muted-foreground" colSpan={6}>No development grants yet.</td></tr>
-            ) : testAccess.map((row) => {
-              const active = row.active;
-              return (
-                <tr key={row.id} className="border-b border-border/60">
-                  <td className="p-2 font-mono">{row.user_id.slice(0, 8)}…</td>
-                  <td className="p-2">{row.access_role}</td>
-                  <td className="p-2">{new Date(row.granted_at).toLocaleDateString()}</td>
-                  <td className="p-2">{row.expires_at ? new Date(row.expires_at).toLocaleDateString() : "—"}</td>
-                  <td className="p-2">{active ? "active" : row.revoked_at ? "revoked" : "expired"}</td>
-                  <td className="p-2">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      data-testid={`admin-test-access-revoke-${row.user_id}-${row.access_role}`}
-                      disabled={busy !== null || !active}
-                      onClick={() => void revokeAccess(row.user_id, row.access_role)}
-                    >
-                      Revoke
-                    </Button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        {/* Only the table scrolls sideways on narrow screens; the page itself never does. */}
+        <div
+          className="mt-3 max-w-full overflow-x-auto"
+          role="region"
+          aria-label="Development access grants"
+          tabIndex={0}
+          data-testid="admin-test-access-scroll"
+        >
+          <table className="w-full min-w-[560px] text-left text-xs" data-testid="admin-test-access-list">
+            <thead className="border-b border-border text-muted-foreground">
+              <tr>
+                <th className="p-2">User</th>
+                <th className="p-2">Role</th>
+                <th className="p-2">Granted</th>
+                <th className="p-2">Expires</th>
+                <th className="p-2">State</th>
+                <th className="p-2">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {testAccess.length === 0 ? (
+                <tr><td className="p-2 text-muted-foreground" colSpan={6}>No development grants yet.</td></tr>
+              ) : testAccess.map((row) => {
+                const active = row.active;
+                return (
+                  <tr key={row.id} className="border-b border-border/60">
+                    <td className="p-2 font-mono">{row.user_id.slice(0, 8)}…</td>
+                    <td className="p-2">{row.access_role}</td>
+                    <td className="p-2">{new Date(row.granted_at).toLocaleDateString()}</td>
+                    <td className="p-2">{row.expires_at ? new Date(row.expires_at).toLocaleDateString() : "—"}</td>
+                    <td className="p-2">{active ? "active" : row.revoked_at ? "revoked" : "expired"}</td>
+                    <td className="p-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        data-testid={`admin-test-access-revoke-${row.user_id}-${row.access_role}`}
+                        disabled={busy !== null || !active}
+                        onClick={() => void revokeAccess(row.user_id, row.access_role)}
+                      >
+                        Revoke
+                      </Button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </section>
 
       {message ? (
@@ -456,132 +465,148 @@ export function RentalTestModePanel() {
       </section>
 
       <section className="rounded-lg border border-border">
-        <table className="w-full text-left text-sm" data-testid="admin-rental-table">
-          <thead className="border-b border-border text-xs text-muted-foreground">
-            <tr>
-              <th className="p-2">Listing</th>
-              <th className="p-2">State</th>
-              <th className="p-2">Test</th>
-              <th className="p-2">Leads / showings</th>
-              <th className="p-2">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rentals.map((row) => {
-              const test = isTest(row);
-              const c = counts[row.id] ?? { leads: 0, showings: 0 };
-              return (
-                <tr key={row.id} className="border-b border-border/60 align-top">
-                  <td className="p-2">
-                    <div className="font-medium">{row.title ?? "(untitled)"}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {row.neighborhood} · {row.currency} {row.price_monthly ?? "—"} · avail {row.available_from ?? "—"}
-                    </div>
-                    {test ? (
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        publish={metaString(row, "admin_test_publish_state") || "—"} · photo={metaString(row, "admin_test_photo_rights") || "—"}
-                        {metaString(row, "admin_test_owner_user_id") ? ` · owner ${metaString(row, "admin_test_owner_user_id").slice(0, 8)}…` : ""}
-                        {metaString(row, "admin_test_broker_user_id") ? ` · broker ${metaString(row, "admin_test_broker_user_id").slice(0, 8)}…` : ""}
+        <div
+          className="max-w-full overflow-x-auto"
+          role="region"
+          aria-label="Rental listings"
+          tabIndex={0}
+          data-testid="admin-rental-table-scroll"
+        >
+          <table className="w-full min-w-[760px] text-left text-sm" data-testid="admin-rental-table">
+            <thead className="border-b border-border text-xs text-muted-foreground">
+              <tr>
+                <th className="p-2">Listing</th>
+                <th className="p-2">State</th>
+                <th className="p-2">Test</th>
+                <th className="p-2">Leads / showings</th>
+                <th className="p-2">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rentals.map((row) => {
+                const test = isTest(row);
+                const c = counts[row.id] ?? { leads: 0, showings: 0 };
+                return (
+                  <tr key={row.id} className="border-b border-border/60 align-top">
+                    <td className="p-2">
+                      <div className="font-medium">{row.title ?? "(untitled)"}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {row.neighborhood} · {row.currency} {row.price_monthly ?? "—"} · avail {row.available_from ?? "—"}
                       </div>
-                    ) : null}
-                  </td>
-                  <td className="p-2 text-xs">
-                    {row.status}/{row.moderation_status}/{row.listing_workflow_status}
-                    <div className="text-muted-foreground">verified={String(row.verified)}</div>
-                  </td>
-                  <td className="p-2 text-xs">{test ? "TEST" : "—"}</td>
-                  <td className="p-2 text-xs">{test ? `${c.leads} / ${c.showings}` : "—"}</td>
-                  <td className="p-2">
-                    {test ? (
-                      <div className="flex flex-wrap gap-1">
-                        <Button type="button" size="sm" variant="outline"
-                          data-testid={`admin-test-publish-${row.id}`} disabled={busy !== null}
-                          onClick={() => void publish(row.id)}>Publish</Button>
-                        <Button type="button" size="sm" variant="outline"
-                          data-testid={`admin-test-approve-${row.id}`} disabled={busy !== null}
-                          onClick={() => void approve(row.id)}>Approve</Button>
-                        <Button type="button" size="sm" variant="outline"
-                          data-testid={`admin-test-reject-${row.id}`} disabled={busy !== null}
-                          onClick={() => void reject(row.id)}>Reject</Button>
-                        <Button type="button" size="sm" variant="outline"
-                          data-testid={`admin-test-reopen-${row.id}`} disabled={busy !== null}
-                          onClick={() => void reopen(row.id)}>Reopen</Button>
-                        <Button type="button" size="sm" variant="outline"
-                          data-testid={`admin-test-photo-${row.id}`} disabled={busy !== null}
-                          onClick={() => void setRight(row.id, "photo",
-                            metaString(row, "admin_test_photo_rights") === "revoked" ? "authorized" : "revoked")}>
-                          {metaString(row, "admin_test_photo_rights") === "revoked" ? "Grant photo" : "Revoke photo"}
-                        </Button>
-                        <Button type="button" size="sm" variant="outline"
-                          data-testid={`admin-test-publish-right-${row.id}`} disabled={busy !== null}
-                          onClick={() => void setRight(row.id, "publishing",
-                            metaString(row, "admin_test_publish_state") === "approved" ? "revoked" : "approved")}>
-                          {metaString(row, "admin_test_publish_state") === "approved" ? "Withdraw publishing" : "Restore publishing"}
-                        </Button>
-                        <Button type="button" size="sm" variant="outline"
-                          data-testid={`admin-test-owner-${row.id}`} disabled={busy !== null || !ownerUserId}
-                          onClick={() => void assignParty(row.id, "owner")}>Assign owner</Button>
-                        <Button type="button" size="sm" variant="outline"
-                          data-testid={`admin-test-broker-${row.id}`} disabled={busy !== null || !brokerUserId}
-                          onClick={() => void assignParty(row.id, "broker")}>Assign broker</Button>
-                        <Button type="button" size="sm" variant="outline"
-                          data-testid={`admin-test-viewing-${row.id}`}
-                          disabled={busy !== null || row.listing_workflow_status !== "published"}
-                          onClick={() => void requestViewing(row)}>Request viewing</Button>
-                        <Button type="button" size="sm" variant="outline"
-                          data-testid={`admin-test-cleanup-${row.id}`} disabled={busy !== null}
-                          onClick={() => void cleanup(row.id)}>Cleanup</Button>
-                      </div>
-                    ) : (
-                      <div className="flex flex-wrap gap-1">
-                        <Button type="button" size="sm" variant="default"
-                          data-testid={`admin-clone-test-${row.id}`}
-                          disabled={busy !== null || !form.availableFrom || !form.imageUrl}
-                          onClick={() => void cloneAsTest(row.id)}
-                          title="Creates an MDE-owned, approved and published development fixture. Original listing is unchanged.">
-                          Make MDE test copy
-                        </Button>
-                        <Button type="button" size="sm" variant="outline"
-                          data-testid={`admin-test-operator-${row.id}`}
-                          disabled={busy !== null}
-                          onClick={() => void assignTestOperator(row.id, !hasTestOperator(row))}>
-                          {hasTestOperator(row) ? "Clear MDE test operator" : "Assign MDE test operator"}
-                        </Button>
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                      {test ? (
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          publish={metaString(row, "admin_test_publish_state") || "—"} · photo={metaString(row, "admin_test_photo_rights") || "—"}
+                          {metaString(row, "admin_test_owner_user_id") ? ` · owner ${metaString(row, "admin_test_owner_user_id").slice(0, 8)}…` : ""}
+                          {metaString(row, "admin_test_broker_user_id") ? ` · broker ${metaString(row, "admin_test_broker_user_id").slice(0, 8)}…` : ""}
+                        </div>
+                      ) : null}
+                    </td>
+                    <td className="p-2 text-xs">
+                      {row.status}/{row.moderation_status}/{row.listing_workflow_status}
+                      <div className="text-muted-foreground">verified={String(row.verified)}</div>
+                    </td>
+                    <td className="p-2 text-xs">{test ? "TEST" : "—"}</td>
+                    <td className="p-2 text-xs">{test ? `${c.leads} / ${c.showings}` : "—"}</td>
+                    <td className="p-2">
+                      {test ? (
+                        <div className="flex flex-wrap gap-1">
+                          <Button type="button" size="sm" variant="outline"
+                            data-testid={`admin-test-publish-${row.id}`} disabled={busy !== null}
+                            onClick={() => void publish(row.id)}>Publish</Button>
+                          <Button type="button" size="sm" variant="outline"
+                            data-testid={`admin-test-approve-${row.id}`} disabled={busy !== null}
+                            onClick={() => void approve(row.id)}>Approve</Button>
+                          <Button type="button" size="sm" variant="outline"
+                            data-testid={`admin-test-reject-${row.id}`} disabled={busy !== null}
+                            onClick={() => void reject(row.id)}>Reject</Button>
+                          <Button type="button" size="sm" variant="outline"
+                            data-testid={`admin-test-reopen-${row.id}`} disabled={busy !== null}
+                            onClick={() => void reopen(row.id)}>Reopen</Button>
+                          <Button type="button" size="sm" variant="outline"
+                            data-testid={`admin-test-photo-${row.id}`} disabled={busy !== null}
+                            onClick={() => void setRight(row.id, "photo",
+                              metaString(row, "admin_test_photo_rights") === "revoked" ? "authorized" : "revoked")}>
+                            {metaString(row, "admin_test_photo_rights") === "revoked" ? "Grant photo" : "Revoke photo"}
+                          </Button>
+                          <Button type="button" size="sm" variant="outline"
+                            data-testid={`admin-test-publish-right-${row.id}`} disabled={busy !== null}
+                            onClick={() => void setRight(row.id, "publishing",
+                              metaString(row, "admin_test_publish_state") === "approved" ? "revoked" : "approved")}>
+                            {metaString(row, "admin_test_publish_state") === "approved" ? "Withdraw publishing" : "Restore publishing"}
+                          </Button>
+                          <Button type="button" size="sm" variant="outline"
+                            data-testid={`admin-test-owner-${row.id}`} disabled={busy !== null || !ownerUserId}
+                            onClick={() => void assignParty(row.id, "owner")}>Assign owner</Button>
+                          <Button type="button" size="sm" variant="outline"
+                            data-testid={`admin-test-broker-${row.id}`} disabled={busy !== null || !brokerUserId}
+                            onClick={() => void assignParty(row.id, "broker")}>Assign broker</Button>
+                          <Button type="button" size="sm" variant="outline"
+                            data-testid={`admin-test-viewing-${row.id}`}
+                            disabled={busy !== null || row.listing_workflow_status !== "published"}
+                            onClick={() => void requestViewing(row)}>Request viewing</Button>
+                          <Button type="button" size="sm" variant="outline"
+                            data-testid={`admin-test-cleanup-${row.id}`} disabled={busy !== null}
+                            onClick={() => void cleanup(row.id)}>Cleanup</Button>
+                        </div>
+                      ) : (
+                        <div className="flex flex-wrap gap-1">
+                          <Button type="button" size="sm" variant="default"
+                            data-testid={`admin-clone-test-${row.id}`}
+                            disabled={busy !== null || !form.availableFrom || !form.imageUrl}
+                            onClick={() => void cloneAsTest(row.id)}
+                            title="Creates an MDE-owned, approved and published development fixture. Original listing is unchanged.">
+                            Make MDE test copy
+                          </Button>
+                          <Button type="button" size="sm" variant="outline"
+                            data-testid={`admin-test-operator-${row.id}`}
+                            disabled={busy !== null}
+                            onClick={() => void assignTestOperator(row.id, !hasTestOperator(row))}>
+                            {hasTestOperator(row) ? "Clear MDE test operator" : "Assign MDE test operator"}
+                          </Button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </section>
 
       <section className="rounded-lg border border-border p-4">
         <h2 className="text-sm font-semibold">Development audit trail</h2>
         <p className="mt-1 text-xs text-muted-foreground">Append-only: UPDATE and DELETE are blocked by the database.</p>
-        <table className="mt-3 w-full text-left text-xs" data-testid="admin-test-events">
-          <thead className="border-b border-border text-muted-foreground">
-            <tr>
-              <th className="p-2">When</th>
-              <th className="p-2">Event</th>
-              <th className="p-2">Listing</th>
-              <th className="p-2">Actor</th>
-            </tr>
-          </thead>
-          <tbody>
-            {testEvents.length === 0 ? (
-              <tr><td className="p-2 text-muted-foreground" colSpan={4}>No development events yet.</td></tr>
-            ) : testEvents.map((row) => (
-              <tr key={row.id} className="border-b border-border/60">
-                <td className="p-2">{new Date(row.created_at).toLocaleString()}</td>
-                <td className="p-2">{row.event_type}</td>
-                <td className="p-2 font-mono">{row.apartment_id ? `${row.apartment_id.slice(0, 8)}…` : "—"}</td>
-                <td className="p-2 font-mono">{row.actor_id ? `${row.actor_id.slice(0, 8)}…` : "—"}</td>
+        <div
+          className="mt-3 max-w-full overflow-x-auto"
+          role="region"
+          aria-label="Development audit trail"
+          tabIndex={0}
+          data-testid="admin-test-events-scroll"
+        >
+          <table className="w-full min-w-[520px] text-left text-xs" data-testid="admin-test-events">
+            <thead className="border-b border-border text-muted-foreground">
+              <tr>
+                <th className="p-2">When</th>
+                <th className="p-2">Event</th>
+                <th className="p-2">Listing</th>
+                <th className="p-2">Actor</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {testEvents.length === 0 ? (
+                <tr><td className="p-2 text-muted-foreground" colSpan={4}>No development events yet.</td></tr>
+              ) : testEvents.map((row) => (
+                <tr key={row.id} className="border-b border-border/60">
+                  <td className="p-2">{new Date(row.created_at).toLocaleString()}</td>
+                  <td className="p-2">{row.event_type}</td>
+                  <td className="p-2 font-mono">{row.apartment_id ? `${row.apartment_id.slice(0, 8)}…` : "—"}</td>
+                  <td className="p-2 font-mono">{row.actor_id ? `${row.actor_id.slice(0, 8)}…` : "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </section>
     </div>
   );

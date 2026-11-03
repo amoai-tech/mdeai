@@ -1,10 +1,13 @@
 import { createScorer } from "@mastra/core/evals";
 import { generateObject } from "ai";
 import { z } from "zod";
-import { FLASH_MODEL } from "../lib/models";
+import { ACTIVE_AI_PROVIDER, ACTIVE_TEXT_MODEL } from "../lib/models";
 import { extractClaims, type FaithfulnessClaim } from "./faithfulness-core";
 import {
   evaluateGroundingCoverage,
+  groundedSourceNames,
+  normalizeGroundingName,
+  sameGroundedEntityName,
   type GroundingCoverageInput,
   type GroundingCoverageReply,
 } from "./grounding-coverage-core";
@@ -37,10 +40,35 @@ function getInput(input: GroundingCoverageInput | undefined): GroundingCoverageI
 }
 
 function judgeEnabled(requestContext: unknown): boolean {
-  if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) return false;
+  // A judge uses the configured provider; do not require a Google key for NVIDIA.
+  const key = ACTIVE_AI_PROVIDER === "nvidia"
+    ? process.env.NVIDIA_API_KEY
+    : process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+  if (!key?.trim()) return false;
   const ctx = requestContext as { get?: (k: string) => unknown } | undefined;
   const flag = typeof ctx?.get === "function" ? ctx.get(JUDGE_CONTEXT_KEY) : undefined;
   return flag !== false;
+}
+
+export function reconcileGroundingJudgeVerdict(
+  unsupported: FaithfulnessClaim[],
+  uncovered: string[],
+  groundedAliases: { claim: string; sourceName: string }[],
+  toolOutputs: unknown[],
+): FaithfulnessClaim[] {
+  const confirmedAbsent = new Set(uncovered.map(normalizeGroundingName));
+  const validSources = new Set(groundedSourceNames(toolOutputs).map(normalizeGroundingName));
+  return unsupported.filter((candidate) => {
+    const claim = normalizeGroundingName(candidate.claim);
+    if (confirmedAbsent.has(claim)) return true;
+    return !groundedAliases.some((alias) => {
+      const source = normalizeGroundingName(alias.sourceName);
+      if (normalizeGroundingName(alias.claim) !== claim || !validSources.has(source)) return false;
+      // A judge-proposed alias is not evidence by itself. Compare the full
+      // distinctive word sets to an actual tool-row name, in both directions.
+      return sameGroundedEntityName(claim, source);
+    });
+  });
 }
 
 async function judgeUncovered(
@@ -49,11 +77,15 @@ async function judgeUncovered(
 ): Promise<FaithfulnessClaim[]> {
   try {
     const { object } = await generateObject({
-      model: FLASH_MODEL,
+      model: ACTIVE_TEXT_MODEL,
       schema: z.object({
         uncovered: z
           .array(z.string())
           .describe("Entity claim strings genuinely absent from tool output."),
+        groundedAliases: z.array(z.object({
+          claim: z.string(),
+          sourceName: z.string(),
+        })).default([]).describe("Exact source name that proves a flagged alias is grounded."),
       }),
       prompt: [
         "You verify whether named venues/listings/events in a concierge reply are grounded.",
@@ -64,11 +96,15 @@ async function judgeUncovered(
         ...unsupported.map((c) => `- ${c.claim}`),
         "",
         "Return only entities genuinely absent from tool output.",
-        "Paraphrases or synonyms present in the tool output are NOT uncovered.",
+        "Only clear a candidate as a paraphrase when you can cite its exact source name",
+        "from TOOL OUTPUT in groundedAliases: [{claim, sourceName}].",
+        "If there is no concrete source name, keep the entity in uncovered.",
+        "Do not make up source names; an empty uncovered list alone proves nothing.",
       ].join("\n"),
     });
-    const set = new Set(object.uncovered.map((s) => s.toLowerCase().trim()));
-    return unsupported.filter((c) => set.has(c.claim.toLowerCase().trim()));
+    return reconcileGroundingJudgeVerdict(
+      unsupported, object.uncovered, object.groundedAliases ?? [], toolOutputs,
+    );
   } catch {
     return unsupported;
   }

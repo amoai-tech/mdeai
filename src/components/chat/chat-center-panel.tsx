@@ -12,12 +12,13 @@ import { DeterministicConciergeChat } from "@/components/chat/deterministic-conc
 import { useSavedThreadHistory } from "@/components/chat/chat-provider";
 import { useConciergeSession } from "@/components/chat/concierge-session-context";
 import { WorkflowProgressStrip } from "@/components/chat/workflow-progress-strip";
+import { RENTAL_EXAMPLE_QUERY } from "@/lib/rental-failure-recovery";
 import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 
-const CONCIERGE_LABELS = {
+export const CONCIERGE_LABELS = {
   modalHeaderTitle: "Medellín concierge",
   welcomeMessageText:
-    'Hi — I can help with rentals, events, restaurants, and day trips in Medellín. Try: "1BR in Laureles under $80/night" or "salsa events this weekend".',
+    `Hi — I can help with rentals, events, restaurants, and day trips in Medellín. Try: "${RENTAL_EXAMPLE_QUERY}" or "salsa events this weekend".`,
 };
 
 /**
@@ -44,7 +45,9 @@ export function ChatCenterPanel() {
     <section
       data-testid="center-chat-panel"
       aria-label="Concierge chat"
-      className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
+      // SAN-1606 — the phone tab bar floats over the viewport, so the column stops above it: the
+      // composer and its disclaimer keep the 8px gap. Zero above `lg`.
+      className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden pb-[var(--mde-mobile-nav-clearance)] lg:pb-0"
     >
       <div
         key={sessionKey}

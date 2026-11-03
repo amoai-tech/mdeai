@@ -1,6 +1,7 @@
 "use client";
 
-import { Component, type ErrorInfo, type ReactNode } from "react";
+import type { ReactNode } from "react";
+import { AppErrorBoundary } from "@/components/errors/error-boundary";
 
 /**
  * SAN-1209-FIX — Host OS error isolation.
@@ -14,55 +15,28 @@ import { Component, type ErrorInfo, type ReactNode } from "react";
  *
  * This boundary makes any such crash *visible and contained*: the rest of the
  * page keeps rendering, the operator sees a labelled fallback, and the real
- * error is logged so prod can be diagnosed without a debugger. Roberto never
- * stares at a blank screen because one widget threw.
+ * error is logged so prod can be diagnosed without a debugger.
  *
- * Class component because React error boundaries require it; there is no hooks
- * equivalent for componentDidCatch.
+ * The implementation is the shared `AppErrorBoundary`; this wrapper keeps the
+ * established `[host-os <label> crashed]` breadcrumb and the existing call sites.
  *
- * Reset strategy: this boundary has no internal recovery — once it catches, it
- * stays on the fallback for its lifetime. Recovery is the consumer's job. The
- * Host OS shell stays mounted across /host/* navigation, so HostOsBody keys the
- * page-body boundary by pathname (`key={pathname}`) to remount it with fresh
- * state on each route change; the host segment `error.tsx` exposes `reset()`.
+ * Reset strategy: no internal recovery. The Host OS shell stays mounted across
+ * /host/* navigation, so HostOsBody keys the page-body boundary by pathname
+ * (`key={pathname}`) to remount it with fresh state on each route change; the
+ * host segment `error.tsx` exposes `reset()`.
  */
-
-type HostErrorBoundaryProps = {
+export function HostErrorBoundary({
+  children,
+  fallback,
+  label,
+}: {
   children: ReactNode;
-  /** Rendered in place of the crashed subtree. */
   fallback: ReactNode;
-  /** Short label used in the console breadcrumb (e.g. "copilot-rail"). */
   label: string;
-};
-
-type HostErrorBoundaryState = {
-  hasError: boolean;
-};
-
-// skipcq: JS-0067 - ES module export; not browser global scope
-export class HostErrorBoundary extends Component<
-  HostErrorBoundaryProps,
-  HostErrorBoundaryState
-> {
-  state: HostErrorBoundaryState = { hasError: false };
-
-  static getDerivedStateFromError(): HostErrorBoundaryState {
-    return { hasError: true };
-  }
-
-  componentDidCatch(error: Error, info: ErrorInfo): void {
-    // Diagnostic breadcrumb — survives minified prod builds (no dev overlay).
-    console.error(`[host-os ${this.props.label} crashed]`, {
-      message: error.message,
-      stack: error.stack,
-      componentStack: info.componentStack,
-    });
-  }
-
-  render(): ReactNode {
-    if (this.state.hasError) {
-      return this.props.fallback;
-    }
-    return this.props.children;
-  }
+}) {
+  return (
+    <AppErrorBoundary fallback={fallback} label={label} scope="host-os">
+      {children}
+    </AppErrorBoundary>
+  );
 }

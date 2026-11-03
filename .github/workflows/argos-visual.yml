@@ -1,0 +1,53 @@
+name: Argos visual regression
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "e2e/argos-visual.spec.ts"
+      - "playwright.config.ts"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/argos-visual.yml"
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: argos-visual-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  visual:
+    name: Screenshot public UI
+    # Do not expose a repository secret to untrusted fork pull requests.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Argos determines the visual baseline from Git history.
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Capture and upload Argos screenshots
+        env:
+          ARGOS_TOKEN: ${{ secrets.ARGOS_TOKEN }}
+          NODE_ENV: development
+          NEXT_TELEMETRY_DISABLED: "1"
+          NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:9
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_test
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ""
+          NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: test
+          NEXT_PUBLIC_E2E_MOCK_MAPS: "1"
+          SMOKE_BASE_URL: http://localhost:3002
+          PLAYWRIGHT_WEB_SERVER_COMMAND: npm run dev:ui:worktree
+        run: npx playwright test e2e/argos-visual.spec.ts --project=chromium --workers=1

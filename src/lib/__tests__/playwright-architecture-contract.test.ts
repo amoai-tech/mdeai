@@ -186,6 +186,9 @@ describe("SAN-1341 Playwright architecture", () => {
     expect(workflow).toContain("NODE_ENV: development");
     expect(workflow).not.toContain("secrets.NEXT_PUBLIC_SUPABASE");
     expect(workflow).toContain("SMOKE_BASE_URL: http://localhost:3002");
+    // One compiler for all deterministic shards; avoid mixed Webpack/Turbopack reports.
+    expect(workflow).toContain("PLAYWRIGHT_WEB_SERVER_COMMAND: npx next dev --turbopack -p 3002");
+    expect(workflow).not.toContain("matrix.shard == 3");
   });
 
   it("includes long-chat virtualization in the same deterministic PR browser run", () => {

@@ -39,6 +39,7 @@ function parseRpcJson(value: unknown): { apartment_id?: string; landlord_profile
 // skipcq: JS-R1005
 export async function submitBrokerOnboarding(
   input: BrokerOnboardingFormInput,
+  destination: "host" | "app" = "host",
 ): Promise<BrokerOnboardingSubmitResult> {
   const validation = validateBrokerOnboardingInput(input);
   if (!validation.ok) return validation;
@@ -148,6 +149,7 @@ export async function submitBrokerOnboarding(
     return { ok: false, message: apartmentError.message };
   }
 
-  redirect(BROKER_LISTINGS_PATH);
+  // Fixed destinations only; no user-supplied redirect URL.
+  redirect(destination === "app" ? "/app/rentals/listings" : BROKER_LISTINGS_PATH);
   return { ok: false, message: "Redirecting to listings." };
 }

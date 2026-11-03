@@ -34,5 +34,23 @@
     "prompt": "Redesign the café list page spacing and imagery without any AI proposals or editing workflow.",
     "should_trigger": false,
     "expected_owner": "frontend-design"
+  },
+  {
+    "id": "opendots-7",
+    "prompt": "A café owner edits an AI-proposed description, commits it, then loses the HTTP response. Restore the saved OpenDots receipt.",
+    "should_trigger": true,
+    "expected_owner": "opendots"
+  },
+  {
+    "id": "opendots-8",
+    "prompt": "Compare an old review receipt with no draft snapshot against a changed OpenDots proposal.",
+    "should_trigger": true,
+    "expected_owner": "opendots"
+  },
+  {
+    "id": "opendots-9",
+    "prompt": "Improve standalone restaurant card photos without AI suggestions or user-reviewed actions.",
+    "should_trigger": false,
+    "expected_owner": "frontend-design"
   }
 ]

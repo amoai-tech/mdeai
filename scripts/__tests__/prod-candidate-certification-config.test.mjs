@@ -52,7 +52,7 @@ test("keeps pre-promotion certification independent of Maps browser referrer res
   );
   // Cleanup proves the throwaway user owns ZERO threads afterwards — not merely
   // that the delete call was made.
-  assert.match(spec, /deleteThrowawayIdentity\(identity\)/);
+  assert.match(spec, /deleteThrowawayIdentity\(identity,\s*\{\s*waitForAiRunAudit:\s*agentRunCompleted\s*\}\)/);
   assert.match(spec, /threadCount\(userId\)[\s\S]{0,80}?\.toBe\(0\)/);
 });
 

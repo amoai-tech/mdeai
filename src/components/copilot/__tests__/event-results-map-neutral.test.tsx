@@ -11,9 +11,21 @@ import { createRoot, type Root } from "react-dom/client";
 const ui = vi.hoisted(() => ({
   panToPin: vi.fn(),
   openVenueDetail: vi.fn(),
+  setRows: vi.fn(),
   selectedPinId: null as string | null,
+  searchEvents: vi.fn(() => Promise.resolve(true)),
+  liveAgent: true,
 }));
 
+vi.mock("@/hooks/use-event-search-fast-path", () => ({
+  useEventSearchFastPath: () => ({ handleUserMessage: ui.searchEvents }),
+}));
+vi.mock("@/components/chat/concierge-coagent-context", () => ({
+  useOptionalConciergeCoAgent: () => ({
+    agent: ui.liveAgent ? { isRunning: false } : undefined,
+    isReady: true,
+  }),
+}));
 vi.mock("@/platform/maps/map-context", () => ({
   useMapContext: () => ({ selectedPinId: ui.selectedPinId, panToPin: ui.panToPin }),
 }));
@@ -21,7 +33,7 @@ vi.mock("@/components/chat/rental-ui-context", () => ({
   useRentalUi: () => ({ openVenueDetail: ui.openVenueDetail }),
 }));
 vi.mock("@/components/chat/event-search-results-context", () => ({
-  useEventSearchResults: () => ({ setRows: vi.fn(), setWebCitations: vi.fn() }),
+  useEventSearchResults: () => ({ setRows: ui.setRows, setWebCitations: vi.fn() }),
 }));
 vi.mock("@/components/chat/rich-card-results-context", () => ({
   RichCardResultsRegistrar: () => null,
@@ -40,6 +52,9 @@ const event = (id: string, coords?: { latitude: number; longitude: number }) => 
   currency: "USD",
   ...coords,
 });
+
+// React 19 act() uses this flag to detect a properly configured jsdom test environment.
+(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 let root: Root;
 let container: HTMLElement;
@@ -69,7 +84,11 @@ beforeEach(() => {
   Element.prototype.scrollIntoView = vi.fn();
   ui.panToPin.mockReset();
   ui.openVenueDetail.mockReset();
+  ui.searchEvents.mockReset();
+  ui.searchEvents.mockResolvedValue(true);
+  ui.setRows.mockReset();
   ui.selectedPinId = null;
+  ui.liveAgent = true;
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -80,7 +99,42 @@ afterEach(() => {
   container.remove();
 });
 
+describe("SAN-1407 empty event result replacement", () => {
+  it("clears previously shown rows when the latest finished event result is empty", () => {
+    act(() => root.render(<EventResults result={{ results: [event("old")], source: "supabase" }} />));
+    expect(ui.setRows).toHaveBeenLastCalledWith([expect.objectContaining({ id: "old" })]);
+    act(() => root.render(<EventResults result={{ results: [], source: "supabase" }} />));
+    expect(ui.setRows).toHaveBeenLastCalledWith([]);
+  });
+});
+
 describe("event cards on the map", () => {
+  it("preserves tier-backed price, Buy availability and URL in the shared rows", () => {
+    act(() =>
+      root.render(
+        <EventResults result={{
+          results: [{
+            ...event("paid"),
+            pricePerTicket: 40000,
+            currency: "COP",
+            canBuyTickets: true,
+            ticketUrl: "/events/paid",
+          }],
+          source: "supabase",
+        }} />,
+      ),
+    );
+    expect(ui.setRows).toHaveBeenCalledWith([
+      expect.objectContaining({
+        id: "paid",
+        pricePerTicket: 40000,
+        currency: "COP",
+        canBuyTickets: true,
+        ticketUrl: "/events/paid",
+      }),
+    ]);
+  });
+
   it("an event with coordinates pans to its pin and opens its details", () => {
     render();
     act(() => cardBody("event-mapped").click());
@@ -105,5 +159,53 @@ describe("event cards on the map", () => {
     ui.selectedPinId = "event-mapped";
     render();
     expect(container.querySelector('[data-pin-id="event-mapped"]')?.getAttribute("data-selected")).toBe("true");
+  });
+});
+
+
+describe("EventResults empty and unavailable states", () => {
+  function showResult(result: unknown) {
+    act(() => root.render(<EventResults result={result} />));
+  }
+
+  it("routes suggestions into the existing event-search handler instead of an AI-only turn", async () => {
+    showResult({ results: [], total: 0, source: "supabase" });
+    expect(container.querySelector('[data-testid="events-search-error"]')).toBeNull();
+    const weekend = container.querySelector('[data-testid="events-empty-suggest-weekend"]');
+    expect(weekend).toBeInstanceOf(HTMLButtonElement);
+    await act(async () => (weekend as HTMLButtonElement).click());
+    expect(ui.searchEvents).toHaveBeenCalledOnce();
+    expect(ui.searchEvents).toHaveBeenCalledWith("Show events this weekend in Medellín");
+  });
+
+  it("reports failed suggestions rather than silently claiming a search completed", async () => {
+    ui.searchEvents.mockRejectedValueOnce(new Error("API 503"));
+    showResult({ results: [], total: 0, source: "supabase" });
+    const weekend = container.querySelector('[data-testid="events-empty-suggest-weekend"]');
+    await act(async () => (weekend as HTMLButtonElement).click());
+    expect(container.querySelector('[data-testid="events-suggestion-error"]')).not.toBeNull();
+  });
+
+  it("renders the empty state without calling provider-only hooks when no live agent is mounted", () => {
+    ui.liveAgent = false;
+    showResult({ results: [], total: 0, source: "supabase" });
+    expect(container.querySelector('[data-testid="events-empty"]')).not.toBeNull();
+    const weekend = container.querySelector('[data-testid="events-empty-suggest-weekend"]');
+    expect(weekend).toBeInstanceOf(HTMLButtonElement);
+    expect((weekend as HTMLButtonElement).disabled).toBe(true);
+    act(() => (weekend as HTMLButtonElement).click());
+    expect(ui.searchEvents).not.toHaveBeenCalled();
+  });
+
+  it("does not disguise an unavailable database as a healthy empty market", () => {
+    showResult({ results: [], total: 0, source: "fallback" });
+    expect(container.querySelector('[data-testid="events-search-error"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="events-empty"]')).toBeNull();
+  });
+
+  it("does not disguise malformed tool output as a healthy empty market", () => {
+    showResult({ total: 0, source: "supabase" });
+    expect(container.querySelector('[data-testid="events-search-error"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="events-empty"]')).toBeNull();
   });
 });

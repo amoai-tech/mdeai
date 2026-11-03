@@ -75,7 +75,10 @@ env:
 jobs:
   supabase-acl:
     name: supabase-acl
-    runs-on: ubuntu-latest
+    # The CI-only port remapper imports stdlib tomllib (Python >=3.11).
+    # Ubuntu 24.04 ships system Python 3.12; pin the runner instead of relying on
+    # the moving ubuntu-latest label or installing an unnecessary tomli fallback.
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
 
     steps:
@@ -97,6 +100,47 @@ jobs:
       - name: Install
         run: npm ci
 
+      # The checked-in 546xx ports remain correct for developer machines, but on Linux runners
+      # they fall inside the ephemeral TCP range (usually 32768-60999). Docker may then fail
+      # to bind :54622 after a dependency download briefly uses that port. Change ONLY the
+      # throwaway CI checkout; all subsequent Supabase CLI commands read the same config.
+      - name: Move CI-only Supabase ports below the Linux ephemeral range
+        run: |
+          python3 - <<'PYPORTS'
+          import re
+          import tomllib
+          from pathlib import Path
+
+          path = Path("supabase/config.toml")
+          original = path.read_text()
+          # Only the seven active, fixed Supabase service ports; leave commented examples alone.
+          ci_config, count = re.subn(
+              r"(?m)^((?:shadow_)?port[ \t]*=[ \t]*)546([0-9]{2})$",
+              r"\g<1>246\2",
+              original,
+          )
+          if count != 7:
+              raise SystemExit(f"Expected seven active 546xx port settings; found {count}")
+          parsed = tomllib.loads(ci_config)
+          expected = {
+              ("api", "port"): 24621,
+              ("db", "port"): 24622,
+              ("db", "shadow_port"): 24620,
+              ("db.pooler", "port"): 24629,
+              ("studio", "port"): 24623,
+              ("local_smtp", "port"): 24624,
+              ("analytics", "port"): 24627,
+          }
+          for (section, key), port in expected.items():
+              value = parsed
+              for part in section.split("."):
+                  value = value[part]
+              if value[key] != port:
+                  raise SystemExit(f"Incorrect {section}.{key} CI port: {value[key]}")
+          path.write_text(ci_config)
+          print("CI-only Supabase ports: API 24621, DB 24622, shadow 24620, others 24623-24629")
+          PYPORTS
+
       - name: Start local Supabase stack
         run: supabase start
 
@@ -108,6 +152,32 @@ jobs:
       - name: Replay every migration from scratch
         run: supabase db reset
 
+      # The CLI resolves the one-shot pg_prove image on every `supabase test db` run.
+      # A transient GHCR outage must not fail the gate before a single test executes.
+      # Seed the exact local tag the CLI looks for, trying three registries with retries;
+      # once the tag exists locally, the CLI skips its own network pull.
+      - name: Pre-pull pgTAP runner image with registry fallback
+        run: |
+          set -euo pipefail
+          image="supabase/pg_prove:3.36"
+          local_image="ghcr.io/${image}"
+          if docker image inspect "$local_image" >/dev/null 2>&1; then
+            echo "pg_prove runner already cached: $local_image"
+            exit 0
+          fi
+          for registry in ghcr.io public.ecr.aws docker.io; do
+            for attempt in 1 2 3; do
+              if docker pull "${registry}/${image}"; then
+                docker tag "${registry}/${image}" "$local_image"
+                echo "pg_prove runner cached from ${registry}"
+                exit 0
+              fi
+              sleep $((attempt * 10))
+            done
+          done
+          echo "::error::Unable to pull ${image} from ghcr.io, public.ecr.aws or docker.io"
+          exit 1
+
       # `set -o pipefail` matters: without it a failing `supabase test db` would be masked by
       # `tee` exiting 0, and the job would report green on a red suite. The log is `tee`d so it
       # can be uploaded as an artifact on failure (below); Actions already shows stdout, but an
@@ -117,13 +187,14 @@ jobs:
           set -o pipefail
           supabase test db 2>&1 | tee pgtap.log
 
-      # pgTAP runs in a single transaction, so it cannot prove SKIP LOCKED contention or a
-      # send-vs-delivery-receipt race. These open real connections and read only the local
-      # database (config.toml ports).
-      - name: WhatsApp concurrency and delivery race (two connections)
+      # pgTAP runs in a single transaction, so it cannot prove SKIP LOCKED contention, a
+      # send-vs-delivery-receipt race, or a concurrent publish claim. These open real
+      # connections and read only the local database (config.toml ports).
+      - name: Concurrency and delivery-race proofs (two connections)
         run: |
           node supabase/tests/concurrency/san1444_claim_concurrency.mjs
           node supabase/tests/concurrency/san1444_send_receipt_race.mjs
+          node supabase/tests/concurrency/san1285_publish_concurrency.mjs
 
       # Run the real HTTP path, not just SET ROLE in psql. This checks both
       # legacy service JWTs and modern sb_secret_ keys through Kong/PostgREST.

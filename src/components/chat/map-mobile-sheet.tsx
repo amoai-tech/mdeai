@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { Map, MapPin, XIcon } from "lucide-react";
+import { keyboardLiftPx } from "@/lib/hooks/use-chat-keyboard-height";
 import { ChatMap } from "@/components/maps/ChatMap";
 import { EmptyState } from "@/components/empty/empty-state";
 import { Button } from "@/components/ui/button";
@@ -57,9 +58,20 @@ function getLgUpServerSnapshot() {
   return false;
 }
 
+const subscribeHydration = () => () => {};
+const getHydratedSnapshot = () => true;
+const getServerHydratedSnapshot = () => false;
+
 /** MAP-007 mobile bottom sheet — map without covering chat input. */
 export function MapMobileSheet() {
   const [userMapOpen, setUserMapOpen] = useState(false);
+  // The trigger is server-rendered before React attaches its click handler.
+  // Keep it visibly disabled until hydration so an early tap cannot do nothing.
+  const isHydrated = useSyncExternalStore(
+    subscribeHydration,
+    getHydratedSnapshot,
+    getServerHydratedSnapshot,
+  );
   const isLgUp = useSyncExternalStore(
     subscribeLgUp,
     getLgUpSnapshot,
@@ -77,15 +89,123 @@ export function MapMobileSheet() {
 
   const sheetOpen = !isLgUp && userMapOpen;
 
+  // SAN-1606 — the tab bar took over the bottom of the screen, so a fixed 7.5rem offset no longer
+  // clears both the compact composer and the bar. Measure the composer card itself and keep this
+  // control just above it: the composer already sits above the bar, and a longer draft moves the
+  // card, so the trigger follows instead of overlapping.
+  const [composerGap, setComposerGap] = useState<number | null>(null);
+  useEffect(() => {
+    if (isLgUp) return;
+    const composerSelector = '[data-testid="copilot-chat-input"]';
+    const composer = () => document.querySelector<HTMLElement>(composerSelector);
+    let observer: ResizeObserver | null = null;
+    let observed: HTMLElement | null = null;
+    let frame = 0;
+    let watchFrame = 0;
+    let frames = 0;
+    let stable = 0;
+    let last = Number.NaN;
+
+    const measure = (): number | null => {
+      const element = composer();
+      if (!element) return null;
+      // The rendered position already includes the overlay keyboard's lift, and the style below
+      // adds that lift again, so measure the *unlifted* top; otherwise a measurement taken while
+      // the keyboard is open (growth, remount) would push the trigger a whole keyboard too high.
+      // Only a keyboard-sized gap is a lift (see keyboardLiftPx); a browser-UI gap is not.
+      const unliftedTop = element.getBoundingClientRect().top + keyboardLiftPx();
+      const gap = Math.round(window.innerHeight - unliftedTop + 8);
+      if (gap > 0) setComposerGap(gap);
+      return gap > 0 ? gap : null;
+    };
+
+    // Re-attach whenever the composer is a *different node*: switching thread remounts the keyed
+    // chat subtree, and an observer left on the detached element would stop reporting growth, so
+    // the trigger could end up under an expanded draft.
+    const attachObserver = () => {
+      if (typeof ResizeObserver === "undefined") return;
+      const element = composer();
+      if (!element || element === observed) return;
+      observer?.disconnect();
+      observer = new ResizeObserver(() => measure());
+      observer.observe(element);
+      observed = element;
+      measure();
+    };
+
+    // CopilotKit mounts the composer after the runtime resolves, and the welcome screen is still
+    // moving while it does: a ResizeObserver only reports size changes and would miss both, so
+    // settle on animation frames until the measured gap stops moving, then observe real resizes
+    // (a longer draft grows the card) instead of polling forever.
+    const settle = () => {
+      const gap = measure();
+      if (gap != null && gap === last) stable += 1;
+      else stable = 0;
+      last = gap ?? Number.NaN;
+      frames += 1;
+      if (stable < 3 && frames < 180) {
+        frame = requestAnimationFrame(settle);
+      } else {
+        attachObserver();
+      }
+    };
+    const startSettle = () => {
+      cancelAnimationFrame(frame);
+      frames = 0;
+      stable = 0;
+      last = Number.NaN;
+      frame = requestAnimationFrame(settle);
+    };
+
+    // One persistent watcher, throttled to a frame. It watches `document.body`, the only node in
+    // this tree that cannot be replaced: the composer, the keyed chat subtree and even the centre
+    // panel can be swapped on a thread switch, and an observer attached to any of them would then
+    // sit on a dead node and never fire again. Every tick re-reads the live composer and compares
+    // node identity, so a remount starts a fresh measurement instead of leaving a stale gap.
+    const watcher = new MutationObserver(() => {
+      if (watchFrame) return;
+      watchFrame = requestAnimationFrame(() => {
+        watchFrame = 0;
+        const current = composer();
+        if (!current || current === observed) return;
+        startSettle();
+      });
+    });
+    watcher.observe(document.body, { childList: true, subtree: true });
+    startSettle();
+
+    window.addEventListener("resize", measure);
+    return () => {
+      cancelAnimationFrame(frame);
+      cancelAnimationFrame(watchFrame);
+      watcher.disconnect();
+      observer?.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [isLgUp]);
+
   return (
     <div
       data-testid="map-mobile-controls"
       data-right-column-mode="map"
-      className="pointer-events-none fixed bottom-[calc(7.5rem+env(safe-area-inset-bottom,0px))] right-4 z-40 lg:hidden"
+      // Pre-measurement (server HTML, or a slow hydration on a cold runner) the trigger must already
+      // sit above the idle composer, never over it: the composer region is a fixed stack of the
+      // bar clearance + disclaimer + composer + padding, so a 9rem offset lands 8px above the
+      // composer for any phone height. The measured position then refines it.
+      className="pointer-events-none fixed bottom-[calc(var(--mde-mobile-nav-clearance)+9rem)] right-4 z-40 lg:hidden"
+      // `--mde-keyboard-height` (published by useChatKeyboardHeight on /chat) is the overlay
+      // keyboard's lift; the composer moves up by it without resizing, so the trigger adds it too.
+      style={
+        composerGap == null
+          ? undefined
+          : { bottom: `calc(${composerGap}px + var(--mde-keyboard-height, 0px))` }
+      }
     >
       <Button
         type="button"
         data-testid="map-sheet-trigger"
+        data-hydrated={isHydrated ? "true" : "false"}
+        disabled={!isHydrated}
         className="pointer-events-auto h-11 gap-2 rounded-full px-4 shadow-lg"
         size="default"
         aria-label={pinCount > 0 ? `Open map with ${pinCount} pins` : "Open map"}

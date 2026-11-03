@@ -7,9 +7,24 @@
  * rather than on hand-written cards: COP/month, the photo list, unknown bedrooms, two ads with
  * no coordinates, and no viewing action for any of them.
  */
+// SAN-1611: the date selector navigates with the app router, which a bare createRoot lacks.
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn(), refresh: vi.fn(), prefetch: vi.fn() }),
+  usePathname: () => "/rentals",
+  useSearchParams: () => new URLSearchParams(),
+  notFound: () => { throw new Error("NEXT_NOT_FOUND"); },
+  redirect: (url: string) => { throw new Error(`NEXT_REDIRECT:${url}`); },
+}));
+
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+// Retry uses App Router refresh; this isolated component test has no mounted Next router.
+vi.mock("next/navigation", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/navigation")>()),
+  useRouter: () => ({ refresh: vi.fn() }),
+}));
 
 vi.mock("@/components/maps/MapProvider", () => ({
   MapsShell: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -376,6 +391,12 @@ describe("RentalDetailsPanel — states", () => {
       );
     });
   }
+
+  it("exposes the exact listing id on the panel for card/pin/Details parity", async () => {
+    await renderPanel(baseRentalOf());
+    const panel = container.querySelector('[data-testid="rental-details-panel"]');
+    expect(panel?.getAttribute("data-listing-id")).toBe(baseRentalOf().id);
+  });
 
   it("shows a placeholder, not a broken image, when there are no photos", async () => {
     await renderPanel({ ...baseRentalOf(), image: "", images: [] });

@@ -19,8 +19,12 @@ for (const route of ["/rentals", "/restaurants"]) {
     { width: 390, height: 844 },
   ]) {
     test(`${route} mobile map keeps Close out of the map viewport at ${viewport.width}px`, async ({ page }) => {
+      // The first /rentals visit in a cold Next.js dev shard compiles the entire
+      // server route and waits on its data source. That cost is unrelated to
+      // this map-sheet geometry check; keep the UI assertions unchanged.
+      test.slow(route === "/rentals", "Cold /rentals compilation in the deterministic CI shard");
       await page.setViewportSize(viewport);
-      await page.goto(route, { waitUntil: "domcontentloaded" });
+      await page.goto(route, { waitUntil: "commit" });
 
       const trigger = page.getByTestId("browse-map-fab");
       await waitUntilInteractive(trigger, "the Map button");
@@ -33,6 +37,11 @@ for (const route of ["/rentals", "/restaurants"]) {
       await expect(toolbar).toBeVisible();
       await expect(close).toBeVisible();
       await expect(map).toBeVisible();
+      // CI uses the real MDE map component with a deterministic maps mock.
+      // A visible sheet is not the same as tiles being ready; wait for the
+      // tile-ready callback to remove the customer-facing loading state.
+      await expect(page.getByTestId("browse-map-loading")).toBeHidden({ timeout: 15_000 });
+      await expect(map).toHaveAttribute("data-e2e-mock-map", "true");
 
       // Poll to allow the bottom sheet's slide-in transform to settle.
       await expect
@@ -65,6 +74,7 @@ for (const route of ["/rentals", "/restaurants"]) {
       if (viewport.width === 390) {
         await trigger.click();
         await expect(map).toBeVisible();
+        await expect(page.getByTestId("browse-map-loading")).toBeHidden({ timeout: 15_000 });
         await close.click();
         await expect(close).toBeHidden();
       }

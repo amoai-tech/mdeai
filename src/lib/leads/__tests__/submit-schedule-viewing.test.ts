@@ -95,6 +95,24 @@ describe("submitScheduleViewing (SAN-1203 truthful success contract)", () => {
     });
   });
 
+  it("surfaces a 409 unavailable-listing error without claiming the viewing succeeded", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse(409, {
+        success: false,
+        error: {
+          code: "LISTING_UNAVAILABLE",
+          message: SCHEDULE_VIEWING_ERROR_MESSAGES.LISTING_UNAVAILABLE,
+        },
+      }),
+    );
+
+    await expect(submitScheduleViewing(VALID_INPUT)).rejects.toMatchObject({
+      code: "LISTING_UNAVAILABLE",
+      message: SCHEDULE_VIEWING_ERROR_MESSAGES.LISTING_UNAVAILABLE,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("falls back to shared safe copy when the server sends no message", async () => {
     fetchMock.mockResolvedValue(
       jsonResponse(503, { success: false, error: { code: "UPSTREAM_ERROR" } }),

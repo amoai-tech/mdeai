@@ -68,6 +68,7 @@ mastra-agent-memory.db-*
 # Playwright / smoke artifacts
 test-results/
 playwright-report/
+screenshots/
 
 # Local scratch
 tmp/
@@ -122,3 +123,6 @@ __pycache__/
 *.py[cod]
 deno.lock
 .shots/
+
+# Local nested release worktrees are not application source.
+/.release-*/

@@ -1,5 +1,5 @@
 import { Agent } from '@mastra/core/agent';
-import { FLASH_MODEL } from '../lib/models';
+import { ACTIVE_TEXT_MODEL } from '../lib/models';
 
 export const evaluationAgent = new Agent({
   id: 'evaluation-agent',
@@ -30,5 +30,5 @@ A JSON-style ordered list of objects, each:
 - Never change ids, prices, or names.
 - Return at most 5 reranked items even if more are passed in.
 - Output JSON only — no prose.`,
-  model: FLASH_MODEL,
+  model: ACTIVE_TEXT_MODEL,
 });

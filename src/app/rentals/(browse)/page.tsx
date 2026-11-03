@@ -48,6 +48,8 @@ export default async function RentalsPage({ searchParams }: Props) {
       const data = await searchRentals({
         neighborhood: filters.neighborhood ?? undefined,
         minBedrooms,
+        // Studio / 1 BR / 2 BR are exact choices; only 3 BR+ is a minimum.
+        maxBedrooms: minBedrooms != null && minBedrooms < 3 ? minBedrooms : undefined,
         checkIn: filters.from ?? undefined,
         checkOut: filters.through ?? undefined,
         limit: BROWSE_RESULT_LIMIT,

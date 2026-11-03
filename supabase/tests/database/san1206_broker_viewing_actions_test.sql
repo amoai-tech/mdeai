@@ -167,11 +167,11 @@ select is(
 -- B · IDENTITY CONTROLS — the allow case cannot be the admin disjunct
 -- ═══════════════════════════════════════════════════════════════════════════════
 
-select is(public.has_role('a1206000-0000-4000-8000-000000000001', 'admin'), false,
+select is(exists (select 1 from public.user_roles where user_id = 'a1206000-0000-4000-8000-000000000001'::uuid and role = 'admin'::public.user_role and (expires_at is null or expires_at > now())), false,
           'B1: the owning broker holds no admin role');
-select is(public.has_role('a1206000-0000-4000-8000-000000000002', 'admin'), false,
+select is(exists (select 1 from public.user_roles where user_id = 'a1206000-0000-4000-8000-000000000002'::uuid and role = 'admin'::public.user_role and (expires_at is null or expires_at > now())), false,
           'B2: the other broker holds no admin role');
-select is(public.has_role('a1206000-0000-4000-8000-000000000003', 'admin'), false,
+select is(exists (select 1 from public.user_roles where user_id = 'a1206000-0000-4000-8000-000000000003'::uuid and role = 'admin'::public.user_role and (expires_at is null or expires_at > now())), false,
           'B3: the renter holds no admin role');
 
 set local role authenticated;

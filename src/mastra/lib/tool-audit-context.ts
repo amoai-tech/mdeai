@@ -6,6 +6,33 @@ export const MDEAI_TOOL_SPANS_KEY = "mdeaiToolSpans";
 /** Optional cumulative token usage for the turn (when upstream exposes it). */
 export const MDEAI_TOKEN_USAGE_KEY = "mdeaiTokenUsage";
 
+/** SAN-1396: one turn-local carrier for malformed Gemini retry decisions.
+ * The canonical ai_runs finalize writer reads this data; no second DB write. */
+export const MDEAI_MALFORMED_RETRY_KEY = "mdeaiMalformedRetryDecisions";
+export type MalformedRetryDecision =
+  | "retry_requested"
+  | "refused_tool_ran"
+  | "refused_unidentified_message";
+
+export function recordMalformedRetryDecision(
+  requestContext: RequestContext | undefined,
+  decision: MalformedRetryDecision,
+): void {
+  if (!requestContext) return;
+  const raw = requestContext.get(MDEAI_MALFORMED_RETRY_KEY);
+  const previous: MalformedRetryDecision[] = Array.isArray(raw)
+    ? (raw as MalformedRetryDecision[])
+    : [];
+  requestContext.set(MDEAI_MALFORMED_RETRY_KEY, [...previous, decision].slice(-3));
+}
+
+export function getMalformedRetryDecisions(context?: unknown): MalformedRetryDecision[] {
+  const requestContext = resolveRequestContext(context);
+  const raw = requestContext?.get(MDEAI_MALFORMED_RETRY_KEY);
+  return Array.isArray(raw) ? (raw as MalformedRetryDecision[]).slice() : [];
+}
+
+
 export interface TokenUsage {
   input_tokens: number;
   output_tokens: number;

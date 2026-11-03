@@ -1,19 +1,39 @@
 import { describe, expect, it } from "vitest";
 import {
   buildEventSearchParams,
+  eventCardsToToolEnvelope,
   canFastPathEventSearch,
+  visibleEventSearchReasons,
   shouldInstantEventClarify,
 } from "@/lib/event-search-fast-path";
 import type { ConciergeWorkingMemory } from "@/lib/types";
 
+describe("event-search customer-facing reasons", () => {
+  it("converts supported factors into readable facts and hides internal ranking data", () => {
+    expect(visibleEventSearchReasons([
+      { factor: "hybrid_semantic", note: "hybrid_search_events RPC" },
+      { factor: "date_window", note: "this_weekend" },
+      { factor: "salsa_intent", note: "music_energy + nightlife signals" },
+    ])).toEqual(["Date: this weekend", "Salsa and music relevance"]);
+  });
+  it("does not echo unknown/internal factors or untrusted date notes", () => {
+    expect(visibleEventSearchReasons([
+      { factor: "date_window_relaxed", note: "no tonight matches" },
+      { factor: "date_window", note: "untrusted backend note" },
+    ])).toEqual([]);
+  });
+});
+
 describe("event-search-fast-path", () => {
-  it("instant clarify for generic city-only query", () => {
-    expect(shouldInstantEventClarify("list events medellin", {})).toBe(true);
-    expect(
-      shouldInstantEventClarify("list events medellin", {
-        lastEventQuery: { genericAskPending: true },
-      }),
-    ).toBe(false);
+  it("searches citywide events without a category, clarifying only a bare event prompt", () => {
+    for (const query of ["events in Medellín", "list events medellin", "show me events in Medellín"]) {
+      expect(shouldInstantEventClarify(query, {})).toBe(false);
+      expect(canFastPathEventSearch(query, {})).toBe(true);
+      expect(buildEventSearchParams(query, {})).toEqual({ dateWindow: "any", limit: 10 });
+    }
+    expect(shouldInstantEventClarify("events?", {})).toBe(true);
+    expect(shouldInstantEventClarify("events?", { lastEventQuery: { genericAskPending: true } })).toBe(false);
+    expect(canFastPathEventSearch("events?", {})).toBe(false);
   });
 
   it("fast path for category-specific query", () => {
@@ -84,8 +104,11 @@ describe("event-search-fast-path", () => {
     expect(params?.dateWindow).toBe("this_weekend");
   });
 
-  it("does not fast path generic first turn", () => {
-    expect(canFastPathEventSearch("list events medellin", {})).toBe(false);
+  it("a citywide browse never inherits stale category, neighborhood or date filters", () => {
+    const memory: ConciergeWorkingMemory = {
+      lastEventQuery: { category: "music", neighborhood: "El Poblado", dateWindow: "tonight" },
+    };
+    expect(buildEventSearchParams("events in Medellín", memory)).toEqual({ dateWindow: "any", limit: 10 });
   });
 
   it("does not fast path rental queries with neighborhood names", () => {
@@ -180,6 +203,30 @@ describe("event-search-fast-path", () => {
       expect(
         buildEventSearchParams("show all events in Medellín", {})?.queryText,
       ).toBeUndefined();
+    });
+  });
+});
+
+describe("SAN-1250 honest ticket offer transport", () => {
+  it("preserves real prices, currency, ticket URL and Buy availability in the fast path envelope", () => {
+    const envelope = eventCardsToToolEnvelope([
+      { id: "tierless", title: "Parade", category: "culture",
+        venue: "Medellín", neighborhood: "Poblado",
+        startsAt: "2027-02-24T01:00:00Z",
+        pricePerTicket: null, currency: "USD", imageUrl: "",
+        canBuyTickets: false, ticketUrl: "/events/parade" },
+      { id: "paid", title: "Reina", category: "culture",
+        venue: "Medellín", neighborhood: "Poblado",
+        startsAt: "2027-02-24T01:00:00Z",
+        pricePerTicket: 40000, currency: "COP", imageUrl: "",
+        canBuyTickets: true, ticketUrl: "/events/reina" },
+    ]);
+    expect(envelope.results[0]).toMatchObject({
+      pricePerTicket: null, canBuyTickets: false, ticketUrl: "/events/parade",
+    });
+    expect(envelope.results[1]).toMatchObject({
+      pricePerTicket: 40000, currency: "COP",
+      canBuyTickets: true, ticketUrl: "/events/reina",
     });
   });
 });

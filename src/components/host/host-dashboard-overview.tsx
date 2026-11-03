@@ -3,6 +3,10 @@ import { HostKpiPanel } from "@/components/host/host-kpi-panel";
 import { HostNarrativeBanner } from "@/components/host/host-narrative-banner";
 import { HostRecommendationsPanel } from "@/components/host/host-recommendations-panel";
 import type { HostDashboardState } from "@/lib/types/host-dashboard";
+import {
+  HOST_OS_QUICK_LINKS,
+  type HostOsBasePath,
+} from "@/lib/host/host-os-nav";
 
 /**
  * SAN-1194 · HOST-DASH-001 — Host Dashboard OS · overview body.
@@ -19,15 +23,7 @@ import type { HostDashboardState } from "@/lib/types/host-dashboard";
  * cleanly in unit tests and never recomputes a number.
  */
 
-export const DASHBOARD_QUICK_LINKS: ReadonlyArray<{
-  href: string;
-  label: string;
-  testId: string;
-}> = [
-  { href: "/host/analytics", label: "Open Analytics", testId: "dashboard-open-analytics" },
-  { href: "/host/events", label: "View events", testId: "dashboard-open-events" },
-  { href: "/host/event/new", label: "Create event", testId: "dashboard-open-new-event" },
-];
+export const DASHBOARD_QUICK_LINKS = HOST_OS_QUICK_LINKS["/host"];
 
 /** Honest "not wired yet" tile — dashed, muted, never a fake number. */
 // skipcq: JS-0067 - module-local helper; not browser global scope
@@ -61,7 +57,13 @@ function SectionHeading({ children }: { children: React.ReactNode }) { // skipcq
 }
 
 // skipcq: JS-0067 - ES module export; not browser global scope
-export function HostDashboardOverview({ state }: { state: HostDashboardState }) { // skipcq: JS-0067
+export function HostDashboardOverview({
+  state,
+  basePath = "/host",
+}: {
+  state: HostDashboardState;
+  basePath?: HostOsBasePath;
+}) { // skipcq: JS-0067
   return (
     <div className="space-y-5 overflow-y-auto p-4">
       {/* 1. Daily briefing — figure-free prose */}
@@ -118,7 +120,7 @@ export function HostDashboardOverview({ state }: { state: HostDashboardState }) 
       <div className="space-y-2">
         <SectionHeading>Jump to</SectionHeading>
         <div data-testid="dashboard-quick-links" className="flex flex-wrap gap-2">
-          {DASHBOARD_QUICK_LINKS.map((link) => (
+          {HOST_OS_QUICK_LINKS[basePath].map((link) => (
             <Link
               key={link.href}
               href={link.href}

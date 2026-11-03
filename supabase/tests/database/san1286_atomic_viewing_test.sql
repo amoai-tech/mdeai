@@ -5,6 +5,14 @@
 begin;
 select plan(61);
 
+-- SAN-1502: this contract predates Phase A. Run it under the explicit launch
+-- phase so its inactive/withdrawn rejection continues to prove the Phase B
+-- rules. Phase A pending-rental behavior is proved in
+-- san1502_viewing_authority_test.sql.
+update public.rental_runtime_settings
+   set phase = 'launch', changed_at = now()
+ where singleton;
+
 -- Deterministic fixtures; transaction rollback keeps the local DB clean.
 insert into public.profiles (id, email, full_name)
 values
@@ -381,7 +389,7 @@ select throws_ok($q$
     'inactive@example.com', 'Inactive', null, null::uuid,
     '2099-10-17 14:00:00+00'::timestamptz, '{}'::jsonb, '{}'::jsonb
   )
-$q$, 'P0001', 'p1_schedule_tour_atomic: listing is not requestable', 'inactive listing is rejected');
+$q$, 'P1287', 'p1_schedule_tour_atomic: listing is not requestable', 'inactive listing is rejected');
 select is((select count(*)::int from public.leads where idempotency_key='san1286-inactive-key'), 0, 'inactive listing creates no lead');
 
 -- Force a downstream showing failure. The lead insert must roll back too.

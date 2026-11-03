@@ -27,6 +27,7 @@ import {
   createTokenSink,
   runWithTokenSink,
 } from "@/mastra/lib/token-usage-als";
+import { CONCIERGE_TURN_TIMEOUT_MS } from "@/mastra/lib/models";
 /**
  * [SAN-905 · CK-V2-007d — Console clean on hostEventAgent stream](https://linear.app/sanjiovani/issue/SAN-905/ck-v2-007d-console-clean-on-hosteventagent-stream):
  * CopilotKit replays AG-UI messages without Gemini thought_signature on assistant
@@ -37,12 +38,22 @@ function sanitizeHostEventAgUiInput(input: RunAgentInput): RunAgentInput {
   const messages = input.messages ?? [];
   if (messages.length <= 1) return input;
 
-  const userMessages = messages.filter((m) => m.role === "user");
-  if (userMessages.length === 0) return input;
+  // Keep the newest user turn AND everything after it. A frontend-tool
+  // continuation ends with the assistant tool-call + tool result; sending only
+  // the user message stranded the model on `set_event_draft` forever because it
+  // never saw that its previous tool call had succeeded.
+  let lastUserIndex = -1;
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    if (messages[index]?.role === "user") {
+      lastUserIndex = index;
+      break;
+    }
+  }
+  if (lastUserIndex < 0) return input;
 
   return {
     ...input,
-    messages: [userMessages[userMessages.length - 1]!],
+    messages: messages.slice(lastUserIndex),
   };
 }
 
@@ -81,6 +92,12 @@ export type LoggingMastraAgentConfig = MastraAgentConfig & {
   userId?: string | null;
   persistTurnLog?: PersistTurnLog;
 };
+
+/** The concierge needs the sum of its primary + fallback model deadlines.
+ * Other agents preserve the existing 26s hard limit. */
+export function agentTurnTimeoutMs(agentMapKey: string): number {
+  return agentMapKey === "conciergeAgent" ? CONCIERGE_TURN_TIMEOUT_MS : 26_000;
+}
 
 /**
  * Wraps @ag-ui/mastra MastraAgent.run() so each CopilotKit turn logs to public.ai_runs.
@@ -122,8 +139,10 @@ export class LoggingMastraAgent extends MastraAgent {
     // only `error` flipped a boolean and the thrown value was thrown away, so
     // every failure landed in ai_runs with status=error + error_message=NULL,
     // and aborts were silently mislabeled success.
+    const turnTimeoutMs = agentTurnTimeoutMs(this.agentMapKey);
     let status: "success" | "error" = "success";
     let completed = false;
+    let timedOut = false;
     let errorType: AgentErrorType | undefined;
     let errorMessage: string | undefined;
     const runInput =
@@ -151,7 +170,11 @@ export class LoggingMastraAgent extends MastraAgent {
       }),
       finalize(() => {
         // Unsubscribed before completing and without an error = client abort.
-        if (status === "success" && !completed) {
+        if (timedOut) {
+          status = "error";
+          errorType = "timeout";
+          errorMessage = `MDE agent turn timed out after ${Math.round(turnTimeoutMs / 1_000)} seconds`;
+        } else if (status === "success" && !completed) {
           status = "error";
           errorType = "client_abort";
           errorMessage = "stream unsubscribed before completion (client abort)";
@@ -203,8 +226,18 @@ export class LoggingMastraAgent extends MastraAgent {
     // Subscribe inside the sink's async context so model calls triggered by the
     // AG-UI bridge (which starts its work synchronously on subscribe) inherit it.
     return new Observable<BaseEvent>((subscriber) => {
+      // Bound the ENTIRE CopilotKit turn, including tools, agent steps and the
+      // last SSE event. A per-model timeout does not bound multi-step turns.
+      // The error flows through tap/finalize, so ai_runs records the failure.
+      const deadline = setTimeout(() => {
+        timedOut = true;
+        subscriber.error(new Error(`MDE agent turn timed out after ${Math.round(turnTimeoutMs / 1_000)} seconds`));
+      }, turnTimeoutMs);
       const sub = runWithTokenSink(tokenSink, () => stream.subscribe(subscriber));
-      return () => sub.unsubscribe();
+      return () => {
+        clearTimeout(deadline);
+        sub.unsubscribe();
+      };
     });
   }
 }
@@ -214,6 +247,7 @@ export const RUNTIME_AGENT_ALLOWLIST = new Set([
   "conciergeAgent",
   "hostEventAgent",
   "hostOpsAgent",
+  "partnerAgent",
   "pingAgent",
 ]);
 

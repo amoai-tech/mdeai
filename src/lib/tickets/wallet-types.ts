@@ -48,6 +48,7 @@ export type BuyerOrderListItem = {
   id: string;
   shortId: string | null;
   status: string;
+  isSandbox: boolean;
   totalCents: number;
   currency: string;
   quantity: number;

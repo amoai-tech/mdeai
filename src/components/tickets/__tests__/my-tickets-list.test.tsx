@@ -24,6 +24,7 @@ const upcomingOrder: BuyerOrderListItem = {
   id: "11111111-1111-1111-1111-111111111111",
   shortId: "MDE-UP1",
   status: "paid",
+  isSandbox: true,
   totalCents: 4000000,
   currency: "cop",
   quantity: 2,
@@ -37,6 +38,7 @@ const pastOrder: BuyerOrderListItem = {
   id: "22222222-2222-2222-2222-222222222222",
   shortId: "MDE-PAST1",
   status: "paid",
+  isSandbox: false,
   totalCents: 1500000,
   currency: "cop",
   quantity: 1,
@@ -81,6 +83,7 @@ describe("MyTicketsList", () => {
     expect(html).toContain('data-testid="my-tickets-cover"');
     expect(html).toContain("photo-cover.jpg");
     expect(html).toContain("Grand Finals 2026");
+    expect(html).toContain("TEST payment");
     expect(html).toContain("· Test Venue");
     expect(html).toContain('data-testid="my-tickets-show-qr"');
     expect(html).toContain(
@@ -93,6 +96,8 @@ describe("MyTicketsList", () => {
       <MyTicketsList orders={[pastOrder]} upcoming={[]} past={[pastOrder]} />,
     );
     expect(html).toContain('data-testid="my-tickets-cover-placeholder"');
+    expect(html).toContain("Paid");
+    expect(html).not.toContain("TEST payment");
     expect(html).not.toContain('data-testid="my-tickets-cover"');
   });
 });

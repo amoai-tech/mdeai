@@ -4,6 +4,12 @@
 begin;
 select plan(19);
 
+-- The admin contest API runs behind a trusted service-role Supabase client.
+-- JWT role context, not a bare postgres SQL session, authorizes cross-user
+-- actor lookups in the shared has_role() helper.
+select set_config('request.jwt.claims', '{"role":"service_role"}', true);
+
+
 insert into auth.users (id, email) values
   ('f1526000-0000-4000-8000-000000000001','san1526-admin@example.com'),
   ('f1526000-0000-4000-8000-000000000002','san1526-admin2@example.com'),

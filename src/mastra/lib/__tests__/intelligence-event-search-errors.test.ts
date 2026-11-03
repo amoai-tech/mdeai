@@ -4,7 +4,7 @@ const queryResult = { data: null, error: { message: "permission denied" } };
 
 const createQueryBuilder = () => { // skipcq: JS-0067
   const builder: Record<string, unknown> = {};
-  for (const method of ["select", "eq", "order", "limit", "gte", "lte", "ilike"] as const) {
+  for (const method of ["select", "eq", "not", "or", "order", "limit", "gte", "lte", "ilike"] as const) {
     builder[method] = vi.fn(() => builder);
   }
   builder.then = (

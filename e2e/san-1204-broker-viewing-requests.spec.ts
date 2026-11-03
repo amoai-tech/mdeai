@@ -219,7 +219,9 @@ async function assertRequestContent(page: Page, fixture: Fixture, run: string): 
   );
   await expect(card).toContainText(`SAN1204 requestable ${run}`);
   await expect(card).toContainText(`Sofia ${run}`);
-  await expect(card).toContainText(/scheduled/i);
+  // A persisted `scheduled` row is pending broker confirmation and must read "Requested".
+  await expect(card).toHaveAttribute("data-status", "scheduled");
+  await expect(card).toContainText(/Requested/i);
   await expect(
     card.locator(`[data-testid="viewing-request-time-${fixture.showingId}"]`),
     "the viewing time must be the listing-local time, not the server's",
@@ -380,7 +382,7 @@ async function fillFixture(
 
 /** Create the request through the real atomic RPC, not by hand, then capture its exact ids. */
 async function seedRequest(admin: Admin, fixture: Fixture, run: string): Promise<void> {
-  const { error: rpcError } = await admin.rpc("p1_schedule_tour_atomic", {
+  const viewingInput = {
     p_listing_id: fixture.slug,
     p_user_id: null,
     p_idempotency_key: fixture.idempotencyKey,
@@ -392,8 +394,13 @@ async function seedRequest(admin: Admin, fixture: Fixture, run: string): Promise
     p_scheduled_at: SCHEDULED_AT,
     p_lead_metadata: {},
     p_showing_metadata: {},
-  });
+  };
+  const { error: rpcError } = await admin.rpc("p1_schedule_tour_atomic", viewingInput);
   if (rpcError) throw new Error(`p1_schedule_tour_atomic failed: ${rpcError.message}`);
+
+  // An actual same-key submit retry must not create a second lead or showing.
+  const { error: duplicateError } = await admin.rpc("p1_schedule_tour_atomic", viewingInput);
+  if (duplicateError) throw new Error(`idempotent viewing retry failed: ${duplicateError.message}`);
 
   // Retried on purpose: cleanup deletes by these ids, so a transient Supabase failure here would
   // leave leadId/showingId null and strand the rows the RPC just committed.
@@ -402,12 +409,14 @@ async function seedRequest(admin: Admin, fixture: Fixture, run: string): Promise
   );
   fixture.leadId = leadResult.data?.[0]?.id ?? null;
   if (!fixture.leadId) throw new Error("the RPC must have committed one lead");
+  if (leadResult.data?.length !== 1) throw new Error("same-key retry created duplicate leads");
 
   const showingResult = await retryCall("showing lookup", () =>
     admin.from("showings").select("id").eq("lead_id", fixture.leadId!),
   );
   fixture.showingId = showingResult.data?.[0]?.id ?? null;
   if (!fixture.showingId) throw new Error("the RPC must have committed one showing");
+  if (showingResult.data?.length !== 1) throw new Error("same-key retry created duplicate showings");
 }
 
 /**
@@ -568,10 +577,16 @@ test.describe("SAN-1204 · the owning broker sees the real viewing request", () 
     try {
       await seedRequest(admin, fixture, run);
 
-      const owner = await assertOwnerSees(browser, fixture, run);
-      const other = await assertOtherDenied(browser, fixture);
-      const mobile = await assertMobileWorkspace(browser, fixture);
-      await assertAnonymousDenied(browser);
+      // Budget each browser stage so a blocked host Suspense page cannot consume
+      // the entire 600s test timeout and skip cleanup of real production rows.
+      const owner = await test.step("owning broker sees exactly one viewing", () =>
+        assertOwnerSees(browser, fixture, run), { timeout: 105_000 });
+      const other = await test.step("unrelated broker sees no viewing", () =>
+        assertOtherDenied(browser, fixture), { timeout: 105_000 });
+      const mobile = await test.step("mobile broker workspace shows viewing", () =>
+        assertMobileWorkspace(browser, fixture), { timeout: 105_000 });
+      await test.step("anonymous visitor is denied", () =>
+        assertAnonymousDenied(browser), { timeout: 40_000 });
 
       for (const [who, problems] of [
         ["owner", owner],

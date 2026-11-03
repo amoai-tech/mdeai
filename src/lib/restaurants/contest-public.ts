@@ -31,6 +31,9 @@ export type PublicNominee = {
   developmentTestTotal: number;
   /** Competition place; null when nobody has an accepted vote. */
   rank: number | null;
+  /** Catalog coordinates, when the restaurant row carries a real pair. Null means "no map pin". */
+  latitude: number | null;
+  longitude: number | null;
 };
 
 /**
@@ -59,6 +62,55 @@ const SLUG_RE = /^[a-z0-9][a-z0-9-]*$/i;
 
 function asString(value: unknown): string | null {
   return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+/** A map pin needs a real, finite pair inside the coordinate range; anything else is "no location". */
+function asCoordinate(value: unknown, limit: number): number | null {
+  return typeof value === "number" && Number.isFinite(value) && Math.abs(value) <= limit
+    ? value
+    : null;
+}
+
+/**
+ * Coordinates are deliberately not in the contest RPC payload: `contest_public_get` is a contest
+ * read, and adding map fields would widen the public contest contract for a presentation detail.
+ * One allowlisted read against `public.restaurants` supplies them instead.
+ *
+ * A failure here is contained on purpose — the pins disappear and the nominee cards keep working.
+ * The design contract is explicit that a map outage must never block the ballot.
+ */
+async function attachNomineeCoordinates(
+  supabase: NonNullable<ReturnType<typeof createServiceRoleClient>>,
+  nominees: PublicNominee[],
+): Promise<void> {
+  if (nominees.length === 0) return;
+  const ids = Array.from(new Set(nominees.map((nominee) => nominee.restaurantId)));
+
+  const { data, error } = await supabase
+    .from("restaurants")
+    .select("id, latitude, longitude")
+    .in("id", ids);
+  if (error) {
+    console.error("[contests] nominee coordinate read failed:", error.message);
+    return;
+  }
+  if (!Array.isArray(data)) return;
+
+  const byId = new Map<string, { latitude: number | null; longitude: number | null }>();
+  for (const raw of data as Record<string, unknown>[]) {
+    const id = asString(raw.id);
+    if (!id) continue;
+    byId.set(id, {
+      latitude: asCoordinate(raw.latitude, 90),
+      longitude: asCoordinate(raw.longitude, 180),
+    });
+  }
+
+  for (const nominee of nominees) {
+    const coordinates = byId.get(nominee.restaurantId);
+    nominee.latitude = coordinates?.latitude ?? null;
+    nominee.longitude = coordinates?.longitude ?? null;
+  }
 }
 
 function toContest(row: Record<string, unknown>): PublicContest | null {
@@ -159,9 +211,13 @@ export async function getPublicContest(ref: string): Promise<DetailResult> {
         audienceAccepted: accepted,
         developmentTestTotal: development,
         rank,
+        latitude: null,
+        longitude: null,
       });
     }
   }
+
+  await attachNomineeCoordinates(supabase, nominees);
 
   return { status: "found", contest, nominees };
 }

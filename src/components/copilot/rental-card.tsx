@@ -37,6 +37,11 @@ export type RentalCardProps = RentalResultRow & {
    * would reject.
    */
   canScheduleViewing?: boolean;
+  /**
+   * SAN-1235 — set when another result row looks like this same apartment ("Also listed as #1").
+   * Labelled, never hidden: the rows may be two real feeds for one home.
+   */
+  duplicateNote?: string;
 } & Omit<CardInteractionProps, "onSelect" | "pinId"> & {
   /** Unifies to `() => void` in UX-024; callers pass listing id today. */
   onSelect?: (id: string) => void;
@@ -68,6 +73,7 @@ export function RentalCard({
   onSchedule,
   onOpenDetails,
   canScheduleViewing,
+  duplicateNote,
 }: RentalCardProps) {
   // The listing's own currency — never assumed USD. A stored monthly rent leads: the nightly figure
   // would only be rent ÷ 30, so it is not shown as an offer (same rule as the /rentals browse card).
@@ -90,7 +96,7 @@ export function RentalCard({
     tags,
   });
   const matchReason = buildMatchReason(
-    { id, title, neighborhood, nightly_price, bedrooms, wifi, amenities, tags },
+    { id, title, neighborhood, nightly_price, price_monthly, currency, bedrooms, bedrooms_unknown, wifi, amenities, tags },
     searchParams,
   );
 
@@ -175,6 +181,19 @@ export function RentalCard({
         <h3 className="min-w-0 flex-1 font-medium leading-snug">{title}</h3>
       </div>
 
+      {duplicateNote ? (
+        <div className="mt-1">
+          <Badge
+            variant="outline"
+            className="text-[10px] font-normal"
+            data-testid={`rental-card-duplicate-${id}`}
+            title={duplicateNote}
+          >
+            {duplicateNote}
+          </Badge>
+        </div>
+      ) : null}
+
       <p className="mt-0.5 text-xs text-muted-foreground">
         {neighborhood}
         {bedrooms_unknown ? " · Bedrooms unknown" : bedrooms != null
@@ -206,9 +225,12 @@ export function RentalCard({
         <p className="mt-1 text-xs text-muted-foreground">{availability}</p>
       ) : null}
 
-      <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">
-        {matchReason}
-      </p>
+      {matchReason ? (
+        <p className="mt-2 min-w-0 break-words text-xs leading-relaxed text-muted-foreground" data-testid="rental-match-reason">
+          <span className="font-medium text-foreground">Why it may fit:</span>{" "}
+          {matchReason}
+        </p>
+      ) : null}
 
       {tags?.includes("self-attested") ? (
         <div className="mt-2 flex flex-wrap gap-1">

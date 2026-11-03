@@ -1,0 +1,113 @@
+[
+  {
+    "id": "personal-saved",
+    "ownerIssue": "SAN-1576",
+    "legacyUrl": "/saved",
+    "appUrl": "/app/me/saved",
+    "guardLayers": ["proxy", "page"],
+    "actor": "ana",
+    "expectedOutcome": "own saved collection",
+    "state": "proven"
+  },
+  {
+    "id": "personal-tickets",
+    "ownerIssue": "SAN-1576",
+    "legacyUrl": "/me/tickets",
+    "appUrl": "/app/me/tickets",
+    "guardLayers": ["proxy", "page"],
+    "actor": "ana",
+    "expectedOutcome": "buyer-scoped wallet list",
+    "state": "proven"
+  },
+  {
+    "id": "ticket-pass",
+    "ownerIssue": "SAN-1576",
+    "legacyUrl": "/me/tickets/:id",
+    "appUrl": "/app/me/tickets/:id",
+    "guardLayers": ["proxy", "page", "rls"],
+    "actor": "buyer",
+    "expectedOutcome": "owner QR state; foreign/missing identical 404",
+    "state": "proven",
+    "evidence": "PR #519 production QA"
+  },
+  {
+    "id": "rentals",
+    "ownerIssue": "SAN-1578",
+    "legacyUrl": "/host/rentals",
+    "appUrl": "/app/rentals",
+    "guardLayers": ["proxy", "layout", "rls"],
+    "actor": "ana",
+    "expectedOutcome": "broker concierge",
+    "state": "proven"
+  },
+  {
+    "id": "rentals-listings",
+    "ownerIssue": "SAN-1578",
+    "legacyUrl": "/host/rentals/listings",
+    "appUrl": "/app/rentals/listings",
+    "guardLayers": ["proxy", "layout", "rls"],
+    "actor": "ana",
+    "expectedOutcome": "broker listings",
+    "state": "proven"
+  },
+  {
+    "id": "events-list",
+    "ownerIssue": "SAN-1577",
+    "legacyUrl": "/host/events",
+    "appUrl": "/app/events",
+    "guardLayers": ["proxy", "layout", "rls"],
+    "actor": "ana",
+    "expectedOutcome": "organizer event list",
+    "state": "proven"
+  },
+  {
+    "id": "events-overview",
+    "ownerIssue": "SAN-1577",
+    "legacyUrl": "/host/dashboard",
+    "appUrl": "/app/events/overview",
+    "guardLayers": ["proxy", "layout", "rls"],
+    "actor": "ana",
+    "expectedOutcome": "organizer KPIs",
+    "state": "proven"
+  },
+  {
+    "id": "events-analytics",
+    "ownerIssue": "SAN-1577",
+    "legacyUrl": "/host/analytics",
+    "appUrl": "/app/events/analytics",
+    "guardLayers": ["proxy", "layout", "rls"],
+    "actor": "ana",
+    "expectedOutcome": "organizer analytics",
+    "state": "proven"
+  },
+  {
+    "id": "events-wizard",
+    "ownerIssue": "SAN-1577",
+    "legacyUrl": "/host/event/new",
+    "appUrl": "/app/events/new",
+    "guardLayers": ["proxy", "layout", "page"],
+    "actor": "ana",
+    "expectedOutcome": "hostEventAgent wizard",
+    "state": "proven"
+  },
+  {
+    "id": "partner-profile",
+    "ownerIssue": "SAN-1579",
+    "legacyUrl": "/partners/profile",
+    "appUrl": "/app/partners/profile",
+    "guardLayers": ["proxy", "page", "rpc"],
+    "actor": "ana",
+    "expectedOutcome": "own partner settings",
+    "state": "proven"
+  },
+  {
+    "id": "contests",
+    "ownerIssue": "SAN-1580",
+    "legacyUrl": "/admin/contests",
+    "appUrl": "/app/contests",
+    "guardLayers": ["proxy", "page", "action", "rpc"],
+    "actor": "admin",
+    "expectedOutcome": "admin contest management",
+    "state": "proven"
+  }
+]
