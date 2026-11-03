@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AskMdeSheet } from "../ask-mde-sheet";
@@ -14,11 +14,14 @@ vi.mock("next/link", () => ({
 
 // The composer is the real discovery surface; here it only proves where it mounts.
 const composerMounts: string[] = [];
+const composerProps: Array<{ page: string; suggestions?: readonly string[] }> = [];
 vi.mock("@/components/chat/discovery-ask-composer", () => ({
-  DiscoveryAskComposer: ({ page }: { page: string }) => {
+  DiscoveryAskComposer: ({ page, suggestions }: { page: string; suggestions?: readonly string[] }) => {
     composerMounts.push(page);
+    composerProps.push({ page, suggestions });
     return <div data-testid="shared-composer" data-page={page} />;
   },
+  EVENT_DETAIL_ASK_SUGGESTIONS: ["Are tickets available?", "Where is the meeting point?", "What time does it start?"],
 }));
 
 const contextMounts: string[] = [];
@@ -32,6 +35,7 @@ vi.mock("@/components/chat/discovery-page-context", () => ({
 beforeEach(() => {
   mocks.pathname = "/events/a1b2c3d4-0001-0001-0001-000000000003";
   composerMounts.length = 0;
+  composerProps.length = 0;
   contextMounts.length = 0;
 });
 
@@ -51,6 +55,26 @@ describe("AskMdeSheet — one assistant, mounted where a page needs it", () => {
     expect(screen.getByTestId("shared-composer").getAttribute("data-page")).toBe("events");
     // The event page owns the exact selected id; the drawer must not claim one.
     expect(screen.queryByTestId("page-context")).toBeNull();
+  });
+
+  it("hands the event drawer its starter questions and no other page any", async () => {
+    render(<AskMdeSheet />);
+    openAskMde();
+    await waitFor(() => expect(composerProps).toHaveLength(1));
+    expect(composerProps[0].suggestions).toEqual([
+      "Are tickets available?",
+      "Where is the meeting point?",
+      "What time does it start?",
+    ]);
+
+    cleanup();
+    composerProps.length = 0;
+    mocks.pathname = "/restaurants/41d0b0aa-0000-4000-8000-000000000001";
+    render(<AskMdeSheet />);
+    await userEvent.click(screen.getByTestId("ask-mde-launcher"));
+    await waitFor(() => expect(composerProps).toHaveLength(1));
+    expect(composerProps[0].page).toBe("restaurants");
+    expect(composerProps[0].suggestions).toBeUndefined();
   });
 
   it("offers its own launcher where no other Ask MDE control exists", async () => {

@@ -7,6 +7,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { EventTicketTiers } from "@/components/events/event-ticket-tiers";
 import type { BookingCheckoutTarget } from "@/components/modals/booking-checkout-modal";
 import { formatTicketPrice } from "@/lib/events/format-event";
+import { eventDetailAction } from "@/lib/events/event-detail-action";
 import type { PublicEventDetail, PublicEventTicket } from "@/lib/events/types";
 import { openAskMde } from "@/lib/chat/ask-mde-bridge";
 
@@ -59,7 +60,7 @@ export function EventDetailAside({
                   </p>
                 ) : (
                   <p className="text-lg font-semibold">
-                    {event.tickets.length === 0 ? "Price TBD" : "Sold out"}
+                    {eventDetailAction(event).kind === "sold-out" ? "Sold out" : "Price TBD"}
                   </p>
                 )}
                 <div ref={tiersRef} tabIndex={-1} className="mt-4 scroll-mt-24 outline-none focus-visible:ring-2 focus-visible:ring-ring"

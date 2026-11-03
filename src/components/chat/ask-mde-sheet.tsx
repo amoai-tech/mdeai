@@ -11,7 +11,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { DiscoveryAskComposer } from "@/components/chat/discovery-ask-composer";
+import { DiscoveryAskComposer, EVENT_DETAIL_ASK_SUGGESTIONS } from "@/components/chat/discovery-ask-composer";
 import { DiscoveryPageContext, type DiscoveryPage } from "@/components/chat/discovery-page-context";
 import { ASK_MDE_OPEN_EVENT } from "@/lib/chat/ask-mde-bridge";
 
@@ -36,6 +36,12 @@ const ROUTES: AssistantRoute[] = [
   { pattern: /^\/restaurants\/[^/]+\/?$/, page: "restaurants", title: "Ask about this restaurant", entry: "bubble", ownsSelection: false },
 ];
 
+/** Route -> assistant ownership. Pure so the component itself stays a thin shell. */
+// skipcq: JS-0067 - module-local helper; not browser global scope
+export function matchAssistantRoute(pathname: string): AssistantRoute | null {
+  return ROUTES.find((candidate) => candidate.pattern.test(pathname)) ?? null;
+}
+
 /**
  * The single customer-facing Ask MDE surface.
  *
@@ -44,10 +50,11 @@ const ROUTES: AssistantRoute[] = [
  * provider, no second conversation store, and no model run on mount: a turn starts
  * only when the visitor sends one.
  */
+// skipcq: JS-0067 - module-local React component; not browser global scope
 export function AskMdeSheet() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
-  const route = ROUTES.find((candidate) => candidate.pattern.test(pathname ?? "")) ?? null;
+  const route = matchAssistantRoute(pathname ?? "");
 
   useEffect(() => {
     if (!route) return;
@@ -96,7 +103,13 @@ export function AskMdeSheet() {
           </SheetHeader>
           <div className="min-h-0 flex-1 overflow-y-auto">
             {route.ownsSelection ? null : <DiscoveryPageContext page={route.page} filters={{}} />}
-            <DiscoveryAskComposer page={route.page} hideHeading />
+            {/* Only the event drawer offers starter questions: they assume this event's
+                tickets, meeting point and start time, which other pages cannot promise. */}
+            <DiscoveryAskComposer
+              page={route.page}
+              suggestions={route.page === "events" ? EVENT_DETAIL_ASK_SUGGESTIONS : undefined}
+              hideHeading
+            />
           </div>
         </SheetContent>
       </Sheet>

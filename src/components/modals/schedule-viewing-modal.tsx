@@ -2,6 +2,8 @@
 
 import { useEffect, useReducer, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import { isFutureInstant, resolvePreferredAtInstant, LISTING_TIME_ZONE } from "@/lib/leads/schedule-viewing-time";
 import { useRentalUi } from "@/components/chat/rental-ui-context";
 import { submitScheduleViewing } from "@/lib/leads/submit-schedule-viewing";
 import { buildSchedulePrefill, type SchedulePrefill } from "@/lib/leads/schedule-prefill";
@@ -37,7 +39,26 @@ const loadPrefillForCurrentUser = async (): Promise<SchedulePrefill | null> => {
   }
 };
 
-/** SCREEN-008 — schedule viewing modal → POST /api/leads/schedule-viewing (G2). */
+/** Calendar dates are date-only Medellín wall dates, never UTC timestamps. */
+const dateOnly = (date: Date): string => {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+};
+
+const localDate = (iso: string): Date => {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y, m - 1, d);
+};
+
+const medellinToday = (): string => {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: LISTING_TIME_ZONE,
+    year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(new Date());
+  const value = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
+  return `${value("year")}-${value("month")}-${value("day")}`;
+};
+
+/** SCREEN-008 / SAN-262 — local viewing draft → review → original atomic write. */
 export const ScheduleViewingModal = () => {
   const { scheduleTarget, closeScheduleViewing, setLeadConfirmation } = useRentalUi();
   // SAN-1075 — iOS overlays the keyboard instead of shrinking the layout viewport.
@@ -49,7 +70,14 @@ export const ScheduleViewingModal = () => {
   // requests before the button disables. This ref is the synchronous lock.
   const submitLockRef = useRef(false);
   const [contact, dispatchContact] = useReducer(contactReducer, INITIAL_CONTACT);
-  const [preferredAt, setPreferredAt] = useState("");
+  const [viewingDate, setViewingDate] = useState("");
+  const [viewingTime, setViewingTime] = useState("");
+  const [stage, setStage] = useState<"details" | "review">("details");
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [dateError, setDateError] = useState<string | null>(null);
+  const [draftOwner, setDraftOwner] = useState(scheduleTarget?.listingId);
+  const preferredAt = viewingDate && viewingTime ? `${viewingDate}T${viewingTime}` : "";
+  const today = medellinToday();
   // SAN-1059 — the message alone cannot tell the renter what to do next, so the failure carries
   // the typed code as well. It also carries the apartment it belongs to: opening a different
   // apartment must never inherit the previous one's "not accepting requests" error.
@@ -61,6 +89,16 @@ export const ScheduleViewingModal = () => {
   const [submitting, setSubmitting] = useState(false);
 
   const isOpen = Boolean(scheduleTarget);
+  // Derive from changed listing identity during render (no cascading effect).
+  if (scheduleTarget?.listingId !== draftOwner) {
+    setDraftOwner(scheduleTarget?.listingId);
+    setViewingDate("");
+    setViewingTime("");
+    setStage("details");
+    setCalendarOpen(false);
+    setDateError(null);
+    setFailure(null);
+  }
   // Derived, not stored: a failure is only ever shown for the apartment that produced it.
   const activeFailure =
     failure && scheduleTarget && failure.listingId === scheduleTarget.listingId ? failure : null;
@@ -116,7 +154,10 @@ export const ScheduleViewingModal = () => {
       });
       closeScheduleViewing();
       dispatchContact({ type: "reset" });
-      setPreferredAt("");
+      setViewingDate("");
+      setViewingTime("");
+      setStage("details");
+      setCalendarOpen(false);
     } catch (err) {
       // The modal stays open with the typed values intact so the renter can fix
       // the time or retry rather than losing the request.
@@ -133,6 +174,17 @@ export const ScheduleViewingModal = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (stage === "details") {
+      const instant = preferredAt ? resolvePreferredAtInstant(preferredAt) : null;
+      if (!instant || !isFutureInstant(instant)) {
+        setDateError(instant ? "Choose a viewing time in the future." : "Choose a valid viewing date and time.");
+        return;
+      }
+      setDateError(null);
+      setFailure(null);
+      setStage("review");
+      return;
+    }
     await submitRequest();
   };
 
@@ -161,55 +213,77 @@ export const ScheduleViewingModal = () => {
           {scheduleTarget.title} · {scheduleTarget.neighborhood}
         </p>
         <form className="mt-4 space-y-3" onSubmit={handleSubmit}>
-          <label className="block text-sm">
-            <span className="font-medium">Your name</span>
-            <input
-              className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-base"
-              name="name"
-              autoComplete="name"
-              required
-              value={contact.name.value}
-              onChange={(e) => dispatchContact({ type: "typed", field: "name", value: e.target.value })}
-              disabled={submitting}
-            />
-          </label>
-          <label className="block text-sm">
-            <span className="font-medium">Email</span>
-            <input
-              type="email"
-              className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-base"
-              name="email"
-              autoComplete="email"
-              required
-              value={contact.email.value}
-              onChange={(e) => dispatchContact({ type: "typed", field: "email", value: e.target.value })}
-              disabled={submitting}
-            />
-          </label>
-          <label className="block text-sm">
-            <span className="font-medium">Phone (optional)</span>
-            <input
-              type="tel"
-              className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-base"
-              name="phone"
-              autoComplete="tel"
-              value={contact.phone.value}
-              onChange={(e) => dispatchContact({ type: "typed", field: "phone", value: e.target.value })}
-              disabled={submitting}
-            />
-          </label>
-          <label className="block text-sm">
-            <span className="font-medium">Preferred time (Medellín time)</span>
-            <input
-              type="datetime-local"
-              className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-base"
-              name="preferredAt"
-              required
-              value={preferredAt}
-              onChange={(e) => setPreferredAt(e.target.value)}
-              disabled={submitting}
-            />
-          </label>
+          {stage === "details" ? (
+            <>
+              <label className="block text-sm">
+                <span className="font-medium">Your name</span>
+                <input className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-base"
+                  name="name" autoComplete="name" required maxLength={120} value={contact.name.value}
+                  onChange={(e) => dispatchContact({ type: "typed", field: "name", value: e.target.value })}
+                  disabled={submitting} />
+              </label>
+              <label className="block text-sm">
+                <span className="font-medium">Email</span>
+                <input type="email" className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-base"
+                  name="email" autoComplete="email" required maxLength={120} value={contact.email.value}
+                  onChange={(e) => dispatchContact({ type: "typed", field: "email", value: e.target.value })}
+                  disabled={submitting} />
+              </label>
+              <label className="block text-sm">
+                <span className="font-medium">Phone (optional)</span>
+                <input type="tel" className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-base"
+                  name="phone" autoComplete="tel" value={contact.phone.value}
+                  onChange={(e) => dispatchContact({ type: "typed", field: "phone", value: e.target.value })}
+                  disabled={submitting} />
+              </label>
+              <div className="space-y-2">
+                <p id="viewing-date-label" className="text-sm font-medium">Preferred viewing date (Medellín time)</p>
+                <Button type="button" variant="outline" aria-expanded={calendarOpen}
+                  aria-controls="viewing-day-calendar" data-testid="viewing-date-trigger"
+                  className="min-h-11 w-full justify-start font-normal"
+                  onClick={() => setCalendarOpen((value) => !value)} disabled={submitting}>
+                  {viewingDate ? `Selected: ${viewingDate}` : "Choose a viewing date"}
+                </Button>
+                {calendarOpen ? (
+                  <div id="viewing-day-calendar" data-testid="viewing-date-calendar" className="overflow-x-auto">
+                    <Calendar mode="single" selected={viewingDate ? localDate(viewingDate) : undefined}
+                      onSelect={(day) => {
+                        setViewingDate(day ? dateOnly(day) : "");
+                        setDateError(null);
+                        if (day) setCalendarOpen(false);
+                      }}
+                      disabled={{ before: localDate(today) }}
+                      className="mx-auto w-full max-w-full [--cell-size:2.5rem] min-[390px]:[--cell-size:2.75rem] [&_.rdp-month]:mx-auto"
+                      aria-labelledby="viewing-date-label" />
+                  </div>
+                ) : null}
+                <p className="text-xs text-muted-foreground" data-testid="viewing-date-selection">
+                  {viewingDate ? `Selected: ${viewingDate}` : "No date selected"}
+                </p>
+              </div>
+              <label className="block text-sm">
+                <span className="font-medium">Preferred viewing time (Medellín time)</span>
+                <input type="time" name="viewingTime" data-testid="viewing-time" step={900} required
+                  className="mt-1 h-11 w-full rounded-lg border border-input bg-background px-3 text-base"
+                  value={viewingTime} onChange={(e) => { setViewingTime(e.target.value); setDateError(null); }}
+                  disabled={submitting} />
+              </label>
+              <p className="text-xs text-muted-foreground">This is a request, not a confirmed appointment.</p>
+              {dateError ? <p role="alert" data-testid="viewing-date-error" className="text-sm text-destructive">{dateError}</p> : null}
+            </>
+          ) : (
+            <section data-testid="schedule-viewing-review" aria-label="Review your viewing request" className="space-y-3 text-sm">
+              <h3 className="text-base font-semibold">Review your request</h3>
+              <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 break-words">
+                <dt className="text-muted-foreground">Apartment</dt><dd>{scheduleTarget.title}</dd>
+                <dt className="text-muted-foreground">Name</dt><dd>{contact.name.value.trim()}</dd>
+                <dt className="text-muted-foreground">Email</dt><dd>{contact.email.value.trim()}</dd>
+                {contact.phone.value.trim() ? <><dt className="text-muted-foreground">Phone</dt><dd>{contact.phone.value.trim()}</dd></> : null}
+                <dt className="text-muted-foreground">Requested time</dt><dd>{viewingDate} at {viewingTime} (Medellín)</dd>
+              </dl>
+              <p className="text-xs text-muted-foreground">Your requested time is not yet confirmed by the host.</p>
+            </section>
+          )}
           {activeFailure ? (
             <p
               role="alert"
@@ -227,23 +301,17 @@ export const ScheduleViewingModal = () => {
               onChooseAnother={closeScheduleViewing}
             />
           ) : null}
-          <div className="flex justify-end gap-2 pt-2">
-            <Button
-              type="button"
-              variant="outline"
-              className="min-h-11 lg:min-h-0"
-              onClick={closeScheduleViewing}
-              disabled={submitting}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              className="min-h-11 lg:min-h-0"
-              data-testid="schedule-viewing-submit"
-              disabled={submitting}
-            >
-              {submitting ? "Submitting…" : "Submit"}
+          <div className="sticky bottom-0 z-10 -mx-4 -mb-4 flex flex-wrap justify-end gap-2 border-t bg-background px-4 py-3">
+            <Button type="button" variant="outline" className="min-h-11"
+              onClick={closeScheduleViewing} disabled={submitting}>Cancel</Button>
+            {stage === "review" ? (
+              <Button type="button" variant="outline" data-testid="schedule-viewing-edit" className="min-h-11"
+                onClick={() => { setStage("details"); setFailure(null); }} disabled={submitting}>Edit</Button>
+            ) : null}
+            <Button type="submit" className="min-h-11"
+              data-testid={stage === "review" ? "schedule-viewing-submit" : "schedule-viewing-review-button"}
+              disabled={submitting}>
+              {submitting ? "Submitting…" : stage === "review" ? "Request viewing" : "Review request"}
             </Button>
           </div>
         </form>

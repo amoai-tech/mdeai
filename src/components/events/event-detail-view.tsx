@@ -12,15 +12,9 @@ import { EventDetailNavigation, EventDetailHero } from "@/components/events/even
 import { EventDetailMap } from "@/components/events/event-detail-map";
 import { EventVenueSection } from "@/components/events/event-venue-section";
 import { DiscoveryPageContext } from "@/components/chat/discovery-page-context";
-import { formatEventSchedule, ticketsRemaining } from "@/lib/events/format-event";
-import type { PublicEventDetail, PublicEventTicket } from "@/lib/events/types";
-
-function lowestAvailablePrice(tickets: PublicEventTicket[]): PublicEventTicket | null {
-  const available = tickets.filter((t) => ticketsRemaining(t.qtyTotal, t.qtySold) > 0);
-  return available.length
-    ? available.reduce((min, t) => (t.priceCents < min.priceCents ? t : min))
-    : null;
-}
+import { formatEventSchedule } from "@/lib/events/format-event";
+import { eventDetailAction } from "@/lib/events/event-detail-action";
+import type { PublicEventDetail } from "@/lib/events/types";
 
 /** Stored descriptions may end with an explicit "Listing notice:" paragraph; surface it as a callout, not About text. */
 function splitListingNotice(description: string | null): { about: string | null; notice: string | null } {
@@ -40,7 +34,9 @@ export function EventDetailView({ event, backTo = "events" }: { event: PublicEve
   const city = event.venue?.city ?? event.city;
   const venueLine = [street, street?.toLowerCase().includes((city ?? "").toLowerCase()) ? null : city]
     .filter(Boolean).join(" · ");
-  const fromTier = useMemo(() => lowestAvailablePrice(event.tickets), [event.tickets]);
+  // One tested decision for tickets vs sold out vs no tiers ("follow"), never a guess.
+  const action = useMemo(() => eventDetailAction(event), [event]);
+  const fromTier = action.kind === "tickets" ? action.tier : null;
   const returnPath = `/events/${event.slug ?? event.id}`;
   const duration = event.endsAt ? Math.round(
     (new Date(event.endsAt).getTime() - new Date(event.startsAt).getTime()) / 60000,

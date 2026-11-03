@@ -64,7 +64,7 @@ describe("ScheduleViewingModal (SAN-716 / SCREEN-008)", () => {
     expect(html).toContain("Laureles");
   });
 
-  it("renders all four form fields", () => {
+  it("renders contact fields and a separate viewing-time control", () => {
     vi.mocked(useRentalUi).mockReturnValue({
       scheduleTarget: MOCK_TARGET,
       closeScheduleViewing: vi.fn(),
@@ -75,7 +75,8 @@ describe("ScheduleViewingModal (SAN-716 / SCREEN-008)", () => {
     expect(html).toContain('name="name"');
     expect(html).toContain('name="email"');
     expect(html).toContain('name="phone"');
-    expect(html).toContain('name="preferredAt"');
+    expect(html).toContain('name="viewingTime"');
+    expect(html).toContain("Preferred viewing date");
   });
 
   it("name and email fields are required", () => {
@@ -111,7 +112,7 @@ describe("ScheduleViewingModal (SAN-716 / SCREEN-008)", () => {
     } as unknown as ReturnType<typeof useRentalUi>);
 
     const html = renderToStaticMarkup(React.createElement(ScheduleViewingModal));
-    const tag = html.match(/<input[^>]*name="preferredAt"[^>]*>/)?.[0] ?? "";
+    const tag = html.match(/<input[^>]*name="viewingTime"[^>]*>/)?.[0] ?? "";
     expect(tag).not.toBe("");
     expect(tag).toContain("required");
   });
@@ -127,7 +128,7 @@ describe("ScheduleViewingModal (SAN-716 / SCREEN-008)", () => {
     expect(html).toContain("Medellín time");
   });
 
-  it("renders Submit and Cancel buttons", () => {
+  it("renders Review and Cancel buttons", () => {
     vi.mocked(useRentalUi).mockReturnValue({
       scheduleTarget: MOCK_TARGET,
       closeScheduleViewing: vi.fn(),
@@ -135,7 +136,7 @@ describe("ScheduleViewingModal (SAN-716 / SCREEN-008)", () => {
     } as unknown as ReturnType<typeof useRentalUi>);
 
     const html = renderToStaticMarkup(React.createElement(ScheduleViewingModal));
-    expect(html).toContain("Submit");
+    expect(html).toContain("Review request");
     expect(html).toContain("Cancel");
   });
 
@@ -172,6 +173,6 @@ describe("ScheduleViewingModal (SAN-716 / SCREEN-008)", () => {
     } as unknown as ReturnType<typeof useRentalUi>);
 
     const html = renderToStaticMarkup(React.createElement(ScheduleViewingModal));
-    expect(html).toContain('data-testid="schedule-viewing-submit"');
+    expect(html).toContain('data-testid="schedule-viewing-review-button"');
   });
 });

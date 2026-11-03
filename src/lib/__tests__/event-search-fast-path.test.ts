@@ -25,13 +25,15 @@ describe("event-search customer-facing reasons", () => {
 });
 
 describe("event-search-fast-path", () => {
-  it("instant clarify for generic city-only query", () => {
-    expect(shouldInstantEventClarify("list events medellin", {})).toBe(true);
-    expect(
-      shouldInstantEventClarify("list events medellin", {
-        lastEventQuery: { genericAskPending: true },
-      }),
-    ).toBe(false);
+  it("searches citywide events without a category, clarifying only a bare event prompt", () => {
+    for (const query of ["events in Medellín", "list events medellin", "show me events in Medellín"]) {
+      expect(shouldInstantEventClarify(query, {})).toBe(false);
+      expect(canFastPathEventSearch(query, {})).toBe(true);
+      expect(buildEventSearchParams(query, {})).toEqual({ dateWindow: "any", limit: 10 });
+    }
+    expect(shouldInstantEventClarify("events?", {})).toBe(true);
+    expect(shouldInstantEventClarify("events?", { lastEventQuery: { genericAskPending: true } })).toBe(false);
+    expect(canFastPathEventSearch("events?", {})).toBe(false);
   });
 
   it("fast path for category-specific query", () => {
@@ -102,8 +104,11 @@ describe("event-search-fast-path", () => {
     expect(params?.dateWindow).toBe("this_weekend");
   });
 
-  it("does not fast path generic first turn", () => {
-    expect(canFastPathEventSearch("list events medellin", {})).toBe(false);
+  it("a citywide browse never inherits stale category, neighborhood or date filters", () => {
+    const memory: ConciergeWorkingMemory = {
+      lastEventQuery: { category: "music", neighborhood: "El Poblado", dateWindow: "tonight" },
+    };
+    expect(buildEventSearchParams("events in Medellín", memory)).toEqual({ dateWindow: "any", limit: 10 });
   });
 
   it("does not fast path rental queries with neighborhood names", () => {
