@@ -93,7 +93,7 @@ role with `test.use({ qaRole: "..." })` and receives `qaRolePage`:
 | --- | --- |
 | `anonymous` (default) | Signed out; independent browser context |
 | `super-admin` | `mde@socialmediaville.ca` |
-| `event-host` | `mde@socialmediaville.ca` (Super Admin QA; **not** proof of host-only permissions) |
+| `event-host` | `MDE_QA_EVENT_HOST_EMAIL` (dedicated non-admin `qa-*@mdeai.co`; fail closed if absent) |
 | `renter` | Existing dedicated account from `MDE_QA_RENTER_EMAIL` |
 | `broker` | Existing dedicated account from `MDE_QA_BROKER_EMAIL` |
 

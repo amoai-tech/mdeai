@@ -144,7 +144,7 @@ const ignoreRejection = () => undefined;
 
 /** One composer on every non-rental browse page; Rentals retains its richer search adapter. */
 // skipcq: JS-0067 - module-local React component; not browser global scope
-function LiveComposer({ page, guestEvents, onAgentResults, hideHeading = false, suggestions }: {
+function LiveComposer({ page, guestEvents, onAgentResults, hideHeading = false, suggestions, historyNote }: {
   page: Exclude<DiscoveryPage, "rentals">;
   guestEvents?: EventGuestOptions;
   onAgentResults?: (result: DiscoveryAgentResult) => void;
@@ -152,6 +152,8 @@ function LiveComposer({ page, guestEvents, onAgentResults, hideHeading = false, 
   hideHeading?: boolean;
   /** Optional starter questions; a click sends one normal turn, never a canned answer. */
   suggestions?: readonly string[];
+  /** Label any restored turns from earlier events without clearing the shared thread. */
+  historyNote?: string;
 }) {
   const { user, loading: sessionLoading } = useSession();
   const { agent, isReady } = useConciergeCoAgent();
@@ -283,6 +285,11 @@ function LiveComposer({ page, guestEvents, onAgentResults, hideHeading = false, 
         </div>
       </div>
       )}
+      {historyNote && turns.length > 0 ? (
+        <p role="note" data-testid="discovery-ask-history-context" className="mb-2 text-xs text-muted-foreground">
+          {historyNote}
+        </p>
+      ) : null}
       <AskHistory turns={turns} open={showHistory} />
       {showSuggestions ? (
         <AskSuggestions
@@ -318,16 +325,17 @@ function LiveComposer({ page, guestEvents, onAgentResults, hideHeading = false, 
 }
 
 // skipcq: JS-0067 - module-local React component; not browser global scope
-export function DiscoveryAskComposer({ page, guestEvents, onAgentResults, hideHeading, suggestions }: {
+export function DiscoveryAskComposer({ page, guestEvents, onAgentResults, hideHeading, suggestions, historyNote }: {
   page: Exclude<DiscoveryPage, "rentals">;
   guestEvents?: EventGuestOptions;
   onAgentResults?: (result: DiscoveryAgentResult) => void;
   hideHeading?: boolean;
   suggestions?: readonly string[];
+  historyNote?: string;
 }) {
   const coAgent = useOptionalConciergeCoAgent();
   if (isDeterministicE2E() || !coAgent) {
     return <div data-testid={`discovery-ask-${page}`} className="border-t p-4 text-sm text-muted-foreground">Ask MDE about {page} in the live application.</div>;
   }
-  return <LiveComposer page={page} guestEvents={guestEvents} onAgentResults={onAgentResults} hideHeading={hideHeading} suggestions={suggestions} />;
+  return <LiveComposer page={page} guestEvents={guestEvents} onAgentResults={onAgentResults} hideHeading={hideHeading} suggestions={suggestions} historyNote={historyNote} />;
 }

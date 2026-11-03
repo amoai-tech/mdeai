@@ -225,6 +225,28 @@ describe("SAN-1600 event header authentication", () => {
 });
 
 describe("SAN-1600 in-page Ask MDE", () => {
+  it("focuses the question textarea before suggestions, or guest sign-in when signed out", async () => {
+    const first = render(<EventDetailView event={base} />);
+    const inline = screen.getByTestId("event-ask-mde-inline");
+    const suggestion = document.createElement("button");
+    suggestion.textContent = "Are tickets available?";
+    const textarea = document.createElement("textarea");
+    inline.append(suggestion, textarea);
+    await userEvent.click(screen.getByTestId("event-ask-mde"));
+    expect(document.activeElement).toBe(textarea);
+
+    first.unmount();
+    render(<EventDetailView event={base} />);
+    const guest = screen.getByTestId("event-ask-mde-inline");
+    let login = guest.querySelector<HTMLAnchorElement>('a[href*="/login"]');
+    if (!login) {
+      login = document.createElement("a");
+      login.href = "/login?next=%2Fevents";
+      guest.append(login);
+    }
+    await userEvent.click(screen.getByTestId("event-ask-mde"));
+    expect(document.activeElement).toBe(login);
+  });
   it("keeps one assistant on the page, directly below the location, and scrolls to it", async () => {
     // SAN-1624: the drawer is gone; the composer lives under Listed location and the
     // aside button only brings it into view — it never opens a second conversation.

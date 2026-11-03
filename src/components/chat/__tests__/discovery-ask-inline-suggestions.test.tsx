@@ -12,6 +12,7 @@ const chatMocks = vi.hoisted(() => ({
   appendMessage: vi.fn(),
   isReady: true,
   signedIn: true,
+  turns: [] as Array<{ id: string; role: "user" | "assistant"; text: string }>,
 }));
 
 const agent = {
@@ -37,7 +38,7 @@ vi.mock("@/lib/hooks/use-concierge-chat", () => ({
     isRuntimeUnavailable: () => false,
   }),
 }));
-vi.mock("@/components/rentals/rental-ask-tool-results", () => ({ useTurns: () => [] }));
+vi.mock("@/components/rentals/rental-ask-tool-results", () => ({ useTurns: () => chatMocks.turns }));
 vi.mock("next/navigation", () => ({ usePathname: () => "/events/a1b2c3d4-0001-0001-0001-000000000003" }));
 vi.mock("next/link", () => ({
   default: ({ href, children, ...rest }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { href: string }) => (
@@ -54,6 +55,7 @@ beforeEach(() => {
   chatMocks.appendMessage.mockResolvedValue(true);
   chatMocks.isReady = true;
   chatMocks.signedIn = true;
+  chatMocks.turns = [];
 });
 
 afterEach(cleanup);
@@ -88,6 +90,17 @@ describe("SAN-1624 — inline Ask MDE suggestions", () => {
       pendingTurn.resolve(true);
       await pendingTurn.promise;
     });
+  });
+
+  it("labels older event replies as shared history rather than this event's answer", () => {
+    chatMocks.turns = [
+      { id: "q-reina", role: "user", text: "How much are tickets at Reina?" },
+      { id: "a-reina", role: "assistant", text: "Reina lists VIP tickets." },
+    ];
+    render(<DiscoveryAskComposer page="events" suggestions={QUESTIONS} hideHeading
+      historyNote="Shared history: earlier answers may describe other events." />);
+    expect(screen.getByTestId("discovery-ask-history-context").textContent).toContain("other events");
+    expect(screen.getByTestId("discovery-ask-history").textContent).toContain("Reina lists VIP tickets.");
   });
 
   it("keeps guests on the existing sign-in state with no questions", () => {

@@ -29,8 +29,10 @@ function focusInlineAsk() {
   const section = document.getElementById("event-ask-mde-inline");
   if (!section) return;
   section.scrollIntoView({ behavior: "smooth", block: "start" });
-  const field = section.querySelector<HTMLTextAreaElement>("textarea, a, button");
-  field?.focus({ preventScroll: true });
+  const field = section.querySelector<HTMLTextAreaElement>("textarea")
+    ?? section.querySelector<HTMLAnchorElement>('a[href*="/login"]')
+    ?? section;
+  field.focus({ preventScroll: true });
 }
 
 /** Visitor decision panel: event facts, one canonical ticket picker and existing AI handoff. */

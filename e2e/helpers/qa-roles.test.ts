@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { QA_HOST_EMAIL, QA_SUPER_ADMIN_EMAIL } from "./auth";
+import { QA_SUPER_ADMIN_EMAIL } from "./auth";
 import { resolveQaRoleEmail } from "./qa-roles";
 
 describe("role-selected QA identities", () => {
@@ -9,8 +9,10 @@ describe("role-selected QA identities", () => {
   it("uses the existing Super Admin only for admin intent", () => {
     expect(resolveQaRoleEmail("super-admin", {})).toBe(QA_SUPER_ADMIN_EMAIL);
   });
-  it("uses the existing QA host for event-host intent", () => {
-    expect(resolveQaRoleEmail("event-host", {})).toBe(QA_HOST_EMAIL);
+  it("requires a separately provisioned non-admin event host", () => {
+    expect(() => resolveQaRoleEmail("event-host", {})).toThrow(/MDE_QA_EVENT_HOST_EMAIL/);
+    expect(resolveQaRoleEmail("event-host", { MDE_QA_EVENT_HOST_EMAIL: "QA-Event-Host@MDEAI.CO" })).toBe("qa-event-host@mdeai.co");
+    expect(() => resolveQaRoleEmail("event-host", { MDE_QA_EVENT_HOST_EMAIL: QA_SUPER_ADMIN_EMAIL })).toThrow(/dedicated/);
   });
   it.each(["renter", "broker"] as const)("rejects an unconfigured %s account", (role) => {
     expect(() => resolveQaRoleEmail(role, {})).toThrow(/existing dedicated account/);
@@ -24,7 +26,7 @@ describe("role-selected QA identities", () => {
   it("refuses an unrelated real customer", () => {
     expect(() => resolveQaRoleEmail("renter", { MDE_QA_RENTER_EMAIL: "customer@example.com" })).toThrow(/dedicated/);
   });
-  it("refuses the existing host for broker tests", () => {
-    expect(() => resolveQaRoleEmail("broker", { MDE_QA_BROKER_EMAIL: QA_HOST_EMAIL })).toThrow(/dedicated/);
+  it("refuses Super Admin for broker tests", () => {
+    expect(() => resolveQaRoleEmail("broker", { MDE_QA_BROKER_EMAIL: QA_SUPER_ADMIN_EMAIL })).toThrow(/dedicated/);
   });
 });

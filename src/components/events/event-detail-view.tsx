@@ -111,18 +111,20 @@ export function EventDetailView({
               <section
                 id="event-ask-mde-inline"
                 aria-label="Ask MDE about this event"
+                tabIndex={-1}
                 data-testid="event-ask-mde-inline"
                 className="order-7 scroll-mt-24 rounded-xl border border-border bg-card"
               >
                 <div className="border-b border-border px-4 pt-3">
                   <h2 className="text-sm font-semibold">Ask MDE about this event</h2>
                   <p className="pb-2 text-xs text-muted-foreground">
-                    Answers use this event&apos;s saved tickets, times and location.
+                    New answers use this event&apos;s saved tickets, times and location.
                   </p>
                 </div>
                 <DiscoveryAskComposer
                   page="events"
                   suggestions={EVENT_DETAIL_ASK_SUGGESTIONS}
+                  historyNote="Shared history: earlier answers may describe other events. Ask a new question for this event."
                   hideHeading
                 />
               </section>
