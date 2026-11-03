@@ -62,8 +62,8 @@ select results_eq(
 insert into public.event_tickets (id, event_id, name, price_cents, currency, qty_total, qty_sold, qty_pending, is_active)
 values ('55555555-5555-5555-5555-555555555555','33333333-3333-3333-3333-333333333333','VIP', 7000000, 'COP', 10, 0, 0, true);
 select results_eq(
-  $ select count(*)::int from public.notifications
-      where user_id = '11111111-1111-1111-1111-111111111111' and type = 'event_ticket_available' $,
+  $$ select count(*)::int from public.notifications
+      where user_id = '11111111-1111-1111-1111-111111111111' and type = 'event_ticket_available' $$,
   array[1], 'a second tier does not spam an already-notified follower');
 
 update public.event_tickets set is_active = false
@@ -71,8 +71,8 @@ update public.event_tickets set is_active = false
 update public.event_tickets set is_active = true
  where id = '44444444-4444-4444-4444-444444444444';
 select results_eq(
-  $ select count(*)::int from public.notifications
-      where user_id = '11111111-1111-1111-1111-111111111111' and type = 'event_ticket_available' $,
+  $$ select count(*)::int from public.notifications
+      where user_id = '11111111-1111-1111-1111-111111111111' and type = 'event_ticket_available' $$,
   array[1], 'reopening an old tier remains silent for this follow');
 
 -- ACL contract: the trigger is internally executable, not an end-user RPC.
