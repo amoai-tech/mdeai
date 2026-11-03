@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
+import ReactMarkdown from "react-markdown";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession } from "@/hooks/use-session";
@@ -92,6 +93,13 @@ function LiveComposer({ page, guestEvents, onAgentResults, hideHeading = false }
   // composer remounts. Keep that answer visible by default; users can still
   // explicitly collapse the conversation with the existing toggle.
   const [showHistory, setShowHistory] = useState(true);
+  const historyRef = useRef<HTMLOListElement>(null);
+  const followLatestRef = useRef(true);
+  // Follow streamed replies unless the reader intentionally scrolled back.
+  useLayoutEffect(() => {
+    const history = historyRef.current;
+    if (history && followLatestRef.current) history.scrollTop = history.scrollHeight;
+  }, [showHistory, turns]);
   const inFlight = useRef(false);
   const cancelled = useRef(false);
   // A run's tool result may arrive in a separate agent update from its final text.
@@ -199,8 +207,20 @@ function LiveComposer({ page, guestEvents, onAgentResults, hideHeading = false }
       </div>
       )}
       {showHistory && turns.length > 0 ? (
-        <ol data-testid="discovery-ask-history" role="log" aria-live="polite" className="mb-2 max-h-52 space-y-2 overflow-auto rounded-lg border p-3">
-          {turns.map((t) => <li key={t.id} className="text-sm"><span className="mr-2 text-xs font-medium text-muted-foreground">{t.role === "user" ? "You" : "MDE"}:</span>{t.text}</li>)}
+        <ol ref={historyRef} data-testid="discovery-ask-history" role="log" aria-live="polite"
+          onScroll={(event) => {
+            const el = event.currentTarget;
+            followLatestRef.current = el.scrollHeight - el.clientHeight - el.scrollTop <= 28;
+          }}
+          className="mb-2 max-h-52 space-y-2 overflow-auto rounded-lg border p-3">
+          {turns.map((t) => <li key={t.id} className="min-w-0 text-sm">
+            <span className="mr-2 text-xs font-medium text-muted-foreground">{t.role === "user" ? "You" : "MDE"}:</span>
+            {t.role === "assistant" ? (
+              <div className="min-w-0 break-words [&_p]:my-1 [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-0.5 [&_a]:text-primary [&_a]:underline [&_pre]:overflow-x-auto">
+                <ReactMarkdown skipHtml>{t.text}</ReactMarkdown>
+              </div>
+            ) : <span className="whitespace-pre-wrap break-words">{t.text}</span>}
+          </li>)}
         </ol>
       ) : null}
       {signedOut && page === "events" && guestEvents ? <GuestEventComposer options={guestEvents} /> : signedOut ? (
