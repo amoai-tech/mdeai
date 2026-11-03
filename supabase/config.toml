@@ -387,10 +387,6 @@ deno_version = 2
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
-# Internal rules-engine jobs use their own server secret, never a browser token.
-[functions.rules-engine]
-verify_jwt = false
-
 # Contestant photo moderation requires a real authenticated user JWT.
 [functions.moderate-asset]
 verify_jwt = true
