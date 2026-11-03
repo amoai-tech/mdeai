@@ -30,7 +30,7 @@ Knowledge graph tool for codebase + docs analysis. Builds a queryable graph of e
 - [Interpreting Results](#interpreting-results)
 - [Key Findings (Phase 2, 2026-06-09)](#key-findings-phase-2-2026-06-09)
 - [Safeguards — What NOT to Do](#safeguards--what-not-to-do)
-- [Graph Stats (current build)](#graph-stats-current-build)
+- [Graph Stats (verified example, not a shared current index)](#graph-stats-verified-example-not-a-shared-current-index)
 - [File Reference](#file-reference)
 
 ---
@@ -56,8 +56,8 @@ returns noisy hits (e.g. doc nodes that merely contain the word "agent"):
 
 ```bash
 # Bad — vague NL, returns noise
-graphify query "where is the agent defined"
-graphify query "what handles onboarding"
+npm run graphify:query -- "where is the agent defined"
+npm run graphify:query -- "what handles onboarding"
 ```
 
 For fuzzy or conceptual discovery, use `grep` + `Read` instead. Reach for graphify once
@@ -74,7 +74,7 @@ you have an exact identifier to anchor on.
 ```bash
 # Official PyPI package is graphifyy (double y). Pin the verified version + SQL support.
 uv tool install --reinstall --force 'graphifyy[sql]==0.9.101'
-graphify --version                         # expect 0.9.101
+GRAPHIFY_NO_AUTO_REFRESH=1 graphify --version    # expect 0.9.101; no skill modifications
 uv tool list
 
 # Run from the checkout containing the code you are editing.
@@ -83,7 +83,19 @@ npm run graphify:update                    # regenerate code index for this chec
 npm run graphify:explain -- conciergeAgent
 ```
 
-If `graphify --version` fails with `ModuleNotFoundError`, reinstall with the `uv tool` command above. The wrapper prefers `GRAPHIFY_BIN` when set, otherwise the executable on `PATH`, then a legacy venv fallback. It defaults `GRAPHIFY_NO_AUTO_REFRESH=1` to avoid modifying agent skill files on ordinary queries.
+If Graphify reports `ModuleNotFoundError`, reinstall with the `uv tool` command above. The wrapper resolves an explicit `GRAPHIFY_BIN` first, then the isolated `uv` tool environment, `~/.local/bin/graphify`, and finally the legacy venv. It never executes arbitrary Graphify binaries from `PATH`; it verifies version 0.9.101 and checks SQL support when updating. In nonstandard installations, set `GRAPHIFY_BIN` explicitly. Direct CLI commands must use `GRAPHIFY_NO_AUTO_REFRESH=1` or the wrapper to avoid refreshing unrelated agent configurations.
+
+### Upstream source receipt (v0.9.101)
+
+| Field | Verified source / decision |
+| --- | --- |
+| URL and exact source | [v0.9.101 README — Install](https://github.com/Graphify-Labs/graphify/blob/v0.9.101/README.md#install); [v0.9.101 pyproject.toml — `project.optional-dependencies.sql` and `project.scripts`](https://github.com/Graphify-Labs/graphify/blob/v0.9.101/pyproject.toml); [v0.9.101 `graphify/__main__.py` — automatic skill refresh opt-out](https://github.com/Graphify-Labs/graphify/blob/v0.9.101/graphify/__main__.py) |
+| Decision | Use the official `graphifyy` CLI and optional SQL grammar, pin the tested version, keep skill auto-refresh disabled during ordinary repository queries, and index the active checkout |
+| Disposition | **ADAPT** official package/CLI configuration; do not copy upstream agent settings |
+| Destination | `scripts/graphify-run.sh`; `scripts/__tests__/graphify-run.test.mjs`; this guide; `.claude/skills/tasks/SKILL.md`; `.claude/skills/tasks/references/domain-routing.md` |
+| Implementation | Prefer the isolated `uv` executable over arbitrary PATH; verify version and SQL support, preserve argument and working-directory behavior, and route agent commands through the wrapper |
+| Verification | `GRAPHIFY_NO_AUTO_REFRESH=1 graphify --version`; `npm run graphify:update`; `npm run graphify:explain -- conciergeAgent`; `node --test scripts/__tests__/graphify-run.test.mjs` |
+| Version / commit | Graphify **v0.9.101**, released November 2, 2026 |
 
 ---
 
@@ -93,8 +105,8 @@ If `graphify --version` fails with `ModuleNotFoundError`, reinstall with the `uv
 
 ```bash
 npm run graphify:path -- "useConciergeCoAgent" "concierge.ts" --undirected
-graphify path "createClient" "venue_booking_requests"
-graphify path "CafeBrowseFilters" "buildFilterUrl"
+npm run graphify:path -- "createClient" "venue_booking_requests"
+npm run graphify:path -- "CafeBrowseFilters" "buildFilterUrl"
 ```
 
 Paths are directed by default. For imports between the client and server subgraphs, an **undirected** path may exist even when a directed path does not. The verified `useConciergeCoAgent` to `concierge.ts` lookup needs `--undirected`; a missing directed path is not a broken installation.
@@ -115,8 +127,8 @@ print(hits[:20])
 ### explain — plain-language description of a node
 
 ```bash
-graphify explain "useRentalUi"
-graphify explain "search-grounded-places.ts"
+npm run graphify:explain -- "useRentalUi"
+npm run graphify:explain -- "search-grounded-places.ts"
 ```
 
 ### query — BFS traversal for a question
@@ -126,8 +138,8 @@ that exists in the graph; degrades to noise for paraphrased / conceptual questio
 "When to use graphify" above).
 
 ```bash
-graphify query "what calls createClient" --budget 3000
-graphify query "Mastra tool registration" --dfs
+npm run graphify:query -- "what calls createClient" --budget 3000
+npm run graphify:query -- "Mastra tool registration" --dfs
 ```
 
 ### Blast radius — what depends on X
@@ -135,7 +147,7 @@ graphify query "Mastra tool registration" --dfs
 Graphify **v0.9.101 includes `affected`**, which performs bounded reverse dependency traversal:
 
 ```bash
-graphify affected "conciergeAgent" --depth 1
+bash scripts/graphify-run.sh affected "conciergeAgent" --depth 1
 npm run graphify:explain -- "conciergeAgent"          # immediate neighbors
 npm run graphify:path -- "useConciergeCoAgent" "concierge.ts" --undirected
 ```
@@ -184,13 +196,13 @@ This extracts code (including SQL when installed with `[sql]`), without an LLM o
 
 To change what is indexed, edit `.graphifyignore` (the include/exclude contract) — not a
 script constant. Corpus counts above are historical Phase-1/2 figures; see
-[`GRAPHIFY-BASELINE.md`](../_archive/legacy-active-docs-2026-09-18/task-130/ai-second-brain/GRAPHIFY-BASELINE.md) for the current measured corpus.
+[`GRAPHIFY-BASELINE.md`](../_archive/legacy-active-docs-2026-09-18/task-130/ai-second-brain/GRAPHIFY-BASELINE.md) for historical corpus measurements, not the active checkout.
 
 ---
 
 ## Reading the Graph Report
 
-`graphify-out/GRAPH_REPORT.md` is generated after every build.
+`graphify-out/GRAPH_REPORT.md` is generated by the full semantic/clustering workflow, **not** by `npm run graphify:update` (the code-only `--no-cluster` refresh). If a report remains after a code-only update, it is **historical** and its findings must not be treated as current without regenerating the report and checking the indexed checkout.
 
 **God nodes** — the most-connected symbols. Highest degree = everything depends on this.
 - A code god node (e.g. `cn()`, `createClient()`) is a shared utility — expected.

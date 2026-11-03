@@ -1,35 +1,52 @@
 #!/usr/bin/env bash
-# Canonical MDE Graphify wrapper. Runs the official graphifyy CLI from the repo
-# root using GRAPHIFY_BIN, PATH, or a legacy project venv. This wrapper — NOT a
-# Python script — is the documented entrypoint; older docs referencing
-# scripts/graphify-phase2-build.py are stale (that file never existed).
-#
-# Common commands (all AST-only, $0, no LLM):
-#   bash scripts/graphify-run.sh update .      # refresh the graph after code/doc changes
-#   bash scripts/graphify-run.sh tree          # regenerate the HTML viz (GRAPH_TREE.html)
-#   bash scripts/graphify-run.sh query "..."   # BFS lookup over graph.json
-#   bash scripts/graphify-run.sh explain "X"   # plain-language node + neighbors
-# Exclusions live in .graphifyignore. Output (graphify-out/) is gitignored.
+# Canonical MDE Graphify wrapper. Prefer the verified isolated uv tool; never
+# execute an arbitrary graphify binary from PATH. GRAPHIFY_BIN is an explicit
+# caller override, resolved before switching to the repository root.
+# Exclusions live in .graphifyignore; generated output is gitignored.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-
-# Graphify 0.9+ can refresh agent skills on CLI invocation; never mutate an
-# unrelated Claude/Kilo/Devin configuration during a repository query.
 export GRAPHIFY_NO_AUTO_REFRESH="${GRAPHIFY_NO_AUTO_REFRESH:-1}"
+EXPECTED_VERSION="graphify 0.9.101"
+INSTALL_CMD="uv tool install --reinstall --force 'graphifyy[sql]==0.9.101'"
 
 if [[ -n "${GRAPHIFY_BIN:-}" ]]; then
   GRAPHIFY="$GRAPHIFY_BIN"
-elif command -v graphify >/dev/null 2>&1; then
-  GRAPHIFY="$(command -v graphify)"
+  if [[ "$GRAPHIFY" != /* ]]; then
+    GRAPHIFY="$(pwd -P)/$GRAPHIFY"
+  fi
+elif [[ -x "${UV_TOOL_DIR:-$HOME/.local/share/uv/tools}/graphifyy/bin/graphify" ]]; then
+  GRAPHIFY="${UV_TOOL_DIR:-$HOME/.local/share/uv/tools}/graphifyy/bin/graphify"
+elif [[ -x "$HOME/.local/bin/graphify" ]]; then
+  GRAPHIFY="$HOME/.local/bin/graphify"
 else
   GRAPHIFY="$HOME/.venvs/graphify/bin/graphify"
 fi
 
 if [[ ! -x "$GRAPHIFY" ]]; then
   echo "Graphify executable not found: $GRAPHIFY" >&2
-  echo "Install: uv tool install --reinstall --force 'graphifyy[sql]==0.9.101'" >&2
+  echo "Install: $INSTALL_CMD" >&2
   exit 1
+fi
+
+# Explicit binary paths are operator-controlled; even these must match our
+# tested CLI contract. The version check itself also disables auto-refresh.
+if ! VERSION="$("$GRAPHIFY" --version 2>&1)" || [[ "$VERSION" != "$EXPECTED_VERSION" ]]; then
+  echo "Incompatible Graphify at $GRAPHIFY (expected $EXPECTED_VERSION; got ${VERSION:-none})." >&2
+  echo "Repair: $INSTALL_CMD" >&2
+  exit 1
+fi
+
+# The SQL grammar is an optional extra. Do not silently build incomplete SQL
+# graphs when the required parser is absent from this Graphify environment.
+if [[ "${1:-}" == "update" || "${1:-}" == "extract" ]]; then
+  RESOLVED_BIN="$(readlink -f "$GRAPHIFY")"
+  TOOL_PYTHON="$(dirname "$RESOLVED_BIN")/python"
+  if [[ ! -x "$TOOL_PYTHON" ]] || ! "$TOOL_PYTHON" -c 'import tree_sitter_sql' >/dev/null 2>&1; then
+    echo "Graphify SQL parser missing from the selected tool environment: $GRAPHIFY" >&2
+    echo "Repair: $INSTALL_CMD" >&2
+    exit 1
+  fi
 fi
 
 cd "$ROOT"
