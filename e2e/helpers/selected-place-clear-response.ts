@@ -204,8 +204,14 @@ export function confirmsNothingSelected(input: string): boolean {
     answer.startsWith("currently") ||
     answer.startsWith("right now") ||
     answer.startsWith("based on the current browser state") ||
-    answer.startsWith("based on current browser state");
+    answer.startsWith("based on current browser state") ||
+    answer.startsWith("based on ");
   if (!startsAsConfirmation) return false;
 
-  return hasNegativeSelectedStatement(answer);
+  // "No — no public place or rental listing is currently selected." has a
+  // compound object between "no" and "selected", so the exact phrase list above
+  // misses it. The positive/contradiction checks already ran, so a remaining
+  // explicit "no … selected" is a negative answer.
+  if (currentState.includes("no ") && currentState.includes("selected")) return true;
+  return hasNegativeSelectedStatement(currentState);
 }
