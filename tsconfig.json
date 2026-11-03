@@ -1,7 +1,11 @@
 {
   "compilerOptions": {
     "target": "ES2017",
-    "lib": ["dom", "dom.iterable", "esnext"],
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
@@ -19,7 +23,9 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": [
+        "./src/*"
+      ]
     }
   },
   "include": [
@@ -30,7 +36,16 @@
     "e2e/**/*.ts",
     "scripts/**/*.ts",
     ".next/types/**/*.ts",
-    ".next/dev/types/**/*.ts"
+    ".next/dev/types/**/*.ts",
+    ".next-chromatic/types/**/*.ts",
+    ".next-chromatic/dev/types/**/*.ts"
   ],
-  "exclude": ["node_modules", "supabase/functions", "commerce/**", "github/**", "docs/**", ".worktrees/**"]
+  "exclude": [
+    "node_modules",
+    "supabase/functions",
+    "commerce/**",
+    "github/**",
+    "docs/**",
+    ".worktrees/**"
+  ]
 }
