@@ -8,7 +8,7 @@ import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const h = vi.hoisted(() => ({
+const chatMocks = vi.hoisted(() => ({
   appendMessage: vi.fn(),
   isReady: true,
   signedIn: true,
@@ -22,15 +22,15 @@ const agent = {
 };
 
 vi.mock("@/hooks/use-session", () => ({
-  useSession: () => ({ user: h.signedIn ? { id: "u1" } : null, loading: false }),
+  useSession: () => ({ user: chatMocks.signedIn ? { id: "u1" } : null, loading: false }),
 }));
 vi.mock("@/components/chat/concierge-coagent-context", () => ({
-  useOptionalConciergeCoAgent: () => ({ agent, isReady: h.isReady }),
-  useConciergeCoAgent: () => ({ agent, isReady: h.isReady }),
+  useOptionalConciergeCoAgent: () => ({ agent, isReady: chatMocks.isReady }),
+  useConciergeCoAgent: () => ({ agent, isReady: chatMocks.isReady }),
 }));
 vi.mock("@/lib/hooks/use-concierge-chat", () => ({
   useConciergeChat: () => ({
-    appendMessage: h.appendMessage,
+    appendMessage: chatMocks.appendMessage,
     stopActiveRun: vi.fn(),
     retryLastTurn: vi.fn(),
     isLoading: false,
@@ -50,10 +50,10 @@ const { DiscoveryAskComposer, EVENT_DETAIL_ASK_SUGGESTIONS } = await import("../
 const QUESTIONS = EVENT_DETAIL_ASK_SUGGESTIONS;
 
 beforeEach(() => {
-  h.appendMessage.mockReset();
-  h.appendMessage.mockResolvedValue(true);
-  h.isReady = true;
-  h.signedIn = true;
+  chatMocks.appendMessage.mockReset();
+  chatMocks.appendMessage.mockResolvedValue(true);
+  chatMocks.isReady = true;
+  chatMocks.signedIn = true;
 });
 
 afterEach(cleanup);
@@ -73,22 +73,25 @@ describe("SAN-1624 — inline Ask MDE suggestions", () => {
   it("sends exactly one real turn when a question is clicked", async () => {
     render(<DiscoveryAskComposer page="events" suggestions={QUESTIONS} hideHeading />);
     await userEvent.click(screen.getByRole("button", { name: "Are tickets available?" }));
-    await waitFor(() => expect(h.appendMessage).toHaveBeenCalledTimes(1));
-    expect(h.appendMessage).toHaveBeenCalledWith("Are tickets available?");
+    await waitFor(() => expect(chatMocks.appendMessage).toHaveBeenCalledTimes(1));
+    expect(chatMocks.appendMessage).toHaveBeenCalledWith("Are tickets available?");
   });
 
   it("does not duplicate the turn when the same question is clicked twice quickly", async () => {
-    let finish: (saved: boolean) => void = () => undefined;
-    h.appendMessage.mockReturnValue(new Promise<boolean>((resolve) => { finish = resolve; }));
+    const pendingTurn = Promise.withResolvers<boolean>();
+    chatMocks.appendMessage.mockReturnValue(pendingTurn.promise);
     render(<DiscoveryAskComposer page="events" suggestions={QUESTIONS} hideHeading />);
     const chip = screen.getByRole("button", { name: "Are tickets available?" });
     act(() => { chip.click(); chip.click(); });
-    expect(h.appendMessage).toHaveBeenCalledTimes(1);
-    await act(async () => { finish(true); });
+    expect(chatMocks.appendMessage).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      pendingTurn.resolve(true);
+      await pendingTurn.promise;
+    });
   });
 
   it("keeps guests on the existing sign-in state with no questions", () => {
-    h.signedIn = false;
+    chatMocks.signedIn = false;
     render(<DiscoveryAskComposer page="events" suggestions={QUESTIONS} hideHeading />);
     expect(screen.queryByTestId("discovery-ask-suggestion")).toBeNull();
     expect(screen.getByText(/Sign in to ask about events/i)).toBeTruthy();
