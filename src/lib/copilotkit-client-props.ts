@@ -38,7 +38,7 @@ type CopilotKitClientProps = {
   properties: Record<string, unknown>;
   agents__unsafe_dev_only: Record<string, never>;
   selfManagedAgents: Record<string, never>;
-  showDevConsole: false;
+  enableInspector: false;
   /** CopilotKit public license key; omitted entirely when not configured. */
   publicLicenseKey?: string;
 };
@@ -60,9 +60,11 @@ type CopilotKitClientProps = {
  * 200 and the app merely looks connected.
  */
 export function getCopilotKitClientProps(agent: CopilotAgentName): CopilotKitClientProps {
-  // showDevConsole=false — CopilotKit defaults to loading web-inspector on localhost;
-  // after dev restarts a stale .next chunk causes ChunkLoadError for that bundle.
-  const inspectorOff = { showDevConsole: false as const };
+  // enableInspector=false — CopilotKit defaults to loading the web inspector on localhost,
+  // and after dev restarts a stale .next chunk causes ChunkLoadError for that bundle.
+  // CopilotKit 1.84.1's v2 provider only reads `enableInspector`; the old `showDevConsole`
+  // prop is honoured by the v1-deprecated provider alone, so it silently stopped working.
+  const inspectorOff = { enableInspector: false as const };
   // Direct `process.env.NEXT_PUBLIC_*` access so Next inlines it into the client bundle.
   const publicLicenseKey = process.env.NEXT_PUBLIC_COPILOTKIT_LICENSE_KEY?.trim();
 
