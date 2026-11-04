@@ -130,6 +130,17 @@ export function assertRunCompleted(
     );
   }
 
+  // AG-UI 1.0 permits a terminal RUN_FINISHED for a cancelled or interrupted
+  // run. This helper certifies successful completion only, not mere termination.
+  // An omitted outcome is legacy success for backwards compatibility.
+  const finishedEvent = events.find((event) => event.type === "RUN_FINISHED");
+  const outcome = finishedEvent?.outcome as { type?: unknown } | undefined;
+  if (outcome && outcome.type !== "success") {
+    throw new Error(
+      `agent/run ended with ${String(outcome.type)} outcome — not a completed turn`,
+    );
+  }
+
   // Order is part of the contract. The server emits through AG-UI's own
   // `verifyEvents`, which refuses a stream whose first event is not RUN_STARTED,
   // so a reversed stream did not come from a healthy run.
