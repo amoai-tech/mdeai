@@ -10,7 +10,7 @@ describe("SAN-729 — a truthful Host sales answer is accepted in both word orde
   it("accepts the count after the word", () => {
     expect(statesTicketCount("Tickets sold: 2. Paid orders: 1.", 2)).toBe(true);
     expect(statesTicketCount("Tickets: 2", 2)).toBe(true);
-    expect(statesTicketCount("Total tickets - 2", 2)).toBe(true);
+    expect(statesTicketCount("Tickets - 2", 2)).toBe(true);
   });
 
   it("rejects a different count, including one that contains the digit", () => {
@@ -42,6 +42,10 @@ describe("SAN-729 — a truthful Host sales answer is accepted in both word orde
       "Tickets sold: 2. Total capacity: 10 tickets; 8 tickets left.",
       "Tickets sold: 2. Ticket 1: General Admission.",
       "2 sold, 8 tickets remaining.",
+      "2 tickets sold out of 10 tickets.",
+      "2 tickets sold; 8 tickets still available.",
+      "Tickets sold: 2. Total tickets: 10.",
+      "Tickets sold: 2. Out of 10 tickets total.",
     ]) {
       expect(statesTicketCount(reply, 2), reply).toBe(true);
     }
@@ -63,6 +67,7 @@ describe("SAN-729 — a truthful Host sales answer is accepted in both word orde
     expect(statesTicketCount("Remaining tickets: 8. Capacity: 10.", 8)).toBe(false);
     expect(statesTicketCount("Available tickets: 10.", 10)).toBe(false);
     expect(statesTicketCount("Capacity tickets: 10.", 10)).toBe(false);
+    expect(statesTicketCount("Total tickets: 10.", 10)).toBe(false);
   });
 
   it("does not misread the revenue amount as tickets sold across a line break", () => {
