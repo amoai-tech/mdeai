@@ -1,9 +1,6 @@
 # Human-in-the-loop and suspend/resume
 
-Read this when a Mastra agent must pause for approval, resume after a decision, or
-survive a process boundary mid-run. This is the surface MDE's consequential writes
-(listing publish, lead reply, import) build on, so get the shape right before
-designing the approval flow.
+Read this only when a Mastra agent needs **optional user confirmation** or a real durable suspend/resume boundary. This is not a reason to add permissions or approval prerequisites. **Phase A:** rental search, viewings, publishing, imports, events and bookings must work without landlord/partner approval, ownership documents, property verification, photo-rights paperwork, or other business certification gates. Authenticated server-side authorization, data isolation, atomic writes and idempotency still apply. Confirm that the installed Mastra and AG-UI adapter expose the example APIs before selecting them.
 
 ## The two shapes
 
@@ -17,8 +14,10 @@ lives, not which one you read about first.
 
 ## Inline approval
 
+The following is a **vendor-API illustration**, not the existing MDE CopilotKit route or a required publishing gate. Verify this API in installed types before use; MDE's current browser-facing HITL adapter uses its established CopilotKit tool path.
+
 ```ts
-const output = await agent.generate("Publish listing 123", {
+const output = await agent.generate("Review the user's requested action", {
   requireToolApproval: true,
 });
 
@@ -92,16 +91,16 @@ execution and resumable streams. Two options matter in review:
 
 ## MDE rules
 
-Approval proves *intent*. It never proves *authorization*. Every approved write must
-still re-check, inside the backend path that performs it:
+HITL confirms a **user's intent** when that decision is actually needed. It never proves **server authorization** or creates a Phase A **business approval gate**. Do not add new prompts or mandatory suspensions solely because the framework supports them. Existing grant/revoke/approve controls can be tested without blocking normal development journeys.
 
-1. the authenticated user, and that they own the record (for rentals, `acting_landlord_ids()`);
-2. the record's current version against the version the approval was granted for;
-3. that the requested transition is legal from the record's current state;
-4. idempotency, so a double click or a retried resume produces exactly one mutation.
+For a consequential write, the **canonical backend/RPC**, not the frontend decision, must:
 
-A reject or cancel path must write nothing at all — assert that with row counts
-rather than trusting the branch.
+1. derive the actor/tenant from the authenticated server context; enforce server-side Super Admin privileges or normal scoped authorization, **without** demanding landlord/ownership verification or partner paperwork as a Phase A eligibility prerequisite;
+2. recheck record ID, expected version/current state and technical constraints at commit time; do not resurrect deferred Phase B business eligibility or publication gates;
+3. commit the transition atomically and idempotently, so a double click, retries, or resumed execution cannot duplicate a lead, showing, booking, order, ticket or payment;
+4. return the **actual persisted outcome**. A denial or cancellation before commit must not write a row; if a write already completed before Stop, report the committed result truthfully rather than claiming it was reversed.
+
+Verify negative cases using real status and row counts, not the model's explanation. Keep framework/tool integration tests in the existing upgrade tasks rather than building a second approval service.
 
 ## Version caution
 

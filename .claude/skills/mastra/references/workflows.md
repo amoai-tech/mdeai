@@ -9,9 +9,9 @@ tags: mastra, workflows, suspend, hitl, snapshots
 
 # Mastra workflows — docs & reference index
 
-**mdeai Phase 1:** concierge uses **agents + tools** in-process; batch workflows (event discovery EVP-022) land W2+. **Roberto HITL** (W3–4) maps to **suspend/resume** + CopilotKit `renderAndWaitForResponse` — read both docs before wiring.
+**Current MDE runtime:** inspect `src/mastra/index.ts` for registered workflows and `src/mastra/workflows/` for their actual steps. The Next.js / CopilotKit runtime already uses in-process Mastra agents. Do not scaffold a second workflow runner or assume an older `Roberto` approval flow is required. A supported suspend/resume feature may implement optional **user confirmation** or genuine recovery, but it cannot impose Phase A partner, property-ownership, event-publication or viewing business gates. Check the installed Mastra and AG-UI adapter APIs before using any example.
 
-**Lookup order:** [`mcp-docs-lookup.md`](mcp-docs-lookup.md) → **`mastraDocs`** paths below → [`links.md`](../links.md).
+**Lookup order for MDE code:** check `package.json` / lockfile and installed `node_modules/@mastra/*/dist/docs/` → `assets/SOURCE_MAP.json` plus installed TypeScript declarations/source → version-matched official docs → optional [`mcp-docs-lookup.md`](mcp-docs-lookup.md) / `mastraDocs` for supplementary research → [`links.md`](../links.md) as a navigation index. A current remote example is not proof that the installed API supports it.
 
 ---
 
@@ -25,7 +25,7 @@ tags: mastra, workflows, suspend, hitl, snapshots
 | Control flow | https://mastra.ai/docs/workflows/control-flow | `.then`, `.branch`, `.parallel` |
 | Agents & tools in workflows | https://mastra.ai/docs/workflows/agents-and-tools | Agent steps |
 | Snapshots | https://mastra.ai/docs/workflows/snapshots | Persisted suspend state |
-| Suspend & resume | https://mastra.ai/docs/workflows/suspend-and-resume | **Roberto approval gate** |
+| Suspend & resume | https://mastra.ai/docs/workflows/suspend-and-resume | Version-verified durable resume/optional user confirmation; never Phase A business approvals |
 | Human-in-the-loop | https://mastra.ai/docs/workflows/human-in-the-loop | HITL patterns |
 | Time travel | https://mastra.ai/docs/workflows/time-travel | Debug / replay |
 | Error handling | https://mastra.ai/docs/workflows/error-handling | Retries, fallbacks |

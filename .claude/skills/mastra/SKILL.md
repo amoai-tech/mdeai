@@ -3,8 +3,8 @@ name: mastra
 description: >-
   Use for any MDE request clearly involving Mastra, including agents, tools, workflows, memory, storage, RequestContext, streaming, suspend/resume, HITL, evals, traces, runtime bridges, and Mastra-specific bugs/errors/failures. A known Mastra failure stays with this domain owner rather than generic systematic-debugging.
 metadata:
-  mde-version: "2.0.0"
-  upstream-commit: "1ddd3219f44770f5b84d9930f99fccd6fd1890ed"
+  mde-version: "2.1.0"
+  upstream-commit: "1b3d178260a3ff88a075bc44075439d8d227e990"
   verified-package: "@mastra/core 1.74.0"
   verified-at: "2026-10-05"
 ---
@@ -17,7 +17,13 @@ MDE runs one **coherent stable** Mastra family (SAN-1338). The previous mixed
 alpha/beta surface and the `Memory.recall()` type-drift suppression are gone; verify
 against the installed type definition rather than assuming a signature.
 
-| Package | Installed | Line |
+The versions below are a **PR #717 snapshot**, not a promise about every worktree or a
+future SAN-1626 upgrade. Before any API recommendation, compare this table with the
+current `package.json`, `package-lock.json`, and the actual installed package
+`package.json`/exports (when `node_modules` exists). Update this snapshot in the
+same PR as a family upgrade; do not install `@latest` to make the table true.
+
+| Package | Snapshot | Release line |
 |---|---|---|
 | `@mastra/core` | 1.74.0 | stable |
 | `@mastra/pg` | 1.29.0 | stable |
@@ -46,6 +52,17 @@ input schema and clears the pin through the public Memory API.
 
 Never rely on remembered Mastra APIs when current installed docs/source can prove the contract.
 
+**MDE override for newer official references:** Vendor documentation may describe Mastra Platform deployment or automatic external bug/feedback submission. MDE deploys through its existing Vercel process. Do not switch hosting or transmit MDE code, diagnostics, logs, or bug reports to upstream services unless the owner explicitly authorizes that action. Follow installed-version types before adopting APIs from upstream `main`.
+
+## Safe Mastra CLI diagnostics
+
+- **Select the target explicitly:** before any `mastra api` inspection, check the installed CLI help and pass `--url` for the intended, authorized server. Some trace/observability commands otherwise default to Mastra's hosted observability endpoint, even when local Studio is running. Never assume a command points at MDE's local runtime.
+- **Read-only first:** for example, `mastra api --url http://localhost:4111 agent list` or `mastra api --url http://localhost:4111 trace query --help` after verifying the installed CLI supports the command. Running an agent, executing a tool, uploading traces, or changing a remote environment is not a harmless diagnostic; confirm authorization and impact first.
+- **Review CLI telemetry:** set `MASTRA_TELEMETRY_DISABLED=1` for a diagnostic command when opting out of Mastra usage analytics. This is a per-process CLI choice, **not** an instruction to change MDE's application environment, tracing pipeline, or observability configuration. It does not prevent model calls or other configured network traffic.
+- **Version first:** prefer installed package docs under `node_modules/@mastra/*/dist/docs/`, their `assets/SOURCE_MAP.json`, and installed types. The official CLI guide can describe commands newer than MDE's installed CLI; never install `mastra@latest` simply to run diagnostics.
+
+References: https://mastra.ai/reference/observability/tracing/advanced-queries and https://mastra.ai/blog/upgraded-mastra-cli.
+
 ## Ownership
 
 Own Mastra agent definitions, tools, workflows, memory, storage, streaming, RequestContext, suspend/resume, HITL semantics, trace/eval behavior, and Mastra-side CopilotKit integration. `copilotkit` owns browser-facing provider/hooks/AG-UI rendering. Domain skills own business invariants.
@@ -69,7 +86,7 @@ Own Mastra agent definitions, tools, workflows, memory, storage, streaming, Requ
 
 ## MDE references
 
-Use existing project references only for MDE-specific behavior, including `references/mdeai-concierge.md`, `references/copilotkit.md`, `references/memory.md`, `references/workflows.md`, `references/tools.md`, `references/streaming.md`, and `references/supabase-auth.md`. Treat older broad examples as historical unless current code confirms them.
+Use MDE-specific references such as `references/mdeai-concierge.md`, `references/memory.md`, `references/workflows.md`, `references/tools.md`, and `references/streaming.md` against current code. `references/copilotkit.md` documents a **separate-server example**, and `references/supabase-auth.md` documents **standalone Mastra HTTP auth**; neither is the default MDE runtime or an instruction to scaffold, install dependencies, or replace the current same-origin Next.js bridge. Do not treat historical broad examples as implementation authority.
 
 ## Verification
 
@@ -86,8 +103,8 @@ MDE overlays — read the one matching the affected contract:
 | Area | Reference |
 |---|---|
 | Concierge agent | `references/mdeai-concierge.md` |
-| CopilotKit bridge | `references/copilotkit.md`, `references/headless-ui.md`, `references/display-only.md` |
-| Memory | `references/memory.md`, `references/supabase-auth.md` |
+| CopilotKit bridge | Current `src/app/api/copilotkit/[[...path]]/route.ts`, CopilotKit skill `references/mastra-bridge.md`; `references/copilotkit.md` is standalone-only |
+| Memory | `references/memory.md`; `references/supabase-auth.md` is standalone Mastra HTTP auth only |
 | Workflows | `references/workflows.md`, `references/workspace.md`, `references/workspace-skills.md` |
 | Tools and approval | `references/tools.md`, `references/human-in-the-loop.md` |
 | Streaming | `references/streaming.md` |
