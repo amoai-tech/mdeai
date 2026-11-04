@@ -37,9 +37,33 @@ function normalize(value: string): string {
   return value.replace(/\s+/g, " ").trim();
 }
 
+/**
+ * The concierge answers some questions with cards, so the assistant bubble can
+ * exist for a moment before its content is painted. Wait for real text, then
+ * capture it — an empty capture would make the reload assertion meaningless.
+ */
+async function replyTextAfter(page: import("@playwright/test").Page, before: number): Promise<string> {
+  await waitForConciergeReply(page, before);
+  const last = page.getByTestId("copilot-chat-region").getByTestId("copilot-assistant-message").last();
+  await expect
+    .poll(async () => normalize(await last.innerText()).length, {
+      timeout: 30_000,
+      message: "assistant reply renders content",
+    })
+    .toBeGreaterThan(0);
+  return normalize(await last.innerText());
+}
+
+/**
+ * Production certification must FAIL when the renter identity is missing — a green
+ * suite containing only a skip proves nothing. Outside certification the spec skips,
+ * so ordinary local/PR runs stay honest without demanding the QA account.
+ */
+const CERTIFICATION = process.env.MDE_PROD_CERTIFICATION === "1";
+
 test.describe("SAN-1626 · signed-in renter concierge on a 390px phone", () => {
   test.skip(
-    !process.env.MDE_QA_RENTER_EMAIL,
+    !CERTIFICATION && !process.env.MDE_QA_RENTER_EMAIL,
     "Configure an existing dedicated renter QA identity (MDE_QA_RENTER_EMAIL)",
   );
 
@@ -60,14 +84,12 @@ test.describe("SAN-1626 · signed-in renter concierge on a 390px phone", () => {
     const cards = page.getByTestId("rental-card");
     await expect(cards.first()).toBeVisible({ timeout: 120_000 });
     expect(await cards.count()).toBeGreaterThan(0);
-    const firstReply = await waitForConciergeReply(page, before);
-    expect(normalize(firstReply).length).toBeGreaterThan(0);
+    const firstReply = await replyTextAfter(page, before);
 
     // 2 — a follow-up runs on the same conversation.
     const afterFirst = await countConciergeReplies(page);
     await sendConciergeMessage(page, "Which one has a balcony?");
-    const secondReply = await waitForConciergeReply(page, afterFirst);
-    expect(normalize(secondReply).length).toBeGreaterThan(0);
+    const secondReply = await replyTextAfter(page, afterFirst);
 
     // 3 — reload keeps THESE two replies, not merely two replies.
     const expectedReplies = [firstReply, secondReply].map(normalize).map((text) => text.slice(0, 120));
