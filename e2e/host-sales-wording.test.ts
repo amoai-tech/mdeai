@@ -72,6 +72,21 @@ describe("SAN-729 — a truthful Host sales answer is accepted in both word orde
     expect(statesTicketCount("Revenue: COP 1,800\nTickets: 2", 2)).toBe(true);
   });
 
+  it("rejects unlabeled conflicting ticket counts alongside explicitly sold counts", () => {
+    expect(statesTicketCount("You sold 2 tickets. Tickets: 20", 2)).toBe(false);
+    expect(statesTicketCount("Tickets sold: 2; tickets: 12", 2)).toBe(false);
+  });
+
+  it("accepts a sold label split from its count by one newline or thin space", () => {
+    expect(statesTicketCount("Tickets sold:\n2", 2)).toBe(true);
+    expect(statesTicketCount("Tickets sold:\u20092", 2)).toBe(true);
+  });
+
+  it("does not split currency thousands digits into a false ticket count", () => {
+    expect(statesTicketCount("Revenue: COP 1,800 Tickets: 2", 2)).toBe(true);
+    expect(statesTicketCount("Revenue: COP 1,800 Tickets sold: 2", 2)).toBe(true);
+  });
+
   it("handles long whitespace padding without backtracking", () => {
     const padded = `Tickets${" ".repeat(20_000)}sold: 2`;
     const started = Date.now();

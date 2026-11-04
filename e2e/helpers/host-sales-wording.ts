@@ -5,17 +5,18 @@
  * previous line cannot be mistaken for the next line's ticket-sales quantity.
  */
 
-// Explicit sold labels take priority over generic ticket-count wording.
+// Extract explicit sold labels; generic counts are also compared unless marked as inventory.
 const SOLD_PATTERNS = [
-  /\b(\d{1,6})[ \t\u00a0\u202f]{1,16}tickets?[ \t\u00a0\u202f]{1,16}(?:were[ \t\u00a0\u202f]{1,16})?sold\b/gi, // "2 tickets sold"
-  /\btickets?[ \t\u00a0\u202f]{1,16}sold[ \t\u00a0\u202f]{0,16}[:=\-–]?[ \t\u00a0\u202f]{0,16}(\d{1,6})\b/gi, // "Tickets sold: 2"
-  /\bsold[ \t\u00a0\u202f]{0,16}[:=\-–]?[ \t\u00a0\u202f]{0,16}(\d{1,6})[ \t\u00a0\u202f]{1,16}tickets?\b/gi, // "You sold 2 tickets"
-  /(?:^|[.!?;\n])[ \t\u00a0\u202f]{0,16}sold[ \t\u00a0\u202f]{0,16}[:=\-–][ \t\u00a0\u202f]{0,16}(\d{1,6})\b/gi, // "Sold: 2" as its own statement
-  /\b(\d{1,6})[ \t\u00a0\u202f]{1,16}sold\b/gi, // "2 sold"
+  /(?<![\d,.])\b(\d{1,6})[ \t\u00a0\u202f\u2009]{1,16}tickets?[ \t\u00a0\u202f\u2009]{1,16}(?:were[ \t\u00a0\u202f\u2009]{1,16})?sold\b/gi, // "2 tickets sold"
+  /\btickets?[ \t\u00a0\u202f\u2009]{1,16}sold[ \t\u00a0\u202f\u2009]{0,16}[:=\-–]?[ \t\u00a0\u202f\u2009]{0,16}(\d{1,6})\b/gi, // "Tickets sold: 2"
+  /\btickets?[ \t\u00a0\u202f\u2009]{1,16}sold[ \t\u00a0\u202f\u2009]{0,16}[:=\-–][ \t\u00a0\u202f\u2009]{0,16}\r?\n[ \t\u00a0\u202f\u2009]{0,16}(\d{1,6})\b/gi, // "Tickets sold:\n2"
+  /\bsold[ \t\u00a0\u202f\u2009]{0,16}[:=\-–]?[ \t\u00a0\u202f\u2009]{0,16}(\d{1,6})[ \t\u00a0\u202f\u2009]{1,16}tickets?\b/gi, // "You sold 2 tickets"
+  /(?:^|[.!?;\n])[ \t\u00a0\u202f\u2009]{0,16}sold[ \t\u00a0\u202f\u2009]{0,16}[:=\-–][ \t\u00a0\u202f\u2009]{0,16}(\d{1,6})\b/gi, // "Sold: 2" as its own statement
+  /(?<![\d,.])\b(\d{1,6})[ \t\u00a0\u202f\u2009]{1,16}sold\b/gi, // "2 sold"
 ];
 
-const COUNT_BEFORE = /\b(\d{1,6})[ \t\u00a0\u202f]{1,16}tickets?\b/gi; // "2 tickets"
-const COUNT_AFTER = /\btickets?(?:[ \t\u00a0\u202f]{1,16}(?:count|total))?[ \t\u00a0\u202f]{0,16}[:=\-–][ \t\u00a0\u202f]{0,16}(\d{1,6})\b/gi; // "Tickets: 2"
+const COUNT_BEFORE = /(?<![\d,.])\b(\d{1,6})[ \t\u00a0\u202f\u2009]{1,16}tickets?\b/gi; // "2 tickets"
+const COUNT_AFTER = /\btickets?(?:[ \t\u00a0\u202f\u2009]{1,16}(?:count|total))?[ \t\u00a0\u202f\u2009]{0,16}[:=\-–][ \t\u00a0\u202f\u2009]{0,16}(\d{1,6})\b/gi; // "Tickets: 2"
 
 function values(text: string, patterns: RegExp[]): number[] {
   const counts: number[] = [];
@@ -30,22 +31,22 @@ function values(text: string, patterns: RegExp[]): number[] {
 
 /** Ticket counts describing sales (not available/remaining/capacity amounts). */
 export function statedTicketCounts(text: string): number[] {
-  const explicitSold = values(text, SOLD_PATTERNS);
-  if (explicitSold.length > 0) return explicitSold;
+  // Check sold-labeled figures and unambiguous generic ticket counts together.
+  // Capacity and remaining inventory are filtered out below.
 
   // Backward compatibility for answers such as "2 tickets" or "Tickets: 2".
   // Do not mistake inventory statements for sales when no sold label exists.
-  const counts: number[] = [];
+  const counts = values(text, SOLD_PATTERNS);
   for (const match of text.matchAll(COUNT_BEFORE)) {
     const before = text.slice(Math.max(0, match.index - 32), match.index);
     const after = text.slice(match.index + match[0].length, match.index + match[0].length + 32);
-    if (/\b(?:capacity|remaining|available|left|inventory)[ \t\u00a0\u202f]*[:=\-–]?[ \t\u00a0\u202f]*$/i.test(before)) continue;
-    if (/^[ \t\u00a0\u202f]{0,16}(?:remaining|left|available|in[ \t\u00a0\u202f]{1,16}stock)\b/i.test(after)) continue;
+    if (/\b(?:capacity|remaining|available|left|inventory)[ \t\u00a0\u202f\u2009]*[:=\-–]?[ \t\u00a0\u202f\u2009]*$/i.test(before)) continue;
+    if (/^[ \t\u00a0\u202f\u2009]{0,16}(?:remaining|left|available|capacity|total|in[ \t\u00a0\u202f\u2009]{1,16}stock)\b/i.test(after)) continue;
     counts.push(Number(match[1]));
   }
   for (const match of text.matchAll(COUNT_AFTER)) {
     const before = text.slice(Math.max(0, match.index - 32), match.index);
-    if (/\b(?:capacity|remaining|available|left|inventory|unsold)[ \t\u00a0\u202f]*[:=\-–]?[ \t\u00a0\u202f]*$/i.test(before)) continue;
+    if (/\b(?:capacity|remaining|available|left|inventory|unsold)[ \t\u00a0\u202f\u2009]*[:=\-–]?[ \t\u00a0\u202f\u2009]*$/i.test(before)) continue;
     counts.push(Number(match[1]));
   }
   return counts;
