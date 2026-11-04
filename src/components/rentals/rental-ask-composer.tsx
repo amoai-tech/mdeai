@@ -254,6 +254,7 @@ function usePublishHeight(element: HTMLDivElement | null): void {
   }, [element]);
 }
 
+// skipcq: JS-0067 - module-local React component; not a browser global
 function LiveComposer({
   onResults,
   context,
@@ -369,6 +370,8 @@ function LiveComposer({
   const returnTo = query ? `${pathname}?${query}` : pathname;
   const signInHref = `/login?next=${encodeURIComponent(returnTo)}`;
 
+  // skipcq: JS-R1005 - existing composed rental send handler; lifecycle branching
+  // stays together to preserve one transactional turn and its cancellation/cleanup.
   const send = useCallback(async () => {
     // The exact text as typed, so a restore only happens when nothing new has been written.
     const raw = draft;
@@ -441,6 +444,38 @@ function LiveComposer({
     const abort = new AbortController();
     abortRef.current = abort;
     const turn = ++turnId.current;
+    // AG-UI's own run lifecycle is the success authority, not a globally shared
+    // error counter or a new assistant tool-call/partial-message placeholder.
+    // Correlate by runId: the previously stopped run can still finish late.
+    let activeRunId: string | null = null;
+    let runSucceeded = false;
+    let runFailed = false;
+    let completedAssistantText = false;
+    const assistantTextMessageIds = new Set<string>();
+    const runSubscription = agent?.subscribe({
+      onRunInitialized: ({ input }) => { activeRunId = input.runId; },
+      onTextMessageStartEvent: ({ input, event }) => {
+        // AG-UI defines an omitted TEXT_MESSAGE_START role as "assistant".
+        if (input.runId === activeRunId && (event.role === "assistant" || event.role === undefined)) {
+          assistantTextMessageIds.add(event.messageId);
+        }
+      },
+      onTextMessageEndEvent: ({ input, event, textMessageBuffer }) => {
+        if (input.runId === activeRunId && assistantTextMessageIds.has(event.messageId) &&
+            textMessageBuffer.trim().length > 0) {
+          completedAssistantText = true;
+        }
+      },
+      onRunFinishedEvent: ({ event, outcome }) => {
+        if (event.runId === activeRunId && outcome === "success") runSucceeded = true;
+      },
+      onRunErrorEvent: ({ input }) => {
+        if (input.runId === activeRunId) runFailed = true;
+      },
+      onRunFailed: ({ input }) => {
+        if (input.runId === activeRunId) runFailed = true;
+      },
+    });
     toolResultSeen.current = false;
     pendingToolResult.current = null;
     const errorVersionBefore = getConciergeErrorVersion();
@@ -458,7 +493,13 @@ function LiveComposer({
         setDraft((current) => (current === "" ? raw : current));
         return;
       }
-      if (getConciergeErrorVersion() !== errorVersionBefore) {
+      // Only a successful run with an actual completed answer may ignore a late
+      // error from the previous, stopped run: visible text OR validated rental
+      // tool-result cards. A tool-call placeholder, partial text, or failed
+      // current run never qualifies.
+      const producedAnswer = runSucceeded && !runFailed &&
+        (completedAssistantText || toolResultSeen.current);
+      if (runFailed || (getConciergeErrorVersion() !== errorVersionBefore && !producedAnswer)) {
         // The turn is already in the thread; a Retry here would add the same question twice.
         setError(ERROR_COPY_RUN);
         return;
@@ -525,10 +566,11 @@ function LiveComposer({
         }
       }
     } finally {
+      runSubscription?.unsubscribe();
       sendInFlight.current = false;
       if (mounted.current) setSending(false);
     }
-  }, [appendMessage, busy, draft, signedOut, isReady, onResults, onOpenDetails, context, setState]);
+  }, [agent, appendMessage, busy, draft, signedOut, isReady, onResults, onOpenDetails, context, setState]);
 
   const onStop = useCallback(() => {
     if (sendInFlight.current) cancelled.current = true;
