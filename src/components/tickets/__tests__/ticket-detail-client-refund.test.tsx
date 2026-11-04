@@ -5,6 +5,12 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { TicketDetailClient } from "@/components/tickets/ticket-detail-client";
 import type { WalletOrderPayload } from "@/lib/tickets/wallet-types";
 
+vi.mock("react-qr-code", () => ({
+  default: ({ value }: { value: string }) => (
+    <div data-testid="qr-encoded-value" data-value={value} />
+  ),
+}));
+
 vi.mock("next/link", () => ({
   default: ({ href, children, ...props }: {
     href: string;
@@ -91,6 +97,7 @@ describe("ticket detail refunded/cancelled QR safety", () => {
     });
     const qr = await screen.findByTestId("my-tickets-qr");
     expect(qr.getAttribute("data-qr-state")).toBe("valid");
+    expect(screen.getByTestId("qr-encoded-value").getAttribute("data-value")).toBe("valid-second-ticket");
     expect(screen.queryByTestId("my-tickets-revoked")).toBeNull();
   });
 
