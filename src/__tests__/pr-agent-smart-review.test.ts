@@ -275,8 +275,14 @@ describe("SAN-1609 quality, budget and provider run metrics", () => {
   });
 
   it("rejects oversized or malformed provider model names without ambiguous regex work", () => {
-    const fixture = (label: string) => complete +
-      `\n<hr>\n<details> <summary><strong>⚙️ Agent run details</strong></summary>\n\n- Model: ${label}\n- Time cost: 1.1s\n- AI calls: 1\n\n</details>\n`;
+    // Keep model values as separate fixture data. No HTML interpolation,
+    // and no change to the exact upstream review-details markup.
+    const fixture = (label: string) => [
+      complete,
+      "\n<hr>\n<details> <summary><strong>⚙️ Agent run details</strong></summary>\n\n- Model: ",
+      label,
+      "\n- Time cost: 1.1s\n- AI calls: 1\n\n</details>\n",
+    ].join("");
     expect(parseReviewUsage(fixture("a".repeat(1025)), BASE, HEAD).model).toBeNull();
     expect(parseReviewUsage(fixture("openai/nvidia/model, "), BASE, HEAD).model).toBeNull();
     expect(parseReviewUsage(fixture("model), ("), BASE, HEAD).model).toBeNull();
