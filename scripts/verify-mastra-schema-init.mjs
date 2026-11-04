@@ -349,8 +349,6 @@ try {
       `\nmastra-schema-init-check: FAIL — the initializer did not create ${missing.length} contract table(s).`,
     );
     process.exitCode = 1;
-  } else {
-    console.log("\nmastra-schema-init-check: OK — every contract table was provisioned.");
   }
 
   if (unclassified.length) {
@@ -361,6 +359,13 @@ try {
         "  needs it, or to adapterInitExtraTables if it only backs a Mastra feature MDE does not use.",
     );
     process.exitCode = 1;
+  }
+
+  // Only claim success when BOTH classification checks passed. Printing OK before the
+  // unclassified-table failure made the transcript read "OK … then FAIL", which hides the
+  // real verdict in a long CI log.
+  if (!missing.length && !unclassified.length) {
+    console.log("\nmastra-schema-init-check: OK — every contract table was provisioned and classified.");
   }
 
   // SAN-547 — asserted, never applied. `mastra:init` owns installing the guard, so
