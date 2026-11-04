@@ -1,12 +1,7 @@
-import { test, expect, type Page } from "@playwright/test";
-import {
-  createThrowawayIdentity,
-  deleteThrowawayIdentity,
-  getSupabaseAdmin,
-  hasE2eEnv,
-  signInAsOnOrigin,
-  type ThrowawayIdentity,
-} from "./helpers/auth";
+import { test, expect, type Page } from "./fixtures";
+import { loadEnvLocalForE2E } from "./helpers/auth";
+
+loadEnvLocalForE2E();
 
 /**
  * SAN-1605 · Journey B — a real Stop on the shipped /rentals composer.
@@ -34,9 +29,12 @@ import {
  *     retryable error, and a user Stop produces none, so the recovery path after
  *     Stop is sending again.
  */
-// Use a real but disposable Supabase identity. The existing cleanup helper proves
-// the user's threads/messages and profile are gone; ai_runs cascades on profile deletion.
-test.use({ trace: "off", screenshot: "off", video: "off", viewport: { width: 1440, height: 900 } });
+// The dedicated permanent renter QA identity remains intact. Aborting an AI
+// stream can leave server-side output processors running AFTER the browser is idle;
+// deleting its thread/user in an E2E teardown can trigger FK errors in production.
+// Runs require explicit opt-in. Safely draining and purging QA records is a
+// separate backend lifecycle concern, not a test-teardown shortcut.
+test.use({ qaRole: "renter", trace: "off", screenshot: "off", video: "off", viewport: { width: 1440, height: 900 } });
 
 const QUESTION = "Find a furnished 2-bedroom apartment in Laureles under COP 3 million.";
 const composer = (page: Page) => page.locator('[data-testid="rental-ask-composer"]:visible').first();
@@ -103,29 +101,14 @@ async function expectNoErrorBanner(page: Page): Promise<void> {
 }
 
 test.describe("SAN-1605 · signed-in Stop on /rentals", () => {
-  let identity: ThrowawayIdentity | undefined;
-  test.beforeEach(async () => {
-    identity = undefined;
-    expect(hasE2eEnv(), "Real Supabase E2E credentials are required; no silent skips").toBe(true);
-    identity = await createThrowawayIdentity("qa-san1605-stop-retry");
-  });
-  test.afterEach(async () => {
-    if (!identity) return;
-    const userId = identity.userId;
-    await deleteThrowawayIdentity(identity, { waitForAiRunAudit: true });
-    // The live FK is ai_runs.user_id -> profiles(id) ON DELETE CASCADE.
-    // Verify the cascade instead of assuming that deleting Auth removed logs.
-    const { count, error } = await (await getSupabaseAdmin()).from("ai_runs")
-      .select("id", { head: true, count: "exact" }).eq("user_id", userId);
-    expect(error, "QA audit cleanup query").toBeNull();
-    expect(count, "no QA ai_runs remain").toBe(0);
-    identity = undefined;
-  });
+  test.skip(
+    process.env.MDE_QA_STOP_RETRY_WRITE !== "1" || !process.env.MDE_QA_RENTER_EMAIL,
+    "Set MDE_QA_STOP_RETRY_WRITE=1 and existing MDE_QA_RENTER_EMAIL for opt-in real QA writes",
+  );
 
-  test("Stop returns the composer to idle with no error banner", async ({ page, baseURL }) => {
+  test("Stop returns the composer to idle with no error banner", async ({ qaRolePage: page }) => {
     test.setTimeout(300_000);
 
-    await signInAsOnOrigin(page, baseURL!, identity!.email);
     const res = await page.goto("/rentals", { waitUntil: "domcontentloaded" });
     expect(res?.ok()).toBe(true);
 
@@ -134,7 +117,7 @@ test.describe("SAN-1605 · signed-in Stop on /rentals", () => {
     const input = active.locator("textarea, input").first();
     const stop = active.getByTestId("rental-ask-stop");
 
-    // 1 — a real run starts; the Stop control only exists while streaming.
+    // 1 — a real CopilotKit request responds before attempting Stop.
     await input.fill(QUESTION);
     const firstResponse = streamResponse(page);
     await active.getByTestId("rental-ask-send").click();
@@ -156,10 +139,9 @@ test.describe("SAN-1605 · signed-in Stop on /rentals", () => {
     await expectComposerIdle(page, 30_000);
   });
 
-  test("a question sent after Stop produces a new assistant answer", async ({ page, baseURL }) => {
+  test("a question sent after Stop produces a new assistant answer", async ({ qaRolePage: page }) => {
     test.setTimeout(300_000);
 
-    await signInAsOnOrigin(page, baseURL!, identity!.email);
     await page.goto("/rentals", { waitUntil: "domcontentloaded" });
     const active = composer(page);
     await expect(active).toBeVisible({ timeout: 30_000 });
