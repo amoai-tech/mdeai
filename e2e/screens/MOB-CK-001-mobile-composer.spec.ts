@@ -9,7 +9,10 @@ const LONG_MESSAGE =
   "I need a quiet furnished apartment in Laureles for remote work, with reliable Wi-Fi, two bedrooms, a desk, natural light, and enough detail to compare several real options without losing what I already selected on the map.";
 
 async function gotoComposer(page: Page) {
-  const response = await page.goto("/chat", { waitUntil: "domcontentloaded" });
+  // In Next.js dev, HTML may arrive long before the lazily compiled client
+  // bundles finish loading (CI traces showed 22–29s). Start the 30s composer
+  // visibility contract after the page load event, not during script download.
+  const response = await page.goto("/chat", { waitUntil: "load", timeout: 90_000 });
   expect(response?.ok(), "GET /chat").toBe(true);
 
   // Verify the user-visible v2 composer, not a custom chat-view mount marker.

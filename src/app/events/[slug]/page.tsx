@@ -15,14 +15,21 @@ type EventDetailPageProps = {
   searchParams: Promise<{ from?: string | string[] }>;
 };
 
+// skipcq: JS-0067 - Next.js requires this named module export; not a browser global
 export async function generateMetadata({
   params,
 }: EventDetailPageProps): Promise<Metadata> {
   const { slug } = await params;
   const result = await getPublicEventResult(slug);
-  // A temporary read failure must not be titled "Event not found".
-  if (result.status !== "ok") {
-    return { title: result.status === "not-found" ? "Event not found · mdeai" : "Event unavailable · mdeai" };
+  // A missing or unreadable event must never be indexed as a real event page.
+  // A temporary read failure keeps a non-committal title: it is not "not found".
+  if (result.status === "not-found") {
+    return { title: "Event not found · mdeai", robots: { index: false, follow: false } };
+  }
+  // A temporary read failure is not a deletion. Never answer noindex for an event that
+  // may still exist: Google drops the URL permanently. The page shows Retry instead.
+  if (result.status === "unavailable") {
+    return { title: "Event unavailable · mdeai" };
   }
   const event = result.event;
   return {
