@@ -42,12 +42,14 @@
 --
 -- Lockdown
 -- --------
--- `public.mastra_*` tables are server-only. Supabase grants ALL on new `public` tables to
--- `anon` / `authenticated` through its default privileges, so a table created here would
--- otherwise be reachable through PostgREST. The `DO` block below is the SQL form of
--- `scripts/lib/mastra-storage-lockdown.mjs` (the canonical implementation, applied by
--- `mastra:init`). It is duplicated here only because a migration cannot import that
--- module, and it is role-aware so the same file also runs on a plain Postgres.
+-- `public.mastra_*` tables are server-only. Supabase may grant new tables in
+-- `public` to `anon` / `authenticated` by default, so the migration must secure
+-- both new tables before any API access. Mirror the canonical lockdown in
+-- `scripts/lib/mastra-storage-lockdown.mjs`, but target ONLY these two tables:
+-- reapplying DROP POLICY / CREATE POLICY to the 32 existing tables would take
+-- unnecessary locks and could overwrite independently maintained policies.
+-- The full initializer still locks down the entire prefix in fresh environments.
+-- Role checks keep this migration usable on plain PostgreSQL without Supabase roles.
 
 create table if not exists public."mastra_workflow_run_owners" (
     "runId" text not null,
@@ -110,13 +112,9 @@ declare
   has_anon boolean := exists (select 1 from pg_roles where rolname = 'anon');
   has_authenticated boolean := exists (select 1 from pg_roles where rolname = 'authenticated');
 begin
+  -- Additive upgrade: do not rewrite policies on existing Mastra storage tables.
   for t in
-    select c.relname
-    from pg_class c
-    join pg_namespace n on n.oid = c.relnamespace
-    where n.nspname = 'public'
-      and c.relkind = 'r'
-      and starts_with(c.relname, 'mastra_')
+    select unnest(array['mastra_workflow_run_owners', 'mastra_memory_run_fences']::text[])
   loop
     execute format('alter table public.%I enable row level security', t);
     execute format('alter table public.%I force row level security', t);
