@@ -1,0 +1,27 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { safeViewingRejection } from "../prod-behaviour-smoke.mjs";
+
+const unavailable = {
+  success: false,
+  error: {
+    code: "LISTING_UNAVAILABLE",
+    message: "This home isn't accepting viewing requests right now. Pick another apartment from the results.",
+  },
+};
+
+test("accepts a safe 409 response for the deliberately nonexistent listing", () => {
+  assert.equal(safeViewingRejection(409, unavailable), true);
+});
+
+test("preserves the old safe 400 validation response contract", () => {
+  assert.equal(safeViewingRejection(400, { error: { code: "VALIDATION_ERROR", message: "Please try again." } }), true);
+});
+
+test("rejects false success, wrong codes, and database error leakage", () => {
+  assert.equal(safeViewingRejection(200, { success: true }), false);
+  assert.equal(safeViewingRejection(409, { success: true, error: unavailable.error }), false);
+  assert.equal(safeViewingRejection(409, { error: { code: "AUTH_REQUIRED", message: unavailable.error.message } }), false);
+  assert.equal(safeViewingRejection(409, { error: { code: "LISTING_UNAVAILABLE", message: "p1_schedule_tour_atomic: listing rejected" } }), false);
+  assert.equal(safeViewingRejection(409, null), false);
+});

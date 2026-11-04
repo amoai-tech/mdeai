@@ -72,6 +72,23 @@ async function servedFingerprint() {
   };
 }
 
+// The intentionally nonexistent listing may be rejected during input validation
+// (400) or after a safe domain lookup (409). Both are legitimate negative
+// outcomes. Never accept success or a response leaking database internals.
+export function safeViewingRejection(status, json) {
+  const error = json && json.error;
+  const message = error && typeof error.message === "string" ? error.message : "";
+  const expected =
+    (status === 400 && error?.code === "VALIDATION_ERROR" && /try again/i.test(message)) ||
+    (status === 409 && error?.code === "LISTING_UNAVAILABLE" && /another apartment from the results/i.test(message));
+  const payload = JSON.stringify(json ?? {});
+  return Boolean(
+    json?.success !== true &&
+    expected &&
+    !/p1_schedule|constraint|duplicate key|postgres|violates/i.test(payload),
+  );
+}
+
 async function safeViewingError() {
   const res = await fetch(BASE + "/api/leads/schedule-viewing", {
     method: "POST",
@@ -86,16 +103,10 @@ async function safeViewingError() {
     }),
   });
   const json = await res.json().catch(() => ({}));
-  const payload = JSON.stringify(json);
-  const message = json && json.error ? json.error.message || "" : "";
-  const safe =
-    res.status === 400 &&
-    json &&
-    json.error &&
-    json.error.code === "VALIDATION_ERROR" &&
-    /try again/i.test(message) &&
-    !/p1_schedule|constraint|duplicate key|postgres|violates/i.test(payload);
-  return { ok: safe, detail: "HTTP " + res.status + " " + JSON.stringify(json) };
+  return {
+    ok: safeViewingRejection(res.status, json),
+    detail: "HTTP " + res.status + " " + JSON.stringify(json),
+  };
 }
 
 const ANSWERED = /Found \d+ rentals?|No rentals match|No rentals are available/i;
