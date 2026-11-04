@@ -9,7 +9,7 @@ const agui = (id: string | null, route = "/events") => ({
   }],
 });
 const userTurn = (text: string) => [{ role: "user", content: text }];
-const lookupFound = async () => ({
+const lookupFound = () => Promise.resolve({
   found: true,
   data: { id: "a1b2c3d4-0001-0001-0001-000000000003", name: "Feria de las Flores Preview Parade", event_tickets: [] },
 });
@@ -30,7 +30,7 @@ describe("SAN-1600 — a simple question about the item on screen carries its ve
 
   it("leaves the turn untouched when the lookup cannot verify the item", async () => {
     const original = userTurn("Are tickets available?");
-    const miss = async () => ({ found: false, data: null });
+    const miss = () => Promise.resolve({ found: false, data: null });
     expect(await withVerifiedSelectionFacts(original, agui("a1b2c3d4-0001-0001-0001-000000000003"), miss)).toBe(original);
   });
 
@@ -50,7 +50,7 @@ describe("SAN-1600 — a simple question about the item on screen carries its ve
   });
 
   it("uses verified location and time fields for a meeting-point question", async () => {
-    const verified = async () => ({
+    const verified = () => Promise.resolve({
       found: true,
       data: { name: "Feria de las Flores Preview Parade", address: "Listed street address",
         event_start_time: "2027-08-08T15:00:00Z", event_venues: [{ name: "Listed venue" }], event_tickets: [] },
@@ -64,7 +64,7 @@ describe("SAN-1600 — a simple question about the item on screen carries its ve
   });
 
   it("accepts the linked event venue as an object, as Supabase returns for a many-to-one relation", async () => {
-    const verified = async () => ({
+    const verified = () => Promise.resolve({
       found: true, data: { name: "Feria de las Flores Preview Parade",
         event_venues: { name: "Official event venue", address: "Known venue address", city: "Medellín" } },
     });
@@ -73,7 +73,7 @@ describe("SAN-1600 — a simple question about the item on screen carries its ve
   });
 
   it("does not claim zero tiers when ticket tiers were not retrieved", async () => {
-    const verified = async () => ({ found: true, data: { name: "Feria de las Flores Preview Parade" } });
+    const verified = () => Promise.resolve({ found: true, data: { name: "Feria de las Flores Preview Parade" } });
     const out = await withVerifiedSelectionFacts(userTurn("Are tickets available?"), agui("a1b2c3d4-0001-0001-0001-000000000003"), verified);
     expect(String(out[0].content)).not.toContain("no ticket tiers listed");
   });
@@ -89,6 +89,22 @@ describe("SAN-1600 — a simple question about the item on screen carries its ve
       agui("a1b2c3d4-0001-0001-0001-000000000003"), lookupFound,
     );
     expect(String(out[0].content)).toContain("no ticket tiers listed");
+  });
+
+  it("includes stored ticket counts without claiming a sale is possible", async () => {
+    const lookup = () => Promise.resolve({ found: true, data: {
+      name: "Feria de las Flores Preview Parade",
+      event_tickets: [{ name: "General", price: 25000, currency: "COP", qty_total: 100, qty_sold: 100 }],
+    } });
+    const out = await withVerifiedSelectionFacts(
+      userTurn("Are tickets sold out?"),
+      agui("a1b2c3d4-0001-0001-0001-000000000003"), lookup,
+    );
+    const content = String(out[0].content);
+    expect(content).toContain('"qty_total":100');
+    expect(content).toContain('"qty_sold":100');
+    expect(content).toContain('"ticket_tier_count":1');
+    expect(content).toContain("not proof that checkout is currently available");
   });
 
   it("preserves rich message parts instead of discarding non-text payloads", async () => {

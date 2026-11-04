@@ -245,101 +245,134 @@ export function currentSelectedNameOnly<T extends { role: string; content: unkno
 }
 
 /**
- * SAN-1600 — the current public event was verified on every observed run but
- * the model ignored instructions-only evidence. Include question-specific facts
- * in the last user turn without changing the existing concierge or RLS lookup.
+ * SAN-1600 — the current event was verified but its instructions-only facts were
+ * sometimes ignored. Add relevant public data to the active question instead.
+ * Browser selection is a hint; only the existing public RLS lookup is trusted.
  */
 const ITEM_ATTRIBUTE_QUESTION = /\b(?:tickets?|available|availability|price|prices|cost|how much|meeting|meet|where|when|time|start|start(s|ed)?|venue|location|sold out)\b/i;
 const TICKET_FACT_QUESTION = /\b(?:tickets?|available|availability|price|prices|cost|how much|sold out)\b/i;
 const LOCATION_FACT_QUESTION = /\b(?:meeting|meet|where|venue|location|address)\b/i;
 const TIME_FACT_QUESTION = /\b(?:when|time|start|start(s|ed)?)\b/i;
 
-/** Do not reinterpret an explicit target (e.g. "tickets for Reina") as the selected Feria. */
+/** Do not answer a different explicitly named event using the selected Feria. */
 const EXPLICIT_OTHER_TARGET = /\b(?:for|about|at|of)\s+(?!(?:this|that|my|our)\b|the\s+(?:selected|current|same|event|item|one)\b)(?:the\s+)?([A-ZÀ-Ÿ][\p{L}\p{N}]+)/u;
 
-function compactSelectedEventFacts(data: Record<string, unknown>, question: string): Record<string, unknown> {
-  const facts: Record<string, unknown> = {
-    event_name: typeof data.name === "string" ? data.name : "Unknown event",
-  };
-  if (TICKET_FACT_QUESTION.test(question)) {
-    if (Array.isArray(data.event_tickets)) {
-      facts.ticket_tier_status = data.event_tickets.length === 0
-        ? "no ticket tiers listed"
-        : "ticket tiers listed (not proof that checkout is currently available)";
-      facts.ticket_tiers = data.event_tickets.slice(0, 12).map((tier: unknown) => {
-        if (!tier || typeof tier !== "object") return {};
-        const item = tier as Record<string, unknown>;
-        return { name: item.name ?? null, price: item.price ?? null, currency: item.currency ?? null };
-      });
-    } else {
-      facts.ticket_tier_status = "not verified — do not infer zero tiers or purchase availability";
-    }
-  }
-  if (LOCATION_FACT_QUESTION.test(question)) {
-    facts.listed_address = typeof data.address === "string" && data.address.trim() ? data.address : "not listed";
-    // Supabase returns an object for the event -> venue FK, not always an array.
-    const venueRows = Array.isArray(data.event_venues) ? data.event_venues
-      : data.event_venues && typeof data.event_venues === "object" ? [data.event_venues] : [];
-    facts.listed_venues = venueRows.length
-      ? venueRows.map((venue: unknown) => {
-          const v = venue as Record<string, unknown>;
-          return { name: v.name ?? null, address: v.address ?? null, city: v.city ?? null };
-        })
-      : "not listed";
-    facts.exact_meeting_point = "not confirmed by verified public record";
-  }
-  if (TIME_FACT_QUESTION.test(question)) {
-    facts.event_start_time = data.event_start_time ?? "not listed";
-  }
-  return facts;
-}
+type PublicLookup = (selection: {
+  page: "rentals" | "restaurants" | "events" | "cafes" | "nightlife";
+  id: string;
+}) => Promise<{ found: boolean; data: Record<string, unknown> | null }>;
 
+const isPublicRecord = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === "object" && !Array.isArray(value);
+
+const selectedEventTicketFacts = (tiers: unknown): Record<string, unknown> => {
+  if (!Array.isArray(tiers)) {
+    return { ticket_tier_status: "not verified — do not infer zero tiers or purchase availability" };
+  }
+  return {
+    ticket_tier_status: tiers.length === 0
+      ? "no ticket tiers listed"
+      : "ticket tiers listed (not proof that checkout is currently available)",
+    ticket_tier_count: tiers.length,
+    ticket_tiers: tiers.slice(0, 12).map((tier: unknown) => {
+      if (!isPublicRecord(tier)) return {};
+      return {
+        name: tier.name ?? null,
+        price: tier.price ?? null,
+        currency: tier.currency ?? null,
+        qty_total: tier.qty_total ?? null,
+        qty_sold: tier.qty_sold ?? null,
+      };
+    }),
+  };
+};
+
+const selectedEventLocationFacts = (data: Record<string, unknown>): Record<string, unknown> => {
+  // Supabase many-to-one join returns an object (or null); test doubles may use an array.
+  const venueRows = Array.isArray(data.event_venues) ? data.event_venues
+    : isPublicRecord(data.event_venues) ? [data.event_venues] : [];
+  return {
+    listed_address: typeof data.address === "string" && data.address.trim() ? data.address : "not listed",
+    listed_venues: venueRows.length
+      ? venueRows.filter(isPublicRecord).map((venueRecord) => ({
+        name: venueRecord.name ?? null,
+        address: venueRecord.address ?? null,
+        city: venueRecord.city ?? null,
+      }))
+      : "not listed",
+    exact_meeting_point: "not confirmed by verified public record",
+  };
+};
+
+const compactSelectedEventFacts = (data: Record<string, unknown>, question: string): Record<string, unknown> => ({
+  event_name: typeof data.name === "string" ? data.name : "Unknown event",
+  ...(TICKET_FACT_QUESTION.test(question) ? selectedEventTicketFacts(data.event_tickets) : {}),
+  ...(LOCATION_FACT_QUESTION.test(question) ? selectedEventLocationFacts(data) : {}),
+  ...(TIME_FACT_QUESTION.test(question) ? { event_start_time: data.event_start_time ?? "not listed" } : {}),
+});
+
+const isSelectedEventQuestion = (question: string): boolean =>
+  ITEM_ATTRIBUTE_QUESTION.test(question) &&
+  !(COMPARISON_REQUEST.test(question) && TWO_PUBLIC_ITEMS.test(question));
+
+const isDifferentNamedEvent = (question: string, eventName: unknown): boolean => {
+  const explicitName = question.match(EXPLICIT_OTHER_TARGET)?.[1];
+  if (!explicitName) return false;
+  return typeof eventName !== "string" || !eventName.toLocaleLowerCase().includes(explicitName.toLocaleLowerCase());
+};
+
+const isTextPart = (part: unknown): part is { type: "text"; text: string } =>
+  isPublicRecord(part) && part.type === "text" && typeof part.text === "string";
+
+/** Keep images and other parts intact instead of flattening a CopilotKit user turn. */
+const appendVerifiedFactBlock = (content: unknown, block: string): unknown | null => {
+  if (typeof content === "string") return content + block;
+  if (!isPublicRecord(content) || !Array.isArray(content.parts)) return null;
+  const parts: unknown[] = [...content.parts];
+  const textPartIndex = parts.findLastIndex(isTextPart);
+  if (textPartIndex < 0) return null;
+  const textPart = parts[textPartIndex];
+  if (!isTextPart(textPart)) return null;
+  parts[textPartIndex] = { ...textPart, text: textPart.text + block };
+  return { ...content, parts };
+};
+
+const activeSelectedEventTurn = <T extends { role: string; content: unknown }>(
+  messages: T[],
+  agui: unknown,
+): { id: string; lastUser: number; question: string } | null => {
+  const selected = selectedDiscoveryContext(agui);
+  if (selected?.route !== "/events" || !selected.selectedPublicEntityId) return null;
+  const lastUser = messages.findLastIndex((message) => message.role === "user");
+  if (lastUser < 0) return null;
+  const question = messageText(messages[lastUser].content);
+  return isSelectedEventQuestion(question)
+    ? { id: selected.selectedPublicEntityId, lastUser, question }
+    : null;
+};
+
+// skipcq: JS-0067 - ES module exports are module-scoped, not browser globals.
 export async function withVerifiedSelectionFacts<T extends { role: string; content: unknown }>(
   messages: T[],
   agui: unknown,
-  lookup: (selection: { page: "rentals" | "restaurants" | "events" | "cafes" | "nightlife"; id: string }) =>
-    Promise<{ found: boolean; data: Record<string, unknown> | null }>,
+  lookup: PublicLookup,
 ): Promise<T[]> {
-  const selected = selectedDiscoveryContext(agui);
-  const id = selected?.selectedPublicEntityId ?? null;
-  // This change addresses event questions only. Non-event records have different
-  // field contracts and must not acquire the event-ticket summary.
-  if (!selected || selected.route !== "/events" || !id) return messages;
-  const lastUser = messages.findLastIndex((message) => message.role === "user");
-  if (lastUser < 0) return messages;
-  const originalContent = messages[lastUser].content;
-  const question = messageText(originalContent);
-  if (!ITEM_ATTRIBUTE_QUESTION.test(question)) return messages;
-  if (COMPARISON_REQUEST.test(question) && TWO_PUBLIC_ITEMS.test(question)) return messages;
-  const explicitName = question.match(EXPLICIT_OTHER_TARGET)?.[1] ?? null;
-  const richParts = originalContent && typeof originalContent === "object" && "parts" in originalContent
-    && Array.isArray(originalContent.parts) ? originalContent.parts : null;
-  const textPartIndex = richParts?.findLastIndex((part: unknown) =>
-    part && typeof part === "object" && "type" in part && part.type === "text"
-    && "text" in part && typeof part.text === "string") ?? -1;
-  if (typeof originalContent !== "string" && textPartIndex < 0) return messages;
-
+  const turn = activeSelectedEventTurn(messages, agui);
+  if (!turn) return messages;
   try {
-    const verified = await lookup({ page: "events", id });
-    if (!verified.found || !verified.data) return messages;
-    // A specifically named different event is not a question about the current
-    // selection. A named reference to the same selected event is safe to ground.
-    if (explicitName && !(typeof verified.data.name === "string"
-      && verified.data.name.toLocaleLowerCase().includes(explicitName.toLocaleLowerCase()))) return messages;
-    const facts = compactSelectedEventFacts(verified.data, question);
-    const block = "\n\n[SERVER-VERIFIED ITEM ON SCREEN — read-only data for the selected event. Answer using only the fields below. Do not ask which event. Never infer missing fields or treat a listed tier as purchase availability.]\n"
-      + JSON.stringify(facts);
-    let nextContent: unknown;
-    if (typeof originalContent === "string") {
-      nextContent = originalContent + block;
-    } else {
-      const parts = [...richParts!];
-      const textPart = parts[textPartIndex] as { type: string; text: string };
-      parts[textPartIndex] = { ...textPart, text: textPart.text + block };
-      nextContent = { ...(originalContent as Record<string, unknown>), parts };
+    const verified = await lookup({ page: "events", id: turn.id });
+    if (!verified.found || !verified.data || isDifferentNamedEvent(turn.question, verified.data.name)) {
+      return messages;
     }
+    const facts = compactSelectedEventFacts(verified.data, turn.question);
+    const block = [
+      "\n\n[SERVER-VERIFIED ITEM ON SCREEN — read-only data for the selected event. Answer using only the fields below. Do not ask which event. Never infer missing fields or treat a listed tier as purchase availability.]\n",
+      JSON.stringify(facts),
+    ].join("");
+    const newContent = appendVerifiedFactBlock(messages[turn.lastUser].content, block);
+    if (newContent === null) return messages;
     const next = [...messages];
-    next[lastUser] = { ...messages[lastUser], content: nextContent } as T;
+    next[turn.lastUser] = { ...messages[turn.lastUser], content: newContent } as T;
     return next;
   } catch {
     return messages;
