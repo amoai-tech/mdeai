@@ -128,7 +128,7 @@
     "test:e2e:rental-viewing": "PW_SKIP_WEBSERVER=1 playwright test e2e/rental-conversion-journey.spec.ts --project=prod-smoke --workers=1 --retries=0",
     "test:local:embedding": "node scripts/check-local-embedding-readiness.mjs",
     "test:local:embedding:journey": "node scripts/test-local-embedding-journey.mjs",
-    "test:e2e:chromatic-pilot": "node scripts/run-chromatic-pilot.mjs",
+    "test:e2e:chromatic-pilot": "node scripts/run-chromatic-pilot.cjs",
     "chromatic:pilot": "chromatic --playwright --no-interactive"
   },
   "dependencies": {

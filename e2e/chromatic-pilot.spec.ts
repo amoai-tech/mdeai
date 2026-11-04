@@ -12,7 +12,7 @@ import {
 
 // Real MDE UI + isolated deterministic API fixtures. No live bookings, leads,
 // ticket payments, or stored conversations. All snapshots are opt-in.
-async function prepareVisualPage(page: Page) {
+const prepareVisualPage = async (page: Page) => {
   await mockFastPaths(page);
   // The anonymous fast-path chat would otherwise POST to a real persistence
   // endpoint and receive a 401. Keep this UI-only test entirely read-only.
@@ -20,7 +20,7 @@ async function prepareVisualPage(page: Page) {
     if (route.request().method() !== "POST") return route.fallback();
     const url = new URL(route.request().url());
     const data = route.request().postDataJSON() as { messages?: unknown[] } | null;
-    await route.fulfill({
+    return route.fulfill({
       status: 200,
       contentType: "application/json",
       body: JSON.stringify({
@@ -31,9 +31,9 @@ async function prepareVisualPage(page: Page) {
       }),
     });
   });
-}
+};
 
-async function mockEventDetails(page: Page) {
+const mockEventDetails = async (page: Page) => {
   // Match the existing Argos test's public event-detail API contract.
   // The selected event and ticket prices are fake visual fixtures only.
   await page.route("**/api/events/*/public", async (route) => {
@@ -64,7 +64,7 @@ async function mockEventDetails(page: Page) {
       body: JSON.stringify({ event: publicEvent }),
     });
   });
-}
+};
 
 test.describe("MDE Chromatic mobile UI pilot", () => {
   test.skip(process.env.CHROMATIC_PILOT !== "1", "Chromatic pilot is opt-in");

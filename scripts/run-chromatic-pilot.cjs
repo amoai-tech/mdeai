@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // Repeatable, opt-in Chromatic UI pilot. No live credentials or database writes.
-import { spawnSync } from "node:child_process";
-import { join } from "node:path";
+// CommonJS is deliberate for this Node CLI; the project ESLint rule targets ESM imports.
+/* eslint-disable @typescript-eslint/no-require-imports */
+const { spawnSync } = require("node:child_process");
+const { join } = require("node:path");
 
 const env = {
   ...process.env,
