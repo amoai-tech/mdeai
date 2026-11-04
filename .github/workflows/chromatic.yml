@@ -1,0 +1,64 @@
+name: Chromatic Playwright pilot
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "e2e/chromatic-pilot.spec.ts"
+      - "e2e/helpers/deterministic-chat.ts"
+      - "scripts/run-chromatic-pilot.mjs"
+      - "playwright.config.ts"
+      - "package.json"
+      - "package-lock.json"
+      - "next.config.ts"
+      - "tsconfig.json"
+      - ".github/workflows/chromatic.yml"
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chromatic-pilot-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  visual:
+    name: Rentals and Events mobile visual checks
+    # Never expose the project token to code from untrusted fork PRs.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout source and history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Capture 390px rental and event states
+        run: npm run test:e2e:chromatic-pilot
+
+      - name: Upload and compare UI snapshots
+        # The official action forwards PR metadata, unlike the raw CLI on a merge SHA.
+        # Advisory pilot: visual differences stay reviewable without failing CI.
+        uses: chromaui/action@add73a4a1d7bc609b8664be286b7309707f1938d # official latest v18.14.0
+        with:
+          playwright: true
+          projectToken: ${{ secrets.CHROMATIC_PROJECT_TOKEN }}
+          exitZeroOnChanges: true
