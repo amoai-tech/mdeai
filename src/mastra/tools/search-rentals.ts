@@ -1,4 +1,5 @@
 import { createTool } from '@mastra/core/tools';
+import { formatWhatsAppRentalReply } from './whatsapp-rental-reply';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { getSupabaseServerAnonEnv } from '@/lib/supabase/server-env';
 import { formatDateOnly } from '@/lib/rentals/date-only';
@@ -406,6 +407,27 @@ export function monthlyBudgetFromQuery(
   };
 }
 
+/** Identify a WhatsApp channel run without impacting web/CopilotKit tool results. */
+export function isWhatsAppRun(context: unknown): boolean {
+  const outer = context as { requestContext?: unknown } | undefined;
+  const requestContext = outer?.requestContext ?? context;
+  const get = (requestContext as { get?: (key: string) => unknown } | undefined)?.get;
+  if (typeof get !== 'function') return false;
+  for (const key of ['channel', '__mastra_chat_channel_render']) {
+    const value = get.call(requestContext, key) as
+      | string
+      | { platform?: unknown; name?: unknown; id?: unknown }
+      | undefined;
+    if (typeof value === 'string' && value.toLowerCase().includes('whatsapp')) return true;
+    if (value && typeof value === 'object') {
+      for (const candidate of [value.platform, value.name, value.id]) {
+        if (typeof candidate === 'string' && candidate.toLowerCase().includes('whatsapp')) return true;
+      }
+    }
+  }
+  return false;
+}
+
 export function rowToRental(r: ApartmentRow): Rental {
   const canScheduleViewing = isRentalRequestable(r);
   const nightlyPrice = nightlyPriceFrom(r);
@@ -754,6 +776,8 @@ export const searchRentalsTool = createTool({
     ),
     source: z.literal('supabase'),
     budgetNote: z.string().optional(),
+    /** Exact rental search results rendered as WhatsApp text; omitted on web. */
+    whatsapp_reply: z.string().optional(),
     /** Requests this search cannot filter (pets, furnished…); the cards must disclose them. */
     unappliedRequests: z.array(z.string()).optional(),
     hybridUsed: z.boolean().optional(),
@@ -826,6 +850,9 @@ export const searchRentalsTool = createTool({
       source,
       budgetNote,
       unappliedRequests: unappliedRequestsFor({ queryText }),
+      whatsapp_reply: isWhatsAppRun(context)
+        ? formatWhatsAppRentalReply(results, monthlyBudgetFromQuery(inputData))
+        : undefined,
       hybridUsed,
       rankExplanation,
     };
