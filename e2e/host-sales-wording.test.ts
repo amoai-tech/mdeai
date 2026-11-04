@@ -60,6 +60,16 @@ describe("SAN-729 — a truthful Host sales answer is accepted in both word orde
   it("does not mistake remaining quantities or numbered tiers for sold totals", () => {
     expect(statesTicketCount("8 tickets remaining. Capacity: 10 tickets.", 8)).toBe(false);
     expect(statesTicketCount("Ticket 1: General Admission", 1)).toBe(false);
+    expect(statesTicketCount("Remaining tickets: 8. Capacity: 10.", 8)).toBe(false);
+    expect(statesTicketCount("Available tickets: 10.", 10)).toBe(false);
+    expect(statesTicketCount("Capacity tickets: 10.", 10)).toBe(false);
+  });
+
+  it("does not misread the revenue amount as tickets sold across a line break", () => {
+    const liveReply = "Total revenue: COP\u202f1,800\nTickets sold: 2\nPaid orders: 1";
+    expect(statesTicketCount(liveReply, 2)).toBe(true);
+    expect(statesTicketCount("Total revenue: COP 1,800\n2 tickets sold", 2)).toBe(true);
+    expect(statesTicketCount("Revenue: COP 1,800\nTickets: 2", 2)).toBe(true);
   });
 
   it("handles long whitespace padding without backtracking", () => {
