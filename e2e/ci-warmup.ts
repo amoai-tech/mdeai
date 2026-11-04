@@ -27,6 +27,19 @@ export default async function warmUpCiChat() {
   }
 
   const started = Date.now();
+  // Three deterministic shards intentionally replace the real CopilotKit
+  // provider with a local chat test adapter. There is no v2 composer to wait
+  // for in that mode. Preserve their existing SSR-only preparation.
+  if (process.env.NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT === "1") {
+    const response = await fetch(url, { signal: AbortSignal.timeout(90_000) });
+    if (!response.ok) {
+      throw new Error(`CI chat warm-up failed: HTTP ${response.status}`);
+    }
+    await response.arrayBuffer();
+    console.log(`[e2e warm-up] deterministic /chat HTML ready in ${Date.now() - started}ms`);
+    return;
+  }
+
   const browser = await chromium.launch();
   try {
     const page = await browser.newPage({
