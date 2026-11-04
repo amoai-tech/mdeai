@@ -41,10 +41,11 @@ const composer = (page: Page) => page.locator('[data-testid="rental-ask-composer
 
 function streamResponse(page: Page) {
   // A Stop button appears even during the pre-request `sending` state. Wait
-  // until the real CopilotKit endpoint has responded before claiming a run began.
+  // until the CopilotKit run request carrying this specific question responds.
   return page.waitForResponse(
     (res) => res.request().method() === "POST" &&
-      res.url().includes("/api/copilotkit") && res.ok(),
+      res.url().includes("/api/copilotkit") &&
+      res.request().postData()?.includes(QUESTION) === true && res.ok(),
     { timeout: 60_000 },
   );
 }
