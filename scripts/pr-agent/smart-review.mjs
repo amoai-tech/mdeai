@@ -96,26 +96,50 @@ export function reviewCoverageFromComment(body, baseSha, headSha) {
  */
 export function parseReviewUsage(body, baseSha, headSha) {
   const empty = { model: null, inputTokens: null, outputTokens: null,
-    seconds: null, calls: null, estimatedUsd: null };
+    seconds: null, calls: null, estimatedUsd: null, costLabel: null };
   const envelope = parseReviewEnvelope(body ?? "");
   if (!envelope.valid || envelope.baseSha !== baseSha.toLowerCase() || envelope.headSha !== headSha.toLowerCase()) return empty;
-  const section = envelope.body.match(/<summary><strong>[^<]*Agent run details<\/strong><\/summary>([\s\S]*?)<\/details>/);
+
+  // PR-Agent v0.49.0 show_run_details() renders "<details> <summary>"
+  // (with a space). Support both that official spelling and the compact
+  // spelling; require the exact section title rather than parsing PR prose.
+  const section = envelope.body.match(/<details>\s*<summary><strong>[^<]*Agent run details<\/strong><\/summary>([\s\S]*?)<\/details>/i);
   if (!section) return empty;
   const bodyText = section[1];
-  const model = bodyText.match(/(?:^|\n)- Model: ([a-z0-9_.\/-]+)(?: \(fallback\))?(?:\r?\n|$)/i)?.[1] ?? null;
+  const modelRaw = bodyText.match(/(?:^|\n)- Models?: ([^\r\n]+)/)?.[1]?.trim();
+  // A fallback section can have multiple models. Do not turn provider text
+  // into arbitrary Markdown or silently report only the primary model.
+  const model = modelRaw && /^[a-z0-9_.\/-]+(?:, [a-z0-9_.\/-]+)*(?: \(includes fallback\)| \(fallback\))?$/i.test(modelRaw) ? modelRaw : null;
   const tokens = bodyText.match(/(?:^|\n)- Tokens: ([\d,]+) in \/ ([\d,]+) out \/ ([\d,]+) total(?:\r?\n|$)/);
   const seconds = bodyText.match(/(?:^|\n)- Time cost: (\d+(?:\.\d+)?)s(?:\r?\n|$)/)?.[1];
   const calls = bodyText.match(/(?:^|\n)- AI calls: (\d+)(?:\r?\n|$)/)?.[1];
-  const usd = bodyText.match(/(?:^|\n)- Estimated API cost: \$(\d+(?:\.\d+)?) USD(?:\r?\n|$)/)?.[1];
-  const safe = (x) => x === undefined ? null : Number.isSafeInteger(Number(x.replaceAll(",", ""))) && Number(x.replaceAll(",", "")) >= 0 && Number(x.replaceAll(",", "")) < 1e10 ? Number(x.replaceAll(",", "")) : null;
+  const safe = (x) => x === undefined ? null : Number.isSafeInteger(Number(x.replaceAll(",", ""))) &&
+    Number(x.replaceAll(",", "")) >= 0 && Number(x.replaceAll(",", "")) < 1e10 ? Number(x.replaceAll(",", "")) : null;
   const inputTokens = tokens ? safe(tokens[1]) : null, outputTokens = tokens ? safe(tokens[2]) : null;
   const total = tokens ? safe(tokens[3]) : null;
+
+  // Preserve the pinned provider's "partial" and "<$0.01" qualifiers.
+  // Omitted or unavailable prices remain UNKNOWN, never a fabricated $0.
+  const costRaw = bodyText.match(/(?:^|\n)- Estimated API cost: ([^\r\n]+)(?:\r?\n|$)/)?.[1]?.trim();
+  let estimatedUsd = null, costLabel = null;
+  if (costRaw === "<$0.01 USD") {
+    costLabel = costRaw;
+  } else if (costRaw) {
+    const price = costRaw.match(/^\$([\d,]+(?:\.\d+)?) USD(?: \(partial: (\d+) of (\d+) successful calls priced\))?$/);
+    const amount = price ? Number(price[1].replaceAll(",", "")) : null;
+    const priced = price?.[2] ? safe(price[2]) : null, successful = price?.[3] ? safe(price[3]) : null;
+    const validPartial = price?.[2] === undefined || (priced !== null && successful !== null && priced > 0 && priced <= successful);
+    if (amount !== null && Number.isFinite(amount) && amount >= 0 && amount < 1e7 && validPartial) {
+      estimatedUsd = amount;
+      costLabel = costRaw;
+    }
+  }
   return { model,
     inputTokens: total !== null && inputTokens !== null && outputTokens !== null && inputTokens + outputTokens === total ? inputTokens : null,
     outputTokens: total !== null && inputTokens !== null && outputTokens !== null && inputTokens + outputTokens === total ? outputTokens : null,
     seconds: seconds !== undefined && Number.isFinite(Number(seconds)) && Number(seconds) >= 0 && Number(seconds) < 86400 ? Number(seconds) : null,
     calls: calls === undefined ? null : safe(calls),
-    estimatedUsd: usd !== undefined && Number.isFinite(Number(usd)) && Number(usd) >= 0 ? Number(usd) : null };
+    estimatedUsd, costLabel };
 }
 
 // Render the exact path safely in a Markdown table. JSON makes embedded CR/LF
@@ -160,7 +184,8 @@ export function buildCoverageReport({ repo, number, baseSha, headSha, files, exp
   const criticalPending = pending.filter((f) => ["critical", "high"].includes(f.category));
   const verified = details.filter((f) => f.coverage === "ai-reviewed" || f.validation.status === "validated").length;
   // An empty inventory is not evidence of perfect coverage.
-  const percentVerified = details.length ? Math.round(100 * verified / details.length) : null;
+  // Never round partial proof to 100% (199/200 rounds to 100 otherwise).
+  const percentVerified = details.length ? (verified === details.length && !inventory.unknownInventory ? 100 : Math.min(99, Math.round(100 * verified / details.length))) : null;
   const verifiedLabel = percentVerified === null ? "unknown (no changed files)" : percentVerified + "%";
   const usage = parseReviewUsage(reviewBody, baseSha, headSha);
   const plan = planFollowupBatches({ details }, { baseSha, headSha, maxBatches: 6, maxPatchBytes: 35000 });
@@ -175,7 +200,7 @@ export function buildCoverageReport({ repo, number, baseSha, headSha, files, exp
     criticalPending.length ? `**Needs independent human attention:** ${criticalPending.slice(0, 10).map((f) => quotePath(f.path)).join(", ")}` : "No uncovered critical/high-risk files established.", "",
     pending.length ? `**Follow-up:** ${pending.length} file(s) lack proven AI coverage. Plan a bounded file-specific review; this comment does not execute or certify one.` : "No actionable uncovered files identified from the available evidence.",
     "**Quality (grounded):** " + verified + "/" + details.length + " files have confirmed AI or deterministic proof (" + verifiedLabel + "); " + criticalPending.length + " critical/high-risk files still need human attention.",
-    "**Model usage (reported):** " + (usage.model ?? "unknown") + " · Calls: " + (usage.calls ?? "unknown") + " · Input/output tokens: " + (usage.inputTokens ?? "unknown") + "/" + (usage.outputTokens ?? "unknown") + " · Processing time: " + (usage.seconds === null ? "unknown" : usage.seconds + "s") + " · Estimated API cost: " + (usage.estimatedUsd === null ? "unknown (not $0)" : "$" + usage.estimatedUsd.toFixed(4) + " USD") + ".",
+    "**Model usage (reported):** " + (usage.model ?? "unknown") + " · Calls: " + (usage.calls ?? "unknown") + " · Input/output tokens: " + (usage.inputTokens ?? "unknown") + "/" + (usage.outputTokens ?? "unknown") + " · Processing time: " + (usage.seconds === null ? "unknown" : usage.seconds + "s") + " · Estimated API cost: " + (usage.costLabel ?? "unknown (not $0)") + ".",
     "**Follow-up budget:** " + plan.batches.length + "/6 risk-ordered patch batches plan " + plannedFiles + " files, capped at 35,000 patch bytes per batch; " + plan.deferred.length + " files deferred. Planning only: no extra model calls executed or certified.",
     ...(inventory.unknownInventory ? ["", "**Inventory UNKNOWN:** GitHub's changed-file listing is incomplete or exceeds its 3,000-file limit."] : []),
     "", "Required Floor, branch protection and human review remain authoritative. Missing AI coverage does not add a new docs-only merge gate."].join("\n");

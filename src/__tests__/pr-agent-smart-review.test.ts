@@ -208,6 +208,32 @@ describe("SAN-1609 quality, budget and provider run metrics", () => {
     expect(report.body).not.toContain("100%");
   });
 
+  it("never rounds 199/200 proven files up to a false 100% coverage claim", () => {
+    const files = Array.from({ length: 200 }, (_, i) => ({
+      filename: `src/components/Item${String(i).padStart(3, "0")}.tsx`,
+      ...(i < 199 ? { patch: "+x" } : {}),
+    }));
+    const result = buildCoverageReport({ repo: "a/b", number: 1, baseSha: BASE, headSha: HEAD,
+      files, expectedCount: files.length, reviewBody: complete });
+    expect(result.quality.verifiedFiles).toBe(199);
+    expect(result.quality.percentVerified).toBeLessThan(100);
+    expect(result.body).not.toContain("(100%)");
+    expect(result.status).toBe("UNKNOWN");
+  });
+
+  it("never shows 100% when GitHub's changed-file inventory is incomplete", () => {
+    const files = [
+      { filename: "src/components/ExampleA.tsx", patch: "+x" },
+      { filename: "src/components/ExampleB.tsx", patch: "+x" },
+    ];
+    const result = buildCoverageReport({ repo: "a/b", number: 1, baseSha: BASE, headSha: HEAD,
+      files, expectedCount: files.length + 1, reviewBody: complete });
+    expect(result.counts.aiReviewed).toBe(2);
+    expect(result.status).toBe("UNKNOWN");
+    expect(result.quality.percentVerified).toBeLessThan(100);
+    expect(result.body).not.toContain("(100%)");
+  });
+
   it("reads only exact-head official review usage; unknown API cost is not zero", () => {
     const content = complete + "\n<details><summary><strong>⚙️ Agent run details</strong></summary>\n" +
       "- Model: openai/nvidia/nemotron-3.5-lightning-30b-a3b\n" +
@@ -215,7 +241,7 @@ describe("SAN-1609 quality, budget and provider run metrics", () => {
       "- Time cost: 63.9s\n- AI calls: 1\n</details>";
     const usage = parseReviewUsage(content, BASE, HEAD);
     expect(usage).toEqual({ model: "openai/nvidia/nemotron-3.5-lightning-30b-a3b",
-      inputTokens: 15916, outputTokens: 5188, seconds: 63.9, calls: 1, estimatedUsd: null });
+      inputTokens: 15916, outputTokens: 5188, seconds: 63.9, calls: 1, estimatedUsd: null, costLabel: null });
     expect(parseReviewUsage(content, BASE, "c".repeat(40)).calls).toBeNull();
     const report = buildCoverageReport({ repo: "a/b", number: 1, baseSha: BASE, headSha: HEAD,
       files: [{ filename: "src/security/auth.ts", patch: "+x" }], expectedCount: 1, reviewBody: content });
@@ -226,6 +252,45 @@ describe("SAN-1609 quality, budget and provider run metrics", () => {
     expect(parseReviewUsage(priced, BASE, HEAD).estimatedUsd).toBe(0.08);
     expect(readFileSync(".pr_agent.toml", "utf8")).toContain("output_run_cost = true");
   });
+  it("parses the EXACT pinned v0.49.0 run-details HTML and multi-model fallback safely", () => {
+    // Actual upstream show_run_details(gfm_supported=true) has a space between
+    // <details> and <summary>; the old parser silently ignored the entire block.
+    const source = complete + "\n<hr>\n<details> <summary><strong>⚙️ Agent run details</strong></summary>\n\n" +
+      "- Models: openai/nvidia/nemotron-3.5-lightning-30b-a3b, openai/nvidia/nemotron-3.5-super-vl-120b-a12b (includes fallback)\n" +
+      "- Tokens: 15,916 in / 5,188 out / 21,104 total\n" +
+      "- Time cost: 63.9s\n- AI calls: 2\n" +
+      "- Estimated API cost: unavailable (no calls could be priced)\n\n</details>\n";
+    const data = parseReviewUsage(source, BASE, HEAD);
+    expect(data).toMatchObject({
+      model: "openai/nvidia/nemotron-3.5-lightning-30b-a3b, openai/nvidia/nemotron-3.5-super-vl-120b-a12b (includes fallback)",
+      inputTokens: 15916, outputTokens: 5188, seconds: 63.9, calls: 2,
+      estimatedUsd: null, costLabel: null,
+    });
+    const report = buildCoverageReport({ repo: "a/b", number: 7, baseSha: BASE, headSha: HEAD,
+      files: [{ filename: "src/mastra/agent.ts", patch: "+x" }], expectedCount: 1, reviewBody: source });
+    expect(report.body).toContain("nemotron-3.5-super-vl-120b-a12b");
+    expect(report.body).toContain("includes fallback");
+    expect(report.body).toContain("unknown (not $0)");
+    expect(parseReviewUsage(source, BASE, "c".repeat(40)).calls).toBeNull();
+  });
+
+  it("reports exact small or partially priced costs without claiming full pricing", () => {
+    const header = complete + "\n<hr>\n<details> <summary><strong>⚙️ Agent run details</strong></summary>\n\n" +
+      "- Model: openai/nvidia/nemotron-3.5-lightning-30b-a3b\n- Time cost: 1.1s\n- AI calls: 2\n";
+    const small = parseReviewUsage(header + "- Estimated API cost: <$0.01 USD\n\n</details>", BASE, HEAD);
+    expect(small.estimatedUsd).toBeNull();
+    expect(small.costLabel).toBe("<$0.01 USD");
+    const partial = parseReviewUsage(header +
+      "- Estimated API cost: $0.08 USD (partial: 1 of 2 successful calls priced)\n\n</details>", BASE, HEAD);
+    expect(partial.estimatedUsd).toBe(0.08);
+    expect(partial.costLabel).toBe("$0.08 USD (partial: 1 of 2 successful calls priced)");
+    const report = buildCoverageReport({ repo: "a/b", number: 7, baseSha: BASE, headSha: HEAD,
+      files: [{ filename: "src/mastra/agent.ts", patch: "+x" }], expectedCount: 1,
+      reviewBody: header + "- Estimated API cost: $0.08 USD (partial: 1 of 2 successful calls priced)\n\n</details>" });
+    expect(report.body).toContain("$0.08 USD (partial: 1 of 2 successful calls priced)");
+    expect(report.body).not.toContain("Estimated API cost: $0.0800 USD.");
+  });
+
   it("packs 100 unreviewed files into bounded batches without generating AI results", () => {
     const files = Array.from({ length: 100 }, (_, i) => ({
       filename: i === 0 ? "src/security/a.ts" : "src/components/Item" + String(i).padStart(3,"0") + ".tsx",
