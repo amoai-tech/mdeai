@@ -20,9 +20,13 @@ export async function generateMetadata({
 }: EventDetailPageProps): Promise<Metadata> {
   const { slug } = await params;
   const result = await getPublicEventResult(slug);
-  // A temporary read failure must not be titled "Event not found".
-  if (result.status !== "ok") {
-    return { title: result.status === "not-found" ? "Event not found · mdeai" : "Event unavailable · mdeai" };
+  // A missing or unreadable event must never be indexed as a real event page.
+  // A temporary read failure keeps a non-committal title: it is not "not found".
+  if (result.status === "not-found") {
+    return { title: "Event not found · mdeai", robots: { index: false, follow: false } };
+  }
+  if (result.status === "unavailable") {
+    return { title: "Event unavailable · mdeai", robots: { index: false, follow: true } };
   }
   const event = result.event;
   return {
