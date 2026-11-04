@@ -155,7 +155,7 @@ export async function waitForCopilotRuntime(page: Page) {
 
 /** Wait until the composer can accept input, not just until it is painted.
  * Saved history keeps CopilotChat mounted but inert during loading/errors. */
-export async function ensureChatInputVisible(page: Page, timeoutMs = 15_000) {
+export const ensureChatInputVisible = async (page: Page, timeoutMs = 15_000) => {
   const input = page.getByTestId("copilot-chat-region").getByRole("textbox").first();
   if (!(await input.isVisible().catch(() => false))) {
     const open = page.getByRole("button", { name: /open chat/i });

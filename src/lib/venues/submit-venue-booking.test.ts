@@ -50,7 +50,7 @@ describe("submitVenueBooking", () => {
   it("uses truthful pending copy when the API has no custom message", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => Response.json({ success: true, requestId: "abc-123" })),
+      vi.fn(() => Response.json({ success: true, requestId: "abc-123" })),
     );
 
     const result = await submitVenueBooking(payload);

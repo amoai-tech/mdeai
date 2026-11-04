@@ -22,10 +22,10 @@ export type RestaurantBookingSearchContext = {
   set: (key: string, value: unknown) => void;
 };
 
-export function rememberGroundedRestaurantSearch(
+export const rememberGroundedRestaurantSearch = (
   ctx: RestaurantBookingSearchContext | undefined,
   result: { source: string; results: readonly { id: string; name: string }[] },
-): void {
+): void => {
   if (!ctx) return;
   ctx.set(RESTAURANT_BOOKING_SEARCH_KEY, {
     source: result.source,
@@ -60,17 +60,21 @@ export function hasCompleteRestaurantBookingDetails(text: string): boolean {
 // Limit work for malformed or unexpectedly large provider/user text.
 const NAME_WORD_CHAR = /[\p{L}\p{N}]/u;
 
-function containsExactName(text: string, name: string): boolean {
+const isWordBoundary = (haystack: string, at: number, length: number): boolean => {
+  // Preserve the full Unicode code points on either side of the label.
+  const previous = at === 0 ? '' : Array.from(haystack.slice(Math.max(0, at - 2), at)).at(-1) ?? '';
+  const next = Array.from(haystack.slice(at + length, at + length + 2))[0] ?? '';
+  return !NAME_WORD_CHAR.test(previous) && !NAME_WORD_CHAR.test(next);
+};
+
+const containsExactName = (text: string, name: string): boolean => {
   const literal = name.trim();
   if (literal.length < 2 || literal.length > 160 || text.length > 16_000) return false;
 
   const haystack = text.toLocaleLowerCase();
   const needle = literal.toLocaleLowerCase();
   for (let at = haystack.indexOf(needle); at !== -1; at = haystack.indexOf(needle, at + 1)) {
-    // Two UTF-16 units cover one adjacent Unicode code point (incl. astral characters).
-    const previous = at === 0 ? '' : Array.from(haystack.slice(Math.max(0, at - 2), at)).at(-1) ?? '';
-    const next = Array.from(haystack.slice(at + needle.length, at + needle.length + 2))[0] ?? '';
-    if (!NAME_WORD_CHAR.test(previous) && !NAME_WORD_CHAR.test(next)) return true;
+    if (isWordBoundary(haystack, at, needle.length)) return true;
   }
   return false;
 }
@@ -92,14 +96,21 @@ function hasGroundedNamedRestaurant(text: string, output: unknown): boolean {
   });
 }
 
-export function shouldContinueVenueBookingAfterSearch({
+const hasToolCall = (steps: readonly ToolStep[], names: ReadonlySet<string>): boolean =>
+  steps.some(step => step.toolCalls?.some(call => names.has(call.toolName || '')));
+
+const hasMatchedRestaurantResult = (steps: readonly ToolStep[], text: string): boolean =>
+  steps.some(step => step.toolResults?.some(result =>
+    SEARCH_NAMES.has(result.toolName || '') && hasGroundedNamedRestaurant(text, result.output)));
+
+export const shouldContinueVenueBookingAfterSearch = ({
   stepNumber, messages, steps, requestContext,
 }: {
   stepNumber: number;
   messages: readonly Message[];
   steps: readonly ToolStep[];
   requestContext?: Pick<RestaurantBookingSearchContext, 'get'> & Partial<Pick<RestaurantBookingSearchContext, 'set'>>;
-}): boolean {
+}): boolean => {
   // A client can supply unreserved request-context keys. Invalidate any such
   // value before the first model step; only the server-side restaurant tool may
   // populate this key during the current agent run.
@@ -111,18 +122,16 @@ export function shouldContinueVenueBookingAfterSearch({
   const text = lastUser ? userText(lastUser.content) : '';
   // An unrelated follow-up must never inherit an earlier booking proposal.
   if (!hasCompleteRestaurantBookingDetails(text)) return false;
-  if (steps.some(step => step.toolCalls?.some(call => BOOKING_NAMES.has(call.toolName || '')))) return false;
+  if (hasToolCall(steps, BOOKING_NAMES)) return false;
 
   // Prefer the actual tool result if Mastra included it in this run's steps.
-  const matchedStepResult = steps.some(step => step.toolResults?.some(result =>
-    SEARCH_NAMES.has(result.toolName || '') && hasGroundedNamedRestaurant(text, result.output)));
+  const matchedStepResult = hasMatchedRestaurantResult(steps, text);
 
   // When the provider omits tool-result snapshots, the per-run receipt alone
   // cannot authorize a proposal: require a search tool call in these steps.
-  const searchedThisRun = steps.some(step =>
-    step.toolCalls?.some(call => SEARCH_NAMES.has(call.toolName || '')));
-  const matchedReceipt = !matchedStepResult && searchedThisRun && !!requestContext?.set &&
-    hasGroundedNamedRestaurant(text, requestContext.get(RESTAURANT_BOOKING_SEARCH_KEY));
+  const searchedThisRun = hasToolCall(steps, SEARCH_NAMES);
+  const matchedReceipt = !matchedStepResult && searchedThisRun && Boolean(requestContext?.set) &&
+    hasGroundedNamedRestaurant(text, requestContext?.get(RESTAURANT_BOOKING_SEARCH_KEY));
 
   if (!matchedStepResult && !matchedReceipt) return false;
 

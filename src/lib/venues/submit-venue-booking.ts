@@ -5,9 +5,9 @@ import {
   type VenueBookingSubmitResult,
 } from "@/lib/venues/venue-booking-form-schema";
 
-export async function submitVenueBooking(
+export const submitVenueBooking = async (
   input: VenueBookingRequestInput,
-): Promise<VenueBookingSubmitResult> {
+): Promise<VenueBookingSubmitResult> => {
   const payload = venueBookingRequestSchema.parse(input);
 
   const res = await fetch("/api/venue-booking/request", {

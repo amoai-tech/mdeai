@@ -26,7 +26,7 @@ const bookingDatePart = (type: "year" | "month" | "day") =>
   dateParts.find(part => part.type === type)?.value ?? "";
 const BOOKING_DATE = `${bookingDatePart("year")}-${bookingDatePart("month")}-${bookingDatePart("day")}`;
 const BOGOTA_7_PM = new Date(`${BOOKING_DATE}T19:00:00-05:00`).toISOString();
-async function askAgentToPrepare(page: Page, email: string, baseURL: string) {
+const askAgentToPrepare = async (page: Page, email: string, baseURL: string) => {
   // CopilotKit may connect lazily only after the first user message. Waiting
   // for a pre-message /info response made cold local runs fail without ever
   // exercising Mastra. The shared submit helper watches the actual request.

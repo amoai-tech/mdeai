@@ -141,7 +141,7 @@ const errorChatMarkup = `<section data-testid="copilot-chat-region">
   <p data-testid="saved-history-error" role="alert">Couldn’t load this conversation.</p>
   <div inert aria-busy="false"><textarea aria-label="Ask concierge"></textarea></div>
 </section>`;
-function chatMarkup(status: "loading" | "error") {
+const chatMarkup = (status: "loading" | "error") => {
   return status === "loading" ? loadingChatMarkup : errorChatMarkup;
 }
 

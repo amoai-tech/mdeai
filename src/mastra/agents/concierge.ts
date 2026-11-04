@@ -289,7 +289,7 @@ Decision rules (in order):
 1. lastRentalQuery EXISTS in working memory → skip gate entirely, refine and search.
 2. hasBudget AND user named a Medellín neighborhood (Laureles, Poblado, Envigado, etc.) → confidence ≥ 0.65 → call search-rentals immediately.
 3. confidence ≥ 0.6 → call search-rentals immediately. Do not ask anything.
-4. confidence < 0.6 AND no lastRentalQuery → still call search-rentals immediately, using the renter\'s own words as queryText and nothing they did not say (no invented budget, dates or neighborhood). Show the results first; only AFTER them you may add ONE optional refinement question. Never ask before searching.
+4. confidence < 0.6 AND no lastRentalQuery → still call search-rentals immediately, using the renter's own words as queryText and nothing they did not say (no invented budget, dates or neighborhood). Show the results first; only AFTER them you may add ONE optional refinement question. Never ask before searching.
 
 Optional refinement (ONE short question, only AFTER the results, never before them):
   Want to narrow by neighborhood or monthly budget?

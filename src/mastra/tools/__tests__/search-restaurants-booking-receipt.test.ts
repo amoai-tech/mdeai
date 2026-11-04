@@ -14,7 +14,7 @@ const restaurant = {
   vibe: [], imageUrl: '', sourceUrl: '',
 };
 
-async function runSearch(context?: RequestContext) {
+const runSearch = (context?: RequestContext) => {
   const execute = searchRestaurantsTool.execute;
   if (!execute) throw new Error('Restaurant search tool has no execute');
   return execute({ queryText: 'Verdeo', limit: 5 }, context
