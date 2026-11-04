@@ -1,11 +1,9 @@
-import { test, expect } from "@playwright/test";
-import { hasE2eEnv, signInAsOnOrigin } from "./helpers/auth";
+import { test, expect } from "./fixtures";
 import {
   countConciergeReplies,
   gotoConcierge,
   sendConciergeMessage,
   waitForConciergeReply,
-  waitForRentalCards,
 } from "./helpers/maps-layout";
 
 /**
@@ -13,25 +11,40 @@ import {
  *
  * Guest 390px browse/map (prod-rentals-mobile-form-map) and the signed-in host
  * thread (app/host-ai-continuity, viewportWidth 390) were already proven. This
- * covers the remaining gap: a signed-in renter asking for a real apartment on a
- * phone, getting grounded cards, following up, and keeping the conversation
- * across a reload.
+ * covers the remaining gap: a renter asking for a real apartment on a phone,
+ * getting grounded cards, following up, and keeping the conversation across a
+ * reload.
+ *
+ * Identity: the dedicated `renter` QA role, never Super Admin. `qa-roles.ts`
+ * refuses a missing or non-`qa-*@mdeai.co` account and never substitutes an
+ * admin, so this skips (rather than silently proving the wrong user's journey)
+ * until `MDE_QA_RENTER_EMAIL` is configured.
  *
  * Authenticated pages must not leak credentials or private DOM into artifacts.
  */
-test.use({ viewport: { width: 390, height: 844 }, trace: "off", screenshot: "off", video: "off" });
+const RENTAL_QUESTION = "Find a furnished 2-bedroom apartment in Laureles under COP 3 million.";
 
-const QA_SUPER_ADMIN = "mde@socialmediaville.ca";
+test.use({
+  qaRole: "renter",
+  viewport: { width: 390, height: 844 },
+  trace: "off",
+  screenshot: "off",
+  video: "off",
+});
+
+/** Whitespace-insensitive containment, so layout wrapping cannot break the match. */
+function normalize(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
+}
 
 test.describe("SAN-1626 · signed-in renter concierge on a 390px phone", () => {
-  test.skip(!hasE2eEnv(), "Needs the live Supabase e2e credentials");
+  test.skip(
+    !process.env.MDE_QA_RENTER_EMAIL,
+    "Configure an existing dedicated renter QA identity (MDE_QA_RENTER_EMAIL)",
+  );
 
-  test("asks, gets grounded cards, follows up and survives a reload", async ({ browser, baseURL }) => {
+  test("asks, gets grounded cards, follows up and survives a reload", async ({ qaRolePage: page }) => {
     test.setTimeout(420_000);
-    const origin = new URL(baseURL ?? "https://www.mdeai.co").origin;
-    const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
-    const page = await context.newPage();
-    await signInAsOnOrigin(page, origin, QA_SUPER_ADMIN);
 
     await gotoConcierge(page);
     const region = page.getByTestId("copilot-chat-region");
@@ -40,30 +53,40 @@ test.describe("SAN-1626 · signed-in renter concierge on a 390px phone", () => {
     expect(box?.width ?? 0).toBeGreaterThan(0);
     expect(box?.width ?? 0).toBeLessThanOrEqual(390);
 
+    // 1 — the requested 2-bedroom search must itself return cards. No fallback
+    // query and no retry with different criteria: zero cards is a failure.
     const before = await countConciergeReplies(page);
-    await sendConciergeMessage(page, "Find a furnished 2-bedroom apartment in Laureles under COP 3 million.");
-    await waitForRentalCards(page);
-    expect(await page.getByTestId("rental-card").count()).toBeGreaterThan(0);
-    await waitForConciergeReply(page, before);
+    await sendConciergeMessage(page, RENTAL_QUESTION);
+    const cards = page.getByTestId("rental-card");
+    await expect(cards.first()).toBeVisible({ timeout: 120_000 });
+    expect(await cards.count()).toBeGreaterThan(0);
+    const firstReply = await waitForConciergeReply(page, before);
+    expect(normalize(firstReply).length).toBeGreaterThan(0);
 
+    // 2 — a follow-up runs on the same conversation.
     const afterFirst = await countConciergeReplies(page);
-    const followUp = await (async () => {
-      await sendConciergeMessage(page, "Which one has a balcony?");
-      return waitForConciergeReply(page, afterFirst);
-    })();
-    expect(followUp.length).toBeGreaterThan(0);
+    await sendConciergeMessage(page, "Which one has a balcony?");
+    const secondReply = await waitForConciergeReply(page, afterFirst);
+    expect(normalize(secondReply).length).toBeGreaterThan(0);
 
-    expect(await countConciergeReplies(page)).toBeGreaterThanOrEqual(2);
+    // 3 — reload keeps THESE two replies, not merely two replies.
+    const expectedReplies = [firstReply, secondReply].map(normalize).map((text) => text.slice(0, 120));
     await page.reload({ waitUntil: "domcontentloaded" });
     await expect(page.getByTestId("copilot-chat-region")).toBeVisible({ timeout: 30_000 });
     await expect
-      .poll(() => countConciergeReplies(page), { timeout: 60_000, message: "transcript after reload" })
-      .toBeGreaterThanOrEqual(2);
+      .poll(
+        async () => {
+          const transcript = normalize(await page.getByTestId("copilot-chat-region").innerText());
+          return expectedReplies.filter((text) => transcript.includes(text)).length;
+        },
+        { timeout: 60_000, message: "both pre-reload replies are still in the transcript" },
+      )
+      .toBe(expectedReplies.length);
 
-    const guest = await browser.newContext();
-    const anon = await guest.request.get(`${origin}/api/copilotkit/info`);
+    // 4 — an anonymous caller is still refused the runtime.
+    const guest = await page.context().browser()!.newContext();
+    const anon = await guest.request.get(`${new URL(page.url()).origin}/api/copilotkit/info`);
     expect(anon.status()).toBe(401);
     await guest.close();
-    await context.close();
   });
 });
