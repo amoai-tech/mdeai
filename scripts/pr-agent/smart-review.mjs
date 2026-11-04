@@ -86,13 +86,16 @@ export function reviewCoverageFromComment(body, baseSha, headSha) {
   const failure = coverageFailure(env.body, headSha);
   const incomplete = failure?.code === "INCOMPLETE_REVIEW";
   // A state rejected by the canonical verifier can never prove advisory 100%.
-  if (failure && !incomplete) return { status: "failed", excluded: warnings, clipped,
-    reason: `strict review state rejected (${failure.code})` };
+  if (failure && !incomplete) return {
+    status: failure.code === "STALE_HEAD" ? "unknown" : "failed", excluded: warnings, clipped,
+    reason: failure.code === "STALE_HEAD" ? "stale persisted review head" :
+      `strict review state rejected (${failure.code})`,
+  };
   const markers = [...env.body.matchAll(/(?:^|\n)<!-- pr-agent-review-state:v1\n([\s\S]*?)\n-->/g)];
   if (markers.length > 1) return { status: "failed", excluded: warnings, clipped, reason: "ambiguous persistent review state" };
   if (!markers.length) return { status: warnings.length || clippedEvidence.present || incomplete ? "partial" : "unknown",
     excluded: warnings, clipped, reason: clippedEvidence.present ? "partially clipped input patch" :
-      incomplete ? "failed/incomplete review chunk" : warnings.length ? "excluded-file footer" : "no persistent state" };
+      incomplete ? failure.reason : warnings.length ? "excluded-file footer" : "no persistent state" };
   try {
     const saved = JSON.parse(markers[0][1]);
     const state = saved?.last_run;
@@ -109,7 +112,7 @@ export function reviewCoverageFromComment(body, baseSha, headSha) {
     return { status: state.complete && !excluded.length && !clippedEvidence.present && !incomplete ? "complete" : "partial",
       excluded, clipped, reviewedRemainder,
       reason: clippedEvidence.present ? "partially clipped input patch" :
-        incomplete ? "failed/incomplete review chunk" : "persistent PR Agent state" };
+        incomplete ? failure.reason : "persistent PR Agent state" };
   } catch { return { status: "failed", excluded: warnings, clipped, reason: "invalid review-state JSON" }; }
 }
 
@@ -293,7 +296,7 @@ export function planFollowupBatches(report, { baseSha, headSha, modelConfigDiges
       continue;
     }
     if (!safePatchLimit || file.patchBytes > safePatchLimit) {
-      deferred.push({ path: file.path, reason: file.patchBytes > safePatchLimit ?
+      deferred.push({ path: file.path, reason: safePatchLimit > 0 && file.patchBytes > safePatchLimit ?
         "oversized patch; needs line-bounded review or human inspection" : "bounded patch/call budget" });
       continue;
     }

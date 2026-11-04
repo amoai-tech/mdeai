@@ -100,6 +100,42 @@ describe("SAN-1634 giant patch coverage (real PR #605 regression)", () => {
     }
   });
 
+  it("keeps a stale persisted head UNKNOWN rather than falsely calling the review job FAILED", () => {
+    const state = { schema_version: 1, findings: [], last_run: {
+      head_sha: "c".repeat(40), complete: true, excluded_files: [],
+    } };
+    const body = marker + "\n<!-- pr-agent:review:full -->\n<!-- pr-agent-review-state:v1\n" +
+      JSON.stringify(state) + "\n-->";
+    const result = reviewCoverageFromComment(body, BASE, HEAD);
+    expect(result.status).toBe("unknown");
+    const report = buildCoverageReport({ repo: "a/b", number: 730, baseSha: BASE, headSha: HEAD,
+      files: [{ filename: "src/payments/checkout.ts", patch: "+x" }], expectedCount: 1, reviewBody: body });
+    expect(report.status).toBe("UNKNOWN");
+    expect(report.counts.aiReviewed).toBe(0);
+  });
+
+  it("explains an incomplete persisted state without inventing a failed AI chunk", () => {
+    const state = { schema_version: 1, findings: [], last_run: {
+      head_sha: HEAD, complete: false, excluded_files: [],
+    } };
+    const body = marker + "\n<!-- pr-agent:review:full -->\n<!-- pr-agent-review-state:v1\n" +
+      JSON.stringify(state) + "\n-->";
+    const result = reviewCoverageFromComment(body, BASE, HEAD);
+    expect(result.status).toBe("partial");
+    expect(result.reason).toContain("complete=false");
+    expect(result.reason).not.toContain("failed chunk");
+  });
+
+  it("calls a zero follow-up budget bounded, not an oversized source file", () => {
+    const report = buildCoverageReport({ repo: "a/b", number: 730, baseSha: BASE, headSha: HEAD,
+      files: [{ filename: "src/payments/checkout.ts", patch: "+x" }], expectedCount: 1 });
+    const plan = planFollowupBatches(report, { baseSha: BASE, headSha: HEAD, maxPatchBytes: 0 });
+    expect(plan.batches).toHaveLength(0);
+    expect(plan.deferred).toEqual([{
+      path: "src/payments/checkout.ts", reason: "bounded patch/call budget",
+    }]);
+  });
+
   it("does not mark successful chunks as a 100% review when a chunk failed", () => {
     const failedChunkFooter = "\n\n<hr>\n\n" +
       "ℹ️ **Chunked review:** the diff exceeded the model token budget, so it was reviewed in 3 chunks and the per-chunk results were merged. 1 chunk(s) failed and are not covered by this review.\n";
@@ -110,7 +146,7 @@ describe("SAN-1634 giant patch coverage (real PR #605 regression)", () => {
     expect(report.status).toBe("PARTIAL");
     expect(report.counts.aiReviewed).toBe(0);
     expect(report.quality.percentVerified).toBeLessThan(100);
-    expect(report.body).toContain("failed/incomplete review chunk");
+    expect(report.body).toContain("failed chunk");
   });
 
   it("does not treat prior names on renamed giant files as fully reviewed", () => {
