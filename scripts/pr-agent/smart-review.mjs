@@ -1,6 +1,6 @@
 // SAN-1609: bounded, advisory coverage for the existing PR Agent. No second LLM engine.
 import { createHash } from "node:crypto";
-import { parseReviewEnvelope, excludedFilesFromReview } from "./review-policy.mjs";
+import { parseReviewEnvelope, excludedFilesFromReview, clippedPatchesFromReview, coverageFailure } from "./review-policy.mjs";
 
 export const COVERAGE_MARKER = "<!-- mde-smart-review-coverage:v1 -->";
 export const POLICY_VERSION = "mde-smart-v1";
@@ -79,15 +79,41 @@ export function reviewCoverageFromComment(body, baseSha, headSha) {
   const env = parseReviewEnvelope(body ?? "");
   if (!env.valid || env.baseSha !== baseSha.toLowerCase() || env.headSha !== headSha.toLowerCase()) return { status: "unknown", excluded: [], reason: "missing current base/head envelope" };
   const warnings = excludedFilesFromReview(env.body);
+  const clippedEvidence = clippedPatchesFromReview(env.body);
+  const clipped = clippedEvidence.files;
+  // Reuse the exact same fail-closed chunk/clipping checks as the strict verifier.
+  // Successful model calls alone do not prove that every chunk completed.
+  const failure = coverageFailure(env.body, headSha);
+  const incomplete = failure?.code === "INCOMPLETE_REVIEW";
+  // A state rejected by the canonical verifier can never prove advisory 100%.
+  if (failure && !incomplete) return {
+    status: failure.code === "STALE_HEAD" ? "unknown" : "failed", excluded: warnings, clipped,
+    reason: failure.code === "STALE_HEAD" ? "stale persisted review head" :
+      `strict review state rejected (${failure.code})`,
+  };
   const markers = [...env.body.matchAll(/(?:^|\n)<!-- pr-agent-review-state:v1\n([\s\S]*?)\n-->/g)];
-  if (markers.length > 1) return { status: "failed", excluded: warnings, reason: "ambiguous persistent review state" };
-  if (!markers.length) return { status: warnings.length ? "partial" : "unknown", excluded: warnings, reason: warnings.length ? "excluded-file footer" : "no persistent state" };
+  if (markers.length > 1) return { status: "failed", excluded: warnings, clipped, reason: "ambiguous persistent review state" };
+  if (!markers.length) return { status: warnings.length || clippedEvidence.present || incomplete ? "partial" : "unknown",
+    excluded: warnings, clipped, reason: clippedEvidence.present ? "partially clipped input patch" :
+      incomplete ? failure.reason : warnings.length ? "excluded-file footer" : "no persistent state" };
   try {
-    const state = JSON.parse(markers[0][1])?.last_run;
-    if (state?.head_sha?.toLowerCase() !== headSha.toLowerCase() || !Array.isArray(state?.excluded_files) || typeof state.complete !== "boolean") return { status: "unknown", excluded: warnings, reason: "stale/malformed review-state fields" };
+    const saved = JSON.parse(markers[0][1]);
+    const state = saved?.last_run;
+    if (state?.head_sha?.toLowerCase() !== headSha.toLowerCase() || !Array.isArray(state?.excluded_files) || typeof state.complete !== "boolean") return { status: "unknown", excluded: warnings, clipped, reason: "stale/malformed review-state fields" };
     const excluded = [...new Set([...warnings, ...state.excluded_files])];
-    return { status: state.complete && !excluded.length ? "complete" : "partial", excluded, reason: "persistent PR Agent state" };
-  } catch { return { status: "failed", excluded: warnings, reason: "invalid review-state JSON" }; }
+    // Only a COMPLETE persisted run that accounts for ALL named clipped paths
+    // can prove other patches were reviewed. Failed chunks, unknown clipped
+    // names, omitted files or malformed state cannot supply that evidence.
+    const reviewedRemainder = state.complete && excluded.length === 0 &&
+      saved.schema_version === 1 && Array.isArray(saved.findings) &&
+      clippedEvidence.present && clipped.length > 0 &&
+      clippedEvidence.unlistedCount === 0 && new Set(clipped).size === clipped.length &&
+      failure?.reason === "PR-Agent reported patches clipped before analysis (partial input coverage)";
+    return { status: state.complete && !excluded.length && !clippedEvidence.present && !incomplete ? "complete" : "partial",
+      excluded, clipped, reviewedRemainder,
+      reason: clippedEvidence.present ? "partially clipped input patch" :
+        incomplete ? failure.reason : "persistent PR Agent state" };
+  } catch { return { status: "failed", excluded: warnings, clipped, reason: "invalid review-state JSON" }; }
 }
 
 /**
@@ -170,11 +196,20 @@ export function buildCoverageReport({ repo, number, baseSha, headSha, files, exp
   const inventory = classifyFiles(files, expectedCount);
   const ai = reviewJobResult === "success" ? reviewCoverageFromComment(reviewBody, baseSha, headSha) : { status: "failed", excluded: [], reason: `review job ${reviewJobResult}` };
   const excluded = new Set(ai.excluded.map(normalizedPath));
+  const clipped = new Set((ai.clipped ?? []).map(normalizedPath));
+  // Missing or renamed paths in provider claims are not proof of unrelated
+  // files having been reviewed. Never trust an incomplete GitHub inventory.
+  const matchedClipped = !inventory.unknownInventory && clipped.size > 0 &&
+    [...clipped].every((path) => inventory.files.some((file) =>
+      normalizedPath(file.path) === path || normalizedPath(file.previousPath) === path));
+  const reviewedRemainder = ai.reviewedRemainder === true && matchedClipped;
   const details = inventory.files.map((file) => {
     const validation = validations[file.path] ?? { status: "unknown", reason: "no deterministic proof" };
     const coverage = ["excluded", "generated"].includes(file.category) ? "policy-excluded" :
+      clipped.has(normalizedPath(file.path)) || (file.previousPath && clipped.has(normalizedPath(file.previousPath))) ? "partially-reviewed" :
       excluded.has(normalizedPath(file.path)) || (file.previousPath && excluded.has(normalizedPath(file.previousPath))) ? "unreviewed" :
-      ai.status === "failed" ? "failed" : ai.status === "complete" && file.patchDigest ? "ai-reviewed" : "unknown";
+      ai.status === "failed" ? "failed" :
+      (ai.status === "complete" || reviewedRemainder) && file.patchDigest ? "ai-reviewed" : "unknown";
     return { ...file, coverage, validation };
   });
   const counts = {
@@ -183,6 +218,7 @@ export function buildCoverageReport({ repo, number, baseSha, headSha, files, exp
     deterministicValidated: details.filter((f) => f.validation.status === "validated").length,
     policyExcluded: details.filter((f) => f.coverage === "policy-excluded").length,
     uncovered: details.filter((f) => f.coverage === "unreviewed").length,
+    partiallyReviewed: details.filter((f) => f.coverage === "partially-reviewed").length,
     unknown: details.filter((f) => f.coverage === "unknown").length,
     failed: details.filter((f) => f.coverage === "failed" || f.validation.status === "failed").length,
   };
@@ -197,13 +233,13 @@ export function buildCoverageReport({ repo, number, baseSha, headSha, files, exp
   );
   const status = counts.failed || ai.status === "failed" ? "FAILED" :
     inventory.unknownInventory || ai.status === "unknown" || generatedUnvalidated || unprovenPatch ? "UNKNOWN" :
-      counts.uncovered || counts.unknown ? "PARTIAL" : "COMPLETE";
-  const pending = details.filter((f) => ["unknown", "unreviewed", "failed"].includes(f.coverage) && !["excluded", "generated"].includes(f.category));
+      counts.uncovered || counts.partiallyReviewed || counts.unknown || ai.status === "partial" ? "PARTIAL" : "COMPLETE";
+  const pending = details.filter((f) => ["unknown", "unreviewed", "partially-reviewed", "failed"].includes(f.coverage) && !["excluded", "generated"].includes(f.category));
   const criticalPending = pending.filter((f) => ["critical", "high"].includes(f.category));
   const verified = details.filter((f) => f.coverage === "ai-reviewed" || f.validation.status === "validated").length;
   // An empty inventory is not evidence of perfect coverage.
   // Never round partial proof to 100% (199/200 rounds to 100 otherwise).
-  const percentVerified = details.length ? (verified === details.length && !inventory.unknownInventory ? 100 : Math.min(99, Math.round(100 * verified / details.length))) : null;
+  const percentVerified = details.length ? (verified === details.length && !inventory.unknownInventory && ai.status === "complete" ? 100 : Math.min(99, Math.round(100 * verified / details.length))) : null;
   const verifiedLabel = percentVerified === null ? "unknown (no changed files)" : percentVerified + "%";
   const usage = parseReviewUsage(reviewBody, baseSha, headSha);
   const plan = planFollowupBatches({ details }, { baseSha, headSha, maxBatches: 6, maxPatchBytes: 35000 });
@@ -212,7 +248,7 @@ export function buildCoverageReport({ repo, number, baseSha, headSha, files, exp
   const body = [COVERAGE_MARKER, "## MDE smart review coverage (advisory)", "",
     `**PR:** ${repo}#${number} · **Base:** ${quotePath(baseSha)} · **Head:** ${quotePath(headSha)}`,
     `**${status}** — ${ai.reason}. AI review and deterministic validation are independent evidence.`, "",
-    `Changed: ${counts.total} · AI reviewed: ${counts.aiReviewed} · Validated: ${counts.deterministicValidated} · Policy-excluded: ${counts.policyExcluded} · Unreviewed: ${counts.uncovered} · Unknown: ${counts.unknown} · Failed: ${counts.failed}.`, "",
+    `Changed: ${counts.total} · AI reviewed: ${counts.aiReviewed} · Validated: ${counts.deterministicValidated} · Policy-excluded: ${counts.policyExcluded} · Unreviewed: ${counts.uncovered} · Partially reviewed: ${counts.partiallyReviewed} · Unknown: ${counts.unknown} · Failed: ${counts.failed}.`, "",
     "| File | Classification | AI coverage | Deterministic validation |", "| --- | --- | --- | --- |", ...rows,
     ...(details.length > rows.length ? [`| … | ${details.length - rows.length} additional files | See GitHub diff | — |`] : []), "",
     criticalPending.length ? `**Needs independent human attention:** ${criticalPending.slice(0, 10).map((f) => quotePath(f.path)).join(", ")}` : "No uncovered critical/high-risk files established.", "",
@@ -220,6 +256,9 @@ export function buildCoverageReport({ repo, number, baseSha, headSha, files, exp
     "**Quality (grounded):** " + verified + "/" + details.length + " files have confirmed AI or deterministic proof (" + verifiedLabel + "); " + criticalPending.length + " critical/high-risk files still need human attention.",
     "**Model usage (reported):** " + (usage.model ?? "unknown") + " · Calls: " + (usage.calls ?? "unknown") + " · Input/output tokens: " + (usage.inputTokens ?? "unknown") + "/" + (usage.outputTokens ?? "unknown") + " · Processing time: " + (usage.seconds === null ? "unknown" : usage.seconds + "s") + " · Estimated API cost: " + (usage.costLabel ?? "unknown (not $0)") + ".",
     "**Follow-up budget:** " + plan.batches.length + "/6 risk-ordered patch batches plan " + plannedFiles + " files, capped at 35,000 patch bytes per batch; " + plan.deferred.length + " files deferred. Planning only: no extra model calls executed or certified.",
+    ...(plan.deferred.length ? ["**Deferred files needing manual or line-bounded review:** " +
+      plan.deferred.slice(0, 8).map((f) => quotePath(f.path) + " (" + f.reason + ")").join(", ") +
+      (plan.deferred.length > 8 ? ` (+${plan.deferred.length - 8} more)` : "")] : []),
     ...(inventory.unknownInventory ? ["", "**Inventory UNKNOWN:** GitHub's changed-file listing is incomplete or exceeds its 3,000-file limit."] : []),
     "", "Required Floor, branch protection and human review remain authoritative. Missing AI coverage does not add a new docs-only merge gate."].join("\n");
   return { status, counts, details, criticalPending, usage,
@@ -251,13 +290,14 @@ export function planFollowupBatches(report, { baseSha, headSha, modelConfigDiges
     }
     paths = []; patchDigests = []; totalBytes = 0;
   };
-  for (const file of report.details.filter((f) => ["unknown", "unreviewed", "failed"].includes(f.coverage) && !["excluded", "generated"].includes(f.category))) {
+  for (const file of report.details.filter((f) => ["unknown", "unreviewed", "partially-reviewed", "failed"].includes(f.coverage) && !["excluded", "generated"].includes(f.category))) {
     if (!baseSha || !headSha || !file.patchDigest || !Number.isSafeInteger(file.patchBytes)) {
       deferred.push({ path: file.path, reason: "missing exact patch/SHA" });
       continue;
     }
     if (!safePatchLimit || file.patchBytes > safePatchLimit) {
-      deferred.push({ path: file.path, reason: "bounded patch/call budget" });
+      deferred.push({ path: file.path, reason: safePatchLimit > 0 && file.patchBytes > safePatchLimit ?
+        "oversized patch; needs line-bounded review or human inspection" : "bounded patch/call budget" });
       continue;
     }
     if (paths.length && totalBytes + file.patchBytes > safePatchLimit) flush();
