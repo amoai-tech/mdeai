@@ -81,6 +81,25 @@ describe("SAN-1634 giant patch coverage (real PR #605 regression)", () => {
     expect(report.details.find((f:{path:string})=>f.path===code.filename)?.coverage).toBe("unknown");
   });
 
+  it("rejects malformed persisted review states that the canonical strict verifier rejects", () => {
+    const last_run = { head_sha: HEAD, complete: true, excluded_files: [] };
+    const invalid = [
+      { last_run }, // no schema version and findings
+      { schema_version: 2, findings: [], last_run },
+      { schema_version: 1, findings: "not-an-array", last_run },
+    ];
+    for (const state of invalid) {
+      const body = marker + "\n<!-- pr-agent:review:full -->\n<!-- pr-agent-review-state:v1\n" +
+        JSON.stringify(state) + "\n-->";
+      expect(reviewCoverageFromComment(body, BASE, HEAD).status).toBe("failed");
+      const report = buildCoverageReport({ repo: "a/b", number: 730, baseSha: BASE, headSha: HEAD,
+        files: [{ filename: "src/payments/checkout.ts", patch: "+x" }], expectedCount: 1, reviewBody: body });
+      expect(report.status).toBe("FAILED");
+      expect(report.counts.aiReviewed).toBe(0);
+      expect(report.quality.percentVerified).toBeLessThan(100);
+    }
+  });
+
   it("does not mark successful chunks as a 100% review when a chunk failed", () => {
     const failedChunkFooter = "\n\n<hr>\n\n" +
       "ℹ️ **Chunked review:** the diff exceeded the model token budget, so it was reviewed in 3 chunks and the per-chunk results were merged. 1 chunk(s) failed and are not covered by this review.\n";

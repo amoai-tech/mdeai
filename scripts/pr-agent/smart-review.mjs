@@ -85,6 +85,9 @@ export function reviewCoverageFromComment(body, baseSha, headSha) {
   // Successful model calls alone do not prove that every chunk completed.
   const failure = coverageFailure(env.body, headSha);
   const incomplete = failure?.code === "INCOMPLETE_REVIEW";
+  // A state rejected by the canonical verifier can never prove advisory 100%.
+  if (failure && !incomplete) return { status: "failed", excluded: warnings, clipped,
+    reason: `strict review state rejected (${failure.code})` };
   const markers = [...env.body.matchAll(/(?:^|\n)<!-- pr-agent-review-state:v1\n([\s\S]*?)\n-->/g)];
   if (markers.length > 1) return { status: "failed", excluded: warnings, clipped, reason: "ambiguous persistent review state" };
   if (!markers.length) return { status: warnings.length || clippedEvidence.present || incomplete ? "partial" : "unknown",
