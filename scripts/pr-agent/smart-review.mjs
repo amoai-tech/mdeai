@@ -83,18 +83,29 @@ export function reviewCoverageFromComment(body, baseSha, headSha) {
   const clipped = clippedEvidence.files;
   // Reuse the exact same fail-closed chunk/clipping checks as the strict verifier.
   // Successful model calls alone do not prove that every chunk completed.
-  const incomplete = coverageFailure(env.body, headSha)?.code === "INCOMPLETE_REVIEW";
+  const failure = coverageFailure(env.body, headSha);
+  const incomplete = failure?.code === "INCOMPLETE_REVIEW";
   const markers = [...env.body.matchAll(/(?:^|\n)<!-- pr-agent-review-state:v1\n([\s\S]*?)\n-->/g)];
   if (markers.length > 1) return { status: "failed", excluded: warnings, clipped, reason: "ambiguous persistent review state" };
   if (!markers.length) return { status: warnings.length || clippedEvidence.present || incomplete ? "partial" : "unknown",
     excluded: warnings, clipped, reason: clippedEvidence.present ? "partially clipped input patch" :
       incomplete ? "failed/incomplete review chunk" : warnings.length ? "excluded-file footer" : "no persistent state" };
   try {
-    const state = JSON.parse(markers[0][1])?.last_run;
+    const saved = JSON.parse(markers[0][1]);
+    const state = saved?.last_run;
     if (state?.head_sha?.toLowerCase() !== headSha.toLowerCase() || !Array.isArray(state?.excluded_files) || typeof state.complete !== "boolean") return { status: "unknown", excluded: warnings, clipped, reason: "stale/malformed review-state fields" };
     const excluded = [...new Set([...warnings, ...state.excluded_files])];
+    // Only a COMPLETE persisted run that accounts for ALL named clipped paths
+    // can prove other patches were reviewed. Failed chunks, unknown clipped
+    // names, omitted files or malformed state cannot supply that evidence.
+    const reviewedRemainder = state.complete && excluded.length === 0 &&
+      saved.schema_version === 1 && Array.isArray(saved.findings) &&
+      clippedEvidence.present && clipped.length > 0 &&
+      clippedEvidence.unlistedCount === 0 && new Set(clipped).size === clipped.length &&
+      failure?.reason === "PR-Agent reported patches clipped before analysis (partial input coverage)";
     return { status: state.complete && !excluded.length && !clippedEvidence.present && !incomplete ? "complete" : "partial",
-      excluded, clipped, reason: clippedEvidence.present ? "partially clipped input patch" :
+      excluded, clipped, reviewedRemainder,
+      reason: clippedEvidence.present ? "partially clipped input patch" :
         incomplete ? "failed/incomplete review chunk" : "persistent PR Agent state" };
   } catch { return { status: "failed", excluded: warnings, clipped, reason: "invalid review-state JSON" }; }
 }
@@ -180,12 +191,19 @@ export function buildCoverageReport({ repo, number, baseSha, headSha, files, exp
   const ai = reviewJobResult === "success" ? reviewCoverageFromComment(reviewBody, baseSha, headSha) : { status: "failed", excluded: [], reason: `review job ${reviewJobResult}` };
   const excluded = new Set(ai.excluded.map(normalizedPath));
   const clipped = new Set((ai.clipped ?? []).map(normalizedPath));
+  // Missing or renamed paths in provider claims are not proof of unrelated
+  // files having been reviewed. Never trust an incomplete GitHub inventory.
+  const matchedClipped = !inventory.unknownInventory && clipped.size > 0 &&
+    [...clipped].every((path) => inventory.files.some((file) =>
+      normalizedPath(file.path) === path || normalizedPath(file.previousPath) === path));
+  const reviewedRemainder = ai.reviewedRemainder === true && matchedClipped;
   const details = inventory.files.map((file) => {
     const validation = validations[file.path] ?? { status: "unknown", reason: "no deterministic proof" };
     const coverage = ["excluded", "generated"].includes(file.category) ? "policy-excluded" :
       clipped.has(normalizedPath(file.path)) || (file.previousPath && clipped.has(normalizedPath(file.previousPath))) ? "partially-reviewed" :
       excluded.has(normalizedPath(file.path)) || (file.previousPath && excluded.has(normalizedPath(file.previousPath))) ? "unreviewed" :
-      ai.status === "failed" ? "failed" : ai.status === "complete" && file.patchDigest ? "ai-reviewed" : "unknown";
+      ai.status === "failed" ? "failed" :
+      (ai.status === "complete" || reviewedRemainder) && file.patchDigest ? "ai-reviewed" : "unknown";
     return { ...file, coverage, validation };
   });
   const counts = {

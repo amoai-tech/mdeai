@@ -45,7 +45,10 @@ describe("SAN-1634 giant patch coverage (real PR #605 regression)", () => {
       files:[giant,code],expectedCount:2,reviewBody:body});
     expect(report.status).toBe("PARTIAL");
     expect(report.counts.partiallyReviewed).toBe(1);
-    expect(report.counts.aiReviewed).toBe(0);
+    expect(parsed.reviewedRemainder).toBe(true);
+    expect(report.counts.aiReviewed).toBe(1);
+    expect(report.details.find((f:{path:string})=>f.path===code.filename)?.coverage).toBe("ai-reviewed");
+    expect(report.criticalPending).toHaveLength(0);
     expect(report.details.find((f:{path:string})=>f.path===clipped)?.coverage).toBe("partially-reviewed");
     expect(report.quality.percentVerified).toBeLessThan(100);
     expect(report.body).toContain("Partially reviewed: 1");
@@ -53,6 +56,29 @@ describe("SAN-1634 giant patch coverage (real PR #605 regression)", () => {
       expect.objectContaining({path:clipped,reason:expect.stringContaining("oversized")}),
     ]));
     expect(report.body).toContain("line-bounded");
+  });
+
+  it("keeps unaffected files UNKNOWN when some clipped filenames were not listed", () => {
+    const body = complete + authoritativeFooter + "... and 4 more\n";
+    const parsed = reviewCoverageFromComment(body, BASE, HEAD);
+    expect(parsed.status).toBe("partial");
+    expect(parsed.reviewedRemainder).toBe(false);
+    const report = buildCoverageReport({repo:"a/b",number:605,baseSha:BASE,headSha:HEAD,
+      files:[giant,code],expectedCount:2,reviewBody:body});
+    expect(report.counts.aiReviewed).toBe(0);
+    expect(report.details.find((f:{path:string})=>f.path===code.filename)?.coverage).toBe("unknown");
+  });
+
+  it("keeps unaffected files UNKNOWN when a clipped review also has failed chunks", () => {
+    const failedChunkFooter = "\n\n<hr>\n\n" +
+      "ℹ️ **Chunked review:** the diff exceeded the model token budget, so it was reviewed in 3 chunks and the per-chunk results were merged. 1 chunk(s) failed and are not covered by this review.\n";
+    const body = complete + failedChunkFooter + authoritativeFooter;
+    expect(reviewCoverageFromComment(body, BASE, HEAD).reviewedRemainder).toBe(false);
+    const report = buildCoverageReport({repo:"a/b",number:605,baseSha:BASE,headSha:HEAD,
+      files:[giant,code],expectedCount:2,reviewBody:body});
+    expect(report.counts.aiReviewed).toBe(0);
+    expect(report.status).toBe("PARTIAL");
+    expect(report.details.find((f:{path:string})=>f.path===code.filename)?.coverage).toBe("unknown");
   });
 
   it("does not mark successful chunks as a 100% review when a chunk failed", () => {
