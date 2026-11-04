@@ -22,4 +22,24 @@ describe("SAN-729 — a truthful Host sales answer is accepted in both word orde
   it("does not count a bare number somewhere else in the reply", () => {
     expect(statesTicketCount("COP 1,800 in revenue across 2 orders.", 2)).toBe(false);
   });
+
+  it("rejects a contradictory reply even when the expected count is present", () => {
+    expect(statesTicketCount("20 tickets. 2 tickets.", 2)).toBe(false);
+    expect(statesTicketCount("Tickets sold: 2, actually tickets sold: 12", 2)).toBe(false);
+  });
+
+  it("rejects a missing count and an invalid expectation", () => {
+    expect(statesTicketCount("No sales yet for this event.", 2)).toBe(false);
+    expect(statesTicketCount("2 tickets", Number.NaN)).toBe(false);
+    expect(statesTicketCount("2 tickets", -1)).toBe(false);
+  });
+
+  it("handles long whitespace padding without backtracking", () => {
+    const padded = `Tickets${" ".repeat(20_000)}sold: 2`;
+    const started = Date.now();
+    expect(statesTicketCount(padded, 2)).toBe(false);
+    expect(Date.now() - started).toBeLessThan(500);
+    // Normal formatting still passes.
+    expect(statesTicketCount("Tickets   sold:  2", 2)).toBe(true);
+  });
 });
