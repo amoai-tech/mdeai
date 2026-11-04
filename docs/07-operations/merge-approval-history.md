@@ -504,6 +504,38 @@ certification.
 
 **Open question:** should an unclassified-table failure in `verify-mastra-schema-init.mjs` run in `floor` (no database) as well as in the `mastra-schema-init` job? Today it only runs where a database exists.
 
+## PR #722 — CI rehearsal for the Mastra 1.81 migration (SAN-1626)
+
+**Date:** 2026-11-04. **Reason:** the repository has exactly one collaborator and that account authored the PR, so GitHub cannot record the required approving review.
+
+**Head merged:** `f8a8f2143ccd31cd109ddcb53fa90832f3605dd1` (merge commit `0b162ea115acf53cedaf4c0cd6827b7f83ce3fdd`).
+
+**Required checks green on that exact head:** `floor`, `mastra-schema-init` (including the new rehearsal step it adds), `review / review`, `review / verify-review-result`. Unresolved review threads: **0**.
+
+**Advisory analyzers, reviewed and not gating:** DeepSource JavaScript reported `fail` on this head and `pass` on the preceding head; the results were inconsistent, and the underlying diagnostic was not available in the recorded review evidence. Treat this as a documented advisory unknown, not proof that no finding existed. No application runtime code was changed.
+
+**What a reviewer would have been asked:** whether this duplicates the existing `scripts/__tests__/mastra-181-migration.integration.test.mjs` (it does not — that test proves the SQL protects the new tables; this proves the *sequence* production goes through, red `42P01` before the migration and green after, on a **simulated legacy missing-table footprint** (the two Mastra 1.81 tables are removed from a disposable current-schema database, rather than recreating every historical migration)), and whether adding a step to the PostgreSQL job is justified (it is: `floor` has no database, so the upgrade sequence had only ever been proven by hand).
+
+**Evidence:** the rehearsal reports five phases — legacy footprint, red before migration, migration applied twice, both `runId` primary keys plus forced RLS with zero client grants, green after migration including cold-start resume.
+
+**Open question:** should the same rehearsal also run locally in `floor` when a developer has Docker available, so the sequence is caught before push rather than only in CI?
+
+## PR #725 — signed-in renter mobile proof (SAN-1626)
+
+**Date:** 2026-11-04. **Reason:** same sole-collaborator condition as above.
+
+**Head merged:** `7476155147f34e4c5eb7fcb1bb22c2d17329f6f0` (merge commit `ffedad8d408be384d296f596b43b5a586d30d91f`).
+
+**Required checks green on that exact head:** `floor`, `mastra-schema-init`, `review / review`, `review / verify-review-result`; 29 checks pass, 0 fail, 3 documented skips. Unresolved review threads: **0** (all three review comments were verified against current code, found valid, and fixed).
+
+**Advisory analyzers, reviewed and not gating:** Codacy and DeepSource raised only their known script/path and transient-JavaScript items; nothing touched application code.
+
+**What a reviewer would have been asked:** three things, all of which changed the code rather than the wording — whether `waitForRentalCards()`'s 1-bedroom/$80 fallback could let a failed 2-bedroom search pass (it could; removed), whether asserting "at least two replies" survived a reload actually proved replay (it did not; the same two reply texts are now compared), and whether Super Admin was an acceptable identity for a renter journey (it is not — `e2e/helpers/qa-roles.ts` forbids substituting an admin, so the spec now uses `qaRole: "renter"`; a missing renter QA account **fails when `MDE_PROD_CERTIFICATION=1`**, whereas non-certification runs may deliberately skip it). A fourth defect surfaced while running it: the assistant bubble exists before card content paints, so the captured reply was empty and the reload assertion was vacuous; `replyTextAfter()` now waits for rendered content.
+
+**Environment note:** the proof needs a dedicated `qa-renter@mdeai.co` identity (created through the existing Supabase Auth admin path, no password) configured via `MDE_QA_RENTER_EMAIL` in the ignored local env. It is deliberately not committed anywhere.
+
+**Open question:** should `MDE_PROD_CERTIFICATION=1` be set in the scheduled production workflow so a missing renter identity fails that job instead of skipping locally?
+
 ## Adding an entry
 
 Record: the PRs, the date, the reason, which required checks had passed, what a reviewer would have
