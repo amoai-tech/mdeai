@@ -149,8 +149,9 @@ select throws_ok($$select public.ticket_payment_refund_v2(
   'P0001', 'REFUND_EXCEEDS_ORDER_TOTAL', 'cannot exceed original paid amount');
 select lives_ok($$select public.ticket_payment_refund_v2(
   'a1285000-0000-4000-8000-0000000000d2', 6000000,
-  'customer_request', 're_SAN1242FINAL', null, 'stripe_dashboard', null)$$,
-  'remaining refunded value completes the original order');
+  'customer_request', 're_SAN1242FINAL', null, 'stripe_dashboard',
+  array['a1285000-0000-4000-8000-0000000000f1'::uuid])$$,
+  'full monetary refund revokes ALL active tickets even with a subset selected');
 reset role;
 
 select is((select status from public.event_orders

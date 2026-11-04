@@ -70,8 +70,19 @@ begin
     case when v_total_refunded = v_order.total_cents then
       'refunded' else 'partial_refund' end
   where id = p_order_id;
-  -- An amount-only partial refund does not revoke tickets.
-  if p_attendee_ids is not null then
+  -- A full monetary refund always revokes EVERY remaining admission, even
+  -- when the caller supplies only some attendee IDs (or an empty array).
+  -- Otherwise an order could be fully refunded with active scannable QR tickets.
+  if v_total_refunded = v_order.total_cents then
+    with changed as (
+      update public.event_attendees
+         set status = 'refunded'
+       where order_id = p_order_id and status = 'active'
+      returning id
+    ) select count(*) into v_revoked from changed;
+  elsif p_attendee_ids is not null then
+    -- Partial money refund with explicit attendee selections revokes only
+    -- those seats; amount-only partial refunds preserve admission.
     with changed as (
       update public.event_attendees
          set status = 'refunded'
@@ -82,13 +93,6 @@ begin
     if v_revoked <> v_expected then
       raise exception 'REFUND_ATTENDEE_UPDATE_RACE';
     end if;
-  elsif v_total_refunded = v_order.total_cents then
-    with changed as (
-      update public.event_attendees
-         set status = 'refunded'
-       where order_id = p_order_id and status = 'active'
-      returning id
-    ) select count(*) into v_revoked from changed;
   end if;
   if v_revoked > 0 then
     update public.event_tickets
