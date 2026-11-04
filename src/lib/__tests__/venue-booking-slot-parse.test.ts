@@ -7,12 +7,12 @@ import {
 describe("parseVenueBookingSlots", () => {
   it("parses Class U booking prompt", () => {
     const slots = parseVenueBookingSlots(
-      "Book Mamasita Friday 8pm for 4. Contact QA User at qa-landlord@mdeai.co.",
+      "Book Mamasita Friday 8pm for 4. Contact QA User at mde@socialmediaville.ca.",
     );
     expect(slots.venueName).toMatch(/mamasita/i);
     expect(slots.partySize).toBe(4);
     expect(slots.contactName).toBe("QA User");
-    expect(slots.contactEmail).toBe("qa-landlord@mdeai.co");
+    expect(slots.contactEmail).toBe("mde@socialmediaville.ca");
     // 8pm Bogotá (-05:00) emitted as a UTC "Z" instant → 01:00 next day.
     expect(slots.requestedAtIso).toMatch(/T01:00:00\.000Z$/);
   });

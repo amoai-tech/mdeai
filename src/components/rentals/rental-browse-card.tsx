@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type KeyboardEvent } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { Bed, Building2, Calendar, ExternalLink, Wifi } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -208,13 +208,6 @@ export function RentalBrowseCard({
   const preview = () => (onPreview ?? onSelect)?.();
   const interactive = Boolean(onSelect && pinId);
 
-  const handleBodyKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      onSelect?.();
-    }
-  };
-
   return (
     <VenueCardShell
       testId={testId ?? `rental-card-${rental.id}`}
@@ -225,11 +218,6 @@ export function RentalBrowseCard({
       selected={selected}
       ariaLabel={`Rental: ${rental.title}, ${rental.neighborhood}`}
       onPreview={interactive ? preview : undefined}
-      bodyRole={interactive ? "button" : undefined}
-      bodyTabIndex={interactive ? 0 : undefined}
-      bodyAriaLabel={interactive ? `Select ${rental.title} on map` : undefined}
-      onBodyClick={interactive ? () => onSelect?.() : undefined}
-      onBodyKeyDown={interactive ? handleBodyKeyDown : undefined}
       media={
         onDetails ? (
           <button
@@ -261,6 +249,20 @@ export function RentalBrowseCard({
       }
       footer={
         <div className="flex w-full flex-wrap items-center justify-between gap-2">
+          {interactive ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              data-testid={`rental-card-map-select-${rental.id}`}
+              aria-label={`Show ${rental.title} on the map`}
+              className="min-h-11 lg:min-h-0"
+              onClick={() => onSelect?.()}
+              onFocus={preview}
+            >
+              Show on map
+            </Button>
+          ) : null}
           {onAskSelect ? <Button type="button" size="sm" variant={selectedForAsk ? "secondary" : "outline"}
             aria-pressed={Boolean(selectedForAsk)} data-testid="rental-ask-select" onClick={onAskSelect}>
             {selectedForAsk ? "Clear selection" : "Ask about this"}

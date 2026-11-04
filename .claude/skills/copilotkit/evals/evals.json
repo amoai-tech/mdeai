@@ -47,13 +47,13 @@
     },
     {
       "id": 5,
-      "prompt": "CopilotKit verify says MDE has no hosted project/API key. Diagnose our self-hosted /api/copilotkit runtime without signing into Intelligence just to satisfy the CLI.",
-      "expected_output": "Uses OSS verification with a named agent and round trip, adds runtime URL/auth headers when needed, and treats exact-SHA browser certification as separate evidence.",
+      "prompt": "CopilotKit verify says MDE has no hosted project/API key. Diagnose our self-hosted /api/copilotkit runtime safely without signing into Intelligence or making an unrequested live model call.",
+      "expected_output": "Runs OSS wiring-only verify with --expect-runtime oss and --agent id; adds --runtime-url/auth headers if needed. Makes --round-trip an explicitly authorized QA step because it consumes model credits and creates a thread; no default production round-trip.",
       "files": [],
       "expectations": [
-        "Uses --expect-runtime oss",
-        "Uses --round-trip with an explicit agent id",
-        "Does not create/select hosted Intelligence merely to make verify pass"
+        "Uses --expect-runtime oss with an explicit agent id for a wiring-only check",
+        "Uses --round-trip only as an opt-in live QA test and explains cost/thread persistence",
+        "Does not connect hosted Intelligence or claim wiring checks prove full user journeys"
       ]
     },
     {
@@ -65,6 +65,28 @@
         "Keeps copilotkit as the single MDE skill owner",
         "Uses the vendored Channels references",
         "Does not enable or host managed Channels inside the existing serverless request route"
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "During prelaunch development a renter requests a viewing for a test apartment that has no landlord verification or partner approval. Should we add a useHumanInTheLoop approval requirement before allowing the viewing?",
+      "expected_output": "No Phase A business-approval gate. HITL can support user confirmation on consequential actions, but it must not require property eligibility, landlord approval, verification, or paperwork; retain authenticated backend authority and durable writes.",
+      "files": [],
+      "expectations": [
+        "Rejects landlord/partner/eligibility paperwork as a Phase A prerequisite",
+        "Distinguishes user confirmation from business approval and from server authorization",
+        "Preserves auth, isolation and atomic/idempotent backend writes"
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "I am checking our self-hosted CopilotKit runtime and want to run npx copilotkit verify on production as the first check. What exact flags are safe, and does --round-trip call the AI or save anything?",
+      "expected_output": "Uses --expect-runtime oss and an agent ID for wiring-only validation first; avoids --round-trip by default; explains that --round-trip sends a live model request, consumes credits and creates a thread, and should only run in an authorized QA environment with known runtime URL and credentials.",
+      "files": [],
+      "expectations": [
+        "Starts with a non-round-trip OSS wiring check using --expect-runtime oss and --agent",
+        "States --round-trip sends a real request that incurs model cost and creates a thread",
+        "Uses explicit authorized QA target and avoids default live production mutation"
       ]
     }
   ]

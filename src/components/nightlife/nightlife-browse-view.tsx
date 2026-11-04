@@ -86,7 +86,7 @@ function NightlifeBrowseViewInner({
     <DiscoveryPageContext page="nightlife" filters={{ neighborhood, vibe }} selectedId={selectedId} />
     <DiscoveryWorkspace
       activeSlug="nightlife"
-      askComposer={<DiscoveryAskComposer page="nightlife" onAgentResults={onAgentResults} />}
+      askComposer={<DiscoveryAskComposer page="nightlife" onAgentResults={onAgentResults} hasSelectedItem={Boolean(selectedId)} onClearSelection={clearAskSelection} />}
       rightPanel={hasMap ? <BrowseMapPanel fill /> : undefined}
       testId="nightlife-page"
       title="Nightlife"

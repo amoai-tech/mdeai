@@ -1,7 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useRef, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import Link from "next/link";
+import type { AbstractAgent } from "@copilotkit/react-core/v2";
+import { useOptionalConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
+import { useEventSearchFastPath } from "@/hooks/use-event-search-fast-path";
+import { ToolErrorChip } from "@/components/copilot/tool-error-chip";
 import { CafeResultCard } from "@/components/copilot/cafe-result-card";
 import { RentalCard } from "@/components/copilot/rental-card";
 import type { RentalSearchMeta } from "@/components/chat/rental-fast-path-context";
@@ -21,7 +25,7 @@ import type { ParsedGroundedToolResult } from "@/lib/parse-grounded-tool-result"
 import { useEventSearchResults } from "@/components/chat/event-search-results-context";
 import { RichCardResultsRegistrar } from "@/components/chat/rich-card-results-context";
 import { useMapContext } from "@/platform/maps/map-context";
-import { normalizeToolEnvelope } from "@/lib/normalize-tool-envelope";
+import { normalizeToolEnvelope, unwrapAgUiToolPayload } from "@/lib/normalize-tool-envelope";
 import { visibleEventSearchReasons } from "@/lib/event-search-fast-path";
 import { toDetailRental } from "@/lib/rentals/chat-rental-detail";
 import { emptyRentalNotice, unappliedRentalNotice } from "@/lib/rental-display";
@@ -325,6 +329,7 @@ export function RentalResults({
       {rows.length === 0 ? (
         <EmptyState
           testId="rentals-empty"
+          className="mde-map-fab-safe"
           title="No rentals matched"
           description={
             [envelope.budgetNote, emptyUnappliedNote].filter(Boolean).join(" ") ||
@@ -406,14 +411,80 @@ export function RentalResults({
   );
 }
 
+/** Provider-required hooks live only in this child, which is never rendered in deterministic E2E. */
+function LiveEventSearchSuggestions({ agent, isReady }: { agent: AbstractAgent; isReady: boolean }) {
+  // Use the same event fast path as the chat composer, so clicking a suggestion
+  // finishes a real search and updates cards, pins and transcript (not just an agent turn).
+  const { handleUserMessage } = useEventSearchFastPath();
+  const pendingRef = useRef(false);
+  const [searching, setSearching] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const sendQuery = async (query: string) => {
+    if (!isReady || agent.isRunning || pendingRef.current) return;
+    pendingRef.current = true;
+    setSearching(true);
+    setFailed(false);
+    try {
+      if (!(await handleUserMessage(query))) setFailed(true);
+    } catch {
+      setFailed(true);
+    } finally {
+      pendingRef.current = false;
+      setSearching(false);
+    }
+  };
+
+  return (
+    <>
+      <EmptyState
+        testId="events-empty"
+        title="No events found"
+        className="mde-map-fab-safe"
+        description="Try a different date range or neighborhood."
+        suggestions={[
+          { label: "Events this weekend", testId: "events-empty-suggest-weekend", disabled: !isReady || agent.isRunning || searching, onClick: () => void sendQuery("Show events this weekend in Medellín") },
+          { label: "Salsa in Poblado", testId: "events-empty-suggest-salsa", disabled: !isReady || agent.isRunning || searching, onClick: () => void sendQuery("Show salsa events in El Poblado") },
+        ]}
+      />
+      {searching || !isReady || agent.isRunning ? <p className="text-xs text-muted-foreground">Searching…</p> : null}
+      {failed ? <ToolErrorChip testId="events-suggestion-error" message="Couldn't run that search. Please try again." /> : null}
+    </>
+  );
+}
+
+/** The deterministic chat shares this UI but intentionally has no CopilotKitProvider. */
+function EventSearchEmptyState() {
+  const concierge = useOptionalConciergeCoAgent();
+  if (concierge?.agent) {
+    return <LiveEventSearchSuggestions agent={concierge.agent} isReady={concierge.isReady} />;
+  }
+  return (
+    <EmptyState
+      testId="events-empty"
+      title="No events found"
+      className="mde-map-fab-safe"
+      description="Try a different date range or neighborhood."
+      suggestions={[
+        { label: "Events this weekend", testId: "events-empty-suggest-weekend", disabled: true },
+        { label: "Salsa in Poblado", testId: "events-empty-suggest-salsa", disabled: true },
+      ]}
+    />
+  );
+}
+
 export function EventResults({ result }: { result: unknown }) {
   const { selectedPinId, panToPin } = useMapContext();
   const { openVenueDetail } = useRentalUi();
   const { setRows, setWebCitations } = useEventSearchResults();
   const isCurrent = useCurrentSearchToolResult();
   const listRef = useRef<HTMLDivElement>(null);
+  const raw = unwrapAgUiToolPayload(result);
+  const validEnvelope = Boolean(raw) && typeof raw === "object" && !Array.isArray(raw) &&
+    Array.isArray((raw as { results?: unknown }).results);
   const envelope = normalizeToolEnvelope(result);
   const reasons = visibleEventSearchReasons(envelope.rankExplanation ?? []);
+  const searchUnavailable = !validEnvelope ||
+    (envelope.source === "fallback" && (envelope.results?.length ?? 0) === 0);
   // SAN-1422 — an event without trusted coordinates is a usable card with no pin, so it must not
   // pan, select or highlight a map target that does not exist.
   const pinnedIds = useMemo(
@@ -503,16 +574,13 @@ export function EventResults({ result }: { result: unknown }) {
           </ul>
         </div>
       ) : null}
-      {rows.length === 0 ? (
-        <EmptyState
-          testId="events-empty"
-          title="No events found"
-          description="Try a different date range or neighborhood."
-          suggestions={[
-            { label: "Events this weekend", testId: "events-empty-suggest-weekend" },
-            { label: "Salsa in Poblado", testId: "events-empty-suggest-salsa" },
-          ]}
+      {searchUnavailable ? (
+        <ToolErrorChip
+          testId="events-search-error"
+          message="Event search is temporarily unavailable. Please try again."
         />
+      ) : rows.length === 0 ? (
+        <EventSearchEmptyState />
       ) : (
         <div ref={listRef} className="flex flex-col gap-2 py-2">
           {rows.map((e) => {

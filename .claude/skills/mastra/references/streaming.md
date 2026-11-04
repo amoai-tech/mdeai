@@ -9,11 +9,22 @@ tags: mastra, streaming, sse, events, tool-streaming
 
 # Mastra streaming — docs & reference index
 
-**mdeai Phase 1:** Camila's `/chat` streams via **CopilotKit + AG-UI** (`getLocalAgents` in-process). Mastra `Agent.stream()` events (`text-delta`, `tool-call`, `tool-result`) bridge through the runtime — read [events](https://mastra.ai/docs/streaming/events) + [tool streaming](https://mastra.ai/docs/streaming/tool-streaming) when debugging generative UI or tool progress. **Background task streaming** is Phase 2 unless a task enables `backgroundTaskManager`.
+**Current MDE runtime:** the browser calls same-origin `/api/copilotkit` via `src/app/api/copilotkit/[[...path]]/route.ts` and the existing `LoggingMastraAgent` / `@ag-ui/mastra` adapter—not a standalone `/chat` SSE server. Compare Mastra stream chunks against the **installed** AG-UI adapter and CopilotKit version before copying examples from [Mastra streaming](https://mastra.ai/docs/streaming/events). Do not add a parallel stream, map-state system, or background-task manager without an explicit task.
 
-**Lookup order:** [`mcp-docs-lookup.md`](mcp-docs-lookup.md) → **`mastraDocs`** paths below → [`links.md`](../links.md).
+**Lookup order for MDE code:** check `package.json` / lockfile and installed `node_modules/@mastra/*/dist/docs/` → `assets/SOURCE_MAP.json` plus installed TypeScript declarations/source → version-matched official docs → optional [`mcp-docs-lookup.md`](mcp-docs-lookup.md) / `mastraDocs` for supplementary research → [`links.md`](../links.md) as a navigation index. A current remote example is not proof that the installed API supports it.
 
 ---
+
+## Completion, Stop and failure truth (SAN-1605 compatibility target)
+
+A streamed sentence or a UI confirmation is **not** proof that an action succeeded. Follow the existing `src/mastra/copilotkit/logging-mastra-agent.ts` and `src/mastra/lib/mastra-telemetry.ts` result/error categories rather than inventing new result or audit owners:
+
+- **Completed:** a successful AG-UI run may finish rendering; a consequential action is successful only after the existing backend/RPC confirms its durable commit.
+- **Failed:** preserve agent/tool errors as errors; no false positive cards, booking, payment or event-save confirmation.
+- **Timed out:** label timeout distinctly, verify no late/duplicate side effect, and use existing idempotency for any retry.
+- **Client aborted / Stop:** distinguish deliberate unsubscribe/cancel from server failure and normal finish. Stop should terminate the intended run, not another thread, and should never say “saved” when no commit occurred. If a write **already committed** before cancellation, verify and report that actual result honestly.
+
+**Compatibility proof under SAN-1605:** exercise run start → text/tool events → tool result → successful finish; tool error → failed finish; cancel/Stop → aborted finish without a false success; reconnect/replay; request timeout; and a side-effecting tool with retry. Assert the real UI state and independent persisted row counts, not just event types. Check installed `@ag-ui/mastra`, `@ag-ui/client`, and CopilotKit event ordering/cancellation contracts before migration. These cases are **not certified by this skills update**.
 
 ## Concepts (docs — Supatabs)
 

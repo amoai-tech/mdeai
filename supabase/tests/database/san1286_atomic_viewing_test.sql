@@ -389,7 +389,7 @@ select throws_ok($q$
     'inactive@example.com', 'Inactive', null, null::uuid,
     '2099-10-17 14:00:00+00'::timestamptz, '{}'::jsonb, '{}'::jsonb
   )
-$q$, 'P0001', 'p1_schedule_tour_atomic: listing is not requestable', 'inactive listing is rejected');
+$q$, 'P1287', 'p1_schedule_tour_atomic: listing is not requestable', 'inactive listing is rejected');
 select is((select count(*)::int from public.leads where idempotency_key='san1286-inactive-key'), 0, 'inactive listing creates no lead');
 
 -- Force a downstream showing failure. The lead insert must roll back too.

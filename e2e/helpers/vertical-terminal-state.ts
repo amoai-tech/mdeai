@@ -78,7 +78,7 @@ export const VERTICALS: Record<VerticalName, VerticalSpec> = {
     query: "salsa events this weekend in Medellín",
     cards: '[data-testid="event-card"]',
     empty: ['[data-testid="events-empty"]'],
-    error: SHARED_ERROR_SURFACES,
+    error: [...SHARED_ERROR_SURFACES, '[data-testid="events-search-error"]'],
   },
   restaurants: {
     query: "suggest restaurants medellin",

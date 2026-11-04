@@ -22,7 +22,7 @@ test.describe('MDE Rentals phone: browse, map and viewing-form layout', () => {
     await expect(modal.getByRole('dialog')).toBeVisible();
     await expect(modal.locator('input[name="name"]')).toBeVisible();
     await expect(modal.locator('input[name="email"]')).toBeVisible();
-    await expect(modal.locator('input[name="preferredAt"]')).toBeVisible();
+    await expect(modal.getByTestId('viewing-time')).toBeVisible();
     // No Submit click, network write, or lead creation in this suite.
     const box = await modal.getByRole('dialog').boundingBox();
     expect(box).not.toBeNull();

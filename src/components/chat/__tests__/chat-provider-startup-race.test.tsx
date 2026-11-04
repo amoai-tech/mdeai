@@ -69,27 +69,63 @@ afterEach(() => {
   clearConciergeError();
 });
 
-describe("guest CopilotKit startup while session resolves", () => {
-  it("never shows a failed-turn notice for a guest's early 401", () => {
+describe("concierge provider auth/error transitions", () => {
+  it("does not mount the runtime before initial auth resolution", () => {
     render();
-    act(() => { session.onError?.(startup401); });
-    expect(getConciergeErrorForThread("guest-thread").version).toBe(0);
+    // There is no callback and no runtime request to fail while auth is unknown.
+    expect(session.onError).toBeNull();
+    expect(container.textContent).toBe("");
+
     session.loading = false;
     render();
+    expect(session.onError).toBeTypeOf("function");
+    act(() => { session.onError?.(startup401); });
     expect(getConciergeErrorForThread("guest-thread").version).toBe(0);
   });
 
-  it("reports a pending 401 when the session resolves authenticated", () => {
+  it("ignores a late 401 from an old guest provider after sign-in", () => {
+    session.loading = false;
     render();
-    act(() => { session.onError?.(startup401); });
+    const guestRequestError = session.onError;
+    expect(guestRequestError).toBeTypeOf("function");
+
+    session.user = { id: "user-a" };
+    render();
+    expect(session.onError).not.toBe(guestRequestError);
+
+    // A guest request must not become a signed-in failure merely because the
+    // session changed before its response completed.
+    act(() => { guestRequestError?.(startup401); });
+    expect(getConciergeErrorForThread("guest-thread").version).toBe(0);
+  });
+
+  it("reports an actual 401 from the signed-in provider", () => {
+    render();
+    expect(session.onError).toBeNull();
     session.user = { id: "user-a" };
     session.loading = false;
     render();
+    expect(session.onError).toBeTypeOf("function");
+    act(() => { session.onError?.(startup401); });
     expect(getConciergeErrorForThread("guest-thread").version).toBeGreaterThan(0);
   });
 
-  it("immediately reports a real agent-run failure even before auth settles", () => {
+  it("reports genuine agent-run failures after sign-in", () => {
+    session.user = { id: "user-a" };
+    session.loading = false;
     render();
+    expect(session.onError).toBeTypeOf("function");
+    act(() => { session.onError?.({ code: "agent_run_failed" }); });
+    expect(getConciergeErrorForThread("guest-thread").version).toBeGreaterThan(0);
+  });
+
+  it("keeps reporting genuine failures during a signed-in session refresh", () => {
+    session.user = { id: "user-a" };
+    session.loading = false;
+    render();
+    session.loading = true;
+    render();
+    expect(session.onError).toBeTypeOf("function");
     act(() => { session.onError?.({ code: "agent_run_failed" }); });
     expect(getConciergeErrorForThread("guest-thread").version).toBeGreaterThan(0);
   });

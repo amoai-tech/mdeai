@@ -9,7 +9,7 @@ tags: mastra, mcp, docs
 
 # Mastra docs — MCP lookup matrix
 
-Use **before** guessing APIs from training data. mdeai has **`user-mastra`** MCP (Cursor) and optional **`@mastra/mcp-docs-server`** (stdio).
+This reference describes **supplementary documentation lookup**, not the first source of API truth. Prefer current `package.json`, installed `node_modules/@mastra/*/dist/docs/`, the `SOURCE_MAP.json` and installed TypeScript declarations/source; only then use version-matched official docs and optional docs MCP. Never guess APIs from training data or install another MCP server solely for a task. Cursor environments may expose `user-mastra`; do not assume the connection exists in other clients.
 
 ## Tool pick (Cursor `user-mastra`)
 

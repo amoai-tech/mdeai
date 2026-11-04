@@ -8,7 +8,9 @@ tags: mastra, copilotkit, integration
 mdeapp: not-default-use-integrations-ref
 ---
 
-# Using CopilotKit
+# Using CopilotKit — standalone-server reference ONLY
+
+> **Not the current MDE implementation.** The steps below scaffold a **separate Mastra server** with `registerCopilotKit({ path: '/chat' })`, distinct hosting, CORS and dependency installation. Do **not** run the scaffold/install steps or copy this wiring into MDE. Current MDE uses the existing **same-origin Next.js CopilotKit v2 route** `src/app/api/copilotkit/[[...path]]/route.ts` → `getLocalAgentsWithLogging` → `src/mastra/index.ts`. Keep server-derived authentication, request context, thread ownership, allowlist, rate limits, telemetry and AG-UI adapter. For runtime changes read the canonical `copilotkit` skill and `.claude/skills/copilotkit/references/mastra-bridge.md`. This page is background research only for an **explicitly authorized future standalone-server project**; examples may target different package versions.
 
 [CopilotKit](https://www.copilotkit.ai/) provides React components to quickly integrate customizable AI copilots into your application. Combined with Mastra, you can build sophisticated AI apps featuring bidirectional state synchronization and interactive UIs.
 

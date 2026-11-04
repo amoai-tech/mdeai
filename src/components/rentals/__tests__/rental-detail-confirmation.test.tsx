@@ -10,6 +10,13 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act } from "react";
+vi.mock("@/components/ui/calendar", () => ({
+  Calendar: ({ onSelect }: { onSelect: (date: Date | undefined) => void }) => (
+    <button type="button" data-testid="viewing-date-mock"
+      onClick={() => onSelect(new Date('2099-01-02T12:00:00'))}>Select date</button>
+  ),
+}));
+
 import { renderToString } from "react-dom/server";
 import { createRoot, type Root } from "react-dom/client";
 
@@ -95,10 +102,19 @@ async function requestViewing() {
   await act(() => {
     setNativeValue(document.querySelector('input[name="name"]') as HTMLInputElement, "Camila Test");
     setNativeValue(document.querySelector('input[name="email"]') as HTMLInputElement, "camila@example.invalid");
-    setNativeValue(document.querySelector('input[name="preferredAt"]') as HTMLInputElement, "2099-01-02T15:00");
+    (document.querySelector('[data-testid="viewing-date-trigger"]') as HTMLButtonElement).click();
+    setNativeValue(document.querySelector('input[name="viewingTime"]') as HTMLInputElement, "15:00");
   });
-  await act(async () => {
-    (document.querySelector("form") as HTMLFormElement).requestSubmit();
+  await act(() => {
+    (document.querySelector('[data-testid="viewing-date-mock"]') as HTMLButtonElement).click();
+  });
+  await act(() => {
+    (document.querySelector("form") as HTMLFormElement).dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    return Promise.resolve();
+  });
+  await act(() => {
+    (document.querySelector("form") as HTMLFormElement).dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    return Promise.resolve();
   });
   await act(() => Promise.resolve());
 }

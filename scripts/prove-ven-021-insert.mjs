@@ -6,7 +6,7 @@
 import { createClient } from "@supabase/supabase-js";
 
 const baseUrl = process.argv[2] ?? "http://localhost:3001";
-const email = process.env.VEN_021_PROOF_EMAIL ?? "qa-landlord@mdeai.co";
+const email = process.env.VEN_021_PROOF_EMAIL ?? "mde@socialmediaville.ca";
 
 const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
 const anonKey =

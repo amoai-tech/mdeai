@@ -26,6 +26,7 @@ const PROD_SPECS = [
   "**/prod-candidate-certification.spec.ts",
   "**/prod-synthetic-smoke.spec.ts",
   "**/prod-signed-in-route.spec.ts",
+  "**/prod-ticket-wallet-authed.spec.ts",
   "**/prod-rentals-results-refresh.spec.ts",
   "**/prod-rentals-mobile-form-map.spec.ts",
   "**/prod-discovery-inline-ask.spec.ts",

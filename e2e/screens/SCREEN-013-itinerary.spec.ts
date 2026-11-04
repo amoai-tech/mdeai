@@ -79,13 +79,13 @@ async function injectQaLandlordSession(page: import("@playwright/test").Page) {
   const client = createClient(url, anon);
   const { data: link } = await admin.auth.admin.generateLink({
     type: "magiclink",
-    email: "qa-landlord@mdeai.co",
+    email: "mde@socialmediaville.ca",
     options: { redirectTo: "http://localhost:3001/trips" },
   });
   const otp = link?.properties?.email_otp;
   if (!otp) throw new Error("missing email_otp from generateLink");
   const { data, error } = await client.auth.verifyOtp({
-    email: "qa-landlord@mdeai.co",
+    email: "mde@socialmediaville.ca",
     token: otp,
     type: "email",
   });

@@ -8,6 +8,7 @@ const ITEMS = [
   { href: "/app/me", label: "Overview" },
   { href: "/app/me/saved", label: "Saved" },
   { href: "/app/me/tickets", label: "Tickets" },
+  { href: "/app/me/notifications", label: "Notifications" },
 ] as const;
 
 /**

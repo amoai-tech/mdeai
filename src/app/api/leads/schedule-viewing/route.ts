@@ -94,6 +94,11 @@ export async function POST(req: Request) {
     return failure("VALIDATION_ERROR", 400);
   }
 
+  // p1_schedule_tour_atomic matches a UUID case-insensitively but a slug exactly, and every
+  // stored slug is lowercase. Normalising here means a differently-cased id still books, even
+  // before the edge function's own normalisation is deployed.
+  const listingId = data.listingId.trim().toLowerCase();
+
   const supabase = await createClient();
   // Guest lead capture: no 401 when logged out — edge receives anon JWT (AUTH-004).
   const {
@@ -112,12 +117,12 @@ export async function POST(req: Request) {
         email: data.email,
         phone: data.phone ?? null,
         neighborhood: data.neighborhood,
-        listing_id: data.listingId,
+        listing_id: listingId,
         listing_title: data.listingTitle,
         preferred_at: preferredAtInstant,
         trip_id: data.tripId ?? null,
         idempotency_key: buildScheduleIdempotencyKey({
-          listingId: data.listingId,
+          listingId,
           email: data.email,
           name: data.name,
           phone: data.phone,
@@ -145,6 +150,16 @@ export async function POST(req: Request) {
       message: edgeJson.error?.message,
     });
     return failure("RATE_LIMITED", 429);
+  }
+
+  if (!edgeRes.ok && edgeJson.error?.code === "LISTING_UNAVAILABLE") {
+    logUpstreamFailure("listing_unavailable", {
+      status: edgeRes.status,
+      code: edgeJson.error.code,
+      message: edgeJson.error.message,
+    });
+    // The apartment cannot take a request; the renter's own input is not the problem.
+    return failure("LISTING_UNAVAILABLE", 409);
   }
 
   if (!edgeRes.ok && edgeJson.error?.code === "VALIDATION_ERROR") {

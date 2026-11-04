@@ -1,86 +1,54 @@
 ---
-title: mdeAI Concierge — Mastra production patterns
-description: Load when editing my-mastra-app concierge agent, SSE transport, or ai_runs logging.
+title: MDE AI Concierge — current Mastra runtime and grounded actions
+description: Use when changing the in-process MDE concierge, tool outcomes, maps, memory, or persisted AI runs. Current source paths take priority over this guide.
 parent: mastra
 impact: HIGH
-impactDescription: Concierge agent, SSE transport, tool naming, ai_runs logging, deployment
-tags: mastra, mdeai, concierge, sse, tools, deployment
+impactDescription: MDE agents, CopilotKit bridge, data boundaries, observability
+tags: mastra, mdeai, concierge, copilotkit, agents, tools
 ---
 
-# mdeAI Concierge — Mastra production patterns
+# MDE AI Concierge — current implementation
 
-> Load this when working on `my-mastra-app/` in the mdeAI repo.
+**Scope:** This is a navigation guide for the existing Next.js + Mastra + CopilotKit implementation, **not** a scaffold or source of API signatures. Verify code, installed versions/types, and embedded Mastra docs before editing. The old `my-mastra-app`, standalone `/chat` SSE server, four-tool-only concierge, and separate Vercel Mastra deployment are historical, **not** the current app architecture.
 
-## Agent structure (don't change without a plan)
+## Canonical runtime owners (inspect these, do not create replacements)
 
-One `conciergeAgent` with four tools. Never split into multiple agents.
+| Concern | Current source |
+|---|---|
+| Agent and workflow registry | `src/mastra/index.ts` (at PR #717: 9 registered agents, 4 workflows; recount in current code) |
+| Concierge instructions, tool selection, grounded results | `src/mastra/agents/concierge.ts`, `src/mastra/tools/` |
+| Same-origin CopilotKit v2 endpoint | `src/app/api/copilotkit/[[...path]]/route.ts` |
+| Runtime paths and single-route mode | `src/lib/copilotkit-transport.ts` |
+| Mastra → AG-UI adapter, audit and turn outcomes | `src/mastra/copilotkit/logging-mastra-agent.ts` |
+| Tool/action names used by frontend renders | `src/platform/copilot/mastra-tool-action-names.ts` |
+| Thread-scoped memory + selected-pin clearing | `src/mastra/lib/agent-memory.ts` |
+| Search/cards/pins | Existing Rentals and Events browse views, discovery tools, and `useBrowseMapSync` |
+| Session, thread ownership, request context, rate limits | The current `/api/copilotkit` route and its helpers |
+| AI run audit and costs | `src/mastra/lib/log-agent-run.ts`, `src/mastra/lib/mastra-telemetry.ts` |
 
-```
-my-mastra-app/src/mastra/agents/concierge.ts
-  model: google/gemini-3.1-flash-lite-preview
-  tools: searchRentalsTool, searchEventsTool, searchRestaurantsTool, searchAttractionsTool
-  inputProcessors: PromptInjectionDetector, TokenLimiter(8192)
-  memory: workingMemory (thread-scoped) — lastIntent, lastRentalQuery, lastEventQuery
-```
+The runtime resolves authenticated/guest context server-side, runs the registered Mastra agents in process through the existing AG-UI adapter, and logs turns through the existing `ai_runs` path. Do **not** create `my-mastra-app/`, `registerCopilotKit({ path: '/chat' })`, a new chat endpoint, or a second SSE/map-state pipeline.
 
-Architecture invariants (never violate):
-- Gemini never generates coordinates, prices, or IDs — only tool results do
-- Pins come exclusively from tool-output-available output fields with lat/lng
-- UI state (cards, pins) is driven by ChatAction objects — never by parsing prose
-- Supabase is the inventory source of truth; Maps API is enrichment only
+## Working journeys
 
-## SSE event transport — critical field mapping
+- **Rentals:** renter asks for a 2-bedroom place → search tool returns real inventory → existing cards/map use structured, grounded IDs and coordinates → Details → user requests a viewing → existing authenticated/authorized backend persists the lead/showing and reports the actual outcome. No Phase A landlord verification, owner paperwork, listing-publication, or viewing approval gates.
+- **Events:** user/host asks about an event → grounded event tools/cards → authorized create/update or TEST checkout via existing API/DB/Stripe workflow → confirm persistence and signed webhook outcome, not merely an assistant message. Do not invent tickets, price, availability, or completed payment.
+- **AI follow-ups:** conversation retains server-owned thread/resource identity. On refinement, reuse existing tool schemas and memory rather than regenerate data or convert assistant prose into pins/cards.
 
-Mastra emits two key SSE event types:
+## Correctness, safety and failure handling
 
-| Event type | Carries | Client action |
-|-----------|---------|--------------|
-| tool-input-available | { toolCallId, toolName } | Store in Map<string, string> |
-| tool-output-available | { toolCallId, output } | Look up toolName from map, build ChatAction |
+1. **Source truth:** location/price/availability/record IDs come only from the canonical tool/DB result. Unknown facts stay unknown; carry external source attribution. Never generate map pins from prose.
+2. **Authority:** user-provided text, frontend tool args, and HITL approval only convey requests/intent. The server independently authorizes private reads/writes and validates actor/context; keep RLS and tenant isolation. Phase A has no business certification gates.
+3. **Tool identity:** maintain the Mastra **tool-map key** expected by CopilotKit render/action registration; do not assume a `createTool({ id })` is the AG-UI frontend name.
+4. **Memory:** preserve per-thread `threadId` and server-derived `resourceId`; verify isolation and concurrent updates (see `memory.md`). The selected-pin `null` clear is intentional.
+5. **Streaming and Stop:** a completed stream, failure, timeout, and client abort are different states. A Stop before a committed write is not success; a committed write should not be undone merely because the user disconnects. Prove side effects and retries at the canonical API/DB boundary.
+6. **Telemetry:** `LoggingMastraAgent` already classifies and records outcomes. Avoid a duplicate logging table/exporter or custom observability service merely to answer routine debug questions. Select explicit CLI targets.
+7. **Version matching:** consult `node_modules/@mastra/*/dist/docs/`, `SOURCE_MAP.json`, installed types, and the reviewed lockfile before adopting a vendor example. Only upgrade the coherent Mastra/AG-UI family in its owning task.
 
-tool-output-available does NOT carry toolName — correlate via toolCallId.
+## Focused verification
 
-Tool name to ChatAction mapping:
-- searchEventsTool      → OPEN_EVENT_RESULTS
-- searchRentalsTool     → OPEN_RENTALS_RESULTS
-- searchRestaurantsTool → OPEN_RESTAURANT_RESULTS
-- searchAttractionsTool → OPEN_ATTRACTION_RESULTS
+- Run `npm run check:skills` for these instructions and `npm run check:mastra` for registry/schema constraints.
+- Run focused existing Vitest tests for tool mapping, AG-UI route ownership, memory, and AI telemetry, chosen from **current** test names; never assume a historical script exists.
+- For user-facing changes, test one real authorized browse → cards/map → Details → action → DB readback path, plus unauthorized user, duplicate retry, error, Stop, and refresh where relevant.
+- When reporting evidence, distinguish documentation/static tests, isolated agent turns, real browser/database journeys, and actual deployed outcomes. **This documentation change alone does not certify those journeys.**
 
-## normalizeToolOutput (required before dispatch)
-
-All tool output must pass through normalizeToolOutput(toolName, raw) before becoming a ChatAction (MASTRA-046). Zod safeParse — parse failure returns null, shows prose-only message, no crash.
-
-## ChatAction versioning
-
-Every ChatAction type must have version: 1. Unknown versions are logged and skipped. Schema change rule: bump version, keep old parser branch for one release, then drop.
-
-## Multi-tool pin merge
-
-Use per-category accumulation — never setPins(next) which replaces all categories:
-setPins(prev => [...prev.filter(p => p.category !== 'event'), ...newEventPins])
-
-## ai_runs logging (mdeapp / CopilotKit path)
-
-Every chat turn must write a row to `public.ai_runs`: `{ agent_name, agent_type, status, duration_ms, user_id? }`.
-
-**mdeapp (CopilotKit + `@ag-ui/mastra`):** Do not rely on Mastra `server.middleware` alone — middleware runs on the Mastra HTTP server ([docs](https://mastra.ai/docs/server/middleware)), while prod chat uses `POST /api/copilotkit` → `MastraAgent.getLocalAgents({ mastra })` in-process. `@ag-ui/mastra` calls `agent.stream()` without `onFinish`; use `LoggingMastraAgent` (F13) wrapping `run()` completion.
-
-**Legacy `my-mastra-app`:** `ai-runs-middleware.ts` on `POST /chat` + `recordMastraRun()` in `lib/ai-runs.ts`.
-
-**Dual tables:** `ai_runs` = product audit; `mastra_ai_spans` = Mastra observability exporter (F20+).
-
-Smoke: row within 10 minutes of a CopilotKit chat turn; anonymous `user_id` null is OK.
-
-## Deployment checklist
-
-Before deploying my-mastra-app to Vercel: npm run build + mastra build must be clean. Health check: curl .../health must return {"status":"ok"}. Bundle must NOT contain MOCK_EVENTS. Required env vars: DATABASE_URL, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, GEMINI_API_KEY.
-
-## Task references
-
-- PLAN-001: tasks/mastra/maps/tasks/plans/001-geo-chat-production-plan.md — master roadmap
-- MASTRA-044: 044-mastra-deploy-verification.md — deploy + health check
-- MASTRA-045: 045-mastra-smoke-hardening.md — smoke spec hardening
-- MASTRA-046: 046-mastra-action-schema-validation.md — normalizeToolOutput
-- MASTRA-047: 047-mastra-map-pin-merge-versioning.md — pin merge + versioning
-- PLACES-005-010: 020-place-details-enrichment.md — Places enrichment
-- GROUNDING-001: 010-grounded-search.md — Maps grounding (Phase 3)
+Related: `references/memory.md`, `references/streaming.md`, `references/human-in-the-loop.md`; CopilotKit's `references/mastra-bridge.md`; https://github.com/mastra-ai/skills/tree/main/skills/mastra.

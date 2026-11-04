@@ -258,7 +258,7 @@ export function RentalCard({
         </div>
       ) : null}
 
-      <div className="mt-3 flex flex-wrap gap-2">
+      <div className="mde-rental-card-actions mt-3 flex flex-wrap gap-2">
         {onOpenDetails ? (
           <Button
             type="button"

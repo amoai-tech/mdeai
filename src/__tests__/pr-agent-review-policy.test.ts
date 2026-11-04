@@ -1,314 +1,89 @@
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   appendCertification,
+  excludedCoverageFromReview,
   excludedFilesFromReview,
   hasCertificationForBase,
-  hasCertificationForHead,
   parseReviewEnvelope,
   reviewEnvelope,
-  selectCertifiedReviewForHead,
   selectReviewCommand,
   stampReviewEnvelope,
   verifyReviewResult,
 } from "../../scripts/pr-agent/review-policy.mjs";
-
-const BASE_A = "a".repeat(40);
-const BASE_B = "b".repeat(40);
-const HEAD_A = "c".repeat(40);
-const HEAD_B = "d".repeat(40);
-const RUN_STARTED = Date.parse("2026-09-20T01:00:00Z");
-
-const REVIEW_MARKERS = ["<!-- pr-agent:review:full -->", "<!-- pr-agent:review:incremental -->"];
-const REVIEW_FULL = "## MDE PR Review\n\n<!-- pr-agent:review:full -->\n\nbody";
-const REVIEW_INCREMENTAL = "## Incremental MDE PR Review\n\n<!-- pr-agent:review:incremental -->\n\nbody";
-
-/** The fallback PR-Agent publishes when it cannot update the persistent review: no token, no head. */
-function standaloneReview(body: string) {
-  return [
-    "## Standalone PR Review",
-    "",
-    "_PR-Agent could not safely update the persistent review. This standalone result will not replace the canonical review._",
-    "",
-    "## MDE PR Review 🔍",
-    "",
-    body,
-  ].join("\n");
-}
-
-type ReviewEnvelopeOptions = {
-  baseSha?: string;
-  headSha?: string;
-  command?: "/review" | "/review -i";
-};
-
-function envelopedCanonical(options: ReviewEnvelopeOptions = {}) {
-  const command = options.command ?? "/review";
-  const envelope = reviewEnvelope({
-    baseSha: options.baseSha ?? BASE_A,
-    headSha: options.headSha ?? HEAD_A,
-    command,
-    type: "canonical",
-  });
-  const marker = command === "/review -i" ? "<!-- pr-agent:review:incremental -->" : "<!-- pr-agent:review:full -->";
-  return `${envelope}
-## MDE PR Review 🔍
-${marker}
-review body
-
-<!-- pr-agent-review-state:v1
-${JSON.stringify({ findings: [], schema_version: 1, last_run: { complete: true, excluded_files: [], head_sha: options.headSha ?? HEAD_A } })}
--->`;
-}
-
-function envelopedStandalone(options: ReviewEnvelopeOptions = {}) {
-  return `${reviewEnvelope({
-    baseSha: options.baseSha ?? BASE_A,
-    headSha: options.headSha ?? HEAD_A,
-    command: options.command ?? "/review",
-    type: "standalone",
-  })}
-${standaloneReview("review body")}`;
-}
-
-function comment(body: string, updatedAt: string, login = "github-actions[bot]") {
-  return { body, updated_at: updatedAt, user: { login } };
-}
-
-describe("PR-Agent certified-review selection for a head", () => {
-  it("matches a head marker case-insensitively", () => {
-    const marker = appendCertification("", { baseSha: BASE_A, headSha: HEAD_A });
-    expect(hasCertificationForHead(marker, HEAD_A)).toBe(true);
-    expect(hasCertificationForHead(marker, HEAD_A.toUpperCase())).toBe(true);
-    expect(hasCertificationForHead(marker, BASE_B)).toBe(false);
-  });
-
-  it("selects exactly one review, the one the head marker certified", () => {
-    const marker = appendCertification("", { baseSha: BASE_A, headSha: HEAD_A });
-    const selection = selectCertifiedReviewForHead({
-      comments: [
-        comment(REVIEW_FULL, "2026-09-20T00:10:00Z"),
-        comment(REVIEW_FULL, "2026-09-20T00:30:00Z"),
-        comment(marker, "2026-09-20T00:31:00Z"),
-      ],
-      headSha: HEAD_A,
-      reviewMarkers: REVIEW_MARKERS,
-      allowUnconfirmedHead: true,
-    });
-    expect(selection.comment?.updated_at).toBe("2026-09-20T00:30:00Z");
-    expect(selection.consideredReviews).toBe(2);
-    // Only one body crosses the boundary — never a concatenation of both.
-    expect(selection.comment?.body).toBe(REVIEW_FULL);
-  });
-
-  it("ignores reviews published after the marker for this head", () => {
-    const marker = appendCertification("", { baseSha: BASE_A, headSha: HEAD_A });
-    const selection = selectCertifiedReviewForHead({
-      comments: [
-        comment(REVIEW_FULL, "2026-09-20T00:10:00Z"),
-        comment(marker, "2026-09-20T00:11:00Z"),
-        comment(REVIEW_INCREMENTAL, "2026-09-20T00:40:00Z"),
-      ],
-      headSha: HEAD_A,
-      reviewMarkers: REVIEW_MARKERS,
-      allowUnconfirmedHead: true,
-    });
-    expect(selection.comment?.body).toBe(REVIEW_FULL);
-  });
-
-  it("refuses to select anything when no marker exists for the head", () => {
-    const selection = selectCertifiedReviewForHead({
-      comments: [
-        comment(appendCertification("", { baseSha: BASE_A, headSha: BASE_B }), "2026-09-20T00:31:00Z"),
-        comment(REVIEW_FULL, "2026-09-20T00:30:00Z"),
-      ],
-      headSha: HEAD_A,
-      reviewMarkers: REVIEW_MARKERS,
-    });
-    expect(selection.comment).toBeNull();
-    expect(selection.reason).toContain("no recorded review marker for head");
-  });
-
-  it("never returns a non-bot comment", () => {
-    const marker = appendCertification("", { baseSha: BASE_A, headSha: HEAD_A });
-    const selection = selectCertifiedReviewForHead({
-      comments: [
-        comment(marker, "2026-09-20T00:31:00Z", "someone-else"),
-        comment(REVIEW_FULL, "2026-09-20T00:30:00Z", "someone-else"),
-      ],
-      headSha: HEAD_A,
-      reviewMarkers: REVIEW_MARKERS,
-      allowUnconfirmedHead: true,
-    });
-    expect(selection.comment).toBeNull();
-  });
-
-  it("refuses to guess a head that is not the newest certification", () => {
-    // HEAD_A is certified, but a later certification for HEAD_C exists. The boundary now belongs to
-    // HEAD_C, so nothing ties a review to HEAD_A — and a guess would score a different head's review.
-    const marker = appendCertification(
-      appendCertification("", { baseSha: BASE_A, headSha: HEAD_A }),
-      { baseSha: BASE_A, headSha: "d".repeat(40) },
-    );
-    const selection = selectCertifiedReviewForHead({
-      comments: [
-        comment(REVIEW_FULL, "2026-09-20T00:10:00Z"),
-        comment(marker, "2026-09-20T00:31:00Z"),
-      ],
-      headSha: HEAD_A,
-      reviewMarkers: REVIEW_MARKERS,
-    });
-    expect(selection.comment).toBeNull();
-    expect(selection.headConfirmed).toBe(false);
-    expect(selection.headEvidence).toBe("unconfirmed");
-    expect(selection.reason).toContain("not the newest certification");
-  });
-
-  it("trusts the boundary when the head is the newest certification", () => {
-    // The last marker is the most recent certification, so no later certification can confuse it.
-    // This is the live canary case: a standalone review that carries no head of its own.
-    const marker = appendCertification(
-      appendCertification("", { baseSha: BASE_A, headSha: "d".repeat(40) }),
-      { baseSha: BASE_B, headSha: HEAD_A },
-    );
-    const selection = selectCertifiedReviewForHead({
-      comments: [
-        comment(REVIEW_FULL, "2026-09-20T00:10:00Z"),
-        comment(standaloneReview("a real finding"), "2026-09-20T00:30:00Z"),
-        comment(marker, "2026-09-20T00:31:00Z"),
-      ],
-      headSha: HEAD_A,
-      reviewMarkers: REVIEW_MARKERS,
-    });
-    expect(selection.comment?.updated_at).toBe("2026-09-20T00:30:00Z");
-    expect(selection.headConfirmed).toBe(true);
-    expect(selection.headEvidence).toBe("newest-certified-head");
-  });
-
-  it("recognises a standalone review as a review, not as a certification record", () => {
-    const marker = appendCertification("", { baseSha: BASE_A, headSha: HEAD_A });
-    const review = standaloneReview(`quoted marker:\n<!-- mde-pr-agent-cert base=${BASE_A} head=${HEAD_A} -->`);
-    const selection = selectCertifiedReviewForHead({
-      comments: [
-        comment(REVIEW_FULL, "2026-09-20T00:10:00Z"),
-        comment(review, "2026-09-20T00:20:00Z"),
-        comment(marker, "2026-09-20T00:21:00Z"),
-      ],
-      headSha: HEAD_A,
-      reviewMarkers: REVIEW_MARKERS,
-    });
-    expect(selection.comment?.body).toBe(review);
-    expect(selection.marker?.body).toBe(marker);
-  });
-
-  it("only guesses an older head when the operator explicitly allows it", () => {
-    const marker = appendCertification(
-      appendCertification("", { baseSha: BASE_A, headSha: HEAD_A }),
-      { baseSha: BASE_A, headSha: "d".repeat(40) },
-    );
-    const selection = selectCertifiedReviewForHead({
-      comments: [
-        comment(REVIEW_FULL, "2026-09-20T00:10:00Z"),
-        comment(marker, "2026-09-20T00:31:00Z"),
-      ],
-      headSha: HEAD_A,
-      reviewMarkers: REVIEW_MARKERS,
-      allowUnconfirmedHead: true,
-    });
-    expect(selection.comment?.body).toBe(REVIEW_FULL);
-    expect(selection.headConfirmed).toBe(false);
-    expect(selection.headEvidence).toBe("unconfirmed");
-  });
-
-  it("pins the exact head instead of the newest review under the marker", () => {
-    // Regression for the real replay defect: the marker comment is edited in place, so its
-    // timestamp is the LAST certification. For an older head the boundary alone returns the newer
-    // head's review.
-    const olderHead = HEAD_A;
-    const newerHead = "d".repeat(40);
-    const marker = appendCertification(
-      appendCertification("", { baseSha: BASE_A, headSha: olderHead }),
-      { baseSha: BASE_A, headSha: newerHead },
-    );
-    const olderReview = `${REVIEW_FULL}\n{"last_run":{"head_sha":"${olderHead}"}}`;
-    const newerReview = `${REVIEW_INCREMENTAL}\n{"last_run":{"head_sha":"${newerHead}"}}`;
-    const readHead = (body: string) => /"head_sha":"([0-9a-f]{40})"/.exec(body)?.[1] ?? null;
-
-    const selection = selectCertifiedReviewForHead({
-      comments: [
-        comment(olderReview, "2026-09-20T00:10:00Z"),
-        comment(newerReview, "2026-09-20T00:20:00Z"),
-        comment(marker, "2026-09-20T00:21:00Z"),
-      ],
-      headSha: olderHead,
-      reviewMarkers: REVIEW_MARKERS,
-      headShaOf: readHead,
-    });
-    expect(selection.headConfirmed).toBe(true);
-    expect(selection.comment?.body).toBe(olderReview);
-  });
-
-  it("rejects a malformed head", () => {
-    expect(() => hasCertificationForHead("x", "not-a-sha")).toThrow(/40-character git SHA/);
-    expect(() =>
-      selectCertifiedReviewForHead({ comments: [], headSha: "nope", reviewMarkers: REVIEW_MARKERS }),
-    ).toThrow(/40-character git SHA/);
-  });
-
-  it("requires the whole marker shape, not a bare head= substring", () => {
-    // A review comment can contain any of these because PR-Agent embeds the diff it reviews.
-    expect(hasCertificationForHead(`the diff says head=${HEAD_A}`, HEAD_A)).toBe(false);
-    expect(hasCertificationForHead(`base=${BASE_A} head=${HEAD_A}`, HEAD_A)).toBe(false);
-    expect(hasCertificationForHead("<!-- mde-pr-agent-cert base=... head=... -->", HEAD_A)).toBe(false);
-    expect(hasCertificationForHead(`<!-- mde-pr-agent-cert base=${BASE_A} head=${HEAD_A} -->`, HEAD_A)).toBe(true);
-  });
-
-  it("never treats a review that quotes a marker as the certification record", () => {
-    const marker = appendCertification("", { baseSha: BASE_A, headSha: HEAD_A });
-    // The quoted marker is inside a real review body, so it also carries a review token.
-    const quoted = `## Incremental MDE PR Review\n<!-- pr-agent:review:incremental -->\n\n\`\`\`\n${marker}\n\`\`\``;
-    const selection = selectCertifiedReviewForHead({
-      comments: [
-        comment(REVIEW_FULL, "2026-09-20T00:10:00Z"),
-        comment(marker, "2026-09-20T00:11:00Z"),
-        comment(quoted, "2026-09-20T00:20:00Z"),
-      ],
-      headSha: HEAD_A,
-      reviewMarkers: REVIEW_MARKERS,
-      allowUnconfirmedHead: true,
-    });
-    // Without the review-token exclusion the newer quoting review becomes the marker and is then
-    // selected as its own certified review — the wrong review, scored as if it were current.
-    expect(selection.comment?.body).toBe(REVIEW_FULL);
-    expect(selection.marker?.body).toBe(marker);
-  });
-
-  it("uses the newest marker when several name the same head", () => {
-    const marker = appendCertification("", { baseSha: BASE_A, headSha: HEAD_A });
-    const selection = selectCertifiedReviewForHead({
-      comments: [
-        comment(REVIEW_FULL, "2026-09-20T00:10:00Z"),
-        comment(marker, "2026-09-20T00:11:00Z"),
-        comment(REVIEW_INCREMENTAL, "2026-09-20T00:30:00Z"),
-        comment(marker, "2026-09-20T00:40:00Z"),
-      ],
-      headSha: HEAD_A,
-      reviewMarkers: REVIEW_MARKERS,
-      allowUnconfirmedHead: true,
-    });
-    expect(selection.marker?.updated_at).toBe("2026-09-20T00:40:00Z");
-    expect(selection.comment?.body).toBe(REVIEW_INCREMENTAL);
-  });
-});
+import {
+  BASE_A,
+  BASE_B,
+  HEAD_A,
+  HEAD_B,
+  RUN_STARTED,
+  REVIEW_FULL,
+  comment,
+  envelopedCanonical,
+  envelopedStandalone,
+} from "./pr-agent-review-fixtures";
 
 describe("PR-Agent review policy", () => {
-  it("uses incremental review only when the current base was previously certified", () => {
+  it("always selects current full PR diff even after same-base certification", () => {
     const history = appendCertification("", { baseSha: BASE_A, headSha: HEAD_A });
-    expect(selectReviewCommand({ action: "synchronize", certificationBodies: [history], baseSha: BASE_A })).toBe("/review -i");
-    expect(selectReviewCommand({ action: "synchronize", certificationBodies: [history], baseSha: BASE_B })).toBe("/review");
+    for (const action of ["opened", "reopened", "ready_for_review", "synchronize"]) {
+      expect(selectReviewCommand({ action, certificationBodies: [history], baseSha: BASE_A })).toBe("/review");
+      expect(selectReviewCommand({ action, certificationBodies: [history], baseSha: BASE_B })).toBe("/review");
+    }
   });
 
-  it("uses a full review when no prior certification exists", () => {
-    expect(selectReviewCommand({ action: "synchronize", certificationBodies: [], baseSha: BASE_A })).toBe("/review");
+  it("malformed, missing, or hostile history cannot enable historical incremental mode", () => {
+    for (const bodies of [[], ["untrusted"], [null], [appendCertification("", { baseSha: BASE_A, headSha: HEAD_A })]]) {
+      expect(selectReviewCommand({ action: "synchronize", certificationBodies: bodies, baseSha: BASE_A })).toBe("/review");
+    }
+  });
+
+  it("regression: ordinary-titled two-parent merge adds history outside a six-file Chat PR diff", () => {
+    const dir = mkdtempSync(join(tmpdir(), "mde-san1628-merge-"));
+    const git = (...args: string[]) => execFileSync("git", args, { cwd: dir, encoding: "utf8" }).trim();
+    const write = (path: string, content: string) => {
+      mkdirSync(join(dir, path.substring(0, path.lastIndexOf("/"))), { recursive: true });
+      writeFileSync(join(dir, path), content);
+    };
+    try {
+      git("init", "-q", "-b", "main");
+      git("config", "user.name", "MDE fixture");
+      git("config", "user.email", "fixture@example.invalid");
+      write("docs/root.md", "main");
+      git("add", "."); git("commit", "-qm", "initial");
+      git("switch", "-q", "-c", "chat-fix");
+      for (let i = 0; i < 6; i++) write(`src/chat/file-${i}.tsx`, `// change ${i}`);
+      git("add", "."); git("commit", "-qm", "fix: six chat files");
+      git("switch", "-q", "main");
+      write("src/rentals/unrelated.ts", "historical rentals change");
+      write("src/events/unrelated.ts", "historical events change");
+      git("add", "."); git("commit", "-qm", "feat: unrelated work on main");
+      git("switch", "-q", "chat-fix");
+      git("merge", "--no-ff", "-m", "chore: synchronize chat branch", "main");
+      expect(git("rev-list", "--parents", "-n", "1", "HEAD").split(" ")).toHaveLength(3);
+      const fullDiff = git("diff", "--name-only", "main...chat-fix").split("\n");
+      expect(fullDiff).toHaveLength(6);
+      expect(fullDiff.every((path) => path.startsWith("src/chat/"))).toBe(true);
+      expect(git("diff", "--name-only", "HEAD^1", "HEAD")).toContain("src/rentals/unrelated.ts");
+      expect(selectReviewCommand({ action: "synchronize", certificationBodies: [appendCertification("", { baseSha: BASE_A, headSha: HEAD_A })], baseSha: BASE_A })).toBe("/review");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("counts named and unlisted excluded files without inventing paths (PR #490)", () => {
+    const footer = "\n⚠️ **Review coverage:** The following files were not included in this review because of the token budget:\n" +
+      Array.from({ length: 50 }, (_, i) => `- \`src/unrelated-${i}.ts\`\n`).join("") + "... and 903 more\n";
+    expect(excludedCoverageFromReview(footer)).toMatchObject({ unlistedCount: 903, total: 953 });
+    expect(excludedFilesFromReview(footer)).toHaveLength(50);
+    const result = verifyReviewResult({ comments: [comment(envelopedCanonical() + footer, "2026-09-20T01:00:05Z")],
+      startedAt: RUN_STARTED, reviewCommand: "/review", baseSha: BASE_A, headSha: HEAD_A });
+    expect(result.code).toBe("INCOMPLETE_REVIEW");
+    expect(result.reason).toContain("953 excluded");
+    expect(result.reason).toContain("50 named, 903 unnamed");
   });
 
   it("rejects the actual PR #342 false-green: partial review excluded 17 of 20 changed files", () => {
@@ -345,6 +120,72 @@ ${JSON.stringify({ findings: [], schema_version: 1, last_run: { head_sha: HEAD_A
     const body = envelopedCanonical().replace('"excluded_files":[]', '"excluded_files":["src/unreviewed.ts"]');
     const result = verifyReviewResult({ comments: [comment(body, "2026-09-20T01:00:05Z")], startedAt: RUN_STARTED, reviewCommand: "/review", baseSha: BASE_A, headSha: HEAD_A });
     expect(result.code).toBe("INCOMPLETE_REVIEW");
+  });
+
+  it("rejects partial input coverage when no review state marker is published", () => {
+    const noState = envelopedCanonical().replace(/<!-- pr-agent-review-state:v1\n[\s\S]*?\n-->/, "");
+    const partial = "\n<hr>\n⚠️ **Review coverage:** The following files had patches clipped before analysis to fit the token budget (partial input coverage):\n" +
+      "- `src/events/checkout.ts`\n... and 12 more\n";
+    const result = verifyReviewResult({ comments: [comment(noState + partial, "2026-09-20T01:00:05Z")],
+      startedAt: RUN_STARTED, reviewCommand: "/review", baseSha: BASE_A, headSha: HEAD_A });
+    expect(result.code).toBe("INCOMPLETE_REVIEW");
+    expect(result.reason).toContain("partial input coverage");
+  });
+
+  it("rejects failed review chunks even when no files are explicitly excluded", () => {
+    const noState = envelopedCanonical().replace(/<!-- pr-agent-review-state:v1\n[\s\S]*?\n-->/, "");
+    const chunked = "\n<hr>\nℹ️ **Chunked review:** the diff exceeded the model token budget, so it was reviewed in 6 chunks and the per-chunk results were merged. 2 chunk(s) failed and are not covered by this review.\n";
+    const result = verifyReviewResult({ comments: [comment(noState + chunked, "2026-09-20T01:00:05Z")],
+      startedAt: RUN_STARTED, reviewCommand: "/review", baseSha: BASE_A, headSha: HEAD_A });
+    expect(result.code).toBe("INCOMPLETE_REVIEW");
+    expect(result.reason).toContain("2 failed chunk(s)");
+  });
+
+  it.each([
+    ["failed chunk", "ℹ️ **Chunked review:** the diff exceeded the model token budget, so it was reviewed in 3 chunks and the per-chunk results were merged. 1 chunk(s) failed and are not covered by this review."],
+    ["partial input", "⚠️ **Review coverage:** The following files had patches clipped before analysis to fit the token budget (partial input coverage):\n- `src/venue-booking.ts`"],
+    ["excluded file", "⚠️ **Review coverage:** The following files were not included in this review because of the token budget:\n- `src/venue-booking.ts`"],
+  ])("rejects provider-appended %s after model leaves a Markdown fence unclosed", (_kind, warning) => {
+    for (const fence of ["```", "~~~", "````"]) {
+      for (const withState of [true, false]) {
+        const raw = withState ? envelopedCanonical() : envelopedCanonical().replace(/<!-- pr-agent-review-state:v1\n[\s\S]*?\n-->/, "");
+        const body = raw + `\n${fence}md\nThe AI reviewer forgot to close this example.\n\n<hr>\n\n${warning}\n`;
+        const result = verifyReviewResult({ comments: [comment(body, "2026-09-20T01:00:05Z")],
+          startedAt: RUN_STARTED, reviewCommand: "/review", baseSha: BASE_A, headSha: HEAD_A });
+        expect(result, `${_kind} / ${fence} / state=${withState}`).toMatchObject({ ok: false, code: "INCOMPLETE_REVIEW" });
+      }
+    }
+  });
+
+  it.each([
+    ["failed chunk", "ℹ️ **Chunked review:** the diff exceeded the model token budget, so it was reviewed in 3 chunks and the per-chunk results were merged. 1 chunk(s) failed and are not covered by this review."],
+    ["partial input", "⚠️ **Review coverage:** The following files had patches clipped before analysis to fit the token budget (partial input coverage):\n- `src/example.ts`"],
+    ["excluded file", "⚠️ **Review coverage:** The following files were not included in this review because of the token budget:\n- `src/example.ts`"],
+  ])("keeps ignoring a provider-shaped %s example inside a CLOSED model fence", (_kind, warning) => {
+    const noState = envelopedCanonical().replace(/<!-- pr-agent-review-state:v1\n[\s\S]*?\n-->/, "");
+    const body = noState + `\n\n\`\`\`md\n\n<hr>\n\n${warning}\n\`\`\`\n`;
+    const result = verifyReviewResult({ comments: [comment(body, "2026-09-20T01:00:05Z")],
+      startedAt: RUN_STARTED, reviewCommand: "/review", baseSha: BASE_A, headSha: HEAD_A });
+    expect(result, _kind).toMatchObject({ ok: true, coverageConfirmed: false });
+  });
+
+  it("ignores provider-shaped text in a closed fence even with an extra divider in that example", () => {
+    const noState = envelopedCanonical().replace(/<!-- pr-agent-review-state:v1\n[\s\S]*?\n-->/, "");
+    const example = "\n\n\`\`\`md\n\n<hr>\n\n" +
+      "ℹ️ **Chunked review:** the diff exceeded the model token budget, so it was reviewed in 3 chunks and the per-chunk results were merged. 1 chunk(s) failed and are not covered by this review.\n\n" +
+      "<hr>\n\nThe snippet is only an example.\n\`\`\`\n";
+    const result = verifyReviewResult({ comments: [comment(noState + example, "2026-09-20T01:00:05Z")],
+      startedAt: RUN_STARTED, reviewCommand: "/review", baseSha: BASE_A, headSha: HEAD_A });
+    expect(result).toMatchObject({ ok: true, coverageConfirmed: false });
+  });
+
+  it("ignores examples of chunk/partial input warnings inside Markdown fences or quoted blocks", () => {
+    const noState = envelopedCanonical().replace(/<!-- pr-agent-review-state:v1\n[\s\S]*?\n-->/, "");
+    const example = "\n```md\nℹ️ **Chunked review:** reviewed in 6 chunks. 2 chunk(s) failed and are not covered by this review.\n" +
+      "⚠️ **Review coverage:** The following files had patches clipped before analysis to fit the token budget (partial input coverage):\n- `src/example.ts`\n```\n";
+    const result = verifyReviewResult({ comments: [comment(noState + example, "2026-09-20T01:00:05Z")],
+      startedAt: RUN_STARTED, reviewCommand: "/review", baseSha: BASE_A, headSha: HEAD_A });
+    expect(result.ok).toBe(true);
   });
 
   it("rejects a six-chunk review that explicitly excludes files even when the persistent state is absent", () => {

@@ -5,30 +5,36 @@ import {
   createThrowawayIdentity, deleteThrowawayIdentity, getSupabaseAdmin,
   hasE2eEnv, signInAsOnOrigin, getTestSession,
 } from "../helpers/auth";
-import { sendConciergeMessage } from "../helpers/maps-layout";
+import { ensureChatInputVisible, sendConciergeMessage } from "../helpers/maps-layout";
 import { asUser } from "../helpers/rental-journey-fixture";
 
 /** Real Gemini → CopilotKit v2 → Mastra → HITL → API → live Supabase.
  * Never use this test as a release claim when it is skipped or the model is down.
  */
-test.use({ viewport: { width: 390, height: 844 }, timezoneId: "America/Toronto" });
+test.use({ viewport: { width: 390, height: 844 }, timezoneId: "America/Bogota" });
 test.setTimeout(180_000);
 test.skip(!hasE2eEnv() || process.env.MDE_AI_BOOKING_LIVE !== "1",
   "Opt in to live-model AI booking and authorized Supabase QA identities");
 
 const VERDEO = "a1b2c3d4-e5f6-4789-abcd-100000000005";
-const BOGOTA_7_PM = "2026-11-16T00:00:00.000Z";
-async function askAgentToPrepare(page: Page, email: string, baseURL: string) {
-  // Arm before navigation: the installed runtime can handshake via /info
-  // or POST /api/copilotkit depending on connection state. A specific JSON
-  // method="info" predicate missed real HTTP 200 handshakes in Next dev.
-  const ready = page.waitForResponse(r => r.url().includes("/api/copilotkit") &&
-    r.status() === 200, { timeout: 45_000 });
+// A fixed 2026 date eventually becomes a past-date false failure. Use a fresh
+// Bogotá-local date so the real booking QA remains valid on future runs.
+const dateParts = new Intl.DateTimeFormat("en-US", {
+  timeZone: "America/Bogota", year: "numeric", month: "2-digit", day: "2-digit",
+}).formatToParts(new Date(Date.now() + 14 * 86_400_000));
+const bookingDatePart = (type: "year" | "month" | "day") =>
+  dateParts.find(part => part.type === type)?.value ?? "";
+const BOOKING_DATE = `${bookingDatePart("year")}-${bookingDatePart("month")}-${bookingDatePart("day")}`;
+const BOGOTA_7_PM = new Date(`${BOOKING_DATE}T19:00:00-05:00`).toISOString();
+const askAgentToPrepare = async (page: Page, email: string, baseURL: string) => {
+  // CopilotKit may connect lazily only after the first user message. Waiting
+  // for a pre-message /info response made cold local runs fail without ever
+  // exercising Mastra. The shared submit helper watches the actual request.
   await page.goto(new URL("/chat", baseURL).toString());
-  await ready;
+  await ensureChatInputVisible(page, 45_000);
   await sendConciergeMessage(page,
     "Find Verdeo restaurant in El Poblado. Prepare a table request for two on " +
-    "November 15 2026 at 7 PM Medellin. Contact name SAN-1149 QA, email " +
+    BOOKING_DATE + " at 7 PM Medellin. Contact name SAN-1149 QA, email " +
     email + ". Show review before sending.",
     // Live cold CopilotKit /info startup can exceed the default 6s browser reaction watch.
     35_000,
@@ -76,13 +82,15 @@ test("AI-generated Verdeo proposal: Send persists exactly one pending receipt an
     expect(response.status(), await response.text()).toBe(200);
     const saved = await response.json() as {requestId:string};
     expect(saved.requestId).toMatch(/^[0-9a-f-]{36}$/i);
-    await expect(page.getByTestId("venue-booking-confirmation-card"))
-      .toContainText(saved.requestId.slice(0,8),{timeout:30000});
+    const confirmation = page.getByTestId("venue-booking-confirmation-card");
+    await expect(confirmation).toContainText(saved.requestId.slice(0,8),{timeout:30000});
+    await expect(confirmation).toContainText("awaiting confirmation from the venue");
+    await expect(confirmation).not.toContainText("WhatsApp");
     const evidenceDir = process.env.MDE_QA_EVIDENCE_DIR;
     if (evidenceDir) {
       await mkdir(evidenceDir, { recursive: true });
       await page.screenshot({
-        path: join(evidenceDir, "san1149-ai-saved-pending-receipt-390-20261028.png"),
+        path: join(evidenceDir, "san1149-ai-saved-pending-receipt-390.png"),
         mask: [page.getByText(person.email, { exact: false })],
       });
     }

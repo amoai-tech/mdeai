@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { publicDiscoveryContext } from "../discovery-page-context";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { persistCurrentSelection, publicDiscoveryContext, readPreviousSelection, previousSelectionId } from "../discovery-page-context";
 
 describe("public MDE page context (SAN-737)", () => {
   it("includes only allowlisted public filters and a selected UUID", () => {
@@ -36,5 +36,68 @@ describe("public MDE page context (SAN-737)", () => {
     expect(publicDiscoveryContext("nightlife", { feature: "workspace", vibe: "salsa" })).toEqual({
       route: "/nightlife", filters: { vibe: "salsa" }, selectedPublicEntityId: null,
     });
+  });
+});
+
+describe("SAN-1600 — previous selection for an explicit comparison", () => {
+  const reina = "22222222-2222-2222-2222-000000000001";
+  const feria = "a1b2c3d4-0001-0001-0001-000000000003";
+
+  it("carries the previous item of the same route, and never the current one", () => {
+    expect(previousSelectionId({ route: "/events", id: reina }, "events", feria)).toBe(reina);
+    expect(previousSelectionId({ route: "/events", id: feria }, "events", feria)).toBeNull();
+  });
+
+  it("ignores an id from another route or a non-id value", () => {
+    expect(previousSelectionId({ route: "/rentals", id: reina }, "events", feria)).toBeNull();
+    expect(previousSelectionId({ route: "/events", id: "not-a-uuid" }, "events", feria)).toBeNull();
+    expect(previousSelectionId(null, "events", feria)).toBeNull();
+  });
+
+  it("puts the hint in the context only when it is usable", () => {
+    expect(publicDiscoveryContext("events", {}, feria, reina))
+      .toMatchObject({ selectedPublicEntityId: feria, previousPublicEntityId: reina });
+    expect(publicDiscoveryContext("events", {}, feria)).not.toHaveProperty("previousPublicEntityId");
+  });
+});
+
+describe("SAN-1600 client navigation + auth remount previous-item tracking", () => {
+  const reina = "22222222-2222-2222-2222-000000000001";
+  const feria = "a1b2c3d4-0001-0001-0001-000000000003";
+  const saved = new Map<string, string>();
+  beforeEach(() => {
+    saved.clear();
+    vi.stubGlobal("window", {
+      sessionStorage: {
+        getItem: (key: string) => saved.get(key) ?? null,
+        setItem: (key: string, value: string) => { saved.set(key, value); },
+      },
+    });
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("handles an in-page A → B selection change without losing A on auth remount", () => {
+    expect(readPreviousSelection("events", reina)).toBeNull();
+    persistCurrentSelection("events", reina, null);
+    expect(readPreviousSelection("events", feria)).toBe(reina);
+    persistCurrentSelection("events", feria, reina);
+    expect(readPreviousSelection("events", feria)).toBe(reina);
+    expect(publicDiscoveryContext("events", {}, feria, readPreviousSelection("events", feria))
+      .previousPublicEntityId).toBe(reina);
+  });
+
+  it("never reuses an event as a rental's previous item on SPA navigation", () => {
+    expect(readPreviousSelection("events", reina)).toBeNull();
+    persistCurrentSelection("events", reina, null);
+    expect(readPreviousSelection("rentals", feria)).toBeNull();
+    persistCurrentSelection("rentals", feria, null);
+    expect(readPreviousSelection("rentals", reina)).toBe(feria);
+  });
+
+  it("does not replace the last selected event when browsing with no selection", () => {
+    expect(readPreviousSelection("events", reina)).toBeNull();
+    persistCurrentSelection("events", reina, null);
+    expect(readPreviousSelection("events", null)).toBeNull();
+    expect(readPreviousSelection("events", feria)).toBe(reina);
   });
 });

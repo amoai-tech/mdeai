@@ -40,7 +40,7 @@ Use this file to jump from a **task or question** to the right **official URL ta
 | Logs, traces, evals, datasets, CI | [Observability & evals](../links.md#observability-evals) | — |
 | Inspect/call Mastra server resources from CLI | [Server & client](../links.md#server-client) | [`official/mastra/references/mastra-api.md`](official/mastra/references/mastra-api.md) |
 | Find exact traces using field/span/score/feedback predicates | [Observability & evals](../links.md#observability-evals) | [`official/mastra/references/trace-query.md`](official/mastra/references/trace-query.md) |
-| Investigate recurring agent-health/failure themes | [Observability & evals](../links.md#observability-evals) | [`official/mastra/references/trace-intelligence.md`](official/mastra/references/trace-intelligence.md) |
+| Investigate recurring agent-health/failure themes | [Observability & evals](../links.md#observability-evals) | [`official/mastra/references/trace-query.md`](official/mastra/references/trace-query.md) (aggregate completed traces) |
 | Choose Agent vs Workflow vs Tool vs Memory/Storage | [Guides — concepts](../links.md#guides-concepts) | [`official/mastra/references/core-concepts.md`](official/mastra/references/core-concepts.md) |
 | Production / cloud | [Deployment](../links.md#deployment) | [`remote-docs.md`](remote-docs.md) |
 | Model strings, providers, embeddings | [Models](../links.md#models) | [`model-providers.md`](model-providers.md), [`openai.md`](openai.md), [`gemini.md`](gemini.md); run [`../scripts/provider-registry.mjs`](../scripts/provider-registry.mjs) |
