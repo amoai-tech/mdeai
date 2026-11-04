@@ -36,13 +36,13 @@ const base: WalletOrderPayload = {
   attendees: [attendee],
 };
 
-function renderPayload(payload: WalletOrderPayload) {
+const renderPayload = (payload: WalletOrderPayload) => {
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
     ok: true,
-    json: async () => payload,
+    json: () => Promise.resolve(payload),
   }));
   return render(<TicketDetailClient orderId={orderId} accessToken="qa-capability-token" />);
-}
+};
 
 afterEach(() => {
   cleanup();
