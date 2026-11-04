@@ -1,0 +1,41 @@
+name: Temporary Chromatic lockfile refresh
+
+on:
+  push:
+    branches: [chore/chromatic-playwright-pilot]
+    paths:
+      - ".github/workflows/chromatic-lock-refresh.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  refresh:
+    if: github.repository == 'amoai-tech/mdeai' && github.ref == 'refs/heads/chore/chromatic-playwright-pilot'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chore/chromatic-playwright-pilot
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Refresh only the npm lockfile without running install scripts
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Check critical security advisories
+        run: npm audit --audit-level=critical
+      - name: Commit only the generated lockfile
+        run: |
+          git diff --check
+          git add -- package-lock.json
+          if git diff --cached --quiet; then
+            echo "No lockfile changes"
+            exit 0
+          fi
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'fix: lock patched Storybook for Chromatic'
+          git push origin HEAD:chore/chromatic-playwright-pilot
