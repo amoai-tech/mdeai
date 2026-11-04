@@ -119,7 +119,9 @@ export function TicketDetailClient({
     );
   }
 
-  if (!primary?.qr_token) {
+  // A revoked pass has no usable QR by design; prefer the revoked notice over
+  // the generic "no QR yet" message when the attendee row no longer has a token.
+  if (!revokedReason && !primary?.qr_token) {
     return (
       <main className="mx-auto max-w-lg px-4 py-10">
         <p>No QR available for this order yet.</p>
@@ -127,10 +129,10 @@ export function TicketDetailClient({
     );
   }
 
-  const holder = primary.full_name ?? order.buyer_name ?? "Guest";
+  const holder = primary?.full_name ?? order.buyer_name ?? "Guest";
   const eventEnd = event.event_end_time ?? event.event_start_time;
   const isExpired = new Date(eventEnd).getTime() < nowMs;
-  const isUsed = primary.status !== "active";
+  const isUsed = primary?.status !== "active";
   const passState = resolvePassState(isUsed, isExpired);
   const venueLine = [event.address, event.city].filter(Boolean).join(" · ");
   const directionsQuery = venueLine
@@ -177,13 +179,13 @@ export function TicketDetailClient({
             This ticket cannot be used at the door.
           </p>
         </div>
-      ) : (
+      ) : primary ? (
         <TicketQrDisplay
           value={primary.qr_token}
           label={`${holder} · scan at door`}
           state={passState}
         />
-      )}
+      ) : null}
 
       <dl className="mt-5 divide-y divide-border rounded-xl border border-border text-sm">
         <PassRow label="Ticket holder" value={holder} />
@@ -211,6 +213,7 @@ export function TicketDetailClient({
         eventName={event.name}
         directionsQuery={venueLine ? directionsQuery : null}
         shareUrl={shareUrl}
+        canShare={!revokedReason}
       />
     </main>
   );

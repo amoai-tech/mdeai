@@ -11,6 +11,11 @@ type TicketPassActionsProps = {
   directionsQuery: string | null;
   /** URL to share back to this pass. */
   shareUrl: string;
+  /**
+   * False for a revoked pass. Sharing a refunded or cancelled ticket only
+   * misleads the recipient, who cannot enter with it.
+   */
+  canShare?: boolean;
 };
 
 // skipcq: JS-0067
@@ -18,6 +23,7 @@ export function TicketPassActions({
   eventName,
   directionsQuery,
   shareUrl,
+  canShare = true,
 }: TicketPassActionsProps) {
   const [shareNote, setShareNote] = useState<string | null>(null);
 
@@ -46,7 +52,7 @@ export function TicketPassActions({
 
   return (
     <div className="mt-6" data-testid="my-tickets-pass-actions">
-      <div className="grid grid-cols-3 gap-2">
+      <div className={cn("grid gap-2", canShare ? "grid-cols-3" : "grid-cols-2")}>
         {directionsHref ? (
           <a
             href={directionsHref}
@@ -74,17 +80,19 @@ export function TicketPassActions({
           </span>
         )}
 
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={onShare}
-          className="min-h-11 flex-col gap-1 py-2"
-          data-testid="my-tickets-action-share"
-        >
-          <Share2 className="size-4" aria-hidden />
-          Share
-        </Button>
+        {canShare ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onShare}
+            className="min-h-11 flex-col gap-1 py-2"
+            data-testid="my-tickets-action-share"
+          >
+            <Share2 className="size-4" aria-hidden />
+            Share
+          </Button>
+        ) : null}
 
         <span
           className={cn(

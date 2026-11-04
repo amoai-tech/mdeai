@@ -122,3 +122,59 @@ describe("partial refund labels", () => {
     expect(screen.getByText("TEST payment")).toBeTruthy();
   });
 });
+
+describe("revoked passes cannot be shared", () => {
+  it("offers no Share action on a fully refunded ticket", async () => {
+    renderPayload({
+      ...base,
+      order: { ...base.order, status: "refunded" },
+      attendees: [{ ...attendee, status: "refunded" }],
+    });
+    await screen.findByTestId("my-tickets-revoked");
+    expect(screen.queryByTestId("my-tickets-action-share")).toBeNull();
+  });
+
+  it("offers no Share action on a cancelled ticket", async () => {
+    renderPayload({
+      ...base,
+      order: { ...base.order, status: "cancelled" },
+      attendees: [{ ...attendee, status: "cancelled" }],
+    });
+    await screen.findByTestId("my-tickets-revoked");
+    expect(screen.queryByTestId("my-tickets-action-share")).toBeNull();
+  });
+
+  it("keeps Share for a paid active ticket", async () => {
+    renderPayload(base);
+    await screen.findByTestId("my-tickets-qr");
+    expect(screen.getByTestId("my-tickets-action-share")).toBeTruthy();
+  });
+
+  it("keeps Share for the remaining active ticket after a partial refund", async () => {
+    renderPayload({
+      ...base,
+      order: { ...base.order, status: "partial_refund", quantity: 2 },
+      attendees: [
+        { ...attendee, status: "refunded" },
+        { ...attendee, id: "44444444-4444-4444-8444-444444444444", qr_token: "valid-second-ticket" },
+      ],
+    });
+    await screen.findByTestId("my-tickets-qr");
+    expect(screen.getByTestId("my-tickets-action-share")).toBeTruthy();
+  });
+});
+
+describe("refunded order with no attendee row", () => {
+  it("still explains the refund instead of claiming no QR exists yet", async () => {
+    renderPayload({
+      ...base,
+      order: { ...base.order, status: "refunded" },
+      attendees: [],
+    });
+    expect((await screen.findByTestId("my-tickets-revoked")).textContent).toContain(
+      "Refunded — not valid for entry",
+    );
+    expect(screen.queryByText("No QR available for this order yet.")).toBeNull();
+    expect(screen.queryByTestId("my-tickets-action-share")).toBeNull();
+  });
+});
