@@ -48,6 +48,15 @@ Never rely on remembered Mastra APIs when current installed docs/source can prov
 
 **MDE override for newer official references:** Vendor documentation may describe Mastra Platform deployment or automatic external bug/feedback submission. MDE deploys through its existing Vercel process. Do not switch hosting or transmit MDE code, diagnostics, logs, or bug reports to upstream services unless the owner explicitly authorizes that action. Follow installed-version types before adopting APIs from upstream `main`.
 
+## Safe Mastra CLI diagnostics
+
+- **Select the target explicitly:** before any `mastra api` inspection, check the installed CLI help and pass `--url` for the intended, authorized server. Some trace/observability commands otherwise default to Mastra's hosted observability endpoint, even when local Studio is running. Never assume a command points at MDE's local runtime.
+- **Read-only first:** for example, `mastra api --url http://localhost:4111 agent list` or `mastra api --url http://localhost:4111 trace query --help` after verifying the installed CLI supports the command. Running an agent, executing a tool, uploading traces, or changing a remote environment is not a harmless diagnostic; confirm authorization and impact first.
+- **Review CLI telemetry:** set `MASTRA_TELEMETRY_DISABLED=1` for a diagnostic command when opting out of Mastra usage analytics. This is a per-process CLI choice, **not** an instruction to change MDE's application environment, tracing pipeline, or observability configuration. It does not prevent model calls or other configured network traffic.
+- **Version first:** prefer installed package docs under `node_modules/@mastra/*/dist/docs/`, their `assets/SOURCE_MAP.json`, and installed types. The official CLI guide can describe commands newer than MDE's installed CLI; never install `mastra@latest` simply to run diagnostics.
+
+References: https://mastra.ai/reference/observability/tracing/advanced-queries and https://mastra.ai/blog/upgraded-mastra-cli.
+
 ## Ownership
 
 Own Mastra agent definitions, tools, workflows, memory, storage, streaming, RequestContext, suspend/resume, HITL semantics, trace/eval behavior, and Mastra-side CopilotKit integration. `copilotkit` owns browser-facing provider/hooks/AG-UI rendering. Domain skills own business invariants.

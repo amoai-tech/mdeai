@@ -52,6 +52,17 @@
         "References `@mastra/mcp` / `MCPClient` and the docs server package name",
         "Links or names `https://mastra.ai/docs/mcp/overview` (or `links.md` MCP section)"
       ]
+    },
+    {
+      "id": 6,
+      "prompt": "I want to inspect failed Mastra traces on my laptop. The CLI can also reach Mastra's hosted observability. Show the safe command and explain whether telemetry should change our application configuration.",
+      "expected_output": "Checks the installed CLI's supported commands, explicitly targets the authorized local server with mastra api --url http://localhost:4111, reviews optional MASTRA_TELEMETRY_DISABLED=1 at CLI-process scope only, avoids uploading diagnostics or changing MDE app telemetry.",
+      "files": [],
+      "expectations": [
+        "Selects and verifies an explicit --url instead of relying on hosted observability defaults",
+        "Uses installed-version command help and package docs/types before relying on newest CLI capabilities",
+        "Explains per-process MASTRA_TELEMETRY_DISABLED=1 and does not globally modify MDE application telemetry or transmit diagnostics"
+      ]
     }
   ]
 }

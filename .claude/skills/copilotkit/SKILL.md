@@ -14,7 +14,7 @@ metadata:
 
 1. Inspect the installed MDE CopilotKit packages and current runtime/provider code.
 2. Read the pinned official CopilotKit core skill in `references/official/copilotkit/SKILL.md`.
-3. For wiring/debugging, also read `references/official/copilotkit-cli/SKILL.md`. MDE is self-hosted OSS, so prefer `verify --expect-runtime oss --round-trip --agent <id>` rather than hosted-Intelligence checks.
+3. For wiring/debugging, also read `references/official/copilotkit-cli/SKILL.md`. MDE is self-hosted OSS: start with `verify --expect-runtime oss --agent <id>`; add `--round-trip` only for an explicitly authorized live QA agent check, never merely to satisfy a hosted-Intelligence check.
 4. For Channels or Intelligence work, load only the matching vendored official reference named under **Official feature routing** below.
 5. Use current official CopilotKit/AG-UI docs or source when the pinned skill directs you there.
 6. Apply the MDE-specific invariants below.
@@ -49,23 +49,30 @@ new v1 consumers.
 ## OSS verification
 
 MDE runs a self-hosted, same-origin runtime rather than hosted CopilotKit Intelligence. For
-manual discovery, use the current CLI so its wiring knowledge is fresh:
+manual discovery, use the current CLI so its wiring knowledge is fresh. Start with a
+wiring-only check (no model request):
 
 ```bash
 npx copilotkit@latest verify \
   --expect-runtime oss \
-  --round-trip \
+  --runtime-url http://localhost:3001/api/copilotkit \
   --agent conciergeAgent \
   --json
 ```
 
+When a QA round trip is deliberately authorized, add `--round-trip` to the same
+command and target the intended QA runtime with `--runtime-url`.
+
 For a preview/production URL, also pass `--runtime-url <origin>/api/copilotkit` and the
 required authenticated `--header '<name>: <value>'`. Never print session secrets.
 
+**`--round-trip` is an opt-in live operation:** it sends a real prompt through the selected runtime, consumes model credits, and creates a conversation thread. Use an explicitly authorized QA environment and test identity, check the target URL/agent and credential scope, and clean up test data using the existing QA process when appropriate. Do not run it against production by default. For read-only wiring discovery, omit `--round-trip`; re-run with it only when a real agent invocation is intended. A completed CLI round trip does not prove correct business output or tool side effects.
+
 Use `@latest` for manual upstream discovery. For CI or repeatable certification, keep the
 reviewed CLI version pinned (currently `4.10.0`) until a separate review deliberately moves
-that pin. A passing CLI check proves wiring and a basic round trip; it does not replace MDE's
-exact-SHA browser, tool, streaming, auth/isolation, or production certification.
+that pin. A wiring-only CLI check verifies the reported configuration and reachable runtime checks;
+`--round-trip` separately proves one agent response. Neither replaces MDE's exact-SHA
+browser, tool, streaming, auth/isolation, or production certification.
 
 ## Official feature routing
 
@@ -113,6 +120,8 @@ in the channel, Channel reports `online`, and a real human mention got a real re
 is a false positive.
 
 ## Human-in-the-loop with Mastra
+
+**Phase A development policy:** HITL is optional user confirmation for a specific consequential action when the user needs to review or choose (for example, confirming a ticket purchase). It is **not** permission from a landlord, partner, moderator, or platform operator and must not impose rental eligibility, verified ownership, photo-rights paperwork, event-publication approval, viewing, or booking gates during prelaunch development. Continue to enforce authenticated server authorization, private-data isolation, and atomic/idempotent writes. Do not introduce additional approval steps just because the framework supports them.
 
 For MDE's current installed Mastra + CopilotKit integration, use the tool-based CopilotKit
 v2 `useHumanInTheLoop` flow for the approval UI. The current MDE integration is not
