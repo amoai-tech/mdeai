@@ -9,7 +9,9 @@ tags: mastra, models, providers, router
 
 # Model Providers
 
-Mastra provides a unified interface for working with LLMs across multiple providers, giving you access to 3893 models from 109 providers through a single API.
+**MDE model-selection procedure:** Read the current `package.json` / lockfile and installed Mastra provider registry; use the bundled **read-only** `.claude/skills/mastra/references/official/mastra/scripts/provider-registry.mjs` with `--list` or `--provider <name>` to check names against the installed registry (check the script's actual vendored location before running). This is metadata discovery, **not** proof that credentials exist, that a provider currently serves a model, or that a real request will succeed. Check MDE's actual model configuration and an explicitly authorized QA agent request before certifying runtime support; live calls incur cost and may persist threads. Never change provider/model merely because newer docs or registry metadata list an option. The counts and examples below are historical vendor material, not a current MDE availability promise.
+
+Mastra provides a model-router interface across multiple LLM providers; exact available models, APIs, and usage depend on installed package versions and provider access.
 
 ## Contents
 

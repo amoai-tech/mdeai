@@ -11,7 +11,7 @@ tags: mastra, embedded-docs, node_modules
 
 Look up API signatures from embedded docs in `node_modules/@mastra/*/dist/docs/` - these match the installed version.
 
-**Use this FIRST** when Mastra packages are installed locally. Embedded docs are always accurate for the installed version.
+**Use embedded docs first** when Mastra packages are installed locally. They are packaged with the installed version, but where examples and declarations disagree, verify the actual exports and TypeScript/source implementation in that same install before making an API claim.
 
 ## Why use embedded docs
 

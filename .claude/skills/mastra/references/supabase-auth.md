@@ -7,7 +7,9 @@ impactDescription: @mastra/auth-supabase server integration
 tags: mastra, supabase, auth
 ---
 
-# Supabase
+# Supabase — standalone Mastra HTTP-server auth reference ONLY
+
+> **Not the current MDE auth integration.** This is a generic example for `@mastra/auth-supabase` on a standalone Mastra HTTP server; it is **not** permission to install `@latest`, add a second auth provider, expose a browser service key, or replace MDE's existing `/api/copilotkit` authentication. MDE's current Next.js route `src/app/api/copilotkit/[[...path]]/route.ts` uses `authorizeCopilotKitRequest`, server-resolved `resourceId`/`RequestContext`, per-thread ownership, rate limits and `getLocalAgentsWithLogging`. Inspect the route and `src/lib/copilotkit-auth.ts` first. RLS/server privileges still protect private data; Phase A business ownership paperwork and partner approval are **not** authorization prerequisites. Use the commands/examples below only for a separately scoped standalone-server task after verifying installed APIs.
 
 The `@mastra/auth-supabase` package provides authentication for Mastra using Supabase Auth. It verifies incoming requests using Supabase's authentication system and integrates with the Mastra server using the `auth` option.
 
