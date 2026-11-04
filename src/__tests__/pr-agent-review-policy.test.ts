@@ -141,6 +141,44 @@ ${JSON.stringify({ findings: [], schema_version: 1, last_run: { head_sha: HEAD_A
     expect(result.reason).toContain("2 failed chunk(s)");
   });
 
+  it.each([
+    ["failed chunk", "ℹ️ **Chunked review:** the diff exceeded the model token budget, so it was reviewed in 3 chunks and the per-chunk results were merged. 1 chunk(s) failed and are not covered by this review."],
+    ["partial input", "⚠️ **Review coverage:** The following files had patches clipped before analysis to fit the token budget (partial input coverage):\n- `src/venue-booking.ts`"],
+    ["excluded file", "⚠️ **Review coverage:** The following files were not included in this review because of the token budget:\n- `src/venue-booking.ts`"],
+  ])("rejects provider-appended %s after model leaves a Markdown fence unclosed", (_kind, warning) => {
+    for (const fence of ["```", "~~~", "````"]) {
+      for (const withState of [true, false]) {
+        const raw = withState ? envelopedCanonical() : envelopedCanonical().replace(/<!-- pr-agent-review-state:v1\n[\s\S]*?\n-->/, "");
+        const body = raw + `\n${fence}md\nThe AI reviewer forgot to close this example.\n\n<hr>\n\n${warning}\n`;
+        const result = verifyReviewResult({ comments: [comment(body, "2026-09-20T01:00:05Z")],
+          startedAt: RUN_STARTED, reviewCommand: "/review", baseSha: BASE_A, headSha: HEAD_A });
+        expect(result, `${_kind} / ${fence} / state=${withState}`).toMatchObject({ ok: false, code: "INCOMPLETE_REVIEW" });
+      }
+    }
+  });
+
+  it.each([
+    ["failed chunk", "ℹ️ **Chunked review:** the diff exceeded the model token budget, so it was reviewed in 3 chunks and the per-chunk results were merged. 1 chunk(s) failed and are not covered by this review."],
+    ["partial input", "⚠️ **Review coverage:** The following files had patches clipped before analysis to fit the token budget (partial input coverage):\n- `src/example.ts`"],
+    ["excluded file", "⚠️ **Review coverage:** The following files were not included in this review because of the token budget:\n- `src/example.ts`"],
+  ])("keeps ignoring a provider-shaped %s example inside a CLOSED model fence", (_kind, warning) => {
+    const noState = envelopedCanonical().replace(/<!-- pr-agent-review-state:v1\n[\s\S]*?\n-->/, "");
+    const body = noState + `\n\n\`\`\`md\n\n<hr>\n\n${warning}\n\`\`\`\n`;
+    const result = verifyReviewResult({ comments: [comment(body, "2026-09-20T01:00:05Z")],
+      startedAt: RUN_STARTED, reviewCommand: "/review", baseSha: BASE_A, headSha: HEAD_A });
+    expect(result, _kind).toMatchObject({ ok: true, coverageConfirmed: false });
+  });
+
+  it("ignores provider-shaped text in a closed fence even with an extra divider in that example", () => {
+    const noState = envelopedCanonical().replace(/<!-- pr-agent-review-state:v1\n[\s\S]*?\n-->/, "");
+    const example = "\n\n\`\`\`md\n\n<hr>\n\n" +
+      "ℹ️ **Chunked review:** the diff exceeded the model token budget, so it was reviewed in 3 chunks and the per-chunk results were merged. 1 chunk(s) failed and are not covered by this review.\n\n" +
+      "<hr>\n\nThe snippet is only an example.\n\`\`\`\n";
+    const result = verifyReviewResult({ comments: [comment(noState + example, "2026-09-20T01:00:05Z")],
+      startedAt: RUN_STARTED, reviewCommand: "/review", baseSha: BASE_A, headSha: HEAD_A });
+    expect(result).toMatchObject({ ok: true, coverageConfirmed: false });
+  });
+
   it("ignores examples of chunk/partial input warnings inside Markdown fences or quoted blocks", () => {
     const noState = envelopedCanonical().replace(/<!-- pr-agent-review-state:v1\n[\s\S]*?\n-->/, "");
     const example = "\n```md\nℹ️ **Chunked review:** reviewed in 6 chunks. 2 chunk(s) failed and are not covered by this review.\n" +
