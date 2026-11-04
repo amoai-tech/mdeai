@@ -250,19 +250,26 @@ describe("verify-mastra-schema-init — contract path safety", () => {
 });
 
 describe("check-mastra-schema-contract — committed contract", () => {
-  it("records exactly the production schema and the reproducing adapter pairing", () => {
-    // Full-set equality, not a length + spot-check: dropping or renaming any
-    // required production table must fail here.
-    expect([...committedContract.expectedTables].sort()).toEqual(
-      [...PRODUCTION_MASTRA_TABLES].sort(),
+  it("keeps every production table and the tables SAN-1626 proved the runtime now needs", () => {
+    // Every table observed live on 2026-09-18 must still be required. Dropping or
+    // renaming one fails here, exactly as before.
+    const required = new Set(committedContract.expectedTables);
+    const dropped = PRODUCTION_MASTRA_TABLES.filter((t) => !required.has(t));
+    expect(dropped).toEqual([]);
+    // SAN-1626: @mastra/core@1.81.0 claims run ownership on every `Run._start` and writes
+    // mastra_workflow_run_owners; @mastra/pg@1.34.0 also creates mastra_memory_run_fences.
+    // Both are added by supabase/migrations/20261104031855_mastra_181_run_ownership.sql.
+    expect(required.has("mastra_workflow_run_owners")).toBe(true);
+    expect(required.has("mastra_memory_run_fences")).toBe(true);
+    expect(committedContract.expectedTables).toHaveLength(
+      PRODUCTION_MASTRA_TABLES.length + 2,
     );
-    expect(committedContract.expectedTables).toHaveLength(32);
-    expect(new Set(committedContract.expectedTables).size).toBe(32);
-    // The certified pairing (SAN-1338): @mastra/pg@1.29.0 with @mastra/core@1.74.0.
-    // That adapter creates a superset of this list (see contract _derivation); the
-    // 32 production tables above remain the required set.
-    expect(committedContract.adapterVersion).toBe("1.29.0");
-    expect(committedContract.coreVersion).toBe("1.74.0");
+    expect(new Set(committedContract.expectedTables).size).toBe(
+      committedContract.expectedTables.length,
+    );
+    // The certified pairing (SAN-1626): @mastra/pg@1.34.0 with @mastra/core@1.81.0.
+    expect(committedContract.adapterVersion).toBe("1.34.0");
+    expect(committedContract.coreVersion).toBe("1.81.0");
   });
 
   it("documents the adapter's extra tables without treating them as required", () => {

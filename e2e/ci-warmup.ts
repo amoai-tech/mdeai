@@ -1,12 +1,17 @@
+import { chromium, expect } from "@playwright/test";
+
 /**
- * CI-only warm-up for Next.js development builds.
+ * CI-only warm-up for the real /chat route and its browser-side JavaScript.
  *
- * Playwright detects when Next starts LISTENING, but on a cold runner the first
- * /chat request can spend ~40s compiling before the browser hydrates. That
- * compilation is infrastructure setup, not part of the 60s interaction contract.
- * Precompile the SAME real route once per CI lane before test timers begin.
+ * Next.js development mode compiles client chunks lazily. Fetching /chat HTML
+ * alone leaves app/chat/page.js and layout.js cold: on GitHub's mobile runner
+ * they took 22–23 seconds to load, leaving almost no time for the real composer
+ * to appear inside the test's 30-second visibility contract (run 41768579624).
  *
- * Never contact remote servers or activate on production smoke tests.
+ * Use a real browser once before test timing starts. This compiles and hydrates
+ * the same CopilotKit v2 composer the mobile suite will assert, without mocking
+ * the runtime, bypassing guest auth, hitting production, or sleeping a fixed time.
+ * It also detects an actually broken composer early instead of masking failure.
  */
 export default async function warmUpCiChat() {
   if (process.env.PLAYWRIGHT_CI_WARMUP !== "1") return;
@@ -22,12 +27,44 @@ export default async function warmUpCiChat() {
   }
 
   const started = Date.now();
-  const response = await fetch(url, { signal: AbortSignal.timeout(90_000) });
-  if (!response.ok) {
-    throw new Error(`CI chat warm-up failed: HTTP ${response.status}`);
+  // Three deterministic shards intentionally replace the real CopilotKit
+  // provider with a local chat test adapter. There is no v2 composer to wait
+  // for in that mode. Preserve their existing SSR-only preparation.
+  if (process.env.NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT === "1") {
+    const response = await fetch(url, { signal: AbortSignal.timeout(90_000) });
+    if (!response.ok) {
+      throw new Error(`CI chat warm-up failed: HTTP ${response.status}`);
+    }
+    await response.arrayBuffer();
+    console.log(`[e2e warm-up] deterministic /chat HTML ready in ${Date.now() - started}ms`);
+    return;
   }
-  // Consume the entire streamed response: a status-200 header alone does not
-  // prove that the server finished compiling and rendering the page.
-  await response.arrayBuffer();
-  console.log(`[e2e warm-up] /chat ready in ${Date.now() - started}ms`);
+
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage({
+      viewport: { width: 390, height: 844 },
+      isMobile: true,
+      hasTouch: true,
+    });
+    const response = await page.goto(url.toString(), {
+      waitUntil: "domcontentloaded",
+      timeout: 90_000,
+    });
+    if (!response?.ok()) {
+      throw new Error(`CI chat warm-up failed: HTTP ${response?.status() ?? "no response"}`);
+    }
+
+    // Browser-side chunk download, React hydration, resolved guest identity,
+    // and real v2 composer readiness must all finish before E2E test clocks start.
+    const region = page.getByTestId("copilot-chat-region");
+    await region.waitFor({ state: "visible", timeout: 120_000 });
+    const input = region.getByTestId("copilot-chat-textarea");
+    await expect(input).toBeVisible({ timeout: 30_000 });
+    await expect(input).toBeEnabled({ timeout: 30_000 });
+
+    console.log(`[e2e warm-up] /chat real mobile composer ready in ${Date.now() - started}ms`);
+  } finally {
+    await browser.close();
+  }
 }

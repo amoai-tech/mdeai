@@ -98,6 +98,15 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
         run: node scripts/seed-supabase-proof-roles.mjs
 
+      # SAN-1626 — tests actual SQL with Supabase-like roles, proves idempotence,
+      # new-table PK/RLS/grants, and catches accidental policy resets on
+      # pre-existing Mastra tables. Everything rolls back on local Postgres.
+      - name: Verify Mastra 1.81 migration preserves existing storage policies
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+          MASTRA_181_MIGRATION_INTEGRATION: "1"
+        run: node --test scripts/__tests__/mastra-181-migration.integration.test.mjs
+
       # Disposable database: exercise the real package entry point from empty.
       - name: Provision the Mastra schema through mastra:init
         env:

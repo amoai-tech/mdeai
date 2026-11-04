@@ -61,8 +61,18 @@ if (!connectionString) {
 }
 
 let expected;
+/**
+ * Every table the adapter creates that the runtime does NOT need. `expected` and
+ * `optionalTables` together must classify the whole provisioned set — see the
+ * unclassified-table failure below.
+ */
+let optionalTables = [];
 try {
-  expected = JSON.parse(fs.readFileSync(contractPath, "utf8")).expectedTables;
+  const contract = JSON.parse(fs.readFileSync(contractPath, "utf8"));
+  expected = contract.expectedTables;
+  optionalTables = Array.isArray(contract.adapterInitExtraTables)
+    ? contract.adapterInitExtraTables
+    : [];
 } catch (error) {
   console.error(`mastra-schema-init-check: cannot read ${contractPath}: ${error.message}`);
   process.exit(1);
@@ -320,8 +330,16 @@ try {
 
   const missing = expected.filter((t) => !actual.has(t));
   const extra = [...actual].filter((t) => !expected.includes(t));
+  // A provisioned table that the contract has not classified is a FAILURE, not a note.
+  // SAN-1626 is why: `@mastra/pg@1.34.0` started creating `mastra_workflow_run_owners`,
+  // which run ownership needs on every `Run._start`. Unclassified extras used to be printed
+  // and ignored, so the gate stayed green while production would have failed with 42P01.
+  // Every table must now be either required (expectedTables) or explicitly optional
+  // (adapterInitExtraTables) — silence is not an option.
+  const optional = new Set(optionalTables);
+  const unclassified = extra.filter((t) => !optional.has(t));
 
-  console.log(`  contract expects     : ${expected.length}`);
+  console.log(`  contract expects     : ${expected.length} required + ${optional.size} optional`);
   console.log(`  database provisioned : ${actual.size}`);
   console.log(`  missing vs contract  : ${missing.length}${missing.length ? ` — ${missing.join(", ")}` : ""}`);
   console.log(`  extra vs contract    : ${extra.length}${extra.length ? ` — ${extra.join(", ")}` : ""}`);
@@ -331,8 +349,23 @@ try {
       `\nmastra-schema-init-check: FAIL — the initializer did not create ${missing.length} contract table(s).`,
     );
     process.exitCode = 1;
-  } else {
-    console.log("\nmastra-schema-init-check: OK — every contract table was provisioned.");
+  }
+
+  if (unclassified.length) {
+    console.error(
+      `\nmastra-schema-init-check: FAIL — ${unclassified.length} provisioned table(s) are not in the contract: ` +
+        `${unclassified.join(", ")}.\n` +
+        "  Classify each one before merging: add it to expectedTables and ship a migration if the runtime\n" +
+        "  needs it, or to adapterInitExtraTables if it only backs a Mastra feature MDE does not use.",
+    );
+    process.exitCode = 1;
+  }
+
+  // Only claim success when BOTH classification checks passed. Printing OK before the
+  // unclassified-table failure made the transcript read "OK … then FAIL", which hides the
+  // real verdict in a long CI log.
+  if (!missing.length && !unclassified.length) {
+    console.log("\nmastra-schema-init-check: OK — every contract table was provisioned and classified.");
   }
 
   // SAN-547 — asserted, never applied. `mastra:init` owns installing the guard, so
