@@ -34,6 +34,34 @@ describe("SAN-729 — a truthful Host sales answer is accepted in both word orde
     expect(statesTicketCount("2 tickets", -1)).toBe(false);
   });
 
+  it("accepts sold quantities alongside truthful remaining and capacity figures", () => {
+    for (const reply of [
+      "2 tickets sold, 8 tickets remaining.",
+      "Capacity: 10 tickets. Sold: 2 tickets.",
+      "2 tickets sold out of 10 tickets available.",
+      "Tickets sold: 2. Total capacity: 10 tickets; 8 tickets left.",
+      "Tickets sold: 2. Ticket 1: General Admission.",
+      "2 sold, 8 tickets remaining.",
+    ]) {
+      expect(statesTicketCount(reply, 2), reply).toBe(true);
+    }
+  });
+
+  it("rejects contradictory sold figures even when remaining inventory is correct", () => {
+    for (const reply of [
+      "20 tickets sold. Actually, 2 tickets sold. 8 tickets remaining.",
+      "Tickets sold: 2, but 12 tickets were sold.",
+      "Sold: 3 tickets; 2 tickets sold. Capacity: 10 tickets.",
+    ]) {
+      expect(statesTicketCount(reply, 2), reply).toBe(false);
+    }
+  });
+
+  it("does not mistake remaining quantities or numbered tiers for sold totals", () => {
+    expect(statesTicketCount("8 tickets remaining. Capacity: 10 tickets.", 8)).toBe(false);
+    expect(statesTicketCount("Ticket 1: General Admission", 1)).toBe(false);
+  });
+
   it("handles long whitespace padding without backtracking", () => {
     const padded = `Tickets${" ".repeat(20_000)}sold: 2`;
     const started = Date.now();
