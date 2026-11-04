@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { RunFinishedEventSchema } from "@ag-ui/core/schemas";
 import { createServer, type ServerResponse } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
 import {
@@ -147,7 +148,14 @@ describe("SAN-1330 · a bare 200 does not certify the turn", () => {
 
   it.each([
     { label: "cancelled", outcome: { type: "cancelled" } },
-    { label: "interrupted", outcome: { type: "interrupt", interrupts: [] } },
+    // An interrupt must carry at least one entry: AG-UI 1.0's
+    // RunFinishedInterruptOutcomeSchema rejects `interrupts: []` with
+    // "expected array to have >=1 items", so an empty array would test a payload
+    // the protocol can never emit.
+    {
+      label: "interrupted",
+      outcome: { type: "interrupt", interrupts: [{ id: "interrupt-1", reason: "awaiting approval" }] },
+    },
   ])("never certifies a $label AG-UI 1.0 run as successful", ({ outcome }) => {
     const events = [
       { type: "RUN_STARTED", threadId: THREAD, runId: "r" },
@@ -156,6 +164,34 @@ describe("SAN-1330 · a bare 200 does not certify the turn", () => {
     expect(() => assertRunCompleted(events, { threadId: THREAD, runId: "r" })).toThrow(
       /non-success outcome/,
     );
+  });
+
+  it("uses only protocol-valid outcome payloads", () => {
+    // Guards the fixtures above: an outcome the AG-UI 1.0 schema rejects could
+    // never be emitted by a real server, so testing it would prove nothing.
+    // RunFinishedInterruptOutcomeSchema in particular requires at least one
+    // interrupt, and a bare `{ type: "cancelled" }` IS a documented outcome.
+    const payloads = [
+      { type: "RUN_FINISHED", threadId: THREAD, runId: "r", outcome: { type: "success" } },
+      { type: "RUN_FINISHED", threadId: THREAD, runId: "r", outcome: { type: "cancelled" } },
+      {
+        type: "RUN_FINISHED",
+        threadId: THREAD,
+        runId: "r",
+        outcome: { type: "interrupt", interrupts: [{ id: "i-1", reason: "awaiting approval" }] },
+      },
+    ];
+    for (const payload of payloads) {
+      expect(RunFinishedEventSchema.safeParse(payload).success).toBe(true);
+    }
+    expect(
+      RunFinishedEventSchema.safeParse({
+        type: "RUN_FINISHED",
+        threadId: THREAD,
+        runId: "r",
+        outcome: { type: "interrupt", interrupts: [] },
+      }).success,
+    ).toBe(false);
   });
 
   it("accepts an explicit AG-UI 1.0 success outcome", () => {
