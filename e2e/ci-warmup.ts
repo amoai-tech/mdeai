@@ -42,43 +42,28 @@ export default async function warmUpCiChat() {
 
   const browser = await chromium.launch();
   try {
-    // The real-composer suite checks both phone and desktop layouts. A mobile-only
-    // warm-up left the first desktop navigation cold: run 41781676195 reached
-    // HMR after ~22s and the desktop composer missed its 30s visibility window.
-    // Precompile/hydrate both viewports instead of extending the assertion timeout.
-    const viewports = [
-      { name: "mobile", viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true },
-      { name: "desktop", viewport: { width: 1280, height: 900 }, isMobile: false, hasTouch: false },
-    ];
-
-    for (const view of viewports) {
-      const page = await browser.newPage({
-        viewport: view.viewport,
-        isMobile: view.isMobile,
-        hasTouch: view.hasTouch,
-      });
-      try {
-        const response = await page.goto(url.toString(), {
-          waitUntil: "domcontentloaded",
-          timeout: 90_000,
-        });
-        if (!response?.ok()) {
-          throw new Error(`CI ${view.name} chat warm-up failed: HTTP ${response?.status() ?? "no response"}`);
-        }
-
-        // Warm the genuine CopilotKit v2 composer, without a deterministic adapter
-        // or auth bypass. A guest runtime-info 401 is expected in this lane.
-        const region = page.getByTestId("copilot-chat-region");
-        await region.waitFor({ state: "visible", timeout: 120_000 });
-        const input = region.getByTestId("copilot-chat-textarea");
-        await expect(input).toBeVisible({ timeout: 30_000 });
-        await expect(input).toBeEnabled({ timeout: 30_000 });
-
-        console.log(`[e2e warm-up] /chat real ${view.name} composer ready in ${Date.now() - started}ms`);
-      } finally {
-        await page.close();
-      }
+    const page = await browser.newPage({
+      viewport: { width: 390, height: 844 },
+      isMobile: true,
+      hasTouch: true,
+    });
+    const response = await page.goto(url.toString(), {
+      waitUntil: "domcontentloaded",
+      timeout: 90_000,
+    });
+    if (!response?.ok()) {
+      throw new Error(`CI chat warm-up failed: HTTP ${response?.status() ?? "no response"}`);
     }
+
+    // Browser-side chunk download, React hydration, resolved guest identity,
+    // and real v2 composer readiness must all finish before E2E test clocks start.
+    const region = page.getByTestId("copilot-chat-region");
+    await region.waitFor({ state: "visible", timeout: 120_000 });
+    const input = region.getByTestId("copilot-chat-textarea");
+    await expect(input).toBeVisible({ timeout: 30_000 });
+    await expect(input).toBeEnabled({ timeout: 30_000 });
+
+    console.log(`[e2e warm-up] /chat real mobile composer ready in ${Date.now() - started}ms`);
   } finally {
     await browser.close();
   }
