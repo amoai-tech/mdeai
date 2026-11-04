@@ -34,6 +34,7 @@ const PROD_SPECS = [
   "**/prod-copilotkit-isolation.spec.ts",
   "**/prod-concierge-thread-lifecycle.spec.ts",
   "**/prod-renter-mobile-chat.spec.ts",
+  "**/prod-concierge-stop-retry.spec.ts",
   "**/prod-release-health.spec.ts",
   "**/san-1413-saved-chat-continuity.spec.ts",
   "**/prod-journey-j05-j20.spec.ts",
