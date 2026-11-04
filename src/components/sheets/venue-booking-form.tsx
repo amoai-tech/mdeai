@@ -52,8 +52,8 @@ export function VenueBookingForm({
       >
         <p className="font-medium">Sign in to request a booking</p>
         <p className="mt-1 text-muted-foreground">
-          We save your request securely. WhatsApp confirmation comes after our team
-          reviews it — not an instant reservation.
+          We save your request securely. The venue must confirm it before
+          this becomes a reservation.
         </p>
         <p className="mt-2">
           <Link
@@ -131,8 +131,8 @@ export function VenueBookingForm({
     <form className="space-y-3" onSubmit={handleSubmit} data-testid="venue-booking-form">
       <p className="text-sm text-muted-foreground">
         Submit a visit request for <span className="font-medium text-foreground">{venueTitle}</span>.
-        Status stays <span className="font-medium text-foreground">pending</span> until we
-        confirm by WhatsApp.
+        Status stays <span className="font-medium text-foreground">pending</span> until
+        the venue responds. Check its status in MDE.
       </p>
       <label className="block text-sm">
         <span className="font-medium">Your name</span>
