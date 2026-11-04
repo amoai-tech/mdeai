@@ -132,13 +132,17 @@ test.describe("SAN-1413 the selected saved chat survives refresh and Back/Forwar
 });
 
 // Keep readiness regressions in the existing deterministic Playwright project.
+// Literal fixtures avoid interpolated HTML while exercising the real readiness helper.
+const loadingChatMarkup = `<section data-testid="copilot-chat-region">
+  <p data-testid="saved-history-loading">Loading conversation…</p>
+  <div inert aria-busy="true"><textarea aria-label="Ask concierge"></textarea></div>
+</section>`;
+const errorChatMarkup = `<section data-testid="copilot-chat-region">
+  <p data-testid="saved-history-error" role="alert">Couldn’t load this conversation.</p>
+  <div inert aria-busy="false"><textarea aria-label="Ask concierge"></textarea></div>
+</section>`;
 function chatMarkup(status: "loading" | "error") {
-  return `<section data-testid="copilot-chat-region">
-    ${status === "loading" ? '<p data-testid="saved-history-loading">Loading conversation…</p>' : '<p data-testid="saved-history-error" role="alert">Couldn’t load this conversation.</p>'}
-    <div inert aria-busy="${status === "loading"}">
-      <textarea aria-label="Ask concierge"></textarea>
-    </div>
-  </section>`;
+  return status === "loading" ? loadingChatMarkup : errorChatMarkup;
 }
 
 test.describe("SAN-1149 chat readiness helper", () => {

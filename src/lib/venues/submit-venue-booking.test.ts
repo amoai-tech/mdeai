@@ -36,14 +36,26 @@ describe("submitVenueBooking", () => {
         Response.json({
           success: true,
           requestId: "abc-123",
-          message: "Request sent — we'll confirm by WhatsApp.",
+          message: "Request sent — awaiting confirmation from the venue.",
         }),
       ),
     );
 
     const result = await submitVenueBooking(payload);
     expect(result.requestId).toBe("abc-123");
-    expect(result.message).toContain("WhatsApp");
+    expect(result.message).toContain("awaiting confirmation");
+    expect(result.message).not.toContain("WhatsApp");
+  });
+
+  it("uses truthful pending copy when the API has no custom message", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Response.json({ success: true, requestId: "abc-123" })),
+    );
+
+    const result = await submitVenueBooking(payload);
+    expect(result.message).toMatch(/awaiting confirmation from the venue/i);
+    expect(result.message).not.toMatch(/WhatsApp|confirmed reservation/i);
   });
 
   it("throws on server error", async () => {
