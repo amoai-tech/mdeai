@@ -46,7 +46,7 @@ describe("POST /api/venue-booking/request", () => {
       ok: true,
       data: {
         requestId: "row-1",
-        message: "Request sent — we'll confirm by WhatsApp.",
+        message: "Request sent — awaiting confirmation from the venue.",
       },
     });
 

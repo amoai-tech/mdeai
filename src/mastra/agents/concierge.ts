@@ -15,7 +15,7 @@ import { requestVenueBookingTool } from '../tools/request-venue-booking';
 import { CONCIERGE_AGENT_MODEL } from "../lib/models";
 import { geminiMalformedFirstStepRetry } from "../lib/gemini-malformed-retry";
 import { getDefaultInputProcessors } from "../lib/agent-input-processors";
-import { currentSelectedNameOnly, verifiedDiscoverySelectionHint, withComparisonRecords } from "../lib/discovery-agent-context";
+import { currentSelectedNameOnly, verifiedDiscoverySelectionHint, withComparisonRecords, withVerifiedSelectionFacts } from "../lib/discovery-agent-context";
 import { MapUiStateSchema } from "@/platform/contracts/map-ui-state";
 import { formatEventSourcePromptHint } from "@/lib/events/trusted-event-sources";
 import { RESTAURANT_CLARIFY_MESSAGE } from "@/lib/restaurant-clarify-copy";
@@ -290,7 +290,7 @@ Decision rules (in order):
 1. lastRentalQuery EXISTS in working memory → skip gate entirely, refine and search.
 2. hasBudget AND user named a Medellín neighborhood (Laureles, Poblado, Envigado, etc.) → confidence ≥ 0.65 → call search-rentals immediately.
 3. confidence ≥ 0.6 → call search-rentals immediately. Do not ask anything.
-4. confidence < 0.6 AND no lastRentalQuery → still call search-rentals immediately, using the renter\'s own words as queryText and nothing they did not say (no invented budget, dates or neighborhood). Show the results first; only AFTER them you may add ONE optional refinement question. Never ask before searching.
+4. confidence < 0.6 AND no lastRentalQuery → still call search-rentals immediately, using the renter's own words as queryText and nothing they did not say (no invented budget, dates or neighborhood). Show the results first; only AFTER them you may add ONE optional refinement question. Never ask before searching.
 
 Optional refinement (ONE short question, only AFTER the results, never before them):
   Want to narrow by neighborhood or monthly budget?
@@ -514,8 +514,8 @@ export const conciergeAgent = new Agent({
     // proposal. Once the current run grounded the exact named venue and the
     // customer already supplied every mandatory field, require the *existing*
     // proposal-only HITL tool for the next Mastra step. No database writer here.
-    { id: 'san1149-booking-continuation', processInputStep: ({ stepNumber, messages, steps }) =>
-      shouldContinueVenueBookingAfterSearch({ stepNumber, messages, steps })
+    { id: 'san1149-booking-continuation', processInputStep: ({ stepNumber, messages, steps, requestContext }) =>
+      shouldContinueVenueBookingAfterSearch({ stepNumber, messages, steps, requestContext })
         ? { toolChoice: { type: 'tool' as const, toolName: 'requestVenueBooking' } }
         : {} },
     { id: "san737-current-selected-name-history", processInput: ({ messages, requestContext }) =>
@@ -524,6 +524,8 @@ export const conciergeAgent = new Agent({
     // server-side from the tab's previous selection. Everything else is unchanged.
     { id: "san1600-comparison-records", processInput: ({ messages, requestContext }) =>
       withComparisonRecords(messages, requestContext?.get("ag-ui"), lookupPublicDiscoveryItemFromServer) },
+    { id: "san1600-verified-selection-facts", processInput: ({ messages, requestContext }) =>
+      withVerifiedSelectionFacts(messages, requestContext?.get("ag-ui"), lookupPublicDiscoveryItemFromServer) },
   ],
   channels: buildConciergeChannels(),
   // PERF-002: 10-message window (was 20). Follow-up state lives in working memory

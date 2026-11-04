@@ -3,12 +3,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import {
   venueBookingRequestSchema,
+  VENUE_BOOKING_PENDING_MESSAGE,
   type VenueBookingRequestInput,
   type VenueBookingSubmitResult,
 } from "@/lib/venues/venue-booking-form-schema";
-
-const SAVED_MESSAGE =
-  "Request sent — we'll confirm by WhatsApp. This is not a confirmed reservation yet.";
 
 /** The canonical MDE UUID takes precedence over an optional Google ID. */
 export function buildVenueBookingIdempotencyKey(input: {
@@ -129,12 +127,12 @@ export async function insertVenueBookingRequest(
         previous.party_size === input.partySize &&
         new Date(previous.requested_at).getTime() === new Date(input.requestedAt).getTime()
       ) {
-        return { ok: true, data: { requestId: previous.id, message: SAVED_MESSAGE } };
+        return { ok: true, data: { requestId: previous.id, message: VENUE_BOOKING_PENDING_MESSAGE } };
       }
       return { ok: false, status: 409, message: "You already submitted a different booking request." };
     }
     return { ok: false, status: 500, message: "Could not save booking request" };
   }
 
-  return { ok: true, data: { requestId: data.id, message: SAVED_MESSAGE } };
+  return { ok: true, data: { requestId: data.id, message: VENUE_BOOKING_PENDING_MESSAGE } };
 }
