@@ -1,10 +1,13 @@
 import { randomUUID } from "node:crypto";
 import {
-  RunAgentInputSchema,
   runHttpRequest,
   transformHttpEventStream,
   type RunAgentInput,
 } from "@ag-ui/client";
+// AG-UI 1.0 moved the zod validators out of the client entry into the core
+// package's `./schemas` subpath. The official export still exists — only the
+// import path changed; do not hand-roll a replacement validator.
+import { RunAgentInputSchema } from "@ag-ui/core/schemas";
 
 /**
  * SAN-1330 — the CopilotKit envelope, and nothing else.
@@ -165,6 +168,27 @@ export function assertRunCompleted(
 }
 
 /**
+ * AG-UI 1.0's `transformHttpEventStream` decodes events but no longer validates
+ * their required fields, so a truncated or garbled stream can arrive as a
+ * sequence of empty `RUN_STARTED` / `RUN_FINISHED` objects. The specification
+ * still makes `threadId` and `runId` mandatory on both lifecycle events, and a
+ * run cannot be certified without them — so assert it here, where the decoded
+ * stream is handed back, instead of trusting the decoder to have done it.
+ */
+function assertLifecycleEventsCarryIdentity(events: AgUiEvent[]): void {
+  for (const event of events) {
+    if (event.type !== "RUN_STARTED" && event.type !== "RUN_FINISHED") continue;
+    const threadId = typeof event.threadId === "string" ? event.threadId.trim() : "";
+    const runId = typeof event.runId === "string" ? event.runId.trim() : "";
+    if (!threadId || !runId) {
+      throw new Error(
+        `${event.type} is missing its required threadId/runId — a garbled stream is not progress`,
+      );
+    }
+  }
+}
+
+/**
  * Dispatch one authenticated `agent/run` and decode the AG-UI event stream.
  *
  * `headers` must carry the caller's session cookies: the route authorizes with a
@@ -264,8 +288,10 @@ export async function runConciergeAgent(options: {
       }, timeoutMs);
     });
 
+    const events = await Promise.race([collected, timeout]);
+    assertLifecycleEventsCarryIdentity(events);
     return {
-      events: await Promise.race([collected, timeout]),
+      events,
       // Read back from the parsed envelope: these are the exact ids the server
       // was handed, so the caller can tie the stream it gets back to this request.
       threadId: envelope.body.threadId,
