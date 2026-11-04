@@ -274,6 +274,16 @@ describe("SAN-1609 quality, budget and provider run metrics", () => {
     expect(parseReviewUsage(source, BASE, "c".repeat(40)).calls).toBeNull();
   });
 
+  it("rejects oversized or malformed provider model names without ambiguous regex work", () => {
+    const fixture = (label: string) => complete +
+      `\n<hr>\n<details> <summary><strong>⚙️ Agent run details</strong></summary>\n\n- Model: ${label}\n- Time cost: 1.1s\n- AI calls: 1\n\n</details>\n`;
+    expect(parseReviewUsage(fixture("a".repeat(1025)), BASE, HEAD).model).toBeNull();
+    expect(parseReviewUsage(fixture("openai/nvidia/model, "), BASE, HEAD).model).toBeNull();
+    expect(parseReviewUsage(fixture("model), ("), BASE, HEAD).model).toBeNull();
+    expect(parseReviewUsage(fixture("openai/nvidia/lightning (fallback)"), BASE, HEAD).model)
+      .toBe("openai/nvidia/lightning (fallback)");
+  });
+
   it("reports exact small or partially priced costs without claiming full pricing", () => {
     const header = complete + "\n<hr>\n<details> <summary><strong>⚙️ Agent run details</strong></summary>\n\n" +
       "- Model: openai/nvidia/nemotron-3.5-lightning-30b-a3b\n- Time cost: 1.1s\n- AI calls: 2\n";

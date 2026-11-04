@@ -94,6 +94,20 @@ export function reviewCoverageFromComment(body, baseSha, headSha) {
  * Only data published in a current-SHA PR Agent run-details block counts.
  * Missing provider pricing is unknown, not a free ($0) review.
  */
+// Provider-generated model labels are untrusted comment text. Validate with
+// bounded character comparisons rather than an ambiguous repeating regex.
+function isSafeModelToken(value) {
+  if (!value || value.length > 128) return false;
+  for (let i = 0; i < value.length; i++) {
+    const c = value.charCodeAt(i);
+    if ((c >= 48 && c <= 57) || (c >= 65 && c <= 90) ||
+        (c >= 97 && c <= 122) || c === 45 || c === 46 ||
+        c === 47 || c === 95) continue;
+    return false;
+  }
+  return true;
+}
+
 export function parseReviewUsage(body, baseSha, headSha) {
   const empty = { model: null, inputTokens: null, outputTokens: null,
     seconds: null, calls: null, estimatedUsd: null, costLabel: null };
@@ -109,7 +123,11 @@ export function parseReviewUsage(body, baseSha, headSha) {
   const modelRaw = bodyText.match(/(?:^|\n)- Models?: ([^\r\n]+)/)?.[1]?.trim();
   // A fallback section can have multiple models. Do not turn provider text
   // into arbitrary Markdown or silently report only the primary model.
-  const model = modelRaw && /^[a-z0-9_.\/-]+(?:, [a-z0-9_.\/-]+)*(?: \(includes fallback\)| \(fallback\))?$/i.test(modelRaw) ? modelRaw : null;
+  const bounded = modelRaw && modelRaw.length <= 512 ? modelRaw : null;
+  const ending = bounded?.endsWith(" (includes fallback)") ? " (includes fallback)" :
+    bounded?.endsWith(" (fallback)") ? " (fallback)" : "";
+  const names = bounded ? bounded.slice(0, bounded.length - ending.length).split(", ") : [];
+  const model = names.length > 0 && names.length <= 6 && names.every(isSafeModelToken) ? bounded : null;
   const tokens = bodyText.match(/(?:^|\n)- Tokens: ([\d,]+) in \/ ([\d,]+) out \/ ([\d,]+) total(?:\r?\n|$)/);
   const seconds = bodyText.match(/(?:^|\n)- Time cost: (\d+(?:\.\d+)?)s(?:\r?\n|$)/)?.[1];
   const calls = bodyText.match(/(?:^|\n)- AI calls: (\d+)(?:\r?\n|$)/)?.[1];
