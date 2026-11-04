@@ -1,3 +1,4 @@
+// skipcq: JS-0833 -- Node .mjs is an ES module; DeepSource misclassifies its parser mode.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { safeViewingRejection } from "../prod-behaviour-smoke.mjs";
