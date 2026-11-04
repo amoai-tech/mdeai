@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+import { createArgosReporterOptions } from "@argos-ci/playwright/reporter";
 
 const localBaseURL = process.env.SMOKE_BASE_URL || "http://localhost:3001";
 // Parse once: browser CI needs to know when Next.js is LISTENING, not when the
@@ -25,7 +26,9 @@ const PROD_SPECS = [
   "**/prod-candidate-certification.spec.ts",
   "**/prod-synthetic-smoke.spec.ts",
   "**/prod-signed-in-route.spec.ts",
+  "**/prod-ticket-wallet-authed.spec.ts",
   "**/prod-rentals-results-refresh.spec.ts",
+  "**/prod-rentals-mobile-form-map.spec.ts",
   "**/prod-discovery-inline-ask.spec.ts",
   "**/prod-discovery-nightlife-mobile.spec.ts",
   "**/prod-copilotkit-isolation.spec.ts",
@@ -36,6 +39,7 @@ const PROD_SPECS = [
   "**/rental-ai-security.spec.ts",
   "**/san-1204-broker-viewing-requests.spec.ts",
   "**/rental-conversion-journey.spec.ts",
+  "**/maps-mobile-lifecycle.spec.ts",
 ];
 
 export default defineConfig({
@@ -47,8 +51,15 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   timeout: 60_000,
   reporter: [
-    ["list"],
+    [process.env.CI ? "dot" : "list"],
     ["html", { open: "never", outputFolder: "tmp/playwright-report" }],
+    [
+      "@argos-ci/playwright/reporter",
+      createArgosReporterOptions({
+        // Other MDE browser CI jobs intentionally have no Argos token.
+        uploadToArgos: Boolean(process.env.CI && process.env.ARGOS_TOKEN),
+      }),
+    ],
   ],
   use: {
     baseURL,
@@ -79,12 +90,19 @@ export default defineConfig({
         "**/mobile-header.spec.ts",
         // SAN-522: mobile composer runs under local-chromium; keep it out of the general project.
         "**/screens/MOB-CK-001-mobile-composer.spec.ts",
+        // SAN-1606: the phone navigation journey runs in the deterministic lane only.
+        "**/mobile-bottom-nav.spec.ts",
         // SAN-524: the browse map sheet Close target; runs in the PR gate under `local-chromium`.
         "**/browse-map-close-touch.spec.ts",
         ...PROD_SPECS,
       ],
       workers: 1,
-      use: { ...devices["Desktop Chrome"], baseURL },
+      use: {
+        ...devices["Desktop Chrome"],
+        baseURL,
+        // Chromium-only launch arguments stabilize screenshot text rendering.
+        launchOptions: { args: ["--disable-lcd-text", "--font-render-hinting=none"] },
+      },
     },
     {
       name: "local-chromium",
@@ -100,6 +118,7 @@ export default defineConfig({
         "**/viewing-modal-keyboard.spec.ts",
         "**/mobile-header.spec.ts",
         "**/browse-map-close-touch.spec.ts",
+        "**/mobile-bottom-nav.spec.ts",
         "**/san-1524-contests.spec.ts",
       ],
       testIgnore: [VITEST_TESTS, ...PROD_SPECS],
@@ -108,6 +127,7 @@ export default defineConfig({
       use: {
         ...devices["Desktop Chrome"],
         baseURL: localBaseURL,
+        launchOptions: { args: ["--disable-lcd-text", "--font-render-hinting=none"] },
         trace: "retain-on-failure",
       },
     },
@@ -116,7 +136,11 @@ export default defineConfig({
       testMatch: "**/auth-guard.spec.ts",
       testIgnore: VITEST_TESTS,
       workers: 1,
-      use: { ...devices["Desktop Chrome"], baseURL: localBaseURL },
+      use: {
+        ...devices["Desktop Chrome"],
+        baseURL: localBaseURL,
+        launchOptions: { args: ["--disable-lcd-text", "--font-render-hinting=none"] },
+      },
     },
     {
       name: "cross-browser-firefox",
@@ -141,6 +165,7 @@ export default defineConfig({
       use: {
         ...devices["Desktop Chrome"],
         baseURL: localBaseURL,
+        launchOptions: { args: ["--disable-lcd-text", "--font-render-hinting=none"] },
         trace: "retain-on-failure",
       },
     },

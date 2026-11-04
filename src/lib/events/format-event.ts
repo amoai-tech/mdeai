@@ -28,6 +28,22 @@ export function formatEventCardPrice(
   return currency?.toUpperCase() === "COP" ? `$${formatted} COP` : `$${formatted}`;
 }
 
+/** Short Medellín-local start, e.g. "Mon, Oct 19, 4:00 PM". Shared by the browse card and its map pin. */
+export function formatEventStartsAt(iso: string): string {
+  try {
+    return new Intl.DateTimeFormat("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      timeZone: EVENT_TIME_ZONE,
+    }).format(new Date(iso));
+  } catch {
+    return iso;
+  }
+}
+
 export function formatEventSchedule(startsAt: string, endsAt: string | null): string {
   const start = new Date(startsAt);
   const startLabel = new Intl.DateTimeFormat("en-US", {

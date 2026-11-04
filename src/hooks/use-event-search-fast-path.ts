@@ -108,6 +108,7 @@ export function useEventSearchFastPath() {
       params: EventSearchApiParams,
       memory: ConciergeWorkingMemory,
       propagateFailure = false,
+      submissionId?: string,
     ): Promise<boolean> => {
       if (busyRef.current) return false;
       busyRef.current = true;
@@ -136,7 +137,7 @@ export function useEventSearchFastPath() {
         const summary = usedFallback
           ? fastPathEventFallbackSummary(cards.length, pinCount, params.dateWindow)
           : fastPathAssistantSummary(cards.length, pinCount);
-        showExchange(userText, summary);
+        showExchange(userText, summary, submissionId);
         return true;
       } catch (err) {
         console.error("[event-fast-path]", err);
@@ -153,7 +154,7 @@ export function useEventSearchFastPath() {
   );
 
   const handleUserMessage = useCallback(
-    async (text: string): Promise<boolean> => {
+    async (text: string, submissionId?: string): Promise<boolean> => {
       const trimmed = text.trim();
       if (!trimmed) return false;
       if (clarifyPending && clarifyKind === "restaurant") return false;
@@ -179,7 +180,7 @@ export function useEventSearchFastPath() {
         try {
           const response = await fetch(`/api/events/${eventId}/public`, { cache: "no-store" });
           if (response.status === 404) {
-            showExchange(trimmed, "This event is no longer publicly listed. Explore current events at /events.");
+            showExchange(trimmed, "This event is no longer publicly listed. Explore current events at /events.", submissionId);
             return true;
           }
           if (!response.ok) throw new Error(`public event context failed: ${response.status}`);
@@ -190,7 +191,7 @@ export function useEventSearchFastPath() {
           clearLocalMessages();
           clearOthers("event");
           setToolResult(null);
-          showExchange(trimmed, summarizePublicEventForChat(payload.event));
+          showExchange(trimmed, summarizePublicEventForChat(payload.event), submissionId);
           return true;
         } finally {
           busyRef.current = false;
@@ -203,7 +204,7 @@ export function useEventSearchFastPath() {
         try {
           setToolResult(null);
           clearOthers("event");
-          showClarify(trimmed, EVENT_CLARIFY_MESSAGE, "event");
+          showClarify(trimmed, EVENT_CLARIFY_MESSAGE, "event", submissionId);
           return true;
         } finally {
           busyRef.current = false;
@@ -218,7 +219,7 @@ export function useEventSearchFastPath() {
       // A busy handler cannot claim it accepted a second turn without retaining it.
       if (busyRef.current) return false;
       clearLocalMessages();
-      return runSearch(trimmed, params, memory, true);
+      return runSearch(trimmed, params, memory, true, submissionId);
     },
     [clarifyKind, clarifyPending, clearLocalMessages, clearOthers, runSearch, setToolResult, showClarify, showExchange, state],
   );

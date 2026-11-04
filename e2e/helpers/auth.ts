@@ -4,7 +4,10 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
-export const QA_HOST_EMAIL = "qa-landlord@mdeai.co";
+export const QA_SUPER_ADMIN_EMAIL = "mde@socialmediaville.ca";
+/** Legacy default for signed-in QA: now the same verified Super Admin account.
+ * Use throwaway identities when testing ordinary-user permissions. */
+export const QA_HOST_EMAIL = QA_SUPER_ADMIN_EMAIL;
 
 /** Load `.env.local` into process.env for e2e helpers (Playwright doesn't read it). */
 export function loadEnvLocalForE2E(): void {
@@ -39,10 +42,22 @@ function supabaseEnv() {
   return { url, anon, serviceKey };
 }
 
-/** True only when the Supabase env required for authed e2e is present. */
+/** Reject fake CI backend credentials before trying authenticated QA journeys. */
 export function hasE2eEnv(): boolean {
   const { url, anon, serviceKey } = supabaseEnv();
-  return Boolean(url && anon && serviceKey);
+  if (!url || !anon || !serviceKey || anon === "sb_publishable_test") return false;
+  try {
+    const parsed = new URL(url);
+    if ((parsed.hostname === "127.0.0.1" || parsed.hostname === "localhost") && parsed.port === "9") {
+      return false;
+    }
+    // Never send a service-role QA request over plaintext to an arbitrary remote host.
+    // Local Supabase CLI is the only supported HTTP exception.
+    return parsed.protocol === "https:" ||
+      (parsed.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(parsed.hostname));
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -200,7 +215,26 @@ async function selectThreadIds(
  * A partial cleanup throws instead of passing green: swallowing it here is what let
  * an earlier run leave orphaned messages behind.
  */
-export async function deleteThrowawayIdentity(identity: ThrowawayIdentity): Promise<void> {
+/**
+ * Mastra's completion event can precede its fire-and-forget ai_runs write.
+ * When a QA test completed a turn, wait for its audit row BEFORE removing the
+ * profiles FK target, otherwise the audit insert races with auth cleanup.
+ */
+async function waitForQaRunAudit(admin: AdminClient, userId: string): Promise<void> {
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const { count, error } = await admin.from("ai_runs")
+      .select("id", { count: "exact", head: true }).eq("user_id", userId);
+    if (error) throw new Error("QA run audit read failed: " + error.message);
+    if ((count ?? 0) > 0) return;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  throw new Error("QA agent turn finished but ai_runs audit did not persist before cleanup");
+}
+
+export async function deleteThrowawayIdentity(
+  identity: ThrowawayIdentity,
+  options: { waitForAiRunAudit?: boolean } = {},
+): Promise<void> {
   if (!identity.email.endsWith("@qa-isolation.mdeai.co")) {
     throw new Error("refusing to delete a non-disposable QA identity");
   }
@@ -265,6 +299,17 @@ export async function deleteThrowawayIdentity(identity: ThrowawayIdentity): Prom
     }
   }
 
+  // The test can prove its AI audit is durable before the FK target disappears.
+  // Keep cleanup best-effort even when the audit is missing, but fail the test.
+  let auditFailure: string | null = null;
+  if (options.waitForAiRunAudit) {
+    try {
+      await waitForQaRunAudit(admin, identity.userId);
+    } catch (error) {
+      auditFailure = error instanceof Error ? error.message : String(error);
+    }
+  }
+
   // Never delete the auth owner while its private Mastra rows might remain.
   // Keep the disposable identity available for a later safe cleanup retry.
   if (failures.length > 0) {
@@ -295,6 +340,7 @@ export async function deleteThrowawayIdentity(identity: ThrowawayIdentity): Prom
   } else if ((profileLeft.data ?? []).length > 0) {
     failures.push("profile remains after cleanup");
   }
+  if (auditFailure) failures.push(auditFailure);
 
   if (failures.length > 0) {
     throw new Error("cleanup failed for " + identity.email + " — " + failures.join("; "));
@@ -305,7 +351,10 @@ export async function deleteThrowawayIdentity(identity: ThrowawayIdentity): Prom
  * Mint a real Supabase session for a test user via admin magic-link → verifyOtp.
  * Retries to absorb magic-link flakiness. Never logs key values.
  */
-export async function getTestSession(email = QA_HOST_EMAIL): Promise<Session> {
+export async function getTestSession(
+  email = QA_HOST_EMAIL,
+  options: { requireExisting?: boolean } = {},
+): Promise<Session> {
   const { url, anon } = supabaseEnv();
   if (!url || !anon) {
     throw new Error("E2E Supabase env missing (url/anon)");
@@ -313,10 +362,11 @@ export async function getTestSession(email = QA_HOST_EMAIL): Promise<Session> {
   const admin = await getSupabaseAdmin();
 
   // Supabase admin.generateLink(type: "magiclink") creates missing users.
-  // The shared QA identity must already exist: a smoke run must never silently
-  // provision a new account in the real project if the QA account was deleted.
-  // Throwaway identities are created explicitly elsewhere before this helper.
-  if (email.toLowerCase() === QA_HOST_EMAIL.toLowerCase()) {
+  // Both permanent QA identities must already exist: a smoke run must never
+  // silently create an auth user. Explicitly provisioned throwaway identities
+  // are handled by their existing creation/cleanup flows.
+  const permanentQaEmails = [QA_HOST_EMAIL, QA_SUPER_ADMIN_EMAIL];
+  if (options.requireExisting || permanentQaEmails.includes(email.toLowerCase())) {
     let page = 1;
     let found = false;
     while (true) {
@@ -325,12 +375,12 @@ export async function getTestSession(email = QA_HOST_EMAIL): Promise<Session> {
         perPage: 1000,
       });
       if (error) throw new Error(`QA account lookup failed: ${error.message}`);
-      found = data.users.some((user) => user.email?.toLowerCase() === QA_HOST_EMAIL);
+      found = data.users.some((user) => user.email?.toLowerCase() === email.toLowerCase());
       if (found || !data.nextPage) break;
       page = data.nextPage;
     }
     if (!found) {
-      throw new Error(`Existing QA account ${QA_HOST_EMAIL} not found; refusing magic-link auto-creation`);
+      throw new Error(`Existing QA account ${email} not found; refusing magic-link auto-creation`);
     }
   }
 
@@ -419,10 +469,11 @@ export async function signInAsOnOrigin(
   page: Page,
   origin: string,
   email = QA_HOST_EMAIL,
+  options: { requireExisting?: boolean } = {},
 ): Promise<Session> {
   // Accept a bare host as well as a full origin; default to https.
   const parsed = new URL(origin.includes("://") ? origin : `https://${origin}`);
-  const session = await getTestSession(email);
+  const session = await getTestSession(email, options);
   await injectSession(page.context(), session, {
     host: parsed.hostname,
     secure: parsed.protocol === "https:",

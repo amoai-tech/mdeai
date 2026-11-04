@@ -31,9 +31,10 @@ import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { errorBody, getCorsHeaders, jsonResponse } from "../_shared/http.ts";
 import { getServiceClient } from "../_shared/supabase-clients.ts";
 import { assertCheckoutSessionBindsPayment, assertPaidOrderMatches } from "../_shared/ticket-payment-verification.ts";
+import { expiredSessionMatchesOrder, webhookEventMatchesMode, webhookSecretsAreDistinct, type TicketStripeMode } from "../_shared/ticket-stripe-webhook-guards.ts";
 // Lazy Stripe init so missing-key configurations surface as 500 CONFIG_ERROR
 // rather than crashing on cold-start before headers are sent.
-let _stripe: Stripe | null = null;
+const stripeClients = new Map<string, Stripe>();
 interface TicketFinalizeData {
   order?: {
     id?: string;
@@ -48,15 +49,19 @@ interface TicketFinalizeData {
   attendees?: unknown[];
 }
 
-function getStripe(): Stripe | null {
-  if (_stripe) return _stripe;
-  const key = Deno.env.get("STRIPE_SECRET_KEY");
-  if (!key) return null;
-  _stripe = new Stripe(key, {
+function getStripe(mode: "live" | "sandbox"): Stripe | null {
+  const existing = stripeClients.get(mode);
+  if (existing) return existing;
+  const key = Deno.env.get(mode === "sandbox"
+    ? "STRIPE_SANDBOX_SECRET_KEY"
+    : "STRIPE_SECRET_KEY");
+  if (!key || (mode === "sandbox" && !/^(rk|sk)_test_/.test(key))) return null;
+  const client = new Stripe(key, {
     apiVersion: "2026-04-22.dahlia",
     httpClient: Stripe.createFetchHttpClient(),
   });
-  return _stripe;
+  stripeClients.set(mode, client);
+  return client;
 }
 const ENDPOINT = "ticket-payment-webhook";
 Deno.serve(async (req) => {
@@ -68,47 +73,46 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") {
     return jsonResponse(errorBody("METHOD_NOT_ALLOWED", "Use POST"), 405, req);
   }
-  const stripe = getStripe();
-  const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET");
-  if (!stripe || !webhookSecret) {
-    console.error(
-      "ticket-payment-webhook: missing STRIPE_SECRET_KEY or STRIPE_WEBHOOK_SECRET",
-    );
-    return jsonResponse(
-      errorBody("CONFIG_ERROR", "Server is missing Stripe credentials"),
-      500,
-      req,
-    );
-  }
-  // 1. Verify Stripe signature using the RAW body. We MUST NOT call req.json()
-  //    before this — JSON-parsing-and-re-stringifying changes whitespace and
-  //    breaks the HMAC verification.
+  // Authenticate the raw payload using the independent endpoint secrets.
+  // Only a verified signature determines which Stripe account handles an event.
   const rawBody = await req.text();
   const sig = req.headers.get("stripe-signature");
   if (!sig) {
-    return jsonResponse(
-      errorBody("BAD_SIGNATURE", "Missing stripe-signature header"),
-      400,
-      req,
-    );
+    return jsonResponse(errorBody("BAD_SIGNATURE", "Missing stripe-signature header"), 400, req);
   }
-  let event: Stripe.Event;
-  try {
-    event = await stripe.webhooks.constructEventAsync(
-      rawBody,
-      sig,
-      webhookSecret,
-    );
-  } catch (err) {
-    console.error(
-      "ticket-payment-webhook: signature verification failed",
-      err instanceof Error ? err.message : err,
-    );
-    return jsonResponse(
-      errorBody("BAD_SIGNATURE", "Stripe signature did not match"),
-      400,
-      req,
-    );
+  const configurations = [
+    { mode: "live" as const, secret: Deno.env.get("STRIPE_WEBHOOK_SECRET") },
+    { mode: "sandbox" as const, secret: Deno.env.get("STRIPE_SANDBOX_WEBHOOK_SECRET") },
+  ];
+  if (!webhookSecretsAreDistinct(configurations[0].secret, configurations[1].secret)) {
+    console.error("ticket-payment-webhook: live and sandbox signing secrets must differ");
+    return jsonResponse(errorBody("CONFIG_ERROR", "Stripe signing configuration is invalid"), 500, req);
+  }
+  if (!configurations.some(({ mode, secret }) => !!secret && !!getStripe(mode))) {
+    console.error("ticket-payment-webhook: no complete Stripe webhook configuration");
+    return jsonResponse(errorBody("CONFIG_ERROR", "Server is missing Stripe credentials"), 500, req);
+  }
+  let event: Stripe.Event | null = null;
+  let stripe: Stripe | null = null;
+  let verifiedMode: TicketStripeMode | null = null;
+  for (const { mode, secret } of configurations) {
+    const candidate = getStripe(mode);
+    if (!secret || !candidate) continue;
+    try {
+      const verified = await candidate.webhooks.constructEventAsync(rawBody, sig, secret);
+      // Both directions must agree. A valid signature alone does not establish payment mode.
+      if (!webhookEventMatchesMode(mode, verified.livemode)) continue;
+      event = verified;
+      stripe = candidate;
+      verifiedMode = mode;
+      break;
+    } catch {
+      // Another environment may have signed this request; never trust raw JSON.
+    }
+  }
+  if (!event || !stripe || !verifiedMode) {
+    console.error("ticket-payment-webhook: signature verification failed");
+    return jsonResponse(errorBody("BAD_SIGNATURE", "Stripe signature did not match"), 400, req);
   }
   // 2. Idempotency — Stripe retries on 5xx. Same event.id = no-op success.
   const service = getServiceClient();
@@ -138,13 +142,17 @@ Deno.serve(async (req) => {
         event.data.object as Stripe.Checkout.Session,
         service,
       );
-    } else if (event.type === "checkout.session.expired") {
-      await handleCheckoutSessionExpired(
+    } else if (
+      event.type === "checkout.session.expired" ||
+      event.type === "checkout.session.async_payment_failed"
+    ) {
+      await handleCheckoutSessionUnpaid(
         event.data.object as Stripe.Checkout.Session,
         service,
+        verifiedMode,
       );
     } else if (event.type === "payment_intent.succeeded") {
-      await handlePaymentSucceeded(event.data.object as Stripe.PaymentIntent, service);
+      await handlePaymentSucceeded(event.data.object as Stripe.PaymentIntent, service, stripe);
     } else if (event.type === "charge.refunded") {
       await handleRefund(event.data.object as Stripe.Charge, service);
     } else {
@@ -257,16 +265,26 @@ async function handleCheckoutSessionPaid(
   await finalizePaidOrder(orderId, piId, session.amount_total, session.currency, service, session.id);
 }
 
-async function handleCheckoutSessionExpired(
+async function handleCheckoutSessionUnpaid(
   session: Stripe.Checkout.Session,
   service: SupabaseClient,
+  mode: TicketStripeMode,
 ) {
+  if (session.payment_status === "paid") throw new Error("PAID_SESSION_CANNOT_CANCEL");
   const orderId = session.metadata?.order_id;
   if (!orderId) {
     console.log(
       `checkout.session.expired missing order_id; ignoring session=${session.id}`,
     );
     return;
+  }
+  // A signed Stripe event is not authorization to cancel an arbitrary order
+  // named in its metadata. Only its own persisted Session may release seats.
+  const { data: order, error: lookupError } = await service.from("event_orders")
+    .select("stripe_session_id").eq("id", orderId).maybeSingle();
+  if (lookupError || !order) throw new Error("EXPIRY_ORDER_LOOKUP_FAILED");
+  if (!expiredSessionMatchesOrder(order.stripe_session_id, session.id, mode)) {
+    throw new Error("EXPIRY_SESSION_MISMATCH");
   }
   const { error } = await service.rpc("ticket_checkout_cancel", {
     p_order_id: orderId,
@@ -283,7 +301,7 @@ async function handleCheckoutSessionExpired(
   }
 }
 
-async function handlePaymentSucceeded(pi: Stripe.PaymentIntent, service: SupabaseClient) {
+async function handlePaymentSucceeded(pi: Stripe.PaymentIntent, service: SupabaseClient, stripe: Stripe) {
   const orderId = pi.metadata?.order_id;
   if (!orderId) {
     console.log(
@@ -302,8 +320,7 @@ async function handlePaymentSucceeded(pi: Stripe.PaymentIntent, service: Supabas
     // Session ID. Return 500 so Stripe retries; NEVER fulfill unbound PI data.
     throw new Error("PAYMENT_SESSION_NOT_READY");
   }
-  const stripe = getStripe();
-  if (!stripe) throw new Error("PAYMENT_STRIPE_NOT_CONFIGURED");
+  // Use the same account that authenticated the signed webhook.
   const session = await stripe.checkout.sessions.retrieve(order.stripe_session_id);
   assertCheckoutSessionBindsPayment(session, {
     sessionId: order.stripe_session_id,

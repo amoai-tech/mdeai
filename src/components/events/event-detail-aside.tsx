@@ -3,12 +3,13 @@
 import Link from "next/link";
 import type { RefObject } from "react";
 import { CalendarDays, Info, MapPin, Sparkles } from "lucide-react";
-import { buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { EventInterestButton } from "@/components/events/event-interest-button";
 import { EventTicketTiers } from "@/components/events/event-ticket-tiers";
 import type { BookingCheckoutTarget } from "@/components/modals/booking-checkout-modal";
 import { formatTicketPrice } from "@/lib/events/format-event";
+import { eventDetailAction } from "@/lib/events/event-detail-action";
 import type { PublicEventDetail, PublicEventTicket } from "@/lib/events/types";
-import { cn } from "@/lib/utils";
 
 type EventDetailAsideProps = {
   event: PublicEventDetail;
@@ -17,18 +18,29 @@ type EventDetailAsideProps = {
   schedule: string;
   durationLabel: string | null;
   fromTier: PublicEventTicket | null;
+  interest: { signedIn: boolean; following: boolean };
   tiersRef: RefObject<HTMLDivElement | null>;
-  askUrl: string;
   notice: string | null;
   onCheckout: (target: BookingCheckoutTarget) => void;
 };
 
+/** The assistant now lives under the location: bring it into view instead of opening a drawer. */
+function focusInlineAsk() {
+  const section = document.getElementById("event-ask-mde-inline");
+  if (!section) return;
+  section.scrollIntoView({ behavior: "smooth", block: "start" });
+  const field = section.querySelector<HTMLTextAreaElement>("textarea")
+    ?? section.querySelector<HTMLAnchorElement>('a[href*="/login"]')
+    ?? section;
+  field.focus({ preventScroll: true });
+}
+
 /** Visitor decision panel: event facts, one canonical ticket picker and existing AI handoff. */
 export function EventDetailAside({
-  event, city, venueLine, schedule, durationLabel, fromTier, tiersRef, askUrl, notice, onCheckout,
+  event, city, venueLine, schedule, durationLabel, fromTier, tiersRef, notice, onCheckout, interest,
 }: EventDetailAsideProps) {
   return (
-            <aside className="order-2 space-y-5 lg:col-start-2 lg:row-start-1 lg:row-span-4 lg:sticky lg:top-8 lg:self-start">
+            <aside className="order-2 space-y-5">
               <div className="space-y-3">
                 <p className="text-sm font-medium text-muted-foreground">{city || "Event details"}</p>
                 <h1 className="text-2xl font-semibold leading-tight tracking-tight md:text-3xl">{event.name}</h1>
@@ -60,7 +72,7 @@ export function EventDetailAside({
                   </p>
                 ) : (
                   <p className="text-lg font-semibold">
-                    {event.tickets.length === 0 ? "Price TBD" : "Sold out"}
+                    {eventDetailAction(event).kind === "sold-out" ? "Sold out" : "Price TBD"}
                   </p>
                 )}
                 <div ref={tiersRef} tabIndex={-1} className="mt-4 scroll-mt-24 outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -68,18 +80,28 @@ export function EventDetailAside({
                   <EventTicketTiers event={event} onCheckout={onCheckout} />
                 </div>
                 {!fromTier ? (
-                  <div className="mt-4 flex flex-wrap gap-2">
+                  <div className="mt-4 space-y-2">
+                    {/* Consent to updates, never a ticket: sold-out and no-tier events both offer it. */}
+                    <EventInterestButton
+                      eventId={event.id}
+                      following={Boolean(interest.following)}
+                      signedIn={Boolean(interest.signedIn)}
+                    />
                     <Link className={buttonVariants({ variant: "outline", size: "sm" })} href="/events">
                       Explore other events
                     </Link>
                   </div>
                 ) : null}
               </div>
-              <Link href={askUrl} data-testid="event-ask-mde"
-                className={cn(buttonVariants({ variant: fromTier ? "outline" : "default" }), "w-full justify-start gap-2 whitespace-normal text-left")}>
+              {/* Scrolls to the one assistant already on the page: no dialog, no second
+                  conversation, so it must not advertise a popup. */}
+              <Button type="button" data-testid="event-ask-mde" onClick={focusInlineAsk}
+                aria-controls="event-ask-mde-inline"
+                variant={fromTier ? "outline" : "default"}
+                className="w-full justify-start gap-2 whitespace-normal text-left">
                 <Sparkles className="size-4 shrink-0" aria-hidden />
                 Ask MDE about this event
-              </Link>
+              </Button>
             </aside>
   );
 }

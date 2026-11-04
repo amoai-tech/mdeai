@@ -45,7 +45,9 @@ export function ChatCenterPanel() {
     <section
       data-testid="center-chat-panel"
       aria-label="Concierge chat"
-      className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
+      // SAN-1606 — the phone tab bar floats over the viewport, so the column stops above it: the
+      // composer and its disclaimer keep the 8px gap. Zero above `lg`.
+      className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden pb-[var(--mde-mobile-nav-clearance)] lg:pb-0"
     >
       <div
         key={sessionKey}

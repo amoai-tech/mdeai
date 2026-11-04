@@ -19,6 +19,7 @@ Review the actual diff against both the repository contract and the task/spec. F
 
 Load specialist guidance only when the changed surface requires it:
 - GitHub Actions, CI scripts, required gates, permissions, secret exposure, event/path filters, or false-green pipelines → [`references/ci-review.md`](references/ci-review.md).
+- Large PRs, generated JSON snapshots, missing chunk coverage or bounded re-review → [`references/large-pr-review.md`](references/large-pr-review.md).
 
 `code-review` remains the owner; the reference adds CI-specific invariants rather than creating a second review skill.
 

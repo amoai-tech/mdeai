@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, type KeyboardEvent } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { Bed, Building2, Calendar, ExternalLink, Wifi } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { VenueCardShell } from "@/components/browse/venue-card-shell";
 import { VenueCardPlaceholder } from "@/components/browse/venue-card-placeholder";
-import { formatRentalPrices } from "@/lib/rental-display";
+import { buildMatchReason, formatRentalPrices } from "@/lib/rental-display";
+import type { RentalSearchApiParams } from "@/lib/rental-query-parser";
 import { approvedExternalSourceUrl } from "@/lib/rentals/external-source";
 import { rentalToMapPin } from "@/lib/browse/browse-pin-converters";
 import { cn } from "@/lib/utils";
@@ -72,6 +73,8 @@ export function externalSourceUrlFor(rental: Rental): string | null {
 
 type RentalBrowseCardProps = {
   rental: Rental;
+  /** Grounded, optional customer query; never a search-score/debug field. */
+  matchParams?: RentalSearchApiParams;
   /** SAN-478 / REAL-011 — per-listing id for Playwright (`rental-card-${id}`). */
   testId?: string;
   /** Query string (with leading `?`) appended to the detail link so the renter's filters survive the trip. */
@@ -165,6 +168,7 @@ function RentalBrowseCardMedia({
 /** Show a real rental card; map controls require coordinates and viewing requires authorization. */
 export function RentalBrowseCard({
   rental,
+  matchParams,
   testId,
   detailSearch,
   selected,
@@ -189,6 +193,7 @@ export function RentalBrowseCard({
     rental.currency,
   );
   const chips = topAmenities(rental.amenities);
+  const matchReason = buildMatchReason(rental, matchParams);
   const hasWifi = rental.wifi || rental.amenities?.some((a) => a.toLowerCase().includes("wifi"));
   const pinId = rentalToMapPin(rental)?.id;
   // SAN-1349: the viewing action requires the explicit requestability proof.
@@ -203,13 +208,6 @@ export function RentalBrowseCard({
   const preview = () => (onPreview ?? onSelect)?.();
   const interactive = Boolean(onSelect && pinId);
 
-  const handleBodyKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      onSelect?.();
-    }
-  };
-
   return (
     <VenueCardShell
       testId={testId ?? `rental-card-${rental.id}`}
@@ -220,11 +218,6 @@ export function RentalBrowseCard({
       selected={selected}
       ariaLabel={`Rental: ${rental.title}, ${rental.neighborhood}`}
       onPreview={interactive ? preview : undefined}
-      bodyRole={interactive ? "button" : undefined}
-      bodyTabIndex={interactive ? 0 : undefined}
-      bodyAriaLabel={interactive ? `Select ${rental.title} on map` : undefined}
-      onBodyClick={interactive ? () => onSelect?.() : undefined}
-      onBodyKeyDown={interactive ? handleBodyKeyDown : undefined}
       media={
         onDetails ? (
           <button
@@ -256,6 +249,20 @@ export function RentalBrowseCard({
       }
       footer={
         <div className="flex w-full flex-wrap items-center justify-between gap-2">
+          {interactive ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              data-testid={`rental-card-map-select-${rental.id}`}
+              aria-label={`Show ${rental.title} on the map`}
+              className="min-h-11 lg:min-h-0"
+              onClick={() => onSelect?.()}
+              onFocus={preview}
+            >
+              Show on map
+            </Button>
+          ) : null}
           {onAskSelect ? <Button type="button" size="sm" variant={selectedForAsk ? "secondary" : "outline"}
             aria-pressed={Boolean(selectedForAsk)} data-testid="rental-ask-select" onClick={onAskSelect}>
             {selectedForAsk ? "Clear selection" : "Ask about this"}
@@ -416,6 +423,12 @@ export function RentalBrowseCard({
         </div>
       ) : !nightlyLabel ? (
         <p className="mt-1.5 text-xs text-muted-foreground">Price not provided</p>
+      ) : null}
+
+      {matchReason ? (
+        <p className="mt-1.5 min-w-0 break-words text-xs leading-relaxed text-muted-foreground" data-testid="rental-match-reason">
+          <span className="font-medium text-foreground">Why it may fit:</span>{" "}{matchReason}
+        </p>
       ) : null}
 
       {rental.availability ? (

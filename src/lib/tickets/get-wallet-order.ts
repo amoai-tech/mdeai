@@ -40,7 +40,7 @@ export async function listBuyerOrders(userId?: string): Promise<Result<BuyerOrde
   const { data, error } = await supabase
     .from("event_orders")
     .select(
-      "id, short_id, status, total_cents, currency, quantity, events(name, event_start_time, primary_image_url, address, city)",
+      "id, short_id, status, total_cents, currency, quantity, stripe_session_id, events(name, event_start_time, primary_image_url, address, city)",
     )
     .eq("buyer_user_id", buyerId)
     .in("status", ["paid", "refunded", "partial_refund"])
@@ -69,6 +69,7 @@ export async function listBuyerOrders(userId?: string): Promise<Result<BuyerOrde
         id: row.id as string,
         shortId: (row.short_id as string | null) ?? null,
         status: row.status as string,
+        isSandbox: (row.stripe_session_id ?? "").startsWith("cs_test_"),
         totalCents: row.total_cents as number,
         currency: row.currency as string,
         quantity: row.quantity as number,

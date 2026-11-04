@@ -18,8 +18,9 @@ import { ACTIVE_TEXT_MODEL } from "./models";
  *
  * To re-enable the guard for a deploy: set MASTRA_PROMPT_INJECTION_GUARD=true.
  */
-export function getDefaultInputProcessors(): InputProcessor[] {
-  const processors: InputProcessor[] = [new TokenLimiter(8192)];
+// skipcq: JS-0067 - exported function is scoped to this ES module, not the global object
+export function getDefaultInputProcessors(inputTokenLimit = 8192): InputProcessor[] {
+  const processors: InputProcessor[] = [new TokenLimiter(inputTokenLimit)];
 
   if (process.env.MASTRA_PROMPT_INJECTION_GUARD === "true") {
     processors.unshift(new PromptInjectionDetector({ model: ACTIVE_TEXT_MODEL }));

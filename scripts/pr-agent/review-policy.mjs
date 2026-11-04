@@ -297,7 +297,55 @@ export function findFreshReviewCandidates({ comments, startedAt }) {
 // PR-Agent v0.46 can omit the persistent state on clean reviews. Its absence
 // is NOT evidence of completeness, but it also is not an incomplete review.
 // When it publishes coverage state, reject incomplete or misleading values.
+// PR-Agent's coverage footer is top-level Markdown. Quoted examples, fenced
+// blocks and indented code are evidence in a review, not its own coverage state.
+function unquotedReviewMarkdown(body) {
+  let fenceChar = null;
+  let fenceLength = 0;
+  let quotedParagraph = false;
+  return body.split(/\r?\n/).map((line) => {
+    // A Markdown blockquote may lazily continue a paragraph on following lines
+    // without another '>' prefix. A blank line ends that continuation.
+    if (/^ {0,3}>/.test(line)) { quotedParagraph = true; return ""; }
+    if (line.trim() === "") { quotedParagraph = false; return ""; }
+    if (quotedParagraph) return "";
+    const match = line.match(/^ {0,3}(`{3,}|~{3,})/);
+    if (fenceChar) {
+      if (match && match[1][0] === fenceChar && match[1].length >= fenceLength &&
+          line.slice(match[0].length).trim() === "") {
+        fenceChar = null;
+        fenceLength = 0;
+      }
+      return "";
+    }
+    if (match) {
+      fenceChar = match[1][0];
+      fenceLength = match[1].length;
+      return "";
+    }
+    if (/^(?: {4}|\t)/.test(line)) return "";
+    return line;
+  }).join("\n");
+}
+
+// One canonical parser for PR-Agent's top-level excluded-file footer.
+// Quoted examples and fenced/indented code must never affect coverage.
+export function excludedFilesFromReview(body) {
+  const matches = unquotedReviewMarkdown(body ?? "").match(
+    /(?:^|\r?\n) {0,3}⚠️\s+\*\*Review coverage:\*\*\s+The following files were not included in this review because of the token budget:\s*\r?\n((?:[ \t]*-[ \t]+`[^`\r\n]+`[ \t]*\r?\n?)+)/,
+  );
+  return matches ? [...matches[1].matchAll(/^[ \t]*-[ \t]+`([^`\r\n]+)`/gm)].map((m) => m[1]) : [];
+}
+
 function coverageFailure(body, headSha) {
+  // PR-Agent can omit persistent finding state on a clean review even when its
+  // own six-chunk coverage footer explicitly lists files omitted by the token
+  // budget. The footer is direct evidence of incompleteness, regardless of
+  // whether a state marker exists or incorrectly claims complete=true.
+  const footerExcluded = excludedFilesFromReview(body);
+  if (footerExcluded.length) {
+    return { ok: false, code: "INCOMPLETE_REVIEW", reason: `PR-Agent review footer reports ${footerExcluded.length} excluded file(s) after chunking` };
+  }
   const markers = [...body.matchAll(/(?:^|\n)<!-- pr-agent-review-state:v1\n([\s\S]*?)\n-->/g)];
   if (markers.length === 0) return null; // Clean reviews may have no persisted findings.
   if (markers.length !== 1) {

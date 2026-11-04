@@ -6,12 +6,12 @@ function makeHandlers() {
   return {
     threadId: undefined as string | undefined,
     retryLastTurn: undefined as (() => Promise<boolean>) | undefined,
-    handleRentalMessage: vi.fn(async () => false),
-    handleEventVenueBookingMessage: vi.fn(async () => false),
-    handleEventMessage: vi.fn(async () => false),
-    handleGroundedMessage: vi.fn(async () => false),
-    handleRestaurantMessage: vi.fn(async () => false),
-    onAgentSend: vi.fn(async () => true),
+    handleRentalMessage: vi.fn<(text: string, submissionId?: string) => Promise<boolean>>(async () => false),
+    handleEventVenueBookingMessage: vi.fn<(text: string, submissionId?: string) => Promise<boolean>>(async () => false),
+    handleEventMessage: vi.fn<(text: string, submissionId?: string) => Promise<boolean>>(async () => false),
+    handleGroundedMessage: vi.fn<(text: string, submissionId?: string) => Promise<boolean>>(async () => false),
+    handleRestaurantMessage: vi.fn<(text: string, submissionId?: string) => Promise<boolean>>(async () => false),
+    onAgentSend: vi.fn<(text: string, submissionId?: string) => Promise<boolean>>(async () => true),
   };
 }
 
@@ -26,7 +26,7 @@ describe("SAN-867 · VEB-MVP-001 — Router hijack fix — sendConciergeUserMess
     await sendConciergeUserMessage("plan my weekend", handlers);
 
     expect(handlers.onAgentSend).toHaveBeenCalledOnce();
-    expect(handlers.onAgentSend).toHaveBeenCalledWith("plan my weekend");
+    expect(handlers.onAgentSend).toHaveBeenCalledWith("plan my weekend", expect.any(String));
     expect(handlers.handleEventMessage).not.toHaveBeenCalled();
     expect(handlers.handleRentalMessage).not.toHaveBeenCalled();
   });
@@ -80,7 +80,7 @@ describe("SAN-867 · VEB-MVP-001 — Router hijack fix — sendConciergeUserMess
     expect(await sendConciergeUserMessage("music events tonight", handlers)).toBe(true);
     expect(handlers.handleEventMessage).toHaveBeenCalledTimes(2);
     expect(handlers.onAgentSend).toHaveBeenCalledOnce();
-    expect(handlers.onAgentSend).toHaveBeenCalledWith("music events tonight");
+    expect(handlers.onAgentSend).toHaveBeenCalledWith("music events tonight", expect.any(String));
 
     finishFirst(true);
     expect(await first).toBe(true);
@@ -102,6 +102,23 @@ describe("SAN-867 · VEB-MVP-001 — Router hijack fix — sendConciergeUserMess
     await Promise.all([failure.retry?.(), failure.retry?.()]);
     expect(handlers.handleEventMessage).toHaveBeenCalledTimes(2);
     expect(handlers.onAgentSend).not.toHaveBeenCalled();
+  });
+
+  it("reuses one submission ID for a fast-path retry but creates a new ID for a deliberate repeat", async () => {
+    const handlers = makeHandlers();
+    handlers.threadId = "thread-a";
+    handlers.handleEventMessage
+      .mockRejectedValueOnce(new Error("transient event search failure"))
+      .mockResolvedValue(true);
+
+    await sendConciergeUserMessage("salsa events this weekend", handlers);
+    const failure = getConciergeErrorSnapshot();
+    await failure.retry?.();
+    await sendConciergeUserMessage("salsa events this weekend", handlers);
+    const ids = handlers.handleEventMessage.mock.calls.map((call) => call[1]);
+    expect(ids).toHaveLength(3);
+    expect(ids[0]).toBe(ids[1]);
+    expect(ids[2]).not.toBe(ids[0]);
   });
 
   it("uses the agent-turn retry for a failed agent send", async () => {
@@ -137,7 +154,7 @@ describe("SAN-867 · VEB-MVP-001 — Router hijack fix — sendConciergeUserMess
 
         await sendConciergeUserMessage(text, handlers);
 
-        expect(handlers.handleRentalMessage).toHaveBeenCalledWith(text);
+        expect(handlers.handleRentalMessage).toHaveBeenCalledWith(text, expect.any(String));
         expect(handlers.onAgentSend).not.toHaveBeenCalled();
       },
     );

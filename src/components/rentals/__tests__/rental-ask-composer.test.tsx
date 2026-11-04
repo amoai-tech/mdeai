@@ -1063,6 +1063,21 @@ describe("RentalAskComposer (SAN-1421)", () => {
     expect(chat.stopActiveRun).toHaveBeenCalledTimes(1);
   });
 
+  it("offers the same selected-apartment clear action from the sticky composer", () => {
+    const onClearSelection = vi.fn();
+    render(<RentalAskComposer hasSelectedListing onClearSelection={onClearSelection} />);
+
+    const clear = screen.getByTestId("rental-ask-clear-selection");
+    expect(clear.getAttribute("aria-label")).toBe("Clear selected item");
+    fireEvent.click(clear);
+    expect(onClearSelection).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not render a clear action when no apartment is selected", () => {
+    render(<RentalAskComposer />);
+    expect(screen.queryByTestId("rental-ask-clear-selection")).toBeNull();
+  });
+
   it("publishes its rendered height so the phone Map button can clear it", async () => {
     vi.stubGlobal(
       "ResizeObserver",

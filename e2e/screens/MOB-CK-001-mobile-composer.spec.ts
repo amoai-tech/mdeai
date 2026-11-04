@@ -12,16 +12,16 @@ async function gotoComposer(page: Page) {
   const response = await page.goto("/chat", { waitUntil: "domcontentloaded" });
   expect(response?.ok(), "GET /chat").toBe(true);
 
-  await expect(page.getByTestId("concierge-chat-view-mounted")).toHaveCount(1, {
-    timeout: 30_000,
-  });
-
+  // Verify the user-visible v2 composer, not a custom chat-view mount marker.
+  // A guest runtime-info 401 can leave the stock composer visible while the
+  // internal view slot is still reconnecting. Its marker is not a UI contract.
   const region = page.getByTestId("copilot-chat-region");
   const input = region.getByTestId("copilot-chat-textarea");
   const send = region.getByTestId("copilot-send-button");
 
   await expect(region).toBeVisible({ timeout: 30_000 });
   await expect(input).toBeVisible({ timeout: 30_000 });
+  await expect(input).toBeEnabled({ timeout: 30_000 });
   await expect(send).toBeVisible({ timeout: 30_000 });
 
   return {
@@ -137,6 +137,81 @@ test.describe(`${SCREEN_ID} CopilotKit v2 mobile composer`, () => {
     await expectInsideViewport(page, input, "composer");
     await expectInsideViewport(page, send, "Send");
     await expectNoHorizontalOverflow(page);
+  });
+
+  /**
+   * SAN-1606 — the phone composer is one compact row above the five-tab bar.
+   *
+   * Idle it is 56–64px tall: the textarea and Send share one row, so the second control row that
+   * CopilotKit renders on desktop is gone. A long draft still grows the same textarea, then scrolls
+   * inside it at the cap, and nothing (chip strip, map button, tab bar) takes the input's space.
+   */
+  test("is one compact phone row that keeps a long draft reachable above the tab bar", async ({
+    page,
+  }) => {
+    const { region, input, send } = await gotoComposer(page);
+    const composer = page.getByTestId("copilot-chat-input");
+    const nav = page.getByTestId("mobile-bottom-nav");
+    const mapTrigger = page.getByTestId("map-sheet-trigger");
+
+    await expect(composer).toBeVisible();
+    await expect
+      .poll(async () => Math.round((await composer.boundingBox())?.height ?? 0), {
+        timeout: 10_000,
+        message: "idle composer is 56–64px tall",
+      })
+      .toBeGreaterThanOrEqual(56);
+    expect(Math.round((await composer.boundingBox())!.height)).toBeLessThanOrEqual(64);
+
+    // One row: the textarea and Send share a horizontal band.
+    const textareaBox = await input.boundingBox();
+    const sendBox = await send.boundingBox();
+    expect(Math.abs(textareaBox!.y - sendBox!.y)).toBeLessThanOrEqual(4);
+
+    // No visible top chip strip on a phone, and no reserved height where it used to be.
+    await expect(page.getByTestId("chat-query-bar")).toBeHidden();
+    expect(await page.getByTestId("chat-query-bar").boundingBox()).toBeNull();
+    const header = await page.locator('[data-testid="geo-chat-shell"] header').boundingBox();
+    const canvas = await page.locator('[data-testid="chat-canvas"]').boundingBox();
+    expect(canvas?.y).toBe((header?.y ?? 0) + (header?.height ?? 0));
+
+    // The composer and the map control sit above the bar, never under it.
+    const composerBox = await composer.boundingBox();
+    const navBox = await nav.boundingBox();
+    expect(composerBox!.y + composerBox!.height).toBeLessThanOrEqual(navBox!.y);
+    // Wait for the control to be interactive before judging its settled position: before hydration
+    // it renders at a documented placeholder that is already above the composer, so this only
+    // excludes measuring a disabled control mid-hydration.
+    await expect(mapTrigger).toHaveAttribute("data-hydrated", "true", { timeout: 30_000 });
+    await expect
+      .poll(
+        async () => {
+          const [map, card] = await Promise.all([mapTrigger.boundingBox(), composer.boundingBox()]);
+          return map && card ? Math.round(map.y + map.height - card.y) : Number.POSITIVE_INFINITY;
+        },
+        { timeout: 10_000, message: "map control settles above the composer" },
+      )
+      .toBeLessThanOrEqual(0);
+
+    await typeDraft(page, input, send, LONG_MESSAGE);
+
+    const grown = await composer.boundingBox();
+    expect(Math.round(grown!.height)).toBeGreaterThan(64);
+    expect(Math.round(grown!.height), "draft stays inside the compact cap").toBeLessThanOrEqual(128);
+    const scroll = await input.evaluate((el) => ({
+      scrollHeight: el.scrollHeight,
+      clientHeight: el.clientHeight,
+    }));
+    expect(scroll.scrollHeight).toBeGreaterThan(scroll.clientHeight);
+    await expect(input).toHaveValue(LONG_MESSAGE);
+    await expect(send).toBeEnabled();
+    await expectInsideViewport(page, input, "composer with a long draft");
+    await expectInsideViewport(page, send, "Send with a long draft");
+    await expectNoHorizontalOverflow(page);
+
+    const grownBox = await composer.boundingBox();
+    expect(grownBox!.y + grownBox!.height).toBeLessThanOrEqual(navBox!.y);
+    await expect(region).toBeVisible();
   });
 
   for (const viewport of [PHONE_390, PHONE_360]) {
@@ -323,5 +398,32 @@ test.describe(`${SCREEN_ID} CopilotKit v2 mobile composer`, () => {
     await expectInsideViewport(page, input, "composer after agent reply");
     await expectInsideViewport(page, send, "Send after agent reply");
     await expectNoHorizontalOverflow(page);
+  });
+});
+
+/**
+ * SAN-1606 — the compact composer is a phone contract, and this lane is the only one that renders
+ * the real CopilotKit v2 input (the deterministic lane has its own chat adapter), so the desktop
+ * "nothing leaked" assertion must live here instead of being skipped there.
+ */
+test.describe("MOB-CK-001 desktop composer contract", () => {
+  test.use({ viewport: { width: 1280, height: 900 } });
+
+  test("keeps the stock v2 composer at desktop width", async ({ page }) => {
+    const { input } = await gotoComposer(page);
+
+    const card = page.getByTestId("copilot-chat-input");
+    await expect(card).toBeVisible();
+    const box = await card.boundingBox();
+    expect(box, "desktop composer box").not.toBeNull();
+    // The compact phone card is 56px; the stock desktop composer is taller. `> 60` would accept a
+    // leaked 61–64px compact row, so the bound is the phone card's own ceiling. Read through null
+    // instead of `box!`: a missing box should fail this assertion, not throw a TypeError.
+    const height = box?.height ?? 0;
+    expect(height, "desktop keeps the stock composer height").toBeGreaterThan(64);
+
+    // The phone-only contract caps a draft at 100px of text; it must not reach a desktop viewport.
+    const maxHeight = await input.evaluate((el) => getComputedStyle(el).maxHeight);
+    expect(maxHeight, "phone-only draft cap must not apply on desktop").not.toBe("100px");
   });
 });

@@ -2,6 +2,16 @@
 
 Use AGENTS.md as the repository-wide engineering contract. Exact-head deterministic CI and human review remain authoritative; PR-Agent is advisory.
 
+## Smart large PR review (SAN-1609)
+
+The existing pinned PR Agent remains the sole AI reviewer. A separate advisory job
+classifies changed files, validates three known generated snapshots as data, and
+reports real AI coverage separately from deterministic checks. Missing AI coverage
+is not a new required docs-only merge gate; high-risk gaps require human attention.
+See [large-PR reference](../../.claude/skills/code-review/references/large-pr-review.md)
+for the file taxonomy, exact-head evidence, coverage states, bounded follow-up
+planner, tests and official documentation.
+
 ## Universal review order
 
 1. Outcome — verify the requested user/business result.
@@ -15,7 +25,7 @@ Use AGENTS.md as the repository-wide engineering contract. Exact-head determinis
 9. Real workflow — trace the affected end-to-end user/system journey.
 10. Proof — verify tests/build/E2E/pgTAP actually exercise the changed behavior.
 
-Inspect surrounding repository contracts when needed, while keeping findings scoped to defects introduced or exposed by the PR. Before `safe_to_merge`, try to falsify the PR's claims through silent skips, false-green tests, wrong exit codes, stale assumptions, missing negative tests, and retry/replay/concurrency failures.
+Inspect surrounding repository contracts when needed, while keeping findings scoped to defects introduced or exposed by the PR. Before recommending `no_concerns_found`, try to falsify the PR's claims through silent skips, false-green tests, wrong exit codes, stale assumptions, missing negative tests, and retry/replay/concurrency failures.
 
 A green test is evidence only if it exercises the changed failure path. For security/RLS/payments/migrations/deployment gates, missing deterministic negative proof is material.
 

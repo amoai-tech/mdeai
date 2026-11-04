@@ -1,5 +1,6 @@
 import { formatEventSchedule, formatTicketPrice, ticketsRemaining } from "@/lib/events/format-event";
 import type { PublicEventDetail } from "@/lib/events/types";
+import { buildListedAreaMapUrl, buildVenueDirectionsUrl } from "@/lib/events/event-map-links";
 
 /** Match only the event-detail CTA contract, not arbitrary chat messages containing UUIDs. */
 export function eventIdFromDetailAsk(text: string): string | null {
@@ -25,10 +26,14 @@ export function summarizePublicEventForChat(event: PublicEventDetail): string {
     ? "Source: manually entered listing. MDE has not independently verified an organizer announcement for this event."
     : "Source: public event listing. Verify event-specific dates and instructions with its organizer.";
 
-  const destination = event.venue?.address || event.address;
-  const directions = destination
-    ? `https://www.google.com/maps/dir/?${new URLSearchParams({ api: "1", destination })}`
-    : null;
+  // Reuse the same map contract as the event detail screen.
+  // A listed street without a linked venue cannot be treated as an exact destination.
+  const locationUrl = event.venue
+    ? buildVenueDirectionsUrl(event.venue.address, event.latitude, event.longitude)
+    : buildListedAreaMapUrl(event.address || event.city);
+  const locationLabel = event.venue
+    ? "Directions"
+    : "Listed area (exact meeting point not confirmed)";
 
   return [
     `Event: ${event.name}`,
@@ -38,7 +43,7 @@ export function summarizePublicEventForChat(event: PublicEventDetail): string {
     event.host?.name ? `Hosted by: ${event.host.name}` : null,
     sourceStatus,
     event.description ? `About: ${event.description}` : null,
-    directions ? `Directions: ${directions}` : null,
+    locationUrl ? `${locationLabel}: ${locationUrl}` : null,
     `Event details: /events/${event.slug ?? event.id}`,
   ].filter(Boolean).join("\n\n");
 }

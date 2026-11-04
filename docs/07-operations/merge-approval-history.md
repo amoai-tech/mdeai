@@ -360,6 +360,134 @@ token columns on one orphan test user; admin lookup and signed-in routes now suc
 
 **Follow-up:** Recruit a second reviewer to eliminate reliance on this structural exception. Check that a subsequent ordinary MDE PR runs on the new pin; clean up temporary test PRs and branches after proof.
 
+## 2026-10-29 — PR #623 (SAN-1606 five-tab phone navigation)
+
+**PR:** [#623](https://github.com/amoai-tech/mdeai/pull/623). **Reason:** at the time of this change amoai-tech is the
+repository's sole collaborator and the PR author; GitHub forbids self-approval. This note records the limited
+sole-collaborator exception under AGENTS.md, not a general bypass of review or CI.
+
+**Exact-head proof:** the exact head SHA, green `floor` and `mastra-schema-init`, the green
+`review / verify-review-result` result and the unresolved-thread count (0) are recorded on PR #623 before any
+administrator merge. The override must not be used if any of those conditions fails, and the required checks and
+review guard stay configured.
+
+**Change and review scope:** one new route-aware client component (`src/components/navigation/mobile-bottom-nav.tsx`)
+mounted once in `src/app/layout.tsx`, one shared clearance token plus phone-only composer CSS in `src/app/globals.css`,
+`/chat` chip-strip hiding, and clearance offsets in the existing surface owners (Home, chat centre column,
+`DiscoveryWorkspace`, rental/event detail CTA bars, restaurant detail, `/chat` map trigger, HomeFab). No schema, RLS,
+RPC, API, agent, provider, dependency or payment change; authentication and data isolation are untouched. Tests: the
+nav unit contract, a new `e2e/mobile-bottom-nav.spec.ts`, extended `MOB-CK-001`, rewritten `SCREEN-003` mobile block,
+and updated unit expectations whose contracts moved (discovery Ask bar pinning, rental CTA safe-area ownership).
+
+**Evidence:** nav unit 32/32; full Vitest 4325 passed / 0 failed; `mobile-bottom-nav` 8/8; `MOB-CK-001` 8/8;
+`SCREEN-003` 6/6; `mobile-header` + `maps-layout-mobile` + `browse-map-close-touch` 15/15; `san-1469` 2/2; typecheck,
+lint, build, `check:mastra` and the CopilotKit v2 audits exit 0; 138/138 rendered-geometry checks with before/after
+screenshots in `docs/tasks/evidence/SAN-1606/`. Locally unrunnable: `pr-agent-pinned-loader`, because the pinned
+container reads the checkout as uid 65534 and this worktree sits under a 750 home directory — CI runs it from
+`/github/workspace`.
+
+**What an independent reviewer would be asked:** does the allowlist admit exactly the five consumer routes plus
+one-segment consumer details and nothing protected or transactional; does the bar hold 64px/12px/480px/44px with a
+visible active and focus state; is the chip strip's state genuinely still mounted for desktop; is the compact
+composer the same CopilotKit textarea (no second input) with Send, auth, error/retry and draft behaviour intact; and
+does every fixed surface clear the bar without covering a composer, map control or card CTA.
+
+**Follow-up:** recruit a second reviewer so this structural exception can retire; re-measure the scoped composer CSS
+when CopilotKit v2 changes its input DOM.
+
+## 2026-10-30 — PR #625 (SAN-1606 mobile navigation completion)
+
+**PR:** [#625](https://github.com/amoai-tech/mdeai/pull/625). **Reason:** amoai-tech is the repository's sole
+collaborator and the PR author; GitHub forbids self-approval. The owner's SAN-1606 completion work order asks for the
+focused PR to be reviewed, merged and deployed, and explicitly authorizes adding the existing mobile navigation
+Playwright test to one required CI job.
+
+**Exact-head proof:** the PR body records the head SHA, the green `floor`, `mastra-schema-init`, `review / verify-review-result`
+(0 unresolved threads) and the deterministic shards — which now execute the mobile navigation journey itself.
+
+**Change and review scope:** hide the floating map control while an on-screen keyboard is open (one CSS rule on the
+existing `html[data-mde-no-nav]` marker) plus the regression assertion that it hides and returns; wire
+`e2e/mobile-bottom-nav.spec.ts` into the existing deterministic Playwright job and out of the general `chromium`
+project; add `scripts/verify-mobile-nav.mjs` (`npm run verify:mobile-nav -- <url> <expected-sha>`) and its evidence.
+No navigation architecture, business gate, schema or API change.
+
+**Evidence:** production build of the tested tree `2630adff53fd5efa2a4acfc3f63d5887abdf0366` → **35/35** checks in
+34s (`docs/tasks/evidence/SAN-1606/deployed/`); the same command against the pre-fix deployed release `bdac360e72`
+reports **34/36**, failing exactly on the map control this PR fixes.
+
+**What an independent reviewer would be asked:** does the map control genuinely return after the keyboard closes; is
+the spec executed once (deterministic lane) rather than duplicated; does the command fail loudly on a wrong SHA or a
+broken journey; and are the 1023/1024/1280 boundaries correct.
+
+**Follow-up:** run the command against the deployed release after merge, then report the physical-device keyboard
+results to SAN-522 when hardware is available.
+
+## 2026-11-01 — PR #668 (SAN-1600 event header sign-in and saved-location map)
+
+**PR:** [#668](https://github.com/amoai-tech/mdeai/pull/668). **Reason:** amoai-tech is the repository's sole
+collaborator and the PR author; GitHub forbids self-approval. The owner's SAN-1600 implementation order asks for the
+event page to gain visible authentication and a truthful embedded map.
+
+**Exact-head proof:** head `e9fe1348bf9c4f45921e428e5ef2ef05bb2e467c`; `floor`, `mastra-schema-init`,
+`review / verify-review-result`, the deterministic chromium shards, `codacy-eslint` and the Maps contracts job all
+green; 0 unresolved review threads.
+
+**Change and review scope:** guest Sign in / Sign up with a validated `next` path, Account / My tickets when signed
+in, and a contained Google Map that draws only saved coordinates (linked venue point + directions, or a listed area
+with an explicit unconfirmed-meeting-point note and area search). Desktop becomes two independent columns. No schema,
+payment, agent or runtime change.
+
+**Evidence:** 97 focused tests, `npm run build` exit 0, and Playwright on the built app for both live test events at
+320/390/768/1024/1440 (no overflow, one `h1`, correct map state per event) — `docs/screenshots/san-1600/prA-*.png`.
+
+**What an independent reviewer would be asked:** does an unconfirmed venue ever produce a precise pin or turn-by-turn
+directions; does a failed or keyless map leave tickets, navigation and Ask MDE working; does `next` survive
+validation and return the visitor to the same event; does the header still fit 320px.
+
+**Follow-up:** the deployed readback on `www.mdeai.co` after the staged certification promotes this SHA.
+
+## 2026-11-01 — PR #670 (SAN-1600 in-page Ask MDE assistant)
+
+**PR:** [#670](https://github.com/amoai-tech/mdeai/pull/670). **Reason:** amoai-tech is the repository's sole
+collaborator and the PR author; GitHub forbids self-approval. The owner's SAN-1600 order asks for one native Ask MDE
+experience across eligible pages instead of a link that leaves the page.
+
+**Exact-head proof:** head `04ff0c938192d795a46c71b56b6a55474888174cdf859305f5626954dbdc4d1f174099` (rebased onto `7a3d855cc5` after #668 merged);
+`floor`, `mastra-schema-init`, `review / verify-review-result` green with 0 unresolved threads.
+
+**Change and review scope:** one drawer mounted in the root layout next to the phone tab bar, rendering the existing
+`DiscoveryAskComposer` inside the existing CopilotKit v2 provider — same agent, thread and saved history. Route
+ownership is one explicit list; browse pages keep their inline composer and `/chat`, auth, host and `/app` surfaces
+are untouched. The event page gives the drawer that event's real saved id. No new provider, agent, runtime, schema or
+payment change.
+
+**Evidence:** 301 focused tests green after the rebase, `npm run typecheck`, targeted ESLint and `npm run build` clean;
+Playwright on the built app shows the drawer opening on the event CTA and the restaurant launcher, with 0 launchers on
+`/events`, `/chat`, `/login` and `/rentals`, and 0 extra `/api/copilotkit` POSTs when the drawer opens.
+
+**What an independent reviewer would be asked:** can a page mount a second assistant; does opening the drawer start a
+model run; does a guest see an honest sign-in path rather than a dead control; does the event answer use that event's
+id rather than whatever was selected on another route.
+
+**Follow-up:** the signed-in live AI answer (no QA credentials in this worktree) and the deployed readback after
+certification.
+
+## 2026-11-03 — PR #705 (accessible discovery and chat controls)
+
+**PR:** [#705](https://github.com/amoai-tech/mdeai/pull/705) · **Head:** `b4abaa3d3bd94730b1df314a42812c49f6e3d061` · **Merge:** `9d791c658655a13b2c728d730ffb984d93daec05`
+
+**Why:** the repository had exactly one collaborator, `amoai-tech`, who also authored the PR; GitHub cannot record a self-approval.
+
+**Green on the exact head:** `floor`, `mastra-schema-init`, `review / verify-review-result`, deterministic Chromium, real mobile composer, Argos, Codacy static analysis and Vercel. Unresolved review threads: **0**.
+
+**Scope:** 10 files across the chat composer, rental browse card, event/restaurant filters and mobile navigation. Added accessible names to the existing CopilotKit v2 Send/attachment slots while preserving class-string, props-object and custom-component slot values; made “Show on map” a native button; corrected link semantics to `aria-current`; raised active-chip contrast. No auth, RLS, database, payment or workflow change.
+
+**Evidence:** focused Vitest 94/94; protected preview audit 16/16 pages at 390/768/1024/1440 with **0 axe WCAG 2.0/2.1/2.2 A/AA violations**, 0 overflow and 0 page exceptions; keyboard map selection and filter navigation passed. Five initial Codacy findings were test-only `no-mixed-html` false positives; those lines were replaced and Codacy passed.
+
+**Post-merge:** production `/api/version` later reached `6e6a46e53be6f659c9682972beadd23570ce9582`, which contains `9d791c65`. Production smoke at 390/1440 for `/chat`, `/rentals`, `/events`, `/restaurants` returned 200 with 0 overflow, 0 page errors, correct Send/Add labels, keyboard map selection and event filtering. SAN-546 remains In Progress because this was the accessibility slice, not the full J05–J20 matrix.
+
+**Nothing unreviewed rode along:** no workflow, migration, RLS, payment or release-gate change.
+
 ## Adding an entry
 
 Record: the PRs, the date, the reason, which required checks had passed, what a reviewer would have

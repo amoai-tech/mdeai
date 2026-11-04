@@ -86,7 +86,7 @@ test("promotion is explicit, uses the exact deployment id, and is a pinned CLI c
 
   assert.match(promote, /vercel@\$\{VERCEL_CLI_VERSION\}\" promote \"\$\{VERCEL_DEPLOYMENT_ID\}\"/);
   assert.match(promote, /--scope "\$\{VERCEL_SCOPE\}"/);
-  assert.match(promote, /--token "\$\{VERCEL_TOKEN\}"/);
+  assert.doesNotMatch(promote, /--token/, "do not expose Vercel tokens in CLI arguments");
   assert.match(workflow(), /VERCEL_CLI_VERSION:\s*"\d+\.\d+\.\d+"/, "the Vercel CLI must be pinned to an exact version");
   assert.match(workflow(), /VERCEL_DEPLOYMENT_ID:\s*\$\{\{\s*github\.event\.client_payload\.id\s*\}\}/);
 
@@ -109,7 +109,7 @@ test("promotion cannot run after any failed step", () => {
   assert.doesNotMatch(before, /continue-on-error:\s*true/, "a step that may fail must not precede promotion");
 });
 
-test("order: validate, credential, names, staged, certify, publish, re-confirm staged, promote, verify", () => {
+test("order: validate, staged, certify, re-confirm staged, promote, verify, stability, THEN publish final status", () => {
   const job = certifyJob(workflow());
   const order = [
     "Checkout exact deployed commit",
@@ -119,10 +119,11 @@ test("order: validate, credential, names, staged, certify, publish, re-confirm s
     "Verify Production defines the required variable names",
     "Confirm the candidate is staged",
     "Certify exact staged candidate",
-    "Publish certification result",
     "Re-confirm the candidate is still staged right before promotion",
     "Promote the exact certified deployment",
     "Verify www.mdeai.co serves the exact certified deployment",
+    "Verify production aliases remain stable after promotion",
+    "Publish final release certification result",
   ].map((name) => stepIndex(job, name));
   assert.deepEqual([...order].sort((a, b) => a - b), order, "steps must run in the safe order");
 });
@@ -153,20 +154,32 @@ test("certification runs on the exact candidate URL, before and never after prom
   );
 });
 
-test("publishes success only from the certification step's own outcome", () => {
+test("publishes success only after certification, staged recheck, promotion, domain and stability all passed", () => {
   const job = certifyJob(workflow());
-  const result = stepBody(job, "Publish certification result");
+  const result = stepBody(job, "Publish final release certification result");
   assert.match(result, /if: always\(\)/);
-  assert.match(result, /CERTIFY_OUTCOME: \$\{\{ steps\.certify\.outcome \}\}/);
-  assert.match(result, /if \[ "\$\{CERTIFY_OUTCOME\}" = "success" \]; then[\s\S]*?state=success/);
-  assert.match(result, /state=failure/, "any other outcome must publish failure");
+  for (const [key, stepId] of [
+    ["CERTIFY_OUTCOME", "certify"],
+    ["STAGED_OUTCOME", "final_staged"],
+    ["PROMOTE_OUTCOME", "promote"],
+    ["VERIFIED_OUTCOME", "verify_promoted"],
+    ["STABLE_OUTCOME", "verify_stable"],
+  ]) {
+    assert.ok(result.includes(`${key}: \${{ steps.${stepId}.outcome }}`), `${key} must come from its exact step`);
+    assert.ok(result.includes(`"$${key}" == success`), `${key} must gate success`);
+  }
+  assert.match(result, /state=failure/, "any skipped, failed, or cancelled gate must publish failure");
   assert.match(result, /-f target_url="\$\{RUN_URL\}"/, "the status must stay diagnosable");
+  assert.ok(stepIndex(job, "Verify production aliases remain stable after promotion") < stepIndex(job, "Publish final release certification result"));
+  assert.doesNotMatch(job.slice(0, stepIndex(job, "Publish final release certification result")), /-f context=production-certification/, "success must not be prepublished");
 });
 
 test("production is verified after promotion, and only if promotion succeeded", () => {
   const job = certifyJob(workflow());
   const verify = stepBody(job, "Verify www.mdeai.co serves the exact certified deployment");
   assert.match(verify, /node \.trusted\/scripts\/vercel-release-control\.mjs assert-promoted/);
+  assert.match(verify, /GH_TOKEN:\s*\$\{\{ secrets\.GITHUB_TOKEN \}\}/,
+    "post-promote verification re-reads live main, so it must have GitHub credentials");
   assert.match(verify, /if:\s*\$\{\{\s*success\(\)\s*\}\}/);
 });
 
@@ -299,4 +312,54 @@ test("secrets are only passed to the steps that need them", () => {
   assert.doesNotMatch(certify, /VERCEL_TOKEN/);
   const install = stepBody(job, "Install dependencies");
   assert.doesNotMatch(install, /secrets\./);
+});
+
+// SAN-1586: a checkout-based main check before the long E2E is not a final freshness check.
+test("promotion rechecks GitHub remote main in the same trusted step after certification", () => {
+  const job = certifyJob(workflow());
+  const promote = stepBody(job, "Promote the exact certified deployment");
+  const fresh = promote.indexOf("assert-current-main");
+  const cli = promote.indexOf("vercel@");
+  assert.ok(fresh >= 0 && cli > fresh, "fetch the current main before calling Vercel");
+  assert.match(promote, /GH_TOKEN:\s*\$\{\{ secrets\.GITHUB_TOKEN \}\}/);
+  assert.match(promote, /node \.trusted\/scripts\/vercel-release-control\.mjs assert-current-main/);
+  assert.match(promote, /set -euo pipefail/, "a moved main must stop the promotion");
+});
+
+test("Vercel 409 never grants a green release without exact-alias reconciliation", () => {
+  const promote = stepBody(certifyJob(workflow()), "Promote the exact certified deployment");
+  assert.match(promote, /grep -Eiq.*409/);
+  assert.match(promote, /reconcile-promote/);
+  assert.match(promote, /exit 1/, "all unrelated errors must fail");
+  assert.doesNotMatch(promote, /continue-on-error|always\(\)/);
+});
+
+test("release rechecks both aliases after a delayed second promotion, not only immediately", () => {
+  const job = certifyJob(workflow());
+  const verify = stepIndex(job, "Verify www.mdeai.co serves the exact certified deployment");
+  const stable = stepIndex(job, "Verify production aliases remain stable after promotion");
+  assert.ok(stable > verify, "stability window must follow the immediate verification");
+  assert.match(stepBody(job, "Verify production aliases remain stable after promotion"), /assert-stable/);
+});
+
+test("scheduled late-drift detector only reads aliases and never runs promotion", () => {
+  const txt = workflow();
+  assert.match(txt, /schedule:\s*\n\s*- cron:/);
+  const start = txt.indexOf("\n  monitor-production:");
+  const end = txt.indexOf("\n  certify:");
+  assert.ok(start > 0 && end > start);
+  const monitor = txt.slice(start, end);
+  assert.match(monitor, /github\.event_name == 'schedule'/);
+  assert.match(monitor, /assert-live-current/);
+  assert.doesNotMatch(monitor, /active-deployment/);
+  assert.doesNotMatch(monitor, /vercel@|npx.*promote|request_promote/);
+});
+
+// Canary F01: schedule.github.sha can lag the already-promoted current main.
+test("scheduled monitor never passes event SHA as live-main expectation", () => {
+  const job = workflow().split("\n  monitor-production:")[1].split("\n  certify:")[0];
+  assert.doesNotMatch(job, /VERCEL_DEPLOYMENT_SHA:\s*\$\{\{\s*github\.sha\s*\}\}/);
+  assert.doesNotMatch(job, /active-deployment/, "use one atomic read-only monitor command");
+  assert.match(job, /assert-live-current/);
+  assert.match(job, /GH_TOKEN:\s*\$\{\{\s*secrets\.GITHUB_TOKEN\s*\}\}/);
 });

@@ -20,8 +20,10 @@ export function HomeFab() {
 
   return (
     <div
-      className="fixed bottom-6 right-4 z-50 flex flex-col items-end gap-2 sm:right-6"
-      style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+      // SAN-1606 — on a phone the five-tab bar already opens Chat, so the floating "Ask the
+      // concierge" pill would be a duplicate. It is desktop-only now; scroll-to-top stays on both
+      // and sits above the tab bar instead of under it.
+      className="fixed bottom-[calc(var(--mde-mobile-nav-clearance)+0.5rem)] right-4 z-40 flex flex-col items-end gap-2 sm:right-6 lg:bottom-6"
     >
       {showScrollTop && (
         <button
@@ -36,7 +38,7 @@ export function HomeFab() {
         href="/chat"
         data-testid="home-fab-chat"
         aria-label="Open AI concierge"
-        className="flex min-h-[52px] items-center gap-2 rounded-full bg-accent px-5 py-3 text-sm font-semibold text-accent-foreground shadow-lg transition-all duration-200 hover:bg-accent/90 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 motion-reduce:transition-none"
+        className="hidden min-h-[52px] items-center gap-2 rounded-full bg-accent px-5 py-3 text-sm font-semibold text-accent-foreground shadow-lg transition-all duration-200 hover:bg-accent/90 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 motion-reduce:transition-none lg:flex"
       >
         <MessageSquareIcon className="size-4 shrink-0" aria-hidden="true" />
         <span>Ask the concierge</span>

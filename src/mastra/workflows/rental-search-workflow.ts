@@ -257,7 +257,7 @@ const rerankStep = createStep({
     const preference = inputData.preference;
     const scored = inputData.cards
       .map((c) => ({ card: c, score: scoreCard(c, preference) }))
-      .sort((a, b) => b.score - a.score)
+      .sort((a, b) => (b.score - a.score) || a.card.id.localeCompare(b.card.id))
       .slice(0, 5);
 
     const usedLabels = new Set<string>();

@@ -254,6 +254,49 @@ describe("mapSavedThreadHistory — repeats already saved before the fix", () =>
     ).toEqual(["user:ok", "assistant:first answer", "user:ok", "assistant:second answer"]);
   });
 
+  it("keeps consecutive identical fast-path questions and answers with separate submission IDs", () => {
+    // Both assistant answers are written immediately by the fast path (1 ms after
+    // the question), unlike a model response. Only the submission UUID differentiates them.
+    expect(
+      shown([
+        r("local-aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa-user", "user", "Show Italian restaurants", 0),
+        r("local-aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa-assistant", "assistant", "Found 5", 1),
+        r("local-bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb-user", "user", "Show Italian restaurants", 8_000),
+        r("local-bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb-assistant", "assistant", "Found 5", 8_001),
+      ]),
+    ).toEqual([
+      "user:Show Italian restaurants",
+      "assistant:Found 5",
+      "user:Show Italian restaurants",
+      "assistant:Found 5",
+    ]);
+  });
+
+  it("does not exempt malformed stable-looking IDs from legacy duplicate cleanup", () => {
+    const malformed = "local-" + "z".repeat(36) + "-user";
+    expect(shown([
+      r("old-user", "user", "q", 0),
+      r("old-assistant", "assistant", "a", 1_900),
+      r(malformed, "user", "q", 5_000),
+      r("another-old-assistant", "assistant", "a", 5_001),
+      r("next-user", "user", "next", 5_002),
+    ])).toEqual(["user:q", "assistant:a", "user:next"]);
+  });
+
+  it("reopening history retains two intentional identical exchanges with distinct submit IDs", () => {
+    const a = crypto.randomUUID();
+    const b = crypto.randomUUID();
+    const saved = [
+      row(`local-${a}-user`, "user", text("Italian restaurants?"), "2026-10-01T10:00:00.000Z"),
+      row(`local-${a}-assistant`, "assistant", text("Three restaurants"), "2026-10-01T10:00:00.001Z"),
+      row(`local-${b}-user`, "user", text("Italian restaurants?"), "2026-10-01T10:00:00.020Z"),
+      row(`local-${b}-assistant`, "assistant", text("Three restaurants"), "2026-10-01T10:00:00.021Z"),
+    ];
+    const reload = () => mapSavedThreadHistory(saved);
+    expect(reload().map((item) => item.role)).toEqual(["user", "assistant", "user", "assistant"]);
+    expect(reload().map((item) => item.id)).toEqual(saved.map((item) => item.id));
+  });
+
   it("the same question asked twice with the same answer both times is kept (seconds apart)", () => {
     expect(
       shown([

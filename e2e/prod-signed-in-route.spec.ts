@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { hasE2eEnv, signInAsOnOrigin, QA_HOST_EMAIL } from "./helpers/auth";
+import { hasE2eEnv, signInAsOnOrigin, QA_HOST_EMAIL, QA_SUPER_ADMIN_EMAIL } from "./helpers/auth";
 
 // Authenticated pages and private threads must not generate failure screenshots/traces.
 // Playwright may still attach automatic error-context; keep test reports private.
@@ -15,7 +15,7 @@ test.use({ trace: "off", screenshot: "off", video: "off" });
  * and that a protected route actually renders for an authenticated user.
  *
  * This spec mints a genuine Supabase session for the dedicated QA account
- * (`qa-landlord@mdeai.co`) through the admin API and injects it as the
+ * (`mde@socialmediaville.ca`) through the admin API and injects it as the
  * `sb-<ref>-auth-token` cookie for the target origin. It deliberately does NOT
  * use `E2E_BYPASS_AUTH`, so production authentication is never weakened.
  *
@@ -62,6 +62,17 @@ test.describe("prod signed-in route proof", () => {
     expect(response?.status()).toBe(200);
     expect(page.url()).not.toContain("/login");
     await expect(page.locator("body")).toBeVisible();
+  });
+
+  test("opt-in Super Admin QA account reaches read-only event administration", async ({ page }) => {
+    test.skip(process.env.MDE_SUPER_ADMIN_QA_SMOKE !== "1", "Only run from a trusted main checkout with explicitly provisioned local credentials");
+    expect(hasE2eEnv(), "Trusted runner needs existing Supabase URL, publishable key and service-role key").toBe(true);
+    // Never store tokens in the repository, Canary, PR preview, or Playwright artifacts.
+    await signInAsOnOrigin(page, baseUrl, QA_SUPER_ADMIN_EMAIL);
+    const response = await page.goto(route("/app/admin/events"), { waitUntil: "domcontentloaded" });
+    expect(response?.status()).toBe(200);
+    expect(new URL(page.url()).pathname).toBe("/app/admin/events");
+    await expect(page.getByTestId("admin-events")).toBeVisible();
   });
 
   test("authenticated runtime boots with the pinned CopilotKit version and every agent", async ({

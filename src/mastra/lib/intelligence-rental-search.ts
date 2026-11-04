@@ -175,6 +175,7 @@ export async function searchRentalsIntelligent(
     if (!developmentMode) q = q.eq("status", "active").not("landlord_id", "is", null);
     if (neighborhood) q = q.ilike("neighborhood", `%${neighborhood}%`);
     if (typeof query.minBedrooms === "number") q = q.gte("bedrooms", query.minBedrooms);
+    if (typeof query.maxBedrooms === "number") q = q.lte("bedrooms", query.maxBedrooms);
     // SAN-486 / SAN-1349: the shared availability rule (known move-in date, full-stay coverage or
     // not expired), "today" being the America/Bogota date the viewing RPC uses.
     q = applyAvailabilityFilters(q, {
@@ -290,6 +291,7 @@ export async function searchRentalsIntelligent(
     if (!developmentMode) aptQ = aptQ.eq("status", "active").not("landlord_id", "is", null);
     if (neighborhood) aptQ = aptQ.ilike("neighborhood", `%${neighborhood}%`);
     if (typeof query.minBedrooms === "number") aptQ = aptQ.gte("bedrooms", query.minBedrooms);
+    if (typeof query.maxBedrooms === "number") aptQ = aptQ.lte("bedrooms", query.maxBedrooms);
     // SAN-486 / SAN-1349: the shared availability rule (known move-in date, full-stay coverage or
     // not expired), "today" being the America/Bogota date the viewing RPC uses.
     aptQ = applyAvailabilityFilters(aptQ, {

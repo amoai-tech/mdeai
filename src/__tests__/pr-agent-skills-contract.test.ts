@@ -39,7 +39,7 @@ const skills = [
 
 describe("SAN-1312 PR-Agent review contract", () => {
   it("delegates runtime to the immutable shared core and keeps the caller trust boundary", () => {
-    expect(workflow).toContain("amoai-tech/pr-review-infra/.github/workflows/pr-agent.yml@75233d4cdd1e6b041b8bdb497450dee6fd513cb3");
+    expect(workflow).toMatch(/^    uses: amoai-tech\/pr-review-infra\/\.github\/workflows\/pr-agent\.yml@[0-9a-f]{40}$/m);
     expect(workflow).toContain("github.event.pull_request.head.repo.full_name == github.repository");
     expect(workflow).toContain('NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}');
     expect(workflow).not.toContain("GOOGLE_GENERATIVE_AI_API_KEY");
@@ -258,14 +258,10 @@ describe("SAN-1312 PR-Agent review contract", () => {
     expect(read("scripts/pr-agent/evals/README.md")).not.toContain("sort_by(.updatedAt)");
   });
 
-  it("does not configure keys the pinned PR-Agent cannot read", () => {
-    // Verified against the shipped binary: `publish_error_details` first appears in the
-    // v0.46.0 `settings/configuration.toml` and has no reader in v0.45.0. On the pinned
-    // image it is a silent no-op, so the config must not claim the feature is active.
-    if (workflow.includes("v0.45.0")) {
-      expect(config).not.toMatch(/^\s*publish_error_details\s*=/m);
-    }
-    expect(config).toContain("publish_error_details` is a v0.46+ key");
+  it("keeps supported PR-Agent error publishing host-owned", () => {
+    // The v0.49.0 shared workflow enables this setting on the trusted host.
+    // Do not duplicate host settings in repository-controlled configuration.
+    expect(config).not.toMatch(/^\s*publish_error_details\s*=/m);
   });
 
   it("keeps repo-local routing while shared core owns review orchestration", () => {

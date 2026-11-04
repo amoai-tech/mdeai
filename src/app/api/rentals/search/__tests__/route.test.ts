@@ -73,6 +73,22 @@ describe("POST /api/rentals/search", () => {
     );
   });
 
+  it("forwards an explicit exact bedroom ceiling to canonical search", async () => {
+    searchRentals.mockResolvedValue({ results: [], total: 0, source: "supabase" });
+    const res = await POST(post({ neighborhood: "Laureles", minBedrooms: 2, maxBedrooms: 2 }));
+    expect(res.status).toBe(200);
+    expect(searchRentals).toHaveBeenCalledWith(
+      expect.objectContaining({ minBedrooms: 2, maxBedrooms: 2 }),
+      expect.objectContaining({ client: expect.anything() }),
+    );
+  });
+
+  it("rejects contradictory bounds without querying Supabase", async () => {
+    const res = await POST(post({ minBedrooms: 3, maxBedrooms: 2 }));
+    expect(res.status).toBe(400);
+    expect(searchRentals).not.toHaveBeenCalled();
+  });
+
   it("forwards the monthly cap parsed from the renter's sentence", async () => {
     searchRentals.mockResolvedValue({ results: [], total: 0, source: "supabase" });
     const params = buildRentalSearchParams(

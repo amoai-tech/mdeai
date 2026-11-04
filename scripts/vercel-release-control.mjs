@@ -10,14 +10,19 @@
  *   env-names         the Production target defines every required variable NAME
  *   assert-staged     the candidate is READY, from main, owns no production domain yet, and the
  *                     certified URL belongs to this exact deployment id
- *   assert-promoted   www.mdeai.co AND mdeai.co now point at the exact tested deployment (alias records), and the
- *                     deployment's id and commit are the ones that were certified
+ *   assert-promoted   both domains serve the exact certified deployment, still current on main
+ *   assert-current-main  reject a superseded candidate before promotion
+ *   reconcile-promote   bounded Vercel 409 recovery, with a final remote-main check
+ *   assert-stable       watch both aliases and main after promotion
+ *   assert-live-current scheduled read-only monitor that derives the SHA from live main
  *
  * Names and IDs only. The env check reads variable NAMES and TARGETS and never
  * touches a value; error messages never echo an API response body.
  *
- * Usage: node scripts/vercel-release-control.mjs <credential|env-names|assert-staged|assert-promoted>
- * Env:   VERCEL_TOKEN (all), VERCEL_DEPLOYMENT_ID + VERCEL_DEPLOYMENT_SHA (assert-*)
+ * Usage: node scripts/vercel-release-control.mjs <command>
+ * Env:   VERCEL_TOKEN for Vercel requests; GH_TOKEN + GITHUB_REPOSITORY for remote main;
+ *        VERCEL_DEPLOYMENT_ID + VERCEL_DEPLOYMENT_SHA for candidate-specific checks.
+ *        assert-live-current reads live alias + SHA; it never takes the schedule event SHA.
  */
 import { pathToFileURL } from "node:url";
 
@@ -219,6 +224,83 @@ export async function vercelGet(
   return response.json();
 }
 
+
+// Fetch the remote ref, not a checkout made minutes earlier before the candidate browser test.
+export async function githubMainSha({ fetchImpl = fetch, token = process.env.GH_TOKEN,
+  repository = process.env.GITHUB_REPOSITORY } = {}) {
+  if (!token || !repository || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository) ||
+    repository.split("/").some(part => part === "." || part === "..")) {
+    fail("GH_TOKEN and a valid GITHUB_REPOSITORY are required");
+  }
+  let response;
+  try {
+    response = await fetchImpl("https://api.github.com/repos/" + repository + "/git/ref/heads/main", {
+      headers: { authorization: "Bearer " + token, accept: "application/vnd.github+json" },
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+  } catch { fail("cannot fetch current main from GitHub"); }
+  if (!response.ok) fail("GitHub current-main lookup failed (HTTP " + response.status + ")");
+  let body;
+  try { body = await response.json(); } catch { fail("invalid GitHub main ref response"); }
+  const sha = body?.object?.sha;
+  if (typeof sha !== "string" || !/^[0-9a-f]{40}$/i.test(sha)) fail("invalid GitHub main commit SHA");
+  return sha.toLowerCase();
+}
+
+export function checkCurrentMain(currentSha, expectedSha) {
+  if (currentSha.toLowerCase() !== expectedSha.toLowerCase())
+    fail("candidate superseded: main moved during certification; refusing promotion");
+}
+
+// A Vercel 409 alone is never success: exact current main, READY deployment and both
+// authoritative domain alias records must all match. The same seam proves later drift.
+export async function reconcilePromotion({ expected, readMain, readDeployment, readAliases,
+  attempts = 6, delayMs = 10000, pause = (ms) => new Promise(r => setTimeout(r, ms)) }) {
+  if (!Number.isInteger(attempts) || attempts < 1 || attempts > 20) fail("invalid reconciliation budget");
+  let lastError;
+  for (let i = 0; i < attempts; i += 1) {
+    checkCurrentMain(await readMain(), expected.sha);
+    const deployment = await readDeployment();
+    checkIdentity(deployment, expected);
+    try {
+      checkPromoted(deployment, expected, await readAliases());
+    } catch (error) {
+      lastError = error;
+      if (i < attempts - 1) await pause(delayMs);
+      continue;
+    }
+    // Main can advance while Vercel's deployment/alias reads are in flight.
+    checkCurrentMain(await readMain(), expected.sha);
+    return;
+  }
+  fail("promotion unresolved after bounded alias checks: " + (lastError?.message ?? "unknown"));
+}
+
+export async function checkStablePromotion({ expected, readMain, readDeployment, readAliases,
+  attempts = 10, delayMs = 20000, pause = (ms) => new Promise(r => setTimeout(r, ms)) }) {
+  for (let i = 0; i < attempts; i += 1) {
+    checkCurrentMain(await readMain(), expected.sha);
+    checkPromoted(await readDeployment(), expected, await readAliases());
+    checkCurrentMain(await readMain(), expected.sha);
+    if (i < attempts - 1) await pause(delayMs);
+  }
+}
+
+/**
+ * Scheduled monitoring compares LIVE remote main with both live Vercel aliases.
+ * Schedule-event SHAs can be stale and must not be used for this check.
+ * Re-read main after deployment/alias validation to close the read-time race.
+ * Read-only: no alias or promotion changes.
+ */
+export async function verifyLiveMain({ readMain, readAliases, readDeployment }) {
+  const sha = await readMain();
+  const aliases = await readAliases();
+  const id = checkDomainAlias(PRIMARY_DOMAIN, aliases[PRIMARY_DOMAIN]);
+  checkPromoted(await readDeployment(id), { id, sha }, aliases);
+  checkCurrentMain(await readMain(), sha);
+  return { id, sha };
+}
+
 const required = (name) => {
   const value = (process.env[name] ?? "").trim();
   if (!value) fail(`${name} is required`);
@@ -253,6 +335,27 @@ async function main(command) {
     );
     console.log(`vercel-release: ${expected.id} is staged (READY, main, no production domain, auto-assign OFF)`);
     console.log(`vercel-release: production currently serves ${current[PRIMARY_DOMAIN]} (the version to recover to)`);
+  } else if (command === "assert-live-current") {
+    const { id, sha } = await verifyLiveMain({
+      readMain: () => githubMainSha(),
+      readAliases: () => readDomainAliases(),
+      readDeployment: (deploymentId) => vercelGet("/v13/deployments/" + deploymentId + "?teamId=" + TEAM_ID),
+    });
+    console.log("vercel-release: both production domains serve live main " + sha.slice(0, 12) + " on " + id);
+  } else if (command === "assert-current-main") {
+    checkCurrentMain(await githubMainSha(), required("VERCEL_DEPLOYMENT_SHA"));
+    console.log("vercel-release: candidate still matches remote main");
+  } else if (["reconcile-promote", "assert-stable"].includes(command)) {
+    const expected = { id: required("VERCEL_DEPLOYMENT_ID"), sha: required("VERCEL_DEPLOYMENT_SHA") };
+    const readMain = () => githubMainSha();
+    const readDeployment = () => vercelGet("/v13/deployments/" + expected.id + "?teamId=" + TEAM_ID);
+    const readAliases = () => readDomainAliases();
+    if (command === "reconcile-promote") {
+      await reconcilePromotion({ expected, readMain, readDeployment, readAliases });
+    } else if (command === "assert-stable") {
+      await checkStablePromotion({ expected, readMain, readDeployment, readAliases });
+    }
+    console.log("vercel-release: " + command + " OK — both domains serve the exact current main");
   } else if (command === "assert-promoted") {
     const expected = { id: required("VERCEL_DEPLOYMENT_ID"), sha: required("VERCEL_DEPLOYMENT_SHA") };
     let lastError;
@@ -264,18 +367,20 @@ async function main(command) {
           expected,
           await readDomainAliases(),
         );
+        checkCurrentMain(await githubMainSha(), expected.sha);
         console.log(
           `vercel-release: ${PRODUCTION_DOMAINS.join(" and ")} serve the certified ${expected.id} @ ${expected.sha.slice(0, 12)}`,
         );
         return;
       } catch (error) {
+        if (String(error?.message ?? "").includes("candidate superseded:")) throw error;
         lastError = error;
         if (attempt < 6) await wait(10_000);
       }
     }
     throw lastError;
   } else {
-    fail("usage: vercel-release-control.mjs <credential|env-names|assert-staged|assert-promoted>");
+    fail("usage: vercel-release-control.mjs <credential|env-names|assert-staged|assert-current-main|assert-live-current|assert-promoted|reconcile-promote|assert-stable>");
   }
 }
 

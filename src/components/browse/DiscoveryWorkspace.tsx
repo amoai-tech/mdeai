@@ -2,6 +2,9 @@
 
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { resolveMobileNavTab } from "@/components/navigation/mobile-bottom-nav";
+import { cn } from "@/lib/utils";
 import { AuthStatus } from "@/components/auth/auth-status";
 import { WorkspaceNavRail } from "@/components/browse/workspace-nav-rail";
 import { ChatNavDrawer } from "@/components/chat/chat-nav-drawer";
@@ -40,6 +43,10 @@ export type DiscoveryWorkspaceProps = {
  */
 export function DiscoveryWorkspace(props: DiscoveryWorkspaceProps) {
   const { testId, activeSlug, title, subtitle, filterBar, notice, children, rightPanel, askComposer, mobileMapTrigger } = props;
+  // This shell also renders Cafés and Nightlife, which have no phone tab bar. Reserve the bar's
+  // space only where the bar is actually mounted, using the bar's own allowlist as the one source
+  // of truth (so a future route change cannot leave a dead gap behind).
+  const hasMobileNav = resolveMobileNavTab(usePathname()) !== null;
   return (
     <div
       data-testid={testId}
@@ -54,7 +61,12 @@ export function DiscoveryWorkspace(props: DiscoveryWorkspaceProps) {
 
       <main
         id="main-content"
-        className="flex min-h-0 min-w-0 flex-1 flex-col lg:overflow-y-auto"
+        // SAN-1606 — one phone-only reserve for the floating tab bar, so the pinned Ask MDE bar and
+        // the last card both end above it. Zero above `lg` and on routes without the bar.
+        className={cn(
+          "flex min-h-0 min-w-0 flex-1 flex-col lg:overflow-y-auto lg:pb-0",
+          hasMobileNav && "pb-[var(--mde-mobile-nav-clearance)]",
+        )}
         data-testid="workspace-results-column"
       >
         <header className="sticky top-0 z-10 border-b border-border bg-background/95 px-4 py-4 backdrop-blur sm:px-6">
@@ -80,12 +92,27 @@ export function DiscoveryWorkspace(props: DiscoveryWorkspaceProps) {
         </div>
 
         {notice}
-        <div className="px-4 pb-24 sm:px-6 lg:pb-6">{children}</div>
+        {/* Extra phone scroll room lets the last card's buttons move above the
+            sticky composer + floating tab bar instead of being covered. */}
+        <div className={cn(
+          "px-4 sm:px-6 lg:pb-6",
+          // The composer publishes its real rendered height. Reserve that height plus
+          // the floating tab bar so the last card's controls can scroll above both.
+          hasMobileNav && askComposer
+            ? "pb-[calc(var(--mde-ask-composer-height,18rem)_+_5rem)] lg:pb-6"
+            : "pb-24",
+        )}>{children}</div>
 
         {askComposer ? (
           <div
             data-testid="workspace-ask-composer"
-            className="sticky bottom-0 z-20 mt-auto border-t border-border/60 bg-background/95 shadow-[0_-6px_16px_-14px_rgb(0_0_0/0.35)] backdrop-blur supports-[backdrop-filter]:bg-background/90"
+            // SAN-1606 — while stuck this bar pins above the floating tab bar instead of over it;
+            // `lg:bottom-0` is the desktop behaviour it had before, and routes without the bar
+            // keep the bar at the bottom edge.
+            className={cn(
+              "sticky z-20 mt-auto border-t border-border/60 bg-background/95 shadow-[0_-6px_16px_-14px_rgb(0_0_0/0.35)] backdrop-blur supports-[backdrop-filter]:bg-background/90 lg:bottom-0",
+              hasMobileNav ? "bottom-[var(--mde-mobile-nav-clearance)]" : "bottom-0",
+            )}
           >
             {askComposer}
           </div>

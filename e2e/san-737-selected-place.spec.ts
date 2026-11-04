@@ -6,6 +6,7 @@ import {
   signInAsOnOrigin, type ThrowawayIdentity,
 } from "./helpers/auth";
 import { establishVercelAutomationBypass } from "./fixtures/vercel-bypass";
+import { confirmsNothingSelected } from "./helpers/selected-place-clear-response";
 
 /**
  * SAN-737 live acceptance. Uses the real page, authenticated CopilotKit stream,
@@ -80,12 +81,19 @@ for (const size of [{ name: "desktop", width: 1440, height: 900 }, { name: "mobi
   test.describe(`SAN-737 ${size.name}: selected A → B → Clear and saved thread`, () => {
     test.use({ viewport: { width: size.width, height: size.height } });
     test.skip(!base, "Set SAN737_BASE_URL to explicitly exercise the real app");
+    // One throwaway identity per route/viewport. The CopilotKit per-user rate
+    // limit is 120 requests; five routes × three turns + runtime polling from a
+    // single identity exhausted it on Nightlife. Fresh identities keep each
+    // route independent and cleanup exact.
     let identity: ThrowawayIdentity | undefined;
-    test.beforeAll(async () => {
+    test.beforeEach(async () => {
       expect(hasE2eEnv()).toBe(true);
       identity = await createThrowawayIdentity("qa-san737-selected-context");
     });
-    test.afterAll(async () => { if (identity) await deleteThrowawayIdentity(identity); });
+    test.afterEach(async () => {
+      if (identity) await deleteThrowawayIdentity(identity);
+      identity = undefined;
+    });
 
     for (const scenario of routes) {
       test(`${scenario.route}: changes grounded selection and clears it`, async ({ page }) => {
@@ -145,14 +153,14 @@ for (const size of [{ name: "desktop", width: 1440, height: 900 }, { name: "mobi
         await composerInput.fill("");
         const cards = page.locator(scenario.card);
         await expect.poll(() => cards.count(), { timeout: 40_000 }).toBeGreaterThanOrEqual(2);
-        // Titles and IDs come from the actual rendered public data.
-        const first = cards.nth(0);
-        const second = cards.nth(1);
-        const a = (await first.locator("h3").first().innerText()).trim();
-        const b = (await second.locator("h3").first().innerText()).trim();
+        // Agent results can replace/reorder the visible cards after any turn.
+        // Pin A by its real visible heading, never by a mutable .nth() index.
+        const cardNamed = (name: string) => cards.filter({
+          has: page.getByRole("heading", { level: 3, name, exact: true }),
+        }).first();
+        const a = (await cards.first().locator("h3").first().innerText()).trim();
         expect(a.length).toBeGreaterThan(2);
-        expect(b.length).toBeGreaterThan(2);
-        expect(a).not.toBe(b);
+        const first = cardNamed(a);
         const select = (card: Locator) => scenario.route === "restaurants"
           ? card.locator("..").locator(scenario.select)
           : card.locator(scenario.select);
@@ -162,18 +170,49 @@ for (const size of [{ name: "desktop", width: 1440, height: 900 }, { name: "mobi
           "What is the exact public name of the selected place? Verify the selected record using the public lookup before answering.", 1);
         expect(firstReply.toLocaleLowerCase()).toContain(a.toLocaleLowerCase());
 
+        // A successful AI search may change cards and map pins. Select B from
+        // the *current* displayed list, then keep its heading stable throughout
+        // the second turn; otherwise an index can silently point at item C.
+        const afterFirst = (await cards.locator("h3").allInnerTexts()).map(t => t.trim());
+        const b = afterFirst.find((name) => name !== a);
+        if (!b) throw new Error("a distinct currently visible B must exist");
+        const second = cardNamed(b);
+        if (size.width === 390) {
+          // B may sit under the sticky composer in the initial scroll position.
+          // Scroll it into the upper-middle like a person would, then click normally.
+          await select(second).evaluate((button) => {
+            const top = button.getBoundingClientRect().top + window.scrollY;
+            window.scrollTo({ top: Math.max(0, top - 300), behavior: "auto" });
+          });
+        }
         await select(second).click();
         await expect(select(second)).toHaveAttribute("aria-pressed", "true");
-        await expect(select(first)).toHaveAttribute("aria-pressed", "false");
+        if (await first.count()) {
+          await expect(select(first)).toHaveAttribute("aria-pressed", "false");
+        }
         const secondReply = await ask(page, scenario.route,
           "What is the exact name of the place I have selected NOW? Use its verified current record, not the previous item.", 2);
         expect(secondReply.toLocaleLowerCase()).toContain(b.toLocaleLowerCase());
 
-        await select(second).click();
+        // On a phone, the growing Ask MDE transcript can cover a card's own Clear
+        // button. The composer exposes the SAME selected-item handler in its
+        // always-reachable sticky area; click that normally, never force-click.
+        if (size.width === 390) {
+          const stickyClear = page.getByTestId(
+            scenario.route === "rentals"
+              ? "rental-ask-clear-selection"
+              : "discovery-ask-clear-selection",
+          );
+          await expect(stickyClear).toBeVisible();
+          await stickyClear.click();
+        } else {
+          await select(second).click();
+        }
         await expect(select(second)).toHaveAttribute("aria-pressed", "false");
         const clearedReply = await ask(page, scenario.route,
           "Is any place currently selected? Do not assume the previous place is still selected.", 3);
-        expect(clearedReply).toMatch(/no |none|not selected|nothing selected|cleared|don't have|do not have/i);
+        expect(confirmsNothingSelected(clearedReply),
+          `the finished reply must explicitly confirm the current selection is empty. Reply: ${clearedReply}`).toBe(true);
         expect(copilotPosts.filter((status) => status === 200).length).toBeGreaterThanOrEqual(3);
         expect(copilotPosts.some((status) => status >= 400 && status !== 401)).toBe(false);
         expect(errors).toEqual([]);

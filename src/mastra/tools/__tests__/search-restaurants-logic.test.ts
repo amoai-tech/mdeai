@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { mapCuisineFromTypes, priceLevelToTier, rowToRestaurant, restaurantSchema, searchRestaurants, restaurantSearchDisplayName } from '../search-restaurants.js';
+import { searchRestaurantsIntelligent } from '../../lib/intelligence-restaurant-search';
 
 vi.mock('../../lib/intelligence-restaurant-search', () => ({
   searchRestaurantsIntelligent: vi.fn().mockResolvedValue({ results: [], hybridUsed: false }),
@@ -119,7 +120,7 @@ describe('searchRestaurants — intelligent search fallback', () => {
 
 describe('El Cielo labels in the intelligent chat search path', () => {
   it('preserves both real result IDs and distinguishes their on-screen names', async () => {
-    const { searchRestaurantsIntelligent } = await import('../../lib/intelligence-restaurant-search');
+    // Reuse the hoisted mocked module; cold dynamic imports can exceed the full-suite 5s timeout.
     const base = {
       cuisine: 'international', neighborhood: 'El Poblado', priceTier: '$$$',
       avgPricePerPerson: 30, currency: 'USD', rating: 4.5, vibe: [], imageUrl: '',
@@ -138,7 +139,7 @@ describe('El Cielo labels in the intelligent chat search path', () => {
       ['fc6031d7-dcf6-44c3-9547-f7172c37ee95', 'Elcielo Hotel Medellín'],
       ['a1b2c3d4-e5f6-4789-abcd-100000000004', 'Elcielo Restaurant Medellín'],
     ]);
-  });
+  }, 15_000); // Full-suite CPU contention can exceed Vitest's default 5s.
 });
 
 describe('neighborhood sanitization', () => {
