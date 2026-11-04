@@ -33,6 +33,15 @@ those functions rather than the Stripe SDK directly.
 2. Verify the exact API behavior in current Stripe official docs before changing payment contracts.
 3. Preserve existing MDE architecture unless the task explicitly requires migration.
 
+## Official Stripe tooling before custom code
+
+Use [official-tools.md](references/official-tools.md) to choose Stripe's supported agent plugins, hosted MCP, CLI, Dashboard/Workbench, Checkout, webhooks, Connect, and reporting before proposing new payment code.
+
+- Start with already connected official Stripe tools and the **current** Stripe documentation. If available, use `stripe docs`; the documented setup is `stripe agent setup`, but installation/account authorization requires the owner's action.
+- Reuse MDE's existing Checkout, Edge Functions, RPCs, and idempotent business transactions. Stripe owns payment processing; MDE owns tickets, bookings, and authorization. Do **not** create a duplicate payment engine, webhook service, or financial ledger.
+- Stripe has deprecated standalone agent-toolkit and local MCP packages in favor of the hosted MCP; do not introduce them without a verified reason. See https://github.com/stripe/ai and https://docs.stripe.com/agents.
+- Recheck Stripe SDK/API compatibility against actual repository code before applying the historical version snapshot above.
+
 ## MDE invariants
 
 - Never expose secret keys or webhook secrets to client code.
