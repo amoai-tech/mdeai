@@ -490,10 +490,12 @@ function LiveComposer({
         setDraft((current) => (current === "" ? raw : current));
         return;
       }
-      // Ignore a late error from the stopped run ONLY when this run emitted a
-      // completed assistant text message AND finished successfully. Tool-call
-      // placeholders and partial output from a failed run are not answers.
-      const producedAnswer = runSucceeded && !runFailed && completedAssistantText;
+      // Only a successful run with an actual completed answer may ignore a late
+      // error from the previous, stopped run: visible text OR validated rental
+      // tool-result cards. A tool-call placeholder, partial text, or failed
+      // current run never qualifies.
+      const producedAnswer = runSucceeded && !runFailed &&
+        (completedAssistantText || toolResultSeen.current);
       if (runFailed || (getConciergeErrorVersion() !== errorVersionBefore && !producedAnswer)) {
         // The turn is already in the thread; a Retry here would add the same question twice.
         setError(ERROR_COPY_RUN);

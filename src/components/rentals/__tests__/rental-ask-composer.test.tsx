@@ -175,6 +175,29 @@ describe("RentalAskComposer (SAN-1636) · a stopped run must not fail the next q
     expect(screen.queryByTestId("rental-ask-retry")).toBeNull();
   });
 
+  it("accepts successful rental cards without prose when a stopped run reports late error", async () => {
+    const onResults = vi.fn();
+    chat.appendMessage.mockImplementationOnce(async () => {
+      const runId = "run-tool-results";
+      for (const sub of agent.runSubscribers) sub.onRunInitialized?.({ input: { runId } });
+      // The actual rental tool result arrives without final assistant prose.
+      agent.messages.push({ id: "u-cards", role: "user", content: "2BR in Laureles" });
+      agent.messages.push({ id: "assistant-tool", role: "assistant", toolCalls: [{ id: "call-rentals", function: { name: "searchRentals" } }] });
+      agent.messages.push({ id: "result-cards", role: "tool", toolCallId: "call-rentals", content: JSON.stringify({ results: [rental("rental-1")] }) });
+      agent.listeners.forEach((listener) => listener());
+      for (const sub of agent.runSubscribers) sub.onRunFinishedEvent?.({ event: { runId }, outcome: "success" });
+      errorVersion.value += 1;
+      return true;
+    });
+
+    render(<RentalAskComposer onResults={onResults} />);
+    type("2BR in Laureles");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+    await waitFor(() => expect(chat.appendMessage).toHaveBeenCalledOnce());
+    await waitFor(() => expect(onResults).toHaveBeenCalledOnce());
+    expect(screen.queryByTestId("rental-ask-error")).toBeNull();
+  });
+
   it("rejects a tool-call-only assistant placeholder after a failed run", async () => {
     chat.appendMessage.mockImplementationOnce(async () => {
       for (const sub of agent.runSubscribers) sub.onRunInitialized?.({ input: { runId: "run-3" } });
