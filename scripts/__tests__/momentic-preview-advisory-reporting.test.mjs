@@ -1,38 +1,61 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { test } from 'node:test';
+import { RENTAL_TESTS, EVENT_TESTS, CONCIERGE_TESTS, selectMomenticPilotTests } from '../momentic-pilot-scope.mjs';
 
 const workflow = fs.readFileSync('.github/workflows/momentic-rentals-preview.yml', 'utf8');
 
-test('advisory preview suite is selected only by pull-request Floor checks', () => {
+test('advisory preview still selects only current PRs after Floor and executes trusted main', () => {
   assert.match(workflow, /github\.event\.workflow_run\.event == 'pull_request'/);
   assert.match(workflow, /github\.event\.workflow_run\.head_sha/);
   assert.match(workflow, /ref: main/);
+  assert.match(workflow, /actual.*DEPLOY_SHA/);
 });
 
-test('all five read-only Momentic journeys must finish before PASS is reported', () => {
-  assert.match(workflow, /^\s+exact-bedroom-filter\s*$/m);
-  assert.match(workflow, /^\s+broker-guest-redirect\s*$/m);
-  assert.match(workflow, /^\s+renter-saved-guest-redirect\s*$/m);
-  assert.match(workflow, /^\s+search-to-details\s*$/m);
-  assert.match(workflow, /^\s+viewing-form-no-submit\s*$/m);
-  assert.match(workflow, /if \[\[ "\$OUTCOME" == success \]\]; then\s+result="PASS — 5\/5/);
+test('all five Rentals tests remain selected together, and every new public test exists', () => {
+  assert.equal(RENTAL_TESTS.length, 5);
+  assert.deepEqual(selectMomenticPilotTests(['src/components/rentals/rental-browse-card.tsx']), RENTAL_TESTS);
+  for (const path of [...RENTAL_TESTS, ...EVENT_TESTS, ...CONCIERGE_TESTS]) {
+    assert.equal(fs.existsSync(path), true, path);
+    assert.match(fs.readFileSync(path, 'utf8'), /- read-only/);
+  }
+});
+
+test('selected test count, real execution, and success must agree before PASS', () => {
+  assert.match(workflow, /tests_json=\$\(printf/);
+  assert.match(workflow, /count=\$\(jq -er 'length'/);
+  assert.match(workflow, /while IFS= read -r path; do[\s\S]*?momentic@3\.69\.0 run "\$path"/);
   assert.match(workflow, /--retries 0/);
+  assert.match(workflow, /elif \[\[ "\$OUTCOME" == success \]\]; then\s+result="PASS — \$count\/\$count/);
+  assert.doesNotMatch(workflow, /result="PASS — 5\/5/);
 });
 
-test('unavailable scoped access is BLOCKED and a failed browser test is never PASS', () => {
-  assert.match(workflow, /BLOCKED — no verified READY preview \(0\/5 executed\)/);
-  assert.doesNotMatch(workflow, /BLOCKED — SSO-protected preview/, "network/HTTP failures are not proof of SSO");
+test('unavailable preview, missing tests, or failed browser checks never count as PASS', () => {
+  assert.match(workflow, /selection_ok=true/);
+  assert.match(workflow, /SELECTION_OK: \$\{\{ steps\.scope\.outputs\.selection_ok \}\}/);
+  assert.match(workflow, /if \[\[ "\$SELECTION_OK" != true \]\]; then/);
+  assert.match(workflow, /ERROR — could not select trusted tests for this PR/);
+  assert.match(workflow, /SKIPPED — no public discovery tests affected/);
+  assert.match(workflow, /BLOCKED — browser test run was cancelled; result unknown/);
+  assert.match(workflow, /BLOCKED — no verified READY preview \(0\/\$count executed\)/);
+  assert.match(workflow, /BLOCKED — trusted tests unavailable on main/);
+  assert.match(workflow, /FAIL — selected Momentic test failed/);
+  assert.match(workflow, /conclusion=neutral/);
+  assert.match(workflow, /conclusion=success/);
+  assert.match(workflow, /conclusion=failure/);
   assert.match(workflow, /Advisory, not a required merge check/);
-  assert.match(workflow, /BLOCKED — temporary scoped preview access unavailable/);
-  assert.doesNotMatch(workflow, /Validate scoped preview access/);
-  assert.match(workflow, /if: steps\.share\.outputs\.available == 'true'\s+id: installed/);
-  assert.match(workflow, /momentic-preview-link\.mjs create/);
-  assert.match(workflow, /momentic-preview-link\.mjs revoke/);
+});
+
+test('scoped preview access is created, revoked before reporting, and cleanup failure is visible', () => {
+  const create = workflow.indexOf('momentic-preview-link.mjs create');
+  const revoke = workflow.indexOf('momentic-preview-link.mjs revoke');
+  const publish = workflow.indexOf('Publish advisory PR check with honest status');
+  assert.ok(create !== -1 && revoke > create && publish > revoke);
+  assert.match(workflow, /id: revoke/);
+  assert.match(workflow, /REVOKED: \$\{\{ steps\.revoke\.outcome \}\}/);
+  assert.match(workflow, /ERROR — temporary preview access revocation failed/);
   assert.match(workflow, /MOMENTIC_PREVIEW_SHARE_TOKEN/);
   assert.match(workflow, /--url-override/);
-  assert.match(workflow, /temporary scoped preview access unavailable/);
   assert.match(workflow, /started_at=/);
   assert.match(workflow, /completed_at=/);
-  assert.match(workflow, /-f conclusion=neutral/);
 });
