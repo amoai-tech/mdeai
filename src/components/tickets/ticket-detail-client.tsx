@@ -92,6 +92,14 @@ export function TicketDetailClient({
   const { order, event, attendees } = payload;
   const activeAttendees = attendees.filter((a) => a.status === "active");
   const primary = activeAttendees[0] ?? attendees[0];
+  // The order-level full refund is authoritative even if attendee updates lag.
+  // Partial refunds must preserve the QR for remaining active attendees.
+  const revokedReason =
+    order.status === "refunded" || primary?.status === "refunded"
+      ? "Refunded"
+      : order.status === "cancelled" || primary?.status === "cancelled"
+        ? "Cancelled"
+        : null;
 
   if (order.status === "pending") {
     return (
@@ -158,11 +166,24 @@ export function TicketDetailClient({
         ) : null}
       </div>
 
-      <TicketQrDisplay
-        value={primary.qr_token}
-        label={`${holder} · scan at door`}
-        state={passState}
-      />
+      {revokedReason ? (
+        <div
+          role="status"
+          data-testid="my-tickets-revoked"
+          className="rounded-xl border border-border bg-muted px-5 py-7 text-center"
+        >
+          <p className="font-semibold">{revokedReason} — not valid for entry</p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            This ticket cannot be used at the door.
+          </p>
+        </div>
+      ) : (
+        <TicketQrDisplay
+          value={primary.qr_token}
+          label={`${holder} · scan at door`}
+          state={passState}
+        />
+      )}
 
       <dl className="mt-5 divide-y divide-border rounded-xl border border-border text-sm">
         <PassRow label="Ticket holder" value={holder} />
@@ -175,7 +196,13 @@ export function TicketDetailClient({
           value={order.short_id ?? order.id.slice(0, 8)}
         />
         <PassRow
-          label={order.stripe_session_id?.startsWith("cs_test_") ? "TEST payment" : "Paid"}
+          label={
+            revokedReason === "Refunded"
+              ? "Refunded amount"
+              : order.stripe_session_id?.startsWith("cs_test_")
+                ? "TEST payment"
+                : "Paid"
+          }
           value={formatWalletMoney(order.total_cents, order.currency)}
         />
       </dl>
