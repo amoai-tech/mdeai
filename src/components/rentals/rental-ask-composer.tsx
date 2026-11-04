@@ -441,14 +441,38 @@ function LiveComposer({
     const abort = new AbortController();
     abortRef.current = abort;
     const turn = ++turnId.current;
-    // Read the agent's own messages: the rendered turns lag by a React commit, and
-    // a stopped run keeps finishing on the server, so its failure can land while the
-    // NEXT turn is already in flight (SAN-1636).
-    const assistantAnswers = () =>
-      ((agent?.messages ?? []) as Array<{ role?: string }>).filter(
-        (message) => message.role === "assistant",
-      ).length;
-    const assistantAnswersBefore = assistantAnswers();
+    // AG-UI's own run lifecycle is the success authority, not a globally shared
+    // error counter or a new assistant tool-call/partial-message placeholder.
+    // Correlate by runId: the previously stopped run can still finish late.
+    let activeRunId: string | null = null;
+    let runSucceeded = false;
+    let runFailed = false;
+    let completedAssistantText = false;
+    const assistantTextMessageIds = new Set<string>();
+    const runSubscription = agent?.subscribe({
+      onRunInitialized: ({ input }) => { activeRunId = input.runId; },
+      onTextMessageStartEvent: ({ input, event }) => {
+        // AG-UI defines an omitted TEXT_MESSAGE_START role as "assistant".
+        if (input.runId === activeRunId && (event.role === "assistant" || event.role === undefined)) {
+          assistantTextMessageIds.add(event.messageId);
+        }
+      },
+      onTextMessageEndEvent: ({ input, event, textMessageBuffer }) => {
+        if (input.runId === activeRunId && assistantTextMessageIds.has(event.messageId) &&
+            textMessageBuffer.trim().length > 0) {
+          completedAssistantText = true;
+        }
+      },
+      onRunFinishedEvent: ({ event, outcome }) => {
+        if (event.runId === activeRunId && outcome === "success") runSucceeded = true;
+      },
+      onRunErrorEvent: ({ input }) => {
+        if (input.runId === activeRunId) runFailed = true;
+      },
+      onRunFailed: ({ input }) => {
+        if (input.runId === activeRunId) runFailed = true;
+      },
+    });
     toolResultSeen.current = false;
     pendingToolResult.current = null;
     const errorVersionBefore = getConciergeErrorVersion();
@@ -466,13 +490,11 @@ function LiveComposer({
         setDraft((current) => (current === "" ? raw : current));
         return;
       }
-      // SAN-1636: the error version is global, and a run that was stopped can bump it
-      // after this send started. Reporting that as a failure told the renter MDE could
-      // not answer while the answer was already on screen. Only call this turn failed
-      // when it produced no assistant turn of its own; a genuine failure still leaves
-      // the count unchanged and is reported as before.
-      const producedAnswer = assistantAnswers() > assistantAnswersBefore;
-      if (getConciergeErrorVersion() !== errorVersionBefore && !producedAnswer) {
+      // Ignore a late error from the stopped run ONLY when this run emitted a
+      // completed assistant text message AND finished successfully. Tool-call
+      // placeholders and partial output from a failed run are not answers.
+      const producedAnswer = runSucceeded && !runFailed && completedAssistantText;
+      if (runFailed || (getConciergeErrorVersion() !== errorVersionBefore && !producedAnswer)) {
         // The turn is already in the thread; a Retry here would add the same question twice.
         setError(ERROR_COPY_RUN);
         return;
@@ -539,10 +561,11 @@ function LiveComposer({
         }
       }
     } finally {
+      runSubscription?.unsubscribe();
       sendInFlight.current = false;
       if (mounted.current) setSending(false);
     }
-  }, [agent?.messages, appendMessage, busy, draft, signedOut, isReady, onResults, onOpenDetails, context, setState]);
+  }, [agent, appendMessage, busy, draft, signedOut, isReady, onResults, onOpenDetails, context, setState]);
 
   const onStop = useCallback(() => {
     if (sendInFlight.current) cancelled.current = true;

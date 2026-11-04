@@ -19,6 +19,14 @@ const session = vi.hoisted(() => ({
   user: { id: "user-1" } as { id: string } | null,
   loading: false,
 }));
+type RunSubscriber = {
+  onRunInitialized?: (args: { input: { runId: string } }) => void;
+  onTextMessageStartEvent?: (args: { input: { runId: string }; event: { messageId: string; role?: string } }) => void;
+  onTextMessageEndEvent?: (args: { input: { runId: string }; event: { messageId: string }; textMessageBuffer: string }) => void;
+  onRunFinishedEvent?: (args: { event: { runId: string }; outcome: "success" | "cancelled" | "interrupt" }) => void;
+  onRunErrorEvent?: (args: { input: { runId: string } }) => void;
+  onRunFailed?: (args: { input: { runId: string } }) => void;
+};
 const agent = vi.hoisted(() => ({
   messages: [] as Array<{
     id: string;
@@ -29,6 +37,7 @@ const agent = vi.hoisted(() => ({
     toolCalls?: unknown;
   }>,
   listeners: [] as Array<() => void>,
+  runSubscribers: [] as RunSubscriber[],
 }));
 const coagent = vi.hoisted(() => ({ present: true, isReady: true, setState: vi.fn() }));
 const nav = vi.hoisted(() => ({ pathname: "/rentals", search: "" }));
@@ -51,9 +60,13 @@ vi.mock("@/components/chat/concierge-coagent-context", () => {
     get messages() {
       return agent.messages;
     },
-    subscribe: (subscriber: { onMessagesChanged?: () => void }) => {
+    subscribe: (subscriber: RunSubscriber & { onMessagesChanged?: () => void }) => {
       if (subscriber.onMessagesChanged) agent.listeners.push(subscriber.onMessagesChanged);
-      return { unsubscribe: () => { agent.listeners = []; } };
+      agent.runSubscribers.push(subscriber);
+      return { unsubscribe: () => {
+        if (subscriber.onMessagesChanged) agent.listeners = agent.listeners.filter((fn) => fn !== subscriber.onMessagesChanged);
+        agent.runSubscribers = agent.runSubscribers.filter((entry) => entry !== subscriber);
+      } };
     },
   };
   return {
@@ -120,20 +133,35 @@ beforeEach(() => {
   nav.search = "";
   agent.messages = [];
   agent.listeners = [];
+  agent.runSubscribers = [];
   errorVersion.value = 0;
 });
 
 afterEach(cleanup);
+
+function reportCompletedAnswer(runId: string, messageId: string, text: string) {
+  const input = { runId };
+  const event = { messageId };
+  for (const sub of agent.runSubscribers) sub.onRunInitialized?.({ input });
+  // The role may be omitted by the server; AG-UI defines that as assistant.
+  for (const sub of agent.runSubscribers) sub.onTextMessageStartEvent?.({ input, event });
+  agent.messages.push({ id: messageId, role: "assistant", content: text });
+  for (const sub of agent.runSubscribers) sub.onTextMessageEndEvent?.({ input, event, textMessageBuffer: text });
+  for (const sub of agent.runSubscribers) sub.onRunFinishedEvent?.({ event: { runId }, outcome: "success" });
+  agent.listeners.forEach((listener) => listener());
+}
 
 describe("RentalAskComposer (SAN-1636) · a stopped run must not fail the next question", () => {
   it("does not report a failure when the previous stopped run bumps the error version but this turn answers", async () => {
     // The stopped run keeps finishing on the server, so its failure lands while the
     // next turn is already in flight. The turn answered, so nothing failed for the user.
     chat.appendMessage.mockImplementationOnce(async () => {
-      errorVersion.value += 1;
       agent.messages.push({ id: "u1", role: "user", content: "two-bedroom in Laureles" });
-      agent.messages.push({ id: "a1", role: "assistant", content: "Here are three under COP 3M." });
-      agent.listeners.forEach((listener) => listener());
+      reportCompletedAnswer("run-2", "a1", "Here are three under COP 3M.");
+      // The stopped run's error arrives LATE after the new run already answered.
+      // Its different runId must not turn the successful answer into an error.
+      for (const sub of agent.runSubscribers) sub.onRunErrorEvent?.({ input: { runId: "run-stopped" } });
+      errorVersion.value += 1;
       return true;
     });
 
@@ -145,6 +173,53 @@ describe("RentalAskComposer (SAN-1636) · a stopped run must not fail the next q
     await waitFor(() => expect(draftValue()).toBe(""));
     expect(screen.queryByTestId("rental-ask-error")).toBeNull();
     expect(screen.queryByTestId("rental-ask-retry")).toBeNull();
+  });
+
+  it("rejects a tool-call-only assistant placeholder after a failed run", async () => {
+    chat.appendMessage.mockImplementationOnce(async () => {
+      for (const sub of agent.runSubscribers) sub.onRunInitialized?.({ input: { runId: "run-3" } });
+      agent.messages.push({ id: "tool-only", role: "assistant", toolCalls: [{ id: "call-1", type: "function" }] });
+      errorVersion.value += 1;
+      agent.listeners.forEach((listener) => listener());
+      return true;
+    });
+
+    render(<RentalAskComposer />);
+    type("Find rentals in Laureles");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+    const alert = await screen.findByTestId("rental-ask-error");
+    expect(alert.textContent).toContain("could not answer");
+  });
+
+  it("rejects a partial assistant text stream that never completed", async () => {
+    chat.appendMessage.mockImplementationOnce(async () => {
+      for (const sub of agent.runSubscribers) sub.onRunInitialized?.({ input: { runId: "run-4" } });
+      agent.messages.push({ id: "partial", role: "assistant", content: "Here are some" });
+      errorVersion.value += 1;
+      agent.listeners.forEach((listener) => listener());
+      return true;
+    });
+
+    render(<RentalAskComposer />);
+    type("Find rentals in Laureles");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+    const alert = await screen.findByTestId("rental-ask-error");
+    expect(alert.textContent).toContain("could not answer");
+  });
+
+  it("reports failure when completed text is followed by this run's error", async () => {
+    chat.appendMessage.mockImplementationOnce(async () => {
+      reportCompletedAnswer("run-error", "a-error", "Here are a few apartments");
+      for (const sub of agent.runSubscribers) sub.onRunErrorEvent?.({ input: { runId: "run-error" } });
+      errorVersion.value += 1;
+      return true;
+    });
+
+    render(<RentalAskComposer />);
+    type("Find rentals in Laureles");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+    const alert = await screen.findByTestId("rental-ask-error");
+    expect(alert.textContent).toContain("could not answer");
   });
 
   it("still reports a failure when the turn produced no answer", async () => {
