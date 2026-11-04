@@ -90,7 +90,7 @@ describe("SAN-1312 PR-Agent review contract", () => {
     expect(config).toContain("Deterministic CI and human review remain authoritative");
     expect(config).toContain("YAML serialization requirement");
     expect(config).toContain(
-      "For every free-text field in the PR-Agent review, always use a YAML block scalar (`|`) with indented content",
+      "For multiline prose fields (especially issue_content), use a YAML block scalar (`|`) with indented content",
     );
     expect(config).toContain("Never start an unquoted YAML scalar with a backtick");
     expect(config).toContain("adversarial");
