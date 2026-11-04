@@ -391,7 +391,31 @@ export function excludedFilesFromReview(body) {
   return excludedCoverageFromReview(body).files;
 }
 
-function coverageFailure(body, headSha) {
+// SAN-1634: expose the SAME trusted/top-level provider coverage footer to the
+// advisory reporter. Quoted prose, closed code fences and PR-head text are
+// never grounds for declaring that a patch was clipped.
+export function clippedPatchesFromReview(body) {
+  const visible = reviewCoverageMarkdown(body);
+  const header = /(?:^|\n) {0,3}⚠️\s+\*\*Review coverage:\*\*\s+The following files had patches clipped before analysis to fit the token budget \(partial input coverage\):[ \t]*(?:\r?\n|$)/;
+  const match = header.exec(visible);
+  if (!match) return { present: false, files: [], unlistedCount: 0, total: 0 };
+  const rest = visible.slice(match.index + match[0].length);
+  const files = [];
+  let nextLine = "";
+  // Bound the work by comment length and avoid nested repetition/ambiguous
+  // regexes on model-generated Markdown. Never invent unnamed file paths.
+  for (const line of rest.split(/\r?\n/)) {
+    const path = /^[ \t]*-[ \t]+`([^`\r\n]+)`[ \t]*$/.exec(line);
+    if (!path) { nextLine = line; break; }
+    files.push(path[1]);
+  }
+  const more = /^\.\.\.\s+and\s+(\d+)\s+more$/.exec(nextLine.trim());
+  const count = more ? Number(more[1]) : 0;
+  const unlistedCount = Number.isSafeInteger(count) && count >= 0 ? count : 0;
+  return { present: true, files, unlistedCount, total: files.length + unlistedCount };
+}
+
+export function coverageFailure(body, headSha) {
   // The pinned PR-Agent v0.49.0 also reports failed chunks and clipped patches
   // outside the excluded-files footer. Missing persistent state must not turn
   // either explicit partial-review signal into a successful certification.
@@ -401,8 +425,7 @@ function coverageFailure(body, headSha) {
     return { ok: false, code: "INCOMPLETE_REVIEW",
       reason: `PR-Agent reported ${failedChunk[1]} failed chunk(s); review coverage is incomplete` };
   }
-  const partialInput = /(?:^|\n) {0,3}⚠️\s+\*\*Review coverage:\*\*\s+The following files had patches clipped before analysis to fit the token budget \(partial input coverage\):/;
-  if (partialInput.test(visible)) {
+  if (clippedPatchesFromReview(body).present) {
     return { ok: false, code: "INCOMPLETE_REVIEW",
       reason: "PR-Agent reported patches clipped before analysis (partial input coverage)" };
   }

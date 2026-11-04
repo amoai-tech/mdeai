@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { parseDocument } from "yaml";
-import { reviewEnvelope, excludedFilesFromReview } from "../../scripts/pr-agent/review-policy.mjs";
+import { reviewEnvelope, excludedFilesFromReview, clippedPatchesFromReview } from "../../scripts/pr-agent/review-policy.mjs";
 import {
   buildCoverageReport, classifyFiles, planFollowupBatches,
   reviewCoverageFromComment, parseReviewUsage, validateGeneratedJson, validateSnapshotReferences, COVERAGE_MARKER,
@@ -18,6 +18,67 @@ const files = [
   { filename: "docs/overview.md", status: "modified", patch: "+docs" },
   { filename: "package-lock.json", status: "modified" },
 ];
+
+describe("SAN-1634 giant patch coverage (real PR #605 regression)", () => {
+  const clipped = "docs/UIUX/01-progress.md";
+  const warning = "⚠️ **Review coverage:** The following files had patches clipped before analysis to fit the token budget (partial input coverage):\n- \`" + clipped + "\`\n";
+  const authoritativeFooter = "\n\n<hr>\n\n" + warning;
+  const giant = { filename: clipped, status: "modified", patch: "+".concat("x".repeat(42000)) };
+  const code = { filename: "src/payments/checkout.ts", status: "modified", patch: "+fixed" };
+
+  it("extracts only true top-level clipped patches, even after an unfinished model fence", () => {
+    expect(clippedPatchesFromReview(authoritativeFooter).files).toEqual([clipped]);
+    expect(clippedPatchesFromReview(authoritativeFooter + "... and 4 more\n")).toMatchObject({
+      present: true, files: [clipped], unlistedCount: 4, total: 5,
+    });
+    expect(clippedPatchesFromReview("\n\`\`\`markdown\n" + authoritativeFooter).files).toEqual([clipped]);
+    expect(clippedPatchesFromReview("\n> " + warning.replaceAll("\n", "\n> ")).files).toEqual([]);
+    expect(clippedPatchesFromReview("\n\`\`\`md\n" + authoritativeFooter + "\n\`\`\`\n").files).toEqual([]);
+  });
+
+  it("never certifies 100% when the provider clipped a giant file despite complete=true", () => {
+    const body = complete + authoritativeFooter;
+    const parsed = reviewCoverageFromComment(body, BASE, HEAD);
+    expect(parsed.status).toBe("partial");
+    expect(parsed.clipped).toEqual([clipped]);
+    const report = buildCoverageReport({repo:"amoai-tech/mdeai",number:605,baseSha:BASE,headSha:HEAD,
+      files:[giant,code],expectedCount:2,reviewBody:body});
+    expect(report.status).toBe("PARTIAL");
+    expect(report.counts.partiallyReviewed).toBe(1);
+    expect(report.counts.aiReviewed).toBe(0);
+    expect(report.details.find((f:{path:string})=>f.path===clipped)?.coverage).toBe("partially-reviewed");
+    expect(report.quality.percentVerified).toBeLessThan(100);
+    expect(report.body).toContain("Partially reviewed: 1");
+    expect(report.plan.deferred).toEqual(expect.arrayContaining([
+      expect.objectContaining({path:clipped,reason:expect.stringContaining("oversized")}),
+    ]));
+    expect(report.body).toContain("line-bounded");
+  });
+
+  it("does not mark successful chunks as a 100% review when a chunk failed", () => {
+    const failedChunkFooter = "\n\n<hr>\n\n" +
+      "ℹ️ **Chunked review:** the diff exceeded the model token budget, so it was reviewed in 3 chunks and the per-chunk results were merged. 1 chunk(s) failed and are not covered by this review.\n";
+    const body = complete + failedChunkFooter;
+    expect(reviewCoverageFromComment(body, BASE, HEAD).status).toBe("partial");
+    const report = buildCoverageReport({repo:"a/b",number:605,baseSha:BASE,headSha:HEAD,
+      files:[{filename:"src/payments/checkout.ts",patch:"+x"}],expectedCount:1,reviewBody:body});
+    expect(report.status).toBe("PARTIAL");
+    expect(report.counts.aiReviewed).toBe(0);
+    expect(report.quality.percentVerified).toBeLessThan(100);
+    expect(report.body).toContain("failed/incomplete review chunk");
+  });
+
+  it("does not treat prior names on renamed giant files as fully reviewed", () => {
+    const old = "src/payments/legacy-checkout.ts";
+    const renamed = {filename:"src/payments/checkout.ts",previous_filename:old,status:"renamed",patch:"+x"};
+    const body = complete + "\n\n<hr>\n\n" + warning.replace(clipped, old);
+    const report = buildCoverageReport({repo:"a/b",number:690,baseSha:BASE,headSha:HEAD,
+      files:[renamed],expectedCount:1,reviewBody:body});
+    expect(report.details[0].coverage).toBe("partially-reviewed");
+    expect(report.status).toBe("PARTIAL");
+    expect(report.criticalPending).toHaveLength(1);
+  });
+});
 
 describe("SAN-1609 smart coverage", () => {
   it("prioritizes security and app code, with exact patch digests and no default-low unknowns", () => {
