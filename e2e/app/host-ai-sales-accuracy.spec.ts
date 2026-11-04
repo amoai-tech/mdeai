@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { mkdir } from "node:fs/promises";
+import { join } from "node:path";
 import { statesTicketCount } from "../helpers/host-sales-wording";
 import { test, expect, type Browser, type BrowserContext, type Locator, type Page } from "@playwright/test";
 import {
@@ -24,7 +26,10 @@ test.use({
   launchOptions: process.env.MDE_E2E_CHROME_PATH
     ? { executablePath: process.env.MDE_E2E_CHROME_PATH }
     : {},
-  trace: "off", screenshot: "off", video: "off",
+  // Authenticated traces can contain disposable session material; opt in locally.
+  trace: process.env.MDE_HOST_QA_TRACE === "1" ? "retain-on-failure" : "off",
+  screenshot: process.env.MDE_HOST_QA_TRACE === "1" ? "only-on-failure" : "off",
+  video: "off",
 });
 
 const base = process.env.PROD_SMOKE_BASE_URL?.trim() ?? "";
@@ -198,11 +203,31 @@ for (const width of [390, 1440]) {
       }, 90_000);
       console.log("SAN1396_SALES_REPLY", JSON.stringify(afterFirst.slice(-400)));
 
-      await ask("Which event is that for?");
-      await expect(rail).toContainText(new RegExp(`qa draft ${run}`, "i"), { timeout: 90_000 });
-      expect(fixture.name).toContain(run);
+      const followUpQuestion = "Which event is that for? Give its full name or exact event ID.";
+      await ask(followUpQuestion);
+      // Match only the new answer. An earlier reply mentioning the fixture must
+      // not make a wrong follow-up pass; either exact identifier is sufficient.
+      await expect.poll(async () => {
+        const transcript = await rail.innerText();
+        const followUpStart = transcript.lastIndexOf(followUpQuestion);
+        if (followUpStart < 0) return false;
+        // LLMs may render ordinary UUID/name hyphens as nonbreaking en dashes.
+        // Normalize typography, never remove the identifying UUID or run suffix.
+        const normalize = (value: string) => value.toLowerCase()
+          .replace(/[\u2010-\u2015\u2212\ufe58\ufe63\uff0d]/g, "-")
+          .replace(/[\u00a0\u202f\u2009]/g, " ");
+        const answer = normalize(transcript.slice(followUpStart + followUpQuestion.length));
+        const uniqueFixtureName = `SAN-1396 QA draft ${run}`;
+        return answer.includes(normalize(fixture.eventId)) || answer.includes(normalize(uniqueFixtureName));
+      }, { timeout: 90_000, message: "Host follow-up must identify the exact seeded event" }).toBe(true);
       await expectNoOverflow(page);
       expect(consoleErrors).toEqual([]);
+      // Optional private QA evidence: the page contains only a disposable Host.
+      const evidenceDir = process.env.MDE_HOST_QA_SCREENSHOT_DIR?.trim();
+      if (evidenceDir) {
+        await mkdir(evidenceDir, { recursive: true });
+        await page.screenshot({ path: join(evidenceDir, `host-sales-${width}.png`), fullPage: true });
+      }
     });
   });
 }

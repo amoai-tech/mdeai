@@ -10,6 +10,7 @@ describe("SAN-729 — a truthful Host sales answer is accepted in both word orde
   it("accepts the count after the word", () => {
     expect(statesTicketCount("Tickets sold: 2. Paid orders: 1.", 2)).toBe(true);
     expect(statesTicketCount("Tickets: 2", 2)).toBe(true);
+    expect(statesTicketCount("Total tickets: 2", 2)).toBe(true);
     expect(statesTicketCount("a total of 2 tickets", 2)).toBe(true);
     expect(statesTicketCount("Tickets - 2", 2)).toBe(true);
   });
@@ -27,6 +28,7 @@ describe("SAN-729 — a truthful Host sales answer is accepted in both word orde
   it("rejects a contradictory reply even when the expected count is present", () => {
     expect(statesTicketCount("20 tickets. 2 tickets.", 2)).toBe(false);
     expect(statesTicketCount("Tickets sold: 2, actually tickets sold: 12", 2)).toBe(false);
+    expect(statesTicketCount("You sold a total of 2 tickets. Tickets sold: 3.", 3)).toBe(false);
   });
 
   it("rejects a missing count and an invalid expectation", () => {
@@ -47,6 +49,8 @@ describe("SAN-729 — a truthful Host sales answer is accepted in both word orde
       "2 tickets sold; 8 tickets still available.",
       "Tickets sold: 2. Total tickets: 10.",
       "2 tickets sold of 10 tickets.",
+      "Tickets sold: 2. Sell-through 20% (2 of 10 tickets).",
+      "2 tickets sold. Event is at 20 % sell-through (2 of 10 tickets).",
       "Tickets sold: 2. Out of 10 tickets total.",
     ]) {
       expect(statesTicketCount(reply, 2), reply).toBe(true);
@@ -69,7 +73,8 @@ describe("SAN-729 — a truthful Host sales answer is accepted in both word orde
     expect(statesTicketCount("Remaining tickets: 8. Capacity: 10.", 8)).toBe(false);
     expect(statesTicketCount("Available tickets: 10.", 10)).toBe(false);
     expect(statesTicketCount("Capacity tickets: 10.", 10)).toBe(false);
-    expect(statesTicketCount("Total tickets: 10.", 10)).toBe(false);
+    expect(statesTicketCount("Total capacity: 10 tickets.", 10)).toBe(false);
+    expect(statesTicketCount("Tickets sold: 2. Total tickets: 10.", 2)).toBe(true);
   });
 
   it("does not misread the revenue amount as tickets sold across a line break", () => {
