@@ -254,6 +254,7 @@ function usePublishHeight(element: HTMLDivElement | null): void {
   }, [element]);
 }
 
+// skipcq: JS-0067 - module-local React component; not a browser global
 function LiveComposer({
   onResults,
   context,
@@ -369,6 +370,8 @@ function LiveComposer({
   const returnTo = query ? `${pathname}?${query}` : pathname;
   const signInHref = `/login?next=${encodeURIComponent(returnTo)}`;
 
+  // skipcq: JS-R1005 - existing composed rental send handler; lifecycle branching
+  // stays together to preserve one transactional turn and its cancellation/cleanup.
   const send = useCallback(async () => {
     // The exact text as typed, so a restore only happens when nothing new has been written.
     const raw = draft;

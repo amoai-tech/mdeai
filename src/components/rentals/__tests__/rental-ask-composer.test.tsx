@@ -139,6 +139,7 @@ beforeEach(() => {
 
 afterEach(cleanup);
 
+// skipcq: JS-0067 - ESM-scoped test helper, not a browser global
 function reportCompletedAnswer(runId: string, messageId: string, text: string) {
   const input = { runId };
   const event = { messageId };
@@ -155,14 +156,14 @@ describe("RentalAskComposer (SAN-1636) · a stopped run must not fail the next q
   it("does not report a failure when the previous stopped run bumps the error version but this turn answers", async () => {
     // The stopped run keeps finishing on the server, so its failure lands while the
     // next turn is already in flight. The turn answered, so nothing failed for the user.
-    chat.appendMessage.mockImplementationOnce(async () => {
+    chat.appendMessage.mockImplementationOnce(() => {
       agent.messages.push({ id: "u1", role: "user", content: "two-bedroom in Laureles" });
       reportCompletedAnswer("run-2", "a1", "Here are three under COP 3M.");
       // The stopped run's error arrives LATE after the new run already answered.
       // Its different runId must not turn the successful answer into an error.
       for (const sub of agent.runSubscribers) sub.onRunErrorEvent?.({ input: { runId: "run-stopped" } });
       errorVersion.value += 1;
-      return true;
+      return Promise.resolve(true);
     });
 
     render(<RentalAskComposer />);
@@ -177,7 +178,7 @@ describe("RentalAskComposer (SAN-1636) · a stopped run must not fail the next q
 
   it("accepts successful rental cards without prose when a stopped run reports late error", async () => {
     const onResults = vi.fn();
-    chat.appendMessage.mockImplementationOnce(async () => {
+    chat.appendMessage.mockImplementationOnce(() => {
       const runId = "run-tool-results";
       for (const sub of agent.runSubscribers) sub.onRunInitialized?.({ input: { runId } });
       // The actual rental tool result arrives without final assistant prose.
@@ -187,7 +188,7 @@ describe("RentalAskComposer (SAN-1636) · a stopped run must not fail the next q
       agent.listeners.forEach((listener) => listener());
       for (const sub of agent.runSubscribers) sub.onRunFinishedEvent?.({ event: { runId }, outcome: "success" });
       errorVersion.value += 1;
-      return true;
+      return Promise.resolve(true);
     });
 
     render(<RentalAskComposer onResults={onResults} />);
@@ -199,12 +200,12 @@ describe("RentalAskComposer (SAN-1636) · a stopped run must not fail the next q
   });
 
   it("rejects a tool-call-only assistant placeholder after a failed run", async () => {
-    chat.appendMessage.mockImplementationOnce(async () => {
+    chat.appendMessage.mockImplementationOnce(() => {
       for (const sub of agent.runSubscribers) sub.onRunInitialized?.({ input: { runId: "run-3" } });
       agent.messages.push({ id: "tool-only", role: "assistant", toolCalls: [{ id: "call-1", type: "function" }] });
       errorVersion.value += 1;
       agent.listeners.forEach((listener) => listener());
-      return true;
+      return Promise.resolve(true);
     });
 
     render(<RentalAskComposer />);
@@ -215,12 +216,12 @@ describe("RentalAskComposer (SAN-1636) · a stopped run must not fail the next q
   });
 
   it("rejects a partial assistant text stream that never completed", async () => {
-    chat.appendMessage.mockImplementationOnce(async () => {
+    chat.appendMessage.mockImplementationOnce(() => {
       for (const sub of agent.runSubscribers) sub.onRunInitialized?.({ input: { runId: "run-4" } });
       agent.messages.push({ id: "partial", role: "assistant", content: "Here are some" });
       errorVersion.value += 1;
       agent.listeners.forEach((listener) => listener());
-      return true;
+      return Promise.resolve(true);
     });
 
     render(<RentalAskComposer />);
@@ -231,11 +232,11 @@ describe("RentalAskComposer (SAN-1636) · a stopped run must not fail the next q
   });
 
   it("reports failure when completed text is followed by this run's error", async () => {
-    chat.appendMessage.mockImplementationOnce(async () => {
+    chat.appendMessage.mockImplementationOnce(() => {
       reportCompletedAnswer("run-error", "a-error", "Here are a few apartments");
       for (const sub of agent.runSubscribers) sub.onRunErrorEvent?.({ input: { runId: "run-error" } });
       errorVersion.value += 1;
-      return true;
+      return Promise.resolve(true);
     });
 
     render(<RentalAskComposer />);
@@ -247,11 +248,11 @@ describe("RentalAskComposer (SAN-1636) · a stopped run must not fail the next q
 
   it("still reports a failure when the turn produced no answer", async () => {
     // Same version bump, but nothing was answered: this must remain a visible failure.
-    chat.appendMessage.mockImplementationOnce(async () => {
+    chat.appendMessage.mockImplementationOnce(() => {
       errorVersion.value += 1;
       agent.messages.push({ id: "u1", role: "user", content: "two-bedroom in Laureles" });
       agent.listeners.forEach((listener) => listener());
-      return true;
+      return Promise.resolve(true);
     });
 
     render(<RentalAskComposer />);
