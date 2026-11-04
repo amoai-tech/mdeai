@@ -31,7 +31,7 @@ import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { errorBody, getCorsHeaders, jsonResponse } from "../_shared/http.ts";
 import { getServiceClient } from "../_shared/supabase-clients.ts";
 import { assertCheckoutSessionBindsPayment, assertPaidOrderMatches } from "../_shared/ticket-payment-verification.ts";
-import { validatedSuccessfulRefunds, stripeRefundReason } from "../_shared/ticket-refund-reconciliation.ts";
+import { collectStripeRefunds, validatedSuccessfulRefunds, stripeRefundReason } from "../_shared/ticket-refund-reconciliation.ts";
 import { expiredSessionMatchesOrder, webhookEventMatchesMode, webhookSecretsAreDistinct, type TicketStripeMode } from "../_shared/ticket-stripe-webhook-guards.ts";
 // Lazy Stripe init so missing-key configurations surface as 500 CONFIG_ERROR
 // rather than crashing on cold-start before headers are sent.
@@ -365,10 +365,10 @@ async function handleRefund(
 
   // Ask Stripe for the current settled refunds rather than trusting an
   // aggregate amount or an old/out-of-order charge.refunded snapshot.
-  const page = await stripe.refunds.list({ charge: charge.id, limit: 100 });
-  const settled = validatedSuccessfulRefunds(
-    charge, order, page.data, page.has_more,
+  const refunds = await collectStripeRefunds<Stripe.Refund>(
+    stripe.refunds.list({ charge: charge.id, limit: 100 }),
   );
+  const settled = validatedSuccessfulRefunds(charge, order, refunds, false);
   for (const refund of settled) {
     // The existing v2 RPC locks the order, dedupes Stripe refund IDs,
     // records amounts and retains tickets on amount-only partial refunds.

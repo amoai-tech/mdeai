@@ -13,6 +13,22 @@ export interface StripeChargeEvidence {
   amount: number;
   currency: string;
 }
+// Stripe list calls yield an async iterator that transparently fetches all pages.
+// Never commit a partial money snapshot: exceed the safety cap => retry/fail closed.
+export async function collectStripeRefunds<T>(
+  source: AsyncIterable<T>,
+  maxRefunds = 1_000,
+): Promise<T[]> {
+  const refunds: T[] = [];
+  for await (const refund of source) {
+    if (refunds.length >= maxRefunds) {
+      throw new Error("REFUND_RECONCILIATION_LIMIT");
+    }
+    refunds.push(refund);
+  }
+  return refunds;
+}
+
 export function validatedSuccessfulRefunds(
   charge: StripeChargeEvidence,
   order: { total_cents: number; currency: string },

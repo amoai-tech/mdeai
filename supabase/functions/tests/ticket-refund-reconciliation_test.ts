@@ -1,5 +1,6 @@
 import { assertEquals, assertThrows } from "jsr:@std/assert@1";
 import {
+  collectStripeRefunds,
   stripeRefundReason,
   validatedSuccessfulRefunds,
 } from "../_shared/ticket-refund-reconciliation.ts";
@@ -94,4 +95,47 @@ Deno.test("preserves supported Stripe refund reason mapping", () => {
   assertEquals(stripeRefundReason("duplicate"), "duplicate");
   assertEquals(stripeRefundReason("fraudulent"), "fraudulent");
   assertEquals(stripeRefundReason(null), "other");
+});
+
+// Stripe automatically fetches subsequent refund pages via async iteration.
+// We must observe all refunds before writing any money to the database.
+Deno.test("refund pagination consumes more than Stripe's 100-item page", async () => {
+  async function* pagedRefunds() {
+    for (let i = 0; i < 101; i++) {
+      yield { ...partial, id: `re_PAGED${i}`, amount: 1, created: i };
+    }
+  }
+  const refunds = await collectStripeRefunds(pagedRefunds());
+  assertEquals(refunds.length, 101);
+  assertEquals(
+    validatedSuccessfulRefunds(charge, order, refunds, false).length,
+    101,
+  );
+});
+
+Deno.test("refund pagination fails closed on the explicit maximum", async () => {
+  async function* tooManyRefunds() {
+    for (let i = 0; i < 4; i++) yield i;
+  }
+  let message = "";
+  try {
+    await collectStripeRefunds(tooManyRefunds(), 3);
+  } catch (error) {
+    message = error instanceof Error ? error.message : String(error);
+  }
+  assertEquals(message, "REFUND_RECONCILIATION_LIMIT");
+});
+
+Deno.test("refund pagination aborts on provider fetch failure", async () => {
+  async function* brokenPage() {
+    yield partial;
+    throw new Error("stripe page timeout");
+  }
+  let message = "";
+  try {
+    await collectStripeRefunds(brokenPage());
+  } catch (error) {
+    message = error instanceof Error ? error.message : String(error);
+  }
+  assertEquals(message, "stripe page timeout");
 });
