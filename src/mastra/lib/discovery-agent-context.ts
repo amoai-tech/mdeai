@@ -243,3 +243,42 @@ export function currentSelectedNameOnly<T extends { role: string; content: unkno
   if (!asksDirectly || compares || hasAnotherRequest || !asksSelectedName) return messages;
   return messages.slice(lastUser);
 }
+
+/**
+ * SAN-1600 — measured defect: the verified record reached the model's instructions on
+ * every run, and the model still asked "which event?" on 3 of 4 identical questions.
+ * Instructions alone are advisory, so for a simple question about the item on screen we
+ * put the verified facts in the user turn itself, immediately before generation.
+ *
+ * Scope is deliberately narrow: one attribute question about the current selection.
+ * Comparisons keep their own processor; anything else keeps normal history.
+ */
+const ITEM_ATTRIBUTE_QUESTION = /\b(?:tickets?|available|availability|price|prices|cost|how much|meeting|meet|where|when|time|start|start(s|ed)?|venue|location|sold out)\b/i;
+
+export async function withVerifiedSelectionFacts<T extends { role: string; content: unknown }>(
+  messages: T[],
+  agui: unknown,
+  lookup: (selection: { page: "rentals" | "restaurants" | "events" | "cafes" | "nightlife"; id: string }) =>
+    Promise<{ found: boolean; data: Record<string, unknown> | null }>,
+): Promise<T[]> {
+  const selected = selectedDiscoveryContext(agui);
+  const id = selected?.selectedPublicEntityId ?? null;
+  if (!selected || !id) return messages;
+  const lastUser = messages.findLastIndex((message) => message.role === "user");
+  if (lastUser < 0) return messages;
+  const question = messageText(messages[lastUser].content);
+  if (!ITEM_ATTRIBUTE_QUESTION.test(question)) return messages;
+  // A comparison already has its own two-record processor.
+  if (COMPARISON_REQUEST.test(question) && TWO_PUBLIC_ITEMS.test(question)) return messages;
+  const page = selected.route.slice(1) as "rentals" | "restaurants" | "events" | "cafes" | "nightlife";
+  try {
+    const verified = await lookup({ page, id });
+    if (!verified.found || !verified.data) return messages;
+    const block = `\n\n[SERVER-VERIFIED ITEM ON SCREEN — authoritative for this question. Answer from it in one sentence. Never ask which item the visitor means: it is the one below. Never invent fields this record does not contain.]\n${compactPublicRecord(verified.data)}`;
+    const next = [...messages];
+    next[lastUser] = { ...messages[lastUser], content: question + block } as T;
+    return next;
+  } catch {
+    return messages;
+  }
+}
