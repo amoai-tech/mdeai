@@ -1,4 +1,12 @@
-import { test, expect, type Page } from "./fixtures";
+import { test, expect, type Page } from "@playwright/test";
+import {
+  createThrowawayIdentity,
+  deleteThrowawayIdentity,
+  getSupabaseAdmin,
+  hasE2eEnv,
+  signInAsOnOrigin,
+  type ThrowawayIdentity,
+} from "./helpers/auth";
 
 /**
  * SAN-1605 · Journey B — a real Stop on the shipped /rentals composer.
@@ -7,7 +15,8 @@ import { test, expect, type Page } from "./fixtures";
  * mocked SSE stream. This drives the product surface as a signed-in renter and
  * proves only what it actually checks:
  *
- *   1. the answer really starts (the Stop control exists only while a run streams),
+ *   1. an authenticated CopilotKit request receives a successful HTTP response,
+ *      and Stop is available while the composer is still busy,
  *   2. pressing Stop returns the composer to its idle state,
  *   3. a Stop does NOT surface a retryable error banner,
  *   4. a question sent afterwards produces a NEW ASSISTANT turn, not merely an
@@ -25,18 +34,31 @@ import { test, expect, type Page } from "./fixtures";
  *     retryable error, and a user Stop produces none, so the recovery path after
  *     Stop is sending again.
  */
-test.use({ qaRole: "renter", trace: "off", screenshot: "off", video: "off" });
+// Use a real but disposable Supabase identity. The existing cleanup helper proves
+// the user's threads/messages and profile are gone; ai_runs cascades on profile deletion.
+test.use({ trace: "off", screenshot: "off", video: "off", viewport: { width: 1440, height: 900 } });
 
 const QUESTION = "Find a furnished 2-bedroom apartment in Laureles under COP 3 million.";
+const composer = (page: Page) => page.locator('[data-testid="rental-ask-composer"]:visible').first();
+
+function streamResponse(page: Page) {
+  // A Stop button appears even during the pre-request `sending` state. Wait
+  // until the real CopilotKit endpoint has responded before claiming a run began.
+  return page.waitForResponse(
+    (res) => res.request().method() === "POST" &&
+      res.url().includes("/api/copilotkit") && res.ok(),
+    { timeout: 60_000 },
+  );
+}
 
 async function openTranscript(page: Page): Promise<void> {
-  const panel = page.getByTestId("rental-ask-transcript");
+  const panel = composer(page).getByTestId("rental-ask-transcript");
   if ((await panel.count()) === 0) {
-    const toggle = page.getByTestId("rental-ask-toggle-transcript");
+    const toggle = composer(page).getByTestId("rental-ask-toggle-transcript");
     await expect(toggle).toBeVisible({ timeout: 30_000 });
     await toggle.click();
   }
-  await expect(page.getByTestId("rental-ask-transcript")).toBeVisible({ timeout: 30_000 });
+  await expect(panel).toBeVisible({ timeout: 30_000 });
 }
 
 /**
@@ -46,7 +68,7 @@ async function openTranscript(page: Page): Promise<void> {
  * a new assistant turn gets a new row even when its text happens to be identical.
  */
 async function markExistingAssistantTurns(page: Page): Promise<void> {
-  await page.getByTestId("rental-ask-transcript").locator("li").evaluateAll((rows) => {
+  await composer(page).getByTestId("rental-ask-transcript").locator("li").evaluateAll((rows) => {
     for (const row of rows) {
       if (row.firstElementChild?.textContent?.trim() === "MDE") {
         row.setAttribute("data-existing-assistant-turn", "");
@@ -57,16 +79,22 @@ async function markExistingAssistantTurns(page: Page): Promise<void> {
 
 /** The composer is idle only when Stop is gone, Send is back and the input accepts text. */
 async function expectComposerIdle(page: Page, timeout = 60_000): Promise<void> {
-  await expect(page.getByTestId("rental-ask-stop")).toBeHidden({ timeout });
-  await expect(page.getByTestId("rental-ask-send")).toBeVisible({ timeout });
-  await expect(
-    page.getByTestId("rental-ask-composer").locator("textarea, input").first(),
-  ).toBeEnabled({ timeout });
+  const active = composer(page);
+  const send = active.getByTestId("rental-ask-send");
+  const input = active.locator("textarea, input").first();
+  await expect(active.getByTestId("rental-ask-stop")).toBeHidden({ timeout });
+  await expect(send).toBeVisible({ timeout });
+  await expect(input).toBeEnabled({ timeout });
+  // Send is correctly disabled for an empty draft. Actually type, confirm
+  // Send can enable, then clear without starting another request.
+  await input.fill("Can I search rentals?");
+  await expect(send).toBeEnabled({ timeout });
+  await input.fill("");
 }
 
 /** After the run has settled, a user-visible error banner is a real defect. */
 async function expectNoErrorBanner(page: Page): Promise<void> {
-  const banner = page.getByTestId("rental-ask-error");
+  const banner = composer(page).getByTestId("rental-ask-error");
   const count = await banner.count();
   if (count > 0) {
     const message = await banner.first().innerText().catch(() => "(unreadable)");
@@ -75,25 +103,42 @@ async function expectNoErrorBanner(page: Page): Promise<void> {
 }
 
 test.describe("SAN-1605 · signed-in Stop on /rentals", () => {
-  test.skip(
-    !process.env.MDE_QA_RENTER_EMAIL,
-    "Configure an existing dedicated renter QA identity (MDE_QA_RENTER_EMAIL)",
-  );
+  let identity: ThrowawayIdentity | undefined;
+  test.beforeEach(async () => {
+    identity = undefined;
+    expect(hasE2eEnv(), "Real Supabase E2E credentials are required; no silent skips").toBe(true);
+    identity = await createThrowawayIdentity("qa-san1605-stop-retry");
+  });
+  test.afterEach(async () => {
+    if (!identity) return;
+    const userId = identity.userId;
+    await deleteThrowawayIdentity(identity, { waitForAiRunAudit: true });
+    // The live FK is ai_runs.user_id -> profiles(id) ON DELETE CASCADE.
+    // Verify the cascade instead of assuming that deleting Auth removed logs.
+    const { count, error } = await (await getSupabaseAdmin()).from("ai_runs")
+      .select("id", { head: true, count: "exact" }).eq("user_id", userId);
+    expect(error, "QA audit cleanup query").toBeNull();
+    expect(count, "no QA ai_runs remain").toBe(0);
+    identity = undefined;
+  });
 
-  test("Stop returns the composer to idle with no error banner", async ({ qaRolePage: page }) => {
+  test("Stop returns the composer to idle with no error banner", async ({ page, baseURL }) => {
     test.setTimeout(300_000);
 
+    await signInAsOnOrigin(page, baseURL!, identity!.email);
     const res = await page.goto("/rentals", { waitUntil: "domcontentloaded" });
     expect(res?.ok()).toBe(true);
 
-    const composer = page.getByTestId("rental-ask-composer");
-    await expect(composer).toBeVisible({ timeout: 30_000 });
-    const input = composer.locator("textarea, input").first();
-    const stop = page.getByTestId("rental-ask-stop");
+    const active = composer(page);
+    await expect(active).toBeVisible({ timeout: 30_000 });
+    const input = active.locator("textarea, input").first();
+    const stop = active.getByTestId("rental-ask-stop");
 
     // 1 — a real run starts; the Stop control only exists while streaming.
     await input.fill(QUESTION);
-    await composer.getByTestId("rental-ask-send").click();
+    const firstResponse = streamResponse(page);
+    await active.getByTestId("rental-ask-send").click();
+    await firstResponse;
     await expect(stop).toBeVisible({ timeout: 60_000 });
 
     // 2 — Stop, then wait for the composer to actually settle rather than
@@ -107,22 +152,25 @@ test.describe("SAN-1605 · signed-in Stop on /rentals", () => {
 
     // 4 — the composer survives a refresh and is genuinely idle and usable.
     await page.reload({ waitUntil: "domcontentloaded" });
-    await expect(page.getByTestId("rental-ask-composer")).toBeVisible({ timeout: 30_000 });
+    await expect(composer(page)).toBeVisible({ timeout: 30_000 });
     await expectComposerIdle(page, 30_000);
   });
 
-  test("a question sent after Stop produces a new assistant answer", async ({ qaRolePage: page }) => {
+  test("a question sent after Stop produces a new assistant answer", async ({ page, baseURL }) => {
     test.setTimeout(300_000);
 
+    await signInAsOnOrigin(page, baseURL!, identity!.email);
     await page.goto("/rentals", { waitUntil: "domcontentloaded" });
-    const composer = page.getByTestId("rental-ask-composer");
-    await expect(composer).toBeVisible({ timeout: 30_000 });
-    const input = composer.locator("textarea, input").first();
-    const send = composer.getByTestId("rental-ask-send");
-    const stop = page.getByTestId("rental-ask-stop");
+    const active = composer(page);
+    await expect(active).toBeVisible({ timeout: 30_000 });
+    const input = active.locator("textarea, input").first();
+    const send = active.getByTestId("rental-ask-send");
+    const stop = active.getByTestId("rental-ask-stop");
 
     await input.fill(QUESTION);
+    const firstResponse = streamResponse(page);
     await send.click();
+    await firstResponse;
     await expect(stop).toBeVisible({ timeout: 60_000 });
     await stop.click();
     await expectComposerIdle(page);
@@ -134,19 +182,18 @@ test.describe("SAN-1605 · signed-in Stop on /rentals", () => {
     // The recovery path after a Stop is sending again. Observe the new run
     // starting AND settling; a stale answer from the first run is not proof.
     await input.fill(QUESTION);
+    const secondResponse = streamResponse(page);
     await send.click();
-    await expect(stop).toBeVisible({ timeout: 60_000 });
+    await secondResponse;
     await expectComposerIdle(page, 180_000);
     await expectNoErrorBanner(page);
 
-    // The transcript has a six-turn sliding window. Look for a NEW MDE row,
-    // not a greater count (which can stay constant), the echoed user prompt,
-    // or a different answer text (which an identical retry need not produce).
-    const newAnswer = page.getByTestId("rental-ask-transcript")
-      .locator('li:not([data-existing-assistant-turn])')
-      .filter({ has: page.locator("span:first-child", { hasText: /^MDE$/ }) })
-      .first();
-    await expect(newAnswer).toBeVisible({ timeout: 30_000 });
-    await expect(newAnswer.locator("span").nth(1)).not.toBeEmpty();
+    // The last transcript row must be the answer AFTER the newly resent You
+    // turn, not an older reply or merely a response-count increase. A bounded
+    // six-turn window can evict older answers without changing its length.
+    const lastRow = composer(page).getByTestId("rental-ask-transcript").locator("li").last();
+    await expect(lastRow.locator("span").first()).toHaveText("MDE");
+    await expect(lastRow.locator("span").nth(1)).not.toBeEmpty();
+    await expect(lastRow).not.toHaveAttribute("data-existing-assistant-turn", "");
   });
 });
