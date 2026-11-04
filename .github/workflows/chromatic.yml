@@ -7,7 +7,7 @@ on:
       - "src/**"
       - "e2e/chromatic-pilot.spec.ts"
       - "e2e/helpers/deterministic-chat.ts"
-      - "scripts/run-chromatic-pilot.mjs"
+      - "scripts/run-chromatic-pilot.cjs"
       - "playwright.config.ts"
       - "package.json"
       - "package-lock.json"
