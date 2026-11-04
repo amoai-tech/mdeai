@@ -197,7 +197,7 @@ export function TicketDetailClient({
         />
         <PassRow
           label={
-            revokedReason === "Refunded"
+            order.status === "refunded"
               ? "Refunded amount"
               : order.stripe_session_id?.startsWith("cs_test_")
                 ? "TEST payment"

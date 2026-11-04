@@ -101,3 +101,17 @@ describe("ticket detail refunded/cancelled QR safety", () => {
     expect(screen.queryByTestId("my-tickets-revoked")).toBeNull();
   });
 });
+
+describe("partial refund labels", () => {
+  it("does not claim the entire order amount was refunded when no ticket remains active", async () => {
+    renderPayload({
+      ...base,
+      order: { ...base.order, status: "partial_refund" },
+      attendees: [{ ...attendee, status: "refunded" }],
+    });
+    await screen.findByTestId("my-tickets-revoked");
+    expect(screen.queryByTestId("my-tickets-qr")).toBeNull();
+    expect(screen.queryByText("Refunded amount")).toBeNull();
+    expect(screen.getByText("TEST payment")).toBeTruthy();
+  });
+});

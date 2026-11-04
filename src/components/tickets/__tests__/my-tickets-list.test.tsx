@@ -101,3 +101,28 @@ describe("MyTicketsList", () => {
     expect(html).not.toContain('data-testid="my-tickets-cover"');
   });
 });
+
+describe("MyTicketsList refund status navigation", () => {
+  it("links fully refunded orders to a status detail, never labels the link Show QR", () => {
+    const refunded: BuyerOrderListItem = { ...upcomingOrder, status: "refunded" };
+    const html = renderToStaticMarkup(
+      <MyTicketsList orders={[refunded]} upcoming={[refunded]} past={[]} />,
+    );
+    expect(html).toContain('data-testid="my-tickets-view-ticket"');
+    expect(html).toContain("View ticket");
+    expect(html).toContain("Refunded");
+    expect(html).toContain('href="/me/tickets/11111111-1111-1111-1111-111111111111"');
+    expect(html).not.toContain('data-testid="my-tickets-show-qr"');
+  });
+
+  it("uses a neutral detail link for a partially refunded order with an active ticket", () => {
+    const partial: BuyerOrderListItem = { ...upcomingOrder, status: "partial_refund" };
+    const html = renderToStaticMarkup(
+      <MyTicketsList orders={[partial]} upcoming={[partial]} past={[]} />,
+    );
+    expect(html).toContain('data-testid="my-tickets-view-ticket"');
+    expect(html).toContain("Partially refunded");
+    expect(html).toContain("View ticket");
+    expect(html).not.toContain('data-testid="my-tickets-show-qr"');
+  });
+});
