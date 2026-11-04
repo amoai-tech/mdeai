@@ -125,6 +125,47 @@ beforeEach(() => {
 
 afterEach(cleanup);
 
+describe("RentalAskComposer (SAN-1636) · a stopped run must not fail the next question", () => {
+  it("does not report a failure when the previous stopped run bumps the error version but this turn answers", async () => {
+    // The stopped run keeps finishing on the server, so its failure lands while the
+    // next turn is already in flight. The turn answered, so nothing failed for the user.
+    chat.appendMessage.mockImplementationOnce(async () => {
+      errorVersion.value += 1;
+      agent.messages.push({ id: "u1", role: "user", content: "two-bedroom in Laureles" });
+      agent.messages.push({ id: "a1", role: "assistant", content: "Here are three under COP 3M." });
+      agent.listeners.forEach((listener) => listener());
+      return true;
+    });
+
+    render(<RentalAskComposer />);
+    type("two-bedroom in Laureles");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+
+    await waitFor(() => expect(chat.appendMessage).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(draftValue()).toBe(""));
+    expect(screen.queryByTestId("rental-ask-error")).toBeNull();
+    expect(screen.queryByTestId("rental-ask-retry")).toBeNull();
+  });
+
+  it("still reports a failure when the turn produced no answer", async () => {
+    // Same version bump, but nothing was answered: this must remain a visible failure.
+    chat.appendMessage.mockImplementationOnce(async () => {
+      errorVersion.value += 1;
+      agent.messages.push({ id: "u1", role: "user", content: "two-bedroom in Laureles" });
+      agent.listeners.forEach((listener) => listener());
+      return true;
+    });
+
+    render(<RentalAskComposer />);
+    type("two-bedroom in Laureles");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+
+    await waitFor(() => expect(chat.appendMessage).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.queryByTestId("rental-ask-error")).not.toBeNull());
+    expect(screen.getByTestId("rental-ask-error").textContent).toContain("could not answer");
+  });
+});
+
 describe("RentalAskComposer (SAN-1421)", () => {
   it("opens the first apartment locally for the exact details command, without a model search", async () => {
     const onResults = vi.fn();

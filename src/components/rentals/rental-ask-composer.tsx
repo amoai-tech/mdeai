@@ -441,6 +441,14 @@ function LiveComposer({
     const abort = new AbortController();
     abortRef.current = abort;
     const turn = ++turnId.current;
+    // Read the agent's own messages: the rendered turns lag by a React commit, and
+    // a stopped run keeps finishing on the server, so its failure can land while the
+    // NEXT turn is already in flight (SAN-1636).
+    const assistantAnswers = () =>
+      ((agent?.messages ?? []) as Array<{ role?: string }>).filter(
+        (message) => message.role === "assistant",
+      ).length;
+    const assistantAnswersBefore = assistantAnswers();
     toolResultSeen.current = false;
     pendingToolResult.current = null;
     const errorVersionBefore = getConciergeErrorVersion();
@@ -458,7 +466,13 @@ function LiveComposer({
         setDraft((current) => (current === "" ? raw : current));
         return;
       }
-      if (getConciergeErrorVersion() !== errorVersionBefore) {
+      // SAN-1636: the error version is global, and a run that was stopped can bump it
+      // after this send started. Reporting that as a failure told the renter MDE could
+      // not answer while the answer was already on screen. Only call this turn failed
+      // when it produced no assistant turn of its own; a genuine failure still leaves
+      // the count unchanged and is reported as before.
+      const producedAnswer = assistantAnswers() > assistantAnswersBefore;
+      if (getConciergeErrorVersion() !== errorVersionBefore && !producedAnswer) {
         // The turn is already in the thread; a Retry here would add the same question twice.
         setError(ERROR_COPY_RUN);
         return;
@@ -528,7 +542,7 @@ function LiveComposer({
       sendInFlight.current = false;
       if (mounted.current) setSending(false);
     }
-  }, [appendMessage, busy, draft, signedOut, isReady, onResults, onOpenDetails, context, setState]);
+  }, [agent?.messages, appendMessage, busy, draft, signedOut, isReady, onResults, onOpenDetails, context, setState]);
 
   const onStop = useCallback(() => {
     if (sendInFlight.current) cancelled.current = true;
