@@ -40,20 +40,19 @@ async function openTranscript(page: Page): Promise<void> {
 }
 
 /**
- * The transcript holds BOTH speakers as `<li><span>You|MDE</span>…`. Comparing the
- * whole transcript text would pass the moment the renter's own question is echoed,
- * which is exactly the false proof this test must avoid — so count only the
- * assistant turns.
+ * Mark the assistant rows that existed BEFORE resending. /rentals shows only
+ * the last six turns, so comparing assistant counts gives a false failure when
+ * an older answer falls off the list. React retains the existing keyed <li>s;
+ * a new assistant turn gets a new row even when its text happens to be identical.
  */
-async function assistantTurnCount(page: Page): Promise<number> {
-  const items = page.getByTestId("rental-ask-transcript").locator("li");
-  const total = await items.count();
-  let assistant = 0;
-  for (let index = 0; index < total; index += 1) {
-    const text = (await items.nth(index).innerText()).trim();
-    if (text.startsWith("MDE")) assistant += 1;
-  }
-  return assistant;
+async function markExistingAssistantTurns(page: Page): Promise<void> {
+  await page.getByTestId("rental-ask-transcript").locator("li").evaluateAll((rows) => {
+    for (const row of rows) {
+      if (row.firstElementChild?.textContent?.trim() === "MDE") {
+        row.setAttribute("data-existing-assistant-turn", "");
+      }
+    }
+  });
 }
 
 /** The composer is idle only when Stop is gone, Send is back and the input accepts text. */
@@ -130,23 +129,24 @@ test.describe("SAN-1605 · signed-in Stop on /rentals", () => {
     await expectNoErrorBanner(page);
 
     await openTranscript(page);
-    const baseline = await assistantTurnCount(page);
+    await markExistingAssistantTurns(page);
 
-    // The recovery path after a Stop is sending again. A new assistant turn is
-    // the only thing that proves MDE answered — an echoed question cannot, and a
-    // run that never started cannot either.
+    // The recovery path after a Stop is sending again. Observe the new run
+    // starting AND settling; a stale answer from the first run is not proof.
     await input.fill(QUESTION);
     await send.click();
-    await expect
-      .poll(() => assistantTurnCount(page), {
-        timeout: 180_000,
-        message: "a new assistant turn appeared after Stop",
-      })
-      .toBeGreaterThan(baseline);
-
-    // Only judge the outcome once the run has settled.
+    await expect(stop).toBeVisible({ timeout: 60_000 });
     await expectComposerIdle(page, 180_000);
     await expectNoErrorBanner(page);
-    expect(await assistantTurnCount(page)).toBeGreaterThan(baseline);
+
+    // The transcript has a six-turn sliding window. Look for a NEW MDE row,
+    // not a greater count (which can stay constant), the echoed user prompt,
+    // or a different answer text (which an identical retry need not produce).
+    const newAnswer = page.getByTestId("rental-ask-transcript")
+      .locator('li:not([data-existing-assistant-turn])')
+      .filter({ has: page.locator("span:first-child", { hasText: /^MDE$/ }) })
+      .first();
+    await expect(newAnswer).toBeVisible({ timeout: 30_000 });
+    await expect(newAnswer.locator("span").nth(1)).not.toBeEmpty();
   });
 });
