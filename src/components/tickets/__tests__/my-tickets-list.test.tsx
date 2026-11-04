@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { cleanup, render } from "@testing-library/react";
 import { MyTicketsList } from "@/components/tickets/my-tickets-list";
 import type { BuyerOrderListItem } from "@/lib/tickets/wallet-types";
 
@@ -102,27 +103,31 @@ describe("MyTicketsList", () => {
   });
 });
 
+afterEach(cleanup);
+
 describe("MyTicketsList refund status navigation", () => {
   it("links fully refunded orders to a status detail, never labels the link Show QR", () => {
     const refunded: BuyerOrderListItem = { ...upcomingOrder, status: "refunded" };
-    const html = renderToStaticMarkup(
+    const { getByTestId, queryByTestId } = render(
       <MyTicketsList orders={[refunded]} upcoming={[refunded]} past={[]} />,
     );
-    expect(html).toContain('data-testid="my-tickets-view-ticket"');
-    expect(html).toContain("View ticket");
-    expect(html).toContain("Refunded");
-    expect(html).toContain('href="/me/tickets/11111111-1111-1111-1111-111111111111"');
-    expect(html).not.toContain('data-testid="my-tickets-show-qr"');
+    const link = getByTestId("my-tickets-view-ticket");
+    expect(link.textContent).toContain("View ticket");
+    expect(link.closest("li")?.textContent).toContain("Refunded");
+    expect(link.getAttribute("href")).toBe(
+      "/me/tickets/11111111-1111-1111-1111-111111111111",
+    );
+    expect(queryByTestId("my-tickets-show-qr")).toBeNull();
   });
 
   it("uses a neutral detail link for a partially refunded order with an active ticket", () => {
     const partial: BuyerOrderListItem = { ...upcomingOrder, status: "partial_refund" };
-    const html = renderToStaticMarkup(
+    const { getByTestId, queryByTestId } = render(
       <MyTicketsList orders={[partial]} upcoming={[partial]} past={[]} />,
     );
-    expect(html).toContain('data-testid="my-tickets-view-ticket"');
-    expect(html).toContain("Partially refunded");
-    expect(html).toContain("View ticket");
-    expect(html).not.toContain('data-testid="my-tickets-show-qr"');
+    const link = getByTestId("my-tickets-view-ticket");
+    expect(link.closest("li")?.textContent).toContain("Partially refunded");
+    expect(link.textContent).toContain("View ticket");
+    expect(queryByTestId("my-tickets-show-qr")).toBeNull();
   });
 });
