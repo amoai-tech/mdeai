@@ -321,8 +321,13 @@ test.describe(`${SCREEN_ID} CopilotKit v2 mobile composer`, () => {
   });
 
   test("reduced motion disables the send-control transition", async ({ page }) => {
-    await page.emulateMedia({ reducedMotion: "reduce" });
+    // Mount the composer normally first. This case tests the CSS media query,
+    // not the guest CopilotKit bootstrap path (covered by the first test).
+    // Changing emulateMedia on a mounted page updates CSS immediately.
     const { send } = await gotoComposer(page);
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    expect(await page.evaluate(() =>
+      matchMedia("(prefers-reduced-motion: reduce)").matches)).toBe(true);
     const transitionDuration = await send.evaluate(
       (el) => getComputedStyle(el).transitionDuration,
     );
