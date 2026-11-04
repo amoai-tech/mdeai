@@ -4,7 +4,7 @@ description: >-
   Use for any MDE request clearly involving CopilotKit, including implementation, configuration, /api/copilotkit, CopilotKit v2 React hooks, generative UI, frontend tools/actions, shared agent state, AG-UI transport, runtime wiring, CLI verification, HITL, CopilotKit-to-Mastra bridges, and CopilotKit-specific bugs/errors/failures. A known CopilotKit failure stays with this domain owner rather than generic systematic-debugging.
 metadata:
   mde-version: "2.1.0"
-  upstream-commit: "632b050da4a3ee5a8eb3e263316b9acd2fdfe6ff"
+  upstream-commit: "4f0e86deaebb9d6e6d4625cbed4087912aee6d0c"
   verified-package: "exact aligned pins in package.json (@copilotkit/react-core + @copilotkit/runtime)"
 ---
 

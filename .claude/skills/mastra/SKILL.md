@@ -4,7 +4,7 @@ description: >-
   Use for any MDE request clearly involving Mastra, including agents, tools, workflows, memory, storage, RequestContext, streaming, suspend/resume, HITL, evals, traces, runtime bridges, and Mastra-specific bugs/errors/failures. A known Mastra failure stays with this domain owner rather than generic systematic-debugging.
 metadata:
   mde-version: "2.0.0"
-  upstream-commit: "1ddd3219f44770f5b84d9930f99fccd6fd1890ed"
+  upstream-commit: "1b3d178260a3ff88a075bc44075439d8d227e990"
   verified-package: "@mastra/core 1.74.0"
   verified-at: "2026-10-05"
 ---
@@ -45,6 +45,8 @@ input schema and clears the pin through the public Memory API.
 6. Apply the MDE-specific invariants and references below.
 
 Never rely on remembered Mastra APIs when current installed docs/source can prove the contract.
+
+**MDE override for newer official references:** Vendor documentation may describe Mastra Platform deployment or automatic external bug/feedback submission. MDE deploys through its existing Vercel process. Do not switch hosting or transmit MDE code, diagnostics, logs, or bug reports to upstream services unless the owner explicitly authorizes that action. Follow installed-version types before adopting APIs from upstream `main`.
 
 ## Ownership
 
