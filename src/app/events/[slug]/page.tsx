@@ -15,6 +15,7 @@ type EventDetailPageProps = {
   searchParams: Promise<{ from?: string | string[] }>;
 };
 
+// skipcq: JS-0067 - Next.js requires this named module export; not a browser global
 export async function generateMetadata({
   params,
 }: EventDetailPageProps): Promise<Metadata> {
@@ -25,8 +26,10 @@ export async function generateMetadata({
   if (result.status === "not-found") {
     return { title: "Event not found · mdeai", robots: { index: false, follow: false } };
   }
+  // A temporary read failure is not a deletion. Never answer noindex for an event that
+  // may still exist: Google drops the URL permanently. The page shows Retry instead.
   if (result.status === "unavailable") {
-    return { title: "Event unavailable · mdeai", robots: { index: false, follow: true } };
+    return { title: "Event unavailable · mdeai" };
   }
   const event = result.event;
   return {
