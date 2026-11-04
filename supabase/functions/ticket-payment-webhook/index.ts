@@ -351,7 +351,9 @@ async function handleRefund(
   const piId = typeof charge.payment_intent === "string"
     ? charge.payment_intent : charge.payment_intent?.id ?? null;
   if (!piId) {
-    console.log("ticket-payment-webhook: charge has no PaymentIntent", charge.id);
+    console.log(
+      `charge.refunded had no payment_intent; ignoring charge=${charge.id}`,
+    );
     return;
   }
   const { data: order, error: lookupErr } = await service.from("event_orders")
@@ -381,7 +383,7 @@ async function handleRefund(
       p_initiated_via: "stripe_dashboard",
       p_attendee_ids: null,
     });
-    if (error) throw new Error("TICKET_REFUND_RECONCILIATION_FAILED: " + error.message);
+    if (error) throw new Error(`TICKET_REFUND_RECONCILIATION_FAILED: ${error.message}`);
   }
 }
 // ---------------------------------------------------------------------------
