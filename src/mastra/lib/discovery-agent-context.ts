@@ -245,15 +245,54 @@ export function currentSelectedNameOnly<T extends { role: string; content: unkno
 }
 
 /**
- * SAN-1600 — measured defect: the verified record reached the model's instructions on
- * every run, and the model still asked "which event?" on 3 of 4 identical questions.
- * Instructions alone are advisory, so for a simple question about the item on screen we
- * put the verified facts in the user turn itself, immediately before generation.
- *
- * Scope is deliberately narrow: one attribute question about the current selection.
- * Comparisons keep their own processor; anything else keeps normal history.
+ * SAN-1600 — the current public event was verified on every observed run but
+ * the model ignored instructions-only evidence. Include question-specific facts
+ * in the last user turn without changing the existing concierge or RLS lookup.
  */
 const ITEM_ATTRIBUTE_QUESTION = /\b(?:tickets?|available|availability|price|prices|cost|how much|meeting|meet|where|when|time|start|start(s|ed)?|venue|location|sold out)\b/i;
+const TICKET_FACT_QUESTION = /\b(?:tickets?|available|availability|price|prices|cost|how much|sold out)\b/i;
+const LOCATION_FACT_QUESTION = /\b(?:meeting|meet|where|venue|location|address)\b/i;
+const TIME_FACT_QUESTION = /\b(?:when|time|start|start(s|ed)?)\b/i;
+
+/** Do not reinterpret an explicit target (e.g. "tickets for Reina") as the selected Feria. */
+const EXPLICIT_OTHER_TARGET = /\b(?:for|about|at|of)\s+(?!(?:this|that|my|our)\b|the\s+(?:selected|current|same|event|item|one)\b)(?:the\s+)?([A-ZÀ-Ÿ][\p{L}\p{N}]+)/u;
+
+function compactSelectedEventFacts(data: Record<string, unknown>, question: string): Record<string, unknown> {
+  const facts: Record<string, unknown> = {
+    event_name: typeof data.name === "string" ? data.name : "Unknown event",
+  };
+  if (TICKET_FACT_QUESTION.test(question)) {
+    if (Array.isArray(data.event_tickets)) {
+      facts.ticket_tier_status = data.event_tickets.length === 0
+        ? "no ticket tiers listed"
+        : "ticket tiers listed (not proof that checkout is currently available)";
+      facts.ticket_tiers = data.event_tickets.slice(0, 12).map((tier: unknown) => {
+        if (!tier || typeof tier !== "object") return {};
+        const item = tier as Record<string, unknown>;
+        return { name: item.name ?? null, price: item.price ?? null, currency: item.currency ?? null };
+      });
+    } else {
+      facts.ticket_tier_status = "not verified — do not infer zero tiers or purchase availability";
+    }
+  }
+  if (LOCATION_FACT_QUESTION.test(question)) {
+    facts.listed_address = typeof data.address === "string" && data.address.trim() ? data.address : "not listed";
+    // Supabase returns an object for the event -> venue FK, not always an array.
+    const venueRows = Array.isArray(data.event_venues) ? data.event_venues
+      : data.event_venues && typeof data.event_venues === "object" ? [data.event_venues] : [];
+    facts.listed_venues = venueRows.length
+      ? venueRows.map((venue: unknown) => {
+          const v = venue as Record<string, unknown>;
+          return { name: v.name ?? null, address: v.address ?? null, city: v.city ?? null };
+        })
+      : "not listed";
+    facts.exact_meeting_point = "not confirmed by verified public record";
+  }
+  if (TIME_FACT_QUESTION.test(question)) {
+    facts.event_start_time = data.event_start_time ?? "not listed";
+  }
+  return facts;
+}
 
 export async function withVerifiedSelectionFacts<T extends { role: string; content: unknown }>(
   messages: T[],
@@ -263,20 +302,44 @@ export async function withVerifiedSelectionFacts<T extends { role: string; conte
 ): Promise<T[]> {
   const selected = selectedDiscoveryContext(agui);
   const id = selected?.selectedPublicEntityId ?? null;
-  if (!selected || !id) return messages;
+  // This change addresses event questions only. Non-event records have different
+  // field contracts and must not acquire the event-ticket summary.
+  if (!selected || selected.route !== "/events" || !id) return messages;
   const lastUser = messages.findLastIndex((message) => message.role === "user");
   if (lastUser < 0) return messages;
-  const question = messageText(messages[lastUser].content);
+  const originalContent = messages[lastUser].content;
+  const question = messageText(originalContent);
   if (!ITEM_ATTRIBUTE_QUESTION.test(question)) return messages;
-  // A comparison already has its own two-record processor.
   if (COMPARISON_REQUEST.test(question) && TWO_PUBLIC_ITEMS.test(question)) return messages;
-  const page = selected.route.slice(1) as "rentals" | "restaurants" | "events" | "cafes" | "nightlife";
+  const explicitName = question.match(EXPLICIT_OTHER_TARGET)?.[1] ?? null;
+  const richParts = originalContent && typeof originalContent === "object" && "parts" in originalContent
+    && Array.isArray(originalContent.parts) ? originalContent.parts : null;
+  const textPartIndex = richParts?.findLastIndex((part: unknown) =>
+    part && typeof part === "object" && "type" in part && part.type === "text"
+    && "text" in part && typeof part.text === "string") ?? -1;
+  if (typeof originalContent !== "string" && textPartIndex < 0) return messages;
+
   try {
-    const verified = await lookup({ page, id });
+    const verified = await lookup({ page: "events", id });
     if (!verified.found || !verified.data) return messages;
-    const block = `\n\n[SERVER-VERIFIED ITEM ON SCREEN — authoritative for this question. Answer from it in one sentence. Never ask which item the visitor means: it is the one below. Never invent fields this record does not contain.]\n${compactPublicRecord(verified.data)}`;
+    // A specifically named different event is not a question about the current
+    // selection. A named reference to the same selected event is safe to ground.
+    if (explicitName && !(typeof verified.data.name === "string"
+      && verified.data.name.toLocaleLowerCase().includes(explicitName.toLocaleLowerCase()))) return messages;
+    const facts = compactSelectedEventFacts(verified.data, question);
+    const block = "\n\n[SERVER-VERIFIED ITEM ON SCREEN — read-only data for the selected event. Answer using only the fields below. Do not ask which event. Never infer missing fields or treat a listed tier as purchase availability.]\n"
+      + JSON.stringify(facts);
+    let nextContent: unknown;
+    if (typeof originalContent === "string") {
+      nextContent = originalContent + block;
+    } else {
+      const parts = [...richParts!];
+      const textPart = parts[textPartIndex] as { type: string; text: string };
+      parts[textPartIndex] = { ...textPart, text: textPart.text + block };
+      nextContent = { ...(originalContent as Record<string, unknown>), parts };
+    }
     const next = [...messages];
-    next[lastUser] = { ...messages[lastUser], content: question + block } as T;
+    next[lastUser] = { ...messages[lastUser], content: nextContent } as T;
     return next;
   } catch {
     return messages;
