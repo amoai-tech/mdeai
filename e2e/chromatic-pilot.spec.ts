@@ -16,7 +16,7 @@ const prepareVisualPage = async (page: Page) => {
   await mockFastPaths(page);
   // The anonymous fast-path chat would otherwise POST to a real persistence
   // endpoint and receive a 401. Keep this UI-only test entirely read-only.
-  await page.route("**/api/threads/*/messages", async (route) => {
+  await page.route("**/api/threads/*/messages", (route) => {
     if (route.request().method() !== "POST") return route.fallback();
     const url = new URL(route.request().url());
     const data = route.request().postDataJSON() as { messages?: unknown[] } | null;
