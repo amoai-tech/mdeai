@@ -59,6 +59,15 @@ describe("PR-Agent v0.49.0 YAML review schema reliability", () => {
     expect(instructions).toContain("never a block scalar for a path");
   });
 
+  it("guards the real four-chunk NVIDIA YAML boolean coercion regression", () => {
+    // Post-merge PR #605: bare YAML No became false and caused 6 v0.49.0
+    // schema warnings; a provider-native quoted-string preflight removed them.
+    expect(instructions).toContain("PyYAML");
+    expect(instructions).toContain("bare `No`");
+    expect(instructions).toContain("FINAL YAML PREFLIGHT");
+    expect(instructions).toContain('relevant_tests: "No"');
+  });
+
   it("uses one concise formatting contract instead of repeated YAML directions", () => {
     expect(instructions.length).toBeLessThan(3900);
     expect(instructions.match(/YAML serialization requirement/g)).toHaveLength(1);
