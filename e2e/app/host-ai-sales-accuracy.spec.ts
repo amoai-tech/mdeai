@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { ticketCountPattern } from "../helpers/host-sales-wording";
 import { test, expect, type Browser, type BrowserContext, type Locator, type Page } from "@playwright/test";
 import {
   createThrowawayIdentity,
@@ -190,7 +191,8 @@ for (const width of [390, 1440]) {
       };
       // Wait until the streamed reply is complete: amounts present and ALL equal to the seeded total.
       // A wrong total never converges, so a wrong answer still fails; the failure shows the reply.
-      const ticketsRe = new RegExp(`\\b${TICKETS}\\s+tickets?\\b`, "i");
+      // Accept both truthful orders ("2 tickets" / "Tickets sold: 2") without loosening the number.
+      const ticketsRe = ticketCountPattern(TICKETS);
       const afterFirst = await waitForReply(rail, async () => {
         const amounts = await copAmounts();
         return amounts.length > 0 && amounts.every((n) => n === DISPLAYED_TOTAL) && ticketsRe.test(await rail.innerText());
