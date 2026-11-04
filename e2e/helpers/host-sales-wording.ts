@@ -65,3 +65,17 @@ export function statesTicketCount(text: string, count: number): boolean {
   const stated = statedTicketCounts(text);
   return stated.length > 0 && stated.every((value) => value === count);
 }
+
+
+// Order totals are a separate metric from ticket quantity and revenue.
+const PAID_ORDER_PATTERNS = [
+  /(?<![\d,.])\b(\d{1,6})[ \t\u00a0\u202f\u2009]{1,16}paid[ \t\u00a0\u202f\u2009]{1,16}orders?\b/gi,
+  /\bpaid[ \t\u00a0\u202f\u2009]{1,16}orders?[ \t\u00a0\u202f\u2009]{0,16}[:=\-–][ \t\u00a0\u202f\u2009]{0,16}(\d{1,6})\b/gi,
+];
+
+/** The Host answer must state one consistent paid-order quantity. */
+export function statesPaidOrderCount(text: string, expected: number): boolean {
+  if (!Number.isSafeInteger(expected) || expected < 0) return false;
+  const counts = values(text, PAID_ORDER_PATTERNS);
+  return counts.length > 0 && counts.every((count) => count === expected);
+}

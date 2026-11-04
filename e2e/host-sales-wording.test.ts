@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { statesTicketCount } from "./helpers/host-sales-wording";
+import { statesPaidOrderCount, statesTicketCount } from "./helpers/host-sales-wording";
 
 describe("SAN-729 — a truthful Host sales answer is accepted in both word orders", () => {
   it("accepts the count before the word", () => {
@@ -106,5 +106,19 @@ describe("SAN-729 — a truthful Host sales answer is accepted in both word orde
     expect(Date.now() - started).toBeLessThan(500);
     // Normal formatting still passes.
     expect(statesTicketCount("Tickets   sold:  2", 2)).toBe(true);
+  });
+});
+
+
+describe("SAN-729 — Host AI paid orders are not mistaken for tickets", () => {
+  it("accepts both truthful paid-order word orders", () => {
+    expect(statesPaidOrderCount("1 paid order and 2 tickets sold", 1)).toBe(true);
+    expect(statesPaidOrderCount("Paid orders: 1. Tickets sold: 2", 1)).toBe(true);
+    expect(statesPaidOrderCount("Revenue: COP 1,800\nPaid orders: 1", 1)).toBe(true);
+  });
+  it("rejects incorrect, conflicting, or absent paid-order totals", () => {
+    expect(statesPaidOrderCount("2 paid orders", 1)).toBe(false);
+    expect(statesPaidOrderCount("Paid orders: 1; Paid orders: 2", 1)).toBe(false);
+    expect(statesPaidOrderCount("Tickets sold: 2. Revenue: COP 1,800", 1)).toBe(false);
   });
 });
