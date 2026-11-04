@@ -35,18 +35,21 @@ export function statedTicketCounts(text: string): number[] {
   // Capacity and remaining inventory are filtered out below.
 
   // Backward compatibility for answers such as "2 tickets" or "Tickets: 2".
-  // Do not mistake inventory statements for sales when no sold label exists.
-  const counts = values(text, SOLD_PATTERNS);
+  // Inventory labels (including "Total tickets") alone do not prove sold units.
+  const explicitSold = values(text, SOLD_PATTERNS);
+  const counts = [...explicitSold];
   for (const match of text.matchAll(COUNT_BEFORE)) {
     const before = text.slice(Math.max(0, match.index - 32), match.index);
     const after = text.slice(match.index + match[0].length, match.index + match[0].length + 32);
-    if (/\b(?:capacity|remaining|available|left|inventory|out[ \t\u00a0\u202f\u2009]{1,16}of|of|total)[ \t\u00a0\u202f\u2009]*[:=\-–]?[ \t\u00a0\u202f\u2009]*$/i.test(before)) continue;
+    if (/\b(?:capacity|remaining|available|left|inventory|out[ \t\u00a0\u202f\u2009]{1,16}of|total)[ \t\u00a0\u202f\u2009]*[:=\-–]?[ \t\u00a0\u202f\u2009]*$/i.test(before)) continue;
+    if (explicitSold.length > 0 && /\bof[ \t\u00a0\u202f\u2009]*$/i.test(before)) continue;
     if (/^[ \t\u00a0\u202f\u2009]{0,16}(?:(?:still)[ \t\u00a0\u202f\u2009]{1,16})?(?:remaining|left|available|capacity|total|in[ \t\u00a0\u202f\u2009]{1,16}stock)\b/i.test(after)) continue;
     counts.push(Number(match[1]));
   }
   for (const match of text.matchAll(COUNT_AFTER)) {
     const before = text.slice(Math.max(0, match.index - 32), match.index);
-    if (/\b(?:capacity|remaining|available|left|inventory|unsold|total)[ \t\u00a0\u202f\u2009]*[:=\-–]?[ \t\u00a0\u202f\u2009]*$/i.test(before)) continue;
+    if (/\b(?:capacity|remaining|available|left|inventory|unsold)[ \t\u00a0\u202f\u2009]*[:=\-–]?[ \t\u00a0\u202f\u2009]*$/i.test(before)) continue;
+    if (/\btotal[ \t\u00a0\u202f\u2009]*$/i.test(before)) continue;
     counts.push(Number(match[1]));
   }
   return counts;
