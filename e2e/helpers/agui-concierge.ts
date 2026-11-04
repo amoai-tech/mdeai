@@ -130,6 +130,18 @@ export function assertRunCompleted(
     );
   }
 
+  // In AG-UI 1.0 a clean Stop or a pending HITL interrupt also emits
+  // RUN_FINISHED, but neither means the agent finished its task successfully.
+  // An absent outcome is the documented legacy success default.
+  const finishOutcome = events.find((event) => event.type === "RUN_FINISHED")?.outcome as
+    | { type?: string }
+    | undefined;
+  if (finishOutcome !== undefined && finishOutcome?.type !== "success") {
+    throw new Error(
+      `agent/run reported non-success outcome: ${finishOutcome?.type ?? "invalid"}`,
+    );
+  }
+
   // Order is part of the contract. The server emits through AG-UI's own
   // `verifyEvents`, which refuses a stream whose first event is not RUN_STARTED,
   // so a reversed stream did not come from a healthy run.

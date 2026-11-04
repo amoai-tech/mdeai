@@ -145,6 +145,27 @@ describe("SAN-1330 · a bare 200 does not certify the turn", () => {
     expect(() => assertRunCompleted(events, { threadId: THREAD, runId: "r" })).toThrow(/RUN_ERROR/);
   });
 
+  it.each([
+    { label: "cancelled", outcome: { type: "cancelled" } },
+    { label: "interrupted", outcome: { type: "interrupt", interrupts: [] } },
+  ])("never certifies a $label AG-UI 1.0 run as successful", ({ outcome }) => {
+    const events = [
+      { type: "RUN_STARTED", threadId: THREAD, runId: "r" },
+      { type: "RUN_FINISHED", threadId: THREAD, runId: "r", outcome },
+    ] as AgUiEvent[];
+    expect(() => assertRunCompleted(events, { threadId: THREAD, runId: "r" })).toThrow(
+      /non-success outcome/,
+    );
+  });
+
+  it("accepts an explicit AG-UI 1.0 success outcome", () => {
+    const events = [
+      { type: "RUN_STARTED", threadId: THREAD, runId: "r" },
+      { type: "RUN_FINISHED", threadId: THREAD, runId: "r", outcome: { type: "success" } },
+    ] as AgUiEvent[];
+    expect(() => assertRunCompleted(events, { threadId: THREAD, runId: "r" })).not.toThrow();
+  });
+
   it("throws when RUN_FINISHED arrives before RUN_STARTED", () => {
     // Order is part of the contract: the server emits through AG-UI's own
     // `verifyEvents`, which refuses a stream whose first event is not
