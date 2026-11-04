@@ -488,6 +488,22 @@ certification.
 
 **Nothing unreviewed rode along:** no workflow, migration, RLS, payment or release-gate change.
 
+## PR #719 — Mastra 1.81 run-ownership migration (SAN-1626)
+
+**Date:** 2026-11-04. **Reason:** the repository has exactly one collaborator and that account authored the PR, so GitHub cannot record the required approving review.
+
+**Head merged:** `58254779155e183c568d3d11d589dcf41798d2e1` (merge commit `9546b2e78509dbbcd2db4dcd15e8393e3e83a782`).
+
+**Required checks green on that exact head:** `floor`, `mastra-schema-init`, `review / review`, `review / verify-review-result`. Unresolved review threads: **0**.
+
+**Advisory analyzers, reviewed and not gating:** Codacy reported two `path traversal` findings on build-time scripts that resolve repository-internal paths — the contract path is resolved and constrained to the repository root, with a test proving `--contract /etc/passwd` is rejected, and the second is a hard-coded migration filename; the identical construct exists on `main`. DeepSource JavaScript reported a failure whose rule text is only visible inside the DeepSource account; its first failing commit added a test-only file, and no production code was implicated. Neither was left unexamined; neither blocks per `AGENTS.md` § "CI and merge approval".
+
+**What a reviewer would have been asked:** whether the additive two-table migration is the correct minimum (it is: `Run._start` claims ownership on every workflow run and fails `42P01` without the table, `42P10` without its `runId` primary key), whether narrowing the migration's lockdown to only the two new tables is safe (proven by `scripts/__tests__/mastra-181-migration.integration.test.mjs`, which fails against the broader original), and whether making an unclassified provisioned table a verification failure is the right root-cause fix (it is: that gap let this upgrade pass CI while production would have broken).
+
+**Database precondition:** the migration was applied and verified **before** the new runtime deployed — 34 `public.mastra_*` tables, `runId` primary keys, RLS + FORCE RLS on all 34, `anon`/`authenticated` denied on both new tables, one `service_role_manage` policy per table, and 202 threads / 524 messages / 121 snapshots preserved.
+
+**Open question:** should an unclassified-table failure in `verify-mastra-schema-init.mjs` run in `floor` (no database) as well as in the `mastra-schema-init` job? Today it only runs where a database exists.
+
 ## Adding an entry
 
 Record: the PRs, the date, the reason, which required checks had passed, what a reviewer would have
