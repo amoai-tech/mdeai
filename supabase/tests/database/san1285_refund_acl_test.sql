@@ -145,7 +145,7 @@ set local role anon;
 select throws_ok(
   $$select public.ticket_payment_refund_v2(
       'a1285000-0000-4000-8000-0000000000d2'::uuid, 8000000::bigint,
-      'customer_request', 're_anon_denied', null, 'admin_api', null)$$,
+      'customer_request', 're_anondenied', null, 'admin_api', null)$$,
   '42501', null, 'anonymous refund attempt is denied before any write'
 );
 reset role;
@@ -154,7 +154,7 @@ set local role authenticated;
 select throws_ok(
   $$select public.ticket_payment_refund_v2(
       'a1285000-0000-4000-8000-0000000000d2'::uuid, 8000000::bigint,
-      'customer_request', 're_auth_denied', null, 'admin_api', null)$$,
+      'customer_request', 're_authdenied', null, 'admin_api', null)$$,
   '42501', null, 'authenticated buyer refund attempt is denied before any write'
 );
 reset role;
@@ -165,7 +165,7 @@ set local role service_role;
 select throws_ok(
   $$select public.ticket_payment_refund_v2(
       '00000000-0000-0000-0000-000000000000'::uuid, 100::bigint,
-      'customer_request', 're_invalid_order', null, 'admin_api', null)$$,
+      'customer_request', 're_invalidorder', null, 'admin_api', null)$$,
   'P0001', 'ORDER_NOT_FOUND', 'trusted server reaches the function but an unknown order fails'
 );
 reset role;
@@ -180,7 +180,7 @@ set local role service_role;
 select lives_ok(
   $$select public.ticket_payment_refund_v2(
       'a1285000-0000-4000-8000-0000000000d2'::uuid, 8000000::bigint,
-      'customer_request', 're_valid_refund', null, 'admin_api', null)$$,
+      'customer_request', 're_validrefund', null, 'admin_api', null)$$,
   'the trusted server can complete a full refund'
 );
 reset role;
@@ -210,7 +210,7 @@ set local role service_role;
 select throws_ok(
   $$select public.ticket_payment_refund_v2(
       'a1285000-0000-4000-8000-0000000000d2'::uuid, 8000000::bigint,
-      'customer_request', 're_duplicate_refund', null, 'admin_api', null)$$,
+      'customer_request', 're_duplicaterefund', null, 'admin_api', null)$$,
   'P0001', 'ORDER_NOT_REFUNDABLE: refunded', 'a second refund on the same order is rejected'
 );
 reset role;
