@@ -107,10 +107,11 @@ export function isTicketSaleOpen(
   now = Date.now(),
 ): boolean {
   const start = ticket.saleStartsAt ? Date.parse(ticket.saleStartsAt) : Number.NaN;
-  if (Number.isFinite(start) && start > now) return false;
   const end = ticket.saleEndsAt ? Date.parse(ticket.saleEndsAt) : Number.NaN;
-  if (Number.isFinite(end) && end < now) return false;
-  return true;
+  return !(
+    (Number.isFinite(start) && start > now) ||
+    (Number.isFinite(end) && end < now)
+  );
 }
 
 export type TicketAvailability =

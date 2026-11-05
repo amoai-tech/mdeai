@@ -77,7 +77,7 @@ export function EventDetailAside({
               </div>
               <div className="rounded-xl border border-border bg-card p-4 shadow-sm sm:p-5">
                 {fromTier ? (
-                  <p className="text-lg font-semibold">
+                  <p className="text-lg font-semibold" data-testid="event-ticket-headline">
                     {fromTier.priceCents === 0
                       ? cheapestPaid
                         ? `Free entry · paid tiers from ${formatTicketPrice(cheapestPaid.priceCents, cheapestPaid.currency)}`
@@ -85,7 +85,7 @@ export function EventDetailAside({
                       : `From ${formatTicketPrice(fromTier.priceCents, fromTier.currency)}`}
                   </p>
                 ) : (
-                  <p className="text-lg font-semibold">
+                  <p className="text-lg font-semibold" data-testid="event-ticket-headline">
                     {hasBelowMinimum
                       ? "Unavailable"
                       : hasClosedSale

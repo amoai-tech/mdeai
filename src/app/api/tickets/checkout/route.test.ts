@@ -43,7 +43,7 @@ describe("SAN-1263 checkout verified buyer forwarding", () => {
   beforeEach(() => {
     getUser.mockReset().mockResolvedValue({ data: { user: null }, error: null });
     getSession.mockReset().mockResolvedValue({ data: { session: null }, error: null });
-    mockFetch.mockReset().mockImplementation(async () => new Response(JSON.stringify({
+    mockFetch.mockReset().mockImplementation(() => new Response(JSON.stringify({
       success: true,
       data: { stripe_session_url: "https://checkout.stripe.com/c/test", order_id: "order", access_token: "fixture-access" },
     }), { status: 200, headers: { "Content-Type": "application/json" } }));

@@ -59,4 +59,10 @@ describe("EventDetailView ticket truth", () => {
     expect(mixed).toContain("Free entry · paid tiers from $40,000 COP");
     expect(mixed).not.toBe("Free entry");
   });
+
+  it("uses the exact header state and hides the mobile buy bar for a closed sale", () => {
+    const html = renderToStaticMarkup(<EventDetailView event={{...baseEvent,tickets:[{...tier,saleStartsAt:"2099-01-01T00:00:00Z"}]}} />);
+    expect(html).toMatch(/data-testid="event-ticket-headline"[^>]*>Not on sale<\/p>/);
+    expect(html).not.toContain('data-testid="event-detail-mobile-buy-bar"');
+  });
 });
