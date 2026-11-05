@@ -7,8 +7,8 @@ async function loadCompletion() {
   try {
     Deno.serve =
       (() => ({ finished: Promise.resolve() })) as unknown as typeof Deno.serve;
-    const module = await import("../ticket-checkout/index.ts");
-    return module.completePreparedCheckout;
+    const checkoutModule = await import("../ticket-checkout/index.ts");
+    return checkoutModule.completePreparedCheckout;
   } finally {
     Deno.serve = original;
   }
@@ -17,10 +17,10 @@ async function loadCompletion() {
 function makeDoubles(error: unknown, sessionId: string | null = null) {
   const rpcCalls: string[] = [];
   const chain = {
-    select(_c: string) {
+    select() {
       return chain;
     },
-    eq(_c: string, _v: string) {
+    eq() {
       return chain;
     },
     maybeSingle: () => ({
@@ -29,7 +29,7 @@ function makeDoubles(error: unknown, sessionId: string | null = null) {
     }),
   };
   const service = {
-    from(_name: string) {
+    from() {
       return chain;
     },
     rpc(name: string) {
