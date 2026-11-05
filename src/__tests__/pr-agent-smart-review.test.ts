@@ -203,6 +203,30 @@ describe("SAN-1609 smart coverage", () => {
     expect(buildCoverageReport({ repo: "a/b", number: 1, baseSha: BASE, headSha: "c".repeat(40), files, expectedCount: 5, reviewBody: complete }).status).toBe("UNKNOWN");
   });
 
+  it("preserves published exact-head partial evidence when the reusable verifier fails", () => {
+    const excludedState = `${marker}\n<!-- pr-agent:review:full -->\n<!-- pr-agent-review-state:v1\n${JSON.stringify({
+      schema_version: 1, findings: [],
+      last_run: { head_sha: HEAD, complete: false, excluded_files: ["src/payments/checkout.ts"] },
+    })}\n-->`;
+    const report = buildCoverageReport({ repo: "amoai-tech/mdeai", number: 756,
+      baseSha: BASE, headSha: HEAD,
+      files: [
+        { filename: "src/payments/checkout.ts", patch: "+checkout" },
+        { filename: "src/components/Event.tsx", patch: "+component" },
+      ], expectedCount: 2, reviewBody: excludedState, reviewJobResult: "success" });
+    expect(report.status).toBe("PARTIAL");
+    expect(report.counts.uncovered).toBe(1);
+    expect(report.counts.failed).toBe(0);
+    expect(report.counts.unknown).toBe(1);
+    expect(report.details.find((f: { path: string }) => f.path === "src/payments/checkout.ts")?.coverage).toBe("unreviewed");
+    expect(report.body).toContain("Follow-up: 2 file(s) lack proven AI coverage");
+    // Actual reviewer failure with no trusted review evidence must still fail.
+    const noReview = buildCoverageReport({ repo: "amoai-tech/mdeai", number: 756,
+      baseSha: BASE, headSha: HEAD, files: [{ filename: "src/payments/checkout.ts", patch: "+x" }],
+      expectedCount: 1, reviewJobResult: "failure" });
+    expect(noReview.status).toBe("FAILED");
+  });
+
   it("reports partial missing high-risk files, unknown state and provider failure honestly", () => {
     const report = buildCoverageReport({ repo: "amoai-tech/mdeai", number: 485, baseSha: BASE, headSha: HEAD, files, expectedCount: 5, reviewBody: omitted,
       validations: { "docs/progress/data/pr-files.json": { status: "validated" } } });
@@ -239,6 +263,8 @@ describe("SAN-1609 smart coverage", () => {
     expect(job.permissions).toEqual({ actions: "read", contents: "read", "pull-requests": "write", issues: "write" });
     expect(job.steps[0].with.ref).toBe("${{ github.event.pull_request.base.sha }}");
     expect(source).toMatch(/^    uses: amoai-tech\/pr-review-infra\/\.github\/workflows\/pr-agent\.yml@[0-9a-f]{40}$/m);
+    expect(source).toContain('const canonicalReview = matching.find((comment) => {');
+    expect(source).toContain('reviewJobResult: canonicalReview ? "success" : process.env.REVIEW_JOB_RESULT');
   });
 });
 
