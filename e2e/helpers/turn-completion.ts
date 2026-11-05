@@ -48,3 +48,44 @@ export function hasStarted(state: TurnState): boolean {
 export function isTerminal(state: TurnState): boolean {
   return state === "done" || state === "failed";
 }
+
+/**
+ * A run request is only successful when a response ARRIVED and its status is not an
+ * error. Playwright's `request.response()` returns null when the request failed
+ * before any response, and `response.finished()` resolves for HTTP 500 too — so
+ * "the body finished streaming" was never evidence of success.
+ */
+export type RunHttpOutcome =
+  | { kind: "ok" }
+  | { kind: "failed"; reason: string };
+
+export function assessRunResponse(status: number | null): RunHttpOutcome {
+  if (status === null) {
+    return { kind: "failed", reason: "the run request failed before receiving a response" };
+  }
+  if (status >= 400) {
+    return { kind: "failed", reason: `the run request failed with HTTP ${status}` };
+  }
+  return { kind: "ok" };
+}
+
+/**
+ * Playwright's `response.finished()` RESOLVES with an Error (or null) instead of
+ * rejecting, so an aborted stream had been treated as a clean finish.
+ */
+type StreamResponse = { status(): number; finished(): Promise<Error | null | void> };
+
+/**
+ * Awaits the run response, but judges it first: a missing response or a 4xx/5xx is
+ * a failure even when the body streams to completion. The status is checked BEFORE
+ * waiting on the stream, so an error response cannot hang behind an open connection.
+ */
+export async function awaitRunResponse(response: StreamResponse | null): Promise<void> {
+  const outcome = assessRunResponse(response ? response.status() : null);
+  if (outcome.kind === "failed") throw new Error(outcome.reason);
+  if (!response) return;
+  const streamError = await response.finished();
+  if (streamError) {
+    throw streamError instanceof Error ? streamError : new Error(String(streamError));
+  }
+}

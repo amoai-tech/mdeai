@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { assessTurn, hasStarted, isTerminal, type TurnObservation } from "./turn-completion";
+import {
+  assessRunResponse,
+  assessTurn,
+  awaitRunResponse,
+  hasStarted,
+  isTerminal,
+  type TurnObservation,
+} from "./turn-completion";
 
 const observation = (overrides: Partial<TurnObservation> = {}): TurnObservation => ({
   settled: false,
@@ -55,5 +62,76 @@ describe("assessTurn — the helper must never report success early", () => {
   it("does not treat a stopped run as a completed turn without a new reply", () => {
     // The user pressed Stop: no new reply, nothing running, response may settle.
     expect(assessTurn(observation({ repliesBefore: 1, repliesNow: 1 }))).toBe("pending");
+  });
+});
+
+describe("assessRunResponse — the body finishing is not evidence of success", () => {
+  it("treats a missing response as a failure", () => {
+    // Playwright returns null when the request failed before any response.
+    expect(assessRunResponse(null)).toEqual({
+      kind: "failed",
+      reason: "the run request failed before receiving a response",
+    });
+  });
+
+  it.each([400, 401, 403, 429, 500, 502, 503])("treats HTTP %i as a failure", (status) => {
+    expect(assessRunResponse(status)).toEqual({
+      kind: "failed",
+      reason: `the run request failed with HTTP ${status}`,
+    });
+  });
+
+  it.each([200, 201, 204])("treats HTTP %i as success", (status) => {
+    expect(assessRunResponse(status)).toEqual({ kind: "ok" });
+  });
+});
+
+describe("awaitRunResponse — failure must not hide behind an open stream", () => {
+  it("rejects when no response ever arrived", async () => {
+    await expect(awaitRunResponse(null)).rejects.toThrow(/before receiving a response/);
+  });
+
+  it("rejects an HTTP 500 even though its body finishes normally", async () => {
+    const response = { status: () => 500, finished: async () => null };
+    await expect(awaitRunResponse(response)).rejects.toThrow(/HTTP 500/);
+  });
+
+  it("rejects an HTTP 500 without waiting on a stream that never closes", async () => {
+    // If the status check ran after `finished()`, this would hang forever.
+    const response = {
+      status: () => 500,
+      finished: () => new Promise<Error | null>(() => undefined),
+    };
+    await expect(awaitRunResponse(response)).rejects.toThrow(/HTTP 500/);
+  });
+
+  it("resolves only after a successful body finishes", async () => {
+    let finished = false;
+    const response = {
+      status: () => 200,
+      finished: async () => {
+        finished = true;
+        return null;   // Playwright resolves with null on a clean stream
+      },
+    };
+    await awaitRunResponse(response);
+    expect(finished).toBe(true);
+  });
+
+  it("surfaces an aborted stream that Playwright reports by RESOLVING with an Error", async () => {
+    // `finished()` resolves with an Error instead of rejecting; ignoring the return
+    // value silently turned a broken stream into a success.
+    const response = { status: () => 200, finished: async () => new Error("net::ERR_ABORTED") };
+    await expect(awaitRunResponse(response)).rejects.toThrow(/ERR_ABORTED/);
+  });
+
+  it("surfaces a body read that rejects outright", async () => {
+    const response = {
+      status: () => 200,
+      finished: async () => {
+        throw new Error("aborted");
+      },
+    };
+    await expect(awaitRunResponse(response)).rejects.toThrow(/aborted/);
   });
 });

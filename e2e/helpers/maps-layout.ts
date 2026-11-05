@@ -1,6 +1,6 @@
 import { expect, type Page } from "@playwright/test";
 import { isDeterministicE2E } from "../../src/lib/deterministic-e2e";
-import { assessTurn, hasStarted, isTerminal } from "./turn-completion";
+import { assessTurn, awaitRunResponse, hasStarted, isTerminal } from "./turn-completion";
 
 const RENTAL_QUERY = "1BR apartment in Laureles under 80 dollars per night";
 
@@ -332,9 +332,7 @@ function watchForAppApiRequest(
     .then((request) => {
       pendingTurnCompletion.set(
         page,
-        request.response().then(async (response) => {
-          if (response) await response.finished();
-        }),
+        request.response().then((response) => awaitRunResponse(response)),
       );
       return true;
     })
