@@ -1,9 +1,9 @@
 ---
 name: copilotkit
 description: >-
-  Use for any MDE request clearly involving CopilotKit, including implementation, configuration, /api/copilotkit, CopilotKit v2 React hooks, generative UI, frontend tools/actions, shared agent state, AG-UI transport, runtime wiring, CLI verification, HITL, CopilotKit-to-Mastra bridges, and CopilotKit-specific bugs/errors/failures. A known CopilotKit failure stays with this domain owner rather than generic systematic-debugging.
+  Use for any MDE request clearly involving CopilotKit, including implementation, configuration, /api/copilotkit, CopilotKit v2 React hooks, generative UI, native Components/Surfaces, A2UI fixed/dynamic schema, standardUI catalogs, frontend tools/actions, shared agent state, AG-UI transport, runtime wiring, CLI verification, HITL, CopilotKit-to-Mastra bridges, and CopilotKit-specific bugs/errors/failures. A known CopilotKit failure stays with this domain owner rather than generic systematic-debugging.
 metadata:
-  mde-version: "2.2.0"
+  mde-version: "2.3.0"
   upstream-commit: "4f0e86deaebb9d6e6d4625cbed4087912aee6d0c"
   verified-package: "exact aligned pins in package.json (@copilotkit/react-core + @copilotkit/runtime)"
 ---
@@ -16,9 +16,10 @@ metadata:
 2. Read the pinned official CopilotKit core skill in `references/official/copilotkit/SKILL.md`.
 3. For wiring/debugging, also read `references/official/copilotkit-cli/SKILL.md`. MDE is self-hosted OSS: start with `verify --expect-runtime oss --agent <id>`; add `--round-trip` only for an explicitly authorized live QA agent check, never merely to satisfy a hosted-Intelligence check.
 4. For Channels or Intelligence work, load only the matching vendored official reference named under **Official feature routing** below.
-5. For native A2UI, catalogs, `render_ui`, or page Surfaces, read `references/native-generative-ui.md` **before** editing; it distinguishes existing tool rendering from experimental Components and Surfaces.
-6. Use current official CopilotKit/AG-UI docs and version-matched source when the pinned skill directs you there.
-7. Apply the MDE-specific invariants below.
+5. For native React `render_ui`, typed catalogs, or page Surfaces, read `references/native-generative-ui.md`. For protocol A2UI operations or fixed/dynamic schemas, read `references/a2ui-protocol.md` instead; never assume the two integration paths share setup.
+6. For `standardUI`, built-in charts/maps/forms, or extending the 69-component standard catalog, read `references/standard-catalog.md` and expose only the approved vocabulary.
+7. Use current official CopilotKit/AG-UI docs and version-matched source when the pinned skill directs you there.
+8. Apply the MDE-specific invariants below.
 
 Do not answer volatile CopilotKit API questions from memory. Do not silently replace installed-version behavior with latest-main examples.
 
@@ -136,7 +137,7 @@ is a false positive.
 5. Apply [official state/actions](https://docs.copilotkit.ai/generative-ui/components/state-and-actions) only to verified user gestures (Details, map focus, Review Tickets). No AI-triggered checkout or viewing write. Revalidate ID, actor, amount, availability and any consequential mutation in existing domain APIs/RPCs. Ticket selector reuses `EventTicketTiers` and `BookingCheckoutModal`; the signed Stripe TEST webhook owns payment success.
 6. Verify the specific browser journey (not only a unit test): real card and pin, current-search A→B ordering, unsupported component/invalid ID, unknown field, Stop/Retry, auth boundary, guest Events path, refresh and 390px mobile. Run focused tests → typecheck/lint → `npm run check:skills` → repository `npm run floor` at final exact SHA. Preserve current `useRenderTool` fallback if A2UI fails.
 
-**Detailed file-by-file implementation map, official URLs, expected observations and negative cases:** `references/native-generative-ui.md`. Keep the task-level instructions in their linked Linear issues instead of duplicating business rules here.
+**Implementation map:** `references/native-generative-ui.md`. **Distinct protocol A2UI**: `references/a2ui-protocol.md`. **Standard built-ins and component-selection policy**: `references/standard-catalog.md`. Keep task-level business instructions in Linear rather than duplicating them here.
 
 ## Human-in-the-loop with Mastra
 
@@ -205,7 +206,7 @@ Official Mastra-specific CopilotKit guidance:
 
 1. Classify the issue: wiring/runtime, React/provider, AG-UI/tool rendering, shared state, CLI verification, or Mastra bridge.
 2. Use the official core/CLI skill as the default procedure and lookup guide.
-3. Load only the matching MDE reference: `runtime-and-react.md`, `ag-ui-and-tools.md`, `mastra-bridge.md`, or `native-generative-ui.md` for A2UI and Surfaces.
+3. Load only the matching MDE reference: `runtime-and-react.md`, `ag-ui-and-tools.md`, `mastra-bridge.md`, `native-generative-ui.md` (native Components/Surfaces), `a2ui-protocol.md` (protocol operations), or `standard-catalog.md` (standardUI built-ins).
 4. Reproduce before editing when debugging.
 5. Keep the smallest safe contract change and hand Mastra-internal changes to `mastra`.
 6. Prove the affected contract with targeted tests plus browser/stream evidence when user-visible behavior changed.
@@ -227,6 +228,8 @@ At minimum verify the affected runtime URL, agent identity, version surface, too
 - `references/runtime-and-react.md`
 - `references/ag-ui-and-tools.md`
 - `references/mastra-bridge.md`
-- `references/native-generative-ui.md` — current MDE CopilotKit 1.84+ A2UI / Surfaces implementation and proof checklist
+- `references/native-generative-ui.md` — native React `render_ui` catalog / Surfaces and proof checklist
+- `references/a2ui-protocol.md` — A2UI protocol v0.8/v0.9/v1.0, fixed/dynamic schema, alternative integration boundary
+- `references/standard-catalog.md` — 69 built-ins, extends versus allowlist, existing MDE map/payment guardrails
 - https://docs.copilotkit.ai/
 - https://github.com/CopilotKit/CopilotKit
