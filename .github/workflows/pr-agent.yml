@@ -184,10 +184,10 @@ jobs:
             // owned only by the immutable shared workflow.
             // Trusted PR base can predate this helper. Preserve current-head
             // partial coverage and defer stale-comment cleanup until base merges.
-            const staleTargets = typeof staleTargetedRecoveryComments === "function"
-              ? staleTargetedRecoveryComments(comments, baseSha, headSha) : [];
             const recoveryMarker = typeof TARGETED_RECOVERY_MARKER === "string"
               ? TARGETED_RECOVERY_MARKER : "<!-- mde-pr-agent-targeted-recovery:v1 -->";
+            const staleTargets = typeof staleTargetedRecoveryComments === "function"
+              ? staleTargetedRecoveryComments(comments, baseSha, headSha, recoveryMarker) : [];
             for (const stale of staleTargets) {
               try {
                 await github.rest.issues.updateComment({

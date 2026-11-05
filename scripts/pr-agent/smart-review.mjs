@@ -9,21 +9,26 @@ export const TARGETED_RECOVERY_MARKER = "<!-- mde-pr-agent-targeted-recovery:v1 
  * A bot comment's fixed header carries the exact base/head. Never search
  * free-form model findings for revision identity or trust a human comment.
  */
-export function staleTargetedRecoveryComments(comments, baseSha, headSha) {
+export function staleTargetedRecoveryComments(comments, baseSha, headSha, recoveryMarker) {
   if (!Array.isArray(comments) ||
+      typeof recoveryMarker !== "string" || !recoveryMarker ||
       !/^[a-f0-9]{40}$/.test(baseSha ?? "") ||
       !/^[a-f0-9]{40}$/.test(headSha ?? "")) return [];
   const expected = "**Base/head:** " + baseSha + " / " + headSha;
   return comments.filter((comment) => {
     if (comment?.user?.login !== "github-actions[bot]" ||
         typeof comment.body !== "string" ||
-        !comment.body.startsWith(TARGETED_RECOVERY_MARKER + "\n") ||
-        comment.body.startsWith(TARGETED_RECOVERY_MARKER +
+        !comment.body.startsWith(recoveryMarker + "\n") ||
+        comment.body.startsWith(recoveryMarker +
           "\n## Targeted PR-Agent follow-up — OUTDATED")) return false;
-    // Only the short machine-authored prefix, never AI text further down.
-    const prefix = comment.body.slice(0, 1800).split("\n").slice(0, 16);
-    const recorded = prefix.find((line) => line.startsWith("**Base/head:** "));
-    return recorded !== expected;
+    // The source digest starts immediately after the bot-authored revision
+    // header. Never accept a model-written Base/head from the findings below.
+    // This follows the format boundary rather than a fixed line/byte cutoff.
+    const headerEnd = comment.body.indexOf("\n**Diff SHA-256:** ");
+    if (headerEnd < 0) return true; // Malformed bot output cannot claim a current head.
+    const revisionLines = comment.body.slice(0, headerEnd).split("\n")
+      .filter((line) => line.startsWith("**Base/head:** "));
+    return revisionLines.length !== 1 || revisionLines[0] !== expected;
   });
 }
 

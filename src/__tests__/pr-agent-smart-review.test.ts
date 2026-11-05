@@ -556,16 +556,56 @@ describe("SAN-1640 retire stale targeted model review", () => {
     const prior = bot(TARGETED_RECOVERY_MARKER +
       "\n## Targeted PR-Agent follow-up — OUTDATED\n\n", 321);
     expect(staleTargetedRecoveryComments(
-      [stale, current, nonbot, prior, bot("different", 1234)], BASE, HEAD))
+      [stale, current, nonbot, prior, bot("different", 1234)], BASE, HEAD, TARGETED_RECOVERY_MARKER))
       .toEqual([stale]);
   });
 
   it("rejects missing/malformed headers and never takes a user comment as a bot review", () => {
     const bad = bot(TARGETED_RECOVERY_MARKER + "\n## Follow-up\n\nmodel claims current sha");
-    expect(staleTargetedRecoveryComments([bad], BASE, HEAD)).toEqual([bad]);
-    expect(staleTargetedRecoveryComments([bad], "invalid", HEAD)).toEqual([]);
-    expect(staleTargetedRecoveryComments([], BASE, HEAD)).toEqual([]);
-    expect(staleTargetedRecoveryComments(null, BASE, HEAD)).toEqual([]);
+    expect(staleTargetedRecoveryComments([bad], BASE, HEAD, TARGETED_RECOVERY_MARKER)).toEqual([bad]);
+    expect(staleTargetedRecoveryComments([bad], "invalid", HEAD, TARGETED_RECOVERY_MARKER)).toEqual([]);
+    expect(staleTargetedRecoveryComments([], BASE, HEAD, TARGETED_RECOVERY_MARKER)).toEqual([]);
+    expect(staleTargetedRecoveryComments(null, BASE, HEAD, TARGETED_RECOVERY_MARKER)).toEqual([]);
+  });
+});
+
+describe("SAN-1640 structured recovery headers", () => {
+  const bot = (body: string) => ({ id: 23, body, user: { login: "github-actions[bot]" } });
+  const makeHeader = (base: string, head: string) =>
+    TARGETED_RECOVERY_MARKER + "\n## Verified bounded follow-up\n\n" +
+    "**File:** src/components/events/event-ticket-tiers.tsx\n" +
+    "Extra metadata: value\n".repeat(150) +
+    "**Base/head:** " + base + " / " + head + "\n" +
+    "**Diff SHA-256:** " + "d".repeat(64) + "\n" +
+    "## Findings\n**Base/head:** " + BASE + " / " + HEAD + "\n";
+
+  it("keeps a current bot review even when its header grows beyond 16 lines and 1800 chars", () => {
+    expect(staleTargetedRecoveryComments(
+      [bot(makeHeader(BASE, HEAD))], BASE, HEAD, TARGETED_RECOVERY_MARKER)).toEqual([]);
+  });
+
+  it("retires an old source revision regardless of model-text spoofing or header length", () => {
+    const stale = bot(makeHeader("c".repeat(40), HEAD));
+    expect(staleTargetedRecoveryComments(
+      [stale], BASE, HEAD, TARGETED_RECOVERY_MARKER)).toEqual([stale]);
+  });
+
+  it("rejects ambiguous header identity and missing proof without inspecting model prose", () => {
+    const dup = bot(makeHeader(BASE, HEAD).replace("**Diff SHA-256:**",
+      "**Base/head:** " + BASE + " / " + HEAD + "\n**Diff SHA-256:**"));
+    const missingDigest = bot(TARGETED_RECOVERY_MARKER +
+      "\n## Verified bounded follow-up\n\n## Findings\n**Base/head:** " +
+      BASE + " / " + HEAD + "\n");
+    expect(staleTargetedRecoveryComments(
+      [dup, missingDigest], BASE, HEAD, TARGETED_RECOVERY_MARKER)).toEqual([dup, missingDigest]);
+  });
+
+  it("requires an explicit recovery marker rather than depending on module scope", () => {
+    const stale = bot(makeHeader("c".repeat(40), HEAD));
+    expect(staleTargetedRecoveryComments([stale], BASE, HEAD)).toEqual([]);
+    expect(staleTargetedRecoveryComments([stale], BASE, HEAD, "")).toEqual([]);
+    expect(staleTargetedRecoveryComments(
+      [stale], BASE, HEAD, TARGETED_RECOVERY_MARKER)).toEqual([stale]);
   });
 });
 

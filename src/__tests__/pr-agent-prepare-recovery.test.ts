@@ -151,7 +151,7 @@ describe("SAN-1640 exact-source recovery preparation", () => {
       "Report exact-commit coverage (no PR-head code execution)",
     ]);
     expect(workflow).toContain("hasPublishedPartialReview");
-    expect(workflow).toContain("staleTargetedRecoveryComments(comments, baseSha, headSha)");
+    expect(workflow).toContain("staleTargetedRecoveryComments(comments, baseSha, headSha, recoveryMarker)");
     expect(workflow).toContain("Targeted PR-Agent follow-up — OUTDATED");
     expect(workflow).toContain("REVIEW_JOB_RESULT: " + "$" + "{{ needs.review.result }}");
     expect(workflow).not.toContain("Re-review missing patch with pinned PR-Agent v0.49.0");
