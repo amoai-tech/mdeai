@@ -1,7 +1,9 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- CommonJS imports are required in this .cjs test (DeepSource JS-0833 on .mjs). */
 const assert = require("node:assert/strict");
 const { existsSync, readFileSync } = require("node:fs");
 const { join } = require("node:path");
 const { test } = require("node:test");
+/* eslint-enable @typescript-eslint/no-require-imports */
 
 const base = join(process.cwd(), ".claude/skills/copilotkit");
 const skill = readFileSync(join(base, "SKILL.md"), "utf8");
