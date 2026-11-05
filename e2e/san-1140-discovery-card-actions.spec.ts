@@ -28,6 +28,8 @@ type RouteSpec = {
   ask: string;
   /** Only routes with a real public details destination get one. */
   details?: string;
+  /** Café/nightlife cards expose a coordinate-gated "View on map" control. */
+  mapAction?: boolean;
 };
 
 const ROUTES: RouteSpec[] = [
@@ -43,12 +45,14 @@ const ROUTES: RouteSpec[] = [
     pageTestId: "cafes-browse",
     card: '[data-result-kind="cafe"]',
     ask: '[data-testid="venue-ask-select"]',
+    mapAction: true,
   },
   {
     route: "/nightlife",
     pageTestId: "nightlife-page",
     card: '[data-result-kind="nightlife"]',
     ask: '[data-testid="venue-ask-select"]',
+    mapAction: true,
   },
 ];
 
@@ -97,6 +101,22 @@ async function expectAskContainment(page: Page, spec: RouteSpec) {
       expect(askBox.y + askBox.height).toBeLessThanOrEqual(
         cardBox.y + cardBox.height + 1,
       );
+      // SAN-1122: one action height across restaurants, cafés and nightlife.
+      expect(
+        askBox.height,
+        `${spec.route} card ${i}: Ask must keep the 44px shared action height`,
+      ).toBeGreaterThanOrEqual(44);
+    }
+
+    if (spec.mapAction) {
+      const mapAction = card.locator('[data-testid="venue-map-select"]');
+      if (await mapAction.count()) {
+        const mapBox = await mapAction.boundingBox();
+        expect(
+          mapBox?.height ?? 0,
+          `${spec.route} card ${i}: View on map must match the shared action height`,
+        ).toBeGreaterThanOrEqual(44);
+      }
     }
   }
 }
@@ -238,6 +258,45 @@ for (const spec of ROUTES) {
       await expect(ask).toHaveAttribute("aria-pressed", "false");
     });
 
+    if (spec.mapAction) {
+      test(`${spec.route} View on map selects that card's own venue pin, switches and clears`, async ({
+        page,
+      }) => {
+        const cards = await openRoute(page, spec);
+        const count = await cards.count();
+        test.skip(count === 0, `no ${spec.route} inventory in this environment`);
+        const first = cards.first();
+        const second = cards.nth(1);
+        const firstMap = first.locator('[data-testid="venue-map-select"]');
+        const secondMap = second.locator('[data-testid="venue-map-select"]');
+        // A venue without grounded coordinates must not offer a map action at all.
+        test.skip(
+          (await firstMap.count()) === 0 || (await secondMap.count()) === 0,
+          `needs two coordinate-backed ${spec.route} pins in this environment`,
+        );
+
+        await firstMap.scrollIntoViewIfNeeded();
+        await waitUntilInteractive(firstMap, `${spec.route} View on map`);
+        await firstMap.click();
+        await expect(firstMap).toHaveAttribute("aria-pressed", "true");
+        await expect(first).toHaveAttribute("data-selected", "true");
+        await expect(second).toHaveAttribute("data-selected", "false");
+
+        // Card B selects pin B and releases pin A — never both, never the wrong one.
+        await secondMap.scrollIntoViewIfNeeded();
+        await secondMap.click();
+        await expect(secondMap).toHaveAttribute("aria-pressed", "true");
+        await expect(second).toHaveAttribute("data-selected", "true");
+        await expect(first).toHaveAttribute("data-selected", "false");
+        await expect(firstMap).toHaveAttribute("aria-pressed", "false");
+
+        // Activating the selected control again clears the map selection.
+        await secondMap.click();
+        await expect(secondMap).toHaveAttribute("aria-pressed", "false");
+        await expect(second).toHaveAttribute("data-selected", "false");
+      });
+    }
+
     if (spec.details) {
       const detailsSelector = spec.details;
       test(`${spec.route} View details is one real link inside the card and opens the record`, async ({
@@ -261,7 +320,13 @@ for (const spec of ROUTES) {
 
         await details.scrollIntoViewIfNeeded();
         await details.click();
-        await expect(page).toHaveURL(new RegExp(`/restaurants/${id}$`));
+        await expect
+          .poll(() => new URL(page.url()).pathname, {
+            message: "Details must open that restaurant's own route",
+            // A cold Next dev compile of the detail route is legitimately slow.
+            timeout: 30_000,
+          })
+          .toBe(`/restaurants/${id}`);
         await expect(page.locator("h1, h2").first()).toBeVisible();
 
         await page.goBack();

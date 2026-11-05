@@ -102,6 +102,35 @@ describe("VenueBrowseCard", () => {
     expect(placeholder).not.toContain("bg-muted");
   });
 
+  it("uses the shared 44px action height for map and Ask, matching restaurants", () => {
+    const html = renderToStaticMarkup(
+      <VenueBrowseCard
+        kind="cafe"
+        listing={cafe}
+        pinId="venue-cafe-1"
+        selectedForMap={false}
+        onMapSelect={() => {}}
+        onAskSelect={() => {}}
+      />,
+    );
+    // Two primary controls at the shared action height (SAN-1122), Directions stays compact.
+    expect(html.match(/h-11/g) ?? []).toHaveLength(2);
+    expect(html.match(/min-w-11/g) ?? []).toHaveLength(2);
+    expect(html).toContain('data-testid="venue-ask-select"');
+    expect(html).toContain('data-testid="venue-map-select"');
+    // The footer wraps its own content inside the card instead of overflowing it.
+    expect(html).toContain("flex w-full flex-wrap items-center gap-2");
+  });
+
+  it.each(["cafe", "nightlife"] as const)("keeps %s actions at 44px even when only Ask is available", (kind) => {
+    const listing = kind === "cafe" ? cafe : nightlife;
+    const html = renderToStaticMarkup(
+      <VenueBrowseCard kind={kind} listing={listing} onAskSelect={() => {}} />,
+    );
+    expect(html.match(/h-11/g) ?? []).toHaveLength(1);
+    expect(html).not.toContain("venue-map-select");
+  });
+
   it("renders legacy inline media when requested", () => {
     const html = renderToStaticMarkup(
       <VenueBrowseCard
