@@ -79,6 +79,18 @@ describe("QA magic-link safety", () => {
     },
   );
 
+  it("normalizes whitespace and case for a fixed QA account before minting OTP", async () => {
+    const email = "qa-renter@mdeai.co";
+    listUsers.mockResolvedValue({ data: { users: [{ email }] }, error: null });
+    generateLink.mockResolvedValue({ data: { properties: { email_otp: "test-otp" } }, error: null });
+    verifyOtp.mockResolvedValue({ data: { session: { access_token: "renter-test-jwt" } }, error: null });
+
+    await expect(getTestSession("  QA-Renter@MDEAI.CO  "))
+      .resolves.toHaveProperty("access_token", "renter-test-jwt");
+    expect(generateLink).toHaveBeenCalledWith({ type: "magiclink", email });
+    expect(verifyOtp).toHaveBeenCalledWith({ type: "email", token: "test-otp", email });
+  });
+
   it("accepts a separately configured existing broker QA account", async () => {
     const email = "qa-broker@mdeai.co";
     listUsers.mockResolvedValue({
