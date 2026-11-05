@@ -1,6 +1,6 @@
 ---
 title: SAN-1637 AI execution plan — rentals, events, tickets and trusted AI
-status: proposed
+status: approved-with-corrections
 updated: 2026-11-05
 source_of_truth: Linear SAN-1637 for order/status; origin/main for code; installed lockfile for versions
 ---
@@ -27,9 +27,9 @@ table.
 
 | Item | Current value |
 |---|---|
-| Safe base | `origin/main` = `ab24e576dfe2441dc2cd591dd613f92ea5b75b5d` (fetched 2026-11-05) |
+| Safe base | `origin/main` = `c4c510da742fde904a5f0f422bd95cd295254312` (fetched 2026-11-05; PR #753 was test-only) |
 | Working checkout | `feat/san-983-982-984-515-event-ops` at `5d728324f0f1c85ff67c487e3a48fff8798f1db1`, **dirty** |
-| Clean audit worktree | `/home/sk/mdeai-worktrees/san-1637-audit` at `ab24e5…` |
+| Clean PR1 worktree | `/home/sk/mdeai-worktrees/san-1637-audit` at `c4c510…` |
 | Package manager / Node | npm 11.19.0 / Node 24.21.0 |
 | Next.js | 16.4.3 |
 | React / React DOM | `^19.2.1`, resolved 19.2.6 |
@@ -176,18 +176,19 @@ Files:
   same availability helper.
 - `src/components/events/event-ticket-tiers.tsx` — per-tier min/max; pending-aware capacity;
   no hard-coded 8; no paid checkout for zero-price tiers.
-- `src/lib/tickets/ticket-checkout-schema.ts` — stop claiming an unrelated hard cap; the RPC
-  remains the authority. If a transport cap is needed, make it the database maximum and
-  document it, not a second business rule.
+- `src/lib/tickets/ticket-checkout-schema.ts` — retain the documented safe transport ceiling
+  of 10 (all current tiers use 10); the RPC remains the per-tier authority. Do not widen the
+  API merely because the database constraint allows 50.
 - Tests: update the existing ticket-tier test that asserts 8; add `cop`/`COP`, pending,
-  min/max, sold-out, not-yet-on-sale, ended-sale and free-tier cases.
+  min/max, all four availability states and free-tier cases. Prove 8/9/10 accepted and 11
+  rejected at the API boundary.
 
 **No migration by default.** The canonical RPC already validates `qty_sold + qty_pending`,
 per-tier min/max, publication, sale windows and positive COP. Only write SQL if a focused
 pgTAP/production read proves a canonical RPC defect.
 
-**Proof:** focused Vitest; browser + API + DB agree for 1/8/9/10, `cop`/`COP`, pending,
-min/max and sold-out; no false checkout CTA.
+**Proof:** focused Vitest; browser + API + DB agree for 8/9/10/11, `cop`/`COP`, pending,
+min/max, sold-out, not-yet-on-sale, sale-ended and below-minimum; no false checkout CTA.
 
 ### Milestone 2 — SAN-1630 transport proof and one catalog (PR 2)
 
@@ -311,10 +312,11 @@ Three reviewable deliveries, in dependency order. Keep each PR's scope closed.
 | PR 2 | `feat/san-1630-a2ui-surfaces` | One catalog; provider wiring; guide consumer; `rental-comparison`; bounded Rentals/Events Surfaces; fallback/negative tests | Ticket selector or payment changes |
 | PR 3 | `feat/san-1632-ai-ticket-checkout` | Ticket selector; user-confirmed existing Checkout; Stripe TEST/webhook/wallet proof; SAN-1637 certification | New runtime, new schema, live payment |
 
-PR 1 keeps the two outcomes in one delivery because they are both “make the existing
-journeys truthful before adding AI UI”, but the commits stay separate: rental verification
-and ticket contract must be independently reviewable. If review load becomes excessive,
-split PR 1 at that commit boundary; do not split the ticket data contract away from its tests.
+PR 1 keeps the two outcomes in one delivery because the rental verification required **no
+rental code change**; the ticket contract is the only implementation. The evidence for
+SAN-739 and the ticket code remain independently reviewable. If real-browser rental access
+had been blocked, the ticket fix would have continued in its own focused PR rather than
+sitting idle. Do not split the ticket data contract away from its tests.
 
 ## File and system ownership
 
@@ -410,11 +412,49 @@ mislead an implementer.
 | [Stripe — webhooks](https://docs.stripe.com/webhooks) | Signed raw-body webhook; duplicate events must be harmless | **REFERENCE** | existing ticket webhook | signed/duplicate/failed webhook tests |
 | [Supabase — RLS](https://supabase.com/docs/guides/database/postgres/row-level-security) | Authorized reads; no service role in client; no new public path | **REFERENCE** | ticket/catalog data reads | API/RLS tests + browser |
 
+## Review corrections adopted
+
+- **Base:** the plan now records `c4c510da…`, not the earlier `ab24e576…`. PR 1 is rebased onto
+  that base.
+- **A2UI proof order:** one ID-only rental component first, through the real provider and
+  Mastra guide, then expand. Do not start with the standard catalogue or page Surfaces.
+- **Free tiers:** a live zero-price tier exists but is not an active tier on a published event.
+  Treat free ticketing as a future product decision. Do not send it into paid Checkout; keep
+  truthful free-tier information and defer an RSVP/zero-payment entitlement flow.
+- **Availability:** one helper returns `available`, `sold-out`, `not-yet-on-sale`, `sale-ended`
+  or `below-minimum`; event details, chat summaries and the picker reuse it.
+- **API ceiling:** keep the documented safe ceiling of 10; do not widen to 50. The RPC enforces
+  each tier's real min/max and current capacity. Test 8/9/10/11.
+- **Permissions/concurrency:** do not remove either ticket-checkout RPC overload or change its
+  grants without confirming callers. Prove the service-role Edge path, two buyers, rollback and
+  webhook idempotency in the payment milestone.
+- **Page state:** the existing page remains the only owner of results, filters, selection and
+  map pins. A Surface is presentation only.
+- **Rollback:** `NEXT_PUBLIC_MDE_A2UI=0` is a build-time control, not an instant kill switch.
+  Use deployment rollback or a deliberately designed runtime flag for immediate recovery.
+- **Skill/docs:** review and merge the existing PR #752 skill update after checks; do not
+  duplicate its changes. Track the 30 pre-existing `check:docs` violations separately.
+- **Rental renderer parameters:** compare `search-tool-renders.tsx` with the Mastra
+  `search-rentals` input schema before changing it; prove COP/month rendering and argument
+  survival with a focused test.
+
+## Implementation status (2026-11-05)
+
+| Item | Status |
+|---|---|
+| PR 1 — ticket foundation + SAN-739 browser verification | **Open, not merged** — PR #756 |
+| Plan doc | This document |
+| A2UI catalog / real `render_ui` proof | **Not started** — PR 2 |
+| Comparison / page Surfaces | **Not started** — PR 2 |
+| AI ticket selector / Stripe TEST | **Not started** — PR 3 |
+
+PR #756 remains open until the product owner explicitly approves a merge. It is not merged.
+
 ## Immediate next action
 
-1. Review this plan.
-2. Start PR 1 on a clean branch from `ab24e576…`: verify SAN-739 in the browser, then implement
-   the ticket contract and its focused tests.
+1. Review PR #756 and do not merge it without explicit approval.
+2. After approval, start PR 2 with **one** real rental card through `render_ui`; do not expand
+   the catalogue until that browser trace exists.
 3. Do not close SAN-1630, SAN-1631, SAN-1632 or SAN-1637 until the milestone proofs above
    exist. Do not claim `render_ui` works from code inspection alone.
 
