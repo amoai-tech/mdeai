@@ -175,6 +175,11 @@ function EventBrowseViewInner({
     dateWindow,
     price,
   });
+  // The map/Ask selection is the newer action whenever it moves away from the open panel; close
+  // instead of leaving the panel describing a different event than the highlighted marker.
+  if (detailsId && selectedId !== detailsId) {
+    setDetailsId(null);
+  }
   const detailsEvent = shownEvents.find((event) => event.id === detailsId) ?? null;
   // F8: a filter that hides the event closes the panel; forgetting the id stops it reopening
   // when the filter later brings the event back.
