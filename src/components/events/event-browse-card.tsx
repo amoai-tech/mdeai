@@ -119,7 +119,7 @@ export function EventBrowseCard({
                 size="sm"
                 variant={event.canBuyTickets ? "outline" : "default"}
                 className="h-card-action min-w-card-action px-3"
-                data-testid="event-details-open"
+                data-testid="event-details-cta"
                 onClick={(clickEvent) => onDetails(clickEvent.currentTarget)}
               >
                 Details

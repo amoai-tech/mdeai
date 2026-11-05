@@ -28,6 +28,7 @@ type LoadState =
   | { status: "missing" }
   | { status: "error" };
 
+/** The panel body: list-row snapshot first, then the canonical public record. */
 function EventBrowseDetailsBody({
   event,
   onClose,
@@ -104,11 +105,6 @@ function EventBrowseDetailsBody({
         <span className="text-sm font-semibold" data-testid="event-browse-details-price">
           {priceLabel}
         </span>
-        {state.status === "ready" ? (
-          <span className="text-sm text-muted-foreground">
-            {state.detail.address ?? ""}
-          </span>
-        ) : null}
       </div>
 
       {state.status === "loading" ? (
@@ -149,14 +145,31 @@ function EventBrowseDetailsBody({
             <h3 className="text-sm font-semibold">Tickets</h3>
             {state.detail.tickets.length ? (
               <ul className="mt-2 space-y-1.5" data-testid="event-browse-details-tiers">
-                {state.detail.tickets.map((ticket) => (
-                  <li key={ticket.id} className="flex items-center justify-between gap-3 text-sm">
-                    <span>{ticket.name}</span>
-                    <span className="font-medium">
-                      {formatEventCardPrice(ticket.priceCents / 100, ticket.currency)}
-                    </span>
-                  </li>
-                ))}
+                {state.detail.tickets.map((ticket) => {
+                  // Same rule as the full page: a tier with nothing left is not purchasable.
+                  const soldOut = ticket.qtyTotal - ticket.qtySold <= 0;
+                  return (
+                    <li
+                      key={ticket.id}
+                      className="flex items-center justify-between gap-3 text-sm"
+                      data-sold-out={soldOut ? "true" : "false"}
+                    >
+                      <span>
+                        {ticket.name}
+                        {soldOut ? (
+                          <span className="ml-2 text-xs font-medium text-destructive">
+                            Sold out
+                          </span>
+                        ) : null}
+                      </span>
+                      <span className="font-medium">
+                        {ticket.priceCents === 0
+                          ? "Free"
+                          : formatEventCardPrice(ticket.priceCents / 100, ticket.currency)}
+                      </span>
+                    </li>
+                  );
+                })}
               </ul>
             ) : (
               // Same truthful label the card and the full page use.
@@ -209,6 +222,10 @@ function EventBrowseDetailsBody({
   );
 }
 
+/**
+ * Desktop Details. Sits over the live map when the page has one, and alone in the right
+ * column when it does not.
+ */
 export function EventBrowseDetailsPanel(props: {
   event: PublishedEventListItem;
   onClose: () => void;
@@ -224,6 +241,10 @@ export function EventBrowseDetailsPanel(props: {
   );
 }
 
+/**
+ * Phone Details. Reuses the shared Sheet so modal focus, Escape and return-focus stay
+ * consistent with the rest of the app.
+ */
 export function EventBrowseDetailsSheet(props: {
   event: PublishedEventListItem;
   onClose: () => void;

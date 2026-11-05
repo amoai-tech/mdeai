@@ -40,10 +40,8 @@ test.describe(`${SCREEN_ID} event detail page`, () => {
       page,
     }) => {
       const errors = watchCriticalConsoleErrors(page);
-      await page.goto("/events", { waitUntil: "domcontentloaded" });
-      await expect(page.getByTestId("event-details-cta").first()).toBeVisible({
-        timeout: 15000,
-      });
+      // SAN-1638: browse Details no longer navigates, so reach the detail page directly.
+      await page.goto(`/events/${KNOWN_SLUG}`, { waitUntil: "domcontentloaded" });
 
       await page.route("**/*", async (route) => {
         const req = route.request();
@@ -57,7 +55,6 @@ test.describe(`${SCREEN_ID} event detail page`, () => {
         await route.continue();
       });
 
-      await page.getByTestId("event-details-cta").first().click();
       await expect(page.locator('[data-testid="event-detail-skeleton"]')).toBeVisible({
         timeout: 8000,
       });
