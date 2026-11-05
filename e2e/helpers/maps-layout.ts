@@ -104,9 +104,13 @@ export async function gotoConcierge(page: Page) {
   if (!res?.ok()) {
     throw new Error(`GET /chat failed: ${res?.status()}`);
   }
+  // Cold loads can exceed 20s, and a visible canvas does not mean the surface is
+  // usable. Wait for the readiness STATE: the composer exists AND is enabled, which
+  // only happens once hydration and the runtime handshake are done.
   await page
     .locator('[data-testid="chat-canvas"]')
-    .waitFor({ state: "visible", timeout: 20_000 });
+    .waitFor({ state: "visible", timeout: 60_000 });
+  await expect(page.getByPlaceholder(/type a message/i).first()).toBeEnabled({ timeout: 30_000 });
   await hideCopilotWebInspector(page);
   await waitForCopilotRuntime(page);
 }
@@ -408,8 +412,25 @@ export async function waitForCopilotIdle(page: Page, timeout = 120_000) {
     },
   );
 
+  // Wait for the run to actually start before judging it idle, otherwise the gap
+  // between submit and first token reads as "finished".
+  const runStarted = page
+    .locator('[data-testid="concierge-stop"], [data-testid="discovery-ask-stop"], [data-testid="copilot-assistant-message"]')
+    .first();
+  await runStarted.waitFor({ state: "visible", timeout: 20_000 }).catch(() => undefined);
+
+  const stop = page.locator('[data-testid="concierge-stop"], [data-testid="discovery-ask-stop"]').first();
   await expect
-    .poll(() => settled, { timeout, intervals: [100, 250, 500, 1_000] })
+    .poll(
+      async () => {
+        if (settled) return true;
+        // The AG-UI response stream can stay open after the run ends. The Stop
+        // control disappearing is the UI's own "run finished" signal, so trust it
+        // instead of hanging until the timeout on a stream that never closes.
+        return !(await stop.isVisible().catch(() => false));
+      },
+      { timeout, intervals: [100, 250, 500, 1_000] },
+    )
     .toBe(true);
   pendingTurnCompletion.delete(page);
   if (failure) throw failure;
