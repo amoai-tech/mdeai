@@ -60,6 +60,16 @@ describe("SAN-1600 grounded event detail chat for guests", () => {
     expect(pending).toContain("Sold out");
   });
 
+  it("does not call a tier available when its remaining stock is below the minimum order", () => {
+    const ticket = { id: "vip", name: "VIP", priceCents: 12000000,
+      currency: "COP", qtyTotal: 1, qtySold: 0, qtyPending: 0,
+      minPerOrder: 2, maxPerOrder: 10,
+      saleStartsAt: null, saleEndsAt: null, position: 0 };
+    const text = summarizePublicEventForChat({ ...event, tickets: [ticket] });
+    expect(text).toContain("minimum order");
+    expect(text).not.toContain("VIP: $120,000 COP");
+  });
+
   it("does not call a stock-held tier available before its sale window opens", () => {
     const ticket = { id: "vip", name: "VIP", priceCents: 12000000,
       currency: "COP", qtyTotal: 10, qtySold: 0, qtyPending: 0,

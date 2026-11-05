@@ -49,5 +49,8 @@ describe("EventDetailView ticket truth", () => {
     expect(notOnSale).toContain("Not on sale yet");
     expect(notOnSale).not.toContain("Price TBD");
     expect(notOnSale).not.toContain("Sold out");
+    const unavailable = renderToStaticMarkup(<EventDetailView event={{...baseEvent,tickets:[{...tier,qtyTotal:1,minPerOrder:2}]}} />);
+    expect(unavailable).toContain("Unavailable");
+    expect(unavailable).not.toContain("Sold out");
   });
 });

@@ -4,6 +4,7 @@ import {
   formatEventCardPrice,
   formatEventSchedule,
   formatTicketPrice,
+  ticketAvailability,
   ticketsRemaining,
 } from "@/lib/events/format-event";
 
@@ -71,6 +72,30 @@ describe("formatEventSchedule", () => {
       "2027-02-24T05:30:00.000Z",
     );
     expect(label).toMatch(/–/);
+  });
+});
+
+describe("ticketAvailability", () => {
+  const base = {
+    qtyTotal: 10,
+    qtySold: 0,
+    qtyPending: 0,
+    minPerOrder: 1,
+    saleStartsAt: null,
+    saleEndsAt: null,
+  };
+
+  it("distinguishes every public sellability state", () => {
+    expect(ticketAvailability(base)).toBe("available");
+    expect(ticketAvailability({ ...base, qtyTotal: 3, qtySold: 3 })).toBe("sold-out");
+    expect(ticketAvailability({ ...base, saleStartsAt: "2099-01-01T00:00:00Z" })).toBe("not-yet-on-sale");
+    expect(ticketAvailability({ ...base, saleEndsAt: "2000-01-01T00:00:00Z" })).toBe("sale-ended");
+    expect(ticketAvailability({ ...base, qtyTotal: 1, minPerOrder: 2 })).toBe("below-minimum");
+  });
+
+  it("treats pending reservations exactly like sold seats for availability", () => {
+    expect(ticketAvailability({ ...base, qtyTotal: 3, qtyPending: 2 })).toBe("available");
+    expect(ticketAvailability({ ...base, qtyTotal: 3, qtyPending: 3 })).toBe("sold-out");
   });
 });
 

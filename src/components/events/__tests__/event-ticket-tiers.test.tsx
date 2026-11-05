@@ -125,6 +125,13 @@ describe("SAN-1600 compact (chat sheet) checkout targets the selected tier", () 
     expect(screen.getByTestId("event-tiers-sold-out").textContent).toContain("not on sale");
   });
 
+  it("labels a tier with too little stock for its minimum order as Unavailable", () => {
+    render(<EventTicketTiers event={event([{ ...ga, qtyTotal: 1, qtySold: 0, minPerOrder: 2 }])} compactFooter onCheckout={vi.fn()} />);
+    expect(screen.queryByTestId("event-sheet-checkout-cta")).toBeNull();
+    expect(screen.getByTestId("event-tiers-sold-out").textContent).toContain("none meet the minimum order");
+    expect(screen.getByTestId("event-tier-unavailable").textContent).toContain("Unavailable");
+  });
+
   it("offers no payment button for sold-out or zero-tier events", () => {
     const { rerender } = render(<EventTicketTiers event={event([{ ...ga, qtySold: 30 }])} compactFooter onCheckout={vi.fn()} />);
     expect(screen.queryByTestId("event-sheet-checkout-cta")).toBeNull();

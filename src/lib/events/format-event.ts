@@ -113,17 +113,58 @@ export function isTicketSaleOpen(
   return true;
 }
 
-/** A tier is available when it has capacity and its sale window is open. */
+export type TicketAvailability =
+  | "available"
+  | "sold-out"
+  | "not-yet-on-sale"
+  | "sale-ended"
+  | "below-minimum";
+
+/**
+ * One canonical sellability state for every public ticket surface.
+ *
+ * The database RPC remains the authority for checkout. This state only keeps
+ * the UI from offering a control the RPC would reject.
+ */
+export function ticketAvailability(
+  ticket: {
+    qtyTotal: number;
+    qtySold: number;
+    qtyPending?: number;
+    minPerOrder?: number;
+    saleStartsAt?: string | null;
+    saleEndsAt?: string | null;
+  },
+  now = Date.now(),
+): TicketAvailability {
+  const remaining = ticketsRemaining(
+    ticket.qtyTotal,
+    ticket.qtySold,
+    ticket.qtyPending ?? 0,
+  );
+  if (remaining <= 0) return "sold-out";
+
+  const start = ticket.saleStartsAt ? Date.parse(ticket.saleStartsAt) : Number.NaN;
+  if (Number.isFinite(start) && start > now) return "not-yet-on-sale";
+
+  const end = ticket.saleEndsAt ? Date.parse(ticket.saleEndsAt) : Number.NaN;
+  if (Number.isFinite(end) && end < now) return "sale-ended";
+
+  if (remaining < Math.max(1, ticket.minPerOrder ?? 1)) return "below-minimum";
+  return "available";
+}
+
+/** A tier is available when it has enough capacity and its sale window is open. */
 export function isTicketAvailable(
   ticket: {
     qtyTotal: number;
     qtySold: number;
     qtyPending?: number;
+    minPerOrder?: number;
     saleStartsAt?: string | null;
     saleEndsAt?: string | null;
   },
   now = Date.now(),
 ): boolean {
-  return ticketsRemaining(ticket.qtyTotal, ticket.qtySold, ticket.qtyPending ?? 0) > 0 &&
-    isTicketSaleOpen(ticket, now);
+  return ticketAvailability(ticket, now) === "available";
 }

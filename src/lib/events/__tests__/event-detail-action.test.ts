@@ -44,4 +44,11 @@ describe("SAN-1620 — the event action never invents availability", () => {
     expect(eventDetailAction({ tickets: [tier({ qtyTotal: 3, qtySold: 0, qtyPending: 3 })] }))
       .toEqual({ kind: "sold-out" });
   });
+
+  it("distinguishes a closed sale window and a minimum-order mismatch from sold out", () => {
+    expect(eventDetailAction({ tickets: [tier({ saleStartsAt: "2099-01-01T00:00:00Z" })] }))
+      .toMatchObject({ kind: "unavailable", reason: "not-yet-on-sale" });
+    expect(eventDetailAction({ tickets: [tier({ qtyTotal: 1, minPerOrder: 2 })] }))
+      .toMatchObject({ kind: "unavailable", reason: "below-minimum" });
+  });
 });

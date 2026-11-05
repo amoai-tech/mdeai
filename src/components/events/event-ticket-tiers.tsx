@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import {
   formatTicketPrice,
   isTicketAvailable,
-  isTicketSaleOpen,
+  ticketAvailability,
   ticketsRemaining,
 } from "@/lib/events/format-event";
 import type { PublicEventDetail, PublicEventTicket } from "@/lib/events/types";
@@ -28,8 +28,7 @@ function capacity(tier: PublicEventTicket): number {
 }
 
 function canOrder(tier: PublicEventTicket): boolean {
-  const remaining = capacity(tier);
-  return remaining > 0 && isTicketSaleOpen(tier) && remaining >= minOrder(tier);
+  return ticketAvailability(tier) === "available";
 }
 
 function initialQuantity(tier: PublicEventTicket): number {
@@ -51,14 +50,6 @@ function lowestAvailablePrice(
   return available.reduce((min, tier) =>
     tier.priceCents < min.priceCents ? tier : min,
   );
-}
-
-function saleClosedLabel(tier: PublicEventTicket): string | null {
-  const start = tier.saleStartsAt ? Date.parse(tier.saleStartsAt) : Number.NaN;
-  if (Number.isFinite(start) && start > Date.now()) return "Not on sale yet";
-  const end = tier.saleEndsAt ? Date.parse(tier.saleEndsAt) : Number.NaN;
-  if (Number.isFinite(end) && end < Date.now()) return "Sales ended";
-  return null;
 }
 
 export type EventTicketTiersProps = {
@@ -110,7 +101,13 @@ export function EventTicketTiers({
     });
   };
 
-  const hasStock = event.tickets.some((tier) => capacity(tier) > 0);
+  const hasBelowMinimum = event.tickets.some(
+    (tier) => ticketAvailability(tier) === "below-minimum",
+  );
+  const hasClosedSale = event.tickets.some((tier) => {
+    const availability = ticketAvailability(tier);
+    return availability === "not-yet-on-sale" || availability === "sale-ended";
+  });
 
   return (
     <section aria-labelledby="event-tiers-heading">
@@ -122,9 +119,11 @@ export function EventTicketTiers({
           className="mt-3 rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground"
           data-testid="event-tiers-sold-out"
         >
-          {hasStock
-            ? "Tickets are listed but not on sale right now. Check the sale window or ask the organizer."
-            : "All tickets for this event are sold out. Check back for updates or explore other events."}
+          {hasBelowMinimum
+            ? "Tickets are listed, but none meet the minimum order. Check back or ask the organizer."
+            : hasClosedSale
+              ? "Tickets are listed but not on sale right now. Check the sale window or ask the organizer."
+              : "All tickets for this event are sold out. Check back for updates or explore other events."}
         </div>
       ) : null}
 
@@ -139,14 +138,20 @@ export function EventTicketTiers({
         ) : (
           event.tickets.map((tier) => {
             const remaining = capacity(tier);
-            const soldOut = remaining === 0;
+            const availability = ticketAvailability(tier);
+            const soldOut = availability === "sold-out";
+            const belowMinimum = availability === "below-minimum";
+            const saleLabel = availability === "not-yet-on-sale"
+              ? "Not on sale yet"
+              : availability === "sale-ended"
+                ? "Sales ended"
+                : null;
+            const saleOpen = availability === "available";
             const qty = quantities[tier.id] ?? 0;
             const cap = Math.min(remaining, maxOrder(tier));
             const min = Math.min(minOrder(tier), cap);
-            const saleLabel = saleClosedLabel(tier);
-            const saleOpen = isTicketSaleOpen(tier);
             const paid = tier.priceCents > 0;
-            const canBuy = !soldOut && saleOpen && cap >= minOrder(tier) && paid;
+            const canBuy = saleOpen && paid;
             const atOrderCap = qty >= maxOrder(tier) && remaining > maxOrder(tier);
 
             return (
@@ -195,13 +200,13 @@ export function EventTicketTiers({
                         {saleLabel}
                       </p>
                     ) : null}
-                    {!soldOut && saleOpen && cap < minOrder(tier) ? (
-                      <p className="mt-1 text-xs font-medium text-muted-foreground" data-testid="event-tier-min-order">
-                        Only {remaining} left, but the minimum order is {minOrder(tier)}.
+                    {belowMinimum ? (
+                      <p className="mt-1 text-xs font-medium text-muted-foreground" data-testid="event-tier-unavailable">
+                        Unavailable: only {remaining} left, but the minimum order is {minOrder(tier)}.
                       </p>
                     ) : null}
                   </div>
-                  {!soldOut && saleOpen && cap >= minOrder(tier) ? (
+                  {saleOpen ? (
                     <div className="flex items-center gap-2">
                       <Button
                         type="button"

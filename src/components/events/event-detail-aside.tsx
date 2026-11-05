@@ -9,8 +9,7 @@ import { EventTicketTiers } from "@/components/events/event-ticket-tiers";
 import type { BookingCheckoutTarget } from "@/components/modals/booking-checkout-modal";
 import {
   formatTicketPrice,
-  isTicketAvailable,
-  ticketsRemaining,
+  ticketAvailability,
 } from "@/lib/events/format-event";
 import { eventDetailAction } from "@/lib/events/event-detail-action";
 import type { PublicEventDetail, PublicEventTicket } from "@/lib/events/types";
@@ -43,10 +42,9 @@ function focusInlineAsk() {
 export function EventDetailAside({
   event, city, venueLine, schedule, durationLabel, fromTier, tiersRef, notice, onCheckout, interest,
 }: EventDetailAsideProps) {
-  const hasStock = event.tickets.some(
-    (ticket) => ticketsRemaining(ticket.qtyTotal, ticket.qtySold, ticket.qtyPending) > 0,
-  );
-  const anyOnSale = event.tickets.some((ticket) => isTicketAvailable(ticket));
+  const states = event.tickets.map((ticket) => ticketAvailability(ticket));
+  const hasBelowMinimum = states.includes("below-minimum");
+  const hasClosedSale = states.includes("not-yet-on-sale") || states.includes("sale-ended");
   return (
             <aside className="order-2 space-y-5">
               <div className="space-y-3">
@@ -82,11 +80,13 @@ export function EventDetailAside({
                   </p>
                 ) : (
                   <p className="text-lg font-semibold">
-                    {hasStock && !anyOnSale
-                      ? "Not on sale"
-                      : eventDetailAction(event).kind === "sold-out"
-                        ? "Sold out"
-                        : "Price TBD"}
+                    {hasBelowMinimum
+                      ? "Unavailable"
+                      : hasClosedSale
+                        ? "Not on sale"
+                        : eventDetailAction(event).kind === "sold-out"
+                          ? "Sold out"
+                          : "Price TBD"}
                   </p>
                 )}
                 <div ref={tiersRef} tabIndex={-1} className="mt-4 scroll-mt-24 outline-none focus-visible:ring-2 focus-visible:ring-ring"
