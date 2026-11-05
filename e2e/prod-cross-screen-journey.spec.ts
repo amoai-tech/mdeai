@@ -97,31 +97,25 @@ test.describe("SAN-1298 cross-screen conversation (/chat → /rentals → /event
     await signInAsOnOrigin(page, baseUrl, identity.email);
     if (isVercelPreview) await establishVercelAutomationBypass(page, baseUrl, bypassSecret);
 
-    // Console errors are evidence, but two kinds are expected noise here:
+    // Console errors are evidence. Two kinds are expected and filtered by content
+    // rather than by time, because this repository forbids fixed sleeps in E2E
+    // (`playwright-architecture-contract`):
     //  - the Maps raster fallback, and
     //  - "Failed to fetch" from a request a full-page navigation aborted mid-flight.
-    // A hard navigation tears down in-flight CopilotKit polling by design, so the
-    // assertion below judges SETTLED page time only: the collector is reset after
-    // each navigation settles. Anything logged while a page is sitting still still
-    // fails the run.
+    // A hard navigation tears down in-flight CopilotKit polling by design.
     const consoleErrors: string[] = [];
     page.on("console", (message) => {
       if (message.type() !== "error") return;
       const text = message.text();
       if (/Vector Map.*Falling back to Raster/i.test(text)) return;
+      if (/Failed to fetch/i.test(text)) return;
       consoleErrors.push(text);
     });
-    /** Drop teardown noise after a navigation, so only steady-state errors count. */
-    const settleConsole = async () => {
-      await page.waitForTimeout(1_500);
-      consoleErrors.length = 0;
-    };
 
     const runThreads = recordRunThreadIds(page);
 
     // ── 1. Ask on /chat ──────────────────────────────────────────────────────
     await gotoConcierge(page);
-    await settleConsole();
     const firstQuestion = `Remember the word ${marker}-A`;
     await sendAndWait(page, firstQuestion);
     const threadA = runThreads.at(-1);
@@ -132,7 +126,6 @@ test.describe("SAN-1298 cross-screen conversation (/chat → /rentals → /event
     // ── 2. Leave for /rentals, then /events (full reloads) ───────────────────
     for (const path of ["/rentals", "/events"]) {
       await page.goto(`${baseUrl}${path}`, { waitUntil: "domcontentloaded" });
-      await settleConsole();
       await expect
         .soft(page, `staying signed in on ${path}`)
         .toHaveURL(new RegExp(`${path.replace("/", "\\/")}$`), { timeout: 30_000 });
@@ -142,7 +135,6 @@ test.describe("SAN-1298 cross-screen conversation (/chat → /rentals → /event
 
     // ── 3. Return to /chat and resume the same conversation ──────────────────
     await gotoConcierge(page);
-    await settleConsole();
     const savedThread = page.locator(`[data-testid="nav-thread-item"][data-thread-id="${threadA}"]`).first();
     await expect(savedThread, "the earlier conversation is listed in the rail").toBeVisible({
       timeout: 30_000,
@@ -181,6 +173,6 @@ test.describe("SAN-1298 cross-screen conversation (/chat → /rentals → /event
       .soft(persistedAfter, "the follow-up persisted on thread A")
       .toBeGreaterThan(persistedBefore);
 
-    expect.soft(consoleErrors, "no console errors while any page was settled").toEqual([]);
+    expect.soft(consoleErrors, "no unexpected console errors across the journey").toEqual([]);
   });
 });

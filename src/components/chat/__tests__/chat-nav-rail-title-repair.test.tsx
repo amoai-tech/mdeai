@@ -11,17 +11,19 @@ const ui = vi.hoisted(() => ({
   push: vi.fn(),
   setActiveThreadId: vi.fn(),
   stopActiveRun: vi.fn(),
+  startNewChat: vi.fn(),
+  activeThreadId: null as string | null,
   ensure: vi.fn(),
   threads: [] as Array<{ id: string; title: string | null; updatedAt: string }>,
 }));
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: ui.push }) }));
 vi.mock("@/components/chat/concierge-session-context", () => ({
-  useConciergeSession: () => ({ startNewChat: vi.fn(), stopActiveRun: ui.stopActiveRun }),
+  useConciergeSession: () => ({ startNewChat: ui.startNewChat, stopActiveRun: ui.stopActiveRun }),
 }));
 vi.mock("@/lib/chat/thread-nav-context", () => ({
   useThreadNav: () => ({
-    activeThreadId: null,
+    activeThreadId: ui.activeThreadId,
     setActiveThreadId: ui.setActiveThreadId,
     clearActiveThread: vi.fn(),
   }),
@@ -40,6 +42,8 @@ beforeEach(() => {
   ui.push.mockReset();
   ui.setActiveThreadId.mockReset();
   ui.stopActiveRun.mockReset();
+  ui.startNewChat.mockReset();
+  ui.activeThreadId = null;
   ui.ensure.mockReset();
   ui.ensure.mockResolvedValue(true);
   ui.threads = [
@@ -104,6 +108,35 @@ describe("ChatNavRail opening a saved chat (SAN-1412)", () => {
       root.render(<ChatNavRail />);
     });
     open("untitled");
+    expect(ui.push).toHaveBeenCalledWith("/chat");
+  });
+});
+
+describe("ChatNavRail re-clicking the open chat (SAN-1639)", () => {
+  it("does not reset, detach or navigate when the clicked chat is already active", () => {
+    ui.activeThreadId = "titled";
+    act(() => {
+      root.render(<ChatNavRail />);
+    });
+    open("titled");
+
+    // The reset is what erased the transcript the click was meant to show.
+    expect(ui.startNewChat).not.toHaveBeenCalled();
+    expect(ui.stopActiveRun).not.toHaveBeenCalled();
+    expect(ui.setActiveThreadId).not.toHaveBeenCalled();
+    expect(ui.push).not.toHaveBeenCalled();
+  });
+
+  it("still switches normally when a different chat is clicked", () => {
+    ui.activeThreadId = "titled";
+    act(() => {
+      root.render(<ChatNavRail />);
+    });
+    open("untitled");
+
+    expect(ui.startNewChat).toHaveBeenCalledTimes(1);
+    expect(ui.stopActiveRun).toHaveBeenCalledTimes(1);
+    expect(ui.setActiveThreadId).toHaveBeenCalledWith("untitled");
     expect(ui.push).toHaveBeenCalledWith("/chat");
   });
 });

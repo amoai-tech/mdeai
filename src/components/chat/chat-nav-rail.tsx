@@ -175,6 +175,15 @@ export function ChatNavRail({
   }
 
   function onSelectThread(id: string) {
+    // SAN-1639: clicking the conversation that is already open must change nothing.
+    // The reset below — startNewChat() + stopActiveRun() — is right when switching
+    // conversations, but on a re-click it detached the live run and cleared the
+    // very transcript the click was meant to show. Keep the mobile rail's close
+    // action, which is what onNavigate does.
+    if (id === activeThreadId) {
+      onNavigate?.();
+      return;
+    }
     // Clear old map cards and detach an in-flight run before reopening, then
     // record the selected conversation. setActiveThreadId adds the Back/Forward
     // step; re-pushing /chat would wipe that entry (SAN-1413).
