@@ -166,6 +166,7 @@ This table lists **every active documentation file currently under `docs/`** on 
 | Platform | [`03-platform/copilotkit-mastra/reference-adoption-plan-2026-09-20.md`](03-platform/copilotkit-mastra/reference-adoption-plan-2026-09-20.md) | Markdown | Current |
 | Platform | [`03-platform/copilotkit-mastra/reference-pack.md`](03-platform/copilotkit-mastra/reference-pack.md) | Markdown | Current |
 | Platform | [`03-platform/copilotkit-mastra/roadmap.md`](03-platform/copilotkit-mastra/roadmap.md) | Markdown | Current |
+| Platform | [`03-platform/copilotkit-mastra/san-1637-ai-execution-plan.md`](03-platform/copilotkit-mastra/san-1637-ai-execution-plan.md) | Markdown | Current |
 | Domains | [`04-domains/README.md`](04-domains/README.md) | Markdown | Current |
 | Domains | [`04-domains/cafes-nightlife/README.md`](04-domains/cafes-nightlife/README.md) | Markdown | Current |
 | Domains | [`04-domains/ecommerce/README.md`](04-domains/ecommerce/README.md) | Markdown | Current |

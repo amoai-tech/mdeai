@@ -1,0 +1,422 @@
+---
+title: SAN-1637 AI execution plan — rentals, events, tickets and trusted AI
+status: proposed
+updated: 2026-11-05
+source_of_truth: Linear SAN-1637 for order/status; origin/main for code; installed lockfile for versions
+---
+
+# SAN-1637 AI execution plan
+
+## Outcome
+
+A renter can ask Ask MDE for real apartments, see cards and matching map pins, compare 2–4
+of them, open Details and request a viewing. An attendee can ask for a real event and real
+ticket tier, edit a quantity, review the total and continue to the existing Stripe TEST
+Checkout. The AI may choose **ids**, never prices, inventory, coordinates, availability or
+payment success.
+
+The plan deliberately reuses the existing CopilotKit v2 route, the Mastra concierge, the
+Supabase-backed search tools, the current cards/maps/Details, `EventTicketTiers`,
+`BookingCheckoutModal`, the atomic ticket RPC and the Stripe webhook. It does not add a
+second runtime, provider, agent, search engine, map, ticket catalogue, checkout or database
+table.
+
+## Verified current truth
+
+### Exact baseline
+
+| Item | Current value |
+|---|---|
+| Safe base | `origin/main` = `ab24e576dfe2441dc2cd591dd613f92ea5b75b5d` (fetched 2026-11-05) |
+| Working checkout | `feat/san-983-982-984-515-event-ops` at `5d728324f0f1c85ff67c487e3a48fff8798f1db1`, **dirty** |
+| Clean audit worktree | `/home/sk/mdeai-worktrees/san-1637-audit` at `ab24e5…` |
+| Package manager / Node | npm 11.19.0 / Node 24.21.0 |
+| Next.js | 16.4.3 |
+| React / React DOM | `^19.2.1`, resolved 19.2.6 |
+| CopilotKit React / Runtime | 1.84.1 / 1.84.1 |
+| CopilotKit shared | 1.84.1 (clean install) |
+| Mastra Core | 1.81.0 |
+| Mastra client-js / memory / pg / libsql | 1.58.0 / 1.40.0 / 1.34.0 / 1.28.0 |
+| AG-UI Client / Core | 1.0.2 / 1.0.2 |
+| AG-UI Mastra adapter | 2.0.2 |
+| Supabase JS / SSR | 2.106.1 / 0.10.3 |
+| Stripe (Edge Function) | `npm:stripe@23.0.0` |
+| Zod | 3.25.76 |
+
+The clean install (`npm ci` in the audit worktree) added 1,793 packages and resolved the
+CopilotKit/AG-UI/Mastra family without duplicate `AbstractAgent` or forced peers:
+
+- `@copilotkit/react-core@1.84.1`
+- `@copilotkit/runtime@1.84.1`
+- `@copilotkit/shared@1.84.1`
+- `@ag-ui/client@1.0.2`
+- `@ag-ui/core@1.0.2`
+- `@ag-ui/mastra@2.0.2`
+- `@mastra/core@1.81.0`
+
+### Baseline checks actually run
+
+| Check | Result |
+|---|---|
+| `npm ci` in the clean worktree | PASS, 1,793 packages |
+| `npm ls next react @copilotkit/react-core @copilotkit/runtime @copilotkit/shared @mastra/core @ag-ui/client @ag-ui/core @ag-ui/mastra --depth=1` | PASS, exact versions; shared 1.84.1 deduped |
+| `npm run typecheck` | PASS, exit 0 |
+| `npm run lint` | PASS, exit 0 |
+| `npm run audit:copilotkit-v2` | PASS, 2,273 modules / 5,477 dependencies, 0 v1 violations, 0 allowlisted |
+| `npm run check:mastra` | PASS, 34 expected `public.mastra_*` tables, pg/core versions match |
+| Focused Vitest: ticket tiers, format-event, get-public-event, CopilotKit v2 contract | PASS, 4 files / 42 tests |
+
+### What is **not** verified
+
+- No live Supabase query was made in this audit: the Supabase MCP server is not connected to
+  this session. The Linear snapshot (45 apartments, 45 embeddings, 50 published events, six
+  tiers) is **not** re-certified here.
+- No browser or dev server was started in this audit. Rental cards, map pins, Details,
+  `render_ui`, Stop/Retry and 390px behavior remain browser-UNVERIFIED.
+- No Stripe TEST purchase, signed webhook, wallet/QR readback or duplicate-webhook test was
+  run.
+- `npm run floor` was **not** run. The baseline checks above are narrower than the repository
+  gate and do not replace it.
+- The working checkout is unsuitable for implementation: its `package.json` still pins
+  CopilotKit 1.75.0 / Mastra 1.74.0 / AG-UI 0.0.59 / adapter 1.1.6, while its `node_modules`
+  contains the upgraded packages. Anything run there mixes old source with new dependencies.
+
+## Upgrade audit verdict
+
+| Subsystem | Verdict | Evidence | Smallest required fix |
+|---|---|---|---|
+| Exact dependency resolution | **PASS on `origin/main`**; **FAIL in the dirty checkout** | Clean `npm ci`/`npm ls` is deduped; dirty checkout has old manifest + upgraded `node_modules` | Do all work in a clean worktree at `ab24e5…`; never `npm install` over the dirty tree |
+| CopilotKit v2 single-route transport | **PASS** | `createCopilotRuntimeHandler` + `mode: "single-route"` + client `useSingleEndpoint: true`; contract tests pass | None |
+| Route auth, rate limits, thread ownership, Stop/Retry allowlist | **PASS by source and contract tests**; browser UNVERIFIED | Auth and ownership run before the handler; `agent/run`, `connect`, `stop`, `info` only; `threads/*` denied | Keep unchanged; prove Stop/Retry in the browser |
+| AG-UI tool transport | **PASS by source** | `@ag-ui/mastra` `buildClientTools` forwards `RunAgentInput.tools`; runtime injects `render_ui` into those tools | None |
+| AG-UI context transport | **PASS at the adapter** | `MastraAgent.applyInputContext` forwards `input.context` to `requestContext.get("ag-ui")` on every run | Keep; do not replace the adapter |
+| Mastra model prompt consumption of the A2UI guide | **FAIL** | `src/mastra/agents/concierge.ts` dynamic instructions read `requestContext.get("ag-ui")` only for the selection hint; they never append the `Generative UI guide` entry the runtime sends | Append the generative-UI guide inside the existing dynamic instructions; no message replay, no adapter fork |
+| A2UI provider/catalog | **ABSENT** | No `generativeUI` prop in either provider; no `src/components/copilot/a2ui/`; no `createGenerativeUI`; no `render_ui` references in `src/` | Add one small typed catalog and wire it into the two existing concierge providers |
+| Existing rental cards | **PARTIAL / browser-UNVERIFIED** | `RentalResults`, `RentalCard`, `ToolPinsSync`, `search-rentals` exist; IDs are opaque; pins use `rental-${id}`; no browser proof on this SHA | Verify SAN-739 first; only fix reproduced defects |
+| Existing event cards | **PARTIAL / browser-UNVERIFIED** | `EventResults` resolves returned IDs through the public event API; ticket prices are tier-backed | Verify guest and signed-in event search in the browser |
+| Ticket quantity/availability contract | **FAIL** | UI hard-caps 8; checkout schema caps 10; canonical RPC uses per-tier `min_per_order`/`max_per_order`; mapper omits `qty_pending`, limits and sale windows; `ticketsRemaining` ignores pending | One shared availability contract; server remains authoritative |
+| Ticket currency | **FAIL** | Mapper returns raw currency; formatter special-cases only exact `"COP"`; DB carries both `cop` and `COP` | Normalize to uppercase at the read/format boundary; keep server amount in minor units |
+| Free ticket → checkout | **FAIL** | `EventTicketTiers` offers a free tier to checkout; the RPC rejects `price_cents <= 0` with `INVALID_TICKET_PRICE_OR_CURRENCY` | Do not open paid Checkout for zero-price tiers; either hide the CTA or add a separate RSVP path. Do not fabricate a paid order |
+| Stripe TEST end-to-end | **UNVERIFIED** | Existing Edge Function has server-priced order checks, idempotency key, signed-webhook and finalize paths | Run one real TEST purchase and negative webhook cases; redirect success is not payment proof |
+
+### The key transport finding
+
+The runtime does exactly what the official docs say it should:
+
+1. the provider sends the catalog envelope;
+2. `GenerativeUIMiddleware.prepareInput` injects the `render_ui` tool **and** a
+   `Generative UI guide` context entry;
+3. `@ag-ui/mastra` forwards the tool definitions to Mastra and stores the context entry at
+   `requestContext.get("ag-ui")`;
+4. the Mastra model sees the tools, but MDE's concierge instructions never include the guide.
+
+So this is not a reason to replace CopilotKit, Mastra or the adapter. It is one missing
+consumer in an existing dynamic-instructions function. The official transport page is
+explicit that the agent must use **both** the run's tools and its context entries.
+
+## Confirmed errors, blockers and failure points
+
+| ID | Severity | Problem | Evidence | Fix / proof |
+|---|---|---|---|---|
+| B1 | Blocker | Implementation base is a dirty, pre-upgrade branch | `git status`; `package.json` 1.75.0 vs installed 1.84.1 | Create a branch from `origin/main` in the clean worktree; `npm ci`; one SHA per PR |
+| B2 | Blocker | No A2UI catalog/provider exists | no `generativeUI`; no `a2ui/`; no `createGenerativeUI`; no `render_ui` in `src/` | Add the smallest catalog and provider wiring; prove one real emitted operation |
+| B3 | Blocker | `render_ui` guide never reaches the concierge model | `conciergeAgent` dynamic instructions only build the selection hint | Append the guide from `requestContext.get("ag-ui")`; test the resolved instructions |
+| B4 | High | Quantity caps disagree: UI 8, API 10, RPC per tier (currently 10) | `event-ticket-tiers.tsx:17`; `ticket-checkout-schema.ts:6`; RPC `min_per_order`/`max_per_order` | Use `minPerOrder`/`maxPerOrder` from the real tier; server remains the final check |
+| B5 | High | Remaining count ignores pending reservations | `get-public-event.ts` selects only `qty_total,qty_sold`; `ticketsRemaining` subtracts only sold | Select/map `qty_pending`; capacity = `max(0, total - sold - pending)` everywhere |
+| B6 | High | Lowercase `cop` is not normalized | `formatTicketPrice` checks `currency === "COP"` only | Normalize `currency.trim().toUpperCase()` at the mapper and formatter; test `cop`/`COP` |
+| B7 | High | Free tiers offer Checkout, server rejects them | UI test explicitly opens checkout for `priceCents: 0`; RPC rejects `price_cents <= 0` | Hide/disable paid checkout for free tiers; add a truthful no-payment path only if required |
+| B8 | High | Sale windows are not mapped to the detail picker | `PublicEventTicket` has no `saleStartsAt`/`saleEndsAt`; RPC rejects not-started/ended sales | Map and render sale windows; share one availability predicate |
+| B9 | Medium | `eventDetailAction` also ignores pending reservations | `remainingSeats` subtracts sold only | Use the same pending-aware helper |
+| B10 | Medium | `event-detail-chat` tells guests a tier is available from sold-only counts | `summarizePublicEventForChat` calls two-argument `ticketsRemaining` | Use the pending-aware helper; test sold-out with pending |
+| B11 | Medium | Rental renderer's input schema omits monthly/budget fields used by the tool | `search-tool-renders.tsx` schema lacks `maxMonthlyPrice`, `maxBedrooms`, `stayType`, `budgetCurrency` | Prove with a focused renderer test before changing; extra Zod keys are stripped but the render contract should match the tool |
+| B12 | Medium | Page Surface ownership is undefined | Existing page state is `shownResults`/`shownEvents` + `useBrowseMapSync`; no Surface exists | Keep the page as data owner; Surface is presentation only; never add a second map/results store |
+| B13 | Medium | `LoggingMastraAgent.clone()` does not copy optional adapter config (including `a2ui`) | wrapper `clone()` passes only agent/resource/requestContext/userId | Use runtime/provider middleware for generic generative UI; do not add `a2ui` agent config without fixing clone |
+| B14 | Process | Skill and docs still claim CopilotKit 1.75.0 | `.claude/skills/copilotkit/SKILL.md:108`; `docs/07-operations/README.md:120` | Correct the version references in the same PR that audits the upgrade; do not change governance |
+| B15 | Evidence gap | Live DB, browser, Stripe TEST and full gate are unproven | no Supabase MCP, no browser, no Stripe credentials in this session | Run them before any Done claim; do not substitute source inspection |
+
+## Dependency-ordered execution plan
+
+### Milestone 0 — clean baseline
+
+**Outcome:** every change starts from the upgraded `main`, not the dirty Event Ops branch.
+
+1. Use `origin/main` at the recorded SHA; create a dedicated worktree/branch.
+2. Run `npm ci`, then `npm ls` for the exact family.
+3. Record the SHA in Linear and in every PR body.
+4. Do not copy the untracked Event Ops changes or `node_modules` into the new branch.
+
+**Proof:** `npm ci` + `npm ls` + `npm run typecheck` on the exact base.
+
+### Milestone 1 — SAN-739 rental verification and SAN-1632 foundation (PR 1)
+
+**Outcome:** real rental cards work, and the ticket data contract is truthful before any AI
+ticket selector is added.
+
+**1A · SAN-739, verify first**
+
+- Reuse `search-tool-renders.tsx`, `rental-card.tsx`, `tool-pins-sync.tsx`,
+  `search-rentals.ts`, `search-tool-result-cards.tsx`.
+- Search exactly: “Pet-friendly two-bedroom apartments in Laureles under COP 4M.”
+- Verify each card maps to a real returned record; price is the listing's own currency;
+  Details opens the same listing; the matching map pin is `rental-${id}`; empty results clear
+  stale pins; an older search cannot overwrite a newer one.
+- Check guest and signed-in, refresh, Stop/Retry, 390px and keyboard.
+- Fix only reproduced defects. Do not add a second renderer or search path.
+
+**1B · ticket quantity, capacity and currency**
+
+Files:
+
+- `src/lib/events/types.ts` — add `qtyPending`, `minPerOrder`, `maxPerOrder`,
+  `saleStartsAt`, `saleEndsAt`.
+- `src/lib/events/get-public-event.ts` — select and map those fields; normalize currency.
+- `src/lib/events/format-event.ts` — one `ticketsRemaining(total, sold, pending)` helper;
+  normalize currency; keep existing price formatting.
+- `src/lib/events/event-detail-action.ts` and `src/lib/events/event-detail-chat.ts` — use the
+  same availability helper.
+- `src/components/events/event-ticket-tiers.tsx` — per-tier min/max; pending-aware capacity;
+  no hard-coded 8; no paid checkout for zero-price tiers.
+- `src/lib/tickets/ticket-checkout-schema.ts` — stop claiming an unrelated hard cap; the RPC
+  remains the authority. If a transport cap is needed, make it the database maximum and
+  document it, not a second business rule.
+- Tests: update the existing ticket-tier test that asserts 8; add `cop`/`COP`, pending,
+  min/max, sold-out, not-yet-on-sale, ended-sale and free-tier cases.
+
+**No migration by default.** The canonical RPC already validates `qty_sold + qty_pending`,
+per-tier min/max, publication, sale windows and positive COP. Only write SQL if a focused
+pgTAP/production read proves a canonical RPC defect.
+
+**Proof:** focused Vitest; browser + API + DB agree for 1/8/9/10, `cop`/`COP`, pending,
+min/max and sold-out; no false checkout CTA.
+
+### Milestone 2 — SAN-1630 transport proof and one catalog (PR 2)
+
+**Outcome:** one real generated component renders in the existing chat from a real
+`render_ui` call, then the smallest reusable catalog exists.
+
+**2A · prove the boundary**
+
+- Add the catalog to both existing concierge providers:
+  - `src/components/copilot/copilot-kit-provider.tsx`
+  - `src/components/chat/chat-provider.tsx`
+- Give it `agentIds: ["conciergeAgent"]` so host/partner agents get no catalog.
+- Add the guide consumer in the existing dynamic instructions in
+  `src/mastra/agents/concierge.ts`.
+- Do not add a second provider, a second runtime or an agent-level `a2ui` config.
+- Preserve `useRenderTool` as the deterministic fallback.
+
+**2B · smallest catalog**
+
+Create `src/components/copilot/a2ui/mde-ui-catalog.tsx` with only:
+
+- `RentalCard({ listingId })`
+- `EventCard({ eventId })`
+- reserve `RentalComparison` only after the standalone component exists.
+
+Rules:
+
+- IDs only; the model never sends price, title, currency, coordinates, source or tier data.
+- Rental IDs are opaque strings; event IDs are UUIDs.
+- Resolve from the current authorized search/page results; reject unknown, stale, duplicate
+  or cross-thread IDs.
+- Reuse `RentalCard`, `EventCard`, `useRentalUi`, `useMapContext`, the map pin id convention
+  and the existing Details/viewing handlers.
+- Add a provider-level error boundary and a native fallback.
+
+**Proof:** one real browser turn shows a generated component and the AG-UI trace shows the
+matching `render_ui` tool call; malformed/forged/stale IDs do not render; ordinary cards still
+render when A2UI is disabled.
+
+### Milestone 3 — SAN-1041 comparison and SAN-1631 page Surfaces (PR 2, continued)
+
+**3A · pure comparison first**
+
+Create `src/components/copilot/rental-comparison.tsx`:
+
+- props take 2–4 real `Rental` rows or IDs resolved from the current results;
+- compare rent, bedrooms, known amenities and source; unknown stays “Unknown”;
+- reuse Details, Focus map and Viewing handlers;
+- desktop side-by-side; 390px stacked or scroll inside the panel only;
+- works with deterministic tool data when A2UI is off.
+
+**3B · bounded page targets**
+
+Add `GenerativeUISurface` to:
+
+- `src/components/rentals/rental-browse-view.tsx`
+- `src/components/events/event-browse-view.tsx`
+
+Keep the page as the single owner of results, filters, selected item, Details and map pins.
+The Surface is presentation over current IDs; it must not create a second results store or a
+second map. `fallback` is the existing native panel or `null`. “Clear” deletes the generated
+surface and returns the original page. An older search cannot populate a newer Surface.
+
+**Proof:** compare three real apartments without fabricated data; cards, Details and pins
+refer to the same records; guest Events still works; A→B→Clear, Stop/Retry, refresh, 390px and
+invalid IDs pass.
+
+### Milestone 4 — SAN-1632 AI ticket workflow and Stripe TEST (PR 3)
+
+**4A · selector adapter**
+
+Create `src/components/copilot/a2ui/event-ticket-selector.tsx`:
+
+- receives `eventId` and optional `initialTierId`/`initialQuantity`;
+- loads `/api/events/${eventId}/public`, then reuses `EventTicketTiers`;
+- after the user edits, AI updates never overwrite the user's tier/quantity;
+- the user must click the existing “Review tickets” path; the agent cannot open Checkout,
+  create an order or call Stripe.
+
+**4B · stale and invalid selections**
+
+Re-fetch the public event before opening `BookingCheckoutModal`; reject a tier that is no
+longer active/sellable, a quantity outside min/max or stock, and an event that is no longer
+published. The server/RPC is still the final authority.
+
+**4C · Stripe TEST proof**
+
+Use the existing `/api/tickets/checkout` → Edge Function → RPC → Stripe TEST → signed webhook
+→ `event_orders`/wallet/QR path. Prove:
+
+- one successful TEST purchase creates one paid order and the exact ticket entitlements;
+- a duplicate webhook does not duplicate the order/entitlements;
+- a failed/expired payment creates no paid order;
+- a forged/invalid signature is rejected;
+- a sold-out tier and two concurrent buyers are handled atomically;
+- redirect success alone is never treated as payment.
+
+**Proof:** real TEST session, signed webhook, database readback, wallet/QR, screenshot and
+exact order ID (redacted where needed). Do not run live payments.
+
+### Milestone 5 — SAN-1637 certification
+
+Run the user journeys in this order:
+
+1. Rentals: search → cards → map → compare → Details → viewing → one persisted lead/showing
+   with the correct broker visibility.
+2. Events: search → event → tier → quantity → review → Stripe TEST → signed webhook → wallet.
+3. AI: chat → Mastra tool → AG-UI → A2UI display → user action → persisted result.
+4. Security: guest, signed-in, foreign thread/ID, forged ID, stale result, invalid webhook.
+5. Responsive/accessibility: 390px, keyboard, focus, no body overflow.
+6. Release: focused tests → lint/typecheck → `npm run floor` once at the exact SHA → real
+   browser → staged deployment → exact deployed SHA check.
+
+## PR strategy
+
+Three reviewable deliveries, in dependency order. Keep each PR's scope closed.
+
+| Delivery | Branch theme | Scope | Must not include |
+|---|---|---|---|
+| PR 1 | `feat/san-739-ticket-contract` | Rental verification; ticket quantity/capacity/currency/free-tier/availability contract; focused tests | A2UI, comparison, selector, Stripe workflow changes |
+| PR 2 | `feat/san-1630-a2ui-surfaces` | One catalog; provider wiring; guide consumer; `rental-comparison`; bounded Rentals/Events Surfaces; fallback/negative tests | Ticket selector or payment changes |
+| PR 3 | `feat/san-1632-ai-ticket-checkout` | Ticket selector; user-confirmed existing Checkout; Stripe TEST/webhook/wallet proof; SAN-1637 certification | New runtime, new schema, live payment |
+
+PR 1 keeps the two outcomes in one delivery because they are both “make the existing
+journeys truthful before adding AI UI”, but the commits stay separate: rental verification
+and ticket contract must be independently reviewable. If review load becomes excessive,
+split PR 1 at that commit boundary; do not split the ticket data contract away from its tests.
+
+## File and system ownership
+
+| Area | Owner files | Change |
+|---|---|---|
+| Transport / auth | `src/app/api/copilotkit/[[...path]]/route.ts`, `src/lib/copilotkit-transport.ts` | No change unless a reproduced transport defect |
+| Providers | `src/components/copilot/copilot-kit-provider.tsx`, `src/components/chat/chat-provider.tsx` | Add `generativeUI` with the same catalog; `agentIds` = concierge |
+| Model guide | `src/mastra/agents/concierge.ts`, new `src/mastra/lib/…` helper | Append the runtime's generative-UI guide from `requestContext.get("ag-ui")` |
+| Catalog | `src/components/copilot/a2ui/mde-ui-catalog.tsx` | One typed catalog; ID-only components |
+| Comparison | `src/components/copilot/rental-comparison.tsx` | Pure presentation; existing handlers |
+| Page Surfaces | `src/components/rentals/rental-browse-view.tsx`, `src/components/events/event-browse-view.tsx` | Bounded target, native fallback, no second state store |
+| Ticket data | `src/lib/events/{types,get-public-event,format-event,event-ticket-offer,event-detail-action,event-detail-chat}.ts` | Pending, min/max, sale windows, currency |
+| Ticket UI | `src/components/events/event-ticket-tiers.tsx` | Per-tier controls; no hard-coded 8; free-tier handling |
+| Ticket API | `src/lib/tickets/ticket-checkout-schema.ts` | One documented transport cap; RPC remains the authority |
+| AI ticket UI | `src/components/copilot/a2ui/event-ticket-selector.tsx` | Reuses `EventTicketTiers` and `BookingCheckoutModal` |
+| Tests | focused Vitest, Playwright, pgTAP only if SQL changes | Add only the cases that prove the above |
+
+## Verification matrix
+
+| Requirement | Smallest proof |
+|---|---|
+| Dependencies align | `npm ci`, `npm ls` exact family, no duplicate `AbstractAgent` |
+| Transport/auth unchanged | `src/__tests__/api/copilotkit-v2-contract.test.ts`; browser guest/signed-in |
+| `render_ui` guide reaches Mastra | unit test on resolved concierge instructions; real browser tool-call trace |
+| Real rental cards | browser search with real DB result; IDs, prices, pin ids, Details |
+| Ticket contract | Vitest for 1/8/9/10, `cop`/`COP`, pending, min/max, sale windows, free tier |
+| Server authority | API/RPC tests; 11 and over-limit rejected; stale price rejected |
+| Comparison | 2/3/4 real records; unknown fields; Details/map parity; 390px |
+| Page Surface | A→B→Clear; native fallback; no duplicate map; older result cannot win |
+| AI ticket selector | real tier/quantity; manual override preserved; explicit review click |
+| Stripe TEST | one paid order; correct entitlements; duplicate/failed/forged webhook negatives |
+| Release | `npm run floor` once on final SHA; staged exact-SHA check; no skip counted as pass |
+
+## Rollback and fallback
+
+- A2UI is experimental: keep the deterministic `useRenderTool` cards and page fallback as the
+  default when the catalog is absent, invalid or disabled. A build-time
+  `NEXT_PUBLIC_MDE_A2UI=0` switch can remove the catalog without touching the server.
+- The ticket data fixes are presentation/read-contract changes; revert the PR if a regression
+  appears. No migration is expected, so there is no schema rollback.
+- Stripe changes, if any, must be behind the existing sandbox/live mode selection. Never
+  fall back to live money because sandbox configuration is missing.
+- If a page Surface cannot preserve the current results/map relationship, ship the chat
+  catalog and comparison first and leave the page target behind its fallback. Do not add a
+  second map or store to force it.
+
+## Outdated instructions to correct
+
+| Location | Current stale claim | Correction |
+|---|---|---|
+| `.claude/skills/copilotkit/SKILL.md:108` | MDE pins 1.75.0 and references the `v1.75.0` tag | Point to the exact `package.json` / lockfile pins; currently 1.84.1 |
+| `docs/07-operations/README.md:120` | “CopilotKit 1.75.0” | Update to the current pin and keep the same-origin explanation |
+| `docs/03-platform/copilotkit-mastra/reference-adoption-plan-2026-09-20.md` | `@mastra/core@1.35.0`; `examples/v2` called legacy | State the current 1.81.0 baseline; use the v1.84.1/v2 example only as a pattern |
+| `docs/03-platform/copilotkit-mastra/README.md` | Generic “current pins” with no versions | Add the exact family and the A2UI limitation |
+| Linear SAN-1637 / SAN-1630 | “current rental/event results/pins work” | Mark browser-UNVERIFIED until the SAN-739/event browser pass on the exact SHA |
+
+Do not rewrite governance or business policy. Correct only the version/state claims that now
+mislead an implementer.
+
+## Best practices and suggested improvements
+
+1. **One authoritative quantity rule.** Derive UI, API and tests from the stored tier; never
+   introduce a second business cap. The database/RPC is the final authority.
+2. **IDs, not facts, from the model.** A2UI props carry `listingId` / `eventId` only. Price,
+   currency, availability, coordinates and source are resolved server-side or from the current
+   authorized results.
+3. **One catalog, one provider stack.** Use the existing provider; `agentIds` keeps host and
+   partner agents out. Do not add a second generative-UI provider.
+4. **Keep the fallback deterministic.** The ordinary `useRenderTool` cards and page results
+   must work with A2UI disabled or malformed.
+5. **Respect the experimental boundary.** Pin the installed CopilotKit/AG-UI versions; do not
+   upgrade during feature work. Read the installed `.d.mts`/source before copying examples.
+6. **Do not confuse a redirect with payment.** Only the signed webhook plus DB/order readback
+   proves a paid ticket.
+7. **Keep tests at the narrowest layer.** Unit-test the availability/formatter helpers;
+   browser-test the user journey; run `floor` once on the final SHA, not after every edit.
+8. **Clean the checkout before editing.** A mixed old-manifest/new-`node_modules` tree is a
+   false-green factory.
+9. **Record the exact SHA and evidence.** Linear status follows evidence, not code volume.
+
+## Source receipts
+
+| Source | Decision it answered | Disposition | Destination | Verification |
+|---|---|---|---|---|
+| [CopilotKit — Components and surfaces](https://docs.copilotkit.ai/mastra/generative-ui/components.mdx) | Provider catalog; runtime adds `render_ui` and a guide; the agent must use tools and context | **ADAPT** | providers, catalog, concierge guide | real `render_ui` trace + browser |
+| [CopilotKit — Transports](https://docs.copilotkit.ai/mastra/generative-ui/components/transports.mdx) | Tool transport needs both the run's tools and its context entries | **REFERENCE** | guide consumer | resolved-instructions test |
+| [CopilotKit — Catalogs](https://docs.copilotkit.ai/mastra/generative-ui/components/catalogs.mdx) | Typed `createGenerativeUI` contract; zod 3 works; IDs-only props | **ADAPT** | `mde-ui-catalog.tsx` | typecheck + catalog tests |
+| [CopilotKit — Surfaces](https://docs.copilotkit.ai/mastra/generative-ui/components/surfaces.mdx) | `GenerativeUISurface` target, component allowlist, fallback, autoScroll | **ADAPT** | rental/event browse views | A→B→Clear browser test |
+| `@copilotkit/runtime@1.84.1` `dist/v2/runtime/generative-ui/generative-ui-middleware.mjs` | Exact `render_ui` injection, target/operations validation, synthetic tool result | **REFERENCE** | transport test | source-level contract + real event trace |
+| `@ag-ui/mastra@2.0.2` `dist/mastra-*.mjs` / `.d.mts` | `buildClientTools` forwards run tools; `applyInputContext` stores context at `requestContext.get("ag-ui")` | **REFERENCE** | concierge guide, tests | adapter source + resolved instructions |
+| `@mastra/core@1.81.0` `agent.types.d.ts` / `types/dynamic-argument.d.ts` | Per-run `instructions` dynamic argument receives `requestContext`; `AgentExecutionOptions` also supports `context`/`system` | **ADAPT** | `conciergeAgent` dynamic instructions | typecheck + unit test |
+| [Stripe — idempotent requests](https://docs.stripe.com/api/idempotent_requests) | Reuse a stable idempotency key across retries | **REFERENCE** | existing ticket checkout | duplicate retry test |
+| [Stripe — webhooks](https://docs.stripe.com/webhooks) | Signed raw-body webhook; duplicate events must be harmless | **REFERENCE** | existing ticket webhook | signed/duplicate/failed webhook tests |
+| [Supabase — RLS](https://supabase.com/docs/guides/database/postgres/row-level-security) | Authorized reads; no service role in client; no new public path | **REFERENCE** | ticket/catalog data reads | API/RLS tests + browser |
+
+## Immediate next action
+
+1. Review this plan.
+2. Start PR 1 on a clean branch from `ab24e576…`: verify SAN-739 in the browser, then implement
+   the ticket contract and its focused tests.
+3. Do not close SAN-1630, SAN-1631, SAN-1632 or SAN-1637 until the milestone proofs above
+   exist. Do not claim `render_ui` works from code inspection alone.
+
+The next checkpoint is a single real `render_ui` browser trace after PR 1, not a second
+planning document.
