@@ -187,9 +187,13 @@ test.describe("SAN-1298 cross-screen conversation (/chat → /rentals → /event
     const followUp = `And the second word ${marker}-B`;
     await sendAndWait(page, followUp);
     expect.soft(runThreads.at(-1), "the follow-up continues thread A").toBe(threadA);
-    const persistedAfter = await persistedCount(threadA!);
-    expect
-      .soft(persistedAfter, "the follow-up persisted on thread A")
+    // Mastra writes on its own schedule, so poll instead of reading once: a single
+    // read can catch the database before the turn lands and fail a good run.
+    await expect
+      .poll(() => persistedCount(threadA!), {
+        timeout: 30_000,
+        message: "the follow-up persisted on thread A",
+      })
       .toBeGreaterThan(persistedBefore);
 
     expect.soft(consoleErrors, "no unexpected console errors across the journey").toEqual([]);

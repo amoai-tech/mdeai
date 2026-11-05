@@ -347,8 +347,13 @@ export async function deleteThrowawayIdentity(
     const afterDelete = await retryTransientDb(
       () => admin.auth.admin.getUserById(identity.userId),
     );
-    const gone = !afterDelete.data.user;
-    if (!gone) failures.push("identity still exists after a successful delete");
+    // A read that itself failed proves nothing: treat it as unverified, never as
+    // "gone". Only a successful lookup with no user is evidence of deletion.
+    if (afterDelete.error) {
+      failures.push("verify identity deletion: " + afterDelete.error.message);
+    } else if (afterDelete.data.user) {
+      failures.push("identity still exists after a successful delete");
+    }
   }
   if (userError) {
     // An earlier delete may have succeeded before its HTTP response was lost.
