@@ -27,7 +27,9 @@ vi.mock("@/components/modals/booking-checkout-modal", () => ({
 afterEach(cleanup);
 
 const tier = (over: Partial<PublicEventTicket>): PublicEventTicket => ({
-  id: "t", name: "T", priceCents: 1000, currency: "COP", qtyTotal: 30, qtySold: 0, position: 0, ...over,
+  id: "t", name: "T", priceCents: 1000, currency: "COP", qtyTotal: 30, qtySold: 0,
+  qtyPending: 0, minPerOrder: 1, maxPerOrder: 10, saleStartsAt: null, saleEndsAt: null,
+  position: 0, ...over,
 });
 const ga = tier({ id: "tier-ga", name: "General", priceCents: 3000000, position: 1 });
 const vip = tier({ id: "tier-vip", name: "VIP", priceCents: 9000000, position: 2, qtyTotal: 20 });
@@ -73,20 +75,79 @@ describe("SAN-1600 compact (chat sheet) checkout targets the selected tier", () 
     expect(onCheckout).not.toHaveBeenCalled();
   });
 
-  it("caps a tier at the 8-ticket order limit and the remaining stock", () => {
-    render(<EventTicketTiers event={event([{ ...ga, qtyTotal: 30 }, { ...vip, qtyTotal: 2 }])} compactFooter onCheckout={vi.fn()} />);
-    for (let i = 0; i < 10; i++) plus("General");
-    expect(cta().textContent).toContain("General × 8");
+  it("caps a tier at its own max_per_order and the remaining stock, never a global 8", () => {
+    render(<EventTicketTiers event={event([
+      { ...ga, qtyTotal: 30, maxPerOrder: 10 },
+      { ...vip, qtyTotal: 2, maxPerOrder: 10 },
+    ])} compactFooter onCheckout={vi.fn()} />);
+    for (let i = 0; i < 12; i++) plus("General");
+    expect(cta().textContent).toContain("General × 10");
     plus("VIP");
     plus("VIP");
     expect(cta().textContent).toContain("VIP × 2");
   });
 
-  it("shows a free tier as a purchasable selection with the right price text", () => {
+  it("clamps every tier to the shared 10-ticket API ceiling", () => {
+    render(<EventTicketTiers event={event([{ ...ga, qtyTotal: 30, maxPerOrder: 20 }])} compactFooter onCheckout={vi.fn()} />);
+    for (let i = 0; i < 20; i++) plus("General");
+    expect(cta().textContent).toContain("General × 10");
+  });
+
+  it("defaults the compact sheet to a paid tier, not a free tier", () => {
+    const onCheckout = vi.fn();
+    render(<EventTicketTiers event={event([
+      tier({ id: "tier-free", name: "RSVP", priceCents: 0 }),
+      ga,
+    ])} compactFooter onCheckout={onCheckout} />);
+    expect(cta().textContent).toContain("Pay for General");
+    expect(cta().textContent).not.toContain("Free entry");
+    fireEvent.click(cta());
+    expect(onCheckout.mock.calls[0][0]).toMatchObject({ tier: { id: "tier-ga" }, quantity: 1 });
+  });
+
+  it("honours a tier's min_per_order instead of forcing 1", () => {
+    const onCheckout = vi.fn();
+    render(<EventTicketTiers event={event([{ ...ga, minPerOrder: 2, maxPerOrder: 6 }])} compactFooter onCheckout={onCheckout} />);
+    expect(cta().textContent).toContain("General × 2");
+    fireEvent.click(screen.getByRole("button", { name: "Decrease General quantity" }));
+    expect(cta().disabled).toBe(true);
+    fireEvent.click(cta());
+    expect(onCheckout).not.toHaveBeenCalled();
+    plus("General");
+    fireEvent.click(cta());
+    expect(onCheckout.mock.calls[0][0]).toMatchObject({ tier: { id: "tier-ga" }, quantity: 2 });
+  });
+
+  it("subtracts pending reservations from the displayed capacity", () => {
+    render(<EventTicketTiers event={event([{ ...ga, qtyTotal: 30, qtyPending: 28, maxPerOrder: 10 }])} compactFooter onCheckout={vi.fn()} />);
+    expect(screen.getByTestId("event-tier-qty").textContent).toBe("1");
+    plus("General");
+    expect(screen.getByTestId("event-tier-qty").textContent).toBe("2");
+    plus("General");
+    expect(screen.getByTestId("event-tier-qty").textContent).toBe("2");
+  });
+
+  it("does not offer paid checkout for a free tier", () => {
     const onCheckout = vi.fn();
     render(<EventTicketTiers event={event([tier({ id: "tier-free", name: "RSVP", priceCents: 0 })])} compactFooter onCheckout={onCheckout} />);
-    fireEvent.click(cta());
-    expect(onCheckout.mock.calls[0][0]).toMatchObject({ tier: { id: "tier-free", priceCents: 0 }, quantity: 1 });
+    const button = cta();
+    expect(button.disabled).toBe(true);
+    expect(button.textContent).toContain("Free entry");
+    fireEvent.click(button);
+    expect(onCheckout).not.toHaveBeenCalled();
+  });
+
+  it("does not offer checkout outside the tier's sale window", () => {
+    render(<EventTicketTiers event={event([{ ...ga, saleStartsAt: "2099-01-01T00:00:00Z" }])} compactFooter onCheckout={vi.fn()} />);
+    expect(screen.queryByTestId("event-sheet-checkout-cta")).toBeNull();
+    expect(screen.getByTestId("event-tiers-sold-out").textContent).toContain("not on sale");
+  });
+
+  it("labels a tier with too little stock for its minimum order as Unavailable", () => {
+    render(<EventTicketTiers event={event([{ ...ga, qtyTotal: 1, qtySold: 0, minPerOrder: 2 }])} compactFooter onCheckout={vi.fn()} />);
+    expect(screen.queryByTestId("event-sheet-checkout-cta")).toBeNull();
+    expect(screen.getByTestId("event-tiers-sold-out").textContent).toContain("none meet the minimum order");
+    expect(screen.getByTestId("event-tier-unavailable").textContent).toContain("Unavailable");
   });
 
   it("offers no payment button for sold-out or zero-tier events", () => {

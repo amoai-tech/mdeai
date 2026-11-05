@@ -1,0 +1,36 @@
+fileType: momentic/test/v2
+id: mde-ga-10-ticket-readonly
+description: "Read-only PR regression: Reina General Admission (GA) honors the 10-ticket ceiling and shows the correct COP total in the review modal; never submit to Stripe."
+url: https://www.mdeai.co/events/22222222-2222-2222-2222-000000000001
+labels:
+  - events
+  - tickets
+  - guest
+  - read-only
+retries: 0
+steps:
+  - assert: "The Reina event details page is fully loaded and shows an active GA (General Admission) ticket tier at $40,000 COP per ticket. Do not use a skeleton/loading state or another ticket tier."
+  - assert: "The GA tier starts at quantity 1 and has an enabled Increase GA quantity button. We will only change quantity, open the non-paying review dialog, and cancel; never submit payment."
+  - click:
+      css: 'button[aria-label="Increase GA quantity"]'
+  - click:
+      css: 'button[aria-label="Increase GA quantity"]'
+  - click:
+      css: 'button[aria-label="Increase GA quantity"]'
+  - click:
+      css: 'button[aria-label="Increase GA quantity"]'
+  - click:
+      css: 'button[aria-label="Increase GA quantity"]'
+  - click:
+      css: 'button[aria-label="Increase GA quantity"]'
+  - click:
+      css: 'button[aria-label="Increase GA quantity"]'
+  - click:
+      css: 'button[aria-label="Increase GA quantity"]'
+  - click:
+      css: 'button[aria-label="Increase GA quantity"]'
+  - assert: "The GA ticket row shows quantity exactly 10, its Increase GA quantity button is disabled, and the visible per-order limit says up to 10 tickets. This is the GA row, not VIP or another ticket."
+  - click: "Buy GA button within the GA tier row, opening the in-app review modal only. Do not click Pay with Stripe, fill payment information, or navigate away."
+  - assert: "The booking review modal shows tier GA, quantity exactly 10 and Total $400,000 COP (10 × $40,000 COP). The page has NOT redirected to Stripe or submitted a payment; this is only the local review form."
+  - click: "Cancel button inside the booking review modal, not Pay with Stripe"
+  - assert: "The review modal is closed, the same Reina event page is still open, and there is no payment confirmation or checkout redirect. No order or payment was submitted during this test."

@@ -30,8 +30,8 @@ const base: PublicEventDetail = {
   imageUrl: null, currency: "COP", latitude: 6.21, longitude: -75.57,
   source: "manual", mapsUrl: null, host: null, venue: null, tickets: [],
 };
-const a = { id: "tier-ga", name: "General", priceCents: 3000000, currency: "COP", qtyTotal: 30, qtySold: 0, position: 1 };
-const b = { id: "tier-vip", name: "VIP", priceCents: 9000000, currency: "COP", qtyTotal: 20, qtySold: 0, position: 2 };
+const a = { id: "tier-ga", name: "General", priceCents: 3000000, currency: "COP", qtyTotal: 30, qtySold: 0, qtyPending: 0, minPerOrder: 1, maxPerOrder: 10, saleStartsAt: null, saleEndsAt: null, position: 1 };
+const b = { id: "tier-vip", name: "VIP", priceCents: 9000000, currency: "COP", qtyTotal: 20, qtySold: 0, qtyPending: 0, minPerOrder: 1, maxPerOrder: 10, saleStartsAt: null, saleEndsAt: null, position: 2 };
 
 beforeEach(() => {
   session.user = null;

@@ -59,9 +59,10 @@ function getStripe(): Stripe | null {
   _stripeMode = mode;
   return _stripe;
 }
-// Zod schema. quantity 1-10 enforced both here and in the RPC's
-// min_per_order/max_per_order check; client-side errors return 400 fast,
-// server-side guarantees the truth.
+// Zod schema. quantity is bounded by a documented safe transport ceiling (10;
+// all current tiers use 10). The atomic RPC still enforces each tier's own
+// min_per_order/max_per_order, sale window and remaining capacity. Client-side
+// errors return 400 fast; the server owns the business truth.
 const AttendeeSchema = z.object({
   email: z.string().email().max(120),
   full_name: z.string().min(1).max(120),
