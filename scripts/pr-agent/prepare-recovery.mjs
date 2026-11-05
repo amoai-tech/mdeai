@@ -143,3 +143,72 @@ export async function prepareRecoveryFromGithub({
       String(error?.message ?? error).slice(0, 180) };
   }
 }
+
+/**
+ * Validate model-produced paths and line anchors against the exact trusted diff.
+ * Reject invented paths/lines, retain only supported advisory findings and do
+ * not certify results that required discarding any model output.
+ */
+export function validateTargetedModelOutput({ output, diff, path }) {
+  const reject = (reason) => ({ ok: false, reason, findings: [],
+    rejectedFindings: 0, coverageComplete: false });
+  if (!safeSourcePath(path) || typeof diff !== "string" ||
+      Buffer.byteLength(diff) > MAX_DIFF_BYTES ||
+      !diff.startsWith("diff --git a/" + path + " b/" + path + "\n--- a/" + path +
+        "\n+++ b/" + path + "\n")) return reject("untrusted exact file diff");
+  const review = output?.review, coverage = output?.coverage;
+  const effort = review?.["estimated_effort_to_review_[1-5]"];
+  if (!review || !Array.isArray(review.key_issues_to_review) ||
+      !Number.isSafeInteger(effort) || effort < 1 || effort > 5 ||
+      !["Yes", "No"].includes(String(review.relevant_tests ?? "").trim()) ||
+      !["Yes", "No"].includes(String(review.security_concerns ?? "").trim()) ||
+      !Array.isArray(coverage?.files_not_reviewed) ||
+      !Array.isArray(coverage?.files_partially_reviewed)) {
+    return reject("invalid model schema or provider coverage");
+  }
+  const changed = new Set();
+  let lineNo = null;
+  for (const line of diff.split("\n").slice(3)) {
+    if (line.startsWith("@@ ")) {
+      const match = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(line);
+      if (!match) return reject("malformed diff hunk");
+      lineNo = Number(match[1]);
+    } else if (lineNo !== null && line.startsWith("+")) {
+      changed.add(lineNo++);
+    } else if (lineNo !== null && line.startsWith(" ")) {
+      lineNo += 1;
+    } else if (lineNo !== null &&
+               (line.startsWith("-") || line === "" ||
+                line === "\\ No newline at end of file")) {
+      // Deletion or metadata: no new-side line advancement.
+    } else if (line) {
+      return reject("invalid diff line");
+    }
+  }
+  if (!changed.size || review.key_issues_to_review.length > 100) {
+    return reject("unbounded findings or no changed lines");
+  }
+  const findings = [];
+  let rejectedFindings = 0;
+  for (const issue of review.key_issues_to_review) {
+    const file = typeof issue?.relevant_file === "string" ? issue.relevant_file.trim() : "";
+    const title = typeof issue?.issue_header === "string" ? issue.issue_header.trim() : "";
+    const detail = typeof issue?.issue_content === "string" ? issue.issue_content.trim() : "";
+    const start = issue?.start_line, end = issue?.end_line;
+    const grounded = Number.isSafeInteger(start) && Number.isSafeInteger(end) &&
+      start > 0 && end >= start && end - start < 100 &&
+      [...changed].some((line) => line >= start && line <= end);
+    if (file !== path || !title || title.length > 240 ||
+        !detail || detail.length > 10000 || !grounded || findings.length >= 6) {
+      rejectedFindings += 1;
+      continue;
+    }
+    findings.push({ path, title, detail, startLine: start, endLine: end });
+  }
+  const omissions = coverage.files_not_reviewed.length + coverage.files_partially_reviewed.length;
+  return { ok: true, findings, rejectedFindings,
+    coverageComplete: omissions === 0 && rejectedFindings === 0,
+    reason: omissions ? "provider still omitted part of the file" :
+      rejectedFindings ? "some model findings lacked changed-line proof" :
+        "targeted model output covers the supplied patch" };
+}

@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { parseDocument } from "yaml";
 import { reviewEnvelope } from "../../scripts/pr-agent/review-policy.mjs";
-import { exactFileDiff, selectRecoveryTarget, prepareRecoveryFromGithub } from "../../scripts/pr-agent/prepare-recovery.mjs";
+import { exactFileDiff, selectRecoveryTarget, prepareRecoveryFromGithub, validateTargetedModelOutput } from "../../scripts/pr-agent/prepare-recovery.mjs";
 
 const baseSha = "a".repeat(40), headSha = "b".repeat(40);
 const path = "src/components/events/event-ticket-tiers.tsx";
@@ -19,6 +19,47 @@ const reviewBody = `${reviewEnvelope({ baseSha, headSha, command: "/review", typ
 ${JSON.stringify({ schema_version: 1, findings: [],
   last_run: { head_sha: headSha, complete: false, excluded_files: [path], kind: "partial" } })}
 -->`;
+
+
+describe("SAN-1640 targeted model findings require changed-line evidence", () => {
+  const patch = exactFileDiff(path, "const a = 1;\n", "const a = 2;\n");
+  const model = {
+    review: { "estimated_effort_to_review_[1-5]": 2,
+      relevant_tests: "No\n", security_concerns: "No",
+      key_issues_to_review: [
+        { relevant_file: path + "\n", issue_header: "Changed line",
+          issue_content: "Specific defect", start_line: 1, end_line: 1 },
+      ] },
+    coverage: { files_not_reviewed: [], files_partially_reviewed: [] },
+  };
+  it("accepts an exact file change and trims harmless YAML whitespace", () => {
+    expect(validateTargetedModelOutput({output:model,diff:patch.diff,path})).toMatchObject({
+      ok:true, rejectedFindings:0, coverageComplete:true,
+      findings:[{path,title:"Changed line",startLine:1,endLine:1}],
+    });
+  });
+  it("discards invented anchors and other-file findings without claiming completion", () => {
+    const altered={...model,review:{...model.review,key_issues_to_review:[
+      ...model.review.key_issues_to_review,
+      {relevant_file:path,issue_header:"No changed line",issue_content:"Unsupported",
+        start_line:99,end_line:100},
+      {relevant_file:"src/payment.ts",issue_header:"Wrong file",issue_content:"Unsupported",
+        start_line:1,end_line:1},
+    ]}};
+    expect(validateTargetedModelOutput({output:altered,diff:patch.diff,path})).toMatchObject({
+      ok:true,rejectedFindings:2,coverageComplete:false,findings:[{path,startLine:1}],
+    });
+  });
+  it("rejects untyped review, missing coverage and incomplete model coverage", () => {
+    expect(validateTargetedModelOutput({output:{review:model.review},diff:patch.diff,path}).ok).toBe(false);
+    expect(validateTargetedModelOutput({output:{...model,review:{...model.review,relevant_tests:false}},
+      diff:patch.diff,path}).ok).toBe(false);
+    expect(validateTargetedModelOutput({output:model,diff:patch.diff,path:"../file.ts"}).ok).toBe(false);
+    expect(validateTargetedModelOutput({output:{...model,coverage:{
+      files_not_reviewed:[path],files_partially_reviewed:[]}},diff:patch.diff,path})
+      .coverageComplete).toBe(false);
+  });
+});
 
 describe("SAN-1640 exact-source recovery preparation", () => {
   it("builds an actual complete unified diff without executing source code", () => {
@@ -77,6 +118,9 @@ describe("SAN-1640 exact-source recovery preparation", () => {
     expect(workflow).toContain("--json-output /review/recovery.json");
     expect(workflow).toContain("The shared reviewer must verify combined coverage before merge.");
     expect(workflow).not.toContain("-e GITHUB_TOKEN");
+    expect(workflow).toContain("validateTargetedModelOutput({ output, diff, path: plan.path })");
+    expect(workflow).toContain("Ungrounded model findings withheld");
+    expect(workflow).not.toContain("md.slice(0, 16000)");
   });
 
   it("fetches only the base and head file blobs and aborts on stale PR", async () => {

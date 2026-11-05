@@ -343,11 +343,23 @@ jobs:
               core.warning("Recovery diff provenance mismatch; nothing published.");
               return;
             }
-            const covered = Array.isArray(output.coverage?.files_not_reviewed) &&
-              Array.isArray(output.coverage?.files_partially_reviewed) &&
-              !output.coverage.files_not_reviewed.length &&
-              !output.coverage.files_partially_reviewed.length &&
-              Array.isArray(output.review?.key_issues_to_review);
+            // Validate model-generated paths and changed-line anchors against
+            // the exact trusted patch before publishing any AI prose.
+            const { pathToFileURL } = require("node:url");
+            const { validateTargetedModelOutput } = await import(pathToFileURL(
+              process.env.GITHUB_WORKSPACE + "/scripts/pr-agent/prepare-recovery.mjs").href);
+            const checked = validateTargetedModelOutput({ output, diff, path: plan.path });
+            if (!checked.ok) {
+              core.warning("Targeted model output rejected: " + checked.reason);
+              return;
+            }
+            const covered = checked.coverageComplete;
+            const groundedFindings = checked.findings.length
+              ? checked.findings.map((finding) =>
+                  "### " + finding.title.replace(/[\r\n]/g, " ") + "\n" +
+                  "**Changed lines:** " + finding.startLine + "–" + finding.endLine + "\n\n" +
+                  finding.detail).join("\n\n")
+              : "No findings with supported changed-line evidence.";
             const marker = "<!-- mde-pr-agent-targeted-recovery:v1 -->";
             const body = marker + "\n## Targeted PR-Agent follow-up (advisory)\n\n" +
               "**File:** " + plan.path + "\n" +
@@ -356,9 +368,10 @@ jobs:
               "**Reviewer profile:** v0.49.0-nvidia-lightning-target-v1\n" +
               "**Model coverage:** " + (covered ? "no omissions reported for this targeted patch" :
                 "incomplete/unknown") + "\n\n" +
+              "**Ungrounded model findings withheld:** " + checked.rejectedFindings + "\n\n" +
               "**Important:** This does NOT override the required full-review check. " +
               "The shared reviewer must verify combined coverage before merge.\n\n" +
-              md.slice(0, 16000);
+              groundedFindings.slice(0, 14000);
             const comments = await github.paginate(github.rest.issues.listComments, {
               ...repo, issue_number: pull_number, per_page: 100,
             });
