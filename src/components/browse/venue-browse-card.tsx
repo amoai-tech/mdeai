@@ -67,12 +67,18 @@ type VenueBrowseCardProps = {
   mediaLayout?: "inline" | "cover";
   selectedForAsk?: boolean;
   onAskSelect?: () => void;
+  /** SAN-1638: this card's Details panel is open (announced with aria-expanded). */
+  detailsOpen?: boolean;
+  /** SAN-1638: open this venue's read-only Details in the page's existing right panel.
+   *  The triggering control is passed back so closing Details can restore focus to it. */
+  onDetails?: (trigger: HTMLElement) => void;
   /** Existing map selection. Only coordinate-backed venues receive a map action. */
   pinId?: string;
   selectedForMap?: boolean;
   onMapSelect?: () => void;
 };
 
+/** Venue tags are stored kebab-cased; show them as words. */
 function formatTagLabel(tag: string): string {
   return tag
     .split("-")
@@ -80,6 +86,7 @@ function formatTagLabel(tag: string): string {
     .join(" ");
 }
 
+/** Real Google Maps directions link, and nothing when the venue has no usable URL. */
 function DirectionsLink({
   mapsUrl,
   directionsTestId,
@@ -136,6 +143,7 @@ function DirectionsLink({
   );
 }
 
+/** One café or nightlife result: media, facts, and the Ask and Details actions. */
 export function VenueBrowseCard({
   kind,
   listing,
@@ -143,6 +151,8 @@ export function VenueBrowseCard({
   mediaLayout = "cover",
   selectedForAsk,
   onAskSelect,
+  onDetails,
+  detailsOpen = false,
   pinId,
   selectedForMap,
   onMapSelect,
@@ -182,6 +192,13 @@ export function VenueBrowseCard({
           className="h-card-action min-w-card-action px-3"
           aria-pressed={Boolean(selectedForAsk)} data-testid="venue-ask-select" onClick={onAskSelect}>
           {selectedForAsk ? "Clear selection" : "Ask about this"}
+        </Button> : null}
+        {onDetails ? <Button type="button" size="sm" variant="outline"
+          className="h-card-action min-w-card-action px-3"
+          data-testid="venue-details-open"
+          aria-expanded={detailsOpen}
+          onClick={(event) => onDetails(event.currentTarget)}>
+          Details
         </Button> : null}
         <DirectionsLink mapsUrl={listing.mapsUrl} directionsTestId={config.directionsTestId} mapsTestId={config.mapsTestId} />
       </div>}
