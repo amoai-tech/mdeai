@@ -123,6 +123,17 @@ describe("SAN-1263 checkout verified buyer forwarding", () => {
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
+  it("uses the Vercel preview host only with explicit VERCEL_ENV=preview", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("VERCEL_ENV", "preview");
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "");
+    vi.stubEnv("VERCEL_URL", "mde-preview.vercel.app");
+    const response = await call(valid);
+    expect(response.status).toBe(200);
+    const forwarded = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(forwarded.return_url_success).toContain("https://mde-preview.vercel.app/events/");
+  });
+
   it("fails closed for invalid Checkout origin configuration", async () => {
     vi.stubEnv("NEXT_PUBLIC_SITE_URL", "http://attacker.example");
     const response = await call(valid);

@@ -53,6 +53,7 @@ export async function POST(req: Request) {
       process.env.NEXT_PUBLIC_SITE_URL,
       process.env.VERCEL_URL,
       process.env.NODE_ENV === "production",
+      process.env.VERCEL_ENV,
     );
     ({ successUrl, cancelUrl } = buildTicketCheckoutReturnUrls(
       origin, data.returnPath,

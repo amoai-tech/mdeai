@@ -4,12 +4,16 @@ export function trustedCheckoutOrigin(
   configured: string | undefined,
   vercelUrl: string | undefined,
   isProduction: boolean,
+  vercelEnvironment?: string,
 ): string {
   // A Vercel deployment URL is not the custom-domain cookie origin. In a
   // production runtime, require the explicit site domain rather than returning
   // buyers to an ephemeral deployment hostname without their login session.
+  // Vercel preview builds also use NODE_ENV=production. Only an explicit,
+  // server-controlled VERCEL_ENV=preview may use the preview deployment host.
+  const allowDeploymentHost = !isProduction || vercelEnvironment === "preview";
   const candidate = configured ||
-    (!isProduction && vercelUrl ? "https://" + vercelUrl : undefined) ||
+    (allowDeploymentHost && vercelUrl ? "https://" + vercelUrl : undefined) ||
     (!isProduction ? "http://localhost:3001" : undefined);
   if (!candidate) throw new Error("CHECKOUT_ORIGIN_NOT_CONFIGURED");
   let url: URL;
