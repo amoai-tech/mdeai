@@ -184,6 +184,7 @@
     "zod": "^3.25.0"
   },
   "devDependencies": {
+    "@argos-ci/cli": "6.11.0",
     "@argos-ci/playwright": "^7.8.0",
     "@chromatic-com/playwright": "^1.0.0",
     "@eslint/eslintrc": "^3.3.5",

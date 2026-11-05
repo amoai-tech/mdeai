@@ -11,6 +11,10 @@ function discover(extraEnv = {}, args = []) {
   const env = { ...process.env };
   delete env.PROD_SMOKE_BASE_URL;
   delete env.PW_SKIP_WEBSERVER;
+  delete env.MDE_REMOTE_DISCOVERY_CARDS;
+  delete env.MDE_ROLE_QA_E2E;
+  delete env.MDE_SUPER_ADMIN_QA;
+  delete env.MDE_PARTNER_LIVE_SOURCE_E2E;
   Object.assign(env, extraEnv);
   return execFileSync(process.execPath, [cli, "test", "--list", ...args], {
     env,
@@ -51,6 +55,10 @@ function configuredProjects(extraEnv = {}) {
   const env = { ...process.env, NODE_NO_WARNINGS: "1" };
   delete env.PROD_SMOKE_BASE_URL;
   delete env.PW_SKIP_WEBSERVER;
+  delete env.MDE_REMOTE_DISCOVERY_CARDS;
+  delete env.MDE_ROLE_QA_E2E;
+  delete env.MDE_SUPER_ADMIN_QA;
+  delete env.MDE_PARTNER_LIVE_SOURCE_E2E;
   delete env.PW_REUSE_WEBSERVER;
   Object.assign(env, extraEnv);
   const script = `import("./playwright.config.ts").then(({default: config}) =>
@@ -108,6 +116,47 @@ test("deployed mobile-nav verifier opts into only its existing read-only spec", 
   const list = discover(env, ["e2e/mobile-bottom-nav.spec.ts", "--project=prod-smoke"]);
   assert.match(list, /mobile-bottom-nav\.spec\.ts/);
   assert.match(list, /\[prod-smoke\]/);
+});
+
+const REMOTE_QA_SUITE_CASES = [
+  ["MDE_REMOTE_DISCOVERY_CARDS", "e2e/san-1140-discovery-card-actions.spec.ts"],
+  ["MDE_ROLE_QA_E2E", "e2e/qa-role-selection.spec.ts"],
+  ["MDE_SUPER_ADMIN_QA", "e2e/qa-super-admin-fixture.spec.ts"],
+  ["MDE_PARTNER_LIVE_SOURCE_E2E", "e2e/app/partner-ai-signup-live-source.spec.ts"],
+];
+
+test("every remote QA suite requires its own explicit opt-in and prod-smoke project", () => {
+  const base = {
+    PROD_SMOKE_BASE_URL: "https://example.invalid",
+    PW_SKIP_WEBSERVER: "1",
+  };
+  for (const [flag, path] of REMOTE_QA_SUITE_CASES) {
+    assert.throws(
+      () => discover(base, [path, "--project=prod-smoke"]),
+      /No tests found/,
+      `unexpected remote QA exposure without ${flag}: ${path}`,
+    );
+    const listed = discover({ ...base, [flag]: "1" }, [path, "--project=prod-smoke"]);
+    assert.match(listed, /\[prod-smoke\]/);
+    assert.match(listed, /Total: [1-9][0-9]* tests? in [1-9]/);
+    assert.ok(listed.includes(path.slice(path.lastIndexOf("/") + 1)), path);
+    const configured = configuredProjects({ ...base, [flag]: "1", SMOKE_BASE_URL: "https://example.invalid" });
+    assert.equal(configured.chromiumBaseURL, "http://localhost:3001");
+    assert.equal(configured.productionBaseURL, "https://example.invalid");
+  }
+});
+
+test("remote QA flags cannot bypass the local-only SMOKE_BASE_URL guard", () => {
+  for (const [flag] of REMOTE_QA_SUITE_CASES) {
+    assert.throws(
+      () => discover({
+        SMOKE_BASE_URL: "https://example.invalid",
+        PW_SKIP_WEBSERVER: "1",
+        [flag]: "1",
+      }, ["--project=chromium"]),
+      /SMOKE_BASE_URL must be a local HTTP\(S\) loopback URL/,
+    );
+  }
 });
 
 test("ordinary browser projects reject remote or unsafe SMOKE_BASE_URL before test discovery", () => {

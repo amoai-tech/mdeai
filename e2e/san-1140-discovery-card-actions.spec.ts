@@ -17,8 +17,8 @@ import { waitUntilInteractive } from "./helpers/rental-journey-steps";
  *
  *   SMOKE_BASE_URL=http://localhost:3011 PW_SKIP_WEBSERVER=1 \
  *     npx playwright test e2e/san-1140-discovery-card-actions.spec.ts --project=chromium
- *   SMOKE_BASE_URL=https://www.mdeai.co PW_SKIP_WEBSERVER=1 \
- *     npx playwright test e2e/san-1140-discovery-card-actions.spec.ts --project=chromium
+ *   PROD_SMOKE_BASE_URL=https://www.mdeai.co PW_SKIP_WEBSERVER=1 MDE_REMOTE_DISCOVERY_CARDS=1 \
+ *     npx playwright test e2e/san-1140-discovery-card-actions.spec.ts --project=prod-smoke
  */
 
 type RouteSpec = {

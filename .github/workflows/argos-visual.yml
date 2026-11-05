@@ -23,25 +23,23 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  visual:
-    name: Screenshot public UI
-    # Do not expose a repository secret to untrusted fork pull requests.
+  capture:
+    name: Capture public UI (Playwright)
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # Argos determines the visual baseline from Git history.
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - name: Capture and upload Argos screenshots
+      # No ARGOS_TOKEN here: a paid upload quota must not make passing
+      # browser assertions fail or leak private credentials to the capture job.
+      - name: Capture read-only screenshots and prove browser assertions
         env:
-          ARGOS_TOKEN: ${{ secrets.ARGOS_TOKEN }}
           NODE_ENV: development
           NEXT_TELEMETRY_DISABLED: "1"
           NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:9
@@ -53,4 +51,54 @@ jobs:
           ARGOS_VISUAL_TEST: "1"
           SMOKE_BASE_URL: http://localhost:3002
           PLAYWRIGHT_WEB_SERVER_COMMAND: npm run dev:ui:worktree
-        run: npx playwright test e2e/argos-visual.spec.ts e2e/argos-visual-expanded.spec.ts --project=chromium --workers=1
+        run: npx playwright test e2e/argos-visual.spec.ts e2e/argos-visual-expanded.spec.ts --project=chromium --workers=1 --reporter=dot
+      - name: Retain public screenshots for separate Argos verification
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-visual-captures
+          path: screenshots/
+          if-no-files-found: error
+          retention-days: 7
+
+  visual:
+    # Keep this existing job name: branch protection must never mistake
+    # successful browser captures for a verified Argos visual comparison.
+    name: Screenshot public UI
+    needs: capture
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Argos uses Git history to locate the baseline.
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: public-visual-captures
+          path: screenshots/
+      - name: Upload and verify Argos build
+        env:
+          ARGOS_TOKEN: ${{ secrets.ARGOS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${ARGOS_TOKEN:-}" ]]; then
+            echo "VISUAL_NOT_VERIFIED: Argos token is missing." | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          if ! npx argos upload ./screenshots > /tmp/argos-upload.log 2>&1; then
+            cat /tmp/argos-upload.log
+            if grep -qi "maximum screenshot capacity\|screenshot quota" /tmp/argos-upload.log; then
+              echo "VISUAL_NOT_VERIFIED: Argos screenshot quota exhausted (HTTP 402). Restore capacity in Argos billing; browser capture has a separate status." | tee -a "$GITHUB_STEP_SUMMARY"
+            else
+              echo "VISUAL_NOT_VERIFIED: Argos upload failed. Inspect logs and the Argos project before merging." | tee -a "$GITHUB_STEP_SUMMARY"
+            fi
+            exit 1
+          fi
+          cat /tmp/argos-upload.log
+          echo "Argos upload submitted. Review the Argos visual diff/check before claiming visual approval." >> "$GITHUB_STEP_SUMMARY"
