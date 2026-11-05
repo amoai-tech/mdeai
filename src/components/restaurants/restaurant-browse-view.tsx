@@ -194,6 +194,9 @@ function RestaurantBrowseViewInner({
                     }}
                     onDetails={(trigger) => {
                       detailsTriggerRef.current = trigger;
+                      // Details is the newer, explicit choice: release a pin that would otherwise
+                      // win the lookup and leave the panel showing a different restaurant.
+                      setSelectedPinId(null);
                       setDetailsId(r.id);
                     }}
                     detailsTestId={`restaurant-details-open-${r.id}`}
