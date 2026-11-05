@@ -117,8 +117,12 @@ test.describe("SAN-1298 cross-screen conversation (/chat → /rentals → /event
     // The second is gated on a navigation actually being in flight, so a genuine
     // failed request while a page sits still is still reported.
     let navigating = false;
+    // True from a hard navigation until the next turn settles. An aborted session
+    // bootstrap surfaces after load, so the in-flight flag alone cannot cover it.
+    let postNavigation = false;
     const gotoPage = async (path: string) => {
       navigating = true;
+      postNavigation = true;
       try {
         return await page.goto(`${baseUrl}${path}`, { waitUntil: "domcontentloaded" });
       } finally {
@@ -134,7 +138,7 @@ test.describe("SAN-1298 cross-screen conversation (/chat → /rentals → /event
       // A hard reload tears down the session bootstrap mid-request; the abort
       // surfaces after load, so the in-flight window above cannot catch it. Only
       // this exact cause is filtered — any other failed fetch is still reported.
-      if (/Failed to fetch/i.test(text) && /_useSession/.test(text)) return;
+      if (postNavigation && /Failed to fetch/i.test(text) && /_useSession/.test(text)) return;
       consoleErrors.push(text);
     });
 
@@ -144,6 +148,7 @@ test.describe("SAN-1298 cross-screen conversation (/chat → /rentals → /event
     await gotoConcierge(page);
     const firstQuestion = `Remember the word ${marker}-A`;
     await sendAndWait(page, firstQuestion);
+    postNavigation = false;
     const threadA = runThreads.at(-1);
     expect(threadA, "the first question ran on a thread").toBeTruthy();
     // Mastra persists on its own schedule, so poll rather than reading once: the
@@ -193,9 +198,51 @@ test.describe("SAN-1298 cross-screen conversation (/chat → /rentals → /event
       )
       .toBe(true);
 
-    // SAN-1639: clicking the conversation that is already open used to reset the
-    // transcript. Clicking it now must leave the history intact.
+    // SAN-1639: clicking the conversation that is already open used to clear the
+    // transcript for a few seconds and then reload it. A `toHaveCount(1)` retry can
+    // pass either side of that dip, so it cannot see the bug. Sample continuously
+    // with a MutationObserver and assert the LOWEST count observed never fell.
+    await page.evaluate(() => {
+      const win = window as unknown as {
+        __minChatCount: number;
+        __chatObserver?: MutationObserver;
+        __quietSince?: number;
+      };
+      const selector = '[data-testid="copilot-user-message"]';
+      win.__minChatCount = document.querySelectorAll(selector).length;
+      win.__chatObserver?.disconnect();
+      win.__chatObserver = new MutationObserver(() => {
+        const n = document.querySelectorAll(selector).length;
+        if (n < win.__minChatCount) win.__minChatCount = n;
+      });
+      win.__chatObserver.observe(
+        document.querySelector('[data-testid="copilot-chat-region"]') ?? document.body,
+        { childList: true, subtree: true, characterData: true },
+      );
+    });
+
     await savedThread.click();
+
+    // Settle signal rather than a timeout: the region is quiet once no history
+    // restore is running, observed for a continuous second.
+    await page.waitForFunction(() => {
+      const win = window as unknown as { __quietSince?: number };
+      if (document.querySelector('[data-testid="saved-history-loading"]')) {
+        win.__quietSince = undefined;
+        return false;
+      }
+      win.__quietSince ??= Date.now();
+      return Date.now() - win.__quietSince > 1_000;
+    }, undefined, { timeout: 30_000 });
+
+    const minChatCount = await page.evaluate(
+      () => (window as unknown as { __minChatCount: number }).__minChatCount,
+    );
+    expect
+      .soft(minChatCount, "re-clicking the open conversation never emptied the transcript")
+      .toBeGreaterThanOrEqual(1);
+
+    // And it is still there once things settle.
     await expect
       .soft(
         region.getByTestId("copilot-user-message").filter({ hasText: `${marker}-A` }),
