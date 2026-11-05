@@ -50,6 +50,16 @@ describe("SAN-1640 targeted model findings require changed-line evidence", () =>
       ok:true,rejectedFindings:2,coverageComplete:true,findingsGrounded:false,findings:[{path,startLine:1}],
     });
   });
+  it("counts grounded findings above the display cap separately from hallucinations", () => {
+    const repeated = { ...model, review: { ...model.review,
+      key_issues_to_review: Array.from({ length: 7 }, (_, i) => ({
+        ...model.review.key_issues_to_review[0], issue_header: "Grounded " + i,
+      })) } };
+    expect(validateTargetedModelOutput({ output: repeated, diff: patch.diff, path }))
+      .toMatchObject({ ok: true, coverageComplete: true, rejectedFindings: 0,
+        truncatedFindings: 1, findingsGrounded: true });
+  });
+
   it("rejects untyped review, missing coverage and incomplete model coverage", () => {
     expect(validateTargetedModelOutput({output:{review:model.review},diff:patch.diff,path}).ok).toBe(false);
     expect(validateTargetedModelOutput({output:{...model,review:{...model.review,relevant_tests:false}},
@@ -147,6 +157,8 @@ describe("SAN-1640 exact-source recovery preparation", () => {
     expect(workflow).toContain("validateTargetedModelOutput({ output, diff, path: plan.path })");
     expect(workflow).toContain("Ungrounded model findings withheld");
     expect(workflow).not.toContain("md.slice(0, 16000)");
+    expect(workflow).toContain('split("\\n**Important:**")[0]');
+    expect(workflow).toContain("Additional grounded findings beyond display cap");
     expect(workflow).toContain("Shared required reviewer certified coverage; skipping duplicate model call.");
     expect(workflow).toContain("REVIEW_JOB_RESULT: " + "$" + "{{ needs.review.result }}");
   });

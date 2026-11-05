@@ -268,11 +268,15 @@ jobs:
             // review twice. Cache only trusted bot-published, complete advisory
             // output from this exact model/profile and SHA256 source patch.
             const profile = "v0.49.0-nvidia-lightning-target-v1";
-            if (previousRecovery &&
-                (previousRecovery.body ?? "").includes("**Base/head:** " + baseSha + " / " + headSha) &&
-                (previousRecovery.body ?? "").includes("**Diff SHA-256:** " + plan.diffSha256) &&
-                (previousRecovery.body ?? "").includes("**Reviewer profile:** " + profile) &&
-                (previousRecovery.body ?? "").includes(
+            // The review body contains untrusted model prose. Cache only the
+            // trusted, fixed-format header BEFORE the Important/body boundary.
+            const trustedHeader = (previousRecovery?.body ?? "").split("\n**Important:**")[0];
+            if (trustedHeader.startsWith(marker + "\n## Targeted PR-Agent follow-up (advisory)\n") &&
+                trustedHeader.includes("**File:** " + plan.path + "\n") &&
+                trustedHeader.includes("**Base/head:** " + baseSha + " / " + headSha + "\n") &&
+                trustedHeader.includes("**Diff SHA-256:** " + plan.diffSha256 + "\n") &&
+                trustedHeader.includes("**Reviewer profile:** " + profile + "\n") &&
+                trustedHeader.includes(
                   "**Model coverage:** no omissions reported for this targeted patch")) {
               core.info("Exact-head bounded review already published; no extra model call.");
               return;
@@ -376,7 +380,8 @@ jobs:
               "**Reviewer profile:** v0.49.0-nvidia-lightning-target-v1\n" +
               "**Model coverage:** " + (covered ? "no omissions reported for this targeted patch" :
                 "incomplete/unknown") + "\n\n" +
-              "**Ungrounded model findings withheld:** " + checked.rejectedFindings + "\n\n" +
+              "**Ungrounded model findings withheld:** " + checked.rejectedFindings + "\n" +
+              "**Additional grounded findings beyond display cap:** " + checked.truncatedFindings + "\n\n" +
               "**Important:** This does NOT override the required full-review check. " +
               "The shared reviewer must verify combined coverage before merge.\n\n" +
               groundedFindings.slice(0, 14000);

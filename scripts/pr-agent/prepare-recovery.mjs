@@ -189,7 +189,7 @@ export function validateTargetedModelOutput({ output, diff, path }) {
     return reject("unbounded findings or no changed lines");
   }
   const findings = [];
-  let rejectedFindings = 0;
+  let rejectedFindings = 0, truncatedFindings = 0;
   for (const issue of review.key_issues_to_review) {
     const file = typeof issue?.relevant_file === "string" ? issue.relevant_file.trim() : "";
     const title = typeof issue?.issue_header === "string" ? issue.issue_header.trim() : "";
@@ -199,14 +199,18 @@ export function validateTargetedModelOutput({ output, diff, path }) {
       start > 0 && end >= start && end - start < 100 &&
       [...changed].some((line) => line >= start && line <= end);
     if (file !== path || !title || title.length > 240 ||
-        !detail || detail.length > 10000 || !grounded || findings.length >= 6) {
+        !detail || detail.length > 10000 || !grounded) {
       rejectedFindings += 1;
+      continue;
+    }
+    if (findings.length >= 6) {
+      truncatedFindings += 1;
       continue;
     }
     findings.push({ path, title, detail, startLine: start, endLine: end });
   }
   const omissions = coverage.files_not_reviewed.length + coverage.files_partially_reviewed.length;
-  return { ok: true, findings, rejectedFindings,
+  return { ok: true, findings, rejectedFindings, truncatedFindings,
     // Review coverage and quality of individual findings are distinct facts.
     // The pinned provider may cover the full patch while one suggested finding
     // has an invalid line anchor. Withhold that finding, not the coverage proof.
@@ -243,5 +247,6 @@ export function verifyRecoveredCoverage({ reviewBody, baseSha, headSha, files,
   return { ok: true, code: "RECOVERED_COVERAGE", path: plan.path,
     diffSha256: plan.diffSha256, findings: checked.findings,
     rejectedFindings: checked.rejectedFindings,
+    truncatedFindings: checked.truncatedFindings,
     reason: "all omitted high-risk source patches recovered for exact base/head" };
 }
