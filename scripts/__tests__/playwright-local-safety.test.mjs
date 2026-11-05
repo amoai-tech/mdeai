@@ -57,6 +57,7 @@ function configuredProjects(extraEnv = {}) {
     console.log(JSON.stringify({
       defaultBaseURL: config.use.baseURL,
       chromiumBaseURL: config.projects.find((p) => p.name === "chromium").use.baseURL,
+      productionBaseURL: config.projects.find((p) => p.name === "prod-smoke")?.use.baseURL ?? null,
       productionPresent: config.projects.some((p) => p.name === "prod-smoke"),
       reuseExistingServer: config.webServer?.reuseExistingServer ?? false,
       webServerPort: config.webServer?.port ?? null,
@@ -78,6 +79,35 @@ test("CLI test discovery fails closed on inherited remote SMOKE_BASE_URL", () =>
       return true;
     },
   );
+});
+
+test("legacy production certification can pass both remote URLs without redirecting ordinary projects", () => {
+  const env = {
+    SMOKE_BASE_URL: "https://example.invalid",
+    PROD_SMOKE_BASE_URL: "https://example.invalid",
+    PW_SKIP_WEBSERVER: "1",
+  };
+  const loaded = configuredProjects(env);
+  assert.equal(loaded.chromiumBaseURL, "http://localhost:3001");
+  assert.equal(loaded.defaultBaseURL, "http://localhost:3001");
+  assert.equal(loaded.productionBaseURL, "https://example.invalid");
+  assert.equal(loaded.productionPresent, true);
+  assert.equal(loaded.webServerPort, null);
+  const list = discover(env, ["--project=prod-smoke"]);
+  assert.match(list, /\[prod-smoke\]/);
+  assert.match(list, /prod-release-health\.spec\.ts/);
+});
+
+test("deployed mobile-nav verifier opts into only its existing read-only spec", () => {
+  const env = {
+    SMOKE_BASE_URL: "https://example.invalid",
+    PROD_SMOKE_BASE_URL: "https://example.invalid",
+    PW_SKIP_WEBSERVER: "1",
+    MDE_SAN1606_REMOTE_MOBILE_NAV: "1",
+  };
+  const list = discover(env, ["e2e/mobile-bottom-nav.spec.ts", "--project=prod-smoke"]);
+  assert.match(list, /mobile-bottom-nav\.spec\.ts/);
+  assert.match(list, /\[prod-smoke\]/);
 });
 
 test("ordinary browser projects reject remote or unsafe SMOKE_BASE_URL before test discovery", () => {

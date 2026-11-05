@@ -1,37 +1,37 @@
 import { defineConfig, devices } from "@playwright/test";
 import { createArgosReporterOptions } from "@argos-ci/playwright/reporter";
 
-const localBaseURL = process.env.SMOKE_BASE_URL || "http://localhost:3001";
-// Ordinary browser projects may create records. Never allow an inherited
-// SMOKE_BASE_URL to silently redirect them to a remote server. Intentional
-// production checks use the separate prod-smoke project and PROD_SMOKE_BASE_URL.
-const localWebServerURL = new URL(localBaseURL);
+const prodBaseURL = process.env.PROD_SMOKE_BASE_URL?.trim();
+// Remote tests require BOTH production flags and an explicitly selected project.
+// No ordinary project ever receives a remote base URL, even with those flags.
+const runProductionProjects = Boolean(prodBaseURL) && process.env.PW_SKIP_WEBSERVER === "1";
+const requestedLocalBaseURL = process.env.SMOKE_BASE_URL || "http://localhost:3001";
+const requestedURL = new URL(requestedLocalBaseURL);
 const loopbackHosts = new Set(["localhost", "127.0.0.1", "[::1]"]);
-if (
-  !["http:", "https:"].includes(localWebServerURL.protocol) ||
-  !loopbackHosts.has(localWebServerURL.hostname) ||
-  localWebServerURL.username ||
-  localWebServerURL.password
-) {
+const isSafeLocalURL =
+  ["http:", "https:"].includes(requestedURL.protocol) &&
+  loopbackHosts.has(requestedURL.hostname) &&
+  !requestedURL.username &&
+  !requestedURL.password;
+if (!isSafeLocalURL && !runProductionProjects) {
   throw new Error(
     "SMOKE_BASE_URL must be a local HTTP(S) loopback URL (localhost, 127.0.0.1, or [::1]). " +
       "Use PROD_SMOKE_BASE_URL with PW_SKIP_WEBSERVER=1 and --project=prod-smoke for explicit remote checks.",
   );
 }
+// Production certification historically sets both URL variables to the remote
+// deployment. Ignore SMOKE_BASE_URL in that case for ALL ordinary projects;
+// only prod-smoke uses PROD_SMOKE_BASE_URL. This prevents a remote test leak.
+const localBaseURL = isSafeLocalURL ? requestedLocalBaseURL : "http://localhost:3001";
 // Browser CI needs to know when Next.js is LISTENING, not when the expensive
 // marketing homepage has finished compiling or fetching live data.
+const localWebServerURL = new URL(localBaseURL);
 const localWebServerPort = Number(
   localWebServerURL.port || (localWebServerURL.protocol === "https:" ? 443 : 80),
 );
 const webServerCommand =
   process.env.PLAYWRIGHT_WEB_SERVER_COMMAND || "npm run dev:ui";
-const prodBaseURL = process.env.PROD_SMOKE_BASE_URL?.trim();
-// Remote targets belong only to the opt-in prod-smoke project. A developer's
-// inherited PROD_SMOKE_BASE_URL must never redirect ordinary browser tests.
 const baseURL = localBaseURL;
-// Keep live-data tests out of ordinary local/agent discovery. Both flags must
-// be intentional; explicit trusted production scripts already supply them.
-const runProductionProjects = Boolean(prodBaseURL) && process.env.PW_SKIP_WEBSERVER === "1";
 
 const VITEST_TESTS = "**/*.test.ts";
 
@@ -46,6 +46,10 @@ const PROD_SPECS = [
   "**/app/host-ai-sales-accuracy.spec.ts",
   "**/prod-candidate-certification.spec.ts",
   ...OPT_IN_PROD_SPECS,
+  // SAN-1606's read-only deployed mobile navigation probe is explicitly opt-in.
+  ...(process.env.MDE_SAN1606_REMOTE_MOBILE_NAV === "1"
+    ? ["**/mobile-bottom-nav.spec.ts"]
+    : []),
   "**/prod-synthetic-smoke.spec.ts",
   "**/prod-signed-in-route.spec.ts",
   "**/prod-ticket-wallet-authed.spec.ts",
