@@ -42,7 +42,7 @@ function RestaurantDetails({
 
 export function RestaurantDetailsPanel(props: { restaurant: Restaurant; onClose: () => void }) {
   return (
-    <section data-testid="restaurant-details-panel" className="absolute inset-0 z-20 overflow-y-auto rounded-xl border bg-background shadow-xl">
+    <section data-details-panel data-testid="restaurant-details-panel" className="absolute inset-0 z-20 overflow-y-auto rounded-xl border bg-background shadow-xl">
       <RestaurantDetails {...props} />
     </section>
   );

@@ -110,7 +110,7 @@ export function VenueBrowseDetailsPanel(props: {
   onClose: () => void;
 }) {
   return (
-    <section
+    <section data-details-panel
       data-testid="venue-browse-details-panel"
       aria-label={`${props.listing.name} details`}
       className="absolute inset-0 z-20 overflow-y-auto rounded-xl border bg-background shadow-xl"
