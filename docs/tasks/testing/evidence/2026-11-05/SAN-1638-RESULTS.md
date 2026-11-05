@@ -14,7 +14,7 @@ Baseline: rebased onto `main` at `cfa5a90a` (which also retired the Argos visual
 | Deterministic CI lane | GitHub `deterministic chromium 1/3…3/3` | 3/3 green at `d900eb27` |
 | Required checks | `floor`, `mastra-schema-init`, `review / review`, `review / verify-review-result` | green at `d900eb27` |
 
-Code was verified at `d900eb27`; the last commit that changes runtime behaviour is `b241c149` (the focus guard). Commits after that add docstrings and this evidence file, which change no behaviour, and CI re-runs on every head — read the current results on the PR rather than this file for the latest head.
+Code was verified at `d900eb27`. The last commit that changes runtime behaviour is `0043aa98` (a selected pin now clears the explicit Details id, so releasing it closes the panel). Commits after it add docstrings and this evidence file, which change no behaviour, and CI re-runs on every head — read the current results on the PR rather than this file for the latest head.
 
 ## Real-data browser journeys (dev server, real Supabase catalog)
 
@@ -44,4 +44,4 @@ Event panel: real tiers (GA $40,000 · VIP $120,000 · Backstage $400,000 · Fro
 - Buy tickets: no live event currently has an external ticket URL, so the button never rendered.
 - Production: these PRs are unmerged; `/api/version` still returns the previous release.
 - DeepSource JavaScript: 20 remaining findings are the JS-0067 module-scope false-positive class and complexity thresholds (see PR discussion); JS-0098 / JS-0116 / JS-0321 were fixed.
-- `Screenshot public UI` (Argos) fails with HTTP 402 free-plan screenshot capacity. Not a code defect; no code changed to silence it.
+- `Screenshot public UI` (Argos) failed with HTTP 402 free-plan screenshot capacity while these PRs were open. That job was retired on `main` in #766 (`cfa5a90a`), which is the baseline these PRs now sit on, so the check no longer runs. Nothing was changed in code to silence it.

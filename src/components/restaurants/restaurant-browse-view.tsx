@@ -76,8 +76,8 @@ function RestaurantBrowseViewInner({
   // A pin pick and an explicit Details click both drive the panel; the pin wins while selected.
   // There is deliberately no mirrored "last pin" state or ref: as state it re-ran after a Details
   // click and clobbered the record that click had just opened, which is exactly the regression
-  // this block used to cause. Releasing a pin therefore falls back to the last record the visitor
-  // opened explicitly, and Close clears both.
+  // that block used to cause. A selected pin also clears the explicit Details id below, so
+  // releasing it closes the panel rather than reopening an older record.
   const openRestaurantId = pinRestaurantId ?? detailsId;
   const detailsRestaurant = shownResults.find((r) => r.id === openRestaurantId) ?? null;
   // A map-marker pick moves the panel, so it must move the Ask context with it; otherwise the
