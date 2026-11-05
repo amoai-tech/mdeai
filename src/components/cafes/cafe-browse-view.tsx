@@ -89,6 +89,11 @@ function CafeBrowseViewInner({
   // with grounded rows, so a Details panel for the old catalogue must close instead of floating
   // over unrelated results.
   const displayedListings = activeRows === null ? results : [];
+  // The map/Ask selection is the newer action whenever it moves away from the open panel; close
+  // instead of leaving the panel and the highlighted pin describing different venues.
+  if (detailsId && selectedId !== detailsId) {
+    setDetailsId(null);
+  }
   const detailsListing = displayedListings.find((listing) => listing.id === detailsId) ?? null;
   const closeDetails = useCallback(() => {
     setDetailsId(null);

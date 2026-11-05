@@ -72,7 +72,7 @@ function RestaurantBrowseViewInner({
   // panel and a late search result can never repoint an already-open Details.
   // A pin selection opened Details before this task; keep that, and let an explicit Details click
   // win by releasing the pin.
-  const openRestaurantId = detailsId ?? pinRestaurantId;
+  const openRestaurantId = pinRestaurantId ?? detailsId;
   const detailsRestaurant = shownResults.find((r) => r.id === openRestaurantId) ?? null;
   // Forget an id whose record left the results, so it cannot reopen on a later search.
   if (detailsId && !shownResults.some((r) => r.id === detailsId)) {
