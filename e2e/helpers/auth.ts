@@ -82,16 +82,6 @@ export async function getSupabaseAdmin() {
 /** A confirmed auth user that exists only for the duration of one proof run. */
 export type ThrowawayIdentity = { email: string; userId: string };
 
-/**
- * Create a confirmed throwaway auth user (SAN-547).
- *
- * A second *permanent* QA account would work too, but it would accumulate every
- * run's threads under one long-lived resource id, so "which rows belong to this
- * run?" stops being answerable by query alone. A per-run identity makes the
- * database postcondition exact: every row owned by this id was written by this
- * run, and cleanup can be proven by deletion rather than inferred from a
- * timestamp window.
- */
 /** Best-effort removal of any account created under an exact email (ambiguous create). */
 async function deleteAuthUsersByEmail(
   admin: Awaited<ReturnType<typeof getSupabaseAdmin>>,
@@ -112,6 +102,16 @@ async function deleteAuthUsersByEmail(
   }
 }
 
+/**
+ * Create a confirmed throwaway auth user (SAN-547).
+ *
+ * A second *permanent* QA account would work too, but it would accumulate every
+ * run's threads under one long-lived resource id, so "which rows belong to this
+ * run?" stops being answerable by query alone. A per-run identity makes the
+ * database postcondition exact: every row owned by this id was written by this
+ * run, and cleanup can be proven by deletion rather than inferred from a
+ * timestamp window.
+ */
 export async function createThrowawayIdentity(label: string): Promise<ThrowawayIdentity> {
   const admin = await getSupabaseAdmin();
   // randomUUID, not Math.random: two runs starting in the same millisecond must

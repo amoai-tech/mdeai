@@ -142,8 +142,15 @@ test.describe("SAN-1298 cross-screen conversation (/chat → /rentals → /event
     await sendAndWait(page, firstQuestion);
     const threadA = runThreads.at(-1);
     expect(threadA, "the first question ran on a thread").toBeTruthy();
+    // Mastra persists on its own schedule, so poll rather than reading once: the
+    // first read can beat the write and fail a healthy run.
+    await expect
+      .poll(() => persistedCount(threadA!), {
+        timeout: 30_000,
+        message: "the turn was persisted before leaving /chat",
+      })
+      .toBeGreaterThan(0);
     const persistedBefore = await persistedCount(threadA!);
-    expect(persistedBefore, "the turn was persisted before leaving /chat").toBeGreaterThan(0);
 
     // ── 2. Leave for /rentals, then /events (full reloads) ───────────────────
     for (const path of ["/rentals", "/events"]) {
