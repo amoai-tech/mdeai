@@ -55,6 +55,14 @@ test("direct-answer negative trigger does not require a nonexistent direct skill
   const wrong = gradeTrigger(makeTrace(prompt, { called: true }), 4);
   assert.equal(wrong.exit, 1);
   assert.ok(wrong.report.checks.some((c) => c.check === "skill_not_called" && !c.pass));
+
+  // A direct answer must not pass merely because a *different* skill fired.
+  const otherSkillEvents = makeTrace(prompt).trim().split("\n").map(JSON.parse);
+  const otherCall = otherSkillEvents.find((e) => e.type === "tool/call");
+  otherCall.data.arguments = JSON.stringify({ name: "tests" });
+  const anotherWrong = gradeTrigger(otherSkillEvents.map(JSON.stringify).join("\n") + "\n", 4);
+  assert.equal(anotherWrong.exit, 1, JSON.stringify(anotherWrong.report));
+  assert.ok(anotherWrong.report.checks.some((c) => c.check === "no_skill_called" && !c.pass));
 });
 
 test("stale checkout reports the missing UIUX eval file and a safe worktree fix", () => {

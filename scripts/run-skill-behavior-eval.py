@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-CHECKS = {"catalog_contains", "skill_called", "skill_not_called", "skill_result_ok", "turn_completed"}
+CHECKS = {"catalog_contains", "skill_called", "skill_not_called", "no_skill_called", "skill_result_ok", "turn_completed"}
 
 
 def read_eval_pack(path: Path) -> object:
@@ -54,8 +54,8 @@ def load_case(skill: str, eval_id: int) -> dict:
             raise ValueError("this first runner accepts only deterministic checks; rubric needs an independent grader")
         if item.get("check") not in CHECKS or not isinstance(item.get("id"), str) or not item["id"]:
             raise ValueError("expectation needs a unique id and supported named check")
-        if item["check"] != "turn_completed" and not isinstance(item.get("value"), str):
-            raise ValueError("non-completion checks require a named skill value")
+        if item["check"] not in ("turn_completed", "no_skill_called") and not isinstance(item.get("value"), str):
+            raise ValueError("skill-specific checks require a named skill value")
     return case
 
 
@@ -97,6 +97,8 @@ def load_trigger_case(skill: str, trigger_id: int) -> dict:
             {"id": "correct-owner", "check": "skill_called", "value": owner},
             {"id": "owner-read", "check": "skill_result_ok", "value": owner},
         ])
+    else:
+        checks.append({"id": "no-other-skill", "check": "no_skill_called"})
     checks.append({"id": "finished", "check": "turn_completed"})
     for check in checks:
         check["kind"] = "deterministic"
@@ -163,6 +165,8 @@ def check_evidence(name: str, value: str | None, catalogs: list[str],
         return value in calls.values()
     if name == "skill_not_called":
         return value not in calls.values()
+    if name == "no_skill_called":
+        return not calls
     if name == "skill_result_ok":
         return any(skill == value and results.get(call_id) is True for call_id, skill in calls.items())
     return finished

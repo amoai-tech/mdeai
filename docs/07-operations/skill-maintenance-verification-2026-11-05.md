@@ -12,7 +12,7 @@ A developer opening a testing guide should be able to follow all links from eith
 ## Automated behavior / safety proof
 
 - Red-first regression: `scripts/__tests__/check-skill-layout.test.mjs` caught a broken link inside `references/tdd.md` which the old checker missed. After the fix, valid nested links, missing links, external links and inline/fenced-code examples behave correctly.
-- Red-first regression: `scripts/__tests__/skill-behavior-runner.test.mjs` caught the incorrect requirement for a fictional `direct` skill call in a no-trigger case. The evaluator now requires the target skill *not* be called; a genuine alternate owner must still be called and produce a successful result.
+- Red-first regression: `scripts/__tests__/skill-behavior-runner.test.mjs` caught the incorrect requirement for a fictional `direct` skill call in a no-trigger case. The evaluator now requires **no skill call at all** for direct-answer controls (including unrelated skills); a genuine alternate owner must still be called and produce a successful result.
 - Existing safety cases reject forged skill catalog content, missing tool calls, tool-result failures, unrelated or stale turns, incomplete turns, and unexpected calls on a negative control.
 - `npm run check:skills` and focused Node tests pass. These are code/fixture checks, **not** independent live-model routing measurements.
 
