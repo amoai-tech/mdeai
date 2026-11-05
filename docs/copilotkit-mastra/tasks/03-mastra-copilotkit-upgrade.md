@@ -1,9 +1,9 @@
 # 03 — Verification: Mastra 1.81, CopilotKit 1.84.1 and AG-UI 1.0.2
 
 **Verified:** 2026-11-04 (America/Bogota)
-**Verified commit:** `61efd9723d6d302f84c833ce8874670b27e74e87`
-**Production `/api/version`:** `61efd9723d6d302f84c833ce8874670b27e74e87` — **identical to `origin/main`**
-**Verdict:** the three upgrades are implemented, integrated, deployed and exercised on the real application. Both follow-up PRs merged; the one known product defect is fixed **and confirmed live**.
+**Historical production release verified on 2026-11-04:** `61efd9723d6d302f84c833ce8874670b27e74e87`. At that verification time, `/api/version` matched `origin/main`. This is a dated evidence snapshot, **not** a claim that today's production still serves that commit.
+**Verification scope:** the clean install and local test matrix below ran on `df868d1afc`; a separate GitHub `floor` passed on `61efd9723d`; the **20 production browser checks** ran on the earlier release and Stop/Retry **2/2** was re-run on `61efd9723d`. See §§2–3 for exact evidence.
+**Verdict (at the time):** the three upgrades were implemented, integrated and deployed. The Stop/Retry false-error defect was subsequently fixed by PR #741 and verified on the historical `61efd9723d` production release.
 
 > This file reports only what was measured. Where a claim is unproven it is marked **not tested**, never PASS.
 
@@ -51,9 +51,9 @@ Resolved tree after the lower-bounded overrides merged in #735:
 | CopilotKit v2 audit | `df868d1afc` | — | 0 | — | `audit:copilotkit-v2`: 0 violations, **0 v1 imports added** |
 | Playwright (production) | `df868d1afc` | **20** | **0** | 1 | see §3 |
 
-Gates were also run on the previous release `df868d1afc` with identical results; the figures below were re-confirmed on `df868d1afc` and the browser journeys re-run on `61efd9723d`.
+**Separate later release evidence:** GitHub CI [`floor` on `61efd9723d`](https://github.com/amoai-tech/mdeai/actions/runs/41936993674/job/126947846116) **passed**, including lint, TypeScript, Next.js build, full Vitest (**4,869 passed, 49 skipped; 588 test files passed**) and `check:mastra`. The earlier **4,861** count belongs only to `df868d1afc`; it must not be used as test proof for the subsequently merged PR #741 fix. CI [`floor` on PR #744 head `2272965`](https://github.com/amoai-tech/mdeai/actions/runs/41952363310/job/126999043407) likewise passed with **4,869 passed, 49 skipped**; that is a documentation-branch gate, not a production browser run. These GitHub `floor` jobs **do not** establish that all 20 authenticated browser checks were re-run on `61efd9723d`.
 
-`npm run floor` cannot complete in this shell for a pre-existing reason: `scripts/__tests__/pr-agent-pinned-loader.test.mjs` mounts the repo as uid 65534 against `pr-agent-pinned-loader.py`, which is mode `0600` here. Every other floor step was run individually above; CI `floor` is green on the merged commit.
+**Local environment limitation (historical):** `npm run floor` did not complete in the original shell because `scripts/__tests__/pr-agent-pinned-loader.test.mjs` ran as uid 65534 against a locally mode-`0600` file. That is a local runner permission issue; the linked GitHub CI `floor` passed on the later release. Do not confuse local shell failure with the GitHub gate result.
 
 ---
 
@@ -126,7 +126,7 @@ Two behaviours that changed in AG-UI 1.0 and were handled:
 | Journey | Status | Evidence |
 |---|---|---|
 | **A — Renter AI search + follow-up + refresh** | 🟢 PASS | renter identity; grounded cards; follow-up; both replies survive reload (`prod-renter-mobile-chat`, `prod-concierge-thread-lifecycle`) |
-| **B — Stop / Retry** | 🟢 PASS (with a caveat) | real Stop ends the running state; a later question is answered (`prod-concierge-stop-retry`). Caveat: an intermittent false *"MDE could not answer that"* banner was found — see §6 |
+| **B — Stop / Retry** | 🟢 PASS; regression fixed | Initial testing found an intermittent false *"MDE could not answer that"* banner after Stop. PR [#741](https://github.com/amoai-tech/mdeai/pull/741) fixed it; `prod-concierge-stop-retry` subsequently passed **2/2** on production `61efd9723d`. See §6 for the original defect and fix. |
 | **C — Viewing transaction, no duplicates** | 🟢 PASS | `rental-conversion-journey`: exactly one lead + one showing, replay creates nothing, wrong broker denied, rows cleaned (fixture `88528bbb`) |
 | **D — Host / Events AI** | 🟡 PARTIAL | host continuity suite passes at 390px; two SAN-1396 host specs had wording/width failures triaged separately. Not re-run on `df868d1a` |
 | **E — Security / mobile** | 🟢 PASS | isolation 9/9; guest `/api/copilotkit/info` → 401; 390×844 layouts pass |
@@ -141,7 +141,7 @@ After Stop, the next question intermittently showed *"MDE could not answer that�
 
 - **Root cause** — `src/components/rentals/rental-ask-composer.tsx` snapshot the **global** concierge error version and treated any later change as this turn's failure. A stopped run keeps finishing server-side, so its error landed while the next question was in flight.
 - **Fix** — scope the verdict to this turn: compare the agent's assistant-message count before/after the send, and only report a failure when this turn produced no answer. Reads `agent.messages` directly because the rendered turns lag by a React commit — that lag *is* the race.
-- **Proof** — RED → GREEN at component level: the new test fails on the old code (`expected <div id="rental-ask-error"> to be null`) and passes on the fix; a second test keeps the real failure path covered. `npm test` 4861 passed / 0 failed.
+- **Proof** — RED → GREEN at component level: the new test fails on the old code (`expected <div id="rental-ask-error"> to be null`) and passes on the fix; a second test covers the real failure path. Later GitHub [`floor` on `61efd9723d`](https://github.com/amoai-tech/mdeai/actions/runs/41936993674/job/126947846116) reports **4,869 passed, 49 skipped**, not the earlier pre-fix 4,861. The production Stop/Retry suite passed **2/2** on that SHA.
 - **Status** — [PR #741](https://github.com/amoai-tech/mdeai/pull/741) **merged and deployed** in `61efd9723d`. Confirmed live: `prod-concierge-stop-retry` **2 passed (14.2 s)** on that release, including the previously intermittent case.
 
 ### Merged PR — Stop/Retry production proof ([PR #738](https://github.com/amoai-tech/mdeai/pull/738))
@@ -174,19 +174,25 @@ The tail is mounted and the button works. The first question is answered by the 
 | Task | Status | Verified / Applicable | Complete | PR(s) | Missing proof / next action |
 |---|---|---:|---:|---|---|
 | SAN-1626 · Upgrade Mastra 1.81 Agents, Workflows and Supabase Storage | 🟢 | 12/12 | 100% | #719 `9546b2e7`, #721 `dd9c5427`, #722 `0b162ea1`, #725 `ffedad8d` | None. WhatsApp deferred by product owner (excluded, not counted) |
-| SAN-1629 · Upgrade CopilotKit v2 to 1.84 Without Breaking Chat | 🟢 | 12/12 | 100% | #728 `c49a8423`, #735 `6870154f`, #741 `1d13b2fa` | `/chat` mid-run Stop remains a separate product decision, not an upgrade criterion |
-| SAN-1605 · Upgrade AG-UI 1.0 Protocol and Mastra Adapter | 🟢 | 11/12 | 92% | #728 `c49a8423`, #732 `bf920e49`, #738, #741 | Server-side tool interruption unmeasured (cancellation is cooperative) — **not tested** |
-| SAN-1630 / 1631 / 1632 · interactive A2UI surfaces | 🔵 | 0/— | 0% | — | Not started; separate from the framework upgrade |
-| **Overall epic (SAN-1625)** | **🟡** | **35/37** | **95%** | | Decide `/chat` mid-run Stop; measure server-side tool interruption |
+| SAN-1629 · Upgrade CopilotKit v2 to 1.84 Without Breaking Chat | 🟢 | 12/12 | 100% | #728 `c49a8423`, #735 `6870154f`, #741 `61efd972` (merged SHA) | No Stop defect: the control appears for active agent generation; direct rental fast-path lookups do not have a running agent to stop |
+| SAN-1605 · Upgrade AG-UI 1.0 Protocol and Mastra Adapter | 🟡 historical verification | 11/12 | 91.7% (≈92%) | #728 `c49a8423`, #732 `bf920e49`, #738, #741 | Server-side interruption of an in-flight database-writing tool was **not tested**, not PASS |
+| SAN-1630 / 1631 / 1632 · interactive A2UI surfaces | 🔵 separate scope | 0/— | Not counted | — | Interactive product features are outside the framework-upgrade denominator |
+| **Historical framework verification (before N/A classification)** | **🟡** | **35/36** | **97.2%** | | One unmeasured cancellation-during-write checkpoint; the retracted `/chat` Stop claim is **not** an open defect |
 
-**Percentage basis:** `independently verified acceptance checkpoints ÷ applicable checkpoints`. Not-tested items count as unverified, not passed. Interactive feature tasks are kept separate so the framework percentage is not inflated.
+**Later scope decision, separate from the historical test results:** The Linear [SAN-1625 epic](https://linear.app/amo100/issue/SAN-1625) records SAN-1605 cancellation-during-write as **N/A, not passed** (no suitable development-safe agent-write fixture used). This changes the applicable denominator to **11/11 for SAN-1605** and **35/35 (100%) across the framework tasks**, without asserting that the unmeasured tool-abort behavior was tested. The separate A2UI features remain outside this figure.
+
+**Percentage basis:** verified checkpoints ÷ applicable checkpoints. The historical 35/36 and later 35/35 figures describe **different scope decisions**, not additional test executions. Do not count N/A as PASS.
 
 ---
 
 ## 8. What is proven, what is not
 
-**Proven on `df868d1afc`, then re-proven on `61efd9723d` = production:** exact dependency versions; CVE-2026-8769 absent from the resolved tree; 0 TS errors; 0 lint warnings; 4861 unit/integration tests; 836 Mastra tests; 0 CopilotKit v1 imports; 20 authenticated production journeys including real Stop, grounded cards, follow-up, refresh persistence and cross-user isolation; 34 Mastra tables with RLS + FORCE RLS; production SHA identical to `main`.
+**On `df868d1afc` (earlier evidence):** clean dependency installation, exact version and CVE checks, 0 TypeScript/lint errors, **4,861** Vitest tests, **836** Mastra tests, 0 CopilotKit v1 imports and **20** production browser checks (1 opted-out test skipped). Supabase checks recorded 34 Mastra tables with RLS + FORCE RLS. These are earlier-snapshot measurements.
 
-**Not proven:** that a Stop interrupts an already-running Mastra tool server-side (cooperative cancellation — unmeasured); Host/Events AI on this exact SHA; automated screenshots — the Playwright suites ran with trace/screenshot/video disabled in production certification mode, so this report cites test names and assertions rather than image artefacts.
+**On `61efd9723d` (later production release at the time):** [GitHub CI `floor` passed](https://github.com/amoai-tech/mdeai/actions/runs/41936993674/job/126947846116), including lint, typecheck, build and **4,869** Vitest tests (49 skipped); the Stop/Retry production browser suite was separately re-run and passed **2/2 (14.2 s)** after PR #741. `/api/version` matched `origin/main` at that point. **The full set of 20 browser checks was not documented as re-run on this later SHA.**
 
-**Not claimed:** public-launch certification, 100% epic completion, or that green CI alone equals working production.
+**On PR #744's document-only head `2272965`:** [CI `floor` passed](https://github.com/amoai-tech/mdeai/actions/runs/41952363310/job/126999043407) with **4,869** tests passed and 49 skipped. This confirms the PR's repository gate, **not** a fresh deployment or end-to-end production certification.
+
+**Not proven:** that Stop interrupts an already-running Mastra tool server-side (cooperative cancellation — unmeasured); Host/Events AI on the `61efd9723d` historical SHA; automated screenshots — the recorded Playwright production suites disabled screenshot/trace/video, so this report cites assertions rather than image artefacts.
+
+**Not claimed:** public-launch certification, a successful server-side tool abort, or that green CI alone proves every production journey. Later Linear's 100% framework tally follows an N/A scope decision, **not** completion of the unmeasured experiment.
