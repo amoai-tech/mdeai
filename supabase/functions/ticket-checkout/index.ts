@@ -38,7 +38,7 @@ import { getServiceClient, getUserId } from "../_shared/supabase-clients.ts";
 import { resolveCheckoutBuyer } from "../_shared/ticket-checkout-buyer.ts";
 import { signJwtHs256 } from "../_shared/jwt.ts";
 import { deriveCheckoutAccessToken, duplicateCheckoutCode } from "../_shared/checkout-access-token.ts";
-import { definitiveStripeCreateFailure, preparedCheckoutRetryAllowed } from "../_shared/ticket-checkout-recovery.ts";
+import { preparedCheckoutFailureCode, preparedCheckoutRetryAllowed } from "../_shared/ticket-checkout-recovery.ts";
 // Initialise Stripe lazily so a missing key is reported via 500 CONFIG_ERROR
 // rather than crashing the function on cold-start before headers are sent.
 let _stripe: Stripe | null = null;
@@ -130,32 +130,15 @@ async function completePreparedCheckout(
     );
   } catch (err) {
     console.error("Stripe Session creation failed:", err);
-    if (definitiveStripeCreateFailure(err)) {
-      // A rejected request cannot have created a *new* Session, but this order
-      // may already be bound to one from an earlier attempt whose success was
-      // never cached (e.g. a 200 whose cache write failed). A 401/403 can also
-      // come from a key rotation or a TEST/live mode change rather than from a
-      // rejection of this request. Releasing tickets behind a Session that is
-      // still payable would take money for an order we just cancelled.
-      if (order.stripe_session_id) {
-        return jsonResponse(errorBody("CHECKOUT_SESSION_RECONCILIATION_REQUIRED",
-          "Stripe rejected this retry but an earlier Checkout Session is already bound; verify that Session before retrying"), 503, req);
-      }
-      const { error: cancelError } = await service.rpc("ticket_checkout_cancel", {
-        p_order_id: prepared.order_id,
-      });
-      if (cancelError) {
-        console.error("Checkout rejection reservation release failed:", cancelError);
-        return jsonResponse(errorBody("CHECKOUT_RELEASE_FAILED",
-          "Unable to release rejected Checkout reservation"), 503, req);
-      }
-      return jsonResponse(errorBody("STRIPE_REJECTED",
-        "Stripe rejected the Checkout request"), 502, req);
-    }
-    // Timeouts, 5xx and unknown outcomes may have created a Session.
-    // Leave the pending order held and retry with the same key, never a new one.
-    return jsonResponse(errorBody("CHECKOUT_RETRYABLE",
-      "Stripe response is uncertain; retry Checkout with the same request"), 503, req);
+    // The prepared request may have reached Stripe before an earlier response
+    // was lost, even when no Session ID was saved. A later 401/403/400 cannot
+    // prove an earlier Session was not created. Never release the hold based
+    // only on a Stripe-create error; require reconciliation instead.
+    const code = preparedCheckoutFailureCode(err);
+    return jsonResponse(errorBody(code,
+      code === "CHECKOUT_SESSION_RECONCILIATION_REQUIRED"
+        ? "Stripe rejected this attempt; an earlier Checkout Session may still be payable. Reconcile before releasing tickets"
+        : "Stripe response is uncertain; retry Checkout with the same request"), 503, req);
   }
   if (!session.url) {
     return jsonResponse(errorBody("CHECKOUT_SESSION_NOT_READY",

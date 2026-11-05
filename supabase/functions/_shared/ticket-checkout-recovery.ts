@@ -34,3 +34,15 @@ export function preparedCheckoutRetryAllowed(
     nowMs >= createdAtMs &&
     nowMs - createdAtMs < STRIPE_V1_SAFE_RETRY_WINDOW_MS;
 }
+
+// A prepared Checkout has already been durably recorded, and *may* have been
+// submitted to Stripe. Classifying the CURRENT response as a definitive 4xx
+// does not prove an earlier attempt did not create a payable Session.
+// Thus no Stripe-create error on a prepared order grants cancellation authority.
+export function preparedCheckoutFailureCode(
+  error: unknown,
+): "CHECKOUT_SESSION_RECONCILIATION_REQUIRED" | "CHECKOUT_RETRYABLE" {
+  return definitiveStripeCreateFailure(error)
+    ? "CHECKOUT_SESSION_RECONCILIATION_REQUIRED"
+    : "CHECKOUT_RETRYABLE";
+}
