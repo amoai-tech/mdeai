@@ -14,6 +14,7 @@ import { RestaurantCard } from "@/components/copilot/restaurant-card";
 import { RestaurantBrowseFilters } from "@/components/restaurants/restaurant-browse-filters";
 import { RestaurantDetailsPanel, RestaurantDetailsSheet } from "@/components/restaurants/restaurant-details-panel";
 import { useIsLgUp } from "@/hooks/use-is-lg-up";
+import { useEscapeToClose } from "@/hooks/use-escape-to-close";
 import { EmptyState } from "@/components/empty/empty-state";
 import { Button } from "@/components/ui/button";
 import { useMapContext, useMapPinSelect } from "@/platform/maps/map-context";
@@ -95,6 +96,9 @@ function RestaurantBrowseViewInner({
     setSelectedPinId(null);
     requestAnimationFrame(() => detailsTriggerRef.current?.focus());
   }, [setSelectedPinId]);
+  // Escape closes the desktop panel (the phone Sheet already does).
+  useEscapeToClose(Boolean(detailsRestaurant && desktop), closeDetails);
+
   const onAgentResults = useCallback((result: DiscoveryAgentResult) => {
     if (result.page === "restaurants") {
       setSelectedForAskId(null);
@@ -205,6 +209,7 @@ function RestaurantBrowseViewInner({
                       detailsTriggerRef.current = null;
                     }}
                     selectedForAsk={selectedForAsk === r.id}
+                    detailsOpen={openRestaurantId === r.id}
                     // Ask selects context only: it clears the map/details preview and
                     // toggles our own selection. Nothing is sent until the visitor submits.
                     onAskSelect={() => {

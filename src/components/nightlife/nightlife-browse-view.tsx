@@ -10,6 +10,7 @@ import { useMapContext, useMapPinSelect } from "@/platform/maps/map-context";
 import { useBrowseMapSync } from "@/hooks/use-browse-map-sync";
 import { useBrowseCardScroll } from "@/hooks/use-browse-card-scroll";
 import { useIsLgUp } from "@/hooks/use-is-lg-up";
+import { useEscapeToClose } from "@/hooks/use-escape-to-close";
 import { venueToMapPin } from "@/lib/browse/browse-pin-converters";
 import { DiscoveryGroundedResults, hasVenueBrowseMapPins } from "@/components/chat/discovery-grounded-results";
 import type { DiscoveryAgentResult } from "@/components/chat/discovery-tool-results";
@@ -65,6 +66,7 @@ function NightlifeBrowseViewInner({
     return pin ? [pin] : [];
   }), [results]);
   useBrowseMapSync(activeRows === null && !error ? basePins : [], "venue");
+  // Escape closes the desktop panel (the phone Sheet already does).
   const { selectedId, selectForAsk, clearAskSelection } = useVenueAskSelection(
     activeRows, results.map((r) => r.id),
   );
@@ -109,6 +111,9 @@ function NightlifeBrowseViewInner({
     clearAskSelection();
     requestAnimationFrame(() => detailsTriggerRef.current?.focus());
   }, [clearAskSelection]);
+
+  // Escape closes the desktop panel (the phone Sheet already does).
+  useEscapeToClose(Boolean(detailsListing && desktop), closeDetails);
 
   return (
     <>
@@ -191,6 +196,7 @@ function NightlifeBrowseViewInner({
                 kind="nightlife"
                 listing={listing}
                 selectedForAsk={selectedId === listing.id}
+                detailsOpen={detailsListing?.id === listing.id}
                 pinId={basePins.some((pin) => pin.id === `venue-${listing.id}`) ? `venue-${listing.id}` : undefined}
                 selectedForMap={selectedPinId === `venue-${listing.id}`}
                 onMapSelect={basePins.some((pin) => pin.id === `venue-${listing.id}`) ? () => selectPin(`venue-${listing.id}`) : undefined}

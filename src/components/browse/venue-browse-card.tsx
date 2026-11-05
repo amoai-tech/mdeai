@@ -67,6 +67,8 @@ type VenueBrowseCardProps = {
   mediaLayout?: "inline" | "cover";
   selectedForAsk?: boolean;
   onAskSelect?: () => void;
+  /** SAN-1638: this card's Details panel is open (announced with aria-expanded). */
+  detailsOpen?: boolean;
   /** SAN-1638: open this venue's read-only Details in the page's existing right panel.
    *  The triggering control is passed back so closing Details can restore focus to it. */
   onDetails?: (trigger: HTMLElement) => void;
@@ -147,6 +149,7 @@ export function VenueBrowseCard({
   selectedForAsk,
   onAskSelect,
   onDetails,
+  detailsOpen = false,
   pinId,
   selectedForMap,
   onMapSelect,
@@ -189,7 +192,9 @@ export function VenueBrowseCard({
         </Button> : null}
         {onDetails ? <Button type="button" size="sm" variant="outline"
           className="h-card-action min-w-card-action px-3"
-          data-testid="venue-details-open" onClick={(event) => onDetails(event.currentTarget)}>
+          data-testid="venue-details-open"
+          aria-expanded={detailsOpen}
+          onClick={(event) => onDetails(event.currentTarget)}>
           Details
         </Button> : null}
         <DirectionsLink mapsUrl={listing.mapsUrl} directionsTestId={config.directionsTestId} mapsTestId={config.mapsTestId} />

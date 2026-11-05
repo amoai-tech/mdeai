@@ -61,6 +61,8 @@ export type RestaurantCardProps = {
   detailsHref?: string;
   /** Browse grid only: test id for the Details action (link or button). */
   detailsTestId?: string;
+  /** Browse grid only: this card's Details panel is currently open (announced to AT). */
+  detailsOpen?: boolean;
 };
 
 function cuisineLabel(cuisine?: string): string | null {
@@ -186,6 +188,7 @@ export function RestaurantCard({
   onDetails,
   detailsHref,
   detailsTestId,
+  detailsOpen = false,
 }: RestaurantCardProps) {
   const ratingText = formatGroundedRating(rating);
   const typeLabel = cuisineLabel(cuisine) ?? "Restaurant";
@@ -278,6 +281,7 @@ export function RestaurantCard({
             variant="outline"
             className="h-card-action min-w-card-action px-3"
             data-testid={detailsTestId ?? "restaurant-details-open"}
+            aria-expanded={detailsOpen}
             onClick={(e) => {
               e.stopPropagation();
               onDetails(e.currentTarget);

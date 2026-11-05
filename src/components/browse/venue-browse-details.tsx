@@ -65,6 +65,11 @@ function VenueBrowseDetailsBody({
               {formatTag(tag)}
             </Badge>
           ))}
+          {listing.tags.length > 5 ? (
+            <Badge variant="outline" data-testid="venue-browse-details-more-tags">
+              +{listing.tags.length - 5}
+            </Badge>
+          ) : null}
         </div>
       ) : null}
 
