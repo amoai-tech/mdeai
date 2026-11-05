@@ -10,10 +10,10 @@
  *   env-names         the Production target defines every required variable NAME
  *   assert-staged     the candidate is READY, from main, owns no production domain yet, and the
  *                     certified URL belongs to this exact deployment id
- *   assert-promoted   both domains serve the exact certified deployment, still current on main
- *   assert-current-main  reject a superseded candidate before promotion
+ *   assert-promoted   both domains serve the exact certified deployment after promotion
+ *   assert-current-main  reject a superseded candidate BEFORE promotion
  *   reconcile-promote   bounded Vercel 409 recovery, with a final remote-main check
- *   assert-stable       watch both aliases and main after promotion
+ *   assert-stable       watch both exact deployment aliases after promotion (not newer staged main)
  *   assert-live-current scheduled read-only monitor that derives the SHA from live main
  *
  * Names and IDs only. The env check reads variable NAMES and TARGETS and never
@@ -276,12 +276,14 @@ export async function reconcilePromotion({ expected, readMain, readDeployment, r
   fail("promotion unresolved after bounded alias checks: " + (lastError?.message ?? "unknown"));
 }
 
-export async function checkStablePromotion({ expected, readMain, readDeployment, readAliases,
+// A newly merged commit is STAGED until its own certification promotes it. Once this
+// candidate has already been promoted, advancing main is not alias drift. Keep
+// checking the authoritative deployment ID/SHA/READY state and BOTH domain aliases;
+// a competing promotion, split alias or wrong build must still fail immediately.
+export async function checkStablePromotion({ expected, readDeployment, readAliases,
   attempts = 10, delayMs = 20000, pause = (ms) => new Promise(r => setTimeout(r, ms)) }) {
   for (let i = 0; i < attempts; i += 1) {
-    checkCurrentMain(await readMain(), expected.sha);
     checkPromoted(await readDeployment(), expected, await readAliases());
-    checkCurrentMain(await readMain(), expected.sha);
     if (i < attempts - 1) await pause(delayMs);
   }
 }
@@ -347,15 +349,14 @@ async function main(command) {
     console.log("vercel-release: candidate still matches remote main");
   } else if (["reconcile-promote", "assert-stable"].includes(command)) {
     const expected = { id: required("VERCEL_DEPLOYMENT_ID"), sha: required("VERCEL_DEPLOYMENT_SHA") };
-    const readMain = () => githubMainSha();
     const readDeployment = () => vercelGet("/v13/deployments/" + expected.id + "?teamId=" + TEAM_ID);
     const readAliases = () => readDomainAliases();
     if (command === "reconcile-promote") {
-      await reconcilePromotion({ expected, readMain, readDeployment, readAliases });
+      await reconcilePromotion({ expected, readMain: () => githubMainSha(), readDeployment, readAliases });
     } else if (command === "assert-stable") {
-      await checkStablePromotion({ expected, readMain, readDeployment, readAliases });
+      await checkStablePromotion({ expected, readDeployment, readAliases });
     }
-    console.log("vercel-release: " + command + " OK — both domains serve the exact current main");
+    console.log("vercel-release: " + command + " OK — both domains serve the exact certified deployment");
   } else if (command === "assert-promoted") {
     const expected = { id: required("VERCEL_DEPLOYMENT_ID"), sha: required("VERCEL_DEPLOYMENT_SHA") };
     let lastError;
@@ -367,13 +368,13 @@ async function main(command) {
           expected,
           await readDomainAliases(),
         );
-        checkCurrentMain(await githubMainSha(), expected.sha);
+        // Pre-promotion freshness is enforced in the promotion step. A newer
+        // main commit staged after that step must not invalidate this release.
         console.log(
           `vercel-release: ${PRODUCTION_DOMAINS.join(" and ")} serve the certified ${expected.id} @ ${expected.sha.slice(0, 12)}`,
         );
         return;
       } catch (error) {
-        if (String(error?.message ?? "").includes("candidate superseded:")) throw error;
         lastError = error;
         if (attempt < 6) await wait(10_000);
       }

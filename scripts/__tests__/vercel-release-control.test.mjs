@@ -459,15 +459,16 @@ test("late old-version alias takeover after a clean promotion is detected", asyn
   assert.equal(rounds, 3);
 });
 
-test("stable alias monitoring succeeds only when both aliases and current main remain exact", async () => {
+test("stable alias monitoring verifies the same deployed build even after main advances", async () => {
   let rounds = 0;
+  let mainReads = 0;
   await checkStablePromotion(snapshot({
-    attempts: 3, readAliases: async () => { rounds++; return aliasesOf(); },
+    attempts: 3,
+    readMain: async () => { mainReads++; return "c".repeat(40); },
+    readAliases: async () => { rounds++; return aliasesOf(); },
   }));
-  assert.equal(rounds, 3);
-  await assert.rejects(() => checkStablePromotion(snapshot({
-    attempts: 3, readMain: async () => "c".repeat(40),
-  })), /superseded/);
+  assert.equal(rounds, 3, "complete the bounded stability window");
+  assert.equal(mainReads, 0, "after promotion, a newer staged main SHA is not alias drift");
 });
 
 // Canary F01: a schedule event may be pinned to an older workflow SHA even when the
@@ -523,11 +524,26 @@ test("409 reconciliation refuses a stale success after main advances during alia
   assert.equal(reads, 2, "fresh main must be read after alias and READY identity verification");
 });
 
-test("stability monitoring fails if main advances after the deployment and aliases pass", async () => {
-  let reads = 0;
+test("stability monitoring fails if a newer build replaces one production alias", async () => {
+  await assert.rejects(() => checkStablePromotion(snapshot({
+    attempts: 2,
+    readMain: async () => "d".repeat(40),
+    readAliases: async () => aliasesOf(ID, {
+      "mdeai.co": domainAlias("mdeai.co", { deploymentId: OLD }),
+    }),
+  })), /does not point/);
+});
+
+test("stability monitoring rejects wrong SHA and unready deployments regardless of main", async () => {
   await assert.rejects(() => checkStablePromotion(snapshot({
     attempts: 1,
-    readMain: async () => ++reads === 1 ? SHA : "d".repeat(40),
-  })), /superseded/);
-  assert.equal(reads, 2);
+    readMain: async () => "d".repeat(40),
+    readDeployment: async () => promotedDeployment({
+      meta: { githubCommitSha: "b".repeat(40), githubCommitRef: "main" },
+    }),
+  })), /commit sha/);
+  await assert.rejects(() => checkStablePromotion(snapshot({
+    attempts: 1,
+    readDeployment: async () => promotedDeployment({ readyState: "BUILDING" }),
+  })), /not READY/);
 });
