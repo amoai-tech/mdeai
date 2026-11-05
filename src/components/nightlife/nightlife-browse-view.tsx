@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useVenueAskSelection } from "@/components/chat/use-venue-ask-selection";
 import { BrowseMapContextShell } from "@/components/browse/BrowseMapContextShell";
 import { BrowseMapPanel } from "@/components/browse/BrowseMapPanel";
@@ -9,6 +9,7 @@ import { BrowseMapSheet } from "@/components/browse/BrowseMapSheet";
 import { useMapContext, useMapPinSelect } from "@/platform/maps/map-context";
 import { useBrowseMapSync } from "@/hooks/use-browse-map-sync";
 import { useBrowseCardScroll } from "@/hooks/use-browse-card-scroll";
+import { useIsLgUp } from "@/hooks/use-is-lg-up";
 import { venueToMapPin } from "@/lib/browse/browse-pin-converters";
 import { DiscoveryGroundedResults, hasVenueBrowseMapPins } from "@/components/chat/discovery-grounded-results";
 import type { DiscoveryAgentResult } from "@/components/chat/discovery-tool-results";
@@ -20,6 +21,10 @@ import { DiscoveryPageContext } from "@/components/chat/discovery-page-context";
 import { EmptyState } from "@/components/empty/empty-state";
 import { Button } from "@/components/ui/button";
 import { VenueBrowseCard } from "@/components/browse/venue-browse-card";
+import {
+  VenueBrowseDetailsPanel,
+  VenueBrowseDetailsSheet,
+} from "@/components/browse/venue-browse-details";
 import { NightlifeBrowseFilters } from "@/components/nightlife/nightlife-browse-filters";
 import type { NightlifeListing, NightlifeVibe } from "@/lib/nightlife-browse";
 
@@ -49,6 +54,7 @@ function NightlifeBrowseViewInner({
 }: NightlifeBrowseViewProps) {
   const { selectedPinId } = useMapContext();
   const selectPin = useMapPinSelect();
+  const desktop = useIsLgUp();
   useBrowseCardScroll();
   const retryHref = buildFilterUrl({ neighborhood, vibe });
   const [searched, setSearched] = useState<{ scope: string; rows: GroundedToolRow[] } | null>(null);
@@ -81,13 +87,51 @@ function NightlifeBrowseViewInner({
   // A result set without valid positions keeps its cards but never shows an empty map.
   const hasMap = hasVenueBrowseMapPins(basePins, activeRows, error);
 
+  // SAN-1638: Details is its own state, deliberately independent of the map pin, so a venue
+  // with no coordinates still opens. Deriving the open record from the rows currently on screen
+  // closes the panel when a filter removes it and stops a late search from repointing it.
+  const [detailsId, setDetailsId] = useState<string | null>(null);
+  // SAN-1638: closing Details puts keyboard focus back on the control that opened it.
+  const detailsTriggerRef = useRef<HTMLElement | null>(null);
+  const detailsListing = results.find((listing) => listing.id === detailsId) ?? null;
+  const closeDetails = useCallback(() => {
+    setDetailsId(null);
+    requestAnimationFrame(() => detailsTriggerRef.current?.focus());
+  }, []);
+
   return (
     <>
     <DiscoveryPageContext page="nightlife" filters={{ neighborhood, vibe }} selectedId={selectedId} />
     <DiscoveryWorkspace
       activeSlug="nightlife"
       askComposer={<DiscoveryAskComposer page="nightlife" onAgentResults={onAgentResults} hasSelectedItem={Boolean(selectedId)} onClearSelection={clearAskSelection} />}
-      rightPanel={hasMap ? <BrowseMapPanel fill /> : undefined}
+      rightPanel={
+        desktop && detailsListing ? (
+          hasMap ? (
+            <BrowseMapPanel
+              fill
+              overlay={
+                <VenueBrowseDetailsPanel
+                  kind="nightlife"
+                  listing={detailsListing}
+                  onClose={closeDetails}
+                />
+              }
+            />
+          ) : (
+            // No coordinate-backed pins: Details still gets the right column, with no fake map.
+            <div className="relative h-full">
+              <VenueBrowseDetailsPanel
+                kind="nightlife"
+                listing={detailsListing}
+                onClose={closeDetails}
+              />
+            </div>
+          )
+        ) : hasMap ? (
+          <BrowseMapPanel fill />
+        ) : undefined
+      }
       testId="nightlife-page"
       title="Nightlife"
       subtitle="Clubs & bars in Medellín"
@@ -140,6 +184,10 @@ function NightlifeBrowseViewInner({
                 selectedForMap={selectedPinId === `venue-${listing.id}`}
                 onMapSelect={basePins.some((pin) => pin.id === `venue-${listing.id}`) ? () => selectPin(`venue-${listing.id}`) : undefined}
                 onAskSelect={() => selectForAsk(selectedId === listing.id ? null : listing.id)}
+                onDetails={(trigger) => {
+                  detailsTriggerRef.current = trigger;
+                  setDetailsId(listing.id);
+                }}
                 composition="nova"
                 mediaLayout="inline"
               />
@@ -148,6 +196,13 @@ function NightlifeBrowseViewInner({
         ) : null}
       </section>
     </DiscoveryWorkspace>
+    {detailsListing && !desktop ? (
+      <VenueBrowseDetailsSheet
+        kind="nightlife"
+        listing={detailsListing}
+        onClose={closeDetails}
+      />
+    ) : null}
     </>
   );
 }

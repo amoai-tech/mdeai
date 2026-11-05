@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import type { DiscoveryAgentResult } from "@/components/chat/discovery-tool-results";
 import Link from "next/link";
 import { ArrowUpRight, Trophy, UtensilsCrossed } from "lucide-react";
@@ -55,10 +55,21 @@ function RestaurantBrowseViewInner({
   const retryHref = buildFilterUrl({ neighborhood, cuisine });
   const [searched, setSearched] = useState<{ scope: string; rows: Restaurant[] } | null>(null);
   const [selectedForAskId, setSelectedForAskId] = useState<string | null>(null);
+  // SAN-1638: Details has its own identity. It must not depend on `selectedPinId` — a restaurant
+  // with no coordinates has no pin, and the panel used to be reachable only through one.
+  const [detailsId, setDetailsId] = useState<string | null>(null);
+  // SAN-1638: closing Details puts keyboard focus back on the control that opened it.
+  const detailsTriggerRef = useRef<HTMLElement | null>(null);
   const shownResults = searched?.scope === retryHref ? searched.rows : results;
   const selectedRestaurant = shownResults.find((r) => `restaurant-${r.id}` === selectedPinId) ?? null;
+  // Derived from the rows currently on screen: a filter that drops the restaurant closes the
+  // panel, and a late search result can never repoint an already-open Details.
+  const detailsRestaurant = shownResults.find((r) => r.id === detailsId) ?? null;
   const selectedForAsk = shownResults.some((r) => r.id === selectedForAskId) ? selectedForAskId : null;
-  const closeDetails = useCallback(() => setSelectedPinId(null), [setSelectedPinId]);
+  const closeDetails = useCallback(() => {
+    setDetailsId(null);
+    requestAnimationFrame(() => detailsTriggerRef.current?.focus());
+  }, []);
   const onAgentResults = useCallback((result: DiscoveryAgentResult) => {
     if (result.page === "restaurants") {
       setSelectedForAskId(null);
@@ -88,7 +99,7 @@ function RestaurantBrowseViewInner({
       <DiscoveryWorkspace
         activeSlug="restaurants"
         askComposer={<DiscoveryAskComposer page="restaurants" onAgentResults={onAgentResults} hasSelectedItem={Boolean(selectedForAsk ?? selectedRestaurant)} onClearSelection={() => { setSelectedForAskId(null); setSelectedPinId(null); }} />}
-        rightPanel={<BrowseMapPanel fill overlay={selectedRestaurant && desktop ? <RestaurantDetailsPanel restaurant={selectedRestaurant} onClose={closeDetails} /> : undefined} />}
+        rightPanel={<BrowseMapPanel fill overlay={detailsRestaurant && desktop ? <RestaurantDetailsPanel restaurant={detailsRestaurant} onClose={closeDetails} /> : undefined} />}
         testId="restaurants-browse"
         title="Restaurants"
         subtitle={
@@ -168,8 +179,11 @@ function RestaurantBrowseViewInner({
                         current === r.id ? null : r.id,
                       );
                     }}
-                    detailsHref={`/restaurants/${r.id}`}
-                    detailsTestId={`restaurant-detail-link-${r.id}`}
+                    onDetails={(trigger) => {
+                      detailsTriggerRef.current = trigger;
+                      setDetailsId(r.id);
+                    }}
+                    detailsTestId={`restaurant-details-open-${r.id}`}
                     testId={`restaurant-card-${r.id}`}
                     composition="nova"
                     mediaLayout="inline"
@@ -181,7 +195,7 @@ function RestaurantBrowseViewInner({
         </section>
       </DiscoveryWorkspace>
 
-      {selectedRestaurant && !desktop ? <RestaurantDetailsSheet restaurant={selectedRestaurant} onClose={closeDetails} /> : null}
+      {detailsRestaurant && !desktop ? <RestaurantDetailsSheet restaurant={detailsRestaurant} onClose={closeDetails} /> : null}
     </>
   );
 }

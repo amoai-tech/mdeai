@@ -13,7 +13,7 @@ function RestaurantDetails({
   onClose: () => void;
 }) {
   return (
-    <div className="space-y-4 bg-background p-5" data-testid="restaurant-details">
+    <div className="space-y-4 bg-background p-5 pb-8" data-testid="restaurant-details">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="font-serif text-xl font-semibold">{restaurant.name}</h2>

@@ -38,13 +38,14 @@ const ROUTES: RouteSpec[] = [
     pageTestId: "restaurants-browse",
     card: '[data-result-kind="restaurant"]',
     ask: '[data-testid="restaurant-ask-select"]',
-    details: '[data-testid^="restaurant-detail-link-"]',
+    details: '[data-testid^="restaurant-details-open-"]',
   },
   {
     route: "/cafes",
     pageTestId: "cafes-browse",
     card: '[data-result-kind="cafe"]',
     ask: '[data-testid="venue-ask-select"]',
+    details: '[data-testid="venue-details-open"]',
     mapAction: true,
   },
   {
@@ -52,6 +53,7 @@ const ROUTES: RouteSpec[] = [
     pageTestId: "nightlife-page",
     card: '[data-result-kind="nightlife"]',
     ask: '[data-testid="venue-ask-select"]',
+    details: '[data-testid="venue-details-open"]',
     mapAction: true,
   },
 ];
@@ -339,45 +341,67 @@ for (const spec of ROUTES) {
 
     if (spec.details) {
       const detailsSelector = spec.details;
-      test(`${spec.route} View details is one real link inside the card and opens the record`, async ({
+      test(`${spec.route} Details opens in place, follows the card, closes and restores focus`, async ({
         page,
       }) => {
         const cards = await openRoute(page, spec);
         const count = await cards.count();
         if (skipOrFail(count === 0, spec, "rendered no cards")) return;
+        if (count < 2) return;
 
-        const card = cards.first();
-        const details = card.locator(detailsSelector);
-        await expect(details).toHaveCount(1);
-        // Chat-only duplicate Details control must not appear on a browse card.
-        await expect(card.locator('[data-testid="restaurant-details-cta"]')).toHaveCount(0);
+        const urlBefore = page.url();
+        const first = cards.first();
+        const second = cards.nth(1);
+        const firstName = (await first.locator("h3").first().innerText()).trim();
+        const secondName = (await second.locator("h3").first().innerText()).trim();
 
-        const href = await details.getAttribute("href");
-        // Internal record route, never an external or script URL.
-        expect(href, "Details must use the internal public route").toMatch(
-          /^\/restaurants\/[A-Za-z0-9_-]+$/,
+        // Exactly one Details control per card, and no chat-only duplicate.
+        await expect(first.locator(detailsSelector)).toHaveCount(1);
+        await expect(first.locator('[data-testid="restaurant-details-cta"]')).toHaveCount(0);
+
+        const panel = page.locator(
+          '[data-testid="restaurant-details-panel"], [data-testid="venue-browse-details-panel"]',
         );
-        const id = href?.split("/").pop();
-        if (!DETERMINISTIC_FIXTURES) {
-          // Live inventory uses canonical UUIDs; the CI fixture uses readable ids.
-          expect(id, "live restaurant ids are canonical UUIDs").toMatch(
-            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
-          );
-        }
+        const body = page.locator(
+          '[data-testid="restaurant-details"], [data-testid="venue-browse-details"]',
+        );
 
-        await details.scrollIntoViewIfNeeded();
-        await details.click();
+        await first.locator(detailsSelector).scrollIntoViewIfNeeded();
+        await first.locator(detailsSelector).click();
+        await body.first().waitFor({ state: "visible" });
+        expect(
+          (await body.first().locator("h2").first().innerText()).trim(),
+          "the panel shows the card that was clicked",
+        ).toBe(firstName);
+        // Browse Details must not navigate: the list, filters and map stay put.
+        expect(new URL(page.url()).pathname).toBe(new URL(urlBefore).pathname);
+
+        // Comparing: choosing another card repoints the same panel.
+        await second.locator(detailsSelector).click();
         await expect
-          .poll(() => new URL(page.url()).pathname, {
-            message: "Details must open that restaurant's own route",
-            // A cold Next dev compile of the detail route is legitimately slow.
-            timeout: 30_000,
-          })
-          .toBe(`/restaurants/${id}`);
-        await expect(page.locator("h1, h2").first()).toBeVisible();
+          .poll(async () => (await body.first().locator("h2").first().innerText()).trim())
+          .toBe(secondName);
 
-        await page.goBack();
-        await expect(page.locator(spec.card).first()).toBeVisible();
+        await page
+          .locator(
+            '[data-testid="restaurant-details-close"], [data-testid="venue-browse-details-close"]',
+          )
+          .first()
+          .click();
+        await expect(panel.first()).toHaveCount(0);
+        expect(new URL(page.url()).pathname).toBe(new URL(urlBefore).pathname);
+        // Closing returns keyboard focus to the control that opened Details.
+        await expect
+          .poll(() =>
+            page.evaluate(
+              (selector) => {
+                const active = document.activeElement;
+                return Boolean(active && active.matches(selector));
+              },
+              detailsSelector,
+            ),
+          )
+          .toBe(true);
       });
     }
   });

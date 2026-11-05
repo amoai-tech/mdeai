@@ -48,12 +48,18 @@ export type RestaurantCardProps = {
   /** Browse grid only: toggle this restaurant as the Ask MDE selection. */
   onAskSelect?: () => void;
   /**
+   * Browse grid only (SAN-1638): open Details in the page's existing right panel instead of
+   * navigating. The full /restaurants/[id] page stays reachable from the panel itself.
+   * The triggering control is passed back so closing can restore focus to it.
+   */
+  onDetails?: (trigger: HTMLElement) => void;
+  /**
    * Browse grid only: the real public details route for this restaurant. The footer
    * renders it as a link, never a dead button. Chat uses `onOpenDetails` instead;
    * passing both would show two Details controls, so callers pass exactly one.
    */
   detailsHref?: string;
-  /** Browse grid only: keeps the existing `restaurant-detail-link-<id>` selector. */
+  /** Browse grid only: test id for the Details action (link or button). */
   detailsTestId?: string;
 };
 
@@ -177,6 +183,7 @@ export function RestaurantCard({
   bookingTestId = "restaurant-booking-cta",
   selectedForAsk,
   onAskSelect,
+  onDetails,
   detailsHref,
   detailsTestId,
 }: RestaurantCardProps) {
@@ -210,6 +217,7 @@ export function RestaurantCard({
     Boolean(onOpenEventVenue) ||
     Boolean(onBookRequest) ||
     Boolean(detailsHref) ||
+    Boolean(onDetails) ||
     Boolean(onAskSelect);
 
   const footerContent = (
@@ -263,7 +271,22 @@ export function RestaurantCard({
             Details
           </Button>
         ) : null}
-        {detailsHref ? (
+        {onDetails ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-card-action min-w-card-action px-3"
+            data-testid={detailsTestId ?? "restaurant-details-open"}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDetails(e.currentTarget);
+            }}
+          >
+            <Info data-icon="inline-start" aria-hidden />
+            View details
+          </Button>
+        ) : detailsHref ? (
           <Link
             href={detailsHref}
             data-testid={detailsTestId}
