@@ -122,7 +122,16 @@ async function completePreparedCheckout(
   } catch (err) {
     console.error("Stripe Session creation failed:", err);
     if (definitiveStripeCreateFailure(err)) {
-      // A definite client-side rejection cannot have created a Session.
+      // A rejected request cannot have created a *new* Session, but this order
+      // may already be bound to one from an earlier attempt whose success was
+      // never cached (e.g. a 200 whose cache write failed). A 401/403 can also
+      // come from a key rotation or a TEST/live mode change rather than from a
+      // rejection of this request. Releasing tickets behind a Session that is
+      // still payable would take money for an order we just cancelled.
+      if (order.stripe_session_id) {
+        return jsonResponse(errorBody("CHECKOUT_SESSION_RECONCILIATION_REQUIRED",
+          "Stripe rejected this retry but an earlier Checkout Session is already bound; verify that Session before retrying"), 503, req);
+      }
       const { error: cancelError } = await service.rpc("ticket_checkout_cancel", {
         p_order_id: prepared.order_id,
       });
