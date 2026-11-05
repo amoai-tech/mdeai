@@ -27,8 +27,8 @@ SMOKE_BASE_URL=http://localhost:3011 PW_SKIP_WEBSERVER=1 \
   npx playwright test e2e/san-1140-discovery-card-actions.spec.ts --project=chromium --workers=1
 
 # Against the live site
-SMOKE_BASE_URL=https://www.mdeai.co PW_SKIP_WEBSERVER=1 \
-  npx playwright test e2e/san-1140-discovery-card-actions.spec.ts --project=chromium --workers=1
+PROD_SMOKE_BASE_URL=https://www.mdeai.co PW_SKIP_WEBSERVER=1 MDE_REMOTE_DISCOVERY_CARDS=1 \
+  npx playwright test e2e/san-1140-discovery-card-actions.spec.ts --project=prod-smoke --workers=1
 ```
 
 It proves, per card: DOM **and** geometric containment of every action, exactly one Ask per card,
@@ -158,8 +158,8 @@ cannot quietly convert an opted-in test into a skip.
 Read-only browser verification with the configured existing accounts:
 
 ```bash
-MDE_ROLE_QA_E2E=1 PW_SKIP_WEBSERVER=1 SMOKE_BASE_URL=https://www.mdeai.co \
-  npm run test:e2e:qa-roles
+MDE_ROLE_QA_E2E=1 PW_SKIP_WEBSERVER=1 PROD_SMOKE_BASE_URL=https://www.mdeai.co \
+  npx playwright test e2e/qa-role-selection.spec.ts --project=prod-smoke --workers=1 --retries=0
 ```
 
 Expect **5 passed, 0 skipped**: guest deny, Super Admin, Event Host,
@@ -219,8 +219,8 @@ or trusted CI secrets (both commands intentionally opt in):
 MDE_SUPER_ADMIN_QA=1 PW_SKIP_WEBSERVER=1 SMOKE_BASE_URL=http://localhost:3001 \
   npx playwright test e2e/qa-super-admin-fixture.spec.ts --project=chromium --workers=1
 
-MDE_SUPER_ADMIN_QA=1 PW_SKIP_WEBSERVER=1 SMOKE_BASE_URL=https://www.mdeai.co \
-  npx playwright test e2e/qa-super-admin-fixture.spec.ts --project=chromium --workers=1
+MDE_SUPER_ADMIN_QA=1 PW_SKIP_WEBSERVER=1 PROD_SMOKE_BASE_URL=https://www.mdeai.co \
+  npx playwright test e2e/qa-super-admin-fixture.spec.ts --project=prod-smoke --workers=1
 ```
 
 Playwright defines `screenshot`, `trace` and `video` as injectable
@@ -271,9 +271,9 @@ The fast deterministic regression `e2e/app/partner-ai-signup-persistence.spec.ts
 
 ```bash
 MDE_PARTNER_LIVE_SOURCE_E2E=1 PW_SKIP_WEBSERVER=1 \
-  SMOKE_BASE_URL=https://www.mdeai.co \
+  PROD_SMOKE_BASE_URL=https://www.mdeai.co \
   npx playwright test e2e/app/partner-ai-signup-live-source.spec.ts \
-    --project=chromium --workers=1
+    --project=prod-smoke --workers=1 --retries=0
 ```
 
 4. Verify **1 passed, 0 failed, 0 skipped** plus `SAN1193_LIVE_PASS` and `SAN1193_LIVE_CLEANUP_VERIFIED`. Confirm test identities and any synthetic partner rows were removed. Failed tests require cleanup investigation before another run; no automatic paid-provider retries.

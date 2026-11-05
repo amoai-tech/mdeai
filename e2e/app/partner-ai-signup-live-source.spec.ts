@@ -18,6 +18,9 @@ test.skip(
   "Real source smoke is opt-in: MDE_PARTNER_LIVE_SOURCE_E2E=1",
 );
 test.use({ trace: "off", screenshot: "off" });
+// This invokes a paid provider and writes real run-owned records. Fail once,
+// clean up, and diagnose; never automatically replay the entire journey.
+test.describe.configure({ retries: 0 });
 
 test("SAN-1193: live website → source source → review/edit → save → refresh/readback", async ({
   page,

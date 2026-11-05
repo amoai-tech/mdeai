@@ -17,8 +17,8 @@ import { waitUntilInteractive } from "./helpers/rental-journey-steps";
  *
  *   SMOKE_BASE_URL=http://localhost:3011 PW_SKIP_WEBSERVER=1 \
  *     npx playwright test e2e/san-1140-discovery-card-actions.spec.ts --project=chromium
- *   SMOKE_BASE_URL=https://www.mdeai.co PW_SKIP_WEBSERVER=1 \
- *     npx playwright test e2e/san-1140-discovery-card-actions.spec.ts --project=chromium
+ *   PROD_SMOKE_BASE_URL=https://www.mdeai.co PW_SKIP_WEBSERVER=1 MDE_REMOTE_DISCOVERY_CARDS=1 \
+ *     npx playwright test e2e/san-1140-discovery-card-actions.spec.ts --project=prod-smoke
  */
 
 type RouteSpec = {
@@ -38,13 +38,14 @@ const ROUTES: RouteSpec[] = [
     pageTestId: "restaurants-browse",
     card: '[data-result-kind="restaurant"]',
     ask: '[data-testid="restaurant-ask-select"]',
-    details: '[data-testid^="restaurant-detail-link-"]',
+    details: '[data-testid^="restaurant-details-open-"]',
   },
   {
     route: "/cafes",
     pageTestId: "cafes-browse",
     card: '[data-result-kind="cafe"]',
     ask: '[data-testid="venue-ask-select"]',
+    details: '[data-testid="venue-details-open"]',
     mapAction: true,
   },
   {
@@ -52,6 +53,7 @@ const ROUTES: RouteSpec[] = [
     pageTestId: "nightlife-page",
     card: '[data-result-kind="nightlife"]',
     ask: '[data-testid="venue-ask-select"]',
+    details: '[data-testid="venue-details-open"]',
     mapAction: true,
   },
 ];
@@ -67,6 +69,7 @@ const WIDTHS = [320, 390, 768, 1440] as const;
 const DETERMINISTIC_FIXTURES =
   process.env.NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT === "1";
 
+/** Fail in the deterministic CI lane and skip elsewhere, so a missing fixture can never read as a pass. */
 function skipOrFail(
   missing: boolean,
   spec: RouteSpec,
@@ -82,9 +85,12 @@ function skipOrFail(
   return true;
 }
 
+/** Open a browse route and wait for its page root before touching any card. */
 async function openRoute(page: Page, spec: RouteSpec): Promise<Locator> {
   await page.goto(spec.route, { waitUntil: "domcontentloaded" });
-  await expect(page.getByTestId(spec.pageTestId)).toBeVisible({ timeout: 60_000 });
+  // The dev server can briefly mount two copies of the page root during hydration; a strict
+  // single-element match then throws. Wait for the first real one.
+  await expect(page.getByTestId(spec.pageTestId).first()).toBeVisible({ timeout: 60_000 });
   const cards = page.locator(spec.card);
   try {
     await expect(cards.first()).toBeVisible({ timeout: 30_000 });
@@ -108,38 +114,53 @@ async function expectAskContainment(page: Page, spec: RouteSpec) {
 
   for (let i = 0; i < Math.min(cardCount, 5); i += 1) {
     const card = cards.nth(i);
-    // A dev server can briefly mount a duplicate list during hydration, so a card
-    // captured by index can disappear for a frame. Measure only a real, stable box:
-    // if the card never gets one, this fails instead of measuring nothing.
+    // One synchronous read inside the page: the dev server can briefly mount a duplicate list
+    // during hydration, so separate boundingBox() calls can race a detach. Polling this single
+    // measurement is both race-free and still fails loudly if a card never gets a real box.
+    type Boxes = {
+      card: { x: number; y: number; width: number; height: number };
+      ask: { x: number; y: number; width: number; height: number };
+      askCount: number;
+    };
+    // Holder object: a plain `let` is narrowed to null by TS across the polling closure.
+    const measured: { boxes: Boxes | null } = { boxes: null };
     await expect
-      .poll(async () => (await card.boundingBox())?.height ?? 0, {
-        message: `${spec.route} card ${i} must render a measurable box`,
-        timeout: 15_000,
-      })
-      .toBeGreaterThan(0);
-    const asks = await card.locator(spec.ask).count();
-    expect(asks, `${spec.route} card ${i} owns its Ask toggle`).toBe(1);
-    // Geometric containment: the control is painted inside the card's own box,
-    // not merely present in the page.
-    const cardBox = await card.boundingBox();
-    const askBox = await card.locator(spec.ask).boundingBox();
-    expect(cardBox, `${spec.route} card ${i} card box`).not.toBeNull();
-    expect(askBox, `${spec.route} card ${i} ask box`).not.toBeNull();
-    if (cardBox && askBox) {
-      expect(askBox.x).toBeGreaterThanOrEqual(cardBox.x - 1);
-      expect(askBox.y).toBeGreaterThanOrEqual(cardBox.y - 1);
-      expect(askBox.x + askBox.width).toBeLessThanOrEqual(
-        cardBox.x + cardBox.width + 1,
-      );
-      expect(askBox.y + askBox.height).toBeLessThanOrEqual(
-        cardBox.y + cardBox.height + 1,
-      );
-      // SAN-1122: one action height across restaurants, cafés and nightlife.
-      expect(
-        askBox.height,
-        `${spec.route} card ${i}: Ask must keep the 44px shared action height`,
-      ).toBeGreaterThanOrEqual(44);
-    }
+      .poll(
+        async () => {
+          measured.boxes = await card.evaluate((el, selector) => {
+            const ask = el.querySelector(selector);
+            if (!ask) return null;
+            const cardRect = el.getBoundingClientRect();
+            const askRect = ask.getBoundingClientRect();
+            if (cardRect.height <= 0 || askRect.height <= 0) return null;
+            return {
+              card: { x: cardRect.x, y: cardRect.y, width: cardRect.width, height: cardRect.height },
+              ask: { x: askRect.x, y: askRect.y, width: askRect.width, height: askRect.height },
+              askCount: el.querySelectorAll(selector).length,
+            };
+          }, spec.ask);
+          return measured.boxes !== null;
+        },
+        {
+          message: `${spec.route} card ${i} must render a measurable box`,
+          timeout: 15_000,
+        },
+      )
+      .toBe(true);
+    expect(measured.boxes, `${spec.route} card ${i} measured boxes`).not.toBeNull();
+
+    const { card: cardBox, ask: askBox } = measured.boxes as Boxes;
+    expect((measured.boxes as Boxes).askCount, `${spec.route} card ${i} owns its Ask toggle`).toBe(1);
+    // Geometric containment: the control is painted inside the card's own box, not merely present.
+    expect(askBox.x).toBeGreaterThanOrEqual(cardBox.x - 1);
+    expect(askBox.y).toBeGreaterThanOrEqual(cardBox.y - 1);
+    expect(askBox.x + askBox.width).toBeLessThanOrEqual(cardBox.x + cardBox.width + 1);
+    expect(askBox.y + askBox.height).toBeLessThanOrEqual(cardBox.y + cardBox.height + 1);
+    // SAN-1122: one action height across restaurants, cafés and nightlife.
+    expect(
+      askBox.height,
+      `${spec.route} card ${i}: Ask must keep the 44px shared action height`,
+    ).toBeGreaterThanOrEqual(44);
 
     if (spec.mapAction) {
       const mapAction = card.locator('[data-testid="venue-map-select"]');
@@ -154,6 +175,7 @@ async function expectAskContainment(page: Page, spec: RouteSpec) {
   }
 }
 
+/** Assert nothing on the page scrolls sideways at the current viewport. */
 async function expectNoHorizontalOverflow(page: Page, where: string) {
   const { scrollWidth, clientWidth } = await page.evaluate(() => ({
     scrollWidth: document.documentElement.scrollWidth,
@@ -339,45 +361,79 @@ for (const spec of ROUTES) {
 
     if (spec.details) {
       const detailsSelector = spec.details;
-      test(`${spec.route} View details is one real link inside the card and opens the record`, async ({
+      test(`${spec.route} Details opens in place, follows the card, closes and restores focus`, async ({
         page,
       }) => {
         const cards = await openRoute(page, spec);
         const count = await cards.count();
         if (skipOrFail(count === 0, spec, "rendered no cards")) return;
-
-        const card = cards.first();
-        const details = card.locator(detailsSelector);
-        await expect(details).toHaveCount(1);
-        // Chat-only duplicate Details control must not appear on a browse card.
-        await expect(card.locator('[data-testid="restaurant-details-cta"]')).toHaveCount(0);
-
-        const href = await details.getAttribute("href");
-        // Internal record route, never an external or script URL.
-        expect(href, "Details must use the internal public route").toMatch(
-          /^\/restaurants\/[A-Za-z0-9_-]+$/,
-        );
-        const id = href?.split("/").pop();
-        if (!DETERMINISTIC_FIXTURES) {
-          // Live inventory uses canonical UUIDs; the CI fixture uses readable ids.
-          expect(id, "live restaurant ids are canonical UUIDs").toMatch(
-            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
-          );
+        if (
+          skipOrFail(
+            count < 2,
+            spec,
+            "needs at least two cards to prove Details follows the card",
+          )
+        ) {
+          return;
         }
 
-        await details.scrollIntoViewIfNeeded();
-        await details.click();
-        await expect
-          .poll(() => new URL(page.url()).pathname, {
-            message: "Details must open that restaurant's own route",
-            // A cold Next dev compile of the detail route is legitimately slow.
-            timeout: 30_000,
-          })
-          .toBe(`/restaurants/${id}`);
-        await expect(page.locator("h1, h2").first()).toBeVisible();
+        const urlBefore = page.url();
+        const first = cards.first();
+        const second = cards.nth(1);
+        const firstName = (await first.locator("h3").first().innerText()).trim();
+        const secondName = (await second.locator("h3").first().innerText()).trim();
 
-        await page.goBack();
-        await expect(page.locator(spec.card).first()).toBeVisible();
+        // Exactly one Details control per card, and no chat-only duplicate.
+        await expect(first.locator(detailsSelector)).toHaveCount(1);
+        await expect(first.locator('[data-testid="restaurant-details-cta"]')).toHaveCount(0);
+
+        const panel = page.locator(
+          '[data-testid="restaurant-details-panel"], [data-testid="venue-browse-details-panel"]',
+        );
+        const body = page.locator(
+          '[data-testid="restaurant-details"], [data-testid="venue-browse-details"]',
+        );
+
+        await first.locator(detailsSelector).scrollIntoViewIfNeeded();
+        // Wait for hydration: a click on a not-yet-hydrated button does nothing, which then
+        // reads as "the panel never opened".
+        await waitUntilInteractive(first.locator(detailsSelector), `${spec.route} Details`);
+        await first.locator(detailsSelector).click();
+        await body.first().waitFor({ state: "visible" });
+        expect(
+          (await body.first().locator("h2").first().innerText()).trim(),
+          "the panel shows the card that was clicked",
+        ).toBe(firstName);
+        // Browse Details must not navigate: the list, filters and map stay put.
+        expect(new URL(page.url()).pathname).toBe(new URL(urlBefore).pathname);
+
+        // Comparing: choosing another card repoints the same panel.
+        await waitUntilInteractive(second.locator(detailsSelector), `${spec.route} Details`);
+        await second.locator(detailsSelector).click();
+        await expect
+          .poll(async () => (await body.first().locator("h2").first().innerText()).trim())
+          .toBe(secondName);
+
+        await page
+          .locator(
+            '[data-testid="restaurant-details-close"], [data-testid="venue-browse-details-close"]',
+          )
+          .first()
+          .click();
+        await expect(panel.first()).toHaveCount(0);
+        expect(new URL(page.url()).pathname).toBe(new URL(urlBefore).pathname);
+        // Closing returns keyboard focus to the control that opened Details.
+        await expect
+          .poll(() =>
+            page.evaluate(
+              (selector) => {
+                const active = document.activeElement;
+                return Boolean(active && active.matches(selector));
+              },
+              detailsSelector,
+            ),
+          )
+          .toBe(true);
       });
     }
   });

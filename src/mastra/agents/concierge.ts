@@ -16,6 +16,7 @@ import { CONCIERGE_AGENT_MODEL } from "../lib/models";
 import { geminiMalformedFirstStepRetry } from "../lib/gemini-malformed-retry";
 import { getDefaultInputProcessors } from "../lib/agent-input-processors";
 import { currentSelectedNameOnly, verifiedDiscoverySelectionHint, withComparisonRecords, withVerifiedSelectionFacts } from "../lib/discovery-agent-context";
+import { hasGenerativeUIGuide, MDE_A2UI_GUIDE } from "../lib/generative-ui-context";
 import { MapUiStateSchema } from "@/platform/contracts/map-ui-state";
 import { formatEventSourcePromptHint } from "@/lib/events/trusted-event-sources";
 import { RESTAURANT_CLARIFY_MESSAGE } from "@/lib/restaurant-clarify-copy";
@@ -475,10 +476,17 @@ export const conciergeAgent = new Agent({
   id: 'concierge-agent',
   name: 'Concierge Agent',
   instructions: async ({ requestContext }) => {
+    const agUiContext = requestContext.get("ag-ui");
     const currentSelection = await verifiedDiscoverySelectionHint(
-      requestContext.get("ag-ui"), lookupPublicDiscoveryItemFromServer,
+      agUiContext, lookupPublicDiscoveryItemFromServer,
     );
-    return currentSelection ? `${currentSelection}\n${conciergeBaseInstructions}` : conciergeBaseInstructions;
+    // The A2UI transport gives the model a render_ui tool AND a component guide.
+    // The Mastra adapter forwards the guide in RunAgentInput.context; this
+    // dynamic instruction is the only place that turns it into a system prompt.
+    const generativeGuide = hasGenerativeUIGuide(agUiContext) ? MDE_A2UI_GUIDE : null;
+    return [currentSelection, generativeGuide, conciergeBaseInstructions]
+      .filter(Boolean)
+      .join("\n\n");
   },
   model: CONCIERGE_AGENT_MODEL,
   // SAN-1396: restore a failed FIRST model step only for Gemini's known malformed

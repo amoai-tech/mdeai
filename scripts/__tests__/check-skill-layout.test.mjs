@@ -94,6 +94,45 @@ test("passes when the exposure mirror is complete", () => {
   assert.match(result.stdout, /SKILL_LAYOUT_PASS active=1/);
 });
 
+test("finds broken links inside supporting reference documents", () => {
+  const root = writeSkill(tmpRepo(), "alpha", {
+    body: `${skillBody("alpha")}\nRead [TDD](references/tdd.md).\n`,
+    files: {
+      "references/tdd.md": "# Test-first guide\n\nSee [tests](references/tests.md).\n",
+      "references/tests.md": "# Tests\n",
+    },
+  });
+
+  const output = failing(root);
+  assert.match(output, /broken relative link in .*references\/tdd\.md/);
+  assert.match(output, /references\/tests\.md/);
+});
+
+test("valid supporting reference links resolve relative to their own directory", () => {
+  const root = writeSkill(tmpRepo(), "alpha", {
+    body: `${skillBody("alpha")}\nRead [TDD](references/tdd.md).\n`,
+    files: {
+      "references/tdd.md": "# Test-first guide\n\nSee [tests](tests.md).\n",
+      "references/tests.md": "# Tests\n",
+      "references/deep/strategy.md": "# Strategy\n\nSee [tests](../tests.md).\n",
+    },
+  });
+
+  const result = runChecker(root);
+  assert.equal(result.status, 0, result.stdout);
+});
+
+test("supporting reference links inside code and external URLs are ignored", () => {
+  const root = writeSkill(tmpRepo(), "alpha", {
+    files: {
+      "references/tdd.md": "# Guide\n\n`[literal](nope.md)`\n\n```md\n[not-a-link](missing.md)\n```\n\n[Anthropic](https://platform.claude.com/docs)\n",
+    },
+  });
+
+  const result = runChecker(root);
+  assert.equal(result.status, 0, result.stdout);
+});
+
 test("fails when the exposure mirror omits a canonical entry", () => {
   const root = writeSkill(tmpRepo(), "alpha", {
     files: { "references/one.md": "# one\n" },

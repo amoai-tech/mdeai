@@ -155,6 +155,11 @@ export function useMapPinSelect() {
   );
 }
 
+/** For read-only cards that may render outside a mounted map. */
+export function useOptionalMapContext(): MapContextValue | null {
+  return useContext(MapContext);
+}
+
 export function useMapContext(): MapContextValue {
   const ctx = useContext(MapContext);
   if (!ctx) {

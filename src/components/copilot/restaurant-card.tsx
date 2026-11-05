@@ -48,15 +48,24 @@ export type RestaurantCardProps = {
   /** Browse grid only: toggle this restaurant as the Ask MDE selection. */
   onAskSelect?: () => void;
   /**
+   * Browse grid only (SAN-1638): open Details in the page's existing right panel instead of
+   * navigating. The full /restaurants/[id] page stays reachable from the panel itself.
+   * The triggering control is passed back so closing can restore focus to it.
+   */
+  onDetails?: (trigger: HTMLElement) => void;
+  /**
    * Browse grid only: the real public details route for this restaurant. The footer
    * renders it as a link, never a dead button. Chat uses `onOpenDetails` instead;
    * passing both would show two Details controls, so callers pass exactly one.
    */
   detailsHref?: string;
-  /** Browse grid only: keeps the existing `restaurant-detail-link-<id>` selector. */
+  /** Browse grid only: test id for the Details action (link or button). */
   detailsTestId?: string;
+  /** Browse grid only: this card's Details panel is currently open (announced to AT). */
+  detailsOpen?: boolean;
 };
 
+/** Display label for a cuisine code, or null when it is unknown. */
 function cuisineLabel(cuisine?: string): string | null {
   if (!cuisine) return null;
   return cuisine
@@ -65,6 +74,7 @@ function cuisineLabel(cuisine?: string): string | null {
     .join(" ");
 }
 
+/** Directions link for a restaurant with a real maps URL. */
 function RestaurantMapLinks({ mapsUrl }: { mapsUrl?: string | null }) {
   if (!mapsUrl) return null;
   const deepLinks = mapsDeepLinksEnabled();
@@ -116,6 +126,7 @@ function RestaurantMapLinks({ mapsUrl }: { mapsUrl?: string | null }) {
   );
 }
 
+/** Card media: the real photo, or the placeholder when none is usable. */
 function RestaurantCardMedia({
   imageUrl,
   mediaLayout,
@@ -154,6 +165,7 @@ function RestaurantCardMedia({
   );
 }
 
+/** One restaurant result with its facts and the Ask and Details actions. */
 export function RestaurantCard({
   title,
   neighborhood,
@@ -177,8 +189,10 @@ export function RestaurantCard({
   bookingTestId = "restaurant-booking-cta",
   selectedForAsk,
   onAskSelect,
+  onDetails,
   detailsHref,
   detailsTestId,
+  detailsOpen = false,
 }: RestaurantCardProps) {
   const ratingText = formatGroundedRating(rating);
   const typeLabel = cuisineLabel(cuisine) ?? "Restaurant";
@@ -210,6 +224,7 @@ export function RestaurantCard({
     Boolean(onOpenEventVenue) ||
     Boolean(onBookRequest) ||
     Boolean(detailsHref) ||
+    Boolean(onDetails) ||
     Boolean(onAskSelect);
 
   const footerContent = (
@@ -263,7 +278,23 @@ export function RestaurantCard({
             Details
           </Button>
         ) : null}
-        {detailsHref ? (
+        {onDetails ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-card-action min-w-card-action px-3"
+            data-testid={detailsTestId ?? "restaurant-details-open"}
+            aria-expanded={detailsOpen}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDetails(e.currentTarget);
+            }}
+          >
+            <Info data-icon="inline-start" aria-hidden />
+            View details
+          </Button>
+        ) : detailsHref ? (
           <Link
             href={detailsHref}
             data-testid={detailsTestId}

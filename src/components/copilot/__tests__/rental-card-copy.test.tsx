@@ -98,6 +98,24 @@ describe("SAN-1349 rental card viewing CTA gating", () => {
   });
 });
 
+describe("rental price markers", () => {
+  it("uses distinct nightly and monthly test ids on one card", () => {
+    const html = renderToStaticMarkup(
+      <RentalCard
+        id="r1"
+        listingId="a1"
+        title="Both prices"
+        neighborhood="Laureles"
+        nightly_price={100}
+        currency="COP"
+      />,
+    );
+    expect(html.match(/data-testid="rental-price-nightly"/g)).toHaveLength(1);
+    expect(html.match(/data-testid="rental-price-monthly"/g)).toHaveLength(1);
+    expect(html).not.toContain('data-testid="rental-price"');
+  });
+});
+
 describe("external source rental cards", () => {
   it("shows a real monthly COP price, unknown bedrooms, and the original-advertisement link", () => {
     const html = renderToStaticMarkup(

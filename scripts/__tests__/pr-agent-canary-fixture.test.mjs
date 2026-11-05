@@ -132,7 +132,7 @@ describe("SAN-1332 frozen canary fixture", () => {
     );
     assert.equal(
       String(pkg.scripts["check:release-gates"]),
-      "node --test scripts/__tests__/*.test.mjs",
+      "node --test scripts/__tests__/*.test.mjs scripts/__tests__/*.test.cjs",
       "the canary's suite must be inside the release-gate glob",
     );
   });

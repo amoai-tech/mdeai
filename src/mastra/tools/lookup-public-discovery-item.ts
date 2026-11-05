@@ -15,7 +15,7 @@ const SOURCE = {
   // refuses. Both relations are public (anonymous RLS) and small.
   events: {
     table: "events",
-    fields: "id, name, address, event_start_time, currency, event_venues ( name, address, city ), event_tickets ( name, price_cents, currency, qty_total, qty_sold )",
+    fields: "id, name, address, event_start_time, currency, event_venues ( name, address, city ), event_tickets ( name, price_cents, currency, qty_total, qty_sold, qty_pending, min_per_order, max_per_order, sale_starts_at, sale_ends_at )",
     projection: ["id", "name", "address", "event_start_time", "currency", "event_venues", "event_tickets"] as string[],
   },
   cafes: { table: "venue_anchors", fields: "id, name, kind, neighborhood, tags" },

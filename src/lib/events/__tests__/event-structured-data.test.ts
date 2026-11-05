@@ -31,6 +31,11 @@ function tier(overrides: Partial<PublicEventDetail["tickets"][number]> = {}) {
     currency: "COP",
     qtyTotal: 100,
     qtySold: 10,
+    qtyPending: 0,
+    minPerOrder: 1,
+    maxPerOrder: 10,
+    saleStartsAt: null,
+    saleEndsAt: null,
     position: 0,
     ...overrides,
   };
