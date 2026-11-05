@@ -1,6 +1,6 @@
 # A2UI protocol — choose the correct CopilotKit integration
 
-Read when work mentions A2UI schemas, declarative UI operations, fixed/dynamic schema, A2A, or AG-UI streaming. For **native React Components and Surfaces** (`createGenerativeUI`, `render_ui`, `GenerativeUISurface`), read `native-generative-ui.md` instead. This guide is a **reference**, not approval to install an extra renderer.
+Read when work mentions A2UI schemas, declarative UI operations, fixed/dynamic schema, A2A, or AG-UI streaming. For **native React Components and Surfaces** (`createGenerativeUI`, `render_ui`, `GenerativeUISurface`), also read `native-generative-ui.md` when a task spans both protocol A2UI and native UI. For a native-only task, start with the native guide; this protocol guide is not a prerequisite. This guide is a **reference**, not approval to install an extra renderer.
 
 ## 1. Select the approach before editing
 

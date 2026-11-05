@@ -32,6 +32,22 @@ Historical repository snapshot (5 Nov 2026): CopilotKit React/Runtime **1.84.1**
 - **3.4 Rental comparison:** [SAN-1041](https://linear.app/amo100/issue/SAN-1041) creates `src/components/copilot/rental-comparison.tsx` as a pure component **before** registering it with catalog. **VERIFY:** 2–4 real current results, accurate COP/month, existing Details and verified coordinates, 390px no body overflow.
 - **3.5 Ticket selection:** [SAN-1632](https://linear.app/amo100/issue/SAN-1632) may create `src/components/copilot/a2ui/event-ticket-selector.tsx` after first reconciling tier `max_per_order`, pending inventory and COP. Reuse `src/components/events/event-ticket-tiers.tsx`, `src/components/modals/booking-checkout-modal.tsx`, canonical checkout API, Supabase RPC and Stripe TEST webhook. **VERIFY:** no made-up tier/price, user explicitly confirms, one paid order and correct wallet tickets, idempotent webhook.
 
+## Inspector-first generative UI diagnosis (development/QA only)
+
+Use the [official Inspector](https://docs.copilotkit.ai/inspector) before editing catalogs, providers or Mastra adapters:
+
+| Symptom | Inspector tab | What to verify |
+| --- | --- | --- |
+| “No generative UI” | Provider configuration | Existing route-owner provider has `generativeUI={{ ui }}` (no new nested provider) |
+| Surface remains empty / fallback | **Generative UI → Surfaces → Rejected operations** | Component is allowed, operation/schema valid, target surface ID exists |
+| Component has missing/wrong values | **Surfaces → tree and data model** | Props, bindings, source-backed ID hydration and user edits |
+| Model never calls a component/function | **Catalog** and **Prompt** | Component advertised to the model; function has a mounted handler; expected `render_ui` guide/tools provided |
+| Card appears only in text, not page | **Conversation**, **AG-UI Events**, **Surfaces** | Correlate run/tool ID with actual visible page Surface |
+
+Inspector's **Prompt** view shows what the model was offered for the last/next run. Use it to compare a bounded MDE catalog with an unnecessarily broad one; never claim token/cost savings without measurements. Inspect `ag-ui-and-tools.md` and `mastra-bridge.md` when the adapter/tool never arrives.
+
+Use Inspector only in authorized development/QA. Debug endpoints/events may expose private prompts or user data: do not enable public debug feeds or paste raw tokens in review comments. Preserve the current `useRenderTool` fallback when native `render_ui` is unsupported or rejected.
+
 ## 4. Evidence required before task completion
 
 - **4.1 Focused tests:** valid/invalid schema; real/stale/forged IDs; missing values; concurrent searches; failed tool or `render_ui`; thread switching/refresh; guest and signed-in isolation; keyboard and 390px; existing tool renderer fallback.

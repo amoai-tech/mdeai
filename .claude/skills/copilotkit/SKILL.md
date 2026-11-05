@@ -3,7 +3,7 @@ name: copilotkit
 description: >-
   Guides MDE CopilotKit v2 setup, integration and troubleshooting. Use for /api/copilotkit runtime, React hooks, native Components/Surfaces, render_ui, A2UI fixed/dynamic schemas, standardUI catalogs, AG-UI/Mastra transport, frontend tools/actions, shared state, CLI verification, HITL, and CopilotKit-specific errors. Keeps browser-facing bridge failures with the CopilotKit domain owner; Mastra and product skills own their respective business/agent logic.
 metadata:
-  mde-version: "2.3.0"
+  mde-version: "2.3.1"
   upstream-commit: "4f0e86deaebb9d6e6d4625cbed4087912aee6d0c"
   verified-package: "exact aligned pins in package.json (@copilotkit/react-core + @copilotkit/runtime)"
 ---
@@ -208,14 +208,16 @@ Official Mastra-specific CopilotKit guidance:
 
 1. Classify the issue: wiring/runtime, React/provider, AG-UI/tool rendering, shared state, CLI verification, or Mastra bridge.
 2. Use the official core/CLI skill as the default procedure and lookup guide.
-3. Load only the matching MDE reference: `runtime-and-react.md`, `ag-ui-and-tools.md`, `mastra-bridge.md`, `native-generative-ui.md` (native Components/Surfaces), `a2ui-protocol.md` (protocol operations), or `standard-catalog.md` (standardUI built-ins).
+3. Load only the matching MDE references: `runtime-and-react.md` (provider/route), `ag-ui-and-tools.md` + `mastra-bridge.md` (missing cards/tool results/streaming), `native-generative-ui.md` (native Components/Surfaces), `a2ui-protocol.md` (protocol operations; load **both** for mixed A2UI tasks), or `standard-catalog.md` (built-ins and catalog cost). Follow the failure-isolation table and Inspector evidence before changing agent/search code.
 4. Reproduce before editing when debugging.
 5. Keep the smallest safe contract change and hand Mastra-internal changes to `mastra`.
 6. Prove the affected contract with targeted tests plus browser/stream evidence when user-visible behavior changed.
 
 ## Verification
 
-At minimum verify the affected runtime URL, agent identity, version surface, tool/action mapping, auth/rate-limit behavior, AG-UI result/state handling, and rendered user path. A passing CopilotKit CLI wiring check does not prove tool execution, streaming order, state synchronization, or rendered generative UI; test those separately.
+At minimum verify the affected runtime URL, agent identity, version surface, tool/action mapping, auth/rate-limit behavior, AG-UI result/state handling, and rendered user path. For missing cards, distinguish **input args** from **completed tool results**; partial AG-UI argument deltas are never authorization to act. A passing CopilotKit CLI wiring check does not prove tool execution, streaming order, state synchronization, or rendered generative UI; test those separately.
+
+For changes to this skill, run `npm run check:skills` and `node --test scripts/__tests__/copilotkit-skill-contract.test.mjs scripts/__tests__/skill-evals-conformance.test.mjs scripts/__tests__/skill-behavior-runner.test.mjs`, then the repo-required final-head CI. These checks validate structure/grader behavior, **not agent instruction-following**. Use the existing `scripts/run-skill-behavior-eval.py` only for compatible DSH-formatted skill cases; report which real model eval IDs actually ran and separately review their **content rubrics**. Never claim a modeled user journey or a behavioral pass solely from static checks.
 
 ## References
 

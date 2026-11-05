@@ -42,7 +42,16 @@ const appUI = createGenerativeUI({
 
 For MDE's **small** catalog, use `createGenerativeUI` with only approved domain components and strict synchronous Zod props; follow `native-generative-ui.md`. Do **not** add `extends: [standardUI]` just to get a `Card`/layout: reuse MDE's own React card internals or explicitly document an approved subset after checking version-matched catalog APIs. If proposing omission/replacement of built-ins, read the exact official [standard catalog](https://docs.copilotkit.ai/generative-ui/components/standard-catalog) and [catalog guide](https://docs.copilotkit.ai/generative-ui/components/catalogs) for supported configuration; do not invent an `exclude` option.
 
-## 3. Safety and behavior that matter for MDE
+## 3. Catalog scope and prompt-cost verification
+
+Choose the smallest vocabulary supported by the **existing route-owner provider and selected agent**. For example, Rentals needs an ID-backed rental comparison; Events needs ticket-tier selection. Neither should receive every general-purpose map, chart, form and media primitive by default.
+
+- **Confirm the actual exposure mechanism.** `generativeUI={{ ui }}` advertises a catalog through its provider; adding `extends: [standardUI]` expands that vocabulary. A runtime agent allowlist is not proof that the UI catalog was narrowed per agent. Do not invent per-agent filtering APIs or nest new providers; inspect exact v1.84.1 typings and the model-facing prompt with [Inspector](https://docs.copilotkit.ai/inspector).
+- **Measure before optimizing.** With the same authorized QA scenario and model settings, compare offered component names, the added generative-UI prompt/context size, response latency, and model usage when available. Record relative results and actual sources; do not invent token savings. Avoid logging private prompt contents.
+- **Keep stable identity.** Share the existing small catalog where both MDE route providers need it; use existing tool renderers for ordinary grounded search. Only broaden vocabulary when a real user journey needs it and tests prove safe operation.
+- **Negative control:** verify an unsupported component/function is absent from the advertised Catalog and fails safely instead of silently being accepted. Validate stale/forged IDs against the current authorized results.
+
+## 4. Safety and behavior that matter for MDE
 
 - **Inputs**: built-in inputs validate and preserve user edits; verify this on the actual installed version, especially after a later agent update. Do not let AI reset a user-edited ticket quantity.
 - **Actions**: `Button` and `Pressable` can trigger browser behavior. Only enable whitelisted, user-invoked actions; backend/RPC owns authorization, price, inventory, viewing and payment.
