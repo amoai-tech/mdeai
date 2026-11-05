@@ -172,6 +172,9 @@ Files:
 - `src/lib/events/types.ts` — add `qtyPending`, `minPerOrder`, `maxPerOrder`,
   `saleStartsAt`, `saleEndsAt`.
 - `src/lib/events/get-public-event.ts` — select and map those fields; normalize currency.
+  Filter `event_tickets.is_hidden = false` in the **canonical public read**, alongside
+  existing tier `is_active = true`, so Details, browse and A2UI share the same data;
+  preserve authorized admin-management access.
 - `src/lib/events/format-event.ts` — keep `ticketsRemaining(total, sold, pending)`
   as a numeric helper. Specify one canonical `getTicketAvailability(tier, requestedQuantity, now)`
   predicate returning `{ status, remaining, minimum, maximum }`. Its five statuses are
@@ -201,8 +204,8 @@ per-tier min/max, publication, sale windows and positive COP. The plan has **not
 verified** whether the RPC checks explicit event deactivation (`is_active`) or
 hidden tiers (`is_hidden`). Inspect the canonical RPC and live definition before
 changing SQL; if defects are confirmed, patch that same RPC with pgTAP tests and
-preserved grants. Do not add business approvals or launch-eligibility prerequisites
-in development.
+preserved grants, plus a tested forward-fix or rollback migration plan.
+Do not add business approvals or launch-eligibility prerequisites in development.
 
 **Proof:** focused Vitest; browser + API + DB agree for 8/9/10/11, `cop`/`COP`, pending,
 min/max, all five states including `available`, sold-out, not-yet-on-sale,
@@ -282,9 +285,9 @@ invalid IDs pass.
 Create `src/components/copilot/a2ui/event-ticket-selector.tsx`:
 
 - receives `eventId` and optional `initialTierId`/`initialQuantity`;
-- loads `/api/events/${eventId}/public`, excludes hidden tiers (`is_hidden = true`)
-  from the **public** selector, then reuses `EventTicketTiers`; authorized admin
-  management remains unaffected;
+- loads `/api/events/${eventId}/public`, which already excludes hidden and inactive
+  tiers in the canonical public read; reuses `EventTicketTiers` **without** a
+  selector-only visibility filter; admin management remains unaffected;
 - after the user edits, AI updates never overwrite the user's tier/quantity;
 - the user must click the existing “Review tickets” path; the agent cannot open Checkout,
   create an order or call Stripe.
@@ -361,7 +364,7 @@ the ticket contract PR. Do not split the ticket contract from its tests.
 | Catalog | `src/components/copilot/a2ui/mde-ui-catalog.tsx` | One typed catalog; ID-only components |
 | Comparison | `src/components/copilot/rental-comparison.tsx` | Pure presentation; existing handlers |
 | Page Surfaces | `src/components/rentals/rental-browse-view.tsx`, `src/components/events/event-browse-view.tsx` | Bounded target, native fallback, no second state store |
-| Ticket data | `src/lib/events/{types,get-public-event,format-event,event-ticket-offer,event-detail-action,event-detail-chat}.ts` | Pending, min/max, sale windows, currency |
+| Ticket data | `src/lib/events/{types,get-public-event,format-event,event-ticket-offer,event-detail-action,event-detail-chat}.ts` | Pending, min/max, sale windows, currency; hidden tiers filtered at public read |
 | Ticket UI | `src/components/events/event-ticket-tiers.tsx` | Per-tier controls; no hard-coded 8; free-tier handling |
 | Ticket API | `src/lib/tickets/ticket-checkout-schema.ts` | One documented transport cap; RPC remains the authority |
 | AI ticket UI | `src/components/copilot/a2ui/event-ticket-selector.tsx` | Reuses `EventTicketTiers` and `BookingCheckoutModal` |
@@ -376,7 +379,7 @@ the ticket contract PR. Do not split the ticket contract from its tests.
 | `render_ui` guide reaches Mastra | unit test on resolved concierge instructions; real browser tool-call trace |
 | Real rental cards | browser search with real DB result; IDs, prices, pin ids, Details |
 | Ticket contract | Vitest for 1/8/9/10, `cop`/`COP`, pending, min/max, **all five states**, free/hidden tiers, incompatible minimum |
-| Server authority | API/RPC tests: 11 and over-limit rejected at current ceiling; stale prices, hidden tiers and explicitly inactive events rejected; preserve development policy |
+| Server authority | API/RPC tests: current ceiling, stale price, hidden/inactive tiers and explicit deactivation; public-read filtering, development policy, SQL migration rollback if needed |
 | Comparison | 2/3/4 real records; unknown fields; Details/map parity; 390px |
 | Page Surface | A→B→Clear; native fallback; no duplicate map; older result cannot win |
 | AI ticket selector | real tier/quantity; manual override preserved; explicit review click |
@@ -389,8 +392,10 @@ the ticket contract PR. Do not split the ticket contract from its tests.
   default when the catalog is absent, invalid or disabled. A build-time
   `NEXT_PUBLIC_MDE_A2UI=0` is a **build-time** flag, not an immediate runtime
   kill switch; a new deployment or deployment rollback is needed.
-- The ticket data fixes are presentation/read-contract changes; revert the PR if a regression
-  appears. No migration is expected, so there is no schema rollback.
+- Ticket UI/read-contract changes can be reverted in code. If Milestone 1B proves a
+  canonical RPC defect requiring a migration, a code-only PR revert is insufficient:
+  supply a tested **forward-fix or rollback migration** preserving function signatures,
+  grants, capacity transactions and data integrity. No migration by default.
 - Stripe changes, if any, must be behind the existing sandbox/live mode selection. Never
   fall back to live money because sandbox configuration is missing.
 - If a page Surface cannot preserve the current results/map relationship, ship the chat
