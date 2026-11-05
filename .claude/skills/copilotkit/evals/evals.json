@@ -1,6 +1,6 @@
 {
   "skill_name": "copilotkit",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "evals": [
     {
       "id": 1,
@@ -109,6 +109,39 @@
         "Does not copy TanStack/Prisma/shop stack or add a second provider",
         "Rejects model-provided prices, made-up coordinates and direct AI payment",
         "Requires real E2E browser/Stripe TEST proof with deterministic fallback"
+      ]
+    },
+    {
+      "id": 11,
+      "prompt": "Use CopilotKit A2UI to build SAN-1630 for our existing Mastra app. The docs show a2ui: {} and an older A2A restaurant example. Should we add both of those plus the native render_ui catalog?",
+      "expected_output": "Routes to a2ui-protocol.md and native-generative-ui.md, distinguishes protocol middleware from native Components/Surfaces, rejects copying A2A v0.8 operations or adding a2ui: {} just to get render_ui, and requires installed-source/real-browser proof.",
+      "files": [],
+      "expectations": [
+        "Separates protocol A2UI middleware from native render_ui without a second runtime",
+        "Recognizes legacy A2A/v0.8 payloads are not compatible with current spec by assumption",
+        "Requires exact package verification and one live tool-call/UI trace"
+      ]
+    },
+    {
+      "id": 12,
+      "prompt": "For MDE rentals, use the 69 CopilotKit standardUI components including Map and Button, and extend standardUI so the model can only render RentalCard. Is this the smallest safe catalog?",
+      "expected_output": "Routes to standard-catalog.md, explains extends: [standardUI] exposes all standard built-ins rather than narrowing them, recommends a tiny ID-only domain catalog and existing MDE map, and avoids installing MapLibre or AI-triggered checkout.",
+      "files": [],
+      "expectations": [
+        "Explains 69-component standardUI and how extends expands visibility",
+        "Keeps MDE domain cards and existing map/pins authoritative",
+        "Never lets the agent invent prices/coordinates or trigger checkout"
+      ]
+    },
+    {
+      "id": 13,
+      "prompt": "An agent produced JSON with beginRendering/surfaceUpdate from the CopilotKit A2A starter, but our installed A2UI renderer expects createSurface/updateComponents/updateDataModel. Should we parse and run it anyway?",
+      "expected_output": "Routes to a2ui-protocol.md, identifies the starter's legacy v0.8 operation format versus v0.9+ and v1.0-candidate boundaries, rejects unvalidated mixing, and requires matching renderer/spec version, bounded catalog validation, negative tests and actual UI proof.",
+      "files": [],
+      "expectations": [
+        "Rejects silently mixing A2UI operation versions",
+        "Uses a2ui.org and installed CopilotKit docs/types as sources of truth",
+        "Tests malformed/unsupported operations and auth-safe fallback"
       ]
     }
   ]
