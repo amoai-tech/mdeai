@@ -219,7 +219,7 @@ describe("SAN-1609 smart coverage", () => {
     expect(report.counts.failed).toBe(0);
     expect(report.counts.unknown).toBe(1);
     expect(report.details.find((f: { path: string }) => f.path === "src/payments/checkout.ts")?.coverage).toBe("unreviewed");
-    expect(report.body).toContain("Follow-up: 2 file(s) lack proven AI coverage");
+    expect(report.body).toContain("**Follow-up:** 2 file(s) lack proven AI coverage");
     // Actual reviewer failure with no trusted review evidence must still fail.
     const noReview = buildCoverageReport({ repo: "amoai-tech/mdeai", number: 756,
       baseSha: BASE, headSha: HEAD, files: [{ filename: "src/payments/checkout.ts", patch: "+x" }],
@@ -264,7 +264,10 @@ describe("SAN-1609 smart coverage", () => {
     expect(job.steps[0].with.ref).toBe("${{ github.event.pull_request.base.sha }}");
     expect(source).toMatch(/^    uses: amoai-tech\/pr-review-infra\/\.github\/workflows\/pr-agent\.yml@[0-9a-f]{40}$/m);
     expect(source).toContain('const canonicalReview = matching.find((comment) => {');
-    expect(source).toContain('reviewJobResult: canonicalReview ? "success" : process.env.REVIEW_JOB_RESULT');
+    expect(source).toContain('reviewBody: process.env.REVIEW_JOB_RESULT === "success"');
+    expect(source).toContain('reviewJobResult: publishPartial ? "success" : process.env.REVIEW_JOB_RESULT');
+    expect(source).toContain('saved.last_run?.complete === false');
+    expect(source).toContain('**Reusable reviewer check:**');
   });
 });
 
