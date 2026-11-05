@@ -1,6 +1,6 @@
 # Native generative UI and page Surfaces — MDE bridge checklist
 
-**Owner:** `.claude/skills/copilotkit/SKILL.md`. This is an MDE overlay, **not** a copied upstream or a new agent. It is intended for SAN-1630, SAN-1631, SAN-1041 and SAN-1632. SAN-739 keeps the existing tool renderer.
+**Owner:** `.claude/skills/copilotkit/SKILL.md`. This is an MDE overlay, **not** a copied upstream or a new agent. For distinct protocol-level A2UI fixed/dynamic schemas read `a2ui-protocol.md`; for `standardUI` and built-in-component selection read `standard-catalog.md`. It is intended for SAN-1630, SAN-1631, SAN-1041 and SAN-1632. SAN-739 keeps the existing tool renderer.
 
 ## 1. Verify versions and the actual integration
 
