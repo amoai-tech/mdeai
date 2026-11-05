@@ -188,11 +188,14 @@ function RestaurantBrowseViewInner({
                     pinId={pinId}
                     selected={selectedPinId === pinId}
                     onSelect={() => {
+                      // `selectPin` toggles: a second click on the selected card releases it, and
+                      // that must close the panel (and the Ask context) as it did before.
+                      const releasing = pinRestaurantId === r.id;
                       selectPin(pinId);
-                      // Replace any older panel record too, so releasing the pin later cannot
-                      // fall back to a restaurant the visitor has moved on from.
-                      setDetailsId(r.id);
-                      setSelectedForAskId(r.id);
+                      setDetailsId(releasing ? null : r.id);
+                      setSelectedForAskId(releasing ? null : r.id);
+                      // Opened from the card body, so Close must not move focus to an older button.
+                      detailsTriggerRef.current = null;
                     }}
                     selectedForAsk={selectedForAsk === r.id}
                     // Ask selects context only: it clears the map/details preview and
