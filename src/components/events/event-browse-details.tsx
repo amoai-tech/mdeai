@@ -180,7 +180,9 @@ function EventBrowseDetailsBody({
       ) : null}
 
       <div className="flex flex-wrap gap-3">
-        {/* The full page stays the canonical destination for sharing and checkout. */}
+        {/* The full page stays the canonical destination — except when the API confirmed this
+            event no longer exists, where the link would be a dead end. */}
+        {state.status === "missing" ? null : (
         <Link
           href={fullPageHref}
           data-testid="event-browse-details-full-page"
@@ -189,6 +191,7 @@ function EventBrowseDetailsBody({
           <CalendarDays data-icon="inline-start" aria-hidden />
           Full event page
         </Link>
+        )}
         {event.canBuyTickets && event.ticketUrl.startsWith("http") ? (
           <a
             href={event.ticketUrl}

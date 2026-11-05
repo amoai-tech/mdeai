@@ -295,6 +295,9 @@ function EventBrowseViewInner({
                 onAskSelect={() => selectEvent(selectedId === event.id ? null : event.id)}
                 onDetails={(trigger) => {
                   detailsTriggerRef.current = trigger;
+                  // SAN-1638: the panel record is also the Ask MDE record, so the concierge answers
+                  // about the event on screen. Selecting context never sends a message.
+                  selectEvent(event.id);
                   setDetailsId(event.id);
                 }} />
               );
