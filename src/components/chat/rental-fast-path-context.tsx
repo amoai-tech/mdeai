@@ -20,6 +20,8 @@ type RentalFastPathContextValue = {
   /** Recent fast-path result envelopes for historical cards; thread-local. */
   toolResults: unknown[];
   setToolResult: (result: unknown | null) => void;
+  /** New chat / thread switch: remove every result, not only the current one. */
+  clearToolResults: () => void;
   searchMeta: RentalSearchMeta | null;
   setSearchMeta: (meta: RentalSearchMeta | null) => void;
 };
@@ -47,13 +49,19 @@ export function RentalFastPathProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const clearToolResults = useCallback(() => {
+    setToolResultState(null);
+    setToolResults([]);
+    setSearchMetaState(null);
+  }, []);
+
   const setSearchMeta = useCallback((meta: RentalSearchMeta | null) => {
     setSearchMetaState(meta);
   }, []);
 
   const value = useMemo(
-    () => ({ toolResult, toolResults, setToolResult, searchMeta, setSearchMeta }),
-    [toolResult, toolResults, setToolResult, searchMeta, setSearchMeta],
+    () => ({ toolResult, toolResults, setToolResult, clearToolResults, searchMeta, setSearchMeta }),
+    [toolResult, toolResults, setToolResult, clearToolResults, searchMeta, setSearchMeta],
   );
 
   return (

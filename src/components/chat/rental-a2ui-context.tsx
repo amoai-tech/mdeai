@@ -5,13 +5,16 @@ import { useAgentContext } from "@copilotkit/react-core/v2";
 import { useConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
 import { useRentalFastPath } from "@/components/chat/rental-fast-path-context";
 import { normalizeToolEnvelope } from "@/lib/normalize-tool-envelope";
+import { isRentalA2UIId } from "@/lib/rentals/a2ui-id";
 import type { ConciergeWorkingMemory } from "@/lib/types";
 
 type RentalRow = NonNullable<ConciergeWorkingMemory["lastRentalResults"]>[number];
 
 /** IDs only: no untrusted titles, prices or instructions enter the prompt. */
 export function rentalA2UIContextValue(rows: readonly RentalRow[] | undefined): string {
-  return JSON.stringify((rows ?? []).slice(0, 5).map((row) => row.id));
+  return JSON.stringify(
+    (rows ?? []).slice(0, 5).map((row) => row.id).filter(isRentalA2UIId),
+  );
 }
 
 /**

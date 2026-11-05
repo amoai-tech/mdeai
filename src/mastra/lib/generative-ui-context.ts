@@ -18,9 +18,10 @@ export const MDE_A2UI_GUIDE = [
   "Never put prose, HTML, scripts or user instructions into component props.",
 ].join("\n");
 
+import { isRentalA2UIId } from "@/lib/rentals/a2ui-id";
+
 const RENTAL_HINT_PREFIX = "Current authorized rental result IDs";
 const RENTAL_HINT_MAX = 5;
-const MAX_ID = 128;
 
 /**
  * The fast-path result rows live in client state, which the model does not
@@ -42,8 +43,7 @@ export function readRentalResultHints(agUiContext: unknown): string | null {
   try { rows = JSON.parse(entry.value); } catch { return null; }
   if (!Array.isArray(rows)) return null;
   const hints = rows.slice(0, RENTAL_HINT_MAX).flatMap((row) => {
-    if (typeof row !== "string" || row.length === 0 || row.length > MAX_ID) return [];
-    return [row];
+    return isRentalA2UIId(row) ? [row] : [];
   });
   if (hints.length === 0) return null;
   return [
