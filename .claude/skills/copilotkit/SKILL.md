@@ -3,7 +3,7 @@ name: copilotkit
 description: >-
   Use for any MDE request clearly involving CopilotKit, including implementation, configuration, /api/copilotkit, CopilotKit v2 React hooks, generative UI, frontend tools/actions, shared agent state, AG-UI transport, runtime wiring, CLI verification, HITL, CopilotKit-to-Mastra bridges, and CopilotKit-specific bugs/errors/failures. A known CopilotKit failure stays with this domain owner rather than generic systematic-debugging.
 metadata:
-  mde-version: "2.1.0"
+  mde-version: "2.2.0"
   upstream-commit: "4f0e86deaebb9d6e6d4625cbed4087912aee6d0c"
   verified-package: "exact aligned pins in package.json (@copilotkit/react-core + @copilotkit/runtime)"
 ---
@@ -16,8 +16,9 @@ metadata:
 2. Read the pinned official CopilotKit core skill in `references/official/copilotkit/SKILL.md`.
 3. For wiring/debugging, also read `references/official/copilotkit-cli/SKILL.md`. MDE is self-hosted OSS: start with `verify --expect-runtime oss --agent <id>`; add `--round-trip` only for an explicitly authorized live QA agent check, never merely to satisfy a hosted-Intelligence check.
 4. For Channels or Intelligence work, load only the matching vendored official reference named under **Official feature routing** below.
-5. Use current official CopilotKit/AG-UI docs or source when the pinned skill directs you there.
-6. Apply the MDE-specific invariants below.
+5. For native A2UI, catalogs, `render_ui`, or page Surfaces, read `references/native-generative-ui.md` **before** editing; it distinguishes existing tool rendering from experimental Components and Surfaces.
+6. Use current official CopilotKit/AG-UI docs and version-matched source when the pinned skill directs you there.
+7. Apply the MDE-specific invariants below.
 
 Do not answer volatile CopilotKit API questions from memory. Do not silently replace installed-version behavior with latest-main examples.
 
@@ -26,7 +27,7 @@ Do not answer volatile CopilotKit API questions from memory. Do not silently rep
 Own the browser-facing agent bridge: provider/hooks, same-origin runtime, AG-UI events, frontend tool/action registration, shared state, generative UI, and CopilotKit-visible failures. `mastra` owns agents/tools/workflows/memory/storage/HITL semantics. Product-domain skills own business invariants.
 ## Current MDE invariants
 
-- MDE uses CopilotKit v2 React APIs from `@copilotkit/react-core/v2`.
+- MDE uses CopilotKit v2 React APIs from `@copilotkit/react-core/v2`. At the 5 Nov 2026 audit, `package.json` pins `@copilotkit/react-core` and `@copilotkit/runtime` to **1.84.1**, `@mastra/core` to **1.81.0**, `@ag-ui/client` and `@ag-ui/core` to **1.0.2**, and `@ag-ui/mastra` to **2.0.2**; these are a historical snapshot, so check `package.json`, lockfile, installed exports, and the actual checkout/HEAD before relying on them.
 - Browser traffic uses the same-origin `/api/copilotkit` runtime; do not switch to hosted Intelligence implicitly.
 - Tool render/action names must match the Mastra tool-map key, not a `createTool()` id.
 - Preserve auth, distributed rate limits, request context, telemetry, and agent allowlists on the runtime route.
@@ -105,7 +106,7 @@ upstream's own test bed, so translate before acting:
 
 | A vendored reference says | MDE reality | Do this |
 |---|---|---|
-| "Verified against `@copilotkit/runtime@1.65.0`" and `@copilotkit/channels@0.6.0` (`setup-slack-channel` and its `troubleshooting.md`) | MDE pins `@copilotkit/runtime` and `@copilotkit/react-core` at `1.75.0`; `@copilotkit/channels` is **not installed** | Treat every API name, log line, status enum and error category as unverified until you confirm it in the installed `node_modules/@copilotkit/*` or the pinned `v1.75.0` source tag |
+| "Verified against `@copilotkit/runtime@1.65.0`" and `@copilotkit/channels@0.6.0` (`setup-slack-channel` and its `troubleshooting.md`) | At the 5 Nov 2026 audit, MDE pins React + Runtime at **1.84.1**; `@copilotkit/channels` is **not installed** | Treat the vendored reference versions as upstream history, not current MDE truth. Confirm each volatile API against the **current installed package** and matching official release tag (for the audited pin: [`v1.84.1` exports](https://github.com/CopilotKit/CopilotKit/blob/v1.84.1/packages/react-core/src/v2/generative-ui/index.ts)). Never silently revert to 1.75.0. |
 | `pnpm …` commands (the OpenTag starter's convention) | MDE uses npm: `npm run …`, `npx …` | Translate the command; never add pnpm or its lockfile to MDE |
 | Channels / Intelligence setup steps | Neither product is enabled in MDE | Planning reference only, see above |
 
@@ -118,6 +119,24 @@ For the vendored `setup-slack-channel` reference, these MDE overlay rules take p
 started" is not success. Use the Slack skill's *Done means three things* rule (app installed and
 in the channel, Channel reports `online`, and a real human mention got a real reply); any one alone
 is a false positive.
+
+## Native generative UI and A2UI — prove the transport first
+
+**Use for:** [SAN-1630](https://linear.app/amo100/issue/SAN-1630) catalog, [SAN-1631](https://linear.app/amo100/issue/SAN-1631) Surfaces, [SAN-1041](https://linear.app/amo100/issue/SAN-1041) comparison and [SAN-1632](https://linear.app/amo100/issue/SAN-1632) ticket selector. [SAN-739](https://linear.app/amo100/issue/SAN-739) already owns existing rental `useRenderTool` verification; do not rebuild it.
+
+**Keep two concepts separate:**
+- **Existing, working:** `useRenderTool` in `src/components/copilot/search-tool-renders.tsx` renders Mastra tool results. Preserve it as a reliable fallback.
+- **New, experimental:** native Components/Surfaces uses `createGenerativeUI`, `GenerativeUISurface`, provider `generativeUI={{ ui }}`, and per-run `render_ui`. These exports exist in [CopilotKit v1.84.1](https://github.com/CopilotKit/CopilotKit/blob/v1.84.1/packages/react-core/src/v2/generative-ui/index.ts), but **MDE's end-to-end Mastra transport has not yet been proven**. Do not mark it working from package versions or TypeScript alone. Do not add the older standalone A2UI renderer/middleware or a second agent/runtime without a specific verified need.
+
+**Required sequence:**
+1. Verify actual installed versions and runtime: `package.json`, `src/lib/copilotkit-transport.ts`, `src/app/api/copilotkit/[[...path]]/route.ts`, `src/lib/copilotkit-client-props.ts`, `src/components/{copilot/copilot-kit-provider,chat/chat-provider}.tsx`. Preserve MDE's explicit **single-route + `useSingleEndpoint: true`**, auth, thread replay and existing route-specific providers.
+2. Run one actual `render_ui` experiment **before building a catalog**. Follow [official transports](https://docs.copilotkit.ai/generative-ui/components/transports): the agent must receive per-run tools and instructions. Inspect `src/mastra/copilotkit/logging-mastra-agent.ts` and the pinned `@ag-ui/mastra` implementation; confirm the frontend-provided `render_ui` tool and context survive input sanitization, flow to Mastra/model, emit AG-UI tool-call events, and render in the browser. Fix only the demonstrated boundary; preserve per-user isolation, telemetry, timeout/Stop.
+3. **After that proof**, adapt [official catalogs](https://docs.copilotkit.ai/generative-ui/components/catalogs) and [pinned catalog types](https://github.com/CopilotKit/CopilotKit/blob/v1.84.1/packages/react-core/src/v2/generative-ui/catalog.ts) into **one** `src/components/copilot/a2ui/mde-ui-catalog.tsx`. Use synchronous Zod validation and source-backed **IDs**; rental IDs can be opaque strings, not necessarily UUIDs. Hydrate through existing authorized current results, not model-supplied price, coordinates, ticket tiers or availability. Plug the same catalog into the two *existing* providers; keep stable props.
+4. Build comparison as a pure existing-data component first ([SAN-1041](https://linear.app/amo100/issue/SAN-1041)), then attach it to the catalog. Adapt [official Surfaces](https://docs.copilotkit.ai/generative-ui/components/surfaces) into bounded **existing** `src/components/rentals/rental-browse-view.tsx` and `src/components/events/event-browse-view.tsx`; restrict allowed components, preserve native fallback/results/filter/map synchronization and guest Events search. The [pinned shop example](https://github.com/CopilotKit/CopilotKit/blob/v1.84.1/examples/v2/generative-ui-shop/README.md) is **MODEL ONLY** for bounded Surface + fallback; **do not copy** its TanStack agent, Prisma/SQLite database, or cart/payment implementation.
+5. Apply [official state/actions](https://docs.copilotkit.ai/generative-ui/components/state-and-actions) only to verified user gestures (Details, map focus, Review Tickets). No AI-triggered checkout or viewing write. Revalidate ID, actor, amount, availability and any consequential mutation in existing domain APIs/RPCs. Ticket selector reuses `EventTicketTiers` and `BookingCheckoutModal`; the signed Stripe TEST webhook owns payment success.
+6. Verify the specific browser journey (not only a unit test): real card and pin, current-search A→B ordering, unsupported component/invalid ID, unknown field, Stop/Retry, auth boundary, guest Events path, refresh and 390px mobile. Run focused tests → typecheck/lint → `npm run check:skills` → repository `npm run floor` at final exact SHA. Preserve current `useRenderTool` fallback if A2UI fails.
+
+**Detailed file-by-file implementation map, official URLs, expected observations and negative cases:** `references/native-generative-ui.md`. Keep the task-level instructions in their linked Linear issues instead of duplicating business rules here.
 
 ## Human-in-the-loop with Mastra
 
@@ -186,7 +205,7 @@ Official Mastra-specific CopilotKit guidance:
 
 1. Classify the issue: wiring/runtime, React/provider, AG-UI/tool rendering, shared state, CLI verification, or Mastra bridge.
 2. Use the official core/CLI skill as the default procedure and lookup guide.
-3. Load only the matching MDE reference: `runtime-and-react.md`, `ag-ui-and-tools.md`, or `mastra-bridge.md`.
+3. Load only the matching MDE reference: `runtime-and-react.md`, `ag-ui-and-tools.md`, `mastra-bridge.md`, or `native-generative-ui.md` for A2UI and Surfaces.
 4. Reproduce before editing when debugging.
 5. Keep the smallest safe contract change and hand Mastra-internal changes to `mastra`.
 6. Prove the affected contract with targeted tests plus browser/stream evidence when user-visible behavior changed.
@@ -208,5 +227,6 @@ At minimum verify the affected runtime URL, agent identity, version surface, too
 - `references/runtime-and-react.md`
 - `references/ag-ui-and-tools.md`
 - `references/mastra-bridge.md`
+- `references/native-generative-ui.md` — current MDE CopilotKit 1.84+ A2UI / Surfaces implementation and proof checklist
 - https://docs.copilotkit.ai/
 - https://github.com/CopilotKit/CopilotKit
