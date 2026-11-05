@@ -68,11 +68,17 @@ describe("A2UI system instructions", () => {
   });
 
   it("does not scan past the context entry ceiling for rental ids", () => {
-    const entries = Array.from({ length: 21 }, (_, index) => ({
-      description: index === 20 ? "Current authorized rental result IDs" : "noise",
+    const inside = Array.from({ length: 21 }, (_, index) => ({
+      description: index === 19 ? RENTAL_A2UI_CONTEXT_DESCRIPTION : "noise",
       value: JSON.stringify(["real-1"]),
     }));
-    expect(readRentalResultHints({ context: entries })).toBeNull();
+    expect(readRentalResultHints({ context: inside })).toContain("real-1");
+
+    const outside = Array.from({ length: 21 }, (_, index) => ({
+      description: index === 20 ? RENTAL_A2UI_CONTEXT_DESCRIPTION : "noise",
+      value: JSON.stringify(["real-1"]),
+    }));
+    expect(readRentalResultHints({ context: outside })).toBeNull();
   });
 
   it("does not scan an unbounded client context", () => {
