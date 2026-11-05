@@ -536,6 +536,20 @@ certification.
 
 **Open question:** should `MDE_PROD_CERTIFICATION=1` be set in the scheduled production workflow so a missing renter identity fails that job instead of skipping locally?
 
+## PR #746 — restaurant Ask and Details inside the discovery card (SAN-1140)
+
+**Date:** 2026-11-05. **Reason:** the repository has exactly one collaborator (`amoai-tech`) and that account authored the PR, so GitHub cannot record the required approving review; `main` still requires one approving review, so this was an administrator merge under the documented sole-collaborator exception.
+
+**Head merged:** `69409775fa33e089b77c148fec2afa8e495928d4` (merge commit `9cbaa5f7c3aacfc3b9e26214ddb4307db5ea53ea`, verified by `https://www.mdeai.co/api/version` immediately after deploy).
+
+**Required checks green on that exact head:** `floor`, `mastra-schema-init`, `review / review`, `review / verify-review-result`. Unresolved review threads: **0**.
+
+**Advisory analyzers, reviewed and not gating:** Codacy reported `fail` with exactly two Opengrep findings, both in the new *test* file `e2e/san-1140-discovery-card-actions.spec.ts`: non-literal `RegExp` / ReDoS on `new RegExp(\`/restaurants/${id}$\`)`. The value came from an href already constrained to `/^\/restaurants\/[0-9a-f-]{36}$/`, so there was no untrusted input and no production code involved. The finding was not suppressed or ignored: the assertion was replaced with a `URL.pathname` comparison in the SAN-1122 PR. Kilo Code Review: no issues found. DeepSource: pass. Canonical MDE PR review: no concerns, score 93.
+
+**What a reviewer would have been asked:** whether moving the two controls into `RestaurantCard` could break the chat card (it cannot — the new props are optional and chat still renders `restaurant-details-cta`), whether Ask selection could start a model turn (measured: the only `/api/copilotkit` POST on selection is the runtime's `{"method":"info"}` call, so no `agent/run`), and whether the card really contains the controls rather than merely painting them in the same area (the spec asserts DOM descent **and** geometric containment at 320/390/768/1440px and at 200% zoom).
+
+**Open question:** should the deterministic CI lane run the new card-action spec? It currently skips when the environment has no inventory, because that lane points at an intentionally unreachable database, so live browser proof of these cards only happens locally or against production. A seeded inventory fixture for the deterministic lane would close that gap without making CI depend on production data.
+
 ## Adding an entry
 
 Record: the PRs, the date, the reason, which required checks had passed, what a reviewer would have
