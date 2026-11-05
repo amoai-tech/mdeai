@@ -7,10 +7,12 @@ const LG_QUERY = "(min-width: 1024px)";
 // `matchMedia` is absent in SSR and in jsdom component tests. Fall back to the same
 // mobile-first answer `getServerSnapshot` gives instead of throwing, so a view that
 // renders Details in this column can still be unit-tested.
+/** Whether this environment can answer a media query at all. */
 function canMatchMedia() {
   return typeof window !== "undefined" && typeof window.matchMedia === "function";
 }
 
+/** Subscribe to the lg breakpoint; nothing to observe without matchMedia. */
 function subscribe(onStoreChange: () => void) {
   if (!canMatchMedia()) return () => {};
   const mq = window.matchMedia(LG_QUERY);
@@ -18,6 +20,7 @@ function subscribe(onStoreChange: () => void) {
   return () => mq.removeEventListener("change", onStoreChange);
 }
 
+/** Current answer for the lg breakpoint, mobile-first when it cannot be queried. */
 function getSnapshot() {
   if (!canMatchMedia()) return false;
   return window.matchMedia(LG_QUERY).matches;

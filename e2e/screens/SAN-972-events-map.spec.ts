@@ -26,6 +26,7 @@ async function shoot(page: Page, name: string) {
   await page.screenshot({ path: `${shots}/${name}.png` });
 }
 
+/** Open the events page at a given viewport and return the located cards. */
 async function openEvents(page: Page, width: number, height: number) {
   await page.setViewportSize({ width, height });
   await gotoBrowseRoute(page, "/events");
@@ -57,6 +58,7 @@ async function lastDetailsCovered(page: Page): Promise<string | false> {
   return covered;
 }
 
+/** Only the cards that carry a saved position, in page order. */
 async function locatedCards(page: Page) {
   const cards = page.locator('[data-testid="event-card"][data-pin-id]');
   await expect(page.getByTestId("event-card").first()).toBeVisible();

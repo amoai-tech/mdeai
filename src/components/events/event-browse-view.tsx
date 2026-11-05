@@ -27,6 +27,7 @@ import type { PublishedEventListItem } from "@/lib/events/list-published-events"
 import { useMapContext } from "@/platform/maps/map-context";
 import type { DateWindow, EventCategory } from "@/mastra/tools/search-events";
 
+/** Current filter URL for this page, or the bare path when no filter is set. */
 function buildFilterUrl(filters: {
   category?: EventCategory | null;
   neighborhood?: string | null;
@@ -54,6 +55,7 @@ type EventBrowseViewProps = {
   price: "free" | "paid" | null;
 };
 
+/** Results, map and right column for events, driven by the shared selection. */
 function EventBrowseViewInner({
   results,
   total,
@@ -328,6 +330,7 @@ function EventBrowseViewInner({
   );
 }
 
+/** Event browse shell that provides the shared map state. */
 export function EventBrowseView(props: EventBrowseViewProps) {
   return <BrowseMapContextShell><EventBrowseViewInner {...props} /></BrowseMapContextShell>;
 }

@@ -31,6 +31,7 @@ const CATEGORY_LABELS: Record<EventCategory, string> = {
   nightlife: "Nightlife",
 };
 
+/** Card media: the real event image, or the placeholder when none is available. */
 function EventBrowseCardMedia({
   imageUrl,
   imageAlt,
@@ -70,6 +71,7 @@ function EventBrowseCardMedia({
   );
 }
 
+/** One event result with its facts and the Ask and Details actions. */
 export function EventBrowseCard({
   event,
   composition = "nova",

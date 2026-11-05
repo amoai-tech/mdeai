@@ -49,6 +49,7 @@ const detail: PublicEventDetail = {
   tickets: [],
 };
 
+/** Replace fetch for one test; the stub always resolves to a Response. */
 function stubFetch(handler: () => Response | Promise<Response>) {
   // `fetch` must resolve to a Response; wrapping keeps every stub thenable.
   const mock = vi.fn(() => Promise.resolve(handler()));
@@ -56,6 +57,7 @@ function stubFetch(handler: () => Response | Promise<Response>) {
   return mock;
 }
 
+/** A JSON Response with the given body and status. */
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
