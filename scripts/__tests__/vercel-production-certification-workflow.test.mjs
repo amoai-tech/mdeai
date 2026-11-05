@@ -119,8 +119,8 @@ test("order: validate, staged, certify, re-confirm staged, promote, verify, stab
     "Verify Production defines the required variable names",
     "Confirm the candidate is staged",
     "Certify exact staged candidate",
-    "Re-confirm the candidate is still staged right before promotion",
     "Wait for exact-SHA Floor success",
+    "Re-confirm the candidate is still staged right before promotion",
     "Promote the exact certified deployment",
     "Verify www.mdeai.co serves the exact certified deployment",
     "Verify production aliases remain stable after promotion",
@@ -388,6 +388,9 @@ test("SAN-1362: exact-SHA Floor success is a fail-closed prerequisite to product
   assert.match(gate, /GH_TOKEN: \$\{\{ secrets\.GITHUB_TOKEN \}\}/);
   assert.match(gate, /if: \$\{\{ success\(\) && steps\.certify\.outcome == 'success' \}\}/);
   assert.ok(stepIndex(job, "Certify exact staged candidate") < stepIndex(job, "Wait for exact-SHA Floor success"));
+  assert.ok(stepIndex(job, "Wait for exact-SHA Floor success") <
+    stepIndex(job, "Re-confirm the candidate is still staged right before promotion"),
+    "the final Vercel staged check must run AFTER the bounded Floor wait");
   assert.ok(stepIndex(job, "Wait for exact-SHA Floor success") < stepIndex(job, "Promote the exact certified deployment"));
   assert.match(promote, /assert-current-main/);
   const published = stepBody(job, "Publish final release certification result");
