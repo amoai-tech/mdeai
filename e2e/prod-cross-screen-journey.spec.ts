@@ -117,8 +117,12 @@ test.describe("SAN-1298 cross-screen conversation (/chat → /rentals → /event
     // The second is gated on a navigation actually being in flight, so a genuine
     // failed request while a page sits still is still reported.
     let navigating = false;
+    // True from a hard navigation until the next turn settles. An aborted session
+    // bootstrap surfaces after load, so the in-flight flag alone cannot cover it.
+    let postNavigation = false;
     const gotoPage = async (path: string) => {
       navigating = true;
+      postNavigation = true;
       try {
         return await page.goto(`${baseUrl}${path}`, { waitUntil: "domcontentloaded" });
       } finally {
@@ -131,6 +135,10 @@ test.describe("SAN-1298 cross-screen conversation (/chat → /rentals → /event
       const text = message.text();
       if (/Vector Map.*Falling back to Raster/i.test(text)) return;
       if (navigating && /Failed to fetch/i.test(text)) return;
+      // A hard reload tears down the session bootstrap mid-request; the abort
+      // surfaces after load, so the in-flight window above cannot catch it. Only
+      // this exact cause is filtered — any other failed fetch is still reported.
+      if (postNavigation && /Failed to fetch/i.test(text) && /_useSession/.test(text)) return;
       consoleErrors.push(text);
     });
 
@@ -161,32 +169,93 @@ test.describe("SAN-1298 cross-screen conversation (/chat → /rentals → /event
 
     // ── 3. Return to /chat and resume the same conversation ──────────────────
     await gotoConcierge(page);
+    // This is also a hard load, so the session bootstrap is in-flight again.
+    postNavigation = true;
     const savedThread = page.locator(`[data-testid="nav-thread-item"][data-thread-id="${threadA}"]`).first();
     await expect(savedThread, "the earlier conversation is listed in the rail").toBeVisible({
       timeout: 30_000,
     });
 
-    // The app is expected to reattach thread A on return. Click the rail item ONLY
-    // when it is not already the active chat: re-clicking the active thread clears
-    // the visible transcript for several seconds (observed on 6c4fb2fd0a), which is
-    // a separate behaviour and not what this journey is proving.
-    const railActive = await page.locator("nav[data-active-thread-id]").first()
-      .getAttribute("data-active-thread-id");
-    if (railActive !== threadA) {
-      await savedThread.click();
-    }
-    await expect
-      .soft(page.locator("nav[data-active-thread-id]").first(), "the reopened chat is thread A")
-      .toHaveAttribute("data-active-thread-id", threadA!, { timeout: 30_000 });
-
     const region = page.getByTestId("copilot-chat-region");
     await expect(page.getByTestId("saved-history-loading")).toHaveCount(0, { timeout: 30_000 });
     await expect(page.getByTestId("saved-history-error")).toHaveCount(0);
+    // The post-navigation bootstrap window is over once history has settled; the
+    // follow-up turn must not inherit it, or a real session-fetch failure there
+    // would be filtered out.
+    postNavigation = false;
     // Shown again exactly once — a duplicate would mean the history replayed twice.
     await expect
       .soft(
         region.getByTestId("copilot-user-message").filter({ hasText: `${marker}-A` }),
         "the earlier question is shown exactly once after returning",
+      )
+      .toHaveCount(1, { timeout: 30_000 });
+
+    // The rail may legitimately keep no active id here: this conversation is the
+    // tab's own session thread, so it is already displayed. What must never happen
+    // is a DIFFERENT thread being marked active.
+    const railActive = await page.locator("nav[data-active-thread-id]").first()
+      .getAttribute("data-active-thread-id");
+    expect
+      .soft(
+        !railActive || railActive === threadA,
+        `no other conversation is marked active (rail showed ${railActive ?? "none"})`,
+      )
+      .toBe(true);
+
+    // SAN-1639: clicking the conversation that is already open used to clear the
+    // transcript for a few seconds and then reload it. A `toHaveCount(1)` retry can
+    // pass either side of that dip, so it cannot see the bug. Sample continuously
+    // with a MutationObserver and assert the LOWEST count observed never fell.
+    await page.evaluate(() => {
+      const win = window as unknown as {
+        __minChatCount: number;
+        __chatObserver?: MutationObserver;
+        __quietSince?: number;
+      };
+      const selector = '[data-testid="copilot-user-message"]';
+      win.__minChatCount = document.querySelectorAll(selector).length;
+      win.__chatObserver?.disconnect();
+      win.__chatObserver = new MutationObserver(() => {
+        const n = document.querySelectorAll(selector).length;
+        if (n < win.__minChatCount) win.__minChatCount = n;
+      });
+      // `copilot-chat-region` lives inside `<div key={sessionKey}>` in
+      // chat-center-panel, so a session reset remounts and detaches it — an
+      // observer on that node would silently stop watching exactly when the
+      // transcript is cleared. Watch the stable panel and count globally.
+      win.__chatObserver.observe(
+        document.querySelector('[data-testid="center-chat-panel"]') ?? document.body,
+        { childList: true, subtree: true, characterData: true },
+      );
+    });
+
+    await savedThread.click();
+
+    // Settle signal rather than a timeout: the region is quiet once no history
+    // restore is running, observed for a continuous second.
+    await page.waitForFunction(() => {
+      const win = window as unknown as { __quietSince?: number };
+      if (document.querySelector('[data-testid="saved-history-loading"]')) {
+        win.__quietSince = undefined;
+        return false;
+      }
+      win.__quietSince ??= Date.now();
+      return Date.now() - win.__quietSince > 1_000;
+    }, undefined, { timeout: 30_000 });
+
+    const minChatCount = await page.evaluate(
+      () => (window as unknown as { __minChatCount: number }).__minChatCount,
+    );
+    expect
+      .soft(minChatCount, "re-clicking the open conversation never emptied the transcript")
+      .toBeGreaterThanOrEqual(1);
+
+    // And it is still there once things settle.
+    await expect
+      .soft(
+        region.getByTestId("copilot-user-message").filter({ hasText: `${marker}-A` }),
+        "re-clicking the open conversation keeps its history",
       )
       .toHaveCount(1, { timeout: 30_000 });
 
