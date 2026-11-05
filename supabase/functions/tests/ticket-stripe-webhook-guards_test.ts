@@ -1,5 +1,5 @@
 import { assert, assertEquals, assertRejects } from "jsr:@std/assert@1";
-import Stripe from "https://esm.sh/stripe@14.21.0?target=denonext";
+import Stripe from "npm:stripe@23.0.0";
 import {
   expiredSessionMatchesOrder,
   webhookEventMatchesMode,
@@ -8,7 +8,7 @@ import {
 
 // The same SDK and async signature verification used by the real Edge Function.
 const stripe = new Stripe("rk_test_fixture_not_a_real_key", {
-  apiVersion: "2026-04-22.dahlia",
+  apiVersion: "2026-09-30.endive",
   httpClient: Stripe.createFetchHttpClient(),
 });
 // Generate ephemeral fixture signing keys: never hardcode Stripe-shaped secrets.
