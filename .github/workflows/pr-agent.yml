@@ -23,7 +23,7 @@ jobs:
       issues: write
       pull-requests: write
     # Shared infra merged #17/#18: 300s model timeout and 16K output budget.
-    uses: amoai-tech/pr-review-infra/.github/workflows/pr-agent.yml@ee25454f664417b3d10513ee4ec90664e050bc56
+    uses: amoai-tech/pr-review-infra/.github/workflows/pr-agent.yml@9c6e84f3ffbd3f90095d87a277c4aced8012edef
     with:
       evidence_title: MDE PR-Agent Evidence
     secrets:
@@ -75,7 +75,8 @@ jobs:
             }
             const { buildCoverageReport, validateGeneratedJson,
               validateSnapshotReferences, COVERAGE_MARKER,
-              hasPublishedPartialReview } = await import(pathToFileURL(source).href);
+              hasPublishedPartialReview, staleTargetedRecoveryComments,
+              TARGETED_RECOVERY_MARKER } = await import(pathToFileURL(source).href);
             const { parseReviewEnvelope, isStandaloneReview } = await import(pathToFileURL(
               `${process.env.GITHUB_WORKSPACE}/scripts/pr-agent/review-policy.mjs`).href);
             const repo = { owner: context.repo.owner, repo: context.repo.repo };
@@ -178,6 +179,31 @@ jobs:
               core.notice("PR changed during analysis; suppressing stale coverage comment.");
               return;
             }
+            // Keep the existing targeted review history truthful if an
+            // earlier revision was superseded. The model reviewer itself is
+            // owned only by the immutable shared workflow.
+            // Trusted PR base can predate this helper. Preserve current-head
+            // partial coverage and defer stale-comment cleanup until base merges.
+            const recoveryMarker = typeof TARGETED_RECOVERY_MARKER === "string"
+              ? TARGETED_RECOVERY_MARKER : "<!-- mde-pr-agent-targeted-recovery:v1 -->";
+            const staleTargets = typeof staleTargetedRecoveryComments === "function"
+              ? staleTargetedRecoveryComments(comments, baseSha, headSha, recoveryMarker) : [];
+            for (const stale of staleTargets) {
+              try {
+                await github.rest.issues.updateComment({
+                  ...repo, comment_id: stale.id,
+                  body: recoveryMarker +
+                    "\n## Targeted PR-Agent follow-up — OUTDATED\n\n" +
+                    "The PR base/head changed. Previous targeted findings do not apply " +
+                    "to this revision. The current review remains authoritative.\n",
+                });
+              } catch (error) {
+                // A cleanup write failure must not suppress the truthful
+                // current-head coverage report or alter the required gate.
+                core.warning("Unable to retire old targeted review: " +
+                  String(error.message).slice(0, 160));
+              }
+            }
             const previous = comments.find((comment) =>
               comment.user?.login === "github-actions[bot]" && (comment.body ?? "").startsWith(COVERAGE_MARKER));
             if (previous) {
@@ -190,212 +216,3 @@ jobs:
             for (const file of report.criticalPending.slice(0, 12)) {
               core.warning(`Unconfirmed AI review for ${file.category}: ${file.path}`);
             }
-      # Same pinned PR-Agent, reviewing only one exact missing high-risk file.
-      # This is ADVISORY until the canonical shared verifier accepts supplemental
-      # coverage; never rewrite its failed required check or fabricate completion.
-      - name: Prepare bounded exact-blob recovery
-        id: recovery-plan
-        env:
-          REVIEW_JOB_RESULT: ${{ needs.review.result }}
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-        with:
-          github-token: ${{ github.token }}
-          script: |
-            const fs = require("node:fs");
-            const { pathToFileURL } = require("node:url");
-            const source = process.env.GITHUB_WORKSPACE + "/scripts/pr-agent/prepare-recovery.mjs";
-            if (!fs.existsSync(source)) {
-              core.notice("Bounded recovery waits for the trusted base module to merge.");
-              return;
-            }
-            const { prepareRecoveryFromGithub } = await import(pathToFileURL(source).href);
-            const { parseReviewEnvelope } = await import(pathToFileURL(
-              process.env.GITHUB_WORKSPACE + "/scripts/pr-agent/review-policy.mjs").href);
-            const repo = { owner: context.repo.owner, repo: context.repo.repo };
-            const pullNumber = context.payload.pull_request.number;
-            const baseSha = context.payload.pull_request.base.sha;
-            const headSha = context.payload.pull_request.head.sha;
-            const { data: run } = await github.rest.actions.getWorkflowRun({
-              ...repo, run_id: context.runId,
-            });
-            const start = Date.parse(run.run_started_at);
-            const comments = await github.paginate(github.rest.issues.listComments, {
-              ...repo, issue_number: pullNumber, per_page: 100,
-            });
-            // Mark a previous head's targeted results outdated even when this
-            // revision needs no follow-up. Otherwise old findings look current.
-            const marker = "<!-- mde-pr-agent-targeted-recovery:v1 -->";
-            const previousRecovery = comments.find((comment) =>
-              comment.user?.login === "github-actions[bot]" &&
-              (comment.body ?? "").startsWith(marker));
-            if (previousRecovery &&
-                !(previousRecovery.body ?? "").includes("**Base/head:** " + baseSha + " / " + headSha)) {
-              await github.rest.issues.updateComment({
-                ...repo, comment_id: previousRecovery.id,
-                body: marker + "\n## Targeted PR-Agent follow-up — OUTDATED\n\n" +
-                  "The PR base/head changed. Previous targeted findings do not apply " +
-                  "to this revision. The current review remains authoritative.\n",
-              });
-            }
-            // The canonical shared verifier may have recovered the exact patch
-            // already. Never pay for the same AI review a second time.
-            if (process.env.REVIEW_JOB_RESULT === "success") {
-              core.info("Shared required reviewer certified coverage; skipping duplicate model call.");
-              return;
-            }
-            const candidates = comments.filter((comment) => {
-              if (comment.user?.login !== "github-actions[bot]" ||
-                  Date.parse(comment.updated_at) < start) return false;
-              const env = parseReviewEnvelope(comment.body ?? "");
-              return env.valid && env.baseSha === baseSha && env.headSha === headSha &&
-                env.type === "canonical" && env.command === "/review" &&
-                env.body.includes("<!-- pr-agent:review:full -->");
-            }).sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at));
-            if (!candidates.length) return;
-            let plan;
-            try {
-              plan = await prepareRecoveryFromGithub({ github, ...repo, pullNumber,
-                baseSha, headSha, reviewBody: candidates[0].body });
-            } catch (error) {
-              core.warning("Bounded recovery unavailable: " + String(error.message).slice(0, 180));
-              return;
-            }
-            if (!plan.ok) {
-              core.info("No safe bounded recovery: " + plan.reason);
-              return;
-            }
-            // Re-running the same exact PR revision must not buy the same AI
-            // review twice. Cache only trusted bot-published, complete advisory
-            // output from this exact model/profile and SHA256 source patch.
-            const profile = "v0.49.0-nvidia-lightning-target-v1";
-            // The review body contains untrusted model prose. Cache only the
-            // trusted, fixed-format header BEFORE the Important/body boundary.
-            const trustedHeader = (previousRecovery?.body ?? "").split("\n**Important:**")[0];
-            if (trustedHeader.startsWith(marker + "\n## Targeted PR-Agent follow-up (advisory)\n") &&
-                trustedHeader.includes("**File:** " + plan.path + "\n") &&
-                trustedHeader.includes("**Base/head:** " + baseSha + " / " + headSha + "\n") &&
-                trustedHeader.includes("**Diff SHA-256:** " + plan.diffSha256 + "\n") &&
-                trustedHeader.includes("**Reviewer profile:** " + profile + "\n") &&
-                trustedHeader.includes(
-                  "**Model coverage:** no omissions reported for this targeted patch")) {
-              core.info("Exact-head bounded review already published; no extra model call.");
-              return;
-            }
-            fs.mkdirSync(".pr-agent", { recursive: true });
-            fs.writeFileSync(".pr-agent/recovery.diff", plan.diff, "utf8");
-            delete plan.diff;
-            fs.writeFileSync(".pr-agent/recovery-plan.json", JSON.stringify(plan), "utf8");
-            core.setOutput("ready", "true");
-            core.info("Prepared one exact-source patch for bounded PR-Agent review: " + plan.path);
-
-      - name: Re-review missing patch with pinned PR-Agent v0.49.0
-        id: recovery-model
-        if: steps.recovery-plan.outputs.ready == 'true'
-        shell: bash
-        env:
-          OPENAI_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
-          OPENAI_API_BASE: https://integrate.api.nvidia.com/v1
-        run: |
-          set -euo pipefail
-          image='pragent/pr-agent@sha256:b1ed6e8de56eb4d6e4169ee0d5c209bb5ed1ef071a01c0c042c64b80192a785c'
-          # Mount only the generated patch, never a PR-head checkout or GitHub token.
-          if docker run --rm \
-              -v "$PWD/.pr-agent:/review:rw" -w /review \
-              -e OPENAI_API_KEY -e OPENAI_API_BASE \
-              -e 'config.model=openai/nvidia/nemotron-3.5-lightning-30b-a3b' \
-              -e 'config.fallback_models=["openai/nvidia/nemotron-3.5-super-vl-120b-a12b"]' \
-              -e 'config.max_model_tokens=40000' \
-              -e 'config.custom_model_max_tokens=40000' \
-              -e 'config.max_output_tokens=8192' \
-              -e 'config.ai_timeout=180' \
-              -e 'config.num_retries=0' \
-              -e 'litellm.extra_body={"chat_template_kwargs":{"enable_thinking":false}}' \
-              -e 'litellm.disable_aiohttp=true' \
-              --entrypoint python "$image" \
-              -m pr_agent.cli --diff-file /review/recovery.diff \
-              --json-output /review/recovery.json --output /review/recovery.md review; then
-            if [[ -s .pr-agent/recovery.json && -s .pr-agent/recovery.md ]]; then
-              echo 'completed=true' >> "$GITHUB_OUTPUT"
-            fi
-          else
-            echo '::warning::Targeted AI review failed; original strict incomplete review remains red.'
-          fi
-
-      - name: Publish bounded review findings (advisory; no false certificate)
-        if: steps.recovery-model.outputs.completed == 'true'
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-        with:
-          github-token: ${{ github.token }}
-          script: |
-            const fs = require("node:fs");
-            const crypto = require("node:crypto");
-            const repo = { owner: context.repo.owner, repo: context.repo.repo };
-            const pull_number = context.payload.pull_request.number;
-            let plan, diff, output, md;
-            try {
-              plan = JSON.parse(fs.readFileSync(".pr-agent/recovery-plan.json", "utf8"));
-              diff = fs.readFileSync(".pr-agent/recovery.diff", "utf8");
-              output = JSON.parse(fs.readFileSync(".pr-agent/recovery.json", "utf8"));
-              md = fs.readFileSync(".pr-agent/recovery.md", "utf8");
-            } catch (error) {
-              core.warning("Targeted model evidence unreadable or invalid JSON: " +
-                String(error.message).slice(0, 180));
-              return;
-            }
-            const { data: live } = await github.rest.pulls.get({ ...repo, pull_number });
-            if (live.base.sha !== plan.baseSha || live.head.sha !== plan.headSha ||
-                plan.baseSha !== context.payload.pull_request.base.sha ||
-                plan.headSha !== context.payload.pull_request.head.sha) {
-              core.warning("PR revision moved; refusing stale targeted findings.");
-              return;
-            }
-            const fingerprint = crypto.createHash("sha256").update(diff).digest("hex");
-            if (fingerprint !== plan.diffSha256 || !diff.startsWith(
-              "diff --git a/" + plan.path + " b/" + plan.path + "\n")) {
-              core.warning("Recovery diff provenance mismatch; nothing published.");
-              return;
-            }
-            // Validate model-generated paths and changed-line anchors against
-            // the exact trusted patch before publishing any AI prose.
-            const { pathToFileURL } = require("node:url");
-            const { validateTargetedModelOutput } = await import(pathToFileURL(
-              process.env.GITHUB_WORKSPACE + "/scripts/pr-agent/prepare-recovery.mjs").href);
-            const checked = validateTargetedModelOutput({ output, diff, path: plan.path });
-            if (!checked.ok) {
-              core.warning("Targeted model output rejected: " + checked.reason);
-              return;
-            }
-            const covered = checked.coverageComplete;
-            const groundedFindings = checked.findings.length
-              ? checked.findings.map((finding) =>
-                  "### " + finding.title.replace(/[\r\n]/g, " ") + "\n" +
-                  "**Changed lines:** " + finding.startLine + "–" + finding.endLine + "\n\n" +
-                  finding.detail).join("\n\n")
-              : "No findings with supported changed-line evidence.";
-            const marker = "<!-- mde-pr-agent-targeted-recovery:v1 -->";
-            const body = marker + "\n## Targeted PR-Agent follow-up (advisory)\n\n" +
-              "**File:** " + plan.path + "\n" +
-              "**Base/head:** " + plan.baseSha + " / " + plan.headSha + "\n" +
-              "**Diff SHA-256:** " + fingerprint + "\n" +
-              "**Reviewer profile:** v0.49.0-nvidia-lightning-target-v1\n" +
-              "**Model coverage:** " + (covered ? "no omissions reported for this targeted patch" :
-                "incomplete/unknown") + "\n\n" +
-              "**Ungrounded model findings withheld:** " + checked.rejectedFindings + "\n" +
-              "**Additional grounded findings beyond display cap:** " + checked.truncatedFindings + "\n\n" +
-              "**Important:** This does NOT override the required full-review check. " +
-              "The shared reviewer must verify combined coverage before merge.\n\n" +
-              groundedFindings.slice(0, 14000);
-            const comments = await github.paginate(github.rest.issues.listComments, {
-              ...repo, issue_number: pull_number, per_page: 100,
-            });
-            const previous = comments.find((c) => c.user?.login === "github-actions[bot]" &&
-              (c.body ?? "").startsWith(marker));
-            if (previous) {
-              if (previous.body !== body) await github.rest.issues.updateComment({
-                ...repo, comment_id: previous.id, body,
-              });
-            } else await github.rest.issues.createComment({
-              ...repo, issue_number: pull_number, body,
-            });
-            core.notice("Published one bounded supplemental review; required verifier remains unchanged.");
-
