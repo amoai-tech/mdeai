@@ -134,9 +134,19 @@ jobs:
               const envelope = parseReviewEnvelope(comment.body ?? "");
               return envelope.valid && envelope.baseSha === baseSha && envelope.headSha === headSha;
             }).sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at));
+            // The reusable review job includes strict certification. It can fail
+            // AFTER PR-Agent published an exact-head partial review. Preserve that
+            // review's evidence without treating all changed files as failed.
+            // Do not interpret a random/stale bot comment as review proof.
+            const canonicalReview = matching.find((comment) => {
+              const envelope = parseReviewEnvelope(comment.body ?? "");
+              return envelope.type === "canonical" && envelope.command === "/review" &&
+                envelope.body.includes("<!-- pr-agent:review:full -->");
+            });
             const report = buildCoverageReport({ repo: `${repo.owner}/${repo.repo}`, number: pull_number,
               baseSha, headSha, files, expectedCount: current.changed_files,
-              reviewBody: matching[0]?.body ?? "", reviewJobResult: process.env.REVIEW_JOB_RESULT,
+              reviewBody: canonicalReview?.body ?? "",
+              reviewJobResult: canonicalReview ? "success" : process.env.REVIEW_JOB_RESULT,
               validations });
             const { data: latest } = await github.rest.pulls.get({ ...repo, pull_number });
             if (latest.base.sha !== baseSha || latest.head.sha !== headSha) {
