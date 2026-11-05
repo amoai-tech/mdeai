@@ -565,9 +565,9 @@ certification.
 **Open question:** event cards still use 28px actions. Should the same shared action height be applied there under SAN-972, or do events deliberately keep a denser footer because they carry a price and a ticket action?
 
 
-## 2026-11-05 — PRs #751, #753, #754 and #755 (sole-collaborator exception, four merges)
+## 2026-11-05 — PRs #751, #753, #754 and #755 (administrator merges; exception conditions documented)
 
-Four PRs merged on one day by `amoai-tech`, who is also the sole repository collaborator and the author of each, so GitHub could not record an approving review (`reviewDecision: REVIEW_REQUIRED` on all four). **Each merge is an administrator merge under the exception above. Every condition that can be read from the API was verified on the exact head** — `floor`, `mastra-schema-init` and `review / verify-review-result`. The fourth requirement, that the PR body records the exception and the exact head, was **not** met by three of the four PRs (see the paragraph below the table), so this entry does not claim full compliance for them.
+Four PRs merged on one day by `amoai-tech`, who was the sole repository collaborator and PR author; GitHub did not record an approving review (`reviewDecision: REVIEW_REQUIRED` on all four). **These were administrator merges, but full compliance with the documented sole-collaborator exception is not established for all four.** Exact-head `floor`, `mastra-schema-init` and `review / verify-review-result` checks passed, as tabulated below. The PR-body requirement (exception plus exact head) was **not met by #753, #754 or #755 at merge time**. Current resolved-thread counts cannot establish the historical thread state at the moment of each merge. Retrospective notes are not evidence of prior approval.
 
 The check evidence comes from the exact-head check runs. The review-thread column is the **current** state read from the API, not a reconstruction of the moment of merge: GitHub does not expose when a thread was resolved relative to a merge, and no historical count is claimed here.
 
