@@ -6,7 +6,8 @@ import { exactFileDiff, selectRecoveryTarget, prepareRecoveryFromGithub } from "
 
 const baseSha = "a".repeat(40), headSha = "b".repeat(40);
 const path = "src/components/events/event-ticket-tiers.tsx";
-const files = [{ filename: path, status: "modified", patch: "@@ -1 +1 @@\n-a\n+b" }];
+const headBlobSha = "f".repeat(40);
+const files = [{ filename: path, status: "modified", sha: headBlobSha, patch: "@@ -1 +1 @@\n-a\n+b" }];
 const reviewBody = `${reviewEnvelope({ baseSha, headSha, command: "/review", type: "canonical" })}
 <!-- pr-agent:review:full -->
 ## MDE PR Review
@@ -93,6 +94,7 @@ describe("SAN-1640 exact-source recovery preparation", () => {
             calls.push(ref);
             const text = ref === baseSha ? "const old = 1;\n" : "const old = 2;\n";
             return { data: { type: "file", encoding: "base64",
+              sha: ref === headSha ? headBlobSha : "e".repeat(40),
               size: Buffer.byteLength(text), content: Buffer.from(text).toString("base64") } };
           },
         },
@@ -103,8 +105,16 @@ describe("SAN-1640 exact-source recovery preparation", () => {
       pullNumber: 756, baseSha, headSha, reviewBody });
     expect(recovered).toMatchObject({ ok: true, path, bounded: true, source: "exact-blob-diff" });
     expect(calls).toEqual(["pr", baseSha, headSha, "pr"]);
+    // The current PR files API SHA is authoritative for the head blob.
+    const swapped = { ...github, paginate: async () => [{ ...files[0], sha: "1".repeat(40) }] };
+    await expect(prepareRecoveryFromGithub({ github: swapped, owner: "amoai-tech", repo: "mdeai",
+      pullNumber: 756, baseSha, headSha, reviewBody })).resolves.toMatchObject({
+      ok: false, reason: "exact-head blob SHA does not match current PR inventory",
+    });
     moved = true;
     await expect(prepareRecoveryFromGithub({ github, owner: "amoai-tech", repo: "mdeai",
-      pullNumber: 756, baseSha, headSha, reviewBody })).rejects.toThrow("STALE_PR_REVISION");
+      pullNumber: 756, baseSha, headSha, reviewBody })).resolves.toMatchObject({
+      ok: false, reason: expect.stringContaining("STALE_PR_REVISION"),
+    });
   });
 });
