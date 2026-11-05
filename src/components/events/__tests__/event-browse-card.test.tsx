@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { EventBrowseCard } from "@/components/events/event-browse-card";
@@ -51,22 +52,26 @@ describe("EventBrowseCard", () => {
 
   it("uses the shared discovery action height on Ask, Details and Buy tickets", () => {
     // SAN-1122 follow-up: event actions were 28px while restaurant and venue cards were 44px.
-    // The shared --spacing-card-action token is the single source, so assert every action
-    // reads it instead of only the two that happened to be visible in a screenshot.
+    // The shared --spacing-card-action token is the single source. Read each element's OWN
+    // class attribute: a forward slice of the markup can pick up the next element's classes
+    // (the Button primitive emits `class` before `data-testid`), which would pass even if the
+    // Ask button lost the token.
+    const classOf = (html: string, testId: string): string | null => {
+      const doc = new DOMParser().parseFromString(html, "text/html");
+      return doc.querySelector(`[data-testid="${testId}"]`)?.getAttribute("class") ?? null;
+    };
+
     const withTickets = renderToStaticMarkup(
       <EventBrowseCard event={event} onAskSelect={() => undefined} />,
     );
-    const actions = [
-      'data-testid="event-ask-select"',
-      'data-testid="event-details-cta"',
-      'data-testid="event-buy-cta"',
-    ];
-    for (const testId of actions) {
-      const at = withTickets.indexOf(testId);
-      expect(at, `${testId} must render`).toBeGreaterThan(-1);
-      // The class list follows the element's data-testid attribute in the markup.
-      const element = withTickets.slice(at, at + 2400);
-      expect(element, `${testId} must use the card action token`).toContain(
+    for (const testId of [
+      "event-ask-select",
+      "event-details-cta",
+      "event-buy-cta",
+    ]) {
+      const className = classOf(withTickets, testId);
+      expect(className, `${testId} must render`).not.toBeNull();
+      expect(className, `${testId} must use the card action token`).toContain(
         "h-card-action",
       );
     }
@@ -77,8 +82,9 @@ describe("EventBrowseCard", () => {
         onAskSelect={() => undefined}
       />,
     );
-    expect(withoutTickets).toContain("h-card-action");
-    expect(withoutTickets).not.toContain('data-testid="event-buy-cta"');
+    expect(classOf(withoutTickets, "event-ask-select")).toContain("h-card-action");
+    expect(classOf(withoutTickets, "event-details-cta")).toContain("h-card-action");
+    expect(classOf(withoutTickets, "event-buy-cta")).toBeNull();
   });
 
   it("renders a compact inline media card while preserving real ticket actions", () => {
