@@ -136,7 +136,7 @@ describe("SAN-1640 exact-source recovery preparation", () => {
     expect(selectRecoveryTarget({ reviewBody: failed, baseSha, headSha, files, expectedCount: 1 }).ok).toBe(false);
   });
 
-  it("retains a valid, bounded, advisory-only workflow with the pinned reviewer", () => {
+  it("delegates targeted model recovery to the immutable shared reviewer only", () => {
     const workflow = readFileSync(".github/workflows/pr-agent.yml", "utf8");
     const yaml = parseDocument(workflow);
     expect(yaml.errors).toEqual([]);
@@ -146,23 +146,17 @@ describe("SAN-1640 exact-source recovery preparation", () => {
     const smart = jobs.jobs["smart-coverage"];
     expect(smart["timeout-minutes"]).toBe(12);
     expect(smart.name).toContain("advisory");
-    expect(smart.steps.map((step) => step.name)).toEqual(expect.arrayContaining([
-      "Prepare bounded exact-blob recovery",
-      "Re-review missing patch with pinned PR-Agent v0.49.0",
-      "Publish bounded review findings (advisory; no false certificate)",
-    ]));
-    expect(workflow).toContain("pragent/pr-agent@sha256:b1ed6e8de56eb4d6e4169ee0d5c209bb5ed1ef071a01c0c042c64b80192a785c");
-    expect(workflow).toContain("--diff-file /review/recovery.diff");
-    expect(workflow).toContain("--json-output /review/recovery.json");
-    expect(workflow).toContain("The shared reviewer must verify combined coverage before merge.");
-    expect(workflow).not.toContain("-e GITHUB_TOKEN");
-    expect(workflow).toContain("validateTargetedModelOutput({ output, diff, path: plan.path })");
-    expect(workflow).toContain("Ungrounded model findings withheld");
-    expect(workflow).not.toContain("md.slice(0, 16000)");
-    expect(workflow).toContain('split("\\n**Important:**")[0]');
-    expect(workflow).toContain("Additional grounded findings beyond display cap");
-    expect(workflow).toContain("Shared required reviewer certified coverage; skipping duplicate model call.");
+    expect(smart.steps.map((step) => step.name)).toEqual([
+      "Checkout trusted base policy",
+      "Report exact-commit coverage (no PR-head code execution)",
+    ]);
+    expect(workflow).toContain("hasPublishedPartialReview");
     expect(workflow).toContain("REVIEW_JOB_RESULT: " + "$" + "{{ needs.review.result }}");
+    expect(workflow).not.toContain("Re-review missing patch with pinned PR-Agent v0.49.0");
+    expect(workflow).not.toContain("--diff-file /review/recovery.diff");
+    expect(workflow).not.toContain("OPENAI_API_KEY");
+    expect(workflow).not.toContain("recovery-model");
+    expect(workflow).toMatch(/^    uses: amoai-tech\/pr-review-infra\/\.github\/workflows\/pr-agent\.yml@[0-9a-f]{40}$/m);
   });
 
   it("fetches only the base and head file blobs and aborts on stale PR", async () => {
