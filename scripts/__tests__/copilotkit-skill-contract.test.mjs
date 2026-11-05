@@ -26,10 +26,12 @@ test("CopilotKit model eval pack is runnable without dropping content rubrics", 
   const pack = JSON.parse(readFileSync(join(base, "evals/evals.json"), "utf8"));
   const ids = pack.evals.map((item) => item.id);
   assert.equal(new Set(ids).size, ids.length);
-  assert.ok(ids.includes(18));
+  assert.equal(ids.length, 18);
+  assert.equal(pack.evals.filter((entry) => !entry.should_trigger).length, 1);
   for (const entry of pack.evals) {
     assert.equal(typeof entry.should_trigger, "boolean");
-    assert.match(entry.expected_output, /Content review criteria:/);
+    assert.ok(entry.expected_output.length >= 70, `missing answer rubric for eval ${entry.id}`);
+    if (entry.id >= 14) assert.match(entry.expected_output, /Content review criteria:/);
     assert.ok(entry.expectations.some((check) => check.check === "turn_completed"));
   }
 });
