@@ -202,19 +202,30 @@ for (const width of [390, 1440]) {
       await ask(followUpQuestion);
       // Match only the new answer. An earlier reply mentioning the fixture must
       // not make a wrong follow-up pass; either exact identifier is sufficient.
+      // LLMs may render ordinary UUID/name hyphens as nonbreaking en dashes.
+      // Normalize typography, never remove the identifying UUID or run suffix.
+      const normalize = (value: string) => value.toLowerCase()
+        .replace(/[\u2010-\u2015\u2212\ufe58\ufe63\uff0d]/g, "-")
+        .replace(/[\u00a0\u202f\u2009]/g, " ");
+      const expectedEventId = normalize(fixture.eventId);
+      // The full seeded name, including its "(not a real event)" suffix: a reply that
+      // only reproduces a prefix is not an identification of this fixture.
+      const expectedEventName = normalize(fixture.name);
+      // Wait for the answer to STOP streaming before judging it. A match taken from a
+      // half-rendered stream is not evidence that the completed answer identifies the
+      // event, so the identifier must be present and unchanged across two reads.
+      let previousAnswer = "";
       await expect.poll(async () => {
         const transcript = await rail.innerText();
         const followUpStart = transcript.lastIndexOf(followUpQuestion);
         if (followUpStart < 0) return false;
-        // LLMs may render ordinary UUID/name hyphens as nonbreaking en dashes.
-        // Normalize typography, never remove the identifying UUID or run suffix.
-        const normalize = (value: string) => value.toLowerCase()
-          .replace(/[\u2010-\u2015\u2212\ufe58\ufe63\uff0d]/g, "-")
-          .replace(/[\u00a0\u202f\u2009]/g, " ");
         const answer = normalize(transcript.slice(followUpStart + followUpQuestion.length));
-        const uniqueFixtureName = `SAN-1396 QA draft ${run}`;
-        return answer.includes(normalize(fixture.eventId)) || answer.includes(normalize(uniqueFixtureName));
-      }, { timeout: 90_000, message: "Host follow-up must identify the exact seeded event" }).toBe(true);
+        const identifies =
+          answer.includes(expectedEventId) || answer.includes(expectedEventName);
+        const settled = identifies && answer === previousAnswer;
+        previousAnswer = answer;
+        return settled;
+      }, { timeout: 90_000, intervals: [1_000, 2_000], message: "Host follow-up must identify the exact seeded event" }).toBe(true);
       await expectNoOverflow(page);
       expect(consoleErrors).toEqual([]);
     });

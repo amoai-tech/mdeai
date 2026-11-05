@@ -31,6 +31,27 @@ describe("SAN-729 — a truthful Host sales answer is accepted in both word orde
     expect(statesTicketCount("You sold a total of 2 tickets. Tickets sold: 3.", 3)).toBe(false);
   });
 
+  it("treats unsold tickets as inventory, not as sales", () => {
+    // A truthful answer may state both: "2 tickets sold, 8 tickets unsold".
+    expect(statesTicketCount("2 tickets sold, 8 tickets unsold", 2)).toBe(true);
+    expect(statesTicketCount("You sold 2 tickets. 8 tickets unsold.", 2)).toBe(true);
+    expect(statesTicketCount("8 tickets unsold", 2)).toBe(false);
+  });
+
+  it("never accepts a comma-formatted amount as a partial ticket count", () => {
+    // "1,800" must not be read as 1: a revenue figure is not a ticket count.
+    expect(statesTicketCount("Tickets sold: 1,800", 1)).toBe(false);
+    expect(statesTicketCount("Tickets sold: 1,800", 2)).toBe(false);
+    expect(statesTicketCount("Tickets: 1,800", 1)).toBe(false);
+    expect(statesTicketCount("You sold 1,800 tickets", 1)).toBe(false);
+    expect(statesTicketCount("Sold: 1,800", 1)).toBe(false);
+    expect(statesTicketCount("1,800 tickets sold", 1)).toBe(false);
+    // Unformatted counts keep working in every supported shape.
+    expect(statesTicketCount("2 tickets sold", 2)).toBe(true);
+    expect(statesTicketCount("Tickets sold: 2", 2)).toBe(true);
+    expect(statesTicketCount("Tickets: 2", 2)).toBe(true);
+  });
+
   it("rejects a missing count and an invalid expectation", () => {
     expect(statesTicketCount("No sales yet for this event.", 2)).toBe(false);
     expect(statesTicketCount("2 tickets", Number.NaN)).toBe(false);

@@ -8,15 +8,15 @@
 // Extract explicit sold labels; generic counts are also compared unless marked as inventory.
 const SOLD_PATTERNS = [
   /(?<![\d,.])\b(\d{1,6})[ \t\u00a0\u202f\u2009]{1,16}tickets?[ \t\u00a0\u202f\u2009]{1,16}(?:were[ \t\u00a0\u202f\u2009]{1,16})?sold\b/gi, // "2 tickets sold"
-  /\btickets?[ \t\u00a0\u202f\u2009]{1,16}sold[ \t\u00a0\u202f\u2009]{0,16}[:=\-–]?[ \t\u00a0\u202f\u2009]{0,16}(\d{1,6})\b/gi, // "Tickets sold: 2"
-  /\btickets?[ \t\u00a0\u202f\u2009]{1,16}sold[ \t\u00a0\u202f\u2009]{0,16}[:=\-–][ \t\u00a0\u202f\u2009]{0,16}\r?\n[ \t\u00a0\u202f\u2009]{0,16}(\d{1,6})\b/gi, // "Tickets sold:\n2"
+  /\btickets?[ \t\u00a0\u202f\u2009]{1,16}sold[ \t\u00a0\u202f\u2009]{0,16}[:=\-–]?[ \t\u00a0\u202f\u2009]{0,16}(\d{1,6})(?!\d|[.,]\d)\b/gi, // "Tickets sold: 2"
+  /\btickets?[ \t\u00a0\u202f\u2009]{1,16}sold[ \t\u00a0\u202f\u2009]{0,16}[:=\-–][ \t\u00a0\u202f\u2009]{0,16}\r?\n[ \t\u00a0\u202f\u2009]{0,16}(\d{1,6})(?!\d|[.,]\d)\b/gi, // "Tickets sold:\n2"
   /\bsold[ \t\u00a0\u202f\u2009]{0,16}[:=\-–]?[ \t\u00a0\u202f\u2009]{0,16}(\d{1,6})[ \t\u00a0\u202f\u2009]{1,16}tickets?\b/gi, // "You sold 2 tickets"
-  /(?:^|[.!?;\n])[ \t\u00a0\u202f\u2009]{0,16}sold[ \t\u00a0\u202f\u2009]{0,16}[:=\-–][ \t\u00a0\u202f\u2009]{0,16}(\d{1,6})\b/gi, // "Sold: 2" as its own statement
+  /(?:^|[.!?;\n])[ \t\u00a0\u202f\u2009]{0,16}sold[ \t\u00a0\u202f\u2009]{0,16}[:=\-–][ \t\u00a0\u202f\u2009]{0,16}(\d{1,6})(?!\d|[.,]\d)\b/gi, // "Sold: 2" as its own statement
   /(?<![\d,.])\b(\d{1,6})[ \t\u00a0\u202f\u2009]{1,16}sold\b/gi, // "2 sold"
 ];
 
-const COUNT_BEFORE = /(?<![\d,.])\b(\d{1,6})[ \t\u00a0\u202f\u2009]{1,16}tickets?\b/gi; // "2 tickets"
-const COUNT_AFTER = /\btickets?(?:[ \t\u00a0\u202f\u2009]{1,16}(?:count|total))?[ \t\u00a0\u202f\u2009]{0,16}[:=\-–][ \t\u00a0\u202f\u2009]{0,16}(\d{1,6})\b/gi; // "Tickets: 2"
+const COUNT_BEFORE = /(?<![\d,.])\b(\d{1,6})(?!\d|[.,]\d)[ \t\u00a0\u202f\u2009]{1,16}tickets?\b/gi; // "2 tickets"
+const COUNT_AFTER = /\btickets?(?:[ \t\u00a0\u202f\u2009]{1,16}(?:count|total))?[ \t\u00a0\u202f\u2009]{0,16}[:=\-–][ \t\u00a0\u202f\u2009]{0,16}(\d{1,6})(?!\d|[.,]\d)\b/gi; // "Tickets: 2"
 
 function values(text: string, patterns: RegExp[]): number[] {
   const counts: number[] = [];
@@ -47,7 +47,7 @@ export function statedTicketCounts(text: string): number[] {
     // still expresses a sales count even if another sold label is present.
     if (explicitSold.length > 0 && /\bof[ \t\u00a0\u202f\u2009]*$/i.test(before)
         && !/\b(?:a[ \t\u00a0\u202f\u2009]{1,16})?total[ \t\u00a0\u202f\u2009]{1,16}of[ \t\u00a0\u202f\u2009]*$/i.test(before)) continue;
-    if (/^[ \t\u00a0\u202f\u2009]{0,16}(?:(?:still)[ \t\u00a0\u202f\u2009]{1,16})?(?:remaining|left|available|capacity|total|in[ \t\u00a0\u202f\u2009]{1,16}stock)\b/i.test(after)) continue;
+    if (/^[ \t\u00a0\u202f\u2009]{0,16}(?:(?:still|not|un)[ \t\u00a0\u202f\u2009]{0,16})?(?:remaining|left|available|capacity|total|unsold|in[ \t\u00a0\u202f\u2009]{1,16}stock)\b/i.test(after)) continue;
     counts.push(Number(match[1]));
   }
   for (const match of text.matchAll(COUNT_AFTER)) {
