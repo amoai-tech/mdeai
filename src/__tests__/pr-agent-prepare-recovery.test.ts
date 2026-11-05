@@ -83,9 +83,11 @@ describe("SAN-1640 combined original and supplemental review certification", () 
     coverage:{files_not_reviewed:[],files_partially_reviewed:[]}};
   const verify = (override={}) => verifyRecoveredCoverage({reviewBody,baseSha,headSha,
     files,expectedCount:1,plan,diff:diffProof.diff,output,...override});
-  it("certifies one exact-head, bounded, fully covered missing patch", () => {
-    expect(verify()).toMatchObject({ok:true,code:"RECOVERED_COVERAGE",path,
+  it("reports source-bound model coverage as advisory, never a merge certificate", () => {
+    expect(verify()).toMatchObject({ok:true,code:"TARGETED_RECOVERY_ADVISORY",path,
       diffSha256:diffProof.diffSha256,findings:[{path,startLine:1}]});
+    expect(verify().reason).toContain("advisory only");
+    expect(verify().code).not.toBe("RECOVERED_COVERAGE");
   });
   it("fails on stale revision, wrong target, substituted patch or incomplete provider result", () => {
     expect(verify({headSha:"c".repeat(40)}).ok).toBe(false);

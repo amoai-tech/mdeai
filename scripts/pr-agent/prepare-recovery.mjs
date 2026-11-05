@@ -244,9 +244,12 @@ export function verifyRecoveredCoverage({ reviewBody, baseSha, headSha, files,
   if (!checked.ok || !checked.coverageComplete) {
     return reject(checked.reason || "targeted AI coverage remains incomplete");
   }
-  return { ok: true, code: "RECOVERED_COVERAGE", path: plan.path,
+  // A bounded source/diff binding is not proof that an LLM read every hunk.
+  // This is an advisory model result, NOT a merge or full-coverage certificate.
+  // Only the separate trusted shared-workflow verifier may decide its own gate.
+  return { ok: true, code: "TARGETED_RECOVERY_ADVISORY", path: plan.path,
     diffSha256: plan.diffSha256, findings: checked.findings,
     rejectedFindings: checked.rejectedFindings,
     truncatedFindings: checked.truncatedFindings,
-    reason: "all omitted high-risk source patches recovered for exact base/head" };
+    reason: "one exact-head patch supplied; model reports no omissions (advisory only)" };
 }
