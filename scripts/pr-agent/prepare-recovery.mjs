@@ -207,8 +207,41 @@ export function validateTargetedModelOutput({ output, diff, path }) {
   }
   const omissions = coverage.files_not_reviewed.length + coverage.files_partially_reviewed.length;
   return { ok: true, findings, rejectedFindings,
-    coverageComplete: omissions === 0 && rejectedFindings === 0,
+    // Review coverage and quality of individual findings are distinct facts.
+    // The pinned provider may cover the full patch while one suggested finding
+    // has an invalid line anchor. Withhold that finding, not the coverage proof.
+    coverageComplete: omissions === 0,
+    findingsGrounded: rejectedFindings === 0,
     reason: omissions ? "provider still omitted part of the file" :
-      rejectedFindings ? "some model findings lacked changed-line proof" :
+      rejectedFindings ? "patch covered; ungrounded suggestions withheld" :
         "targeted model output covers the supplied patch" };
+}
+
+
+/** Pure, fail-closed combined review proof. The caller must first obtain plan
+ * and diff from exact GitHub base/head blobs, and verify the PR is still at
+ * that revision immediately before certification/publication.
+ */
+export function verifyRecoveredCoverage({ reviewBody, baseSha, headSha, files,
+  expectedCount, plan, diff, output }) {
+  const reject = (reason) => ({ ok: false, reason });
+  const selected = selectRecoveryTarget({ reviewBody, baseSha, headSha, files, expectedCount });
+  if (!selected.ok) return reject(selected.reason);
+  if (!plan || plan.baseSha !== baseSha || plan.headSha !== headSha ||
+      plan.path !== selected.path || plan.risk !== selected.risk ||
+      plan.source !== "exact-blob-diff" || plan.bounded !== true ||
+      typeof diff !== "string" || !Number.isSafeInteger(plan.patchBytes) ||
+      plan.patchBytes <= 0 || plan.patchBytes > MAX_DIFF_BYTES ||
+      Buffer.byteLength(diff) !== plan.patchBytes ||
+      createHash("sha256").update(diff).digest("hex") !== plan.diffSha256) {
+    return reject("stale, mismatched or unbounded source diff proof");
+  }
+  const checked = validateTargetedModelOutput({ output, diff, path: plan.path });
+  if (!checked.ok || !checked.coverageComplete) {
+    return reject(checked.reason || "targeted AI coverage remains incomplete");
+  }
+  return { ok: true, code: "RECOVERED_COVERAGE", path: plan.path,
+    diffSha256: plan.diffSha256, findings: checked.findings,
+    rejectedFindings: checked.rejectedFindings,
+    reason: "all omitted high-risk source patches recovered for exact base/head" };
 }

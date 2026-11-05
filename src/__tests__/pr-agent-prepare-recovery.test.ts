@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { parseDocument } from "yaml";
 import { reviewEnvelope } from "../../scripts/pr-agent/review-policy.mjs";
-import { exactFileDiff, selectRecoveryTarget, prepareRecoveryFromGithub, validateTargetedModelOutput } from "../../scripts/pr-agent/prepare-recovery.mjs";
+import { exactFileDiff, selectRecoveryTarget, prepareRecoveryFromGithub, validateTargetedModelOutput, verifyRecoveredCoverage } from "../../scripts/pr-agent/prepare-recovery.mjs";
 
 const baseSha = "a".repeat(40), headSha = "b".repeat(40);
 const path = "src/components/events/event-ticket-tiers.tsx";
@@ -47,7 +47,7 @@ describe("SAN-1640 targeted model findings require changed-line evidence", () =>
         start_line:1,end_line:1},
     ]}};
     expect(validateTargetedModelOutput({output:altered,diff:patch.diff,path})).toMatchObject({
-      ok:true,rejectedFindings:2,coverageComplete:false,findings:[{path,startLine:1}],
+      ok:true,rejectedFindings:2,coverageComplete:true,findingsGrounded:false,findings:[{path,startLine:1}],
     });
   });
   it("rejects untyped review, missing coverage and incomplete model coverage", () => {
@@ -61,6 +61,32 @@ describe("SAN-1640 targeted model findings require changed-line evidence", () =>
   });
 });
 
+
+describe("SAN-1640 combined original and supplemental review certification", () => {
+  const diffProof = exactFileDiff(path, "const a = 1;\n", "const a = 2;\n");
+  const plan = {baseSha,headSha,path,risk:"high",source:"exact-blob-diff",
+    bounded:true,diffSha256:diffProof.diffSha256,patchBytes:diffProof.patchBytes};
+  const output = {review:{"estimated_effort_to_review_[1-5]":2,
+    relevant_tests:"No\n", security_concerns:"No",
+    key_issues_to_review:[{relevant_file:path+"\n",issue_header:"Grounded",
+      issue_content:"Supported patch line",start_line:1,end_line:1}]},
+    coverage:{files_not_reviewed:[],files_partially_reviewed:[]}};
+  const verify = (override={}) => verifyRecoveredCoverage({reviewBody,baseSha,headSha,
+    files,expectedCount:1,plan,diff:diffProof.diff,output,...override});
+  it("certifies one exact-head, bounded, fully covered missing patch", () => {
+    expect(verify()).toMatchObject({ok:true,code:"RECOVERED_COVERAGE",path,
+      diffSha256:diffProof.diffSha256,findings:[{path,startLine:1}]});
+  });
+  it("fails on stale revision, wrong target, substituted patch or incomplete provider result", () => {
+    expect(verify({headSha:"c".repeat(40)}).ok).toBe(false);
+    expect(verify({plan:{...plan,path:"src/payments.ts"}}).ok).toBe(false);
+    expect(verify({diff:diffProof.diff+"\n+tamper"}).ok).toBe(false);
+    expect(verify({output:{...output,coverage:{
+      files_not_reviewed:[path],files_partially_reviewed:[]}}}).ok).toBe(false);
+    expect(verify({reviewBody:reviewBody.replace('"complete":false','"complete":true')}).ok)
+      .toBe(false);
+  });
+});
 describe("SAN-1640 exact-source recovery preparation", () => {
   it("builds an actual complete unified diff without executing source code", () => {
     const result = exactFileDiff(path, "const a = 1;\n", "const a = 2;\n");
@@ -121,6 +147,8 @@ describe("SAN-1640 exact-source recovery preparation", () => {
     expect(workflow).toContain("validateTargetedModelOutput({ output, diff, path: plan.path })");
     expect(workflow).toContain("Ungrounded model findings withheld");
     expect(workflow).not.toContain("md.slice(0, 16000)");
+    expect(workflow).toContain("Shared required reviewer certified coverage; skipping duplicate model call.");
+    expect(workflow).toContain("REVIEW_JOB_RESULT: " + "$" + "{{ needs.review.result }}");
   });
 
   it("fetches only the base and head file blobs and aborts on stale PR", async () => {

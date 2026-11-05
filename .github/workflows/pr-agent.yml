@@ -195,6 +195,8 @@ jobs:
       # coverage; never rewrite its failed required check or fabricate completion.
       - name: Prepare bounded exact-blob recovery
         id: recovery-plan
+        env:
+          REVIEW_JOB_RESULT: ${{ needs.review.result }}
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           github-token: ${{ github.token }}
@@ -234,6 +236,12 @@ jobs:
                   "The PR base/head changed. Previous targeted findings do not apply " +
                   "to this revision. The current review remains authoritative.\n",
               });
+            }
+            // The canonical shared verifier may have recovered the exact patch
+            // already. Never pay for the same AI review a second time.
+            if (process.env.REVIEW_JOB_RESULT === "success") {
+              core.info("Shared required reviewer certified coverage; skipping duplicate model call.");
+              return;
             }
             const candidates = comments.filter((comment) => {
               if (comment.user?.login !== "github-actions[bot]" ||
