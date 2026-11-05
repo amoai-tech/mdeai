@@ -127,20 +127,20 @@ export function RentalCard({
   const showScheduleCta = canScheduleViewing === true && Boolean(onSchedule);
 
   const media = photoUrl ? (
-    <div className="w-full shrink-0 sm:w-[200px]">
+    <div className="w-full shrink-0 sm:w-[232px]">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={photoUrl}
         alt={photoAlt}
-        width={200}
-        height={120}
-        className="aspect-[16/10] w-full rounded-md object-cover sm:aspect-auto sm:h-[120px] sm:w-[200px]"
+        width={232}
+        height={150}
+        className="aspect-[16/10] w-full rounded-lg object-cover sm:aspect-auto sm:h-[150px] sm:w-[232px]"
         loading="lazy"
       />
     </div>
   ) : (
     <div
-      className="hidden h-[120px] w-[200px] shrink-0 items-center justify-center rounded-md bg-muted text-xs text-muted-foreground sm:flex"
+      className="hidden h-[150px] w-[232px] shrink-0 items-center justify-center rounded-lg bg-muted text-xs text-muted-foreground sm:flex"
       aria-hidden
     >
       Photo
@@ -178,7 +178,7 @@ export function RentalCard({
             Best match
           </Badge>
         ) : null}
-        <h3 className="min-w-0 flex-1 font-medium leading-snug">{title}</h3>
+        <h3 className="min-w-0 flex-1 text-base font-semibold leading-snug">{title}</h3>
       </div>
 
       {duplicateNote ? (
@@ -194,7 +194,7 @@ export function RentalCard({
         </div>
       ) : null}
 
-      <p className="mt-0.5 text-xs text-muted-foreground">
+      <p className="mt-1 text-sm text-muted-foreground">
         {neighborhood}
         {bedrooms_unknown ? " · Bedrooms unknown" : bedrooms != null
           ? ` · ${bedrooms === 0 ? "Studio" : `${bedrooms} BR`}` : ""}
@@ -203,16 +203,17 @@ export function RentalCard({
       {nightlyLabel || monthlyLabel ? (
         <div className="mt-2 flex flex-wrap items-center gap-2">
           {nightlyLabel ? (
-            <span className="inline-flex rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
+            <span className="inline-flex rounded-full bg-primary/10 px-2.5 py-1 text-sm font-semibold text-primary" data-testid="rental-price-nightly">
               {nightlyLabel}
             </span>
           ) : null}
           {monthlyLabel ? (
             <span
+              data-testid="rental-price-monthly"
               className={
                 nightlyLabel
-                  ? "text-xs text-muted-foreground"
-                  : "inline-flex rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary"
+                  ? "text-sm text-muted-foreground"
+                  : "inline-flex rounded-full bg-primary/10 px-2.5 py-1 text-lg font-semibold tracking-tight text-primary"
               }
             >
               {monthlyLabel}
@@ -222,11 +223,11 @@ export function RentalCard({
       ) : null}
 
       {availability ? (
-        <p className="mt-1 text-xs text-muted-foreground">{availability}</p>
+        <p className="mt-1 text-sm text-muted-foreground">{availability}</p>
       ) : null}
 
       {matchReason ? (
-        <p className="mt-2 min-w-0 break-words text-xs leading-relaxed text-muted-foreground" data-testid="rental-match-reason">
+        <p className="mt-2 min-w-0 break-words text-sm leading-relaxed text-muted-foreground" data-testid="rental-match-reason">
           <span className="font-medium text-foreground">Why it may fit:</span>{" "}
           {matchReason}
         </p>
@@ -258,7 +259,23 @@ export function RentalCard({
         </div>
       ) : null}
 
-      <div className="mde-rental-card-actions mt-3 flex flex-wrap gap-2">
+      <div className="mde-rental-card-actions mt-3 flex flex-wrap items-center gap-2">
+        {showScheduleCta ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="default"
+            className="min-h-card-action flex-1 sm:flex-none lg:min-h-0"
+            data-testid="rental-schedule-cta"
+            onClick={(e) => {
+              e.stopPropagation();
+              onSchedule?.();
+            }}
+          >
+            <Calendar className="size-3.5" aria-hidden />
+            Schedule viewing
+          </Button>
+        ) : null}
         {onOpenDetails ? (
           <Button
             type="button"
@@ -280,26 +297,10 @@ export function RentalCard({
             target="_blank"
             rel="nofollow noopener noreferrer"
             data-testid="rental-original-listing-cta"
-            className="inline-flex h-8 min-h-card-action items-center rounded-md border px-3 text-sm lg:min-h-0"
+            className="inline-flex min-h-card-action items-center rounded-md border px-3 text-sm text-muted-foreground transition-colors hover:text-foreground lg:min-h-0"
           >
             View original listing
           </a>
-        ) : null}
-        {showScheduleCta ? (
-          <Button
-            type="button"
-            size="sm"
-            variant="default"
-            className="min-h-card-action lg:min-h-0"
-            data-testid="rental-schedule-cta"
-            onClick={(e) => {
-              e.stopPropagation();
-              onSchedule?.();
-            }}
-          >
-            <Calendar className="size-3.5" aria-hidden />
-            Schedule viewing
-          </Button>
         ) : null}
       </div>
     </VenueCardShell>

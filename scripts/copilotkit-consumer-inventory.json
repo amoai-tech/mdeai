@@ -370,6 +370,11 @@
       "file": "src/components/host/rentals/__tests__/rentals-concierge-contract.test.ts",
       "classification": "test-only",
       "note": "SAN-1124: guards v2 CopilotChat and useRenderTool registration plus broker workspace contract."
+    },
+    {
+      "file": "src/components/copilot/a2ui/mde-ui-catalog.tsx",
+      "classification": "keep",
+      "note": "SAN-1630: one v2 createGenerativeUI catalog with a RentalCard; resolves only an authorized listingId from the current rental tool result and mounts no provider or run."
     }
   ]
 }
