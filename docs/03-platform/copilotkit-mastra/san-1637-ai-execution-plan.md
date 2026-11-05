@@ -29,7 +29,7 @@ table.
 |---|---|
 | Safe base | `origin/main` = `c4c510da742fde904a5f0f422bd95cd295254312` (fetched 2026-11-05; PR #753 was test-only) |
 | Working checkout | `feat/san-983-982-984-515-event-ops` at `5d728324f0f1c85ff67c487e3a48fff8798f1db1`, **dirty** |
-| Clean PR1 worktree | `/home/sk/mdeai-worktrees/san-1637-audit` at `c4c510…` |
+| Clean baseline | `c4c510da742fde904a5f0f422bd95cd295254312`; locate with `git worktree list` or create a worktree from this SHA |
 | Package manager / Node | npm 11.19.0 / Node 24.21.0 |
 | Next.js | 16.4.3 |
 | React / React DOM | `^19.2.1`, resolved 19.2.6 |
@@ -85,7 +85,7 @@ CopilotKit/AG-UI/Mastra family without duplicate `AbstractAgent` or forced peers
 
 | Subsystem | Verdict | Evidence | Smallest required fix |
 |---|---|---|---|
-| Exact dependency resolution | **PASS on `origin/main`**; **FAIL in the dirty checkout** | Clean `npm ci`/`npm ls` is deduped; dirty checkout has old manifest + upgraded `node_modules` | Do all work in a clean worktree at `ab24e5…`; never `npm install` over the dirty tree |
+| Exact dependency resolution | **PASS on `origin/main`**; **FAIL in the dirty checkout** | Clean `npm ci`/`npm ls` is deduped; dirty checkout has old manifest + upgraded `node_modules` | Use a clean worktree from the verified `c4c510da…` baseline; run `npm ci` there. Before a new delivery, recheck the latest PR base. Never install over the dirty checkout |
 | CopilotKit v2 single-route transport | **PASS** | `createCopilotRuntimeHandler` + `mode: "single-route"` + client `useSingleEndpoint: true`; contract tests pass | None |
 | Route auth, rate limits, thread ownership, Stop/Retry allowlist | **PASS by source and contract tests**; browser UNVERIFIED | Auth and ownership run before the handler; `agent/run`, `connect`, `stop`, `info` only; `threads/*` denied | Keep unchanged; prove Stop/Retry in the browser |
 | AG-UI tool transport | **PASS by source** | `@ag-ui/mastra` `buildClientTools` forwards `RunAgentInput.tools`; runtime injects `render_ui` into those tools | None |
@@ -128,10 +128,10 @@ explicit that the agent must use **both** the run's tools and its context entrie
 | B8 | High | Sale windows are not mapped to the detail picker | `PublicEventTicket` has no `saleStartsAt`/`saleEndsAt`; RPC rejects not-started/ended sales | Map and render sale windows; share one availability predicate |
 | B9 | Medium | `eventDetailAction` also ignores pending reservations | `remainingSeats` subtracts sold only | Use the same pending-aware helper |
 | B10 | Medium | `event-detail-chat` tells guests a tier is available from sold-only counts | `summarizePublicEventForChat` calls two-argument `ticketsRemaining` | Use the pending-aware helper; test sold-out with pending |
-| B11 | Medium | Rental renderer's input schema omits monthly/budget fields used by the tool | `search-tool-renders.tsx` schema lacks `maxMonthlyPrice`, `maxBedrooms`, `stayType`, `budgetCurrency` | Prove with a focused renderer test before changing; extra Zod keys are stripped but the render contract should match the tool |
+| B11 | Medium | Rental renderer's input schema omits monthly/budget fields used by the tool | `search-tool-renders.tsx` schema lacks `maxPriceMonthly`, `maxBedrooms`, `stayType`, `budgetCurrency` | Prove with a focused renderer test before changing; extra Zod keys are stripped but the render contract should match the tool |
 | B12 | Medium | Page Surface ownership is undefined | Existing page state is `shownResults`/`shownEvents` + `useBrowseMapSync`; no Surface exists | Keep the page as data owner; Surface is presentation only; never add a second map/results store |
 | B13 | Medium | `LoggingMastraAgent.clone()` does not copy optional adapter config (including `a2ui`) | wrapper `clone()` passes only agent/resource/requestContext/userId | Use runtime/provider middleware for generic generative UI; do not add `a2ui` agent config without fixing clone |
-| B14 | Process | Skill and docs still claim CopilotKit 1.75.0 | `.claude/skills/copilotkit/SKILL.md:108`; `docs/07-operations/README.md:120` | Correct the version references in the same PR that audits the upgrade; do not change governance |
+| B14 | Process | Skill and docs still claim CopilotKit 1.75.0 | `.claude/skills/copilotkit/SKILL.md:108`; `docs/07-operations/README.md:120` | PR #752 owns the CopilotKit skill update; verify it separately rather than duplicate edits. Only correct another stale documentation claim at its verified location, never in credential instructions |
 | B15 | Evidence gap | Live DB, browser, Stripe TEST and full gate are unproven | no Supabase MCP, no browser, no Stripe credentials in this session | Run them before any Done claim; do not substitute source inspection |
 
 ## Dependency-ordered execution plan
@@ -159,7 +159,9 @@ ticket selector is added.
 - Search exactly: “Pet-friendly two-bedroom apartments in Laureles under COP 4M.”
 - Verify each card maps to a real returned record; price is the listing's own currency;
   Details opens the same listing; the matching map pin is `rental-${id}`; empty results clear
-  stale pins; an older search cannot overwrite a newer one.
+  stale pins; an older search cannot overwrite a newer one. If pets cannot be filtered,
+  assert that the UI explicitly says pet-friendliness was **not filtered** and must be
+  checked per listing; do not label an unfiltered match pet-friendly.
 - Check guest and signed-in, refresh, Stop/Retry, 390px and keyboard.
 - Fix only reproduced defects. Do not add a second renderer or search path.
 
@@ -170,25 +172,42 @@ Files:
 - `src/lib/events/types.ts` — add `qtyPending`, `minPerOrder`, `maxPerOrder`,
   `saleStartsAt`, `saleEndsAt`.
 - `src/lib/events/get-public-event.ts` — select and map those fields; normalize currency.
-- `src/lib/events/format-event.ts` — one `ticketsRemaining(total, sold, pending)` helper;
-  normalize currency; keep existing price formatting.
-- `src/lib/events/event-detail-action.ts` and `src/lib/events/event-detail-chat.ts` — use the
-  same availability helper.
+- `src/lib/events/format-event.ts` — keep `ticketsRemaining(total, sold, pending)`
+  as a numeric helper. Specify one canonical `getTicketAvailability(tier, requestedQuantity, now)`
+  predicate returning `{ status, remaining, minimum, maximum }`. Its five statuses are
+  `available`, `sold-out`, `not-yet-on-sale`, `sale-ended`, `below-minimum`; it checks
+  pending capacity, per-order limits, sale windows and the current checkout API ceiling.
+  Normalize currency and preserve existing price formatting.
+- `src/lib/events/event-ticket-offer.ts`, `src/lib/events/event-detail-action.ts` and
+  `src/lib/events/event-detail-chat.ts` — reuse that **same** predicate. In particular,
+  `summarizeEventTicketOffer` must not advertise inventory below `min_per_order` as sellable.
 - `src/components/events/event-ticket-tiers.tsx` — per-tier min/max; pending-aware capacity;
-  no hard-coded 8; no paid checkout for zero-price tiers.
+  no hard-coded 8; offer quantities only up to `min(maxPerOrder, remaining, 10)` to match
+  the current API ceiling. If a future tier's minimum exceeds 10, show a truthful
+  unavailable-by-current-checkout message, not an impossible option; no paid Checkout
+  for zero-price tiers.
 - `src/lib/tickets/ticket-checkout-schema.ts` — retain the documented safe transport ceiling
-  of 10 (all current tiers use 10); the RPC remains the per-tier authority. Do not widen the
-  API merely because the database constraint allows 50.
+  of 10 (all audited tiers use 10); the RPC remains the per-tier authority. If real
+  tier requirements exceed 10, change the picker and API together only after focused
+  contract, capacity and concurrency tests, rather than silently widening to 50.
 - Tests: update the existing ticket-tier test that asserts 8; add `cop`/`COP`, pending,
-  min/max, all four availability states and free-tier cases. Prove 8/9/10 accepted and 11
-  rejected at the API boundary.
+  min/max, **all five results** (`available`, `sold-out`, `not-yet-on-sale`, `sale-ended`,
+  `below-minimum`) and free-tier cases. Explicitly assert a sellable tier returns
+  `available`. Prove 8/9/10 accepted and 11 rejected at the current API boundary,
+  including a tier with `min_per_order > 10` as a clearly surfaced incompatibility.
 
 **No migration by default.** The canonical RPC already validates `qty_sold + qty_pending`,
-per-tier min/max, publication, sale windows and positive COP. Only write SQL if a focused
-pgTAP/production read proves a canonical RPC defect.
+per-tier min/max, publication, sale windows and positive COP. The plan has **not
+verified** whether the RPC checks explicit event deactivation (`is_active`) or
+hidden tiers (`is_hidden`). Inspect the canonical RPC and live definition before
+changing SQL; if defects are confirmed, patch that same RPC with pgTAP tests and
+preserved grants. Do not add business approvals or launch-eligibility prerequisites
+in development.
 
 **Proof:** focused Vitest; browser + API + DB agree for 8/9/10/11, `cop`/`COP`, pending,
-min/max, sold-out, not-yet-on-sale, sale-ended and below-minimum; no false checkout CTA.
+min/max, all five states including `available`, sold-out, not-yet-on-sale,
+sale-ended, below-minimum, explicitly inactive events, hidden tiers and
+`min_per_order > 10`; no false checkout CTA.
 
 ### Milestone 2 — SAN-1630 transport proof and one catalog (PR 2)
 
@@ -208,11 +227,11 @@ min/max, sold-out, not-yet-on-sale, sale-ended and below-minimum; no false check
 
 **2B · smallest catalog**
 
-Create `src/components/copilot/a2ui/mde-ui-catalog.tsx` with only:
-
-- `RentalCard({ listingId })`
-- `EventCard({ eventId })`
-- reserve `RentalComparison` only after the standalone component exists.
+Create `src/components/copilot/a2ui/mde-ui-catalog.tsx` initially with **only**
+`RentalCard({ listingId })`. First prove one real ID-only rental `render_ui` trace
+through both the provider and Mastra guide, plus forged-ID fallback. **Only after
+that proof** add `EventCard({ eventId })`; add `RentalComparison` in Milestone 3.
+Do not build a full catalog before proving the single component.
 
 Rules:
 
@@ -263,7 +282,9 @@ invalid IDs pass.
 Create `src/components/copilot/a2ui/event-ticket-selector.tsx`:
 
 - receives `eventId` and optional `initialTierId`/`initialQuantity`;
-- loads `/api/events/${eventId}/public`, then reuses `EventTicketTiers`;
+- loads `/api/events/${eventId}/public`, excludes hidden tiers (`is_hidden = true`)
+  from the **public** selector, then reuses `EventTicketTiers`; authorized admin
+  management remains unaffected;
 - after the user edits, AI updates never overwrite the user's tier/quantity;
 - the user must click the existing “Review tickets” path; the agent cannot open Checkout,
   create an order or call Stripe.
@@ -271,8 +292,11 @@ Create `src/components/copilot/a2ui/event-ticket-selector.tsx`:
 **4B · stale and invalid selections**
 
 Re-fetch the public event before opening `BookingCheckoutModal`; reject a tier that is no
-longer active/sellable, a quantity outside min/max or stock, and an event that is no longer
-published. The server/RPC is still the final authority.
+longer active/sellable, hidden, outside the sale window or below minimum, a quantity
+outside per-tier limits/stock/the API ceiling, and an explicitly deactivated event
+(`is_active = false`). The existing server/RPC must independently reject invalid
+orders even after a refetch race; test and fix that canonical path where needed.
+Respect development-phase policy; do not impose launch approvals/verification.
 
 **4C · Stripe TEST proof**
 
@@ -280,14 +304,23 @@ Use the existing `/api/tickets/checkout` → Edge Function → RPC → Stripe TE
 → `event_orders`/wallet/QR path. Prove:
 
 - one successful TEST purchase creates one paid order and the exact ticket entitlements;
-- a duplicate webhook does not duplicate the order/entitlements;
-- a failed/expired payment creates no paid order;
+- simultaneous duplicate webhooks do not duplicate the order/entitlements **or**
+  send multiple ticket emails; use durable atomic email-send idempotency;
+- a failed/expired payment creates no paid order; a success event racing with or
+  arriving after cancellation/expiration cannot strand a paid buyer: test both
+  orders and require reconciliation to deliver the entitlement or refund the charge;
 - a forged/invalid signature is rejected;
 - a sold-out tier and two concurrent buyers are handled atomically;
 - redirect success alone is never treated as payment.
 
-**Proof:** real TEST session, signed webhook, database readback, wallet/QR, screenshot and
-exact order ID (redacted where needed). Do not run live payments.
+**Proof:** real TEST session, signed webhook, database readback, wallet/QR, screenshot
+and exact order ID (redacted where needed). TEST payments write to the real MDE
+Supabase project. Preserve proof, then perform **authorized, narrowly scoped** cleanup
+of only test-owned orders, entitlements and dependents; re-query affected tables to
+prove no test rows remain. Never delete unknown or real customer records. An
+**independent `task-verifier`** must examine payment side effects, concurrent webhook
+and email outcomes, reconciliation, cleanup and DB evidence before certification.
+Do not run live payments.
 
 ### Milestone 5 — SAN-1637 certification
 
@@ -312,11 +345,11 @@ Three reviewable deliveries, in dependency order. Keep each PR's scope closed.
 | PR 2 | `feat/san-1630-a2ui-surfaces` | One catalog; provider wiring; guide consumer; `rental-comparison`; bounded Rentals/Events Surfaces; fallback/negative tests | Ticket selector or payment changes |
 | PR 3 | `feat/san-1632-ai-ticket-checkout` | Ticket selector; user-confirmed existing Checkout; Stripe TEST/webhook/wallet proof; SAN-1637 certification | New runtime, new schema, live payment |
 
-PR 1 keeps the two outcomes in one delivery because the rental verification required **no
-rental code change**; the ticket contract is the only implementation. The evidence for
-SAN-739 and the ticket code remain independently reviewable. If real-browser rental access
-had been blocked, the ticket fix would have continued in its own focused PR rather than
-sitting idle. Do not split the ticket data contract away from its tests.
+PR #756 contains the ticket-contract changes, but **SAN-739 rental browser
+verification is still pending**. Source inspection cannot establish that rental
+code changes are unnecessary. Keep the two proof outcomes independent. If a rental
+browser failure is reproduced, fix it in a focused correction rather than expanding
+the ticket contract PR. Do not split the ticket contract from its tests.
 
 ## File and system ownership
 
@@ -342,19 +375,20 @@ sitting idle. Do not split the ticket data contract away from its tests.
 | Transport/auth unchanged | `src/__tests__/api/copilotkit-v2-contract.test.ts`; browser guest/signed-in |
 | `render_ui` guide reaches Mastra | unit test on resolved concierge instructions; real browser tool-call trace |
 | Real rental cards | browser search with real DB result; IDs, prices, pin ids, Details |
-| Ticket contract | Vitest for 1/8/9/10, `cop`/`COP`, pending, min/max, sale windows, free tier |
-| Server authority | API/RPC tests; 11 and over-limit rejected; stale price rejected |
+| Ticket contract | Vitest for 1/8/9/10, `cop`/`COP`, pending, min/max, **all five states**, free/hidden tiers, incompatible minimum |
+| Server authority | API/RPC tests: 11 and over-limit rejected at current ceiling; stale prices, hidden tiers and explicitly inactive events rejected; preserve development policy |
 | Comparison | 2/3/4 real records; unknown fields; Details/map parity; 390px |
 | Page Surface | A→B→Clear; native fallback; no duplicate map; older result cannot win |
 | AI ticket selector | real tier/quantity; manual override preserved; explicit review click |
-| Stripe TEST | one paid order; correct entitlements; duplicate/failed/forged webhook negatives |
+| Stripe TEST | Paid order/entitlements, concurrent duplicate-webhook + email dedupe, success/cancel race recovery, failed/forged negatives, scoped cleanup and DB re-query; independent `task-verifier` |
 | Release | `npm run floor` once on final SHA; staged exact-SHA check; no skip counted as pass |
 
 ## Rollback and fallback
 
 - A2UI is experimental: keep the deterministic `useRenderTool` cards and page fallback as the
   default when the catalog is absent, invalid or disabled. A build-time
-  `NEXT_PUBLIC_MDE_A2UI=0` switch can remove the catalog without touching the server.
+  `NEXT_PUBLIC_MDE_A2UI=0` is a **build-time** flag, not an immediate runtime
+  kill switch; a new deployment or deployment rollback is needed.
 - The ticket data fixes are presentation/read-contract changes; revert the PR if a regression
   appears. No migration is expected, so there is no schema rollback.
 - Stripe changes, if any, must be behind the existing sandbox/live mode selection. Never
@@ -367,8 +401,8 @@ sitting idle. Do not split the ticket data contract away from its tests.
 
 | Location | Current stale claim | Correction |
 |---|---|---|
-| `.claude/skills/copilotkit/SKILL.md:108` | MDE pins 1.75.0 and references the `v1.75.0` tag | Point to the exact `package.json` / lockfile pins; currently 1.84.1 |
-| `docs/07-operations/README.md:120` | “CopilotKit 1.75.0” | Update to the current pin and keep the same-origin explanation |
+| `.claude/skills/copilotkit/SKILL.md:108` | Stale v1.75.0 pin | Already owned by **open PR #752**; verify and review that PR, do not duplicate its changes here |
+| `docs/07-operations/README.md` | Version claim **not proven** by the cited license-key line | Inspect actual content and update only verified version-bearing text; **do not** rewrite the license-key instructions |
 | `docs/03-platform/copilotkit-mastra/reference-adoption-plan-2026-09-20.md` | `@mastra/core@1.35.0`; `examples/v2` called legacy | State the current 1.81.0 baseline; use the v1.84.1/v2 example only as a pattern |
 | `docs/03-platform/copilotkit-mastra/README.md` | Generic “current pins” with no versions | Add the exact family and the A2UI limitation |
 | Linear SAN-1637 / SAN-1630 | “current rental/event results/pins work” | Mark browser-UNVERIFIED until the SAN-739/event browser pass on the exact SHA |
@@ -414,17 +448,17 @@ mislead an implementer.
 
 ## Review corrections adopted
 
-- **Base:** the plan now records `c4c510da…`, not the earlier `ab24e576…`. PR 1 is rebased onto
-  that base.
+- **Base:** `c4c510da…` is the recorded verified audit baseline; before working,
+  reverify the latest PR base and head. Do not assume PR #756 has been rebased.
 - **A2UI proof order:** one ID-only rental component first, through the real provider and
   Mastra guide, then expand. Do not start with the standard catalogue or page Surfaces.
 - **Free tiers:** a live zero-price tier exists but is not an active tier on a published event.
   Treat free ticketing as a future product decision. Do not send it into paid Checkout; keep
   truthful free-tier information and defer an RSVP/zero-payment entitlement flow.
-- **Availability:** one helper returns `available`, `sold-out`, `not-yet-on-sale`, `sale-ended`
-  or `below-minimum`; event details, chat summaries and the picker reuse it.
-- **API ceiling:** keep the documented safe ceiling of 10; do not widen to 50. The RPC enforces
-  each tier's real min/max and current capacity. Test 8/9/10/11.
+- **Availability:** `getTicketAvailability(tier, requestedQuantity, now)` produces five
+  status results; `ticketsRemaining` is only a numeric helper. Reuse the predicate.
+- **API ceiling:** the current 10-ticket cap bounds picker and API; if a future
+  tier needs more, upgrade and test both layers together. Do not show dead options.
 - **Permissions/concurrency:** do not remove either ticket-checkout RPC overload or change its
   grants without confirming callers. Prove the service-role Edge path, two buyers, rollback and
   webhook idempotency in the payment milestone.
@@ -432,10 +466,10 @@ mislead an implementer.
   map pins. A Surface is presentation only.
 - **Rollback:** `NEXT_PUBLIC_MDE_A2UI=0` is a build-time control, not an instant kill switch.
   Use deployment rollback or a deliberately designed runtime flag for immediate recovery.
-- **Skill/docs:** review and merge the existing PR #752 skill update after checks; do not
-  duplicate its changes. Track the 30 pre-existing `check:docs` violations separately.
+- **Skill/docs:** PR #752 owns the skill update. Keep its changes out of this PR;
+  do not touch license-key instructions. Track unrelated pre-existing docs violations separately.
 - **Rental renderer parameters:** compare `search-tool-renders.tsx` with the Mastra
-  `search-rentals` input schema before changing it; prove COP/month rendering and argument
+  `search-rentals` tool, including exact `maxPriceMonthly`; prove COP/month argument
   survival with a focused test.
 
 ## Implementation status (2026-11-05)
@@ -458,5 +492,11 @@ PR #756 remains open until the product owner explicitly approves a merge. It is 
 3. Do not close SAN-1630, SAN-1631, SAN-1632 or SAN-1637 until the milestone proofs above
    exist. Do not claim `render_ui` works from code inspection alone.
 
-The next checkpoint is a single real `render_ui` browser trace after PR 1, not a second
-planning document.
+The next checkpoint is one real `render_ui` browser trace after ticket-foundation
+and rental-browser proof, not a second planning document.
+
+### Review correction log
+
+Reviewer corrections are applied **in the owning requirements above**. The ticket
+RPC/webhook concerns remain **unimplemented and unverified** until the relevant feature
+PR proves them; this documentation-only PR does not certify runtime payment safety.
