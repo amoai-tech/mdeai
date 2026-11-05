@@ -87,7 +87,7 @@ describe("SAN-1640 combined original and supplemental review certification", () 
     expect(verify()).toMatchObject({ok:true,code:"TARGETED_RECOVERY_ADVISORY",path,
       diffSha256:diffProof.diffSha256,findings:[{path,startLine:1}]});
     expect(verify().reason).toContain("advisory only");
-    expect(verify().code).not.toBe("RECOVERED_COVERAGE");
+    expect(verify()).not.toMatchObject({code:"RECOVERED_COVERAGE"});
   });
   it("fails on stale revision, wrong target, substituted patch or incomplete provider result", () => {
     expect(verify({headSha:"c".repeat(40)}).ok).toBe(false);
