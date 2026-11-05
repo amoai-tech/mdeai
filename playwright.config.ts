@@ -20,10 +20,17 @@ const runProductionProjects = Boolean(prodBaseURL) && process.env.PW_SKIP_WEBSER
 
 const VITEST_TESTS = "**/*.test.ts";
 
+// SAN-1298's cross-screen journey is opt-in: the history reattach it asserts on is
+// still intermittent on the product side (SAN-1639), so it must not gate the smoke
+// suite. Enable deliberately with MDE_SAN1298_CROSS_SCREEN=1.
+const OPT_IN_PROD_SPECS =
+  process.env.MDE_SAN1298_CROSS_SCREEN === "1" ? ["**/prod-cross-screen-journey.spec.ts"] : [];
+
 const PROD_SPECS = [
   "**/app/host-ai-continuity.spec.ts",
   "**/app/host-ai-sales-accuracy.spec.ts",
   "**/prod-candidate-certification.spec.ts",
+  ...OPT_IN_PROD_SPECS,
   "**/prod-synthetic-smoke.spec.ts",
   "**/prod-signed-in-route.spec.ts",
   "**/prod-ticket-wallet-authed.spec.ts",

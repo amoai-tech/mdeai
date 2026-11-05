@@ -82,6 +82,26 @@ export async function getSupabaseAdmin() {
 /** A confirmed auth user that exists only for the duration of one proof run. */
 export type ThrowawayIdentity = { email: string; userId: string };
 
+/** Best-effort removal of any account created under an exact email (ambiguous create). */
+async function deleteAuthUsersByEmail(
+  admin: Awaited<ReturnType<typeof getSupabaseAdmin>>,
+  email: string,
+): Promise<void> {
+  const remove = async (users: Array<{ id: string; email?: string | null }>): Promise<boolean> => {
+    const match = users.find((user) => user.email === email);
+    if (match) await admin.auth.admin.deleteUser(match.id);
+    return Boolean(match);
+  };
+  for (let page = 1; page <= 5; page++) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 200 });
+    const users = data?.users ?? [];
+    if (error) return;
+    if (await remove(users)) return;
+    // A short page is the last page; nothing more to scan.
+    if (users.length < 200) return;
+  }
+}
+
 /**
  * Create a confirmed throwaway auth user (SAN-547).
  *
@@ -102,6 +122,10 @@ export async function createThrowawayIdentity(label: string): Promise<ThrowawayI
     email_confirm: true,
   });
   if (error || !data.user) {
+    // The account can exist even when the create response is lost. Delete anything
+    // created under this exact email before throwing, so a failed setup cannot leak
+    // a live QA login that no `afterAll` can find (it never received an identity).
+    await deleteAuthUsersByEmail(admin, email).catch(() => undefined);
     throw error ?? new Error(`createUser returned no user for ${label}`);
   }
   return { email, userId: data.user.id };
@@ -319,6 +343,21 @@ export async function deleteThrowawayIdentity(
   const { error: userError } = await retryTransientDb(
     () => admin.auth.admin.deleteUser(identity.userId),
   );
+  if (!userError) {
+    // A 200 from deleteUser is a claim, not proof. Read the account back: a cleanup
+    // that reports success while the identity still exists leaves a live throwaway
+    // QA login behind.
+    const afterDelete = await retryTransientDb(
+      () => admin.auth.admin.getUserById(identity.userId),
+    );
+    // Supabase returns a 404 "User not found" for a successfully deleted user.
+    // A different lookup error does not verify deletion; nor does a returned user.
+    if (afterDelete.data.user) {
+      failures.push("identity still exists after a successful delete");
+    } else if (afterDelete.error && afterDelete.error.status !== 404) {
+      failures.push("verify identity deletion: " + afterDelete.error.message);
+    }
+  }
   if (userError) {
     // An earlier delete may have succeeded before its HTTP response was lost.
     // Check the actual account instead of reporting a false leak or deleting a different user.

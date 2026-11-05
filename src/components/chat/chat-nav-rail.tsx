@@ -147,7 +147,7 @@ export function ChatNavRail({
 }) {
   const router = useRouter();
   const { startNewChat, stopActiveRun } = useConciergeSession();
-  const { activeThreadId, setActiveThreadId, clearActiveThread } = useThreadNav();
+  const { activeThreadId, sessionThreadId, restoringSavedThread, setActiveThreadId, clearActiveThread } = useThreadNav();
   const { threads, loading, error } = useNavThreads();
   const hasChats = !loading && !error && threads.length > 0;
 
@@ -175,6 +175,34 @@ export function ChatNavRail({
   }
 
   function onSelectThread(id: string) {
+    // SAN-1639: clicking the conversation that is already open must change nothing.
+    // The reset below — startNewChat() + stopActiveRun() — is right when switching
+    // conversations, but on a re-click it detached the live run and cleared the
+    // very transcript the click was meant to show. Keep the mobile rail's close
+    // action, which is what onNavigate does.
+    //
+    // The displayed thread is not always `activeThreadId`: a fresh tab runs its
+    // first turn on `sessionThreadId` before any saved-thread selection exists, and
+    // during a restore the provider hides `activeThreadId` until ownership
+    // resolves. Both would miss a plain equality check and take the destructive
+    // path on the conversation the user is looking at.
+    const displayedThreadId = activeThreadId ?? sessionThreadId;
+    if (id === displayedThreadId) {
+      onNavigate?.();
+      // A failed earlier repair (or a placeholder title) must still be retried:
+      // returning early previously left the rail showing the fallback title.
+      if (!isMeaningfulThreadTitle(threads.find((thread) => thread.id === id)?.title)) {
+        void ensureThreadTitle(id);
+      }
+      return;
+    }
+    // A saved-chat restore is still deciding which thread this tab owns. The
+    // provider rejects a selection while that is pending, so resetting here would
+    // clear the transcript and change nothing else.
+    if (restoringSavedThread) {
+      onNavigate?.();
+      return;
+    }
     // Clear old map cards and detach an in-flight run before reopening, then
     // record the selected conversation. setActiveThreadId adds the Back/Forward
     // step; re-pushing /chat would wipe that entry (SAN-1413).
