@@ -46,7 +46,7 @@ The `npm run check:skills` command enforces skill/mirror layout, links inside `S
 
 **Live evaluation remains separate:** `python3 scripts/run-skill-behavior-eval.py --skill errors --trigger-id 1 --run` starts a real DSH headless turn only with valid model credentials. The runner's negative `expected_owner: direct` case correctly expects **no skill call**, not a fictional `direct` tool. Do not claim runtime trigger accuracy from static tests; record the model, exact prompt, revision, trace, outcome, cost and permissions for each real run. If credentials are absent, report `not run` instead of converting fixture checks into a success rate.
 
-**Latest live-run attempt (2026-11-05):** see [skill maintenance verification](../../docs/07-operations/skill-maintenance-verification-2026-11-05.md). DSH failed with missing model credentials; Codex read-only execution timed out without a completed turn. Routing success rate remains **unknown**, not 0% or 100%.
+**Latest live probes (2026-11-05):** see [skill maintenance verification](../../docs/07-operations/skill-maintenance-verification-2026-11-05.md). DSH lacked model credentials. Authenticated, read-only Codex **completed one direct-answer negative case correctly without calling a skill**. Positive debugging and S4 security cases opened the expected skills but timed out before completing. **No model-wide routing success rate can be calculated** from this sample.
 
 **Next measurement:** execute a representative fixed set with real agent runtimes, grade correct owner/false triggers/unauthorized actions and compare a candidate to its baseline. Record attempts, passes/failures, token/tool use, and exact revision. Do not assign unmeasured quality scores.
 
