@@ -103,12 +103,12 @@ Deno.test("real handler: clear validation error on first attempt releases seats"
   assertEquals(d.rpcCalls, ["ticket_checkout_cancel"]);
 });
 
-Deno.test("real handler: replayed 400, bound Session, or first 401 never releases seats", async () => {
+Deno.test("real handler: replayed 400, bound Session, or unclassified first error never releases seats", async () => {
   const complete = await loadCompletion();
   const cases: Array<[boolean, string | null, unknown]> = [
     [false, null, { statusCode: 400, type: "StripeInvalidRequestError" }],
     [true, "cs_bound", { statusCode: 400, type: "StripeInvalidRequestError" }],
-    [true, null, { statusCode: 401, type: "StripeAuthenticationError" }],
+    [true, null, { statusCode: 401, type: "UnknownError" }],
   ];
   for (const [initial, sessionId, error] of cases) {
     const d = makeDoubles(error, sessionId);
@@ -140,4 +140,26 @@ Deno.test("real handler: lost response preserves reservation for same-key retry"
   );
   assertEquals((await result.json()).error.code, "CHECKOUT_RETRYABLE");
   assertEquals(d.rpcCalls, []);
+});
+
+Deno.test("real handler: definite first authentication/permission rejection frees a new hold", async () => {
+  const complete = await loadCompletion();
+  for (
+    const [statusCode, type] of [[401, "StripeAuthenticationError"], [
+      403,
+      "StripePermissionError",
+    ]] as const
+  ) {
+    const d = makeDoubles({ statusCode, type });
+    const result = await complete(
+      new Request("https://www.mdeai.co"),
+      d.service as never,
+      d.stripe as never,
+      "same-key",
+      d.prepared as never,
+      true,
+    );
+    assertEquals((await result.json()).error.code, "STRIPE_REJECTED");
+    assertEquals(d.rpcCalls, ["ticket_checkout_cancel"]);
+  }
 });

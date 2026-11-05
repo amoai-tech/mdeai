@@ -136,15 +136,19 @@ export async function completePreparedCheckout(
     // prove an earlier Session was not created. Never release the hold based
     // only on a Stripe-create error; require reconciliation instead.
     // An unmistakable validation error on the FIRST create can release a hold.
-    // Never treat authentication/permissions failures as such: credentials may
-    // have rotated between attempts, leaving an earlier payable Session.
+    // A first-attempt rejection can release its new hold, while a later
+    // authentication/permission failure might mask an earlier payable Session.
     const errorData = typeof err === "object" && err !== null
       ? err as { statusCode?: number; type?: string; code?: string }
       : null;
-    if (firstAttempt && !order.stripe_session_id &&
-        errorData?.statusCode === 400 &&
-        errorData.type === "StripeInvalidRequestError" &&
-        errorData.code !== "idempotency_error") {
+    const rejectedInitialRequest = (
+      (errorData?.statusCode === 400 && errorData.type === "StripeInvalidRequestError") ||
+      (errorData?.statusCode === 401 && errorData.type === "StripeAuthenticationError") ||
+      (errorData?.statusCode === 403 &&
+        ["StripePermissionError", "StripeAuthenticationError"].includes(errorData.type ?? ""))
+    );
+    if (firstAttempt && !order.stripe_session_id && rejectedInitialRequest &&
+        errorData?.code !== "idempotency_error") {
       const { error: releaseError } = await service.rpc("ticket_checkout_cancel", {
         p_order_id: prepared.order_id,
       });
