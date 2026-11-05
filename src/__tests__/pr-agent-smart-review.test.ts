@@ -4,7 +4,7 @@ import { parseDocument } from "yaml";
 import { reviewEnvelope, excludedFilesFromReview, clippedPatchesFromReview } from "../../scripts/pr-agent/review-policy.mjs";
 import {
   buildCoverageReport, classifyFiles, planFollowupBatches,
-  reviewCoverageFromComment, parseReviewUsage, validateGeneratedJson, validateSnapshotReferences, COVERAGE_MARKER,
+  reviewCoverageFromComment, hasPublishedPartialReview, parseReviewUsage, validateGeneratedJson, validateSnapshotReferences, COVERAGE_MARKER,
 } from "../../scripts/pr-agent/smart-review.mjs";
 
 const BASE = "a".repeat(40), HEAD = "b".repeat(40);
@@ -227,6 +227,26 @@ describe("SAN-1609 smart coverage", () => {
     expect(noReview.status).toBe("FAILED");
   });
 
+  it("only accepts a typed exact-head partial state as advisory evidence after a failed job", () => {
+    const partial = `${marker}\n<!-- pr-agent:review:full -->\n<!-- pr-agent-review-state:v1\n${JSON.stringify({
+      schema_version: 1, findings: [], last_run: {
+        head_sha: HEAD, complete: false, excluded_files: ["src/payments/checkout.ts"],
+      },
+    })}\n-->`;
+    const accepts = (body: string, status = "failure") => hasPublishedPartialReview({
+      body, baseSha: BASE, headSha: HEAD, reviewJobResult: status,
+    });
+    expect(accepts(partial)).toBe(true);
+    expect(accepts(partial, "success")).toBe(false);
+    expect(accepts(partial.replace(HEAD, "c".repeat(40)))).toBe(false);
+    expect(accepts(partial.replace('"complete":false', '"complete":true'))).toBe(false);
+    expect(accepts(partial.replace('"excluded_files":["src/payments/checkout.ts"]', '"excluded_files":[]'))).toBe(false);
+    expect(accepts(partial.replace('"schema_version":1', '"schema_version":2'))).toBe(false);
+    expect(accepts(partial.replace('"findings":[]', '"findings":"bad"'))).toBe(false);
+    expect(accepts(partial.replace('<!-- pr-agent-review-state:v1', '<!-- old-state'))).toBe(false);
+    expect(accepts(partial.replace('<!-- pr-agent:review:full -->', 'other'))).toBe(false);
+  });
+
   it("reports partial missing high-risk files, unknown state and provider failure honestly", () => {
     const report = buildCoverageReport({ repo: "amoai-tech/mdeai", number: 485, baseSha: BASE, headSha: HEAD, files, expectedCount: 5, reviewBody: omitted,
       validations: { "docs/progress/data/pr-files.json": { status: "validated" } } });
@@ -266,7 +286,7 @@ describe("SAN-1609 smart coverage", () => {
     expect(source).toContain('const canonicalReview = matching.find((comment) => {');
     expect(source).toContain('reviewBody: process.env.REVIEW_JOB_RESULT === "success"');
     expect(source).toContain('reviewJobResult: publishPartial ? "success" : process.env.REVIEW_JOB_RESULT');
-    expect(source).toContain('saved.last_run?.complete === false');
+    expect(source).toContain('hasPublishedPartialReview({');
     expect(source).toContain('**Reusable reviewer check:**');
   });
 });
