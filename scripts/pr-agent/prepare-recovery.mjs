@@ -100,6 +100,7 @@ export async function prepareRecoveryFromGithub({
   github, owner, repo, pullNumber, baseSha, headSha, reviewBody,
   maxPatchBytes = MAX_DIFF_BYTES,
 }) {
+  try {
   const query = { owner, repo };
   const snapshot = async () => {
     const { data } = await github.rest.pulls.get({ ...query, pull_number: pullNumber });
@@ -112,21 +113,33 @@ export async function prepareRecoveryFromGithub({
     { ...query, pull_number: pullNumber, per_page: 100 });
   const selected = selectRecoveryTarget({ reviewBody, baseSha, headSha, files, expectedCount });
   if (!selected.ok) return selected;
+  const file = files.find((entry) => entry.filename === selected.path);
   const read = async (ref) => {
     const { data } = await github.rest.repos.getContent({ ...query, path: selected.path, ref });
     if (!data || Array.isArray(data) || data.type !== "file" ||
-        data.encoding !== "base64" || data.size > MAX_SOURCE_BYTES) {
+        data.encoding !== "base64" || data.size > MAX_SOURCE_BYTES ||
+        !SHA.test(data.sha ?? "")) {
       throw new Error("unsupported exact blob");
     }
     const bytes = Buffer.from(data.content, "base64");
     if (bytes.length !== data.size || bytes.includes(0)) throw new Error("binary/size mismatch");
-    return bytes.toString("utf8");
+    const content = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    return { content, blobSha: data.sha };
   };
   const [before, after] = await Promise.all([read(baseSha), read(headSha)]);
-  const patch = exactFileDiff(selected.path, before, after, maxPatchBytes);
+  // GitHub's changed-file list identifies the current head blob by SHA.
+  // This supplements the exact refs and prevents a substituted output blob.
+  if (!SHA.test(file.sha ?? "") || file.sha !== after.blobSha) {
+    return { ok: false, reason: "exact-head blob SHA does not match current PR inventory" };
+  }
+  const patch = exactFileDiff(selected.path, before.content, after.content, maxPatchBytes);
   if (!patch.ok) return patch;
   if (await snapshot() !== expectedCount) return { ok: false, reason: "changed PR file inventory" };
   return { ok: true, baseSha, headSha, path: selected.path, risk: selected.risk,
     source: "exact-blob-diff", bounded: true, diff: patch.diff,
     diffSha256: patch.diffSha256, patchBytes: patch.patchBytes };
+  } catch (error) {
+    return { ok: false, reason: "bounded recovery unavailable: " +
+      String(error?.message ?? error).slice(0, 180) };
+  }
 }
