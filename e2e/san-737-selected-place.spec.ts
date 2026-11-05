@@ -161,9 +161,10 @@ for (const size of [{ name: "desktop", width: 1440, height: 900 }, { name: "mobi
         const a = (await cards.first().locator("h3").first().innerText()).trim();
         expect(a.length).toBeGreaterThan(2);
         const first = cardNamed(a);
-        const select = (card: Locator) => scenario.route === "restaurants"
-          ? card.locator("..").locator(scenario.select)
-          : card.locator(scenario.select);
+        // SAN-1140: every route keeps its Ask toggle inside the card that owns it, so the
+        // scope is the card itself. The old `card.locator("..")` workaround existed only
+        // because restaurants rendered the two controls as siblings below the card.
+        const select = (card: Locator) => card.locator(scenario.select);
         await select(first).click();
         await expect(select(first)).toHaveAttribute("aria-pressed", "true");
         const firstReply = await ask(page, scenario.route,
