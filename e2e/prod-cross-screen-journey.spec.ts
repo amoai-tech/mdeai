@@ -148,7 +148,6 @@ test.describe("SAN-1298 cross-screen conversation (/chat → /rentals → /event
     await gotoConcierge(page);
     const firstQuestion = `Remember the word ${marker}-A`;
     await sendAndWait(page, firstQuestion);
-    postNavigation = false;
     const threadA = runThreads.at(-1);
     expect(threadA, "the first question ran on a thread").toBeTruthy();
     // Mastra persists on its own schedule, so poll rather than reading once: the
@@ -170,6 +169,8 @@ test.describe("SAN-1298 cross-screen conversation (/chat → /rentals → /event
 
     // ── 3. Return to /chat and resume the same conversation ──────────────────
     await gotoConcierge(page);
+    // This is also a hard load, so the session bootstrap is in-flight again.
+    postNavigation = true;
     const savedThread = page.locator(`[data-testid="nav-thread-item"][data-thread-id="${threadA}"]`).first();
     await expect(savedThread, "the earlier conversation is listed in the rail").toBeVisible({
       timeout: 30_000,
@@ -178,6 +179,10 @@ test.describe("SAN-1298 cross-screen conversation (/chat → /rentals → /event
     const region = page.getByTestId("copilot-chat-region");
     await expect(page.getByTestId("saved-history-loading")).toHaveCount(0, { timeout: 30_000 });
     await expect(page.getByTestId("saved-history-error")).toHaveCount(0);
+    // The post-navigation bootstrap window is over once history has settled; the
+    // follow-up turn must not inherit it, or a real session-fetch failure there
+    // would be filtered out.
+    postNavigation = false;
     // Shown again exactly once — a duplicate would mean the history replayed twice.
     await expect
       .soft(
@@ -215,8 +220,12 @@ test.describe("SAN-1298 cross-screen conversation (/chat → /rentals → /event
         const n = document.querySelectorAll(selector).length;
         if (n < win.__minChatCount) win.__minChatCount = n;
       });
+      // `copilot-chat-region` lives inside `<div key={sessionKey}>` in
+      // chat-center-panel, so a session reset remounts and detaches it — an
+      // observer on that node would silently stop watching exactly when the
+      // transcript is cleared. Watch the stable panel and count globally.
       win.__chatObserver.observe(
-        document.querySelector('[data-testid="copilot-chat-region"]') ?? document.body,
+        document.querySelector('[data-testid="center-chat-panel"]') ?? document.body,
         { childList: true, subtree: true, characterData: true },
       );
     });
