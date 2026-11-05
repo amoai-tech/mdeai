@@ -75,6 +75,31 @@ export function validateSnapshotReferences(prData, prFiles) {
   } catch { return { status: "failed", reason: "invalid cross-file JSON" }; }
 }
 
+/**
+ * A failed reusable workflow can still have published a real partial review.
+ * This predicate only changes advisory reporting; the required strict check
+ * stays red. Reuse the canonical parser, not a second inline coverage engine.
+ */
+export function hasPublishedPartialReview({ body, baseSha, headSha, reviewJobResult }) {
+  if (reviewJobResult === "success") return false;
+  const env = parseReviewEnvelope(body ?? "");
+  if (!env.valid || env.baseSha !== baseSha?.toLowerCase() ||
+      env.headSha !== headSha?.toLowerCase() ||
+      env.type !== "canonical" || env.command !== "/review" ||
+      !env.body.includes("<!-- pr-agent:review:full -->")) return false;
+  const state = [...env.body.matchAll(/(?:^|\n)<!-- pr-agent-review-state:v1\n([\s\S]*?)\n-->/g)];
+  if (state.length !== 1) return false;
+  let saved;
+  try { saved = JSON.parse(state[0][1]); } catch { return false; }
+  if (saved?.schema_version !== 1 || !Array.isArray(saved.findings) ||
+      saved.last_run?.head_sha?.toLowerCase() !== headSha.toLowerCase() ||
+      saved.last_run?.complete !== false ||
+      !Array.isArray(saved.last_run?.excluded_files) ||
+      saved.last_run.excluded_files.length < 1) return false;
+  return coverageFailure(env.body, headSha)?.code === "INCOMPLETE_REVIEW" &&
+    reviewCoverageFromComment(body, baseSha, headSha).status === "partial";
+}
+
 export function reviewCoverageFromComment(body, baseSha, headSha) {
   const env = parseReviewEnvelope(body ?? "");
   if (!env.valid || env.baseSha !== baseSha.toLowerCase() || env.headSha !== headSha.toLowerCase()) return { status: "unknown", excluded: [], reason: "missing current base/head envelope" };
