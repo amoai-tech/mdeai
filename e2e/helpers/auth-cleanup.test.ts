@@ -60,8 +60,8 @@ function simulatedAdmin({
   const admin = {
     from,
     auth: { admin: {
-      deleteUser: async () => { authExists = false; return { error: null }; },
-      getUserById: async () => ({
+      deleteUser: () => { authExists = false; return Promise.resolve({ error: null }); },
+      getUserById: () => Promise.resolve({
         data: { user: authExists ? { id: identity.userId } : null },
         error: authExists ? null : authLookupFailure
           ? { status: 403, message: "auth user lookup forbidden" }
