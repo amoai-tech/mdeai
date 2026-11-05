@@ -45,6 +45,9 @@ function EventDetailsActions({
         {state.status === "missing" ? null : (
           <Link
             href={`/events/${event.slug}`}
+            // Prefetching here would fetch a full page for every event panel someone opens;
+            // leaving it off also keeps the route's loading state observable.
+            prefetch={false}
             data-testid="event-browse-details-full-page"
             className={cn(buttonVariants({ size: "sm", variant: "outline" }), "h-card-action px-4")}
           >

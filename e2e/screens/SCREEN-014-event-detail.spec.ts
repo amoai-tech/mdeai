@@ -40,21 +40,28 @@ test.describe(`${SCREEN_ID} event detail page`, () => {
       page,
     }) => {
       const errors = watchCriticalConsoleErrors(page);
-      // SAN-1638: browse Details no longer navigates, so reach the detail page directly.
-      await page.goto(`/events/${KNOWN_SLUG}`, { waitUntil: "domcontentloaded" });
+      // SAN-1638: browse Details opens a panel, so reach the detail page through the panel's
+      // explicit full-page link. That is still a client navigation, which is what this test
+      // needs in order to observe the loading skeleton.
+      await page.goto("/events", { waitUntil: "domcontentloaded" });
+      await expect(page.getByTestId("event-details-cta").first()).toBeVisible({
+        timeout: 15000,
+      });
 
+      // Installed BEFORE the client navigation below, otherwise the delay never applies.
       await page.route("**/*", async (route) => {
         const req = route.request();
         const url = req.url();
         const isDetailFlight =
-          url.includes(KNOWN_SLUG) &&
-          (url.includes("_rsc") || req.resourceType() === "fetch");
+          url.includes("/events/") && (url.includes("_rsc") || req.resourceType() === "fetch");
         if (isDetailFlight) {
           await new Promise((resolve) => setTimeout(resolve, 1200));
         }
         await route.continue();
       });
 
+      await page.getByTestId("event-details-cta").first().click();
+      await page.getByTestId("event-browse-details-full-page").click();
       await expect(page.locator('[data-testid="event-detail-skeleton"]')).toBeVisible({
         timeout: 8000,
       });
