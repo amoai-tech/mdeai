@@ -1,4 +1,6 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { parseDocument } from "yaml";
 import { reviewEnvelope } from "../../scripts/pr-agent/review-policy.mjs";
 import { exactFileDiff, selectRecoveryTarget, prepareRecoveryFromGithub } from "../../scripts/pr-agent/prepare-recovery.mjs";
 
@@ -52,6 +54,28 @@ describe("SAN-1640 exact-source recovery preparation", () => {
     const failed = reviewBody +
       "\n\n<hr>\n\nℹ️ **Chunked review:** the diff exceeded the model token budget, so it was reviewed in 3 chunks and the per-chunk results were merged. 1 chunk(s) failed and are not covered by this review.\n";
     expect(selectRecoveryTarget({ reviewBody: failed, baseSha, headSha, files, expectedCount: 1 }).ok).toBe(false);
+  });
+
+  it("retains a valid, bounded, advisory-only workflow with the pinned reviewer", () => {
+    const workflow = readFileSync(".github/workflows/pr-agent.yml", "utf8");
+    const yaml = parseDocument(workflow);
+    expect(yaml.errors).toEqual([]);
+    const jobs = yaml.toJS() as { jobs: Record<string, {
+      name: string; "timeout-minutes": number; steps: Array<{ name: string; id?: string }>;
+    }> };
+    const smart = jobs.jobs["smart-coverage"];
+    expect(smart["timeout-minutes"]).toBe(12);
+    expect(smart.name).toContain("advisory");
+    expect(smart.steps.map((step) => step.name)).toEqual(expect.arrayContaining([
+      "Prepare bounded exact-blob recovery",
+      "Re-review missing patch with pinned PR-Agent v0.49.0",
+      "Publish bounded review findings (advisory; no false certificate)",
+    ]));
+    expect(workflow).toContain("pragent/pr-agent@sha256:b1ed6e8de56eb4d6e4169ee0d5c209bb5ed1ef071a01c0c042c64b80192a785c");
+    expect(workflow).toContain("--diff-file /review/recovery.diff");
+    expect(workflow).toContain("--json-output /review/recovery.json");
+    expect(workflow).toContain("The shared reviewer must verify combined coverage before merge.");
+    expect(workflow).not.toContain("-e GITHUB_TOKEN");
   });
 
   it("fetches only the base and head file blobs and aborts on stale PR", async () => {
