@@ -36,6 +36,7 @@ Files: `before-*.png` (production, pre-fix), `before-report.json` (raw DOM measu
 | `/rentals` | 41 | true | true | `Ask about this · Details · Schedule viewing` | none |
 
 Files: `after-local-*.png`, `after-local-report.json`,
+`after-<kind>-<width>.png` (re-captured from production after the merge, all five routes),
 `local-restaurants-card-{320,390,768,1440}.png` (card-only, 200% zoom check runs in the spec too),
 `local-cafes-card-390.png`, `local-nightlife-card-390.png`.
 
