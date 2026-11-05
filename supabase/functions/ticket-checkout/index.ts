@@ -113,6 +113,15 @@ async function completePreparedCheckout(
     return jsonResponse(errorBody("CHECKOUT_KEY_CANCELLED",
       "This checkout was cancelled; start a new checkout with a new key"), 409, req);
   }
+  // Only a still-held reservation may reach Stripe. A paid, partially refunded
+  // or refunded order already has its money and must never be offered another
+  // Checkout URL; those buyers need the order reconciled, not a new payment.
+  // (A completed checkout normally returns earlier from the success cache; this
+  // guards the case where that cache write was lost.)
+  if (order.status !== "pending") {
+    return jsonResponse(errorBody("CHECKOUT_RECONCILIATION_REQUIRED",
+      "Checkout reservation is no longer held; verify the order before retrying"), 409, req);
+  }
 
   let session: Stripe.Checkout.Session;
   try {
