@@ -430,47 +430,33 @@ mislead an implementer.
 8. **Clean the checkout before editing.** A mixed old-manifest/new-`node_modules` tree is a
    false-green factory.
 9. **Record the exact SHA and evidence.** Linear status follows evidence, not code volume.
+10. **Avoid false success in payment races.** Success after cancel/expiry needs an auditable issue-or-refund recovery; simultaneous webhook retries must not send duplicate email.
+11. **Separate Phase A from launch gates.** Respect explicit admin deactivation, technical payment validity and data integrity without imposing approvals, verification or launch eligibility during development.
 
 ## Source receipts
 
-| Source | Decision it answered | Disposition | Destination | Verification |
-|---|---|---|---|---|
-| [CopilotKit — Components and surfaces](https://docs.copilotkit.ai/mastra/generative-ui/components.mdx) | Provider catalog; runtime adds `render_ui` and a guide; the agent must use tools and context | **ADAPT** | providers, catalog, concierge guide | real `render_ui` trace + browser |
-| [CopilotKit — Transports](https://docs.copilotkit.ai/mastra/generative-ui/components/transports.mdx) | Tool transport needs both the run's tools and its context entries | **REFERENCE** | guide consumer | resolved-instructions test |
-| [CopilotKit — Catalogs](https://docs.copilotkit.ai/mastra/generative-ui/components/catalogs.mdx) | Typed `createGenerativeUI` contract; zod 3 works; IDs-only props | **ADAPT** | `mde-ui-catalog.tsx` | typecheck + catalog tests |
-| [CopilotKit — Surfaces](https://docs.copilotkit.ai/mastra/generative-ui/components/surfaces.mdx) | `GenerativeUISurface` target, component allowlist, fallback, autoScroll | **ADAPT** | rental/event browse views | A→B→Clear browser test |
-| `@copilotkit/runtime@1.84.1` `dist/v2/runtime/generative-ui/generative-ui-middleware.mjs` | Exact `render_ui` injection, target/operations validation, synthetic tool result | **REFERENCE** | transport test | source-level contract + real event trace |
-| `@ag-ui/mastra@2.0.2` `dist/mastra-*.mjs` / `.d.mts` | `buildClientTools` forwards run tools; `applyInputContext` stores context at `requestContext.get("ag-ui")` | **REFERENCE** | concierge guide, tests | adapter source + resolved instructions |
-| `@mastra/core@1.81.0` `agent.types.d.ts` / `types/dynamic-argument.d.ts` | Per-run `instructions` dynamic argument receives `requestContext`; `AgentExecutionOptions` also supports `context`/`system` | **ADAPT** | `conciergeAgent` dynamic instructions | typecheck + unit test |
-| [Stripe — idempotent requests](https://docs.stripe.com/api/idempotent_requests) | Reuse a stable idempotency key across retries | **REFERENCE** | existing ticket checkout | duplicate retry test |
-| [Stripe — webhooks](https://docs.stripe.com/webhooks) | Signed raw-body webhook; duplicate events must be harmless | **REFERENCE** | existing ticket webhook | signed/duplicate/failed webhook tests |
-| [Supabase — RLS](https://supabase.com/docs/guides/database/postgres/row-level-security) | Authorized reads; no service role in client; no new public path | **REFERENCE** | ticket/catalog data reads | API/RLS tests + browser |
+Each row identifies the exact external or installed-version source that affects the planned implementation. **Verification commands are future acceptance checks, not claims of successful execution in this docs PR.** Reconfirm mutable upstream docs against the installed package versions before implementation.
+
+| URL | Source (file/section/command) | Decision | Disposition | Destination | Implementation | Verification | Version/commit |
+|---|---|---|---|---|---|---|---|
+| https://docs.copilotkit.ai/mastra/generative-ui/components.mdx | Components and provider catalog | Add A2UI to existing providers, not a second runtime | **ADAPT** | `src/components/copilot/copilot-kit-provider.tsx`; `src/components/chat/chat-provider.tsx` | Pass the shared typed catalog with `agentIds: ["conciergeAgent"]` | Real `render_ui` tool trace + browser card; `npm run typecheck` | Docs unversioned; pin implementation to CopilotKit **1.84.1** |
+| https://docs.copilotkit.ai/mastra/generative-ui/components/transports.mdx | Transport of run tools and context | Existing single-route transport is sufficient; reject a second custom transport | **REFERENCE ONLY** | — | No transport replacement; append runtime guide to current Mastra instructions only | `npm run audit:copilotkit-v2`; resolved-instructions test | Docs unversioned; installed AG-UI Mastra **2.0.2** |
+| https://docs.copilotkit.ai/mastra/generative-ui/components/catalogs.mdx | `createGenerativeUI` typed catalog | Model must send IDs, not listing facts | **ADAPT** | `src/components/copilot/a2ui/mde-ui-catalog.tsx` | Start with `RentalCard({ listingId })`; add event only after successful trace | `npm run typecheck`; forged-ID unit test + browser | Docs unversioned; CopilotKit **1.84.1** |
+| https://docs.copilotkit.ai/mastra/generative-ui/components/surfaces.mdx | `GenerativeUISurface` target/fallback | Reuse page state; no additional map or data store | **ADAPT** | `src/components/rentals/rental-browse-view.tsx`; `src/components/events/event-browse-view.tsx` | Add bounded target and native fallback; keep page ownership | A→B→Clear, out-of-order result and 390px browser tests | Docs unversioned; CopilotKit **1.84.1** |
+| https://www.npmjs.com/package/@copilotkit/runtime/v/1.84.1 | Installed `dist/v2/runtime/generative-ui/generative-ui-middleware.mjs` | `render_ui`/guide are already injected; reject bespoke middleware | **REFERENCE ONLY** | — | Inspect installed middleware before writing catalog; no runtime fork | Source/contract test + real emitted operation | **1.84.1** |
+| https://www.npmjs.com/package/@ag-ui/mastra/v/2.0.2 | Installed `dist/mastra-*.mjs` and `.d.mts` | Adapter already passes run tools and context; reject a second bridge | **REFERENCE ONLY** | — | Use existing `requestContext.get("ag-ui")` consumer | Resolved-instructions test + bridge trace | **2.0.2** |
+| https://www.npmjs.com/package/@mastra/core/v/1.81.0 | Installed `agent.types.d.ts`, dynamic-argument types | Keep dynamic per-run instructions; do not build another agent wrapper | **ADAPT** | `src/mastra/agents/concierge.ts` | Append verified guide while preserving request/tenant identity | `npm run typecheck`; focused instructions test | **1.81.0** |
+| https://docs.stripe.com/api/idempotent_requests | Idempotency keys | Existing Checkout retry path is preferred; reject a duplicate order service | **REFERENCE ONLY** | — | Preserve stable idempotency key; add retries/concurrent webhooks to proof | Concurrent Checkout/webhook TEST; DB row comparison | Official docs unversioned; Stripe Edge `npm:stripe@23.0.0` |
+| https://docs.stripe.com/webhooks | Signature/retry/ordering | Reuse signed raw-body handler; reject client-side paid status | **REFERENCE ONLY** | — | Test success vs cancel ordering, duplicate emails, reconciliation/refund | Signed, forged, duplicate, out-of-order webhook TEST | Official docs unversioned; Stripe Edge `npm:stripe@23.0.0` |
+| https://supabase.com/docs/guides/database/postgres/row-level-security | Server/tenant boundaries | Reuse existing RLS + RPC; reject a new public/service-role browser path | **REFERENCE ONLY** | — | No new public write path; verify existing grants before any RPC patch | Authorized/unauthorized RPC + pgTAP checks | Docs unversioned; Supabase JS **2.106.1** |
 
 ## Review corrections adopted
 
-- **Base:** `c4c510da…` is the recorded verified audit baseline; before working,
-  reverify the latest PR base and head. Do not assume PR #756 has been rebased.
-- **A2UI proof order:** one ID-only rental component first, through the real provider and
-  Mastra guide, then expand. Do not start with the standard catalogue or page Surfaces.
-- **Free tiers:** a live zero-price tier exists but is not an active tier on a published event.
-  Treat free ticketing as a future product decision. Do not send it into paid Checkout; keep
-  truthful free-tier information and defer an RSVP/zero-payment entitlement flow.
-- **Availability:** `getTicketAvailability(tier, requestedQuantity, now)` produces five
-  status results; `ticketsRemaining` is only a numeric helper. Reuse the predicate.
-- **API ceiling:** the current 10-ticket cap bounds picker and API; if a future
-  tier needs more, upgrade and test both layers together. Do not show dead options.
-- **Permissions/concurrency:** do not remove either ticket-checkout RPC overload or change its
-  grants without confirming callers. Prove the service-role Edge path, two buyers, rollback and
-  webhook idempotency in the payment milestone.
-- **Page state:** the existing page remains the only owner of results, filters, selection and
-  map pins. A Surface is presentation only.
-- **Rollback:** `NEXT_PUBLIC_MDE_A2UI=0` is a build-time control, not an instant kill switch.
-  Use deployment rollback or a deliberately designed runtime flag for immediate recovery.
-- **Skill/docs:** PR #752 owns the skill update. Keep its changes out of this PR;
-  do not touch license-key instructions. Track unrelated pre-existing docs violations separately.
-- **Rental renderer parameters:** compare `search-tool-renders.tsx` with the Mastra
-  `search-rentals` tool, including exact `maxPriceMonthly`; prove COP/month argument
-  survival with a focused test.
+- **Baseline and evidence:** use recorded `c4c510da…` for the historical audit; dynamically verify the current PR base, avoid machine-specific paths, and keep rental browser proof **pending**.
+- **Implementation order:** one real ID-only rental `render_ui` trace before expanding to events, comparisons or page Surfaces. PR #752 independently owns the CopilotKit skill edits.
+- **Ticket contract:** one five-state availability predicate; pending/min/max/sale windows; current UI/API ceiling 10; accurately disclose unsupported filters and quantities.
+- **Payment safety:** later implementation must verify inactive/hidden event checks, success–cancel recovery, concurrent email dedupe, authorized TEST cleanup and independent payment verification. **These runtime fixes are not part of this documentation PR.**
+- **Sources:** versioned package receipts and explicit decisions, dispositions, implementation effects and verification requirements are above.
 
 ## Implementation status (2026-11-05)
 
