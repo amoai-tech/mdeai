@@ -43,11 +43,20 @@ describe("SAN-1263 checkout verified buyer forwarding", () => {
   beforeEach(() => {
     getUser.mockReset().mockResolvedValue({ data: { user: null }, error: null });
     getSession.mockReset().mockResolvedValue({ data: { session: null }, error: null });
-    mockFetch.mockReset().mockResolvedValue(new Response(JSON.stringify({
+    mockFetch.mockReset().mockImplementation(() => new Response(JSON.stringify({
       success: true,
       data: { stripe_session_url: "https://checkout.stripe.com/c/test", order_id: "order", access_token: "fixture-access" },
     }), { status: 200, headers: { "Content-Type": "application/json" } }));
     vi.stubGlobal("fetch", mockFetch);
+  });
+
+  it("accepts the documented 8/9/10 quantities and rejects 11", async () => {
+    for (const quantity of [8, 9, 10]) {
+      expect((await call({ ...valid, quantity })).status).toBe(200);
+    }
+    expect(mockFetch).toHaveBeenCalledTimes(3);
+    expect((await call({ ...valid, quantity: 11 })).status).toBe(400);
+    expect(mockFetch).toHaveBeenCalledTimes(3);
   });
 
   it("guest checkout keeps the public credential and cannot assign an owner ID", async () => {
@@ -81,6 +90,7 @@ describe("SAN-1263 checkout verified buyer forwarding", () => {
 
   it("invalid input cannot query auth or create a Stripe Checkout", async () => {
     expect((await call({ ...valid, quantity: 0 })).status).toBe(400);
+    expect((await call({ ...valid, quantity: 11 })).status).toBe(400);
     expect(getUser).not.toHaveBeenCalled();
     expect(mockFetch).not.toHaveBeenCalled();
   });

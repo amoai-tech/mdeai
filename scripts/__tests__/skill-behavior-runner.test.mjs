@@ -37,6 +37,34 @@ function grade(input, id = 1, skill = "errors") {
   return { exit: proc.status, report: JSON.parse(proc.stdout), stderr: proc.stderr };
 }
 
+function gradeTrigger(input, id, skill = "errors") {
+  const proc = spawnSync("python3", [script, "--skill", skill, "--trigger-id", String(id), "--trace", "-"], {
+    cwd: root, input, encoding: "utf8", timeout: 10000,
+  });
+  return { exit: proc.status, report: JSON.parse(proc.stdout), stderr: proc.stderr };
+}
+
+test("direct-answer negative trigger does not require a nonexistent direct skill call", () => {
+  const prompt = "What does an HTTP 403 status code mean in general?";
+  const clean = gradeTrigger(makeTrace(prompt, { called: false, result: false }), 4);
+  assert.equal(clean.exit, 0, JSON.stringify(clean.report));
+  assert.equal(clean.report.pass, true);
+  assert.ok(clean.report.checks.some((c) => c.check === "skill_not_called" && c.pass));
+  assert.ok(!clean.report.checks.some((c) => c.check === "skill_called" && c.pass === false));
+
+  const wrong = gradeTrigger(makeTrace(prompt, { called: true }), 4);
+  assert.equal(wrong.exit, 1);
+  assert.ok(wrong.report.checks.some((c) => c.check === "skill_not_called" && !c.pass));
+
+  // A direct answer must not pass merely because a *different* skill fired.
+  const otherSkillEvents = makeTrace(prompt).trim().split("\n").map(JSON.parse);
+  const otherCall = otherSkillEvents.find((e) => e.type === "tool/call");
+  otherCall.data.arguments = JSON.stringify({ name: "tests" });
+  const anotherWrong = gradeTrigger(otherSkillEvents.map(JSON.stringify).join("\n") + "\n", 4);
+  assert.equal(anotherWrong.exit, 1, JSON.stringify(anotherWrong.report));
+  assert.ok(anotherWrong.report.checks.some((c) => c.check === "no_skill_called" && !c.pass));
+});
+
 test("stale checkout reports the missing UIUX eval file and a safe worktree fix", () => {
   const python = [
     "from importlib.util import spec_from_file_location, module_from_spec",

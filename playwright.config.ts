@@ -1,5 +1,4 @@
 import { defineConfig, devices } from "@playwright/test";
-import { createArgosReporterOptions } from "@argos-ci/playwright/reporter";
 
 const prodBaseURL = process.env.PROD_SMOKE_BASE_URL?.trim();
 // Remote tests require BOTH production flags and an explicitly selected project.
@@ -92,13 +91,6 @@ export default defineConfig({
   reporter: [
     [process.env.CI ? "dot" : "list"],
     ["html", { open: "never", outputFolder: "tmp/playwright-report" }],
-    [
-      "@argos-ci/playwright/reporter",
-      createArgosReporterOptions({
-        // Other MDE browser CI jobs intentionally have no Argos token.
-        uploadToArgos: Boolean(process.env.CI && process.env.ARGOS_TOKEN),
-      }),
-    ],
   ],
   use: {
     baseURL,

@@ -3,6 +3,7 @@ import { isEventLookupUuid } from "./event-lookup";
 import { NON_QA_EVENT_SLUG_FILTER, QA_EVENT_NAME_SQL_PATTERN } from "./public-event-fixtures";
 import { parseEventFacts } from "./parse-event-facts";
 import { parseEventHostDisplay } from "./parse-host-display";
+import { normalizeEventCurrency } from "./format-event";
 import type {
   PublicEventDetail,
   PublicEventFacts,
@@ -45,6 +46,11 @@ type TicketRow = {
   currency: string;
   qty_total: number;
   qty_sold: number;
+  qty_pending: number;
+  min_per_order: number;
+  max_per_order: number;
+  sale_starts_at: string | null;
+  sale_ends_at: string | null;
   position: number;
 };
 
@@ -59,9 +65,14 @@ function mapTicket(row: TicketRow): PublicEventTicket {
     id: row.id,
     name: row.name,
     priceCents: row.price_cents,
-    currency: row.currency,
+    currency: normalizeEventCurrency(row.currency),
     qtyTotal: row.qty_total,
     qtySold: row.qty_sold,
+    qtyPending: row.qty_pending,
+    minPerOrder: row.min_per_order,
+    maxPerOrder: row.max_per_order,
+    saleStartsAt: row.sale_starts_at,
+    saleEndsAt: row.sale_ends_at,
     position: row.position,
   };
 }
@@ -101,7 +112,7 @@ function mapEvent(
     imageUrl: row.primary_image_url,
     source: row.source,
     mapsUrl: row.maps_url,
-    currency: row.currency,
+    currency: row.currency ? normalizeEventCurrency(row.currency) : null,
     latitude: toNumber(row.latitude),
     longitude: toNumber(row.longitude),
     host,
@@ -153,7 +164,7 @@ export async function getPublicEventResult(
 
   const { data: ticketRows, error: ticketError } = await supabase
     .from("event_tickets")
-    .select("id, name, price_cents, currency, qty_total, qty_sold, position")
+    .select("id, name, price_cents, currency, qty_total, qty_sold, qty_pending, min_per_order, max_per_order, sale_starts_at, sale_ends_at, position")
     .eq("event_id", row.id)
     .eq("is_active", true)
     .order("position", { ascending: true });

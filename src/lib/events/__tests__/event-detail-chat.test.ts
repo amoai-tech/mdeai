@@ -48,13 +48,36 @@ describe("SAN-1600 grounded event detail chat for guests", () => {
 
   it("formats real available tier prices and sold-out status using quantity fields", () => {
     const ticket = { id: "vip", name: "VIP", priceCents: 12000000,
-      currency: "COP", qtyTotal: 10, qtySold: 2, position: 0 };
+      currency: "COP", qtyTotal: 10, qtySold: 2, qtyPending: 0,
+      minPerOrder: 1, maxPerOrder: 10, saleStartsAt: null, saleEndsAt: null, position: 0 };
     const priced = summarizePublicEventForChat({ ...event, tickets: [ticket] });
     expect(priced).toContain("VIP: $120,000 COP");
     expect(priced).not.toContain("Price TBD");
     const soldout = summarizePublicEventForChat({ ...event, tickets: [{ ...ticket, qtySold: 10 }] });
     expect(soldout).toContain("Sold out");
     expect(soldout).not.toContain("VIP: $120,000 COP");
+    const pending = summarizePublicEventForChat({ ...event, tickets: [{ ...ticket, qtyPending: 8 }] });
+    expect(pending).toContain("Sold out");
+  });
+
+  it("does not call a tier available when its remaining stock is below the minimum order", () => {
+    const ticket = { id: "vip", name: "VIP", priceCents: 12000000,
+      currency: "COP", qtyTotal: 1, qtySold: 0, qtyPending: 0,
+      minPerOrder: 2, maxPerOrder: 10,
+      saleStartsAt: null, saleEndsAt: null, position: 0 };
+    const text = summarizePublicEventForChat({ ...event, tickets: [ticket] });
+    expect(text).toContain("minimum order");
+    expect(text).not.toContain("VIP: $120,000 COP");
+  });
+
+  it("does not call a stock-held tier available before its sale window opens", () => {
+    const ticket = { id: "vip", name: "VIP", priceCents: 12000000,
+      currency: "COP", qtyTotal: 10, qtySold: 0, qtyPending: 0,
+      minPerOrder: 1, maxPerOrder: 10,
+      saleStartsAt: "2099-01-01T00:00:00Z", saleEndsAt: null, position: 0 };
+    const text = summarizePublicEventForChat({ ...event, tickets: [ticket] });
+    expect(text).toContain("not on sale right now");
+    expect(text).not.toContain("VIP: $120,000 COP");
   });
 
   it("keeps exact directions for a linked, saved venue", () => {

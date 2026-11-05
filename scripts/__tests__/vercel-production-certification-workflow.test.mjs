@@ -342,6 +342,19 @@ test("release rechecks both aliases after a delayed second promotion, not only i
   assert.match(stepBody(job, "Verify production aliases remain stable after promotion"), /assert-stable/);
 });
 
+test("after promotion, live deployment identity is checked without demanding main stay frozen", () => {
+  const job = certifyJob(workflow());
+  assert.match(stepBody(job, "Promote the exact certified deployment"), /assert-current-main/,
+    "only a current candidate may start the promotion");
+  assert.match(stepBody(job, "Verify www.mdeai.co serves the exact certified deployment"), /assert-promoted/);
+  assert.match(stepBody(job, "Verify production aliases remain stable after promotion"), /assert-stable/);
+  const source = fs.readFileSync("scripts/vercel-release-control.mjs", "utf8");
+  const postPromotion = source.split('} else if (command === "assert-promoted") {')[1]?.split("} else {\n    fail(\"usage:")[0];
+  assert.ok(postPromotion, "CLI post-promotion step must exist");
+  assert.doesNotMatch(postPromotion, /githubMainSha|checkCurrentMain/,
+    "newer commits only wait for their own promotion; they cannot invalidate a proven live alias");
+});
+
 test("scheduled late-drift detector only reads aliases and never runs promotion", () => {
   const txt = workflow();
   assert.match(txt, /schedule:\s*\n\s*- cron:/);

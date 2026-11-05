@@ -1,3 +1,5 @@
+import { normalizeEventCurrency } from "./format-event";
+
 /**
  * Canonical published-event ticket offer calculation. A legacy summary price
  * of zero does not prove a free ticket: only an actual stored tier can.
@@ -27,6 +29,6 @@ export function summarizeEventTicketOffer(
   return {
     pricePerTicket: cheapest ? cheapest.price_cents / 100 : null,
     canBuyTickets: sellable.length > 0,
-    currency: cheapest?.currency ?? null,
+    currency: cheapest ? normalizeEventCurrency(cheapest.currency) : null,
   };
 }

@@ -461,6 +461,11 @@ export function RentalUiProvider({ children }: { children: ReactNode }) {
   );
 }
 
+/** For a surface that can render without the full rental workspace, such as A2UI. */
+export function useOptionalRentalUi(): RentalUiContextValue | null {
+  return useContext(RentalUiContext);
+}
+
 export function useRentalUi() {
   const ctx = useContext(RentalUiContext);
   if (!ctx) {
