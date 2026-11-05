@@ -35,3 +35,11 @@ test("CopilotKit model eval pack is runnable without dropping content rubrics", 
     assert.ok(entry.expectations.some((check) => check.check === "turn_completed"));
   }
 });
+
+test("native render_ui bridge proof supplies a minimal catalog on the existing provider", () => {
+  const native = readFileSync(join(base, "references/native-generative-ui.md"), "utf8");
+  assert.match(skill, /minimal, inert, typed development catalog/);
+  assert.match(native, /minimal, inert, typed/);
+  assert.match(native, /generativeUI=\{\{ ui: probeUI \}\}/);
+  assert.match(native, /Do not mistake a catalog-free request for a Mastra defect/);
+});
