@@ -210,6 +210,21 @@ jobs:
             const comments = await github.paginate(github.rest.issues.listComments, {
               ...repo, issue_number: pullNumber, per_page: 100,
             });
+            // Mark a previous head's targeted results outdated even when this
+            // revision needs no follow-up. Otherwise old findings look current.
+            const marker = "<!-- mde-pr-agent-targeted-recovery:v1 -->";
+            const previousRecovery = comments.find((comment) =>
+              comment.user?.login === "github-actions[bot]" &&
+              (comment.body ?? "").startsWith(marker));
+            if (previousRecovery &&
+                !(previousRecovery.body ?? "").includes("**Base/head:** " + baseSha + " / " + headSha)) {
+              await github.rest.issues.updateComment({
+                ...repo, comment_id: previousRecovery.id,
+                body: marker + "\n## Targeted PR-Agent follow-up — OUTDATED\n\n" +
+                  "The PR base/head changed. Previous targeted findings do not apply " +
+                  "to this revision. The current review remains authoritative.\n",
+              });
+            }
             const candidates = comments.filter((comment) => {
               if (comment.user?.login !== "github-actions[bot]" ||
                   Date.parse(comment.updated_at) < start) return false;
@@ -281,10 +296,17 @@ jobs:
             const crypto = require("node:crypto");
             const repo = { owner: context.repo.owner, repo: context.repo.repo };
             const pull_number = context.payload.pull_request.number;
-            const plan = JSON.parse(fs.readFileSync(".pr-agent/recovery-plan.json", "utf8"));
-            const diff = fs.readFileSync(".pr-agent/recovery.diff", "utf8");
-            const output = JSON.parse(fs.readFileSync(".pr-agent/recovery.json", "utf8"));
-            const md = fs.readFileSync(".pr-agent/recovery.md", "utf8");
+            let plan, diff, output, md;
+            try {
+              plan = JSON.parse(fs.readFileSync(".pr-agent/recovery-plan.json", "utf8"));
+              diff = fs.readFileSync(".pr-agent/recovery.diff", "utf8");
+              output = JSON.parse(fs.readFileSync(".pr-agent/recovery.json", "utf8"));
+              md = fs.readFileSync(".pr-agent/recovery.md", "utf8");
+            } catch (error) {
+              core.warning("Targeted model evidence unreadable or invalid JSON: " +
+                String(error.message).slice(0, 180));
+              return;
+            }
             const { data: live } = await github.rest.pulls.get({ ...repo, pull_number });
             if (live.base.sha !== plan.baseSha || live.head.sha !== plan.headSha ||
                 plan.baseSha !== context.payload.pull_request.base.sha ||
