@@ -170,6 +170,6 @@ describe("RestaurantCard", () => {
       <RestaurantCard title="Chat Only" pinId="restaurant-chat" testId="restaurant-card" />,
     );
     expect(html).not.toContain('data-testid="restaurant-ask-select"');
-    expect(html).not.toContain('data-testid^="restaurant-detail-link-"');
+    expect(html).not.toMatch(/data-testid="restaurant-detail-link-/);
   });
 });

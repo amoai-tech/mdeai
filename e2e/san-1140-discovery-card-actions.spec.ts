@@ -139,8 +139,8 @@ for (const spec of ROUTES) {
       // Browser zoom is not scriptable in Playwright; document zoom re-flows the same way
       // and is the closest reproducible proxy for WCAG 2.2 reflow.
       await page.setViewportSize({ width: 1440, height: 900 });
-      await page.goto(spec.route, { waitUntil: "domcontentloaded" });
-      await expect(page.getByTestId(spec.pageTestId)).toBeVisible({ timeout: 60_000 });
+      const zoomCards = await openRoute(page, spec);
+      test.skip((await zoomCards.count()) === 0, `no ${spec.route} inventory in this environment`);
       await page.evaluate(() => {
         document.documentElement.style.zoom = "200%";
       });

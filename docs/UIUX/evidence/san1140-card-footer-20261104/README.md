@@ -42,6 +42,15 @@ Files: `after-local-*.png`, `after-local-report.json`,
 At 320px the restaurant footer wraps naturally onto two rows (Directions / Ask + View details)
 inside the card; nothing sits in the gap below the card.
 
+### Page errors, stated exactly
+
+The production baseline recorded **zero** page errors on all five routes. The worktree dev-server
+run recorded **one** transient error on `/rentals` at 1440px during the first cold compile
+(`Cannot read properties of undefined (reading 'getRootNode')`) — it is in
+`after-local-report.json` and is **not** reproducible: 3 further runs of `/rentals` at 1440px after
+warm-up logged `[]`, and `/rentals` code is untouched by this change. The three venue pages
+(`/restaurants`, `/cafes`, `/nightlife`) logged zero errors in every run.
+
 ## Commands
 
 ```bash
