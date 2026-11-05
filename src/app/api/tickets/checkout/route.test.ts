@@ -113,6 +113,16 @@ describe("SAN-1263 checkout verified buyer forwarding", () => {
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
+  it("returns 503 instead of redirecting production buyers to a Vercel deployment host", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "");
+    vi.stubEnv("VERCEL_URL", "mdeai-abc123-amoco.vercel.app");
+    const response = await call(valid);
+    expect(response.status).toBe(503);
+    expect((await response.json()).error.code).toBe("CHECKOUT_ORIGIN_NOT_CONFIGURED");
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
   it("fails closed for invalid Checkout origin configuration", async () => {
     vi.stubEnv("NEXT_PUBLIC_SITE_URL", "http://attacker.example");
     const response = await call(valid);

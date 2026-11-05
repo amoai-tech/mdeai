@@ -9,8 +9,16 @@ describe("trusted Stripe Checkout return origin", () => {
     expect(trustedCheckoutOrigin("https://www.mdeai.co/", undefined, true))
       .toBe("https://www.mdeai.co");
   });
-  it("uses Vercel's server-defined preview URL if no explicit site origin", () => {
-    expect(trustedCheckoutOrigin(undefined, "mde-preview.vercel.app", true))
+  it("uses Vercel's server-defined preview URL in non-production mode", () => {
+    expect(trustedCheckoutOrigin(undefined, "mde-preview.vercel.app", false))
+      .toBe("https://mde-preview.vercel.app");
+  });
+  it("never uses VERCEL_URL as production return origin without an explicit site domain", () => {
+    expect(() => trustedCheckoutOrigin(undefined, "mdeai-abc123-amoco.vercel.app", true))
+      .toThrow("CHECKOUT_ORIGIN_NOT_CONFIGURED");
+    expect(trustedCheckoutOrigin("https://www.mdeai.co", "mdeai-abc123-amoco.vercel.app", true))
+      .toBe("https://www.mdeai.co");
+    expect(trustedCheckoutOrigin(undefined, "mde-preview.vercel.app", false))
       .toBe("https://mde-preview.vercel.app");
   });
   it("fails closed without production configuration", () => {
