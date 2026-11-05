@@ -1,14 +1,15 @@
 # SAN-1638 · MDE Discovery — Open Details in the Right Panel Across All Five Pages
 
 Date: 2026-11-05 · PRs: #754 (restaurants, cafés, nightlife) and #755 (events, stacked)
+Baseline: rebased onto `main` at `cfa5a90a` (which also retired the Argos visual job in #766).
 
 ## What was proven
 
 | Check | Command | Result |
 | --- | --- | --- |
 | Repository gate | `npm run floor` | exit 0 on the heads below |
-| Focused unit tests | `npx vitest run src/components/{restaurants,browse,copilot,cafes,nightlife} src/hooks` | 326 passed |
-| Event panel tests | `npx vitest run src/components/events` | 70 passed (incl. 404 / 503 / Retry / Free / Sold out) |
+| Focused unit tests | `npx vitest run src/components/{restaurants,browse,copilot,cafes,nightlife} src/hooks` | 334 passed |
+| Event panel tests | `npx vitest run src/components/events` | 78 passed (incl. 404 / 503 / Retry / Free / Sold out / Buy hidden on 404) |
 | Card actions browser spec | `SMOKE_BASE_URL=http://localhost:3020 PW_SKIP_WEBSERVER=1 npx playwright test e2e/san-1140-discovery-card-actions.spec.ts --project=chromium --workers=1` | 17 passed |
 | Deterministic CI lane | GitHub `deterministic chromium 1/3…3/3` | 3/3 green at `d900eb27` |
 | Required checks | `floor`, `mastra-schema-init`, `review / review`, `review / verify-review-result` | green at `d900eb27` |
@@ -27,6 +28,12 @@ Code was verified at `d900eb27`; the last commit that changes runtime behaviour 
 | Marker pick moves panel and Ask context together (regression test) | ✅ | — |
 | Escape from inside the panel closes it; from a card it does not | ✅ | — |
 | Ask never opens a panel; it closes one describing another record | ✅ | ✅ |
+| Details A → pin B → **release B** leaves the panel closed (A does not return) | ✅ | — |
+
+Regression tests added after the merge-readiness audit (each proven RED before GREEN):
+
+- releasing a pin closes the panel instead of resurrecting the older Details record;
+- a confirmed 404 hides **Buy tickets** as well as the full-page link.
 
 Event panel: real tiers (GA $40,000 · VIP $120,000 · Backstage $400,000 · Frontrow $80,000 COP), `Price TBD` with no tiers, photo + host/venue rendered from a controlled API response, 404 hides the full-page link, 503 keeps Retry and recovers.
 
