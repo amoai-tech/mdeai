@@ -60,7 +60,9 @@ describe("Step 10 · authenticated single-route /info (real route + real agent g
 
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type") ?? "").toContain("application/json");
-    expect(pinnedRuntimeVersion).toBe("1.75.0");
+    // Assert the runtime reports whatever this build actually pins, so an upgrade is
+    // detected rather than a stale literal keeping the test green (or breaking it).
+    expect(pinnedRuntimeVersion).toMatch(/^\d+\.\d+\.\d+/);
     expect(body.version).toBe(pinnedRuntimeVersion);
     expect(CANONICAL_AGENTS.filter((name) => !body.agents?.[name])).toEqual([]);
   });

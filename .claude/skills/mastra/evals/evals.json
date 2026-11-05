@@ -52,6 +52,83 @@
         "References `@mastra/mcp` / `MCPClient` and the docs server package name",
         "Links or names `https://mastra.ai/docs/mcp/overview` (or `links.md` MCP section)"
       ]
+    },
+    {
+      "id": 6,
+      "prompt": "I want to inspect failed Mastra traces on my laptop. The CLI can also reach Mastra's hosted observability. Show the safe command and explain whether telemetry should change our application configuration.",
+      "expected_output": "Checks the installed CLI's supported commands, explicitly targets the authorized local server with mastra api --url http://localhost:4111, reviews optional MASTRA_TELEMETRY_DISABLED=1 at CLI-process scope only, avoids uploading diagnostics or changing MDE app telemetry.",
+      "files": [],
+      "expectations": [
+        "Selects and verifies an explicit --url instead of relying on hosted observability defaults",
+        "Uses installed-version command help and package docs/types before relying on newest CLI capabilities",
+        "Explains per-process MASTRA_TELEMETRY_DISABLED=1 and does not globally modify MDE application telemetry or transmit diagnostics"
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "An AI coding agent sees the old my-mastra-app guide saying MDE has one four-tool concierge and needs registerCopilotKit('/chat'). The task is to add an event tool. Which runtime files should it edit?",
+      "expected_output": "Inspects current src/mastra/index.ts, src/mastra/agents/concierge.ts, existing tools and the same-origin src/app/api/copilotkit/[[...path]]/route.ts; uses getLocalAgentsWithLogging and keeps frontend tool-map keys stable. Rejects scaffolding my-mastra-app or another /chat endpoint.",
+      "files": [],
+      "expectations": [
+        "Uses the current Next.js CopilotKit v2 endpoint and existing Mastra agent registry",
+        "Rejects copying the obsolete 4-tool, direct-SSE, standalone-server guide",
+        "Preserves auth, tool identity and current streaming/telemetry owners"
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "A new Mastra docs MCP example suggests a method that is not present in our installed @mastra/core TypeScript types. Should I install @latest or trust the remote doc so I can finish quickly?",
+      "expected_output": "Follows installed package docs, SOURCE_MAP and TypeScript exports first; checks exact package/lock versions and upgrade task before using newer APIs; remote Mastra MCP only supplements discovery. Does not install @latest or invent a compatibility wrapper.",
+      "files": [],
+      "expectations": [
+        "Uses installed docs then SOURCE_MAP and types/source before remote MCP",
+        "Checks package lock/version and declines unplanned @latest upgrade",
+        "Does not introduce duplicate workaround or undocumented Mastra method"
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "Prelaunch MDE: a renter wants to schedule a viewing of a development apartment with no landlord paperwork. Should we suspend the Mastra run for owner approval?",
+      "expected_output": "Rejects business permission/eligibility/ownership-verification gate under Phase A; explains HITL may be optional user review only and server-side authentication, authorized role/tenant context and idempotent writes still apply.",
+      "files": [],
+      "expectations": [
+        "Does not require landlord/partner/publication/rights approval as a prelaunch prerequisite",
+        "Separates HITL user intent from server authorization",
+        "Keeps real persisted action, tenant isolation and idempotency"
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "Two Vercel instances update different fields in the same renter Mastra thread concurrently. The in-process memory lock passed unit tests. Is thread working memory now safe and exactly-once across instances?",
+      "expected_output": "No. The existing per-process withThreadLock does not serialize separate instances and read-modify-write can lose updates. Under SAN-1626, test threadId/resourceId isolation, cross-user denial, refresh and two-instance writes/readback, then inspect installed Mastra atomic update/CAS capabilities and the canonical memory owner. No duplicate memory subsystem.",
+      "files": [],
+      "expectations": [
+        "Explicitly identifies cross-instance last-write-wins despite a process-local lock",
+        "Requires two-instance persisted readback and a separate user identity test",
+        "Uses the existing memory owner and marks unverified behavior as unproven"
+      ]
+    },
+    {
+      "id": 11,
+      "prompt": "A host clicks Stop while MDE AI creates an event. The AG-UI output already said 'Created successfully', but the save request failed. What should the UI, telemetry and tests do?",
+      "expected_output": "Treat aborted/failed/time-out/success separately; do not show save success unless the canonical backend committed. Reuse LoggingMastraAgent telemetry and existing AG-UI adapter; verify event ordering, Stop and idempotent retry with independent DB row counts under SAN-1605.",
+      "files": [],
+      "expectations": [
+        "Distinguishes successful finish, failure, timeout and client abort",
+        "Requires durable commit proof; no false saved claim or duplicate write",
+        "Reuses existing telemetry/AG-UI bridge rather than creating a second event stream"
+      ]
+    },
+    {
+      "id": 12,
+      "prompt": "The bundled Mastra provider-registry script lists a Gemini model. Can we switch the production concierge now and mark model support proven without a live request?",
+      "expected_output": "No. Local registry metadata checks provider/model names but not account credentials, current provider availability or successful inference. Verify pinned installed version and MDE model config; authorize a real QA model request and cost/side effects before runtime approval. Do not switch solely because latest docs list it.",
+      "files": [],
+      "expectations": [
+        "States the provider registry is local metadata not a live availability or credential test",
+        "Requires installed-version and current MDE configuration checks",
+        "Defers any live/costly QA request until authorized, does not silently change production model"
+      ]
     }
   ]
 }

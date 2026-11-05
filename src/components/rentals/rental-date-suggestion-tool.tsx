@@ -19,7 +19,7 @@ export function RentalDateSuggestionTool({ onSuggest }: { onSuggest: (stay: Sugg
       // A suggestion is the answer; no follow-up model run is needed.
       followUp: false,
       description:
-        "Propose a stay (first day and optional last day) for the renter to review in the date calendar. Use only dates the renter stated or that are consistent with their request. This opens the calendar with a DRAFT: it does not apply, search, or book anything.",
+        "Propose a stay (first day and optional last day) for the renter to review in the date calendar. Use only dates the renter stated or that are consistent with their request. This opens the calendar with a DRAFT: it does not apply, search, or book anything. Use it ONLY when choosing the stay dates is what the renter asked for. If they want apartments (bedrooms, price, neighbourhood, \"find me\", \"show me rentals\", \"cheaper options\"), that is a listing search: call search-rentals with those dates as filters instead, and do not open this calendar.",
       parameters: z.object({
         from: z.string().describe("First day of the stay, YYYY-MM-DD."),
         through: z.string().nullish().describe("Last day of the stay, YYYY-MM-DD, inclusive. Omit for a single move-in date."),

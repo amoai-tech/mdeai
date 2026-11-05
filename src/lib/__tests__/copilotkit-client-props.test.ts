@@ -24,7 +24,7 @@ describe("getCopilotKitClientProps", () => {
       agentId: "conciergeAgent",
       runtimeUrl: "/api/copilotkit",
       useSingleEndpoint: true,
-      showDevConsole: false,
+      enableInspector: false,
       headers: {},
       properties: {},
       agents__unsafe_dev_only: {},
@@ -46,7 +46,7 @@ describe("getCopilotKitClientProps", () => {
       agentId: "hostEventAgent",
       runtimeUrl: "/api/copilotkit",
       useSingleEndpoint: true,
-      showDevConsole: false,
+      enableInspector: false,
     });
     expect(getCopilotKitClientProps("hostEventAgent").headers).toBe(
       getCopilotKitClientProps("conciergeAgent").headers,

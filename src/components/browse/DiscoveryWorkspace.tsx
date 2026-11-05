@@ -92,7 +92,16 @@ export function DiscoveryWorkspace(props: DiscoveryWorkspaceProps) {
         </div>
 
         {notice}
-        <div className="px-4 pb-24 sm:px-6 lg:pb-6">{children}</div>
+        {/* Extra phone scroll room lets the last card's buttons move above the
+            sticky composer + floating tab bar instead of being covered. */}
+        <div className={cn(
+          "px-4 sm:px-6 lg:pb-6",
+          // The composer publishes its real rendered height. Reserve that height plus
+          // the floating tab bar so the last card's controls can scroll above both.
+          hasMobileNav && askComposer
+            ? "pb-[calc(var(--mde-ask-composer-height,18rem)_+_5rem)] lg:pb-6"
+            : "pb-24",
+        )}>{children}</div>
 
         {askComposer ? (
           <div

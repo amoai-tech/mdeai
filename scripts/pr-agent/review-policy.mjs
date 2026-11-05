@@ -253,10 +253,14 @@ export function appendCertification(body, { baseSha, headSha }) {
   return `${prefix}\n${marker}\n`;
 }
 
-export function selectReviewCommand({ action, certificationBodies, baseSha }) {
-  if (action !== "synchronize") return "/review";
-  const sameBase = certificationBodies.some((body) => hasCertificationForBase(body, baseSha));
-  return sameBase ? "/review -i" : "/review";
+// SAN-1628: Always review the current PR diff. Upstream incremental mode walks
+// commit history and can include two-parent merges with ordinary commit titles,
+// importing unrelated historical files. SAN-1415 owns any future safe opt-in.
+export function selectReviewCommand(_context) {
+  // Preserve the caller contract for SAN-1415 while intentionally ignoring
+  // prior review history until merge-aware incremental scope is proven safe.
+  void _context;
+  return "/review";
 }
 
 function isBotComment(comment) {
@@ -328,23 +332,111 @@ function unquotedReviewMarkdown(body) {
   }).join("\n");
 }
 
-// One canonical parser for PR-Agent's top-level excluded-file footer.
-// Quoted examples and fenced/indented code must never affect coverage.
-export function excludedFilesFromReview(body) {
-  const matches = unquotedReviewMarkdown(body ?? "").match(
-    /(?:^|\r?\n) {0,3}⚠️\s+\*\*Review coverage:\*\*\s+The following files were not included in this review because of the token budget:\s*\r?\n((?:[ \t]*-[ \t]+`[^`\r\n]+`[ \t]*\r?\n?)+)/,
-  );
-  return matches ? [...matches[1].matchAll(/^[ \t]*-[ \t]+`([^`\r\n]+)`/gm)].map((m) => m[1]) : [];
+// PR-Agent v0.49.0 appends its own coverage notices AFTER model-generated
+// Markdown, separated by a literal <hr> block. An unfinished model code fence
+// otherwise swallows these trusted notices when Markdown is filtered. Extract
+// only the exact upstream footer forms before treating model prose as Markdown.
+// A matching example in a CLOSED model fence remains inert: its closing fence
+// appears inside that example before the next provider section.
+function providerAppendedCoverageFooters(body) {
+  const source = (body ?? "").replace(/\r\n/g, "\n");
+  const header = /(?:^|\n\n)<hr>\n\n(?=(?:ℹ️ \*\*Chunked review:\*\* the diff exceeded the model token budget, so it was reviewed in \d+ chunks and the per-chunk results were merged\.|⚠️ \*\*Review coverage:\*\* The following files (?:were not included in this review because of the token budget|had patches clipped before analysis to fit the token budget \(partial input coverage\)):))/g;
+  const starts = [...source.matchAll(header)];
+  const footers = [];
+  for (const candidate of starts) {
+    const start = candidate.index + candidate[0].length;
+    // Exclude subsequent provider sections, help text, and finding-state JSON.
+    const boundaries = [
+      source.indexOf("\n\n<hr>\n\n", start),
+      source.indexOf("\n<!-- pr-agent-review-state:v1\n", start),
+      source.indexOf("\n\n<details>", start),
+    ].filter((index) => index >= 0);
+    const end = boundaries.length ? Math.min(...boundaries) : source.length;
+    const footer = source.slice(start, end);
+    // A CLOSED Markdown example can quote multiple <hr> blocks and the exact
+    // warning text. Search through its closing fence, even past a second <hr>,
+    // but stop before PR-Agent's generated help or state suffix. An unclosed
+    // model fence cannot consume the actual provider-generated notice.
+    const generatedSuffix = [
+      source.indexOf("\n<!-- pr-agent-review-state:v1\n", start),
+      source.indexOf("\n\n<details>", start),
+    ].filter((index) => index >= 0);
+    const suffixEnd = generatedSuffix.length ? Math.min(...generatedSuffix) : source.length;
+    if (/(?:^|\n) {0,3}(?:`{3,}|~{3,})[ \t]*(?:\n|$)/.test(source.slice(start, suffixEnd))) continue;
+    footers.push(footer);
+  }
+  return footers.join("\n");
 }
 
-function coverageFailure(body, headSha) {
+function reviewCoverageMarkdown(body) {
+  const visible = unquotedReviewMarkdown(body ?? "");
+  const appended = providerAppendedCoverageFooters(body);
+  return appended ? `${visible}\n${appended}` : visible;
+}
+
+// One canonical parser for PR-Agent's top-level excluded-file footer.
+// Quoted examples and fenced/indented code must never affect coverage.
+export function excludedCoverageFromReview(body) {
+  const matches = reviewCoverageMarkdown(body).match(
+    /(?:^|\r?\n) {0,3}⚠️\s+\*\*Review coverage:\*\*\s+The following files were not included in this review because of the token budget:\s*\r?\n((?:[ \t]*-[ \t]+`[^`\r\n]+`[ \t]*\r?\n?)+)(?:[ \t]*\.{3}\s+and\s+(\d+)\s+more)?/,
+  );
+  const files = matches ? [...matches[1].matchAll(/^[ \t]*-[ \t]+`([^`\r\n]+)`/gm)].map((m) => m[1]) : [];
+  const more = matches?.[2] ? Number(matches[2]) : 0;
+  // A displayed truncation count is not an inventory of identifiable paths.
+  const unlistedCount = Number.isSafeInteger(more) && more >= 0 ? more : 0;
+  return { files, unlistedCount, total: files.length + unlistedCount };
+}
+
+export function excludedFilesFromReview(body) {
+  return excludedCoverageFromReview(body).files;
+}
+
+// SAN-1634: expose the SAME trusted/top-level provider coverage footer to the
+// advisory reporter. Quoted prose, closed code fences and PR-head text are
+// never grounds for declaring that a patch was clipped.
+export function clippedPatchesFromReview(body) {
+  const visible = reviewCoverageMarkdown(body);
+  const header = /(?:^|\n) {0,3}⚠️\s+\*\*Review coverage:\*\*\s+The following files had patches clipped before analysis to fit the token budget \(partial input coverage\):[ \t]*(?:\r?\n|$)/;
+  const match = header.exec(visible);
+  if (!match) return { present: false, files: [], unlistedCount: 0, total: 0 };
+  const rest = visible.slice(match.index + match[0].length);
+  const files = [];
+  let nextLine = "";
+  // Bound the work by comment length and avoid nested repetition/ambiguous
+  // regexes on model-generated Markdown. Never invent unnamed file paths.
+  for (const line of rest.split(/\r?\n/)) {
+    const path = /^[ \t]*-[ \t]+`([^`\r\n]+)`[ \t]*$/.exec(line);
+    if (!path) { nextLine = line; break; }
+    files.push(path[1]);
+  }
+  const more = /^\.\.\.\s+and\s+(\d+)\s+more$/.exec(nextLine.trim());
+  const count = more ? Number(more[1]) : 0;
+  const unlistedCount = Number.isSafeInteger(count) && count >= 0 ? count : 0;
+  return { present: true, files, unlistedCount, total: files.length + unlistedCount };
+}
+
+export function coverageFailure(body, headSha) {
+  // The pinned PR-Agent v0.49.0 also reports failed chunks and clipped patches
+  // outside the excluded-files footer. Missing persistent state must not turn
+  // either explicit partial-review signal into a successful certification.
+  const visible = reviewCoverageMarkdown(body);
+  const failedChunk = visible.match(/(?:^|\n) {0,3}ℹ️\s+\*\*Chunked review:\*\*[^\n]*?\b(\d+) chunk\(s\) failed and are not covered by this review\./);
+  if (failedChunk && Number(failedChunk[1]) > 0) {
+    return { ok: false, code: "INCOMPLETE_REVIEW",
+      reason: `PR-Agent reported ${failedChunk[1]} failed chunk(s); review coverage is incomplete` };
+  }
+  if (clippedPatchesFromReview(body).present) {
+    return { ok: false, code: "INCOMPLETE_REVIEW",
+      reason: "PR-Agent reported patches clipped before analysis (partial input coverage)" };
+  }
   // PR-Agent can omit persistent finding state on a clean review even when its
   // own six-chunk coverage footer explicitly lists files omitted by the token
   // budget. The footer is direct evidence of incompleteness, regardless of
   // whether a state marker exists or incorrectly claims complete=true.
-  const footerExcluded = excludedFilesFromReview(body);
-  if (footerExcluded.length) {
-    return { ok: false, code: "INCOMPLETE_REVIEW", reason: `PR-Agent review footer reports ${footerExcluded.length} excluded file(s) after chunking` };
+  const footerExcluded = excludedCoverageFromReview(body);
+  if (footerExcluded.total > 0) {
+    return { ok: false, code: "INCOMPLETE_REVIEW",
+      reason: `PR-Agent review footer reports ${footerExcluded.total} excluded file(s) after chunking (${footerExcluded.files.length} named, ${footerExcluded.unlistedCount} unnamed)` };
   }
   const markers = [...body.matchAll(/(?:^|\n)<!-- pr-agent-review-state:v1\n([\s\S]*?)\n-->/g)];
   if (markers.length === 0) return null; // Clean reviews may have no persisted findings.

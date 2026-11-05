@@ -31,6 +31,7 @@ import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { errorBody, getCorsHeaders, jsonResponse } from "../_shared/http.ts";
 import { getServiceClient } from "../_shared/supabase-clients.ts";
 import { assertCheckoutSessionBindsPayment, assertPaidOrderMatches } from "../_shared/ticket-payment-verification.ts";
+import { collectStripeRefunds, validatedSuccessfulRefunds, stripeRefundReason } from "../_shared/ticket-refund-reconciliation.ts";
 import { expiredSessionMatchesOrder, webhookEventMatchesMode, webhookSecretsAreDistinct, type TicketStripeMode } from "../_shared/ticket-stripe-webhook-guards.ts";
 // Lazy Stripe init so missing-key configurations surface as 500 CONFIG_ERROR
 // rather than crashing on cold-start before headers are sent.
@@ -154,7 +155,9 @@ Deno.serve(async (req) => {
     } else if (event.type === "payment_intent.succeeded") {
       await handlePaymentSucceeded(event.data.object as Stripe.PaymentIntent, service, stripe);
     } else if (event.type === "charge.refunded") {
-      await handleRefund(event.data.object as Stripe.Charge, service);
+      await handleRefund(event.data.object as Stripe.Charge, service, stripe);
+    } else if (event.type === "refund.created" || event.type === "refund.updated") {
+      await handleRefundUpdate(event.data.object as Stripe.Refund, service, stripe);
     } else {
       // Unsubscribed event types: 200 OK so Stripe stops retrying. Logged for
       // observability but not an error.
@@ -331,41 +334,56 @@ async function handlePaymentSucceeded(pi: Stripe.PaymentIntent, service: Supabas
   });
   await finalizePaidOrder(orderId, pi.id, pi.amount_received, pi.currency, service, session.id);
 }
-async function handleRefund(charge: Stripe.Charge, service: SupabaseClient) {
-  // R5 fix: charge.payment_intent is `string | Stripe.PaymentIntent | null`.
+async function handleRefundUpdate(
+  refund: Stripe.Refund, service: SupabaseClient, stripe: Stripe,
+) {
+  if (refund.status !== "succeeded") return; // pending/failed is not settled money
+  const chargeId = typeof refund.charge === "string"
+    ? refund.charge : refund.charge?.id;
+  if (!chargeId) throw new Error("REFUND_CHARGE_NOT_BOUND");
+  const charge = await stripe.charges.retrieve(chargeId);
+  await handleRefund(charge, service, stripe);
+}
+
+async function handleRefund(
+  charge: Stripe.Charge, service: SupabaseClient, stripe: Stripe,
+) {
   const piId = typeof charge.payment_intent === "string"
-    ? charge.payment_intent
-    : charge.payment_intent?.id ?? null;
+    ? charge.payment_intent : charge.payment_intent?.id ?? null;
   if (!piId) {
     console.log(
       `charge.refunded had no payment_intent; ignoring charge=${charge.id}`,
     );
     return;
   }
-  // Look up the order via the stored stripe_payment_intent (indexed in 001).
   const { data: order, error: lookupErr } = await service.from("event_orders")
-    .select("id").eq("stripe_payment_intent", piId).maybeSingle();
-  if (lookupErr) {
-    throw new Error(`Order lookup failed: ${lookupErr.message}`);
-  }
+    .select("id,total_cents,currency")
+    .eq("stripe_payment_intent", piId).maybeSingle();
+  if (lookupErr) throw new Error("REFUND_ORDER_LOOKUP_FAILED");
   if (!order) {
-    console.log(
-      `charge.refunded: no order for pi=${piId}; manual reconcile required`,
-    );
+    console.warn("ticket-payment-webhook: unknown refund PaymentIntent", piId);
     return;
   }
-  const { error } = await service.rpc("ticket_payment_refund", {
-    p_order_id: order.id,
-  });
-  if (error) {
-    const msg = error.message ?? "";
-    if (msg.includes("ORDER_NOT_REFUNDABLE")) {
-      console.error(
-        `ticket_payment_refund: ${msg} for order=${order.id} pi=${piId}`,
-      );
-      return;
-    }
-    throw new Error(`ticket_payment_refund failed: ${msg}`);
+
+  // Ask Stripe for the current settled refunds rather than trusting an
+  // aggregate amount or an old/out-of-order charge.refunded snapshot.
+  const refunds = await collectStripeRefunds<Stripe.Refund>(
+    stripe.refunds.list({ charge: charge.id, limit: 100 }),
+  );
+  const settled = validatedSuccessfulRefunds(charge, order, refunds, false);
+  for (const refund of settled) {
+    // The existing v2 RPC locks the order, dedupes Stripe refund IDs,
+    // records amounts and retains tickets on amount-only partial refunds.
+    const { error } = await service.rpc("ticket_payment_refund_v2", {
+      p_order_id: order.id,
+      p_amount_cents: refund.amount,
+      p_reason: stripeRefundReason(refund.reason),
+      p_stripe_refund_id: refund.id,
+      p_initiated_by: null,
+      p_initiated_via: "stripe_dashboard",
+      p_attendee_ids: null,
+    });
+    if (error) throw new Error(`TICKET_REFUND_RECONCILIATION_FAILED: ${error.message}`);
   }
 }
 // ---------------------------------------------------------------------------

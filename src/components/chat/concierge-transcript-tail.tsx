@@ -53,7 +53,7 @@ export const ConciergeTranscriptTail = memo(function ConciergeTranscriptTail({
   transcriptMessageIds?: ReadonlySet<string>;
 }) {
   return (
-    <div data-testid="concierge-transcript-tail" className="flex min-w-0 flex-col">
+    <div data-testid="concierge-transcript-tail" className="mde-concierge-transcript-tail flex min-w-0 flex-col">
       <ConciergeLocalChatMessages excludeIds={transcriptMessageIds} />
       <ConciergeSignInPrompt />
       <RentalFastPathPanel />

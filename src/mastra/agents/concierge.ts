@@ -15,7 +15,7 @@ import { requestVenueBookingTool } from '../tools/request-venue-booking';
 import { CONCIERGE_AGENT_MODEL } from "../lib/models";
 import { geminiMalformedFirstStepRetry } from "../lib/gemini-malformed-retry";
 import { getDefaultInputProcessors } from "../lib/agent-input-processors";
-import { currentSelectedNameOnly, verifiedDiscoverySelectionHint } from "../lib/discovery-agent-context";
+import { currentSelectedNameOnly, verifiedDiscoverySelectionHint, withComparisonRecords, withVerifiedSelectionFacts } from "../lib/discovery-agent-context";
 import { MapUiStateSchema } from "@/platform/contracts/map-ui-state";
 import { formatEventSourcePromptHint } from "@/lib/events/trusted-event-sources";
 import { RESTAURANT_CLARIFY_MESSAGE } from "@/lib/restaurant-clarify-copy";
@@ -241,11 +241,12 @@ const conciergeBaseInstructions = `You are the mdeAI Medellín concierge — a h
 # Working memory rules (very important)
 You have working memory with: lastIntent, lastRentalQuery, lastRentalResults, selectedListingId, lastEventQuery, lastEventResults, selectedEventId, lastGroundedResults (cafés/places shown in the latest grounded reply), mapUi (selectedPinId, pin counts, viewport lat/lng/zoom).
 - Update lastIntent every turn using EXACTLY one of the canonical router values: ${routerIntentSchema.options.join(', ')}. For cafés, bars, clubs, nightlife, and grounded place searches use restaurant_discovery. Tool intent "nightlife" / "cafe" is NOT a valid lastIntent value; never save labels such as nightlife_grounded, grounded_place_search, or grounded_places.
-- After any rental search, save lastRentalQuery (the filters you used, including budgetType) and lastRentalResults (id + title + neighborhood + nightly_price + amenities for each listing you showed). Copy amenities verbatim from the tool result; never add one. Omit maxPriceMonthly entirely when the renter gave no price ceiling; never save maxPriceMonthly: 0 as a placeholder.
+- After any rental search, save lastRentalQuery (the filters you used, including budgetType) and lastRentalResults (id + title + neighborhood + nightly_price + amenities for each listing you showed). Copy amenities verbatim from the tool result; never add one. Omit maxPriceMonthly entirely when the renter gave no price ceiling; never save maxPriceMonthly: 0 as a placeholder. When a monthly ceiling was specified, retain the exact maxPriceMonthly and budgetCurrency for follow-ups.
 - Amenity questions ("which of these has a balcony?", "any with parking?") on an existing result set: answer ONLY from lastRentalResults[].amenities for the exact listings returned. If a listing has no recorded amenity matching the question, say the listing does not specify it — never claim it has the amenity and never claim it lacks it. Do not call search-rentals again just to check an amenity.
 - After any event search, save lastEventQuery and lastEventResults (id + title + venue + date).
 - When the user references a specific listing/event (number, title, "the cheaper one", "that 2BR"), set selectedListingId / selectedEventId.
 - For follow-up rental questions like "when can I view", "show cheaper options", "any with parking?", "show more in the same area" — DO NOT ask rentals vs events. Reuse lastRentalQuery, refine it, and call search-rentals again. Never reset the flow. EXCEPTION: "show me the details" is the frontend action above; do not turn it into another search.
+- "Show cheaper options" / "más baratos": lower the saved budget in the SAME currency and pricing period. For a monthly budget, reduce maxPriceMonthly and preserve budgetCurrency; for a nightly budget, lower maxPricePerNight. Do not invent exchange rates or divide monthly prices by 30.
 - For a grounded café/place follow-up such as "which of these would you recommend for laptop work?", compare ONLY lastGroundedResults, name one or two rows, and use only the summary/area/rating stored there. Do not invent amenities (power outlets, Wi-Fi speed, seating) and do not call search-grounded-places again unless the user asks for new places.
 
 # Neighborhood intelligence (Medellín-native)
@@ -289,7 +290,7 @@ Decision rules (in order):
 1. lastRentalQuery EXISTS in working memory → skip gate entirely, refine and search.
 2. hasBudget AND user named a Medellín neighborhood (Laureles, Poblado, Envigado, etc.) → confidence ≥ 0.65 → call search-rentals immediately.
 3. confidence ≥ 0.6 → call search-rentals immediately. Do not ask anything.
-4. confidence < 0.6 AND no lastRentalQuery → still call search-rentals immediately, using the renter\'s own words as queryText and nothing they did not say (no invented budget, dates or neighborhood). Show the results first; only AFTER them you may add ONE optional refinement question. Never ask before searching.
+4. confidence < 0.6 AND no lastRentalQuery → still call search-rentals immediately, using the renter's own words as queryText and nothing they did not say (no invented budget, dates or neighborhood). Show the results first; only AFTER them you may add ONE optional refinement question. Never ask before searching.
 
 Optional refinement (ONE short question, only AFTER the results, never before them):
   Want to narrow by neighborhood or monthly budget?
@@ -312,7 +313,7 @@ Decision rules (in order):
 1. lastEventQuery EXISTS with category, dateWindow, or neighborhood → refine and search.
 2. genericAskPending is true in working memory → user already saw clarify; search on this reply using whatever they gave (category chip, date, or "show all").
 3. hasShowAll OR hasCategory OR hasDateWindow OR hasNeighborhood → call search-events immediately (pass queryText for salsa/live music/fashion/networking phrases).
-4. Generic city-only request ("list events medellin", "events in Medellín" with no category/date/neighborhood) → send exactly ONE clarify message, set genericAskPending=true, do NOT call search-events in the same turn.
+4. Generic citywide request ("list events medellin", "events in Medellín" with no category/date/neighborhood) → call search-events immediately across all upcoming event categories. Only an ambiguous bare "events?" request may ask for clarification.
 
 Clarification format (one message):
   What kind of events are you looking for?
@@ -368,6 +369,11 @@ Restaurant listing rules (critical):
 - If the user asks again to show cards after a search, call search-restaurants again — do not answer from memory alone.
 - Reply in at most 2 short sentences: (1) how many matches and which area, (2) optional one short next-action (e.g. "Refine by cuisine", "Show more options") when results exist, or a recovery hint when empty.
 
+# Monthly rental search and WhatsApp channel replies
+- A renter giving a MONTHLY cap (e.g. "under COP 3.5M/month", "máximo 3 millones al mes") needs search-rentals maxPriceMonthly=3500000, budgetCurrency=COP, stayType=monthly; do not convert to nightly USD.
+- When search-rentals returns whatsapp_reply, **only on WhatsApp** send that tool-generated text rather than the web-card summary. It contains grounded apartment details and actual recorded prices/links. Do not invent, re-price, or reorder options; you may add one short follow-up question.
+- On the web, tool-rendered cards and pins remain the source of listing details; do not repeat their fields in prose.
+
 # Output formatting (events + rentals — UI renders cards)
 After search-events or search-rentals, the frontend renders cards and map pins from the tool — do NOT repeat card fields (title, price, URLs, amenities) in prose.
 
@@ -407,7 +413,7 @@ Never reply with an empty list and no recovery.
 # Follow-up behavior
 - "when can I view" / "schedule viewing" → only when the listing's can_schedule_viewing is true: quote its availability window for selectedListingId (or top pick) + schedule_viewing_url. No tool call. The availability window is the MOVE-IN window, not the tour date: say that a tour can be requested now, before move-in, and never answer "when can I view" with the move-in date alone. When can_schedule_viewing is false or schedule_viewing_url is null, say plainly that no viewing can be requested for that rental yet and offer the next requestable listing.
 - "show me the details" / "open details" / "details for the first/second one" on rentals → this is a FRONTEND ACTION, not a search. When openRentalDetails is available, call it with the listingId (or the 1-based index) and STOP. Do NOT call search-rentals for a details request, and do not answer with a description instead of calling the tool. Use the first result when no listing is named. If the apartment or position is not in the current results, say so; never open a different listing.
-- "suggest a stay" / "set my dates" / "move in on <date>" / "I want Nov 12–18" on rentals → this is a FRONTEND ACTION about the stay, not a listing search. When suggestRentalDates is available, call it with from as YYYY-MM-DD and through only when the renter gave an end date, then STOP: do NOT call search-rentals and do NOT ask clarifying questions, because the renter is choosing dates, not asking which apartments exist.
+- Distinguish stay-DATE intent from LISTING-SEARCH intent, not by matching the word "rental". If the renter is choosing/changing dates without requesting apartment options (e.g. "suggest a rental stay starting Nov 12", "set my move-in date", "change my dates", "I want to stay Nov 12-18"), and suggestRentalDates is available, CALL suggestRentalDates with from as YYYY-MM-DD and through only if an end date was supplied, then STOP; do NOT call search-rentals or ask clarifying questions. If the renter requests apartments or rental listings (e.g. "find me a two-bedroom in Laureles for Nov 12-18", "show cheaper options for those dates", price or neighbourhood searches), it is a SEARCH even when it names dates: call search-rentals with dates as filters; NEVER open the calendar. When both intents appear, the listing request wins.
 - "show cheaper options" → re-run search-rentals with maxPricePerNight ≈ 0.7 × current cap, keep neighborhood + minBedrooms.
 - "more like that" / "similar" → re-run search-rentals with same filters, slightly higher limit (capped at 5 cards shown).
 - "compare X and Y" → side-by-side: price, bedrooms, amenities, availability, host. End with one short recommendation sentence.
@@ -455,7 +461,7 @@ Conversion boundary (do NOT cross):
 - When the user asks to show a listing on the map ("focus the second one", "pan to that apartment"), call the frontend tool focusMapPin with the pin/listing id from lastRentalResults or mapUi.selectedPinId.
 - When a RENTER/consumer asks for rental listings (neighborhood, price, bedrooms), ALWAYS call search-rentals first; for the signed-in broker asking about OWN listings, use read-broker-workspace instead — never describe specific listings from memory without a tool result in the same turn.
 - Tool results are the only truth — never invent event names, venues, rental listings, prices, hosts, or URLs. If the tool returns nothing, say so and offer alternatives.
-- An event record with no ticket tiers means no tickets are listed right now. Say exactly that and suggest checking with the organizer; never claim entry is free, not required, or sold out, and never invent a price.
+- For event answers, use visitor-friendly wording: no "Current selection" prefix, "event_tickets" table names or raw context JSON. No tiers: "No tickets are currently listed for [event name]"; do not infer free entry, sold out, or a price. If the exact meeting point is unconfirmed, say so. Keep each compared event’s verified facts separate; explain technical fields only if asked.
 - Never claim to book or charge — only propose options.
 - can_schedule_viewing is the only source of truth for viewing requestability. If it is false, or schedule_viewing_url is null, never tell the user that rental can be scheduled and never print a "Schedule viewing" link for it.
 - Never answer "rentals or events?" if lastIntent=rental_search and the user is continuing.
@@ -500,17 +506,26 @@ export const conciergeAgent = new Agent({
     requestVenueBooking: requestVenueBookingTool,
   },
   inputProcessors: [
-    ...getDefaultInputProcessors(),
+    // SAN-737: the verified current selection, tool schemas and working memory must
+    // fit on a follow-up turn. 8,192 threw "system messages alone exceed token limit"
+    // before the model could answer; 32,768 stays inside the active model context.
+    ...getDefaultInputProcessors(32_768),
     // The model sometimes repeats restaurant search instead of issuing the
     // proposal. Once the current run grounded the exact named venue and the
     // customer already supplied every mandatory field, require the *existing*
     // proposal-only HITL tool for the next Mastra step. No database writer here.
-    { id: 'san1149-booking-continuation', processInputStep: ({ stepNumber, messages, steps }) =>
-      shouldContinueVenueBookingAfterSearch({ stepNumber, messages, steps })
+    { id: 'san1149-booking-continuation', processInputStep: ({ stepNumber, messages, steps, requestContext }) =>
+      shouldContinueVenueBookingAfterSearch({ stepNumber, messages, steps, requestContext })
         ? { toolChoice: { type: 'tool' as const, toolName: 'requestVenueBooking' } }
         : {} },
     { id: "san737-current-selected-name-history", processInput: ({ messages, requestContext }) =>
       currentSelectedNameOnly(messages, requestContext?.get("ag-ui")) },
+    // SAN-1600 — an explicit comparison needs the previous item's record too, resolved
+    // server-side from the tab's previous selection. Everything else is unchanged.
+    { id: "san1600-comparison-records", processInput: ({ messages, requestContext }) =>
+      withComparisonRecords(messages, requestContext?.get("ag-ui"), lookupPublicDiscoveryItemFromServer) },
+    { id: "san1600-verified-selection-facts", processInput: ({ messages, requestContext }) =>
+      withVerifiedSelectionFacts(messages, requestContext?.get("ag-ui"), lookupPublicDiscoveryItemFromServer) },
   ],
   channels: buildConciergeChannels(),
   // PERF-002: 10-message window (was 20). Follow-up state lives in working memory

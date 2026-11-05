@@ -6,8 +6,12 @@ export function definitiveStripeCreateFailure(
 ): boolean {
   if (typeof error !== "object" || error === null) return false;
   const kind = error as { type?: string; code?: string };
-  // Stripe can return an idempotency mismatch after the first Session WAS
-  // created; this is not permission to release its reserved tickets.
+  // Stripe returns an idempotency error when the SAME key was already used
+  // with DIFFERENT parameters. That can only happen because an earlier attempt
+  // reached Stripe - so the Session may already exist and may already be
+  // payable. Releasing the reservation here would take money for an order we
+  // just cancelled. Treat it as uncertain: hold the tickets, fail closed, and
+  // let the caller reconcile. Do not "optimise" this into a cancellation.
   if (
     kind.type === "StripeIdempotencyError" ||
     kind.type === "idempotency_error" ||

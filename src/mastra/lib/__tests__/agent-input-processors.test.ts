@@ -6,6 +6,13 @@ describe("getDefaultInputProcessors", () => {
     vi.unstubAllEnvs();
   });
 
+  it("supports the concierge's scoped 12k context budget", () => {
+    expect(getDefaultInputProcessors(12_288)).toHaveLength(1);
+    expect(getDefaultInputProcessors()).toHaveLength(1);
+    expect(getDefaultInputProcessors(12_288)[0]).toMatchObject({ maxTokens: 12_288 });
+    expect(getDefaultInputProcessors()[0]).toMatchObject({ maxTokens: 8192 });
+  });
+
   it("skips PromptInjectionDetector in development by default", () => {
     vi.stubEnv("NODE_ENV", "development");
     vi.stubEnv("MASTRA_PROMPT_INJECTION_GUARD", "");
@@ -19,6 +26,12 @@ describe("getDefaultInputProcessors", () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("MASTRA_PROMPT_INJECTION_GUARD", "");
     expect(getDefaultInputProcessors()).toHaveLength(1);
+  });
+
+  it("allows the concierge to reserve room for the verified selection and follow-up memory", () => {
+    vi.stubEnv("MASTRA_PROMPT_INJECTION_GUARD", "");
+    const [limiter] = getDefaultInputProcessors(32_768);
+    expect((limiter as unknown as { maxTokens: number }).maxTokens).toBeGreaterThanOrEqual(32768);
   });
 
   it("enables PromptInjectionDetector only when MASTRA_PROMPT_INJECTION_GUARD=true", () => {

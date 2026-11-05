@@ -34,7 +34,8 @@
 import Stripe from "https://esm.sh/stripe@14.21.0?target=denonext";
 import { z } from "https://esm.sh/zod@3.23.8";
 import { errorBody, getCorsHeaders, jsonResponse } from "../_shared/http.ts";
-import { getServiceClient } from "../_shared/supabase-clients.ts";
+import { getServiceClient, getUserId } from "../_shared/supabase-clients.ts";
+import { resolveCheckoutBuyer } from "../_shared/ticket-checkout-buyer.ts";
 import { signJwtHs256 } from "../_shared/jwt.ts";
 import { deriveCheckoutAccessToken, duplicateCheckoutCode } from "../_shared/checkout-access-token.ts";
 import { definitiveStripeCreateFailure, preparedCheckoutRetryAllowed } from "../_shared/ticket-checkout-recovery.ts";
@@ -112,6 +113,15 @@ async function completePreparedCheckout(
     return jsonResponse(errorBody("CHECKOUT_KEY_CANCELLED",
       "This checkout was cancelled; start a new checkout with a new key"), 409, req);
   }
+  // Only a still-held reservation may reach Stripe. A paid, partially refunded
+  // or refunded order already has its money and must never be offered another
+  // Checkout URL; those buyers need the order reconciled, not a new payment.
+  // (A completed checkout normally returns earlier from the success cache; this
+  // guards the case where that cache write was lost.)
+  if (order.status !== "pending") {
+    return jsonResponse(errorBody("CHECKOUT_RECONCILIATION_REQUIRED",
+      "Checkout reservation is no longer held; verify the order before retrying"), 409, req);
+  }
 
   let session: Stripe.Checkout.Session;
   try {
@@ -121,7 +131,16 @@ async function completePreparedCheckout(
   } catch (err) {
     console.error("Stripe Session creation failed:", err);
     if (definitiveStripeCreateFailure(err)) {
-      // A definite client-side rejection cannot have created a Session.
+      // A rejected request cannot have created a *new* Session, but this order
+      // may already be bound to one from an earlier attempt whose success was
+      // never cached (e.g. a 200 whose cache write failed). A 401/403 can also
+      // come from a key rotation or a TEST/live mode change rather than from a
+      // rejection of this request. Releasing tickets behind a Session that is
+      // still payable would take money for an order we just cancelled.
+      if (order.stripe_session_id) {
+        return jsonResponse(errorBody("CHECKOUT_SESSION_RECONCILIATION_REQUIRED",
+          "Stripe rejected this retry but an earlier Checkout Session is already bound; verify that Session before retrying"), 503, req);
+      }
       const { error: cancelError } = await service.rpc("ticket_checkout_cancel", {
         p_order_id: prepared.order_id,
       });
@@ -219,12 +238,22 @@ Deno.serve(async (req) => {
       req,
     );
   }
-  // A reused checkout key must refer to the same cart and buyer.
+  // A verified user JWT is the only authority for linking an order to an account.
+  // The public publishable/anon key is intentionally allowed for guest Checkout.
+  const { buyerUserId, invalidSession } = await resolveCheckoutBuyer(
+    req.headers.get("Authorization"), req.headers.get("apikey"),
+    Deno.env.get("SUPABASE_ANON_KEY") ?? null, getUserId,
+  );
+  if (invalidSession) {
+    return jsonResponse(errorBody("INVALID_USER_SESSION", "Please sign in again"), 401, req);
+  }
+  // A reused checkout key must refer to the same cart and *verified* buyer.
   const service = getServiceClient();
   const requestIdentity = JSON.stringify({
     event_id: body.event_id, ticket_id: body.ticket_id,
     quantity: body.quantity, buyer_email: body.buyer_email.toLowerCase(),
     buyer_name: body.buyer_name, attendees: body.attendees,
+    ...(buyerUserId ? { buyer_user_id: buyerUserId } : {}),
     return_url_success: body.return_url_success,
     return_url_cancel: body.return_url_cancel,
   });
@@ -315,6 +344,7 @@ Deno.serve(async (req) => {
       p_buyer_name: body.buyer_name,
       p_access_token: accessToken,
       p_attendees: attendeesWithJwts,
+      p_buyer_user_id: buyerUserId,
     },
   );
   if (rpcError) {
@@ -356,7 +386,7 @@ Deno.serve(async (req) => {
   // Reuse this object (and the same idempotency key) after any lost response.
   const stripeParams: Stripe.Checkout.SessionCreateParams = {
     mode: "payment",
-    // Stripe automatically selects eligible methods from Dashboard settings.
+    // Use Stripe Dashboard payment method settings to show eligible methods.
     line_items: [{
       price_data: {
         currency: chargeCurrency,

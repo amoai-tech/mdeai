@@ -18,7 +18,7 @@ import { PostgresStore } from "@mastra/pg";
  * old pin.
  *
  * `favorites` and `blobs` are deliberately NOT required: the new adapter adds
- * them, but they are outside the committed 32-table schema contract, so
+ * them, but they are outside the committed `expectedTables` schema contract, so
  * requiring them would over-constrain the pin.
  *
  * Domain discovery is lazy — no database is contacted — so this is a

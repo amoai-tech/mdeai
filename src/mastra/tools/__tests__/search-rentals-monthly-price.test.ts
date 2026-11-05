@@ -106,6 +106,26 @@ describe("searchRentals — SAN-1356 monthly price projection", () => {
     expect(mocks.state.bedroomFilters).toEqual(["gte:2"]);
   });
 
+  it("adds a grounded rental reply only for a WhatsApp tool context", async () => {
+    const { searchRentalsTool } = await import("../search-rentals");
+    const args = { neighborhood: "Centro", stayType: "monthly" as const, limit: 5 };
+    const whatsappContext = {
+      requestContext: {
+        get: (name: string) => name === "channel" ? { platform: "whatsapp" } : undefined,
+        set: () => undefined, // the audited-search wrapper also stores timing spans
+      },
+    };
+    const whatsapp = await searchRentalsTool.execute!(args, whatsappContext as never) as {
+      whatsapp_reply?: string;
+    };
+    expect(whatsapp.whatsapp_reply).toContain("Centro Budget Studio");
+    expect(whatsapp.whatsapp_reply).toContain("USD 300/month");
+    expect(whatsapp.whatsapp_reply).toContain("https://mdeai.co/rentals/apt-1");
+
+    const web = await searchRentalsTool.execute!(args, {} as never) as { whatsapp_reply?: string };
+    expect(web.whatsapp_reply).toBeUndefined();
+  });
+
   it("preserves price_monthly through the Mastra tool output envelope", async () => {
     const { searchRentalsTool } = await import("../search-rentals");
 

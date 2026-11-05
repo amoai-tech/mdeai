@@ -396,6 +396,19 @@ verify_jwt = false
 
 # SAN-1597 — guest checkout and Stripe-signed webhooks authenticate in their handlers.
 # Keep both callable without a Supabase user JWT when redeployed from Git.
+# SAN-1622: recovered deployed Edge Functions; exact auth model must replay from Git.
+# ticket-validate checks a custom HS256 staff-link token in-function (not Supabase JWT).
+[functions.ticket-validate]
+verify_jwt = false
+
+# Organizer signs in with a Supabase user JWT and is checked against events.organizer_id.
+[functions.event-staff-link-generator]
+verify_jwt = true
+
+# Supabase user JWT required. Asset authorization hardening is a separate security fix.
+[functions.event-photo-moderate]
+verify_jwt = true
+
 [functions.ticket-checkout]
 verify_jwt = false
 

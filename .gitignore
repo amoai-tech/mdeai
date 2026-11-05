@@ -126,3 +126,7 @@ deno.lock
 
 # Local nested release worktrees are not application source.
 /.release-*/
+
+# Generated Chromatic Playwright archive build log and isolated Next dev cache
+/build-archive.log
+/.next-chromatic/

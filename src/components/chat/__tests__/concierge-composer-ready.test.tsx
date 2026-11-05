@@ -51,6 +51,71 @@ describe("conciergeComposerInput", () => {
     expect(build({ textArea: { disabled: true } }, true).textArea.disabled).toBe(true);
   });
 
+  it("gives the stock CopilotKit icon buttons accessible names without replacing their slots", () => {
+    const input = conciergeComposerInput({
+      sendButton: { className: "existing-send" },
+      addMenuButton: { title: "Existing menu" },
+    } as never, vi.fn(), true) as unknown as {
+      sendButton: Record<string, unknown>;
+      addMenuButton: Record<string, unknown>;
+    };
+    expect(input.sendButton).toMatchObject({ "aria-label": "Send message", className: "existing-send" });
+    expect(input.addMenuButton).toMatchObject({ "aria-label": "Add attachment", title: "Existing menu" });
+  });
+
+  it("keeps a caller's own accessible names instead of overwriting them", () => {
+    const input = conciergeComposerInput({
+      sendButton: { "aria-label": "Ask MDE", className: "existing-send" },
+      addMenuButton: { "aria-label": "Attach a photo" },
+    } as never, vi.fn(), true) as unknown as {
+      sendButton: Record<string, unknown>;
+      addMenuButton: Record<string, unknown>;
+    };
+    expect(input.sendButton).toMatchObject({ "aria-label": "Ask MDE", className: "existing-send" });
+    expect(input.addMenuButton).toMatchObject({ "aria-label": "Attach a photo" });
+  });
+
+  it("preserves class-string slots and still labels the stock controls", () => {
+    const input = conciergeComposerInput({
+      sendButton: "custom-send-class",
+      addMenuButton: "custom-add-class",
+    } as never, vi.fn(), true) as unknown as {
+      sendButton: Record<string, unknown>;
+      addMenuButton: Record<string, unknown>;
+    };
+    expect(input.sendButton).toMatchObject({
+      "aria-label": "Send message",
+      className: "custom-send-class",
+    });
+    expect(input.addMenuButton).toMatchObject({
+      "aria-label": "Add attachment",
+      className: "custom-add-class",
+    });
+  });
+
+  it("leaves custom React component slots untouched", () => {
+    const CustomSend = () => null;
+    const CustomAdd = () => null;
+    const input = conciergeComposerInput({
+      sendButton: CustomSend,
+      addMenuButton: CustomAdd,
+    } as never, vi.fn(), true) as unknown as {
+      sendButton: unknown;
+      addMenuButton: unknown;
+    };
+    expect(input.sendButton).toBe(CustomSend);
+    expect(input.addMenuButton).toBe(CustomAdd);
+  });
+
+  it("labels the default icon-only controls when no slot was supplied", () => {
+    const input = build(undefined, true) as unknown as {
+      sendButton: Record<string, unknown>;
+      addMenuButton: Record<string, unknown>;
+    };
+    expect(input.sendButton).toEqual({ "aria-label": "Send message" });
+    expect(input.addMenuButton).toEqual({ "aria-label": "Add attachment" });
+  });
+
   it("always wires our submit handler", () => {
     const onSubmit = vi.fn();
     const input = conciergeComposerInput(undefined, onSubmit, false) as unknown as { onSubmitMessage: unknown };

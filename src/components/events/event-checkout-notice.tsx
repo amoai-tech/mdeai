@@ -117,7 +117,7 @@ export function EventCheckoutNotice() {
               <div className="mt-2 flex flex-wrap gap-2">
                 <CheckoutWalletLink />
                 <Link
-                  href="/me/tickets"
+                  href="/app/me/tickets"
                   className="inline-flex items-center text-xs text-primary underline-offset-2 hover:underline"
                   data-testid="checkout-my-tickets-link"
                 >

@@ -141,6 +141,19 @@ describe("SAN-1349 · a broken map falls back locally", () => {
     );
   });
 
+  it("settles the map loader when the unavailable-map notice is rendered", async () => {
+    mocks.apiKey.value = undefined;
+    const settled = vi.fn();
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    await act(async () => root.render(<MapsShell><ChatMap onMapSettled={settled} /></MapsShell>));
+    expect(container.querySelector('[data-testid="map-env-error"]')).not.toBeNull();
+    expect(settled).toHaveBeenCalledOnce();
+    await act(async () => root.unmount());
+    container.remove();
+  });
+
   it("renders the no-key fallback, not a <Map>, when the key is missing", () => {
     mocks.apiKey.value = undefined;
 

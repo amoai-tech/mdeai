@@ -472,6 +472,70 @@ id rather than whatever was selected on another route.
 **Follow-up:** the signed-in live AI answer (no QA credentials in this worktree) and the deployed readback after
 certification.
 
+## 2026-11-03 — PR #705 (accessible discovery and chat controls)
+
+**PR:** [#705](https://github.com/amoai-tech/mdeai/pull/705) · **Head:** `b4abaa3d3bd94730b1df314a42812c49f6e3d061` · **Merge:** `9d791c658655a13b2c728d730ffb984d93daec05`
+
+**Why:** the repository had exactly one collaborator, `amoai-tech`, who also authored the PR; GitHub cannot record a self-approval.
+
+**Green on the exact head:** `floor`, `mastra-schema-init`, `review / verify-review-result`, deterministic Chromium, real mobile composer, Argos, Codacy static analysis and Vercel. Unresolved review threads: **0**.
+
+**Scope:** 10 files across the chat composer, rental browse card, event/restaurant filters and mobile navigation. Added accessible names to the existing CopilotKit v2 Send/attachment slots while preserving class-string, props-object and custom-component slot values; made “Show on map” a native button; corrected link semantics to `aria-current`; raised active-chip contrast. No auth, RLS, database, payment or workflow change.
+
+**Evidence:** focused Vitest 94/94; protected preview audit 16/16 pages at 390/768/1024/1440 with **0 axe WCAG 2.0/2.1/2.2 A/AA violations**, 0 overflow and 0 page exceptions; keyboard map selection and filter navigation passed. Five initial Codacy findings were test-only `no-mixed-html` false positives; those lines were replaced and Codacy passed.
+
+**Post-merge:** production `/api/version` later reached `6e6a46e53be6f659c9682972beadd23570ce9582`, which contains `9d791c65`. Production smoke at 390/1440 for `/chat`, `/rentals`, `/events`, `/restaurants` returned 200 with 0 overflow, 0 page errors, correct Send/Add labels, keyboard map selection and event filtering. SAN-546 remains In Progress because this was the accessibility slice, not the full J05–J20 matrix.
+
+**Nothing unreviewed rode along:** no workflow, migration, RLS, payment or release-gate change.
+
+## PR #719 — Mastra 1.81 run-ownership migration (SAN-1626)
+
+**Date:** 2026-11-04. **Reason:** the repository has exactly one collaborator and that account authored the PR, so GitHub cannot record the required approving review.
+
+**Head merged:** `58254779155e183c568d3d11d589dcf41798d2e1` (merge commit `9546b2e78509dbbcd2db4dcd15e8393e3e83a782`).
+
+**Required checks green on that exact head:** `floor`, `mastra-schema-init`, `review / review`, `review / verify-review-result`. Unresolved review threads: **0**.
+
+**Advisory analyzers, reviewed and not gating:** Codacy reported two `path traversal` findings on build-time scripts that resolve repository-internal paths — the contract path is resolved and constrained to the repository root, with a test proving `--contract /etc/passwd` is rejected, and the second is a hard-coded migration filename; the identical construct exists on `main`. DeepSource JavaScript reported a failure whose rule text is only visible inside the DeepSource account; its first failing commit added a test-only file, and no production code was implicated. Neither was left unexamined; neither blocks per `AGENTS.md` § "CI and merge approval".
+
+**What a reviewer would have been asked:** whether the additive two-table migration is the correct minimum (it is: `Run._start` claims ownership on every workflow run and fails `42P01` without the table, `42P10` without its `runId` primary key), whether narrowing the migration's lockdown to only the two new tables is safe (proven by `scripts/__tests__/mastra-181-migration.integration.test.mjs`, which fails against the broader original), and whether making an unclassified provisioned table a verification failure is the right root-cause fix (it is: that gap let this upgrade pass CI while production would have broken).
+
+**Database precondition:** the migration was applied and verified **before** the new runtime deployed — 34 `public.mastra_*` tables, `runId` primary keys, RLS + FORCE RLS on all 34, `anon`/`authenticated` denied on both new tables, one `service_role_manage` policy per table, and 202 threads / 524 messages / 121 snapshots preserved.
+
+**Open question:** should an unclassified-table failure in `verify-mastra-schema-init.mjs` run in `floor` (no database) as well as in the `mastra-schema-init` job? Today it only runs where a database exists.
+
+## PR #722 — CI rehearsal for the Mastra 1.81 migration (SAN-1626)
+
+**Date:** 2026-11-04. **Reason:** the repository has exactly one collaborator and that account authored the PR, so GitHub cannot record the required approving review.
+
+**Head merged:** `f8a8f2143ccd31cd109ddcb53fa90832f3605dd1` (merge commit `0b162ea115acf53cedaf4c0cd6827b7f83ce3fdd`).
+
+**Required checks green on that exact head:** `floor`, `mastra-schema-init` (including the new rehearsal step it adds), `review / review`, `review / verify-review-result`. Unresolved review threads: **0**.
+
+**Advisory analyzers, reviewed and not gating:** DeepSource JavaScript reported `fail` on this head and `pass` on the preceding head; the results were inconsistent, and the underlying diagnostic was not available in the recorded review evidence. Treat this as a documented advisory unknown, not proof that no finding existed. No application runtime code was changed.
+
+**What a reviewer would have been asked:** whether this duplicates the existing `scripts/__tests__/mastra-181-migration.integration.test.mjs` (it does not — that test proves the SQL protects the new tables; this proves the *sequence* production goes through, red `42P01` before the migration and green after, on a **simulated legacy missing-table footprint** (the two Mastra 1.81 tables are removed from a disposable current-schema database, rather than recreating every historical migration)), and whether adding a step to the PostgreSQL job is justified (it is: `floor` has no database, so the upgrade sequence had only ever been proven by hand).
+
+**Evidence:** the rehearsal reports five phases — legacy footprint, red before migration, migration applied twice, both `runId` primary keys plus forced RLS with zero client grants, green after migration including cold-start resume.
+
+**Open question:** should the same rehearsal also run locally in `floor` when a developer has Docker available, so the sequence is caught before push rather than only in CI?
+
+## PR #725 — signed-in renter mobile proof (SAN-1626)
+
+**Date:** 2026-11-04. **Reason:** same sole-collaborator condition as above.
+
+**Head merged:** `7476155147f34e4c5eb7fcb1bb22c2d17329f6f0` (merge commit `ffedad8d408be384d296f596b43b5a586d30d91f`).
+
+**Required checks green on that exact head:** `floor`, `mastra-schema-init`, `review / review`, `review / verify-review-result`; 29 checks pass, 0 fail, 3 documented skips. Unresolved review threads: **0** (all three review comments were verified against current code, found valid, and fixed).
+
+**Advisory analyzers, reviewed and not gating:** Codacy and DeepSource raised only their known script/path and transient-JavaScript items; nothing touched application code.
+
+**What a reviewer would have been asked:** three things, all of which changed the code rather than the wording — whether `waitForRentalCards()`'s 1-bedroom/$80 fallback could let a failed 2-bedroom search pass (it could; removed), whether asserting "at least two replies" survived a reload actually proved replay (it did not; the same two reply texts are now compared), and whether Super Admin was an acceptable identity for a renter journey (it is not — `e2e/helpers/qa-roles.ts` forbids substituting an admin, so the spec now uses `qaRole: "renter"`; a missing renter QA account **fails when `MDE_PROD_CERTIFICATION=1`**, whereas non-certification runs may deliberately skip it). A fourth defect surfaced while running it: the assistant bubble exists before card content paints, so the captured reply was empty and the reload assertion was vacuous; `replyTextAfter()` now waits for rendered content.
+
+**Environment note:** the proof needs a dedicated `qa-renter@mdeai.co` identity (created through the existing Supabase Auth admin path, no password) configured via `MDE_QA_RENTER_EMAIL` in the ignored local env. It is deliberately not committed anywhere.
+
+**Open question:** should `MDE_PROD_CERTIFICATION=1` be set in the scheduled production workflow so a missing renter identity fails that job instead of skipping locally?
+
 ## Adding an entry
 
 Record: the PRs, the date, the reason, which required checks had passed, what a reviewer would have

@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
+import { buildTicketCheckoutReturnUrls, trustedCheckoutOrigin } from "@/lib/tickets/checkout-return-url";
 import {
   buildAttendeePayload,
   ticketCheckoutInputSchema,
 } from "@/lib/tickets/ticket-checkout-schema";
-import { buildTicketCheckoutReturnUrls, trustedCheckoutOrigin } from "@/lib/tickets/checkout-return-url";
 import {
   getSupabaseAnonAuthHeaders,
   getSupabaseFunctionsBaseUrl,
@@ -32,6 +33,19 @@ export async function POST(req: Request) {
   }
 
   const data = parsed.data;
+  // Verify the buyer on the server before forwarding a session credential.
+  // Anonymous buyers continue to receive token-based access to their tickets.
+  const supabase = await createClient();
+  // getSession is used only to find a candidate token; it does not grant ownership.
+  // Both this server and the Edge Function verify it with auth.getUser().
+  const { data: sessionData } = await supabase.auth.getSession();
+  const accessToken = sessionData.session?.access_token ?? null;
+  if (accessToken) {
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (error || !user) {
+      return NextResponse.json({ success: false, error: { message: "Sign-in session expired; please retry" } }, { status: 401 });
+    }
+  }
   let successUrl: string;
   let cancelUrl: string;
   try {
@@ -63,7 +77,7 @@ export async function POST(req: Request) {
 
   const edgeRes = await fetch(`${getSupabaseFunctionsBaseUrl()}/ticket-checkout`, {
     method: "POST",
-    headers: getSupabaseAnonAuthHeaders(),
+    headers: getSupabaseAnonAuthHeaders(accessToken),
     body: JSON.stringify({
       event_id: data.eventId,
       ticket_id: data.ticketId,

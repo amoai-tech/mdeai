@@ -4,8 +4,10 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
-export const QA_HOST_EMAIL = "qa-landlord@mdeai.co";
 export const QA_SUPER_ADMIN_EMAIL = "mde@socialmediaville.ca";
+/** Legacy default for signed-in QA: now the same verified Super Admin account.
+ * Use throwaway identities when testing ordinary-user permissions. */
+export const QA_HOST_EMAIL = QA_SUPER_ADMIN_EMAIL;
 
 /** Load `.env.local` into process.env for e2e helpers (Playwright doesn't read it). */
 export function loadEnvLocalForE2E(): void {

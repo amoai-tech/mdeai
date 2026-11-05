@@ -11,16 +11,14 @@ import { EventDetailAside } from "@/components/events/event-detail-aside";
 import { EventDetailNavigation, EventDetailHero } from "@/components/events/event-detail-chrome";
 import { EventDetailMap } from "@/components/events/event-detail-map";
 import { EventVenueSection } from "@/components/events/event-venue-section";
+import {
+  DiscoveryAskComposer,
+  EVENT_DETAIL_ASK_SUGGESTIONS,
+} from "@/components/chat/discovery-ask-composer";
 import { DiscoveryPageContext } from "@/components/chat/discovery-page-context";
-import { formatEventSchedule, ticketsRemaining } from "@/lib/events/format-event";
-import type { PublicEventDetail, PublicEventTicket } from "@/lib/events/types";
-
-function lowestAvailablePrice(tickets: PublicEventTicket[]): PublicEventTicket | null {
-  const available = tickets.filter((t) => ticketsRemaining(t.qtyTotal, t.qtySold) > 0);
-  return available.length
-    ? available.reduce((min, t) => (t.priceCents < min.priceCents ? t : min))
-    : null;
-}
+import { formatEventSchedule } from "@/lib/events/format-event";
+import { eventDetailAction } from "@/lib/events/event-detail-action";
+import type { PublicEventDetail } from "@/lib/events/types";
 
 /** Stored descriptions may end with an explicit "Listing notice:" paragraph; surface it as a callout, not About text. */
 function splitListingNotice(description: string | null): { about: string | null; notice: string | null } {
@@ -31,7 +29,19 @@ function splitListingNotice(description: string | null): { about: string | null;
   return { about: about || null, notice: notice?.trim() ?? null };
 }
 
-export function EventDetailView({ event, backTo = "events" }: { event: PublicEventDetail; backTo?: "events" | "chat" }) {
+type EventDetailViewProps = {
+  event: PublicEventDetail;
+  backTo?: "events" | "chat";
+  /** Whether this visitor already follows the event; guests get a sign-in path. */
+  interest?: { signedIn: boolean; following: boolean };
+};
+
+export function EventDetailView({
+  event,
+  backTo = "events",
+  // Default to a guest: rendering without server session data must not claim a follow.
+  interest = { signedIn: false, following: false },
+}: EventDetailViewProps) {
   const [checkout, setCheckout] = useState<BookingCheckoutTarget | null>(null);
   const tiersRef = useRef<HTMLDivElement>(null);
   const schedule = formatEventSchedule(event.startsAt, event.endsAt);
@@ -40,7 +50,9 @@ export function EventDetailView({ event, backTo = "events" }: { event: PublicEve
   const city = event.venue?.city ?? event.city;
   const venueLine = [street, street?.toLowerCase().includes((city ?? "").toLowerCase()) ? null : city]
     .filter(Boolean).join(" · ");
-  const fromTier = useMemo(() => lowestAvailablePrice(event.tickets), [event.tickets]);
+  // One tested decision for tickets vs sold out vs no tiers ("follow"), never a guess.
+  const action = useMemo(() => eventDetailAction(event), [event]);
+  const fromTier = action.kind === "tickets" ? action.tier : null;
   const returnPath = `/events/${event.slug ?? event.id}`;
   const duration = event.endsAt ? Math.round(
     (new Date(event.endsAt).getTime() - new Date(event.startsAt).getTime()) / 60000,
@@ -93,6 +105,29 @@ export function EventDetailView({ event, backTo = "events" }: { event: PublicEve
                 latitude={event.latitude} longitude={event.longitude}
                 listedAreaOnly={!event.venue} />
             ) : null}
+              {/* SAN-1624: one assistant, immediately below the location the visitor just
+                  read. No drawer and no second conversation store; the aside button only
+                  scrolls here. */}
+              <section
+                id="event-ask-mde-inline"
+                aria-label="Ask MDE about this event"
+                tabIndex={-1}
+                data-testid="event-ask-mde-inline"
+                className="order-7 scroll-mt-24 rounded-xl border border-border bg-card"
+              >
+                <div className="border-b border-border px-4 pt-3">
+                  <h2 className="text-sm font-semibold">Ask MDE about this event</h2>
+                  <p className="pb-2 text-xs text-muted-foreground">
+                    New answers use this event&apos;s saved tickets, times and location.
+                  </p>
+                </div>
+                <DiscoveryAskComposer
+                  page="events"
+                  suggestions={EVENT_DETAIL_ASK_SUGGESTIONS}
+                  historyNote="Shared history: earlier answers may describe other events. Ask a new question for this event."
+                  hideHeading
+                />
+              </section>
             </div>
             <div className="contents lg:flex lg:w-[380px] lg:shrink-0 lg:flex-col lg:gap-5">
             <EventDetailAside
@@ -102,6 +137,7 @@ export function EventDetailView({ event, backTo = "events" }: { event: PublicEve
               schedule={schedule}
               durationLabel={durationLabel}
               fromTier={fromTier}
+              interest={interest}
               tiersRef={tiersRef}
               notice={notice}
               onCheckout={setCheckout}

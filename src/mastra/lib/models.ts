@@ -12,7 +12,7 @@ import { withTokenUsageTracking } from "./token-usage-middleware";
  * Concierge timeout fallback; it must not become a retry of the same primary.
  *
  * Why an AI SDK model object rather than Mastra's `model: "nvidia/..."` router
- * string: the pinned `@mastra/core@1.74.0` registry does not contain this model,
+ * string: the pinned `@mastra/core` registry does not contain this model,
  * and COST-001 token tracking observes the concrete V2/V3 model contract. See
  * `src/lib/ai-provider.ts` for the full evidence.
  *

@@ -15,7 +15,7 @@ test.use({ trace: "off", screenshot: "off", video: "off" });
  * and that a protected route actually renders for an authenticated user.
  *
  * This spec mints a genuine Supabase session for the dedicated QA account
- * (`qa-landlord@mdeai.co`) through the admin API and injects it as the
+ * (`mde@socialmediaville.ca`) through the admin API and injects it as the
  * `sb-<ref>-auth-token` cookie for the target origin. It deliberately does NOT
  * use `E2E_BYPASS_AUTH`, so production authentication is never weakened.
  *

@@ -92,6 +92,14 @@ export function TicketDetailClient({
   const { order, event, attendees } = payload;
   const activeAttendees = attendees.filter((a) => a.status === "active");
   const primary = activeAttendees[0] ?? attendees[0];
+  // The order-level full refund is authoritative even if attendee updates lag.
+  // Partial refunds must preserve the QR for remaining active attendees.
+  const revokedReason =
+    order.status === "refunded" || primary?.status === "refunded"
+      ? "Refunded"
+      : order.status === "cancelled" || primary?.status === "cancelled"
+        ? "Cancelled"
+        : null;
 
   if (order.status === "pending") {
     return (
@@ -111,7 +119,9 @@ export function TicketDetailClient({
     );
   }
 
-  if (!primary?.qr_token) {
+  // A revoked pass has no usable QR by design; prefer the revoked notice over
+  // the generic "no QR yet" message when the attendee row no longer has a token.
+  if (!revokedReason && !primary?.qr_token) {
     return (
       <main className="mx-auto max-w-lg px-4 py-10">
         <p>No QR available for this order yet.</p>
@@ -119,10 +129,10 @@ export function TicketDetailClient({
     );
   }
 
-  const holder = primary.full_name ?? order.buyer_name ?? "Guest";
+  const holder = primary?.full_name ?? order.buyer_name ?? "Guest";
   const eventEnd = event.event_end_time ?? event.event_start_time;
   const isExpired = new Date(eventEnd).getTime() < nowMs;
-  const isUsed = primary.status !== "active";
+  const isUsed = primary?.status !== "active";
   const passState = resolvePassState(isUsed, isExpired);
   const venueLine = [event.address, event.city].filter(Boolean).join(" · ");
   const directionsQuery = venueLine
@@ -158,11 +168,24 @@ export function TicketDetailClient({
         ) : null}
       </div>
 
-      <TicketQrDisplay
-        value={primary.qr_token}
-        label={`${holder} · scan at door`}
-        state={passState}
-      />
+      {revokedReason ? (
+        <div
+          role="status"
+          data-testid="my-tickets-revoked"
+          className="rounded-xl border border-border bg-muted px-5 py-7 text-center"
+        >
+          <p className="font-semibold">{revokedReason} — not valid for entry</p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            This ticket cannot be used at the door.
+          </p>
+        </div>
+      ) : primary ? (
+        <TicketQrDisplay
+          value={primary.qr_token}
+          label={`${holder} · scan at door`}
+          state={passState}
+        />
+      ) : null}
 
       <dl className="mt-5 divide-y divide-border rounded-xl border border-border text-sm">
         <PassRow label="Ticket holder" value={holder} />
@@ -175,7 +198,13 @@ export function TicketDetailClient({
           value={order.short_id ?? order.id.slice(0, 8)}
         />
         <PassRow
-          label={order.stripe_session_id?.startsWith("cs_test_") ? "TEST payment" : "Paid"}
+          label={
+            order.status === "refunded"
+              ? "Refunded amount"
+              : order.stripe_session_id?.startsWith("cs_test_")
+                ? "TEST payment"
+                : "Paid"
+          }
           value={formatWalletMoney(order.total_cents, order.currency)}
         />
       </dl>
@@ -184,6 +213,7 @@ export function TicketDetailClient({
         eventName={event.name}
         directionsQuery={venueLine ? directionsQuery : null}
         shareUrl={shareUrl}
+        canShare={!revokedReason}
       />
     </main>
   );

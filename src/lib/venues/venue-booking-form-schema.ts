@@ -9,6 +9,11 @@ export const venueBookingKindSchema = z.enum([
 
 export type VenueBookingKind = z.infer<typeof venueBookingKindSchema>;
 
+// Shared receipt copy: a saved request is not a confirmed table or a
+// promise of a WhatsApp message (the customer may not have a phone number).
+export const VENUE_BOOKING_PENDING_MESSAGE =
+  "Request sent — awaiting confirmation from the venue. Check its status in MDE.";
+
 export const venueBookingRequestSchema = z.object({
   venueKind: venueBookingKindSchema,
   placeId: z.string().trim().min(8).max(256).nullable().optional(),

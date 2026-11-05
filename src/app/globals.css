@@ -2,6 +2,16 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+/* Preserve event-card action tap targets next to the fixed mobile Map control.
+   The 9rem is the measured map control width plus its gap from the viewport edge.
+   Plain CSS avoids depending on Tailwind detecting new classes in ignored worktrees;
+   the component class, not the test id, is the production styling contract. */
+@media (max-width: 639px) {
+  .mde-concierge-transcript-tail .mde-event-card-actions,
+  .mde-concierge-transcript-tail .mde-rental-card-actions,
+  .mde-concierge-transcript-tail .mde-map-fab-safe { padding-right: 9rem; }
+}
+
 @custom-variant dark (&:is(.dark *));
 
 /* SAN-1414 — /chat is a one-window-tall workspace at lg+ (chat-page-client, geo-chat-shell, chat-canvas).

@@ -1,10 +1,10 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { parseDocument } from "yaml";
-import { reviewEnvelope, excludedFilesFromReview } from "../../scripts/pr-agent/review-policy.mjs";
+import { reviewEnvelope, excludedFilesFromReview, clippedPatchesFromReview } from "../../scripts/pr-agent/review-policy.mjs";
 import {
   buildCoverageReport, classifyFiles, planFollowupBatches,
-  reviewCoverageFromComment, validateGeneratedJson, validateSnapshotReferences, COVERAGE_MARKER,
+  reviewCoverageFromComment, parseReviewUsage, validateGeneratedJson, validateSnapshotReferences, COVERAGE_MARKER,
 } from "../../scripts/pr-agent/smart-review.mjs";
 
 const BASE = "a".repeat(40), HEAD = "b".repeat(40);
@@ -18,6 +18,148 @@ const files = [
   { filename: "docs/overview.md", status: "modified", patch: "+docs" },
   { filename: "package-lock.json", status: "modified" },
 ];
+
+describe("SAN-1634 giant patch coverage (real PR #605 regression)", () => {
+  const clipped = "docs/UIUX/01-progress.md";
+  const warning = "⚠️ **Review coverage:** The following files had patches clipped before analysis to fit the token budget (partial input coverage):\n- \`" + clipped + "\`\n";
+  const authoritativeFooter = "\n\n<hr>\n\n" + warning;
+  const giant = { filename: clipped, status: "modified", patch: "+".concat("x".repeat(42000)) };
+  const code = { filename: "src/payments/checkout.ts", status: "modified", patch: "+fixed" };
+
+  it("extracts only true top-level clipped patches, even after an unfinished model fence", () => {
+    expect(clippedPatchesFromReview(authoritativeFooter).files).toEqual([clipped]);
+    expect(clippedPatchesFromReview(authoritativeFooter + "... and 4 more\n")).toMatchObject({
+      present: true, files: [clipped], unlistedCount: 4, total: 5,
+    });
+    expect(clippedPatchesFromReview("\n\`\`\`markdown\n" + authoritativeFooter).files).toEqual([clipped]);
+    expect(clippedPatchesFromReview("\n> " + warning.replaceAll("\n", "\n> ")).files).toEqual([]);
+    expect(clippedPatchesFromReview("\n\`\`\`md\n" + authoritativeFooter + "\n\`\`\`\n").files).toEqual([]);
+  });
+
+  it("never certifies 100% when the provider clipped a giant file despite complete=true", () => {
+    const body = complete + authoritativeFooter;
+    const parsed = reviewCoverageFromComment(body, BASE, HEAD);
+    expect(parsed.status).toBe("partial");
+    expect(parsed.clipped).toEqual([clipped]);
+    const report = buildCoverageReport({repo:"amoai-tech/mdeai",number:605,baseSha:BASE,headSha:HEAD,
+      files:[giant,code],expectedCount:2,reviewBody:body});
+    expect(report.status).toBe("PARTIAL");
+    expect(report.counts.partiallyReviewed).toBe(1);
+    expect(parsed.reviewedRemainder).toBe(true);
+    expect(report.counts.aiReviewed).toBe(1);
+    expect(report.details.find((f:{path:string})=>f.path===code.filename)?.coverage).toBe("ai-reviewed");
+    expect(report.criticalPending).toHaveLength(0);
+    expect(report.details.find((f:{path:string})=>f.path===clipped)?.coverage).toBe("partially-reviewed");
+    expect(report.quality.percentVerified).toBeLessThan(100);
+    expect(report.body).toContain("Partially reviewed: 1");
+    expect(report.plan.deferred).toEqual(expect.arrayContaining([
+      expect.objectContaining({path:clipped,reason:expect.stringContaining("oversized")}),
+    ]));
+    expect(report.body).toContain("line-bounded");
+  });
+
+  it("keeps unaffected files UNKNOWN when some clipped filenames were not listed", () => {
+    const body = complete + authoritativeFooter + "... and 4 more\n";
+    const parsed = reviewCoverageFromComment(body, BASE, HEAD);
+    expect(parsed.status).toBe("partial");
+    expect(parsed.reviewedRemainder).toBe(false);
+    const report = buildCoverageReport({repo:"a/b",number:605,baseSha:BASE,headSha:HEAD,
+      files:[giant,code],expectedCount:2,reviewBody:body});
+    expect(report.counts.aiReviewed).toBe(0);
+    expect(report.details.find((f:{path:string})=>f.path===code.filename)?.coverage).toBe("unknown");
+  });
+
+  it("keeps unaffected files UNKNOWN when a clipped review also has failed chunks", () => {
+    const failedChunkFooter = "\n\n<hr>\n\n" +
+      "ℹ️ **Chunked review:** the diff exceeded the model token budget, so it was reviewed in 3 chunks and the per-chunk results were merged. 1 chunk(s) failed and are not covered by this review.\n";
+    const body = complete + failedChunkFooter + authoritativeFooter;
+    expect(reviewCoverageFromComment(body, BASE, HEAD).reviewedRemainder).toBe(false);
+    const report = buildCoverageReport({repo:"a/b",number:605,baseSha:BASE,headSha:HEAD,
+      files:[giant,code],expectedCount:2,reviewBody:body});
+    expect(report.counts.aiReviewed).toBe(0);
+    expect(report.status).toBe("PARTIAL");
+    expect(report.details.find((f:{path:string})=>f.path===code.filename)?.coverage).toBe("unknown");
+  });
+
+  it("rejects malformed persisted review states that the canonical strict verifier rejects", () => {
+    const last_run = { head_sha: HEAD, complete: true, excluded_files: [] };
+    const invalid = [
+      { last_run }, // no schema version and findings
+      { schema_version: 2, findings: [], last_run },
+      { schema_version: 1, findings: "not-an-array", last_run },
+    ];
+    for (const state of invalid) {
+      const body = marker + "\n<!-- pr-agent:review:full -->\n<!-- pr-agent-review-state:v1\n" +
+        JSON.stringify(state) + "\n-->";
+      expect(reviewCoverageFromComment(body, BASE, HEAD).status).toBe("failed");
+      const report = buildCoverageReport({ repo: "a/b", number: 730, baseSha: BASE, headSha: HEAD,
+        files: [{ filename: "src/payments/checkout.ts", patch: "+x" }], expectedCount: 1, reviewBody: body });
+      expect(report.status).toBe("FAILED");
+      expect(report.counts.aiReviewed).toBe(0);
+      expect(report.quality.percentVerified).toBeLessThan(100);
+    }
+  });
+
+  it("keeps a stale persisted head UNKNOWN rather than falsely calling the review job FAILED", () => {
+    const state = { schema_version: 1, findings: [], last_run: {
+      head_sha: "c".repeat(40), complete: true, excluded_files: [],
+    } };
+    const body = marker + "\n<!-- pr-agent:review:full -->\n<!-- pr-agent-review-state:v1\n" +
+      JSON.stringify(state) + "\n-->";
+    const result = reviewCoverageFromComment(body, BASE, HEAD);
+    expect(result.status).toBe("unknown");
+    const report = buildCoverageReport({ repo: "a/b", number: 730, baseSha: BASE, headSha: HEAD,
+      files: [{ filename: "src/payments/checkout.ts", patch: "+x" }], expectedCount: 1, reviewBody: body });
+    expect(report.status).toBe("UNKNOWN");
+    expect(report.counts.aiReviewed).toBe(0);
+  });
+
+  it("explains an incomplete persisted state without inventing a failed AI chunk", () => {
+    const state = { schema_version: 1, findings: [], last_run: {
+      head_sha: HEAD, complete: false, excluded_files: [],
+    } };
+    const body = marker + "\n<!-- pr-agent:review:full -->\n<!-- pr-agent-review-state:v1\n" +
+      JSON.stringify(state) + "\n-->";
+    const result = reviewCoverageFromComment(body, BASE, HEAD);
+    expect(result.status).toBe("partial");
+    expect(result.reason).toContain("complete=false");
+    expect(result.reason).not.toContain("failed chunk");
+  });
+
+  it("calls a zero follow-up budget bounded, not an oversized source file", () => {
+    const report = buildCoverageReport({ repo: "a/b", number: 730, baseSha: BASE, headSha: HEAD,
+      files: [{ filename: "src/payments/checkout.ts", patch: "+x" }], expectedCount: 1 });
+    const plan = planFollowupBatches(report, { baseSha: BASE, headSha: HEAD, maxPatchBytes: 0 });
+    expect(plan.batches).toHaveLength(0);
+    expect(plan.deferred).toEqual([{
+      path: "src/payments/checkout.ts", reason: "bounded patch/call budget",
+    }]);
+  });
+
+  it("does not mark successful chunks as a 100% review when a chunk failed", () => {
+    const failedChunkFooter = "\n\n<hr>\n\n" +
+      "ℹ️ **Chunked review:** the diff exceeded the model token budget, so it was reviewed in 3 chunks and the per-chunk results were merged. 1 chunk(s) failed and are not covered by this review.\n";
+    const body = complete + failedChunkFooter;
+    expect(reviewCoverageFromComment(body, BASE, HEAD).status).toBe("partial");
+    const report = buildCoverageReport({repo:"a/b",number:605,baseSha:BASE,headSha:HEAD,
+      files:[{filename:"src/payments/checkout.ts",patch:"+x"}],expectedCount:1,reviewBody:body});
+    expect(report.status).toBe("PARTIAL");
+    expect(report.counts.aiReviewed).toBe(0);
+    expect(report.quality.percentVerified).toBeLessThan(100);
+    expect(report.body).toContain("failed chunk");
+  });
+
+  it("does not treat prior names on renamed giant files as fully reviewed", () => {
+    const old = "src/payments/legacy-checkout.ts";
+    const renamed = {filename:"src/payments/checkout.ts",previous_filename:old,status:"renamed",patch:"+x"};
+    const body = complete + "\n\n<hr>\n\n" + warning.replace(clipped, old);
+    const report = buildCoverageReport({repo:"a/b",number:690,baseSha:BASE,headSha:HEAD,
+      files:[renamed],expectedCount:1,reviewBody:body});
+    expect(report.details[0].coverage).toBe("partially-reviewed");
+    expect(report.status).toBe("PARTIAL");
+    expect(report.criticalPending).toHaveLength(1);
+  });
+});
 
 describe("SAN-1609 smart coverage", () => {
   it("prioritizes security and app code, with exact patch digests and no default-low unknowns", () => {
@@ -139,7 +281,7 @@ describe("SAN-1609 Canary boundary regressions", () => {
     const report = buildCoverageReport({ repo: "a/b", number: 1, baseSha: base, headSha: head,
       files: [{ filename: "src/ä.ts", patch: "+x" }, { filename: "src/z.ts", patch: "+x" }], expectedCount: 2 });
     expect(report.details.map((f: { path: string }) => f.path)).toEqual(["src/z.ts", "src/ä.ts"]);
-    expect(planFollowupBatches(report, { baseSha: base, headSha: head, maxBatches: 1 }).batches[0].paths).toEqual(["src/z.ts"]);
+    expect(planFollowupBatches(report, { baseSha: base, headSha: head, maxBatches: 1 }).batches[0].paths).toEqual(["src/z.ts", "src/ä.ts"]);
   });
 
   it.each(["./src/a.ts", "src/a.ts "])("normalizes equivalent omitted paths %s", (alias) => {
@@ -195,5 +337,149 @@ describe("SAN-1609 post-merge coverage smoke", () => {
     expect(report.counts.unknown).toBe(1);
     expect(report.status).toBe("UNKNOWN");
     expect(report.details[0].patchDigest).toBeNull();
+  });
+});
+
+describe("SAN-1609 quality, budget and provider run metrics", () => {
+  it("does not report 100% proven coverage for an empty file inventory", () => {
+    const report = buildCoverageReport({ repo: "a/b", number: 1, baseSha: BASE, headSha: HEAD,
+      files: [], expectedCount: 0, reviewBody: complete });
+    expect(report.quality.verifiedFiles).toBe(0);
+    expect(report.quality.percentVerified).toBeNull();
+    expect(report.body).toContain("unknown (no changed files)");
+    expect(report.body).not.toContain("100%");
+  });
+
+  it("never rounds 199/200 proven files up to a false 100% coverage claim", () => {
+    const files = Array.from({ length: 200 }, (_, i) => ({
+      filename: `src/components/Item${String(i).padStart(3, "0")}.tsx`,
+      ...(i < 199 ? { patch: "+x" } : {}),
+    }));
+    const result = buildCoverageReport({ repo: "a/b", number: 1, baseSha: BASE, headSha: HEAD,
+      files, expectedCount: files.length, reviewBody: complete });
+    expect(result.quality.verifiedFiles).toBe(199);
+    expect(result.quality.percentVerified).toBeLessThan(100);
+    expect(result.body).not.toContain("(100%)");
+    expect(result.status).toBe("UNKNOWN");
+  });
+
+  it("never shows 100% when GitHub's changed-file inventory is incomplete", () => {
+    const files = [
+      { filename: "src/components/ExampleA.tsx", patch: "+x" },
+      { filename: "src/components/ExampleB.tsx", patch: "+x" },
+    ];
+    const result = buildCoverageReport({ repo: "a/b", number: 1, baseSha: BASE, headSha: HEAD,
+      files, expectedCount: files.length + 1, reviewBody: complete });
+    expect(result.counts.aiReviewed).toBe(2);
+    expect(result.status).toBe("UNKNOWN");
+    expect(result.quality.percentVerified).toBeLessThan(100);
+    expect(result.body).not.toContain("(100%)");
+  });
+
+  it("reads only exact-head official review usage; unknown API cost is not zero", () => {
+    const content = complete + "\n<details><summary><strong>⚙️ Agent run details</strong></summary>\n" +
+      "- Model: openai/nvidia/nemotron-3.5-lightning-30b-a3b\n" +
+      "- Tokens: 15,916 in / 5,188 out / 21,104 total\n" +
+      "- Time cost: 63.9s\n- AI calls: 1\n</details>";
+    const usage = parseReviewUsage(content, BASE, HEAD);
+    expect(usage).toEqual({ model: "openai/nvidia/nemotron-3.5-lightning-30b-a3b",
+      inputTokens: 15916, outputTokens: 5188, seconds: 63.9, calls: 1, estimatedUsd: null, costLabel: null });
+    expect(parseReviewUsage(content, BASE, "c".repeat(40)).calls).toBeNull();
+    const report = buildCoverageReport({ repo: "a/b", number: 1, baseSha: BASE, headSha: HEAD,
+      files: [{ filename: "src/security/auth.ts", patch: "+x" }], expectedCount: 1, reviewBody: content });
+    expect(report.quality.verifiedFiles).toBe(1);
+    expect(report.quality.percentVerified).toBe(100);
+    expect(report.body).toContain("unknown (not $0)");
+    const priced = content.replace("- AI calls: 1", "- AI calls: 1\n- Estimated API cost: $0.0800 USD");
+    expect(parseReviewUsage(priced, BASE, HEAD).estimatedUsd).toBe(0.08);
+    expect(readFileSync(".pr_agent.toml", "utf8")).toContain("output_run_cost = true");
+  });
+  it("parses the EXACT pinned v0.49.0 run-details HTML and multi-model fallback safely", () => {
+    // Actual upstream show_run_details(gfm_supported=true) has a space between
+    // <details> and <summary>; the old parser silently ignored the entire block.
+    const source = complete + "\n<hr>\n<details> <summary><strong>⚙️ Agent run details</strong></summary>\n\n" +
+      "- Models: openai/nvidia/nemotron-3.5-lightning-30b-a3b, openai/nvidia/nemotron-3.5-super-vl-120b-a12b (includes fallback)\n" +
+      "- Tokens: 15,916 in / 5,188 out / 21,104 total\n" +
+      "- Time cost: 63.9s\n- AI calls: 2\n" +
+      "- Estimated API cost: unavailable (no calls could be priced)\n\n</details>\n";
+    const data = parseReviewUsage(source, BASE, HEAD);
+    expect(data).toMatchObject({
+      model: "openai/nvidia/nemotron-3.5-lightning-30b-a3b, openai/nvidia/nemotron-3.5-super-vl-120b-a12b (includes fallback)",
+      inputTokens: 15916, outputTokens: 5188, seconds: 63.9, calls: 2,
+      estimatedUsd: null, costLabel: null,
+    });
+    const report = buildCoverageReport({ repo: "a/b", number: 7, baseSha: BASE, headSha: HEAD,
+      files: [{ filename: "src/mastra/agent.ts", patch: "+x" }], expectedCount: 1, reviewBody: source });
+    expect(report.body).toContain("nemotron-3.5-super-vl-120b-a12b");
+    expect(report.body).toContain("includes fallback");
+    expect(report.body).toContain("unknown (not $0)");
+    expect(parseReviewUsage(source, BASE, "c".repeat(40)).calls).toBeNull();
+  });
+
+  it("rejects oversized or malformed provider model names without ambiguous regex work", () => {
+    // Keep model values as separate fixture data. No HTML interpolation,
+    // and no change to the exact upstream review-details markup.
+    const fixture = (label: string) => [
+      complete,
+      "\n<hr>\n<details> <summary><strong>⚙️ Agent run details</strong></summary>\n\n- Model: ",
+      label,
+      "\n- Time cost: 1.1s\n- AI calls: 1\n\n</details>\n",
+    ].join("");
+    expect(parseReviewUsage(fixture("a".repeat(1025)), BASE, HEAD).model).toBeNull();
+    expect(parseReviewUsage(fixture("openai/nvidia/model, "), BASE, HEAD).model).toBeNull();
+    expect(parseReviewUsage(fixture("model), ("), BASE, HEAD).model).toBeNull();
+    expect(parseReviewUsage(fixture("openai/nvidia/lightning (fallback)"), BASE, HEAD).model)
+      .toBe("openai/nvidia/lightning (fallback)");
+  });
+
+  it("reports exact small or partially priced costs without claiming full pricing", () => {
+    const header = complete + "\n<hr>\n<details> <summary><strong>⚙️ Agent run details</strong></summary>\n\n" +
+      "- Model: openai/nvidia/nemotron-3.5-lightning-30b-a3b\n- Time cost: 1.1s\n- AI calls: 2\n";
+    const small = parseReviewUsage(header + "- Estimated API cost: <$0.01 USD\n\n</details>", BASE, HEAD);
+    expect(small.estimatedUsd).toBeNull();
+    expect(small.costLabel).toBe("<$0.01 USD");
+    const partial = parseReviewUsage(header +
+      "- Estimated API cost: $0.08 USD (partial: 1 of 2 successful calls priced)\n\n</details>", BASE, HEAD);
+    expect(partial.estimatedUsd).toBe(0.08);
+    expect(partial.costLabel).toBe("$0.08 USD (partial: 1 of 2 successful calls priced)");
+    const report = buildCoverageReport({ repo: "a/b", number: 7, baseSha: BASE, headSha: HEAD,
+      files: [{ filename: "src/mastra/agent.ts", patch: "+x" }], expectedCount: 1,
+      reviewBody: header + "- Estimated API cost: $0.08 USD (partial: 1 of 2 successful calls priced)\n\n</details>" });
+    expect(report.body).toContain("$0.08 USD (partial: 1 of 2 successful calls priced)");
+    expect(report.body).not.toContain("Estimated API cost: $0.0800 USD.");
+  });
+
+  it("packs 100 unreviewed files into bounded batches without generating AI results", () => {
+    const files = Array.from({ length: 100 }, (_, i) => ({
+      filename: i === 0 ? "src/security/a.ts" : "src/components/Item" + String(i).padStart(3,"0") + ".tsx",
+      patch: "+" + "x".repeat(999) }));
+    const report = buildCoverageReport({ repo: "a/b", number: 1, baseSha: BASE, headSha: HEAD,
+      files, expectedCount: 100 });
+    expect(report.status).toBe("UNKNOWN");
+    expect(report.counts.aiReviewed).toBe(0);
+    expect(report.plan.batches.length).toBeGreaterThan(1);
+    expect(report.plan.batches.flatMap((batch: { paths: string[] }) => batch.paths)).toHaveLength(100);
+    expect(report.plan.deferred).toHaveLength(0);
+    expect(report.plan.batches.every((batch: { patchBytes: number }) => batch.patchBytes <= 35000)).toBe(true);
+    expect(report.plan.batches[0].paths[0]).toBe("src/security/a.ts");
+    expect(report.body).toContain("Planning only");
+    const done = [{ ...report.plan.batches[0], complete: true }];
+    expect(planFollowupBatches(report, { baseSha: BASE, headSha: HEAD, completed: done }).batches).toHaveLength(report.plan.batches.length - 1);
+  });
+  it("handles 300 large files without exceeding 6 calls or claiming complete coverage", () => {
+    const files = Array.from({ length: 300 }, (_, i) => ({
+      filename: "src/components/Component" + String(i).padStart(4,"0") + ".tsx",
+      patch: "+" + "x".repeat(3999) }));
+    const report = buildCoverageReport({ repo: "a/b", number: 1, baseSha: BASE, headSha: HEAD,
+      files, expectedCount: 300 });
+    expect(report.plan.batches).toHaveLength(6);
+    expect(report.plan.deferred.length).toBeGreaterThan(0);
+    expect(report.plan.batches.flatMap((batch: { paths: string[] }) => batch.paths).length + report.plan.deferred.length).toBe(300);
+    expect(report.plan.batches.every((batch: { patchBytes: number }) => batch.patchBytes <= 35000)).toBe(true);
+    expect(report.quality.percentVerified).toBe(0);
+    const incomplete = buildCoverageReport({ repo: "a/b", number: 1, baseSha: BASE, headSha: HEAD,
+      files, expectedCount: 301 });
+    expect(incomplete.status).toBe("UNKNOWN");
+    expect(incomplete.body).toContain("Inventory UNKNOWN");
   });
 });

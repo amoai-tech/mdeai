@@ -35,6 +35,13 @@ describe("guest Events Ask MDE (SAN-1250)", () => {
     const body = JSON.parse(vi.mocked(fetch).mock.calls[0][1]!.body as string);
     expect(body).toMatchObject({ queryText: "Salsa concerts in Laureles", category: "music" });
   });
+  it("offers the selected-place clear action from the sticky Ask MDE area", () => {
+    const onClearSelection = vi.fn();
+    render(<DiscoveryAskComposer page="events" hasSelectedItem onClearSelection={onClearSelection} />);
+    fireEvent.click(screen.getByTestId("discovery-ask-clear-selection"));
+    expect(onClearSelection).toHaveBeenCalledTimes(1);
+  });
+
   it("shows rate limiting without claiming results or bypassing authentication", async () => {
     const onEventIds = options();
     vi.mocked(fetch).mockResolvedValue(new Response(null, { status: 429 }));

@@ -119,6 +119,14 @@ function OrderCard({
   detailBasePath: string;
 }) {
   const paid = order.status === "paid";
+  const viewable = paid || order.status === "refunded" || order.status === "partial_refund";
+  const paymentLabel = paid
+    ? (order.isSandbox ? "TEST payment ✓" : "Paid ✓")
+    : order.status === "refunded"
+      ? "Refunded"
+      : order.status === "partial_refund"
+        ? "Partially refunded"
+        : order.status;
   return (
     <li
       className={cn(
@@ -156,20 +164,20 @@ function OrderCard({
         <p className="mt-2 text-sm">
           {order.quantity} ticket{order.quantity === 1 ? "" : "s"} ·{" "}
           {order.shortId ?? order.id.slice(0, 8)} ·{" "}
-          {paid ? (order.isSandbox ? "TEST payment ✓" : "Paid ✓") : order.status}
+          {paymentLabel}
           {" · "}
           {formatWalletMoney(order.totalCents, order.currency)}
         </p>
-        {paid ? (
+        {viewable ? (
           <Link
             href={`${detailBasePath}/${order.id}`}
             className={cn(
               buttonVariants({ size: "sm" }),
               "mt-3 inline-flex min-h-11",
             )}
-            data-testid="my-tickets-show-qr"
+            data-testid={paid ? "my-tickets-show-qr" : "my-tickets-view-ticket"}
           >
-            Show QR →
+            {paid ? "Show QR →" : "View ticket →"}
           </Link>
         ) : (
           <p className="mt-2 text-sm text-muted-foreground">

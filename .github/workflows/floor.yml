@@ -98,6 +98,15 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
         run: node scripts/seed-supabase-proof-roles.mjs
 
+      # SAN-1626 — tests actual SQL with Supabase-like roles, proves idempotence,
+      # new-table PK/RLS/grants, and catches accidental policy resets on
+      # pre-existing Mastra tables. Everything rolls back on local Postgres.
+      - name: Verify Mastra 1.81 migration preserves existing storage policies
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+          MASTRA_181_MIGRATION_INTEGRATION: "1"
+        run: node --test scripts/__tests__/mastra-181-migration.integration.test.mjs
+
       # Disposable database: exercise the real package entry point from empty.
       - name: Provision the Mastra schema through mastra:init
         env:
@@ -171,6 +180,16 @@ jobs:
         run: |
           npx vitest run src/mastra/lib/storage-runtime-tables.integration.test.ts
           npx vitest run src/mastra/lib/storage-durability.integration.test.ts
+
+      # SAN-1626 step 3.12 — the sequence production actually goes through, on a
+      # disposable database: legacy 32-table footprint -> workflow start fails 42P01 ->
+      # apply the real versioned migration -> same workflow starts and resumes ->
+      # apply the migration again (repeat-safe). Reproducing the defect is the guard
+      # against a future migration that only "passes" because the tables already exist.
+      - name: Rehearse the legacy 32-table to migrated 34-table upgrade
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+        run: node scripts/mastra-181-legacy-migration-rehearsal.mjs
 
       # SAN-548 — deliberately AFTER the optional adapter tables are dropped, so this runs
       # against the production-style 32-table contract (no mastra_thread_state). A realistic

@@ -1,12 +1,13 @@
 import {
   venueBookingRequestSchema,
+  VENUE_BOOKING_PENDING_MESSAGE,
   type VenueBookingRequestInput,
   type VenueBookingSubmitResult,
 } from "@/lib/venues/venue-booking-form-schema";
 
-export async function submitVenueBooking(
+export const submitVenueBooking = async (
   input: VenueBookingRequestInput,
-): Promise<VenueBookingSubmitResult> {
+): Promise<VenueBookingSubmitResult> => {
   const payload = venueBookingRequestSchema.parse(input);
 
   const res = await fetch("/api/venue-booking/request", {
@@ -38,8 +39,6 @@ export async function submitVenueBooking(
 
   return {
     requestId: json.requestId,
-    message:
-      json.message ??
-      "Request sent — we'll confirm by WhatsApp. This is not a confirmed reservation yet.",
+    message: json.message ?? VENUE_BOOKING_PENDING_MESSAGE,
   };
 }

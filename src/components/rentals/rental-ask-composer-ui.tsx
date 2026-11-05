@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ArrowUp, MessageSquare, Square } from "lucide-react";
 import { useEffect, useRef, type KeyboardEvent, type ReactNode } from "react";
 import type { PlainTurn } from "@/components/rentals/rental-ask-tool-results";
+import { SelectedItemClearAction } from "@/components/chat/selected-item-clear-action";
 
 const PLACEHOLDER = "Ask about these apartments";
 
@@ -75,8 +76,11 @@ export function ComposerHeader(props: {
   turnCount: number;
   showTranscript: boolean;
   onToggle: () => void;
+  hasSelectedListing?: boolean;
+  onClearSelection?: () => void;
 }) {
   return (
+    <>
     <div className="mb-2 flex items-center justify-between gap-3">
       <p className="text-sm font-medium">Ask MDE</p>
       <div className="flex items-center gap-3">
@@ -98,6 +102,14 @@ export function ComposerHeader(props: {
         </Link>
       </div>
     </div>
+    {props.hasSelectedListing ? (
+      <SelectedItemClearAction
+        label="Apartment selected"
+        onClear={props.onClearSelection}
+        testId="rental-ask-clear-selection"
+      />
+    ) : null}
+    </>
   );
 }
 

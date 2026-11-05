@@ -84,6 +84,36 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+describe("SAN-546 J09 citywide and suggested event-search completion", () => {
+  it("searches all events for a citywide prompt and publishes cards without an agent turn", async () => {
+    const payload = { results: [{ id: "real-event", title: "Real event", category: "culture", venue: "Medellín", neighborhood: "Centro", startsAt: "2027-01-02T01:00:00Z", pricePerTicket: null, currency: "COP" }] };
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => payload });
+    vi.stubGlobal("fetch", fetchMock);
+    const hook = renderHook(useEventSearchFastPath);
+    await act(async () => expect(await hook.handleUserMessage("events in Medellín")).toBe(true));
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(fetchMock).toHaveBeenCalledWith("/api/events/search", expect.objectContaining({
+      method: "POST", body: JSON.stringify({ dateWindow: "any", limit: 10 }),
+    }));
+    expect(mocks.setToolResult).toHaveBeenCalledWith(expect.objectContaining({
+      results: [expect.objectContaining({ id: "real-event", title: "Real event" })],
+    }));
+    expect(mocks.showExchange).toHaveBeenCalledWith("events in Medellín", expect.stringMatching(/Found 1 event/), undefined);
+  });
+
+  it("a follow-up suggestion sends a real date-scoped search and publishes an empty result", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ results: [] }) });
+    vi.stubGlobal("fetch", fetchMock);
+    const hook = renderHook(useEventSearchFastPath);
+    await act(async () => expect(await hook.handleUserMessage("Show events this weekend in Medellín")).toBe(true));
+    expect(fetchMock).toHaveBeenCalledTimes(2); // date window, then broader fallback
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({ dateWindow: "this_weekend" });
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toMatchObject({ dateWindow: "any" });
+    expect(mocks.setToolResult).toHaveBeenCalledWith(expect.objectContaining({ results: [] }));
+    expect(mocks.showExchange).toHaveBeenCalledWith(expect.stringMatching(/Events this weekend/i), expect.stringMatching(/No events matched/), undefined);
+  });
+});
+
 describe("chat fast-path failures reach operation-specific Retry", () => {
   it("surfaces a failing event search instead of silently falling through to the agent", async () => {
     const hook = renderHook(useEventSearchFastPath);
