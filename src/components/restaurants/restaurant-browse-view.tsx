@@ -76,6 +76,15 @@ function RestaurantBrowseViewInner({
   // opened explicitly, and Close clears both.
   const openRestaurantId = pinRestaurantId ?? detailsId;
   const detailsRestaurant = shownResults.find((r) => r.id === openRestaurantId) ?? null;
+  // A map-marker pick moves the panel, so it must move the Ask context with it; otherwise the
+  // panel shows B while the concierge and the pressed card still point at A.
+  if (
+    pinRestaurantId &&
+    pinRestaurantId !== selectedForAskId &&
+    shownResults.some((r) => r.id === pinRestaurantId)
+  ) {
+    setSelectedForAskId(pinRestaurantId);
+  }
   // Forget an id whose record left the results, so it cannot reopen on a later search.
   if (detailsId && !shownResults.some((r) => r.id === detailsId)) {
     setDetailsId(null);

@@ -110,6 +110,17 @@ describe("restaurant Details and the selected pin", () => {
     expect(panelName()).toBe("Alpha Kitchen");
   });
 
+  it("moves the Ask context with the panel when a map marker is picked", () => {
+    openDetails("a");
+    expect(askPressed("a")).toBe("true");
+
+    selectPin("b");
+    expect(panelName()).toBe("Beta Kitchen");
+    // The panel moved to B, so B must be the card that looks selected for Ask MDE.
+    expect(askPressed("b")).toBe("true");
+    expect(askPressed("a")).toBe("false");
+  });
+
   it("closes the panel and the selections, then reopens the same pin's details", () => {
     openDetails("a");
     expect(panelName()).toBe("Alpha Kitchen");
