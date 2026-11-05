@@ -86,7 +86,9 @@ function skipOrFail(
 
 async function openRoute(page: Page, spec: RouteSpec): Promise<Locator> {
   await page.goto(spec.route, { waitUntil: "domcontentloaded" });
-  await expect(page.getByTestId(spec.pageTestId)).toBeVisible({ timeout: 60_000 });
+  // The dev server can briefly mount two copies of the page root during hydration; a strict
+  // single-element match then throws. Wait for the first real one.
+  await expect(page.getByTestId(spec.pageTestId).first()).toBeVisible({ timeout: 60_000 });
   const cards = page.locator(spec.card);
   try {
     await expect(cards.first()).toBeVisible({ timeout: 30_000 });
