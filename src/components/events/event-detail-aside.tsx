@@ -7,7 +7,11 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { EventInterestButton } from "@/components/events/event-interest-button";
 import { EventTicketTiers } from "@/components/events/event-ticket-tiers";
 import type { BookingCheckoutTarget } from "@/components/modals/booking-checkout-modal";
-import { formatTicketPrice } from "@/lib/events/format-event";
+import {
+  formatTicketPrice,
+  isTicketAvailable,
+  ticketsRemaining,
+} from "@/lib/events/format-event";
 import { eventDetailAction } from "@/lib/events/event-detail-action";
 import type { PublicEventDetail, PublicEventTicket } from "@/lib/events/types";
 
@@ -39,6 +43,10 @@ function focusInlineAsk() {
 export function EventDetailAside({
   event, city, venueLine, schedule, durationLabel, fromTier, tiersRef, notice, onCheckout, interest,
 }: EventDetailAsideProps) {
+  const hasStock = event.tickets.some(
+    (ticket) => ticketsRemaining(ticket.qtyTotal, ticket.qtySold, ticket.qtyPending) > 0,
+  );
+  const anyOnSale = event.tickets.some((ticket) => isTicketAvailable(ticket));
   return (
             <aside className="order-2 space-y-5">
               <div className="space-y-3">
@@ -68,11 +76,17 @@ export function EventDetailAside({
               <div className="rounded-xl border border-border bg-card p-4 shadow-sm sm:p-5">
                 {fromTier ? (
                   <p className="text-lg font-semibold">
-                    From {formatTicketPrice(fromTier.priceCents, fromTier.currency)}
+                    {fromTier.priceCents === 0
+                      ? "Free entry"
+                      : `From ${formatTicketPrice(fromTier.priceCents, fromTier.currency)}`}
                   </p>
                 ) : (
                   <p className="text-lg font-semibold">
-                    {eventDetailAction(event).kind === "sold-out" ? "Sold out" : "Price TBD"}
+                    {hasStock && !anyOnSale
+                      ? "Not on sale"
+                      : eventDetailAction(event).kind === "sold-out"
+                        ? "Sold out"
+                        : "Price TBD"}
                   </p>
                 )}
                 <div ref={tiersRef} tabIndex={-1} className="mt-4 scroll-mt-24 outline-none focus-visible:ring-2 focus-visible:ring-ring"

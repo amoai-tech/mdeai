@@ -1,14 +1,24 @@
 /** Event listings are for Medellín; always render their schedule in local Colombia time. */
 export const EVENT_TIME_ZONE = "America/Bogota";
 
+/** One canonical currency label for display and comparisons. Empty/unknown falls back to USD. */
+export function normalizeEventCurrency(
+  currency: string | null | undefined,
+): string {
+  const normalized = currency?.trim().toUpperCase() ?? "";
+  return normalized || "USD";
+}
+
 export function formatTicketPrice(priceCents: number, currency: string): string {
+  if (priceCents === 0) return "Free";
   const amount = priceCents / 100;
-  if (currency === "COP") {
+  const code = normalizeEventCurrency(currency);
+  if (code === "COP") {
     return `$${amount.toLocaleString("en-US", { maximumFractionDigits: 0 })} COP`;
   }
   return new Intl.NumberFormat("en-US", {
     style: "currency",
-    currency,
+    currency: code,
     maximumFractionDigits: 0,
   }).format(amount);
 }
@@ -25,7 +35,7 @@ export function formatEventCardPrice(
   currency: string | null | undefined,
 ): string {
   const formatted = price.toLocaleString("en-US", { maximumFractionDigits: 0 });
-  return currency?.toUpperCase() === "COP" ? `$${formatted} COP` : `$${formatted}`;
+  return normalizeEventCurrency(currency) === "COP" ? `$${formatted} COP` : `$${formatted}`;
 }
 
 /** Short Medellín-local start, e.g. "Mon, Oct 19, 4:00 PM". Shared by the browse card and its map pin. */
@@ -78,6 +88,42 @@ export function formatEventSchedule(startsAt: string, endsAt: string | null): st
   return `${startLabel} – ${endLabel}`;
 }
 
-export function ticketsRemaining(qtyTotal: number, qtySold: number): number {
-  return Math.max(0, qtyTotal - qtySold);
+/** Capacity after both committed sales and pending checkout reservations. */
+export function ticketsRemaining(
+  qtyTotal: number,
+  qtySold: number,
+  qtyPending = 0,
+): number {
+  const total = Number(qtyTotal);
+  const sold = Number(qtySold);
+  const pending = Number(qtyPending);
+  if (![total, sold, pending].every(Number.isFinite)) return 0;
+  return Math.max(0, total - sold - pending);
+}
+
+/** Whether the stored sale window is open right now. Invalid dates are ignored, not invented. */
+export function isTicketSaleOpen(
+  ticket: { saleStartsAt?: string | null; saleEndsAt?: string | null },
+  now = Date.now(),
+): boolean {
+  const start = ticket.saleStartsAt ? Date.parse(ticket.saleStartsAt) : Number.NaN;
+  if (Number.isFinite(start) && start > now) return false;
+  const end = ticket.saleEndsAt ? Date.parse(ticket.saleEndsAt) : Number.NaN;
+  if (Number.isFinite(end) && end < now) return false;
+  return true;
+}
+
+/** A tier is available when it has capacity and its sale window is open. */
+export function isTicketAvailable(
+  ticket: {
+    qtyTotal: number;
+    qtySold: number;
+    qtyPending?: number;
+    saleStartsAt?: string | null;
+    saleEndsAt?: string | null;
+  },
+  now = Date.now(),
+): boolean {
+  return ticketsRemaining(ticket.qtyTotal, ticket.qtySold, ticket.qtyPending ?? 0) > 0 &&
+    isTicketSaleOpen(ticket, now);
 }

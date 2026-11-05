@@ -50,6 +50,11 @@ describe("SAN-1263 checkout verified buyer forwarding", () => {
     vi.stubGlobal("fetch", mockFetch);
   });
 
+  it("accepts the database's per-tier quantities through 10", async () => {
+    expect((await call({ ...valid, quantity: 10 })).status).toBe(200);
+    expect(mockFetch).toHaveBeenCalledOnce();
+  });
+
   it("guest checkout keeps the public credential and cannot assign an owner ID", async () => {
     const response = await call(valid);
     expect(response.status).toBe(200);
@@ -81,6 +86,7 @@ describe("SAN-1263 checkout verified buyer forwarding", () => {
 
   it("invalid input cannot query auth or create a Stripe Checkout", async () => {
     expect((await call({ ...valid, quantity: 0 })).status).toBe(400);
+    expect((await call({ ...valid, quantity: 51 })).status).toBe(400);
     expect(getUser).not.toHaveBeenCalled();
     expect(mockFetch).not.toHaveBeenCalled();
   });

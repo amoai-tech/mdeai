@@ -3,7 +3,10 @@ import { z } from "zod";
 export const ticketCheckoutInputSchema = z.object({
   eventId: z.string().uuid(),
   ticketId: z.string().uuid(),
-  quantity: z.number().int().min(1).max(10),
+  // The database hard ceiling is max_per_order <= 50. The atomic RPC still
+  // enforces each tier's own min/max and remaining capacity; this is only the
+  // transport bound so a malformed request cannot build an unbounded attendee list.
+  quantity: z.number().int().min(1).max(50),
   buyerEmail: z.string().email().max(120),
   buyerName: z.string().min(1).max(120),
   idempotencyKey: z.string().uuid(),

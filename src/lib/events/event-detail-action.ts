@@ -1,4 +1,5 @@
 import type { PublicEventDetail, PublicEventTicket } from "@/lib/events/types";
+import { ticketsRemaining } from "./format-event";
 
 /**
  * What the visitor can actually do on an event page.
@@ -12,8 +13,12 @@ export type EventDetailAction =
   | { kind: "sold-out" }
   | { kind: "follow" };
 
-export function remainingSeats(tier: Pick<PublicEventTicket, "qtyTotal" | "qtySold">): number {
-  const remaining = tier.qtyTotal - tier.qtySold;
+export function remainingSeats(
+  tier: Pick<PublicEventTicket, "qtyTotal" | "qtySold"> & {
+    qtyPending?: number;
+  },
+): number {
+  const remaining = ticketsRemaining(tier.qtyTotal, tier.qtySold, tier.qtyPending ?? 0);
   return Number.isFinite(remaining) && remaining > 0 ? remaining : 0;
 }
 

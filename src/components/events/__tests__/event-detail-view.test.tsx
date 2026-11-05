@@ -29,7 +29,7 @@ const baseEvent: PublicEventDetail = {
   venue: null,
   tickets: [],
 };
-const tier = { id: "t-1", name: "General", priceCents: 4000000, currency: "COP", qtyTotal: 50, qtySold: 0, position: 1 };
+const tier = { id: "t-1", name: "General", priceCents: 4000000, currency: "COP", qtyTotal: 50, qtySold: 0, qtyPending: 0, minPerOrder: 1, maxPerOrder: 10, saleStartsAt: null, saleEndsAt: null, position: 1 };
 
 describe("EventDetailView ticket truth", () => {
   it("does not claim sold out when an event has no ticket tiers", () => {
@@ -44,5 +44,10 @@ describe("EventDetailView ticket truth", () => {
     const sold = renderToStaticMarkup(<EventDetailView event={{...baseEvent,tickets:[{...tier,qtySold:50}]}} />);
     expect(sold).toContain("Sold out");
     expect(sold).not.toContain("Price TBD");
+    const notOnSale = renderToStaticMarkup(<EventDetailView event={{...baseEvent,tickets:[{...tier,saleStartsAt:"2099-01-01T00:00:00Z"}]}} />);
+    expect(notOnSale).toContain("Not on sale");
+    expect(notOnSale).toContain("Not on sale yet");
+    expect(notOnSale).not.toContain("Price TBD");
+    expect(notOnSale).not.toContain("Sold out");
   });
 });

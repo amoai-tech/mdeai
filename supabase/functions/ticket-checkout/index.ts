@@ -59,9 +59,10 @@ function getStripe(): Stripe | null {
   _stripeMode = mode;
   return _stripe;
 }
-// Zod schema. quantity 1-10 enforced both here and in the RPC's
-// min_per_order/max_per_order check; client-side errors return 400 fast,
-// server-side guarantees the truth.
+// Zod schema. quantity is bounded by the database's hard ceiling (50); the
+// atomic RPC still enforces each tier's own min_per_order/max_per_order and
+// remaining capacity. Client-side errors return 400 fast; the server owns
+// the business truth.
 const AttendeeSchema = z.object({
   email: z.string().email().max(120),
   full_name: z.string().min(1).max(120),
@@ -69,10 +70,10 @@ const AttendeeSchema = z.object({
 const RequestSchema = z.object({
   event_id: z.string().uuid(),
   ticket_id: z.string().uuid(),
-  quantity: z.number().int().min(1).max(10),
+  quantity: z.number().int().min(1).max(50),
   buyer_email: z.string().email().max(120),
   buyer_name: z.string().min(1).max(120),
-  attendees: z.array(AttendeeSchema).min(1).max(10),
+  attendees: z.array(AttendeeSchema).min(1).max(50),
   idempotency_key: z.string().uuid(),
   return_url_success: z.string().url().max(500),
   return_url_cancel: z.string().url().max(500),

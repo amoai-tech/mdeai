@@ -1,4 +1,9 @@
-import { formatEventSchedule, formatTicketPrice, ticketsRemaining } from "@/lib/events/format-event";
+import {
+  formatEventSchedule,
+  formatTicketPrice,
+  isTicketSaleOpen,
+  ticketsRemaining,
+} from "@/lib/events/format-event";
 import type { PublicEventDetail } from "@/lib/events/types";
 import { buildListedAreaMapUrl, buildVenueDirectionsUrl } from "@/lib/events/event-map-links";
 
@@ -15,12 +20,17 @@ export function summarizePublicEventForChat(event: PublicEventDetail): string {
     .filter((value, index, all) => Boolean(value) && all.indexOf(value) === index)
     .join(" · ") || "Venue not yet published";
 
-  const available = event.tickets.filter((tier) => ticketsRemaining(tier.qtyTotal, tier.qtySold) > 0);
+  const inStock = event.tickets.filter(
+    (tier) => ticketsRemaining(tier.qtyTotal, tier.qtySold, tier.qtyPending) > 0,
+  );
+  const available = inStock.filter((tier) => isTicketSaleOpen(tier));
   const ticketStatus = event.tickets.length === 0
     ? "Price TBD — no ticket tiers have been published; do not assume tickets are on sale."
-    : available.length === 0
+    : inStock.length === 0
       ? "Sold out — no tickets are available."
-      : available.map((tier) => `${tier.name}: ${formatTicketPrice(tier.priceCents, tier.currency)}`).join("; ");
+      : available.length === 0
+        ? "Tickets are listed but not on sale right now; check the sale window or ask the organizer."
+        : available.map((tier) => `${tier.name}: ${formatTicketPrice(tier.priceCents, tier.currency)}`).join("; ");
 
   const sourceStatus = event.source === "manual"
     ? "Source: manually entered listing. MDE has not independently verified an organizer announcement for this event."

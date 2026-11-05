@@ -21,6 +21,15 @@ describe("formatTicketPrice", () => {
   it("formats COP centavos", () => {
     expect(formatTicketPrice(4_000_000, "COP")).toBe("$40,000 COP");
   });
+
+  it("normalizes lowercase and mixed-case COP instead of falling through", () => {
+    expect(formatTicketPrice(4_000_000, "cop")).toBe("$40,000 COP");
+    expect(formatTicketPrice(4_000_000, "Cop")).toBe("$40,000 COP");
+  });
+
+  it("shows a zero-price tier as Free, not a fabricated paid amount", () => {
+    expect(formatTicketPrice(0, "COP")).toBe("Free");
+  });
 });
 
 describe("formatEventCardPrice", () => {
@@ -69,5 +78,15 @@ describe("ticketsRemaining", () => {
   it("never goes below zero", () => {
     expect(ticketsRemaining(10, 12)).toBe(0);
     expect(ticketsRemaining(100, 7)).toBe(93);
+  });
+
+  it("subtracts pending reservations as well as committed sales", () => {
+    expect(ticketsRemaining(10, 2, 3)).toBe(5);
+    expect(ticketsRemaining(10, 2, 9)).toBe(0);
+  });
+
+  it("returns 0 for corrupt inventory rather than a negative number", () => {
+    expect(ticketsRemaining(Number.NaN, 0, 0)).toBe(0);
+    expect(ticketsRemaining(10, 0, Number.NaN)).toBe(0);
   });
 });

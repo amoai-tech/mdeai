@@ -4,7 +4,8 @@ import type { PublicEventTicket } from "../types";
 
 const tier = (over: Partial<PublicEventTicket> = {}): PublicEventTicket => ({
   id: "t1", name: "GA", priceCents: 4_000_000, currency: "COP",
-  qtyTotal: 100, qtySold: 0, position: 1, ...over,
+  qtyTotal: 100, qtySold: 0, qtyPending: 0, minPerOrder: 1, maxPerOrder: 10,
+  saleStartsAt: null, saleEndsAt: null, position: 1, ...over,
 });
 
 describe("SAN-1620 — the event action never invents availability", () => {
@@ -36,5 +37,11 @@ describe("SAN-1620 — the event action never invents availability", () => {
   it("never returns a negative seat count for corrupt inventory", () => {
     expect(remainingSeats({ qtyTotal: 3, qtySold: 9 })).toBe(0);
     expect(remainingSeats({ qtyTotal: Number.NaN, qtySold: 0 })).toBe(0);
+  });
+
+  it("treats a pending reservation as unavailable capacity", () => {
+    expect(remainingSeats({ qtyTotal: 3, qtySold: 0, qtyPending: 3 })).toBe(0);
+    expect(eventDetailAction({ tickets: [tier({ qtyTotal: 3, qtySold: 0, qtyPending: 3 })] }))
+      .toEqual({ kind: "sold-out" });
   });
 });

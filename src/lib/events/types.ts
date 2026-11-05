@@ -5,6 +5,11 @@ export type PublicEventTicket = {
   currency: string;
   qtyTotal: number;
   qtySold: number;
+  qtyPending: number;
+  minPerOrder: number;
+  maxPerOrder: number;
+  saleStartsAt: string | null;
+  saleEndsAt: string | null;
   position: number;
 };
 
