@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 // Records that a fresh PR-Agent review was published for an exact base/head pair, and decides
 // whether a push can reuse an incremental review.
 //
@@ -466,71 +465,6 @@ export function coverageFailure(body, headSha) {
   return null;
 }
 
-
-/**
- * Complements the canonical partial review ONLY with an independently executed
- * pinned PR-Agent plain-diff review of its exact omitted file. The shared host
- * builds the diff from trusted base/head GitHub blobs; no PR-head script runs.
- * No GitHub comment, model prose, or caller-supplied "complete" flag is proof.
- * This version deliberately handles one exact high-risk text patch; wider
- * partials remain incomplete until independently reviewed.
- */
-export function verifySupplementalReview({ reviewBody, baseSha, headSha, supplemental }) {
-  const reject = (reason) => ({ ok: false, reason });
-  if (!supplemental || typeof supplemental !== "object" ||
-      supplemental.baseSha !== baseSha || supplemental.headSha !== headSha ||
-      !SHA_RE.test(baseSha ?? "") || !SHA_RE.test(headSha ?? "")) {
-    return reject("missing exact base/head supplemental evidence");
-  }
-  const failures = coverageFailure(reviewBody, headSha);
-  if (!failures || failures.code !== "INCOMPLETE_REVIEW" ||
-      /failed chunk/i.test(failures.reason)) {
-    return reject("initial review was not a recoverable omitted-file partial");
-  }
-  const states = [...reviewBody.matchAll(/(?:^|\n)<!-- pr-agent-review-state:v1\n([\s\S]*?)\n-->/g)];
-  if (states.length !== 1) return reject("missing unique persisted original state");
-  let state;
-  try { state = JSON.parse(states[0][1]); } catch { return reject("malformed original state"); }
-  const last = state?.last_run;
-  if (state?.schema_version !== 1 || !Array.isArray(state.findings) ||
-      last?.head_sha?.toLowerCase() !== headSha.toLowerCase() ||
-      last?.complete !== false || last?.kind !== "partial" ||
-      !Array.isArray(last?.excluded_files) || last.excluded_files.length !== 1) {
-    return reject("original run did not prove exactly one missing file");
-  }
-  const missing = last.excluded_files[0];
-  if (typeof missing !== "string" || !missing.startsWith("src/") ||
-      missing.includes("..") || missing.includes("\\") ||
-      supplemental.path !== missing || supplemental.source !== "exact-blob-diff" ||
-      supplemental.bounded !== true) return reject("supplemental path/source mismatch");
-  const footer = excludedCoverageFromReview(reviewBody);
-  const clipped = clippedPatchesFromReview(reviewBody);
-  if (footer.unlistedCount || clipped.unlistedCount ||
-      footer.files.some((p) => p !== missing) ||
-      clipped.files.some((p) => p !== missing)) {
-    return reject("incomplete or mismatched provider coverage footer");
-  }
-  if (typeof supplemental.diff !== "string" ||
-      supplemental.diff.length < 30 || supplemental.diff.length > 35000 ||
-      !supplemental.diff.startsWith("diff --git a/" + missing + " b/" + missing + "\n") ||
-      !supplemental.diff.includes("\n@@ ")) {
-    return reject("missing full bounded exact file diff");
-  }
-  const digest = createHash("sha256").update(supplemental.diff, "utf8").digest("hex");
-  if (supplemental.diffSha256 !== digest) return reject("recovery patch digest mismatch");
-  const output = supplemental.output;
-  const review = output?.review;
-  const coverage = output?.coverage;
-  if (!review || !Array.isArray(review.key_issues_to_review) ||
-      !["Yes", "No"].includes(review.relevant_tests) ||
-      !Array.isArray(coverage?.files_not_reviewed) ||
-      !Array.isArray(coverage?.files_partially_reviewed) ||
-      coverage.files_not_reviewed.length || coverage.files_partially_reviewed.length) {
-    return reject("plain-diff review did not prove complete target patch coverage");
-  }
-  return { ok: true, reason: "one omitted source patch reviewed with exact-head bounded PR-Agent evidence", recoveredPath: missing };
-}
-
 function envelopeFailure(envelope, { baseSha, headSha, reviewCommand, kind, publishedCommand, incrementalSkipped = false }) {
   if (!envelope.valid) return { ok: false, code: envelope.code, reason: envelope.reason };
   if (envelope.baseSha !== baseSha.toLowerCase()) {
@@ -556,7 +490,7 @@ function envelopeFailure(envelope, { baseSha, headSha, reviewCommand, kind, publ
   return null;
 }
 
-export function verifyReviewResult({ comments, startedAt, reviewCommand, baseSha, headSha, supplemental = null }) {
+export function verifyReviewResult({ comments, startedAt, reviewCommand, baseSha, headSha }) {
   assertSha(baseSha, "baseSha");
   assertSha(headSha, "headSha");
   if (!REVIEW_COMMANDS.has(reviewCommand)) {
@@ -586,24 +520,6 @@ export function verifyReviewResult({ comments, startedAt, reviewCommand, baseSha
       publishedCommand: candidate.publishedCommand,
       incrementalSkipped: candidate.incrementalSkipped,
     });
-    // The SAME pinned PR-Agent may recover a single known omitted patch in
-    // bounded plain-diff mode. Verify its exact provenance, full file diff,
-    // JSON coverage and persisted original state before granting a certificate.
-    // Missing/invalid supplemental evidence preserves the original red result.
-    if (failure?.code === "INCOMPLETE_REVIEW" && supplemental &&
-        candidate.kind === "canonical" && candidate.envelope.valid &&
-        candidate.envelope.baseSha === baseSha.toLowerCase() &&
-        candidate.envelope.headSha === headSha.toLowerCase() &&
-        candidate.envelope.command === reviewCommand) {
-      const recovered = verifySupplementalReview({
-        reviewBody: candidate.envelope.body, baseSha, headSha, supplemental,
-      });
-      if (recovered.ok) return {
-        ok: true, code: "OK", coverageConfirmed: true,
-        reason: recovered.reason, recoveredPath: recovered.recoveredPath,
-        comment: candidate.comment, type: "canonical+supplemental",
-      };
-    }
     // A newer review of this same base/head must not be superseded by an
     // older green review if the new publication explicitly records partial
     // or invalid coverage. The previous loop silently skipped such failures.
