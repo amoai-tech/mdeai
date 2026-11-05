@@ -74,7 +74,8 @@ jobs:
               return;
             }
             const { buildCoverageReport, validateGeneratedJson,
-              validateSnapshotReferences, COVERAGE_MARKER } = await import(pathToFileURL(source).href);
+              validateSnapshotReferences, COVERAGE_MARKER,
+              hasPublishedPartialReview } = await import(pathToFileURL(source).href);
             const { parseReviewEnvelope } = await import(pathToFileURL(
               `${process.env.GITHUB_WORKSPACE}/scripts/pr-agent/review-policy.mjs`).href);
             const repo = { owner: context.repo.owner, repo: context.repo.repo };
@@ -147,20 +148,10 @@ jobs:
             // Override its status ONLY for one valid persisted exact-head partial
             // state. Missing/malformed/complete states cannot conceal a timeout
             // or cancellation that happened after a comment was published.
-            const publishPartial = (() => {
-              if (process.env.REVIEW_JOB_RESULT === "success" || !canonicalReview) return false;
-              const envelope = parseReviewEnvelope(canonicalReview.body ?? "");
-              const states = [...envelope.body.matchAll(/<!-- pr-agent-review-state:v1\n([\s\S]*?)\n-->/g)];
-              if (states.length !== 1) return false;
-              try {
-                const saved = JSON.parse(states[0][1]);
-                return saved.schema_version === 1 && Array.isArray(saved.findings) &&
-                  saved.last_run?.head_sha?.toLowerCase() === headSha.toLowerCase() &&
-                  saved.last_run?.complete === false &&
-                  Array.isArray(saved.last_run?.excluded_files) &&
-                  saved.last_run.excluded_files.length > 0;
-              } catch { return false; }
-            })();
+            const publishPartial = hasPublishedPartialReview({
+              body: canonicalReview?.body ?? "", baseSha, headSha,
+              reviewJobResult: process.env.REVIEW_JOB_RESULT,
+            });
             const report = buildCoverageReport({ repo: `${repo.owner}/${repo.repo}`, number: pull_number,
               baseSha, headSha, files, expectedCount: current.changed_files,
               reviewBody: process.env.REVIEW_JOB_RESULT === "success"
