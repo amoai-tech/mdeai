@@ -45,6 +45,10 @@ export function EventDetailAside({
   const states = event.tickets.map((ticket) => ticketAvailability(ticket));
   const hasBelowMinimum = states.includes("below-minimum");
   const hasClosedSale = states.includes("not-yet-on-sale") || states.includes("sale-ended");
+  const paidAvailable = event.tickets
+    .filter((ticket) => ticketAvailability(ticket) === "available" && ticket.priceCents > 0)
+    .sort((a, b) => a.priceCents - b.priceCents);
+  const cheapestPaid = paidAvailable[0] ?? null;
   return (
             <aside className="order-2 space-y-5">
               <div className="space-y-3">
@@ -75,7 +79,9 @@ export function EventDetailAside({
                 {fromTier ? (
                   <p className="text-lg font-semibold">
                     {fromTier.priceCents === 0
-                      ? "Free entry"
+                      ? cheapestPaid
+                        ? `Free entry · paid tiers from ${formatTicketPrice(cheapestPaid.priceCents, cheapestPaid.currency)}`
+                        : "Free entry"
                       : `From ${formatTicketPrice(fromTier.priceCents, fromTier.currency)}`}
                   </p>
                 ) : (

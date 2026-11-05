@@ -87,6 +87,24 @@ describe("SAN-1600 compact (chat sheet) checkout targets the selected tier", () 
     expect(cta().textContent).toContain("VIP × 2");
   });
 
+  it("clamps every tier to the shared 10-ticket API ceiling", () => {
+    render(<EventTicketTiers event={event([{ ...ga, qtyTotal: 30, maxPerOrder: 20 }])} compactFooter onCheckout={vi.fn()} />);
+    for (let i = 0; i < 20; i++) plus("General");
+    expect(cta().textContent).toContain("General × 10");
+  });
+
+  it("defaults the compact sheet to a paid tier, not a free tier", () => {
+    const onCheckout = vi.fn();
+    render(<EventTicketTiers event={event([
+      tier({ id: "tier-free", name: "RSVP", priceCents: 0 }),
+      ga,
+    ])} compactFooter onCheckout={onCheckout} />);
+    expect(cta().textContent).toContain("Pay for General");
+    expect(cta().textContent).not.toContain("Free entry");
+    fireEvent.click(cta());
+    expect(onCheckout.mock.calls[0][0]).toMatchObject({ tier: { id: "tier-ga" }, quantity: 1 });
+  });
+
   it("honours a tier's min_per_order instead of forcing 1", () => {
     const onCheckout = vi.fn();
     render(<EventTicketTiers event={event([{ ...ga, minPerOrder: 2, maxPerOrder: 6 }])} compactFooter onCheckout={onCheckout} />);

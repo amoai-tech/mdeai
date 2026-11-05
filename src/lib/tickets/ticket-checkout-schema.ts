@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+/** Documented transport ceiling shared by the browser and the Next.js API. */
+export const MAX_TICKETS_PER_CHECKOUT = 10;
+
 export const ticketCheckoutInputSchema = z.object({
   eventId: z.string().uuid(),
   ticketId: z.string().uuid(),
@@ -7,7 +10,7 @@ export const ticketCheckoutInputSchema = z.object({
   // transport ceiling, not the business rule: the atomic RPC still enforces
   // each tier's own min/max, sale window and remaining capacity. Revisit this
   // ceiling deliberately if a real tier ever allows more than 10.
-  quantity: z.number().int().min(1).max(10),
+  quantity: z.number().int().min(1).max(MAX_TICKETS_PER_CHECKOUT),
   buyerEmail: z.string().email().max(120),
   buyerName: z.string().min(1).max(120),
   idempotencyKey: z.string().uuid(),

@@ -52,5 +52,11 @@ describe("EventDetailView ticket truth", () => {
     const unavailable = renderToStaticMarkup(<EventDetailView event={{...baseEvent,tickets:[{...tier,qtyTotal:1,minPerOrder:2}]}} />);
     expect(unavailable).toContain("Unavailable");
     expect(unavailable).not.toContain("Sold out");
+    const mixed = renderToStaticMarkup(<EventDetailView event={{...baseEvent,tickets:[
+      {...tier, id: "free", name: "RSVP", priceCents: 0},
+      {...tier, id: "paid", name: "GA", priceCents: 4_000_000},
+    ]}} />);
+    expect(mixed).toContain("Free entry · paid tiers from $40,000 COP");
+    expect(mixed).not.toBe("Free entry");
   });
 });

@@ -12,6 +12,7 @@ import {
 } from "@/lib/events/format-event";
 import type { PublicEventDetail, PublicEventTicket } from "@/lib/events/types";
 import type { BookingCheckoutTarget } from "@/components/modals/booking-checkout-modal";
+import { MAX_TICKETS_PER_CHECKOUT } from "@/lib/tickets/ticket-checkout-schema";
 
 type TierQuantities = Record<string, number>;
 
@@ -20,7 +21,10 @@ function minOrder(tier: PublicEventTicket): number {
 }
 
 function maxOrder(tier: PublicEventTicket): number {
-  return Math.max(1, tier.maxPerOrder ?? 1);
+  return Math.min(
+    MAX_TICKETS_PER_CHECKOUT,
+    Math.max(1, tier.maxPerOrder ?? 1),
+  );
 }
 
 function capacity(tier: PublicEventTicket): number {
@@ -52,6 +56,19 @@ function lowestAvailablePrice(
   );
 }
 
+/** The compact sheet must default to a tier whose CTA can actually be used. */
+function defaultPaidTier(
+  tickets: PublicEventTicket[],
+): PublicEventTicket | null {
+  const paid = tickets.filter(
+    (tier) => isTicketAvailable(tier) && tier.priceCents > 0 && canOrder(tier),
+  );
+  if (paid.length === 0) return null;
+  return paid.reduce((min, tier) =>
+    tier.priceCents < min.priceCents ? tier : min,
+  );
+}
+
 export type EventTicketTiersProps = {
   event: Pick<PublicEventDetail, "id" | "name" | "tickets">;
   onCheckout: (target: BookingCheckoutTarget) => void;
@@ -73,12 +90,16 @@ export function EventTicketTiers({
     () => lowestAvailablePrice(event.tickets),
     [event.tickets],
   );
+  const defaultTier = useMemo(
+    () => (compactFooter ? defaultPaidTier(event.tickets) : null),
+    [compactFooter, event.tickets],
+  );
   // Compact mode has one CTA, so it must follow the tier the visitor picked, never the cheapest.
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selectedTier =
     event.tickets.find(
       (tier) => tier.id === selectedId && isTicketAvailable(tier),
-    ) ?? fromTier;
+    ) ?? (compactFooter ? defaultTier ?? fromTier : fromTier);
   const selectedQty = selectedTier ? (quantities[selectedTier.id] ?? 0) : 0;
   const selectedPaid = selectedTier ? selectedTier.priceCents > 0 : false;
   const selectedCanOrder = selectedTier
