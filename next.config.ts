@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import path from "node:path";
 import { remoteImageRules } from "./src/lib/images/remote-image-hosts";
 
 // The allowed remote image hosts live in src/lib/images/remote-image-hosts so that components
@@ -31,6 +32,17 @@ const nextConfig: NextConfig = {
     // reached the stylesheet (reproduced: a clean build has the rule, the cached rebuild does not),
     // so the Rentals map column stopped sticking in production. The cache saves ~14s of a ~35s compile.
     if (!dev) config.cache = false;
+    // CopilotKit's generative-ui entry imports its standard Map's maplibre peer
+    // even when MDE only uses a custom catalog. Do not ship a second, unused map
+    // runtime; fail clearly if that standard Map is ever rendered.
+    const resolve = config.resolve ?? {};
+    config.resolve = {
+      ...resolve,
+      alias: {
+        ...(resolve.alias ?? {}),
+        "maplibre-gl": path.resolve(__dirname, "src/lib/a2ui/maplibre-stub.ts"),
+      },
+    };
     return config;
   },
   images: {
