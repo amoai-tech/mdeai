@@ -30,7 +30,7 @@ vi.mock("@/components/browse/BrowseMapPanel", async () => {
   const { useMapContext } = await import("@/platform/maps/map-context");
   return {
     BrowseMapPanel: (p: { overlay?: unknown }) => {
-      const { pins, setSelectedPinId } = useMapContext();
+      const { pins, selectedPinId, setSelectedPinId } = useMapContext();
       return (
         <div data-testid="map">
           {p.overlay as never}
@@ -39,7 +39,8 @@ vi.mock("@/components/browse/BrowseMapPanel", async () => {
               key={pin.id}
               type="button"
               data-testid={`marker-${pin.id}`}
-              onClick={() => setSelectedPinId(pin.id)}
+              // The real map toggles: clicking the selected marker releases it.
+              onClick={() => setSelectedPinId(selectedPinId === pin.id ? null : pin.id)}
             >
               {pin.title}
             </button>
@@ -125,6 +126,18 @@ describe("restaurant Details and the selected pin", () => {
     // The panel moved to B, so B must be the card that looks selected for Ask MDE.
     expect(askPressed("b")).toBe("true");
     expect(askPressed("a")).toBe("false");
+  });
+
+  it("releasing a pin closes the panel instead of resurrecting the older Details record", () => {
+    openDetails("a");
+    expect(panelName()).toBe("Alpha Kitchen");
+
+    selectPin("b");
+    expect(panelName()).toBe("Beta Kitchen");
+
+    // Releasing B must not fall back to the Details record that B replaced.
+    selectPin("b");
+    expect(screen.queryByTestId("restaurant-details")).toBeNull();
   });
 
   it("does not move focus to a stale card button when a pin took the panel over", async () => {

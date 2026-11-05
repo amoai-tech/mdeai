@@ -89,6 +89,12 @@ function RestaurantBrowseViewInner({
   ) {
     setSelectedForAskId(pinRestaurantId);
   }
+  // A pin takes ownership of the panel while it is selected. Clearing the explicit Details id
+  // means releasing the pin closes the panel instead of resurrecting the record Details last
+  // showed, which is the difference between "released" and "reopened an older panel".
+  if (pinRestaurantId && detailsId) {
+    setDetailsId(null);
+  }
   // Forget an id whose record left the results, so it cannot reopen on a later search.
   if (detailsId && !shownResults.some((r) => r.id === detailsId)) {
     setDetailsId(null);
