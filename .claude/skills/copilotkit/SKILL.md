@@ -1,7 +1,7 @@
 ---
 name: copilotkit
 description: >-
-  Use for any MDE request clearly involving CopilotKit, including implementation, configuration, /api/copilotkit, CopilotKit v2 React hooks, generative UI, native Components/Surfaces, A2UI fixed/dynamic schema, standardUI catalogs, frontend tools/actions, shared agent state, AG-UI transport, runtime wiring, CLI verification, HITL, CopilotKit-to-Mastra bridges, and CopilotKit-specific bugs/errors/failures. A known CopilotKit failure stays with this domain owner rather than generic systematic-debugging.
+  Guides MDE CopilotKit v2 setup, integration and troubleshooting. Use for /api/copilotkit runtime, React hooks, native Components/Surfaces, render_ui, A2UI fixed/dynamic schemas, standardUI catalogs, AG-UI/Mastra transport, frontend tools/actions, shared state, CLI verification, HITL, and CopilotKit-specific errors. Keeps browser-facing bridge failures with the CopilotKit domain owner; Mastra and product skills own their respective business/agent logic.
 metadata:
   mde-version: "2.3.0"
   upstream-commit: "4f0e86deaebb9d6e6d4625cbed4087912aee6d0c"
@@ -22,6 +22,8 @@ metadata:
 8. Apply the MDE-specific invariants below.
 
 Do not answer volatile CopilotKit API questions from memory. Do not silently replace installed-version behavior with latest-main examples.
+
+**Skill-writing policy:** keep this main entry concise and load only the one-hop reference needed for the task. Review [Claude's skill authoring best practices](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices) and [community skill conventions](https://github.com/shanraisshan/claude-code-best-practice/blob/main/best-practice/claude-skills.md). Test new instructions using `evals/evals.json` before considering them verified; do not treat eval definitions alone as executed tests.
 
 ## Ownership
 
