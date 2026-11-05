@@ -1,6 +1,7 @@
 import { assertEquals } from "jsr:@std/assert@1";
 import {
   definitiveStripeCreateFailure,
+  preparedCheckoutFailureCode,
   preparedCheckoutRetryAllowed,
 } from "../_shared/ticket-checkout-recovery.ts";
 
@@ -22,7 +23,7 @@ Deno.test("network timeout and Stripe 500 never authorize releasing a possibly c
     false,
   );
 });
-Deno.test("Stripe definitive validation/authentication rejection can release reservation", () => {
+Deno.test("Stripe definitive 4xx classification alone does not permit releasing prepared reservation", () => {
   assertEquals(definitiveStripeCreateFailure({ statusCode: 400 }), true);
   assertEquals(definitiveStripeCreateFailure({ statusCode: 401 }), true);
   assertEquals(definitiveStripeCreateFailure({ statusCode: 403 }), true);
@@ -46,14 +47,26 @@ Deno.test("a Stripe idempotency error never releases a reservation, because it i
   // Same key + different params => the first request WAS processed.
   // Cancelling here would free seats behind a Session that may be payable.
   assertEquals(
-    definitiveStripeCreateFailure({ statusCode: 400, type: "StripeIdempotencyError" }),
+    definitiveStripeCreateFailure({
+      statusCode: 400,
+      type: "StripeIdempotencyError",
+    }),
     false,
   );
-  assertEquals(definitiveStripeCreateFailure({ type: "idempotency_error" }), false);
-  assertEquals(definitiveStripeCreateFailure({ code: "idempotency_error" }), false);
+  assertEquals(
+    definitiveStripeCreateFailure({ type: "idempotency_error" }),
+    false,
+  );
+  assertEquals(
+    definitiveStripeCreateFailure({ code: "idempotency_error" }),
+    false,
+  );
   // The guard must win even when the status code alone would look definitive.
   assertEquals(
-    definitiveStripeCreateFailure({ statusCode: 403, code: "idempotency_error" }),
+    definitiveStripeCreateFailure({
+      statusCode: 403,
+      code: "idempotency_error",
+    }),
     false,
   );
 });
@@ -83,4 +96,33 @@ Deno.test("the retry window rejects boundary, zero, negative and non-numeric tim
   assertEquals(preparedCheckoutRetryAllowed("1900000000000", now), false);
   assertEquals(preparedCheckoutRetryAllowed(undefined, now), false);
   assertEquals(preparedCheckoutRetryAllowed(Infinity, now), false);
+});
+
+// Regression: Stripe may have created a payable Session before MDE received an
+// acknowledgement or persisted its Session ID. A later authentication failure
+// cannot prove that the first attempt did not create a Session.
+Deno.test("lost Stripe response, unbound payable Session, then 401/403 preserves reservation for reconciliation", () => {
+  const prepared = { state: "prepared", stripe_session_id: null };
+  assertEquals(prepared.state, "prepared");
+  assertEquals(prepared.stripe_session_id, null);
+  for (const statusCode of [400, 401, 403]) {
+    const action = preparedCheckoutFailureCode({ statusCode });
+    assertEquals(action, "CHECKOUT_SESSION_RECONCILIATION_REQUIRED");
+    // The handler has no release path once a prepared Stripe create was attempted.
+    assertEquals(action === "CHECKOUT_RETRYABLE", false);
+  }
+});
+
+Deno.test("prepared Checkout still retries ambiguous network failures with the original key", () => {
+  for (
+    const error of [
+      new Error("lost response"),
+      { statusCode: 409 },
+      { statusCode: 429 },
+      { statusCode: 500 },
+      { code: "idempotency_error", statusCode: 403 },
+    ]
+  ) {
+    assertEquals(preparedCheckoutFailureCode(error), "CHECKOUT_RETRYABLE");
+  }
 });
