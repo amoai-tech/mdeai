@@ -35,7 +35,7 @@ const prepareVisualPage = async (page: Page) => {
 };
 
 const mockEventDetails = async (page: Page, ticketTiers?: PublicEventTicket[]) => {
-  // Match the existing Argos test's public event-detail API contract.
+  // Match the public event-detail API contract with isolated visual fixtures.
   // The selected event and ticket prices are fake visual fixtures only.
   await page.route("**/api/events/*/public", async (route) => {
     const publicEvent = {
