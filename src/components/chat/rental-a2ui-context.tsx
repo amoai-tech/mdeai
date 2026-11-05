@@ -1,8 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
 import { useAgentContext } from "@copilotkit/react-core/v2";
-import { useConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
 import { useRentalFastPath } from "@/components/chat/rental-fast-path-context";
 import { normalizeToolEnvelope } from "@/lib/normalize-tool-envelope";
 import { isRentalA2UIId } from "@/lib/rentals/a2ui-id";
@@ -23,20 +21,23 @@ export function rentalA2UIContextValue(rows: readonly RentalRow[] | undefined): 
  * and display labels as an untrusted hint; RentalCard still resolves the row
  * from the current authorized tool result and rejects anything else.
  */
+export function rentalHintSource(
+  toolResult: unknown | null,
+  toolResults: readonly unknown[] | undefined,
+): unknown | null {
+  // Prefer the latest successful fast-path response. A failed search sets
+  // toolResult=null but must not resurrect stale lastRentalResults as current.
+  return toolResult ?? toolResults?.[0] ?? null;
+}
+
 export function RentalA2UIContext() {
-  const { state } = useConciergeCoAgent();
-  const { toolResult } = useRentalFastPath();
-  const rows = useMemo(() => {
-    const envelopeRows = toolResult
-      ? normalizeToolEnvelope(toolResult).results
-      : undefined;
-    return (Array.isArray(envelopeRows) && envelopeRows.length > 0
-      ? envelopeRows
-      : state.lastRentalResults) as RentalRow[] | undefined;
-  }, [state.lastRentalResults, toolResult]);
+  const { toolResult, toolResults } = useRentalFastPath();
+  const latest = rentalHintSource(toolResult, toolResults);
+  const envelopeRows = latest ? normalizeToolEnvelope(latest).results : undefined;
+  const rows = (Array.isArray(envelopeRows) ? envelopeRows : undefined) as RentalRow[] | undefined;
   useAgentContext({
     description:
-      "Current authorized rental result IDs in display order; the first id is the top result. When the user asks to render a rental card, use one exact id with render_ui. The card revalidates the id against the current authorized tool result and rejects anything else.",
+      "Most recent successful rental result IDs in display order; the first id is the top result. These may be historical after a newer failed search. When the user asks to render a rental card, use one exact id with render_ui. The card revalidates the id against authorized history and rejects anything else.",
     value: rentalA2UIContextValue(rows),
   });
   return null;

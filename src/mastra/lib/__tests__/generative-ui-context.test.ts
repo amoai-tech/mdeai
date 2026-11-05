@@ -59,6 +59,14 @@ describe("A2UI system instructions", () => {
     expect(readRentalResultHints({ context: [{ description: "Current authorized rental result IDs", value: "x".repeat(5000) }] })).toBeNull();
   });
 
+  it("does not scan past the context entry ceiling for rental ids", () => {
+    const entries = Array.from({ length: 21 }, (_, index) => ({
+      description: index === 20 ? "Current authorized rental result IDs" : "noise",
+      value: JSON.stringify(["real-1"]),
+    }));
+    expect(readRentalResultHints({ context: entries })).toBeNull();
+  });
+
   it("does not scan an unbounded client context", () => {
     const entries = Array.from({ length: 100 }, (_, index) => ({
       description: index === 99 ? "Generative UI guide: later" : "noise",

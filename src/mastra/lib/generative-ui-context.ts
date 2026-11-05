@@ -33,7 +33,7 @@ export function readRentalResultHints(agUiContext: unknown): string | null {
   if (!agUiContext || typeof agUiContext !== "object") return null;
   const entries = (agUiContext as { context?: unknown }).context;
   if (!Array.isArray(entries)) return null;
-  const entry = entries.find((value) => {
+  const entry = entries.slice(0, 20).find((value) => {
     if (!value || typeof value !== "object") return false;
     const description = (value as { description?: unknown }).description;
     return typeof description === "string" && description.startsWith(RENTAL_HINT_PREFIX);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { rentalA2UIContextValue } from "../rental-a2ui-context";
+import { rentalA2UIContextValue, rentalHintSource } from "../rental-a2ui-context";
 
 const rows = [
   { id: "real-1", title: "Bright 2BR", neighborhood: "Laureles", nightly_price: 3_800_000, amenities: ["wifi"] },
@@ -12,6 +12,14 @@ describe("rental A2UI agent context", () => {
     expect(value).toEqual(["real-1", "real-2"]);
     expect(JSON.stringify(value)).not.toContain("3_800_000");
     expect(JSON.stringify(value)).not.toContain("amenities");
+  });
+
+  it("uses the latest successful result and never resurrects state on failure", () => {
+    const latest = { results: [{ id: "latest" }] };
+    const history = [latest, { results: [{ id: "older" }] }];
+    expect(rentalHintSource(null, history)).toBe(latest);
+    expect(rentalHintSource(latest, history)).toBe(latest);
+    expect(rentalHintSource(null, [])).toBeNull();
   });
 
   it("caps the context and handles no results", () => {
