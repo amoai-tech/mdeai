@@ -4,6 +4,7 @@ import { submitVenueLead } from "@/lib/partners/submit-venue-lead";
 import type { VenueLeadInput } from "@/lib/partners/venue-lead-schema";
 
 const VALID_INPUT: VenueLeadInput = {
+  requestId: "46ea2a21-795d-4c64-a58f-e1d87fd941c3",
   name: "Ana Café",
   email: "ana@example.com",
   venueName: "Café Central",

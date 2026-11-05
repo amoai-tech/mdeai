@@ -20,6 +20,8 @@ export const VENUE_LEAD_TYPES = [
 export type VenueLeadType = (typeof VENUE_LEAD_TYPES)[number];
 
 export const venueLeadInputSchema = z.object({
+  /** Client UUID used as the persisted lead id, so retries cannot duplicate. */
+  requestId: z.string().uuid(),
   name: z.string().trim().min(2, "Please enter your name").max(120),
   email: z.string().trim().email("Enter a valid email").max(160),
   venueName: z.string().trim().min(1, "Please enter your venue name").max(160),
