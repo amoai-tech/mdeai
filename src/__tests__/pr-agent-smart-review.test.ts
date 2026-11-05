@@ -568,3 +568,16 @@ describe("SAN-1640 retire stale targeted model review", () => {
     expect(staleTargetedRecoveryComments(null, BASE, HEAD)).toEqual([]);
   });
 });
+
+describe("SAN-1640 trusted-base compatibility for stale targeted comments", () => {
+  it("guards new helper imports when the pull request base has not merged them", () => {
+    const workflow = readFileSync(".github/workflows/pr-agent.yml", "utf8");
+    const doc = parseDocument(workflow);
+    expect(doc.errors).toEqual([]);
+    expect(workflow).toContain('typeof staleTargetedRecoveryComments === "function"');
+    expect(workflow).toContain('typeof TARGETED_RECOVERY_MARKER === "string"');
+    expect(workflow).toContain("for (const stale of staleTargets)");
+    expect(workflow).not.toContain(
+      "for (const stale of staleTargetedRecoveryComments(comments, baseSha, headSha))");
+  });
+});
