@@ -567,7 +567,9 @@ certification.
 
 ## 2026-11-05 — PRs #751, #753, #754 and #755 (sole-collaborator exception, four merges)
 
-Four PRs merged on one day by `amoai-tech`, who is also the sole repository collaborator and the author of each, so GitHub could not record an approving review (`reviewDecision: REVIEW_REQUIRED` on all four). **Each merge is an administrator merge under the exception above, and each one was checked against every condition the exception requires on its exact head** — `floor`, `mastra-schema-init`, `review / verify-review-result`, and 0 unresolved review threads. The evidence, read from the exact-head check runs and the PR review threads:
+Four PRs merged on one day by `amoai-tech`, who is also the sole repository collaborator and the author of each, so GitHub could not record an approving review (`reviewDecision: REVIEW_REQUIRED` on all four). **Each merge is an administrator merge under the exception above. Every condition that can be read from the API was verified on the exact head** — `floor`, `mastra-schema-init` and `review / verify-review-result`. The fourth requirement, that the PR body records the exception and the exact head, was **not** met by three of the four PRs (see the paragraph below the table), so this entry does not claim full compliance for them.
+
+The check evidence comes from the exact-head check runs. The review-thread column is the **current** state read from the API, not a reconstruction of the moment of merge: GitHub does not expose when a thread was resolved relative to a merge, and no historical count is claimed here.
 
 | PR | Head | `floor` | `mastra-schema-init` | `review / verify-review-result` | Review threads | Merge commit | Merged (UTC) |
 | --- | --- | --- | --- | --- | --- | --- | --- |
