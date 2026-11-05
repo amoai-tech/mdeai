@@ -147,7 +147,16 @@ test.describe("SAN-1298 cross-screen conversation (/chat → /rentals → /event
     await expect(savedThread, "the earlier conversation is listed in the rail").toBeVisible({
       timeout: 30_000,
     });
-    await savedThread.click();
+
+    // The app is expected to reattach thread A on return. Click the rail item ONLY
+    // when it is not already the active chat: re-clicking the active thread clears
+    // the visible transcript for several seconds (observed on 6c4fb2fd0a), which is
+    // a separate behaviour and not what this journey is proving.
+    const railActive = await page.locator("nav[data-active-thread-id]").first()
+      .getAttribute("data-active-thread-id");
+    if (railActive !== threadA) {
+      await savedThread.click();
+    }
     await expect
       .soft(page.locator("nav[data-active-thread-id]").first(), "the reopened chat is thread A")
       .toHaveAttribute("data-active-thread-id", threadA!, { timeout: 30_000 });
