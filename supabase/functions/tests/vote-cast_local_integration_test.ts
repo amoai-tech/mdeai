@@ -11,7 +11,7 @@
 // It creates its own user, org, contest and entries, then deletes them. It never touches
 // production and never reuses a real contest.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { createVoteCastHandler } from "../vote-cast/handler.ts";
+import { createVoteCastHandler, type ServiceLike } from "../vote-cast/handler.ts";
 import { createVoteNonceHandler } from "../vote-nonce/handler.ts";
 import { getUserId } from "../_shared/supabase-clients.ts";
 import { verifyTurnstile } from "../_shared/turnstile.ts";
@@ -50,13 +50,16 @@ const CONTEST = "c0000000-0000-0000-0000-0000000000e1";
 const ENTITY = "e0000000-0000-0000-0000-0000000000e1";
 const ENTITY2 = "e0000000-0000-0000-0000-0000000000e2";
 
+// The live integration uses dynamic RPC names without a generated database schema.
+// Retain typed Auth and the handler's typed service contract.
+type LocalService = ReturnType<typeof createClient> & ServiceLike;
 // Lazily built so the module loads (and the test is skipped) without a live stack.
-let _service: any = null;
-function svc(): any {
-  if (!_service) _service = createClient(URL, SERVICE, { auth: { persistSession: false } });
+let _service: LocalService | null = null;
+function svc(): LocalService {
+  if (!_service) _service = createClient(URL, SERVICE, { auth: { persistSession: false } }) as unknown as LocalService;
   return _service;
 }
-let _handler: any = null;
+let _handler: ReturnType<typeof createVoteCastHandler> | null = null;
 function getHandler(): (req: Request) => Promise<Response> {
   if (!_handler) {
     const s = svc();
@@ -228,8 +231,9 @@ Deno.test({ name: "local integration: authenticated vote -> receipt -> retry -> 
       const devTally = await svc().rpc("vote_tally", { p_entity_id: savedEntityId });
       if (devTally.error) throw new Error("vote_tally: " + JSON.stringify(devTally.error));
       const countedDevRows = Number(await sql("select count(*) from vote.votes where entity_id = '" + savedEntityId + "' and development_test and fraud_status <> 'blocked'"));
-      assertEqual(devTally.data.development_test_total, countedDevRows, "development tally agrees with ALL fixture voters for this nominee");
-      assertEqual(devTally.data.audience_accepted, 0, "development ballot never becomes public accepted vote");
+      const tally = devTally.data as { development_test_total: number; audience_accepted: number };
+      assertEqual(tally.development_test_total, countedDevRows, "development tally agrees with ALL fixture voters for this nominee");
+      assertEqual(tally.audience_accepted, 0, "development ballot never becomes public accepted vote");
 
       // 9. Reject a valid-shaped tampered bearer before consuming a nonce.
       const recoveryUser = await makeUser("recovery");
@@ -251,7 +255,7 @@ Deno.test({ name: "local integration: authenticated vote -> receipt -> retry -> 
             name === "cast_restaurant_vote"
               ? Promise.resolve({ data: null, error: { code: "XX000", message: "injected cast failure" } })
               : svc().rpc(name, args),
-          from: (table: string) => svc().from(table),
+          from: (table: string) => (svc() as ServiceLike).from(table),
         },
         verifyTurnstile,
         verifyNonce,
