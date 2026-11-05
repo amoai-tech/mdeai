@@ -58,6 +58,30 @@ const ROUTES: RouteSpec[] = [
 
 const WIDTHS = [320, 390, 768, 1440] as const;
 
+/**
+ * In the deterministic browser lane the app serves a labelled fixture
+ * (`DETERMINISTIC_E2E_VENUES`), so inventory is guaranteed. A zero-card run there is a broken
+ * fixture or a broken page, not a reason to skip — a green run made of skips proves nothing.
+ * Against an arbitrary URL (local dev, production) a missing inventory still skips honestly.
+ */
+const DETERMINISTIC_FIXTURES =
+  process.env.NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT === "1";
+
+function skipOrFail(
+  missing: boolean,
+  spec: RouteSpec,
+  reason: string,
+): boolean {
+  if (!missing) return false;
+  if (DETERMINISTIC_FIXTURES) {
+    throw new Error(
+      `${spec.route}: ${reason}. The deterministic browser lane serves a fixture, so this must fail instead of skipping.`,
+    );
+  }
+  test.skip(true, `${spec.route}: ${reason}`);
+  return true;
+}
+
 async function openRoute(page: Page, spec: RouteSpec): Promise<Locator> {
   await page.goto(spec.route, { waitUntil: "domcontentloaded" });
   await expect(page.getByTestId(spec.pageTestId)).toBeVisible({ timeout: 60_000 });
@@ -84,14 +108,23 @@ async function expectAskContainment(page: Page, spec: RouteSpec) {
 
   for (let i = 0; i < Math.min(cardCount, 5); i += 1) {
     const card = cards.nth(i);
+    // A dev server can briefly mount a duplicate list during hydration, so a card
+    // captured by index can disappear for a frame. Measure only a real, stable box:
+    // if the card never gets one, this fails instead of measuring nothing.
+    await expect
+      .poll(async () => (await card.boundingBox())?.height ?? 0, {
+        message: `${spec.route} card ${i} must render a measurable box`,
+        timeout: 15_000,
+      })
+      .toBeGreaterThan(0);
     const asks = await card.locator(spec.ask).count();
     expect(asks, `${spec.route} card ${i} owns its Ask toggle`).toBe(1);
     // Geometric containment: the control is painted inside the card's own box,
     // not merely present in the page.
     const cardBox = await card.boundingBox();
     const askBox = await card.locator(spec.ask).boundingBox();
-    expect(cardBox).not.toBeNull();
-    expect(askBox).not.toBeNull();
+    expect(cardBox, `${spec.route} card ${i} card box`).not.toBeNull();
+    expect(askBox, `${spec.route} card ${i} ask box`).not.toBeNull();
     if (cardBox && askBox) {
       expect(askBox.x).toBeGreaterThanOrEqual(cardBox.x - 1);
       expect(askBox.y).toBeGreaterThanOrEqual(cardBox.y - 1);
@@ -139,7 +172,7 @@ for (const spec of ROUTES) {
     }) => {
       const cards = await openRoute(page, spec);
       const count = await cards.count();
-      test.skip(count === 0, `no ${spec.route} inventory in this environment`);
+      if (skipOrFail(count === 0, spec, "rendered no cards")) return;
       await expectAskContainment(page, spec);
       await expectNoHorizontalOverflow(page, spec.route);
     });
@@ -151,7 +184,7 @@ for (const spec of ROUTES) {
         await page.setViewportSize({ width, height: 900 });
         const cards = await openRoute(page, spec);
         const count = await cards.count();
-        test.skip(count === 0, `no ${spec.route} inventory in this environment`);
+        if (skipOrFail(count === 0, spec, "rendered no cards")) return;
         await expectAskContainment(page, spec);
         await expectNoHorizontalOverflow(page, `${spec.route} @ ${width}px`);
       }
@@ -160,7 +193,9 @@ for (const spec of ROUTES) {
       // and is the closest reproducible proxy for WCAG 2.2 reflow.
       await page.setViewportSize({ width: 1440, height: 900 });
       const zoomCards = await openRoute(page, spec);
-      test.skip((await zoomCards.count()) === 0, `no ${spec.route} inventory in this environment`);
+      if (skipOrFail((await zoomCards.count()) === 0, spec, "rendered no cards at 200% zoom")) {
+        return;
+      }
       await page.evaluate(() => {
         document.documentElement.style.zoom = "200%";
       });
@@ -198,7 +233,7 @@ for (const spec of ROUTES) {
 
       const cards = await openRoute(page, spec);
       const count = await cards.count();
-      test.skip(count === 0, `no ${spec.route} inventory in this environment`);
+      if (skipOrFail(count === 0, spec, "rendered no cards")) return;
 
       const ask = cards.first().locator(spec.ask);
       await ask.scrollIntoViewIfNeeded();
@@ -224,7 +259,7 @@ for (const spec of ROUTES) {
     }) => {
       const cards = await openRoute(page, spec);
       const count = await cards.count();
-      test.skip(count === 0, `no ${spec.route} inventory in this environment`);
+      if (skipOrFail(count === 0, spec, "rendered no cards")) return;
 
       const card = cards.first();
       const ask = card.locator(spec.ask);
@@ -264,16 +299,21 @@ for (const spec of ROUTES) {
       }) => {
         const cards = await openRoute(page, spec);
         const count = await cards.count();
-        test.skip(count === 0, `no ${spec.route} inventory in this environment`);
+        if (skipOrFail(count === 0, spec, "rendered no cards")) return;
         const first = cards.first();
         const second = cards.nth(1);
         const firstMap = first.locator('[data-testid="venue-map-select"]');
         const secondMap = second.locator('[data-testid="venue-map-select"]');
         // A venue without grounded coordinates must not offer a map action at all.
-        test.skip(
-          (await firstMap.count()) === 0 || (await secondMap.count()) === 0,
-          `needs two coordinate-backed ${spec.route} pins in this environment`,
-        );
+        if (
+          skipOrFail(
+            (await firstMap.count()) === 0 || (await secondMap.count()) === 0,
+            spec,
+            "needs two coordinate-backed pins",
+          )
+        ) {
+          return;
+        }
 
         await firstMap.scrollIntoViewIfNeeded();
         await waitUntilInteractive(firstMap, `${spec.route} View on map`);
@@ -304,7 +344,7 @@ for (const spec of ROUTES) {
       }) => {
         const cards = await openRoute(page, spec);
         const count = await cards.count();
-        test.skip(count === 0, `no ${spec.route} inventory in this environment`);
+        if (skipOrFail(count === 0, spec, "rendered no cards")) return;
 
         const card = cards.first();
         const details = card.locator(detailsSelector);
@@ -313,10 +353,17 @@ for (const spec of ROUTES) {
         await expect(card.locator('[data-testid="restaurant-details-cta"]')).toHaveCount(0);
 
         const href = await details.getAttribute("href");
-        expect(href, "Details must use the real public route").toMatch(
-          /^\/restaurants\/[0-9a-f-]{36}$/,
+        // Internal record route, never an external or script URL.
+        expect(href, "Details must use the internal public route").toMatch(
+          /^\/restaurants\/[A-Za-z0-9_-]+$/,
         );
         const id = href?.split("/").pop();
+        if (!DETERMINISTIC_FIXTURES) {
+          // Live inventory uses canonical UUIDs; the CI fixture uses readable ids.
+          expect(id, "live restaurant ids are canonical UUIDs").toMatch(
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+          );
+        }
 
         await details.scrollIntoViewIfNeeded();
         await details.click();

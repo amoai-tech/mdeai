@@ -15,6 +15,33 @@ implicate restaurant or CopilotKit budget work.
 **Precondition:** `npm run dev` (UI `:3001`, Mastra `:4111`). Restart dev
 between budget runs if a prior session triggered a CopilotKit POST storm.
 
+## Discovery card changes — the 60-second loop
+
+A change to a discovery card (`RestaurantCard`, `VenueBrowseCard`, `EventBrowseCard`,
+`RentalBrowseCard`, or their footers/tokens) does **not** need `npm run floor` to know whether it
+worked. `e2e/san-1140-discovery-card-actions.spec.ts` is the inner loop:
+
+```bash
+# Against any running dev server, real data, ~60s for all three venue pages
+SMOKE_BASE_URL=http://localhost:3011 PW_SKIP_WEBSERVER=1 \
+  npx playwright test e2e/san-1140-discovery-card-actions.spec.ts --project=chromium --workers=1
+
+# Against the live site
+SMOKE_BASE_URL=https://www.mdeai.co PW_SKIP_WEBSERVER=1 \
+  npx playwright test e2e/san-1140-discovery-card-actions.spec.ts --project=chromium --workers=1
+```
+
+It proves, per card: DOM **and** geometric containment of every action, exactly one Ask per card,
+the shared `--spacing-card-action` height, 320/390/768/1440px, 200% zoom, no sideways scroll, a real
+click, Tab/Enter/Space with visible focus, no `agent/run` on selection, Details navigation, and
+café/nightlife A→B→Clear map selection. Use it while iterating; run `npm run floor` once before merge.
+
+The spec also runs in the deterministic CI lane (`test:e2e:deterministic`). That lane has no
+database, so `search-venue-anchors.ts` serves a labelled `DETERMINISTIC_E2E_VENUES` fixture gated by
+`isDeterministicE2E()` — never in production. Because inventory is guaranteed there, a zero-card run
+**fails** in that lane instead of skipping. Against any other URL a missing inventory still skips
+honestly.
+
 ## Query ownership
 
 | Query | Used in | Path |

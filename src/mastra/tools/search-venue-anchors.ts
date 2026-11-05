@@ -29,6 +29,99 @@ export type RankedVenueAnchorRow = VenueAnchorRow & {
 const ANCHOR_SIGNAL_SELECT =
   "venue_anchor_id, quiet_score, date_night_score, rooftop_score, digital_nomad_score, wifi_score, cocktail_score, brunch_score, hidden_gem_score, nightlife_score, local_authenticity_score, touristy_score, service_score, value_score, confidence, source";
 
+/**
+ * Browser-CI fixture. `isDeterministicE2E()` gates this to non-production runs, so a real
+ * visitor never sees it (the same rule as `DETERMINISTIC_E2E_RESTAURANTS`: a database outage
+ * must never become believable fake businesses).
+ *
+ * Names are deliberately labelled as fixtures so a CI screenshot can never be mistaken for
+ * real inventory. The last café and last nightclub have no coordinates on purpose: the browse
+ * cards must render them without a map action and the map must not invent a pin.
+ */
+const DETERMINISTIC_E2E_VENUES: VenueAnchorRow[] = [
+  {
+    id: "fixture-cafe-lau-001",
+    kind: "cafe",
+    name: "CI Fixture Café — Laureles",
+    google_place_id: "ChIJfixtureCafeLaureles0001",
+    neighborhood: "Laureles",
+    latitude: 6.2442,
+    longitude: -75.5921,
+    tags: ["specialty", "workspace-friendly"],
+    metadata: { ai_vibe_summary: "Fixture café with coordinates, used by the deterministic browser suite." },
+  },
+  {
+    id: "fixture-cafe-pob-002",
+    kind: "cafe",
+    name: "CI Fixture Café — El Poblado",
+    google_place_id: "ChIJfixtureCafePoblado0002",
+    neighborhood: "El Poblado",
+    latitude: 6.2088,
+    longitude: -75.5673,
+    tags: ["third-wave", "specialty"],
+    metadata: { ai_vibe_summary: "Second fixture café with coordinates." },
+  },
+  {
+    id: "fixture-cafe-nogeo-003",
+    kind: "cafe",
+    name: "CI Fixture Café — No Coordinates",
+    google_place_id: "ChIJfixtureCafeNoGeo0003",
+    neighborhood: "Laureles",
+    latitude: null,
+    longitude: null,
+    tags: ["specialty"],
+    metadata: { ai_vibe_summary: "Fixture café without stored coordinates: no map action may appear." },
+  },
+  {
+    id: "fixture-club-pro-001",
+    kind: "nightclub",
+    name: "CI Fixture Club — Provenza",
+    google_place_id: "ChIJfixtureClubProvenza0001",
+    neighborhood: "Provenza",
+    latitude: 6.2091,
+    longitude: -75.5679,
+    tags: ["reggaeton", "rooftop"],
+    metadata: { ai_vibe_summary: "Fixture nightclub with coordinates." },
+  },
+  {
+    id: "fixture-club-man-002",
+    kind: "nightclub",
+    name: "CI Fixture Club — Manila",
+    google_place_id: "ChIJfixtureClubManila0002",
+    neighborhood: "Manila",
+    latitude: 6.2125,
+    longitude: -75.5701,
+    tags: ["cocktails", "salsa"],
+    metadata: { ai_vibe_summary: "Second fixture nightclub with coordinates." },
+  },
+  {
+    id: "fixture-club-nogeo-003",
+    kind: "nightclub",
+    name: "CI Fixture Club — No Coordinates",
+    google_place_id: "ChIJfixtureClubNoGeo0003",
+    neighborhood: "Provenza",
+    latitude: null,
+    longitude: null,
+    tags: ["reggaeton"],
+    metadata: { ai_vibe_summary: "Fixture nightclub without stored coordinates: no map action may appear." },
+  },
+];
+
+/** Fixture rows for the requested kind, honouring the browse neighborhood filter and limit. */
+function deterministicVenueRows(
+  kind: "cafe" | "nightclub",
+  neighborhood: string | undefined,
+  limit: number,
+): RankedVenueAnchorRow[] {
+  const rows = DETERMINISTIC_E2E_VENUES.filter((row) => row.kind === kind);
+  const filtered = neighborhood
+    ? rows.filter((row) =>
+        row.neighborhood?.toLowerCase().includes(neighborhood.toLowerCase()),
+      )
+    : rows;
+  return filtered.slice(0, limit);
+}
+
 let _client: ReturnType<typeof createClient> | null = null;
 
 function getSupabaseClient() {
@@ -200,6 +293,12 @@ export async function searchCafeVenueAnchorsForBrowse(params: {
   limit: number;
   queryText?: string;
 }): Promise<{ rows: RankedVenueAnchorRow[]; error: string | null }> {
+  if (isDeterministicE2E()) {
+    return {
+      rows: deterministicVenueRows("cafe", params.neighborhood, params.limit),
+      error: null,
+    };
+  }
   const client = getSupabaseClient();
   if (!client) {
     return {
@@ -284,6 +383,12 @@ export async function searchNightclubVenueAnchorsForBrowse(params: {
   limit: number;
   queryText?: string;
 }): Promise<{ rows: RankedVenueAnchorRow[]; error: string | null }> {
+  if (isDeterministicE2E()) {
+    return {
+      rows: deterministicVenueRows("nightclub", params.neighborhood, params.limit),
+      error: null,
+    };
+  }
   const client = getSupabaseClient();
   if (!client) {
     return {

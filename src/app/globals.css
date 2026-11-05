@@ -63,6 +63,12 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  /* One minimum action height for discovery-card footers (44px). Restaurants,
+     cafés, nightlife, events and rentals all read this token, so a card action
+     is the same tap target on every page instead of a per-component h-11.
+     WCAG 2.2 target-size minimum is 24px; 44px matches the platform guidance
+     the mobile cards were already using. */
+  --spacing-card-action: 2.75rem;
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);

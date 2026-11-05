@@ -49,6 +49,38 @@ describe("EventBrowseCard", () => {
     expect(heroIndex).toBeLessThan(headingIndex);
   });
 
+  it("uses the shared discovery action height on Ask, Details and Buy tickets", () => {
+    // SAN-1122 follow-up: event actions were 28px while restaurant and venue cards were 44px.
+    // The shared --spacing-card-action token is the single source, so assert every action
+    // reads it instead of only the two that happened to be visible in a screenshot.
+    const withTickets = renderToStaticMarkup(
+      <EventBrowseCard event={event} onAskSelect={() => undefined} />,
+    );
+    const actions = [
+      'data-testid="event-ask-select"',
+      'data-testid="event-details-cta"',
+      'data-testid="event-buy-cta"',
+    ];
+    for (const testId of actions) {
+      const at = withTickets.indexOf(testId);
+      expect(at, `${testId} must render`).toBeGreaterThan(-1);
+      // The class list follows the element's data-testid attribute in the markup.
+      const element = withTickets.slice(at, at + 2400);
+      expect(element, `${testId} must use the card action token`).toContain(
+        "h-card-action",
+      );
+    }
+
+    const withoutTickets = renderToStaticMarkup(
+      <EventBrowseCard
+        event={{ ...event, canBuyTickets: false, pricePerTicket: null }}
+        onAskSelect={() => undefined}
+      />,
+    );
+    expect(withoutTickets).toContain("h-card-action");
+    expect(withoutTickets).not.toContain('data-testid="event-buy-cta"');
+  });
+
   it("renders a compact inline media card while preserving real ticket actions", () => {
     const html = renderToStaticMarkup(<EventBrowseCard event={event} mediaLayout="inline" />);
     expect(html).toContain('data-testid="event-details-cta"');
