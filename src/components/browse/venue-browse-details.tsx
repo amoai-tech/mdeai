@@ -20,6 +20,7 @@ const KIND_LABEL: Record<VenueBrowseKind, string> = {
   nightlife: "Nightlife",
 };
 
+/** "third-wave" -> "Third Wave"; venue tags are stored kebab-cased. */
 function formatTag(tag: string): string {
   return tag
     .split("-")
@@ -27,6 +28,7 @@ function formatTag(tag: string): string {
     .join(" ");
 }
 
+/** The read-only body shared by the desktop panel and the phone Sheet. */
 function VenueBrowseDetailsBody({
   kind,
   listing,
@@ -93,7 +95,10 @@ function VenueBrowseDetailsBody({
   );
 }
 
-/** Desktop: sits over the map (or alone in the right column when there is no map). */
+/**
+ * Desktop Details. It sits over the live map when the page has one, and alone in the right
+ * column when it does not — the column must never mount a map just to hold this panel.
+ */
 export function VenueBrowseDetailsPanel(props: {
   kind: VenueBrowseKind;
   listing: VenueBrowseListing;
@@ -110,7 +115,10 @@ export function VenueBrowseDetailsPanel(props: {
   );
 }
 
-/** Phone: the same body in the existing accessible Sheet. */
+/**
+ * Phone Details. Reuses the shared Sheet primitive so focus trapping, Escape and the modal
+ * semantics stay the ones the rest of the app already uses.
+ */
 export function VenueBrowseDetailsSheet(props: {
   kind: VenueBrowseKind;
   listing: VenueBrowseListing;

@@ -347,7 +347,15 @@ for (const spec of ROUTES) {
         const cards = await openRoute(page, spec);
         const count = await cards.count();
         if (skipOrFail(count === 0, spec, "rendered no cards")) return;
-        if (count < 2) return;
+        if (
+          skipOrFail(
+            count < 2,
+            spec,
+            "needs at least two cards to prove Details follows the card",
+          )
+        ) {
+          return;
+        }
 
         const urlBefore = page.url();
         const first = cards.first();

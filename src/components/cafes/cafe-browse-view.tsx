@@ -84,7 +84,15 @@ function CafeBrowseViewInner({
   const [detailsId, setDetailsId] = useState<string | null>(null);
   // SAN-1638: closing Details puts keyboard focus back on the control that opened it.
   const detailsTriggerRef = useRef<HTMLElement | null>(null);
-  const detailsListing = results.find((listing) => listing.id === detailsId) ?? null;
+  // Resolved only from the rows actually on screen. An Ask MDE search replaces the catalogue grid
+  // with grounded rows, so a Details panel for the old catalogue must close instead of floating
+  // over unrelated results.
+  const displayedListings = activeRows === null ? results : [];
+  const detailsListing = displayedListings.find((listing) => listing.id === detailsId) ?? null;
+  // Forget an id whose record left the results, so it cannot reopen on a later search.
+  if (detailsId && !displayedListings.some((listing) => listing.id === detailsId)) {
+    setDetailsId(null);
+  }
   const closeDetails = useCallback(() => {
     setDetailsId(null);
     requestAnimationFrame(() => detailsTriggerRef.current?.focus());
