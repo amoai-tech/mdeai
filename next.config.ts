@@ -22,6 +22,11 @@ const nextConfig: NextConfig = {
   },
   turbopack: {
     root: __dirname,
+    // The webpack alias below covers `next build --webpack`; Turbopack needs
+    // the same peer stub or `next dev --turbopack` tries to resolve maplibre-gl.
+    resolveAlias: {
+      "maplibre-gl": "./src/lib/a2ui/maplibre-stub.ts",
+    },
   },
   // Google Places uses protobufjs dynamic requires; keep its Node runtime native
   // instead of asking Webpack to statically resolve that optional import.

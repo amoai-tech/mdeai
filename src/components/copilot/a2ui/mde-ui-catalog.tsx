@@ -2,12 +2,12 @@
 
 import { useMemo } from "react";
 import { z } from "zod";
+import { useAgent, UseAgentUpdate } from "@copilotkit/react-core/v2";
 import { createGenerativeUI } from "@copilotkit/react-core/v2/generative-ui";
 import { RentalCard as ExistingRentalCard } from "@/components/copilot/rental-card";
 import { useOptionalConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
 import { useOptionalRentalUi } from "@/components/chat/rental-ui-context";
 import { useOptionalMapContext } from "@/platform/maps/map-context";
-import { normalizeToolOutput } from "@/platform/maps/normalize-tool-output";
 import { isFinishedToolPayload, normalizeToolEnvelope } from "@/lib/normalize-tool-envelope";
 import { toDetailRental } from "@/lib/rentals/chat-rental-detail";
 import {
@@ -27,10 +27,14 @@ const rentalToolNames = new Set<string>([
   MASTRA_TOOL_IDS.rentals,
 ]);
 
-function toolNameByCallId(messages: readonly {
+type RentalMessage = {
   role?: string;
+  toolCallId?: string;
+  content?: unknown;
   toolCalls?: Array<{ id?: string; function?: { name?: string } }>;
-}[]): Map<string, string> {
+};
+
+function toolNameByCallId(messages: readonly RentalMessage[]): Map<string, string> {
   const names = new Map<string, string>();
   for (const message of messages) {
     if (message.role !== "assistant") continue;
@@ -41,43 +45,75 @@ function toolNameByCallId(messages: readonly {
   return names;
 }
 
-/** The latest finished rental tool result on the current agent thread. */
-function useCurrentRentalResult(): unknown | null {
-  const concierge = useOptionalConciergeCoAgent();
-  return useMemo(() => {
-    const messages = concierge?.agent?.messages ?? [];
-    if (messages.length === 0) return null;
-    const names = toolNameByCallId(messages);
-    for (let index = messages.length - 1; index >= 0; index -= 1) {
-      const message = messages[index];
-      if (message.role !== "tool" || !message.toolCallId) continue;
-      if (!names.has(message.toolCallId) || !rentalToolNames.has(names.get(message.toolCallId) ?? "")) continue;
-      if (!isFinishedToolPayload(message.content, { rowArray: true })) continue;
-      return message.content;
-    }
-    return null;
-  }, [concierge?.agent?.messages]);
+/**
+ * Every finished rental result on this agent thread, newest first. A card must
+ * survive a later search; using only the newest result broke every earlier card.
+ * This is thread-local, so it cannot read another conversation's results.
+ */
+export function collectRentalResults(messages: readonly RentalMessage[]): unknown[] {
+  const names = toolNameByCallId(messages);
+  const results: unknown[] = [];
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message.role !== "tool" || !message.toolCallId) continue;
+    if (!rentalToolNames.has(names.get(message.toolCallId) ?? "")) continue;
+    if (!isFinishedToolPayload(message.content, { rowArray: true })) continue;
+    results.push(message.content);
+  }
+  return results;
 }
 
-/** Resolve an opaque id only against the latest authorized tool result. */
+/** Prefer the concierge context, then fall back to the active CopilotKit agent (broker chat). */
+export function selectRentalMessages(
+  conciergeMessages: readonly RentalMessage[] | undefined,
+  agentMessages: readonly RentalMessage[] | undefined,
+): readonly RentalMessage[] {
+  return conciergeMessages?.length ? conciergeMessages : agentMessages ?? [];
+}
+
+/** Canonical public details page, used where the chat owns no detail sheet (broker/Ask MDE). */
+export function rentalDetailHref(listingId: string): string {
+  return `/rentals/${encodeURIComponent(listingId)}`;
+}
+
+/** Resolve an opaque id only from real rental results on this thread. */
 export function findRentalRow(
-  result: unknown,
+  results: readonly unknown[],
   listingId: string,
 ): RentalToolRow | null {
-  if (!result) return null;
-  const rows = (normalizeToolEnvelope(result).results ?? []) as RentalToolRow[];
-  return rows.find((candidate) => candidate.id === listingId) ?? null;
+  for (const result of results) {
+    const rows = (normalizeToolEnvelope(result).results ?? []) as RentalToolRow[];
+    const row = rows.find((candidate) => candidate.id === listingId);
+    if (row) return row;
+  }
+  return null;
 }
 
-function useRentalRow(listingId: string): { row: RentalToolRow | null; result: unknown | null } {
-  const result = useCurrentRentalResult();
-  const row = useMemo(() => findRentalRow(result, listingId), [listingId, result]);
-  return { row, result };
+function useRentalMessages(): readonly RentalMessage[] {
+  const concierge = useOptionalConciergeCoAgent();
+  // Broker chat mounts ChatProvider without ConciergeCoAgentProvider; the
+  // active CopilotKit agent is still the same conciergeAgent.
+  const { agent } = useAgent({
+    agentId: "conciergeAgent",
+    updates: [UseAgentUpdate.OnMessagesChanged],
+  });
+  return selectRentalMessages(
+    concierge?.agent?.messages as RentalMessage[] | undefined,
+    agent?.messages as RentalMessage[] | undefined,
+  );
+}
+
+function useRentalRow(listingId: string): RentalToolRow | null {
+  const messages = useRentalMessages();
+  return useMemo(
+    () => findRentalRow(collectRentalResults(messages), listingId),
+    [listingId, messages],
+  );
 }
 
 /** One existing rental card, hydrated only from the current authorized tool result. */
 function MdeRentalCard({ listingId }: { listingId: string }) {
-  const { row, result } = useRentalRow(listingId);
+  const row = useRentalRow(listingId);
   const map = useOptionalMapContext();
   const rentalUi = useOptionalRentalUi();
   const selectedPinId = map?.selectedPinId;
@@ -85,10 +121,10 @@ function MdeRentalCard({ listingId }: { listingId: string }) {
   const openVenueDetail = rentalUi?.openVenueDetail;
   const openScheduleViewing = rentalUi?.openScheduleViewing;
 
-  const hasPin = useMemo(() => {
-    if (!result) return false;
-    return normalizeToolOutput("rental", result).pins.some((pin) => pin.id === `rental-${listingId}`);
-  }, [listingId, result]);
+  // Only a pin that is really on the current map may be selected/highlighted.
+  // A historical card after a newer search stays usable in Details, without
+  // claiming a pin that the newer search removed.
+  const hasPin = map?.pins.some((pin) => pin.id === `rental-${listingId}`) ?? false;
 
   if (!row) {
     return (
@@ -118,7 +154,11 @@ function MdeRentalCard({ listingId }: { listingId: string }) {
       hostName: row.host_name,
       canScheduleViewing: row.can_schedule_viewing === true,
     });
-  } : undefined;
+  } : () => {
+    // Broker chat and the Ask MDE sheet have no rental detail provider. Reuse
+    // the canonical public details page instead of mounting a second sheet.
+    window.open(rentalDetailHref(row.id), "_blank", "noopener,noreferrer");
+  };
 
   return (
     <div data-testid="a2ui-rental-card" data-listing-id={row.id}>
