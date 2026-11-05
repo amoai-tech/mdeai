@@ -1,6 +1,5 @@
 "use client";
 
-import { useMemo } from "react";
 import { z } from "zod";
 import { useAgent, UseAgentUpdate } from "@copilotkit/react-core/v2";
 import { createGenerativeUI } from "@copilotkit/react-core/v2/generative-ui";
@@ -117,11 +116,9 @@ function useRentalMessages(): readonly RentalMessage[] {
 function useRentalRow(listingId: string): RentalToolRow | null {
   const messages = useRentalMessages();
   const fastPath = useOptionalRentalFastPath();
-  return useMemo(() => {
-    const fromAgent = collectRentalResults(messages);
-    const fromFastPath = fastPath?.toolResults ?? (fastPath?.toolResult ? [fastPath.toolResult] : []);
-    return findRentalRow(mergeRentalResults(fromFastPath, fromAgent), listingId);
-  }, [fastPath?.toolResult, fastPath?.toolResults, listingId, messages]);
+  const fromAgent = collectRentalResults(messages);
+  const fromFastPath = fastPath?.toolResults ?? (fastPath?.toolResult ? [fastPath.toolResult] : []);
+  return findRentalRow(mergeRentalResults(fromFastPath, fromAgent), listingId);
 }
 
 /** One existing rental card, hydrated only from the current authorized tool result. */
