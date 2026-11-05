@@ -256,6 +256,19 @@ jobs:
               core.info("No safe bounded recovery: " + plan.reason);
               return;
             }
+            // Re-running the same exact PR revision must not buy the same AI
+            // review twice. Cache only trusted bot-published, complete advisory
+            // output from this exact model/profile and SHA256 source patch.
+            const profile = "v0.49.0-nvidia-lightning-target-v1";
+            if (previousRecovery &&
+                (previousRecovery.body ?? "").includes("**Base/head:** " + baseSha + " / " + headSha) &&
+                (previousRecovery.body ?? "").includes("**Diff SHA-256:** " + plan.diffSha256) &&
+                (previousRecovery.body ?? "").includes("**Reviewer profile:** " + profile) &&
+                (previousRecovery.body ?? "").includes(
+                  "**Model coverage:** no omissions reported for this targeted patch")) {
+              core.info("Exact-head bounded review already published; no extra model call.");
+              return;
+            }
             fs.mkdirSync(".pr-agent", { recursive: true });
             fs.writeFileSync(".pr-agent/recovery.diff", plan.diff, "utf8");
             delete plan.diff;
@@ -340,6 +353,7 @@ jobs:
               "**File:** " + plan.path + "\n" +
               "**Base/head:** " + plan.baseSha + " / " + plan.headSha + "\n" +
               "**Diff SHA-256:** " + fingerprint + "\n" +
+              "**Reviewer profile:** v0.49.0-nvidia-lightning-target-v1\n" +
               "**Model coverage:** " + (covered ? "no omissions reported for this targeted patch" :
                 "incomplete/unknown") + "\n\n" +
               "**Important:** This does NOT override the required full-review check. " +
