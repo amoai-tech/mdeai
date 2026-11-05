@@ -55,9 +55,8 @@ function RestaurantBrowseViewInner({
   const retryHref = buildFilterUrl({ neighborhood, cuisine });
   const [searched, setSearched] = useState<{ scope: string; rows: Restaurant[] } | null>(null);
   const [selectedForAskId, setSelectedForAskId] = useState<string | null>(null);
-  // SAN-1638: Details has its own identity. It must not depend on `selectedPinId` — a restaurant
-  // with no coordinates has no pin, and the panel used to be reachable only through one.
-  const [detailsId, setDetailsId] = useState<string | null>(null);
+  // SAN-1638: no separate Details id. One selected record drives the map, the panel and Ask MDE,
+  // so they cannot disagree — and a restaurant with no coordinates still opens Details.
   // SAN-1638: closing Details puts keyboard focus back on the control that opened it.
   const detailsTriggerRef = useRef<HTMLElement | null>(null);
   const shownResults = searched?.scope === retryHref ? searched.rows : results;
@@ -69,19 +68,16 @@ function RestaurantBrowseViewInner({
     : null;
   // Resolved from the rows currently on screen, so a filter that drops the restaurant closes the
   // panel and a late search result can never repoint an already-open Details.
-  const openRestaurantId = pinRestaurantId ?? detailsId;
+  const openRestaurantId = pinRestaurantId ?? selectedForAskId;
   const detailsRestaurant = shownResults.find((r) => r.id === openRestaurantId) ?? null;
-  // F3: forget a Details id whose record left the results, so it cannot reopen on a later search.
-  // Render-phase reset is the same pattern the events view already uses for its selection.
-  if (detailsId && !shownResults.some((r) => r.id === detailsId)) {
-    setDetailsId(null);
+  // Forget a selection whose record left the results, so it cannot reopen on a later search.
+  if (selectedForAskId && !shownResults.some((r) => r.id === selectedForAskId)) {
+    setSelectedForAskId(null);
   }
-  // SAN-1638: whatever the panel shows is what Ask MDE must receive, so the concierge can never
-  // answer about a restaurant the visitor has moved on from. Setting context never sends a message.
-  const askContextId = openRestaurantId ?? selectedForAskId;
-  const selectedForAsk = shownResults.some((r) => r.id === askContextId) ? askContextId : null;
+  // The panel record IS the Ask record; pressing Ask on another card therefore moves both.
+  const selectedForAsk = detailsRestaurant?.id ?? null;
   const closeDetails = useCallback(() => {
-    setDetailsId(null);
+    setSelectedForAskId(null);
     // Releasing the pin too, otherwise pin-driven Details would reopen on the next render.
     setSelectedPinId(null);
     requestAnimationFrame(() => detailsTriggerRef.current?.focus());
@@ -204,7 +200,6 @@ function RestaurantBrowseViewInner({
                       // win the lookup and leave the panel showing a different restaurant.
                       setSelectedPinId(null);
                       setSelectedForAskId(r.id);
-                      setDetailsId(r.id);
                     }}
                     detailsTestId={`restaurant-details-open-${r.id}`}
                     testId={`restaurant-card-${r.id}`}

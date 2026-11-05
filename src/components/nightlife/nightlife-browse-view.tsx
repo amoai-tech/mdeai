@@ -90,22 +90,17 @@ function NightlifeBrowseViewInner({
   // SAN-1638: Details is its own state, deliberately independent of the map pin, so a venue
   // with no coordinates still opens. Deriving the open record from the rows currently on screen
   // closes the panel when a filter removes it and stops a late search from repointing it.
-  const [detailsId, setDetailsId] = useState<string | null>(null);
   // SAN-1638: closing Details puts keyboard focus back on the control that opened it.
   const detailsTriggerRef = useRef<HTMLElement | null>(null);
   // Resolved only from the rows actually on screen. An Ask MDE search replaces the catalogue grid
   // with grounded rows, so a Details panel for the old catalogue must close instead of floating
   // over unrelated results.
   const displayedListings = activeRows === null ? results : [];
-  const detailsListing = displayedListings.find((listing) => listing.id === detailsId) ?? null;
-  // Forget an id whose record left the results, so it cannot reopen on a later search.
-  if (detailsId && !displayedListings.some((listing) => listing.id === detailsId)) {
-    setDetailsId(null);
-  }
+  const detailsListing = displayedListings.find((listing) => listing.id === selectedId) ?? null;
   const closeDetails = useCallback(() => {
-    setDetailsId(null);
+    clearAskSelection();
     requestAnimationFrame(() => detailsTriggerRef.current?.focus());
-  }, []);
+  }, [clearAskSelection]);
 
   return (
     <>
@@ -198,7 +193,6 @@ function NightlifeBrowseViewInner({
                   // never answer about a venue the visitor is no longer looking at. Selecting
                   // context does not send a message.
                   selectForAsk(listing.id);
-                  setDetailsId(listing.id);
                 }}
                 composition="nova"
                 mediaLayout="inline"
