@@ -29,6 +29,7 @@ import {
 import { CafeBrowseFilters } from "@/components/cafes/cafe-browse-filters";
 import type { CafeFeature, CafeListing } from "@/lib/cafe-browse";
 
+/** Current filter URL for this page, or the bare path when no filter is set. */
 function buildFilterUrl(filters: {
   neighborhood?: string | null;
   feature?: CafeFeature | null;
@@ -47,6 +48,7 @@ type CafeBrowseViewProps = {
   feature: CafeFeature | null;
 };
 
+/** Results, map and right column for cafés, driven by the shared map selection. */
 function CafeBrowseViewInner({
   results,
   error,
@@ -222,6 +224,7 @@ function CafeBrowseViewInner({
   );
 }
 
+/** Café browse shell that provides the shared map state. */
 export function CafeBrowseView(props: CafeBrowseViewProps) {
   return <BrowseMapContextShell><CafeBrowseViewInner {...props} /></BrowseMapContextShell>;
 }

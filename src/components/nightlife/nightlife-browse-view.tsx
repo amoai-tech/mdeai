@@ -29,6 +29,7 @@ import {
 import { NightlifeBrowseFilters } from "@/components/nightlife/nightlife-browse-filters";
 import type { NightlifeListing, NightlifeVibe } from "@/lib/nightlife-browse";
 
+/** Current filter URL for this page, or the bare path when no filter is set. */
 function buildFilterUrl(filters: {
   neighborhood?: string | null;
   vibe?: NightlifeVibe | null;
@@ -47,6 +48,7 @@ type NightlifeBrowseViewProps = {
   vibe: NightlifeVibe | null;
 };
 
+/** Results, map and right column for nightlife, driven by the shared map selection. */
 function NightlifeBrowseViewInner({
   results,
   error,
@@ -232,6 +234,7 @@ function NightlifeBrowseViewInner({
   );
 }
 
+/** Nightlife browse shell that provides the shared map state. */
 export function NightlifeBrowseView(props: NightlifeBrowseViewProps) {
   return <BrowseMapContextShell><NightlifeBrowseViewInner {...props} /></BrowseMapContextShell>;
 }

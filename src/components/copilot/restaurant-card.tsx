@@ -65,6 +65,7 @@ export type RestaurantCardProps = {
   detailsOpen?: boolean;
 };
 
+/** Display label for a cuisine code, or null when it is unknown. */
 function cuisineLabel(cuisine?: string): string | null {
   if (!cuisine) return null;
   return cuisine
@@ -73,6 +74,7 @@ function cuisineLabel(cuisine?: string): string | null {
     .join(" ");
 }
 
+/** Directions link for a restaurant with a real maps URL. */
 function RestaurantMapLinks({ mapsUrl }: { mapsUrl?: string | null }) {
   if (!mapsUrl) return null;
   const deepLinks = mapsDeepLinksEnabled();
@@ -124,6 +126,7 @@ function RestaurantMapLinks({ mapsUrl }: { mapsUrl?: string | null }) {
   );
 }
 
+/** Card media: the real photo, or the placeholder when none is usable. */
 function RestaurantCardMedia({
   imageUrl,
   mediaLayout,
@@ -162,6 +165,7 @@ function RestaurantCardMedia({
   );
 }
 
+/** One restaurant result with its facts and the Ask and Details actions. */
 export function RestaurantCard({
   title,
   neighborhood,

@@ -75,21 +75,27 @@ const make = (id: string, name: string): Restaurant => ({
 const A = make("a", "Alpha Kitchen");
 const B = make("b", "Beta Kitchen");
 
+/** Heading currently shown in the Details panel, or null when it is closed. */
 const panelName = () => {
   const panel = screen.queryByTestId("restaurant-details");
   return panel ? within(panel).getByRole("heading", { level: 2 }).textContent : null;
 };
+/** The rendered card for one restaurant id. */
 const cardFor = (id: string) => screen.getByTestId(`restaurant-card-${id}`);
+/** Press the card Details action, as a visitor would. */
 const openDetails = (id: string) =>
   act(() => {
     within(cardFor(id)).getByTestId(/^restaurant-details-open-/).click();
   });
+/** Whether Ask MDE is pressed on that card. */
 const askPressed = (id: string) =>
   within(cardFor(id)).getByTestId(/^restaurant-ask-select/).getAttribute("aria-pressed");
+/** Pick that restaurant’s map marker. */
 const selectPin = (id: string) =>
   act(() => {
     screen.getByTestId(`marker-restaurant-${id}`).click();
   });
+/** Press the panel Close button. */
 const closePanel = () =>
   act(() => {
     screen.getByTestId("restaurant-details-close").click();
@@ -119,6 +125,21 @@ describe("restaurant Details and the selected pin", () => {
     // The panel moved to B, so B must be the card that looks selected for Ask MDE.
     expect(askPressed("b")).toBe("true");
     expect(askPressed("a")).toBe("false");
+  });
+
+  it("does not move focus to a stale card button when a pin took the panel over", async () => {
+    const alphaTrigger = within(cardFor("a")).getByTestId(/^restaurant-details-open-/);
+    openDetails("a");
+    alphaTrigger.focus();
+
+    // The panel now belongs to Beta, so closing must not focus Alpha's older button.
+    selectPin("b");
+    (document.activeElement as HTMLElement | null)?.blur();
+    closePanel();
+    // Close returns focus inside requestAnimationFrame.
+    await new Promise((resolve) => setTimeout(resolve, 40));
+
+    expect(document.activeElement).not.toBe(alphaTrigger);
   });
 
   it("closes the panel and the selections, then reopens the same pin's details", () => {

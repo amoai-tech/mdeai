@@ -23,6 +23,7 @@ import { useBrowseCardScroll } from "@/hooks/use-browse-card-scroll";
 import { restaurantToMapPin } from "@/lib/browse/browse-pin-converters";
 import type { Restaurant } from "@/mastra/tools/search-restaurants";
 
+/** Current filter URL for this page, or the bare path when no filter is set. */
 function buildFilterUrl(filters: {
   neighborhood?: string | null;
   cuisine?: string | null;
@@ -43,6 +44,7 @@ type RestaurantBrowseViewProps = {
   isSample?: boolean;
 };
 
+/** Results, map and right column for restaurants, driven by the shared map selection. */
 function RestaurantBrowseViewInner({
   results,
   error,
@@ -61,7 +63,9 @@ function RestaurantBrowseViewInner({
   // panel is open closes that panel so the two cannot describe different restaurants.
   const [detailsId, setDetailsId] = useState<string | null>(null);
   // SAN-1638: closing Details puts keyboard focus back on the control that opened it.
-  const detailsTriggerRef = useRef<HTMLElement | null>(null);
+  // The control that opened Details, remembered with its record: a map pin can take the panel
+  // over, and Close must not pull focus onto an older card's button.
+  const detailsTriggerRef = useRef<{ el: HTMLElement; forId: string } | null>(null);
   const shownResults = searched?.scope === retryHref ? searched.rows : results;
   const selectedRestaurant = shownResults.find((r) => `restaurant-${r.id}` === selectedPinId) ?? null;
   // A pin selection opened Details before this task; keep that. Details has its own id for the
@@ -99,8 +103,11 @@ function RestaurantBrowseViewInner({
     setDetailsId(null);
     setSelectedPinId(null);
     setSelectedForAskId(null);
-    requestAnimationFrame(() => detailsTriggerRef.current?.focus());
-  }, [setSelectedPinId]);
+    requestAnimationFrame(() => {
+      const trigger = detailsTriggerRef.current;
+      if (trigger && trigger.forId === openRestaurantId) trigger.el.focus();
+    });
+  }, [openRestaurantId, setSelectedPinId]);
   // Escape closes the desktop panel (the phone Sheet already does).
   useEscapeToClose(Boolean(detailsRestaurant && desktop), closeDetails);
 
@@ -227,7 +234,7 @@ function RestaurantBrowseViewInner({
                       );
                     }}
                     onDetails={(trigger) => {
-                      detailsTriggerRef.current = trigger;
+                      detailsTriggerRef.current = { el: trigger, forId: r.id };
                       // Details is the newer, explicit choice: release a pin that would otherwise
                       // win the lookup and leave the panel showing a different restaurant.
                       setSelectedPinId(null);
@@ -251,6 +258,7 @@ function RestaurantBrowseViewInner({
   );
 }
 
+/** Restaurant browse shell that provides the shared map state. */
 export function RestaurantBrowseView(props: RestaurantBrowseViewProps) {
   return (
     <BrowseMapContextShell>

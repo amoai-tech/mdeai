@@ -78,6 +78,7 @@ type VenueBrowseCardProps = {
   onMapSelect?: () => void;
 };
 
+/** Venue tags are stored kebab-cased; show them as words. */
 function formatTagLabel(tag: string): string {
   return tag
     .split("-")
@@ -85,6 +86,7 @@ function formatTagLabel(tag: string): string {
     .join(" ");
 }
 
+/** Real Google Maps directions link, and nothing when the venue has no usable URL. */
 function DirectionsLink({
   mapsUrl,
   directionsTestId,
@@ -141,6 +143,7 @@ function DirectionsLink({
   );
 }
 
+/** One café or nightlife result: media, facts, and the Ask and Details actions. */
 export function VenueBrowseCard({
   kind,
   listing,

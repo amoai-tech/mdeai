@@ -15,6 +15,7 @@ const press = (target: Element) =>
     target.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
   });
 
+/** A Details region with one focusable control inside it. */
 function panel() {
   const section = document.createElement("section");
   section.setAttribute(DETAILS_PANEL_ATTR, "");

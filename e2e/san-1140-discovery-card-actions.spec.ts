@@ -69,6 +69,7 @@ const WIDTHS = [320, 390, 768, 1440] as const;
 const DETERMINISTIC_FIXTURES =
   process.env.NEXT_PUBLIC_E2E_DETERMINISTIC_CHAT === "1";
 
+/** Fail in the deterministic CI lane and skip elsewhere, so a missing fixture can never read as a pass. */
 function skipOrFail(
   missing: boolean,
   spec: RouteSpec,
@@ -84,6 +85,7 @@ function skipOrFail(
   return true;
 }
 
+/** Open a browse route and wait for its page root before touching any card. */
 async function openRoute(page: Page, spec: RouteSpec): Promise<Locator> {
   await page.goto(spec.route, { waitUntil: "domcontentloaded" });
   // The dev server can briefly mount two copies of the page root during hydration; a strict
@@ -173,6 +175,7 @@ async function expectAskContainment(page: Page, spec: RouteSpec) {
   }
 }
 
+/** Assert nothing on the page scrolls sideways at the current viewport. */
 async function expectNoHorizontalOverflow(page: Page, where: string) {
   const { scrollWidth, clientWidth } = await page.evaluate(() => ({
     scrollWidth: document.documentElement.scrollWidth,
