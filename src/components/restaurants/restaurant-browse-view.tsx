@@ -146,7 +146,6 @@ function RestaurantBrowseViewInner({
               {shownResults.map((r) => {
                 const pinId = `restaurant-${r.id}`;
                 return (
-                  <div key={r.id} className="flex flex-col gap-2">
                   <RestaurantCard
                     key={r.id}
                     title={r.name}
@@ -160,23 +159,21 @@ function RestaurantBrowseViewInner({
                     pinId={pinId}
                     selected={selectedPinId === pinId}
                     onSelect={() => selectPin(pinId)}
+                    selectedForAsk={selectedForAsk === r.id}
+                    // Ask selects context only: it clears the map/details preview and
+                    // toggles our own selection. Nothing is sent until the visitor submits.
+                    onAskSelect={() => {
+                      setSelectedPinId(null);
+                      setSelectedForAskId((current) =>
+                        current === r.id ? null : r.id,
+                      );
+                    }}
+                    detailsHref={`/restaurants/${r.id}`}
+                    detailsTestId={`restaurant-detail-link-${r.id}`}
                     testId={`restaurant-card-${r.id}`}
                     composition="nova"
                     mediaLayout="inline"
                   />
-                  <button type="button" data-testid="restaurant-ask-select" aria-pressed={selectedForAsk === r.id}
-                    className="inline-flex min-h-11 items-center justify-center rounded-md border px-3 text-sm font-medium"
-                    onClick={() => { setSelectedPinId(null); setSelectedForAskId((current) => current === r.id ? null : r.id); }}>
-                    {selectedForAsk === r.id ? "Clear selection" : "Ask about this"}
-                  </button>
-                  <Link
-                    className="inline-flex min-h-11 items-center justify-center rounded-md border px-3 text-sm font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
-                    data-testid={`restaurant-detail-link-${r.id}`}
-                    href={"/restaurants/" + r.id}
-                  >
-                    View details
-                  </Link>
-                  </div>
                 );
               })}
             </div>

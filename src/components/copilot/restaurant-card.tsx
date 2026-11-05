@@ -1,6 +1,7 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { VenueCardShell } from "@/components/browse/venue-card-shell";
 import { VenueCardPlaceholder } from "@/components/browse/venue-card-placeholder";
@@ -39,6 +40,21 @@ export type RestaurantCardProps = {
   onOpenEventVenue?: () => void;
   onBookRequest?: () => void;
   bookingTestId?: string;
+  /**
+   * Browse grid only: this restaurant is the current Ask MDE selection (SAN-1140).
+   * Selection is context, not a send — nothing runs until the visitor submits a question.
+   */
+  selectedForAsk?: boolean;
+  /** Browse grid only: toggle this restaurant as the Ask MDE selection. */
+  onAskSelect?: () => void;
+  /**
+   * Browse grid only: the real public details route for this restaurant. The footer
+   * renders it as a link, never a dead button. Chat uses `onOpenDetails` instead;
+   * passing both would show two Details controls, so callers pass exactly one.
+   */
+  detailsHref?: string;
+  /** Browse grid only: keeps the existing `restaurant-detail-link-<id>` selector. */
+  detailsTestId?: string;
 };
 
 function cuisineLabel(cuisine?: string): string | null {
@@ -159,6 +175,10 @@ export function RestaurantCard({
   onOpenEventVenue,
   onBookRequest,
   bookingTestId = "restaurant-booking-cta",
+  selectedForAsk,
+  onAskSelect,
+  detailsHref,
+  detailsTestId,
 }: RestaurantCardProps) {
   const ratingText = formatGroundedRating(rating);
   const typeLabel = cuisineLabel(cuisine) ?? "Restaurant";
@@ -188,7 +208,9 @@ export function RestaurantCard({
     Boolean(mapsUrl) ||
     Boolean(onOpenDetails) ||
     Boolean(onOpenEventVenue) ||
-    Boolean(onBookRequest);
+    Boolean(onBookRequest) ||
+    Boolean(detailsHref) ||
+    Boolean(onAskSelect);
 
   const footerContent = (
     <>
@@ -210,6 +232,22 @@ export function RestaurantCard({
             Event Venue
           </Button>
         ) : null}
+        {onAskSelect ? (
+          <Button
+            type="button"
+            size="sm"
+            variant={selectedForAsk ? "secondary" : "outline"}
+            className="h-11 min-w-11 px-3"
+            data-testid="restaurant-ask-select"
+            aria-pressed={Boolean(selectedForAsk)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onAskSelect();
+            }}
+          >
+            {selectedForAsk ? "Clear selection" : "Ask about this"}
+          </Button>
+        ) : null}
         {onOpenDetails ? (
           <Button
             type="button"
@@ -224,6 +262,20 @@ export function RestaurantCard({
             <Info data-icon="inline-start" aria-hidden />
             Details
           </Button>
+        ) : null}
+        {detailsHref ? (
+          <Link
+            href={detailsHref}
+            data-testid={detailsTestId}
+            className={cn(
+              buttonVariants({ size: "sm", variant: "outline" }),
+              "h-11 min-w-11 px-3",
+            )}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Info data-icon="inline-start" aria-hidden />
+            View details
+          </Link>
         ) : null}
         {onBookRequest ? (
           <Button
