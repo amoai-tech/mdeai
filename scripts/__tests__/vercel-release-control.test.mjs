@@ -17,6 +17,9 @@ import {
   vercelGet,
   githubMainSha,
   checkCurrentMain,
+  floorRunStatus,
+  githubFloorStatus,
+  waitForFloorSuccess,
   reconcilePromotion,
   checkStablePromotion,
   verifyLiveMain,
@@ -546,4 +549,112 @@ test("stability monitoring rejects wrong SHA and unready deployments regardless 
     attempts: 1,
     readDeployment: async () => promotedDeployment({ readyState: "BUILDING" }),
   })), /not READY/);
+});
+
+// SAN-1362: a successful pull-request check or earlier push run must never bypass
+// the exact-SHA main-push Floor gate before production promotion.
+const floorRun = (over = {}) => ({
+  id: 421001,
+  name: "Floor",
+  event: "push",
+  head_branch: "main",
+  head_sha: SHA,
+  status: "completed",
+  conclusion: "success",
+  created_at: "2026-11-05T21:50:00Z",
+  run_attempt: 1,
+  ...over,
+});
+const floorResponse = (runs) => ({ total_count: runs.length, workflow_runs: runs });
+
+test("pre-promotion Floor: exact main push is allowed only on completed success", () => {
+  assert.equal(floorRunStatus(floorResponse([floorRun()]), SHA), "success");
+  for (const status of ["queued", "in_progress", "waiting", "requested"]) {
+    assert.equal(floorRunStatus(floorResponse([floorRun({ status, conclusion: null })]), SHA), "pending");
+  }
+  for (const conclusion of ["failure", "cancelled", "timed_out", "skipped", "neutral", null]) {
+    assert.equal(floorRunStatus(floorResponse([floorRun({ conclusion })]), SHA), "failed");
+  }
+  assert.equal(floorRunStatus(floorResponse([]), SHA), "pending");
+});
+
+test("pre-promotion Floor: never substitute a PR run, other branch, or wrong SHA", () => {
+  for (const over of [
+    { event: "pull_request" },
+    { head_branch: "feature/release" },
+    { head_sha: "b".repeat(40) },
+    { name: "Fake Floor" },
+  ]) {
+    assert.throws(() => floorRunStatus(floorResponse([floorRun(over)]), SHA), /vercel-release/);
+  }
+  assert.throws(() => floorRunStatus({ total_count: 101, workflow_runs: [floorRun()] }, SHA), /vercel-release/);
+  assert.throws(() => floorRunStatus({ workflow_runs: [floorRun()] }, SHA), /vercel-release/);
+});
+
+test("pre-promotion Floor: latest same-SHA run wins over an earlier success", () => {
+  const oldSuccess = floorRun({ id: 9, created_at: "2026-11-05T21:00:00Z" });
+  const newRun = floorRun({ id: 10, created_at: "2026-11-05T21:01:00Z", status: "in_progress", conclusion: null });
+  assert.equal(floorRunStatus(floorResponse([oldSuccess, newRun]), SHA), "pending");
+  assert.equal(floorRunStatus(floorResponse([oldSuccess, { ...newRun, status: "completed", conclusion: "failure" }]), SHA), "failed");
+  assert.equal(floorRunStatus(floorResponse([oldSuccess, { ...newRun, status: "completed", conclusion: "success" }]), SHA), "success");
+});
+
+test("pre-promotion Floor: API query is scoped to the canonical workflow, SHA, main push and token", async () => {
+  let requests = 0;
+  const state = await githubFloorStatus({
+    sha: SHA,
+    repository: "amoai-tech/mdeai",
+    token: "test-token",
+    fetchImpl: async (url, init) => {
+      requests++;
+      assert.match(url, /\/repos\/amoai-tech\/mdeai\/actions\/workflows\/floor\.yml\/runs\?/);
+      assert.match(url, new RegExp("head_sha=" + SHA));
+      assert.match(url, /branch=main/);
+      assert.match(url, /event=push/);
+      assert.equal(init.headers.authorization, "Bearer test-token");
+      return { ok: true, json: async () => floorResponse([floorRun()]) };
+    },
+  });
+  assert.equal(state, "success");
+  assert.equal(requests, 1);
+  await assert.rejects(() => githubFloorStatus({
+    sha: SHA, repository: "amoai-tech/mdeai", token: "test-token",
+    fetchImpl: async () => ({ ok: false, status: 403 }),
+  }), /vercel-release/);
+  await assert.rejects(() => githubFloorStatus({
+    sha: SHA, repository: "amoai-tech/mdeai", token: "",
+    fetchImpl: async () => { throw new Error("must not fetch"); },
+  }), /vercel-release/);
+});
+
+test("pre-promotion Floor: pending waits without promotion; successful run proceeds", async () => {
+  const seen = ["pending", "pending", "success"];
+  let calls = 0;
+  let pauses = 0;
+  await waitForFloorSuccess({
+    readStatus: async () => { calls++; return seen.shift(); },
+    attempts: 4,
+    delayMs: 1,
+    pause: async () => { pauses++; },
+  });
+  assert.equal(calls, 3);
+  assert.equal(pauses, 2);
+});
+
+test("pre-promotion Floor: failures, unknown states and timeout fail closed", async () => {
+  for (const status of ["failed", "unknown"]) {
+    let reads = 0;
+    await assert.rejects(() => waitForFloorSuccess({
+      readStatus: async () => { reads++; return status; },
+      attempts: 3,
+      pause: async () => { throw new Error("should not wait"); },
+    }), /vercel-release/);
+    assert.equal(reads, 1);
+  }
+  await assert.rejects(() => waitForFloorSuccess({
+    readStatus: async () => "pending",
+    attempts: 2,
+    delayMs: 1,
+    pause: async () => {},
+  }), /vercel-release.*Floor/);
 });

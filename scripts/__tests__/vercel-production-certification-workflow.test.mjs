@@ -120,6 +120,7 @@ test("order: validate, staged, certify, re-confirm staged, promote, verify, stab
     "Confirm the candidate is staged",
     "Certify exact staged candidate",
     "Re-confirm the candidate is still staged right before promotion",
+    "Wait for exact-SHA Floor success",
     "Promote the exact certified deployment",
     "Verify www.mdeai.co serves the exact certified deployment",
     "Verify production aliases remain stable after promotion",
@@ -375,4 +376,22 @@ test("scheduled monitor never passes event SHA as live-main expectation", () => 
   assert.doesNotMatch(job, /active-deployment/, "use one atomic read-only monitor command");
   assert.match(job, /assert-live-current/);
   assert.match(job, /GH_TOKEN:\s*\$\{\{\s*secrets\.GITHUB_TOKEN\s*\}\}/);
+});
+
+test("SAN-1362: exact-SHA Floor success is a fail-closed prerequisite to production promotion", () => {
+  const text = workflow();
+  const job = certifyJob(text);
+  const gate = stepBody(job, "Wait for exact-SHA Floor success");
+  const promote = stepBody(job, "Promote the exact certified deployment");
+  assert.match(text, /permissions:\s*\n\s*contents: read\s*\n\s*actions: read/);
+  assert.match(gate, /node \.trusted\/scripts\/vercel-release-control\.mjs wait-floor/);
+  assert.match(gate, /GH_TOKEN: \$\{\{ secrets\.GITHUB_TOKEN \}\}/);
+  assert.match(gate, /if: \$\{\{ success\(\) && steps\.certify\.outcome == 'success' \}\}/);
+  assert.ok(stepIndex(job, "Certify exact staged candidate") < stepIndex(job, "Wait for exact-SHA Floor success"));
+  assert.ok(stepIndex(job, "Wait for exact-SHA Floor success") < stepIndex(job, "Promote the exact certified deployment"));
+  assert.match(promote, /assert-current-main/);
+  const published = stepBody(job, "Publish final release certification result");
+  assert.match(published, /FLOOR_OUTCOME: \$\{\{ steps\.floor\.outcome \}\}/);
+  assert.match(published, /"\$FLOOR_OUTCOME" == success/);
+  assert.doesNotMatch(gate, /continue-on-error|always\(\)/);
 });
