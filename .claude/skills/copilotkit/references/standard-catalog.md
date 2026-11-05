@@ -62,7 +62,7 @@ Choose the smallest vocabulary supported by the **existing route-owner provider 
 - **Provider**: use the existing `src/components/copilot/copilot-kit-provider.tsx` and `src/components/chat/chat-provider.tsx` owners; share one stable domain catalog; no nested runtime/provider or hosted Intelligence switch.
 - **Release**: test 390px/keyboard, forged/stale IDs, user-edited controls, unknown component names, failed `render_ui`, old-turn results winning after a new turn, and existing card fallback.
 
-## 4. References with destinations and proof
+## 5. References with destinations and proof
 
 - https://docs.copilotkit.ai/generative-ui/components/standard-catalog — **REFERENCE** the 69 built-ins, `standardUI`, input behaviors and MapLibre requirement; **destination**: catalog design decision; **proof**: count actual exposed components and check version-matched schemas.
 - https://docs.copilotkit.ai/generative-ui/components/catalogs — **ADAPT** `createGenerativeUI`, component schemas and optional `extends`; **destination**: `src/components/copilot/a2ui/mde-ui-catalog.tsx`; **proof**: TypeScript and unsupported-component tests.
