@@ -273,7 +273,7 @@ The fast deterministic regression `e2e/app/partner-ai-signup-persistence.spec.ts
 MDE_PARTNER_LIVE_SOURCE_E2E=1 PW_SKIP_WEBSERVER=1 \
   PROD_SMOKE_BASE_URL=https://www.mdeai.co \
   npx playwright test e2e/app/partner-ai-signup-live-source.spec.ts \
-    --project=prod-smoke --workers=1
+    --project=prod-smoke --workers=1 --retries=0
 ```
 
 4. Verify **1 passed, 0 failed, 0 skipped** plus `SAN1193_LIVE_PASS` and `SAN1193_LIVE_CLEANUP_VERIFIED`. Confirm test identities and any synthetic partner rows were removed. Failed tests require cleanup investigation before another run; no automatic paid-provider retries.

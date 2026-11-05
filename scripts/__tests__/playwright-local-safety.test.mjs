@@ -158,6 +158,15 @@ test("existing localhost QA scripts remain discoverable with their original chro
   }
 });
 
+test("paid live-source QA disables retries at the spec and documented CLI", () => {
+  const source = fs.readFileSync("e2e/app/partner-ai-signup-live-source.spec.ts", "utf8");
+  const guide = fs.readFileSync("e2e/README.md", "utf8");
+  assert.match(source, /test\.describe\.configure\(\{ retries: 0 \}\)/);
+  assert.match(guide, /partner-ai-signup-live-source\.spec\.ts[\s\\]*--project=prod-smoke --workers=1 --retries=0/);
+  assert.match(source, /finally \{/);
+  assert.match(source, /cleanupFixtures\(/);
+});
+
 test("remote QA flags cannot bypass the local-only SMOKE_BASE_URL guard", () => {
   for (const [flag] of REMOTE_QA_SUITE_CASES) {
     assert.throws(
