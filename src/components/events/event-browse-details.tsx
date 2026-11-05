@@ -55,7 +55,8 @@ function EventDetailsActions({
             Full event page
           </Link>
         )}
-        {event.canBuyTickets && event.ticketUrl.startsWith("http") ? (
+        {/* A confirmed 404 means the event is gone; offering to buy would contradict that. */}
+        {state.status !== "missing" && event.canBuyTickets && event.ticketUrl.startsWith("http") ? (
           <a
             href={event.ticketUrl}
             target="_blank"

@@ -103,6 +103,23 @@ describe("EventBrowseDetails failure states", () => {
   });
 });
 
+describe("EventBrowseDetails ticket actions", () => {
+  it("hides Buy tickets when the canonical API confirms the event is gone", async () => {
+    stubFetch(() => json({ error: "Event not found" }, 404));
+    // The browse row still claims tickets are on sale; the canonical record says the event is gone.
+    render(
+      <EventBrowseDetailsPanel
+        event={{ ...event, canBuyTickets: true, ticketUrl: "https://tickets.example.com/salsa-night" }}
+        onClose={noop}
+      />,
+    );
+
+    expect(await screen.findByText("This event is no longer available.")).toBeTruthy();
+    expect(screen.queryByTestId("event-browse-details-buy")).toBeNull();
+    expect(screen.queryByTestId("event-browse-details-full-page")).toBeNull();
+  });
+});
+
 describe("EventBrowseDetails ticket labels", () => {
   it("labels a zero-priced tier Free and a full tier Sold out", async () => {
     stubFetch(() =>
