@@ -44,7 +44,7 @@ Event panel: real tiers (GA $40,000 · VIP $120,000 · Backstage $400,000 · Fro
 - A **real** provider 404/503: those branches were proven with intercepted responses, not a live outage.
 - The **signed-in** Ask → Answer journey (`e2e/san-737-selected-place.spec.ts`).
 - Buy tickets: no live event currently has an external ticket URL, so the button never rendered.
-- Production: these PRs are unmerged; `/api/version` still returns the previous release.
+- Production: superseded — both PRs merged (#754 `582c27fb`, #755 `4b7d250e`) and the journeys were re-run on the deployed build `c347162191`; see "Production verification after merge" below.
 - DeepSource JavaScript: 20 remaining findings are the JS-0067 module-scope false-positive class and complexity thresholds (see PR discussion); JS-0098 / JS-0116 / JS-0321 were fixed.
 - `Screenshot public UI` (Argos) failed with HTTP 402 free-plan screenshot capacity while these PRs were open. That job was retired on `main` in #766 (`cfa5a90a`), which is the baseline these PRs now sit on, so the check no longer runs. Nothing was changed in code to silence it.
 
