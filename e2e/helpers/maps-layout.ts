@@ -330,10 +330,14 @@ function watchForAppApiRequest(
       { timeout: timeoutMs },
     )
     .then((request) => {
-      pendingTurnCompletion.set(
-        page,
-        request.response().then((response) => awaitRunResponse(response)),
-      );
+      const completion = request.response().then((response) => awaitRunResponse(response));
+      // This promise now REJECTS on a failed run, and it is stored rather than
+      // awaited here. Without a handler attached at creation, a test that ends (or
+      // never reaches waitForCopilotIdle) leaves an unhandled rejection that can
+      // fail the worker. Attaching one marks it handled; awaiters still see the
+      // rejection, so the failure is reported when the helper runs.
+      completion.catch(() => undefined);
+      pendingTurnCompletion.set(page, completion);
       return true;
     })
     .catch(() => false);
