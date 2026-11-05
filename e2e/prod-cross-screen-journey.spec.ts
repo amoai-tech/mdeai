@@ -102,7 +102,14 @@ test.describe("SAN-1298 cross-screen conversation (/chat → /rentals → /event
     if (identity) await deleteThrowawayIdentity(identity);
   });
 
-  test("a conversation survives leaving /chat and returning to it", async ({ page }) => {
+  // Same journey, both sizes the acceptance asks for. Viewport is set per test so
+  // one invocation covers desktop and mobile with identical steps and assertions.
+  for (const [sizeLabel, viewport] of [
+    ["desktop 1440", { width: 1440, height: 900 }],
+    ["mobile 390", { width: 390, height: 844 }],
+  ] as const) {
+    test(`${sizeLabel}: a conversation survives leaving /chat and returning to it`, async ({ page }) => {
+    await page.setViewportSize(viewport);
     test.setTimeout(420_000);
     identity = await createThrowawayIdentity("qa-san1298");
     if (isVercelPreview) await establishVercelAutomationBypass(page, baseUrl, bypassSecret);
@@ -171,7 +178,19 @@ test.describe("SAN-1298 cross-screen conversation (/chat → /rentals → /event
     await gotoConcierge(page);
     // This is also a hard load, so the session bootstrap is in-flight again.
     postNavigation = true;
-    const savedThread = page.locator(`[data-testid="nav-thread-item"][data-thread-id="${threadA}"]`).first();
+    // On a 390px viewport the rail lives behind the navigation drawer; a real user
+    // taps the trigger before they can see their conversations.
+    const railTrigger = page.getByTestId("nav-drawer-trigger");
+    if (await railTrigger.isVisible().catch(() => false)) {
+      await railTrigger.click();
+    }
+    // Both rails can be in the DOM at once (the desktop rail is hidden at 390px, the
+    // drawer copy is the visible one). Pick the VISIBLE instance, otherwise `.first()`
+    // resolves to the hidden one and the assertion can never pass.
+    const savedThread = page
+      .locator(`[data-testid="nav-thread-item"][data-thread-id="${threadA}"]`)
+      .filter({ visible: true })
+      .first();
     await expect(savedThread, "the earlier conversation is listed in the rail").toBeVisible({
       timeout: 30_000,
     });
@@ -273,5 +292,6 @@ test.describe("SAN-1298 cross-screen conversation (/chat → /rentals → /event
       .toBeGreaterThan(persistedBefore);
 
     expect.soft(consoleErrors, "no unexpected console errors across the journey").toEqual([]);
-  });
+    });
+  }
 });
