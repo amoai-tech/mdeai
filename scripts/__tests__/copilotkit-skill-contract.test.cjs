@@ -43,3 +43,13 @@ test("native render_ui bridge proof supplies a minimal catalog on the existing p
   assert.match(native, /generativeUI=\{\{ ui: probeUI \}\}/);
   assert.match(native, /Do not mistake a catalog-free request for a Mastra defect/);
 });
+
+test("native bridge and payment cases retain critical runtime and transaction criteria", () => {
+  const pack = JSON.parse(readFileSync(join(base, "evals/evals.json"), "utf8"));
+  const byId = new Map(pack.evals.map((item) => [item.id, item.expected_output]));
+  for (const id of [9, 17]) {
+    assert.match(byId.get(id), /minimal, inert provider QA catalog/);
+  }
+  assert.match(byId.get(10), /server-side price, quantity and availability revalidation/);
+  assert.match(byId.get(10), /signed Stripe TEST webhook/);
+});

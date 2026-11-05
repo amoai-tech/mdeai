@@ -61,28 +61,28 @@
     {
       "id": 9, "should_trigger": true,
       "prompt": "We upgraded MDE from CopilotKit 1.75 to 1.84.1. The SAN-1630 A2UI catalog does not show in /chat even though TypeScript compiles. How should we proceed?",
-      "expected_output": "Content review criteria: Treats v1.75.0 references as historical and uses the current installed package; Demands an actual render_ui round trip through Mastra before claiming native A2UI works; Keeps existing tool renderer, runtime and route-specific providers.",
+      "expected_output": "Content review criteria: Treats v1.75.0 references as historical and uses the current installed package; Demands an actual render_ui round trip through Mastra before claiming native A2UI works; Keeps existing tool renderer, runtime and route-specific providers.; First mounts a minimal, inert provider QA catalog before render_ui verification, never blaming Mastra based on a catalog-free run.",
       "files": [],
       "expectations": [{"id":"catalog","kind":"deterministic","check":"catalog_contains","value":"copilotkit"},{"id":"skill-called","kind":"deterministic","check":"skill_called","value":"copilotkit"},{"id":"instructions-loaded","kind":"deterministic","check":"skill_result_ok","value":"copilotkit"},{"id":"turn-completed","kind":"deterministic","check":"turn_completed"}]
     },
     {
       "id": 10, "should_trigger": true,
       "prompt": "Add interactive rental comparison and Events tickets with CopilotKit GenerativeUISurface. Can we copy the official generative-ui-shop, put model prices into cards and let the agent open Stripe Checkout itself?",
-      "expected_output": "Content review criteria: Does not copy TanStack/Prisma/shop stack or add a second provider; Rejects model-provided prices, made-up coordinates and direct AI payment; Requires real E2E browser/Stripe TEST proof with deterministic fallback.",
+      "expected_output": "Content review criteria: Does not copy TanStack/Prisma/shop stack or add a second provider; Rejects model-provided prices, made-up coordinates and direct AI payment; Requires real E2E browser/Stripe TEST proof with deterministic fallback.; Requires user-activated checkout with server-side price, quantity and availability revalidation and a signed Stripe TEST webhook.",
       "files": [],
       "expectations": [{"id":"catalog","kind":"deterministic","check":"catalog_contains","value":"copilotkit"},{"id":"skill-called","kind":"deterministic","check":"skill_called","value":"copilotkit"},{"id":"instructions-loaded","kind":"deterministic","check":"skill_result_ok","value":"copilotkit"},{"id":"turn-completed","kind":"deterministic","check":"turn_completed"}]
     },
     {
       "id": 11, "should_trigger": true,
       "prompt": "Use CopilotKit A2UI to build SAN-1630 for our existing Mastra app. The docs show a2ui: {} and an older A2A restaurant example. Should we add both of those plus the native render_ui catalog?",
-      "expected_output": "Content review criteria: Separates protocol A2UI middleware from native render_ui without a second runtime; Recognizes legacy A2A/v0.8 payloads are not compatible with current spec by assumption; Requires exact package verification and one live tool-call/UI trace.",
+      "expected_output": "Content review criteria: Separates protocol A2UI middleware from native render_ui without a second runtime; Recognizes legacy A2A/v0.8 payloads are not compatible with current spec by assumption; Requires exact package verification and one live tool-call/UI trace.; Reads both native Components/Surfaces and protocol A2UI references when a task combines the two.",
       "files": [],
       "expectations": [{"id":"catalog","kind":"deterministic","check":"catalog_contains","value":"copilotkit"},{"id":"skill-called","kind":"deterministic","check":"skill_called","value":"copilotkit"},{"id":"instructions-loaded","kind":"deterministic","check":"skill_result_ok","value":"copilotkit"},{"id":"turn-completed","kind":"deterministic","check":"turn_completed"}]
     },
     {
       "id": 12, "should_trigger": true,
       "prompt": "For MDE rentals, use the 69 CopilotKit standardUI components including Map and Button, and extend standardUI so the model can only render RentalCard. Is this the smallest safe catalog?",
-      "expected_output": "Content review criteria: Explains 69-component standardUI and how extends expands visibility; Keeps MDE domain cards and existing map/pins authoritative; Never lets the agent invent prices/coordinates or trigger checkout.",
+      "expected_output": "Content review criteria: Explains 69-component standardUI and how extends expands visibility; Keeps MDE domain cards and existing map/pins authoritative; Never lets the agent invent prices/coordinates or trigger checkout.; Prefers a tiny ID-only MDE catalog rather than exposing every built-in component or installing MapLibre.",
       "files": [],
       "expectations": [{"id":"catalog","kind":"deterministic","check":"catalog_contains","value":"copilotkit"},{"id":"skill-called","kind":"deterministic","check":"skill_called","value":"copilotkit"},{"id":"instructions-loaded","kind":"deterministic","check":"skill_result_ok","value":"copilotkit"},{"id":"turn-completed","kind":"deterministic","check":"turn_completed"}]
     },
@@ -117,7 +117,7 @@
     {
       "id": 17, "should_trigger": true,
       "prompt": "The agent says it sent render_ui, but GenerativeUISurface displays the fallback. How should we use official CopilotKit Inspector to decide whether the issue is provider, catalog, model tool exposure, rejected operation or Mastra transport? No code edits.",
-      "expected_output": "Content review criteria: Names relevant Inspector tabs and their signals; Checks whether render_ui reached model and browser; Does not install parallel A2UI middleware or replace fallback.",
+      "expected_output": "Content review criteria: Names relevant Inspector tabs and their signals; Checks whether render_ui reached model and browser; Does not install parallel A2UI middleware or replace fallback.; First mounts a minimal, inert provider QA catalog so render_ui is advertised for the debugging run.",
       "files": [],
       "expectations": [{"id":"catalog","kind":"deterministic","check":"catalog_contains","value":"copilotkit"},{"id":"skill-called","kind":"deterministic","check":"skill_called","value":"copilotkit"},{"id":"instructions-loaded","kind":"deterministic","check":"skill_result_ok","value":"copilotkit"},{"id":"turn-completed","kind":"deterministic","check":"turn_completed"}]
     },
