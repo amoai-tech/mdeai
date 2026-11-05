@@ -141,7 +141,7 @@ Use for current business, market, revenue, and experiment strategy. Historical r
 
 ## Complete active documentation catalog
 
-This table lists **every active documentation file currently under `docs/`** on `main` (145 files). It includes Markdown, HTML wireframes, and JSON architecture snapshots. Obsidian workspace files, binary assets, and historical material under `_archive/` are intentionally excluded from the active-doc catalog. `npm run check:docs` enforces exact set equality between this catalog and the active filesystem, so adding, moving, or removing an active document requires the catalog to change in the same commit.
+This revision's catalog contains **163 active-document entries** plus **two `_archive/` reference links** (165 linked rows total). It includes Markdown, HTML wireframes, and JSON architecture snapshots. Obsidian workspace files, binary assets, and historical material under `_archive/` are intentionally excluded from the active-doc catalog. `npm run check:docs` enforces exact set equality between this catalog and the active filesystem, so adding, moving, or removing an active document requires the catalog to change in the same commit.
 
 | Area | Document | Type | Status |
 |---|---|---|---|
@@ -166,6 +166,7 @@ This table lists **every active documentation file currently under `docs/`** on 
 | Platform | [`03-platform/copilotkit-mastra/reference-adoption-plan-2026-09-20.md`](03-platform/copilotkit-mastra/reference-adoption-plan-2026-09-20.md) | Markdown | Current |
 | Platform | [`03-platform/copilotkit-mastra/reference-pack.md`](03-platform/copilotkit-mastra/reference-pack.md) | Markdown | Current |
 | Platform | [`03-platform/copilotkit-mastra/roadmap.md`](03-platform/copilotkit-mastra/roadmap.md) | Markdown | Current |
+| Platform | [`03-platform/copilotkit-mastra/san-1637-ai-execution-plan.md`](03-platform/copilotkit-mastra/san-1637-ai-execution-plan.md) | Markdown | Current |
 | Domains | [`04-domains/README.md`](04-domains/README.md) | Markdown | Current |
 | Domains | [`04-domains/cafes-nightlife/README.md`](04-domains/cafes-nightlife/README.md) | Markdown | Current |
 | Domains | [`04-domains/ecommerce/README.md`](04-domains/ecommerce/README.md) | Markdown | Current |
