@@ -1,5 +1,5 @@
 /** Opaque listing IDs: UUIDs or provider slugs such as candidate-fincaraiz-123. */
-const RENTAL_A2UI_ID = /^[A-Za-z0-9_-]{1,64}$/;
+const RENTAL_A2UI_ID = /^(?=[A-Za-z0-9_-]*[A-Za-z0-9])[A-Za-z0-9_-]{1,64}$/;
 
 /**
  * A browser-supplied ID may enter a bounded prompt hint only if it is a safe

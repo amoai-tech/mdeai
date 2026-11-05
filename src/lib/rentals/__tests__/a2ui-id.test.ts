@@ -13,5 +13,8 @@ describe("A2UI rental id shape", () => {
     expect(isRentalA2UIId("id<script>")).toBe(false);
     expect(isRentalA2UIId("x".repeat(65))).toBe(false);
     expect(isRentalA2UIId("")).toBe(false);
+    expect(isRentalA2UIId("___")).toBe(false);
+    expect(isRentalA2UIId("----")).toBe(false);
+    expect(isRentalA2UIId("_-_-")).toBe(false);
   });
 });
