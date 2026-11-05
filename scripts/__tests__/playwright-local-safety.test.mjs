@@ -70,6 +70,50 @@ function configuredProjects(extraEnv = {}) {
   }));
 }
 
+test("CLI test discovery fails closed on inherited remote SMOKE_BASE_URL", () => {
+  assert.throws(
+    () => discover({ SMOKE_BASE_URL: "https://example.invalid" }, ["--project=chromium"]),
+    (error) => {
+      assert.match(String(error.stderr), /SMOKE_BASE_URL must be a local HTTP\(S\) loopback URL/);
+      return true;
+    },
+  );
+});
+
+test("ordinary browser projects reject remote or unsafe SMOKE_BASE_URL before test discovery", () => {
+  for (const target of [
+    "https://example.invalid",
+    "http://192.0.2.1:3001",
+    "http://0.0.0.0:3001",
+    "file:///tmp/index.html",
+    "http://user:secret@localhost:3001",
+  ]) {
+    assert.throws(
+      () => configuredProjects({ SMOKE_BASE_URL: target }),
+      /SMOKE_BASE_URL must be a local HTTP\(S\) loopback URL/,
+      `expected unsafe target to be rejected: ${target}`,
+    );
+  }
+});
+
+test("local IPv4, IPv6 and localhost targets still work", () => {
+  for (const target of ["http://localhost:3001", "http://127.0.0.1:3002", "http://[::1]:3003"]) {
+    const loaded = configuredProjects({ SMOKE_BASE_URL: target });
+    assert.equal(loaded.chromiumBaseURL, target);
+  }
+});
+
+test("explicit remote production smoke remains separate from local Chromium", () => {
+  const loaded = configuredProjects({
+    SMOKE_BASE_URL: "http://localhost:3001",
+    PROD_SMOKE_BASE_URL: "https://example.invalid",
+    PW_SKIP_WEBSERVER: "1",
+  });
+  assert.equal(loaded.chromiumBaseURL, "http://localhost:3001");
+  assert.equal(loaded.productionPresent, true);
+  assert.equal(loaded.webServerPort, null);
+});
+
 test("remote URL variables never redirect local Chromium to a remote server", () => {
   for (const remoteEnv of [
     { PROD_SMOKE_BASE_URL: "https://example.invalid" },

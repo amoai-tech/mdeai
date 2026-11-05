@@ -2,9 +2,24 @@ import { defineConfig, devices } from "@playwright/test";
 import { createArgosReporterOptions } from "@argos-ci/playwright/reporter";
 
 const localBaseURL = process.env.SMOKE_BASE_URL || "http://localhost:3001";
-// Parse once: browser CI needs to know when Next.js is LISTENING, not when the
-// expensive marketing homepage has finished compiling or fetching live data.
+// Ordinary browser projects may create records. Never allow an inherited
+// SMOKE_BASE_URL to silently redirect them to a remote server. Intentional
+// production checks use the separate prod-smoke project and PROD_SMOKE_BASE_URL.
 const localWebServerURL = new URL(localBaseURL);
+const loopbackHosts = new Set(["localhost", "127.0.0.1", "[::1]"]);
+if (
+  !["http:", "https:"].includes(localWebServerURL.protocol) ||
+  !loopbackHosts.has(localWebServerURL.hostname) ||
+  localWebServerURL.username ||
+  localWebServerURL.password
+) {
+  throw new Error(
+    "SMOKE_BASE_URL must be a local HTTP(S) loopback URL (localhost, 127.0.0.1, or [::1]). " +
+      "Use PROD_SMOKE_BASE_URL with PW_SKIP_WEBSERVER=1 and --project=prod-smoke for explicit remote checks.",
+  );
+}
+// Browser CI needs to know when Next.js is LISTENING, not when the expensive
+// marketing homepage has finished compiling or fetching live data.
 const localWebServerPort = Number(
   localWebServerURL.port || (localWebServerURL.protocol === "https:" ? 443 : 80),
 );
