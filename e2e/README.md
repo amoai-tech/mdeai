@@ -98,7 +98,9 @@ role with `test.use({ qaRole: "..." })` and receives `qaRolePage`:
 | `broker` | Existing dedicated account from `MDE_QA_BROKER_EMAIL` |
 
 Renter and broker accounts must already exist, be named `qa-*@mdeai.co`, and
-have the intended **actual app role**. The fixture refuses a missing or
+have the intended **actual app role**. `qaRolePage` signs into its own browser
+context and checks the session identity; it does **not** use the legacy
+Super Admin `authSession`/`authenticatedPage` fixture (which is lazy, not auto). The fixture refuses a missing or
 unconfigured identity; it never creates a user or silently substitutes Super Admin.
 For authenticated tests, **explicitly disable screenshot, trace and video**:
 
@@ -111,12 +113,32 @@ test("host QA can open Saved", async ({ qaRolePage }) => {
 });
 ```
 
+The existing MDE Supabase QA accounts can be selected with these **ignored**
+`.env.local` settings (never commit this file or put the service key in GitHub PRs):
+
+```dotenv
+MDE_QA_RENTER_EMAIL=qa-renter@mdeai.co
+MDE_QA_BROKER_EMAIL=qa-landlord@mdeai.co
+MDE_QA_EVENT_HOST_EMAIL=qa-landlord@mdeai.co
+```
+
+The landlord identity has a **development-labelled Rentals profile** as well as
+an Event Host partner record; these are two different app roles, not a
+`user_roles.landlord` enum or an admin permission. The runner explicitly
+reads `.env.local` before registering role tests, so missing configuration
+cannot quietly convert an opted-in test into a skip.
+
 Read-only browser verification with the configured existing accounts:
 
 ```bash
 MDE_ROLE_QA_E2E=1 PW_SKIP_WEBSERVER=1 SMOKE_BASE_URL=https://www.mdeai.co \
   npm run test:e2e:qa-roles
 ```
+
+Expect **5 passed, 0 skipped**: guest deny, Super Admin, Event Host,
+renter and broker. Renter and broker also prove `403` against the admin
+Rentals API. Do not replace these accounts with the Super Admin identity; the
+real server must enforce non-admin access.
 
 The fixture marks authenticated tests' private output directories. Before generic
 Playwright artifacts are uploaded, CI calls

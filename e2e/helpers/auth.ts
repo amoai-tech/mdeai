@@ -361,12 +361,15 @@ export async function getTestSession(
   }
   const admin = await getSupabaseAdmin();
 
-  // Supabase admin.generateLink(type: "magiclink") creates missing users.
-  // Both permanent QA identities must already exist: a smoke run must never
-  // silently create an auth user. Explicitly provisioned throwaway identities
-  // are handled by their existing creation/cleanup flows.
-  const permanentQaEmails = [QA_HOST_EMAIL, QA_SUPER_ADMIN_EMAIL];
-  if (options.requireExisting || permanentQaEmails.includes(email.toLowerCase())) {
+  // Supabase generateLink(magiclink) may create missing users. Never let a
+  // permanent QA identity be silently provisioned by a test. Disposable
+  // qa-isolation.mdeai.co users are provisioned explicitly elsewhere.
+  const normalizedEmail = email.trim().toLowerCase();
+  // Prefix/suffix checks are sufficient here: this is an existing-user safety
+  // guard, not email validation. Avoid regex analysis noise on QA input.
+  const fixedQaEmail = normalizedEmail === QA_SUPER_ADMIN_EMAIL ||
+    (normalizedEmail.startsWith("qa-") && normalizedEmail.endsWith("@mdeai.co"));
+  if (options.requireExisting || fixedQaEmail) {
     let page = 1;
     let found = false;
     while (true) {
@@ -375,12 +378,12 @@ export async function getTestSession(
         perPage: 1000,
       });
       if (error) throw new Error(`QA account lookup failed: ${error.message}`);
-      found = data.users.some((user) => user.email?.toLowerCase() === email.toLowerCase());
+      found = data.users.some((user) => user.email?.toLowerCase() === normalizedEmail);
       if (found || !data.nextPage) break;
       page = data.nextPage;
     }
     if (!found) {
-      throw new Error(`Existing QA account ${email} not found; refusing magic-link auto-creation`);
+      throw new Error(`Existing QA account ${normalizedEmail} not found; refusing magic-link auto-creation`);
     }
   }
 
@@ -392,13 +395,13 @@ export async function getTestSession(
     try {
       const { data: link, error: linkErr } = await admin.auth.admin.generateLink({
         type: "magiclink",
-        email,
+        email: normalizedEmail,
       });
       if (linkErr) throw linkErr;
       const otp = link?.properties?.email_otp;
       if (!otp) throw new Error("missing email_otp from generateLink");
       const { data, error } = await client.auth.verifyOtp({
-        email,
+        email: normalizedEmail,
         token: otp,
         type: "email",
       });
