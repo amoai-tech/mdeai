@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
@@ -566,6 +567,77 @@ const floorRun = (over = {}) => ({
   ...over,
 });
 const floorResponse = (runs) => ({ total_count: runs.length, workflow_runs: runs });
+
+test("pre-promotion Floor: CLI usage and source header document wait-floor", () => {
+  const scriptPath = path.resolve("scripts/vercel-release-control.mjs");
+  const source = fs.readFileSync(scriptPath, "utf8");
+  const header = source.slice(0, source.indexOf("*/"));
+  assert.match(header, /wait-floor\s+require the exact main-push Floor workflow SUCCESS BEFORE promotion/);
+  assert.match(header, /GH_TOKEN \+ GITHUB_REPOSITORY for GitHub checks/);
+  assert.match(header, /VERCEL_DEPLOYMENT_SHA for candidate-specific checks/);
+
+  const cli = spawnSync(process.execPath, [scriptPath], { encoding: "utf8" });
+  assert.equal(cli.status, 1, "missing command must report usage, not succeed");
+  assert.match(cli.stderr, /usage: vercel-release-control\.mjs <[^\n]*wait-floor[^\n]*>/);
+  assert.doesNotMatch(cli.stderr, /Error \[/, "usage should be a controlled error");
+});
+
+test("pre-promotion Floor: malformed API responses and run identities fail closed", () => {
+  const malformed = [
+    null,
+    undefined,
+    {},
+    { total_count: 0 },
+    { total_count: 0, workflow_runs: null },
+    { total_count: 0, workflow_runs: {} },
+    { total_count: "1", workflow_runs: [floorRun()] },
+    { total_count: 1.5, workflow_runs: [floorRun()] },
+    { total_count: -1, workflow_runs: [] },
+    { total_count: 1, workflow_runs: [] },
+    { total_count: 0, workflow_runs: [floorRun()] },
+    floorResponse([floorRun({ head_sha: undefined })]),
+    floorResponse([floorRun({ head_sha: null })]),
+    floorResponse([floorRun({ head_sha: "unknown" })]),
+    floorResponse([floorRun({ status: "completed", conclusion: "unexpected" })]),
+  ];
+  for (const response of malformed) {
+    if (response?.workflow_runs?.[0]?.conclusion === "unexpected") {
+      assert.equal(floorRunStatus(response, SHA), "failed",
+        "unknown completed conclusion must never be treated as success");
+    } else {
+      assert.throws(() => floorRunStatus(response, SHA), /vercel-release/,
+        "invalid API data must never authorize a release");
+    }
+  }
+
+  for (const invalid of [
+    { id: undefined },
+    { id: "123" },
+    { run_attempt: 0 },
+    { run_attempt: undefined },
+    { created_at: "not-a-date" },
+  ]) {
+    assert.throws(() => floorRunStatus(floorResponse([floorRun(invalid)]), SHA), /vercel-release/);
+  }
+});
+
+test("pre-promotion Floor: API rejects malformed JSON and partial results", async () => {
+  for (const payload of [
+    { total_count: 1, workflow_runs: null },
+    { total_count: "1", workflow_runs: [floorRun()] },
+    { total_count: 2, workflow_runs: [floorRun()] },
+    floorResponse([floorRun({ head_sha: undefined })]),
+  ]) {
+    await assert.rejects(() => githubFloorStatus({
+      repository: "amoai-tech/mdeai", sha: SHA, token: "test-token",
+      fetchImpl: async () => ({ ok: true, json: async () => payload }),
+    }), /vercel-release/);
+  }
+  await assert.rejects(() => githubFloorStatus({
+    repository: "amoai-tech/mdeai", sha: SHA, token: "test-token",
+    fetchImpl: async () => ({ ok: true, json: async () => { throw new Error("malformed"); } }),
+  }), /vercel-release/);
+});
 
 test("pre-promotion Floor: exact main push is allowed only on completed success", () => {
   assert.equal(floorRunStatus(floorResponse([floorRun()]), SHA), "success");
