@@ -15,10 +15,18 @@ test('advisory preview still selects only current PRs after Floor and executes t
 test('all five Rentals tests remain selected together, and every new public test exists', () => {
   assert.equal(RENTAL_TESTS.length, 5);
   assert.deepEqual(selectMomenticPilotTests(['src/components/rentals/rental-browse-card.tsx']), RENTAL_TESTS);
-  for (const path of [...RENTAL_TESTS, ...EVENT_TESTS, ...CONCIERGE_TESTS]) {
-    assert.equal(fs.existsSync(path), true, path);
-    assert.match(fs.readFileSync(path, 'utf8'), /- read-only/);
-  }
+  // Explicit trusted paths; static reads avoid dynamic filesystem access in this privileged-CI test.
+  const fixtures = [
+    ['momentic/rentals/exact-bedroom-filter.test.yaml', fs.readFileSync('momentic/rentals/exact-bedroom-filter.test.yaml', 'utf8')],
+    ['momentic/rentals/broker-guest-redirect.test.yaml', fs.readFileSync('momentic/rentals/broker-guest-redirect.test.yaml', 'utf8')],
+    ['momentic/rentals/renter-saved-guest-redirect.test.yaml', fs.readFileSync('momentic/rentals/renter-saved-guest-redirect.test.yaml', 'utf8')],
+    ['momentic/rentals/search-to-details.test.yaml', fs.readFileSync('momentic/rentals/search-to-details.test.yaml', 'utf8')],
+    ['momentic/rentals/viewing-form-no-submit.test.yaml', fs.readFileSync('momentic/rentals/viewing-form-no-submit.test.yaml', 'utf8')],
+    ['momentic/events/public-event-details.test.yaml', fs.readFileSync('momentic/events/public-event-details.test.yaml', 'utf8')],
+    ['momentic/concierge/guest-chat-entry.test.yaml', fs.readFileSync('momentic/concierge/guest-chat-entry.test.yaml', 'utf8')],
+  ];
+  assert.deepEqual(fixtures.map(([path]) => path), [...RENTAL_TESTS, ...EVENT_TESTS, ...CONCIERGE_TESTS]);
+  for (const [, text] of fixtures) assert.match(text, /- read-only/);
 });
 
 test('selected test count, real execution, and success must agree before PASS', () => {

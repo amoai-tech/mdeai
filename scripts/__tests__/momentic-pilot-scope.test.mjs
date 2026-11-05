@@ -1,3 +1,4 @@
+// skipcq: JS-0833 -- Node .mjs uses ESM; DeepSource parser reports a false script-mode error.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {

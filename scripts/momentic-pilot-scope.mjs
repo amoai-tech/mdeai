@@ -1,3 +1,4 @@
+// skipcq: JS-0833 -- Node .mjs uses ESM; DeepSource parser reports a false script-mode error.
 /** Select only trusted, read-only Momentic tests for files changed by a PR. */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
