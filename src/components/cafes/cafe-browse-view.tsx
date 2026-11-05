@@ -83,12 +83,15 @@ function CafeBrowseViewInner({
   // closes the panel when a filter removes it and stops a late search from repointing it.
   // SAN-1638: closing Details puts keyboard focus back on the control that opened it.
   const detailsTriggerRef = useRef<HTMLElement | null>(null);
+  // SAN-1638: the panel has its own id. Details writes the Ask context; Ask never opens the panel.
+  const [detailsId, setDetailsId] = useState<string | null>(null);
   // Resolved only from the rows actually on screen. An Ask MDE search replaces the catalogue grid
   // with grounded rows, so a Details panel for the old catalogue must close instead of floating
   // over unrelated results.
   const displayedListings = activeRows === null ? results : [];
-  const detailsListing = displayedListings.find((listing) => listing.id === selectedId) ?? null;
+  const detailsListing = displayedListings.find((listing) => listing.id === detailsId) ?? null;
   const closeDetails = useCallback(() => {
+    setDetailsId(null);
     clearAskSelection();
     requestAnimationFrame(() => detailsTriggerRef.current?.focus());
   }, [clearAskSelection]);
@@ -176,13 +179,18 @@ function CafeBrowseViewInner({
                 pinId={basePins.some((pin) => pin.id === `venue-${listing.id}`) ? `venue-${listing.id}` : undefined}
                 selectedForMap={selectedPinId === `venue-${listing.id}`}
                 onMapSelect={basePins.some((pin) => pin.id === `venue-${listing.id}`) ? () => selectPin(`venue-${listing.id}`) : undefined}
-                onAskSelect={() => selectForAsk(selectedId === listing.id ? null : listing.id)}
+                onAskSelect={() => {
+                  // Context only: never opens Details, and closes a panel for another record.
+                  setDetailsId(null);
+                  selectForAsk(selectedId === listing.id ? null : listing.id);
+                }}
                 onDetails={(trigger) => {
                   detailsTriggerRef.current = trigger;
                   // SAN-1638: the panel record is also the Ask MDE record, so the concierge can
                   // never answer about a venue the visitor is no longer looking at. Selecting
                   // context does not send a message.
                   selectForAsk(listing.id);
+                  setDetailsId(listing.id);
                 }}
                 composition="nova"
                 mediaLayout="inline"

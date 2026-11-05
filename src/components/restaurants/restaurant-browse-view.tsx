@@ -55,8 +55,10 @@ function RestaurantBrowseViewInner({
   const retryHref = buildFilterUrl({ neighborhood, cuisine });
   const [searched, setSearched] = useState<{ scope: string; rows: Restaurant[] } | null>(null);
   const [selectedForAskId, setSelectedForAskId] = useState<string | null>(null);
-  // SAN-1638: no separate Details id. One selected record drives the map, the panel and Ask MDE,
-  // so they cannot disagree — and a restaurant with no coordinates still opens Details.
+  // SAN-1638: the panel has its own id. Opening Details writes the Ask context; pressing Ask never
+  // opens the panel (on a phone that would cover the composer), and pressing Ask while another
+  // panel is open closes that panel so the two cannot describe different restaurants.
+  const [detailsId, setDetailsId] = useState<string | null>(null);
   // SAN-1638: closing Details puts keyboard focus back on the control that opened it.
   const detailsTriggerRef = useRef<HTMLElement | null>(null);
   const shownResults = searched?.scope === retryHref ? searched.rows : results;
@@ -68,16 +70,20 @@ function RestaurantBrowseViewInner({
     : null;
   // Resolved from the rows currently on screen, so a filter that drops the restaurant closes the
   // panel and a late search result can never repoint an already-open Details.
-  const openRestaurantId = pinRestaurantId ?? selectedForAskId;
+  // A pin selection opened Details before this task; keep that, and let an explicit Details click
+  // win by releasing the pin.
+  const openRestaurantId = detailsId ?? pinRestaurantId;
   const detailsRestaurant = shownResults.find((r) => r.id === openRestaurantId) ?? null;
-  // Forget a selection whose record left the results, so it cannot reopen on a later search.
+  // Forget an id whose record left the results, so it cannot reopen on a later search.
+  if (detailsId && !shownResults.some((r) => r.id === detailsId)) {
+    setDetailsId(null);
+  }
   if (selectedForAskId && !shownResults.some((r) => r.id === selectedForAskId)) {
     setSelectedForAskId(null);
   }
-  // The panel record IS the Ask record; pressing Ask on another card therefore moves both.
-  const selectedForAsk = detailsRestaurant?.id ?? null;
+  const selectedForAsk = shownResults.some((r) => r.id === selectedForAskId) ? selectedForAskId : null;
   const closeDetails = useCallback(() => {
-    setSelectedForAskId(null);
+    setDetailsId(null);
     // Releasing the pin too, otherwise pin-driven Details would reopen on the next render.
     setSelectedPinId(null);
     requestAnimationFrame(() => detailsTriggerRef.current?.focus());
@@ -189,7 +195,10 @@ function RestaurantBrowseViewInner({
                     // Ask selects context only: it clears the map/details preview and
                     // toggles our own selection. Nothing is sent until the visitor submits.
                     onAskSelect={() => {
+                      // Ask sets context only. It never opens Details (which would cover the
+                      // composer on a phone) and it closes any panel describing another record.
                       setSelectedPinId(null);
+                      setDetailsId(null);
                       setSelectedForAskId((current) =>
                         current === r.id ? null : r.id,
                       );
@@ -200,6 +209,7 @@ function RestaurantBrowseViewInner({
                       // win the lookup and leave the panel showing a different restaurant.
                       setSelectedPinId(null);
                       setSelectedForAskId(r.id);
+                      setDetailsId(r.id);
                     }}
                     detailsTestId={`restaurant-details-open-${r.id}`}
                     testId={`restaurant-card-${r.id}`}
