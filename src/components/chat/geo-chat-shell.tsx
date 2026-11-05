@@ -158,7 +158,7 @@ export function GeoChatShell() {
                                     <EventWebCitationFetch />
                                   )}
                                   <MapUiSync />
-                                  <RentalA2UIContext />
+                                  {deterministic ? null : <RentalA2UIContext />}
                                   <div className="flex min-h-0 flex-1 flex-col">
                                     <LeadConfirmationBanner />
                                     <VenueBookingConfirmationBanner />
