@@ -87,7 +87,7 @@ ignored `.env.local` or CI secret store. Never print, commit or upload these
 secrets, Supabase session cookies, Playwright traces, storage-state JSON or
 authenticated screenshots. On a clean worktree, provide the env locally
 without committing it. Missing credentials must make this explicit smoke fail,
-not skip to green. Playwright 1.61 may create `error-context.md` with page content
+not skip to green. Playwright may create `error-context.md` with page content
 on a failed assertion even when trace/screenshot/video are off; treat local
 `test-results/` and HTML reports as sensitive and never publish them from
 authenticated runs. There is no supported `error-context: "off"` test option.
@@ -223,7 +223,7 @@ MDE_SUPER_ADMIN_QA=1 PW_SKIP_WEBSERVER=1 PROD_SMOKE_BASE_URL=https://www.mdeai.c
   npx playwright test e2e/qa-super-admin-fixture.spec.ts --project=prod-smoke --workers=1
 ```
 
-Playwright 1.61 defines `screenshot`, `trace` and `video` as injectable
+Playwright defines `screenshot`, `trace` and `video` as injectable
 worker-scoped option fixtures. The safe/unsafe regression in
 `e2e/qa-playwright-artifact-options*.spec.ts` verifies the resolved values and
 the guard without signing into any account:

@@ -1,7 +1,7 @@
 import { assertSuperAdminRecordingOff, expect, test } from "./fixtures";
 
 /**
- * Hermetic Playwright 1.61 regression. These are built-in WORKER option
+ * Hermetic Playwright worker-option regression. These are built-in WORKER option
  * fixtures; test.use belongs at file scope, not inside a describe group.
  * No browser, login, Supabase credentials or external services needed.
  */
