@@ -146,6 +146,18 @@ test("every remote QA suite requires its own explicit opt-in and prod-smoke proj
   }
 });
 
+test("existing localhost QA scripts remain discoverable with their original chromium project", () => {
+  for (const [flag, path] of REMOTE_QA_SUITE_CASES) {
+    const listed = discover(
+      { SMOKE_BASE_URL: "http://localhost:3001", [flag]: "1" },
+      [path, "--project=chromium"],
+    );
+    assert.match(listed, /\[chromium\]/);
+    assert.match(listed, /Total: [1-9][0-9]* tests? in [1-9]/);
+    assert.ok(listed.includes(path.slice(path.lastIndexOf("/") + 1)), path);
+  }
+});
+
 test("remote QA flags cannot bypass the local-only SMOKE_BASE_URL guard", () => {
   for (const [flag] of REMOTE_QA_SUITE_CASES) {
     assert.throws(

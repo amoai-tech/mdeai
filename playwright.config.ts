@@ -40,6 +40,19 @@ const VITEST_TESTS = "**/*.test.ts";
 const OPT_IN_PROD_SPECS =
   process.env.MDE_SAN1298_CROSS_SCREEN === "1" ? ["**/prod-cross-screen-journey.spec.ts"] : [];
 
+// Scope remote QA allowlisting to prod-smoke only; PROD_SPECS is also
+// ignored by local Chromium projects. Existing local opt-in QA must keep working.
+const REMOTE_QA_SPECS = [
+  ...(process.env.MDE_REMOTE_DISCOVERY_CARDS === "1"
+    ? ["**/san-1140-discovery-card-actions.spec.ts"] : []),
+  ...(process.env.MDE_ROLE_QA_E2E === "1"
+    ? ["**/qa-role-selection.spec.ts"] : []),
+  ...(process.env.MDE_SUPER_ADMIN_QA === "1"
+    ? ["**/qa-super-admin-fixture.spec.ts"] : []),
+  ...(process.env.MDE_PARTNER_LIVE_SOURCE_E2E === "1"
+    ? ["**/app/partner-ai-signup-live-source.spec.ts"] : []),
+];
+
 const PROD_SPECS = [
   "**/app/host-ai-continuity.spec.ts",
   "**/app/host-ai-sales-accuracy.spec.ts",
@@ -49,17 +62,6 @@ const PROD_SPECS = [
   ...(process.env.MDE_SAN1606_REMOTE_MOBILE_NAV === "1"
     ? ["**/mobile-bottom-nav.spec.ts"]
     : []),
-  // Remote QA is suite-scoped; an opt-in flag enables only its corresponding
-  // existing test file. All still require --project=prod-smoke, a remote URL,
-  // and PW_SKIP_WEBSERVER=1. Auth and fixture cleanup remain in each suite.
-  ...(process.env.MDE_REMOTE_DISCOVERY_CARDS === "1"
-    ? ["**/san-1140-discovery-card-actions.spec.ts"] : []),
-  ...(process.env.MDE_ROLE_QA_E2E === "1"
-    ? ["**/qa-role-selection.spec.ts"] : []),
-  ...(process.env.MDE_SUPER_ADMIN_QA === "1"
-    ? ["**/qa-super-admin-fixture.spec.ts"] : []),
-  ...(process.env.MDE_PARTNER_LIVE_SOURCE_E2E === "1"
-    ? ["**/app/partner-ai-signup-live-source.spec.ts"] : []),
   "**/prod-synthetic-smoke.spec.ts",
   "**/prod-signed-in-route.spec.ts",
   "**/prod-ticket-wallet-authed.spec.ts",
@@ -228,7 +230,7 @@ export default defineConfig({
     },
     ...(runProductionProjects ? [{
       name: "prod-smoke",
-      testMatch: PROD_SPECS,
+      testMatch: [...PROD_SPECS, ...REMOTE_QA_SPECS],
       testIgnore: VITEST_TESTS,
       retries: 1,
       workers: 1,
