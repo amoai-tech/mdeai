@@ -41,8 +41,9 @@ shape.
   shell because `pr-agent-pinned-loader.py` is mode `0600` while the container runs as uid
   65534 (pre-existing, identical on pristine `main`). The individual steps above were run
   instead; CI `floor` is the authoritative gate.
-- The Host Ops production spec itself needs a signed-in host fixture and was exercised in CI,
-  not from this shell.
+- The Host Ops production spec itself needs a signed-in host fixture, `PROD_SMOKE_BASE_URL` and
+  `PW_SKIP_WEBSERVER=1`. **No workflow in `.github/workflows/` runs it**, so it was **not run for
+  this head** — it is opt-in and must be run deliberately against a deployment.
 
 ## Honest limitation
 

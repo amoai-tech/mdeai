@@ -38,6 +38,12 @@ describe("SAN-729 — a truthful Host sales answer is accepted in both word orde
     expect(statesTicketCount("8 tickets unsold", 2)).toBe(false);
   });
 
+  it("treats 'not sold' and 'not yet sold' as inventory too", () => {
+    expect(statesTicketCount("2 tickets sold, 8 tickets not sold", 2)).toBe(true);
+    expect(statesTicketCount("You sold 2 tickets. 8 tickets not yet sold.", 2)).toBe(true);
+    expect(statesTicketCount("8 tickets not sold", 2)).toBe(false);
+  });
+
   it("never accepts a comma-formatted amount as a partial ticket count", () => {
     // "1,800" must not be read as 1: a revenue figure is not a ticket count.
     expect(statesTicketCount("Tickets sold: 1,800", 1)).toBe(false);

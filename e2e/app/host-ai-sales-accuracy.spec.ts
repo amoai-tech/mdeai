@@ -208,9 +208,12 @@ for (const width of [390, 1440]) {
         .replace(/[\u2010-\u2015\u2212\ufe58\ufe63\uff0d]/g, "-")
         .replace(/[\u00a0\u202f\u2009]/g, " ");
       const expectedEventId = normalize(fixture.eventId);
-      // The full seeded name, including its "(not a real event)" suffix: a reply that
-      // only reproduces a prefix is not an identification of this fixture.
+      // The full seeded name, including its "(not a real event)" suffix.
       const expectedEventName = normalize(fixture.name);
+      // A reply may legitimately drop or reformat the suffix. `run` is an 8-character
+      // random code, so this run-scoped name still identifies exactly one fixture —
+      // it is not a generic prefix that another event could match.
+      const expectedRunScopedName = normalize(`SAN-1396 QA draft ${run}`);
       // Wait for the answer to STOP streaming before judging it. A match taken from a
       // half-rendered stream is not evidence that the completed answer identifies the
       // event, so the identifier must be present and unchanged across two reads.
@@ -221,7 +224,9 @@ for (const width of [390, 1440]) {
         if (followUpStart < 0) return false;
         const answer = normalize(transcript.slice(followUpStart + followUpQuestion.length));
         const identifies =
-          answer.includes(expectedEventId) || answer.includes(expectedEventName);
+          answer.includes(expectedEventId) ||
+          answer.includes(expectedEventName) ||
+          answer.includes(expectedRunScopedName);
         const settled = identifies && answer === previousAnswer;
         previousAnswer = answer;
         return settled;
