@@ -10,8 +10,10 @@ Date: 2026-11-05 · PRs: #754 (restaurants, cafés, nightlife) and #755 (events,
 | Focused unit tests | `npx vitest run src/components/{restaurants,browse,copilot,cafes,nightlife} src/hooks` | 326 passed |
 | Event panel tests | `npx vitest run src/components/events` | 70 passed (incl. 404 / 503 / Retry / Free / Sold out) |
 | Card actions browser spec | `SMOKE_BASE_URL=http://localhost:3020 PW_SKIP_WEBSERVER=1 npx playwright test e2e/san-1140-discovery-card-actions.spec.ts --project=chromium --workers=1` | 17 passed |
-| Deterministic CI lane | GitHub `deterministic chromium 1/3…3/3` | 3/3 green on `d900eb27` |
-| Required checks | `floor`, `mastra-schema-init`, `review / review`, `review / verify-review-result` | green on `d900eb27` |
+| Deterministic CI lane | GitHub `deterministic chromium 1/3…3/3` | 3/3 green at `d900eb27` |
+| Required checks | `floor`, `mastra-schema-init`, `review / review`, `review / verify-review-result` | green at `d900eb27` |
+
+Code was verified at `d900eb27`; the last commit that changes runtime behaviour is `b241c149` (the focus guard). Commits after that add docstrings and this evidence file, which change no behaviour, and CI re-runs on every head — read the current results on the PR rather than this file for the latest head.
 
 ## Real-data browser journeys (dev server, real Supabase catalog)
 
