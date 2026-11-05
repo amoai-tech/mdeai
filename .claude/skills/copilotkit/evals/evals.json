@@ -61,7 +61,7 @@
     {
       "id": 9, "should_trigger": true,
       "prompt": "We upgraded MDE from CopilotKit 1.75 to 1.84.1. The SAN-1630 A2UI catalog does not show in /chat even though TypeScript compiles. How should we proceed?",
-      "expected_output": "Checks current package pins, exact v1.84.1 exports, per-run render_ui tool/context propagation through LoggingMastraAgent, AG-UI tool-call stream and browser before creating a catalog; preserves useRenderTool fallback and avoids a parallel runtime. Content review criteria: Treats v1.75.0 references as historical and uses the current installed package; Demands an actual render_ui round trip through Mastra before claiming native A2UI works; Keeps existing tool renderer, runtime and route-specific providers.",
+      "expected_output": "Checks current package pins, exact v1.84.1 exports, per-run render_ui tool/context propagation through LoggingMastraAgent, AG-UI tool-call stream and browser using a minimal provider QA catalog before creating the full MDE domain catalog; preserves useRenderTool fallback and avoids a parallel runtime. Content review criteria: Treats v1.75.0 references as historical and uses the current installed package; Demands an actual render_ui round trip through Mastra before claiming native A2UI works; Keeps existing tool renderer, runtime and route-specific providers.",
       "files": [],
       "expectations": [{"id":"catalog","kind":"deterministic","check":"catalog_contains","value":"copilotkit"},{"id":"skill-called","kind":"deterministic","check":"skill_called","value":"copilotkit"},{"id":"instructions-loaded","kind":"deterministic","check":"skill_result_ok","value":"copilotkit"},{"id":"turn-completed","kind":"deterministic","check":"turn_completed"}]
     },
@@ -117,7 +117,7 @@
     {
       "id": 17, "should_trigger": true,
       "prompt": "The agent says it sent render_ui, but GenerativeUISurface displays the fallback. How should we use official CopilotKit Inspector to decide whether the issue is provider, catalog, model tool exposure, rejected operation or Mastra transport? No code edits.",
-      "expected_output": "Checks Inspector Generative UI Surfaces, rejected operations, Catalog, Prompt, Conversation and AG-UI Events; proves native render_ui tool delivery and preserves useRenderTool fallback; no legacy middleware guess. Content review criteria: Names relevant Inspector tabs and their signals; Checks whether render_ui reached model and browser; Does not install parallel A2UI middleware or replace fallback.",
+      "expected_output": "Checks Inspector Generative UI Surfaces, rejected operations, Catalog, Prompt, Conversation and AG-UI Events; first provides a minimal provider catalog and proves native render_ui delivery and preserves useRenderTool fallback; no legacy middleware guess. Content review criteria: Names relevant Inspector tabs and their signals; Checks whether render_ui reached model and browser; Does not install parallel A2UI middleware or replace fallback.",
       "files": [],
       "expectations": [{"id":"catalog","kind":"deterministic","check":"catalog_contains","value":"copilotkit"},{"id":"skill-called","kind":"deterministic","check":"skill_called","value":"copilotkit"},{"id":"instructions-loaded","kind":"deterministic","check":"skill_result_ok","value":"copilotkit"},{"id":"turn-completed","kind":"deterministic","check":"turn_completed"}]
     },
