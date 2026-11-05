@@ -12,9 +12,14 @@ function canMatchMedia() {
   return typeof window !== "undefined" && typeof window.matchMedia === "function";
 }
 
+/** Nothing to unsubscribe from when the environment has no matchMedia. */
+function noopCleanup() {
+  return undefined;
+}
+
 /** Subscribe to the lg breakpoint; nothing to observe without matchMedia. */
 function subscribe(onStoreChange: () => void) {
-  if (!canMatchMedia()) return () => {};
+  if (!canMatchMedia()) return noopCleanup;
   const mq = window.matchMedia(LG_QUERY);
   mq.addEventListener("change", onStoreChange);
   return () => mq.removeEventListener("change", onStoreChange);
