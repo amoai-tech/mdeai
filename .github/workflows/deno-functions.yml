@@ -1,0 +1,89 @@
+# Deno gates for the Supabase Edge Functions.
+#
+# Why this exists: PRs #689, #690 and #692 all changed `supabase/functions/**`, and nothing in
+# CI ever ran `deno check` or `deno test` against them. The Stripe SDK bump in #692
+# (`esm.sh/stripe@14.21.0` -> `npm:stripe@23.0.0` with API `2026-09-30.endive`) therefore passed
+# CI with zero Deno verification, and only a manual check before deploy caught that it compiled.
+# `floor` runs Node/Next.js gates and typecheck; it never touches the Deno edge runtime.
+#
+# Scope is deliberately the payment-critical pair plus the hermetic ticket/stripe tests:
+#   * `ticket-checkout` and `ticket-payment-webhook` are the money path and hold the Stripe SDK pin.
+#   * The selected tests are hermetic: no live Supabase, no Stripe network, no secrets. They run
+#     WITHOUT `--allow-net`, so a test that regresses into making a network call fails loudly
+#     instead of quietly becoming a flaky, environment-dependent test.
+# Widening to every function is a follow-up: several unrelated entrypoints have pre-existing
+# issues, and a gate that is red on day one for unrelated reasons teaches people to ignore it.
+name: Deno edge function gates
+
+on:
+  # No `branches` filter on purpose. AGENTS.md requires `floor` to run on every PR regardless of
+  # base branch because a stacked PR needs the same proof. #690 was stacked on #689's branch, so
+  # filtering to `main` would have let a broken payment function merge into a feature branch and
+  # reach main later inside a combined merge.
+  pull_request:
+    paths:
+      - "supabase/functions/**"
+      - ".github/workflows/deno-functions.yml"
+  push:
+    branches: [main]
+    paths:
+      - "supabase/functions/**"
+      - ".github/workflows/deno-functions.yml"
+
+concurrency:
+  group: deno-functions-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  deno:
+    name: deno check + edge tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # Third-party actions are pinned to full commit SHAs, not mutable tags, following the
+      # convention already established in .github/workflows/supabase-acl.yml: a tag can be
+      # force-pushed, and this job runs with the repository checked out.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with:
+          # Exact runtime, not `v2.x`: a floating minor can change diagnostics or module
+          # resolution and turn this gate red without any repository change.
+          deno-version: "2.9.8"
+          # setup-deno caches DENO_DIR itself; no manual ~/.cache/deno step needed.
+          cache: true
+
+      # No manual node_modules cache. Deno stores npm packages inside DENO_DIR
+      # (`$DENO_DIR/npm/registry.npmjs.org/...`), which `setup-deno` already caches above, so a
+      # separate cache step would duplicate it at best. A `path: supabase/functions/node_modules`
+      # entry would have received nothing: `--node-modules-dir=auto` materialises the directory
+      # from the invocation CWD, and Deno never needed to create it under `supabase/functions/`.
+      #
+      # `--node-modules-dir=auto` must stay on the commands below. A `supabase/functions/deno.json`
+      # relying on implicit config discovery is NOT sufficient: with the invocation CWD at the repo
+      # root, Deno does not pick that file up here, and resolution fails with
+      # "Could not find a matching package for 'npm:stripe@23.0.0'". Verified in CI, not locally —
+      # a local pass can be a false green when the root node_modules already holds the package.
+
+      - name: Typecheck the payment Edge Functions
+        run: |
+          deno check --node-modules-dir=auto \
+            supabase/functions/ticket-checkout/index.ts \
+            supabase/functions/ticket-payment-webhook/index.ts
+
+      # No `--allow-net`: these tests are hermetic by design, and withholding network permission
+      # is what makes that claim enforced rather than aspirational. Module downloads are not gated
+      # by `--allow-net`, so imports still resolve.
+      - name: Run hermetic ticket and Stripe edge tests
+        run: |
+          deno test --node-modules-dir=auto --allow-env --allow-read \
+            supabase/functions/tests/checkout-access-token_test.ts \
+            supabase/functions/tests/ticket-checkout-buyer_test.ts \
+            supabase/functions/tests/ticket-checkout-prepared-handler_test.ts \
+            supabase/functions/tests/ticket-checkout-recovery_test.ts \
+            supabase/functions/tests/ticket-payment-verification_test.ts \
+            supabase/functions/tests/ticket-refund-reconciliation_test.ts \
+            supabase/functions/tests/ticket-stripe-webhook-guards_test.ts
