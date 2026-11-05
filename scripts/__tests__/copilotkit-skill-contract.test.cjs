@@ -1,7 +1,7 @@
-import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
-import { test } from "node:test";
+const assert = require("node:assert/strict");
+const { existsSync, readFileSync } = require("node:fs");
+const { join } = require("node:path");
+const { test } = require("node:test");
 
 const base = join(process.cwd(), ".claude/skills/copilotkit");
 const skill = readFileSync(join(base, "SKILL.md"), "utf8");
