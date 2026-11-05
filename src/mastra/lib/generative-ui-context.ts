@@ -19,8 +19,9 @@ export const MDE_A2UI_GUIDE = [
 ].join("\n");
 
 import { isRentalA2UIId } from "@/lib/rentals/a2ui-id";
+import { RENTAL_A2UI_CONTEXT_DESCRIPTION } from "@/lib/rentals/a2ui-context";
 
-const RENTAL_HINT_PREFIX = "Current authorized rental result IDs";
+const RENTAL_HINT_PREFIX = RENTAL_A2UI_CONTEXT_DESCRIPTION;
 const RENTAL_HINT_MAX = 5;
 
 /**

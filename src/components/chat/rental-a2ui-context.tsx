@@ -4,6 +4,7 @@ import { useAgentContext } from "@copilotkit/react-core/v2";
 import { useRentalFastPath } from "@/components/chat/rental-fast-path-context";
 import { normalizeToolEnvelope } from "@/lib/normalize-tool-envelope";
 import { isRentalA2UIId } from "@/lib/rentals/a2ui-id";
+import { RENTAL_A2UI_CONTEXT_DESCRIPTION } from "@/lib/rentals/a2ui-context";
 import type { ConciergeWorkingMemory } from "@/lib/types";
 
 type RentalRow = NonNullable<ConciergeWorkingMemory["lastRentalResults"]>[number];
@@ -36,8 +37,7 @@ export function RentalA2UIContext() {
   const envelopeRows = latest ? normalizeToolEnvelope(latest).results : undefined;
   const rows = (Array.isArray(envelopeRows) ? envelopeRows : undefined) as RentalRow[] | undefined;
   useAgentContext({
-    description:
-      "Most recent successful rental result IDs in display order; the first id is the top result. These may be historical after a newer failed search. When the user asks to render a rental card, use one exact id with render_ui. The card revalidates the id against authorized history and rejects anything else.",
+    description: RENTAL_A2UI_CONTEXT_DESCRIPTION,
     value: rentalA2UIContextValue(rows),
   });
   return null;
