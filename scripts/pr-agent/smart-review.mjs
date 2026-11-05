@@ -3,6 +3,30 @@ import { createHash } from "node:crypto";
 import { parseReviewEnvelope, excludedFilesFromReview, clippedPatchesFromReview, coverageFailure } from "./review-policy.mjs";
 
 export const COVERAGE_MARKER = "<!-- mde-smart-review-coverage:v1 -->";
+export const TARGETED_RECOVERY_MARKER = "<!-- mde-pr-agent-targeted-recovery:v1 -->";
+
+/** Retire stale targeted results without making another provider call.
+ * A bot comment's fixed header carries the exact base/head. Never search
+ * free-form model findings for revision identity or trust a human comment.
+ */
+export function staleTargetedRecoveryComments(comments, baseSha, headSha) {
+  if (!Array.isArray(comments) ||
+      !/^[a-f0-9]{40}$/.test(baseSha ?? "") ||
+      !/^[a-f0-9]{40}$/.test(headSha ?? "")) return [];
+  const expected = "**Base/head:** " + baseSha + " / " + headSha;
+  return comments.filter((comment) => {
+    if (comment?.user?.login !== "github-actions[bot]" ||
+        typeof comment.body !== "string" ||
+        !comment.body.startsWith(TARGETED_RECOVERY_MARKER + "\n") ||
+        comment.body.startsWith(TARGETED_RECOVERY_MARKER +
+          "\n## Targeted PR-Agent follow-up — OUTDATED")) return false;
+    // Only the short machine-authored prefix, never AI text further down.
+    const prefix = comment.body.slice(0, 1800).split("\n").slice(0, 16);
+    const recorded = prefix.find((line) => line.startsWith("**Base/head:** "));
+    return recorded !== expected;
+  });
+}
+
 export const POLICY_VERSION = "mde-smart-v1";
 const generated = new Set([
   "docs/progress/data/linear-data.json",

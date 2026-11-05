@@ -4,7 +4,8 @@ import { parseDocument } from "yaml";
 import { reviewEnvelope, excludedFilesFromReview, clippedPatchesFromReview } from "../../scripts/pr-agent/review-policy.mjs";
 import {
   buildCoverageReport, classifyFiles, planFollowupBatches,
-  reviewCoverageFromComment, hasPublishedPartialReview, parseReviewUsage, validateGeneratedJson, validateSnapshotReferences, COVERAGE_MARKER,
+  reviewCoverageFromComment, hasPublishedPartialReview, parseReviewUsage, validateGeneratedJson, validateSnapshotReferences,
+  COVERAGE_MARKER, TARGETED_RECOVERY_MARKER, staleTargetedRecoveryComments,
 } from "../../scripts/pr-agent/smart-review.mjs";
 
 const BASE = "a".repeat(40), HEAD = "b".repeat(40);
@@ -532,5 +533,38 @@ describe("SAN-1609 quality, budget and provider run metrics", () => {
       files, expectedCount: 301 });
     expect(incomplete.status).toBe("UNKNOWN");
     expect(incomplete.body).toContain("Inventory UNKNOWN");
+  });
+});
+
+
+describe("SAN-1640 retire stale targeted model review", () => {
+  const oldBase = "c".repeat(40);
+  const previous = (base: string, head: string) =>
+    TARGETED_RECOVERY_MARKER + "\n## Verified bounded follow-up\n\n" +
+    "**File:** src/components/events/event-ticket-tiers.tsx\n" +
+    "**Base/head:** " + base + " / " + head + "\n" +
+    "**Diff SHA-256:** " + "d".repeat(64) + "\n" +
+    "## Model findings\n**Base/head:** " + BASE + " / " + HEAD + "\n";
+  const bot = (body: string, id=123) => ({
+    id, body, user: { login: "github-actions[bot]" },
+  });
+
+  it("marks only older same-bot targeted findings OUTDATED even if model prose spoofs current SHA", () => {
+    const stale = bot(previous(oldBase, HEAD));
+    const current = bot(previous(BASE, HEAD), 456);
+    const nonbot = { ...stale, id: 789, user: { login: "external-author" } };
+    const prior = bot(TARGETED_RECOVERY_MARKER +
+      "\n## Targeted PR-Agent follow-up — OUTDATED\n\n", 321);
+    expect(staleTargetedRecoveryComments(
+      [stale, current, nonbot, prior, bot("different", 1234)], BASE, HEAD))
+      .toEqual([stale]);
+  });
+
+  it("rejects missing/malformed headers and never takes a user comment as a bot review", () => {
+    const bad = bot(TARGETED_RECOVERY_MARKER + "\n## Follow-up\n\nmodel claims current sha");
+    expect(staleTargetedRecoveryComments([bad], BASE, HEAD)).toEqual([bad]);
+    expect(staleTargetedRecoveryComments([bad], "invalid", HEAD)).toEqual([]);
+    expect(staleTargetedRecoveryComments([], BASE, HEAD)).toEqual([]);
+    expect(staleTargetedRecoveryComments(null, BASE, HEAD)).toEqual([]);
   });
 });

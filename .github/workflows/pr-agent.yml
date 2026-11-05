@@ -75,7 +75,8 @@ jobs:
             }
             const { buildCoverageReport, validateGeneratedJson,
               validateSnapshotReferences, COVERAGE_MARKER,
-              hasPublishedPartialReview } = await import(pathToFileURL(source).href);
+              hasPublishedPartialReview, staleTargetedRecoveryComments,
+              TARGETED_RECOVERY_MARKER } = await import(pathToFileURL(source).href);
             const { parseReviewEnvelope, isStandaloneReview } = await import(pathToFileURL(
               `${process.env.GITHUB_WORKSPACE}/scripts/pr-agent/review-policy.mjs`).href);
             const repo = { owner: context.repo.owner, repo: context.repo.repo };
@@ -177,6 +178,25 @@ jobs:
             if (latest.base.sha !== baseSha || latest.head.sha !== headSha) {
               core.notice("PR changed during analysis; suppressing stale coverage comment.");
               return;
+            }
+            // Keep the existing targeted review history truthful if an
+            // earlier revision was superseded. The model reviewer itself is
+            // owned only by the immutable shared workflow.
+            for (const stale of staleTargetedRecoveryComments(comments, baseSha, headSha)) {
+              try {
+                await github.rest.issues.updateComment({
+                  ...repo, comment_id: stale.id,
+                  body: TARGETED_RECOVERY_MARKER +
+                    "\n## Targeted PR-Agent follow-up — OUTDATED\n\n" +
+                    "The PR base/head changed. Previous targeted findings do not apply " +
+                    "to this revision. The current review remains authoritative.\n",
+                });
+              } catch (error) {
+                // A cleanup write failure must not suppress the truthful
+                // current-head coverage report or alter the required gate.
+                core.warning("Unable to retire old targeted review: " +
+                  String(error.message).slice(0, 160));
+              }
             }
             const previous = comments.find((comment) =>
               comment.user?.login === "github-actions[bot]" && (comment.body ?? "").startsWith(COVERAGE_MARKER));
