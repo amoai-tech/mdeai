@@ -11,6 +11,12 @@ import { DiscoveryWorkspace } from "@/components/browse/DiscoveryWorkspace";
 import { DiscoveryAskComposer } from "@/components/chat/discovery-ask-composer";
 import { DiscoveryPageContext } from "@/components/chat/discovery-page-context";
 import { EventBrowseCard } from "@/components/events/event-browse-card";
+import {
+  EventBrowseDetailsPanel,
+  EventBrowseDetailsSheet,
+} from "@/components/events/event-browse-details";
+import { useIsLgUp } from "@/hooks/use-is-lg-up";
+import { useEscapeToClose } from "@/hooks/use-escape-to-close";
 import { EventBrowseFilters } from "@/components/events/event-browse-filters";
 import { EmptyState } from "@/components/empty/empty-state";
 import { Button } from "@/components/ui/button";
@@ -21,6 +27,7 @@ import type { PublishedEventListItem } from "@/lib/events/list-published-events"
 import { useMapContext } from "@/platform/maps/map-context";
 import type { DateWindow, EventCategory } from "@/mastra/tools/search-events";
 
+/** Current filter URL for this page, or the bare path when no filter is set. */
 function buildFilterUrl(filters: {
   category?: EventCategory | null;
   neighborhood?: string | null;
@@ -48,6 +55,7 @@ type EventBrowseViewProps = {
   price: "free" | "paid" | null;
 };
 
+/** Results, map and right column for events, driven by the shared selection. */
 function EventBrowseViewInner({
   results,
   total,
@@ -59,6 +67,11 @@ function EventBrowseViewInner({
 }: EventBrowseViewProps) {
   const { selectedPinId, setSelectedPinId, panToPin } = useMapContext();
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const desktop = useIsLgUp();
+  // SAN-1638: the panel has its own id. Opening Details writes the Ask context; pressing Ask never
+  // opens the panel (on a phone that would cover the composer).
+  const [detailsId, setDetailsId] = useState<string | null>(null);
+  const detailsTriggerRef = useRef<HTMLElement | null>(null);
   const [resolved, setResolved] = useState<{ scope: string; rows: PublishedEventListItem[] } | null>(null);
   // A failure and an in-flight lookup belong to the filter scope they started in, with the IDs to retry, so a
   // filter change can never leave an old error or Retry standing under different filters.
@@ -166,6 +179,25 @@ function EventBrowseViewInner({
     dateWindow,
     price,
   });
+  // The map/Ask selection is the newer action whenever it moves away from the open panel; close
+  // instead of leaving the panel describing a different event than the highlighted marker.
+  if (detailsId && selectedId !== detailsId) {
+    setDetailsId(null);
+  }
+  const detailsEvent = shownEvents.find((event) => event.id === detailsId) ?? null;
+  if (detailsId && !shownEvents.some((event) => event.id === detailsId)) {
+    setDetailsId(null);
+  }
+  // Closing Details clears the selection and returns focus to the control that opened it.
+  const closeDetails = useCallback(() => {
+    setDetailsId(null);
+    selectEvent(null);
+    requestAnimationFrame(() => detailsTriggerRef.current?.focus());
+  }, [selectEvent]);
+
+  // Escape closes the desktop panel (the phone Sheet already does).
+  useEscapeToClose(Boolean(detailsEvent && desktop), closeDetails);
+
   const countLabel =
     total === 1 ? "1 upcoming event listing" : `${total} upcoming event listings`;
 
@@ -178,7 +210,23 @@ function EventBrowseViewInner({
         category, neighborhood, dateWindow,
         onEventIds: (ids) => void resolveIds(ids),
       }} />}
-      rightPanel={hasMap ? <BrowseMapPanel fill /> : undefined}
+      rightPanel={
+        desktop && detailsEvent ? (
+          hasMap ? (
+            <BrowseMapPanel
+              fill
+              overlay={<EventBrowseDetailsPanel event={detailsEvent} onClose={closeDetails} />}
+            />
+          ) : (
+            // No coordinate-backed pins: Details still gets the right column, with no fake map.
+            <div className="relative h-full">
+              <EventBrowseDetailsPanel event={detailsEvent} onClose={closeDetails} />
+            </div>
+          )
+        ) : hasMap ? (
+          <BrowseMapPanel fill />
+        ) : undefined
+      }
       mobileMapTrigger={hasMap ? <BrowseMapSheet inline /> : null}
       testId="events-browse"
       title="Events in Medellín"
@@ -256,17 +304,33 @@ function EventBrowseViewInner({
               <EventBrowseCard key={event.id} event={event} mediaLayout="inline"
                 pinId={onMap ? pinId : undefined}
                 selectedForAsk={selectedId === event.id}
-                onAskSelect={() => selectEvent(selectedId === event.id ? null : event.id)} />
+                detailsOpen={detailsId === event.id}
+                onAskSelect={() => {
+                  // Context only: never opens Details, and closes a panel for another event.
+                  setDetailsId(null);
+                  selectEvent(selectedId === event.id ? null : event.id);
+                }}
+                onDetails={(trigger) => {
+                  detailsTriggerRef.current = trigger;
+                  // SAN-1638: the panel record is also the Ask MDE record, so the concierge answers
+                  // about the event on screen. Selecting context never sends a message.
+                  selectEvent(event.id);
+                  setDetailsId(event.id);
+                }} />
               );
             })}
           </div>
         ) : null}
       </section>
     </DiscoveryWorkspace>
+    {detailsEvent && !desktop ? (
+      <EventBrowseDetailsSheet event={detailsEvent} onClose={closeDetails} />
+    ) : null}
     </>
   );
 }
 
+/** Event browse shell that provides the shared map state. */
 export function EventBrowseView(props: EventBrowseViewProps) {
   return <BrowseMapContextShell><EventBrowseViewInner {...props} /></BrowseMapContextShell>;
 }

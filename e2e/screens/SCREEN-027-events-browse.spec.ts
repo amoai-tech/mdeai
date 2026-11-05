@@ -114,7 +114,7 @@ test.describe("SCREEN-027 /events browse", () => {
     assertConsoleHygiene(errors);
   });
 
-  test("Details link navigates to event detail when cards exist", async ({
+  test("Details opens the in-page panel without navigating", async ({
     page,
   }) => {
     const errors = attachConsoleWatcher(page);
@@ -123,8 +123,10 @@ test.describe("SCREEN-027 /events browse", () => {
     if ((await details.count()) === 0) {
       test.skip(true, "No published events in catalog");
     }
+    const browsePath = new URL(page.url()).pathname;
     await details.click();
-    await expect(page).toHaveURL(/\/events\/[^/]+$/, { timeout: 15_000 });
+    await expect(page.getByTestId("event-browse-details-panel")).toBeVisible({ timeout: 15_000 });
+    await expect.poll(() => new URL(page.url()).pathname).toBe(browsePath);
     assertConsoleHygiene(errors);
   });
 

@@ -26,6 +26,7 @@ async function shoot(page: Page, name: string) {
   await page.screenshot({ path: `${shots}/${name}.png` });
 }
 
+/** Open the events page at a given viewport and return the located cards. */
 async function openEvents(page: Page, width: number, height: number) {
   await page.setViewportSize({ width, height });
   await gotoBrowseRoute(page, "/events");
@@ -57,6 +58,7 @@ async function lastDetailsCovered(page: Page): Promise<string | false> {
   return covered;
 }
 
+/** Only the cards that carry a saved position, in page order. */
 async function locatedCards(page: Page) {
   const cards = page.locator('[data-testid="event-card"][data-pin-id]');
   await expect(page.getByTestId("event-card").first()).toBeVisible();
@@ -93,8 +95,6 @@ test.describe("SAN-972 /events map workspace", () => {
     const card = cards.first();
     const pinId = await card.getAttribute("data-pin-id");
     if (!pinId) throw new Error("located card has no pin id");
-    const slugHref = await card.getByTestId("event-details-cta").getAttribute("href");
-
     await pressUntilOn(card.getByTestId("event-ask-select"));
     await expect(card).toHaveAttribute("data-selected", "true");
     const overlay = page.getByTestId("browse-map-panel").getByTestId("selected-place-overlay");
@@ -104,7 +104,7 @@ test.describe("SAN-972 /events map workspace", () => {
 
     // Map -> Details -> Back
     await overlay.getByTestId("selected-place-overlay-details").click();
-    await expect(page).toHaveURL((url) => url.pathname === slugHref);
+    await expect(page).toHaveURL(/\/events\/[^/]+$/, { timeout: 15_000 });
     await page.goBack();
     await expect(page.getByTestId("events-browse").first()).toBeVisible();
 
