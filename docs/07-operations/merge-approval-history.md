@@ -564,6 +564,24 @@ certification.
 
 **Open question:** event cards still use 28px actions. Should the same shared action height be applied there under SAN-972, or do events deliberately keep a denser footer because they carry a price and a ticket action?
 
+
+## 2026-11-05 — PRs #751, #753, #754 and #755 (sole-collaborator exception, four merges)
+
+Four PRs merged on one day by `amoai-tech`, who is also the sole repository collaborator and the author of each, so GitHub could not record an approving review (`reviewDecision: REVIEW_REQUIRED` on all four). Each merge was an administrator merge under the exception above. Required checks were green on the exact head of #751, #754 and #755 (`floor` and `mastra-schema-init` both `success`); #753 is a test-only follow-up whose checks were green in its own run. Unresolved review threads were zero at merge on #754 and #755 (verified before each merge in the PR discussion).
+
+| PR | Title | Head | Merge commit | Merged (UTC) |
+| --- | --- | --- | --- | --- |
+| #751 | Make Discovery Card Buttons Easier to Tap and Catch Regressions | `b8bdaf8aa2` | `ab24e576df` | 06:29:17 |
+| #753 | Make the event card tap-size test actually fail when the token regresses | `0a06066c22` | `c4c510da74` | 06:43:13 |
+| #754 | Restaurant, café and nightlife Details open in the page instead of a new page | `c0863e476f` | `582c27fb21` | 21:29:50 |
+| #755 | Event Details opens in the page, with real ticket tiers | `79ed3ae5c1` | `4b7d250e9e` | 22:41:23 |
+
+**What a reviewer would have been asked.** #751 and #753: whether a shared 44px action height needed a browser proof (it has one, on every rendered card at 320/390/768/1440px and 200% zoom, and #753 repairs that test so it fails when the token regresses). #754: whether one selected record should drive the map pin, the Details panel and the Ask MDE context together, and whether a released pin should close the panel rather than reopen an older record (both are now covered by five regression tests). #755: whether a confirmed 404 should hide the Buy-tickets and full-page actions (it does, with a mocked 404), and whether the panel should show real tiers only (it shows real tiers, "Free", "Sold out" and "Price TBD", never invented prices).
+
+**Post-merge production verification (2026-11-05, production `c347162191`, which contains both merge commits).** All five routes were exercised on `www.mdeai.co` at 1440px and 390px: Details opens beside the map on desktop and in the bottom Sheet on phones, the URL never changes, Close works, there is no horizontal overflow and no page error. Restaurants: A → B repoints the panel, Ask is selected for the opened record, Escape closes from inside the panel, a pin selection yields to an explicit Details click, and releasing a pin closes the panel. Events: real tiers render (Reina de Antioquia — GA $40,000 · VIP $120,000 · Backstage $400,000 · Frontrow $80,000 COP), an event with no tiers shows "Price TBD", and the full-page link remains. Screenshots with the deployed SHA in the filename are in `docs/screenshots/san-1638/`.
+
+**Open questions.** Events at 390px: no live event currently carries an `imageUrl`, so the panel's photo branch is proven only with a controlled API response. The same is true of the "Buy tickets" action, because no live event has an external ticket URL. Neither is a defect; both stay unproven until such an event exists.
+
 ## Adding an entry
 
 Record: the PRs, the date, the reason, which required checks had passed, what a reviewer would have
