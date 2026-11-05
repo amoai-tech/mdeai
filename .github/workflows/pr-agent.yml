@@ -163,7 +163,8 @@ jobs:
             })();
             const report = buildCoverageReport({ repo: `${repo.owner}/${repo.repo}`, number: pull_number,
               baseSha, headSha, files, expectedCount: current.changed_files,
-              reviewBody: canonicalReview?.body ?? "",
+              reviewBody: process.env.REVIEW_JOB_RESULT === "success"
+                ? matching[0]?.body ?? "" : canonicalReview?.body ?? "",
               reviewJobResult: publishPartial ? "success" : process.env.REVIEW_JOB_RESULT,
               validations });
             if (process.env.REVIEW_JOB_RESULT !== "success") {
