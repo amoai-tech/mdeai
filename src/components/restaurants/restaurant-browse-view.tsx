@@ -72,6 +72,13 @@ function RestaurantBrowseViewInner({
   // panel and a late search result can never repoint an already-open Details.
   // A pin selection opened Details before this task; keep that, and let an explicit Details click
   // win by releasing the pin.
+  // A map-pin click only changes `selectedPinId`. Follow that transition so the panel tracks the
+  // pin instead of falling back to an older record, and close when the pin is released.
+  const [lastPinRestaurantId, setLastPinRestaurantId] = useState<string | null>(null);
+  if (pinRestaurantId !== lastPinRestaurantId) {
+    setLastPinRestaurantId(pinRestaurantId);
+    setDetailsId(pinRestaurantId);
+  }
   const openRestaurantId = pinRestaurantId ?? detailsId;
   const detailsRestaurant = shownResults.find((r) => r.id === openRestaurantId) ?? null;
   // Forget an id whose record left the results, so it cannot reopen on a later search.
