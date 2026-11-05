@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { headers } from "next/headers";
+import { buildTicketCheckoutReturnUrls, trustedCheckoutOrigin } from "@/lib/tickets/checkout-return-url";
 import {
   buildAttendeePayload,
   ticketCheckoutInputSchema,
@@ -9,15 +9,6 @@ import {
   getSupabaseAnonAuthHeaders,
   getSupabaseFunctionsBaseUrl,
 } from "@/lib/supabase/edge-functions";
-
-function siteOriginFromHeaders(headerList: Headers): string {
-  const configured = process.env.NEXT_PUBLIC_SITE_URL;
-  if (configured) return configured.replace(/\/$/, "");
-  const host = headerList.get("x-forwarded-host") ?? headerList.get("host");
-  const proto = headerList.get("x-forwarded-proto") ?? "http";
-  if (host) return `${proto}://${host}`;
-  return "http://localhost:3001";
-}
 
 export async function POST(req: Request) {
   let body: unknown;
@@ -55,11 +46,35 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: { message: "Sign-in session expired; please retry" } }, { status: 401 });
     }
   }
-  const headerList = await headers();
-  const origin = siteOriginFromHeaders(headerList);
-  const returnBase = `${origin}${data.returnPath.startsWith("/") ? data.returnPath : `/${data.returnPath}`}`;
-  const successUrl = `${returnBase}${returnBase.includes("?") ? "&" : "?"}checkout=success&session_id={CHECKOUT_SESSION_ID}`;
-  const cancelUrl = `${returnBase}${returnBase.includes("?") ? "&" : "?"}checkout=cancelled`;
+  let successUrl: string;
+  let cancelUrl: string;
+  try {
+    const origin = trustedCheckoutOrigin(
+      process.env.NEXT_PUBLIC_SITE_URL,
+      process.env.VERCEL_URL,
+      process.env.NODE_ENV === "production",
+      process.env.VERCEL_ENV,
+    );
+    ({ successUrl, cancelUrl } = buildTicketCheckoutReturnUrls(
+      origin, data.returnPath,
+    ));
+  } catch (error) {
+    const code = error instanceof Error &&
+      ["CHECKOUT_RETURN_PATH_INVALID", "CHECKOUT_ORIGIN_NOT_CONFIGURED",
+        "CHECKOUT_ORIGIN_INVALID"].includes(error.message)
+      ? error.message : "CHECKOUT_ORIGIN_INVALID";
+    return NextResponse.json({
+      success: false,
+      error: {
+        code,
+        message: code === "CHECKOUT_RETURN_PATH_INVALID"
+          ? "Invalid event return path"
+          : code === "CHECKOUT_ORIGIN_NOT_CONFIGURED"
+            ? "Checkout return origin is not configured"
+            : "Checkout return origin is invalid",
+      },
+    }, { status: code === "CHECKOUT_RETURN_PATH_INVALID" ? 400 : 503 });
+  }
 
   const edgeRes = await fetch(`${getSupabaseFunctionsBaseUrl()}/ticket-checkout`, {
     method: "POST",
