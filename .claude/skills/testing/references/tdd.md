@@ -39,6 +39,6 @@ Stop if the proposed test only asserts implementation details, snapshots unstabl
 
 ## References
 
-- [`references/tests.md`](references/tests.md) — examples of durable behavior tests.
-- [`references/mocking.md`](references/mocking.md) — mocking boundaries and anti-patterns.
-- [`references/writing-good-tests.md`](references/writing-good-tests.md) — broader test-quality guidance.
+- [`references/tests.md`](tests.md) — examples of durable behavior tests.
+- [`references/mocking.md`](mocking.md) — mocking boundaries and anti-patterns.
+- [`references/writing-good-tests.md`](writing-good-tests.md) — broader test-quality guidance.

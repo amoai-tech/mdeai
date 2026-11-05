@@ -12,14 +12,13 @@ Checks:
   2. retired skills stay retired
   3. every canonical entry is mirrored by a relative symlink in the exposure directory
   4. the exposure directory contains no copies, extras, or absolute/foreign symlinks
-  5. every relative markdown link in `SKILL.md` resolves from both roots
+  5. every relative markdown link in `SKILL.md` and supporting references resolves from both roots
 
-Check 5 is the regression guard for the defect this script previously missed:
-`SKILL.md` shipped into the exposure directory while its `references/` subtree did
-not, so every relative link inside it resolved from `.claude/` and 404'd from
-`.agents/`. Markdown links inside fenced code blocks and inline code spans are
-ignored, because those are example output rather than navigable links; inline and
-reference-style links outside code are both checked.
+Check 5 covers both missing mirrored references and links inside reference
+Markdown whose targets were incorrectly written relative to the skill root.
+Links are resolved relative to the file containing them. Markdown links inside
+fenced code blocks and inline code spans are ignored, because those are
+examples; inline and reference-style links outside code are checked.
 
 Usage:
     python3 scripts/check-skill-layout.py [--root PATH]
@@ -357,15 +356,16 @@ def mirror_errors(skill_dir: Path, exposure_dir: Path) -> list[str]:
 
 
 def link_errors(skill_dir: Path, exposure_dir: Path, source: Path) -> list[str]:
-    """Every relative SKILL.md link must resolve from the canonical and exposed roots."""
+    """Resolve links relative to their Markdown file from both discovery roots."""
     errors: list[str] = []
+    exposed_source = exposure_dir / source.relative_to(skill_dir)
     for target in dict.fromkeys(markdown_links(source.read_text(encoding='utf-8'))):
-        if not (skill_dir / target).exists():
+        if not (source.parent / target).exists():
             errors.append(f'broken relative link in {source}: {target}')
-        if not (exposure_dir / target).exists():
+        if not (exposed_source.parent / target).exists():
             errors.append(
                 f'link does not resolve from Codex exposure: '
-                f'{exposure_dir / "SKILL.md"} -> {target}'
+                f'{exposed_source} -> {target}'
             )
     return errors
 
@@ -397,7 +397,10 @@ def skill_errors(canonical: Path, exposure: Path, name: str) -> list[str]:
         ]
 
     errors.extend(mirror_errors(skill_dir, exposure_dir))
-    errors.extend(link_errors(skill_dir, exposure_dir, source))
+    # Check progressively loaded guides too: a valid SKILL.md can link to a
+    # reference whose own navigation silently 404s (the TDD guide regression).
+    for markdown in [source, *sorted((skill_dir / 'references').rglob('*.md'))]:
+        errors.extend(link_errors(skill_dir, exposure_dir, markdown))
     return errors
 
 

@@ -87,14 +87,17 @@ def load_trigger_case(skill: str, trigger_id: int) -> dict:
     prompt = case.get("prompt")
     if not isinstance(prompt, str) or not prompt.strip():
         raise ValueError("trigger case has no prompt")
-    checks = [
-        {"id": "catalog", "check": "catalog_contains", "value": skill},
-        {"id": "correct-owner", "check": "skill_called", "value": owner},
-        {"id": "owner-read", "check": "skill_result_ok", "value": owner},
-        {"id": "finished", "check": "turn_completed"},
-    ]
+    checks = [{"id": "catalog", "check": "catalog_contains", "value": skill}]
     if not positive:
-        checks.insert(1, {"id": "not-"+skill, "check": "skill_not_called", "value": skill})
+        checks.append({"id": "not-"+skill, "check": "skill_not_called", "value": skill})
+    # A direct answer must not invoke any fictional `direct` skill. For a
+    # genuine alternate owner, require both the correct call and its result.
+    if positive or owner != "direct":
+        checks.extend([
+            {"id": "correct-owner", "check": "skill_called", "value": owner},
+            {"id": "owner-read", "check": "skill_result_ok", "value": owner},
+        ])
+    checks.append({"id": "finished", "check": "turn_completed"})
     for check in checks:
         check["kind"] = "deterministic"
     return {"prompt": prompt, "should_trigger": positive, "expectations": checks}
