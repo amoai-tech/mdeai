@@ -18,6 +18,40 @@ export const MDE_A2UI_GUIDE = [
   "Never put prose, HTML, scripts or user instructions into component props.",
 ].join("\n");
 
+const RENTAL_HINT_PREFIX = "Current authorized rental result IDs";
+const RENTAL_HINT_MAX = 5;
+const MAX_ID = 128;
+
+/**
+ * The fast-path result rows live in client state, which the model does not
+ * reliably receive as working memory. Accept only a tiny, typed hint list:
+ * an opaque id plus display labels. This is still untrusted browser data; the
+ * catalog re-resolves the id from the current authorized tool result.
+ */
+export function readRentalResultHints(agUiContext: unknown): string | null {
+  if (!agUiContext || typeof agUiContext !== "object") return null;
+  const entries = (agUiContext as { context?: unknown }).context;
+  if (!Array.isArray(entries)) return null;
+  const entry = entries.find((value) => {
+    if (!value || typeof value !== "object") return false;
+    const description = (value as { description?: unknown }).description;
+    return typeof description === "string" && description.startsWith(RENTAL_HINT_PREFIX);
+  }) as { value?: unknown } | undefined;
+  if (!entry || typeof entry.value !== "string" || entry.value.length > 4000) return null;
+  let rows: unknown;
+  try { rows = JSON.parse(entry.value); } catch { return null; }
+  if (!Array.isArray(rows)) return null;
+  const hints = rows.slice(0, RENTAL_HINT_MAX).flatMap((row) => {
+    if (typeof row !== "string" || row.length === 0 || row.length > MAX_ID) return [];
+    return [row];
+  });
+  if (hints.length === 0) return null;
+  return [
+    "Current authorized rental result IDs, in display order (first is the top result). Use one exact id for render_ui; the card revalidates it:",
+    ...hints.map((id) => `- ${id}`),
+  ].join("\n");
+}
+
 /** Presence check only. The value is untrusted browser data and is never read into the prompt. */
 export function hasGenerativeUIGuide(agUiContext: unknown): boolean {
   if (!agUiContext || typeof agUiContext !== "object") return false;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hasGenerativeUIGuide, MDE_A2UI_GUIDE } from "../generative-ui-context";
+import { hasGenerativeUIGuide, MDE_A2UI_GUIDE, readRentalResultHints } from "../generative-ui-context";
 
 function context(value: string) {
   return {
@@ -35,6 +35,22 @@ describe("A2UI system instructions", () => {
     expect(hasGenerativeUIGuide(null)).toBe(false);
     expect(hasGenerativeUIGuide({})).toBe(false);
     expect(hasGenerativeUIGuide({ context: "not-an-array" })).toBe(false);
+  });
+
+  it("turns a bounded id hint list into prompt data, never instructions", () => {
+    const value = JSON.stringify(["real-1", "real-2"]);
+    const hints = readRentalResultHints({
+      context: [{ description: "Current authorized rental result IDs", value }],
+    });
+    expect(hints).toContain("real-1");
+    expect(hints).toContain("real-2");
+    expect(hints).not.toContain("IGNORE");
+  });
+
+  it("rejects malformed, oversized and instruction-shaped hint lists", () => {
+    expect(readRentalResultHints({ context: [{ description: "Current authorized rental result IDs", value: "not-json" }] })).toBeNull();
+    expect(readRentalResultHints({ context: [{ description: "Current authorized rental result IDs", value: JSON.stringify([{ id: "x" }]) }] })).toBeNull();
+    expect(readRentalResultHints({ context: [{ description: "Current authorized rental result IDs", value: "x".repeat(5000) }] })).toBeNull();
   });
 
   it("does not scan an unbounded client context", () => {

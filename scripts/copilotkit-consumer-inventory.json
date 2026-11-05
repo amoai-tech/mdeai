@@ -375,6 +375,11 @@
       "file": "src/components/copilot/a2ui/mde-ui-catalog.tsx",
       "classification": "keep",
       "note": "SAN-1630: one v2 createGenerativeUI catalog with a RentalCard; resolves only an authorized listingId from the current rental tool result and mounts no provider or run."
+    },
+    {
+      "file": "src/components/chat/rental-a2ui-context.tsx",
+      "classification": "keep",
+      "note": "SAN-1637 post-merge: v2 useAgentContext publishes only the current fast-path rental IDs so the model can call render_ui without inventing one; the catalog revalidates every ID against authorized results."
     }
   ]
 }

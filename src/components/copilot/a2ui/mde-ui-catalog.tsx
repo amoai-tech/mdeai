@@ -8,6 +8,7 @@ import { RentalCard as ExistingRentalCard } from "@/components/copilot/rental-ca
 import { useOptionalConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
 import { useOptionalRentalUi } from "@/components/chat/rental-ui-context";
 import { useOptionalMapContext } from "@/platform/maps/map-context";
+import { useOptionalRentalFastPath } from "@/components/chat/rental-fast-path-context";
 import { isFinishedToolPayload, normalizeToolEnvelope } from "@/lib/normalize-tool-envelope";
 import { toDetailRental } from "@/lib/rentals/chat-rental-detail";
 import {
@@ -76,6 +77,16 @@ export function rentalDetailHref(listingId: string): string {
   return `/rentals/${encodeURIComponent(listingId)}`;
 }
 
+/** Fast-path results are newest-first; keep agent results after them, deduped by identity. */
+export function mergeRentalResults(
+  fastPathResults: readonly unknown[],
+  agentResults: readonly unknown[],
+): unknown[] {
+  return [...fastPathResults, ...agentResults].filter(
+    (result, index, all) => all.indexOf(result) === index,
+  );
+}
+
 /** Resolve an opaque id only from real rental results on this thread. */
 export function findRentalRow(
   results: readonly unknown[],
@@ -105,10 +116,12 @@ function useRentalMessages(): readonly RentalMessage[] {
 
 function useRentalRow(listingId: string): RentalToolRow | null {
   const messages = useRentalMessages();
-  return useMemo(
-    () => findRentalRow(collectRentalResults(messages), listingId),
-    [listingId, messages],
-  );
+  const fastPath = useOptionalRentalFastPath();
+  return useMemo(() => {
+    const fromAgent = collectRentalResults(messages);
+    const fromFastPath = fastPath?.toolResults ?? (fastPath?.toolResult ? [fastPath.toolResult] : []);
+    return findRentalRow(mergeRentalResults(fromFastPath, fromAgent), listingId);
+  }, [fastPath?.toolResult, fastPath?.toolResults, listingId, messages]);
 }
 
 /** One existing rental card, hydrated only from the current authorized tool result. */
