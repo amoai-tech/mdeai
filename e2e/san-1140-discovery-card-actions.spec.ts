@@ -110,38 +110,53 @@ async function expectAskContainment(page: Page, spec: RouteSpec) {
 
   for (let i = 0; i < Math.min(cardCount, 5); i += 1) {
     const card = cards.nth(i);
-    // A dev server can briefly mount a duplicate list during hydration, so a card
-    // captured by index can disappear for a frame. Measure only a real, stable box:
-    // if the card never gets one, this fails instead of measuring nothing.
+    // One synchronous read inside the page: the dev server can briefly mount a duplicate list
+    // during hydration, so separate boundingBox() calls can race a detach. Polling this single
+    // measurement is both race-free and still fails loudly if a card never gets a real box.
+    type Boxes = {
+      card: { x: number; y: number; width: number; height: number };
+      ask: { x: number; y: number; width: number; height: number };
+      askCount: number;
+    };
+    // Holder object: a plain `let` is narrowed to null by TS across the polling closure.
+    const measured: { boxes: Boxes | null } = { boxes: null };
     await expect
-      .poll(async () => (await card.boundingBox())?.height ?? 0, {
-        message: `${spec.route} card ${i} must render a measurable box`,
-        timeout: 15_000,
-      })
-      .toBeGreaterThan(0);
-    const asks = await card.locator(spec.ask).count();
-    expect(asks, `${spec.route} card ${i} owns its Ask toggle`).toBe(1);
-    // Geometric containment: the control is painted inside the card's own box,
-    // not merely present in the page.
-    const cardBox = await card.boundingBox();
-    const askBox = await card.locator(spec.ask).boundingBox();
-    expect(cardBox, `${spec.route} card ${i} card box`).not.toBeNull();
-    expect(askBox, `${spec.route} card ${i} ask box`).not.toBeNull();
-    if (cardBox && askBox) {
-      expect(askBox.x).toBeGreaterThanOrEqual(cardBox.x - 1);
-      expect(askBox.y).toBeGreaterThanOrEqual(cardBox.y - 1);
-      expect(askBox.x + askBox.width).toBeLessThanOrEqual(
-        cardBox.x + cardBox.width + 1,
-      );
-      expect(askBox.y + askBox.height).toBeLessThanOrEqual(
-        cardBox.y + cardBox.height + 1,
-      );
-      // SAN-1122: one action height across restaurants, cafés and nightlife.
-      expect(
-        askBox.height,
-        `${spec.route} card ${i}: Ask must keep the 44px shared action height`,
-      ).toBeGreaterThanOrEqual(44);
-    }
+      .poll(
+        async () => {
+          measured.boxes = await card.evaluate((el, selector) => {
+            const ask = el.querySelector(selector);
+            if (!ask) return null;
+            const cardRect = el.getBoundingClientRect();
+            const askRect = ask.getBoundingClientRect();
+            if (cardRect.height <= 0 || askRect.height <= 0) return null;
+            return {
+              card: { x: cardRect.x, y: cardRect.y, width: cardRect.width, height: cardRect.height },
+              ask: { x: askRect.x, y: askRect.y, width: askRect.width, height: askRect.height },
+              askCount: el.querySelectorAll(selector).length,
+            };
+          }, spec.ask);
+          return measured.boxes !== null;
+        },
+        {
+          message: `${spec.route} card ${i} must render a measurable box`,
+          timeout: 15_000,
+        },
+      )
+      .toBe(true);
+    expect(measured.boxes, `${spec.route} card ${i} measured boxes`).not.toBeNull();
+
+    const { card: cardBox, ask: askBox } = measured.boxes as Boxes;
+    expect((measured.boxes as Boxes).askCount, `${spec.route} card ${i} owns its Ask toggle`).toBe(1);
+    // Geometric containment: the control is painted inside the card's own box, not merely present.
+    expect(askBox.x).toBeGreaterThanOrEqual(cardBox.x - 1);
+    expect(askBox.y).toBeGreaterThanOrEqual(cardBox.y - 1);
+    expect(askBox.x + askBox.width).toBeLessThanOrEqual(cardBox.x + cardBox.width + 1);
+    expect(askBox.y + askBox.height).toBeLessThanOrEqual(cardBox.y + cardBox.height + 1);
+    // SAN-1122: one action height across restaurants, cafés and nightlife.
+    expect(
+      askBox.height,
+      `${spec.route} card ${i}: Ask must keep the 44px shared action height`,
+    ).toBeGreaterThanOrEqual(44);
 
     if (spec.mapAction) {
       const mapAction = card.locator('[data-testid="venue-map-select"]');
@@ -375,6 +390,9 @@ for (const spec of ROUTES) {
         );
 
         await first.locator(detailsSelector).scrollIntoViewIfNeeded();
+        // Wait for hydration: a click on a not-yet-hydrated button does nothing, which then
+        // reads as "the panel never opened".
+        await waitUntilInteractive(first.locator(detailsSelector), `${spec.route} Details`);
         await first.locator(detailsSelector).click();
         await body.first().waitFor({ state: "visible" });
         expect(
@@ -385,6 +403,7 @@ for (const spec of ROUTES) {
         expect(new URL(page.url()).pathname).toBe(new URL(urlBefore).pathname);
 
         // Comparing: choosing another card repoints the same panel.
+        await waitUntilInteractive(second.locator(detailsSelector), `${spec.route} Details`);
         await second.locator(detailsSelector).click();
         await expect
           .poll(async () => (await body.first().locator("h2").first().innerText()).trim())
