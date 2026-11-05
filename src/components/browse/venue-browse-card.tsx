@@ -173,13 +173,13 @@ export function VenueBrowseCard({
             cards read and tap the same. Directions stays the compact link it is on
             restaurants; the primary controls wrap inside the card at 320px. */}
         {pinId && onMapSelect ? <Button type="button" size="sm" variant={selectedForMap ? "secondary" : "outline"}
-          className="h-11 min-w-11 px-3"
+          className="h-card-action min-w-card-action px-3"
           aria-pressed={Boolean(selectedForMap)} data-testid="venue-map-select" onClick={onMapSelect}>
           <MapPin className="size-3.5" aria-hidden />
           {selectedForMap ? "Selected on map" : "View on map"}
         </Button> : null}
         {onAskSelect ? <Button type="button" size="sm" variant={selectedForAsk ? "secondary" : "outline"}
-          className="h-11 min-w-11 px-3"
+          className="h-card-action min-w-card-action px-3"
           aria-pressed={Boolean(selectedForAsk)} data-testid="venue-ask-select" onClick={onAskSelect}>
           {selectedForAsk ? "Clear selection" : "Ask about this"}
         </Button> : null}

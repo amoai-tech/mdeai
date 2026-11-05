@@ -124,8 +124,9 @@ describe("RestaurantCard", () => {
       />,
     );
     expect(html).toContain('data-testid="event-venue-cta"');
-    expect(html).toContain("h-11");
-    expect(html).toContain("min-w-11");
+    // Shared discovery action height token (see --spacing-card-action).
+    expect(html).toContain("h-card-action");
+    expect(html).toContain("min-w-card-action");
     expect(html).toContain('data-testid="restaurant-hosts-events-badge"');
     expect(html).toContain("Hosts Events");
   });

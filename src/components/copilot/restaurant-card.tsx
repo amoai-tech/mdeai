@@ -221,7 +221,7 @@ export function RestaurantCard({
             type="button"
             size="sm"
             variant="secondary"
-            className="h-11 min-w-11 px-3"
+            className="h-card-action min-w-card-action px-3"
             data-testid="event-venue-cta"
             onClick={(e) => {
               e.stopPropagation();
@@ -237,7 +237,7 @@ export function RestaurantCard({
             type="button"
             size="sm"
             variant={selectedForAsk ? "secondary" : "outline"}
-            className="h-11 min-w-11 px-3"
+            className="h-card-action min-w-card-action px-3"
             data-testid="restaurant-ask-select"
             aria-pressed={Boolean(selectedForAsk)}
             onClick={(e) => {
@@ -269,7 +269,7 @@ export function RestaurantCard({
             data-testid={detailsTestId}
             className={cn(
               buttonVariants({ size: "sm", variant: "outline" }),
-              "h-11 min-w-11 px-3",
+              "h-card-action min-w-card-action px-3",
             )}
             onClick={(e) => e.stopPropagation()}
           >
@@ -281,7 +281,7 @@ export function RestaurantCard({
           <Button
             type="button"
             size="sm"
-            className="h-11 min-w-11 px-3"
+            className="h-card-action min-w-card-action px-3"
             data-testid={bookingTestId}
             onClick={(e) => {
               e.stopPropagation();

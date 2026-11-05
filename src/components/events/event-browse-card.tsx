@@ -102,7 +102,8 @@ export function EventBrowseCard({
       footer={
         <div className="flex w-full flex-wrap items-center justify-between gap-x-2 gap-y-1">
           {/* One secondary toggle: selecting an event also highlights its marker and sets the Ask MDE context. */}
-          {onAskSelect ? <Button type="button" size="sm" variant="ghost" className="-ml-2 text-muted-foreground"
+          {onAskSelect ? <Button type="button" size="sm" variant="ghost"
+            className="-ml-2 h-card-action min-w-card-action text-muted-foreground"
             data-testid="event-ask-select" aria-pressed={Boolean(selectedForAsk)} onClick={onAskSelect}>
             {selectedForAsk ? "Clear selection" : "Ask about this"}
           </Button> : <span />}
@@ -111,7 +112,10 @@ export function EventBrowseCard({
             <Link
               href={detailsHref}
               data-testid="event-details-cta"
-              className={cn(buttonVariants({ size: "sm", variant: event.canBuyTickets ? "outline" : "default" }))}
+              className={cn(
+                buttonVariants({ size: "sm", variant: event.canBuyTickets ? "outline" : "default" }),
+                "h-card-action min-w-card-action px-3",
+              )}
             >
               Details
             </Link>
@@ -121,7 +125,10 @@ export function EventBrowseCard({
                 target="_blank"
                 rel="noopener noreferrer"
                 data-testid="event-buy-cta"
-                className={cn(buttonVariants({ size: "sm", variant: "default" }))}
+                className={cn(
+                  buttonVariants({ size: "sm", variant: "default" }),
+                  "h-card-action min-w-card-action px-3",
+                )}
               >
                 <Ticket data-icon="inline-start" aria-hidden />
                 Buy tickets
@@ -130,6 +137,7 @@ export function EventBrowseCard({
               <Button
                 size="sm"
                 variant="default"
+                className="h-card-action min-w-card-action px-3"
                 nativeButton={false}
                 render={<Link href={detailsHref} data-testid="event-buy-cta" />}
               >

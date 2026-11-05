@@ -114,8 +114,8 @@ describe("VenueBrowseCard", () => {
       />,
     );
     // Two primary controls at the shared action height (SAN-1122), Directions stays compact.
-    expect(html.match(/h-11/g) ?? []).toHaveLength(2);
-    expect(html.match(/min-w-11/g) ?? []).toHaveLength(2);
+    expect(html.match(/h-card-action/g) ?? []).toHaveLength(2);
+    expect(html.match(/min-w-card-action/g) ?? []).toHaveLength(2);
     expect(html).toContain('data-testid="venue-ask-select"');
     expect(html).toContain('data-testid="venue-map-select"');
     // The footer wraps its own content inside the card instead of overflowing it.
@@ -127,7 +127,7 @@ describe("VenueBrowseCard", () => {
     const html = renderToStaticMarkup(
       <VenueBrowseCard kind={kind} listing={listing} onAskSelect={() => {}} />,
     );
-    expect(html.match(/h-11/g) ?? []).toHaveLength(1);
+    expect(html.match(/h-card-action/g) ?? []).toHaveLength(1);
     expect(html).not.toContain("venue-map-select");
   });
 
