@@ -189,6 +189,9 @@ function RestaurantBrowseViewInner({
                     selected={selectedPinId === pinId}
                     onSelect={() => {
                       selectPin(pinId);
+                      // Replace any older panel record too, so releasing the pin later cannot
+                      // fall back to a restaurant the visitor has moved on from.
+                      setDetailsId(r.id);
                       setSelectedForAskId(r.id);
                     }}
                     selectedForAsk={selectedForAsk === r.id}
