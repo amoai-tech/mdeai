@@ -15,6 +15,8 @@ type EventBrowseCardProps = {
   mediaLayout?: "inline" | "cover";
   selectedForAsk?: boolean;
   onAskSelect?: () => void;
+  /** SAN-1638: open Details in the page's right panel instead of navigating. */
+  onDetails?: (trigger: HTMLElement) => void;
   /** Present only when the event has a real map pin; the same ID the shared map uses. */
   pinId?: string;
 };
@@ -72,6 +74,7 @@ export function EventBrowseCard({
   mediaLayout = "cover",
   selectedForAsk,
   onAskSelect,
+  onDetails,
   pinId,
 }: EventBrowseCardProps) {
   const detailsHref = `/events/${event.slug}`;
@@ -108,7 +111,20 @@ export function EventBrowseCard({
             {selectedForAsk ? "Clear selection" : "Ask about this"}
           </Button> : <span />}
           <div className="ml-auto flex items-center gap-2">
-            {/* Details is the primary action unless a real ticket offer exists; then Buy is. */}
+            {/* Details is the primary action unless a real ticket offer exists; then Buy is.
+                On a browse page it opens the in-page panel; elsewhere it is a real link. */}
+            {onDetails ? (
+              <Button
+                type="button"
+                size="sm"
+                variant={event.canBuyTickets ? "outline" : "default"}
+                className="h-card-action min-w-card-action px-3"
+                data-testid="event-details-open"
+                onClick={(clickEvent) => onDetails(clickEvent.currentTarget)}
+              >
+                Details
+              </Button>
+            ) : (
             <Link
               href={detailsHref}
               data-testid="event-details-cta"
@@ -119,6 +135,7 @@ export function EventBrowseCard({
             >
               Details
             </Link>
+            )}
             {!event.canBuyTickets ? null : event.ticketUrl.startsWith("http") ? (
               <Link
                 href={event.ticketUrl}
