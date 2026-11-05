@@ -9,7 +9,6 @@ import type { Session } from "@supabase/supabase-js";
 import {
   getTestSession,
   injectSession,
-  QA_HOST_EMAIL,
   QA_SUPER_ADMIN_EMAIL,
   signInAsOnOrigin,
 } from "./helpers/auth";
@@ -52,7 +51,7 @@ function markPrivateQaOutput(outputPath: (file: string) => string): void {
 export const test = base.extend<SharedFixtures, SharedWorkerFixtures>({
   qaRole: ["anonymous", { option: true }],
   authSession: [
-    async ({}, runFixture) => runFixture(await getTestSession(QA_HOST_EMAIL)),
+    async ({}, runFixture) => runFixture(await getTestSession(QA_SUPER_ADMIN_EMAIL)),
     { scope: "worker" },
   ],
   authStorageState: [

@@ -70,16 +70,14 @@ describe("QA magic-link safety", () => {
     expect(generateLink).toHaveBeenCalledWith({ type: "magiclink", email: QA_SUPER_ADMIN_EMAIL });
   });
 
-  it("refuses to create a missing dedicated renter account", async () => {
-    listUsers.mockResolvedValue({
-      data: { users: [], nextPage: null },
-      error: null,
-    });
-
-    await expect(getTestSession("qa-renter@mdeai.co", { requireExisting: true }))
-      .rejects.toThrow("refusing magic-link auto-creation");
-    expect(generateLink).not.toHaveBeenCalled();
-  });
+  it.each(["qa-renter@mdeai.co", "qa-landlord@mdeai.co"])(
+    "refuses to auto-create an absent fixed QA account: %s",
+    async (email) => {
+      listUsers.mockResolvedValue({ data: { users: [], nextPage: null }, error: null });
+      await expect(getTestSession(email)).rejects.toThrow("refusing magic-link auto-creation");
+      expect(generateLink).not.toHaveBeenCalled();
+    },
+  );
 
   it("accepts a separately configured existing broker QA account", async () => {
     const email = "qa-broker@mdeai.co";

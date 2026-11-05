@@ -362,11 +362,13 @@ export async function getTestSession(
   const admin = await getSupabaseAdmin();
 
   // Supabase admin.generateLink(type: "magiclink") creates missing users.
-  // Both permanent QA identities must already exist: a smoke run must never
-  // silently create an auth user. Explicitly provisioned throwaway identities
-  // are handled by their existing creation/cleanup flows.
-  const permanentQaEmails = [QA_HOST_EMAIL, QA_SUPER_ADMIN_EMAIL];
-  if (options.requireExisting || permanentQaEmails.includes(email.toLowerCase())) {
+  // Supabase generateLink(magiclink) may create missing users. Never let a
+  // permanent QA identity be silently provisioned by a test. Disposable
+  // qa-isolation.mdeai.co users are provisioned explicitly elsewhere.
+  const normalizedEmail = email.trim().toLowerCase();
+  const fixedQaEmail = normalizedEmail === QA_SUPER_ADMIN_EMAIL ||
+    /^qa-[a-z0-9._+-]+@mdeai\.co$/.test(normalizedEmail);
+  if (options.requireExisting || fixedQaEmail) {
     let page = 1;
     let found = false;
     while (true) {

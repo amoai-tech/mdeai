@@ -1,6 +1,10 @@
 import { existsSync } from "node:fs";
 import { expect, test } from "./fixtures";
-import { hasE2eEnv } from "./helpers/auth";
+import { hasE2eEnv, loadEnvLocalForE2E } from "./helpers/auth";
+
+// Playwright evaluates skip conditions when importing the spec, before fixtures run.
+// Load existing ignored QA configuration first so enabled roles cannot silently skip.
+loadEnvLocalForE2E();
 
 /** These tests touch the real hosted Supabase user identities, but never write app records. */
 test.use({ screenshot: "off", trace: "off", video: "off" });
@@ -43,22 +47,24 @@ test.describe("MDE role-selected, isolated QA sessions", () => {
 
   test.describe("renter", () => {
     test.use({ qaRole: "renter" });
-    test.skip(!process.env.MDE_QA_RENTER_EMAIL, "Configure an existing dedicated renter QA identity");
     test("renter signs in without using Super Admin", async ({ qaRolePage }) => {
       const response = await qaRolePage.goto("/saved");
       expect(response?.status()).toBe(200);
       await expect(qaRolePage.getByTestId("saved-page")).toBeVisible();
+      // Real server authorization: a renter cannot read Super Admin records.
+      expect((await qaRolePage.request.get("/api/admin/rentals/test")).status()).toBe(403);
     });
   });
 
   test.describe("broker", () => {
     test.use({ qaRole: "broker" });
-    test.skip(!process.env.MDE_QA_BROKER_EMAIL, "Configure an existing dedicated broker QA identity");
     test("broker sees the existing authorized rental workspace", async ({ qaRolePage }) => {
       const response = await qaRolePage.goto("/host/rentals");
       expect(response?.status()).toBe(200);
       await expect(qaRolePage).toHaveURL(/\/host\/rentals$/);
       await expect(qaRolePage.getByTestId("rentals-broker-workspace")).toBeVisible();
+      // Broker access to their workspace must not grant admin access.
+      expect((await qaRolePage.request.get("/api/admin/rentals/test")).status()).toBe(403);
     });
   });
 });
