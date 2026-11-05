@@ -17,6 +17,8 @@ type EventBrowseCardProps = {
   onAskSelect?: () => void;
   /** SAN-1638: open Details in the page's right panel instead of navigating. */
   onDetails?: (trigger: HTMLElement) => void;
+  /** SAN-1638: this card's Details panel is open (announced with aria-expanded). */
+  detailsOpen?: boolean;
   /** Present only when the event has a real map pin; the same ID the shared map uses. */
   pinId?: string;
 };
@@ -75,6 +77,7 @@ export function EventBrowseCard({
   selectedForAsk,
   onAskSelect,
   onDetails,
+  detailsOpen = false,
   pinId,
 }: EventBrowseCardProps) {
   const detailsHref = `/events/${event.slug}`;
@@ -120,6 +123,8 @@ export function EventBrowseCard({
                 variant={event.canBuyTickets ? "outline" : "default"}
                 className="h-card-action min-w-card-action px-3"
                 data-testid="event-details-cta"
+                data-details-action="open"
+                aria-expanded={detailsOpen}
                 onClick={(clickEvent) => onDetails(clickEvent.currentTarget)}
               >
                 Details
@@ -128,6 +133,7 @@ export function EventBrowseCard({
             <Link
               href={detailsHref}
               data-testid="event-details-cta"
+              data-details-action="link"
               className={cn(
                 buttonVariants({ size: "sm", variant: event.canBuyTickets ? "outline" : "default" }),
                 "h-card-action min-w-card-action px-3",

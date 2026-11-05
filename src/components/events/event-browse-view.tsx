@@ -16,6 +16,7 @@ import {
   EventBrowseDetailsSheet,
 } from "@/components/events/event-browse-details";
 import { useIsLgUp } from "@/hooks/use-is-lg-up";
+import { useEscapeToClose } from "@/hooks/use-escape-to-close";
 import { EventBrowseFilters } from "@/components/events/event-browse-filters";
 import { EmptyState } from "@/components/empty/empty-state";
 import { Button } from "@/components/ui/button";
@@ -65,7 +66,8 @@ function EventBrowseViewInner({
   const { selectedPinId, setSelectedPinId, panToPin } = useMapContext();
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const desktop = useIsLgUp();
-  // SAN-1638: Details identity is its own state, independent of the map pin/Ask selection.
+  // SAN-1638: the panel has its own id. Opening Details writes the Ask context; pressing Ask never
+  // opens the panel (on a phone that would cover the composer).
   const [detailsId, setDetailsId] = useState<string | null>(null);
   const detailsTriggerRef = useRef<HTMLElement | null>(null);
   const [resolved, setResolved] = useState<{ scope: string; rows: PublishedEventListItem[] } | null>(null);
@@ -181,15 +183,18 @@ function EventBrowseViewInner({
     setDetailsId(null);
   }
   const detailsEvent = shownEvents.find((event) => event.id === detailsId) ?? null;
-  // F8: a filter that hides the event closes the panel; forgetting the id stops it reopening
-  // when the filter later brings the event back.
   if (detailsId && !shownEvents.some((event) => event.id === detailsId)) {
     setDetailsId(null);
   }
+  // Closing Details clears the selection and returns focus to the control that opened it.
   const closeDetails = useCallback(() => {
     setDetailsId(null);
+    selectEvent(null);
     requestAnimationFrame(() => detailsTriggerRef.current?.focus());
-  }, []);
+  }, [selectEvent]);
+
+  // Escape closes the desktop panel (the phone Sheet already does).
+  useEscapeToClose(Boolean(detailsEvent && desktop), closeDetails);
 
   const countLabel =
     total === 1 ? "1 upcoming event listing" : `${total} upcoming event listings`;
@@ -297,7 +302,12 @@ function EventBrowseViewInner({
               <EventBrowseCard key={event.id} event={event} mediaLayout="inline"
                 pinId={onMap ? pinId : undefined}
                 selectedForAsk={selectedId === event.id}
-                onAskSelect={() => selectEvent(selectedId === event.id ? null : event.id)}
+                detailsOpen={detailsId === event.id}
+                onAskSelect={() => {
+                  // Context only: never opens Details, and closes a panel for another event.
+                  setDetailsId(null);
+                  selectEvent(selectedId === event.id ? null : event.id);
+                }}
                 onDetails={(trigger) => {
                   detailsTriggerRef.current = trigger;
                   // SAN-1638: the panel record is also the Ask MDE record, so the concierge answers
