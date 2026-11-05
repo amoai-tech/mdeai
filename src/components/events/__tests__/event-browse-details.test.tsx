@@ -51,7 +51,7 @@ const detail: PublicEventDetail = {
 
 function stubFetch(handler: () => Response | Promise<Response>) {
   // `fetch` must resolve to a Response; wrapping keeps every stub thenable.
-  const mock = vi.fn(async () => handler());
+  const mock = vi.fn(() => Promise.resolve(handler()));
   vi.stubGlobal("fetch", mock);
   return mock;
 }
@@ -89,8 +89,10 @@ describe("EventBrowseDetails failure states", () => {
     expect(screen.getByTestId("event-browse-details-full-page")).toBeTruthy();
 
     // A later success must clear the error rather than leaving a stale failure on screen.
-    mock.mockImplementation(async () =>
-      json({ event: { ...detail, tickets: [{ id: "t1", name: "GA", priceCents: 4000000, currency: "COP", qtyTotal: 10, qtySold: 2, position: 0 }] } }),
+    mock.mockImplementation(() =>
+      Promise.resolve(
+        json({ event: { ...detail, tickets: [{ id: "t1", name: "GA", priceCents: 4000000, currency: "COP", qtyTotal: 10, qtySold: 2, position: 0 }] } }),
+      ),
     );
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
 

@@ -205,7 +205,8 @@ function usePublicEventDetail(eventId: string): { state: LoadState; retry: () =>
       }
     };
 
-    void load();
+    // The loader handles its own errors; nothing above needs the promise.
+    load().catch(() => undefined);
     return () => controller.abort();
   }, [eventId, key]);
 
@@ -310,7 +311,7 @@ export function EventBrowseDetailsPanel(props: {
   onClose: () => void;
 }) {
   return (
-    <section
+    <section data-details-panel
       data-testid="event-browse-details-panel"
       aria-label={`${props.event.title} details`}
       className="absolute inset-0 z-20 overflow-y-auto rounded-xl border bg-background shadow-xl"
