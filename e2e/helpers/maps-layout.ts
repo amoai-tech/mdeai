@@ -1,5 +1,6 @@
 import { expect, type Page } from "@playwright/test";
 import { isDeterministicE2E } from "../../src/lib/deterministic-e2e";
+import { assessTurn, hasStarted, isTerminal } from "./turn-completion";
 
 const RENTAL_QUERY = "1BR apartment in Laureles under 80 dollars per night";
 
@@ -110,7 +111,9 @@ export async function gotoConcierge(page: Page) {
   await page
     .locator('[data-testid="chat-canvas"]')
     .waitFor({ state: "visible", timeout: 60_000 });
-  await expect(page.getByPlaceholder(/type a message/i).first()).toBeEnabled({ timeout: 30_000 });
+  // The richer check stays authoritative: it also refuses an inert composer while
+  // saved history is loading and throws when that history failed to load.
+  await ensureChatInputVisible(page, 30_000);
   await hideCopilotWebInspector(page);
   await waitForCopilotRuntime(page);
 }
@@ -244,6 +247,11 @@ export type ConciergeSubmitPort = {
 };
 
 const pendingTurnCompletion = new WeakMap<Page, Promise<void>>();
+/**
+ * Assistant replies already on screen when the turn was submitted. Captured before
+ * the send so a PREVIOUS answer can never be mistaken for the new run starting.
+ */
+const pendingRepliesBefore = new WeakMap<Page, number>();
 
 /**
  * Submit at most twice, and fail loudly if neither submit made the app react.
@@ -337,6 +345,7 @@ function watchForAppApiRequest(
 export async function sendConciergeMessage(
   page: Page, text: string, graceMs: number = CONCIERGE_ACCEPT_GRACE_MS,
 ) {
+  pendingRepliesBefore.set(page, await countConciergeReplies(page).catch(() => 0));
   await submitConciergeMessageWithRetry(
     {
       armReactionWatch: (timeoutMs) => watchForAppApiRequest(page, timeoutMs),
@@ -400,39 +409,44 @@ export async function waitForCopilotIdle(page: Page, timeout = 120_000) {
     return;
   }
 
+  const repliesBefore = pendingRepliesBefore.get(page) ?? 0;
   let settled = false;
   let failure: unknown;
   void completion.then(
-    () => {
-      settled = true;
-    },
-    (error) => {
-      failure = error;
-      settled = true;
-    },
+    () => { settled = true; },
+    (error) => { failure = error; settled = true; },
   );
 
-  // Wait for the run to actually start before judging it idle, otherwise the gap
-  // between submit and first token reads as "finished".
-  const runStarted = page
-    .locator('[data-testid="concierge-stop"], [data-testid="discovery-ask-stop"], [data-testid="copilot-assistant-message"]')
-    .first();
-  await runStarted.waitFor({ state: "visible", timeout: 20_000 }).catch(() => undefined);
-
   const stop = page.locator('[data-testid="concierge-stop"], [data-testid="discovery-ask-stop"]').first();
+  const observe = async () => assessTurn({
+    settled,
+    failure,
+    stopVisible: await stop.isVisible().catch(() => false),
+    repliesBefore,
+    repliesNow: await countConciergeReplies(page).catch(() => repliesBefore),
+  });
+
+  // The run must show evidence of starting. A timeout here is a real failure to
+  // observe the run, so it throws rather than being swallowed.
   await expect
-    .poll(
-      async () => {
-        if (settled) return true;
-        // The AG-UI response stream can stay open after the run ends. The Stop
-        // control disappearing is the UI's own "run finished" signal, so trust it
-        // instead of hanging until the timeout on a stream that never closes.
-        return !(await stop.isVisible().catch(() => false));
-      },
-      { timeout, intervals: [100, 250, 500, 1_000] },
-    )
+    .poll(async () => hasStarted(await observe()), {
+      timeout: 60_000,
+      message: "the submitted turn started (new reply or Stop control)",
+      intervals: [100, 250, 500, 1_000],
+    })
     .toBe(true);
+
+  await expect
+    .poll(async () => isTerminal(await observe()), {
+      timeout,
+      message: "the submitted turn reached a terminal state",
+      intervals: [100, 250, 500, 1_000],
+    })
+    .toBe(true);
+
   pendingTurnCompletion.delete(page);
+  pendingRepliesBefore.delete(page);
+  // A rejected request or agent run is never a completed turn.
   if (failure) throw failure;
 }
 

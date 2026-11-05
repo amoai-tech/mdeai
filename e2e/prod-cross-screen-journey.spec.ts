@@ -92,14 +92,8 @@ test.describe("SAN-1298 cross-screen conversation (/chat → /rentals → /event
     "Opt-in only: set PROD_SMOKE_BASE_URL and MDE_SAN1298_CROSS_SCREEN=1 (writes a QA identity and chat rows)",
   );
 
-  let identity: ThrowawayIdentity | undefined;
-
   test.beforeAll(() => {
     expect(hasE2eEnv(), "Supabase e2e credentials are required when a target is set").toBe(true);
-  });
-
-  test.afterAll(async () => {
-    if (identity) await deleteThrowawayIdentity(identity);
   });
 
   // Same journey, both sizes the acceptance asks for. Viewport is set per test so
@@ -111,6 +105,10 @@ test.describe("SAN-1298 cross-screen conversation (/chat → /rentals → /event
     test(`${sizeLabel}: a conversation survives leaving /chat and returning to it`, async ({ page }) => {
     await page.setViewportSize(viewport);
     test.setTimeout(420_000);
+    // A per-test identity: `afterAll` runs once per worker, so a shared variable let
+    // the second test overwrite the first one's identity and leak that QA account.
+    let identity: ThrowawayIdentity | undefined;
+    try {
     identity = await createThrowawayIdentity("qa-san1298");
     if (isVercelPreview) await establishVercelAutomationBypass(page, baseUrl, bypassSecret);
     await signInAsOnOrigin(page, baseUrl, identity.email);
@@ -292,6 +290,9 @@ test.describe("SAN-1298 cross-screen conversation (/chat → /rentals → /event
       .toBeGreaterThan(persistedBefore);
 
     expect.soft(consoleErrors, "no unexpected console errors across the journey").toEqual([]);
+    } finally {
+      if (identity) await deleteThrowawayIdentity(identity);
+    }
     });
   }
 });
