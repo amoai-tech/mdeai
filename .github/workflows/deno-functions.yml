@@ -61,10 +61,16 @@ jobs:
       # separate cache step would duplicate it at best. A `path: supabase/functions/node_modules`
       # entry would have received nothing: `--node-modules-dir=auto` materialises the directory
       # from the invocation CWD, and Deno never needed to create it under `supabase/functions/`.
+      #
+      # `--node-modules-dir=auto` must stay on the commands below. A `supabase/functions/deno.json`
+      # relying on implicit config discovery is NOT sufficient: with the invocation CWD at the repo
+      # root, Deno does not pick that file up here, and resolution fails with
+      # "Could not find a matching package for 'npm:stripe@23.0.0'". Verified in CI, not locally —
+      # a local pass can be a false green when the root node_modules already holds the package.
 
       - name: Typecheck the payment Edge Functions
         run: |
-          deno check \
+          deno check --node-modules-dir=auto \
             supabase/functions/ticket-checkout/index.ts \
             supabase/functions/ticket-payment-webhook/index.ts
 
@@ -73,7 +79,7 @@ jobs:
       # by `--allow-net`, so imports still resolve.
       - name: Run hermetic ticket and Stripe edge tests
         run: |
-          deno test --allow-env --allow-read \
+          deno test --node-modules-dir=auto --allow-env --allow-read \
             supabase/functions/tests/checkout-access-token_test.ts \
             supabase/functions/tests/ticket-checkout-buyer_test.ts \
             supabase/functions/tests/ticket-checkout-prepared-handler_test.ts \
