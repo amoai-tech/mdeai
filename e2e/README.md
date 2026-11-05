@@ -98,7 +98,9 @@ role with `test.use({ qaRole: "..." })` and receives `qaRolePage`:
 | `broker` | Existing dedicated account from `MDE_QA_BROKER_EMAIL` |
 
 Renter and broker accounts must already exist, be named `qa-*@mdeai.co`, and
-have the intended **actual app role**. The fixture refuses a missing or
+have the intended **actual app role**. `qaRolePage` signs into its own browser
+context and checks the session identity; it does **not** use the legacy
+Super Admin `authSession`/`authenticatedPage` fixture (which is lazy, not auto). The fixture refuses a missing or
 unconfigured identity; it never creates a user or silently substitutes Super Admin.
 For authenticated tests, **explicitly disable screenshot, trace and video**:
 

@@ -365,8 +365,10 @@ export async function getTestSession(
   // permanent QA identity be silently provisioned by a test. Disposable
   // qa-isolation.mdeai.co users are provisioned explicitly elsewhere.
   const normalizedEmail = email.trim().toLowerCase();
+  // Prefix/suffix checks are sufficient here: this is an existing-user safety
+  // guard, not email validation. Avoid regex analysis noise on QA input.
   const fixedQaEmail = normalizedEmail === QA_SUPER_ADMIN_EMAIL ||
-    /^qa-[a-z0-9._+-]+@mdeai\.co$/.test(normalizedEmail);
+    (normalizedEmail.startsWith("qa-") && normalizedEmail.endsWith("@mdeai.co"));
   if (options.requireExisting || fixedQaEmail) {
     let page = 1;
     let found = false;
