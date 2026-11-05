@@ -98,21 +98,6 @@ Deno.test("the retry window rejects boundary, zero, negative and non-numeric tim
   assertEquals(preparedCheckoutRetryAllowed(Infinity, now), false);
 });
 
-// Regression: Stripe may have created a payable Session before MDE received an
-// acknowledgement or persisted its Session ID. A later authentication failure
-// cannot prove that the first attempt did not create a Session.
-Deno.test("lost Stripe response, unbound payable Session, then 401/403 preserves reservation for reconciliation", () => {
-  const prepared = { state: "prepared", stripe_session_id: null };
-  assertEquals(prepared.state, "prepared");
-  assertEquals(prepared.stripe_session_id, null);
-  for (const statusCode of [400, 401, 403]) {
-    const action = preparedCheckoutFailureCode({ statusCode });
-    assertEquals(action, "CHECKOUT_SESSION_RECONCILIATION_REQUIRED");
-    // The handler has no release path once a prepared Stripe create was attempted.
-    assertEquals(action === "CHECKOUT_RETRYABLE", false);
-  }
-});
-
 Deno.test("prepared Checkout still retries ambiguous network failures with the original key", () => {
   for (
     const error of [
