@@ -13,9 +13,8 @@ const nextConfig: NextConfig = {
   // Chromatic runs in a separate worktree/dev process. Do not share .next
   // locks or caches with an existing developer server in the same checkout.
   ...(process.env.CHROMATIC_PILOT === "1" ? { distDir: ".next-chromatic" } : {}),
-  // Next.js dev toolbar and issue badge change independently of MDE UI, causing
-  // false Argos diffs. Disable them only for the dedicated visual-test server.
-  ...(process.env.ARGOS_VISUAL_TEST === "1" ? { devIndicators: false } : {}),
+  // Hide the Next.js development toolbar during deterministic Chromatic visual tests.
+  ...(process.env.CHROMATIC_PILOT === "1" ? { devIndicators: false } : {}),
   experimental: {
     // Reduce peak Webpack compilation memory in dev and build; may slightly increase compile time.
     webpackMemoryOptimizations: true,

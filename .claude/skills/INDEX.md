@@ -2,7 +2,7 @@
 
 Canonical: [`.claude/skills/`](./) · Codex exposure: [`.agents/skills/`](../../.agents/skills/) · Ownership: [`AGENTS.md`](../../AGENTS.md).
 
-**Snapshot:** SAN-1557 skill catalog based on reviewed `origin/main` `01d29fe83f` (2026-10-20). Counts below are definitions and mechanical structure only, not executed agent success rates. Recompute on later commits.
+**Snapshot:** 2026-11-05 from the current GitHub `main` skill tree, verified with `npm run check:skills` and the skill conformance tests. Counts are definitions and mechanical structure, **not** measured agent success rates. Recompute after changes to the skill catalog.
 
 ## Inventory
 
@@ -35,14 +35,18 @@ Each name below is an active canonical skill, exposed through a corresponding re
 | Metric | Current candidate | What is actually verified |
 | --- | ---: | --- |
 | Canonical active skills | **53** | Exists as `SKILL.md` with metadata |
-| Mirrored symlink entries | **160** | File/directory exposures point back to canonical owners |
-| Skills with behavioral `evals.json` | **32/53** | JSON definitions, not executed behavior tests |
-| Skills with `trigger-evals.json` | **20/53** | Positive and near-miss case definitions, not routing pass rate |
-| Defined trigger probes | **150** | Parsed cases across trigger files |
-| Defined behavioral probes | **123** | Parsed cases across behavior files |
+| Mirrored symlink entries | **161** | File/directory exposures point back to canonical owners |
+| Skills with behavioral `evals.json` | **33/53** | JSON definitions, not executed behavior tests |
+| Skills with `trigger-evals.json` | **21/53** | Positive and near-miss case definitions, not routing pass rate |
+| Defined trigger probes | **165** | Parsed cases across trigger files |
+| Defined behavioral probes | **149** | Parsed cases across behavior files |
 | Router `routing-evals.json` cases | **110** | Separate historical router-case format, not counted as trigger files |
 
-The `npm run check:skills` command enforces skill/mirror layout and vendored upstream integrity. `node --test scripts/__tests__/skill-evals-conformance.test.mjs` checks case-file structure. Neither command actually invokes Claude/Codex for each case or establishes routing accuracy; that needs an agent-run benchmark on a stable commit.
+The `npm run check:skills` command enforces skill/mirror layout, links inside `SKILL.md` and nested supporting `references/**/*.md` documents, and vendored upstream integrity. A link must resolve **from the Markdown file containing it**, both in the canonical tree and the agent exposure mirror. `node --test scripts/__tests__/skill-evals-conformance.test.mjs scripts/__tests__/skill-behavior-runner.test.mjs scripts/__tests__/check-skill-layout.test.mjs` validates case schemas, negative controls, fake-tool-call rejection, and link regressions.
+
+**Live evaluation remains separate:** `python3 scripts/run-skill-behavior-eval.py --skill errors --trigger-id 1 --run` starts a real DSH headless turn only with valid model credentials. The runner's negative `expected_owner: direct` case correctly expects **no skill call**, not a fictional `direct` tool. Do not claim runtime trigger accuracy from static tests; record the model, exact prompt, revision, trace, outcome, cost and permissions for each real run. If credentials are absent, report `not run` instead of converting fixture checks into a success rate.
+
+**Latest live probes (2026-11-05):** see [skill maintenance verification](../../docs/07-operations/skill-maintenance-verification-2026-11-05.md). DSH lacked model credentials. Authenticated, read-only Codex **completed one direct-answer negative case correctly without calling a skill**. Positive debugging and S4 security cases opened the expected skills but timed out before completing. **No model-wide routing success rate can be calculated** from this sample.
 
 **Next measurement:** execute a representative fixed set with real agent runtimes, grade correct owner/false triggers/unauthorized actions and compare a candidate to its baseline. Record attempts, passes/failures, token/tool use, and exact revision. Do not assign unmeasured quality scores.
 
