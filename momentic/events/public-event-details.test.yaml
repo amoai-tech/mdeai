@@ -1,0 +1,13 @@
+fileType: momentic/test/v2
+id: mde-events-public-details
+description: "Read-only guest journey: published event list opens matching details without checkout."
+url: https://www.mdeai.co/events
+labels:
+  - events
+  - guest
+  - read-only
+retries: 0
+steps:
+  - assert: "The Events in Medellín page has finished loading and shows real published event cards with titles and dates, not only placeholders."
+  - click: "Details for the first visible published event card in the Events results; do not select Buy tickets"
+  - assert: "The selected event's details view is open and its title and date match the event card clicked. Do not open checkout or claim a ticket purchase."
