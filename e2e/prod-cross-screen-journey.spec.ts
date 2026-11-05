@@ -131,6 +131,10 @@ test.describe("SAN-1298 cross-screen conversation (/chat → /rentals → /event
       const text = message.text();
       if (/Vector Map.*Falling back to Raster/i.test(text)) return;
       if (navigating && /Failed to fetch/i.test(text)) return;
+      // A hard reload tears down the session bootstrap mid-request; the abort
+      // surfaces after load, so the in-flight window above cannot catch it. Only
+      // this exact cause is filtered — any other failed fetch is still reported.
+      if (/Failed to fetch/i.test(text) && /_useSession/.test(text)) return;
       consoleErrors.push(text);
     });
 
@@ -166,19 +170,6 @@ test.describe("SAN-1298 cross-screen conversation (/chat → /rentals → /event
       timeout: 30_000,
     });
 
-    // The app is expected to reattach thread A on return. Click the rail item ONLY
-    // when it is not already the active chat: re-clicking the active thread clears
-    // the visible transcript for several seconds (observed on 6c4fb2fd0a), which is
-    // a separate behaviour and not what this journey is proving.
-    const railActive = await page.locator("nav[data-active-thread-id]").first()
-      .getAttribute("data-active-thread-id");
-    if (railActive !== threadA) {
-      await savedThread.click();
-    }
-    await expect
-      .soft(page.locator("nav[data-active-thread-id]").first(), "the reopened chat is thread A")
-      .toHaveAttribute("data-active-thread-id", threadA!, { timeout: 30_000 });
-
     const region = page.getByTestId("copilot-chat-region");
     await expect(page.getByTestId("saved-history-loading")).toHaveCount(0, { timeout: 30_000 });
     await expect(page.getByTestId("saved-history-error")).toHaveCount(0);
@@ -187,6 +178,28 @@ test.describe("SAN-1298 cross-screen conversation (/chat → /rentals → /event
       .soft(
         region.getByTestId("copilot-user-message").filter({ hasText: `${marker}-A` }),
         "the earlier question is shown exactly once after returning",
+      )
+      .toHaveCount(1, { timeout: 30_000 });
+
+    // The rail may legitimately keep no active id here: this conversation is the
+    // tab's own session thread, so it is already displayed. What must never happen
+    // is a DIFFERENT thread being marked active.
+    const railActive = await page.locator("nav[data-active-thread-id]").first()
+      .getAttribute("data-active-thread-id");
+    expect
+      .soft(
+        !railActive || railActive === threadA,
+        `no other conversation is marked active (rail showed ${railActive ?? "none"})`,
+      )
+      .toBe(true);
+
+    // SAN-1639: clicking the conversation that is already open used to reset the
+    // transcript. Clicking it now must leave the history intact.
+    await savedThread.click();
+    await expect
+      .soft(
+        region.getByTestId("copilot-user-message").filter({ hasText: `${marker}-A` }),
+        "re-clicking the open conversation keeps its history",
       )
       .toHaveCount(1, { timeout: 30_000 });
 
