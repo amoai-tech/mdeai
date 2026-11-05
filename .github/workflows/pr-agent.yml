@@ -143,11 +143,35 @@ jobs:
               return envelope.type === "canonical" && envelope.command === "/review" &&
                 envelope.body.includes("<!-- pr-agent:review:full -->");
             });
+            // A failed reusable job may have published useful partial findings.
+            // Override its status ONLY for one valid persisted exact-head partial
+            // state. Missing/malformed/complete states cannot conceal a timeout
+            // or cancellation that happened after a comment was published.
+            const publishPartial = (() => {
+              if (process.env.REVIEW_JOB_RESULT === "success" || !canonicalReview) return false;
+              const envelope = parseReviewEnvelope(canonicalReview.body ?? "");
+              const states = [...envelope.body.matchAll(/<!-- pr-agent-review-state:v1\n([\s\S]*?)\n-->/g)];
+              if (states.length !== 1) return false;
+              try {
+                const saved = JSON.parse(states[0][1]);
+                return saved.schema_version === 1 && Array.isArray(saved.findings) &&
+                  saved.last_run?.head_sha?.toLowerCase() === headSha.toLowerCase() &&
+                  saved.last_run?.complete === false &&
+                  Array.isArray(saved.last_run?.excluded_files) &&
+                  saved.last_run.excluded_files.length > 0;
+              } catch { return false; }
+            })();
             const report = buildCoverageReport({ repo: `${repo.owner}/${repo.repo}`, number: pull_number,
               baseSha, headSha, files, expectedCount: current.changed_files,
-              reviewBody: canonicalReview?.body ?? "",
-              reviewJobResult: canonicalReview ? "success" : process.env.REVIEW_JOB_RESULT,
+              reviewBody: process.env.REVIEW_JOB_RESULT === "success"
+                ? matching[0]?.body ?? "" : canonicalReview?.body ?? "",
+              reviewJobResult: publishPartial ? "success" : process.env.REVIEW_JOB_RESULT,
               validations });
+            if (process.env.REVIEW_JOB_RESULT !== "success") {
+              report.body += `\n**Reusable reviewer check:** ${process.env.REVIEW_JOB_RESULT}; ${publishPartial
+                ? "published partial findings retained, full-review verification not certified"
+                : "no independently established complete review"}.\n`;
+            }
             const { data: latest } = await github.rest.pulls.get({ ...repo, pull_number });
             if (latest.base.sha !== baseSha || latest.head.sha !== headSha) {
               core.notice("PR changed during analysis; suppressing stale coverage comment.");
