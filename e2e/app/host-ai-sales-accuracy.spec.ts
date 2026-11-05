@@ -198,9 +198,39 @@ for (const width of [390, 1440]) {
       }, 90_000);
       console.log("SAN1396_SALES_REPLY", JSON.stringify(afterFirst.slice(-400)));
 
-      await ask("Which event is that for?");
-      await expect(rail).toContainText(new RegExp(`qa draft ${run}`, "i"), { timeout: 90_000 });
-      expect(fixture.name).toContain(run);
+      const followUpQuestion = "Which event is that for? Give its full name or exact event ID.";
+      await ask(followUpQuestion);
+      // Match only the new answer. An earlier reply mentioning the fixture must
+      // not make a wrong follow-up pass; either exact identifier is sufficient.
+      // LLMs may render ordinary UUID/name hyphens as nonbreaking en dashes.
+      // Normalize typography, never remove the identifying UUID or run suffix.
+      const normalize = (value: string) => value.toLowerCase()
+        .replace(/[\u2010-\u2015\u2212\ufe58\ufe63\uff0d]/g, "-")
+        .replace(/[\u00a0\u202f\u2009]/g, " ");
+      const expectedEventId = normalize(fixture.eventId);
+      // The full seeded name, including its "(not a real event)" suffix.
+      const expectedEventName = normalize(fixture.name);
+      // A reply may legitimately drop or reformat the suffix. `run` is an 8-character
+      // random code, so this run-scoped name still identifies exactly one fixture —
+      // it is not a generic prefix that another event could match.
+      const expectedRunScopedName = normalize(`SAN-1396 QA draft ${run}`);
+      // Wait for the answer to STOP streaming before judging it. A match taken from a
+      // half-rendered stream is not evidence that the completed answer identifies the
+      // event, so the identifier must be present and unchanged across two reads.
+      let previousAnswer = "";
+      await expect.poll(async () => {
+        const transcript = await rail.innerText();
+        const followUpStart = transcript.lastIndexOf(followUpQuestion);
+        if (followUpStart < 0) return false;
+        const answer = normalize(transcript.slice(followUpStart + followUpQuestion.length));
+        const identifies =
+          answer.includes(expectedEventId) ||
+          answer.includes(expectedEventName) ||
+          answer.includes(expectedRunScopedName);
+        const settled = identifies && answer === previousAnswer;
+        previousAnswer = answer;
+        return settled;
+      }, { timeout: 90_000, intervals: [1_000, 2_000], message: "Host follow-up must identify the exact seeded event" }).toBe(true);
       await expectNoOverflow(page);
       expect(consoleErrors).toEqual([]);
     });
