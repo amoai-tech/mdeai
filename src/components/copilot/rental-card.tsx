@@ -203,13 +203,13 @@ export function RentalCard({
       {nightlyLabel || monthlyLabel ? (
         <div className="mt-2 flex flex-wrap items-center gap-2">
           {nightlyLabel ? (
-            <span className="inline-flex rounded-full bg-primary/10 px-2.5 py-1 text-sm font-semibold text-primary" data-testid="rental-price">
+            <span className="inline-flex rounded-full bg-primary/10 px-2.5 py-1 text-sm font-semibold text-primary" data-testid="rental-price-nightly">
               {nightlyLabel}
             </span>
           ) : null}
           {monthlyLabel ? (
             <span
-              data-testid="rental-price"
+              data-testid="rental-price-monthly"
               className={
                 nightlyLabel
                   ? "text-sm text-muted-foreground"
