@@ -148,10 +148,13 @@ jobs:
             // Override its status ONLY for one valid persisted exact-head partial
             // state. Missing/malformed/complete states cannot conceal a timeout
             // or cancellation that happened after a comment was published.
-            const publishPartial = hasPublishedPartialReview({
-              body: canonicalReview?.body ?? "", baseSha, headSha,
-              reviewJobResult: process.env.REVIEW_JOB_RESULT,
-            });
+            // Trusted base may be older while this feature PR is under review.
+            // Never execute PR-head policy: wait for the trusted module to merge.
+            const publishPartial = typeof hasPublishedPartialReview === "function" &&
+              hasPublishedPartialReview({
+                body: canonicalReview?.body ?? "", baseSha, headSha,
+                reviewJobResult: process.env.REVIEW_JOB_RESULT,
+              });
             const report = buildCoverageReport({ repo: `${repo.owner}/${repo.repo}`, number: pull_number,
               baseSha, headSha, files, expectedCount: current.changed_files,
               reviewBody: process.env.REVIEW_JOB_RESULT === "success"
