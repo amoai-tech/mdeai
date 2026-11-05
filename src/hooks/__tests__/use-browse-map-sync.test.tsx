@@ -2,7 +2,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
-import type { MapPin } from "@/platform/contracts";
+import type { MapPin, MapPinCategory } from "@/platform/contracts";
 
 const state = vi.hoisted(() => ({
   selectedPinId: null as string | null,
@@ -31,8 +31,8 @@ const pin = (id: string, lat = 6.24, title = id): MapPin => ({
   source: "sql",
 });
 
-function Probe({ pins }: { pins: MapPin[] }) {
-  useBrowseMapSync(pins, "rental");
+function Probe({ pins, category = "rental" }: { pins: MapPin[]; category?: MapPinCategory }) {
+  useBrowseMapSync(pins, category);
   return null;
 }
 
@@ -67,6 +67,23 @@ describe("SAN-472 browse map sync", () => {
     act(() => root.render(<Probe pins={[pin("old")]} />));
     act(() => root.render(<Probe pins={[]} />));
     expect(state.merge).toHaveBeenLastCalledWith("rental", []);
+  });
+
+  it("clears a stale selected café/nightlife venue after a filter removes it", () => {
+    // SAN-1122: the same sync owns the "venue" category (cafés + nightlife pins).
+    const venuePin = (id: string): MapPin => ({
+      id: `venue-${id}`,
+      category: "venue",
+      lat: 6.24,
+      lng: -75.59,
+      title: id,
+      source: "sql",
+    });
+    act(() => root.render(<Probe category="venue" pins={[venuePin("kept"), venuePin("dropped")]} />));
+    state.selectedPinId = "venue-dropped";
+    act(() => root.render(<Probe category="venue" pins={[venuePin("kept")]} />));
+    expect(state.merge).toHaveBeenLastCalledWith("venue", [venuePin("kept")]);
+    expect(state.select).toHaveBeenCalledWith(null);
   });
 
   it("keeps a matching selection when only its coordinate/title changes", () => {

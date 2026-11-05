@@ -1,0 +1,154 @@
+[
+  {
+    "kind": "cafe",
+    "width": "320",
+    "controls": [
+      {
+        "text": "View on map",
+        "h": 44
+      },
+      {
+        "text": "Ask about this",
+        "h": 44
+      },
+      {
+        "text": "Directions",
+        "h": 32
+      }
+    ],
+    "overflow": 0
+  },
+  {
+    "kind": "nightlife",
+    "width": "320",
+    "controls": [
+      {
+        "text": "View on map",
+        "h": 44
+      },
+      {
+        "text": "Ask about this",
+        "h": 44
+      },
+      {
+        "text": "Directions",
+        "h": 32
+      }
+    ],
+    "overflow": 0
+  },
+  {
+    "kind": "cafe",
+    "width": "390",
+    "controls": [
+      {
+        "text": "View on map",
+        "h": 44
+      },
+      {
+        "text": "Ask about this",
+        "h": 44
+      },
+      {
+        "text": "Directions",
+        "h": 32
+      }
+    ],
+    "overflow": 0
+  },
+  {
+    "kind": "nightlife",
+    "width": "390",
+    "controls": [
+      {
+        "text": "View on map",
+        "h": 44
+      },
+      {
+        "text": "Ask about this",
+        "h": 44
+      },
+      {
+        "text": "Directions",
+        "h": 32
+      }
+    ],
+    "overflow": 0
+  },
+  {
+    "kind": "cafe",
+    "width": "768",
+    "controls": [
+      {
+        "text": "View on map",
+        "h": 44
+      },
+      {
+        "text": "Ask about this",
+        "h": 44
+      },
+      {
+        "text": "Directions",
+        "h": 32
+      }
+    ],
+    "overflow": 0
+  },
+  {
+    "kind": "nightlife",
+    "width": "768",
+    "controls": [
+      {
+        "text": "View on map",
+        "h": 44
+      },
+      {
+        "text": "Ask about this",
+        "h": 44
+      },
+      {
+        "text": "Directions",
+        "h": 32
+      }
+    ],
+    "overflow": 0
+  },
+  {
+    "kind": "cafe",
+    "width": "1440",
+    "controls": [
+      {
+        "text": "View on map",
+        "h": 44
+      },
+      {
+        "text": "Ask about this",
+        "h": 44
+      },
+      {
+        "text": "Directions",
+        "h": 32
+      }
+    ],
+    "overflow": 0
+  },
+  {
+    "kind": "nightlife",
+    "width": "1440",
+    "controls": [
+      {
+        "text": "View on map",
+        "h": 44
+      },
+      {
+        "text": "Ask about this",
+        "h": 44
+      },
+      {
+        "text": "Directions",
+        "h": 32
+      }
+    ],
+    "overflow": 0
+  }
+]
