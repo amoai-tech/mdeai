@@ -4,6 +4,7 @@ import {
   collectRentalResults,
   findRentalRow,
   mdeUI,
+  mergeRentalResults,
   rentalDetailHref,
   selectRentalMessages,
 } from "../mde-ui-catalog";
@@ -36,6 +37,23 @@ describe("MDE A2UI catalog", () => {
     expect(findRentalRow(results, "forged-id")).toBeNull();
     expect(findRentalRow(results, "0")).toBeNull();
     expect(findRentalRow([], "real-1")).toBeNull();
+  });
+
+  it("merges fast-path and agent results without duplicates", () => {
+    const fast = { results: [{ id: "fast-1" }] };
+    const agent = { results: [{ id: "agent-1" }] };
+    expect(mergeRentalResults([fast], [agent, fast])).toEqual([fast, agent]);
+  });
+
+  it("revalidates an ID against the merged authorized history and rejects forged IDs", () => {
+    const older = { results: [{ id: "laureles-1", title: "Laureles", neighborhood: "Laureles" }] };
+    const current = { results: [{ id: "poblado-1", title: "Poblado", neighborhood: "El Poblado" }] };
+    const merged = mergeRentalResults([current], [older]);
+    // An existing card stays usable from authorized history...
+    expect(findRentalRow(merged, "laureles-1")).toMatchObject({ id: "laureles-1" });
+    // ...but a new/forged ID cannot be invented into the card.
+    expect(findRentalRow(merged, "forged-1")).toBeNull();
+    expect(findRentalRow([current], "laureles-1")).toBeNull();
   });
 
   it("collects every finished rental result on the thread, newest first", () => {

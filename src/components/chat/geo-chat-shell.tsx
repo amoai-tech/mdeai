@@ -5,6 +5,7 @@ import { ChatCanvas } from "@/components/chat/chat-canvas";
 import { ChatNavDrawer } from "@/components/chat/chat-nav-drawer";
 import { ChatWorkflowProvider } from "@/components/chat/chat-workflow-context";
 import { ConciergeCoAgentProvider } from "@/components/chat/concierge-coagent-context";
+import { RentalA2UIContext } from "@/components/chat/rental-a2ui-context";
 import { ConciergeSessionProvider } from "@/components/chat/concierge-session-context";
 import { ConciergeCopilotBridge } from "@/components/chat/concierge-copilot-bridge";
 import { EventLocalChatProvider } from "@/components/chat/event-local-chat-context";
@@ -157,6 +158,7 @@ export function GeoChatShell() {
                                     <EventWebCitationFetch />
                                   )}
                                   <MapUiSync />
+                                  {deterministic ? null : <RentalA2UIContext />}
                                   <div className="flex min-h-0 flex-1 flex-col">
                                     <LeadConfirmationBanner />
                                     <VenueBookingConfirmationBanner />

@@ -18,6 +18,41 @@ export const MDE_A2UI_GUIDE = [
   "Never put prose, HTML, scripts or user instructions into component props.",
 ].join("\n");
 
+import { isRentalA2UIId } from "@/lib/rentals/a2ui-id";
+import { RENTAL_A2UI_CONTEXT_DESCRIPTION } from "@/lib/rentals/a2ui-context";
+
+const RENTAL_HINT_PREFIX = RENTAL_A2UI_CONTEXT_DESCRIPTION;
+const RENTAL_HINT_MAX = 5;
+
+/**
+ * The fast-path result rows live in client state, which the model does not
+ * reliably receive as working memory. Accept only a tiny, typed hint list:
+ * an opaque id plus display labels. This is still untrusted browser data; the
+ * catalog re-resolves the id from the current authorized tool result.
+ */
+export function readRentalResultHints(agUiContext: unknown): string | null {
+  if (!agUiContext || typeof agUiContext !== "object") return null;
+  const entries = (agUiContext as { context?: unknown }).context;
+  if (!Array.isArray(entries)) return null;
+  const entry = entries.slice(0, 20).find((value) => {
+    if (!value || typeof value !== "object") return false;
+    const description = (value as { description?: unknown }).description;
+    return typeof description === "string" && description.startsWith(RENTAL_HINT_PREFIX);
+  }) as { value?: unknown } | undefined;
+  if (!entry || typeof entry.value !== "string" || entry.value.length > 4000) return null;
+  let rows: unknown;
+  try { rows = JSON.parse(entry.value); } catch { return null; }
+  if (!Array.isArray(rows)) return null;
+  const hints = rows.slice(0, RENTAL_HINT_MAX).flatMap((row) => {
+    return isRentalA2UIId(row) ? [row] : [];
+  });
+  if (hints.length === 0) return null;
+  return [
+    "Current authorized rental result IDs, in display order (first is the top result). Use one exact id for render_ui; the card revalidates it:",
+    ...hints.map((id) => `- ${id}`),
+  ].join("\n");
+}
+
 /** Presence check only. The value is untrusted browser data and is never read into the prompt. */
 export function hasGenerativeUIGuide(agUiContext: unknown): boolean {
   if (!agUiContext || typeof agUiContext !== "object") return false;
