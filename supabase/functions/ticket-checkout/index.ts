@@ -92,12 +92,13 @@ type PreparedCheckout = {
 // Both fresh and retried attempts send byte-equivalent Stripe parameters and
 // the same Stripe idempotency key. This closes the "Stripe created a Session,
 // but the network response was lost" gap without another reservation.
-async function completePreparedCheckout(
+export async function completePreparedCheckout(
   req: Request,
   service: CheckoutService,
   stripe: Stripe,
   key: string,
   prepared: PreparedCheckout,
+  firstAttempt = false,
 ): Promise<Response> {
   if (!preparedCheckoutRetryAllowed(prepared.created_at_ms)) {
     return jsonResponse(errorBody("CHECKOUT_RECONCILIATION_REQUIRED",
@@ -134,6 +135,27 @@ async function completePreparedCheckout(
     // was lost, even when no Session ID was saved. A later 401/403/400 cannot
     // prove an earlier Session was not created. Never release the hold based
     // only on a Stripe-create error; require reconciliation instead.
+    // An unmistakable validation error on the FIRST create can release a hold.
+    // Never treat authentication/permissions failures as such: credentials may
+    // have rotated between attempts, leaving an earlier payable Session.
+    const errorData = typeof err === "object" && err !== null
+      ? err as { statusCode?: number; type?: string; code?: string }
+      : null;
+    if (firstAttempt && !order.stripe_session_id &&
+        errorData?.statusCode === 400 &&
+        errorData.type === "StripeInvalidRequestError" &&
+        errorData.code !== "idempotency_error") {
+      const { error: releaseError } = await service.rpc("ticket_checkout_cancel", {
+        p_order_id: prepared.order_id,
+      });
+      if (releaseError) {
+        console.error("Checkout reservation release failed:", releaseError);
+        return jsonResponse(errorBody("CHECKOUT_RELEASE_FAILED",
+          "Unable to release invalid Checkout reservation"), 503, req);
+      }
+      return jsonResponse(errorBody("STRIPE_REJECTED",
+        "Stripe rejected invalid Checkout parameters"), 502, req);
+    }
     const code = preparedCheckoutFailureCode(err);
     return jsonResponse(errorBody(code,
       code === "CHECKOUT_SESSION_RECONCILIATION_REQUIRED"
@@ -410,5 +432,5 @@ Deno.serve(async (req) => {
     return jsonResponse(errorBody("CHECKOUT_PREPARE_FAILED",
       "Unable to prepare recoverable Checkout"), 503, req);
   }
-  return completePreparedCheckout(req, service, stripe, body.idempotency_key, prepared);
+  return completePreparedCheckout(req, service, stripe, body.idempotency_key, prepared, true);
 });
