@@ -264,6 +264,7 @@ describe("SAN-1609 smart coverage", () => {
     expect(job.steps[0].with.ref).toBe("${{ github.event.pull_request.base.sha }}");
     expect(source).toMatch(/^    uses: amoai-tech\/pr-review-infra\/\.github\/workflows\/pr-agent\.yml@[0-9a-f]{40}$/m);
     expect(source).toContain('const canonicalReview = matching.find((comment) => {');
+    expect(source).toContain('reviewBody: process.env.REVIEW_JOB_RESULT === "success"');
     expect(source).toContain('reviewJobResult: publishPartial ? "success" : process.env.REVIEW_JOB_RESULT');
     expect(source).toContain('saved.last_run?.complete === false');
     expect(source).toContain('**Reusable reviewer check:**');
