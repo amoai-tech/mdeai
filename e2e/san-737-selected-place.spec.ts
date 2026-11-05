@@ -22,12 +22,6 @@ const base = process.env.SAN737_BASE_URL?.trim() ?? "";
  * ordinary local work, but certification must fail loudly when the target is missing.
  */
 const CERTIFICATION = process.env.MDE_PROD_CERTIFICATION === "1";
-if (CERTIFICATION && !base) {
-  throw new Error(
-    "MDE_PROD_CERTIFICATION=1 requires SAN737_BASE_URL (for example https://www.mdeai.co): " +
-      "refusing to report a green run made entirely of skips.",
-  );
-}
 const evidence = process.env.MDE_QA_EVIDENCE_DIR?.trim();
 const preview = base ? new URL(base).hostname.endsWith(".vercel.app") : false;
 
@@ -100,6 +94,14 @@ for (const size of [{ name: "desktop", width: 1440, height: 900 }, { name: "mobi
     // route independent and cleanup exact.
     let identity: ThrowawayIdentity | undefined;
     test.beforeEach(async () => {
+      // Fail this SAN-737 scenario during test execution, not module import:
+      // other specs must remain collectible and runnable in combined suites.
+      if (CERTIFICATION && !base) {
+        throw new Error(
+          "MDE_PROD_CERTIFICATION=1 requires SAN737_BASE_URL (for example https://www.mdeai.co): " +
+            "refusing to report a green run made entirely of skips.",
+        );
+      }
       expect(hasE2eEnv()).toBe(true);
       identity = await createThrowawayIdentity("qa-san737-selected-context");
     });
