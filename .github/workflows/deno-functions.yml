@@ -8,14 +8,19 @@
 #
 # Scope is deliberately the payment-critical pair plus the hermetic ticket/stripe tests:
 #   * `ticket-checkout` and `ticket-payment-webhook` are the money path and hold the Stripe SDK pin.
-#   * The selected tests are hermetic (no live Supabase, no Stripe network, no secrets).
+#   * The selected tests are hermetic: no live Supabase, no Stripe network, no secrets. They run
+#     WITHOUT `--allow-net`, so a test that regresses into making a network call fails loudly
+#     instead of quietly becoming a flaky, environment-dependent test.
 # Widening to every function is a follow-up: several unrelated entrypoints have pre-existing
 # issues, and a gate that is red on day one for unrelated reasons teaches people to ignore it.
 name: Deno edge function gates
 
 on:
+  # No `branches` filter on purpose. AGENTS.md requires `floor` to run on every PR regardless of
+  # base branch because a stacked PR needs the same proof. #690 was stacked on #689's branch, so
+  # filtering to `main` would have let a broken payment function merge into a feature branch and
+  # reach main later inside a combined merge.
   pull_request:
-    branches: [main]
     paths:
       - "supabase/functions/**"
       - ".github/workflows/deno-functions.yml"
@@ -38,33 +43,37 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      # Third-party actions are pinned to full commit SHAs, not mutable tags, following the
+      # convention already established in .github/workflows/supabase-acl.yml: a tag can be
+      # force-pushed, and this job runs with the repository checked out.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: denoland/setup-deno@v2
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
         with:
-          deno-version: v2.x
+          # Exact runtime, not `v2.x`: a floating minor can change diagnostics or module
+          # resolution and turn this gate red without any repository change.
+          deno-version: "2.9.8"
+          # setup-deno caches DENO_DIR itself; no manual ~/.cache/deno step needed.
+          cache: true
 
-      - name: Cache Deno deps and npm resolution
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/deno
-            supabase/functions/node_modules
-          key: deno-${{ runner.os }}-${{ hashFiles('supabase/functions/**/*.ts') }}
-          restore-keys: |
-            deno-${{ runner.os }}-
+      # No manual node_modules cache. Deno stores npm packages inside DENO_DIR
+      # (`$DENO_DIR/npm/registry.npmjs.org/...`), which `setup-deno` already caches above, so a
+      # separate cache step would duplicate it at best. A `path: supabase/functions/node_modules`
+      # entry would have received nothing: `--node-modules-dir=auto` materialises the directory
+      # from the invocation CWD, and Deno never needed to create it under `supabase/functions/`.
 
-      # `--node-modules-dir=auto` is required: the edge functions import `npm:stripe@23.0.0`,
-      # and without it Deno refuses to resolve the package instead of downloading it.
       - name: Typecheck the payment Edge Functions
         run: |
-          deno check --node-modules-dir=auto \
+          deno check \
             supabase/functions/ticket-checkout/index.ts \
             supabase/functions/ticket-payment-webhook/index.ts
 
+      # No `--allow-net`: these tests are hermetic by design, and withholding network permission
+      # is what makes that claim enforced rather than aspirational. Module downloads are not gated
+      # by `--allow-net`, so imports still resolve.
       - name: Run hermetic ticket and Stripe edge tests
         run: |
-          deno test --node-modules-dir=auto --allow-env --allow-net --allow-read \
+          deno test --allow-env --allow-read \
             supabase/functions/tests/checkout-access-token_test.ts \
             supabase/functions/tests/ticket-checkout-buyer_test.ts \
             supabase/functions/tests/ticket-checkout-prepared-handler_test.ts \
