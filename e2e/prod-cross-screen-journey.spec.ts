@@ -40,7 +40,16 @@ import { establishVercelAutomationBypass } from "./fixtures/vercel-bypass";
  * rather than skipping to green when a target is set without credentials.
  */
 const baseUrl = process.env.PROD_SMOKE_BASE_URL?.trim() ?? "";
-const enabled = Boolean(baseUrl);
+
+/**
+ * This journey signs in and renders a real conversation, so a failure screenshot,
+ * trace or video would capture private chat content. Artifacts stay off by default
+ * here rather than inheriting `only-on-failure` from the project.
+ */
+test.use({ screenshot: "off", trace: "off", video: "off" });
+/** Writes a throwaway identity and real chat rows, so it needs its own opt-in. */
+const optIn = process.env.MDE_SAN1298_CROSS_SCREEN === "1";
+const enabled = Boolean(baseUrl) && optIn;
 const marker = `san1298-${Date.now().toString(36)}`;
 const isVercelPreview = /\.vercel\.app$/i.test(baseUrl ? new URL(baseUrl).hostname : "");
 const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim() ?? "";
@@ -78,7 +87,10 @@ async function sendAndWait(page: Page, text: string) {
 }
 
 test.describe("SAN-1298 cross-screen conversation (/chat → /rentals → /events → /chat)", () => {
-  test.skip(!enabled, "Set PROD_SMOKE_BASE_URL to the deployment under test");
+  test.skip(
+    !enabled,
+    "Opt-in only: set PROD_SMOKE_BASE_URL and MDE_SAN1298_CROSS_SCREEN=1 (writes a QA identity and chat rows)",
+  );
 
   let identity: ThrowawayIdentity | undefined;
 
@@ -97,18 +109,28 @@ test.describe("SAN-1298 cross-screen conversation (/chat → /rentals → /event
     await signInAsOnOrigin(page, baseUrl, identity.email);
     if (isVercelPreview) await establishVercelAutomationBypass(page, baseUrl, bypassSecret);
 
-    // Console errors are evidence. Two kinds are expected and filtered by content
-    // rather than by time, because this repository forbids fixed sleeps in E2E
-    // (`playwright-architecture-contract`):
+    // Console errors are evidence. Two kinds are expected noise and are filtered
+    // by cause, not by time (fixed sleeps are forbidden here by
+    // `playwright-architecture-contract`):
     //  - the Maps raster fallback, and
-    //  - "Failed to fetch" from a request a full-page navigation aborted mid-flight.
-    // A hard navigation tears down in-flight CopilotKit polling by design.
+    //  - "Failed to fetch" for a request a full-page navigation aborted mid-flight.
+    // The second is gated on a navigation actually being in flight, so a genuine
+    // failed request while a page sits still is still reported.
+    let navigating = false;
+    const gotoPage = async (path: string) => {
+      navigating = true;
+      try {
+        return await page.goto(`${baseUrl}${path}`, { waitUntil: "domcontentloaded" });
+      } finally {
+        navigating = false;
+      }
+    };
     const consoleErrors: string[] = [];
     page.on("console", (message) => {
       if (message.type() !== "error") return;
       const text = message.text();
       if (/Vector Map.*Falling back to Raster/i.test(text)) return;
-      if (/Failed to fetch/i.test(text)) return;
+      if (navigating && /Failed to fetch/i.test(text)) return;
       consoleErrors.push(text);
     });
 
@@ -125,10 +147,7 @@ test.describe("SAN-1298 cross-screen conversation (/chat → /rentals → /event
 
     // ── 2. Leave for /rentals, then /events (full reloads) ───────────────────
     for (const path of ["/rentals", "/events"]) {
-      await page.goto(`${baseUrl}${path}`, { waitUntil: "domcontentloaded" });
-      await expect
-        .soft(page, `staying signed in on ${path}`)
-        .toHaveURL(new RegExp(`${path.replace("/", "\\/")}$`), { timeout: 30_000 });
+      await gotoPage(path);
       // A signed-out visitor is redirected to /login; that would be the failure.
       expect.soft(new URL(page.url()).pathname, `${path} did not bounce to login`).toBe(path);
     }

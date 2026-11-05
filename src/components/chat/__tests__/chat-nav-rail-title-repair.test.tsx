@@ -13,6 +13,8 @@ const ui = vi.hoisted(() => ({
   stopActiveRun: vi.fn(),
   startNewChat: vi.fn(),
   activeThreadId: null as string | null,
+  sessionThreadId: "session-thread" as string,
+  restoringSavedThread: false,
   ensure: vi.fn(),
   threads: [] as Array<{ id: string; title: string | null; updatedAt: string }>,
 }));
@@ -24,6 +26,8 @@ vi.mock("@/components/chat/concierge-session-context", () => ({
 vi.mock("@/lib/chat/thread-nav-context", () => ({
   useThreadNav: () => ({
     activeThreadId: ui.activeThreadId,
+    sessionThreadId: ui.sessionThreadId,
+    restoringSavedThread: ui.restoringSavedThread,
     setActiveThreadId: ui.setActiveThreadId,
     clearActiveThread: vi.fn(),
   }),
@@ -44,6 +48,8 @@ beforeEach(() => {
   ui.stopActiveRun.mockReset();
   ui.startNewChat.mockReset();
   ui.activeThreadId = null;
+  ui.sessionThreadId = "session-thread";
+  ui.restoringSavedThread = false;
   ui.ensure.mockReset();
   ui.ensure.mockResolvedValue(true);
   ui.threads = [
@@ -138,5 +144,38 @@ describe("ChatNavRail re-clicking the open chat (SAN-1639)", () => {
     expect(ui.stopActiveRun).toHaveBeenCalledTimes(1);
     expect(ui.setActiveThreadId).toHaveBeenCalledWith("untitled");
     expect(ui.push).toHaveBeenCalledWith("/chat");
+  });
+});
+
+describe("ChatNavRail implicit and restoring threads (SAN-1639)", () => {
+  it("treats the tab's own session thread as already open", () => {
+    // A fresh tab runs its first turn on sessionThreadId before any selection exists.
+    ui.activeThreadId = null;
+    ui.sessionThreadId = "untitled";
+    act(() => { root.render(<ChatNavRail />); });
+    open("untitled");
+    expect(ui.startNewChat).not.toHaveBeenCalled();
+    expect(ui.stopActiveRun).not.toHaveBeenCalled();
+    expect(ui.setActiveThreadId).not.toHaveBeenCalled();
+  });
+
+  it("does not reset the transcript while a saved-thread restore is still pending", () => {
+    ui.activeThreadId = null;
+    ui.sessionThreadId = "session-thread";
+    ui.restoringSavedThread = true;
+    act(() => { root.render(<ChatNavRail />); });
+    open("untitled");
+    // The provider would reject this selection anyway; resetting only clears the view.
+    expect(ui.startNewChat).not.toHaveBeenCalled();
+    expect(ui.stopActiveRun).not.toHaveBeenCalled();
+  });
+
+  it("retries a failed title repair when the open chat has no real title", () => {
+    ui.activeThreadId = "untitled";
+    ui.threads = [{ id: "untitled", title: null, updatedAt: "2026-10-16T12:00:00Z" }];
+    act(() => { root.render(<ChatNavRail />); });
+    open("untitled");
+    expect(ui.ensure).toHaveBeenCalledWith("untitled");
+    expect(ui.startNewChat).not.toHaveBeenCalled();
   });
 });
