@@ -184,6 +184,10 @@ function CafeBrowseViewInner({
                 onAskSelect={() => selectForAsk(selectedId === listing.id ? null : listing.id)}
                 onDetails={(trigger) => {
                   detailsTriggerRef.current = trigger;
+                  // SAN-1638: the panel record is also the Ask MDE record, so the concierge can
+                  // never answer about a venue the visitor is no longer looking at. Selecting
+                  // context does not send a message.
+                  selectForAsk(listing.id);
                   setDetailsId(listing.id);
                 }}
                 composition="nova"

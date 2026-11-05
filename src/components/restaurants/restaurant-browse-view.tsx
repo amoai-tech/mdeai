@@ -76,7 +76,10 @@ function RestaurantBrowseViewInner({
   if (detailsId && !shownResults.some((r) => r.id === detailsId)) {
     setDetailsId(null);
   }
-  const selectedForAsk = shownResults.some((r) => r.id === selectedForAskId) ? selectedForAskId : null;
+  // SAN-1638: whatever the panel shows is what Ask MDE must receive, so the concierge can never
+  // answer about a restaurant the visitor has moved on from. Setting context never sends a message.
+  const askContextId = openRestaurantId ?? selectedForAskId;
+  const selectedForAsk = shownResults.some((r) => r.id === askContextId) ? askContextId : null;
   const closeDetails = useCallback(() => {
     setDetailsId(null);
     // Releasing the pin too, otherwise pin-driven Details would reopen on the next render.
@@ -182,7 +185,10 @@ function RestaurantBrowseViewInner({
                     aiSummary={r.aiSummary}
                     pinId={pinId}
                     selected={selectedPinId === pinId}
-                    onSelect={() => selectPin(pinId)}
+                    onSelect={() => {
+                      selectPin(pinId);
+                      setSelectedForAskId(r.id);
+                    }}
                     selectedForAsk={selectedForAsk === r.id}
                     // Ask selects context only: it clears the map/details preview and
                     // toggles our own selection. Nothing is sent until the visitor submits.
@@ -197,6 +203,7 @@ function RestaurantBrowseViewInner({
                       // Details is the newer, explicit choice: release a pin that would otherwise
                       // win the lookup and leave the panel showing a different restaurant.
                       setSelectedPinId(null);
+                      setSelectedForAskId(r.id);
                       setDetailsId(r.id);
                     }}
                     detailsTestId={`restaurant-details-open-${r.id}`}
