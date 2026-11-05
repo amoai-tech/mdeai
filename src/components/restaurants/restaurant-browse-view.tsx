@@ -69,17 +69,11 @@ function RestaurantBrowseViewInner({
   const pinRestaurantId = selectedPinId?.startsWith("restaurant-")
     ? selectedPinId.slice("restaurant-".length)
     : null;
-  // Resolved from the rows currently on screen, so a filter that drops the restaurant closes the
-  // panel and a late search result can never repoint an already-open Details.
-  // A pin selection opened Details before this task; keep that, and let an explicit Details click
-  // win by releasing the pin.
-  // A map-pin click only changes `selectedPinId`. Follow that transition so the panel tracks the
-  // pin instead of falling back to an older record, and close when the pin is released.
-  const [lastPinRestaurantId, setLastPinRestaurantId] = useState<string | null>(null);
-  if (pinRestaurantId !== lastPinRestaurantId) {
-    setLastPinRestaurantId(pinRestaurantId);
-    setDetailsId(pinRestaurantId);
-  }
+  // A pin pick and an explicit Details click both drive the panel; the pin wins while selected.
+  // There is deliberately no mirrored "last pin" state or ref: as state it re-ran after a Details
+  // click and clobbered the record that click had just opened, which is exactly the regression
+  // this block used to cause. Releasing a pin therefore falls back to the last record the visitor
+  // opened explicitly, and Close clears both.
   const openRestaurantId = pinRestaurantId ?? detailsId;
   const detailsRestaurant = shownResults.find((r) => r.id === openRestaurantId) ?? null;
   // Forget an id whose record left the results, so it cannot reopen on a later search.
@@ -90,10 +84,12 @@ function RestaurantBrowseViewInner({
     setSelectedForAskId(null);
   }
   const selectedForAsk = shownResults.some((r) => r.id === selectedForAskId) ? selectedForAskId : null;
+  // Close clears the whole selection — panel, map pin and Ask context — so nothing is left
+  // pointing at a restaurant the visitor has closed, and focus returns to the control that opened it.
   const closeDetails = useCallback(() => {
     setDetailsId(null);
-    // Releasing the pin too, otherwise pin-driven Details would reopen on the next render.
     setSelectedPinId(null);
+    setSelectedForAskId(null);
     requestAnimationFrame(() => detailsTriggerRef.current?.focus());
   }, [setSelectedPinId]);
   // Escape closes the desktop panel (the phone Sheet already does).
