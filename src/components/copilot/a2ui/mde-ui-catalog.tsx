@@ -3,8 +3,7 @@
 import { useState } from "react";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
-import { useSession } from "@/hooks/use-session";
-import { useConciergeChat } from "@/lib/hooks/use-concierge-chat";
+import { useGroundedSearchFastPath } from "@/hooks/use-grounded-search-fast-path";
 import { useAgent, UseAgentUpdate } from "@copilotkit/react-core/v2";
 import { createGenerativeUI } from "@copilotkit/react-core/v2/generative-ui";
 import { RentalCard as ExistingRentalCard } from "@/components/copilot/rental-card";
@@ -209,11 +208,9 @@ function NearbyRentalAction({
   pinId: string;
   onSelect?: (pinId: string) => void;
 }) {
-  const { user } = useSession();
-  const { appendMessage, isLoading, isRuntimeUnavailable } = useConciergeChat();
+  const { searchNearbyRental } = useGroundedSearchFastPath();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState(false);
-  if (!user) return null;
 
   return (
     <>
@@ -223,16 +220,16 @@ function NearbyRentalAction({
       variant="outline"
       data-testid="rental-nearby-cta"
       className="min-h-card-action lg:min-h-0"
-      disabled={pending || isLoading || isRuntimeUnavailable()}
+      disabled={pending}
       onClick={async (event) => {
         event.stopPropagation();
-        if (pending || isLoading || isRuntimeUnavailable()) return;
+        if (pending) return;
         setPending(true);
         setError(false);
         try {
           onSelect?.(pinId);
-          // The server, not this button, resolves authorized rental coordinates.
-          const started = await appendMessage(`Show 5 cafés within 800 meters of apartment ${listingId}.`);
+          // One grounded Nearby path; server resolves RLS-authorized rental coordinates.
+          const started = await searchNearbyRental(listingId);
           if (!started) setError(true);
         } catch {
           setError(true);
