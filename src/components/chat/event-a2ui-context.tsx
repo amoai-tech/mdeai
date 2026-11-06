@@ -18,14 +18,10 @@ export function eventA2UIContextValue(rows: readonly EventRow[] | undefined): st
   );
 }
 
-export function eventHintSource(
-  toolResult: unknown | null,
-  toolResults: readonly unknown[] | undefined,
-): unknown | null {
+export function eventHintSource(toolResult: unknown | null): unknown | null {
   // Historical result envelopes remain available to already-rendered cards,
   // but a failed search or a search in another domain clears the ACTIVE result.
   // Do not advertise an old event as the current top result to the agent.
-  void toolResults;
   return toolResult;
 }
 

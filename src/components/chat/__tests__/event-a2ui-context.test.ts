@@ -18,12 +18,10 @@ describe("event A2UI context", () => {
 
   it("only advertises active event results; history stays available for existing cards", () => {
     const active = { results: [{ id: A }] };
-    const history = [active, { results: [{ id: B }] }];
-    expect(eventHintSource(active, history)).toBe(active);
+    expect(eventHintSource(active)).toBe(active);
     // A failed event search or another vertical clears the active event result.
     // Historical events remain in the thread catalog but must not be promoted
     // to fresh model hints that can masquerade as the current search.
-    expect(eventHintSource(null, history)).toBeNull();
-    expect(history).toHaveLength(2);
+    expect(eventHintSource(null)).toBeNull();
   });
 });
