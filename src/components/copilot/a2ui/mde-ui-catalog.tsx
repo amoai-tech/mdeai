@@ -1,6 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import { z } from "zod";
+import { Button } from "@/components/ui/button";
+import { useSession } from "@/hooks/use-session";
+import { useConciergeChat } from "@/lib/hooks/use-concierge-chat";
 import { useAgent, UseAgentUpdate } from "@copilotkit/react-core/v2";
 import { createGenerativeUI } from "@copilotkit/react-core/v2/generative-ui";
 import { RentalCard as ExistingRentalCard } from "@/components/copilot/rental-card";
@@ -193,11 +197,55 @@ function useRentalRow(listingId: string): RentalToolRow | null {
   return findRentalRow(mergeRentalResults(fromFastPath, fromAgent), listingId);
 }
 
+/**
+ * Nearby is a question on the current CopilotKit thread, not a second Places
+ * client. This child is mounted only under a ConciergeCoAgentProvider;
+ * broker chat deliberately has no such provider.
+ */
+function NearbyRentalAction({
+  listingId, pinId, onSelect,
+}: {
+  listingId: string;
+  pinId: string;
+  onSelect?: (pinId: string) => void;
+}) {
+  const { user } = useSession();
+  const { appendMessage, isLoading, isRuntimeUnavailable } = useConciergeChat();
+  const [pending, setPending] = useState(false);
+  if (!user) return null;
+
+  return (
+    <Button
+      type="button"
+      size="sm"
+      variant="outline"
+      data-testid="rental-nearby-cta"
+      className="min-h-card-action lg:min-h-0"
+      disabled={pending || isLoading || isRuntimeUnavailable()}
+      onClick={async (event) => {
+        event.stopPropagation();
+        if (pending || isLoading || isRuntimeUnavailable()) return;
+        setPending(true);
+        try {
+          onSelect?.(pinId);
+          // The server, not this button, resolves authorized rental coordinates.
+          await appendMessage(`Show 5 cafés within 800 meters of apartment ${listingId}.`);
+        } finally {
+          setPending(false);
+        }
+      }}
+    >
+      {pending ? "Finding cafés…" : "Show nearby cafés"}
+    </Button>
+  );
+}
+
 /** One existing rental card, hydrated only from the current authorized tool result. */
 function MdeRentalCard({ listingId }: { listingId: string }) {
   const row = useRentalRow(listingId);
   const map = useOptionalMapContext();
   const rentalUi = useOptionalRentalUi();
+  const concierge = useOptionalConciergeCoAgent();
   const selectedPinId = map?.selectedPinId;
   const panToPin = map?.panToPin;
   const openVenueDetail = rentalUi?.openVenueDetail;
@@ -264,6 +312,7 @@ function MdeRentalCard({ listingId }: { listingId: string }) {
         selected={hasPin && selectedPinId === pinId}
         onSelect={hasPin ? () => panToPin?.(pinId) : undefined}
         onOpenDetails={row.tags?.includes("external-source") && !detailRental ? undefined : openDetail}
+        nearbyAction={hasPin && concierge ? <NearbyRentalAction listingId={row.id} pinId={pinId} onSelect={panToPin} /> : undefined}
         canScheduleViewing={row.can_schedule_viewing === true}
         onSchedule={openScheduleViewing ? () => openScheduleViewing({
           listingId: row.id,
