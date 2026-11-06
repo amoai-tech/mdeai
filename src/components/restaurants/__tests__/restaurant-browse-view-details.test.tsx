@@ -1,18 +1,17 @@
 // @vitest-environment jsdom
 import { act, cleanup, render, screen, within } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Restaurant } from "@/mastra/tools/search-restaurants";
 
 /**
- * Two focused regressions for the restaurant Details panel (SAN-1638).
+ * The restaurant Details panel contract (SAN-1638).
  *
- * Both came from mirroring the selected map pin into extra state during render:
- *  1. clicking Details for A while pin B was selected opened B (the mirror re-ran after the
- *     click and overwrote the record the click had just opened);
- *  2. after Close, choosing the same pin again did nothing, because the mirror still held it.
+ * **Details is the only thing that opens the panel.** Selecting a pin — on the map or with the
+ * card's "View on map" — moves the map selection and leaves the panel and the Ask context alone,
+ * which is exactly what café and nightlife cards already did. The panel used to follow the pin,
+ * which meant "View on map" opened Details over the map it had just moved.
  *
- * The panel is driven by `pinRestaurantId ?? detailsId` with no mirror, so both sequences must
- * pass without touching the wider browse behaviour.
+ * Ask MDE is set by opening Details and by the Ask toggle; Close clears panel, pin and Ask.
  */
 vi.mock("@/hooks/use-is-lg-up", () => ({ useIsLgUp: () => true }));
 vi.mock("@/components/browse/DiscoveryWorkspace", () => ({
@@ -75,6 +74,7 @@ const make = (id: string, name: string): Restaurant => ({
 
 const A = make("a", "Alpha Kitchen");
 const B = make("b", "Beta Kitchen");
+const NOLOC: Restaurant = { ...make("c", "Gamma Kitchen"), latitude: undefined, longitude: undefined };
 
 /** Heading currently shown in the Details panel, or null when it is closed. */
 const panelName = () => {
@@ -102,60 +102,70 @@ const closePanel = () =>
     screen.getByTestId("restaurant-details-close").click();
   });
 
+// jsdom has no layout, so the card-scroll hook's scrollIntoView is missing. The real map action
+// runs the real pin-selection hook, which needs it.
+beforeAll(() => {
+  Element.prototype.scrollIntoView = () => undefined;
+});
+
 beforeEach(() => {
-  render(<RestaurantBrowseView results={[A, B]} error={null} neighborhood={null} cuisine={null} />);
+  render(<RestaurantBrowseView results={[A, B, NOLOC]} error={null} neighborhood={null} cuisine={null} />);
 });
 afterEach(() => cleanup());
 
 describe("restaurant Details and the selected pin", () => {
-  it("keeps the restaurant a Details click opened even though a different pin is selected", () => {
+  it("opens the panel for the card whose Details was pressed, whatever pin is selected", () => {
     selectPin("b");
-    expect(panelName()).toBe("Beta Kitchen");
+    expect(panelName()).toBeNull();
 
-    // The newer, explicit action must win; the previously selected pin must not overwrite it.
+    // The explicit action is the only panel opener, so it cannot be shadowed by the pin.
     openDetails("a");
     expect(panelName()).toBe("Alpha Kitchen");
   });
 
-  it("moves the Ask context with the panel when a map marker is picked", () => {
-    openDetails("a");
-    expect(askPressed("a")).toBe("true");
-
+  it("selecting a map marker never opens the panel", () => {
     selectPin("b");
-    expect(panelName()).toBe("Beta Kitchen");
-    // The panel moved to B, so B must be the card that looks selected for Ask MDE.
-    expect(askPressed("b")).toBe("true");
-    expect(askPressed("a")).toBe("false");
+    expect(panelName()).toBeNull();
+    // The pin still changes what the map shows; it just stops repointing the panel.
+    expect(within(cardFor("b")).getByText("Selected on map")).toBeTruthy();
+    // And it does not silently change what the concierge thinks is selected.
+    expect(askPressed("b")).toBe("false");
   });
 
-  it("releasing a pin closes the panel instead of resurrecting the older Details record", () => {
+  it("keeps an open Details panel on its own record while the pin moves", () => {
     openDetails("a");
     expect(panelName()).toBe("Alpha Kitchen");
 
     selectPin("b");
-    expect(panelName()).toBe("Beta Kitchen");
+    expect(panelName()).toBe("Alpha Kitchen");
 
-    // Releasing B must not fall back to the Details record that B replaced.
+    // Releasing the pin changes nothing about the panel either.
     selectPin("b");
-    expect(screen.queryByTestId("restaurant-details")).toBeNull();
+    expect(panelName()).toBe("Alpha Kitchen");
   });
 
-  it("does not move focus to a stale card button when a pin took the panel over", async () => {
-    const alphaTrigger = within(cardFor("a")).getByTestId(/^restaurant-details-open-/);
-    openDetails("a");
-    alphaTrigger.focus();
-
-    // The panel now belongs to Beta, so closing must not focus Alpha's older button.
-    selectPin("b");
-    (document.activeElement as HTMLElement | null)?.blur();
+  it("View on map selects the pin without opening Details or changing Ask", () => {
+    openDetails("b");
+    expect(panelName()).toBe("Beta Kitchen");
     closePanel();
-    // Close returns focus inside requestAnimationFrame.
-    await new Promise((resolve) => setTimeout(resolve, 40));
+    expect(screen.queryByTestId("restaurant-details")).toBeNull();
 
-    expect(document.activeElement).not.toBe(alphaTrigger);
+    // The map action must do what it does on cafés and nightlife: move the map selection only.
+    act(() => {
+      within(cardFor("a")).getByTestId("restaurant-map-select").click();
+    });
+    expect(panelName()).toBeNull();
+    expect(askPressed("a")).toBe("false");
+    expect(within(cardFor("a")).getByText("Selected on map")).toBeTruthy();
   });
 
-  it("closes the panel and the selections, then reopens the same pin's details", () => {
+  it("offers no map action for a restaurant the map cannot show", () => {
+    // `restaurantToMapPin` drops rows without coordinates, so the control must not render.
+    expect(within(cardFor("c")).queryByTestId("restaurant-map-select")).toBeNull();
+    expect(within(cardFor("a")).getByTestId("restaurant-map-select")).toBeTruthy();
+  });
+
+  it("closes the panel and the selections, and reopening Details still works", () => {
     openDetails("a");
     expect(panelName()).toBe("Alpha Kitchen");
     // Opening Details is what sets the Ask context, so Close must clear it again.
@@ -166,8 +176,8 @@ describe("restaurant Details and the selected pin", () => {
     // Close must clear the Ask context too, not leave a card looking selected.
     expect(askPressed("a")).toBe("false");
 
-    // Re-selecting the very same pin must work; no remembered pin may block it.
-    selectPin("a");
+    // The same card can be opened again; nothing remembered blocks it.
+    openDetails("a");
     expect(panelName()).toBe("Alpha Kitchen");
   });
 });

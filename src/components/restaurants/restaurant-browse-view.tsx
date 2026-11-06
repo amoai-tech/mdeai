@@ -70,31 +70,11 @@ function RestaurantBrowseViewInner({
   const selectedRestaurant = shownResults.find((r) => `restaurant-${r.id}` === selectedPinId) ?? null;
   // A pin selection opened Details before this task; keep that. Details has its own id for the
   // card action, but an explicit pin pick is the more deliberate choice, so it wins.
-  const pinRestaurantId = selectedPinId?.startsWith("restaurant-")
-    ? selectedPinId.slice("restaurant-".length)
-    : null;
-  // A pin pick and an explicit Details click both drive the panel; the pin wins while selected.
-  // There is deliberately no mirrored "last pin" state or ref: as state it re-ran after a Details
-  // click and clobbered the record that click had just opened, which is exactly the regression
-  // that block used to cause. A selected pin also clears the explicit Details id below, so
-  // releasing it closes the panel rather than reopening an older record.
-  const openRestaurantId = pinRestaurantId ?? detailsId;
+  // The panel follows Details only. Selecting a pin highlights the map — it no longer swaps the
+  // panel — which is what cafés and nightlife already do, and it is what makes "View on map" mean
+  // the same thing on all three pages instead of opening Details over the map it just moved.
+  const openRestaurantId = detailsId;
   const detailsRestaurant = shownResults.find((r) => r.id === openRestaurantId) ?? null;
-  // A map-marker pick moves the panel, so it must move the Ask context with it; otherwise the
-  // panel shows B while the concierge and the pressed card still point at A.
-  if (
-    pinRestaurantId &&
-    pinRestaurantId !== selectedForAskId &&
-    shownResults.some((r) => r.id === pinRestaurantId)
-  ) {
-    setSelectedForAskId(pinRestaurantId);
-  }
-  // A pin takes ownership of the panel while it is selected. Clearing the explicit Details id
-  // means releasing the pin closes the panel instead of resurrecting the record Details last
-  // showed, which is the difference between "released" and "reopened an older panel".
-  if (pinRestaurantId && detailsId) {
-    setDetailsId(null);
-  }
   // Forget an id whose record left the results, so it cannot reopen on a later search.
   if (detailsId && !shownResults.some((r) => r.id === detailsId)) {
     setDetailsId(null);
@@ -216,15 +196,17 @@ function RestaurantBrowseViewInner({
                     aiSummary={r.aiSummary}
                     pinId={pinId}
                     selected={selectedPinId === pinId}
+                    // Same rule as cafés and nightlife: the map action exists only when
+                    // `restaurantToMapPin` produced a pin for this row.
+                    onMapSelect={
+                      pins.some((pin) => pin.id === pinId)
+                        ? () => selectPin(pinId)
+                        : undefined
+                    }
                     onSelect={() => {
-                      // `selectPin` toggles: a second click on the selected card releases it, and
-                      // that must close the panel (and the Ask context) as it did before.
-                      const releasing = pinRestaurantId === r.id;
+                      // Card body selects on the map, exactly like café and nightlife cards.
+                      // Details is the only action that opens the panel.
                       selectPin(pinId);
-                      setDetailsId(releasing ? null : r.id);
-                      setSelectedForAskId(releasing ? null : r.id);
-                      // Opened from the card body, so Close must not move focus to an older button.
-                      detailsTriggerRef.current = null;
                     }}
                     selectedForAsk={selectedForAsk === r.id}
                     detailsOpen={openRestaurantId === r.id}

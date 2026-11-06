@@ -63,6 +63,16 @@ export type RestaurantCardProps = {
   detailsTestId?: string;
   /** Browse grid only: this card's Details panel is currently open (announced to AT). */
   detailsOpen?: boolean;
+  /**
+   * Browse grid only: select this restaurant's map pin, and nothing else.
+   *
+   * Deliberately separate from `onSelect`: the card body opens Details and sets the Ask topic,
+   * while this action must do exactly what "View on map" does on café and nightlife cards —
+   * move the map selection and leave the list, the panel and the AI context alone.
+   * Omitted when the restaurant has no coordinates, so the action never renders for a row the
+   * map cannot show.
+   */
+  onMapSelect?: () => void;
 };
 
 /** Display label for a cuisine code, or null when it is unknown. */
@@ -193,6 +203,7 @@ export function RestaurantCard({
   detailsHref,
   detailsTestId,
   detailsOpen = false,
+  onMapSelect,
 }: RestaurantCardProps) {
   const ratingText = formatGroundedRating(rating);
   const typeLabel = cuisineLabel(cuisine) ?? "Restaurant";
@@ -233,7 +244,7 @@ export function RestaurantCard({
         {/* One action contract on every discovery card, in this order:
             Directions · View on map · Ask about this · Details. */}
         <RestaurantMapLinks mapsUrl={mapsUrl} />
-        {pinId && onSelect ? (
+        {onMapSelect ? (
           <Button
             type="button"
             size="sm"
@@ -243,7 +254,7 @@ export function RestaurantCard({
             data-testid="restaurant-map-select"
             onClick={(e) => {
               e.stopPropagation();
-              onSelect();
+              onMapSelect();
             }}
           >
             <MapPin data-icon="inline-start" aria-hidden />
