@@ -74,9 +74,9 @@ export function isStoredRentalUuid(id: string): boolean {
 
 /** Respect an explicit bounded radius; never silently replace 300 m with 800 m. */
 export function nearbyCafeRadiusMeters(text: string): number | null {
-  const match = text.match(/\b(\d{1,5})\s*(?:meters?|metres?|m)\b/i);
-  if (!match) return 800;
-  const value = Number(match[1]);
+  const match = text.match(/\b(\d+(?:\.\d+)?)\s*(km|kilometers?|kilometres?|meters?|metres?|m)\b/i);
+  if (!match) return /\bwithin\s+\d/i.test(text) ? null : 800;
+  const value = Number(match[1]) * (/^(?:km|kilo)/i.test(match[2] ?? "") ? 1000 : 1);
   return value >= 100 && value <= 5000 ? value : null;
 }
 
