@@ -210,6 +210,7 @@ function NearbyRentalAction({
   onSelect?: (pinId: string) => void;
 }) {
   const { searchNearbyRental } = useGroundedSearchFastPath();
+  const agentRunning = Boolean(useOptionalConciergeCoAgent()?.agent?.isRunning);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState(false);
 
@@ -221,10 +222,10 @@ function NearbyRentalAction({
       variant="outline"
       data-testid="rental-nearby-cta"
       className="min-h-card-action lg:min-h-0"
-      disabled={pending}
+      disabled={pending || agentRunning}
       onClick={async (event) => {
         event.stopPropagation();
-        if (pending) return;
+        if (pending || agentRunning) return;
         setPending(true);
         setError(false);
         try {
