@@ -86,7 +86,10 @@ eligibility, ownership, publication-approval or viewing-permission gates.
 
 - A real signed-in Google Places Nearby call from a browser at the final head of #783.
 - The A→B selected-place conversation on the deployed SHA.
-- A provider-backed route request (implementation does not exist).
+- A provider-backed route request. The repository has no implementation; the session's
+  `google-maps-experience` MCP endpoint is registered but rejects calls with
+  "Method doesn't allow unregistered callers", so the provider key is not wired into that
+  MCP server either. SAN-465 must supply its own authenticated client.
 - 390×844 and 360×800 map open/select/close/reopen on the current release.
 - Whether every grounded café card satisfies Google's current attribution rules.
 
@@ -423,7 +426,8 @@ Superseded/canceled history stays untouched: SAN-102, SAN-103, SAN-463.
 ### E5 — no provider-backed routes
 - **Symptom:** "How far is this apartment from Provenza?" has no real distance/time path.
 - **Evidence:** only `compute_routes` in an enum (`adk-grounding-types.ts:35`); no Routes API
-  client; `Route`/`duration` handling absent.
+  client; `Route`/`duration` handling absent. The session MCP endpoint exists but rejects the
+  call as an unregistered caller, so a provider key must be supplied before any live route proof.
 - **Root cause:** SAN-465 never implemented; SAN-229 depends on it.
 - **Owner:** `adk-grounding-client.ts` + a typed route adapter.
 - **Smallest fix:** one server function calling the documented `compute_routes` MCP tool (or the
