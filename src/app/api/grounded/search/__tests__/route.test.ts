@@ -1,5 +1,10 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
+const { mockServerClient } = vi.hoisted(() => ({
+  mockServerClient: vi.fn(async () => ({ from: vi.fn() })),
+}));
+vi.mock("@/lib/supabase/server", () => ({ createClient: mockServerClient }));
+
 vi.mock("@/mastra/tools/search-grounded-places", () => ({
   searchGroundedPlacesTool: {
     execute: vi.fn(),
@@ -12,6 +17,7 @@ import { searchGroundedPlacesTool } from "@/mastra/tools/search-grounded-places"
 describe("POST /api/grounded/search", () => {
   beforeEach(() => {
     vi.mocked(searchGroundedPlacesTool.execute!).mockReset();
+    mockServerClient.mockClear();
   });
 
   it("returns grounded tool envelope", async () => {
@@ -83,6 +89,7 @@ describe("POST /api/grounded/search", () => {
       body: JSON.stringify({ query: "cafés within 800 m of this apartment", intent: "cafe", nearbyRentalId, nearbyRadiusMeters: 800 }),
     }));
     expect(res.status).toBe(200);
+    expect(mockServerClient).toHaveBeenCalledOnce();
     expect(searchGroundedPlacesTool.execute).toHaveBeenCalledWith(
       expect.objectContaining({ nearbyRentalId, nearbyRadiusMeters: 800, intent: "cafe" }),
       expect.anything(),
