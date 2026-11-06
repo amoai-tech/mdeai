@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { isEventLookupUuid } from "@/lib/events/event-lookup";
 import {
+  formatEventBadgeDate,
   formatEventCardPrice,
   formatEventSchedule,
   formatTicketPrice,
@@ -113,5 +114,16 @@ describe("ticketsRemaining", () => {
   it("returns 0 for corrupt inventory rather than a negative number", () => {
     expect(ticketsRemaining(Number.NaN, 0, 0)).toBe(0);
     expect(ticketsRemaining(10, 0, Number.NaN)).toBe(0);
+  });
+});
+
+describe("formatEventBadgeDate", () => {
+  it("derives the month and day from the real record in Medellín time", () => {
+    // 2026-02-24T02:00Z is still the 23rd in Bogotá (UTC-5): a badge must not show the UTC day.
+    expect(formatEventBadgeDate("2026-02-24T02:00:00.000Z")).toEqual({ month: "FEB", day: "23" });
+  });
+
+  it("returns null for an unusable timestamp so the card degrades instead of lying", () => {
+    expect(formatEventBadgeDate("not-a-date")).toBeNull();
   });
 });
