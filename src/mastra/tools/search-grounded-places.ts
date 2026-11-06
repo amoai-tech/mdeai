@@ -9,7 +9,7 @@ import {
 import { incrementAndCheckGroundingQuota } from "../lib/grounding-quota";
 import { resolveGroundingLocationBias } from "../lib/grounding-location-bias";
 import { runAuditedTool } from "../lib/run-audited-search";
-import { searchNearbyRentalPlaces } from "./nearby-rental-places";
+import { hasVerifiedNearbyRentalUser, searchNearbyRentalPlaces } from "./nearby-rental-places";
 import { searchRestaurants, type Restaurant } from "./search-restaurants";
 import {
   isCoffeeVenueQuery,
@@ -358,6 +358,20 @@ export const searchGroundedPlacesTool = createTool({
         return {
           results: [], attribution: [], source: "grounding" as const,
           metadata: { reason: "nearby_supported_for_cafes_only", venueKind: "general" },
+        };
+      }
+      // Agent calls bypass the HTTP fast-path route: require a verified,
+      // non-anonymous Supabase user before even reserving paid Places quota.
+      // Service bearer alone and public anonymous clients never authorize Nearby.
+      if (!(await hasVerifiedNearbyRentalUser(context))) {
+        return {
+          results: [], attribution: [], source: "grounding" as const,
+          metadata: {
+            venueKind: "cafe" as const,
+            searchMode: "nearby" as const,
+            anchorPinId: `rental-${inputData.nearbyRentalId}`,
+            reason: "authentication_required",
+          },
         };
       }
       // Nearby is billed too: enforce the existing daily Places/grounding

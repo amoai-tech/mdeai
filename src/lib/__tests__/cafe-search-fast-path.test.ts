@@ -58,10 +58,13 @@ describe("SAN-106 selected rental Nearby classification", () => {
   it("recognizes selected apartment café intent before rental routing", () => {
     expect(isSelectedRentalCafeNearbyRequest("Show cafés within 800 meters of this apartment")).toBe(true);
     expect(isSelectedRentalCafeNearbyRequest("Find coffee shops near this rental")).toBe(true);
+    expect(isSelectedRentalCafeNearbyRequest("Find cafés near the apartment")).toBe(true);
   });
   it("leaves unrelated rentals and cafés alone", () => {
     expect(isSelectedRentalCafeNearbyRequest("Find 2BR apartments in Laureles")).toBe(false);
     expect(isSelectedRentalCafeNearbyRequest("Find cafés in Laureles")).toBe(false);
+    expect(isSelectedRentalCafeNearbyRequest("Show me the apartment near cafés")).toBe(false);
+    expect(isSelectedRentalCafeNearbyRequest("Find the rental around coffee shops")).toBe(false);
   });
 });
 

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { incrementAndCheckGroundingQuota } from "../../lib/grounding-quota";
-import { searchNearbyRentalPlaces } from "../nearby-rental-places";
+import { hasVerifiedNearbyRentalUser, searchNearbyRentalPlaces } from "../nearby-rental-places";
 import { searchGroundedPlacesTool } from "../search-grounded-places";
 
 vi.mock("../../lib/grounding-quota", () => ({
@@ -8,6 +8,7 @@ vi.mock("../../lib/grounding-quota", () => ({
 }));
 vi.mock("../nearby-rental-places", () => ({
   searchNearbyRentalPlaces: vi.fn(),
+  hasVerifiedNearbyRentalUser: vi.fn(),
 }));
 
 const rentalId = "550e8400-e29b-41d4-a716-446655440000";
@@ -18,7 +19,8 @@ const input = {
   intent: "cafe" as const,
 };
 
-async function executeNearby() {
+/** Invoke the real grounded tool with its contextual Nearby input. */
+function executeNearby() {
   const execute = searchGroundedPlacesTool.execute;
   if (!execute) throw new Error("grounded Places tool has no execute handler");
   return execute(input, {} as never);
@@ -28,6 +30,20 @@ describe("SAN-106 Nearby respects the canonical Places budget/kill switch", () =
   beforeEach(() => {
     vi.mocked(incrementAndCheckGroundingQuota).mockReset();
     vi.mocked(searchNearbyRentalPlaces).mockReset();
+    vi.mocked(hasVerifiedNearbyRentalUser).mockReset();
+    vi.mocked(hasVerifiedNearbyRentalUser).mockResolvedValue(true);
+  });
+
+  it("rejects a guest/service/anonymous-context call before quota reservation or Places", async () => {
+    vi.mocked(hasVerifiedNearbyRentalUser).mockResolvedValue(false);
+    const out = await executeNearby();
+    expect(hasVerifiedNearbyRentalUser).toHaveBeenCalledOnce();
+    expect(incrementAndCheckGroundingQuota).not.toHaveBeenCalled();
+    expect(searchNearbyRentalPlaces).not.toHaveBeenCalled();
+    expect(out).toMatchObject({
+      results: [],
+      metadata: { searchMode: "nearby", reason: "authentication_required" },
+    });
   });
 
   it("does not call the billable provider when quota is disabled", async () => {

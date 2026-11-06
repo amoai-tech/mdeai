@@ -4,6 +4,7 @@ import { checkSearchFastPathRateLimit } from "@/lib/api-ip-rate-limit";
 import { searchGroundedPlacesTool } from "@/mastra/tools/search-grounded-places";
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
 import { RENTAL_SUPABASE_KEY } from "@/mastra/tools/search-rentals";
+import { MDEAI_USER_ID_KEY } from "@/mastra/lib/tool-audit-context";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -56,6 +57,7 @@ export async function POST(req: Request) {
     // before a billable Nearby request, then preserve this client's apartment RLS.
     // Standalone public café discovery remains available without sign-in.
     const rentalClient = nearbyRentalId ? await createSupabaseServerClient() : null;
+    let verifiedNearbyUserId: string | null = null;
     if (rentalClient) {
       const { data: { user }, error: authError } = await rentalClient.auth.getUser();
       if (authError || !user || user.is_anonymous) {
@@ -64,10 +66,12 @@ export async function POST(req: Request) {
           { status: 401, headers: { "Cache-Control": "no-store" } },
         );
       }
+      verifiedNearbyUserId = user.id;
     }
     const context = rentalClient ? {
       requestContext: {
-        get: (key: string) => key === RENTAL_SUPABASE_KEY ? rentalClient : undefined,
+        get: (key: string) => key === RENTAL_SUPABASE_KEY ? rentalClient
+          : key === MDEAI_USER_ID_KEY ? verifiedNearbyUserId : undefined,
       },
     } : {};
     const out = await execute(

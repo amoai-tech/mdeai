@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { searchNearby } from "../../lib/google-places-client";
 import { RENTAL_SUPABASE_KEY } from "../search-rentals";
+import { MDEAI_USER_ID_KEY } from "../../lib/tool-audit-context";
 import { normalizeToolOutput } from "@/platform/maps/normalize-tool-output";
 import {
+  hasVerifiedNearbyRentalUser,
   mapNearbyProviderPlaces,
   searchNearbyRentalPlaces,
 } from "../nearby-rental-places";
@@ -36,6 +38,48 @@ function contextWithRlsRental(row: unknown, error: unknown = null) {
   };
   return { context: { requestContext }, from, select, eq, maybeSingle };
 }
+
+describe("SAN-106 verified user guard for tool-originated Nearby", () => {
+  const userId = "renter-verified";
+
+  function authContext(auditId: string | null, user: { id: string; is_anonymous?: boolean } | null) {
+    const getUser = vi.fn().mockResolvedValue({ data: { user }, error: null });
+    const context = {
+      requestContext: {
+        get: (key: string) => key === MDEAI_USER_ID_KEY ? auditId
+          : key === RENTAL_SUPABASE_KEY ? { from: vi.fn(), auth: { getUser } }
+            : undefined,
+      },
+    };
+    return { context, getUser };
+  }
+
+  it("accepts only the server-derived identity matching a non-anonymous RLS client", async () => {
+    const { context, getUser } = authContext(userId, { id: userId, is_anonymous: false });
+    expect(await hasVerifiedNearbyRentalUser(context)).toBe(true);
+    expect(getUser).toHaveBeenCalledOnce();
+  });
+
+  it("rejects missing identity or a service bearer without Supabase user credentials", async () => {
+    const missing = authContext(null, { id: userId, is_anonymous: false });
+    expect(await hasVerifiedNearbyRentalUser(missing.context)).toBe(false);
+    expect(missing.getUser).not.toHaveBeenCalled();
+    expect(await hasVerifiedNearbyRentalUser({ requestContext: { get: (key: string) =>
+      key === MDEAI_USER_ID_KEY ? userId : undefined } })).toBe(false);
+  });
+
+  it("rejects anonymous Supabase identities, forged IDs, and auth errors", async () => {
+    expect(await hasVerifiedNearbyRentalUser(
+      authContext(userId, { id: userId, is_anonymous: true }).context,
+    )).toBe(false);
+    expect(await hasVerifiedNearbyRentalUser(
+      authContext(userId, { id: "different-renter", is_anonymous: false }).context,
+    )).toBe(false);
+    expect(await hasVerifiedNearbyRentalUser(
+      authContext(userId, null).context,
+    )).toBe(false);
+  });
+});
 
 describe("SAN-106 RLS-backed rental Nearby → existing grounded pins", () => {
   beforeEach(() => {
@@ -125,6 +169,34 @@ describe("SAN-106 RLS-backed rental Nearby → existing grounded pins", () => {
     const out = await searchNearbyRentalPlaces(input, context);
     expect(out.results).toEqual([]);
     expect(out.metadata.reason).toBe("nearby_provider_unavailable");
+  });
+
+  it("accepts only exact HTTPS Google Maps hosts with the correct path", () => {
+    const candidates = [
+      "https://www.google.com/maps/place/Test",
+      "https://google.com/maps?cid=123",
+      "https://maps.google.com/?cid=123",
+    ];
+    for (const mapsUrl of candidates) {
+      expect(mapNearbyProviderPlaces({ places: [{ ...realPlace, googleMapsLinks: { placeUri: mapsUrl } }] })[0]?.mapsUrl).toBe(mapsUrl);
+    }
+    for (const mapsUrl of [
+      "https://google.evil.example/maps",
+      "https://www.google.com.evil.example/maps",
+      "https://maps.google.evil.example/?cid=123",
+      "https://google.com/maps.evil.example/path",
+      "https://google.com.evil.example/maps",
+      "https://www.google.com@evil.example/maps",
+      "http://www.google.com/maps/place/Test",
+      "https://www.google.com/search?q=cafe",
+      "not a valid URL",
+    ]) {
+      const mapped = mapNearbyProviderPlaces({
+        places: [{ ...realPlace, googleMapsLinks: { placeUri: mapsUrl } }],
+      });
+      expect(mapped).toHaveLength(1);
+      expect(mapped[0]?.mapsUrl).toBeUndefined();
+    }
   });
 
   it("drops fabricated, incomplete, bad-coordinate and duplicate provider rows", () => {

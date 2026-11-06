@@ -62,9 +62,12 @@ export function buildCafeSearchParams(text: string): CafeSearchApiParams | null 
 
 /** A café search near the SELECTED apartment is not a new rental search. */
 export function isSelectedRentalCafeNearbyRequest(text: string): boolean {
-  return /\b(?:caf[eé]s?|coffee(?:\s+shops?)?)(?=\W|$)/i.test(text) &&
-    /\b(?:near|around|within)\b/i.test(text) &&
-    /\b(?:this|that|selected|the)\s+(?:apartment|rental|listing)\b/i.test(text);
+  const cafe = /\b(?:caf[eé]s?|coffee(?:\s+shops?)?)(?=\W|$)/i.exec(text);
+  const proximity = /\b(?:near|around|within)\b/i.exec(text);
+  const rental = /\b(?:this|that|selected|the)\s+(?:apartment|rental|listing)\b/i.exec(text);
+  // The café must be sought near the rental, not the rental near cafés.
+  return cafe != null && proximity != null && rental != null &&
+    cafe.index < proximity.index && proximity.index < rental.index;
 }
 
 /** Only stored UUID rentals may be resolved by the Nearby SQL lookup. */

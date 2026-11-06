@@ -1,9 +1,9 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { getSupabaseServerAnonEnv } from "@/lib/supabase/server-env";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/database.types";
 import { isStoredRentalUuid } from "@/lib/cafe-search-fast-path";
 import { DEFAULT_NEARBY_SEARCH_MASK, searchNearby } from "../lib/google-places-client";
 import { RENTAL_SUPABASE_KEY } from "./search-rentals";
+import { getAuditUserId } from "../lib/tool-audit-context";
 
 /**
  * SAN-106: Nearby is not a second discovery engine. It is a server-only Google
@@ -47,11 +47,31 @@ export type NearbyRentalResult = {
   };
 };
 
+/** Reject out-of-range or non-finite coordinates before Google requests. */
 function isValidCoordinate(latitude: number, longitude: number): boolean {
   return Number.isFinite(latitude) && Number.isFinite(longitude) &&
     latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180;
 }
 
+/** Only Google Maps' exact HTTPS hosts are accepted for public result links. */
+function validatedMapsUrl(candidate: unknown): string | undefined {
+  if (typeof candidate !== "string") return undefined;
+  try {
+    const url = new URL(candidate);
+    if (url.protocol !== "https:" || url.username || url.password) return undefined;
+    const hostname = url.hostname;
+    if (hostname === "maps.google.com") return candidate;
+    if ((hostname === "google.com" || hostname === "www.google.com") &&
+        (url.pathname === "/maps" || url.pathname.startsWith("/maps/"))) {
+      return candidate;
+    }
+  } catch {
+    // Malformed or untrusted provider link: omit the link, keep the true place.
+  }
+  return undefined;
+}
+
+/** Normalize Google provider rows into safe, coordinate-ready, deduplicated cards. */
 export function mapNearbyProviderPlaces(response: unknown): NearbyRentalResult["results"] {
   const raw = response && typeof response === "object"
     ? (response as { places?: unknown }).places : undefined;
@@ -72,9 +92,7 @@ export function mapNearbyProviderPlaces(response: unknown): NearbyRentalResult["
         !isValidCoordinate(latitude, longitude)) continue;
     seen.add(id);
     const mapsUrlCandidate = place.googleMapsLinks?.placeUri ?? place.googleMapsUri;
-    const mapsUrl = typeof mapsUrlCandidate === "string" &&
-      /^https:\/\/(?:www\.)?google\.[^/]+\/maps\b|^https:\/\/maps\.google\./i.test(mapsUrlCandidate)
-      ? mapsUrlCandidate : undefined;
+    const mapsUrl = validatedMapsUrl(mapsUrlCandidate);
     results.push({
       id, title, latitude, longitude, placeId: id,
       ...(mapsUrl ? { mapsUrl } : {}),
@@ -85,6 +103,7 @@ export function mapNearbyProviderPlaces(response: unknown): NearbyRentalResult["
   return results;
 }
 
+/** Read the request-scoped RLS client without privileged or anonymous fallbacks. */
 function readRlsRentalClient(context?: unknown): SupabaseClient<Database> | null {
   const outer = context as { requestContext?: unknown } | undefined;
   const requestContext = outer?.requestContext ?? context;
@@ -96,14 +115,24 @@ function readRlsRentalClient(context?: unknown): SupabaseClient<Database> | null
     ? value as SupabaseClient<Database> : null;
 }
 
-function getAnonymousRentalClient(): SupabaseClient<Database> | null {
-  const env = getSupabaseServerAnonEnv();
-  if (!env) return null;
-  return createClient<Database>(env.url, env.anonKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
+/**
+ * Validate the server-derived user against the same RLS-scoped Supabase client.
+ * A service bearer, a fabricated context ID, or an anonymous identity is not a
+ * signed-in renter and must never reach the billable Nearby quota/provider.
+ */
+export async function hasVerifiedNearbyRentalUser(context?: unknown): Promise<boolean> {
+  const userId = getAuditUserId(context);
+  const client = readRlsRentalClient(context);
+  if (!userId || !client || typeof client.auth?.getUser !== "function") return false;
+  try {
+    const { data: { user }, error } = await client.auth.getUser();
+    return !error && user != null && !user.is_anonymous && user.id === userId;
+  } catch {
+    return false;
+  }
 }
 
+/** Resolve an authorized rental location and perform one bounded Google Nearby query. */
 export async function searchNearbyRentalPlaces(
   input: NearbyRentalQuery,
   context?: unknown,
@@ -129,9 +158,9 @@ export async function searchNearbyRentalPlaces(
     return empty("invalid_nearby_request");
   }
 
-  // A caller may see only its own RLS-authorized listings. An anonymous user
-  // sees only the public policy's inventory. NEVER use service_role here.
-  const client = readRlsRentalClient(context) ?? getAnonymousRentalClient();
+  // No anonymous fallback: only the request's user-scoped RLS client can
+  // resolve the actual listing location. The tool verifies user identity first.
+  const client = readRlsRentalClient(context);
   if (!client) return empty("rental_search_unavailable");
 
   const { data, error } = await client.from("apartments")

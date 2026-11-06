@@ -18,6 +18,8 @@ vi.mock("@/mastra/tools/search-grounded-places", () => ({
 
 import { POST } from "../route";
 import { searchGroundedPlacesTool } from "@/mastra/tools/search-grounded-places";
+import { MDEAI_USER_ID_KEY } from "@/mastra/lib/tool-audit-context";
+import { RENTAL_SUPABASE_KEY } from "@/mastra/tools/search-rentals";
 
 describe("POST /api/grounded/search", () => {
   beforeEach(() => {
@@ -102,6 +104,11 @@ describe("POST /api/grounded/search", () => {
       expect.objectContaining({ nearbyRentalId, nearbyRadiusMeters: 800, intent: "cafe" }),
       expect.anything(),
     );
+    const callContext = vi.mocked(searchGroundedPlacesTool.execute!).mock.calls[0]?.[1] as unknown as {
+      requestContext: { get(key: string): unknown };
+    };
+    expect(callContext.requestContext.get(MDEAI_USER_ID_KEY)).toBe("signed-in-renter");
+    expect(callContext.requestContext.get(RENTAL_SUPABASE_KEY)).toHaveProperty("auth");
   });
 
   it.each([
