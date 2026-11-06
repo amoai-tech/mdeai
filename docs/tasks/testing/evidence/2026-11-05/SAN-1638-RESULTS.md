@@ -3,7 +3,7 @@
 Date: 2026-11-05 · PRs: #754 (restaurants, cafés, nightlife) and #755 (events, stacked)
 Baseline: rebased onto `main` at `cfa5a90a` (which also retired the Argos visual job in #766).
 Both PRs merged: #754 as `582c27fb`, #755 as `4b7d250e`. Production verification below was
-run against the deployed build `c347162191`.
+run against the deployed build `3ec6b054d2`.
 
 ## What was proven
 
@@ -44,15 +44,13 @@ Event panel: real tiers (GA $40,000 · VIP $120,000 · Backstage $400,000 · Fro
 - A **real** provider 404/503: those branches were proven with intercepted responses, not a live outage.
 - The **signed-in** Ask → Answer journey (`e2e/san-737-selected-place.spec.ts`).
 - Buy tickets: no live event currently has an external ticket URL, so the button never rendered.
-- Production: superseded — both PRs merged (#754 `582c27fb`, #755 `4b7d250e`) and the journeys were re-run on the deployed build `c347162191`; see "Production verification after merge" below.
+- Production: superseded — both PRs merged (#754 `582c27fb`, #755 `4b7d250e`) and the journeys were re-run on the deployed builds listed in "Production verification after merge" below, most recently `3ec6b054d2`.
 - DeepSource JavaScript: 20 remaining findings are the JS-0067 module-scope false-positive class and complexity thresholds (see PR discussion); JS-0098 / JS-0116 / JS-0321 were fixed.
 - `Screenshot public UI` (Argos) failed with HTTP 402 free-plan screenshot capacity while these PRs were open. That job was retired on `main` in #766 (`cfa5a90a`), which is the baseline these PRs now sit on, so the check no longer runs. Nothing was changed in code to silence it.
 
 ## Production verification after merge (2026-11-05)
 
-Deployed build: `https://www.mdeai.co/api/version` returned `c347162191`, equal to `main` at the
-time of testing and containing all four same-day merge commits (`ab24e576` #751, `c4c510da` #753,
-`582c27fb` #754, `4b7d250e` #755).
+Deployed build: `https://www.mdeai.co/api/version` returned `3ec6b054d2` at capture time. Production moved several times during this session (`c3471621` → `3602074` → `3ec6b054d2`), so every screenshot carries the build it came from in its filename instead of relying on prose. All four same-day merge commits (`ab24e576` #751, `c4c510da` #753, `582c27fb` #754, `4b7d250e` #755) are ancestors of `main` and therefore of every one of those builds.
 
 | Route (1440px and 390px) | Details opens in place | URL unchanged | Close works | Horizontal overflow | Page errors |
 | --- | --- | --- | --- | --- | --- |
@@ -78,27 +76,31 @@ Interaction sequences on the same build:
 
 ### Screenshots (committed)
 
-The 20 JPEGs below are **in this repository** (a folder named `screenshots/` is gitignored repo-wide at `.gitignore:71`, which is why this one is called `production-captures/`), captured from the deployed build `36020745cf` at 1440x900 and 390x844. `docs/screenshots/` stays gitignored, so the evidence images live next to this record:
+15 JPEGs are **in this repository**, all captured from the deployed build `3ec6b054d2` at 1440x900 and 390x844. A folder named `screenshots/` is gitignored repo-wide (`.gitignore:71`), which is why this one is `production-captures/`; every filename ends with the build it came from.
 
 ```
-docs/tasks/testing/evidence/2026-11-05/production-captures/<name>-36020745cf.jpg
+docs/tasks/testing/evidence/2026-11-05/production-captures/<name>-3ec6b054d2.jpg
 ```
 
-| File | What it shows |
-| --- | --- |
-| `restaurants-1440-details-open` | Elcielo Details open beside the results list and map |
-| `restaurants-1440-details-a-to-b` | after pressing Details on Cuzco: the same panel now shows Cuzco, URL unchanged |
-| `restaurants-1440-pin-selected` | Cuzco selected on the map, panel following the pin |
-| `restaurants-1440-pin-released-closed` | after releasing the pin: the panel is closed, not reverted to an older record |
-| `cafes-1440-details-open` | Rituales Compañía de Café Details |
-| `nightlife-1440-details-open` | Dulce Jesús Mío Details |
-| `rentals-1440-details-open` | rental Details (unchanged behaviour, regression check) |
-| `events-1440-details-open` | event Details open in place |
-| `events-1440-real-ticket-tiers` | an event with one real tier (GA $40,000 COP) |
-| `events-1440-four-real-tiers` | Reina de Antioquia 2026 Finals with four real tiers |
-| `-390-details-sheet` (five routes) | the bottom Sheet on a phone, settled after the open animation |
+| File | Viewport | What it shows |
+| --- | --- | --- |
+| `restaurants-1440-details-open` | 1440 | Elcielo Details open beside the results list and map |
+| `restaurants-1440-details-a-to-b` | 1440 | after pressing Details on Cuzco: the same panel now shows Cuzco |
+| `restaurants-1440-pin-selected` | 1440 | Cuzco selected on the map, panel following the pin |
+| `restaurants-1440-pin-released-closed` | 1440 | after releasing the pin: the panel is closed, not reverted |
+| `cafes-1440-details-open` | 1440 | Rituales Compañía de Café Details |
+| `nightlife-1440-details-open` | 1440 | Dulce Jesús Mío Details |
+| `rentals-1440-details-open` | 1440 | rental Details (unchanged behaviour, regression check) |
+| `events-1440-details-open` | 1440 | event Details open in place |
+| `events-1440-real-ticket-tiers` | 1440 | event with one real tier (GA $40,000 COP) |
+| `events-1440-four-real-tiers` | 1440 | Reina de Antioquia 2026 Finals with four real tiers |
+| `restaurants-390-details-sheet` | 390 | phone Sheet for a restaurant |
+| `cafes-390-details-sheet` | 390 | phone Sheet for a café |
+| `nightlife-390-details-sheet` | 390 | phone Sheet for a nightlife venue |
+| `rentals-390-details-sheet` | 390 | phone Sheet for a rental |
+| `events-390-details-sheet` | 390 | phone Sheet for an event |
 
-Each capture was produced by the probes described above; no screenshot is hand-edited and none comes from a local development server.
+No screenshot is hand-edited and none comes from a local development server.
 
 ### Still not proven
 
