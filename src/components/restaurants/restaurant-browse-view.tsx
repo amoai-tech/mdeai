@@ -130,7 +130,7 @@ function RestaurantBrowseViewInner({
       />
       <DiscoveryWorkspace
         activeSlug="restaurants"
-        askComposer={<DiscoveryAskComposer key={`${neighborhood ?? ""}:${cuisine ?? ""}`} page="restaurants" onAgentResults={onAgentResults} hasSelectedItem={Boolean(selectedForAsk)} onClearSelection={() => { setSelectedForAskId(null); setSelectedPinId(null); }} guestRestaurants={{
+        askComposer={<DiscoveryAskComposer page="restaurants" onAgentResults={onAgentResults} hasSelectedItem={Boolean(selectedForAsk)} onClearSelection={() => { setSelectedForAskId(null); setSelectedPinId(null); }} guestRestaurants={{
           neighborhood,
           cuisine,
           // Guest search is catalog search: the public endpoint returns grounded rows and the

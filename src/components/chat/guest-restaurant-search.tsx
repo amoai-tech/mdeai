@@ -21,6 +21,20 @@ export type RestaurantGuestOptions = {
   onResults: (rows: Restaurant[], meta: { total: number; query: string }) => void;
 };
 
+/**
+ * Filter-scoped wrapper: a new neighborhood or cuisine means a new result set, so the previous
+ * summary must not survive it. The key sits here — on the guest subtree only — so a filter change
+ * never remounts the signed-in concierge and never discards an unsent draft.
+ */
+export function GuestRestaurantSearch({ options }: { options: RestaurantGuestOptions }) {
+  return (
+    <GuestRestaurantComposer
+      key={`${options.neighborhood ?? ""}:${options.cuisine ?? ""}`}
+      options={options}
+    />
+  );
+}
+
 export function GuestRestaurantComposer({ options }: { options: RestaurantGuestOptions }) {
   const [question, setQuestion] = useState("");
   const [busy, setBusy] = useState(false);

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { GuestRestaurantComposer } from "../guest-restaurant-search";
+import { GuestRestaurantComposer, GuestRestaurantSearch } from "../guest-restaurant-search";
 import type { Restaurant } from "@/mastra/tools/search-restaurants";
 
 /**
@@ -88,6 +88,24 @@ describe("GuestRestaurantComposer", () => {
 
     await waitFor(() => expect(onResults).toHaveBeenCalledTimes(1));
     expect(mock).toHaveBeenCalledTimes(1);
+  });
+
+  it("clears the summary when the filter scope changes, without remounting anything else", async () => {
+    const onResults = vi.fn();
+    stubFetch(() => json({ results: [row("a")], total: 1 }));
+    const { rerender } = render(
+      <GuestRestaurantSearch options={{ onResults, neighborhood: "Laureles" }} />,
+    );
+    ask("quiet");
+    expect((await screen.findByTestId("guest-restaurant-summary")).textContent).toContain("Showing 1 result");
+
+    // Same filters: the summary is still the truth for these rows.
+    rerender(<GuestRestaurantSearch options={{ onResults, neighborhood: "Laureles" }} />);
+    expect(screen.getByTestId("guest-restaurant-summary").textContent).toContain("Showing 1 result");
+
+    // Different filters: those rows are gone, so the summary describing them must be gone too.
+    rerender(<GuestRestaurantSearch options={{ onResults, neighborhood: "El Poblado" }} />);
+    expect(screen.queryByTestId("guest-restaurant-summary")).toBeNull();
   });
 
   it("does nothing for an empty query", () => {

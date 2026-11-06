@@ -24,7 +24,7 @@ type EventGuestOptions = {
 };
 
 /** Guest venue search reuses the public catalog endpoint; protected chat stays protected. */
-import { GuestRestaurantComposer, type RestaurantGuestOptions } from "@/components/chat/guest-restaurant-search";
+import { GuestRestaurantSearch, type RestaurantGuestOptions } from "@/components/chat/guest-restaurant-search";
 
 /** The existing public, rate-limited events endpoint works for guests; protected chat stays protected. */
 function GuestEventComposer({ options }: { options: EventGuestOptions }) {
@@ -314,7 +314,7 @@ function LiveComposer({ page, guestEvents, guestRestaurants, onAgentResults, hid
         />
       ) : null}
       {signedOut && page === "restaurants" && guestRestaurants ? (
-        <GuestRestaurantComposer options={guestRestaurants} />
+        <GuestRestaurantSearch options={guestRestaurants} />
       ) : signedOut && page === "events" && guestEvents ? <GuestEventComposer options={guestEvents} /> : signedOut ? (
         <div className="flex items-center justify-between gap-3"><p className="text-sm text-muted-foreground">Sign in to ask about {page}.</p><Link className="inline-flex min-h-11 shrink-0 items-center whitespace-nowrap rounded-lg bg-primary px-4 text-sm text-primary-foreground" href={`/login?next=${encodeURIComponent(path)}`}>Sign in</Link></div>
       ) : (

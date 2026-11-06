@@ -1,5 +1,4 @@
 // @vitest-environment jsdom
-import { useEffect } from "react";
 import { act, cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Restaurant } from "@/mastra/tools/search-restaurants";
@@ -12,7 +11,6 @@ import type { Restaurant } from "@/mastra/tools/search-restaurants";
  * it counts its own mounts: a filter change has to remount it, because the summary it renders
  * belongs to a result set that the filter has already replaced.
  */
-const mounts = { count: 0 };
 let emit: ((rows: Restaurant[]) => void) | null = null;
 
 vi.mock("@/hooks/use-is-lg-up", () => ({ useIsLgUp: () => true }));
@@ -40,10 +38,6 @@ vi.mock("@/components/chat/discovery-ask-composer", () => ({
   DiscoveryAskComposer: (props: {
     guestRestaurants?: { onResults: (rows: Restaurant[]) => void };
   }) => {
-    // Count real mounts, not re-renders: a filter change must create a new instance.
-    useEffect(() => {
-      mounts.count += 1;
-    }, []);
     emit = props.guestRestaurants?.onResults ?? null;
     return <i data-testid="ask-composer" />;
   },
@@ -74,7 +68,6 @@ const renderView = (cuisine: string | null = null) =>
   );
 
 beforeEach(() => {
-  mounts.count = 0;
   emit = null;
 });
 
@@ -90,16 +83,13 @@ describe("guest catalog search stays honest", () => {
     expect(subtitle()).not.toContain("Ask MDE");
   });
 
-  it("remounts the composer when the filters change, so an old summary cannot survive", () => {
+  it("shows the neutral subtitle again once the filters change the rows", () => {
     const { rerender } = renderView(null);
-    expect(mounts.count).toBe(1);
-
     act(() => emit?.([A]));
     expect(subtitle()).toContain("Search results");
 
-    // A filter change replaces the rows, so the composer that described them must not persist.
+    // A filter change replaces the rows, so the concierge-credit label must not linger.
     rerender(<RestaurantBrowseView results={[A]} error={null} neighborhood={null} cuisine="seafood" />);
-    expect(mounts.count).toBe(2);
     expect(subtitle()).toContain("Food & dining in Medellín");
     expect(subtitle()).not.toContain("Search results");
   });
