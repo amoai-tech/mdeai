@@ -75,7 +75,7 @@
 | 1 | **#792 pending independent approval/merge** | Error-reporting cleanup not yet in `main` | Current-head CI + review, merge, prove failure-injection cleanup |
 | 2 | **#793 pending docs review/merge** | Stale steps mislead the next operator | Correct factual contradictions; docs-only merge |
 | 3 | **Kill during teardown not recovered automatically** | Test identity can remain after a process is terminated | Independent ownership-aware cleanup job; verify all related rows |
-| 4 | **B2 network error / 420 s hang untraced** | Future recurrence cannot be assigned to an exact failing boundary | Trace browser/runtime/agent/provider without hiding errors |
+| 4 | **B2 network error untraced** (one-off; **no evidence for any duration**) | A recurrence cannot be attributed to a boundary | Trace browser → runtime → agent → provider without hiding errors. `420_000` in the specs is the configured **test cap**, not a measured hang: one journey once reached the cap, and where the time went was never recorded |
 | 5 | **Production SHA can change during testing** | Mixed-release counts are invalid | Pin `/api/version` before/after, separate releases |
 | 6 | **Maps error owned separately** | Google Maps `503` remains a distinct diagnostic | Map ID presence verified; inspect failed request and Google Cloud metrics, don't suppress errors |
 | 7 | **CopilotKit/Mastra MCP documentation availability varies** | Tool-based docs lookup may fail | Follow installed package types and official code/docs; #778 tracks fallback |
