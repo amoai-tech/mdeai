@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { checkSearchFastPathRateLimit } from "@/lib/api-ip-rate-limit";
 import { searchGroundedPlacesTool } from "@/mastra/tools/search-grounded-places";
+import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
+import { RENTAL_SUPABASE_KEY } from "@/mastra/tools/search-rentals";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -50,6 +52,14 @@ export async function POST(req: Request) {
         { status: 500 },
       );
     }
+    // A read-only Nearby lookup inherits the caller's Supabase cookie session,
+    // so anon callers see only public RLS rows and signed-in callers see their own.
+    const rentalClient = nearbyRentalId ? await createSupabaseServerClient() : null;
+    const context = rentalClient ? {
+      requestContext: {
+        get: (key: string) => key === RENTAL_SUPABASE_KEY ? rentalClient : undefined,
+      },
+    } : {};
     const out = await execute(
       {
         query: searchQuery,
@@ -57,7 +67,7 @@ export async function POST(req: Request) {
         ...(intent ? { intent } : {}),
         ...(nearbyRentalId ? { nearbyRentalId, nearbyRadiusMeters: nearbyRadiusMeters ?? 800 } : {}),
       },
-      {} as never,
+      context as never,
     );
     const results = (out as { results?: unknown[] }).results ?? [];
     if (results.length === 0) {
