@@ -3,6 +3,7 @@ import {
   createThrowawayIdentity,
   deleteThrowawayIdentity,
   getSupabaseAdmin,
+  settleOwnedCleanup,
   sweepThrowawayIdentities,
 } from "./helpers/auth";
 
@@ -27,6 +28,7 @@ test("an owned identity is deleted with its thread, messages and profile", async
   // This test is ABOUT cleanup, so it must not leak when its own assertions fail:
   // a broken seed aborts before the sweep runs, and without this the identity and
   // its rows would survive the run (which is exactly how one was left behind).
+  let bodyError: unknown;
   try {
   const admin = await getSupabaseAdmin();
   const threadId = `proof-${Date.now()}`;
@@ -87,7 +89,15 @@ test("an owned identity is deleted with its thread, messages and profile", async
   const profile = await admin.from("profiles").select("id").eq("id", identity.userId);
   expect(profile.error, "profile readable after the sweep").toBeNull();
   expect((profile.data ?? []).length, "the profile row is gone").toBe(0);
+  } catch (error) {
+    bodyError = error;
+    throw error;
   } finally {
-    await deleteThrowawayIdentity(identity).catch(() => undefined);
+    // A failed cleanup must never be silent: if the body passed, it fails the test.
+    await settleOwnedCleanup({
+      email: identity.email,
+      bodyError,
+      cleanup: () => deleteThrowawayIdentity(identity),
+    });
   }
 });

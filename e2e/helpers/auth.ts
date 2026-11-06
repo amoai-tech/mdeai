@@ -105,6 +105,32 @@ async function listAllAuthUsers(
 }
 
 /**
+ * Settle a test's own disposable identity without hiding a leak.
+ *
+ * `deleteThrowawayIdentity` throws on partial cleanup on purpose: swallowing that is
+ * what previously left orphaned rows behind. So:
+ * - if the test body PASSED and cleanup fails, rethrow — a green run must prove that
+ *   nothing leaked;
+ * - if the body already FAILED, report the cleanup failure loudly but let the original
+ *   failure surface, so the real reason is not masked.
+ */
+export async function settleOwnedCleanup(options: {
+  email: string;
+  bodyError: unknown;
+  cleanup: () => Promise<void>;
+  log?: (message: string) => void;
+}): Promise<void> {
+  try {
+    await options.cleanup();
+  } catch (cleanupError) {
+    const detail = cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
+    if (!options.bodyError) throw cleanupError;
+    const log = options.log ?? ((message: string) => console.error(message));
+    log(`[qa cleanup] the test failed AND its identity could not be removed (${options.email}): ${detail}`);
+  }
+}
+
+/**
  * Clean up disposable identities left behind by an interrupted run.
  *
  * Ownership rules (a sweep must never interfere with a live journey):
