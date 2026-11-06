@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { searchNearby } from "../../lib/google-places-client";
 import { RENTAL_SUPABASE_KEY } from "../search-rentals";
+import { normalizeToolOutput } from "@/platform/maps/normalize-tool-output";
 import {
   mapNearbyProviderPlaces,
   searchNearbyRentalPlaces,
@@ -75,6 +76,15 @@ describe("SAN-106 RLS-backed rental Nearby → existing grounded pins", () => {
       primaryType: "cafe",
     }]);
     expect(out.attribution).toHaveLength(1);
+    const { pins } = normalizeToolOutput("grounded", out);
+    expect(pins).toMatchObject([{
+      id: "grounded-ChIJCafeTest",
+      category: "grounded",
+      lat: 6.251,
+      lng: -75.591,
+      title: "Real Provider Café",
+      placeId: "ChIJCafeTest",
+    }]);
   });
 
   it("never requests Places for missing, private or coordinate-less rentals", async () => {
