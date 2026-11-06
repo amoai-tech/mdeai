@@ -351,6 +351,37 @@ describe("saved chat history", () => {
     }
   });
 
+  it("times out and offers Retry when only in-memory messages were restored", async () => {
+    await select(A);
+    // A warm agent may hold unsaved turns although durable history is empty.
+    agent.messages = msgs("warm");
+    await act(async () => requests[A].resolve([]));
+    await act(async () => agent.finishRun());
+    await tick();
+    expect(seen.history.status).toBe("idle");
+    expect(agent.messages).toEqual(msgs("warm"));
+
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      agent.messages = [];
+      await act(async () => {
+        root.render(<ThreadNavProvider><ChatProvider><Probe /></ChatProvider></ThreadNavProvider>);
+      });
+      expect(seen.history.status).toBe("loading");
+      await act(async () => { await vi.advanceTimersByTimeAsync(31_000); });
+      expect(seen.history.status).toBe("error");
+      // Retry rechecks durable history rather than silently inventing messages.
+      await act(async () => seen.history.retry());
+      expect(seen.history.status).toBe("loading");
+      await act(async () => requests[A].resolve(msgs("saved")));
+      await act(async () => agent.finishRun());
+      expect(agent.messages).toEqual(msgs("saved"));
+      expect(seen.history.status).toBe("idle");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("shows a retryable error if the runtime never becomes ready", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     try {
