@@ -53,6 +53,23 @@ the current commit is not the intended candidate. Check Vercel deployment
 Do not guess a candidate from the newest `READY` build. Keep the previous
 working deployment on the public aliases during all diagnosis.
 
+Find the **exact staged candidate ID** for this commit with a read-only Vercel
+lookup (the filter checks the SHA again in the returned metadata):
+
+```bash
+vercel api "/v6/deployments?projectId=prj_5eY5DdiVxn7hDbruTG7BrrQT1QAB&target=production&sha=${SHA}&limit=100" --raw --scope amoco |
+  jq -er --arg sha "$SHA" '.deployments[] |
+    select(.meta.githubCommitSha == $sha and .meta.githubCommitRef == "main" and .target == "production" and .state == "READY") |
+    [.id, .url, .state, .meta.githubCommitSha] | @tsv'
+```
+
+If the query returns **no candidates**, stop rather than guessing. If it
+returns **multiple deployments for the same SHA**, use the deployment ID from
+the genuine Vercel `READY` event and certification run; do not select the
+newest entry automatically. Confirm your chosen ID using
+`vercel inspect <exact-staged-deployment-id> --scope amoco` and verify it is
+`READY`, targets production and has the expected `main` commit.
+
 ### 2. Inspect the authoritative exact-SHA push workflow, not a status label
 
 ```bash
@@ -90,9 +107,16 @@ GitHub reruns preserve the original event commit/ref. A certification
 job **still waiting on a pending Floor** can observe the successful run.
 An already **failed Floor stops certification immediately**, so rerunning
 Floor cannot revive that failed certification. Likewise, if certification
-has **ended or timed out**, rerunning Floor does **not** restart it. An authorized operator may create
-a fresh genuine Vercel production redeployment of the *currently intended
-main commit*, with auto-assign still **OFF**, using the Vercel dashboard's
+has **ended or timed out**, rerunning Floor does **not** restart it.
+
+**Before redeploying**, wait for `gh run watch` to finish and recheck step 2:
+the latest exact-SHA `main` push Floor attempt must be `completed` with
+`conclusion=success`. If it is still running, failed, cancelled or unknown,
+**do not redeploy**. Confirm `main` still points to `$SHA`.
+
+Only then may an authorized operator create a fresh genuine Vercel production
+redeployment of that exact commit, with auto-assign still **OFF**, using the
+Vercel dashboard's
 **Redeploy** action (or `vercel redeploy <exact-staged-deployment-id>
 --scope amoco`). This **rebuilds**, so it requires the complete new
 candidate certification and new domain checks. Verify the new deployment's
