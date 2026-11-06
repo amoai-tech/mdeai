@@ -22,14 +22,16 @@ export function eventHintSource(
   toolResult: unknown | null,
   toolResults: readonly unknown[] | undefined,
 ): unknown | null {
-  // A failed search clears the current result; never resurrect a stale browser
-  // state object as if it were the current result set.
-  return toolResult ?? toolResults?.[0] ?? null;
+  // Historical result envelopes remain available to already-rendered cards,
+  // but a failed search or a search in another domain clears the ACTIVE result.
+  // Do not advertise an old event as the current top result to the agent.
+  void toolResults;
+  return toolResult;
 }
 
 export function EventA2UIContext() {
-  const { toolResult, toolResults } = useEventFastPath();
-  const latest = eventHintSource(toolResult, toolResults);
+  const { toolResult } = useEventFastPath();
+  const latest = eventHintSource(toolResult);
   const envelopeRows = latest ? normalizeToolEnvelope(latest).results : undefined;
   const rows = (Array.isArray(envelopeRows) ? envelopeRows : undefined) as EventRow[] | undefined;
   useAgentContext({

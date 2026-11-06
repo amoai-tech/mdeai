@@ -78,7 +78,7 @@ export function readEventResultHints(agUiContext: unknown): string | null {
   });
   if (hints.length === 0) return null;
   return [
-    "Event result ID hints from the most recent successful search, in display order (first is the top result). These may be historical after a newer failed search; use one exact UUID for render_ui; the card revalidates it:",
+    "Active event result ID hints, in display order (first is the top result). Use one exact UUID for render_ui; the card revalidates it against authorized thread results:",
     ...hints.map((id) => `- ${id}`),
   ].join("\n");
 }
