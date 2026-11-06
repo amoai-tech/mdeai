@@ -200,7 +200,7 @@ try {
   // worked — and fail the same way every day. Now that identity is skipped and
   // reported, and the rest still proceed.
   const skippedIdentities = [];
-  const identityCounts = { messages: 0, threads: 0, partners: 0, profiles: 0, users: 0 };
+  const identityCounts = { messages: 0, threads: 0, profiles: 0, users: 0 };
   for (const [index, identity] of orphanIdentities.rows.entries()) {
     const savepoint = `qa_identity_${index}`;
     await client.query(`savepoint ${savepoint}`);
@@ -215,12 +215,13 @@ try {
         [String(identity.id)],
       );
       // A disposable identity can own a `partners` row (`partners_profile_id_fkey`,
-      // ON DELETE RESTRICT). That row is QA fixture data for the same account, so it
-      // is removed first — otherwise the profile and the identity can never go.
-      const partners = await client.query(
-        `delete from public.partners where profile_id = $1::uuid`,
-        [identity.id],
-      );
+      // ON DELETE RESTRICT), and that reference deliberately STOPS the delete here.
+      //
+      // Deleting the partner is not safe: `restaurants.partner_id`, `leads.partner_id`
+      // and `bookings.partner_id` are ON DELETE SET NULL, so a real restaurant assigned
+      // to a QA partner would silently lose its assignment, and `partner_services`,
+      // `partner_locations` and `partner_assets` cascade. The savepoint turns the
+      // restriction into a reported skip instead of a destructive guess.
       const profiles = await client.query(
         `delete from public.profiles where id = $1::uuid`,
         [identity.id],
@@ -231,7 +232,6 @@ try {
       );
       identityCounts.messages += messages.rowCount ?? 0;
       identityCounts.threads += threads.rowCount ?? 0;
-      identityCounts.partners += partners.rowCount ?? 0;
       identityCounts.profiles += profiles.rowCount ?? 0;
       identityCounts.users += users.rowCount ?? 0;
       await client.query(`release savepoint ${savepoint}`);
