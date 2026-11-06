@@ -1,5 +1,6 @@
 import { expect, type Page } from "@playwright/test";
 import { isDeterministicE2E } from "../../src/lib/deterministic-e2e";
+import { assessTurn, awaitRunResponse, hasStarted, isTerminal } from "./turn-completion";
 
 const RENTAL_QUERY = "1BR apartment in Laureles under 80 dollars per night";
 
@@ -104,9 +105,15 @@ export async function gotoConcierge(page: Page) {
   if (!res?.ok()) {
     throw new Error(`GET /chat failed: ${res?.status()}`);
   }
+  // Cold loads can exceed 20s, and a visible canvas does not mean the surface is
+  // usable. Wait for the readiness STATE: the composer exists AND is enabled, which
+  // only happens once hydration and the runtime handshake are done.
   await page
     .locator('[data-testid="chat-canvas"]')
-    .waitFor({ state: "visible", timeout: 20_000 });
+    .waitFor({ state: "visible", timeout: 60_000 });
+  // The richer check stays authoritative: it also refuses an inert composer while
+  // saved history is loading and throws when that history failed to load.
+  await ensureChatInputVisible(page, 30_000);
   await hideCopilotWebInspector(page);
   await waitForCopilotRuntime(page);
 }
@@ -240,6 +247,11 @@ export type ConciergeSubmitPort = {
 };
 
 const pendingTurnCompletion = new WeakMap<Page, Promise<void>>();
+/**
+ * Assistant replies already on screen when the turn was submitted. Captured before
+ * the send so a PREVIOUS answer can never be mistaken for the new run starting.
+ */
+const pendingRepliesBefore = new WeakMap<Page, number>();
 
 /**
  * Submit at most twice, and fail loudly if neither submit made the app react.
@@ -318,12 +330,14 @@ function watchForAppApiRequest(
       { timeout: timeoutMs },
     )
     .then((request) => {
-      pendingTurnCompletion.set(
-        page,
-        request.response().then(async (response) => {
-          if (response) await response.finished();
-        }),
-      );
+      const completion = request.response().then((response) => awaitRunResponse(response));
+      // This promise now REJECTS on a failed run, and it is stored rather than
+      // awaited here. Without a handler attached at creation, a test that ends (or
+      // never reaches waitForCopilotIdle) leaves an unhandled rejection that can
+      // fail the worker. Attaching one marks it handled; awaiters still see the
+      // rejection, so the failure is reported when the helper runs.
+      completion.catch(() => undefined);
+      pendingTurnCompletion.set(page, completion);
       return true;
     })
     .catch(() => false);
@@ -333,6 +347,7 @@ function watchForAppApiRequest(
 export async function sendConciergeMessage(
   page: Page, text: string, graceMs: number = CONCIERGE_ACCEPT_GRACE_MS,
 ) {
+  pendingRepliesBefore.set(page, await countConciergeReplies(page).catch(() => 0));
   await submitConciergeMessageWithRetry(
     {
       armReactionWatch: (timeoutMs) => watchForAppApiRequest(page, timeoutMs),
@@ -396,22 +411,44 @@ export async function waitForCopilotIdle(page: Page, timeout = 120_000) {
     return;
   }
 
+  const repliesBefore = pendingRepliesBefore.get(page) ?? 0;
   let settled = false;
   let failure: unknown;
   void completion.then(
-    () => {
-      settled = true;
-    },
-    (error) => {
-      failure = error;
-      settled = true;
-    },
+    () => { settled = true; },
+    (error) => { failure = error; settled = true; },
   );
 
+  const stop = page.locator('[data-testid="concierge-stop"], [data-testid="discovery-ask-stop"]').first();
+  const observe = async () => assessTurn({
+    settled,
+    failure,
+    stopVisible: await stop.isVisible().catch(() => false),
+    repliesBefore,
+    repliesNow: await countConciergeReplies(page).catch(() => repliesBefore),
+  });
+
+  // The run must show evidence of starting. A timeout here is a real failure to
+  // observe the run, so it throws rather than being swallowed.
   await expect
-    .poll(() => settled, { timeout, intervals: [100, 250, 500, 1_000] })
+    .poll(async () => hasStarted(await observe()), {
+      timeout: 60_000,
+      message: "the submitted turn started (new reply or Stop control)",
+      intervals: [100, 250, 500, 1_000],
+    })
     .toBe(true);
+
+  await expect
+    .poll(async () => isTerminal(await observe()), {
+      timeout,
+      message: "the submitted turn reached a terminal state",
+      intervals: [100, 250, 500, 1_000],
+    })
+    .toBe(true);
+
   pendingTurnCompletion.delete(page);
+  pendingRepliesBefore.delete(page);
+  // A rejected request or agent run is never a completed turn.
   if (failure) throw failure;
 }
 
