@@ -75,6 +75,7 @@ const PROD_SPECS = [
   "**/prod-concierge-stop-retry.spec.ts",
   "**/prod-renter-mobile-chat.spec.ts",
   "**/prod-release-health.spec.ts",
+  "**/prod-nearby-postdeploy.spec.ts",
   "**/san-1413-saved-chat-continuity.spec.ts",
   "**/prod-journey-j05-j20.spec.ts",
   "**/rental-ai-security.spec.ts",

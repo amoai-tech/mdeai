@@ -147,6 +147,25 @@ jobs:
             e2e/prod-copilotkit-isolation.spec.ts \
             --project=prod-smoke --workers=1
 
+      # SAN-106 — bounded post-promotion Nearby proof, once for the promoted SHA.
+      # Reuse the signed-in QA contract and existing production smoke instead of a
+      # separate scheduler or another test engine. Missing credentials must fail.
+      - name: Verify promoted Nearby + live Google Places
+        if: ${{ github.event_name == 'repository_dispatch' }}
+        env:
+          PROD_SMOKE_BASE_URL: ${{ vars.PROD_SMOKE_BASE_URL }}
+          PROD_SMOKE_NEARBY_RENTAL_ID: ${{ vars.PROD_SMOKE_NEARBY_RENTAL_ID }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          PW_SKIP_WEBSERVER: "1"
+        run: |
+          set -euo pipefail
+          # Repository-dispatch checkout points at the promoted deployment SHA.
+          export PROD_SMOKE_EXPECTED_SHA="$(git rev-parse HEAD)"
+          npx playwright test e2e/prod-nearby-postdeploy.spec.ts --project=prod-smoke --workers=1
+
       # SAN-1367 — **Marketplace Health**: live inventory is a business-state observation, not a
       # runtime claim. It is reported separately, on the existing reporting path (step summary),
       # and can never fail this job. `continue-on-error` plus `exit 0` on every branch means an
