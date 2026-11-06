@@ -1,0 +1,156 @@
+{
+ "build": "3ec6b054d27c14e6db1e72a3b4dab4316095e2b8",
+ "capturedAt": "2026-11-06T00:41:29.955Z",
+ "files": [
+  {
+   "file": "restaurants-1440-details-open-3ec6b054d2.jpg",
+   "url": "https://www.mdeai.co/restaurants",
+   "build": "3ec6b054d27c14e6db1e72a3b4dab4316095e2b8",
+   "viewport": "1440x900",
+   "heading": "Elcielo Restaurant Medellín",
+   "capturedAt": "2026-11-06T00:40:26.518Z",
+   "bytes": 99703,
+   "sha256": "043afc17f57be1c0"
+  },
+  {
+   "file": "cafes-1440-details-open-3ec6b054d2.jpg",
+   "url": "https://www.mdeai.co/cafes",
+   "build": "3ec6b054d27c14e6db1e72a3b4dab4316095e2b8",
+   "viewport": "1440x900",
+   "heading": "Rituales Compañía de Café",
+   "capturedAt": "2026-11-06T00:40:29.001Z",
+   "bytes": 85316,
+   "sha256": "75219869a48a31ac"
+  },
+  {
+   "file": "nightlife-1440-details-open-3ec6b054d2.jpg",
+   "url": "https://www.mdeai.co/nightlife",
+   "build": "3ec6b054d27c14e6db1e72a3b4dab4316095e2b8",
+   "viewport": "1440x900",
+   "heading": "Dulce Jesús Mío",
+   "capturedAt": "2026-11-06T00:40:31.941Z",
+   "bytes": 83000,
+   "sha256": "32283d724748db47"
+  },
+  {
+   "file": "rentals-1440-details-open-3ec6b054d2.jpg",
+   "url": "https://www.mdeai.co/rentals",
+   "build": "3ec6b054d27c14e6db1e72a3b4dab4316095e2b8",
+   "viewport": "1440x900",
+   "heading": "",
+   "capturedAt": "2026-11-06T00:41:04.520Z",
+   "bytes": 93041,
+   "sha256": "3904574f5908b615"
+  },
+  {
+   "file": "events-1440-details-open-3ec6b054d2.jpg",
+   "url": "https://www.mdeai.co/events",
+   "build": "3ec6b054d27c14e6db1e72a3b4dab4316095e2b8",
+   "viewport": "1440x900",
+   "heading": "Feria de las Flores Preview Parade",
+   "capturedAt": "2026-11-06T00:41:08.010Z",
+   "bytes": 116484,
+   "sha256": "8f0352429afdf939"
+  },
+  {
+   "file": "restaurants-390-details-sheet-3ec6b054d2.jpg",
+   "url": "https://www.mdeai.co/restaurants",
+   "build": "3ec6b054d27c14e6db1e72a3b4dab4316095e2b8",
+   "viewport": "390x844",
+   "heading": "Elcielo Restaurant Medellín",
+   "capturedAt": "2026-11-06T00:41:12.488Z",
+   "bytes": 33819,
+   "sha256": "8563c69eaf0cff10"
+  },
+  {
+   "file": "cafes-390-details-sheet-3ec6b054d2.jpg",
+   "url": "https://www.mdeai.co/cafes",
+   "build": "3ec6b054d27c14e6db1e72a3b4dab4316095e2b8",
+   "viewport": "390x844",
+   "heading": "Rituales Compañía de Café",
+   "capturedAt": "2026-11-06T00:41:16.616Z",
+   "bytes": 25282,
+   "sha256": "420e5a2e4ac72e58"
+  },
+  {
+   "file": "nightlife-390-details-sheet-3ec6b054d2.jpg",
+   "url": "https://www.mdeai.co/nightlife",
+   "build": "3ec6b054d27c14e6db1e72a3b4dab4316095e2b8",
+   "viewport": "390x844",
+   "heading": "Dulce Jesús Mío",
+   "capturedAt": "2026-11-06T00:41:20.819Z",
+   "bytes": 24219,
+   "sha256": "9dca06a9536d8d4b"
+  },
+  {
+   "file": "rentals-390-details-sheet-3ec6b054d2.jpg",
+   "url": "https://www.mdeai.co/rentals",
+   "build": "3ec6b054d27c14e6db1e72a3b4dab4316095e2b8",
+   "viewport": "390x844",
+   "heading": "Apartamento en Laureles — Zitios 10361973",
+   "capturedAt": "2026-11-06T00:41:25.250Z",
+   "bytes": 26921,
+   "sha256": "efbf5c91569eba1a"
+  },
+  {
+   "file": "events-390-details-sheet-3ec6b054d2.jpg",
+   "url": "https://www.mdeai.co/events",
+   "build": "3ec6b054d27c14e6db1e72a3b4dab4316095e2b8",
+   "viewport": "390x844",
+   "heading": "Feria de las Flores Preview Parade",
+   "capturedAt": "2026-11-06T00:41:29.949Z",
+   "bytes": 42185,
+   "sha256": "88b656659f6c64d4"
+  },
+  {
+   "file": "restaurants-1440-details-a-to-b-3ec6b054d2.jpg",
+   "url": "https://www.mdeai.co/restaurants",
+   "build": "3ec6b054d27c14e6db1e72a3b4dab4316095e2b8",
+   "viewport": "1440x900",
+   "heading": "Cuzco Cocina Peruana",
+   "capturedAt": "2026-11-06T00:41:39.639Z",
+   "bytes": 96068,
+   "sha256": "09e030471a201e8c"
+  },
+  {
+   "file": "restaurants-1440-pin-selected-3ec6b054d2.jpg",
+   "url": "https://www.mdeai.co/restaurants",
+   "build": "3ec6b054d27c14e6db1e72a3b4dab4316095e2b8",
+   "viewport": "1440x900",
+   "heading": "Cuzco Cocina Peruana",
+   "capturedAt": "2026-11-06T00:41:40.560Z",
+   "bytes": 96921,
+   "sha256": "201b8cdee647d30e"
+  },
+  {
+   "file": "restaurants-1440-pin-released-closed-3ec6b054d2.jpg",
+   "url": "https://www.mdeai.co/restaurants",
+   "build": "3ec6b054d27c14e6db1e72a3b4dab4316095e2b8",
+   "viewport": "1440x900",
+   "heading": "(closed)",
+   "capturedAt": "2026-11-06T00:41:41.548Z",
+   "bytes": 203144,
+   "sha256": "02545129a85c477f"
+  },
+  {
+   "file": "events-1440-real-ticket-tiers-3ec6b054d2.jpg",
+   "url": "https://www.mdeai.co/events",
+   "build": "3ec6b054d27c14e6db1e72a3b4dab4316095e2b8",
+   "viewport": "1440x900",
+   "heading": "MDE QA NOT REAL EVENT SAN1263 312ba5a0 — GA $40,000 COP",
+   "capturedAt": "2026-11-06T00:42:16.738Z",
+   "bytes": 96678,
+   "sha256": "6757239bf8b34f33"
+  },
+  {
+   "file": "events-1440-four-real-tiers-3ec6b054d2.jpg",
+   "url": "https://www.mdeai.co/events",
+   "build": "3ec6b054d27c14e6db1e72a3b4dab4316095e2b8",
+   "viewport": "1440x900",
+   "heading": "Reina de Antioquia 2026 Finals — GA $40,000 COP VIP $120,000 COP Backstage $400,000 COP Front",
+   "capturedAt": "2026-11-06T00:42:19.037Z",
+   "bytes": 112033,
+   "sha256": "3aa6e3e1cefa6b55"
+  }
+ ]
+}

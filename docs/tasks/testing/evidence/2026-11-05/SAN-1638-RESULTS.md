@@ -100,6 +100,8 @@ docs/tasks/testing/evidence/2026-11-05/production-captures/<name>-3ec6b054d2.jpg
 | `rentals-390-details-sheet` | 390 | phone Sheet for a rental |
 | `events-390-details-sheet` | 390 | phone Sheet for an event |
 
+Every file above is listed in `production-captures/capture-manifest.json`, which records for each capture its URL, the build SHA, the viewport, the heading shown in the panel, the UTC timestamp, the byte size and the first 16 hex characters of its SHA-256. That manifest is the provenance record: it is written by the same script that took the screenshot, in the same pass, so a renamed or substituted file would not match its entry.
+
 No screenshot is hand-edited and none comes from a local development server.
 
 ### Still not proven
