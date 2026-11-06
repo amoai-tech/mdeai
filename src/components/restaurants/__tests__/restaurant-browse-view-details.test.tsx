@@ -53,7 +53,9 @@ vi.mock("@/components/chat/discovery-ask-composer", () => ({
   DiscoveryAskComposer: () => null,
 }));
 vi.mock("@/components/chat/discovery-page-context", () => ({
-  DiscoveryPageContext: () => null,
+  DiscoveryPageContext: (p: { selectedId: string | null }) => (
+    <i data-testid="ask-context" data-selected={p.selectedId ?? ""} />
+  ),
 }));
 
 import { RestaurantBrowseView } from "@/components/restaurants/restaurant-browse-view";
@@ -89,6 +91,8 @@ const openDetails = (id: string) =>
     within(cardFor(id)).getByTestId(/^restaurant-details-open-/).click();
   });
 /** Whether Ask MDE is pressed on that card. */
+/** What the concierge is told is selected. */
+const contextSelected = () => screen.getByTestId("ask-context").getAttribute("data-selected");
 const askPressed = (id: string) =>
   within(cardFor(id)).getByTestId(/^restaurant-ask-select/).getAttribute("aria-pressed");
 /** Pick that restaurant’s map marker. */
@@ -157,6 +161,33 @@ describe("restaurant Details and the selected pin", () => {
     expect(panelName()).toBeNull();
     expect(askPressed("a")).toBe("false");
     expect(within(cardFor("a")).getByText("Selected on map")).toBeTruthy();
+  });
+
+  it("keeps the concierge and the card in agreement when only the pin moves", () => {
+    act(() => {
+      within(cardFor("a")).getByTestId("restaurant-map-select").click();
+    });
+
+    // The pin moved, but nothing was selected for Ask — so the concierge must not be told
+    // that "a" is the selected restaurant while its Ask control reads unpressed.
+    expect(askPressed("a")).toBe("false");
+    expect(contextSelected()).toBe("");
+
+    // Opening Details is what selects a record for Ask, on both surfaces.
+    openDetails("a");
+    expect(askPressed("a")).toBe("true");
+    expect(contextSelected()).toBe("a");
+  });
+
+  it("gives a restaurant with no map coordinates no map selection at all", () => {
+    // `restaurantToMapPin` dropped this row, so neither the body nor the map action may
+    // announce a selection the map cannot show.
+    const card = cardFor("c");
+    expect(within(card).queryByTestId("restaurant-map-select")).toBeNull();
+    // The card body stops advertising a map selection (the shell only renders the interactive
+    // role and label when a handler exists); the real links and buttons stay.
+    expect(card.querySelector('[aria-label^="Select "]')).toBeNull();
+    expect(card.querySelector('[aria-label="Open details for Gamma Kitchen"]')).toBeNull();
   });
 
   it("offers no map action for a restaurant the map cannot show", () => {

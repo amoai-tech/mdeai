@@ -67,7 +67,6 @@ function RestaurantBrowseViewInner({
   // over, and Close must not pull focus onto an older card's button.
   const detailsTriggerRef = useRef<{ el: HTMLElement; forId: string } | null>(null);
   const shownResults = searched?.scope === retryHref ? searched.rows : results;
-  const selectedRestaurant = shownResults.find((r) => `restaurant-${r.id}` === selectedPinId) ?? null;
   // A pin selection opened Details before this task; keep that. Details has its own id for the
   // card action, but an explicit pin pick is the more deliberate choice, so it wins.
   // The panel follows Details only. Selecting a pin highlights the map — it no longer swaps the
@@ -121,11 +120,11 @@ function RestaurantBrowseViewInner({
       <DiscoveryPageContext
         page="restaurants"
         filters={{ neighborhood, cuisine }}
-        selectedId={selectedForAsk ?? selectedRestaurant?.id ?? null}
+        selectedId={selectedForAsk}
       />
       <DiscoveryWorkspace
         activeSlug="restaurants"
-        askComposer={<DiscoveryAskComposer page="restaurants" onAgentResults={onAgentResults} hasSelectedItem={Boolean(selectedForAsk ?? selectedRestaurant)} onClearSelection={() => { setSelectedForAskId(null); setSelectedPinId(null); }} />}
+        askComposer={<DiscoveryAskComposer page="restaurants" onAgentResults={onAgentResults} hasSelectedItem={Boolean(selectedForAsk)} onClearSelection={() => { setSelectedForAskId(null); setSelectedPinId(null); }} />}
         rightPanel={<BrowseMapPanel fill overlay={detailsRestaurant && desktop ? <RestaurantDetailsPanel restaurant={detailsRestaurant} onClose={closeDetails} /> : undefined} />}
         testId="restaurants-browse"
         title="Restaurants"
@@ -183,6 +182,9 @@ function RestaurantBrowseViewInner({
             >
               {shownResults.map((r) => {
                 const pinId = `restaurant-${r.id}`;
+                // `restaurantToMapPin` drops rows without coordinates, so this is the one
+                // source of truth for "the map can show this restaurant".
+                const hasPin = pins.some((pin) => pin.id === pinId);
                 return (
                   <RestaurantCard
                     key={r.id}
@@ -198,16 +200,11 @@ function RestaurantBrowseViewInner({
                     selected={selectedPinId === pinId}
                     // Same rule as cafés and nightlife: the map action exists only when
                     // `restaurantToMapPin` produced a pin for this row.
-                    onMapSelect={
-                      pins.some((pin) => pin.id === pinId)
-                        ? () => selectPin(pinId)
-                        : undefined
-                    }
-                    onSelect={() => {
-                      // Card body selects on the map, exactly like café and nightlife cards.
-                      // Details is the only action that opens the panel.
-                      selectPin(pinId);
-                    }}
+                    onMapSelect={hasPin ? () => selectPin(pinId) : undefined}
+                    // Card body selects on the map, exactly like café and nightlife cards.
+                    // Omitted for rows the map cannot show, so the card never announces a
+                    // selection it cannot complete.
+                    onSelect={hasPin ? () => selectPin(pinId) : undefined}
                     selectedForAsk={selectedForAsk === r.id}
                     detailsOpen={openRestaurantId === r.id}
                     // Ask selects context only: it clears the map/details preview and
