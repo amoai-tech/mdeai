@@ -58,6 +58,7 @@ const PROD_SPECS = [
   "**/app/host-ai-sales-accuracy.spec.ts",
   "**/prod-candidate-certification.spec.ts",
   ...OPT_IN_PROD_SPECS,
+  "**/qa-cleanup-sweep.spec.ts",
   // SAN-1606's read-only deployed mobile navigation probe is explicitly opt-in.
   ...(process.env.MDE_SAN1606_REMOTE_MOBILE_NAV === "1"
     ? ["**/mobile-bottom-nav.spec.ts"]
