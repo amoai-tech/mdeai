@@ -4,10 +4,13 @@ import { z } from "zod";
 import { useAgent, UseAgentUpdate } from "@copilotkit/react-core/v2";
 import { createGenerativeUI } from "@copilotkit/react-core/v2/generative-ui";
 import { RentalCard as ExistingRentalCard } from "@/components/copilot/rental-card";
+import { EventCard as ExistingEventCard } from "@/components/copilot/event-card";
 import { useOptionalConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
 import { useOptionalRentalUi } from "@/components/chat/rental-ui-context";
 import { useOptionalMapContext } from "@/platform/maps/map-context";
 import { useOptionalRentalFastPath } from "@/components/chat/rental-fast-path-context";
+import { useOptionalEventFastPath } from "@/components/chat/event-fast-path-context";
+import { EVENT_A2UI_ID_PATTERN } from "@/lib/events/a2ui-id";
 import { isFinishedToolPayload, normalizeToolEnvelope } from "@/lib/normalize-tool-envelope";
 import { toDetailRental } from "@/lib/rentals/chat-rental-detail";
 import {
@@ -25,6 +28,11 @@ type RentalToolRow = RentalResultRow & {
 const rentalToolNames = new Set<string>([
   MASTRA_COPILOT_TOOL_ACTIONS.rentals,
   MASTRA_TOOL_IDS.rentals,
+]);
+
+const eventToolNames = new Set<string>([
+  MASTRA_COPILOT_TOOL_ACTIONS.events,
+  MASTRA_TOOL_IDS.events,
 ]);
 
 type RentalMessage = {
@@ -74,6 +82,70 @@ export function selectRentalMessages(
 /** Canonical public details page, used where the chat owns no detail sheet (broker/Ask MDE). */
 export function rentalDetailHref(listingId: string): string {
   return `/rentals/${encodeURIComponent(listingId)}`;
+}
+
+/** Canonical event details page when the chat owns no event sheet. */
+export function eventDetailHref(eventId: string): string {
+  return `/events/${encodeURIComponent(eventId)}`;
+}
+
+export type EventToolRow = {
+  id: string;
+  title: string;
+  venue: string;
+  neighborhood: string;
+  startsAt: string;
+  pricePerTicket: number | null;
+  canBuyTickets?: boolean;
+  currency?: string;
+  imageUrl?: string;
+  ticketUrl?: string;
+  sourceUrl?: string;
+};
+
+/** Every finished event result on this thread, newest first. */
+export function collectEventResults(messages: readonly RentalMessage[]): unknown[] {
+  const names = toolNameByCallId(messages);
+  const results: unknown[] = [];
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message.role !== "tool" || !message.toolCallId) continue;
+    if (!eventToolNames.has(names.get(message.toolCallId) ?? "")) continue;
+    if (!isFinishedToolPayload(message.content, { rowArray: true })) continue;
+    results.push(message.content);
+  }
+  return results;
+}
+
+export function selectEventMessages(
+  conciergeMessages: readonly RentalMessage[] | undefined,
+  agentMessages: readonly RentalMessage[] | undefined,
+): readonly RentalMessage[] {
+  return selectRentalMessages(conciergeMessages, agentMessages);
+}
+
+/** Fast-path results are newest-first; keep agent results after them, deduped. */
+export function mergeEventResults(
+  fastPathResults: readonly unknown[],
+  agentResults: readonly unknown[],
+): unknown[] {
+  return [...fastPathResults, ...agentResults].filter(
+    (result, index, all) => all.indexOf(result) === index,
+  );
+}
+
+/** Resolve an event UUID only from real event results on this thread. */
+export function findEventRow(
+  results: readonly unknown[],
+  eventId: string,
+): EventToolRow | null {
+  if (!EVENT_A2UI_ID_PATTERN.test(eventId)) return null;
+  for (const result of results) {
+    const rows = (normalizeToolEnvelope(result).results ?? []) as EventToolRow[];
+    const row = rows.find((candidate) => candidate.id === eventId);
+    if (row) return row;
+  }
+  return null;
 }
 
 /** Fast-path results are newest-first; keep agent results after them, deduped by identity. */
@@ -203,6 +275,77 @@ function MdeRentalCard({ listingId }: { listingId: string }) {
   );
 }
 
+function useEventRow(eventId: string): EventToolRow | null {
+  const messages = useRentalMessages();
+  const fastPath = useOptionalEventFastPath();
+  const fromAgent = collectEventResults(messages);
+  const fromFastPath = fastPath?.toolResults ?? (fastPath?.toolResult ? [fastPath.toolResult] : []);
+  return findEventRow(mergeEventResults(fromFastPath, fromAgent), eventId);
+}
+
+/** One existing event card, hydrated only from authorized event results. */
+function MdeEventCard({ eventId }: { eventId: string }) {
+  const row = useEventRow(eventId);
+  const map = useOptionalMapContext();
+  const rentalUi = useOptionalRentalUi();
+  const selectedPinId = map?.selectedPinId;
+  const panToPin = map?.panToPin;
+  const openVenueDetail = rentalUi?.openVenueDetail;
+
+  if (!row) {
+    return (
+      <div className="rounded-lg border border-dashed border-border p-3 text-sm text-muted-foreground" data-testid="a2ui-event-unavailable">
+        That event is not in the current authorized results.
+      </div>
+    );
+  }
+
+  const pinId = `event-${row.id}`;
+  const hasPin = map?.pins.some((pin) => pin.id === pinId) ?? false;
+  const ticketUrl = row.ticketUrl ?? eventDetailHref(row.id);
+  const openDetail = openVenueDetail ? () => {
+    if (hasPin) panToPin?.(pinId);
+    openVenueDetail({
+      kind: "event",
+      eventId: row.id,
+      pinId,
+      title: row.title,
+      neighborhood: row.neighborhood,
+      venue: row.venue,
+      startsAt: row.startsAt,
+      pricePerTicket: row.pricePerTicket,
+      currency: row.currency,
+      canBuyTickets: row.canBuyTickets === true,
+      imageUrl: row.imageUrl,
+      ticketUrl,
+      sourceUrl: row.sourceUrl,
+    });
+  } : undefined;
+
+  return (
+    <div data-testid="a2ui-event-card" data-event-id={row.id}>
+      <ExistingEventCard
+        id={pinId}
+        eventId={row.id}
+        title={row.title}
+        venue={row.venue}
+        neighborhood={row.neighborhood}
+        startsAt={row.startsAt}
+        pricePerTicket={row.pricePerTicket}
+        canBuyTickets={row.canBuyTickets === true}
+        currency={row.currency}
+        imageUrl={row.imageUrl}
+        ticketUrl={ticketUrl}
+        sourceUrl={row.sourceUrl}
+        detailsHref={openDetail ? undefined : eventDetailHref(row.id)}
+        selected={hasPin && selectedPinId === pinId}
+        onSelect={hasPin ? () => panToPin?.(pinId) : undefined}
+        onOpenDetails={openDetail}
+      />
+    </div>
+  );
+}
+
 export const mdeUI = createGenerativeUI({
   id: "mde/discovery@1",
   components: {
@@ -214,6 +357,13 @@ export const mdeUI = createGenerativeUI({
       // Gemini often adds an empty `children: []` to a card node. Accept that
       // harmless shape so a valid card is not rejected; this component renders
       // no child content of its own.
+      slots: { children: "multiple" },
+    },
+    EventCard: {
+      component: MdeEventCard,
+      description:
+        "Show one real event from the current authorized search by its eventId UUID. The component resolves venue, date, price, image and ticket link from the stored result; never pass or invent event facts.",
+      props: z.object({ eventId: z.string().regex(EVENT_A2UI_ID_PATTERN) }),
       slots: { children: "multiple" },
     },
   },

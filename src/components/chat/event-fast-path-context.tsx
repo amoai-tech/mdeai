@@ -11,7 +11,11 @@ import {
 
 type EventFastPathContextValue = {
   toolResult: unknown | null;
+  /** Recent successful fast-path result envelopes for historical cards; thread-local. */
+  toolResults: unknown[];
   setToolResult: (result: unknown | null) => void;
+  /** New chat / thread switch: remove every result, not only the current one. */
+  clearToolResults: () => void;
 };
 
 const EventFastPathContext = createContext<EventFastPathContextValue | null>(
@@ -20,14 +24,26 @@ const EventFastPathContext = createContext<EventFastPathContextValue | null>(
 
 export function EventFastPathProvider({ children }: { children: ReactNode }) {
   const [toolResult, setToolResultState] = useState<unknown | null>(null);
+  const [toolResults, setToolResults] = useState<unknown[]>([]);
 
   const setToolResult = useCallback((result: unknown | null) => {
     setToolResultState(result);
+    if (result != null) {
+      setToolResults((previous) => [
+        result,
+        ...previous.filter((item) => item !== result),
+      ].slice(0, 10));
+    }
+  }, []);
+
+  const clearToolResults = useCallback(() => {
+    setToolResultState(null);
+    setToolResults([]);
   }, []);
 
   const value = useMemo(
-    () => ({ toolResult, setToolResult }),
-    [toolResult, setToolResult],
+    () => ({ toolResult, toolResults, setToolResult, clearToolResults }),
+    [toolResult, toolResults, setToolResult, clearToolResults],
   );
 
   return (
@@ -35,6 +51,10 @@ export function EventFastPathProvider({ children }: { children: ReactNode }) {
       {children}
     </EventFastPathContext.Provider>
   );
+}
+
+export function useOptionalEventFastPath(): EventFastPathContextValue | null {
+  return useContext(EventFastPathContext);
 }
 
 export function useEventFastPath() {
