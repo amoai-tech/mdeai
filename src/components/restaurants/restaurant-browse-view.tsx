@@ -124,7 +124,13 @@ function RestaurantBrowseViewInner({
       />
       <DiscoveryWorkspace
         activeSlug="restaurants"
-        askComposer={<DiscoveryAskComposer page="restaurants" onAgentResults={onAgentResults} hasSelectedItem={Boolean(selectedForAsk)} onClearSelection={() => { setSelectedForAskId(null); setSelectedPinId(null); }} />}
+        askComposer={<DiscoveryAskComposer page="restaurants" onAgentResults={onAgentResults} hasSelectedItem={Boolean(selectedForAsk)} onClearSelection={() => { setSelectedForAskId(null); setSelectedPinId(null); }} guestRestaurants={{
+          neighborhood,
+          cuisine,
+          // Guest search is catalog search: the public endpoint returns grounded rows and the
+          // existing cards and map render them. Nothing reaches the agent runtime.
+          onResults: (rows: Restaurant[]) => setSearched({ scope: retryHref, rows }),
+        }} />}
         rightPanel={<BrowseMapPanel fill overlay={detailsRestaurant && desktop ? <RestaurantDetailsPanel restaurant={detailsRestaurant} onClose={closeDetails} /> : undefined} />}
         testId="restaurants-browse"
         title="Restaurants"

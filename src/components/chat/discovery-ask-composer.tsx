@@ -23,6 +23,9 @@ type EventGuestOptions = {
   onEventIds: (ids: string[]) => void;
 };
 
+/** Guest venue search reuses the public catalog endpoint; protected chat stays protected. */
+import { GuestRestaurantComposer, type RestaurantGuestOptions } from "@/components/chat/guest-restaurant-search";
+
 /** The existing public, rate-limited events endpoint works for guests; protected chat stays protected. */
 function GuestEventComposer({ options }: { options: EventGuestOptions }) {
   const [question, setQuestion] = useState("");
@@ -145,9 +148,11 @@ const ignoreRejection = () => undefined;
 
 /** One composer on every non-rental browse page; Rentals retains its richer search adapter. */
 // skipcq: JS-0067 - module-local React component; not browser global scope
-function LiveComposer({ page, guestEvents, onAgentResults, hideHeading = false, suggestions, historyNote, hasSelectedItem, onClearSelection }: {
+function LiveComposer({ page, guestEvents, guestRestaurants, onAgentResults, hideHeading = false, suggestions, historyNote, hasSelectedItem, onClearSelection }: {
   page: Exclude<DiscoveryPage, "rentals">;
   guestEvents?: EventGuestOptions;
+  /** Restaurants only: catalog search for signed-out visitors, using the public endpoint. */
+  guestRestaurants?: RestaurantGuestOptions;
   onAgentResults?: (result: DiscoveryAgentResult) => void;
   /** The shared drawer supplies its own title and full-chat link. */
   hideHeading?: boolean;
@@ -308,7 +313,9 @@ function LiveComposer({ page, guestEvents, onAgentResults, hideHeading = false, 
           onPick={(question) => { runTurn(question, "suggestion").catch(ignoreRejection); }}
         />
       ) : null}
-      {signedOut && page === "events" && guestEvents ? <GuestEventComposer options={guestEvents} /> : signedOut ? (
+      {signedOut && page === "restaurants" && guestRestaurants ? (
+        <GuestRestaurantComposer options={guestRestaurants} />
+      ) : signedOut && page === "events" && guestEvents ? <GuestEventComposer options={guestEvents} /> : signedOut ? (
         <div className="flex items-center justify-between gap-3"><p className="text-sm text-muted-foreground">Sign in to ask about {page}.</p><Link className="inline-flex min-h-11 shrink-0 items-center whitespace-nowrap rounded-lg bg-primary px-4 text-sm text-primary-foreground" href={`/login?next=${encodeURIComponent(path)}`}>Sign in</Link></div>
       ) : (
         <div className="flex items-end gap-2">
@@ -336,9 +343,11 @@ function LiveComposer({ page, guestEvents, onAgentResults, hideHeading = false, 
 }
 
 // skipcq: JS-0067 - module-local React component; not browser global scope
-export function DiscoveryAskComposer({ page, guestEvents, onAgentResults, hideHeading, suggestions, historyNote, hasSelectedItem, onClearSelection }: {
+export function DiscoveryAskComposer({ page, guestEvents, guestRestaurants, onAgentResults, hideHeading, suggestions, historyNote, hasSelectedItem, onClearSelection }: {
   page: Exclude<DiscoveryPage, "rentals">;
   guestEvents?: EventGuestOptions;
+  /** Restaurants only: catalog search for signed-out visitors, using the public endpoint. */
+  guestRestaurants?: RestaurantGuestOptions;
   onAgentResults?: (result: DiscoveryAgentResult) => void;
   hideHeading?: boolean;
   suggestions?: readonly string[];
@@ -350,5 +359,5 @@ export function DiscoveryAskComposer({ page, guestEvents, onAgentResults, hideHe
   if (isDeterministicE2E() || !coAgent) {
     return <div data-testid={`discovery-ask-${page}`} className="border-t p-4 text-sm text-muted-foreground">Ask MDE about {page} in the live application.</div>;
   }
-  return <LiveComposer page={page} guestEvents={guestEvents} onAgentResults={onAgentResults} hideHeading={hideHeading} suggestions={suggestions} historyNote={historyNote} hasSelectedItem={hasSelectedItem} onClearSelection={onClearSelection} />;
+  return <LiveComposer page={page} guestEvents={guestEvents} guestRestaurants={guestRestaurants} onAgentResults={onAgentResults} hideHeading={hideHeading} suggestions={suggestions} historyNote={historyNote} hasSelectedItem={hasSelectedItem} onClearSelection={onClearSelection} />;
 }
