@@ -84,7 +84,7 @@ function RestaurantMapLinks({ mapsUrl }: { mapsUrl?: string | null }) {
       <Button
         variant="link"
         size="sm"
-        className="h-8 px-2 text-xs"
+        className="h-card-action px-3 text-xs"
         nativeButton={false}
         render={
           <a
@@ -107,7 +107,7 @@ function RestaurantMapLinks({ mapsUrl }: { mapsUrl?: string | null }) {
     <Button
       variant="outline"
       size="sm"
-      className="h-8 px-2 text-xs"
+      className="h-card-action px-3 text-xs"
       nativeButton={false}
       render={
         <a
@@ -229,8 +229,27 @@ export function RestaurantCard({
 
   const footerContent = (
     <>
-      <RestaurantMapLinks mapsUrl={mapsUrl} />
-      <div className="flex flex-wrap gap-1.5">
+      <div className="flex flex-wrap items-center gap-2">
+        {/* One action contract on every discovery card, in this order:
+            Directions · View on map · Ask about this · Details. */}
+        <RestaurantMapLinks mapsUrl={mapsUrl} />
+        {pinId && onSelect ? (
+          <Button
+            type="button"
+            size="sm"
+            variant={selected ? "secondary" : "outline"}
+            className="h-card-action min-w-card-action px-3"
+            aria-pressed={Boolean(selected)}
+            data-testid="restaurant-map-select"
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelect();
+            }}
+          >
+            <MapPin data-icon="inline-start" aria-hidden />
+            {selected ? "Selected on map" : "View on map"}
+          </Button>
+        ) : null}
         {onOpenEventVenue ? (
           <Button
             type="button"
@@ -292,7 +311,7 @@ export function RestaurantCard({
             }}
           >
             <Info data-icon="inline-start" aria-hidden />
-            View details
+            Details
           </Button>
         ) : detailsHref ? (
           <Link
@@ -305,7 +324,7 @@ export function RestaurantCard({
             onClick={(e) => e.stopPropagation()}
           >
             <Info data-icon="inline-start" aria-hidden />
-            View details
+            Details
           </Link>
         ) : null}
         {onBookRequest ? (

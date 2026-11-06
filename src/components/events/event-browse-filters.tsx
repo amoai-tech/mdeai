@@ -62,7 +62,7 @@ function toggleDateWindow(
 
 const filterChipClass = cn(
   toggleVariants({ variant: "outline", size: "sm" }),
-  "min-h-9 rounded-full px-3",
+  "min-h-11 rounded-full px-3 lg:min-h-9",
 );
 const activeChipClass = "border-primary bg-primary/10 text-emerald-800 dark:text-emerald-200";
 
