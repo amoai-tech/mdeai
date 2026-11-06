@@ -15,6 +15,7 @@ import { requestVenueBookingTool } from '../tools/request-venue-booking';
 import { CONCIERGE_AGENT_MODEL } from "../lib/models";
 import { geminiMalformedFirstStepRetry } from "../lib/gemini-malformed-retry";
 import { getDefaultInputProcessors } from "../lib/agent-input-processors";
+import { eventCardRenderProcessor } from "../lib/event-card-render-processor";
 import { currentSelectedNameOnly, verifiedDiscoverySelectionHint, withComparisonRecords, withVerifiedSelectionFacts } from "../lib/discovery-agent-context";
 import { hasGenerativeUIGuide, MDE_A2UI_GUIDE, readEventResultHints, readRentalResultHints } from "../lib/generative-ui-context";
 import { MapUiStateSchema } from "@/platform/contracts/map-ui-state";
@@ -521,6 +522,9 @@ export const conciergeAgent = new Agent({
     // fit on a follow-up turn. 8,192 threw "system messages alone exceed token limit"
     // before the model could answer; 32,768 stays inside the active model context.
     ...getDefaultInputProcessors(32_768),
+    // A verified event ID + an explicit "show the first one as a card" request
+    // should force the existing render_ui tool, not another search/clarification.
+    eventCardRenderProcessor(),
     // The model sometimes repeats restaurant search instead of issuing the
     // proposal. Once the current run grounded the exact named venue and the
     // customer already supplied every mandatory field, require the *existing*
