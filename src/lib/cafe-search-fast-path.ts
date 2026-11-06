@@ -67,6 +67,19 @@ export function isSelectedRentalCafeNearbyRequest(text: string): boolean {
     /\b(?:this|that|selected|the)\s+(?:apartment|rental|listing)\b/i.test(text);
 }
 
+/** Only stored UUID rentals may be resolved by the Nearby SQL lookup. */
+export function isStoredRentalUuid(id: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
+}
+
+/** Respect an explicit bounded radius; never silently replace 300 m with 800 m. */
+export function nearbyCafeRadiusMeters(text: string): number | null {
+  const match = text.match(/\b(\d{1,5})\s*(?:meters?|metres?|m)\b/i);
+  if (!match) return 800;
+  const value = Number(match[1]);
+  return value >= 100 && value <= 5000 ? value : null;
+}
+
 export function canFastPathCafeSearch(text: string): boolean {
   return buildCafeSearchParams(text) != null;
 }
