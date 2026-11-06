@@ -143,6 +143,20 @@ function DirectionsLink({
   );
 }
 
+/** First letters of the first two words, e.g. "Dulce Jesús Mío" → "DJ". */
+function venueInitials(name: string): string | undefined {
+  const words = name
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (words.length === 0) return undefined;
+  return words
+    .slice(0, 2)
+    .map((word) => word[0]?.toUpperCase() ?? "")
+    .join("");
+}
+
 /** One café or nightlife result: media, facts, and the Ask and Details actions. */
 export function VenueBrowseCard({
   kind,
@@ -174,6 +188,7 @@ export function VenueBrowseCard({
         <VenueCardPlaceholder
           label={config.label}
           icon={<Icon className="size-5" aria-hidden />}
+          initials={venueInitials(listing.name)}
           mediaLayout={mediaLayout}
           testId={config.placeholderTestId}
         />

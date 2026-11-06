@@ -54,6 +54,30 @@ export function formatEventStartsAt(iso: string): string {
   }
 }
 
+/**
+ * Month and day for a card date badge, in Medellín local time.
+ *
+ * Card media is decorative, so this never replaces the readable schedule line — it only gives a
+ * photo-less card the weight a photo would have carried. Returns null when the timestamp is
+ * unusable, so a card degrades to the plain placeholder instead of showing a wrong day.
+ */
+export function formatEventBadgeDate(iso: string): { month: string; day: string } | null {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      month: "short",
+      day: "numeric",
+      timeZone: EVENT_TIME_ZONE,
+    }).formatToParts(date);
+    const month = parts.find((part) => part.type === "month")?.value;
+    const day = parts.find((part) => part.type === "day")?.value;
+    return month && day ? { month: month.toUpperCase(), day } : null;
+  } catch {
+    return null;
+  }
+}
+
 export function formatEventSchedule(startsAt: string, endsAt: string | null): string {
   const start = new Date(startsAt);
   const startLabel = new Intl.DateTimeFormat("en-US", {
