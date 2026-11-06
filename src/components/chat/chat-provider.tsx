@@ -104,7 +104,7 @@ export function SavedThreadHistory({
   children: ReactNode;
   agentId?: "conciergeAgent" | "hostOpsAgent";
 }) {
-  const { agent, isReady } = useAgent({ agentId, updates: [UseAgentUpdate.OnRunStatusChanged] });
+  const { agent, isReady } = useAgent({ agentId, updates: [UseAgentUpdate.OnRunStatusChanged, UseAgentUpdate.OnMessagesChanged] });
   const [attempt, setAttempt] = useState(0);
   const [outcome, setOutcome] = useState<{
     threadId: string;
@@ -121,6 +121,7 @@ export function SavedThreadHistory({
     attempt: number;
     agent: AbstractAgent;
     hadMessages: boolean;
+    savedMessages: SavedThreadMessage[];
   } | null>(null);
   const restoredThisAttempt =
     outcome?.threadId === threadId && outcome.attempt === attempt &&
@@ -129,6 +130,10 @@ export function SavedThreadHistory({
   const restoredOnCurrentAgent = Boolean(
     restoredThisAttempt && previousRestore && previousRestore.agent === agent &&
     (!previousRestore.hadMessages || agent?.messages.length),
+  );
+  const missingRestoredHistory = Boolean(
+    isReady && restoredThisAttempt && previousRestore?.agent === agent &&
+    previousRestore?.hadMessages && agent?.messages.length === 0,
   );
 
   // Do not run the owner-checked fetch against CopilotKit's provisional agent.
@@ -150,8 +155,10 @@ export function SavedThreadHistory({
   useEffect(() => {
     if (!agent || !isReady) return;
     const previous = restoredAgent.current;
+    // Once this real agent was restored, a later message wipe is repaired by
+    // the dedicated message-change effect below, not a second history fetch.
     if (previous?.threadId === threadId && previous.attempt === attempt &&
-        previous.agent === agent && (!previous.hadMessages || agent.messages.length > 0)) return;
+        previous.agent === agent) return;
     const controller = new AbortController();
     connect.current = watchConnectCycle(agent, controller.signal);
     return () => controller.abort();
@@ -160,13 +167,16 @@ export function SavedThreadHistory({
   useEffect(() => {
     if (!agent || !isReady) return;
     const previous = restoredAgent.current;
+    // Once this real agent was restored, a later message wipe is repaired by
+    // the dedicated message-change effect below, not a second history fetch.
     if (previous?.threadId === threadId && previous.attempt === attempt &&
-        previous.agent === agent && (!previous.hadMessages || agent.messages.length > 0)) return;
+        previous.agent === agent) return;
     const controller = new AbortController();
     const { signal } = controller;
 
     (async () => {
       let failed = false;
+      let savedMessages: SavedThreadMessage[] = [];
       try {
         const res = await fetch(`/api/threads/${encodeURIComponent(threadId)}/messages`, {
           signal,
@@ -174,6 +184,7 @@ export function SavedThreadHistory({
         });
         if (!res.ok) throw new Error(`history ${res.status}`);
         const body = (await res.json()) as { messages?: SavedThreadMessage[] };
+        savedMessages = body.messages ?? [];
         // First attempt: the watch started when the chat opened. A Retry cannot
         // reuse a finished (timed-out) watch, so it waits again if the reconnect
         // is still running, and carries on if it has ended.
@@ -221,7 +232,9 @@ export function SavedThreadHistory({
       }
       if (!signal.aborted) {
         if (!failed) {
-          restoredAgent.current = { threadId, attempt, agent, hadMessages: agent.messages.length > 0 };
+          restoredAgent.current = {
+            threadId, attempt, agent, hadMessages: agent.messages.length > 0, savedMessages,
+          };
         }
         setOutcome({ threadId, attempt, failed, ready: true });
       }
@@ -229,6 +242,38 @@ export function SavedThreadHistory({
 
     return () => controller.abort();
   }, [agent, isReady, threadId, attempt]);
+
+  // The SDK can clear messages after readiness has recovered (for example,
+  // a delayed reconnect). React to OnMessagesChanged and restore from the
+  // already owner-checked snapshot rather than leaving the chat inert forever.
+  useEffect(() => {
+    const saved = restoredAgent.current;
+    if (!missingRestoredHistory || !agent || !saved?.savedMessages.length) return;
+    let active = true;
+    const repair = () => {
+      if (!active || agent.threadId !== threadId || agent.isRunning) return;
+      const merged = reconcileSavedHistory(saved.savedMessages, agent.messages);
+      if (merged.length !== agent.messages.length ||
+          merged.some((message, index) => message.id !== agent.messages[index]?.id)) {
+        agent.setMessages(merged as typeof agent.messages);
+      }
+    };
+    const subscription = agent.subscribe({
+      onRunFinalized: repair,
+      onRunFailed: repair,
+    });
+    const timeout = setTimeout(() => {
+      if (active && agent.threadId === threadId && agent.messages.length === 0) {
+        setOutcome({ threadId, attempt, failed: true, ready: true });
+      }
+    }, RECONNECT_SETTLE_TIMEOUT_MS);
+    repair();
+    return () => {
+      active = false;
+      clearTimeout(timeout);
+      subscription.unsubscribe();
+    };
+  }, [agent, threadId, attempt, missingRestoredHistory]);
 
   const settled = outcome?.threadId === threadId && outcome.attempt === attempt &&
     // Once restored, a transient readiness loss must not make chat inert.
