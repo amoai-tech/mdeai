@@ -212,9 +212,11 @@ function NearbyRentalAction({
   const { user } = useSession();
   const { appendMessage, isLoading, isRuntimeUnavailable } = useConciergeChat();
   const [pending, setPending] = useState(false);
+  const [error, setError] = useState(false);
   if (!user) return null;
 
   return (
+    <>
     <Button
       type="button"
       size="sm"
@@ -226,10 +228,14 @@ function NearbyRentalAction({
         event.stopPropagation();
         if (pending || isLoading || isRuntimeUnavailable()) return;
         setPending(true);
+        setError(false);
         try {
           onSelect?.(pinId);
           // The server, not this button, resolves authorized rental coordinates.
-          await appendMessage(`Show 5 cafés within 800 meters of apartment ${listingId}.`);
+          const started = await appendMessage(`Show 5 cafés within 800 meters of apartment ${listingId}.`);
+          if (!started) setError(true);
+        } catch {
+          setError(true);
         } finally {
           setPending(false);
         }
@@ -237,6 +243,8 @@ function NearbyRentalAction({
     >
       {pending ? "Finding cafés…" : "Show nearby cafés"}
     </Button>
+    {error ? <span role="alert" className="text-xs text-destructive">Nearby search did not start. Try again.</span> : null}
+    </>
   );
 }
 
