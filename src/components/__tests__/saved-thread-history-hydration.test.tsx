@@ -26,6 +26,8 @@ type Msg = { id: string; role: string; content: string };
 class FakeAgent {
   threadId = "";
   isRunning = false;
+  /** CopilotKit's `isReady`: true only once the REGISTERED agent exists. */
+  isReady = true;
   messages: Msg[] = [];
   private finalizers = new Set<() => void>();
   setMessages = vi.fn((m: Msg[]) => {
@@ -50,7 +52,13 @@ class FakeAgent {
 const fakeAgent = vi.hoisted(() => ({ current: null as unknown }));
 vi.mock("@copilotkit/react-core/v2", async (importOriginal) => {
   const real = await importOriginal<typeof import("@copilotkit/react-core/v2")>();
-  return { ...real, useAgent: () => ({ agent: fakeAgent.current }) };
+  return {
+    ...real,
+    useAgent: () => ({
+      agent: fakeAgent.current,
+      isReady: (fakeAgent.current as FakeAgent | null)?.isReady ?? false,
+    }),
+  };
 });
 
 const A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -350,5 +358,71 @@ describe("saved chat history", () => {
     await tick();
     expect(agent.messages).toEqual(msgs("A"));
     expect(seen.history.status).toBe("idle");
+  });
+});
+
+describe("restore gating on CopilotKit readiness (SAN-1639)", () => {
+  /**
+   * `isReady` means "the registered agent exists", not "the reply finished"
+   * (CopilotKit v2 `use-agent.tsx`: a provisional agent reports isReady: false).
+   * Installing saved messages into a provisional agent loses them when CopilotKit
+   * swaps in the real one, so the restore must wait.
+   */
+  it("does not install saved messages into a provisional agent", async () => {
+    agent.isReady = false;
+    agent.threadId = "";
+    await act(async () => seen.nav.setActiveThreadId(A));
+
+    await tick();
+
+    // No history request at all until the registered agent exists, and certainly no
+    // install into the provisional one.
+    expect(requests[A]).toBeUndefined();
+    expect(agent.setMessages).not.toHaveBeenCalled();
+    // Must stay loading, never report "idle" (a blank chat that claims to be done).
+    expect(seen.history.status).toBe("loading");
+  });
+
+  it("installs the saved messages once the registered agent is ready", async () => {
+    agent.isReady = true;
+    await select(A);
+
+    await act(async () => requests[A].resolve(msgs("A")));
+    await tick();
+    agent.finishRun();
+    await tick();
+
+    expect(agent.setMessages).toHaveBeenCalledTimes(1);
+    expect(agent.messages.map((m) => m.id)).toEqual(["A-u", "A-a"]);
+    expect(seen.history.status).toBe("idle");
+  });
+
+  it("restores once when readiness resolves while the thread stays selected", async () => {
+    agent.isReady = false;
+    agent.threadId = "";
+    await act(async () => seen.nav.setActiveThreadId(A));
+    await tick();
+    expect(agent.setMessages).not.toHaveBeenCalled();
+
+    // The registered agent arrives: readiness flips and the tab re-renders on the
+    // same thread, which is what the `isReady` dependency exists to catch.
+    agent.isReady = true;
+    agent.threadId = A;
+    await act(async () => {
+      seen.nav.clearActiveThread();
+    });
+    await tick();
+    await act(async () => seen.nav.setActiveThreadId(A));
+    await tick();
+
+    if (requests[A]) {
+      await act(async () => requests[A].resolve(msgs("A")));
+      await tick();
+      agent.finishRun();
+      await tick();
+    }
+
+    expect(agent.setMessages).toHaveBeenCalledTimes(1);
+    expect(agent.messages.map((m) => m.id)).toEqual(["A-u", "A-a"]);
   });
 });

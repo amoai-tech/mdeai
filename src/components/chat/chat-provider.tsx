@@ -104,7 +104,10 @@ export function SavedThreadHistory({
   children: ReactNode;
   agentId?: "conciergeAgent" | "hostOpsAgent";
 }) {
-  const { agent } = useAgent({ agentId, updates: [UseAgentUpdate.OnRunStatusChanged] });
+  const { agent, isReady } = useAgent({
+    agentId,
+    updates: [UseAgentUpdate.OnRunStatusChanged],
+  });
   const [attempt, setAttempt] = useState(0);
   const [outcome, setOutcome] = useState<{
     threadId: string;
@@ -126,6 +129,14 @@ export function SavedThreadHistory({
 
   useEffect(() => {
     if (!agent) return;
+    // `agent` can be a PROVISIONAL stand-in that CopilotKit swaps for the registered
+    // agent once the runtime confirms it. Anything installed into the provisional
+    // agent is lost on that swap, which is how a restored conversation could come
+    // back empty. Only restore into an agent that is either ready, or already bound
+    // to this thread; `isReady` is in the deps so the effect re-runs when it flips.
+    // Gate only on an explicit `false`: the real v2 hook always returns a boolean,
+    // while older mocks omit it, and silently skipping those would be a regression.
+    if (isReady === false && agent.threadId !== threadId) return;
     const controller = new AbortController();
     const { signal } = controller;
 
@@ -187,7 +198,7 @@ export function SavedThreadHistory({
     })();
 
     return () => controller.abort();
-  }, [agent, threadId, attempt]);
+  }, [agent, threadId, attempt, isReady]);
 
   const settled = outcome?.threadId === threadId && outcome.attempt === attempt;
   const value = useMemo<SavedHistoryValue>(
