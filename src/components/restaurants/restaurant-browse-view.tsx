@@ -56,7 +56,13 @@ function RestaurantBrowseViewInner({
   const selectPin = useMapPinSelect();
   const desktop = useIsLgUp();
   const retryHref = buildFilterUrl({ neighborhood, cuisine });
-  const [searched, setSearched] = useState<{ scope: string; rows: Restaurant[] } | null>(null);
+  // `source` records who produced these rows: the concierge or the public catalog. The subtitle
+  // must not credit the concierge for a catalog search.
+  const [searched, setSearched] = useState<{
+    scope: string;
+    rows: Restaurant[];
+    source: "agent" | "catalog";
+  } | null>(null);
   const [selectedForAskId, setSelectedForAskId] = useState<string | null>(null);
   // SAN-1638: the panel has its own id. Opening Details writes the Ask context; pressing Ask never
   // opens the panel (on a phone that would cover the composer), and pressing Ask while another
@@ -99,7 +105,7 @@ function RestaurantBrowseViewInner({
   const onAgentResults = useCallback((result: DiscoveryAgentResult) => {
     if (result.page === "restaurants") {
       setSelectedForAskId(null);
-      setSearched({ scope: retryHref, rows: result.rows });
+      setSearched({ scope: retryHref, rows: result.rows, source: "agent" });
     }
   }, [retryHref]);
 
@@ -124,14 +130,24 @@ function RestaurantBrowseViewInner({
       />
       <DiscoveryWorkspace
         activeSlug="restaurants"
-        askComposer={<DiscoveryAskComposer page="restaurants" onAgentResults={onAgentResults} hasSelectedItem={Boolean(selectedForAsk)} onClearSelection={() => { setSelectedForAskId(null); setSelectedPinId(null); }} />}
+        askComposer={<DiscoveryAskComposer page="restaurants" onAgentResults={onAgentResults} hasSelectedItem={Boolean(selectedForAsk)} onClearSelection={() => { setSelectedForAskId(null); setSelectedPinId(null); }} guestRestaurants={{
+          neighborhood,
+          cuisine,
+          // Guest search is catalog search: the public endpoint returns grounded rows and the
+          // existing cards and map render them. Nothing reaches the agent runtime.
+          onResults: (rows: Restaurant[]) => setSearched({ scope: retryHref, rows, source: "catalog" }),
+        }} />}
         rightPanel={<BrowseMapPanel fill overlay={detailsRestaurant && desktop ? <RestaurantDetailsPanel restaurant={detailsRestaurant} onClose={closeDetails} /> : undefined} />}
         testId="restaurants-browse"
         title="Restaurants"
         subtitle={
           isSample
             ? "Sample listings — live restaurant data is unavailable; these are not contest nominees"
-            : searched?.scope === retryHref ? `Ask MDE — ${shownResults.length} restaurants` : "Food & dining in Medellín"
+            : searched?.scope === retryHref
+              ? searched.source === "catalog"
+                ? `Search results — ${shownResults.length} restaurants`
+                : `Ask MDE — ${shownResults.length} restaurants`
+              : "Food & dining in Medellín"
         }
         mobileMapTrigger={<BrowseMapSheet inline />}
         filterBar={<RestaurantBrowseFilters neighborhood={neighborhood} cuisine={cuisine} />}
