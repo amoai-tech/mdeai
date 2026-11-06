@@ -360,6 +360,20 @@ export const searchGroundedPlacesTool = createTool({
           metadata: { reason: "nearby_supported_for_cafes_only", venueKind: "general" },
         };
       }
+      // Nearby is billed too: enforce the existing daily Places/grounding
+      // budget and kill switch before a single Google request (Autosana).
+      const nearbyQuota = await incrementAndCheckGroundingQuota();
+      if (!nearbyQuota.allowed) {
+        return {
+          results: [], attribution: [], source: "grounding" as const,
+          metadata: {
+            venueKind: "cafe" as const,
+            searchMode: "nearby" as const,
+            anchorPinId: `rental-${inputData.nearbyRentalId}`,
+            reason: nearbyQuota.reason,
+          },
+        };
+      }
       return searchNearbyRentalPlaces({
         rentalId: inputData.nearbyRentalId,
         radiusMeters: inputData.nearbyRadiusMeters ?? 800,
