@@ -112,6 +112,9 @@ export function SavedThreadHistory({
     failed: boolean;
     /** Distinguishes a timeout before SDK readiness from the real agent's restore. */
     ready: boolean;
+    /** UI-visible completion metadata; refs are accessed only in effects. */
+    agent?: AbstractAgent;
+    hadMessages?: boolean;
   } | null>(null);
 
   // Preserve completed history through transient readiness changes. A genuinely
@@ -126,14 +129,13 @@ export function SavedThreadHistory({
   const restoredThisAttempt =
     outcome?.threadId === threadId && outcome.attempt === attempt &&
     outcome.ready && !outcome.failed;
-  const previousRestore = restoredAgent.current;
   const restoredOnCurrentAgent = Boolean(
-    restoredThisAttempt && previousRestore && previousRestore.agent === agent &&
-    (!previousRestore.hadMessages || agent?.messages.length),
+    restoredThisAttempt && outcome?.agent === agent &&
+    (!outcome.hadMessages || agent?.messages.length),
   );
   const missingRestoredHistory = Boolean(
-    isReady && restoredThisAttempt && previousRestore?.agent === agent &&
-    previousRestore?.hadMessages && agent?.messages.length === 0,
+    isReady && restoredThisAttempt && outcome?.agent === agent &&
+    outcome.hadMessages && agent?.messages.length === 0,
   );
 
   // Do not run the owner-checked fetch against CopilotKit's provisional agent.
@@ -157,8 +159,7 @@ export function SavedThreadHistory({
     const previous = restoredAgent.current;
     // Once this real agent was restored, a later message wipe is repaired by
     // the dedicated message-change effect below, not a second history fetch.
-    if (previous?.threadId === threadId && previous.attempt === attempt &&
-        previous.agent === agent) return;
+    if (previous?.threadId === threadId && previous.agent === agent) return;
     const controller = new AbortController();
     connect.current = watchConnectCycle(agent, controller.signal);
     return () => controller.abort();
@@ -236,7 +237,11 @@ export function SavedThreadHistory({
             threadId, attempt, agent, hadMessages: agent.messages.length > 0, savedMessages,
           };
         }
-        setOutcome({ threadId, attempt, failed, ready: true });
+        setOutcome({
+          threadId, attempt, failed, ready: true,
+          agent: failed ? undefined : agent,
+          hadMessages: !failed && agent.messages.length > 0,
+        });
       }
     })();
 
