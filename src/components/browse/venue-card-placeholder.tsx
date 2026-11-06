@@ -9,6 +9,19 @@ import { cn } from "@/lib/utils";
 export const VENUE_PLACEHOLDER_GRADIENT =
   "linear-gradient(150deg, oklch(0.970 0.015 180), oklch(0.926 0.030 184))";
 
+/**
+ * The single media frame for a discovery card: radius, aspect ratio and shrink behaviour.
+ *
+ * Every photo-less card and every real photo both use this, so the family cannot drift when
+ * someone changes the radius or the aspect ratio. Callers add only their own content styling.
+ */
+export function venueCardMediaFrame(mediaLayout: "inline" | "cover" = "cover"): string {
+  return cn(
+    "relative overflow-hidden rounded-xl",
+    mediaLayout === "cover" ? "aspect-[16/10] w-full" : "aspect-[16/10] w-24 shrink-0 self-start",
+  );
+}
+
 export type VenueCardPlaceholderProps = {
   /** Visible category label (e.g. "Café", "Nightlife"). */
   label: string;
@@ -20,6 +33,12 @@ export type VenueCardPlaceholderProps = {
    * placeholder contract forbids conveying it by colour.
    */
   initials?: string;
+  /**
+   * Arbitrary centre content that replaces the glyph — an event date badge, for example. Callers
+   * hand over *content*, never a frame: this component owns the radius, aspect ratio, gradient and
+   * gap, so a photo-less card cannot drift from the rest of the family.
+   */
+  content?: ReactNode;
   /** Match the host card's media frame. */
   mediaLayout?: "inline" | "cover";
   /** Preserve each card's existing placeholder test id. */
@@ -32,6 +51,7 @@ export function VenueCardPlaceholder({
   label,
   icon,
   initials,
+  content,
   mediaLayout = "cover",
   testId,
   className,
@@ -39,17 +59,17 @@ export function VenueCardPlaceholder({
   return (
     <div
       className={cn(
-        "relative flex flex-col items-center justify-center gap-1 overflow-hidden rounded-xl text-primary/70",
-        mediaLayout === "cover"
-          ? "aspect-[16/10] w-full"
-          : "aspect-[16/10] w-24 shrink-0 self-start",
+        venueCardMediaFrame(mediaLayout),
+        "flex flex-col items-center justify-center gap-1 text-primary/70",
         className,
       )}
       style={{ background: VENUE_PLACEHOLDER_GRADIENT }}
       data-testid={testId}
       aria-hidden
     >
-      {initials ? (
+      {content ? (
+        content
+      ) : initials ? (
         <span
           className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-sm font-semibold tracking-wide text-primary/80"
           data-testid="venue-placeholder-initials"

@@ -3,7 +3,7 @@ import { CalendarDays, Ticket } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { VenueCardShell } from "@/components/browse/venue-card-shell";
-import { VenueCardPlaceholder, VENUE_PLACEHOLDER_GRADIENT } from "@/components/browse/venue-card-placeholder";
+import { VenueCardPlaceholder, venueCardMediaFrame } from "@/components/browse/venue-card-placeholder";
 import { formatEventBadgeDate, formatEventCardPrice, formatEventStartsAt } from "@/lib/events/format-event";
 import type { PublishedEventListItem } from "@/lib/events/list-published-events";
 import type { EventCategory } from "@/mastra/tools/search-events";
@@ -51,19 +51,12 @@ function EventBrowseCardMedia({
   startsAt: string;
 }) {
   if (imageUrl) {
-    const frameClass = cn(
-      "relative overflow-hidden rounded-xl bg-muted text-xs text-muted-foreground",
-      mediaLayout === "cover"
-        ? "aspect-[16/10] w-full"
-        : "aspect-[16/10] w-24 shrink-0 self-start",
-    );
-
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
         src={imageUrl}
         alt={imageAlt}
-        className={cn(frameClass, "object-cover")}
+        className={cn(venueCardMediaFrame(mediaLayout), "bg-muted text-xs text-muted-foreground object-cover")}
         loading="lazy"
         data-testid="event-browse-card-photo"
       />
@@ -71,30 +64,24 @@ function EventBrowseCardMedia({
   }
 
   const badge = formatEventBadgeDate(startsAt);
-  if (!badge) {
-    return (
-      <VenueCardPlaceholder
-        label="Event"
-        icon={<CalendarDays className="size-5" aria-hidden />}
-        mediaLayout={mediaLayout}
-        testId="event-browse-card-photo-placeholder"
-      />
-    );
-  }
 
+  // One owner for the media frame: the shared placeholder decides radius, aspect, gradient and
+  // gap. This card only supplies what sits in the middle, so it can never drift from the family.
   return (
-    <div
-      className={cn(
-        "relative flex flex-col items-center justify-center overflow-hidden rounded-xl text-primary/80",
-        mediaLayout === "cover" ? "aspect-[16/10] w-full" : "aspect-[16/10] w-24 shrink-0 self-start",
-      )}
-      style={{ background: VENUE_PLACEHOLDER_GRADIENT }}
-      data-testid="event-browse-card-date-badge"
-      aria-hidden
-    >
-      <span className="text-[11px] font-semibold tracking-wide">{badge.month}</span>
-      <span className="text-2xl font-semibold leading-none">{badge.day}</span>
-    </div>
+    <VenueCardPlaceholder
+      label="Event"
+      icon={<CalendarDays className="size-5" aria-hidden />}
+      mediaLayout={mediaLayout}
+      testId={badge ? "event-browse-card-date-badge" : "event-browse-card-photo-placeholder"}
+      content={
+        badge ? (
+          <>
+            <span className="text-[11px] font-semibold tracking-wide">{badge.month}</span>
+            <span className="text-2xl font-semibold leading-none">{badge.day}</span>
+          </>
+        ) : undefined
+      }
+    />
   );
 }
 
