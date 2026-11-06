@@ -408,18 +408,25 @@ Superseded/canceled history stays untouched: SAN-102, SAN-103, SAN-463.
   correctly with `reserve_search_grounding_quota` (atomic upsert, fail-closed).
 - **Root cause:** two quota implementations with different guarantees.
 - **Owner:** `grounding-quota.ts` (SAN-776; SAN-105 only if a cache defect is proven).
-- **Smallest fix:** add a `reserve_grounding_quota(p_daily_cap)` RPC modelled on the search one;
-  call it; fail closed (`quota_unavailable`) when the RPC is missing. Make the row write monotonic
-  (`set count = greatest(count + 1, excluded.count)` on upsert) so a stale absolute write cannot
-  lower a reserved count.
-- **Rollout safety (mixed versions):** a rolling deploy is itself a race. An old instance can read
-  `count=N`, then upsert `N+1` after a new instance already reserved `N+1`, erasing that
-  increment. Do not run old read-then-upsert writers beside the new atomic writer. Safe order:
-  (1) ship a compatibility release in which every caller reserves through the RPC (or the SQL
-  update is monotonic), (2) drain/scale out the old instances, (3) enable the new caller. A
-  stale writer must never be able to decrease the stored count.
-- **Test:** 20 parallel reservations, cap 10 → exactly 10 allowed; DB-down → denied; a simulated
-  stale writer (writes `N+1` after `N+2`) → stored count stays `N+2`.
+- **Smallest fix:** add a `reserve_grounding_quota(p_daily_cap)` RPC modelled on the search one and
+  call it; fail closed (`quota_unavailable`) when it is missing. **The RPC alone is not enough:**
+  `grounding-quota.ts` writes `{ date, count: next }` through a direct PostgREST upsert, and old
+  instances keep doing exactly that during a rollout. Add a `BEFORE UPDATE` trigger on
+  `grounding_quota_log` that sets `NEW.count = GREATEST(OLD.count, NEW.count)`. Every writer —
+  RPC, stale direct upsert, or `service_role` — then fails to lower a reserved count; the trigger
+  is a no-op for the RPC's normal increment.
+- **Rollout order (schema, then code, then drain, then enable):**
+  1. Ship the schema-only migration: RPC + trigger. It is backward-compatible; old absolute
+     writers keep working but are clamped.
+  2. Deploy the application change that calls the RPC, with the new caller still disabled behind
+     its flag.
+  3. Drain/scale out the old instances and verify no `upsert({ count })` path remains.
+  4. Enable the caller flag and verify the cap on the now-clean fleet.
+  Deployment and enablement are separate steps; a "compatibility release" is not the feature
+  switch, and step 1 must not ship the new caller.
+- **Test:** 20 parallel RPC reservations, cap 10 → exactly 10 allowed; DB-down → denied; a direct
+  stale PostgREST-style upsert writing `N+1` after `N+2` → the trigger keeps `N+2`; after the old
+  instances are drained, no code path can write an absolute count.
 - **Outcome:** no unbounded Google spend under concurrency or outage.
 
 ### E3 — curated fallback is labelled as grounded (high)
@@ -526,7 +533,8 @@ Superseded/canceled history stays untouched: SAN-102, SAN-103, SAN-463.
 Exit: rental → café cards/pins with anchor retained; A→B answers correctly; 390/360 no crash.
 
 ### Milestone 2 — Truthful, cost-safe Places
-1. **SAN-776** (M) — atomic quota RPC + fail-closed; cost/mask audit.
+1. **SAN-776** (M) — schema-first atomic quota RPC plus the `BEFORE UPDATE` clamp trigger, then
+   fail-closed; cost/mask audit after the counter is trustworthy.
 2. **SAN-105** (S) — only audited cache/proxy defects.
 3. **SAN-1142** (S) — CI guard across every Places/Map call site.
 4. **SAN-790** (M) — source truth + fallback labelling; **SAN-878** (S) attribution matrix.
@@ -590,9 +598,10 @@ SAN-465, or any two PRs touching `search-grounded-places.ts` / `mde-ui-catalog.t
 | Mastra tools | https://mastra.ai/docs/agents/tools | Typed tools |
 | Playwright mobile | https://playwright.dev/docs/emulation | Mobile proof |
 
-Rule: an official example is applied only at the installed version (`@googlemaps/places 2.4.1`,
-`@vis.gl/react-google-maps 1.8.3`, CopilotKit 1.84.1, Mastra 1.81.0). A current upstream example
-against an older pin is a new bug.
+Rule: an official example is applied only at the version declared in `package.json`:
+`@googlemaps/places 2.4.1`, `@vis.gl/react-google-maps 1.8.3`, CopilotKit 1.84.1,
+`@mastra/core 1.81.0` (the `mastra` CLI is a **separate** package pinned at 1.37.0 — do not
+confuse the two). A current upstream example against an older pin is a new bug.
 
 ### 11.1 Source receipts for the decision-shaping sources
 
@@ -644,8 +653,8 @@ mock. Record the request path, the redacted response shape and the source IDs.
 
 - Direct unauthenticated `POST /api/grounded/search` (no `nearbyRentalId`) → 401 or signed guest,
   **zero** provider calls, zero quota increments (E9).
-- Mixed-version quota: a simulated stale writer cannot lower the stored count; 20 parallel
-  reservations at cap 10 allow exactly 10 (E2).
+- Mixed-version quota: a **direct PostgREST-style** stale upsert cannot lower the stored count
+  (trigger-level), and 20 parallel RPC reservations at cap 10 allow exactly 10 (E2).
 - A→B follow-up: the tool-visible state names B and contains none of A's rows, including inside
   the 300 ms debounce window (E4).
 - Curated fallback: schema-valid envelope with non-Google provenance and no Google label (E3).
@@ -679,8 +688,8 @@ mock. Record the request path, the redacted response shape and the source IDs.
 
 1. **Land SAN-106 (#783):** clear the `review/verify-review-result` coverage gate, then run one
    authenticated Nearby browser proof at `c78bc5c4`; update Linear with the exact SHA and evidence.
-2. **Fix the quota truth (SAN-776):** atomic RPC + fail-closed + monotonic update, with the
-   mixed-version and concurrency tests.
+2. **Fix the quota truth (SAN-776):** schema-first RPC + `BEFORE UPDATE` clamp trigger +
+   fail-closed, with the stale-writer, concurrency and DB-down tests.
 3. **Close the anonymous billing hole (E9 / SAN-790 owner):** make `/api/grounded/search` require a
    session or a signed guest identity; prove zero provider calls for a direct unauthenticated POST.
 4. **Prove selected context (SAN-412):** A→B→follow-up test; only then wire viewport bias
