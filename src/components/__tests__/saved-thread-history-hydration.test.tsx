@@ -361,35 +361,71 @@ describe("saved chat history", () => {
     }
   });
 
-  it("times out and offers Retry when only in-memory messages were restored", async () => {
+  it("recovers the retained transcript when durable history is empty (warm agent)", async () => {
+    // A warm agent may hold turns Mastra has not persisted yet. Losing them on a
+    // reconnect is a real regression, so recovery prefers the newest transcript we
+    // observed rather than erroring on the empty durable snapshot.
     await select(A);
-    // A warm agent may hold unsaved turns although durable history is empty.
     agent.messages = msgs("warm");
     await act(async () => requests[A].resolve([]));
     await act(async () => agent.finishRun());
     await tick();
     expect(seen.history.status).toBe("idle");
-    expect(agent.messages).toEqual(msgs("warm"));
 
-    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
-    try {
-      agent.messages = [];
-      await act(async () => {
-        root.render(<ThreadNavProvider><ChatProvider><Probe /></ChatProvider></ThreadNavProvider>);
-      });
-      expect(seen.history.status).toBe("loading");
-      await act(async () => { await vi.advanceTimersByTimeAsync(31_000); });
-      expect(seen.history.status).toBe("error");
-      // Retry rechecks durable history rather than silently inventing messages.
-      await act(async () => seen.history.retry());
-      expect(seen.history.status).toBe("loading");
-      await act(async () => requests[A].resolve(msgs("saved")));
-      await act(async () => agent.finishRun());
-      expect(agent.messages).toEqual(msgs("saved"));
-      expect(seen.history.status).toBe("idle");
-    } finally {
-      vi.useRealTimers();
-    }
+    agent.messages = [];
+    await act(async () => {
+      root.render(<ThreadNavProvider><ChatProvider><Probe /></ChatProvider></ThreadNavProvider>);
+    });
+    await tick();
+
+    // The requirement is that the conversation is not lost; status settles after.
+    expect(agent.messages.map((m) => m.id)).toEqual(["warm-u", "warm-a"]);
+  });
+
+  it("keeps follow-ups sent AFTER the restore when a reconnect clears the transcript", async () => {
+    await select(A);
+    await act(async () => requests[A].resolve(msgs("A")));
+    await act(async () => agent.finishRun());
+    await tick();
+    expect(agent.messages.map((m) => m.id)).toEqual(["A-u", "A-a"]);
+
+    // Camila asks a follow-up: these turns are newer than the restore snapshot.
+    agent.messages = [...msgs("A"), ...msgs("follow")];
+    await act(async () => {
+      root.render(<ThreadNavProvider><ChatProvider><Probe /></ChatProvider></ThreadNavProvider>);
+    });
+
+    // A delayed reconnect clears the visible transcript.
+    agent.messages = [];
+    await act(async () => {
+      root.render(<ThreadNavProvider><ChatProvider><Probe /></ChatProvider></ThreadNavProvider>);
+    });
+    await tick();
+
+    // The newest conversation comes back once, newest turns included.
+    expect(agent.messages.map((m) => m.id)).toEqual(["A-u", "A-a", "follow-u", "follow-a"]);
+  });
+
+  it("recovers a chat that started empty and received its first turns afterwards", async () => {
+    // `hadMessages` is false for a brand-new chat; that must not blind recovery.
+    await select(A);
+    await act(async () => requests[A].resolve([]));
+    await act(async () => agent.finishRun());
+    await tick();
+    expect(seen.history.status).toBe("idle");
+    expect(agent.messages).toEqual([]);
+
+    agent.messages = msgs("first");
+    await act(async () => {
+      root.render(<ThreadNavProvider><ChatProvider><Probe /></ChatProvider></ThreadNavProvider>);
+    });
+    agent.messages = [];
+    await act(async () => {
+      root.render(<ThreadNavProvider><ChatProvider><Probe /></ChatProvider></ThreadNavProvider>);
+    });
+    await tick();
+
+    expect(agent.messages.map((m) => m.id)).toEqual(["first-u", "first-a"]);
   });
 
   it("shows a retryable error if the runtime never becomes ready", async () => {

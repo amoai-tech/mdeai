@@ -248,6 +248,51 @@ export function SavedThreadHistory({
     return () => controller.abort();
   }, [agent, isReady, threadId, attempt]);
 
+  /**
+   * The newest NON-EMPTY transcript seen for this thread on the current agent.
+   *
+   * The restore snapshot is captured when the chat opens, so it cannot contain
+   * turns the user sends afterwards. Retaining the live transcript lets a later
+   * wipe be repaired with those newer messages instead of regressing to the older
+   * snapshot, and covers a chat that started empty and only later received turns.
+   */
+  const retained = useRef<{
+    threadId: string;
+    agent: AbstractAgent;
+    messages: readonly unknown[];
+  } | null>(null);
+
+  // Refs are written only inside effects (never during render).
+  useEffect(() => {
+    if (!agent || agent.threadId !== threadId) {
+      retained.current = null;
+      return;
+    }
+    if (agent.messages.length > 0) {
+      retained.current = { threadId, agent, messages: [...agent.messages] };
+    }
+  }, [agent, threadId, agent?.messages]);
+
+  // Additive recovery: independent of the restore snapshot above, repair a cleared
+  // transcript from the newest turns this session observed. Runs after the
+  // retention effect, so `retained` still holds the pre-wipe transcript.
+  const liveMessageCount = agent && agent.threadId === threadId ? agent.messages.length : -1;
+  useEffect(() => {
+    if (!isReady || !agent || agent.threadId !== threadId) return;
+    if (agent.messages.length !== 0) return;
+    // A run in progress owns the transcript; the existing repair path handles the
+    // stuck-run case and surfaces a retryable error instead of racing the run.
+    if (agent.isRunning) return;
+    const newest = retained.current;
+    if (!newest || newest.threadId !== threadId || newest.agent !== agent) return;
+    if (newest.messages.length === 0) return;
+    const merged = reconcileSavedHistory(
+      newest.messages as SavedThreadMessage[],
+      agent.messages,
+    );
+    if (merged.length > 0) agent.setMessages(merged as typeof agent.messages);
+  }, [agent, isReady, threadId, liveMessageCount]);
+
   // The SDK can clear messages after readiness has recovered (for example,
   // a delayed reconnect). React to OnMessagesChanged and restore from the
   // already owner-checked snapshot rather than leaving the chat inert forever.
