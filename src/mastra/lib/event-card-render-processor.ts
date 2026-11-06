@@ -15,12 +15,9 @@ function contentText(content: unknown): string {
     .join(" ");
 }
 
-function lastUserText(messages: readonly unknown[]): string {
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const message = messages[index] as { role?: string; content?: unknown } | null;
-    if (message?.role === "user") return contentText(message.content);
-  }
-  return "";
+function newestUserText(messages: readonly unknown[]): string {
+  const newest = messages[messages.length - 1] as { role?: string; content?: unknown } | null;
+  return newest?.role === "user" ? contentText(newest.content) : "";
 }
 
 function activeEventId(systemMessages: readonly unknown[]): string | null {
@@ -42,10 +39,14 @@ export function forceEventCardRender(args: {
   stepNumber: number;
   messages: readonly unknown[];
   systemMessages?: readonly unknown[];
+  tools?: Record<string, unknown>;
 }) {
   if (args.stepNumber !== 0) return null;
   if (!activeEventId(args.systemMessages ?? [])) return null;
-  if (!isEventCardRenderRequest(lastUserText(args.messages))) return null;
+  if (!isEventCardRenderRequest(newestUserText(args.messages))) return null;
+  // render_ui is added by the A2UI transport; forcing a missing tool can make
+  // the provider reject the step.
+  if (!args.tools || !Object.prototype.hasOwnProperty.call(args.tools, "render_ui")) return null;
   return { toolChoice: { type: "tool" as const, toolName: "render_ui" } };
 }
 

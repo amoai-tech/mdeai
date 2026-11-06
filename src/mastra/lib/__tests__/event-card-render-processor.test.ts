@@ -6,6 +6,7 @@ const hints = [{
   role: "system",
   content: `Active event result ID hints, in display order:\n- ${EVENT_ID}`,
 }];
+const tools = { render_ui: {} };
 
 describe("forceEventCardRender", () => {
   it("forces the existing render_ui tool on the first step for a card request", () => {
@@ -13,6 +14,7 @@ describe("forceEventCardRender", () => {
       stepNumber: 0,
       messages: [{ role: "user", content: "Show the first event as a card." }],
       systemMessages: hints,
+      tools,
     })).toEqual({ toolChoice: { type: "tool", toolName: "render_ui" } });
   });
 
@@ -21,11 +23,29 @@ describe("forceEventCardRender", () => {
       stepNumber: 1,
       messages: [{ role: "user", content: "Show the first event as a card." }],
       systemMessages: hints,
+      tools,
     })).toBeNull();
     expect(forceEventCardRender({
       stepNumber: 0,
       messages: [{ role: "user", content: "Show me cultural events in Medellín." }],
       systemMessages: hints,
+      tools,
+    })).toBeNull();
+  });
+
+  it("does not force after a tool result or a missing render_ui tool", () => {
+    const userRequest = { role: "user", content: "Show the first event as a card." };
+    expect(forceEventCardRender({
+      stepNumber: 0,
+      messages: [userRequest, { role: "tool", content: "render_ui completed" }],
+      systemMessages: hints,
+      tools,
+    })).toBeNull();
+    expect(forceEventCardRender({
+      stepNumber: 0,
+      messages: [userRequest],
+      systemMessages: hints,
+      tools: {},
     })).toBeNull();
   });
 
@@ -34,6 +54,7 @@ describe("forceEventCardRender", () => {
       stepNumber: 0,
       messages: [{ role: "user", content: "Show the first event as a card." }],
       systemMessages: [{ role: "system", content: "No event results are active." }],
+      tools,
     })).toBeNull();
   });
 });
