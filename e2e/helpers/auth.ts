@@ -82,6 +82,55 @@ export async function getSupabaseAdmin() {
 /** A confirmed auth user that exists only for the duration of one proof run. */
 export type ThrowawayIdentity = { email: string; userId: string };
 
+/**
+ * Remove disposable identities left behind by a KILLED run.
+ *
+ * A killed Playwright process never reaches the per-test `finally`, so its identity
+ * survives. Only accounts created BEFORE the caller started are swept, so a
+ * concurrent run's live identities are never touched.
+ */
+export async function sweepThrowawayIdentities(options: {
+  prefix: string;
+  createdBefore: Date;
+}): Promise<{ orphans: number }> {
+  const admin = await getSupabaseAdmin();
+  const doomed: string[] = [];
+  for (let page = 1; page <= 30; page++) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 200 });
+    if (error) break;
+    const users = data?.users ?? [];
+    for (const user of users) {
+      const email = user.email ?? "";
+      if (!email.startsWith(options.prefix)) continue;
+      if (!email.endsWith("@qa-isolation.mdeai.co")) continue;
+      const created = user.created_at ? new Date(user.created_at) : null;
+      if (created && created < options.createdBefore) doomed.push(user.id);
+    }
+    if (users.length < 200) break;
+  }
+  for (const id of doomed) {
+    const { data: threads } = await admin.from("mastra_threads").select("id").eq("resourceId", id);
+    const ids = (threads ?? []).map((t) => t.id);
+    if (ids.length) await admin.from("mastra_messages").delete().in("thread_id", ids);
+    await admin.from("mastra_threads").delete().eq("resourceId", id);
+    await admin.from("profiles").delete().eq("id", id);
+    await admin.auth.admin.deleteUser(id);
+  }
+  let orphans = 0;
+  for (let page = 1; page <= 30; page++) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 200 });
+    if (error) break;
+    const users = data?.users ?? [];
+    orphans += users.filter((u) =>
+      (u.email ?? "").startsWith(options.prefix) &&
+      (u.email ?? "").endsWith("@qa-isolation.mdeai.co") &&
+      u.created_at && new Date(u.created_at) < options.createdBefore,
+    ).length;
+    if (users.length < 200) break;
+  }
+  return { orphans };
+}
+
 /** Best-effort removal of any account created under an exact email (ambiguous create). */
 async function deleteAuthUsersByEmail(
   admin: Awaited<ReturnType<typeof getSupabaseAdmin>>,

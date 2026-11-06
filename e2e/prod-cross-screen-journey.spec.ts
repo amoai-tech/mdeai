@@ -5,6 +5,7 @@ import {
   getSupabaseAdmin,
   hasE2eEnv,
   signInAsOnOrigin,
+  sweepThrowawayIdentities,
   type ThrowawayIdentity,
 } from "./helpers/auth";
 import {
@@ -82,16 +83,57 @@ async function persistedCount(threadId: string): Promise<number> {
   return count ?? 0;
 }
 
+/**
+ * A3: a 401 on the first send means the runtime had not accepted the session yet.
+ * `POST /api/copilotkit {"method":"info"}` answers 401 `{"error":"unauthorized"}`
+ * for an unauthenticated caller, so polling it until it stops being 401 is a real
+ * readiness signal — no sleep and no filtered error.
+ */
+async function waitForAuthenticatedRuntime(page: Page, timeoutMs = 30_000) {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(async () => {
+          try {
+            const res = await fetch("/api/copilotkit", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ method: "info" }),
+            });
+            return res.status;
+          } catch {
+            return 0;
+          }
+        }),
+      { timeout: timeoutMs, message: "the runtime accepted this session (not 401)", intervals: [100, 250, 500, 1000] },
+    )
+    .not.toBe(401);
+}
+
 async function sendAndWait(page: Page, text: string) {
   // A clean HTTP 200 without an assistant answer is not a successful journey.
   // Capture the baseline before submitting so the previous answer never counts.
   const repliesBefore = await countConciergeReplies(page);
+  await waitForAuthenticatedRuntime(page);
   await sendConciergeMessage(page, text);
   const answer = await waitForConciergeReply(page, repliesBefore, 120_000);
   expect(answer.trim(), "the new AI turn rendered a nonempty answer").not.toBe("");
 }
 
+/** A4: identities created before this suite started are orphans from a killed run. */
+const SUITE_STARTED_AT = new Date();
+
 test.describe("SAN-1298 cross-screen conversation (/chat → /rentals → /events → /chat)", () => {
+  // A killed run skips per-test `finally`; sweep what earlier runs left behind.
+  test.afterAll(async () => {
+    if (!enabled) return;
+    const removed = await sweepThrowawayIdentities({
+      prefix: "qa-san1298-",
+      createdBefore: SUITE_STARTED_AT,
+    });
+    expect(removed.orphans, "no orphaned QA identities remain after the suite").toBe(0);
+  });
+
   test.skip(
     !enabled,
     "Opt-in only: set PROD_SMOKE_BASE_URL and MDE_SAN1298_CROSS_SCREEN=1 (writes a QA identity and chat rows)",
