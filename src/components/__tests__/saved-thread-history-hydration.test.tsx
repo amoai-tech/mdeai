@@ -2,6 +2,7 @@
 import React, { act, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { UseAgentUpdate } from "@copilotkit/react-core/v2";
 
 // The navigation owner waits for a verified auth identity. Test the anonymous path
 // without making Supabase network calls during provider lifecycle unit tests.
@@ -47,10 +48,16 @@ class FakeAgent {
   }
 }
 
-const fakeAgent = vi.hoisted(() => ({ current: null as unknown, ready: true }));
+const fakeAgent = vi.hoisted(() => ({ current: null as unknown, ready: true, lastUpdates: [] as unknown[] }));
 vi.mock("@copilotkit/react-core/v2", async (importOriginal) => {
   const real = await importOriginal<typeof import("@copilotkit/react-core/v2")>();
-  return { ...real, useAgent: () => ({ agent: fakeAgent.current, isReady: fakeAgent.ready }) };
+  return {
+    ...real,
+    useAgent: (options: { updates?: unknown[] }) => {
+      fakeAgent.lastUpdates = options.updates ?? [];
+      return { agent: fakeAgent.current, isReady: fakeAgent.ready };
+    },
+  };
 });
 
 const A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -99,6 +106,7 @@ beforeEach(async () => {
   agent = new FakeAgent();
   fakeAgent.current = agent;
   fakeAgent.ready = true;
+  fakeAgent.lastUpdates = [];
   requests = {};
   vi.stubGlobal(
     "fetch",
@@ -302,6 +310,8 @@ describe("saved chat history", () => {
 
   it("repairs a message wipe that occurs AFTER readiness has returned", async () => {
     await select(A);
+    // The real useAgent hook must rerender on messages changing, not only runs.
+    expect(fakeAgent.lastUpdates).toContain(UseAgentUpdate.OnMessagesChanged);
     await act(async () => requests[A].resolve(msgs("A")));
     await act(async () => agent.finishRun());
     await tick();
