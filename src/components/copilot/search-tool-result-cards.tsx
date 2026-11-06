@@ -32,6 +32,7 @@ import { emptyRentalNotice, unappliedRentalNotice } from "@/lib/rental-display";
 import { duplicateListingNotes } from "@/lib/rentals/duplicate-listings";
 import { normalizeToolOutput } from "@/platform/maps/normalize-tool-output";
 import { parseGroundedToolResult } from "@/lib/parse-grounded-tool-result";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 function rentalPinId(listingId: string) {
   return `rental-${listingId}`;
@@ -472,6 +473,20 @@ function EventSearchEmptyState() {
   );
 }
 
+type EventResultRow = {
+  id: string;
+  title: string;
+  venue: string;
+  neighborhood: string;
+  startsAt: string;
+  pricePerTicket: number | null;
+  canBuyTickets?: boolean;
+  ticketUrl?: string;
+  currency?: string;
+  imageUrl?: string;
+  sourceUrl?: string;
+};
+
 export function EventResults({ result }: { result: unknown }) {
   const { selectedPinId, panToPin } = useMapContext();
   const { openVenueDetail } = useRentalUi();
@@ -491,6 +506,8 @@ export function EventResults({ result }: { result: unknown }) {
     () => new Set(normalizeToolOutput("event", result).pins.map((pin) => pin.id)),
     [result],
   );
+  const [selectedEvent, setSelectedEvent] = useState<EventResultRow | null>(null);
+
   const rows = (envelope.results ?? []) as Array<{
     id: string;
     title: string;
@@ -608,24 +625,33 @@ export function EventResults({ result }: { result: unknown }) {
             });
           };
           return (
-            <EventCard
-              key={e.id}
-              id={pinId}
-              eventId={e.id}
-              title={e.title}
-              venue={e.venue}
-              neighborhood={e.neighborhood}
-              startsAt={e.startsAt}
-              pricePerTicket={e.pricePerTicket}
-              canBuyTickets={e.canBuyTickets === true}
-              currency={e.currency}
-              imageUrl={e.imageUrl}
-              ticketUrl={ticketUrl}
-              sourceUrl={e.sourceUrl}
-              selected={hasPin && selectedPinId === pinId}
-              onSelect={selectOnMap}
-              onOpenDetails={openDetail}
-            />
+            <div key={e.id} className="flex flex-col gap-1">
+              <EventCard
+                id={pinId}
+                eventId={e.id}
+                title={e.title}
+                venue={e.venue}
+                neighborhood={e.neighborhood}
+                startsAt={e.startsAt}
+                pricePerTicket={e.pricePerTicket}
+                canBuyTickets={e.canBuyTickets === true}
+                currency={e.currency}
+                imageUrl={e.imageUrl}
+                ticketUrl={ticketUrl}
+                sourceUrl={e.sourceUrl}
+                selected={hasPin && selectedPinId === pinId}
+                onSelect={selectOnMap}
+                onOpenDetails={openDetail}
+              />
+              <button
+                type="button"
+                data-testid="event-show-card"
+                className="min-h-11 self-start rounded-md border border-border px-3 text-xs"
+                onClick={() => setSelectedEvent(e as EventResultRow)}
+              >
+                Show as card
+              </button>
+            </div>
           );
         })}
         </div>
@@ -648,6 +674,30 @@ export function EventResults({ result }: { result: unknown }) {
           }
         />
       ) : null}
+      <Dialog open={Boolean(selectedEvent)} onOpenChange={(open) => { if (!open) setSelectedEvent(null); }}>
+        <DialogContent className="max-w-md p-3" data-testid="event-card-modal">
+          <DialogHeader className="sr-only">
+            <DialogTitle>{selectedEvent?.title ?? "Event card"}</DialogTitle>
+          </DialogHeader>
+          {selectedEvent ? (
+            <EventCard
+              id={`event-${selectedEvent.id}`}
+              eventId={selectedEvent.id}
+              title={selectedEvent.title}
+              venue={selectedEvent.venue}
+              neighborhood={selectedEvent.neighborhood}
+              startsAt={selectedEvent.startsAt}
+              pricePerTicket={selectedEvent.pricePerTicket}
+              canBuyTickets={selectedEvent.canBuyTickets === true}
+              currency={selectedEvent.currency}
+              imageUrl={selectedEvent.imageUrl}
+              ticketUrl={selectedEvent.ticketUrl ?? `/events/${encodeURIComponent(selectedEvent.id)}`}
+              sourceUrl={selectedEvent.sourceUrl}
+              detailsHref={`/events/${encodeURIComponent(selectedEvent.id)}`}
+            />
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
