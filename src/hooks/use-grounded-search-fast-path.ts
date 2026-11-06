@@ -157,5 +157,24 @@ export function useGroundedSearchFastPath() {
     [clearLocalMessages, runSearch, currentPins, selectedPinId],
   );
 
-  return { handleUserMessage };
+  // A card action uses the SAME read-only Nearby fast path as a typed
+  // contextual query. Never send a second agent turn or guess a map origin.
+  const searchNearbyRental = useCallback(async (rentalId: string): Promise<boolean> => {
+    const pinId = `rental-${rentalId}`;
+    if (busyRef.current ||
+        !currentPins.some((pin) => pin.id === pinId && pin.category === "rental")) {
+      return false;
+    }
+    const text = `Show cafés within 800 meters of apartment ${rentalId}`;
+    clearLocalMessages();
+    return runSearch(text, {
+      query: text,
+      intent: "cafe",
+      limit: 5,
+      nearbyRentalId: rentalId,
+      nearbyRadiusMeters: 800,
+    });
+  }, [currentPins, clearLocalMessages, runSearch]);
+
+  return { handleUserMessage, searchNearbyRental };
 }
