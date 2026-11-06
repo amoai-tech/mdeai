@@ -106,6 +106,30 @@ describe("POST /api/venues/search", () => {
     expect(json.total).toBe(0);
   });
 
+  it("keeps only the rows the query actually describes", async () => {
+    // The retrieval re-ranks, it does not filter; without this the copy would claim matches it
+    // never made and "no matches" could never happen.
+    const res = await post({ kind: "cafe", queryText: "quiet café in Laureles" });
+    const json = await res.json();
+    expect(json.total).toBe(1);
+    expect(json.results[0].title).toBe("Rituales Compañía de Café");
+  });
+
+  it("returns a genuine empty result for a query nothing describes", async () => {
+    const res = await post({ kind: "cafe", queryText: "zzz nowhere at all" });
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.results).toEqual([]);
+    expect(json.total).toBe(0);
+  });
+
+  it("does not filter when the query carries no venue signal", async () => {
+    // "in the" are stopwords: an unfiltered query must not silently empty the page.
+    const res = await post({ kind: "cafe", queryText: "in the" });
+    const json = await res.json();
+    expect(json.total).toBe(1);
+  });
+
   it("rejects invalid json with 400", async () => {
     const res = await POST(
       new Request("http://localhost/api/venues/search", { method: "POST", body: "{not json" }),

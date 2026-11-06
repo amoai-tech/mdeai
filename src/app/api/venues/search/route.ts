@@ -23,6 +23,36 @@ import type { GroundedToolRow } from "@/lib/parse-grounded-tool-result";
  * Truthfulness rules: a retrieval failure is a 503 (never an empty list pretending "no matches"),
  * unknown fields stay absent, and no coordinates, amenities or prices are invented.
  */
+/** Words that carry no venue signal; matching on them would make every query "succeed". */
+const STOPWORDS = new Set([
+  "a", "an", "the", "in", "of", "with", "for", "and", "or", "near", "around",
+  "some", "any", "best", "good", "nice", "place", "places", "venue", "venues",
+  "cafe", "cafes", "café", "cafés", "coffee", "nightlife", "nightclub", "club", "clubs",
+]);
+
+/**
+ * Keep only rows the query actually describes.
+ *
+ * The browse retrieval ranks a page of active anchors; it does not filter by text. Reporting those
+ * ranks as "matches" would claim relevance the data does not have, and would make an honest empty
+ * answer impossible ("zzz" would still return a full page). Token overlap on the real row fields is
+ * the smallest truthful filter: no new retrieval engine, and every exclusion is explainable.
+ */
+function matchesQuery(row: VenueAnchorRow, queryText: string): boolean {
+  const haystack = [row.name, row.neighborhood ?? "", (row.tags ?? []).join(" "), venueAnchorSummary(row) ?? ""]
+    .join(" ")
+    .toLowerCase();
+  const tokens = queryText
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter((token) => token.length >= 3 && !STOPWORDS.has(token));
+  if (tokens.length === 0) return true; // nothing meaningful to filter on
+  return tokens.some((token) =>
+    // Short tokens must match a whole word: "all" would otherwise match inside "Calle".
+    token.length >= 4 ? haystack.includes(token) : new RegExp(`\\b${token}\\b`).test(haystack),
+  );
+}
+
 const bodySchema = z.object({
   kind: z.enum(["cafe", "nightlife"]),
   queryText: z.string().trim().min(1).max(120).optional(),
@@ -74,10 +104,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error }, { status: 503 });
   }
 
+  const matched = queryText ? rows.filter((row) => matchesQuery(row, queryText)) : rows;
+
   return NextResponse.json({
     kind,
-    results: rows.map(toGroundedRow),
-    total: rows.length,
+    results: matched.map(toGroundedRow),
+    total: matched.length,
     source: "venue_anchors",
   });
 }
