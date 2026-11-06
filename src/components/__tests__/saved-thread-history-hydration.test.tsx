@@ -209,6 +209,94 @@ describe("saved chat history", () => {
     }
   });
 
+  it("keeps an already-restored conversation usable when readiness flips true → false → true", async () => {
+    await select(A);
+    await act(async () => requests[A].resolve(msgs("A")));
+    await act(async () => agent.finishRun());
+    await tick();
+    expect(seen.history.status).toBe("idle");
+    const priorRequest = requests[A];
+    const priorWrites = agent.setMessages.mock.calls.length;
+
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      fakeAgent.ready = false;
+      await act(async () => {
+        root.render(<ThreadNavProvider><ChatProvider><Probe /></ChatProvider></ThreadNavProvider>);
+      });
+      expect(seen.history.status).toBe("idle");
+      // A transient loss AFTER successful restore must not show the 30s error.
+      await act(async () => { await vi.advanceTimersByTimeAsync(31_000); });
+      expect(seen.history.status).toBe("idle");
+
+      fakeAgent.ready = true;
+      await act(async () => {
+        root.render(<ThreadNavProvider><ChatProvider><Probe /></ChatProvider></ThreadNavProvider>);
+      });
+      expect(seen.history.status).toBe("idle");
+      expect(agent.messages).toEqual(msgs("A"));
+      expect(requests[A]).toBe(priorRequest);
+      expect(agent.setMessages).toHaveBeenCalledTimes(priorWrites);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("restores again if the real agent is replaced during a readiness loss", async () => {
+    await select(A);
+    await act(async () => requests[A].resolve(msgs("A")));
+    await act(async () => agent.finishRun());
+    await tick();
+    const originalRequest = requests[A];
+    expect(seen.history.status).toBe("idle");
+
+    fakeAgent.ready = false;
+    fakeAgent.current = new FakeAgent(); // SDK provisional replacement
+    await act(async () => {
+      root.render(<ThreadNavProvider><ChatProvider><Probe /></ChatProvider></ThreadNavProvider>);
+    });
+    expect(seen.history.status).toBe("idle");
+
+    const replacement = new FakeAgent();
+    replacement.threadId = A;
+    fakeAgent.current = replacement;
+    fakeAgent.ready = true;
+    await act(async () => {
+      root.render(<ThreadNavProvider><ChatProvider><Probe /></ChatProvider></ThreadNavProvider>);
+    });
+    expect(seen.history.status).toBe("loading");
+    expect(requests[A]).not.toBe(originalRequest);
+    await act(async () => requests[A].resolve(msgs("A")));
+    await act(async () => replacement.finishRun());
+    await tick();
+    expect(replacement.messages).toEqual(msgs("A"));
+    expect(seen.history.status).toBe("idle");
+  });
+
+  it("rehydrates the same agent if reconnect cleared its transcript", async () => {
+    await select(A);
+    await act(async () => requests[A].resolve(msgs("A")));
+    await act(async () => agent.finishRun());
+    await tick();
+    expect(seen.history.status).toBe("idle");
+
+    fakeAgent.ready = false;
+    await act(async () => {
+      root.render(<ThreadNavProvider><ChatProvider><Probe /></ChatProvider></ThreadNavProvider>);
+    });
+    agent.messages = []; // SDK reconnect can reset the displayed transcript
+    fakeAgent.ready = true;
+    await act(async () => {
+      root.render(<ThreadNavProvider><ChatProvider><Probe /></ChatProvider></ThreadNavProvider>);
+    });
+    expect(seen.history.status).toBe("loading");
+    await act(async () => requests[A].resolve(msgs("A")));
+    await act(async () => agent.finishRun());
+    await tick();
+    expect(agent.messages).toEqual(msgs("A"));
+    expect(seen.history.status).toBe("idle");
+  });
+
   it("shows a retryable error if the runtime never becomes ready", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     try {
