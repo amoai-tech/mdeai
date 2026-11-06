@@ -160,6 +160,23 @@ describe("event cards on the map", () => {
     render();
     expect(container.querySelector('[data-pin-id="event-mapped"]')?.getAttribute("data-selected")).toBe("true");
   });
+
+  it("Show as card opens the existing EventCard without a model run", () => {
+    render();
+    const button = container.querySelector('[data-testid="event-show-card"]');
+    expect(button).toBeInstanceOf(HTMLButtonElement);
+    act(() => (button as HTMLButtonElement).click());
+    const modal = document.body.querySelector('[data-testid="event-card-modal"]');
+    expect(modal).not.toBeNull();
+    expect(modal?.querySelector('[data-pin-id="event-mapped"]')).not.toBeNull();
+    const details = modal?.querySelector('[data-testid="event-details-cta"]');
+    expect(details).toBeInstanceOf(HTMLElement);
+    act(() => (details as HTMLElement).click());
+    expect(ui.openVenueDetail).toHaveBeenCalledTimes(1);
+    expect(ui.panToPin).toHaveBeenCalledWith("event-mapped");
+    expect(document.body.querySelector('[data-testid="event-card-modal"]')).toBeNull();
+    expect(ui.searchEvents).not.toHaveBeenCalled();
+  });
 });
 
 
