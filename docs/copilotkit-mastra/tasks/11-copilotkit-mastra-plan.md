@@ -1,8 +1,8 @@
 # 11 · CopilotKit–Mastra reliability, memory and performance plan
 
-**Status:** active plan · **Baseline verified:** 2026-11-05 · **Baseline SHA:** `36020745cfe81774c080bec57fef85acd7144a5a` (= `origin/main` = production `/api/version`)
+**Status:** historical baseline + active B2/C milestones · **Original baseline (2026-11-05):** `36020745cfe81774c080bec57fef85acd7144a5a` (historical only; not current `main`/production). **20/20 product certification:** pinned `8114a5a96382`; later #787 merge was verified at `7c753cd6b1`. Check live SHAs before new work.
 
-Related tasks: **SAN-1639** (chat history blank after navigation / re-click, *In Progress*) and **SAN-1298** (cross-screen conversation, *In Progress*). Reuse these; do not open duplicates.
+Related verified tasks: **SAN-1639 · Fix Chat History Going Blank After Navigation or Re-clicking a Saved Chat** (**Done**) and **SAN-1298 · EPIC · CopilotKit Upgrade — One Safe AI Pattern Across Every MDE Screen** (**Done**). These are complete for their recorded product milestone, not proof that every future release or B2/A4 follow-up is finished. Reuse existing tracking; create no duplicates.
 
 > **Correction that governs everything below:** CopilotKit's `isReady` confirms the **real agent is connected**. It does **not** prove that saved-message replay has finished. Any change to the restore path must gate on *both* connection state and replay completion — never on `isReady` alone.
 
@@ -124,31 +124,19 @@ Inventory first: `persistTurnLog`, `logAgentRunForTurn`, the `ai_runs` audit, an
 
 **Acceptance.** A failed rental search can be attributed to a specific boundary.
 
-### C2 · Working-memory concurrency — root cause identified via the Mastra docs MCP
+### C2 · Working-memory concurrency — measure before any change
 
-`workingMemoryLocks` is an in-process `Map` promise chain (`agent-memory.ts:71`), and behind it MDE runs its **own** `mergeWorkingMemory` (`agent-memory.ts:41`) as a read-modify-write (`agent-memory.ts:256-265`).
+MDE currently uses **thread-scoped** working memory and an in-process `workingMemoryLocks` promise chain in `src/mastra/lib/agent-memory.ts`. The special `selectedPinId: null` clear path performs a local read-modify-write and may lose concurrent updates **across separate instances**. This is a plausible concurrency risk, **not yet a reproduced incident**.
 
-Mastra's docs are explicit (fetched from `docs/memory/working-memory.md` via the `mastra_docs` MCP):
+Mastra's native `mergeWorkingMemory()` is **not** a drop-in replacement: its documented atomic row-locked merge requires **schema-based, resource-scoped** working memory, a `resourceId`, and a supporting storage adapter such as `@mastra/pg`. MDE's memory scope is `thread`. The installed `supportsAtomicWorkingMemoryMerge()` capability does not override that scope requirement.
 
-> With `scope: 'resource'` and a storage adapter that supports atomic merges (**currently `@mastra/pg`**), each merge runs inside a **row-locked database transaction**. Concurrent updates to different fields from separate processes are all kept. **Other adapters merge in the application, which only serializes writers inside a single process.**
+**Correct path:**
+1. Reproduce (or rule out) the lost-update case using two concurrent writers on the **same thread**, including a `selectedPinId: null` clear; prove different threads do not interfere.
+2. Preserve thread identity/isolation and existing schema semantics. Do not convert all memory to resource scope just for an optimization.
+3. If a defect is proven, prefer a narrowly scoped atomic **thread-keyed** Postgres transaction/RPC or a supported adapter mechanism over new locking infrastructure. RLS, authorization, and private data stay unchanged.
+4. Test concurrent writers, failures, retries and null-clearing on real database semantics; otherwise record the measured ceiling and make no speculative changes.
 
-Installed versions confirm the capability is already available: `@mastra/memory` **1.40.0** exports `mergeWorkingMemory` and `supportsAtomicWorkingMemoryMerge`; `@mastra/pg` **1.34.0** is installed and is the adapter the docs name as atomic.
-
-**Change (no migration).** Prefer the platform merge over the local read-modify-write:
-
-```ts
-if (await memory.supportsAtomicWorkingMemoryMerge()) {
-  await memory.mergeWorkingMemory({ threadId, resourceId, workingMemory: patch });
-  return;                    // row-locked in Postgres; safe across instances
-}
-// fallback: existing withThreadLock + local merge (single-instance only)
-```
-
-Keep the shim behaviour that deliberately writes `mapUi.selectedPinId: null` (the native tool strips nulls), and keep `withThreadLock` as the fallback.
-
-**Test first:** a two-writer simulation proving the current path can lose an update and the platform path does not. Preserve thread/resource isolation.
-
-**If the platform path is unavailable in this deployment**, document the single-instance ceiling with a `ponytail:` comment rather than adding a new locking system.
+**Acceptance:** Either a measured safe baseline with documented limitations, or a proven minimal concurrency fix that preserves every field and thread boundary.
 
 ### C3 · Runtime initialization cost
 
@@ -160,13 +148,13 @@ Measure `buildHandler()` and `new CopilotRuntime(...)` per request (route line 1
 
 | Order | Item | Why |
 |---|---|---|
-| 1 | A1 restoration gating | Only path to closing SAN-1639; the symptom is currently unproven |
-| 2 | A3 desktop 401 + matrix 10/10 | Acceptance evidence for both tasks |
-| 3 | A2 `requireNewReply` | Closes the last helper gap before certification |
-| 4 | A4 killed-run cleanup | Prevents QA data accumulating during certification runs |
+| 1 | A1 restoration gating | **Completed:** #777 merged; 20/20 certified at pinned `8114a5a96382` |
+| 2 | A3 desktop 401 + matrix 10/10 | **Completed:** #787 merged; previous 20/20 evidence remains release-pinned |
+| 3 | A2 `requireNewReply` | **Completed:** new nonempty answer assertion already present in #777; #780 closed as duplicate |
+| 4 | A4 killed-run cleanup | **Partially complete:** #787 sweep merged, #792 test finalizer open; independent kill-safe job pending |
 | 5 | B1 / B2 | Two unowned production signals; measure before assigning |
 | 6 | C1 tracing | Makes B1/B2 and future incidents cheap |
-| 7 | C2 / C3 | Only with measurements |
+| 7 | C2 / C3 | Only after two-writer and initialization measurements; native atomic memory merge requires resource scope |
 
 **Efficiency rules learned the hard way**
 
@@ -269,8 +257,8 @@ Every URL below was **fetched and verified to return HTTP 200** on 2026-11-05 (n
 
 | URL | Source | Decision | Disposition |
 |---|---|---|---|
-| https://mastra.ai/docs/memory/working-memory | **"Concurrent updates"**: `@mastra/pg` merges inside a **row-locked transaction**; other adapters only serialize in-process | replace MDE's read-modify-write with the platform merge | **ADAPT** → `src/mastra/lib/agent-memory.ts` |
-| https://mastra.ai/reference/memory/memory-class | `mergeWorkingMemory`, `supportsAtomicWorkingMemoryMerge` | exact API surface at the installed version | **ADAPT** → same file |
+| https://mastra.ai/docs/memory/working-memory | Resource-scoped, schema-based memory uses row-locked atomic merge on supported storage | **Not** a drop-in for MDE's thread scope; test two-writer issue first | **REFERENCE ONLY** → `src/mastra/lib/agent-memory.ts` |
+| https://mastra.ai/reference/memory/memory-class | `mergeWorkingMemory`, `supportsAtomicWorkingMemoryMerge` | check current scope requirements before changing code | **REFERENCE ONLY** |
 | https://mastra.ai/reference/storage/overview | `@mastra/pg` storage capabilities | confirm the adapter supports atomic merge | **REFERENCE ONLY** |
 | https://supabase.com/docs/guides/database/postgres/row-level-security | RLS expectations for the same database | no RLS change is involved; do not weaken it | **REFERENCE ONLY** |
 
@@ -313,13 +301,13 @@ Step-by-step status lives in [`12-steps.md`](./12-steps.md) and is the file to u
 | A1 duplicate | ✅ closed | [#779](https://github.com/amoai-tech/mdeai/pull/779) — one defect, one PR |
 | A2 · No answer ≠ success | ✅ already in main | `sendAndWait` asserts a NEW nonempty reply; [#780](https://github.com/amoai-tech/mdeai/pull/780) **closed** as superseded |
 | A3 · First-send 401 | ✅ | readiness requires HTTP 200 from the runtime info probe; shipped in #787 |
-| A4 · Killed-run cleanup | 🟡 | ownership-aware sweep + row-level verification merged (#787); a failing cleanup test could still leak (fixed in #792) |
+| A4 · Killed-run cleanup | 🟡 | #787 merged ownership-aware sweep; #792 open for failed-test cleanup and error reporting; external job for kill-during-teardown still needed |
 | B1 · 60 s readiness | 🟡 measured | 5 loads: **0.46–1.73 s** to an enabled composer; the 60 s stall did not reproduce |
 | B2 · `network error` | ⬜ | unowned; **not** proven to be Gemini |
 | C1 · Tracing | ⬜ | — |
-| C2 · Working-memory atomic merge | ⬜ | root cause identified (see C2 above) |
+| C2 · Working-memory concurrency | ⬜ | two-writer defect unproven; native atomic API requires resource scope, current MDE memory is thread-scoped |
 | C3 · Runtime init | ⬜ | unmeasured |
 | Support · CopilotKit skill fallback | 🟡 | [#778](https://github.com/amoai-tech/mdeai/pull/778) |
 
-**Definition of done for this plan is unchanged** (see §6). The **20/20 desktop+mobile matrix was achieved** on the pinned `8114a5a96382`; the next milestone is therefore **B2 instrumentation** (why one run hung, and the `network error` boundary) plus an **external cleanup job** for a kill during teardown — not another product matrix.
+**Product milestone achieved:** 20/20 desktop+mobile at pinned `8114a5a96382`; SAN-1639 and SAN-1298 are Done. **Next:** merge open #792/#793 after exact-head CI and required independent approval; instrument B2; build an independent kill-safe cleanup job. No need to repeat the product matrix for docs-only changes.
 
