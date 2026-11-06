@@ -102,12 +102,14 @@ async function waitForAuthenticatedRuntime(page: Page, timeoutMs = 30_000) {
             });
             return res.status;
           } catch {
-            return 0;
+            // A fetch that rejects (mid-navigation, network) proves nothing about
+            // the session. Report it as unauthenticated so the poll keeps waiting.
+            return 401;
           }
         }),
-      { timeout: timeoutMs, message: "the runtime accepted this session (not 401)", intervals: [100, 250, 500, 1000] },
+      { timeout: timeoutMs, message: "the runtime accepted this session (HTTP 200)", intervals: [100, 250, 500, 1000] },
     )
-    .not.toBe(401);
+    .toBe(200);
 }
 
 async function sendAndWait(page: Page, text: string) {
@@ -120,18 +122,30 @@ async function sendAndWait(page: Page, text: string) {
   expect(answer.trim(), "the new AI turn rendered a nonempty answer").not.toBe("");
 }
 
-/** A4: identities created before this suite started are orphans from a killed run. */
-const SUITE_STARTED_AT = new Date();
+/**
+ * A4: identities this suite created. Per-test cleanup normally removes them; a killed
+ * process skips that, so the suite-level sweep is handed their ids explicitly.
+ */
+const OWNED_IDENTITIES: string[] = [];
+/**
+ * Only identities older than this can belong to no live run. The margin must exceed
+ * the longest possible journey (420 s + setup), so an overlapping run's in-use
+ * identity is never treated as abandoned.
+ */
+const ABANDONED_AFTER_MS = 60 * 60_000;
 
 test.describe("SAN-1298 cross-screen conversation (/chat → /rentals → /events → /chat)", () => {
   // A killed run skips per-test `finally`; sweep what earlier runs left behind.
   test.afterAll(async () => {
     if (!enabled) return;
-    const removed = await sweepThrowawayIdentities({
+    const { orphans, problems } = await sweepThrowawayIdentities({
       prefix: "qa-san1298-",
-      createdBefore: SUITE_STARTED_AT,
+      olderThan: new Date(Date.now() - ABANDONED_AFTER_MS),
+      ownedIds: OWNED_IDENTITIES,
     });
-    expect(removed.orphans, "no orphaned QA identities remain after the suite").toBe(0);
+    // An error while listing, deleting or verifying is a failure, never a zero count.
+    expect(problems, "cleanup reported no errors").toEqual([]);
+    expect(orphans, "no orphaned QA identities remain after the suite").toBe(0);
   });
 
   test.skip(
@@ -157,6 +171,7 @@ test.describe("SAN-1298 cross-screen conversation (/chat → /rentals → /event
     let identity: ThrowawayIdentity | undefined;
     try {
     identity = await createThrowawayIdentity("qa-san1298");
+    OWNED_IDENTITIES.push(identity.userId);
     if (isVercelPreview) await establishVercelAutomationBypass(page, baseUrl, bypassSecret);
     await signInAsOnOrigin(page, baseUrl, identity.email);
     if (isVercelPreview) await establishVercelAutomationBypass(page, baseUrl, bypassSecret);
