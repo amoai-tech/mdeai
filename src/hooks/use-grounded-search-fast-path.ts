@@ -35,7 +35,7 @@ async function fetchGroundedSearch(
 
 // All card actions and the composer share the same provider setter identity.
 // One concurrent search per visible conversation; no process-global user state.
-const groundedSearchesInFlight = new WeakSet<Function>();
+const groundedSearchesInFlight = new WeakSet<(result: unknown | null) => void>();
 
 export function useGroundedSearchFastPath() {
   const { setState } = useConciergeCoAgent();
@@ -124,7 +124,6 @@ export function useGroundedSearchFastPath() {
       applySearchResults,
       setToolResult,
       showExchange,
-      setToolResult,
     ],
   );
 
