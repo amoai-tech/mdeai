@@ -169,8 +169,13 @@ describe("event cards on the map", () => {
     const modal = document.body.querySelector('[data-testid="event-card-modal"]');
     expect(modal).not.toBeNull();
     expect(modal?.querySelector('[data-pin-id="event-mapped"]')).not.toBeNull();
+    const details = modal?.querySelector('[data-testid="event-details-cta"]');
+    expect(details).toBeInstanceOf(HTMLElement);
+    act(() => (details as HTMLElement).click());
+    expect(ui.openVenueDetail).toHaveBeenCalledTimes(1);
+    expect(ui.panToPin).toHaveBeenCalledWith("event-mapped");
+    expect(document.body.querySelector('[data-testid="event-card-modal"]')).toBeNull();
     expect(ui.searchEvents).not.toHaveBeenCalled();
-    expect(ui.openVenueDetail).not.toHaveBeenCalled();
   });
 });
 

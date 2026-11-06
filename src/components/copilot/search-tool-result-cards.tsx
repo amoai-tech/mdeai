@@ -507,6 +507,29 @@ export function EventResults({ result }: { result: unknown }) {
     [result],
   );
   const [selectedEvent, setSelectedEvent] = useState<EventResultRow | null>(null);
+  const openSelectedEventDetail = () => {
+    if (!selectedEvent) return;
+    const pinId = `event-${selectedEvent.id}`;
+    const hasPin = pinnedIds.has(pinId);
+    const ticketUrl = selectedEvent.ticketUrl ?? `/events/${encodeURIComponent(selectedEvent.id)}`;
+    setSelectedEvent(null);
+    if (hasPin) panToPin(pinId);
+    openVenueDetail({
+      kind: "event",
+      eventId: selectedEvent.id,
+      pinId,
+      title: selectedEvent.title,
+      neighborhood: selectedEvent.neighborhood,
+      venue: selectedEvent.venue,
+      startsAt: selectedEvent.startsAt,
+      pricePerTicket: selectedEvent.pricePerTicket,
+      currency: selectedEvent.currency,
+      canBuyTickets: selectedEvent.canBuyTickets === true,
+      imageUrl: selectedEvent.imageUrl,
+      ticketUrl,
+      sourceUrl: selectedEvent.sourceUrl,
+    });
+  };
 
   const rows = (envelope.results ?? []) as Array<{
     id: string;
@@ -649,7 +672,7 @@ export function EventResults({ result }: { result: unknown }) {
                 className="min-h-11 self-start rounded-md border border-border px-3 text-xs"
                 onClick={() => setSelectedEvent(e as EventResultRow)}
               >
-                Show as card
+                Quick view
               </button>
             </div>
           );
@@ -693,7 +716,7 @@ export function EventResults({ result }: { result: unknown }) {
               imageUrl={selectedEvent.imageUrl}
               ticketUrl={selectedEvent.ticketUrl ?? `/events/${encodeURIComponent(selectedEvent.id)}`}
               sourceUrl={selectedEvent.sourceUrl}
-              detailsHref={`/events/${encodeURIComponent(selectedEvent.id)}`}
+              onOpenDetails={openSelectedEventDetail}
             />
           ) : null}
         </DialogContent>
