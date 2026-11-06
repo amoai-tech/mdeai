@@ -6,6 +6,8 @@ export type CafeSearchApiParams = {
   neighborhood?: string;
   limit?: number;
   intent?: "cafe" | "nightlife";
+  nearbyRentalId?: string;
+  nearbyRadiusMeters?: number;
 };
 
 const FAST_PATH_LIMIT = 5;
@@ -56,6 +58,13 @@ export function buildCafeSearchParams(text: string): CafeSearchApiParams | null 
     };
   }
   return null;
+}
+
+/** A café search near the SELECTED apartment is not a new rental search. */
+export function isSelectedRentalCafeNearbyRequest(text: string): boolean {
+  return /\b(?:caf[eé]s?|coffee(?:\s+shops?)?)(?=\W|$)/i.test(text) &&
+    /\b(?:near|around|within)\b/i.test(text) &&
+    /\b(?:this|that|selected|the)\s+(?:apartment|rental|listing)\b/i.test(text);
 }
 
 export function canFastPathCafeSearch(text: string): boolean {

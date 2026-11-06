@@ -12,6 +12,8 @@ const bodySchema = z.object({
   neighborhood: z.string().optional(),
   limit: z.number().int().min(1).max(10).optional().default(5),
   intent: z.enum(["cafe", "nightlife", "general"]).optional(),
+  nearbyRentalId: z.string().uuid().optional(),
+  nearbyRadiusMeters: z.number().int().min(100).max(5000).optional(),
 });
 
 /** Fast path — grounded café search without relying on conciergeAgent tool calls. */
@@ -35,7 +37,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const { query, neighborhood, limit, intent } = parsed.data;
+  const { query, neighborhood, limit, intent, nearbyRentalId, nearbyRadiusMeters } = parsed.data;
   const searchQuery = neighborhood
     ? `${query.trim()} near ${neighborhood}`
     : query.trim();
@@ -53,6 +55,7 @@ export async function POST(req: Request) {
         query: searchQuery,
         pageSize: limit,
         ...(intent ? { intent } : {}),
+        ...(nearbyRentalId ? { nearbyRentalId, nearbyRadiusMeters: nearbyRadiusMeters ?? 800 } : {}),
       },
       {} as never,
     );

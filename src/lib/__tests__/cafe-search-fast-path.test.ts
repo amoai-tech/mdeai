@@ -1,3 +1,4 @@
+import { isSelectedRentalCafeNearbyRequest } from "@/lib/cafe-search-fast-path";
 import { describe, expect, it } from "vitest";
 import {
   buildCafeSearchParams,
@@ -50,5 +51,16 @@ describe("cafe-search-fast-path", () => {
   it("summarizes card count for Camila", () => {
     expect(fastPathCafeSummary(5, 5, "Laureles")).toMatch(/Found 5 specialty coffee shops/);
     expect(fastPathCafeSummary(0, 0)).toMatch(/No cafés matched/);
+  });
+});
+
+describe("SAN-106 selected rental Nearby classification", () => {
+  it("recognizes selected apartment café intent before rental routing", () => {
+    expect(isSelectedRentalCafeNearbyRequest("Show cafés within 800 meters of this apartment")).toBe(true);
+    expect(isSelectedRentalCafeNearbyRequest("Find coffee shops near this rental")).toBe(true);
+  });
+  it("leaves unrelated rentals and cafés alone", () => {
+    expect(isSelectedRentalCafeNearbyRequest("Find 2BR apartments in Laureles")).toBe(false);
+    expect(isSelectedRentalCafeNearbyRequest("Find cafés in Laureles")).toBe(false);
   });
 });

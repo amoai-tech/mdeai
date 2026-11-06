@@ -71,4 +71,32 @@ describe("POST /api/grounded/search", () => {
       expect.anything(),
     );
   });
+  it("forwards selected rental identity to the canonical grounded tool", async () => {
+    const nearbyRentalId = "550e8400-e29b-41d4-a716-446655440000";
+    vi.mocked(searchGroundedPlacesTool.execute!).mockResolvedValue({
+      results: [], attribution: [], source: "grounding",
+      metadata: { searchMode: "nearby", anchorPinId: "rental-" + nearbyRentalId },
+    });
+    const res = await POST(new Request("http://localhost/api/grounded/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: "cafés within 800 m of this apartment", intent: "cafe", nearbyRentalId, nearbyRadiusMeters: 800 }),
+    }));
+    expect(res.status).toBe(200);
+    expect(searchGroundedPlacesTool.execute).toHaveBeenCalledWith(
+      expect.objectContaining({ nearbyRentalId, nearbyRadiusMeters: 800, intent: "cafe" }),
+      expect.anything(),
+    );
+  });
+
+  it("rejects fake listing IDs and oversized radii before invoking the provider", async () => {
+    const res = await POST(new Request("http://localhost/api/grounded/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: "cafés", nearbyRentalId: "fake", nearbyRadiusMeters: 90000 }),
+    }));
+    expect(res.status).toBe(400);
+    expect(searchGroundedPlacesTool.execute).not.toHaveBeenCalled();
+  });
+
 });
