@@ -8,9 +8,10 @@ import {
   type ThrowawayIdentity,
 } from "./helpers/auth";
 import {
+  countConciergeReplies,
   gotoConcierge,
   sendConciergeMessage,
-  waitForCopilotIdle,
+  waitForConciergeReply,
 } from "./helpers/maps-layout";
 import { establishVercelAutomationBypass } from "./fixtures/vercel-bypass";
 
@@ -82,8 +83,12 @@ async function persistedCount(threadId: string): Promise<number> {
 }
 
 async function sendAndWait(page: Page, text: string) {
+  // A clean HTTP 200 without an assistant answer is not a successful journey.
+  // Capture the baseline before submitting so the previous answer never counts.
+  const repliesBefore = await countConciergeReplies(page);
   await sendConciergeMessage(page, text);
-  await waitForCopilotIdle(page, 120_000);
+  const answer = await waitForConciergeReply(page, repliesBefore, 120_000);
+  expect(answer.trim(), "the new AI turn rendered a nonempty answer").not.toBe("");
 }
 
 test.describe("SAN-1298 cross-screen conversation (/chat → /rentals → /events → /chat)", () => {

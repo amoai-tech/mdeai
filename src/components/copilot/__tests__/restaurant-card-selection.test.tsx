@@ -132,7 +132,7 @@ describe("RestaurantCard browse actions live inside the card", () => {
     return { ...view, card, onSelect, onAskSelect };
   };
 
-  it("renders Ask and View details as descendants of the card", () => {
+  it("renders Ask and Details as descendants of the card", () => {
     const { card } = renderBrowseCard();
     expect(card).not.toBeNull();
     const asks = card.querySelectorAll('[data-testid="restaurant-ask-select"]');
@@ -161,13 +161,13 @@ describe("RestaurantCard browse actions live inside the card", () => {
     ).toBe(true);
   });
 
-  it("links View details to the real restaurant route", () => {
+  it("links Details to the real restaurant route", () => {
     const { card } = renderBrowseCard();
     const details = card.querySelector(
       '[data-testid="restaurant-detail-link-abc"]',
     ) as HTMLAnchorElement;
     expect(details.getAttribute("href")).toBe("/restaurants/abc");
-    expect(details.textContent).toContain("View details");
+    expect(details.textContent).toContain("Details");
   });
 
   it("exposes Ask as a real toggle button with a pressed state", () => {

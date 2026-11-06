@@ -43,6 +43,12 @@ function attachEventQueryText(
   return params;
 }
 
+/** A request to render an already-visible result must reach the model, not start a new search. */
+export function isEventCardRenderRequest(text: string): boolean {
+  const normalized = text.trim();
+  return /\brender_ui\b/i.test(normalized) || /\bas\s+an?\s+card\b/i.test(normalized);
+}
+
 /** Only a bare "events?" needs clarification; a citywide event request can search all categories. */
 export function shouldInstantEventClarify(
   text: string,

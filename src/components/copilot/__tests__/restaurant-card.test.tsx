@@ -131,7 +131,7 @@ describe("RestaurantCard", () => {
     expect(html).toContain("Hosts Events");
   });
 
-  it("renders the browse footer contract: Directions, Ask, View details", () => {
+  it("renders the browse footer contract: Directions, View on map, Ask, Details", () => {
     const html = renderToStaticMarkup(
       <RestaurantCard
         title="Moshi"
@@ -154,7 +154,7 @@ describe("RestaurantCard", () => {
     expect(html).toContain("Ask about this");
     expect(html).toContain('data-testid="restaurant-detail-link-moshi"');
     expect(html).toContain('href="/restaurants/moshi"');
-    expect(html).toContain("View details");
+    expect(html).toContain("Details");
     expect(html).toMatch(
       /restaurant-card-directions-link|restaurant-card-maps-link/,
     );
