@@ -1,5 +1,10 @@
 import { test, expect } from "@playwright/test";
-import { createThrowawayIdentity, getSupabaseAdmin, sweepThrowawayIdentities } from "./helpers/auth";
+import {
+  createThrowawayIdentity,
+  deleteThrowawayIdentity,
+  getSupabaseAdmin,
+  sweepThrowawayIdentities,
+} from "./helpers/auth";
 
 /**
  * A4 · the interrupted-run sweep must DELETE, not merely count.
@@ -19,6 +24,10 @@ test.use({ screenshot: "off", trace: "off", video: "off" });
 
 test("an owned identity is deleted with its thread, messages and profile", async () => {
   const identity = await createThrowawayIdentity("qa-san1298-proof");
+  // This test is ABOUT cleanup, so it must not leak when its own assertions fail:
+  // a broken seed aborts before the sweep runs, and without this the identity and
+  // its rows would survive the run (which is exactly how one was left behind).
+  try {
   const admin = await getSupabaseAdmin();
   const threadId = `proof-${Date.now()}`;
   const messageId = `${threadId}-m`;
@@ -78,4 +87,7 @@ test("an owned identity is deleted with its thread, messages and profile", async
   const profile = await admin.from("profiles").select("id").eq("id", identity.userId);
   expect(profile.error, "profile readable after the sweep").toBeNull();
   expect((profile.data ?? []).length, "the profile row is gone").toBe(0);
+  } finally {
+    await deleteThrowawayIdentity(identity).catch(() => undefined);
+  }
 });
