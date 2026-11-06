@@ -10,6 +10,7 @@ import { useMapContext, useMapPinSelect } from "@/platform/maps/map-context";
 import { useBrowseMapSync } from "@/hooks/use-browse-map-sync";
 import { useBrowseCardScroll } from "@/hooks/use-browse-card-scroll";
 import { useIsLgUp } from "@/hooks/use-is-lg-up";
+import { countWithNoun } from "@/lib/format/count-with-noun";
 import { useEscapeToClose } from "@/hooks/use-escape-to-close";
 import { venueToMapPin } from "@/lib/browse/browse-pin-converters";
 import { DiscoveryGroundedResults, hasVenueBrowseMapPins } from "@/components/chat/discovery-grounded-results";
@@ -153,7 +154,9 @@ function NightlifeBrowseViewInner({
       testId="nightlife-page"
       title="Nightlife"
       subtitle={
-        error ? "Clubs & bars in Medellín" : `${results.length} nightlife venues in Medellín`
+        error
+          ? "Clubs & bars in Medellín"
+          : `${countWithNoun((activeRows === null ? results : activeRows).length, "nightlife venue", "nightlife venues")} in Medellín`
       }
       mobileMapTrigger={hasMap ? <BrowseMapSheet inline /> : null}
       filterBar={<NightlifeBrowseFilters neighborhood={neighborhood} vibe={vibe} />}

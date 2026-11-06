@@ -22,6 +22,7 @@ import { useBrowseMapSync } from "@/hooks/use-browse-map-sync";
 import { useBrowseCardScroll } from "@/hooks/use-browse-card-scroll";
 import { restaurantToMapPin } from "@/lib/browse/browse-pin-converters";
 import type { Restaurant } from "@/mastra/tools/search-restaurants";
+import { countWithNoun } from "@/lib/format/count-with-noun";
 
 /** Current filter URL for this page, or the bare path when no filter is set. */
 function buildFilterUrl(filters: {
@@ -147,7 +148,9 @@ function RestaurantBrowseViewInner({
               ? searched.source === "catalog"
                 ? `Search results — ${shownResults.length} restaurants`
                 : `Ask MDE — ${shownResults.length} restaurants`
-              : `${shownResults.length} restaurants in Medellín`
+              : error
+                ? "Food & dining in Medellín"
+                : `${countWithNoun(shownResults.length, "restaurant", "restaurants")} in Medellín`
         }
         mobileMapTrigger={<BrowseMapSheet inline />}
         filterBar={<RestaurantBrowseFilters neighborhood={neighborhood} cuisine={cuisine} />}
