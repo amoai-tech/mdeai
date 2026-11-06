@@ -210,7 +210,8 @@ function NearbyRentalAction({
   onSelect?: (pinId: string) => void;
 }) {
   const { searchNearbyRental } = useGroundedSearchFastPath();
-  const agentRunning = Boolean(useOptionalConciergeCoAgent()?.agent?.isRunning);
+  const { agent } = useAgent({ agentId: "conciergeAgent", updates: [UseAgentUpdate.OnRunStatusChanged] });
+  const agentRunning = Boolean(agent?.isRunning);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState(false);
 
