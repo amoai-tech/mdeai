@@ -102,7 +102,7 @@ describe("VenueBrowseCard", () => {
     expect(placeholder).not.toContain("bg-muted");
   });
 
-  it("uses the shared 44px action height for map and Ask, matching restaurants", () => {
+  it("gives every card action the shared 44px height, including Directions", () => {
     const html = renderToStaticMarkup(
       <VenueBrowseCard
         kind="cafe"
@@ -113,8 +113,9 @@ describe("VenueBrowseCard", () => {
         onAskSelect={() => {}}
       />,
     );
-    // Two primary controls at the shared action height (SAN-1122), Directions stays compact.
-    expect(html.match(/h-card-action/g) ?? []).toHaveLength(2);
+    // Directions, View on map and Ask all read the shared height now; Directions used to be
+    // the compact exception, which made it the smallest target on a phone.
+    expect(html.match(/h-card-action/g) ?? []).toHaveLength(3);
     expect(html.match(/min-w-card-action/g) ?? []).toHaveLength(2);
     expect(html).toContain('data-testid="venue-ask-select"');
     expect(html).toContain('data-testid="venue-map-select"');
@@ -127,7 +128,8 @@ describe("VenueBrowseCard", () => {
     const html = renderToStaticMarkup(
       <VenueBrowseCard kind={kind} listing={listing} onAskSelect={() => {}} />,
     );
-    expect(html.match(/h-card-action/g) ?? []).toHaveLength(1);
+    // Ask plus the Directions link — both at the shared height.
+    expect(html.match(/h-card-action/g) ?? []).toHaveLength(2);
     expect(html).not.toContain("venue-map-select");
   });
 
