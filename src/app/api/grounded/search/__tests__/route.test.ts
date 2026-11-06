@@ -18,7 +18,7 @@ vi.mock("@/mastra/tools/search-grounded-places", () => ({
 
 import { POST } from "../route";
 import { searchGroundedPlacesTool } from "@/mastra/tools/search-grounded-places";
-import { MDEAI_USER_ID_KEY } from "@/mastra/lib/tool-audit-context";
+import { MDEAI_TOOL_SPANS_KEY, MDEAI_USER_ID_KEY, recordToolSpan } from "@/mastra/lib/tool-audit-context";
 import { RENTAL_SUPABASE_KEY } from "@/mastra/tools/search-rentals";
 
 describe("POST /api/grounded/search", () => {
@@ -109,6 +109,29 @@ describe("POST /api/grounded/search", () => {
     };
     expect(callContext.requestContext.get(MDEAI_USER_ID_KEY)).toBe("signed-in-renter");
     expect(callContext.requestContext.get(RENTAL_SUPABASE_KEY)).toHaveProperty("auth");
+  });
+
+  it("gives the tool a writable RequestContext so the span audit cannot 500 Nearby", async () => {
+    const nearbyRentalId = "550e8400-e29b-41d4-a716-446655440000";
+    vi.mocked(searchGroundedPlacesTool.execute!).mockResolvedValue({
+      results: [], attribution: [], source: "grounding",
+      metadata: { searchMode: "nearby", anchorPinId: `rental-${nearbyRentalId}`, reason: "nearby_provider_unavailable" },
+    });
+    const res = await POST(new Request("http://localhost/api/grounded/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: "cafés", intent: "cafe", nearbyRentalId, nearbyRadiusMeters: 800 }),
+    }));
+    expect(res.status).toBe(200);
+    const callContext = vi.mocked(searchGroundedPlacesTool.execute!).mock.calls[0]?.[1] as unknown as {
+      requestContext: { get(key: string): unknown; set(key: string, value: unknown): void };
+    };
+    expect(typeof callContext.requestContext.set).toBe("function");
+    // The exact production failure: recordToolSpan calls set() after the tool returns.
+    expect(() => recordToolSpan(callContext, {
+      tool: "search-grounded-places", ms: 1, status: "ok", ts: 1,
+    })).not.toThrow();
+    expect(callContext.requestContext.get(MDEAI_TOOL_SPANS_KEY)).toHaveLength(1);
   });
 
   it.each([
