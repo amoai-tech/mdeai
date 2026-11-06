@@ -404,7 +404,11 @@ export async function waitForCafeGroundedCards(page: Page) {
 }
 
 /** Wait for the accepted concierge request to finish before asserting its UI result. */
-export async function waitForCopilotIdle(page: Page, timeout = 120_000) {
+export async function waitForCopilotIdle(
+  page: Page,
+  timeout = 120_000,
+  options: { requireNewReply?: boolean } = {},
+) {
   const completion = pendingTurnCompletion.get(page);
   if (!completion) {
     await ensureChatInputVisible(page);
@@ -426,6 +430,8 @@ export async function waitForCopilotIdle(page: Page, timeout = 120_000) {
     stopVisible: await stop.isVisible().catch(() => false),
     repliesBefore,
     repliesNow: await countConciergeReplies(page).catch(() => repliesBefore),
+    // A caller that needs an answer must not accept a completed request alone.
+    requireNewReply: options.requireNewReply === true,
   });
 
   // The run must show evidence of starting. A timeout here is a real failure to
