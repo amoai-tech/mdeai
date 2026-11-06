@@ -208,7 +208,7 @@ export function NearbyRentalAction({
 }: {
   listingId: string;
   pinId: string;
-  onSelect?: (pinId: string) => void;
+  onSelect?: (_pinId: string) => void;
 }) {
   const { searchNearbyRental } = useGroundedSearchFastPath();
   const { user, loading } = useSession();

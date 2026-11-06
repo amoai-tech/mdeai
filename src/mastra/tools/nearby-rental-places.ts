@@ -104,7 +104,7 @@ export function mapNearbyProviderPlaces(response: unknown): NearbyRentalResult["
 }
 
 /** Read the request-scoped RLS client without privileged or anonymous fallbacks. */
-function readRlsRentalClient(context?: unknown): SupabaseClient<Database> | null {
+function readRlsRentalClient(context?: unknown) {
   const outer = context as { requestContext?: unknown } | undefined;
   const requestContext = outer?.requestContext ?? context;
   const get = (requestContext as Partial<Pick<Map<string, unknown>, "get">> | undefined)?.get;

@@ -1,5 +1,6 @@
-import { describe, expect, it, vi } from "vitest";
-import { renderToStaticMarkup } from "react-dom/server";
+// @vitest-environment jsdom
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import React from "react";
 
 const mocks = vi.hoisted(() => ({
@@ -27,25 +28,42 @@ const rental = {
 };
 
 describe("SAN-106 nearby rental CTA session guard", () => {
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
   it("does not offer billable Nearby to guests", () => {
     mocks.useSession.mockReturnValue({ user: null, loading: false });
-    const html = renderToStaticMarkup(<NearbyRentalAction {...rental} />);
-    expect(html).not.toContain("rental-nearby-cta");
+    render(<NearbyRentalAction {...rental} />);
+    expect(screen.queryByTestId("rental-nearby-cta")).toBeNull();
     expect(mocks.searchNearbyRental).not.toHaveBeenCalled();
   });
 
   it("hides the action while the session is unresolved", () => {
     mocks.useSession.mockReturnValue({ user: null, loading: true });
-    expect(renderToStaticMarkup(<NearbyRentalAction {...rental} />)).not.toContain("rental-nearby-cta");
+    render(<NearbyRentalAction {...rental} />);
+    expect(screen.queryByTestId("rental-nearby-cta")).toBeNull();
   });
 
   it("does not offer Nearby to a temporary anonymous Supabase identity", () => {
     mocks.useSession.mockReturnValue({ user: { id: "temporary", is_anonymous: true }, loading: false });
-    expect(renderToStaticMarkup(<NearbyRentalAction {...rental} />)).not.toContain("rental-nearby-cta");
+    render(<NearbyRentalAction {...rental} />);
+    expect(screen.queryByTestId("rental-nearby-cta")).toBeNull();
+  });
+
+  it("selects the real pin and searches the stored rental ID when clicked", async () => {
+    mocks.useSession.mockReturnValue({ user: { id: "signed-in-renter" }, loading: false });
+    mocks.searchNearbyRental.mockResolvedValue(true);
+    const onSelect = vi.fn();
+    render(<NearbyRentalAction {...rental} onSelect={onSelect} />);
+    fireEvent.click(screen.getByRole("button", { name: "Show nearby cafés" }));
+    await waitFor(() => expect(mocks.searchNearbyRental).toHaveBeenCalledWith(rental.listingId));
+    expect(onSelect).toHaveBeenCalledWith(rental.pinId);
   });
 
   it("shows the action for a signed-in user", () => {
     mocks.useSession.mockReturnValue({ user: { id: "signed-in-renter" }, loading: false });
-    expect(renderToStaticMarkup(<NearbyRentalAction {...rental} />)).toContain('data-testid="rental-nearby-cta"');
+    render(<NearbyRentalAction {...rental} />);
+    expect(screen.getByRole("button", { name: "Show nearby cafés" })).toBeTruthy();
   });
 });
