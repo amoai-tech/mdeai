@@ -3,6 +3,7 @@ import {
   buildEventSearchParams,
   eventCardsToToolEnvelope,
   canFastPathEventSearch,
+  isEventCardRenderRequest,
   visibleEventSearchReasons,
   shouldInstantEventClarify,
 } from "@/lib/event-search-fast-path";
@@ -21,6 +22,16 @@ describe("event-search customer-facing reasons", () => {
       { factor: "date_window_relaxed", note: "no tonight matches" },
       { factor: "date_window", note: "untrusted backend note" },
     ])).toEqual([]);
+  });
+});
+
+describe("event card render routing", () => {
+  it("does not treat a card-render request as a new event search", () => {
+    expect(isEventCardRenderRequest("Show the first event as a card.")).toBe(true);
+    expect(isEventCardRenderRequest("Show the first one as a card.")).toBe(true);
+    expect(isEventCardRenderRequest("Use render_ui with the first event.")).toBe(true);
+    expect(isEventCardRenderRequest("Show me cultural events in Medellín.")).toBe(false);
+    expect(isEventCardRenderRequest("Show me event cards in Medellín.")).toBe(false);
   });
 });
 

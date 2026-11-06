@@ -9,6 +9,8 @@ const GENERATIVE_UI_GUIDE_PREFIX = "Generative UI guide:";
 export const MDE_A2UI_GUIDE = [
   "Generative UI is available in this run.",
   "Use the render_ui tool only when the user asks to render a card or surface.",
+  "When the user asks to show the first result as a card immediately after a search, call render_ui with the first published result ID; do not ask which result and do not search again.",
+  "If active event result IDs are already published, do not call searchEventsTool again; render the requested card directly.",
   "The catalog components are RentalCard and EventCard.",
   "Call render_ui with target \"chat\" and exactly one createSurface operation.",
   "Each operation has version \"1.0\" and a createSurface object with a new surfaceId and a components array.",
@@ -78,7 +80,7 @@ export function readEventResultHints(agUiContext: unknown): string | null {
   });
   if (hints.length === 0) return null;
   return [
-    "Active event result ID hints, in display order (first is the top result). Use one exact UUID for render_ui; the card revalidates it against authorized thread results:",
+    "Active event result ID hints, in display order (first is the top result). If the user asks to show the first event as a card, call render_ui with the first UUID immediately. Do not call searchEventsTool again, search again, or ask which event. The card revalidates it against authorized thread results:",
     ...hints.map((id) => `- ${id}`),
   ].join("\n");
 }
