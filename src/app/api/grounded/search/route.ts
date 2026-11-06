@@ -52,9 +52,19 @@ export async function POST(req: Request) {
         { status: 500 },
       );
     }
-    // A read-only Nearby lookup inherits the caller's Supabase cookie session,
-    // so anon callers see only public RLS rows and signed-in callers see their own.
+    // A hidden button is not authorization. Verify a real signed-in user
+    // before a billable Nearby request, then preserve this client's apartment RLS.
+    // Standalone public café discovery remains available without sign-in.
     const rentalClient = nearbyRentalId ? await createSupabaseServerClient() : null;
+    if (rentalClient) {
+      const { data: { user }, error: authError } = await rentalClient.auth.getUser();
+      if (authError || !user || user.is_anonymous) {
+        return NextResponse.json(
+          { error: "authentication_required" },
+          { status: 401, headers: { "Cache-Control": "no-store" } },
+        );
+      }
+    }
     const context = rentalClient ? {
       requestContext: {
         get: (key: string) => key === RENTAL_SUPABASE_KEY ? rentalClient : undefined,

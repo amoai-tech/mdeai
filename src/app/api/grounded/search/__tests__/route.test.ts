@@ -1,8 +1,13 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
-const { mockServerClient } = vi.hoisted(() => ({
-  mockServerClient: vi.fn(async () => ({ from: vi.fn() })),
-}));
+const { mockServerClient, mockGetUser } = vi.hoisted(() => {
+  const mockGetUser = vi.fn();
+  const mockServerClient = vi.fn(async () => ({
+    from: vi.fn(),
+    auth: { getUser: mockGetUser },
+  }));
+  return { mockServerClient, mockGetUser };
+});
 vi.mock("@/lib/supabase/server", () => ({ createClient: mockServerClient }));
 
 vi.mock("@/mastra/tools/search-grounded-places", () => ({
@@ -18,6 +23,8 @@ describe("POST /api/grounded/search", () => {
   beforeEach(() => {
     vi.mocked(searchGroundedPlacesTool.execute!).mockReset();
     mockServerClient.mockClear();
+    mockGetUser.mockReset();
+    mockGetUser.mockResolvedValue({ data: { user: { id: "signed-in-renter", is_anonymous: false } }, error: null });
   });
 
   it("returns grounded tool envelope", async () => {
@@ -90,10 +97,33 @@ describe("POST /api/grounded/search", () => {
     }));
     expect(res.status).toBe(200);
     expect(mockServerClient).toHaveBeenCalledOnce();
+    expect(mockGetUser).toHaveBeenCalledOnce();
     expect(searchGroundedPlacesTool.execute).toHaveBeenCalledWith(
       expect.objectContaining({ nearbyRentalId, nearbyRadiusMeters: 800, intent: "cafe" }),
       expect.anything(),
     );
+  });
+
+  it.each([
+    ["guest with no session", { data: { user: null }, error: null }],
+    ["failed auth validation", { data: { user: null }, error: { message: "invalid session" } }],
+    ["anonymous Supabase identity", { data: { user: { id: "temporary", is_anonymous: true } }, error: null }],
+  ])("rejects Nearby for %s before the billable tool runs", async (_label, auth) => {
+    mockGetUser.mockResolvedValue(auth);
+    const res = await POST(new Request("http://localhost/api/grounded/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        query: "cafés near this apartment",
+        intent: "cafe",
+        nearbyRentalId: "550e8400-e29b-41d4-a716-446655440000",
+      }),
+    }));
+    expect(res.status).toBe(401);
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
+    expect(await res.json()).toEqual({ error: "authentication_required" });
+    expect(mockGetUser).toHaveBeenCalledOnce();
+    expect(searchGroundedPlacesTool.execute).not.toHaveBeenCalled();
   });
 
   it("rejects fake listing IDs and oversized radii before invoking the provider", async () => {

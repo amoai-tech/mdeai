@@ -39,6 +39,11 @@ describe("SAN-106 nearby rental CTA session guard", () => {
     expect(renderToStaticMarkup(<NearbyRentalAction {...rental} />)).not.toContain("rental-nearby-cta");
   });
 
+  it("does not offer Nearby to a temporary anonymous Supabase identity", () => {
+    mocks.useSession.mockReturnValue({ user: { id: "temporary", is_anonymous: true }, loading: false });
+    expect(renderToStaticMarkup(<NearbyRentalAction {...rental} />)).not.toContain("rental-nearby-cta");
+  });
+
   it("shows the action for a signed-in user", () => {
     mocks.useSession.mockReturnValue({ user: { id: "signed-in-renter" }, loading: false });
     expect(renderToStaticMarkup(<NearbyRentalAction {...rental} />)).toContain('data-testid="rental-nearby-cta"');

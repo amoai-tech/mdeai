@@ -217,7 +217,7 @@ export function NearbyRentalAction({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState(false);
 
-  if (loading || !user) return null;
+  if (loading || !user || user.is_anonymous) return null;
 
   return (
     <>
