@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { toggleVariants } from "@/components/ui/toggle";
 import { cn } from "@/lib/utils";
+import { ClearFiltersLink } from "@/components/browse/clear-filters-link";
 
 const NEIGHBORHOODS = ["Laureles", "El Poblado", "Envigado", "Sabaneta"] as const;
 
@@ -113,6 +114,9 @@ export function RestaurantBrowseFilters({
           })}
         </div>
       </div>
+      {neighborhood || cuisine ? (
+        <ClearFiltersLink href={buildFilterUrl({})} testId="restaurants-filter-clear" />
+      ) : null}
     </>
   );
 }

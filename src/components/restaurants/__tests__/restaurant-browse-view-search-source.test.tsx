@@ -74,9 +74,27 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("guest catalog search stays honest", () => {
+  it("never claims zero restaurants when the catalogue failed to load", () => {
+    // An error is not a fact about the world; "0 restaurants in Medellín" would be.
+    render(
+      <RestaurantBrowseView results={[]} error="Restaurant catalog temporarily unavailable" neighborhood={null} cuisine={null} />,
+    );
+    expect(subtitle()).toContain("Food & dining in Medellín");
+    expect(subtitle()).not.toContain("0 restaurants");
+  });
+
+  it("pluralises a one-result catalogue", () => {
+    render(<RestaurantBrowseView results={[A]} error={null} neighborhood={null} cuisine={null} />);
+    expect(subtitle()).toContain("1 restaurant in Medellín");
+    expect(subtitle()).not.toContain("1 restaurants");
+  });
+
   it("does not credit the concierge for catalog results", () => {
     renderView();
-    expect(subtitle()).toContain("Food & dining in Medellín");
+    // The default subtitle is the catalogue count, never a concierge claim.
+    // The fixture has one restaurant, so the copy is singular and must agree with the grid.
+    expect(subtitle()).toMatch(/1 restaurant in Medellín/);
+    expect(subtitle()).not.toContain("Ask MDE");
 
     act(() => emit?.([A]));
     expect(subtitle()).toContain("Search results — 1 restaurants");
@@ -90,7 +108,8 @@ describe("guest catalog search stays honest", () => {
 
     // A filter change replaces the rows, so the concierge-credit label must not linger.
     rerender(<RestaurantBrowseView results={[A]} error={null} neighborhood={null} cuisine="seafood" />);
-    expect(subtitle()).toContain("Food & dining in Medellín");
+    // The fixture has one restaurant, so the copy is singular and must agree with the grid.
+    expect(subtitle()).toMatch(/1 restaurant in Medellín/);
     expect(subtitle()).not.toContain("Search results");
   });
 });
