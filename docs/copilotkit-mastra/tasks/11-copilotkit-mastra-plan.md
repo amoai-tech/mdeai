@@ -309,11 +309,11 @@ Step-by-step status lives in [`12-steps.md`](./12-steps.md) and is the file to u
 | Step | Status | PR / evidence |
 |---|---|---|
 | 0 · Prep + SHA pinning | ✅ | worktree `/home/sk/.worktrees/mde-ai-rel`; prod pinned per batch |
-| A1 · Restore gated on `isReady` | ✅ **merged & deployed** | [#777](https://github.com/amoai-tech/mdeai/pull/777) → `9b8b25c9`; production serves `30d12a05a1b5`; hydration suite **30 passed** |
+| A1 · Restore gated on `isReady` | ✅ **certified 20/20** | [#777](https://github.com/amoai-tech/mdeai/pull/777) merged; **20 journeys** on pinned `8114a5a96382` (10 desktop + 10 mobile, 0 retries/skips/flaky) |
 | A1 duplicate | ✅ closed | [#779](https://github.com/amoai-tech/mdeai/pull/779) — one defect, one PR |
 | A2 · No answer ≠ success | ✅ already in main | `sendAndWait` asserts a NEW nonempty reply; [#780](https://github.com/amoai-tech/mdeai/pull/780) **closed** as superseded |
-| A3 · Desktop 401 + 10×10 | ⬜ | last matrix 18/20 (mobile 10/10, desktop 8/10) |
-| A4 · Killed-run cleanup | ⬜ | 22 leaked accounts found and removed across two audits; 0 remain |
+| A3 · First-send 401 | ✅ | readiness requires HTTP 200 from the runtime info probe; shipped in #787 |
+| A4 · Killed-run cleanup | 🟡 | ownership-aware sweep + row-level verification merged (#787); a failing cleanup test could still leak (fixed in #792) |
 | B1 · 60 s readiness | 🟡 measured | 5 loads: **0.46–1.73 s** to an enabled composer; the 60 s stall did not reproduce |
 | B2 · `network error` | ⬜ | unowned; **not** proven to be Gemini |
 | C1 · Tracing | ⬜ | — |

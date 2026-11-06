@@ -5,8 +5,8 @@
 | Field | Value |
 |---|---|
 | Last updated | 2026-11-05 (evening, America/Bogotá) |
-| `origin/main` | **`30d12a05a1b5`** |
-| Production `/api/version` | **`30d12a05a1b5`** — matches main; PR #777 is deployed (`dpl_DZy9MCtksu` built `9b8b25c9`, latest main deployed after) |
+| `origin/main` | **`7c753cd6b1`** |
+| Production `/api/version` | **`7c753cd6b1`** — matches main; #777 and #787 are both in it |
 | Working worktree | `/home/sk/.worktrees/mde-ai-rel` (detached at `origin/main`, clean) |
 | Installed stack | CopilotKit **1.84.1** · AG-UI **1.0.2** · `@ag-ui/mastra` **2.0.2** · Mastra core **1.81.0** · memory 1.40.0 · pg 1.34.0 |
 
@@ -19,11 +19,11 @@
 | Step | Status | Evidence | PR / SHA | Next action |
 |---|---|---|---|---|
 | **0** Prep worktree + pin SHA | ✅ | `npm ci` exit 0; prod pinned before/after each batch | — | — |
-| **A1** Restore gated on `isReady` | ✅ | merged `9b8b25c9`; deployed; hydration suite **30 passed** on main | [#777](https://github.com/amoai-tech/mdeai/pull/777) **MERGED** | live matrix proof (running) |
+| **A1** Restore gated on `isReady` | ✅ **certified** | **20/20 journeys** on pinned `8114a5a96382` (10 desktop + 10 mobile, 0 retries, 0 skips, 0 flaky); hydration suite 30 passed | [#777](https://github.com/amoai-tech/mdeai/pull/777) merged | — |
 | A1 duplicate attempt | ✅ closed | same defect implemented twice | [#779](https://github.com/amoai-tech/mdeai/pull/779) **CLOSED** | — |
 | **A2** No answer ≠ success | ✅ | already in main: `sendAndWait` captures `repliesBefore` before submit, waits for a NEW reply and asserts it is nonempty; `waitForConciergeReply` polls for that reply | [#780](https://github.com/amoai-tech/mdeai/pull/780) **CLOSED** as superseded | — |
-| **A3** Desktop 401 + 10×10 matrix | 🟡 | serial batches today failed on **`net::ERR_NETWORK_CHANGED`** (this machine's link flapping) and one 420 s whole-test timeout — not assertion failures. A healthy batch completes both tests in **1.1 min** | — | re-run as one invocation (`--repeat-each=10 --workers=2`); separate `net::` infrastructure errors from product failures |
-| **A4** Cleanup that survives a killed run | ⬜ | 21 leaked accounts found → deleted; 1 more found later (from a killed run) → deleted; **0 remain** | — | add suite-level sweep |
+| **A3** First-send 401 | ✅ | readiness now requires **HTTP 200** from `POST /api/copilotkit {"method":"info"}` (anonymous returns 401); a rejected fetch no longer counts as ready | [#787](https://github.com/amoai-tech/mdeai/pull/787) merged | — |
+| **A4** Cleanup that survives a killed run | 🟡 | ownership-aware sweep merged (`ownedIds` + 60-min margin, full pagination that throws, row-level verification); new proof test seeds a real thread+message and asserts deletion | [#787](https://github.com/amoai-tech/mdeai/pull/787) merged · [#792](https://github.com/amoai-tech/mdeai/pull/792) open | one orphan was produced by a **failing** cleanup test (fixed in #792); a kill **during teardown** still needs an external job |
 | **B1** 60 s page readiness | 🟡 **measured** | 5 direct loads: canvas `1690 / 497 / 502 / 443 / 541 ms`, composer +~20 ms, history region ready `1733 / 542 / 544 / 464 / 563 ms` → **0.46–1.73 s**, not 60 s | — | the 60 s event is an **outlier** (edge/network), not a product readiness defect; capture the failing run's network trace if it recurs |
 | **B2** `TypeError: network error` | ⬜ | observed once; **not** proven to be Gemini | — | trace one failure end to end |
 | **C1** End-to-end tracing | ⬜ | turn log + `ai_runs` exist; no correlation ids | — | correlate with existing ids |
@@ -92,7 +92,7 @@
 | earlier today | `36020745cfe8` | PR #769 merge; 18/20 matrix run here |
 | later | `9b8b25c96d3` | PR #777 merge — deployed (`dpl_DZy9MCtksu`) |
 | later | `f0bf7c32c1` | intermediate |
-| now | **`30d12a05a1b5`** | current main, deployed, matrix running |
-| now | **`f0bf7c32c1`** | baseline for the next matrix |
+| later | `8114a5a96382` | **certification run: 20/20** |
+| now | **`7c753cd6b1`** | current main = production; post-merge smoke re-run here |
 
 > A result is only valid for the SHA it ran on. Re-run, do not re-label.
