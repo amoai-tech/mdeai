@@ -17,6 +17,7 @@ import {
   eventSearchParamsFromChip,
   fastPathAssistantSummary,
   fastPathEventFallbackSummary,
+  isEventCardRenderRequest,
   shouldInstantEventClarify,
   type EventSearchApiParams,
 } from "@/lib/event-search-fast-path";
@@ -157,6 +158,7 @@ export function useEventSearchFastPath() {
     async (text: string, submissionId?: string): Promise<boolean> => {
       const trimmed = text.trim();
       if (!trimmed) return false;
+      if (isEventCardRenderRequest(trimmed)) return false;
       if (clarifyPending && clarifyKind === "restaurant") return false;
       if (clarifyPending && clarifyKind === "rental") return false;
 
