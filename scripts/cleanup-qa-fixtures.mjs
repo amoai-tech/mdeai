@@ -14,6 +14,18 @@ import { Client } from "pg";
  */
 const APPLY = process.argv.includes("--apply");
 const PREFIXES = ["[QA]%", "QA HITL%", "QA SAN-896%", "[QA DELETE]%", "[QA DEMO]%"];
+/**
+ * Disposable identities created by the Playwright isolation suite.
+ *
+ * They live on their own domain and can be left behind when a test process is
+ * KILLED: no `finally`, no `afterAll`, nothing in that process runs again. This
+ * scheduled job is the independent recovery path.
+ *
+ * Only identities older than the margin are eligible, so a run that is still
+ * alive can never lose its account (the longest journey is well under an hour).
+ */
+const ISOLATION_EMAIL_PATTERN = "qa-%@qa-isolation.mdeai.co";
+const ISOLATION_MIN_AGE = "2 hours";
 const CHILD_TABLES = [
   "event_check_ins",
   "event_attendees",
@@ -58,6 +70,21 @@ try {
     for (const row of rows.rows) {
       console.log(`- ${row.name} (${row.status}, ${row.orders} order(s))`);
     }
+    const orphanIdentities = await client.query(
+      `select u.id, u.email, u.created_at
+         from auth.users u
+        where u.email like $1
+          and u.created_at < now() - $2::interval
+        order by u.created_at`,
+      [ISOLATION_EMAIL_PATTERN, ISOLATION_MIN_AGE],
+    );
+    console.log(
+      `QA cleanup dry-run: ${orphanIdentities.rows.length} orphaned isolation identity(ies)`,
+    );
+    for (const row of orphanIdentities.rows) {
+      console.log(`- ${row.email} (created ${row.created_at.toISOString()})`);
+    }
+
     console.log("No rows changed. Re-run with --apply to delete.");
     process.exit(0);
   }
@@ -78,9 +105,20 @@ try {
     [PREFIXES],
   );
   const ids = selected.rows.map((row) => row.id);
-  if (ids.length === 0) {
+  // Orphaned isolation identities are selected up front: an event-less run must still
+  // be able to recover an identity left behind by a killed test process.
+  const orphanIdentities = await client.query(
+    `select u.id, u.email
+       from auth.users u
+      where u.email like $1
+        and u.created_at < now() - $2::interval
+      order by u.created_at
+      for update`,
+    [ISOLATION_EMAIL_PATTERN, ISOLATION_MIN_AGE],
+  );
+  if (ids.length === 0 && orphanIdentities.rows.length === 0) {
     await client.query("commit");
-    console.log("QA cleanup: 0 events; nothing to do.");
+    console.log("QA cleanup: 0 events and 0 orphaned identities; nothing to do.");
     process.exit(0);
   }
 
@@ -119,6 +157,17 @@ try {
   );
   deleted.events = events.rowCount;
 
+  // Orphaned isolation identities (their account and every row that points at it).
+  const orphanIds = orphanIdentities.rows.map((row) => row.id);
+  if (orphanIds.length > 0) {
+    await client.query(`delete from public.mastra_messages where thread_id in (
+      select id from public.mastra_threads where "resourceId" = any($1::text[]))`, [orphanIds]);
+    await client.query(`delete from public.mastra_threads where "resourceId" = any($1::text[])`, [orphanIds]);
+    await client.query(`delete from public.profiles where id = any($1::uuid[])`, [orphanIds]);
+    await client.query(`delete from auth.users where id = any($1::uuid[])`, [orphanIds]);
+  }
+  deleted.isolationIdentities = orphanIds.length;
+
   const left = await client.query(
     `select count(*)::int n
        from public.events e
@@ -131,6 +180,29 @@ try {
     [PREFIXES],
   );
   if (left.rows[0].n !== 0) throw new Error("QA cleanup verification failed");
+
+  // An unreadable or non-empty state must fail the job; it is never "zero".
+  const leftIdentities = await client.query(
+    `select count(*)::int n from auth.users u
+      where u.email like $1 and u.created_at < now() - $2::interval`,
+    [ISOLATION_EMAIL_PATTERN, ISOLATION_MIN_AGE],
+  );
+  if (leftIdentities.rows[0].n !== 0) {
+    throw new Error(`QA identity cleanup verified ${leftIdentities.rows[0].n} leftover identity(ies)`);
+  }
+  const leftRows = await client.query(
+    `select
+       (select count(*)::int from public.mastra_threads t
+         join auth.users u on u.id::text = t."resourceId"
+        where u.email like $1) +
+       (select count(*)::int from public.profiles p
+         join auth.users u on u.id = p.id
+        where u.email like $1) as n`,
+    [ISOLATION_EMAIL_PATTERN],
+  );
+  if (leftRows.rows[0].n !== 0) {
+    throw new Error(`QA identity cleanup verified ${leftRows.rows[0].n} leftover row(s)`);
+  }
   await client.query("commit");
   console.log(JSON.stringify({ backup, deleted }, null, 2));
 } catch (error) {
