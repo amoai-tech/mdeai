@@ -263,15 +263,23 @@ export function SavedThreadHistory({
   } | null>(null);
 
   // Refs are written only inside effects (never during render).
+  //
+  // Retain ONLY after this thread's restore completed on this agent. CopilotKit can
+  // set the new threadId before it clears the previous transcript, so a thread A→B
+  // switch would otherwise capture A's messages as B's and recovery would replay
+  // them into the wrong conversation (and into B's next run).
+  const restoredForThisThread = Boolean(
+    restoredThisAttempt && outcome?.agent === agent,
+  );
   useEffect(() => {
-    if (!agent || agent.threadId !== threadId) {
+    if (!agent || agent.threadId !== threadId || !restoredForThisThread) {
       retained.current = null;
       return;
     }
     if (agent.messages.length > 0) {
       retained.current = { threadId, agent, messages: [...agent.messages] };
     }
-  }, [agent, threadId, agent?.messages]);
+  }, [agent, threadId, agent?.messages, restoredForThisThread]);
 
   // Additive recovery: independent of the restore snapshot above, repair a cleared
   // transcript from the newest turns this session observed. Runs after the

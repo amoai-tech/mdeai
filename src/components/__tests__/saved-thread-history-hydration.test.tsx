@@ -428,6 +428,36 @@ describe("saved chat history", () => {
     expect(agent.messages.map((m) => m.id)).toEqual(["first-u", "first-a"]);
   });
 
+  it("never replays the previous thread's messages into the new one", async () => {
+    // CopilotKit can set the new threadId BEFORE it clears the old transcript. In that
+    // window the agent still holds thread A's messages while `threadId` is already B;
+    // retaining them as B's would replay them into the wrong conversation.
+    await select(A);
+    await act(async () => requests[A].resolve(msgs("A")));
+    await act(async () => agent.finishRun());
+    await tick();
+    expect(agent.messages.map((m) => m.id)).toEqual(["A-u", "A-a"]);
+
+    agent.threadId = B;
+    await act(async () => seen.nav.setActiveThreadId(B));
+    await act(async () => {
+      root.render(<ThreadNavProvider><ChatProvider><Probe /></ChatProvider></ThreadNavProvider>);
+    });
+    // Still showing A's transcript while B's restore has not run.
+    expect(agent.messages.map((m) => m.id)).toEqual(["A-u", "A-a"]);
+
+    // B's transcript clears before its history arrives.
+    agent.messages = [];
+    await act(async () => {
+      root.render(<ThreadNavProvider><ChatProvider><Probe /></ChatProvider></ThreadNavProvider>);
+    });
+    await tick();
+
+    // A's conversation must not appear in B, and B must not claim to be ready.
+    expect(agent.messages).toEqual([]);
+    expect(seen.history.status).toBe("loading");
+  });
+
   it("shows a retryable error if the runtime never becomes ready", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     try {
