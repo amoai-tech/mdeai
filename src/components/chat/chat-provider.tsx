@@ -248,10 +248,10 @@ export function SavedThreadHistory({
   // already owner-checked snapshot rather than leaving the chat inert forever.
   useEffect(() => {
     const saved = restoredAgent.current;
-    if (!missingRestoredHistory || !agent || !saved?.savedMessages.length) return;
+    if (!missingRestoredHistory || !agent || !saved) return;
     let active = true;
     const repair = () => {
-      if (!active || agent.threadId !== threadId || agent.isRunning) return;
+      if (!active || agent.threadId !== threadId || agent.isRunning || !saved.savedMessages.length) return;
       const merged = reconcileSavedHistory(saved.savedMessages, agent.messages);
       if (merged.length !== agent.messages.length ||
           merged.some((message, index) => message.id !== agent.messages[index]?.id)) {
