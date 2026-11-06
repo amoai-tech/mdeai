@@ -321,5 +321,5 @@ Step-by-step status lives in [`12-steps.md`](./12-steps.md) and is the file to u
 | C3 · Runtime init | ⬜ | unmeasured |
 | Support · CopilotKit skill fallback | 🟡 | [#778](https://github.com/amoai-tech/mdeai/pull/778) |
 
-**Definition of done for this plan is unchanged** (see §6). The next milestone is a **20/20 desktop+mobile matrix on the SHA that contains #777**, not another green unit run.
+**Definition of done for this plan is unchanged** (see §6). The **20/20 desktop+mobile matrix was achieved** on the pinned `8114a5a96382`; the next milestone is therefore **B2 instrumentation** (why one run hung, and the `network error` boundary) plus an **external cleanup job** for a kill during teardown — not another product matrix.
 

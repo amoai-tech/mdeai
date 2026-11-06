@@ -30,7 +30,7 @@
 | **C2** Working-memory atomic merge | ⬜ | root cause **identified**: `@mastra/pg` supports row-locked merge; MDE does a local read-modify-write | — | two-writer test, then swap |
 | **C3** Runtime init cost | ⬜ | unmeasured | — | measure before touching |
 | **Support** CopilotKit skill fallback | 🟡 | docs search fails in the MCP; skill now documents the explorer fallback | [#778](https://github.com/amoai-tech/mdeai/pull/778) | approve or fold into C1 work |
-| Plan document | 🟡 | **301 lines**, §8 source receipts (28 verified URLs) | uncommitted on `docs/san-1638-merge-history` | commit as docs PR |
+| Plan document | ✅ | **325 lines**, §8 source receipts (28 verified URLs) | shipped in [#793](https://github.com/amoai-tech/mdeai/pull/793) | — |
 
 ---
 
@@ -38,8 +38,8 @@
 
 | Question | Answer |
 |---|---|
-| Does Camila still lose her conversation? | **Not reproduced** in 18 journeys; re-click erasure is fixed and live |
-| Is the cause proven? | **Mechanism proven in SDK source** (`isReady === false` ⇒ provisional agent ⇒ messages lost on swap). **Live proof needs #777 deployed** |
+| Does Camila still lose her conversation? | **No — certified**: 20/20 journeys (10 desktop + 10 mobile) on pinned `8114a5a96382`, 0 retries/skips/flaky; re-click erasure fixed and live |
+| Is the cause proven? | **Yes.** Mechanism proven in SDK source (`isReady === false` ⇒ provisional agent ⇒ messages lost on swap) and fixed by #777, which is in production |
 | Are the tests honest? | **Yes** — five separate false-green classes closed; 29 turn-completion cases incl. HTTP failure and empty answers |
 | Is the timer logic removed? | **No, deliberately.** `isReady` proves connection, not replay completion |
 | QA data clean? | **Yes, 0 leftover `qa-san1298` accounts** (verified twice, incl. threads) |
@@ -48,14 +48,17 @@
 
 ## Ordered next steps
 
-### Now (needs a human)
-1. **Approve [#777](https://github.com/amoai-tech/mdeai/pull/777)** — `floor` green, 0 unresolved threads.
-2. **Approve [#780](https://github.com/amoai-tech/mdeai/pull/780)** once its `floor` is green.
-3. Merge in that order, then verify `/api/version` flips and record the new SHA.
+### Done (was "needs a human")
+- ~~Approve #777~~ — **merged** `9b8b25c9`, in production.
+- ~~Approve #780~~ — **closed as superseded**: `main` already requires a NEW nonempty reply in `sendAndWait`.
+- ~~Run the 20/20 matrix~~ — **done**: 20/20 on pinned `8114a5a96382`.
+- ~~A3 authenticated readiness~~ — **shipped** in #787 (HTTP 200 required).
 
-### Immediately after the deploy (agent, ~40 min)
-4. Pin the new `/api/version`; run the cross-screen journey **4×** (desktop + mobile) as a smoke of the fix.
-5. **A3**: add the authenticated-readiness wait before the first send; re-run the 10 desktop + 10 mobile matrix on the pinned SHA. Target **20/20**.
+### Now (the real remaining work)
+1. **Merge [#792](https://github.com/amoai-tech/mdeai/pull/792)** — a failed cleanup now fails the run instead of being swallowed; 3 unit tests prove it.
+2. **Merge [#793](https://github.com/amoai-tech/mdeai/pull/793)** — these trackers.
+3. **B2 tracing** (~1 h): browser → `/api/copilotkit` → `@ag-ui/mastra` → model → stream.
+4. **External cleanup job** (~30 min): the only real answer to a kill *during* teardown.
 
 ### Then (agent, ~2 h)
 6. **A4**: suite-level cleanup sweep; prove it with a deliberately killed run.
@@ -74,12 +77,11 @@
 
 | # | Blocker | Impact | Mitigation |
 |---|---|---|---|
-| 1 | **No approval yet** on #777 / #780 | the root-cause fix is not live | approve, merge, redeploy, verify SHA |
-| 2 | `floor` was still **pending** on #780 at last check | cannot merge | wait, do not bypass |
-| 3 | Production SHA drifts (moved **twice** today) | evidence expires | pin before/after; split by SHA |
-| 4 | Desktop 401 on first send | matrix stuck at 8/10 | auth readiness before send |
-| 5 | Maps `503` / `mapId` config | console assertion fails | real config finding — fix config, do not filter |
-| 6 | Original race **unproven live** | cannot call SAN-1639 Done | deploy #777, then 20/20 matrix |
+| 1 | ~~No approval on #777 / #780~~ | **resolved** — #777 merged & deployed; #780 closed as superseded | — |
+| 2 | ~~`floor` pending on #780~~ | **resolved** — PR closed | — |
+| 3 | Production SHA drifts (moved 7+ times in a day) | evidence expires | pin before/after; split by SHA |
+| 4 | ~~Desktop 401 on first send~~ | **resolved** — #787 requires HTTP 200 from the runtime probe | — |
+| 5 | Maps `503` / `mapId` config | console assertion fails | **owned by another agent**; do not filter the error |
 | 7 | `mastra_docs` local-package tools broken | misleading `@mastra/mcp` listing | read `node_modules` types directly |
 | 8 | CopilotKit MCP semantic search down | falls back to `explore-code` | use explorer; #778 documents it |
 
