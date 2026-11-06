@@ -13,7 +13,7 @@ const coagent = vi.hoisted(() => ({ state: {} as Record<string, unknown> }));
 vi.mock("@/lib/chat/thread-nav-context", () => ({
   useOptionalThreadNav: () => ({ activeThreadId: "thread-b", sessionThreadId: "thread-b" }),
 }));
-const session = vi.hoisted(() => ({ user: { id: "u1" } as { id: string } | null, loading: false }));
+const session = vi.hoisted(() => ({ user: { id: "u1" } as { id: string; is_anonymous?: boolean } | null, loading: false }));
 vi.mock("@/hooks/use-session", () => ({ useSession: () => session }));
 const supa = vi.hoisted(() => ({ getUser: vi.fn() }));
 vi.mock("@/lib/supabase/client", () => ({ createClient: () => ({ auth: { getUser: supa.getUser } }) }));
@@ -28,15 +28,16 @@ vi.mock("@/components/chat/concierge-coagent-context", () => ({
 const noMatch = vi.hoisted(() => ({ handleUserMessage: async () => false }));
 vi.mock("@/hooks/use-event-search-fast-path", () => ({ useEventSearchFastPath: () => noMatch }));
 vi.mock("@/hooks/use-event-venue-booking-fast-path", () => ({ useEventVenueBookingFastPath: () => noMatch }));
-vi.mock("@/hooks/use-grounded-search-fast-path", () => ({ useGroundedSearchFastPath: () => noMatch }));
+const groundedNearby = vi.hoisted(() => ({ handleUserMessage: vi.fn(async () => true) }));
+vi.mock("@/hooks/use-grounded-search-fast-path", () => ({ useGroundedSearchFastPath: () => groundedNearby }));
 vi.mock("@/hooks/use-rental-search-fast-path", () => ({ useRentalSearchFastPath: () => noMatch }));
 vi.mock("@/hooks/use-restaurant-search-fast-path", () => ({ useRestaurantSearchFastPath: () => noMatch }));
 
 import { EventLocalChatProvider, useEventLocalChat } from "@/components/chat/event-local-chat-context";
 import { SIGN_IN_REQUIRED_MESSAGE } from "@/lib/concierge-sign-in-message";
-import { clearConciergeError, reportConciergeError } from "@/lib/concierge-error-store";
+import { clearConciergeError, getConciergeErrorForThread, reportConciergeError } from "@/lib/concierge-error-store";
 import { AGENT_UNAVAILABLE_MESSAGE, useConciergeSendHandlers } from "@/lib/hooks/use-concierge-send-handlers";
-import type { ConciergeSendHandlers } from "@/lib/concierge-send-user-message";
+import { sendConciergeUserMessage, type ConciergeSendHandlers } from "@/lib/concierge-send-user-message";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -65,6 +66,7 @@ beforeEach(() => {
   session.user = { id: "u1" };
   session.loading = false;
   supa.getUser.mockReset();
+  groundedNearby.handleUserMessage.mockResolvedValue(true);
   window.sessionStorage.clear();
   clearConciergeError();
   vi.spyOn(console, "error").mockImplementation(() => {});
@@ -255,6 +257,60 @@ describe("SAN-407 · INT-004 — is the conversation in a rental search?", () =>
 
 // SAN-1507 — a signed-out visitor's AI question got "The assistant can't answer right now. Please try
 // again", although the runtime refuses guests on purpose and a retry can never work.
+describe("SAN-106 guest Nearby chat routing", () => {
+  const text = "Show cafés within 800 meters of this apartment";
+  const rerender = () => act(() => root.render(<EventLocalChatProvider><Harness /></EventLocalChatProvider>));
+
+  it("offers sign-in rather than sending a selected-rental Nearby request or retrying 401", async () => {
+    session.user = null;
+    rerender();
+    let handled: boolean | undefined;
+    await act(async () => { handled = await sendConciergeUserMessage(text, handlers); });
+    expect(handled).toBe(true);
+    expect(groundedNearby.handleUserMessage).not.toHaveBeenCalled();
+    expect(chat.appendMessage).not.toHaveBeenCalled();
+    expect(promptShown).toBe(true);
+    expect(getConciergeErrorForThread("thread-b").version).toBe(0);
+    expect(shown.map((m) => ({ role: m.role, content: m.content }))).toEqual([{ role: "user", content: text }]);
+  });
+
+  it("shows sign-in during an unresolved session without a billable Nearby request", async () => {
+    session.user = null;
+    session.loading = true;
+    supa.getUser.mockResolvedValue({ data: { user: null } });
+    rerender();
+    await act(async () => { expect(await sendConciergeUserMessage(text, handlers)).toBe(true); });
+    expect(groundedNearby.handleUserMessage).not.toHaveBeenCalled();
+    expect(supa.getUser).toHaveBeenCalledOnce();
+    expect(promptShown).toBe(true);
+  });
+
+  it("rejects anonymous Supabase identities while keeping a visible sign-in prompt", async () => {
+    session.user = { id: "temporary-user", is_anonymous: true };
+    rerender();
+    await act(async () => { expect(await sendConciergeUserMessage(text, handlers)).toBe(true); });
+    expect(groundedNearby.handleUserMessage).not.toHaveBeenCalled();
+    expect(chat.appendMessage).not.toHaveBeenCalled();
+    expect(promptShown).toBe(true);
+  });
+
+  it("keeps contextual Nearby on the grounded fast path for signed-in users", async () => {
+    await act(async () => { expect(await sendConciergeUserMessage(text, handlers)).toBe(true); });
+    expect(groundedNearby.handleUserMessage).toHaveBeenCalledWith(text, expect.any(String));
+    expect(chat.appendMessage).not.toHaveBeenCalled();
+    expect(promptShown).toBe(false);
+  });
+
+  it("keeps general café search public for signed-out users", async () => {
+    session.user = null;
+    rerender();
+    const general = "best cafes in Laureles";
+    await act(async () => { expect(await handlers.handleGroundedMessage(general)).toBe(true); });
+    expect(groundedNearby.handleUserMessage).toHaveBeenCalledWith(general, undefined);
+    expect(promptShown).toBe(false);
+  });
+});
+
 describe("onAgentSend for a signed-out visitor", () => {
   const rerender = () =>
     act(() =>
