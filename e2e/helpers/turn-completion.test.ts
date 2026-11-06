@@ -135,3 +135,30 @@ describe("awaitRunResponse — failure must not hide behind an open stream", () 
     await expect(awaitRunResponse(response)).rejects.toThrow(/aborted/);
   });
 });
+
+describe("assessTurn — a completed request is not a rendered answer", () => {
+  it("does not certify a 200 that rendered no answer when an answer is required", () => {
+    // The request finished cleanly but nothing appeared: the user got nothing.
+    const state = assessTurn(observation({ settled: true, requireNewReply: true }));
+    expect(state).toBe("pending");
+    expect(isTerminal(state)).toBe(false);
+  });
+
+  it("certifies the same turn once the answer actually renders", () => {
+    const state = assessTurn(
+      observation({ settled: true, requireNewReply: true, repliesNow: 2 }),
+    );
+    expect(state).toBe("done");
+  });
+
+  it("keeps the previous behaviour when no answer is required", () => {
+    // Fast-path answers and fire-and-forget turns legitimately produce no reply.
+    expect(assessTurn(observation({ settled: true }))).toBe("done");
+  });
+
+  it("still reports failure ahead of the missing answer", () => {
+    expect(
+      assessTurn(observation({ failure: new Error("HTTP 500"), settled: true, requireNewReply: true })),
+    ).toBe("failed");
+  });
+});

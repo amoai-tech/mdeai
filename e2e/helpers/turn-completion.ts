@@ -21,16 +21,28 @@ export type TurnObservation = {
   repliesBefore: number;
   /** Assistant replies counted now. */
   repliesNow: number;
+  /**
+   * When true, a finished response with no new assistant reply is NOT success.
+   * A 200 whose stream closed without rendering an answer is a failed turn from the
+   * user's point of view, even though the HTTP request completed.
+   */
+  requireNewReply?: boolean;
 };
 
 export type TurnState = "pending" | "running" | "done" | "failed";
 
 export function assessTurn(observation: TurnObservation): TurnState {
   if (observation.failure) return "failed";
-  if (observation.settled) return "done";
 
   // A previous answer must never satisfy this: only growth counts.
   const producedNewReply = observation.repliesNow > observation.repliesBefore;
+
+  if (observation.settled) {
+    // The request completed, but a turn the caller expects an answer from is not
+    // "done" until that answer is actually rendered.
+    if (observation.requireNewReply && !producedNewReply) return "pending";
+    return "done";
+  }
 
   if (observation.stopVisible) return "running";
   // The AG-UI stream can stay open after the run ends; a NEW reply with no Stop

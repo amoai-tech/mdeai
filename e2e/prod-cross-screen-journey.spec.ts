@@ -8,6 +8,7 @@ import {
   type ThrowawayIdentity,
 } from "./helpers/auth";
 import {
+  countConciergeReplies,
   gotoConcierge,
   sendConciergeMessage,
   waitForCopilotIdle,
@@ -82,8 +83,18 @@ async function persistedCount(threadId: string): Promise<number> {
 }
 
 async function sendAndWait(page: Page, text: string) {
+  const repliesBefore = await countConciergeReplies(page);
   await sendConciergeMessage(page, text);
   await waitForCopilotIdle(page, 120_000);
+  // A completed request is not an answer. `waitForCopilotIdle` accepts a finished
+  // HTTP response, which a 200 carrying no rendered reply would satisfy; this
+  // journey needs the reply on screen before it can call the turn successful.
+  await expect
+    .poll(() => countConciergeReplies(page), {
+      timeout: 30_000,
+      message: "a new assistant reply rendered for this turn",
+    })
+    .toBeGreaterThan(repliesBefore);
 }
 
 test.describe("SAN-1298 cross-screen conversation (/chat → /rentals → /events → /chat)", () => {
