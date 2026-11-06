@@ -18,6 +18,12 @@ const input = {
   intent: "cafe" as const,
 };
 
+async function executeNearby() {
+  const execute = searchGroundedPlacesTool.execute;
+  if (!execute) throw new Error("grounded Places tool has no execute handler");
+  return execute(input, {} as never);
+}
+
 describe("SAN-106 Nearby respects the canonical Places budget/kill switch", () => {
   beforeEach(() => {
     vi.mocked(incrementAndCheckGroundingQuota).mockReset();
@@ -28,7 +34,7 @@ describe("SAN-106 Nearby respects the canonical Places budget/kill switch", () =
     vi.mocked(incrementAndCheckGroundingQuota).mockResolvedValue({
       allowed: false, reason: "daily_quota_exceeded",
     } as never);
-    const out = await searchGroundedPlacesTool.execute!(input, {} as never);
+    const out = await executeNearby();
     expect(incrementAndCheckGroundingQuota).toHaveBeenCalledOnce();
     expect(searchNearbyRentalPlaces).not.toHaveBeenCalled();
     expect(out).toMatchObject({
@@ -49,7 +55,7 @@ describe("SAN-106 Nearby respects the canonical Places budget/kill switch", () =
       results: [], attribution: [], source: "grounding",
       metadata: { searchMode: "nearby", anchorPinId: `rental-${rentalId}`, venueKind: "cafe", radiusMeters: 800, provider: "google_places_nearby" },
     });
-    await searchGroundedPlacesTool.execute!(input, {} as never);
+    await executeNearby();
     expect(incrementAndCheckGroundingQuota).toHaveBeenCalledOnce();
     expect(searchNearbyRentalPlaces).toHaveBeenCalledOnce();
     expect(searchNearbyRentalPlaces).toHaveBeenCalledWith(

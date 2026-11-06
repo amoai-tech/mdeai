@@ -108,6 +108,7 @@ describe("SAN-106 RLS-backed rental Nearby → existing grounded pins", () => {
     const { context, from } = contextWithRlsRental({ id: RENTAL_ID, latitude: 6.25, longitude: -75.59 });
     for (const query of [
       { ...input, rentalId: "not-a-real-rental" },
+      { ...input, rentalId: "a".repeat(100_000) },
       { ...input, radiusMeters: 90000 },
       { ...input, limit: 100 },
     ]) {

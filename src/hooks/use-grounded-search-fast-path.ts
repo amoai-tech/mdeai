@@ -156,7 +156,7 @@ export function useGroundedSearchFastPath() {
       const params = buildCafeSearchParams(trimmed);
       if (!params) return false;
 
-      if (busyRef.current) return false;
+      if (groundedSearchesInFlight.has(setToolResult)) return false;
       clearLocalMessages();
       return runSearch(trimmed, params, submissionId);
     },

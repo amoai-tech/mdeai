@@ -1,5 +1,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseServerAnonEnv } from "@/lib/supabase/server-env";
+import type { Database } from "@/lib/supabase/database.types";
+import { isStoredRentalUuid } from "@/lib/cafe-search-fast-path";
 import { DEFAULT_NEARBY_SEARCH_MASK, searchNearby } from "../lib/google-places-client";
 import { RENTAL_SUPABASE_KEY } from "./search-rentals";
 
@@ -83,21 +85,21 @@ export function mapNearbyProviderPlaces(response: unknown): NearbyRentalResult["
   return results;
 }
 
-function readRlsRentalClient(context?: unknown): SupabaseClient | null {
+function readRlsRentalClient(context?: unknown): SupabaseClient<Database> | null {
   const outer = context as { requestContext?: unknown } | undefined;
   const requestContext = outer?.requestContext ?? context;
-  const get = (requestContext as { get?: (key: string) => unknown } | undefined)?.get;
+  const get = (requestContext as Partial<Pick<Map<string, unknown>, "get">> | undefined)?.get;
   const value = typeof get === "function"
     ? get.call(requestContext, RENTAL_SUPABASE_KEY)
     : undefined;
-  return value && typeof (value as SupabaseClient).from === "function"
-    ? value as SupabaseClient : null;
+  return value && typeof (value as SupabaseClient<Database>).from === "function"
+    ? value as SupabaseClient<Database> : null;
 }
 
-function getAnonymousRentalClient(): SupabaseClient | null {
+function getAnonymousRentalClient(): SupabaseClient<Database> | null {
   const env = getSupabaseServerAnonEnv();
   if (!env) return null;
-  return createClient(env.url, env.anonKey, {
+  return createClient<Database>(env.url, env.anonKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 }
@@ -119,7 +121,8 @@ export async function searchNearbyRentalPlaces(
   });
 
   // Tool schema guards this too; a direct invocation must not bypass validation.
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(input.rentalId) ||
+  if (typeof input.rentalId !== "string" || input.rentalId.length !== 36 ||
+      !isStoredRentalUuid(input.rentalId) ||
       !Number.isInteger(input.radiusMeters) || input.radiusMeters < 100 ||
       input.radiusMeters > 5000 || !Number.isInteger(input.limit) ||
       input.limit < 1 || input.limit > 10) {
@@ -136,7 +139,7 @@ export async function searchNearbyRentalPlaces(
     .eq("id", input.rentalId)
     .maybeSingle();
   if (error) return empty("rental_lookup_unavailable");
-  if (!data || data.latitude == null || data.longitude == null) {
+  if (data?.latitude == null || data?.longitude == null) {
     return empty("rental_has_no_accessible_coordinates");
   }
 

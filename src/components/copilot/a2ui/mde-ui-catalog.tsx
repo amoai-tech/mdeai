@@ -4,6 +4,7 @@ import { useState } from "react";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { useGroundedSearchFastPath } from "@/hooks/use-grounded-search-fast-path";
+import { useSession } from "@/hooks/use-session";
 import { isStoredRentalUuid } from "@/lib/cafe-search-fast-path";
 import { useAgent, UseAgentUpdate } from "@copilotkit/react-core/v2";
 import { createGenerativeUI } from "@copilotkit/react-core/v2/generative-ui";
@@ -202,7 +203,7 @@ function useRentalRow(listingId: string): RentalToolRow | null {
  * client. This child is mounted only under a ConciergeCoAgentProvider;
  * broker chat deliberately has no such provider.
  */
-function NearbyRentalAction({
+export function NearbyRentalAction({
   listingId, pinId, onSelect,
 }: {
   listingId: string;
@@ -210,10 +211,13 @@ function NearbyRentalAction({
   onSelect?: (pinId: string) => void;
 }) {
   const { searchNearbyRental } = useGroundedSearchFastPath();
+  const { user, loading } = useSession();
   const { agent } = useAgent({ agentId: "conciergeAgent", updates: [UseAgentUpdate.OnRunStatusChanged] });
   const agentRunning = Boolean(agent?.isRunning);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState(false);
+
+  if (loading || !user) return null;
 
   return (
     <>
