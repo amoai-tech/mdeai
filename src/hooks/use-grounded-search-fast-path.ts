@@ -17,7 +17,7 @@ import {
   parseGroundedToolResult,
   resolveGroundedTitle,
 } from "@/lib/parse-grounded-tool-result";
-import { isSelectedRentalCafeNearbyRequest } from "@/lib/cafe-search-fast-path";
+import { isSelectedRentalCafeNearbyRequest, isStoredRentalUuid, nearbyCafeRadiusMeters } from "@/lib/cafe-search-fast-path";
 
 async function fetchGroundedSearch(
   params: CafeSearchApiParams,
@@ -102,8 +102,8 @@ export function useGroundedSearchFastPath() {
           ? reason
             ? "Could not verify nearby cafés for this apartment right now. Try again or choose another apartment."
             : count === 0
-              ? "No cafés found within 800 m of this apartment."
-              : `Found ${count} café${count === 1 ? "" : "s"} within 800 m of this apartment.`
+              ? `No cafés found within ${params.nearbyRadiusMeters ?? 800} m of this apartment.`
+              : `Found ${count} café${count === 1 ? "" : "s"} within ${params.nearbyRadiusMeters ?? 800} m of this apartment.`
           : fastPathCafeSummary(count, pinCount, params.neighborhood, userText);
         showExchange(userText, summary, submissionId);
         return true;
@@ -135,14 +135,17 @@ export function useGroundedSearchFastPath() {
           (pin) => pin.category === "rental" && pin.id === selectedPinId,
         );
         if (!rentalPin) return false;
+        const rentalId = rentalPin.id.slice("rental-".length);
+        const radius = nearbyCafeRadiusMeters(trimmed);
+        if (!isStoredRentalUuid(rentalId) || radius === null) return false;
         if (busyRef.current) return false;
         clearLocalMessages();
         return runSearch(trimmed, {
           query: trimmed,
           intent: "cafe",
           limit: 5,
-          nearbyRentalId: rentalPin.id.slice("rental-".length),
-          nearbyRadiusMeters: 800,
+          nearbyRentalId: rentalId,
+          nearbyRadiusMeters: radius,
         }, submissionId);
       }
       if (!canFastPathCafeSearch(trimmed)) return false;
@@ -161,11 +164,11 @@ export function useGroundedSearchFastPath() {
   // contextual query. Never send a second agent turn or guess a map origin.
   const searchNearbyRental = useCallback(async (rentalId: string): Promise<boolean> => {
     const pinId = `rental-${rentalId}`;
-    if (busyRef.current ||
+    if (busyRef.current || !isStoredRentalUuid(rentalId) ||
         !currentPins.some((pin) => pin.id === pinId && pin.category === "rental")) {
       return false;
     }
-    const text = `Show cafés within 800 meters of apartment ${rentalId}`;
+    const text = "Show nearby cafés for this apartment";
     clearLocalMessages();
     return runSearch(text, {
       query: text,
