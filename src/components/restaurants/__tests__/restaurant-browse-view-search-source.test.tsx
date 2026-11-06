@@ -76,7 +76,9 @@ afterEach(cleanup);
 describe("guest catalog search stays honest", () => {
   it("does not credit the concierge for catalog results", () => {
     renderView();
-    expect(subtitle()).toContain("Food & dining in Medellín");
+    // The default subtitle is the catalogue count, never a concierge claim.
+    expect(subtitle()).toContain("restaurants in Medellín");
+    expect(subtitle()).not.toContain("Ask MDE");
 
     act(() => emit?.([A]));
     expect(subtitle()).toContain("Search results — 1 restaurants");
@@ -90,7 +92,7 @@ describe("guest catalog search stays honest", () => {
 
     // A filter change replaces the rows, so the concierge-credit label must not linger.
     rerender(<RestaurantBrowseView results={[A]} error={null} neighborhood={null} cuisine="seafood" />);
-    expect(subtitle()).toContain("Food & dining in Medellín");
+    expect(subtitle()).toContain("restaurants in Medellín");
     expect(subtitle()).not.toContain("Search results");
   });
 });

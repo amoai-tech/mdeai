@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { toggleVariants } from "@/components/ui/toggle";
 import { cn } from "@/lib/utils";
+import { ClearFiltersLink } from "@/components/browse/clear-filters-link";
 import type { NightlifeVibe } from "@/lib/nightlife-browse";
 
 const NEIGHBORHOODS = [
@@ -79,7 +80,7 @@ export function NightlifeBrowseFilters({
                   neighborhood: toggleNeighborhood(neighborhood, n),
                   vibe,
                 })}
-                aria-pressed={active}
+                aria-current={active ? "true" : undefined}
                 data-testid={`nightlife-filter-neighborhood-${n.toLowerCase().replace(/\s+/g, "-")}`}
                 className={cn(
                   filterChipClass,
@@ -109,7 +110,7 @@ export function NightlifeBrowseFilters({
                   neighborhood,
                   vibe: toggleVibe(vibe, value),
                 })}
-                aria-pressed={active}
+                aria-current={active ? "true" : undefined}
                 data-testid={`nightlife-filter-vibe-${value}`}
                 className={cn(
                   filterChipClass,
@@ -122,6 +123,9 @@ export function NightlifeBrowseFilters({
           })}
         </div>
       </div>
+      {vibe || neighborhood ? (
+        <ClearFiltersLink href={buildFilterUrl({})} testId="nightlife-filter-clear" />
+      ) : null}
     </>
   );
 }

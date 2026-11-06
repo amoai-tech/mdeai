@@ -143,7 +143,11 @@ function CafeBrowseViewInner({
       }
       testId="cafes-browse"
       title="Cafés"
-      subtitle="Specialty coffee & workspace spots in Medellín"
+      subtitle={
+        error
+          ? "Specialty coffee & workspace spots in Medellín"
+          : `${results.length} cafés in Medellín`
+      }
       mobileMapTrigger={hasMap ? <BrowseMapSheet inline /> : null}
       filterBar={<CafeBrowseFilters neighborhood={neighborhood} feature={feature} />}
     >

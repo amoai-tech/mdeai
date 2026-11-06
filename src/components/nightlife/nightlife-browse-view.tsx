@@ -152,7 +152,9 @@ function NightlifeBrowseViewInner({
       }
       testId="nightlife-page"
       title="Nightlife"
-      subtitle="Clubs & bars in Medellín"
+      subtitle={
+        error ? "Clubs & bars in Medellín" : `${results.length} nightlife venues in Medellín`
+      }
       mobileMapTrigger={hasMap ? <BrowseMapSheet inline /> : null}
       filterBar={<NightlifeBrowseFilters neighborhood={neighborhood} vibe={vibe} />}
       notice={notice}

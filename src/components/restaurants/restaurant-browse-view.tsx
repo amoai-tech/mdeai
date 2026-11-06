@@ -147,7 +147,7 @@ function RestaurantBrowseViewInner({
               ? searched.source === "catalog"
                 ? `Search results — ${shownResults.length} restaurants`
                 : `Ask MDE — ${shownResults.length} restaurants`
-              : "Food & dining in Medellín"
+              : `${shownResults.length} restaurants in Medellín`
         }
         mobileMapTrigger={<BrowseMapSheet inline />}
         filterBar={<RestaurantBrowseFilters neighborhood={neighborhood} cuisine={cuisine} />}
