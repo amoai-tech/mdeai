@@ -31,6 +31,8 @@ const started = performance.now();
 const browser = await chromium.launch({ headless: true });
 try {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  const mobileWidth = await page.evaluate(() => window.innerWidth);
+  if (mobileWidth !== 390) throw new Error(`Expected 390px mobile viewport, got ${mobileWidth}`);
   await page.setContent(`<!doctype html>
     <html lang="en"><title>Isolated MDE browser benchmark</title>
       <button type="button" onclick="document.querySelector('output').textContent='Details opened'">View details</button>
@@ -41,6 +43,8 @@ try {
   if (output !== "Details opened") throw new Error(`Button interaction failed: ${output}`);
 
   await page.setViewportSize({ width: 1440, height: 900 });
+  const desktopWidth = await page.evaluate(() => window.innerWidth);
+  if (desktopWidth !== 1440) throw new Error(`Expected 1440px desktop viewport, got ${desktopWidth}`);
   if ((await page.title()) !== "Isolated MDE browser benchmark") {
     throw new Error("Page title changed unexpectedly");
   }
@@ -50,8 +54,8 @@ try {
     playwright: playwrightVersion,
     node: process.version,
     browser: browser.version(),
-    mobileWidth: 390,
-    desktopWidth: 1440,
+    mobileWidth,
+    desktopWidth,
     browserProbeMilliseconds: milliseconds,
     remoteRequests: 0,
   };
