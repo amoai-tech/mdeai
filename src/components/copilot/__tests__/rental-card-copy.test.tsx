@@ -295,3 +295,22 @@ describe("SAN-1226 customer match reasons on rendered cards", () => {
     expect(html).toContain("Wi-Fi listed");
   });
 });
+
+describe("SAN-106 Nearby action on the existing RentalCard", () => {
+  it("shows the action only when its existing Concierge context supplies one", () => {
+    const common = {
+      id: "rental-550e8400-e29b-41d4-a716-446655440000",
+      listingId: "550e8400-e29b-41d4-a716-446655440000",
+      title: "Real Laureles apartment",
+      neighborhood: "Laureles",
+      nightly_price: 0,
+    };
+    const without = renderToStaticMarkup(<RentalCard {...common} />);
+    expect(without).not.toContain("Show nearby cafés");
+    const withAction = renderToStaticMarkup(
+      <RentalCard {...common} nearbyAction={<button type="button">Show nearby cafés</button>} />,
+    );
+    expect(withAction).toContain("Show nearby cafés");
+    expect(withAction).toContain('data-testid="rental-card"');
+  });
+});
