@@ -4,6 +4,7 @@ import { useState } from "react";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { useGroundedSearchFastPath } from "@/hooks/use-grounded-search-fast-path";
+import { isStoredRentalUuid } from "@/lib/cafe-search-fast-path";
 import { useAgent, UseAgentUpdate } from "@copilotkit/react-core/v2";
 import { createGenerativeUI } from "@copilotkit/react-core/v2/generative-ui";
 import { RentalCard as ExistingRentalCard } from "@/components/copilot/rental-card";
@@ -317,7 +318,7 @@ function MdeRentalCard({ listingId }: { listingId: string }) {
         selected={hasPin && selectedPinId === pinId}
         onSelect={hasPin ? () => panToPin?.(pinId) : undefined}
         onOpenDetails={row.tags?.includes("external-source") && !detailRental ? undefined : openDetail}
-        nearbyAction={hasPin && concierge ? <NearbyRentalAction listingId={row.id} pinId={pinId} onSelect={panToPin} /> : undefined}
+        nearbyAction={hasPin && concierge && isStoredRentalUuid(row.id) ? <NearbyRentalAction listingId={row.id} pinId={pinId} onSelect={panToPin} /> : undefined}
         canScheduleViewing={row.can_schedule_viewing === true}
         onSchedule={openScheduleViewing ? () => openScheduleViewing({
           listingId: row.id,
