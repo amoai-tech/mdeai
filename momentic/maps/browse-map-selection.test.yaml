@@ -1,0 +1,13 @@
+fileType: momentic/test/v2
+id: mde-maps-browse-selection
+description: "Read-only Maps journey: select a real rental marker and verify its matching listing card."
+url: https://www.mdeai.co/rentals
+labels:
+  - maps
+  - rentals
+  - read-only
+retries: 0
+steps:
+  - assert: "The Rentals results are finished loading, with at least one actual apartment card and at least one corresponding marker in the visible map. Do not pass on a skeleton or placeholder pin."
+  - click: "A visible map pin for one real apartment with a corresponding result card, not a Google Maps navigation or fullscreen control"
+  - assert: "The selected map popup displays the same apartment identity as the selected result card. Do not assume all listings have geographic coordinates, and do not claim availability is confirmed."
