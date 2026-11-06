@@ -17,6 +17,7 @@ import {
   parseGroundedToolResult,
   resolveGroundedTitle,
 } from "@/lib/parse-grounded-tool-result";
+import { isSelectedRentalCafeNearbyRequest } from "@/lib/cafe-search-fast-path";
 
 async function fetchGroundedSearch(
   params: CafeSearchApiParams,
@@ -37,14 +38,22 @@ export function useGroundedSearchFastPath() {
   const { showExchange, clearLocalMessages } = useEventLocalChat();
   const clearOthers = useClearOtherFastPathResults();
   const { setToolResult } = useGroundedFastPath();
-  const { mergePinsByCategory, requestFitBounds } = useMapContext();
+  const { mergePinsByCategory, requestFitBounds, pins: currentPins, selectedPinId } = useMapContext();
   const busyRef = useRef(false);
 
   const applySearchResults = useCallback(
     (envelope: unknown) => {
       const { pins } = normalizeToolOutput("grounded", envelope);
-      // A grounded search with nothing to pin replaces the other result panels but keeps their pins.
-      clearOthers("grounded", { clearOtherPins: pins.length > 0 });
+      // Nearby results MUST keep the matching rental's card and marker.
+      // Independent grounded discovery continues replacing stale categories.
+      const metadata = envelope && typeof envelope === "object"
+        ? (envelope as { metadata?: { searchMode?: string; anchorPinId?: string } }).metadata
+        : undefined;
+      const preserveRental = metadata?.searchMode === "nearby" &&
+        currentPins.some((pin) => pin.category === "rental" && pin.id === metadata.anchorPinId);
+      if (!preserveRental) {
+        clearOthers("grounded", { clearOtherPins: pins.length > 0 });
+      }
       setToolResult(envelope);
       mergePinsByCategory("grounded", pins);
       if (pins.length >= 2) requestFitBounds();
@@ -72,7 +81,7 @@ export function useGroundedSearchFastPath() {
       }));
       return { count, pinCount: pins.length };
     },
-    [mergePinsByCategory, requestFitBounds, setState, setToolResult, clearOthers],
+    [mergePinsByCategory, requestFitBounds, setState, setToolResult, clearOthers, currentPins],
   );
 
   const runSearch = useCallback(
@@ -86,11 +95,17 @@ export function useGroundedSearchFastPath() {
       try {
         const envelope = await fetchGroundedSearch(params);
         const { count, pinCount } = applySearchResults(envelope);
-        showExchange(
-          userText,
-          fastPathCafeSummary(count, pinCount, params.neighborhood, userText),
-          submissionId,
-        );
+        const reason = envelope && typeof envelope === "object"
+          ? (envelope as { metadata?: { reason?: string } }).metadata?.reason
+          : undefined;
+        const summary = params.nearbyRentalId
+          ? reason
+            ? "Could not verify nearby cafés for this apartment right now. Try again or choose another apartment."
+            : count === 0
+              ? "No cafés found within 800 m of this apartment."
+              : `Found ${count} café${count === 1 ? "" : "s"} within 800 m of this apartment.`
+          : fastPathCafeSummary(count, pinCount, params.neighborhood, userText);
+        showExchange(userText, summary, submissionId);
         return true;
       } catch (err) {
         console.error("[grounded-fast-path]", err);
@@ -113,6 +128,23 @@ export function useGroundedSearchFastPath() {
     async (text: string, submissionId?: string): Promise<boolean> => {
       const trimmed = text.trim();
       if (!trimmed) return false;
+      // The user selected a real mapped rental. Reuse the existing grounded
+      // route with server-only RLS coordinate lookup instead of re-running rentals.
+      if (isSelectedRentalCafeNearbyRequest(trimmed)) {
+        const rentalPin = currentPins.find(
+          (pin) => pin.category === "rental" && pin.id === selectedPinId,
+        );
+        if (!rentalPin) return false;
+        if (busyRef.current) return false;
+        clearLocalMessages();
+        return runSearch(trimmed, {
+          query: trimmed,
+          intent: "cafe",
+          limit: 5,
+          nearbyRentalId: rentalPin.id.slice("rental-".length),
+          nearbyRadiusMeters: 800,
+        }, submissionId);
+      }
       if (!canFastPathCafeSearch(trimmed)) return false;
 
       const params = buildCafeSearchParams(trimmed);
@@ -122,7 +154,7 @@ export function useGroundedSearchFastPath() {
       clearLocalMessages();
       return runSearch(trimmed, params, submissionId);
     },
-    [clearLocalMessages, runSearch],
+    [clearLocalMessages, runSearch, currentPins, selectedPinId],
   );
 
   return { handleUserMessage };
