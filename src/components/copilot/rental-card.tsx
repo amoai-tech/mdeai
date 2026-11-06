@@ -10,6 +10,7 @@ import {
 import type { RentalSearchApiParams } from "@/lib/rental-query-parser";
 import { approvedExternalSourceUrl } from "@/lib/rentals/external-source";
 import { Calendar } from "lucide-react";
+import type { ReactNode } from "react";
 import type { CardInteractionProps, ResultKind } from "@/components/cards/card-interaction-props";
 
 export type RentalCardProps = RentalResultRow & {
@@ -28,6 +29,8 @@ export type RentalCardProps = RentalResultRow & {
   onSchedule?: () => void;
   onSave?: () => void;
   onOpenDetails?: () => void;
+  /** Optional contextual action from the existing authorized Concierge thread. */
+  nearbyAction?: ReactNode;
   /** Monthly price when available (authoritative for monthly display). */
   price_monthly?: number;
   /**
@@ -72,6 +75,7 @@ export function RentalCard({
   onSelect,
   onSchedule,
   onOpenDetails,
+  nearbyAction,
   canScheduleViewing,
   duplicateNote,
 }: RentalCardProps) {
@@ -260,6 +264,7 @@ export function RentalCard({
       ) : null}
 
       <div className="mde-rental-card-actions mt-3 flex flex-wrap items-center gap-2">
+        {nearbyAction}
         {showScheduleCta ? (
           <Button
             type="button"

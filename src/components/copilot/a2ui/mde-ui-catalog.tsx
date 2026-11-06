@@ -1,6 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import { z } from "zod";
+import { Button } from "@/components/ui/button";
+import { useGroundedSearchFastPath } from "@/hooks/use-grounded-search-fast-path";
+import { useSession } from "@/hooks/use-session";
+import { isStoredRentalUuid } from "@/lib/cafe-search-fast-path";
 import { useAgent, UseAgentUpdate } from "@copilotkit/react-core/v2";
 import { createGenerativeUI } from "@copilotkit/react-core/v2/generative-ui";
 import { RentalCard as ExistingRentalCard } from "@/components/copilot/rental-card";
@@ -193,11 +198,66 @@ function useRentalRow(listingId: string): RentalToolRow | null {
   return findRentalRow(mergeRentalResults(fromFastPath, fromAgent), listingId);
 }
 
+/**
+ * Nearby is a question on the current CopilotKit thread, not a second Places
+ * client. This child is mounted only under a ConciergeCoAgentProvider;
+ * broker chat deliberately has no such provider.
+ */
+export function NearbyRentalAction({
+  listingId, pinId, onSelect,
+}: {
+  listingId: string;
+  pinId: string;
+  onSelect?: (_pinId: string) => void;
+}) {
+  const { searchNearbyRental } = useGroundedSearchFastPath();
+  const { user, loading } = useSession();
+  const { agent } = useAgent({ agentId: "conciergeAgent", updates: [UseAgentUpdate.OnRunStatusChanged] });
+  const agentRunning = Boolean(agent?.isRunning);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState(false);
+
+  if (loading || !user || user.is_anonymous) return null;
+
+  return (
+    <>
+    <Button
+      type="button"
+      size="sm"
+      variant="outline"
+      data-testid="rental-nearby-cta"
+      className="min-h-card-action lg:min-h-0"
+      disabled={pending || agentRunning}
+      onClick={async (event) => {
+        event.stopPropagation();
+        if (pending || agentRunning) return;
+        setPending(true);
+        setError(false);
+        try {
+          onSelect?.(pinId);
+          // One grounded Nearby path; server resolves RLS-authorized rental coordinates.
+          const started = await searchNearbyRental(listingId);
+          if (!started) setError(true);
+        } catch {
+          setError(true);
+        } finally {
+          setPending(false);
+        }
+      }}
+    >
+      {pending ? "Finding cafés…" : "Show nearby cafés"}
+    </Button>
+    {error ? <span role="alert" className="text-xs text-destructive">Nearby search did not start. Try again.</span> : null}
+    </>
+  );
+}
+
 /** One existing rental card, hydrated only from the current authorized tool result. */
 function MdeRentalCard({ listingId }: { listingId: string }) {
   const row = useRentalRow(listingId);
   const map = useOptionalMapContext();
   const rentalUi = useOptionalRentalUi();
+  const concierge = useOptionalConciergeCoAgent();
   const selectedPinId = map?.selectedPinId;
   const panToPin = map?.panToPin;
   const openVenueDetail = rentalUi?.openVenueDetail;
@@ -264,6 +324,7 @@ function MdeRentalCard({ listingId }: { listingId: string }) {
         selected={hasPin && selectedPinId === pinId}
         onSelect={hasPin ? () => panToPin?.(pinId) : undefined}
         onOpenDetails={row.tags?.includes("external-source") && !detailRental ? undefined : openDetail}
+        nearbyAction={hasPin && concierge && isStoredRentalUuid(row.id) ? <NearbyRentalAction listingId={row.id} pinId={pinId} onSelect={panToPin} /> : undefined}
         canScheduleViewing={row.can_schedule_viewing === true}
         onSchedule={openScheduleViewing ? () => openScheduleViewing({
           listingId: row.id,

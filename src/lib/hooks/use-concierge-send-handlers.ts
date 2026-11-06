@@ -14,6 +14,7 @@ import { useGroundedSearchFastPath } from "@/hooks/use-grounded-search-fast-path
 import { useRentalSearchFastPath } from "@/hooks/use-rental-search-fast-path";
 import { useRestaurantSearchFastPath } from "@/hooks/use-restaurant-search-fast-path";
 import { useSession } from "@/hooks/use-session";
+import { isSelectedRentalCafeNearbyRequest } from "@/lib/cafe-search-fast-path";
 import { createClient } from "@/lib/supabase/client";
 import { stashConciergeDraft } from "@/lib/concierge-draft-store";
 
@@ -29,7 +30,7 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
   const { showExchange, showNotice, showSignInPrompt } = useEventLocalChat();
   const { state } = useConciergeCoAgent();
   const { user, loading: sessionLoading } = useSession();
-  const signedIn = Boolean(user);
+  const signedIn = Boolean(user && !user.is_anonymous);
   // The rental hook can need the agent for a message it queued while a search was running and then
   // could not answer; `onAgentSend` is defined below, so it is reached through a ref.
   const agentSendRef = useRef<((text: string) => Promise<boolean>) | null>(null);
@@ -42,8 +43,20 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
   const { handleUserMessage: handleEventMessage } = useEventSearchFastPath();
   const { handleUserMessage: handleRestaurantMessage } =
     useRestaurantSearchFastPath();
-  const { handleUserMessage: handleGroundedMessage } =
+  const { handleUserMessage: handleGroundedFastPathMessage } =
     useGroundedSearchFastPath();
+  // The composer already knows this session. Decline contextual Nearby for
+  // guests before the billable route, allowing the existing Concierge agent
+  // fallback to show its sign-in prompt instead of retrying a guaranteed 401.
+  const handleGroundedMessage = useCallback(
+    (text: string, submissionId?: string): Promise<boolean> => {
+      if (isSelectedRentalCafeNearbyRequest(text) && !signedIn) {
+        return Promise.resolve(false);
+      }
+      return handleGroundedFastPathMessage(text, submissionId);
+    },
+    [handleGroundedFastPathMessage, signedIn],
+  );
   const { handleUserMessage: handleEventVenueBookingMessage } =
     useEventVenueBookingFastPath();
 
@@ -64,7 +77,7 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
       if (sessionLoading) {
         try {
           const { data } = await createClient().auth.getUser();
-          hasAccount = Boolean(data.user);
+          hasAccount = Boolean(data.user && !data.user.is_anonymous);
         } catch {
           // keep `signedIn`
         }

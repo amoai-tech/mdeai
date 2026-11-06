@@ -6,6 +6,8 @@ export type CafeSearchApiParams = {
   neighborhood?: string;
   limit?: number;
   intent?: "cafe" | "nightlife";
+  nearbyRentalId?: string;
+  nearbyRadiusMeters?: number;
 };
 
 const FAST_PATH_LIMIT = 5;
@@ -56,6 +58,29 @@ export function buildCafeSearchParams(text: string): CafeSearchApiParams | null 
     };
   }
   return null;
+}
+
+/** A café search near the SELECTED apartment is not a new rental search. */
+export function isSelectedRentalCafeNearbyRequest(text: string): boolean {
+  const cafe = /\b(?:caf[eé]s?|coffee(?:\s+shops?)?)(?=\W|$)/i.exec(text);
+  const proximity = /\b(?:near|around|within)\b/i.exec(text);
+  const rental = /\b(?:this|that|selected|the)\s+(?:apartment|rental|listing)\b/i.exec(text);
+  // The café must be sought near the rental, not the rental near cafés.
+  return cafe != null && proximity != null && rental != null &&
+    cafe.index < proximity.index && proximity.index < rental.index;
+}
+
+/** Only stored UUID rentals may be resolved by the Nearby SQL lookup. */
+export function isStoredRentalUuid(id: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
+}
+
+/** Respect an explicit bounded radius; never silently replace 300 m with 800 m. */
+export function nearbyCafeRadiusMeters(text: string): number | null {
+  const match = text.match(/\b(\d+(?:\.\d+)?)\s*(km|kilometers?|kilometres?|meters?|metres?|m)\b/i);
+  if (!match) return /\bwithin\s+\d/i.test(text) ? null : 800;
+  const value = Math.round(Number(match[1]) * (/^(?:km|kilo)/i.test(match[2] ?? "") ? 1000 : 1));
+  return value >= 100 && value <= 5000 ? value : null;
 }
 
 export function canFastPathCafeSearch(text: string): boolean {

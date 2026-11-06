@@ -1,4 +1,5 @@
 import { clearConciergeError, reportConciergeError } from "@/lib/concierge-error-store";
+import { isSelectedRentalCafeNearbyRequest } from "@/lib/cafe-search-fast-path";
 import {
   routerHandlerOrderFromClassification,
   type RouterRoutingTarget,
@@ -68,6 +69,18 @@ export async function sendConciergeUserMessage(
   let agentAttempted = false;
 
   try {
+    // Contextual cafés beside the selected rental are NOT a new rental search.
+    // If no genuine selected rental exists the handler declines safely.
+    if (isSelectedRentalCafeNearbyRequest(trimmed)) {
+      if (await handlers.handleGroundedMessage(trimmed, submissionId)) return true;
+      // No selected, server-resolvable rental: do not misroute this café follow-up
+      // to apartment search. Signed-in Concierge can ask which listing; guests
+      // receive the existing sign-in prompt rather than fabricated Nearby pins.
+      setConciergePendingSend(true);
+      agentAttempted = true;
+      return await handlers.onAgentSend(trimmed, submissionId);
+    }
+
     const classification = await resolveRouterClassification(trimmed, {
       lastIntent: handlers.lastIntent,
       inRentalSearch: handlers.inRentalSearch,

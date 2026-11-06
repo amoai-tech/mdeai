@@ -9,6 +9,7 @@ import {
 import { incrementAndCheckGroundingQuota } from "../lib/grounding-quota";
 import { resolveGroundingLocationBias } from "../lib/grounding-location-bias";
 import { runAuditedTool } from "../lib/run-audited-search";
+import { hasVerifiedNearbyRentalUser, searchNearbyRentalPlaces } from "./nearby-rental-places";
 import { searchRestaurants, type Restaurant } from "./search-restaurants";
 import {
   isCoffeeVenueQuery,
@@ -304,6 +305,8 @@ export const searchGroundedPlacesInputSchema = z.object({
       "Optional venue kind: cafe, nightlife (clubs/bars), or general POI search",
     ),
   pageSize: z.number().int().min(1).max(10).default(5).optional(),
+  nearbyRentalId: z.string().uuid().optional().describe("Selected rental UUID from the current authorized search. Server resolves real coordinates; never invent an ID."),
+  nearbyRadiusMeters: z.number().int().min(100).max(5000).optional().describe("Nearby radius in metres, default 800; only with a selected rental."),
   locationBias: z
     .object({
       latitude: z.number(),
@@ -337,6 +340,8 @@ export const searchGroundedPlacesTool = createTool({
       query: string;
       intent?: VenueGroundingIntent;
       pageSize?: number;
+      nearbyRentalId?: string;
+      nearbyRadiusMeters?: number;
       locationBias?: { latitude: number; longitude: number };
     },
     context?: unknown,
@@ -346,6 +351,49 @@ export const searchGroundedPlacesTool = createTool({
       async () => {
     const { query: rawQuery, intent, pageSize, locationBias: inputBias } =
       inputData;
+    // Nearby discovery is one mode of the existing grounded tool, not a second
+    // provider or client-owned coordinates. The server checks the rental via RLS.
+    if (inputData.nearbyRentalId) {
+      if (!isCafeGroundingIntent(rawQuery, intent)) {
+        return {
+          results: [], attribution: [], source: "grounding" as const,
+          metadata: { reason: "nearby_supported_for_cafes_only", venueKind: "general" },
+        };
+      }
+      // Agent calls bypass the HTTP fast-path route: require a verified,
+      // non-anonymous Supabase user before even reserving paid Places quota.
+      // Service bearer alone and public anonymous clients never authorize Nearby.
+      if (!(await hasVerifiedNearbyRentalUser(context))) {
+        return {
+          results: [], attribution: [], source: "grounding" as const,
+          metadata: {
+            venueKind: "cafe" as const,
+            searchMode: "nearby" as const,
+            anchorPinId: `rental-${inputData.nearbyRentalId}`,
+            reason: "authentication_required",
+          },
+        };
+      }
+      // Nearby is billed too: enforce the existing daily Places/grounding
+      // budget and kill switch before a single Google request (Autosana).
+      const nearbyQuota = await incrementAndCheckGroundingQuota();
+      if (!nearbyQuota.allowed) {
+        return {
+          results: [], attribution: [], source: "grounding" as const,
+          metadata: {
+            venueKind: "cafe" as const,
+            searchMode: "nearby" as const,
+            anchorPinId: `rental-${inputData.nearbyRentalId}`,
+            reason: nearbyQuota.reason,
+          },
+        };
+      }
+      return searchNearbyRentalPlaces({
+        rentalId: inputData.nearbyRentalId,
+        radiusMeters: inputData.nearbyRadiusMeters ?? 800,
+        limit: pageSize ?? 5,
+      }, context);
+    }
     const query = normalizeVenueGroundingQuery(rawQuery);
     const quota = await incrementAndCheckGroundingQuota();
     if (!quota.allowed) {

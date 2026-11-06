@@ -1,3 +1,4 @@
+import { isSelectedRentalCafeNearbyRequest, isStoredRentalUuid, nearbyCafeRadiusMeters } from "@/lib/cafe-search-fast-path";
 import { describe, expect, it } from "vitest";
 import {
   buildCafeSearchParams,
@@ -50,5 +51,36 @@ describe("cafe-search-fast-path", () => {
   it("summarizes card count for Camila", () => {
     expect(fastPathCafeSummary(5, 5, "Laureles")).toMatch(/Found 5 specialty coffee shops/);
     expect(fastPathCafeSummary(0, 0)).toMatch(/No cafés matched/);
+  });
+});
+
+describe("SAN-106 selected rental Nearby classification", () => {
+  it("recognizes selected apartment café intent before rental routing", () => {
+    expect(isSelectedRentalCafeNearbyRequest("Show cafés within 800 meters of this apartment")).toBe(true);
+    expect(isSelectedRentalCafeNearbyRequest("Find coffee shops near this rental")).toBe(true);
+    expect(isSelectedRentalCafeNearbyRequest("Find cafés near the apartment")).toBe(true);
+  });
+  it("leaves unrelated rentals and cafés alone", () => {
+    expect(isSelectedRentalCafeNearbyRequest("Find 2BR apartments in Laureles")).toBe(false);
+    expect(isSelectedRentalCafeNearbyRequest("Find cafés in Laureles")).toBe(false);
+    expect(isSelectedRentalCafeNearbyRequest("Show me the apartment near cafés")).toBe(false);
+    expect(isSelectedRentalCafeNearbyRequest("Find the rental around coffee shops")).toBe(false);
+  });
+});
+
+describe("SAN-106 stored rental and radius truth", () => {
+  it("accepts actual UUID rental identifiers, not external slug pins", () => {
+    expect(isStoredRentalUuid("550e8400-e29b-41d4-a716-446655440000")).toBe(true);
+    expect(isStoredRentalUuid("grand-by-linares")).toBe(false);
+  });
+  it("preserves user-requested distance and rejects unsafe or unsupported amounts", () => {
+    expect(nearbyCafeRadiusMeters("Show cafés within 300 meters of this apartment")).toBe(300);
+    expect(nearbyCafeRadiusMeters("Find cafés within 2 km of this apartment")).toBe(2000);
+    expect(nearbyCafeRadiusMeters("Find cafés within 1.5 km of this apartment")).toBe(1500);
+    expect(nearbyCafeRadiusMeters("Find cafés within 1.2345 km of this apartment")).toBe(1235);
+    expect(nearbyCafeRadiusMeters("Find cafés within 350.5 m of this apartment")).toBe(351);
+    expect(nearbyCafeRadiusMeters("Show cafés near this apartment")).toBe(800);
+    expect(nearbyCafeRadiusMeters("Show cafés within 90000 meters")).toBeNull();
+    expect(nearbyCafeRadiusMeters("Show cafés within 2 miles")).toBeNull();
   });
 });

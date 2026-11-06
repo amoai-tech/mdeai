@@ -196,3 +196,23 @@ describe("SAN-867 · VEB-MVP-001 — Router hijack fix — sendConciergeUserMess
     });
   });
 });
+
+describe("SAN-106 contextual rental café routing", () => {
+  it("tries grounded Nearby before rental classification when a rental is selected", async () => {
+    const handlers = makeHandlers();
+    handlers.handleGroundedMessage.mockResolvedValueOnce(true);
+    const text = "Show cafés within 800 meters of this apartment";
+    expect(await sendConciergeUserMessage(text, handlers)).toBe(true);
+    expect(handlers.handleGroundedMessage).toHaveBeenCalledWith(text, expect.any(String));
+    expect(handlers.handleRentalMessage).not.toHaveBeenCalled();
+    expect(handlers.onAgentSend).not.toHaveBeenCalled();
+  });
+  it("does not start a new rental search when no selected apartment resolves", async () => {
+    const handlers = makeHandlers();
+    const text = "Show cafés within 800 meters of this apartment";
+    expect(await sendConciergeUserMessage(text, handlers)).toBe(true);
+    expect(handlers.handleGroundedMessage).toHaveBeenCalledOnce();
+    expect(handlers.handleRentalMessage).not.toHaveBeenCalled();
+    expect(handlers.onAgentSend).toHaveBeenCalledWith(text, expect.any(String));
+  });
+});

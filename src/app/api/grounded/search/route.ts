@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { checkSearchFastPathRateLimit } from "@/lib/api-ip-rate-limit";
 import { searchGroundedPlacesTool } from "@/mastra/tools/search-grounded-places";
+import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
+import { RENTAL_SUPABASE_KEY } from "@/mastra/tools/search-rentals";
+import { MDEAI_USER_ID_KEY } from "@/mastra/lib/tool-audit-context";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,6 +15,8 @@ const bodySchema = z.object({
   neighborhood: z.string().optional(),
   limit: z.number().int().min(1).max(10).optional().default(5),
   intent: z.enum(["cafe", "nightlife", "general"]).optional(),
+  nearbyRentalId: z.string().uuid().optional(),
+  nearbyRadiusMeters: z.number().int().min(100).max(5000).optional(),
 });
 
 /** Fast path — grounded café search without relying on conciergeAgent tool calls. */
@@ -35,7 +40,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const { query, neighborhood, limit, intent } = parsed.data;
+  const { query, neighborhood, limit, intent, nearbyRentalId, nearbyRadiusMeters } = parsed.data;
   const searchQuery = neighborhood
     ? `${query.trim()} near ${neighborhood}`
     : query.trim();
@@ -48,13 +53,35 @@ export async function POST(req: Request) {
         { status: 500 },
       );
     }
+    // A hidden button is not authorization. Verify a real signed-in user
+    // before a billable Nearby request, then preserve this client's apartment RLS.
+    // Standalone public café discovery remains available without sign-in.
+    const rentalClient = nearbyRentalId ? await createSupabaseServerClient() : null;
+    let verifiedNearbyUserId: string | null = null;
+    if (rentalClient) {
+      const { data: { user }, error: authError } = await rentalClient.auth.getUser();
+      if (authError || !user || user.is_anonymous) {
+        return NextResponse.json(
+          { error: "authentication_required" },
+          { status: 401, headers: { "Cache-Control": "no-store" } },
+        );
+      }
+      verifiedNearbyUserId = user.id;
+    }
+    const context = rentalClient ? {
+      requestContext: {
+        get: (key: string) => key === RENTAL_SUPABASE_KEY ? rentalClient
+          : key === MDEAI_USER_ID_KEY ? verifiedNearbyUserId : undefined,
+      },
+    } : {};
     const out = await execute(
       {
         query: searchQuery,
         pageSize: limit,
         ...(intent ? { intent } : {}),
+        ...(nearbyRentalId ? { nearbyRentalId, nearbyRadiusMeters: nearbyRadiusMeters ?? 800 } : {}),
       },
-      {} as never,
+      context as never,
     );
     const results = (out as { results?: unknown[] }).results ?? [];
     if (results.length === 0) {
