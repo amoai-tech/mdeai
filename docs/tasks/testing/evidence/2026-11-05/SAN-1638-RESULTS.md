@@ -76,27 +76,29 @@ Interaction sequences on the same build:
   Backstage $400,000 · Frontrow $80,000 COP; the QA event shows one GA $40,000 tier; the
   no-ticket event shows **Price TBD**; the full event page link works from the panel.
 
-### Screenshots (local only)
+### Screenshots (committed)
 
-`docs/screenshots/` is gitignored (`.gitignore:106`), so the PNGs are **not** in the repository.
-They exist on the machine that ran the tests, with the deployed SHA in each filename:
+The 20 JPEGs below are **in this repository**, captured from the deployed build `36020745cf` at 1440x900 and 390x844. `docs/screenshots/` stays gitignored, so the evidence images live next to this record:
 
 ```
-docs/screenshots/san-1638/restaurants-1440-details-open-c347162191.png
-docs/screenshots/san-1638/cafes-1440-details-open-c347162191.png
-docs/screenshots/san-1638/nightlife-1440-details-open-c347162191.png
-docs/screenshots/san-1638/rentals-1440-details-open-c347162191.png
-docs/screenshots/san-1638/events-1440-details-open-c347162191.png
-docs/screenshots/san-1638/events-1440-details-tiers-c347162191.png
-docs/screenshots/san-1638/restaurants-390-details-open-c347162191.png
-docs/screenshots/san-1638/cafes-390-details-open-c347162191.png
-docs/screenshots/san-1638/nightlife-390-details-open-c347162191.png
-docs/screenshots/san-1638/rentals-390-details-open-c347162191.png
-docs/screenshots/san-1638/events-390-details-open-c347162191.png
+docs/tasks/testing/evidence/2026-11-05/screenshots/<name>-36020745cf.jpg
 ```
 
-The 1440px files show the results list and map with the Details panel open beside them; the 390px
-files show the bottom Sheet.
+| File | What it shows |
+| --- | --- |
+| `restaurants-1440-details-open` | Elcielo Details open beside the results list and map |
+| `restaurants-1440-details-a-to-b` | after pressing Details on Cuzco: the same panel now shows Cuzco, URL unchanged |
+| `restaurants-1440-pin-selected` | Cuzco selected on the map, panel following the pin |
+| `restaurants-1440-pin-released-closed` | after releasing the pin: the panel is closed, not reverted to an older record |
+| `cafes-1440-details-open` | Rituales Compañía de Café Details |
+| `nightlife-1440-details-open` | Dulce Jesús Mío Details |
+| `rentals-1440-details-open` | rental Details (unchanged behaviour, regression check) |
+| `events-1440-details-open` | event Details open in place |
+| `events-1440-real-ticket-tiers` | an event with one real tier (GA $40,000 COP) |
+| `events-1440-four-real-tiers` | Reina de Antioquia 2026 Finals with four real tiers |
+| `-390-details-sheet` (five routes) | the bottom Sheet on a phone, settled after the open animation |
+
+Each capture was produced by the probes described above; no screenshot is hand-edited and none comes from a local development server.
 
 ### Still not proven
 
