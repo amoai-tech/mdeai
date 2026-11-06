@@ -74,6 +74,8 @@ describe("SAN-106 stored rental and radius truth", () => {
     expect(nearbyCafeRadiusMeters("Show cafés within 300 meters of this apartment")).toBe(300);
     expect(nearbyCafeRadiusMeters("Find cafés within 2 km of this apartment")).toBe(2000);
     expect(nearbyCafeRadiusMeters("Find cafés within 1.5 km of this apartment")).toBe(1500);
+    expect(nearbyCafeRadiusMeters("Find cafés within 1.2345 km of this apartment")).toBe(1235);
+    expect(nearbyCafeRadiusMeters("Find cafés within 350.5 m of this apartment")).toBe(351);
     expect(nearbyCafeRadiusMeters("Show cafés near this apartment")).toBe(800);
     expect(nearbyCafeRadiusMeters("Show cafés within 90000 meters")).toBeNull();
     expect(nearbyCafeRadiusMeters("Show cafés within 2 miles")).toBeNull();
