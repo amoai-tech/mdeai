@@ -104,13 +104,26 @@ export function SavedThreadHistory({
   children: ReactNode;
   agentId?: "conciergeAgent" | "hostOpsAgent";
 }) {
-  const { agent } = useAgent({ agentId, updates: [UseAgentUpdate.OnRunStatusChanged] });
+  const { agent, isReady } = useAgent({ agentId, updates: [UseAgentUpdate.OnRunStatusChanged] });
   const [attempt, setAttempt] = useState(0);
   const [outcome, setOutcome] = useState<{
     threadId: string;
     attempt: number;
     failed: boolean;
+    /** Distinguishes a timeout before SDK readiness from the real agent's restore. */
+    ready: boolean;
   } | null>(null);
+
+  // Do not run the owner-checked fetch against CopilotKit's provisional agent.
+  // A permanently unavailable runtime must still show an honest retryable error,
+  // not an endless spinner while isReady remains false.
+  useEffect(() => {
+    if (isReady) return;
+    const timeout = setTimeout(() => {
+      setOutcome({ threadId, attempt, failed: true, ready: false });
+    }, RECONNECT_SETTLE_TIMEOUT_MS);
+    return () => clearTimeout(timeout);
+  }, [isReady, threadId, attempt]);
 
   // Watch the reconnect from the moment this thread (and agent) is selected.
   // Declared before the fetch effect so the subscription exists before CopilotKit
@@ -118,14 +131,14 @@ export function SavedThreadHistory({
   // will not happen again.
   const connect = useRef<Promise<ConnectOutcome>>(Promise.resolve("done"));
   useEffect(() => {
-    if (!agent) return;
+    if (!agent || !isReady) return;
     const controller = new AbortController();
     connect.current = watchConnectCycle(agent, controller.signal);
     return () => controller.abort();
-  }, [agent, threadId]);
+  }, [agent, isReady, threadId]);
 
   useEffect(() => {
-    if (!agent) return;
+    if (!agent || !isReady) return;
     const controller = new AbortController();
     const { signal } = controller;
 
@@ -183,13 +196,14 @@ export function SavedThreadHistory({
         if (signal.aborted) return;
         failed = true;
       }
-      if (!signal.aborted) setOutcome({ threadId, attempt, failed });
+      if (!signal.aborted) setOutcome({ threadId, attempt, failed, ready: true });
     })();
 
     return () => controller.abort();
-  }, [agent, threadId, attempt]);
+  }, [agent, isReady, threadId, attempt]);
 
-  const settled = outcome?.threadId === threadId && outcome.attempt === attempt;
+  const settled = outcome?.threadId === threadId &&
+    outcome.attempt === attempt && outcome.ready === isReady;
   const value = useMemo<SavedHistoryValue>(
     () => ({
       status: !settled ? "loading" : outcome.failed ? "error" : "idle",

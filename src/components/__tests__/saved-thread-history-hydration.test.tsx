@@ -47,10 +47,10 @@ class FakeAgent {
   }
 }
 
-const fakeAgent = vi.hoisted(() => ({ current: null as unknown }));
+const fakeAgent = vi.hoisted(() => ({ current: null as unknown, ready: true }));
 vi.mock("@copilotkit/react-core/v2", async (importOriginal) => {
   const real = await importOriginal<typeof import("@copilotkit/react-core/v2")>();
-  return { ...real, useAgent: () => ({ agent: fakeAgent.current }) };
+  return { ...real, useAgent: () => ({ agent: fakeAgent.current, isReady: fakeAgent.ready }) };
 });
 
 const A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -98,6 +98,7 @@ beforeEach(async () => {
   window.history.replaceState(null, "", "/");
   agent = new FakeAgent();
   fakeAgent.current = agent;
+  fakeAgent.ready = true;
   requests = {};
   vi.stubGlobal(
     "fetch",
@@ -139,6 +140,93 @@ afterEach(async () => {
 });
 
 describe("saved chat history", () => {
+  it("waits for the REAL agent before fetching and replaying a saved thread", async () => {
+    const provisional = new FakeAgent();
+    provisional.threadId = A;
+    fakeAgent.current = provisional;
+    fakeAgent.ready = false;
+    await act(async () => {
+      root.render(
+        <ThreadNavProvider><ChatProvider><Probe /></ChatProvider></ThreadNavProvider>,
+      );
+    });
+    await select(A, { connect: false });
+    expect(seen.history.status).toBe("loading");
+    // A provisional agent must not receive the private history or a connect watch.
+    expect(requests[A]).toBeUndefined();
+    expect(provisional.setMessages).not.toHaveBeenCalled();
+
+    fakeAgent.current = agent;
+    fakeAgent.ready = true;
+    await act(async () => {
+      root.render(
+        <ThreadNavProvider><ChatProvider><Probe /></ChatProvider></ThreadNavProvider>,
+      );
+    });
+    expect(requests[A]).toBeDefined();
+    await act(async () => requests[A].resolve(msgs("A")));
+    await tick();
+    expect(seen.history.status).toBe("loading");
+    expect(agent.setMessages).not.toHaveBeenCalled(); // connected is not replay complete
+    await act(async () => agent.finishRun());
+    await tick();
+    expect(agent.messages).toEqual(msgs("A"));
+    expect(seen.history.status).toBe("idle");
+    expect(provisional.setMessages).not.toHaveBeenCalled();
+  });
+
+  it("recovers when the real agent arrives AFTER a readiness timeout", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      fakeAgent.ready = false;
+      await act(async () => {
+        root.render(
+          <ThreadNavProvider><ChatProvider><Probe /></ChatProvider></ThreadNavProvider>,
+        );
+      });
+      await select(A, { connect: false });
+      await act(async () => { await vi.advanceTimersByTimeAsync(31_000); });
+      expect(seen.history.status).toBe("error");
+
+      // Late SDK readiness must invalidate the provisional error and start the
+      // real agent's owner-checked history fetch (without requiring a page reload).
+      fakeAgent.current = agent;
+      fakeAgent.ready = true;
+      await act(async () => {
+        root.render(
+          <ThreadNavProvider><ChatProvider><Probe /></ChatProvider></ThreadNavProvider>,
+        );
+      });
+      expect(seen.history.status).toBe("loading");
+      expect(requests[A]).toBeDefined();
+      await act(async () => requests[A].resolve(msgs("A")));
+      expect(agent.setMessages).not.toHaveBeenCalled();
+      await act(async () => agent.finishRun());
+      expect(agent.messages).toEqual(msgs("A"));
+      expect(seen.history.status).toBe("idle");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("shows a retryable error if the runtime never becomes ready", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      fakeAgent.ready = false;
+      await act(async () => {
+        root.render(
+          <ThreadNavProvider><ChatProvider><Probe /></ChatProvider></ThreadNavProvider>,
+        );
+      });
+      await select(A, { connect: false });
+      expect(seen.history.status).toBe("loading");
+      await act(async () => { await vi.advanceTimersByTimeAsync(30_500); });
+      expect(seen.history.status).toBe("error");
+      expect(requests[A]).toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
   it("shows loading, installs the saved messages, then releases the chat", async () => {
     await select(A);
     expect(seen.history.status).toBe("loading");
