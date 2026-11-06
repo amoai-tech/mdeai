@@ -94,17 +94,23 @@ export async function POST(req: Request) {
   }
 
   const { kind, queryText, neighborhood, limit } = parsed.data;
+  // The browse retrieval reads a bounded window (limit * 3, no ORDER BY) and slices to `limit`
+  // *before* returning, so filtering that slice would report "no matches" for a row that simply
+  // fell outside an arbitrary window. Ask for a much wider candidate set, filter it, then apply the
+  // caller's limit. 60 covers the whole current catalogue (17 cafés, 13 nightlife venues); if the
+  // catalogue outgrows it, the honest next step is a text predicate in the retrieval itself.
+  const candidateLimit = Math.max(limit * 5, 60);
   const { rows, error } =
     kind === "cafe"
-      ? await searchCafeVenueAnchorsForBrowse({ neighborhood, limit, queryText })
-      : await searchNightclubVenueAnchorsForBrowse({ neighborhood, limit, queryText });
+      ? await searchCafeVenueAnchorsForBrowse({ neighborhood, limit: candidateLimit, queryText })
+      : await searchNightclubVenueAnchorsForBrowse({ neighborhood, limit: candidateLimit, queryText });
 
   // A retrieval failure must not be reported as "no venues match".
   if (error) {
     return NextResponse.json({ error }, { status: 503 });
   }
 
-  const matched = queryText ? rows.filter((row) => matchesQuery(row, queryText)) : rows;
+  const matched = (queryText ? rows.filter((row) => matchesQuery(row, queryText)) : rows).slice(0, limit);
 
   return NextResponse.json({
     kind,

@@ -7,6 +7,18 @@ import { afterEach, describe, expect, it, vi } from "vitest";
  */
 const cafeRows = [
   {
+    id: "22222222-2222-4222-8222-222222222222",
+    kind: "cafe",
+    name: "Moshi Café",
+    google_place_id: "place-2",
+    neighborhood: "El Poblado",
+    latitude: 6.21,
+    longitude: -75.57,
+    tags: ["workspace"],
+    metadata: null,
+    is_active: true,
+  },
+  {
     id: "11111111-1111-4111-8111-111111111111",
     kind: "cafe",
     name: "Rituales Compañía de Café",
@@ -65,7 +77,8 @@ describe("POST /api/venues/search", () => {
     expect(json.kind).toBe("cafe");
     expect(json.total).toBe(1);
     expect(json.results[0]).toMatchObject({
-      id: cafeRows[0].id,
+      // The Laureles café, not the El Poblado one the query excluded.
+      id: "11111111-1111-4111-8111-111111111111",
       title: "Rituales Compañía de Café",
       latitude: 6.24,
       longitude: -75.59,
@@ -111,8 +124,11 @@ describe("POST /api/venues/search", () => {
     // never made and "no matches" could never happen.
     const res = await post({ kind: "cafe", queryText: "quiet café in Laureles" });
     const json = await res.json();
+    // Two candidates, one matches: the filter must actually exclude Moshi (El Poblado).
     expect(json.total).toBe(1);
-    expect(json.results[0].title).toBe("Rituales Compañía de Café");
+    expect(json.results.map((r: { title: string }) => r.title)).toEqual([
+      "Rituales Compañía de Café",
+    ]);
   });
 
   it("returns a genuine empty result for a query nothing describes", async () => {
@@ -127,7 +143,7 @@ describe("POST /api/venues/search", () => {
     // "in the" are stopwords: an unfiltered query must not silently empty the page.
     const res = await post({ kind: "cafe", queryText: "in the" });
     const json = await res.json();
-    expect(json.total).toBe(1);
+    expect(json.total).toBe(2);
   });
 
   it("rejects invalid json with 400", async () => {
