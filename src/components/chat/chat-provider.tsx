@@ -125,9 +125,10 @@ export function SavedThreadHistory({
   const restoredThisAttempt =
     outcome?.threadId === threadId && outcome.attempt === attempt &&
     outcome.ready && !outcome.failed;
+  const previousRestore = restoredAgent.current;
   const restoredOnCurrentAgent = Boolean(
-    restoredThisAttempt && restoredAgent.current?.agent === agent &&
-    (!restoredAgent.current.hadMessages || agent?.messages.length),
+    restoredThisAttempt && previousRestore && previousRestore.agent === agent &&
+    (!previousRestore.hadMessages || agent?.messages.length),
   );
 
   // Do not run the owner-checked fetch against CopilotKit's provisional agent.
