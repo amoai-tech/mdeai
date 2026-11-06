@@ -132,11 +132,16 @@ export function SavedThreadHistory({
     // `agent` can be a PROVISIONAL stand-in that CopilotKit swaps for the registered
     // agent once the runtime confirms it. Anything installed into the provisional
     // agent is lost on that swap, which is how a restored conversation could come
-    // back empty. Only restore into an agent that is either ready, or already bound
-    // to this thread; `isReady` is in the deps so the effect re-runs when it flips.
-    // Gate only on an explicit `false`: the real v2 hook always returns a boolean,
-    // while older mocks omit it, and silently skipping those would be a regression.
-    if (isReady === false && agent.threadId !== threadId) return;
+    // back empty. `isReady` is in the deps, so the restore re-runs when it flips.
+    //
+    // There is deliberately NO thread-bound exemption: the agent is usually bound to
+    // the thread before registration completes, so exempting that would disable this
+    // gate for exactly the case it exists to catch. While the agent is not ready the
+    // chat keeps its existing loading/Retry UI instead of claiming success.
+    //
+    // Gate on an explicit `false` only: the real v2 hook always returns a boolean,
+    // while older mocks omit it, and skipping those would be a silent regression.
+    if (isReady === false) return;
     const controller = new AbortController();
     const { signal } = controller;
 

@@ -415,14 +415,15 @@ describe("restore gating on CopilotKit readiness (SAN-1639)", () => {
     await act(async () => seen.nav.setActiveThreadId(A));
     await tick();
 
-    if (requests[A]) {
-      await act(async () => requests[A].resolve(msgs("A")));
-      await tick();
-      agent.finishRun();
-      await tick();
-    }
+    // The restore must really have started now: assert it rather than skipping it.
+    expect(requests[A], "history is requested once the agent is ready").toBeDefined();
+    await act(async () => requests[A].resolve(msgs("A")));
+    await tick();
+    agent.finishRun();
+    await tick();
 
     expect(agent.setMessages).toHaveBeenCalledTimes(1);
     expect(agent.messages.map((m) => m.id)).toEqual(["A-u", "A-a"]);
+    expect(seen.history.status).toBe("idle");
   });
 });
