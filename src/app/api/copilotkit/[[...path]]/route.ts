@@ -193,8 +193,9 @@ async function handleCopilotKit(req: NextRequest) {
     if (!auth.allowed) return auth.response;
     const { resourceId } = auth;
     const isPartnerRun = await isPartnerAgentRunOrConnect(req);
-    // Anonymous Concierge is allowed, but partnerAgent may never run without
-    // a server-authenticated owner even if no business selector was supplied.
+    // Guest runs are already rejected by authorizeCopilotKitRequest: durable
+    // chat requires a server-derived owner. Partner runs additionally reject
+    // missing identities even when no business selector was supplied.
     if (isPartnerRun && !userId) {
       return Response.json({ error: "Sign in to use the partner assistant" }, { status: 401 });
     }
