@@ -4,10 +4,10 @@
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-11-05 (evening, America/Bogotá) |
+| Last updated | 2026-11-06 (after PR #787 merge; PR #792/#793 still open) |
 | `origin/main` | **`7c753cd6b1`** |
 | Production `/api/version` | **`7c753cd6b1`** — matches main; #777 and #787 are both in it |
-| Working worktree | `/home/sk/.worktrees/mde-ai-rel` (detached at `origin/main`, clean) |
+| Working worktree | `/home/sk/.worktrees/mde-ai-rel` retained for PR #792 until merged; verify clean/no processes before removing |
 | Installed stack | CopilotKit **1.84.1** · AG-UI **1.0.2** · `@ag-ui/mastra` **2.0.2** · Mastra core **1.81.0** · memory 1.40.0 · pg 1.34.0 |
 
 **Legend:** ✅ done & verified · 🟡 implemented, awaiting merge/verification · ⬜ not started · 🔴 blocked · ⚫ not needed (measurement said no)
@@ -23,14 +23,14 @@
 | A1 duplicate attempt | ✅ closed | same defect implemented twice | [#779](https://github.com/amoai-tech/mdeai/pull/779) **CLOSED** | — |
 | **A2** No answer ≠ success | ✅ | already in main: `sendAndWait` captures `repliesBefore` before submit, waits for a NEW reply and asserts it is nonempty; `waitForConciergeReply` polls for that reply | [#780](https://github.com/amoai-tech/mdeai/pull/780) **CLOSED** as superseded | — |
 | **A3** First-send 401 | ✅ | readiness now requires **HTTP 200** from `POST /api/copilotkit {"method":"info"}` (anonymous returns 401); a rejected fetch no longer counts as ready | [#787](https://github.com/amoai-tech/mdeai/pull/787) merged | — |
-| **A4** Cleanup that survives a killed run | 🟡 | ownership-aware sweep merged (`ownedIds` + 60-min margin, full pagination that throws, row-level verification); new proof test seeds a real thread+message and asserts deletion | [#787](https://github.com/amoai-tech/mdeai/pull/787) merged · [#792](https://github.com/amoai-tech/mdeai/pull/792) open | one orphan was produced by a **failing** cleanup test (fixed in #792); a kill **during teardown** still needs an external job |
+| **A4** Cleanup that survives a killed run | 🟡 | existing ownership-aware sweep from #787 checks its own run IDs and older identities; #792 adds `try/finally` and error-propagating cleanup with 3 unit tests | [#787](https://github.com/amoai-tech/mdeai/pull/787) merged · [#792](https://github.com/amoai-tech/mdeai/pull/792) open | merge #792 after current-head CI/approval; a process killed during teardown still requires independent cleanup |
 | **B1** 60 s page readiness | 🟡 **measured** | 5 direct loads: canvas `1690 / 497 / 502 / 443 / 541 ms`, composer +~20 ms, history region ready `1733 / 542 / 544 / 464 / 563 ms` → **0.46–1.73 s**, not 60 s | — | the 60 s event is an **outlier** (edge/network), not a product readiness defect; capture the failing run's network trace if it recurs |
 | **B2** `TypeError: network error` | ⬜ | observed once; **not** proven to be Gemini | — | trace one failure end to end |
 | **C1** End-to-end tracing | ⬜ | turn log + `ai_runs` exist; no correlation ids | — | correlate with existing ids |
-| **C2** Working-memory atomic merge | ⬜ | root cause **identified**: `@mastra/pg` supports row-locked merge; MDE does a local read-modify-write | — | two-writer test, then swap |
+| **C2** Working-memory concurrency | ⬜ | MDE uses **thread-scoped** memory and a local read-modify-write; Mastra native atomic `mergeWorkingMemory()` requires **resource scope** | — | reproduce with two writers; preserve thread isolation and `selectedPinId: null`; do not blindly swap APIs |
 | **C3** Runtime init cost | ⬜ | unmeasured | — | measure before touching |
 | **Support** CopilotKit skill fallback | 🟡 | docs search fails in the MCP; skill now documents the explorer fallback | [#778](https://github.com/amoai-tech/mdeai/pull/778) | approve or fold into C1 work |
-| Plan document | ✅ | **325 lines**, §8 source receipts (28 verified URLs) | shipped in [#793](https://github.com/amoai-tech/mdeai/pull/793) | — |
+| Plan document | 🟡 | **325-line** plan and this tracker prepared in existing docs PR | [#793](https://github.com/amoai-tech/mdeai/pull/793) **open** | resolve review, pass exact-head CI, merge; avoid duplicate docs PRs |
 
 ---
 
@@ -48,42 +48,39 @@
 
 ## Ordered next steps
 
-### Done (was "needs a human")
-- ~~Approve #777~~ — **merged** `9b8b25c9`, in production.
-- ~~Approve #780~~ — **closed as superseded**: `main` already requires a NEW nonempty reply in `sendAndWait`.
-- ~~Run the 20/20 matrix~~ — **done**: 20/20 on pinned `8114a5a96382`.
-- ~~A3 authenticated readiness~~ — **shipped** in #787 (HTTP 200 required).
+### Completed — do not repeat
+- [#777](https://github.com/amoai-tech/mdeai/pull/777) merged; chat restore certified **20/20** on pinned production SHA `8114a5a96382`.
+- [#780](https://github.com/amoai-tech/mdeai/pull/780) closed as superseded; new nonempty assistant replies already required.
+- [#787](https://github.com/amoai-tech/mdeai/pull/787) merged; A3 authenticated readiness requires a **200** response; A4 suite-owned/expired identity cleanup added.
+- Follow-up 4-journey smoke on `7c753cd6b1` reported passed. Historical results remain attached to their own SHAs.
 
-### Now (the real remaining work)
-1. **Merge [#792](https://github.com/amoai-tech/mdeai/pull/792)** — a failed cleanup now fails the run instead of being swallowed; 3 unit tests prove it.
-2. **Merge [#793](https://github.com/amoai-tech/mdeai/pull/793)** — these trackers.
-3. **B2 tracing** (~1 h): browser → `/api/copilotkit` → `@ag-ui/mastra` → model → stream.
-4. **External cleanup job** (~30 min): the only real answer to a kill *during* teardown.
+### Now — smallest safe ordered work
+1. Finish [#792](https://github.com/amoai-tech/mdeai/pull/792): preserve the original test failure, propagate or log cleanup failure correctly, pass exact-head CI, obtain required independent approval, then merge. Recheck orphan users, profiles, threads and messages.
+2. Finish [#793](https://github.com/amoai-tech/mdeai/pull/793): resolve contradictory tracker wording, pass CI and independent approval, then merge as **docs-only** work (no browser recertification for docs).
+3. **B2/C1 diagnostics:** instrument browser → `/api/copilotkit` → AG-UI/Mastra → provider/tool → stream. Correlate existing request/turn IDs and log a future hang/network failure. Do not invent a cause for the historical one-off.
+4. **Interrupted-run hygiene:** add an independent CI/scheduled cleanup job that survives a killed process, with run ownership/lease or deliberately aged cleanup and explicit DB verification. Do not delete another active suite's account.
+5. **Worktree cleanup:** after #792 is merged and no process/files need `mde-ai-rel`, check ancestry, worktree status and processes; then `git worktree remove` normally (never force).
+6. **C2/C3** only after measurement: prove two-writer thread-memory conflict and runtime initialization cost before changing semantics or introducing architecture.
 
-### Then (agent, ~2 h)
-6. **A4**: suite-level cleanup sweep; prove it with a deliberately killed run.
-7. **B1 / B2**: measure the 60 s readiness and trace one `network error`. Assign ownership only with data.
-
-### Last (agent, ~4 h)
-8. **C1** tracing → **C2** working-memory swap (two-writer test first) → **C3** runtime-init measurement.
-
-### Closeout
-9. Reconcile **SAN-1639** (currently *In Progress*) and **SAN-1298** checkpoint 2 against the 20/20 matrix on the deployed SHA.
-10. Commit the plan docs (`11` + `12`) as a docs PR.
+### Tracking and closeout
+- [SAN-1639](https://linear.app/amo100/issue/SAN-1639) and [SAN-1298](https://linear.app/amo100/issue/SAN-1298) are **Done** for the previously certified product milestone; keep separate instrumentation/cleanup work open until actually implemented.
+- Update this tracker after each exact-head merge and deployment; never combine evidence from different SHAs.
 
 ---
 
 ## Blockers and failure points
 
-| # | Blocker | Impact | Mitigation |
+| # | Current status | Impact | Mitigation |
 |---|---|---|---|
-| 1 | ~~No approval on #777 / #780~~ | **resolved** — #777 merged & deployed; #780 closed as superseded | — |
-| 2 | ~~`floor` pending on #780~~ | **resolved** — PR closed | — |
-| 3 | Production SHA drifts (moved 7+ times in a day) | evidence expires | pin before/after; split by SHA |
-| 4 | ~~Desktop 401 on first send~~ | **resolved** — #787 requires HTTP 200 from the runtime probe | — |
-| 5 | Maps `503` / `mapId` config | console assertion fails | **owned by another agent**; do not filter the error |
-| 7 | `mastra_docs` local-package tools broken | misleading `@mastra/mcp` listing | read `node_modules` types directly |
-| 8 | CopilotKit MCP semantic search down | falls back to `explore-code` | use explorer; #778 documents it |
+| 1 | **#792 pending independent approval/merge** | Error-reporting cleanup not yet in `main` | Current-head CI + review, merge, prove failure-injection cleanup |
+| 2 | **#793 pending docs review/merge** | Stale steps mislead the next operator | Correct factual contradictions; docs-only merge |
+| 3 | **Kill during teardown not recovered automatically** | Test identity can remain after a process is terminated | Independent ownership-aware cleanup job; verify all related rows |
+| 4 | **B2 network error / 420 s hang untraced** | Future recurrence cannot be assigned to an exact failing boundary | Trace browser/runtime/agent/provider without hiding errors |
+| 5 | **Production SHA can change during testing** | Mixed-release counts are invalid | Pin `/api/version` before/after, separate releases |
+| 6 | **Maps error owned separately** | Google Maps `503` remains a distinct diagnostic | Map ID presence verified; inspect failed request and Google Cloud metrics, don't suppress errors |
+| 7 | **CopilotKit/Mastra MCP documentation availability varies** | Tool-based docs lookup may fail | Follow installed package types and official code/docs; #778 tracks fallback |
+
+**Resolved (not blockers):** #777 merge, #780 duplication, original 8/10 desktop matrix, and the HTTP 401 assertion fix in #787. The 20/20 certification is historical evidence for `8114a5a96382`, not a blanket certification for every later SHA.
 
 ---
 
