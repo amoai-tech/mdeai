@@ -69,6 +69,8 @@ for (const route of ["/rentals", "/restaurants"]) {
 
       await close.click();
       await expect(close).toBeHidden();
+      // The mobile sheet must return keyboard focus to its actual Map trigger.
+      await expect(trigger).toBeFocused();
       // Reopening adds useful state coverage without repeating the slower step
       // for every width; check it once for each route at 390px.
       if (viewport.width === 390) {

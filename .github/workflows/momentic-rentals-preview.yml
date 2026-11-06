@@ -59,7 +59,7 @@ jobs:
           # A completed selection is different from a failed GitHub API or selector command.
           echo "selection_ok=true" >> "$GITHUB_OUTPUT"
           if [[ "$count" -eq 0 ]]; then
-            echo "PR #$pr does not affect public Rentals, Events, or Concierge; advisory skipped."
+            echo "PR #$pr does not affect public Rentals, Events, Concierge or Maps; advisory skipped."
             exit 0
           fi
           echo "selected=true" >> "$GITHUB_OUTPUT"
@@ -141,7 +141,7 @@ jobs:
           fi
           while IFS= read -r path; do
             case "$path" in
-              momentic/rentals/*.test.yaml|momentic/events/*.test.yaml|momentic/concierge/*.test.yaml) ;;
+              momentic/rentals/*.test.yaml|momentic/events/*.test.yaml|momentic/concierge/*.test.yaml|momentic/maps/*.test.yaml) ;;
               *) echo "Unsafe test path refused"; exit 1 ;;
             esac
             if [[ ! -f "$path" ]]; then

@@ -12,6 +12,7 @@ const expectedPaths = new Map([
   ['momentic/rentals/renter-saved-guest-redirect.test.yaml', '/app/me/saved'],
   ['momentic/events/public-event-details.test.yaml', '/events'],
   ['momentic/concierge/guest-chat-entry.test.yaml', '/chat'],
+  ['momentic/maps/browse-map-selection.test.yaml', '/rentals'],
 ]);
 for (const [path, suffix] of expectedPaths) {
   test(`preview override preserves exact route and query for ${path}`, () => {
