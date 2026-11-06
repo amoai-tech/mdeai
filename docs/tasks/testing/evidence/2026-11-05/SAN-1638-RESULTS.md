@@ -78,10 +78,10 @@ Interaction sequences on the same build:
 
 ### Screenshots (committed)
 
-The 20 JPEGs below are **in this repository**, captured from the deployed build `36020745cf` at 1440x900 and 390x844. `docs/screenshots/` stays gitignored, so the evidence images live next to this record:
+The 20 JPEGs below are **in this repository** (a folder named `screenshots/` is gitignored repo-wide at `.gitignore:71`, which is why this one is called `production-captures/`), captured from the deployed build `36020745cf` at 1440x900 and 390x844. `docs/screenshots/` stays gitignored, so the evidence images live next to this record:
 
 ```
-docs/tasks/testing/evidence/2026-11-05/screenshots/<name>-36020745cf.jpg
+docs/tasks/testing/evidence/2026-11-05/production-captures/<name>-36020745cf.jpg
 ```
 
 | File | What it shows |
