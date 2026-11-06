@@ -564,6 +564,30 @@ certification.
 
 **Open question:** event cards still use 28px actions. Should the same shared action height be applied there under SAN-972, or do events deliberately keep a denser footer because they carry a price and a ticket action?
 
+
+## 2026-11-05 — PRs #751, #753, #754 and #755 (administrator merges; exception conditions documented)
+
+Four PRs merged on one day by `amoai-tech`, who was the sole repository collaborator and PR author; GitHub did not record an approving review (`reviewDecision: REVIEW_REQUIRED` on all four). **These were administrator merges, but full compliance with the documented sole-collaborator exception is not established for all four.** Exact-head `floor`, `mastra-schema-init` and `review / verify-review-result` checks passed, as tabulated below. The PR-body requirement (exception plus exact head) was **not met by #753, #754 or #755 at merge time**. Current resolved-thread counts cannot establish the historical thread state at the moment of each merge. Retrospective notes are not evidence of prior approval.
+
+The check evidence comes from the exact-head check runs. The review-thread column is the **current** state read from the API, not a reconstruction of the moment of merge: GitHub does not expose when a thread was resolved relative to a merge, and no historical count is claimed here.
+
+| PR | Head | `floor` | `mastra-schema-init` | `review / verify-review-result` | Review threads | Merge commit | Merged (UTC) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| #751 Make Discovery Card Buttons Easier to Tap and Catch Regressions | `b8bdaf8aa2` | success | success | success | 2 total, **0 unresolved** | `ab24e576df` | 06:29:17 |
+| #753 Make the event card tap-size test actually fail when the token regresses | `0a06066c22` | success | success | success | 0 total, **0 unresolved** | `c4c510da74` | 06:43:13 |
+| #754 Restaurant, café and nightlife Details open in the page instead of a new page | `c0863e476f` | success | success | success | 27 total, **0 unresolved** | `582c27fb21` | 21:29:50 |
+| #755 Event Details opens in the page, with real ticket tiers | `79ed3ae5c1` | success | success | success | 12 total, **0 unresolved** | `4b7d250e9e` | 22:41:23 |
+
+**Which PRs recorded the exception in their own body.** Only **#751** did, with its exact head. **#753, #754 and #755 did not** — their bodies name no exception and no final head, so the record for those three lives only here. Retrospective notes added to those PRs after this entry are labelled as retrospective; they were not written at merge time.
+
+**What a reviewer would have been asked.** #751 and #753: whether a shared action height needed a browser proof. It has one in `e2e/san-1140-discovery-card-actions.spec.ts`, scoped to `/restaurants`, `/cafes` and `/nightlife` — up to five cards per route — at 320/390/768/1440px and at **200 % document zoom** (Playwright cannot script browser zoom, so document zoom is the documented proxy in that spec). #753 repairs that test so it fails when the token regresses. The 44px claim is not universal: `/rentals` keeps a deliberate dense desktop footer (28px at 1440px, 44px at 320px per the SAN-1122 evidence), and venue `Directions` actions measure 32px. #754: whether one selected record should drive the map pin, the Details panel and the Ask MDE context together, and whether a released pin should close the panel rather than reopen an older record (both are covered by five regression tests). #755: whether a confirmed 404 should hide the Buy-tickets and full-page actions (it does, with a mocked 404), and whether the panel should show real tiers only (it shows real tiers, "Free", "Sold out" and "Price TBD", never invented prices).
+
+**Post-merge production verification.** The deployed build at the time reported `c347162191` on `/api/version`, equal to `main` and containing **all four** merge commits above (`ab24e576`, `c4c510da`, `582c27fb`, `4b7d250e`). On that build, at 1440px and 390px, `/restaurants`, `/cafes`, `/nightlife`, `/rentals` and `/events` each opened Details beside the map (desktop) or in the bottom Sheet (phone), without changing the URL, closed cleanly, with no horizontal overflow and no page error. Restaurant sequences: A → B repoints the panel, Ask selects the opened record, Escape closes from inside the panel, a pin gives way to an explicit Details click, and releasing a pin closes the panel. Events rendered real tiers (Reina de Antioquia — GA $40,000 · VIP $120,000 · Backstage $400,000 · Frontrow $80,000 COP) and "Price TBD" for the unticketed event.
+
+The full evidence record is `docs/tasks/testing/evidence/2026-11-05/SAN-1638-RESULTS.md`. The screenshots were written to `docs/screenshots/san-1638/`, which is **gitignored** (`.gitignore:106`), so those PNGs are local artifacts, not repository files; the evidence record lists their exact filenames and the SHA they were taken against.
+
+**Open questions.** No live event currently carries an `imageUrl` or an external ticket URL, so the panel's photo and "Buy tickets" branches are proven only with a controlled API response. Event 404/503 were proven with intercepted responses rather than a live outage, and the signed-in Ask → Answer journey was not executed.
+
 ## Adding an entry
 
 Record: the PRs, the date, the reason, which required checks had passed, what a reviewer would have
