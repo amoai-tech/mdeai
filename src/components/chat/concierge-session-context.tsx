@@ -39,7 +39,7 @@ export function ConciergeSessionProvider({ children }: { children: ReactNode }) 
   const { setState } = useConciergeCoAgent();
   const { clearPins, setSelectedPinId, clearFocusPinRequest } = useMapContext();
   const { clearToolResults: clearRentalFp } = useRentalFastPath();
-  const { setToolResult: setEventFp } = useEventFastPath();
+  const { clearToolResults: clearEventFp } = useEventFastPath();
   const { setToolResult: setRestaurantFp } = useRestaurantFastPath();
   const { setToolResult: setGroundedFp } = useGroundedFastPath();
   const { clearRows, clearWebCitations } = useEventSearchResults();
@@ -62,7 +62,7 @@ export function ConciergeSessionProvider({ children }: { children: ReactNode }) 
     setSelectedPinId(null);
     clearFocusPinRequest();
     clearRentalFp();
-    setEventFp(null);
+    clearEventFp();
     setRestaurantFp(null);
     setGroundedFp(null);
     clearRows();
@@ -85,7 +85,7 @@ export function ConciergeSessionProvider({ children }: { children: ReactNode }) 
     setSelectedPinId,
     clearFocusPinRequest,
     clearRentalFp,
-    setEventFp,
+    clearEventFp,
     setRestaurantFp,
     setGroundedFp,
     clearRows,
