@@ -167,3 +167,22 @@ describe("EventBrowseCard", () => {
     expect(detailsTag(noBuy)).not.toContain("border-border");
   });
 });
+
+describe("photo-less event media fits its frame", () => {
+  it.each(["cover", "inline"] as const)("fits the %s layout", (mediaLayout) => {
+    const html = renderToStaticMarkup(
+      <EventBrowseCard event={event} mediaLayout={mediaLayout} />,
+    );
+    expect(html).toContain('data-testid="event-browse-card-date-badge"');
+    if (mediaLayout === "inline") {
+      // One compact line: the stacked month/day plus the label overflows a 96x60 frame.
+      expect(html).toContain("JUN 12");
+      expect(html).not.toContain("text-2xl");
+    } else {
+      // Full tile keeps the month over a large day.
+      expect(html).toContain("text-2xl");
+    }
+    // The category label survives in both layouts.
+    expect(html).toContain("Event");
+  });
+});

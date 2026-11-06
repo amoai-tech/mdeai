@@ -75,10 +75,19 @@ function EventBrowseCardMedia({
       testId={badge ? "event-browse-card-date-badge" : "event-browse-card-photo-placeholder"}
       content={
         badge ? (
-          <>
-            <span className="text-[11px] font-semibold tracking-wide">{badge.month}</span>
-            <span className="text-2xl font-semibold leading-none">{badge.day}</span>
-          </>
+          mediaLayout === "cover" ? (
+            // Full tile: month over a large day.
+            <>
+              <span className="text-[11px] font-semibold tracking-wide">{badge.month}</span>
+              <span className="text-2xl font-semibold leading-none">{badge.day}</span>
+            </>
+          ) : (
+            // 96x60 inline frame: two stacked lines plus the label and gaps exceed 60px and get
+            // clipped, so the inline layout keeps one compact line and still shows the label.
+            <span className="text-sm font-semibold tracking-wide">
+              {badge.month} {badge.day}
+            </span>
+          )
         ) : undefined
       }
     />
