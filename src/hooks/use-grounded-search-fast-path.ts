@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef } from "react";
+import { useCallback } from "react";
 import { useConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
 import { useEventLocalChat } from "@/components/chat/event-local-chat-context";
 import { useClearOtherFastPathResults } from "@/hooks/use-clear-other-fast-path-results";
@@ -33,13 +33,16 @@ async function fetchGroundedSearch(
   return res.json();
 }
 
+// All card actions and the composer share the same provider setter identity.
+// One concurrent search per visible conversation; no process-global user state.
+const groundedSearchesInFlight = new WeakSet<Function>();
+
 export function useGroundedSearchFastPath() {
   const { setState } = useConciergeCoAgent();
   const { showExchange, clearLocalMessages } = useEventLocalChat();
   const clearOthers = useClearOtherFastPathResults();
   const { setToolResult } = useGroundedFastPath();
   const { mergePinsByCategory, requestFitBounds, pins: currentPins, selectedPinId } = useMapContext();
-  const busyRef = useRef(false);
 
   const applySearchResults = useCallback(
     (envelope: unknown) => {
@@ -90,8 +93,8 @@ export function useGroundedSearchFastPath() {
       params: CafeSearchApiParams,
       submissionId?: string,
     ): Promise<boolean> => {
-      if (busyRef.current) return false;
-      busyRef.current = true;
+      if (groundedSearchesInFlight.has(setToolResult)) return false;
+      groundedSearchesInFlight.add(setToolResult);
       try {
         const envelope = await fetchGroundedSearch(params);
         const { count, pinCount } = applySearchResults(envelope);
@@ -114,13 +117,14 @@ export function useGroundedSearchFastPath() {
         // to the send pipeline so Try again replays the same search.
         throw err;
       } finally {
-        busyRef.current = false;
+        groundedSearchesInFlight.delete(setToolResult);
       }
     },
     [
       applySearchResults,
       setToolResult,
       showExchange,
+      setToolResult,
     ],
   );
 
@@ -138,7 +142,7 @@ export function useGroundedSearchFastPath() {
         const rentalId = rentalPin.id.slice("rental-".length);
         const radius = nearbyCafeRadiusMeters(trimmed);
         if (!isStoredRentalUuid(rentalId) || radius === null) return false;
-        if (busyRef.current) return false;
+        if (groundedSearchesInFlight.has(setToolResult)) return false;
         clearLocalMessages();
         return runSearch(trimmed, {
           query: trimmed,
@@ -157,14 +161,14 @@ export function useGroundedSearchFastPath() {
       clearLocalMessages();
       return runSearch(trimmed, params, submissionId);
     },
-    [clearLocalMessages, runSearch, currentPins, selectedPinId],
+    [clearLocalMessages, runSearch, currentPins, selectedPinId, setToolResult],
   );
 
   // A card action uses the SAME read-only Nearby fast path as a typed
   // contextual query. Never send a second agent turn or guess a map origin.
   const searchNearbyRental = useCallback(async (rentalId: string): Promise<boolean> => {
     const pinId = `rental-${rentalId}`;
-    if (busyRef.current || !isStoredRentalUuid(rentalId) ||
+    if (groundedSearchesInFlight.has(setToolResult) || !isStoredRentalUuid(rentalId) ||
         !currentPins.some((pin) => pin.id === pinId && pin.category === "rental")) {
       return false;
     }
@@ -177,7 +181,7 @@ export function useGroundedSearchFastPath() {
       nearbyRentalId: rentalId,
       nearbyRadiusMeters: 800,
     });
-  }, [currentPins, clearLocalMessages, runSearch]);
+  }, [currentPins, clearLocalMessages, runSearch, setToolResult]);
 
   return { handleUserMessage, searchNearbyRental };
 }
