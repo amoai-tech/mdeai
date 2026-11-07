@@ -595,11 +595,19 @@ export function EventResults({ result }: { result: unknown }) {
       // Scope the "already rendered" check to THIS event: another event's card must not
       // suppress this one.
       const renderedSelector = `[data-testid="a2ui-event-card"][data-event-id="${eventId}"]`;
-      if (document.querySelector(renderedSelector)) return answer(false);
+      const alreadyRendered = document.querySelector<HTMLElement>(renderedSelector);
+      if (alreadyRendered) {
+        alreadyRendered.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        return answer(true);
+      }
 
       window.clearTimeout(recoveryTimer);
       recoveryTimer = window.setTimeout(() => {
-        if (document.querySelector(renderedSelector)) return answer(false);
+        const alreadyRendered = document.querySelector<HTMLElement>(renderedSelector);
+      if (alreadyRendered) {
+        alreadyRendered.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        return answer(true);
+      }
         recoveryHandled.current.add(key);
         setSelectedEvent(row as EventResultRow);
         answer(true);

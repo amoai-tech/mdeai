@@ -26,7 +26,11 @@ vi.mock("@/components/chat/concierge-coagent-context", () => ({
 }));
 // The fast-path searches are not under test here.
 const noMatch = vi.hoisted(() => ({ handleUserMessage: async () => false }));
-const eventFast = vi.hoisted(() => ({ handleUserMessage: async () => false, activeEventId: null as string | null }));
+const eventFast = vi.hoisted(() => ({
+  handleUserMessage: async () => false,
+  activeEventId: null as string | null,
+  activeEventRows: [] as Array<{ id: string; title: string }>,
+}));
 vi.mock("@/hooks/use-event-search-fast-path", () => ({ useEventSearchFastPath: () => eventFast }));
 vi.mock("@/hooks/use-event-venue-booking-fast-path", () => ({ useEventVenueBookingFastPath: () => noMatch }));
 const groundedNearby = vi.hoisted(() => ({ handleUserMessage: vi.fn(async () => true) }));
@@ -65,6 +69,7 @@ beforeEach(() => {
   chat.waitForRuntimeReady.mockImplementation(async () => !chat.runtimeUnavailable);
   coagent.state = {};
   eventFast.activeEventId = null;
+  eventFast.activeEventRows = [];
   session.user = { id: "u1" };
   session.loading = false;
   supa.getUser.mockReset();
@@ -394,30 +399,43 @@ describe("onAgentSend for a signed-out visitor", () => {
     });
   });
 
-  it("dispatches exactly one Quick view recovery only for a card request with an authorized event", async () => {
+  it("confirms only after the exact Quick view opens", async () => {
     eventFast.activeEventId = "a1b2c3d4-0001-0001-0001-000000000003";
+    eventFast.activeEventRows = [{ id: eventFast.activeEventId, title: "Feria de las Flores" }];
     act(() => root.render(<EventLocalChatProvider><Harness /></EventLocalChatProvider>));
-    chat.appendMessage.mockResolvedValue(true);
-    const seen: unknown[] = [];
-    const listener = (event: Event) => seen.push((event as CustomEvent).detail);
-    window.addEventListener("mde:event-card-recovery", listener);
+    const onRecovery = (event: Event) => {
+      const detail = (event as CustomEvent<{ requestId?: string }>).detail;
+      window.dispatchEvent(new CustomEvent("mde:event-card-recovery-result", {
+        detail: { requestId: detail?.requestId, opened: true },
+      }));
+    };
+    window.addEventListener("mde:event-card-recovery", onRecovery);
     await act(async () => {
       await handlers.onAgentSend("Show the first event as a card.");
     });
-    window.removeEventListener("mde:event-card-recovery", listener);
-    expect(seen).toEqual([{ eventId: "a1b2c3d4-0001-0001-0001-000000000003" }]);
+    window.removeEventListener("mde:event-card-recovery", onRecovery);
+    expect(chat.appendMessage).not.toHaveBeenCalled();
+    expect(shown).toContainEqual(expect.objectContaining({ role: "assistant", content: "Here is the event card." }));
   });
 
-  it("does not dispatch recovery without an authorized event ID", async () => {
+  it("falls through to the model when the card does not open", async () => {
+    eventFast.activeEventId = "a1b2c3d4-0001-0001-0001-000000000003";
+    eventFast.activeEventRows = [{ id: eventFast.activeEventId, title: "Feria de las Flores" }];
+    act(() => root.render(<EventLocalChatProvider><Harness /></EventLocalChatProvider>));
     chat.appendMessage.mockResolvedValue(true);
-    const seen: unknown[] = [];
-    const listener = (event: Event) => seen.push((event as CustomEvent).detail);
-    window.addEventListener("mde:event-card-recovery", listener);
+    const onRecovery = (event: Event) => {
+      const detail = (event as CustomEvent<{ requestId?: string }>).detail;
+      window.dispatchEvent(new CustomEvent("mde:event-card-recovery-result", {
+        detail: { requestId: detail?.requestId, opened: false },
+      }));
+    };
+    window.addEventListener("mde:event-card-recovery", onRecovery);
     await act(async () => {
       await handlers.onAgentSend("Show the first event as a card.");
     });
-    window.removeEventListener("mde:event-card-recovery", listener);
-    expect(seen).toEqual([]);
+    window.removeEventListener("mde:event-card-recovery", onRecovery);
+    expect(chat.appendMessage).toHaveBeenCalledTimes(1);
+    expect(shown.some((message) => message.content === "Here is the event card.")).toBe(false);
   });
 
 });

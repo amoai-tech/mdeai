@@ -176,6 +176,9 @@ describe("event cards on the map", () => {
     // Scoped: only a card for THIS event suppresses recovery.
     a2ui.dataset.eventId = "mapped";
     document.body.appendChild(a2ui);
+    const results: Array<Record<string, unknown>> = [];
+    const onResult = (event: Event) => results.push((event as CustomEvent).detail);
+    window.addEventListener("mde:event-card-recovery-result", onResult);
     render();
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)); });
     act(() => {
@@ -184,6 +187,8 @@ describe("event cards on the map", () => {
     });
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 600)); });
     expect(document.body.querySelectorAll('[data-testid="event-card-modal"]')).toHaveLength(0);
+    expect(results).toContainEqual(expect.objectContaining({ eventId: "mapped", opened: true }));
+    window.removeEventListener("mde:event-card-recovery-result", onResult);
     a2ui.remove();
   });
 
