@@ -123,7 +123,12 @@ describe("conciergeAgent", () => {
   });
 
   it("every grounded follow-up rule allows distance only for the current anchor", async () => {
-    const instructions = await conciergeAgent.getInstructions();
+    const raw = await conciergeAgent.getInstructions();
+    const instructions = Array.isArray(raw)
+      ? raw.join("\n")
+      : typeof raw === "string"
+        ? raw
+        : String((raw as { content?: unknown }).content ?? "");
     const restricted = instructions
       .split("\n")
       .filter((line) => line.includes("summary/area/rating"));
