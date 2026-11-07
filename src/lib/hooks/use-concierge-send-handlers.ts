@@ -16,6 +16,7 @@ import { useRentalSearchFastPath } from "@/hooks/use-rental-search-fast-path";
 import { useRestaurantSearchFastPath } from "@/hooks/use-restaurant-search-fast-path";
 import { useSession } from "@/hooks/use-session";
 import { isSelectedRentalCafeNearbyRequest } from "@/lib/cafe-search-fast-path";
+import { closestGroundedResult, isClosestGroundedQuestion } from "@/lib/closest-grounded-result";
 import { createClient } from "@/lib/supabase/client";
 import { stashConciergeDraft } from "@/lib/concierge-draft-store";
 
@@ -51,12 +52,35 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
   // fallback to show its sign-in prompt instead of retrying a guaranteed 401.
   const handleGroundedMessage = useCallback(
     (text: string, submissionId?: string): Promise<boolean> => {
+      // Closest/nearest answers come from measured data, not another model turn.
+      // This prevents invented distances and raw Place IDs in the reply.
+      const groundedMemory = state as
+        | { lastGroundedResults?: Parameters<typeof closestGroundedResult>[0]; selectedListingId?: string }
+        | undefined;
+      if (groundedMemory?.lastGroundedResults?.length && isClosestGroundedQuestion(text)) {
+        const closest = closestGroundedResult(
+          groundedMemory.lastGroundedResults,
+          groundedMemory.selectedListingId,
+        );
+        const message = closest
+          ? closest.partial
+            ? `Among the places with a measured distance, ${closest.title} is closest — about ${closest.distanceMeters} m away (straight-line).`
+            : `${closest.title} is the closest, about ${closest.distanceMeters} m away (straight-line).`
+          : "I don't have a measured distance for the current apartment, so I can't say which is closest.";
+        showExchange(text, message, submissionId);
+        return Promise.resolve(true);
+      }
       if (isSelectedRentalCafeNearbyRequest(text) && !signedIn) {
         return Promise.resolve(false);
       }
       return handleGroundedFastPathMessage(text, submissionId);
     },
-    [handleGroundedFastPathMessage, signedIn],
+    [
+      handleGroundedFastPathMessage,
+      signedIn,
+      state,
+      showExchange,
+    ],
   );
   const { handleUserMessage: handleEventVenueBookingMessage } =
     useEventVenueBookingFastPath();
