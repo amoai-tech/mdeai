@@ -10,7 +10,15 @@ import {
 import { COPILOTKIT_BASE_PATH, COPILOTKIT_HANDLER_MODE } from "@/lib/copilotkit-transport";
 import { createClient } from "@/lib/supabase/server";
 import { mastra } from "@/mastra";
-import { REQUEST_ID_HEADER, logTurnBoundary, resolveTurnCorrelation } from "@/mastra/lib/turn-correlation";
+import {
+  ATTEMPT_ID_HEADER,
+  REQUEST_ID_HEADER,
+  getTurnCorrelation,
+  logTurnBoundary,
+  observeTurnStream,
+  resolveTurnCorrelation,
+  withTurnCorrelation,
+} from "@/mastra/lib/turn-correlation";
 import { getLocalAgentsWithLogging } from "@/mastra/copilotkit/logging-mastra-agent";
 import { setAuditUserId } from "@/mastra/lib/tool-audit-context";
 import { HOST_SUPABASE_KEY } from "@/mastra/tools/hostops-read-tools";
@@ -38,7 +46,7 @@ const persistTurnLog: PersistTurnLog = (opts) => {
       const meta = opts.metadata ?? {};
       console.error("[copilotkit ai_runs persist failed]", {
         agentMapKey: opts.agentMapKey,
-        requestId: "request" in opts ? (opts as { requestId?: string }).requestId : undefined,
+        requestId: getTurnCorrelation()?.requestId ?? null,
         status: opts.status,
         threadId:
           (typeof meta.thread_id === "string" ? meta.thread_id : null) ??
@@ -162,17 +170,25 @@ async function handleCopilotKit(req: NextRequest) {
   // C1: one id for this turn, on every boundary line and on the response, so a slow or
   // failed request can be followed from the browser into the server logs.
   const correlation = resolveTurnCorrelation(req);
-  logTurnBoundary({ requestId: correlation.requestId, phase: "request", durationMs: 0, detail: `${req.method} ${new URL(req.url).pathname}` });
 
-  const response = await handleCorrelatedCopilotKit(req);
+  // The entry line is emitted INSIDE the request path (after the IP ceiling, see
+  // below), so rejected traffic cannot flood the log with one line per rejected call.
+  const response = await withTurnCorrelation(correlation, () => handleCorrelatedCopilotKit(req));
+
   response.headers.set(REQUEST_ID_HEADER, correlation.requestId);
+  response.headers.set(ATTEMPT_ID_HEADER, correlation.attemptId);
   logTurnBoundary({
     requestId: correlation.requestId,
+    attemptId: correlation.attemptId,
     phase: response.status >= 400 ? "error" : "runtime",
     durationMs: correlation.elapsedMs(),
     status: String(response.status),
   });
-  return response;
+
+  // A 200 only proves headers were sent. B2's symptom is a 200 whose answer never
+  // materialises, so the stream itself is observed for completion, emptiness,
+  // cancellation and failure.
+  return response.status < 400 ? observeTurnStream(response, correlation) : response;
 }
 
 async function handleCorrelatedCopilotKit(req: NextRequest): Promise<Response> {
@@ -185,6 +201,19 @@ async function handleCorrelatedCopilotKit(req: NextRequest): Promise<Response> {
     //    shed abusive traffic before we spend a Supabase round-trip on it.
     const ipHardCeiling = await checkCopilotKitDistributedIpHardCeiling(req);
     if (ipHardCeiling) return ipHardCeiling;
+
+    // Only requests that passed the ceiling are logged, so abusive traffic cannot
+    // amplify into log volume.
+    const correlation = getTurnCorrelation();
+    if (correlation) {
+      logTurnBoundary({
+        requestId: correlation.requestId,
+        attemptId: correlation.attemptId,
+        phase: "request",
+        durationMs: correlation.elapsedMs(),
+        detail: `${req.method} ${new URL(req.url).pathname}`,
+      });
+    }
 
     // 2. Server-derived identity. Origin/Referer is routing context, never proof.
     const supabase = await createClient();
