@@ -92,6 +92,11 @@ test.describe("SAN-972 /events map workspace", () => {
   test("card to map and map to card use the same event ID; Details and Back work", async ({ page }) => {
     await openEvents(page, 1440, 900);
     const cards = await locatedCards(page);
+    // Wait for a real Maps renderer and marker before selecting: cards hydrate
+    // first, while Google Maps JavaScript and its tile/marker libraries load later.
+    const mapPanel = page.getByTestId("browse-map-panel");
+    await expect(mapPanel.locator(".gm-style").first()).toBeVisible({ timeout: 20_000 });
+    await expect(mapPanel.getByTestId("map-pin").first()).toBeVisible({ timeout: 20_000 });
     const card = cards.first();
     const pinId = await card.getAttribute("data-pin-id");
     if (!pinId) throw new Error("located card has no pin id");
@@ -105,7 +110,9 @@ test.describe("SAN-972 /events map workspace", () => {
     // Map -> Details -> Back
     await overlay.getByTestId("selected-place-overlay-details").click();
     await expect(page).toHaveURL(/\/events\/[^/]+$/, { timeout: 15_000 });
-    await page.goBack();
+    // The Next.js dev server may keep loading assets after the route has navigated;
+    // assert the real returned page instead of waiting for every load event.
+    await page.goBack({ waitUntil: "commit" });
     await expect(page.getByTestId("events-browse").first()).toBeVisible();
 
     // Map -> card: clicking another marker selects its matching card.
