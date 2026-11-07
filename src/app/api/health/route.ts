@@ -1,11 +1,8 @@
 import { NextResponse } from "next/server";
+import { hasPlacesApiKey } from "@/mastra/lib/google-places-client";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-function hasValue(value: string | undefined): boolean {
-  return typeof value === "string" && value.trim().length >= 8;
-}
 
 /**
  * Release-gate health probe. Booleans only: this endpoint must never expose a
@@ -17,11 +14,7 @@ function hasValue(value: string | undefined): boolean {
  */
 export async function GET() {
   const checks = {
-    placesKey: hasValue(
-      process.env.GOOGLE_PLACES_API_KEY ??
-        process.env.GOOGLE_MAPS_SERVER_API_KEY ??
-        process.env.GOOGLE_MAPS_API_KEY,
-    ),
+    placesKey: hasPlacesApiKey(),
     mapId: Boolean(process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID?.trim()),
     supabase: Boolean(
       process.env.NEXT_PUBLIC_SUPABASE_URL &&

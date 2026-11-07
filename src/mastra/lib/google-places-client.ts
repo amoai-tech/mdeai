@@ -104,6 +104,16 @@ export function requirePlacesApiKey(): string {
   return key;
 }
 
+/** Boolean-only probe for release health; never returns or logs the key. */
+export function hasPlacesApiKey(): boolean {
+  try {
+    requirePlacesApiKey();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 let _client: PlacesClient | null = null;
 
 function getClient(): PlacesClient {
