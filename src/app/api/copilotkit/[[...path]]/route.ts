@@ -10,6 +10,7 @@ import {
 import { COPILOTKIT_BASE_PATH, COPILOTKIT_HANDLER_MODE } from "@/lib/copilotkit-transport";
 import { createClient } from "@/lib/supabase/server";
 import { mastra } from "@/mastra";
+import { REQUEST_ID_HEADER, logTurnBoundary, resolveTurnCorrelation } from "@/mastra/lib/turn-correlation";
 import { getLocalAgentsWithLogging } from "@/mastra/copilotkit/logging-mastra-agent";
 import { setAuditUserId } from "@/mastra/lib/tool-audit-context";
 import { HOST_SUPABASE_KEY } from "@/mastra/tools/hostops-read-tools";
@@ -37,6 +38,7 @@ const persistTurnLog: PersistTurnLog = (opts) => {
       const meta = opts.metadata ?? {};
       console.error("[copilotkit ai_runs persist failed]", {
         agentMapKey: opts.agentMapKey,
+        requestId: "request" in opts ? (opts as { requestId?: string }).requestId : undefined,
         status: opts.status,
         threadId:
           (typeof meta.thread_id === "string" ? meta.thread_id : null) ??
@@ -157,6 +159,23 @@ async function isDeterministicE2ERuntimeInfoRequest(req: NextRequest): Promise<b
 
 /** Auth, distributed rate limits, then CopilotKit/Mastra runtime. */
 async function handleCopilotKit(req: NextRequest) {
+  // C1: one id for this turn, on every boundary line and on the response, so a slow or
+  // failed request can be followed from the browser into the server logs.
+  const correlation = resolveTurnCorrelation(req);
+  logTurnBoundary({ requestId: correlation.requestId, phase: "request", durationMs: 0, detail: `${req.method} ${new URL(req.url).pathname}` });
+
+  const response = await handleCorrelatedCopilotKit(req);
+  response.headers.set(REQUEST_ID_HEADER, correlation.requestId);
+  logTurnBoundary({
+    requestId: correlation.requestId,
+    phase: response.status >= 400 ? "error" : "runtime",
+    durationMs: correlation.elapsedMs(),
+    status: String(response.status),
+  });
+  return response;
+}
+
+async function handleCorrelatedCopilotKit(req: NextRequest): Promise<Response> {
   if (await isDeterministicE2ERuntimeInfoRequest(req)) {
     return Response.json({ agents: {} });
   }
