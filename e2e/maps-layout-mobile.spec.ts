@@ -118,6 +118,109 @@ test.describe("SAN-524 mobile map interaction — 390×844 touch", () => {
     hasTouch: true,
   });
 
+  test("rental comparison keeps Open map clear after toolbar resize and restores it on Clear", async ({ page }) => {
+    test.setTimeout(90_000);
+    await mockFastPaths(page);
+    // Use two distinct apartments; real React card selection and layout, mocked
+    // search response only (no production writes or external API dependency).
+    await page.route("**/api/rentals/search", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          results: [
+            rental,
+            {
+              ...rental,
+              id: "rnt_test_002",
+              title: "Second deterministic apartment in Laureles",
+              nightly_price: 70,
+              longitude: -75.5834,
+            },
+          ],
+          total: 2,
+          source: "mock",
+        }),
+      }),
+    );
+    await gotoDeterministicChat(page);
+    const responsePromise = waitForPost(page, "/api/rentals/search");
+    await typeAndSubmit(page, RENTAL_QUERY);
+    expect((await responsePromise).ok()).toBe(true);
+    const toggles = page.getByTestId("rental-compare-toggle");
+    await expect(toggles).toHaveCount(2);
+
+    const mapTrigger = page.getByTestId("map-sheet-trigger");
+    await expect(mapTrigger).toBeVisible();
+    const initialMap = await mapTrigger.boundingBox();
+    expect(initialMap).not.toBeNull();
+
+    await toggles.nth(0).click();
+    await toggles.nth(1).click();
+    const toolbar = page.getByTestId("rental-compare-toolbar");
+    await expect(toolbar).toBeVisible();
+    await expect(page.getByTestId("rental-compare-open")).toBeVisible();
+
+    const clearance = async () => {
+      const [mapBox, toolbarBox] = await Promise.all([
+        mapTrigger.boundingBox(),
+        toolbar.boundingBox(),
+      ]);
+      if (!mapBox || !toolbarBox) return Number.NEGATIVE_INFINITY;
+      return toolbarBox.y - (mapBox.y + mapBox.height);
+    };
+    await expect.poll(clearance, {
+      message: "Open map must be above the selected-rentals toolbar at 390px",
+    }).toBeGreaterThanOrEqual(4);
+
+    const beforeGrowth = await toolbar.boundingBox();
+    expect(beforeGrowth).not.toBeNull();
+    const mapBeforeGrowth = await mapTrigger.boundingBox();
+    expect(mapBeforeGrowth).not.toBeNull();
+    // Simulate a late font or wrapping change after the toolbar is already
+    // mounted, which a composer-only ResizeObserver would miss.
+    await toolbar.evaluate((element) => {
+      element.style.minHeight = `${Math.ceil(element.getBoundingClientRect().height) + 72}px`;
+    });
+    await expect.poll(async () => (await toolbar.boundingBox())?.height ?? 0)
+      .toBeGreaterThan(beforeGrowth!.height + 60);
+    await expect.poll(clearance, {
+      message: "Open map must follow the toolbar's in-place height change",
+    }).toBeGreaterThanOrEqual(4);
+    await expect.poll(async () => (await mapTrigger.boundingBox())?.y ?? 1e6)
+      .toBeLessThan(mapBeforeGrowth!.y - 55);
+
+    await toolbar.evaluate((element) => element.style.removeProperty("min-height"));
+    await page.getByTestId("rental-compare-clear").click();
+    await expect(toolbar).toHaveCount(0);
+    await expect.poll(async () => {
+      const current = await mapTrigger.boundingBox();
+      return current ? Math.abs(current.y - initialMap!.y) : Number.POSITIVE_INFINITY;
+    }, { message: "Open map must return to its original position after Clear" })
+      .toBeLessThanOrEqual(2);
+
+    // Regression: changing threads can remove the toolbar and remount the
+    // composer in the same mutation frame. The new composer must still settle.
+    await toggles.nth(0).click();
+    await toggles.nth(1).click();
+    await expect(toolbar).toBeVisible();
+    await page.getByTestId("nav-drawer-trigger").click();
+    const drawer = page.getByTestId("nav-drawer-content");
+    await expect(drawer).toBeVisible();
+    await drawer.getByTestId("nav-new-chat").click();
+    await expect(toolbar).toHaveCount(0);
+    await expect.poll(async () => {
+      const [mapBox, inputBox] = await Promise.all([
+        mapTrigger.boundingBox(),
+        page.getByTestId("copilot-chat-input").boundingBox(),
+      ]);
+      if (!mapBox || !inputBox) return Number.NEGATIVE_INFINITY;
+      return inputBox.y - (mapBox.y + mapBox.height);
+    }, { message: "new-thread composer must keep Open map above its top" })
+      .toBeGreaterThanOrEqual(4);
+    await expectNoHorizontalOverflow(page);
+  });
+
   test("map trigger is disabled in server HTML until hydrated", async ({
     browser,
     page,
