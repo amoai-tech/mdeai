@@ -8,6 +8,7 @@ import { useEventSearchFastPath } from "@/hooks/use-event-search-fast-path";
 import { ToolErrorChip } from "@/components/copilot/tool-error-chip";
 import { CafeResultCard } from "@/components/copilot/cafe-result-card";
 import { RentalCard } from "@/components/copilot/rental-card";
+import { RentalComparison, resolveRentalComparisonRows, type ComparisonRentalRow } from "@/components/copilot/rental-comparison";
 import type { RentalSearchMeta } from "@/components/chat/rental-fast-path-context";
 import { EventCard } from "@/components/copilot/event-card";
 import { DomainResults } from "@/components/copilot/domain-results";
@@ -236,7 +237,7 @@ export function RentalResults({
   result: unknown;
   searchMeta?: RentalSearchMeta;
 }) {
-  const { selectedPinId, panToPin } = useMapContext();
+  const { selectedPinId, panToPin, pins } = useMapContext();
   const { openScheduleViewing, openVenueDetail } = useRentalUi();
   const listRef = useRef<HTMLDivElement>(null);
   const envelope = normalizeToolEnvelope(result);
@@ -286,6 +287,55 @@ export function RentalResults({
   // SAN-1235 — the same duplicate rule the /rentals page uses. Two feeds for one home must not
   // look like two apartments in a chat answer, which is exactly what the production envelope did.
   const duplicateNotes = duplicateListingNotes(rows);
+  // Local, deterministic comparison state: only IDs from this actual result.
+  // New result identity resets the selection, so an old turn cannot select
+  // apartments that a new search didn't return.
+  const rowsKey = rows.map((row) => row.id).join("\u001f");
+  const [comparisonState, setComparisonState] = useState<{
+    rowsKey: string; ids: string[]; open: boolean;
+  }>({ rowsKey: "", ids: [], open: false });
+  // Derive only the active result's selection. A new search invalidates the old
+  // selection immediately, without a setState-in-effect render race.
+  const comparisonIds = comparisonState.rowsKey === rowsKey ? comparisonState.ids : [];
+  const comparisonOpen = comparisonState.rowsKey === rowsKey && comparisonState.open;
+  const setComparisonOpen = (open: boolean) => {
+    setComparisonState((previous) => ({
+      rowsKey, ids: previous.rowsKey === rowsKey ? previous.ids : [], open,
+    }));
+  };
+  const comparisonReady = Boolean(resolveRentalComparisonRows(rows, comparisonIds));
+  const toggleComparison = (id: string) => {
+    setComparisonState((previous) => {
+      const ids = previous.rowsKey === rowsKey ? previous.ids : [];
+      return {
+        rowsKey, open: false,
+        ids: ids.includes(id) ? ids.filter((selected) => selected !== id)
+          : ids.length < 4 ? [...ids, id] : ids,
+      };
+    });
+  };
+  const hasCurrentPin = (id: string) => {
+    const pinId = rentalPinId(id);
+    return mappedRentalIds.has(pinId) && pins.some((pin) => pin.id === pinId);
+  };
+  const openComparedDetails = (row: ComparisonRentalRow) => {
+    const pinId = rentalPinId(row.id);
+    const hasPin = hasCurrentPin(row.id);
+    const detailRental = toDetailRental(row);
+    // Same source guard as the existing card, never a fabricated detail sheet.
+    if (row.tags?.includes("external-source") && !detailRental) return;
+    if (hasPin) panToPin(pinId);
+    setComparisonOpen(false);
+    openVenueDetail({
+      kind: "rental", listingId: row.id, pinId, pinned: hasPin,
+      rental: detailRental ?? undefined,
+      title: row.title, neighborhood: row.neighborhood,
+      nightlyPrice: row.nightly_price, bedrooms: row.bedrooms,
+      photoUrl: row.photo_url ?? row.image_url,
+      amenities: row.amenities, availability: row.availability,
+      hostName: row.host_name, canScheduleViewing: row.can_schedule_viewing === true,
+    });
+  };
 
   useEffect(() => {
     if (!selectedPinId || !listRef.current) return;
@@ -309,10 +359,19 @@ export function RentalResults({
                 ? `${rows.length} suggested apartment${rows.length === 1 ? "" : "s"}`
                 : `${rows.length} matching apartment${rows.length === 1 ? "" : "s"}`}
           </span>
-          <Link href="/rentals" className="font-medium text-primary underline-offset-4 hover:underline"
-            data-testid="rental-browse-all-link">
-            Browse all apartments
-          </Link>
+          <div className="flex flex-wrap items-center gap-3">
+            {rows.length >= 2 ? (
+              <button type="button" data-testid="rental-compare-open"
+                className="min-h-11 rounded-md border border-border px-3 font-medium disabled:opacity-50"
+                disabled={!comparisonReady} onClick={() => setComparisonOpen(true)}>
+                Compare selected ({comparisonIds.length}/4)
+              </button>
+            ) : null}
+            <Link href="/rentals" className="font-medium text-primary underline-offset-4 hover:underline"
+              data-testid="rental-browse-all-link">
+              Browse all apartments
+            </Link>
+          </div>
         </div>
       ) : null}
       {rows.length > 0 && envelope.budgetNote ? (
@@ -369,8 +428,8 @@ export function RentalResults({
             });
           };
           return (
+            <div key={r.id} className="flex flex-col gap-1">
             <RentalCard
-              key={r.id}
               id={pinId}
               pinId={hasPin ? pinId : null}
               listingId={r.id}
@@ -404,10 +463,44 @@ export function RentalResults({
                 })
               }
             />
+            {rows.length >= 2 ? (
+              <button type="button" data-testid="rental-compare-toggle"
+                aria-label={comparisonIds.includes(r.id) ? `Remove ${r.title} from comparison` : `Add ${r.title} to comparison`}
+                aria-pressed={comparisonIds.includes(r.id)}
+                disabled={!comparisonIds.includes(r.id) && comparisonIds.length >= 4}
+                className="min-h-11 self-start rounded-md border border-border px-3 text-xs disabled:opacity-50"
+                onClick={() => toggleComparison(r.id)}>
+                {comparisonIds.includes(r.id) ? "Remove from comparison" : "Add to comparison"}
+              </button>
+            ) : null}
+            </div>
           );
         })}
         </div>
       )}
+      <Dialog open={comparisonOpen} onOpenChange={setComparisonOpen}>
+        <DialogContent className="w-[calc(100vw-1rem)] max-w-6xl max-h-[85dvh] overflow-y-auto p-3 sm:p-5"
+          data-testid="rental-comparison-modal">
+          <DialogHeader><DialogTitle>Compare apartments</DialogTitle></DialogHeader>
+          <RentalComparison rows={rows} listingIds={comparisonIds}
+            hasPin={hasCurrentPin}
+            onFocusPin={(id) => {
+              if (!hasCurrentPin(id)) return;
+              panToPin(rentalPinId(id));
+              setComparisonOpen(false);
+            }}
+            canOpenDetails={(row) => !(row.tags?.includes("external-source") && !toDetailRental(row))}
+            onOpenDetails={openComparedDetails}
+            onScheduleViewing={(row) => {
+              if (row.can_schedule_viewing !== true) return;
+              setComparisonOpen(false);
+              openScheduleViewing({
+                listingId: row.id, title: row.title, neighborhood: row.neighborhood,
+              });
+            }}
+          />
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

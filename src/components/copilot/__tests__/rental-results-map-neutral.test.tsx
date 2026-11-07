@@ -8,10 +8,11 @@ const ui = vi.hoisted(() => ({
   openVenueDetail: vi.fn(),
   openScheduleViewing: vi.fn(),
   selectedPinId: null as string | null,
+  pins: [] as Array<{ id: string }>,
 }));
 
 vi.mock("@/platform/maps/map-context", () => ({
-  useMapContext: () => ({ selectedPinId: ui.selectedPinId, panToPin: ui.panToPin }),
+  useMapContext: () => ({ selectedPinId: ui.selectedPinId, panToPin: ui.panToPin, pins: ui.pins }),
 }));
 vi.mock("@/components/chat/rental-ui-context", () => ({
   useRentalUi: () => ({
@@ -56,6 +57,7 @@ beforeEach(() => {
   ui.openVenueDetail.mockReset();
   ui.openScheduleViewing.mockReset();
   ui.selectedPinId = null;
+  ui.pins = [];
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -251,5 +253,53 @@ describe("SAN-1503 · truthful natural-language rental result totals", () => {
     render({ source: "supabase", results: [], total: 42 }, meta("quiet"));
     expect(container.querySelector('[data-testid="rental-results-count"]')).toBeNull();
     expect(container.querySelector('[data-testid="rental-browse-all-link"]')).toBeNull();
+  });
+});
+
+describe("SAN-1041 · deterministic comparison from rental tool results", () => {
+  const result = {
+    source: "supabase",
+    results: [
+      fullRental("first", { latitude: 6.24, longitude: -75.59 }),
+      fullRental("second", { price_monthly: 2_800_000 }),
+      fullRental("third", { price_monthly: 3_500_000 }),
+    ],
+  };
+
+  it("selects two real result IDs, compares their own prices, then opens existing Details", () => {
+    ui.pins = [{ id: "rental-first" }];
+    render(result);
+    const toggles = [...container.querySelectorAll<HTMLButtonElement>('[data-testid="rental-compare-toggle"]')];
+    expect(toggles).toHaveLength(3);
+    const open = container.querySelector<HTMLButtonElement>('[data-testid="rental-compare-open"]');
+    expect(open?.disabled).toBe(true);
+    act(() => { toggles[0].click(); toggles[1].click(); });
+    expect(open?.disabled).toBe(false);
+    act(() => open?.click());
+    const dialog = document.querySelector('[data-testid="rental-comparison-modal"]');
+    expect(dialog).not.toBeNull();
+    expect(dialog?.textContent).toContain("COP 2,400,000/month");
+    expect(dialog?.textContent).toContain("COP 2,800,000/month");
+    const details = dialog?.querySelector<HTMLButtonElement>(
+      '[data-testid="rental-comparison-column-first"] button:nth-child(2)',
+    );
+    expect(details?.textContent).toMatch(/Details/);
+    act(() => details?.click());
+    expect(ui.openVenueDetail).toHaveBeenCalledWith(expect.objectContaining({
+      kind: "rental", listingId: "first", pinned: true,
+      rental: expect.objectContaining({ price_monthly: 2_400_000 }),
+    }));
+    expect(ui.panToPin).toHaveBeenCalledWith("rental-first");
+  });
+
+  it("invalidates selection when a subsequent result replaces the source IDs", () => {
+    render(result);
+    const toggles = [...container.querySelectorAll<HTMLButtonElement>('[data-testid="rental-compare-toggle"]')];
+    act(() => { toggles[0].click(); toggles[1].click(); });
+    expect(container.querySelector<HTMLButtonElement>('[data-testid="rental-compare-open"]')?.disabled).toBe(false);
+    render({ source: "supabase", results: [fullRental("new-a"), fullRental("new-b")] });
+    const open = container.querySelector<HTMLButtonElement>('[data-testid="rental-compare-open"]');
+    expect(open?.disabled).toBe(true);
+    expect(open?.textContent).toContain("(0/4)");
   });
 });
