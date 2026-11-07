@@ -258,3 +258,41 @@ describe("resolveExplicitEventRequest", () => {
     expect(resolveExplicitEventRequest("Show the second event as a card.", [rows[0]])).toBeNull();
   });
 });
+
+describe("resolveExplicitEventRequest · identity before position", () => {
+  it("treats a named event as a title, not as an ordinal", () => {
+    const rows = [
+      { id: "jazz", title: "Sunday Jazz" },
+      { id: "salsa", title: "Second Sunday Salsa" },
+    ];
+    // "Second" is part of the NAME here; the old order returned rows[1] by accident and
+    // would return the wrong event whenever the ordinal did not line up.
+    expect(resolveExplicitEventRequest("Show Sunday Jazz as a card.", rows)).toBe("jazz");
+    expect(resolveExplicitEventRequest("Show Second Sunday Salsa as a card.", rows)).toBe("salsa");
+  });
+
+  it("prefers the longest matching title", () => {
+    const rows = [
+      { id: "short", title: "Jazz Night" },
+      { id: "long", title: "Jazz Night Medellin" },
+    ];
+    expect(resolveExplicitEventRequest("Open Jazz Night Medellin please", rows)).toBe("long");
+    expect(resolveExplicitEventRequest("Open Jazz Night please", rows)).toBe("short");
+  });
+
+  it("does not guess when two different rows match equally", () => {
+    const rows = [
+      { id: "a", title: "Jazz Night" },
+      { id: "b", title: "Jazz Night" },
+    ];
+    expect(resolveExplicitEventRequest("Show Jazz Night as a card", rows)).toBeNull();
+  });
+
+  it("still resolves a pure ordinal request", () => {
+    const rows = [
+      { id: "one", title: "Alpha" },
+      { id: "two", title: "Beta" },
+    ];
+    expect(resolveExplicitEventRequest("Show the second event as a card", rows)).toBe("two");
+  });
+});

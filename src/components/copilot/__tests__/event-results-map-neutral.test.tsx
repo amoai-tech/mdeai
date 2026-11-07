@@ -173,6 +173,8 @@ describe("event cards on the map", () => {
   it("does not recover over an existing A2UI card or without an event ID", async () => {
     const a2ui = document.createElement("div");
     a2ui.dataset.testid = "a2ui-event-card";
+    // Scoped: only a card for THIS event suppresses recovery.
+    a2ui.dataset.eventId = "mapped";
     document.body.appendChild(a2ui);
     render();
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)); });
@@ -254,5 +256,64 @@ describe("EventResults empty and unavailable states", () => {
     showResult({ total: 0, source: "supabase" });
     expect(container.querySelector('[data-testid="events-search-error"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="events-empty"]')).toBeNull();
+  });
+});
+
+describe("event card recovery · reports whether it opened", () => {
+  const wait = (ms: number) => act(async () => { await new Promise((resolve) => setTimeout(resolve, ms)); });
+  const listen = () => {
+    const results: Array<{ requestId?: string; opened?: boolean }> = [];
+    const onResult = (event: Event) => {
+      results.push((event as CustomEvent<{ requestId?: string; opened?: boolean }>).detail ?? {});
+    };
+    window.addEventListener("mde:event-card-recovery-result", onResult);
+    return { results, stop: () => window.removeEventListener("mde:event-card-recovery-result", onResult) };
+  };
+
+  it("acknowledges opened:true when Quick view actually opens", async () => {
+    const listener = listen();
+    render();
+    await wait(50);
+    act(() => {
+      window.dispatchEvent(new CustomEvent("mde:event-card-recovery", {
+        detail: { eventId: "mapped", requestId: "req-1" },
+      }));
+    });
+    await wait(600);
+    expect(listener.results.some((entry) => entry.requestId === "req-1" && entry.opened === true)).toBe(true);
+    expect(document.body.querySelectorAll('[data-testid="event-card-modal"]')).toHaveLength(1);
+    listener.stop();
+  });
+
+  it("acknowledges opened:false when the requested event is not in the rows", async () => {
+    const listener = listen();
+    render();
+    await wait(50);
+    act(() => {
+      window.dispatchEvent(new CustomEvent("mde:event-card-recovery", {
+        detail: { eventId: "does-not-exist", requestId: "req-2" },
+      }));
+    });
+    await wait(600);
+    // Without this, the caller confirmed a card that never opened.
+    expect(listener.results.some((entry) => entry.requestId === "req-2" && entry.opened === false)).toBe(true);
+    listener.stop();
+  });
+
+  it("does not let another event's card suppress this one", async () => {
+    const other = document.createElement("div");
+    other.dataset.testid = "a2ui-event-card";
+    other.dataset.eventId = "some-other-event";
+    document.body.appendChild(other);
+    render();
+    await wait(50);
+    act(() => {
+      window.dispatchEvent(new CustomEvent("mde:event-card-recovery", {
+        detail: { eventId: "mapped", requestId: "req-3" },
+      }));
+    });
+    await wait(600);
+    expect(document.body.querySelectorAll('[data-testid="event-card-modal"]')).toHaveLength(1);
+    other.remove();
   });
 });

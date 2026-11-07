@@ -8,6 +8,44 @@ import { getConciergeErrorForThread, reportConciergeError } from "@/lib/concierg
 import { useOptionalThreadNav } from "@/lib/chat/thread-nav-context";
 import { useConciergeChat } from "@/lib/hooks/use-concierge-chat";
 import type { ConciergeSendHandlers } from "@/lib/concierge-send-user-message";
+
+/**
+ * Ask the mounted event results to open Quick view for one event, and report whether it
+ * actually opened. Bounded so a chat turn can never wait on a missing listener: after
+ * the timeout the caller falls through to the model instead of confirming a no-op.
+ */
+const EVENT_CARD_RECOVERY_EVENT = "mde:event-card-recovery";
+const EVENT_CARD_RECOVERY_RESULT = "mde:event-card-recovery-result";
+const EVENT_CARD_RECOVERY_TIMEOUT_MS = 1_800;
+
+export function requestEventCardRecovery(
+  eventId: string,
+  timeoutMs = EVENT_CARD_RECOVERY_TIMEOUT_MS,
+): Promise<boolean> {
+  if (typeof window === "undefined") return Promise.resolve(false);
+  const requestId = `${eventId}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
+  return new Promise<boolean>((resolve) => {
+    let settled = false;
+    const finish = (opened: boolean) => {
+      if (settled) return;
+      settled = true;
+      window.removeEventListener(EVENT_CARD_RECOVERY_RESULT, onResult as EventListener);
+      window.clearTimeout(timer);
+      resolve(opened);
+    };
+    const onResult = (event: Event) => {
+      const detail = (event as CustomEvent<{ requestId?: unknown; opened?: unknown }>).detail;
+      if (detail?.requestId !== requestId) return;
+      finish(detail.opened === true);
+    };
+    const timer = window.setTimeout(() => finish(false), timeoutMs);
+    window.addEventListener(EVENT_CARD_RECOVERY_RESULT, onResult as EventListener);
+    window.dispatchEvent(
+      new CustomEvent(EVENT_CARD_RECOVERY_EVENT, { detail: { eventId, requestId } }),
+    );
+  });
+}
+
 import { useEventSearchFastPath } from "@/hooks/use-event-search-fast-path";
 import { isEventCardRenderRequest, resolveExplicitEventRequest } from "@/lib/event-search-fast-path";
 import { useOptionalEventSearchResults } from "@/components/chat/event-search-results-context";
@@ -97,12 +135,18 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
         ? resolveExplicitEventRequest(text, currentEventRows)
         : null;
       if (directEventId) {
-        showExchange(text, "Here is the event card.", submissionId);
-        window.dispatchEvent(new CustomEvent("mde:event-card-recovery", {
-          detail: { eventId: directEventId },
-        }));
-        clearConciergePendingSend();
-        return true;
+        // Open the card FIRST and confirm only if it actually opened. The old order
+        // showed "Here is the event card." unconditionally, so a request the listener
+        // could not satisfy (already handled, no matching row, card already rendered)
+        // confirmed an action that never happened.
+        const opened = await requestEventCardRecovery(directEventId);
+        if (opened) {
+          showExchange(text, "Here is the event card.", submissionId);
+          clearConciergePendingSend();
+          return true;
+        }
+        // Falling through sends the request to the model, so the user gets a real answer
+        // instead of a false confirmation.
       }
       try {
         if ((await waitForRuntimeReady()) && (await appendMessage(text))) {
