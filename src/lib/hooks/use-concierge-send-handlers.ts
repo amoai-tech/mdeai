@@ -9,6 +9,7 @@ import { useOptionalThreadNav } from "@/lib/chat/thread-nav-context";
 import { useConciergeChat } from "@/lib/hooks/use-concierge-chat";
 import type { ConciergeSendHandlers } from "@/lib/concierge-send-user-message";
 import { useEventSearchFastPath } from "@/hooks/use-event-search-fast-path";
+import { isEventCardRenderRequest } from "@/lib/event-search-fast-path";
 import { useEventVenueBookingFastPath } from "@/hooks/use-event-venue-booking-fast-path";
 import { useGroundedSearchFastPath } from "@/hooks/use-grounded-search-fast-path";
 import { useRentalSearchFastPath } from "@/hooks/use-rental-search-fast-path";
@@ -40,7 +41,7 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
       return (await agentSendRef.current?.(text)) ?? false;
     },
   });
-  const { handleUserMessage: handleEventMessage } = useEventSearchFastPath();
+  const { handleUserMessage: handleEventMessage, activeEventId } = useEventSearchFastPath();
   const { handleUserMessage: handleRestaurantMessage } =
     useRestaurantSearchFastPath();
   const { handleUserMessage: handleGroundedFastPathMessage } =
@@ -91,6 +92,12 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
       }
       try {
         if ((await waitForRuntimeReady()) && (await appendMessage(text))) {
+          // If the model returns no A2UI surface, the existing real result can
+          // still be shown through Quick view. This is a single recovery, not a
+          // second model run or a forced tool choice.
+          if (isEventCardRenderRequest(text) && activeEventId) {
+            window.dispatchEvent(new CustomEvent("mde:event-card-recovery", { detail: { eventId: activeEventId } }));
+          }
           // Another conversation can report a late error during this run.
           // Only this conversation's stream failure should trigger its notice.
           if (getConciergeErrorForThread(threadId).version === 0) return true;
@@ -106,7 +113,7 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
       clearConciergePendingSend();
       return true;
     },
-    [appendMessage, waitForRuntimeReady, retryLastTurn, threadId, showExchange, showNotice, showSignInPrompt, signedIn, sessionLoading],
+    [appendMessage, waitForRuntimeReady, retryLastTurn, threadId, showExchange, showNotice, showSignInPrompt, signedIn, sessionLoading, activeEventId],
   );
 
   // A cold-runtime wait must not turn two clicks into two agent runs.

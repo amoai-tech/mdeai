@@ -26,7 +26,8 @@ vi.mock("@/components/chat/concierge-coagent-context", () => ({
 }));
 // The fast-path searches are not under test here.
 const noMatch = vi.hoisted(() => ({ handleUserMessage: async () => false }));
-vi.mock("@/hooks/use-event-search-fast-path", () => ({ useEventSearchFastPath: () => noMatch }));
+const eventFast = vi.hoisted(() => ({ handleUserMessage: async () => false, activeEventId: null as string | null }));
+vi.mock("@/hooks/use-event-search-fast-path", () => ({ useEventSearchFastPath: () => eventFast }));
 vi.mock("@/hooks/use-event-venue-booking-fast-path", () => ({ useEventVenueBookingFastPath: () => noMatch }));
 const groundedNearby = vi.hoisted(() => ({ handleUserMessage: vi.fn(async () => true) }));
 vi.mock("@/hooks/use-grounded-search-fast-path", () => ({ useGroundedSearchFastPath: () => groundedNearby }));
@@ -63,6 +64,7 @@ beforeEach(() => {
   chat.runtimeUnavailable = false;
   chat.waitForRuntimeReady.mockImplementation(async () => !chat.runtimeUnavailable);
   coagent.state = {};
+  eventFast.activeEventId = null;
   session.user = { id: "u1" };
   session.loading = false;
   supa.getUser.mockReset();
@@ -391,4 +393,31 @@ describe("onAgentSend for a signed-out visitor", () => {
       expect(promptShown).toBe(true);
     });
   });
+
+  it("dispatches exactly one Quick view recovery only for a card request with an authorized event", async () => {
+    eventFast.activeEventId = "a1b2c3d4-0001-0001-0001-000000000003";
+    act(() => root.render(<EventLocalChatProvider><Harness /></EventLocalChatProvider>));
+    chat.appendMessage.mockResolvedValue(true);
+    const seen: unknown[] = [];
+    const listener = (event: Event) => seen.push((event as CustomEvent).detail);
+    window.addEventListener("mde:event-card-recovery", listener);
+    await act(async () => {
+      await handlers.onAgentSend("Show the first event as a card.");
+    });
+    window.removeEventListener("mde:event-card-recovery", listener);
+    expect(seen).toEqual([{ eventId: "a1b2c3d4-0001-0001-0001-000000000003" }]);
+  });
+
+  it("does not dispatch recovery without an authorized event ID", async () => {
+    chat.appendMessage.mockResolvedValue(true);
+    const seen: unknown[] = [];
+    const listener = (event: Event) => seen.push((event as CustomEvent).detail);
+    window.addEventListener("mde:event-card-recovery", listener);
+    await act(async () => {
+      await handlers.onAgentSend("Show the first event as a card.");
+    });
+    window.removeEventListener("mde:event-card-recovery", listener);
+    expect(seen).toEqual([]);
+  });
+
 });

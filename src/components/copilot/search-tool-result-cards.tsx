@@ -516,6 +516,7 @@ export function EventResults({ result }: { result: unknown }) {
     [result],
   );
   const [selectedEvent, setSelectedEvent] = useState<EventResultRow | null>(null);
+  const recoveryHandled = useRef(new Set<string>());
   const openSelectedEventDetail = () => {
     if (!selectedEvent) return;
     const pinId = `event-${selectedEvent.id}`;
@@ -553,6 +554,35 @@ export function EventResults({ result }: { result: unknown }) {
     imageUrl?: string;
     sourceUrl?: string;
   }>;
+  const rowsRef = useRef<EventResultRow[]>([]);
+  useEffect(() => {
+    rowsRef.current = (envelope.results ?? []) as EventResultRow[];
+  }, [envelope.results]);
+
+  useEffect(() => {
+    // Historical EventResults stay mounted. Only the current result set may
+    // recover, otherwise one event opens duplicate Quick view dialogs.
+    if (!isCurrent) return;
+    let recoveryTimer: number | undefined;
+    const onRecovery = (event: Event) => {
+      const eventId = (event as CustomEvent<{ eventId?: unknown }>).detail?.eventId;
+      if (typeof eventId !== "string" || !eventId || recoveryHandled.current.has(eventId)) return;
+      const row = rowsRef.current.find((value) => value.id === eventId);
+      if (!row) return;
+      window.clearTimeout(recoveryTimer);
+      recoveryTimer = window.setTimeout(() => {
+        // A successful A2UI render wins; never add a duplicate card.
+        if (document.querySelector('[data-testid="a2ui-event-card"]')) return;
+        recoveryHandled.current.add(eventId);
+        setSelectedEvent(row as EventResultRow);
+      }, 500);
+    };
+    window.addEventListener("mde:event-card-recovery", onRecovery);
+    return () => {
+      window.removeEventListener("mde:event-card-recovery", onRecovery);
+      window.clearTimeout(recoveryTimer);
+    };
+  }, [isCurrent]);
 
   useEffect(() => {
     if (!isCurrent) return;
