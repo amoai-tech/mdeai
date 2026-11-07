@@ -19,6 +19,8 @@ export type VenueGuestOptions = {
   kind: "cafe" | "nightlife";
   neighborhood?: string | null;
   onResults: Dispatch<GroundedToolRow[]>;
+  /** Restore the unfiltered catalogue; the page owns that state. */
+  onClear?: () => void;
 };
 
 export function GuestVenueSearchScoped({ options }: { options: VenueGuestOptions }) {
@@ -127,9 +129,26 @@ export function GuestVenueSearch({ options }: { options: VenueGuestOptions }) {
         </button>
       </div>
       {message ? (
-        <p role="status" data-testid="guest-venue-summary" className="text-xs text-muted-foreground">
-          {message}
-        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <p role="status" data-testid="guest-venue-summary" className="text-xs text-muted-foreground">
+            {message}
+          </p>
+          {options.onClear ? (
+            <button
+              type="button"
+              data-testid="guest-venue-clear"
+              className="text-xs text-primary underline-offset-4 hover:underline"
+              onClick={() => {
+                abort.current?.abort();
+                setMessage(null);
+                setError(null);
+                options.onClear?.();
+              }}
+            >
+              Clear search
+            </button>
+          ) : null}
+        </div>
       ) : null}
       {error ? (
         <p role="alert" className="text-xs text-destructive">

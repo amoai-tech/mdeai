@@ -168,3 +168,25 @@ describe("POST /api/venues/search", () => {
     expect(res.status).toBe(400);
   });
 });
+
+describe("vibe words are ranked, not required literally", () => {
+  it("returns the café catalogue for a vibe-only query instead of nothing", async () => {
+    // No café name contains "quiet" or "wifi": the ranking uses the signal columns for those,
+    // so a literal-text filter would wrongly answer "no matches".
+    const res = await post({ kind: "cafe", queryText: "quiet café with wifi" });
+    const json = await res.json();
+    expect(json.total).toBe(2);
+  });
+
+  it("still filters on identity words alongside a vibe word", async () => {
+    const res = await post({ kind: "cafe", queryText: "quiet café in Laureles" });
+    const json = await res.json();
+    expect(json.total).toBe(1);
+    expect(json.results[0].title).toBe("Rituales Compañía de Café");
+  });
+
+  it("keeps giving honest empty answers for words nobody describes", async () => {
+    const res = await post({ kind: "cafe", queryText: "zzz nowhere at all" });
+    expect((await res.json()).total).toBe(0);
+  });
+});

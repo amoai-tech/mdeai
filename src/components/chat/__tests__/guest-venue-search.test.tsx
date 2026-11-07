@@ -117,3 +117,26 @@ describe("GuestVenueSearch", () => {
     expect(screen.queryByTestId("guest-venue-summary")).toBeNull();
   });
 });
+
+describe("Clear search", () => {
+  it("restores the catalogue and drops the summary", async () => {
+    const onResults = vi.fn();
+    const onClear = vi.fn();
+    stubFetch(() => json({ kind: "cafe", results: [row("a")], total: 1 }));
+    render(<GuestVenueSearch options={{ kind: "cafe", onResults, onClear }} />);
+
+    ask("quiet");
+    expect(await screen.findByTestId("guest-venue-summary")).toBeTruthy();
+    fireEvent.click(screen.getByTestId("guest-venue-clear"));
+    expect(onClear).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId("guest-venue-summary")).toBeNull();
+  });
+
+  it("is not rendered when the page cannot clear", async () => {
+    stubFetch(() => json({ kind: "cafe", results: [row("a")], total: 1 }));
+    render(<GuestVenueSearch options={{ kind: "cafe", onResults: vi.fn() }} />);
+    ask("quiet");
+    await screen.findByTestId("guest-venue-summary");
+    expect(screen.queryByTestId("guest-venue-clear")).toBeNull();
+  });
+});

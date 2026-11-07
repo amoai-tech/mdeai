@@ -139,6 +139,7 @@ function NightlifeBrowseViewInner({
             neighborhood,
             // Catalogue search, not the concierge: grounded venue rows, rendered by the same cards.
             onResults: (rows) => setSearched({ scope: retryHref, rows, source: "catalog" }),
+            onClear: () => setSearched(null),
           }}
         />
       }

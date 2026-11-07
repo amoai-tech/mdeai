@@ -10,6 +10,7 @@ import {
   type VenueAnchorRow,
 } from "@/mastra/tools/search-venue-anchors";
 import type { GroundedToolRow } from "@/lib/parse-grounded-tool-result";
+import { parseAnchorIntelligenceSlots } from "@/mastra/lib/intelligence-anchor-search";
 
 /**
  * Public catalogue search for cafés and nightlife, for visitors without an account.
@@ -57,13 +58,44 @@ function searchWords(value: string): string[] {
     .map((part) => part.segment);
 }
 
-function matchesQuery(row: VenueAnchorRow, queryText: string): boolean {
+/**
+ * Words the *ranking* understands — quiet, wifi, rooftop, salsa, cocktails, date night…
+ *
+ * `rankVenueAnchorRows` already scores these against the anchor signal columns, so requiring them
+ * to appear literally in a name or tag would discard exactly the venues the ranking just promoted
+ * ("quiet café with wifi" matched no café by text, only by vibe). Identity words — names,
+ * neighbourhoods, cuisines — still have to appear.
+ */
+function isVibeWord(token: string, kind: "cafe" | "nightlife"): boolean {
+  const slots = parseAnchorIntelligenceSlots(token, kind === "cafe" ? "cafe" : "nightclub");
+  return Boolean(
+    slots.wantsRooftop ||
+      slots.wantsQuiet ||
+      slots.wantsNomad ||
+      slots.wantsSalsa ||
+      slots.wantsBrunch ||
+      slots.wantsCocktails ||
+      slots.wantsDateNight ||
+      slots.wantsHiddenGem ||
+      slots.wantsAntiTouristy ||
+      slots.wantsValue ||
+      slots.wantsService ||
+      slots.wantsNightlife ||
+      slots.wantsSpecialtyCoffee,
+  );
+}
+
+function matchesQuery(row: VenueAnchorRow, queryText: string, kind: "cafe" | "nightlife"): boolean {
   const haystack = foldSearchText(
     [row.name, row.neighborhood ?? "", (row.tags ?? []).join(" "), venueAnchorSummary(row) ?? ""].join(" "),
   );
   const tokens = searchWords(queryText)
     .filter((token) => token.length >= 3 && !STOPWORDS.has(token));
-  if (tokens.length === 0) return true; // no meaningful venue terms to filter on
+  // Only identity words have to appear literally; vibe words are the ranking's job.
+  const identityTokens = tokens.filter((token) => !isVibeWord(token, kind));
+  if (identityTokens.length === 0) return true;
+  tokens.length = 0;
+  tokens.push(...identityTokens);
   const words = new Set(searchWords(haystack));
   return tokens.some((token) =>
     // Short terms must match a whole word: "all" must not match inside "Calle".
@@ -78,7 +110,10 @@ const bodySchema = z.object({
   limit: z.number().int().min(1).max(20).optional().default(12),
 });
 
-function toGroundedRow(row: VenueAnchorRow): GroundedToolRow {
+/** Google-style type for the card's media label, so it never falls back to the generic "Place". */
+const KIND_PRIMARY_TYPE = { cafe: "cafe", nightlife: "bar" } as const;
+
+function toGroundedRow(row: VenueAnchorRow, kind: "cafe" | "nightlife"): GroundedToolRow {
   const coords = venueAnchorToCoordinates(row);
   return {
     id: row.id,
@@ -89,6 +124,7 @@ function toGroundedRow(row: VenueAnchorRow): GroundedToolRow {
     ...(coords.longitude != null ? { longitude: coords.longitude } : {}),
     ...(venueAnchorSummary(row) ? { summary: venueAnchorSummary(row) ?? undefined } : {}),
     ...(row.neighborhood ? { formattedAddress: row.neighborhood } : {}),
+    primaryType: KIND_PRIMARY_TYPE[kind],
   };
 }
 
@@ -128,11 +164,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error }, { status: 503 });
   }
 
-  const matched = (queryText ? rows.filter((row) => matchesQuery(row, queryText)) : rows).slice(0, limit);
+  const matched = (queryText ? rows.filter((row) => matchesQuery(row, queryText, kind)) : rows).slice(0, limit);
 
   return NextResponse.json({
     kind,
-    results: matched.map(toGroundedRow),
+    results: matched.map((row) => toGroundedRow(row, kind)),
     total: matched.length,
     source: "venue_anchors",
   });
