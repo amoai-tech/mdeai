@@ -100,6 +100,7 @@ export function MapMobileSheet() {
     const composer = () => document.querySelector<HTMLElement>(composerSelector);
     let observer: ResizeObserver | null = null;
     let observed: HTMLElement | null = null;
+    let observedToolbar: HTMLElement | null = null;
     let lastToolbar: HTMLElement | null = null;
     let frame = 0;
     let watchFrame = 0;
@@ -130,11 +131,22 @@ export function MapMobileSheet() {
     const attachObserver = () => {
       if (typeof ResizeObserver === "undefined") return;
       const element = composer();
-      if (!element || element === observed) return;
-      observer?.disconnect();
-      observer = new ResizeObserver(() => measure());
-      observer.observe(element);
-      observed = element;
+      if (!element) return;
+      if (element !== observed) {
+        observer?.disconnect();
+        observer = new ResizeObserver(() => measure());
+        observer.observe(element);
+        observed = element;
+        observedToolbar = null;
+      }
+      // The portaled comparison toolbar can wrap after mounting as its count,
+      // fonts, or available width change. Reuse this observer for both nodes.
+      const toolbar = document.querySelector<HTMLElement>('[data-testid="rental-compare-toolbar"]');
+      if (toolbar !== observedToolbar) {
+        if (observedToolbar) observer?.unobserve(observedToolbar);
+        observedToolbar = toolbar;
+        if (toolbar) observer?.observe(toolbar);
+      }
       measure();
     };
 
@@ -178,7 +190,8 @@ export function MapMobileSheet() {
         const toolbar = document.querySelector<HTMLElement>('[data-testid="rental-compare-toolbar"]');
         if (toolbar !== lastToolbar) {
           lastToolbar = toolbar;
-          measure();
+          attachObserver();
+          if (typeof ResizeObserver === "undefined") measure();
         }
         if (current !== observed) startSettle();
       });
