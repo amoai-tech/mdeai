@@ -92,11 +92,13 @@ test.describe("SAN-972 /events map workspace", () => {
   test("card to map and map to card use the same event ID; Details and Back work", async ({ page }) => {
     await openEvents(page, 1440, 900);
     const cards = await locatedCards(page);
-    // Wait for a real Maps renderer and marker before selecting: cards hydrate
-    // first, while Google Maps JavaScript and its tile/marker libraries load later.
+    // Cards hydrate before Google Maps. A clustered marker replaces individual
+    // markers at city zoom, so either visible marker type proves map readiness.
     const mapPanel = page.getByTestId("browse-map-panel");
     await expect(mapPanel.locator(".gm-style").first()).toBeVisible({ timeout: 20_000 });
-    await expect(mapPanel.getByTestId("map-pin").first()).toBeVisible({ timeout: 20_000 });
+    await expect(mapPanel.locator(
+      '[data-testid="map-pin"]:visible, gmp-advanced-marker[title$=" places"]:visible',
+    ).first()).toBeVisible({ timeout: 20_000 });
     const card = cards.first();
     const pinId = await card.getAttribute("data-pin-id");
     if (!pinId) throw new Error("located card has no pin id");

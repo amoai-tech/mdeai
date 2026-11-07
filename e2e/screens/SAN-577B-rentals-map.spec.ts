@@ -23,8 +23,15 @@ test.describe("SAN-577B /rentals map workspace", () => {
     if (!pinId) throw new Error("Map-selectable rental has no pin ID");
     const mapPanel = page.getByTestId("browse-map-panel");
     await expect(mapPanel.locator(".gm-style").first()).toBeVisible({ timeout: 20_000 });
+    const map = mapPanel.getByTestId("chat-map");
+    // This is the observed Google Maps camera, not the card preview state.
+    await expect(map).toHaveAttribute("data-map-zoom", /\d/, { timeout: 15_000 });
+    expect(Number(await map.getAttribute("data-map-zoom"))).toBeLessThan(15);
     await card.locator('[data-testid^="rental-card-map-select-"]').click();
     await expect(card).toHaveAttribute("data-selected", "true");
+    await expect.poll(async () => Number(await map.getAttribute("data-map-zoom")), {
+      timeout: 15_000,
+    }).toBeGreaterThanOrEqual(15);
     // At city zoom, markerclusterer hides individual rental pin DOM nodes.
     // The real Google Maps info window still proves the exact pin was selected.
     await expect(mapPanel.getByTestId("selected-place-overlay"))
