@@ -77,8 +77,9 @@ describe("GuestVenueSearch", () => {
     render(<GuestVenueSearch options={{ kind: "nightlife", onResults }} />);
 
     ask("salsa clubs");
+    // "salsa" is a preference the ranking understands, so it is described rather than ignored.
     expect((await screen.findByTestId("guest-venue-summary")).textContent).toContain(
-      "Search results — 1 nightlife venue",
+      "Suggestions — 1 nightlife venue ranked for salsa",
     );
   });
 
@@ -226,5 +227,19 @@ describe("Clear search", () => {
     ask("quiet");
     await screen.findByTestId("guest-venue-summary");
     expect(screen.queryByTestId("guest-venue-clear")).toBeNull();
+  });
+});
+
+describe("preference labels match what the ranking used", () => {
+  it("describes every preference in the shared list, not a hand-picked subset", async () => {
+    // The regression: the composer listed seven vibes while the route ranked twelve, so a salsa
+    // or value query said "Search results" over rows that had actually been re-ranked.
+    stubFetch(() => json({ kind: "cafe", results: [row("a")], total: 1 }));
+    render(<GuestVenueSearch options={{ kind: "cafe", onResults: vi.fn() }} />);
+    ask("hidden gem with good service under budget");
+    const summary = (await screen.findByTestId("guest-venue-summary")).textContent ?? "";
+    expect(summary).toContain("local favourites");
+    expect(summary).toContain("good service");
+    expect(summary).toContain("value");
   });
 });

@@ -11,6 +11,7 @@ import {
 } from "@/mastra/tools/search-venue-anchors";
 import type { GroundedToolRow } from "@/lib/parse-grounded-tool-result";
 import { parseAnchorIntelligenceSlots } from "@/mastra/lib/intelligence-anchor-search";
+import { isVibeWord as isVibeWordFromList } from "@/lib/venue-vibe-words";
 
 /**
  * Public catalogue search for cafés and nightlife, for visitors without an account.
@@ -61,37 +62,15 @@ function searchWords(value: string): string[] {
 /**
  * Words the *ranking* understands — quiet, wifi, rooftop, salsa, cocktails, date night…
  *
- * `rankVenueAnchorRows` already scores these against the anchor signal columns, so requiring them
- * to appear literally in a name or tag would discard exactly the venues the ranking just promoted
- * ("quiet café with wifi" matched no café by text, only by vibe). Identity words — names,
- * neighbourhoods, cuisines — still have to appear.
+ * The list lives in `venue-vibe-words` so the composer describes exactly the preferences the route
+ * ranks. Requiring them to appear literally in a name or tag would discard the venues the ranking
+ * just promoted ("quiet café with wifi" matches no café by text, only by vibe).
  */
 function isVibeWord(token: string, kind: "cafe" | "nightlife"): boolean {
   const slots = parseAnchorIntelligenceSlots(token, kind === "cafe" ? "cafe" : "nightclub");
-  return Boolean(
-    slots.wantsRooftop ||
-      slots.wantsQuiet ||
-      slots.wantsNomad ||
-      slots.wantsSalsa ||
-      slots.wantsBrunch ||
-      slots.wantsCocktails ||
-      slots.wantsDateNight ||
-      slots.wantsHiddenGem ||
-      slots.wantsAntiTouristy ||
-      slots.wantsValue ||
-      slots.wantsService ||
-      slots.wantsNightlife ||
-      slots.wantsSpecialtyCoffee,
-  );
+  return isVibeWordFromList(token, slots);
 }
 
-/**
- * Decide whether a venue is described by the query at all.
- *
- * @param row Candidate venue anchor.
- * @param queryText Raw visitor query.
- * @param kind Vertical, used to recognise that vertical's vibe words.
- */
 function matchesQuery(row: VenueAnchorRow, queryText: string, kind: "cafe" | "nightlife"): boolean {
   const haystack = foldSearchText(
     [row.name, row.neighborhood ?? "", (row.tags ?? []).join(" "), venueAnchorSummary(row) ?? ""].join(" "),

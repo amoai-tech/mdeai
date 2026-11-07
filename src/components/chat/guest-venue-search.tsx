@@ -5,6 +5,7 @@ import { ArrowUp } from "lucide-react";
 import type { GroundedToolRow } from "@/lib/parse-grounded-tool-result";
 import { countWithNoun } from "@/lib/format/count-with-noun";
 import { parseIntelligenceSlots } from "@/lib/intelligence-slots";
+import { describePreferences } from "@/lib/venue-vibe-words";
 
 /**
  * Guest search for cafés and nightlife over the public venue-anchor route.
@@ -16,18 +17,9 @@ import { parseIntelligenceSlots } from "@/lib/intelligence-slots";
  * Same discipline as the restaurant composer: one search in flight, honest 429/503 messages, and a
  * genuine empty answer reported as empty rather than as an error.
  */
-/** Preference phrases the ranking understands, matched against the whole query. */
+/** Every preference the ranking understands is described, via the shared list. */
 function preferenceWords(query: string): string[] {
-  const slots = parseIntelligenceSlots(query);
-  const found: string[] = [];
-  if (slots.wantsQuiet) found.push("quiet");
-  if (slots.wantsNomad) found.push("wifi/workspace");
-  if (slots.wantsRooftop) found.push("rooftop");
-  if (slots.wantsCocktails) found.push("cocktails");
-  if (slots.wantsBrunch) found.push("brunch");
-  if (slots.wantsDateNight) found.push("date night");
-  if (slots.wantsSpecialtyCoffee) found.push("specialty coffee");
-  return found;
+  return describePreferences(parseIntelligenceSlots(query));
 }
 
 export type VenueGuestOptions = {
