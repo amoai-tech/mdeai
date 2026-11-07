@@ -1,6 +1,7 @@
 import { expect, type Page } from "@playwright/test";
 import { isDeterministicE2E } from "../../src/lib/deterministic-e2e";
 import { assessTurn, awaitRunResponse, hasStarted, isTerminal } from "./turn-completion";
+import { watchTurnDiagnostics } from "./attempt-diagnostics";
 
 const RENTAL_QUERY = "1BR apartment in Laureles under 80 dollars per night";
 
@@ -566,14 +567,27 @@ export async function assertNoDuplicateGroundingLists(page: Page) {
  * this with that count.
  */
 export async function waitForConciergeReply(page: Page, before: number, timeout = 120_000) {
+  // C1: name the exact turn in any failure, so a blank answer can be traced to its
+  // server log line instead of being reported as "empty".
+  const diagnostics = watchTurnDiagnostics(page);
   // Own the send's in-flight completion first: leaving it unawaited lets
   // `response.finished()` run after the test ends ("Test ended").
   await waitForCopilotIdle(page, timeout);
   const replies = page.getByTestId("copilot-chat-region").getByTestId("copilot-assistant-message");
   await expect
-    .poll(() => replies.count(), { timeout, message: "a new concierge assistant reply" })
+    .poll(() => replies.count(), {
+      timeout,
+      message: `a new concierge assistant reply (${diagnostics.summary()})`,
+    })
     .toBeGreaterThan(before);
-  return replies.last().innerText();
+  const text = await replies.last().innerText();
+  if (text.trim().length === 0) {
+    // B2's symptom: a reply bubble that renders nothing.
+    throw new Error(
+      `the new concierge reply rendered no text — ${diagnostics.summary()}`,
+    );
+  }
+  return text;
 }
 
 export function countConciergeReplies(page: Page) {

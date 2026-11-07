@@ -21,6 +21,7 @@ import { useThreadNav } from "@/lib/chat/thread-nav-context";
 import { mdeUI } from "@/components/copilot/a2ui/mde-ui-catalog";
 import { getCopilotKitClientProps } from "@/lib/copilotkit-client-props";
 import { isExpectedGuestStartup401, reportConciergeError } from "@/lib/concierge-error-store";
+import { isBlankAssistantMessage } from "@/lib/blank-assistant-message";
 import { useSession } from "@/hooks/use-session";
 import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 
@@ -299,6 +300,28 @@ export function SavedThreadHistory({
       agent.messages,
     );
     if (merged.length > 0) agent.setMessages(merged as typeof agent.messages);
+  }, [agent, isReady, threadId, liveMessageCount]);
+
+  // B2: a finished assistant message that renders nothing is a FAILED turn.
+  //
+  // The intermittent symptom was a `200` whose stream produced an empty bubble: nothing
+  // treated it as an error, so the customer saw a blank reply and no Retry. Detection
+  // happens when a run finalises, and it reuses the existing retryable notice.
+  useEffect(() => {
+    if (!isReady || !agent || agent.threadId !== threadId) return;
+    const reported = new Set<string>();
+    const inspect = () => {
+      if (agent.isRunning) return;
+      const last = agent.messages[agent.messages.length - 1];
+      if (!last || reported.has(last.id)) return;
+      if (!isBlankAssistantMessage(last as { role?: string; content?: unknown })) return;
+      reported.add(last.id);
+      reportConciergeError(threadId);
+    };
+    const subscription = agent.subscribe({ onRunFinalized: inspect });
+    // A reconnect can finalise without a run-finalized event; re-check on count changes.
+    inspect();
+    return () => subscription.unsubscribe();
   }, [agent, isReady, threadId, liveMessageCount]);
 
   // The SDK can clear messages after readiness has recovered (for example,
