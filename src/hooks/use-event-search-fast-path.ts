@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import { useConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
 import type { EventCard } from "@/mastra/tools/search-events";
 import { useEventLocalChat } from "@/components/chat/event-local-chat-context";
@@ -25,6 +25,8 @@ import type { ConciergeWorkingMemory } from "@/lib/types";
 import { useEventSearchResults } from "@/components/chat/event-search-results-context";
 import { useMapContext } from "@/platform/maps/map-context";
 import { normalizeToolOutput } from "@/platform/maps/normalize-tool-output";
+import { normalizeToolEnvelope } from "@/lib/normalize-tool-envelope";
+import { isEventA2UIId } from "@/lib/events/a2ui-id";
 import type { FilterChipDef } from "@/platform/copilot/chat-filter-chips";
 
 type EventSearchResponse = {
@@ -52,7 +54,7 @@ export function useEventSearchFastPath() {
   const { state, setState } = useConciergeCoAgent();
   const { clarifyPending, clarifyKind, showClarify, showExchange, clearLocalMessages } =
     useEventLocalChat();
-  const { setToolResult } = useEventFastPath();
+  const { toolResult, setToolResult } = useEventFastPath();
   const clearOthers = useClearOtherFastPathResults();
   const { setRows, setWebCitations } = useEventSearchResults();
   const { mergePinsByCategory, requestFitBounds } = useMapContext();
@@ -239,5 +241,11 @@ export function useEventSearchFastPath() {
     [runSearch, state],
   );
 
-  return { handleUserMessage, handleEventChip };
+  const activeEventId = useMemo(() => {
+    const rows = toolResult ? normalizeToolEnvelope(toolResult).results : undefined;
+    const row = (rows ?? []).find((value) => isEventA2UIId((value as { id?: unknown }).id));
+    return (row as { id?: string } | undefined)?.id ?? null;
+  }, [toolResult]);
+
+  return { handleUserMessage, handleEventChip, activeEventId };
 }

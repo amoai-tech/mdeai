@@ -39,6 +39,9 @@ vi.mock("@/components/chat/rich-card-results-context", () => ({
   RichCardResultsRegistrar: () => null,
 }));
 vi.mock("@/components/copilot/tool-pins-sync", () => ({ ToolPinsSync: () => null }));
+vi.mock("@/components/copilot/search-tool-result-ownership", () => ({
+  useCurrentSearchToolResult: () => true,
+}));
 
 import { EventResults } from "@/components/copilot/search-tool-result-cards";
 
@@ -153,6 +156,33 @@ describe("event cards on the map", () => {
     ui.selectedPinId = "event-unmapped";
     render();
     expect(container.querySelector('[data-pin-id="event-unmapped"]')?.getAttribute("data-selected")).toBe("false");
+  });
+
+  it("opens exactly one recovery modal for a current authorized event", async () => {
+    render();
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)); });
+    act(() => {
+      window.dispatchEvent(new CustomEvent("mde:event-card-recovery", { detail: { eventId: "mapped" } }));
+      window.dispatchEvent(new CustomEvent("mde:event-card-recovery", { detail: { eventId: "mapped" } }));
+    });
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 600)); });
+    expect(document.body.querySelectorAll('[data-testid="event-card-modal"]')).toHaveLength(1);
+    expect(ui.searchEvents).not.toHaveBeenCalled();
+  });
+
+  it("does not recover over an existing A2UI card or without an event ID", async () => {
+    const a2ui = document.createElement("div");
+    a2ui.dataset.testid = "a2ui-event-card";
+    document.body.appendChild(a2ui);
+    render();
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)); });
+    act(() => {
+      window.dispatchEvent(new CustomEvent("mde:event-card-recovery", { detail: { eventId: "mapped" } }));
+      window.dispatchEvent(new CustomEvent("mde:event-card-recovery", { detail: {} }));
+    });
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 600)); });
+    expect(document.body.querySelectorAll('[data-testid="event-card-modal"]')).toHaveLength(0);
+    a2ui.remove();
   });
 
   it("an event with coordinates is shown as selected", () => {
