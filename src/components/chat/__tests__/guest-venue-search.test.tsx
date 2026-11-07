@@ -265,3 +265,30 @@ describe("preference labels reach the page", () => {
     expect(onSearchMeta.mock.calls[0][0].preferences).toEqual([]);
   });
 });
+
+describe("a failed follow-up search leaves the previous pair untouched", () => {
+  it("does not report new rows or new preferences when the request fails", async () => {
+    const onResults = vi.fn();
+    const onSearchMeta = vi.fn();
+    let call = 0;
+    stubFetch(() => {
+      call += 1;
+      return call === 1
+        ? json({ kind: "cafe", results: [row("a"), row("b")], total: 2 })
+        : new Response("{}", { status: 503 });
+    });
+    render(<GuestVenueSearch options={{ kind: "cafe", onResults, onSearchMeta }} />);
+
+    ask("quiet");
+    await waitFor(() => expect(onSearchMeta).toHaveBeenCalledTimes(1));
+    expect(onSearchMeta.mock.calls[0][0].preferences).toEqual(["quiet"]);
+    expect(onResults).toHaveBeenCalledTimes(1);
+
+    // A genuinely failing follow-up: both callbacks must stay at one call, so the page keeps the
+    // rows it is still showing together with the label that described them.
+    ask("Pergamino");
+    expect((await screen.findByRole("alert")).textContent).toContain("unavailable");
+    expect(onResults).toHaveBeenCalledTimes(1);
+    expect(onSearchMeta).toHaveBeenCalledTimes(1);
+  });
+});
