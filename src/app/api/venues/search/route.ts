@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { checkSearchFastPathRateLimit } from "@/lib/api-ip-rate-limit";
+import { checkSearchFastPathSharedRateLimit } from "@/lib/api-ip-rate-limit";
 import {
   searchCafeVenueAnchorsForBrowse,
   searchNightclubVenueAnchorsForBrowse,
@@ -129,7 +129,8 @@ function toGroundedRow(row: VenueAnchorRow, kind: "cafe" | "nightlife"): Grounde
 }
 
 export async function POST(req: Request) {
-  const rateLimited = checkSearchFastPathRateLimit(req);
+  // Shared across instances: the same visitor gets the same allowance on every Vercel instance.
+  const rateLimited = await checkSearchFastPathSharedRateLimit(req, "venue-search");
   if (rateLimited) return rateLimited;
 
   let json: unknown;

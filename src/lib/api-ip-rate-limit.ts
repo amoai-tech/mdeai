@@ -1,6 +1,7 @@
 /** VERCEL-CPU-001 — in-process IP rate limits for public API hot paths (Vercel Fluid CPU). */
 import { NextResponse } from "next/server";
 import { createPlacesRateLimiter } from "@/lib/places-rate-limiter";
+import { checkRateLimitDurable, clientIpFromRequest } from "@/lib/distributed-rate-limit";
 
 const searchFastPathLimiter = createPlacesRateLimiter(30);
 const groundingLimiter = createPlacesRateLimiter(15);
@@ -14,6 +15,33 @@ export function rateLimitedResponse(): NextResponse {
     { error: "rate_limited" },
     { status: 429, headers: { "Cache-Control": "no-store" } },
   );
+}
+
+/**
+ * Public search, limited by a shared Postgres store so the number means the same thing on every
+ * Vercel instance.
+ *
+ * Falls back to the in-process bucket when the store is unavailable: a rate limiter must not turn
+ * a database hiccup into a broken search box. `storeAvailable` is what distinguishes the two.
+ */
+export async function checkSearchFastPathSharedRateLimit(
+  req: Request,
+  bucket: string,
+  max = 30,
+  windowSeconds = 3600,
+): Promise<NextResponse | null> {
+  const ip = clientIpFromRequest(req);
+  let result: Awaited<ReturnType<typeof checkRateLimitDurable>> | null = null;
+  try {
+    result = await checkRateLimitDurable(`${bucket}:ip:${ip}`, max, windowSeconds);
+  } catch {
+    result = null;
+  }
+  if (!result || !result.storeAvailable) {
+    // Shared limit unavailable — keep the fast in-process guard so the route is never unprotected.
+    return checkSearchFastPathRateLimit(req);
+  }
+  return result.allowed ? null : rateLimitedResponse();
 }
 
 /** Public POST fast paths: /api/events/search, /api/rentals/search, etc. */
