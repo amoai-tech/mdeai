@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import { Client } from "pg";
+import { buildBackupPayload } from "./qa/cleanup-backup-payload.mjs";
 
 /**
  * Remove only the explicitly allowlisted QA fixture prefixes.
@@ -164,22 +165,6 @@ try {
     );
     Object.assign(identityImpact, counts.rows[0]);
   }
-  fs.writeFileSync(
-    backup,
-    JSON.stringify(
-      {
-        createdAt: new Date().toISOString(),
-        events: selected.rows,
-        children,
-        // Identifiers only: no profile fields, no message bodies.
-        isolationIdentities: orphanIdentities.rows.map((row) => ({ id: row.id, email: row.email })),
-        isolationIdentityImpact: identityImpact,
-      },
-      null,
-      2,
-    ),
-  );
-
   const deleted = {};
   for (const table of CHILD_TABLES) {
     const result = await client.query(
@@ -303,6 +288,22 @@ try {
     throw new Error(`QA identity cleanup verified ${leftRows.rows[0].n} leftover row(s)`);
   }
   await client.query("commit");
+
+  // Only now, after a committed transaction, does the report exist.
+  fs.writeFileSync(
+    backup,
+    JSON.stringify(
+      buildBackupPayload({
+        createdAt: new Date().toISOString(),
+        events: selected.rows,
+        children,
+        identities: orphanIdentities.rows,
+        impact: identityImpact,
+      }),
+      null,
+      2,
+    ),
+  );
   console.log(JSON.stringify({ backup, deleted }, null, 2));
 } catch (error) {
   await client.query("rollback").catch(() => {});
