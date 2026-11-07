@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { RequestContext } from "@mastra/core/request-context";
 import { z } from "zod";
 import { checkSearchFastPathRateLimit } from "@/lib/api-ip-rate-limit";
 import { searchGroundedPlacesTool } from "@/mastra/tools/search-grounded-places";
@@ -68,12 +69,19 @@ export async function POST(req: Request) {
       }
       verifiedNearbyUserId = user.id;
     }
-    const context = rentalClient ? {
-      requestContext: {
-        get: (key: string) => key === RENTAL_SUPABASE_KEY ? rentalClient
-          : key === MDEAI_USER_ID_KEY ? verifiedNearbyUserId : undefined,
-      },
-    } : {};
+    // The tool audit path writes tool spans through RequestContext.set(); a
+    // read-only stub made every Nearby call fail after the provider returned
+    // (TypeError: set is not a function). Use the real context so get/set share
+    // one store.
+    const context: { requestContext?: RequestContext } = {};
+    if (rentalClient) {
+      const requestContext = new RequestContext();
+      requestContext.set(RENTAL_SUPABASE_KEY, rentalClient);
+      if (verifiedNearbyUserId) {
+        requestContext.set(MDEAI_USER_ID_KEY, verifiedNearbyUserId);
+      }
+      context.requestContext = requestContext;
+    }
     const out = await execute(
       {
         query: searchQuery,
