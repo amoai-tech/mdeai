@@ -74,3 +74,29 @@ describe("checkSearchFastPathSharedRateLimit", () => {
     expect(results[30]).toBe(429);
   });
 });
+
+describe("shared limit configuration", () => {
+  it("asks the store for a 60-second window, matching the old in-process guard", async () => {
+    const seen: unknown[][] = [];
+    durable.impl = async (...args: unknown[]) => {
+      seen.push(args);
+      return { allowed: true, count: 1, max: 30, retryAfterSeconds: 0, storeAvailable: true };
+    };
+    await checkSearchFastPathSharedRateLimit(req(), "venue-search:cafe");
+    // key, max, windowSeconds
+    expect(seen[0]?.[1]).toBe(30);
+    expect(seen[0]?.[2]).toBe(60);
+  });
+
+  it("keys each bucket separately, so one route cannot exhaust another", async () => {
+    const keys: string[] = [];
+    durable.impl = async (...args: unknown[]) => {
+      keys.push(String(args[0]));
+      return { allowed: true, count: 1, max: 30, retryAfterSeconds: 0, storeAvailable: true };
+    };
+    await checkSearchFastPathSharedRateLimit(req(), "venue-search:cafe");
+    await checkSearchFastPathSharedRateLimit(req(), "venue-search:nightlife");
+    expect(keys[0]).toContain("venue-search:cafe");
+    expect(keys[1]).toContain("venue-search:nightlife");
+  });
+});

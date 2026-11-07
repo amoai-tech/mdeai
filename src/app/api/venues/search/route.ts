@@ -118,7 +118,9 @@ const bodySchema = z.object({
 });
 
 /** Google-style type for the card's media label, so it never falls back to the generic "Place". */
-const KIND_PRIMARY_TYPE = { cafe: "café", nightlife: "bar" } as const;
+// "Café" for the coffee vertical; nightlife stays "Nightlife venue" because a salsa hall, a
+// cocktail bar and a club are not all bars — the card label should not assert a type we lack.
+const KIND_PRIMARY_TYPE = { cafe: "café", nightlife: "nightlife venue" } as const;
 
 /**
  * Shape one venue anchor like the grounded rows the existing card list renders.
@@ -142,10 +144,6 @@ function toGroundedRow(row: VenueAnchorRow, kind: "cafe" | "nightlife"): Grounde
 }
 
 export async function POST(req: Request) {
-  // Shared across instances: the same visitor gets the same allowance on every Vercel instance.
-  const rateLimited = await checkSearchFastPathSharedRateLimit(req, "venue-search");
-  if (rateLimited) return rateLimited;
-
   let json: unknown;
   try {
     json = await req.json();
@@ -162,6 +160,12 @@ export async function POST(req: Request) {
   }
 
   const { kind, queryText, neighborhood, limit } = parsed.data;
+
+  // Shared across instances, and per kind: a café-heavy visitor should not lose nightlife search
+  // to the same allowance. 30 requests per 60 seconds matches what the in-process guard used.
+  const rateLimited = await checkSearchFastPathSharedRateLimit(req, `venue-search:${kind}`);
+  if (rateLimited) return rateLimited;
+
   // The browse retrieval reads a bounded window (limit * 3, no ORDER BY) and slices to `limit`
   // *before* returning, so filtering that slice would report "no matches" for a row that simply
   // fell outside an arbitrary window. Ask for a much wider candidate set, filter it, then apply the
@@ -175,10 +179,29 @@ export async function POST(req: Request) {
 
   // A retrieval failure must not be reported as "no venues match".
   if (error) {
-    return NextResponse.json({ error }, { status: 503 });
+    if (rows.length >= candidateLimit) {
+    console.warn(
+      `[venues/search] candidate window saturated (${rows.length}/${candidateLimit}) for kind=${kind}`,
+    );
+  }
+
+  return NextResponse.json({ error }, { status: 503 });
   }
 
   const matched = (queryText ? rows.filter((row) => matchesQuery(row, queryText, kind)) : rows).slice(0, limit);
+
+  if (rows.length >= candidateLimit) {
+    console.warn(
+      `[venues/search] candidate window saturated (${rows.length}/${candidateLimit}) for kind=${kind}`,
+    );
+  }
+
+  if (rows.length >= candidateLimit) {
+    // Diagnostics: an incomplete candidate window must never look exhaustive.
+    console.warn(
+      `[venues/search] candidate window saturated (${rows.length}/${candidateLimit}) for kind=${kind}`,
+    );
+  }
 
   return NextResponse.json({
     kind,

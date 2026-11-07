@@ -48,8 +48,26 @@ describe("GuestVenueSearch", () => {
     await waitFor(() => expect(onResults).toHaveBeenCalledTimes(1));
     const body = JSON.parse(String(mock.mock.calls[0][1]?.body));
     expect(body).toMatchObject({ kind: "cafe", queryText: "quiet café in Laureles" });
+    // "quiet" is a preference, so the copy says these are ranked suggestions rather than
+    // verified matches — the row is ordered by the quiet score, not proven to be quiet.
     expect((await screen.findByTestId("guest-venue-summary")).textContent).toContain(
-      "Search results — 2 cafés",
+      "Suggestions — 2 cafés ranked for quiet",
+    );
+  });
+
+  it("says Search results for a name query, and Suggestions for a preference query", async () => {
+    stubFetch(() => json({ kind: "cafe", results: [row("a")], total: 1 }));
+    const { unmount } = render(<GuestVenueSearch options={{ kind: "cafe", onResults: vi.fn() }} />);
+    ask("Pergamino");
+    expect((await screen.findByTestId("guest-venue-summary")).textContent).toContain("Search results");
+    unmount();
+
+    stubFetch(() => json({ kind: "cafe", results: [row("a")], total: 1 }));
+    render(<GuestVenueSearch options={{ kind: "cafe", onResults: vi.fn() }} />);
+    ask("date night");
+    // A two-word preference phrase, which per-token parsing could never recognise.
+    expect((await screen.findByTestId("guest-venue-summary")).textContent).toContain(
+      "ranked for date night",
     );
   });
 

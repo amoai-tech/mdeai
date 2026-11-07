@@ -4,6 +4,7 @@ import { useRef, useState, type Dispatch } from "react";
 import { ArrowUp } from "lucide-react";
 import type { GroundedToolRow } from "@/lib/parse-grounded-tool-result";
 import { countWithNoun } from "@/lib/format/count-with-noun";
+import { parseAnchorIntelligenceSlots } from "@/mastra/lib/intelligence-anchor-search";
 
 /**
  * Guest search for cafés and nightlife over the public venue-anchor route.
@@ -15,6 +16,20 @@ import { countWithNoun } from "@/lib/format/count-with-noun";
  * Same discipline as the restaurant composer: one search in flight, honest 429/503 messages, and a
  * genuine empty answer reported as empty rather than as an error.
  */
+/** Preference phrases the ranking understands, matched against the whole query. */
+function preferenceWords(query: string): string[] {
+  const slots = parseAnchorIntelligenceSlots(query, "cafe");
+  const found: string[] = [];
+  if (slots.wantsQuiet) found.push("quiet");
+  if (slots.wantsNomad) found.push("wifi/workspace");
+  if (slots.wantsRooftop) found.push("rooftop");
+  if (slots.wantsCocktails) found.push("cocktails");
+  if (slots.wantsBrunch) found.push("brunch");
+  if (slots.wantsDateNight) found.push("date night");
+  if (slots.wantsSpecialtyCoffee) found.push("specialty coffee");
+  return found;
+}
+
 export type VenueGuestOptions = {
   kind: "cafe" | "nightlife";
   neighborhood?: string | null;
@@ -84,11 +99,15 @@ export function GuestVenueSearch({ options }: { options: VenueGuestOptions }) {
       }
       const body = json as { results: GroundedToolRow[]; total?: number };
       options.onResults(body.results);
+      const preferences = preferenceWords(query);
       setHasResults(true);
       setMessage(
         body.results.length === 0
           ? `No ${noun[1]} matched “${query}”. Try a neighborhood or a different word.`
-          : `Search results — ${countWithNoun(body.results.length, noun[0], noun[1])} for “${query}”.`,
+          : preferences.length > 0
+            // Ordered by how well each place fits, not proof that it has the feature.
+            ? `Suggestions — ${countWithNoun(body.results.length, noun[0], noun[1])} ranked for ${preferences.join(", ")}.`
+            : `Search results — ${countWithNoun(body.results.length, noun[0], noun[1])} for “${query}”.`,
       );
       setQuestion("");
     } catch (err) {
@@ -154,7 +173,11 @@ export function GuestVenueSearch({ options }: { options: VenueGuestOptions }) {
           data-testid="guest-venue-clear"
           className="text-xs text-primary underline-offset-4 hover:underline"
           onClick={() => {
+            // Aborting the in-flight request means its `finally` no longer clears `busy`
+            // (it guards on signal.aborted), so clear it here or the composer stays dead.
             abort.current?.abort();
+            abort.current = null;
+            setBusy(false);
             setMessage(null);
             setError(null);
             setHasResults(false);

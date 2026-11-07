@@ -183,7 +183,9 @@ describe("POST /api/venues/search", () => {
     // A real nightlife row, so the `nightlife: "bar"` mapping is actually exercised.
     const night = await (await post({ kind: "nightlife" })).json();
     expect(night.results).toHaveLength(1);
-    expect(night.results[0]).toMatchObject({ title: "Son Havana", primaryType: "bar" });
+    // Nightlife is not assumed to be a bar: a salsa hall, a cocktail bar and a club are not the
+    // same category, so the label stays the honest, general one.
+    expect(night.results[0]).toMatchObject({ title: "Son Havana", primaryType: "nightlife venue" });
   });
 
   it("reports when the candidate window was saturated", async () => {

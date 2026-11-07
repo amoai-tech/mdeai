@@ -40,14 +40,15 @@ export async function checkSearchFastPathSharedRateLimit(
   req: Request,
   bucket: string,
   max = 30,
-  windowSeconds = 3600,
+  windowSeconds = 60,
 ): Promise<NextResponse | null> {
   const ip = clientIpFromRequest(req);
   let result: Awaited<ReturnType<typeof checkRateLimitDurable>> | null = null;
   try {
-    // A stalled RPC must not hold the request open: past the budget we use the in-process bucket.
-    // The RPC is supabase-js (fetch-backed) and exposes no abort signal here, so this bounds the
-    // *wait*, not the query itself — the abandoned call is harmless and its result is discarded.
+    // A stalled RPC must not hold the request open: past the budget the in-process bucket applies.
+    // The installed supabase-js (v2, this pin) offers no abort option on `rpc()` — the published
+    // `.abortSignal()` guidance applies to a newer client — so this bounds the wait, not the query.
+    // The abandoned call finishes harmlessly and its result is discarded.
     result = await Promise.race([
       checkRateLimitDurable(`${bucket}:ip:${ip}`, max, windowSeconds),
       new Promise<null>((resolve) => setTimeout(() => resolve(null), SHARED_LIMIT_TIMEOUT_MS)),
