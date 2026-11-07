@@ -10,6 +10,8 @@ import { createRoot, type Root } from "react-dom/client";
 
 const chat = vi.hoisted(() => ({ appendMessage: vi.fn(), runtimeUnavailable: false, waitForRuntimeReady: vi.fn() }));
 const coagent = vi.hoisted(() => ({ state: {} as Record<string, unknown> }));
+const mapState = vi.hoisted(() => ({ selectedPinId: null as string | null, pins: [] as Array<{ id: string; category: string }> }));
+const groundedCtx = vi.hoisted(() => ({ toolResult: null as unknown }));
 vi.mock("@/lib/chat/thread-nav-context", () => ({
   useOptionalThreadNav: () => ({ activeThreadId: "thread-b", sessionThreadId: "thread-b" }),
 }));
@@ -31,6 +33,8 @@ vi.mock("@/hooks/use-event-search-fast-path", () => ({ useEventSearchFastPath: (
 vi.mock("@/hooks/use-event-venue-booking-fast-path", () => ({ useEventVenueBookingFastPath: () => noMatch }));
 const groundedNearby = vi.hoisted(() => ({ handleUserMessage: vi.fn(async () => true) }));
 vi.mock("@/hooks/use-grounded-search-fast-path", () => ({ useGroundedSearchFastPath: () => groundedNearby }));
+vi.mock("@/platform/maps/map-context", () => ({ useOptionalMapContext: () => mapState }));
+vi.mock("@/components/chat/grounded-fast-path-context", () => ({ useGroundedFastPath: () => groundedCtx }));
 vi.mock("@/hooks/use-rental-search-fast-path", () => ({ useRentalSearchFastPath: () => noMatch }));
 vi.mock("@/hooks/use-restaurant-search-fast-path", () => ({ useRestaurantSearchFastPath: () => noMatch }));
 
@@ -64,6 +68,9 @@ beforeEach(() => {
   chat.runtimeUnavailable = false;
   chat.waitForRuntimeReady.mockImplementation(async () => !chat.runtimeUnavailable);
   coagent.state = {};
+  mapState.selectedPinId = null;
+  mapState.pins = [];
+  groundedCtx.toolResult = null;
   eventFast.activeEventId = null;
   session.user = { id: "u1" };
   session.loading = false;
@@ -310,6 +317,46 @@ describe("SAN-106 guest Nearby chat routing", () => {
     await act(async () => { expect(await handlers.handleGroundedMessage(general)).toBe(true); });
     expect(groundedNearby.handleUserMessage).toHaveBeenCalledWith(general, undefined);
     expect(promptShown).toBe(false);
+  });
+});
+
+describe("deterministic grounded ranking is limited to the shown result set and current anchor", () => {
+  const A = "37a05b09-f560-4776-92fd-b8bb2b92e611";
+  const B = "e404023e-ad2f-4446-896d-e085ecdacaf1";
+  const rows = [{ id: "cafe-a", title: "típica tiendas", distanceMeters: 36, distanceFromRentalId: A }];
+  const rerender = () => act(() => root.render(<EventLocalChatProvider><Harness /></EventLocalChatProvider>));
+
+  it("falls through when the map selection is a different apartment", async () => {
+    coagent.state = { selectedListingId: A, lastGroundedResults: rows, lastIntent: "restaurant_discovery" };
+    groundedCtx.toolResult = { source: "grounding", results: [{ id: "cafe-a" }] };
+    mapState.selectedPinId = `rental-${B}`;
+    mapState.pins = [{ id: `rental-${B}`, category: "rental" }];
+    rerender();
+    await act(async () => { expect(await handlers.handleGroundedMessage("Which café is closest?")).toBe(true); });
+    expect(groundedNearby.handleUserMessage).toHaveBeenCalled();
+    expect(shown.some((m) => /típica tiendas is the closest/i.test(m.content))).toBe(false);
+  });
+
+  it("falls through when a restaurant search cleared the grounded panel", async () => {
+    coagent.state = { selectedListingId: A, lastGroundedResults: rows };
+    groundedCtx.toolResult = null;
+    mapState.selectedPinId = null;
+    mapState.pins = [];
+    rerender();
+    await act(async () => { expect(await handlers.handleGroundedMessage("Which café is closest?")).toBe(true); });
+    expect(groundedNearby.handleUserMessage).toHaveBeenCalled();
+    expect(shown.some((m) => /típica tiendas is the closest/i.test(m.content))).toBe(false);
+  });
+
+  it("answers deterministically when the shown rows belong to the current map anchor", async () => {
+    coagent.state = { selectedListingId: A, lastGroundedResults: rows };
+    groundedCtx.toolResult = { source: "grounding", results: [{ id: "cafe-a" }] };
+    mapState.selectedPinId = `rental-${A}`;
+    mapState.pins = [{ id: `rental-${A}`, category: "rental" }];
+    rerender();
+    await act(async () => { expect(await handlers.handleGroundedMessage("Which café is closest?")).toBe(true); });
+    expect(groundedNearby.handleUserMessage).not.toHaveBeenCalled();
+    expect(shown.some((m) => /típica tiendas is the closest, about 36 m/i.test(m.content))).toBe(true);
   });
 });
 
