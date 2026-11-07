@@ -228,6 +228,9 @@ export function NearbyRentalAction({
       data-testid="rental-nearby-cta"
       className="min-h-card-action lg:min-h-0"
       disabled={pending || agentRunning}
+      // Keep Enter/Space on the button from bubbling to the card's key handler,
+      // which would open Details instead of starting Nearby.
+      onKeyDown={(event) => event.stopPropagation()}
       onClick={async (event) => {
         event.stopPropagation();
         if (pending || agentRunning) return;

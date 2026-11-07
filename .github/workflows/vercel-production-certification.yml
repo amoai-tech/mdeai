@@ -286,13 +286,19 @@ jobs:
           base="https://www.mdeai.co"
           live_sha="$(curl -fsS --max-time 20 "$base/api/version" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).sha))')"
           [ "$live_sha" = "$TARGET_SHA" ] || { echo "::error::live SHA $live_sha != $TARGET_SHA"; exit 1; }
-          health="$(curl -fsS --max-time 20 "$base/api/health")"
-          node -e 'const h=JSON.parse(process.argv[1]); if (!h.ok || h.checks.placesKey !== true) { console.error("::error::live placesKey=false"); process.exit(1); }' "$health"
+          health_status="$(curl -sS -o /tmp/live-health.json -w '%{http_code}' --max-time 20 "$base/api/health")"
+          cat /tmp/live-health.json
+          [ "$health_status" = "200" ] || { echo "::error::live health returned $health_status"; exit 1; }
+          node -e 'const h=require("/tmp/live-health.json"); if (!h.ok || h.checks.placesKey !== true) { console.error("::error::live placesKey=false"); process.exit(1); }' 
           curl -fsS -o /dev/null --max-time 20 "$base/rentals"
           guest_status="$(curl -sS -o /tmp/guest-nearby.json -w '%{http_code}' --max-time 20 \
             -X POST "$base/api/grounded/search" -H 'content-type: application/json' \
             -d '{"query":"cafés","intent":"cafe","nearbyRentalId":"00000000-0000-4000-8000-000000000000"}')"
           [ "$guest_status" = "401" ] || { echo "::error::guest Nearby returned $guest_status, expected 401"; exit 1; }
+          # Another actor may have promoted during the requests above; the mixed
+          # response would otherwise combine this SHA with another deployment.
+          live_sha_after="$(curl -fsS --max-time 20 "$base/api/version" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).sha))')"
+          [ "$live_sha_after" = "$TARGET_SHA" ] || { echo "::error::live SHA changed during smoke: $live_sha != $live_sha_after"; exit 1; }
           echo "vercel-release: production smoke passed for $live_sha"
 
       # Publish once, AFTER the final staged/Floor checks, actual promotion, both domain checks,
@@ -310,13 +316,17 @@ jobs:
           PROMOTE_OUTCOME: ${{ steps.promote.outcome }}
           VERIFIED_OUTCOME: ${{ steps.verify_promoted.outcome }}
           STABLE_OUTCOME: ${{ steps.verify_stable.outcome }}
+          CANDIDATE_HEALTH_OUTCOME: ${{ steps.candidate_health.outcome }}
+          SMOKE_OUTCOME: ${{ steps.prod_smoke.outcome }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
           if [[ "$CERTIFY_OUTCOME" == success && "$STAGED_OUTCOME" == success &&
-                "$FLOOR_OUTCOME" == success && "$PROMOTE_OUTCOME" == success &&
+                "$FLOOR_OUTCOME" == success && "$CANDIDATE_HEALTH_OUTCOME" == success &&
+                "$PROMOTE_OUTCOME" == success &&
                 "$VERIFIED_OUTCOME" == success &&
-                "$STABLE_OUTCOME" == success ]]; then
+                "$STABLE_OUTCOME" == success &&
+                "$SMOKE_OUTCOME" == success ]]; then
             state=success
             description="Runtime certified, exact deployment promoted and domains stable; marketplace not evaluated."
           else
