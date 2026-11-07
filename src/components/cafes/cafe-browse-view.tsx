@@ -173,7 +173,9 @@ function CafeBrowseViewInner({
         error
           ? "Specialty coffee & workspace spots in Medellín"
           : searched?.source === "catalog" && activeRows
-            ? `${searchPreferences.length > 0 ? "Suggestions" : "Search results"} — ${countWithNoun(activeRows.length, "café", "cafés")}`
+            ? activeRows.length === 0
+              ? "No cafés matched"
+              : `${searchPreferences.length > 0 ? "Suggestions" : "Search results"} — ${countWithNoun(activeRows.length, "café", "cafés")}`
             : `${countWithNoun((activeRows === null ? results : activeRows).length, "café", "cafés")} in Medellín`
       }
       mobileMapTrigger={hasMap ? <BrowseMapSheet inline /> : null}

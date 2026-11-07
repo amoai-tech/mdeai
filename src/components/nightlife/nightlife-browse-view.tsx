@@ -182,7 +182,9 @@ function NightlifeBrowseViewInner({
         error
           ? "Clubs & bars in Medellín"
           : searched?.source === "catalog" && activeRows
-            ? `${searchPreferences.length > 0 ? "Suggestions" : "Search results"} — ${countWithNoun(activeRows.length, "nightlife venue", "nightlife venues")}`
+            ? activeRows.length === 0
+              ? "No nightlife venues matched"
+              : `${searchPreferences.length > 0 ? "Suggestions" : "Search results"} — ${countWithNoun(activeRows.length, "nightlife venue", "nightlife venues")}`
             : `${countWithNoun((activeRows === null ? results : activeRows).length, "nightlife venue", "nightlife venues")} in Medellín`
       }
       mobileMapTrigger={hasMap ? <BrowseMapSheet inline /> : null}

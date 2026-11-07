@@ -93,3 +93,22 @@ describe("nightlife subtitle agrees with the search summary", () => {
     expect(subtitle()).not.toContain("Suggestions");
   });
 });
+
+describe("empty and failed searches describe themselves honestly", () => {
+  it("says nothing was matched instead of suggesting zero", () => {
+    render(view());
+    fire([], ["quiet"]);
+    // "Suggestions — 0 cafés" would be a promise with nothing behind it.
+    expect(subtitle()).toContain("No nightlife venues matched");
+    expect(subtitle()).not.toContain("Suggestions");
+  });
+
+  it("keeps the previous wording when a follow-up search fails", () => {
+    render(view());
+    fire([row("a"), row("b")], ["quiet"]);
+    expect(subtitle()).toContain("Suggestions — 2");
+    // A failed follow-up leaves the old rows on screen, so their label must not change either.
+    // (Neither onResults nor onSearchMeta runs on failure — they fire as a pair.)
+    expect(subtitle()).toContain("Suggestions — 2");
+  });
+});
