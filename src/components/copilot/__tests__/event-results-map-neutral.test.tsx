@@ -322,3 +322,24 @@ describe("event card recovery · reports whether it opened", () => {
     other.remove();
   });
 });
+
+describe("legacy recovery dispatches (no requestId)", () => {
+  const wait = (ms: number) => act(async () => { await new Promise((resolve) => setTimeout(resolve, ms)); });
+
+  it("does not open a different event over an existing card", async () => {
+    // The model already rendered a card for another event. A legacy dispatch carries only
+    // `activeEventId`, so it must not add a Quick view for the first row on top.
+    const other = document.createElement("div");
+    other.dataset.testid = "a2ui-event-card";
+    other.dataset.eventId = "some-other-event";
+    document.body.appendChild(other);
+    render();
+    await wait(50);
+    act(() => {
+      window.dispatchEvent(new CustomEvent("mde:event-card-recovery", { detail: { eventId: "mapped" } }));
+    });
+    await wait(600);
+    expect(document.body.querySelectorAll('[data-testid="event-card-modal"]')).toHaveLength(0);
+    other.remove();
+  });
+});

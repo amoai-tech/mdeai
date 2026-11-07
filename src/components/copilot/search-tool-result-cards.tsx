@@ -595,7 +595,19 @@ export function EventResults({ result }: { result: unknown }) {
       // Scope the "already rendered" check to THIS event: another event's card must not
       // suppress this one.
       const renderedSelector = `[data-testid="a2ui-event-card"][data-event-id="${eventId}"]`;
-      const alreadyRendered = document.querySelector<HTMLElement>(renderedSelector);
+      /**
+       * Which existing card satisfies this request?
+       *
+       * A request-scoped call knows the event it asked for, so only that event's card
+       * counts. A LEGACY call (no requestId) cannot know which event the model answered
+       * with, so any rendered card satisfies it — otherwise a model card for event #3
+       * would be followed by a Quick view for event #1.
+       */
+      const existingCard = () =>
+        requestId
+          ? document.querySelector<HTMLElement>(renderedSelector)
+          : document.querySelector<HTMLElement>('[data-testid="a2ui-event-card"]');
+      const alreadyRendered = existingCard();
       if (alreadyRendered) {
         alreadyRendered.scrollIntoView({ block: "nearest", behavior: "smooth" });
         return answer(true);
@@ -603,11 +615,11 @@ export function EventResults({ result }: { result: unknown }) {
 
       window.clearTimeout(recoveryTimer);
       recoveryTimer = window.setTimeout(() => {
-        const alreadyRendered = document.querySelector<HTMLElement>(renderedSelector);
-      if (alreadyRendered) {
-        alreadyRendered.scrollIntoView({ block: "nearest", behavior: "smooth" });
-        return answer(true);
-      }
+        const settledCard = existingCard();
+        if (settledCard) {
+          settledCard.scrollIntoView({ block: "nearest", behavior: "smooth" });
+          return answer(true);
+        }
         recoveryHandled.current.add(key);
         setSelectedEvent(row as EventResultRow);
         answer(true);

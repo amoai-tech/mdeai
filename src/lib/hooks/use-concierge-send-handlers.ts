@@ -18,6 +18,12 @@ const EVENT_CARD_RECOVERY_EVENT = "mde:event-card-recovery";
 const EVENT_CARD_RECOVERY_RESULT = "mde:event-card-recovery-result";
 const EVENT_CARD_RECOVERY_TIMEOUT_MS = 1_800;
 
+/** True when any A2UI event card is already on screen (the model answered with a card). */
+export function hasRenderedEventCard(): boolean {
+  if (typeof document === "undefined") return false;
+  return Boolean(document.querySelector('[data-testid="a2ui-event-card"]'));
+}
+
 export function requestEventCardRecovery(
   eventId: string,
   timeoutMs = EVENT_CARD_RECOVERY_TIMEOUT_MS,
@@ -150,11 +156,15 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
       }
       try {
         if ((await waitForRuntimeReady()) && (await appendMessage(text))) {
-          // If the model returns no A2UI surface, the existing real result can
-          // still be shown through Quick view. This is a single recovery, not a
-          // second model run or a forced tool choice.
-          if (isEventCardRenderRequest(text) && activeEventId) {
-            window.dispatchEvent(new CustomEvent("mde:event-card-recovery", { detail: { eventId: activeEventId } }));
+          // If the model returns no A2UI surface, the existing real result can still be
+          // shown through Quick view. Two rules keep it honest:
+          //  - never open a card when the model already rendered one (any event), and
+          //  - target the event the user actually asked for, not the first row. Falling
+          //    back to `activeEventId` after a request for the second event opened the
+          //    FIRST event on top of the model's own card.
+          if (isEventCardRenderRequest(text) && !hasRenderedEventCard()) {
+            const fallbackEventId = directEventId ?? activeEventId;
+            if (fallbackEventId) void requestEventCardRecovery(fallbackEventId);
           }
           // Another conversation can report a late error during this run.
           // Only this conversation's stream failure should trigger its notice.
