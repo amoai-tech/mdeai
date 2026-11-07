@@ -1,6 +1,7 @@
 import { expect, type Page } from "@playwright/test";
 import { isDeterministicE2E } from "../../src/lib/deterministic-e2e";
 import { assessTurn, awaitRunResponse, hasStarted, isTerminal } from "./turn-completion";
+import { watchTurnDiagnostics, type TurnDiagnostics } from "./attempt-diagnostics";
 
 const RENTAL_QUERY = "1BR apartment in Laureles under 80 dollars per night";
 
@@ -565,15 +566,42 @@ export async function assertNoDuplicateGroundingLists(page: Page) {
  * Count CopilotKit's own `copilot-assistant-message` before sending, then call
  * this with that count.
  */
-export async function waitForConciergeReply(page: Page, before: number, timeout = 120_000) {
-  // Own the send's in-flight completion first: leaving it unawaited lets
-  // `response.finished()` run after the test ends ("Test ended").
-  await waitForCopilotIdle(page, timeout);
-  const replies = page.getByTestId("copilot-chat-region").getByTestId("copilot-assistant-message");
-  await expect
-    .poll(() => replies.count(), { timeout, message: "a new concierge assistant reply" })
-    .toBeGreaterThan(before);
-  return replies.last().innerText();
+export async function waitForConciergeReply(
+  page: Page,
+  before: number,
+  timeout = 120_000,
+  /**
+   * C1 diagnostics for THIS turn. Pass the one started BEFORE the send: a watcher
+   * created here attaches after the request, so it can report `attemptId=none`.
+   * When omitted, a local watcher is created and disposed inside this call.
+   */
+  provided?: TurnDiagnostics,
+) {
+  const owned = provided ? undefined : watchTurnDiagnostics(page);
+  const diagnostics = provided ?? owned!;
+  try {
+    // Own the send's in-flight completion first: leaving it unawaited lets
+    // `response.finished()` run after the test ends ("Test ended").
+    await waitForCopilotIdle(page, timeout);
+    const replies = page.getByTestId("copilot-chat-region").getByTestId("copilot-assistant-message");
+    await expect
+      .poll(() => replies.count(), {
+        timeout,
+        message: `a new concierge assistant reply (${diagnostics.summary()})`,
+      })
+      .toBeGreaterThan(before);
+    const text = await replies.last().innerText();
+    if (text.trim().length === 0) {
+      // B2's symptom: a reply bubble that renders nothing.
+      throw new Error(
+        `the new concierge reply rendered no text — ${diagnostics.summary()}`,
+      );
+    }
+    return text;
+  } finally {
+    // A long spec must not accumulate listeners (and every id they captured).
+    owned?.dispose();
+  }
 }
 
 export function countConciergeReplies(page: Page) {

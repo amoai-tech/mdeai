@@ -53,6 +53,10 @@ describe("Step 10 · authenticated single-route /info (real route + real agent g
     getUserMock.mockResolvedValue({ data: { user: { id: "info-proof-user" } } });
 
     const response = await POST(infoEnvelope());
+
+    // C1: the browser can correlate its own attempt with the server log line.
+    expect(response.headers.get("x-mde-request-id")).toMatch(/^[0-9a-f-]{36}$/);
+    expect(response.headers.get("x-mde-attempt-id")).toBeTruthy();
     const body = (await response.json()) as {
       version?: string;
       agents?: Record<string, unknown>;

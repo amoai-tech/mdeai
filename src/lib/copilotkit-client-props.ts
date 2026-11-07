@@ -1,3 +1,4 @@
+import { ATTEMPT_ID_HEADER, newAttemptId } from "@/lib/turn-attempt-id";
 import {
   COPILOTKIT_BASE_PATH,
   COPILOTKIT_USE_SINGLE_ENDPOINT,
@@ -7,6 +8,17 @@ type CopilotAgentName = "conciergeAgent" | "hostEventAgent" | "hostOpsAgent" | "
 
 /** Module-level empties — never inline `{}` on the provider; new refs each render retrigger connect. */
 const STABLE_HEADERS: Record<string, string> = {};
+
+/**
+ * C1: a fresh attempt id per request, so a browser-side failure (offline, aborted,
+ * blocked before headers) still has an identifier the UI can show or report.
+ *
+ * CopilotKit's `headers` prop accepts a function and calls it for each request, which is
+ * why this is a function rather than an object.
+ */
+function attemptHeaders(): Record<string, string> {
+  return { ...STABLE_HEADERS, [ATTEMPT_ID_HEADER]: newAttemptId() };
+}
 const STABLE_PROPERTIES: Record<string, unknown> = {};
 const STABLE_DEV_AGENTS: Record<string, never> = {};
 const STABLE_SELF_MANAGED_AGENTS: Record<string, never> = {};
@@ -34,7 +46,7 @@ type CopilotKitClientProps = {
   agentId: CopilotAgentName;
   runtimeUrl: string;
   useSingleEndpoint: true;
-  headers: Record<string, string>;
+  headers: Record<string, string> | (() => Record<string, string>);
   properties: Record<string, unknown>;
   agents__unsafe_dev_only: Record<string, never>;
   selfManagedAgents: Record<string, never>;
@@ -72,7 +84,7 @@ export function getCopilotKitClientProps(agent: CopilotAgentName): CopilotKitCli
     runtimeUrl: COPILOTKIT_BASE_PATH,
     useSingleEndpoint: COPILOTKIT_USE_SINGLE_ENDPOINT,
     agentId: agent,
-    headers: STABLE_HEADERS,
+    headers: attemptHeaders,
     properties: STABLE_PROPERTIES,
     agents__unsafe_dev_only: STABLE_DEV_AGENTS,
     selfManagedAgents: STABLE_SELF_MANAGED_AGENTS,
