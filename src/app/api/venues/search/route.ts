@@ -111,7 +111,7 @@ const bodySchema = z.object({
 });
 
 /** Google-style type for the card's media label, so it never falls back to the generic "Place". */
-const KIND_PRIMARY_TYPE = { cafe: "cafe", nightlife: "bar" } as const;
+const KIND_PRIMARY_TYPE = { cafe: "café", nightlife: "bar" } as const;
 
 function toGroundedRow(row: VenueAnchorRow, kind: "cafe" | "nightlife"): GroundedToolRow {
   const coords = venueAnchorToCoordinates(row);
@@ -172,5 +172,9 @@ export async function POST(req: Request) {
     results: matched.map((row) => toGroundedRow(row, kind)),
     total: matched.length,
     source: "venue_anchors",
+    // True when retrieval hit its candidate ceiling: there may be matches we never looked at.
+    // The UI ignores it today, but the honest fix (a text predicate in the query) is triggered by
+    // this condition rather than by a guess about catalogue size.
+    windowSaturated: rows.length >= candidateLimit,
   });
 }

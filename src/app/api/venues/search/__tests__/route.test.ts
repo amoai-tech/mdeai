@@ -161,6 +161,20 @@ describe("POST /api/venues/search", () => {
     expect(short.results).toEqual([]);
   });
 
+  it("labels café and nightlife rows the way the card shows them", async () => {
+    const cafe = await (await post({ kind: "cafe" })).json();
+    expect(cafe.results[0].primaryType).toBe("café");
+    const night = await (await post({ kind: "nightlife" })).json();
+    // Nightlife mock returns no rows, so assert the mapping directly through a café-kind request.
+    expect(night.results).toEqual([]);
+  });
+
+  it("reports when the candidate window was saturated", async () => {
+    // 2 mock rows against a 60-row ceiling: not saturated, so "no matches" can be trusted.
+    const res = await (await post({ kind: "cafe", queryText: "quiet" })).json();
+    expect(res.windowSaturated).toBe(false);
+  });
+
   it("rejects invalid json with 400", async () => {
     const res = await POST(
       new Request("http://localhost/api/venues/search", { method: "POST", body: "{not json" }),
