@@ -94,9 +94,17 @@ export function observeTurnStream(
 ): Response {
   if (!response.body) return response;
   const reader = response.body.getReader();
+  const decoder = new TextDecoder();
   let bytes = 0;
   let firstChunkMs: number | null = null;
   let settled = false;
+  /**
+   * An SSE body always carries events (RUN_STARTED, tool calls, …), so byte count alone
+   * cannot tell a real answer from a metadata-only turn. AG-UI emits the assistant text
+   * as `TEXT_MESSAGE_CONTENT`; seeing one is the cheapest non-PII proof that prose was
+   * actually streamed. No event payload is stored.
+   */
+  let sawTextEvent = false;
 
   const finish = (phase: TurnPhase, status: string) => {
     if (settled) return;
@@ -116,12 +124,19 @@ export function observeTurnStream(
       try {
         const { done, value } = await reader.read();
         if (done) {
-          finish("stream", bytes === 0 ? "empty" : "complete");
+          finish(
+            "stream",
+            bytes === 0 ? "empty" : sawTextEvent ? "complete" : "metadata_only",
+          );
           controller.close();
           return;
         }
         if (firstChunkMs === null) firstChunkMs = correlation.elapsedMs();
         bytes += value?.byteLength ?? 0;
+        if (!sawTextEvent && value) {
+          const chunk = decoder.decode(value, { stream: true });
+          if (chunk.includes("TEXT_MESSAGE_CONTENT")) sawTextEvent = true;
+        }
         controller.enqueue(value);
       } catch (error) {
         finish("error", "stream_failed");

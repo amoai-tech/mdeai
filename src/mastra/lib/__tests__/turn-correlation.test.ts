@@ -72,14 +72,14 @@ describe("observeTurnStream", () => {
   it("records stream completion with bytes and first-chunk latency", async () => {
     const spy = vi.spyOn(console, "log").mockImplementation(() => undefined);
     const correlation = resolveTurnCorrelation(request(), Date.now());
-    const body = new TextEncoder().encode("hello");
+    const body = new TextEncoder().encode('data: {"type":"TEXT_MESSAGE_CONTENT","delta":"hi"}\n\n');
     const observed = observeTurnStream(new Response(body, { status: 200 }), correlation);
     await readAll(observed);
     const lines = spy.mock.calls.map((call) => JSON.parse(String(call[0]).replace("[mde-turn] ", "")));
     spy.mockRestore();
     const done = lines.find((line) => line.status === "complete");
     expect(done).toBeDefined();
-    expect(done.detail).toContain("bytes=5");
+    expect(done.detail).toContain(`bytes=${body.byteLength}`);
     expect(done.requestId).toBe(correlation.requestId);
   });
 
@@ -114,5 +114,43 @@ describe("logTurnBoundary", () => {
 
   it("exposes the header name used on responses", () => {
     expect(REQUEST_ID_HEADER).toBe("x-mde-request-id");
+  });
+});
+
+describe("observeTurnStream · metadata vs text", () => {
+  const readAll = async (response: Response) => {
+    const reader = response.body!.getReader();
+    for (;;) {
+      const { done } = await reader.read();
+      if (done) return;
+    }
+  };
+  const lastStatus = (spy: { mock: { calls: unknown[][] } }) =>
+    spy.mock.calls
+      .map((call) => JSON.parse(String(call[0]).replace("[mde-turn] ", "")))
+      .filter((line) => line.phase === "stream")
+      .pop()?.status;
+
+  it("does not call a metadata-only stream complete", async () => {
+    // Exactly the B2 shape: the body carries events, but no assistant prose.
+    const spy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const body = new TextEncoder().encode(
+      'data: {"type":"RUN_STARTED"}\n\ndata: {"type":"RUN_FINISHED"}\n\n',
+    );
+    await readAll(observeTurnStream(new Response(body, { status: 200 }), resolveTurnCorrelation(request())));
+    const status = lastStatus(spy);
+    spy.mockRestore();
+    expect(status).toBe("metadata_only");
+  });
+
+  it("marks a stream that carried assistant text as complete", async () => {
+    const spy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const body = new TextEncoder().encode(
+      'data: {"type":"TEXT_MESSAGE_CONTENT","delta":"Hay dos opciones"}\n\n',
+    );
+    await readAll(observeTurnStream(new Response(body, { status: 200 }), resolveTurnCorrelation(request())));
+    const status = lastStatus(spy);
+    spy.mockRestore();
+    expect(status).toBe("complete");
   });
 });
