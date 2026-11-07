@@ -177,13 +177,14 @@ describe("Clear search", () => {
   it("recovers when Clear is pressed while the fetch is still pending", async () => {
     // The regression the review found: aborting skips the `finally` that clears busy, so the
     // composer stayed dead until a remount. A pending fetch is the only way to reproduce it.
-    let resolveFetch: ((value: Response) => void) | null = null;
+    // A mutable holder, because TS narrows a plain `let` to null across the closure.
+    const pending: { resolve?: (value: Response) => void } = {};
     vi.stubGlobal(
       "fetch",
       vi.fn(
         () =>
           new Promise<Response>((resolve) => {
-            resolveFetch = resolve;
+            pending.resolve = resolve;
           }),
       ),
     );
@@ -197,7 +198,7 @@ describe("Clear search", () => {
 
     // Clear is visible during the search only once results exist, so simulate a prior search.
     expect(onClear).not.toHaveBeenCalled();
-    resolveFetch?.(json({ kind: "cafe", results: [row("a")], total: 1 }));
+    pending.resolve?.(json({ kind: "cafe", results: [row("a")], total: 1 }));
     await screen.findByTestId("guest-venue-summary");
 
     // Second search, still pending, then Clear mid-flight.
