@@ -16,7 +16,7 @@ import { useRentalSearchFastPath } from "@/hooks/use-rental-search-fast-path";
 import { useRestaurantSearchFastPath } from "@/hooks/use-restaurant-search-fast-path";
 import { useSession } from "@/hooks/use-session";
 import { isSelectedRentalCafeNearbyRequest } from "@/lib/cafe-search-fast-path";
-import { closestGroundedResult, isClosestGroundedQuestion } from "@/lib/closest-grounded-result";
+import { closestGroundedResult, parseGroundedRankQuestion } from "@/lib/closest-grounded-result";
 import { createClient } from "@/lib/supabase/client";
 import { stashConciergeDraft } from "@/lib/concierge-draft-store";
 
@@ -57,16 +57,21 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
       const groundedMemory = state as
         | { lastGroundedResults?: Parameters<typeof closestGroundedResult>[0]; selectedListingId?: string }
         | undefined;
-      if (groundedMemory?.lastGroundedResults?.length && isClosestGroundedQuestion(text)) {
-        const closest = closestGroundedResult(
-          groundedMemory.lastGroundedResults,
-          groundedMemory.selectedListingId,
-        );
-        const message = closest
-          ? closest.partial
-            ? `Among the places with a measured distance, ${closest.title} is closest — about ${closest.distanceMeters} m away (straight-line).`
-            : `${closest.title} is the closest, about ${closest.distanceMeters} m away (straight-line).`
-          : "I don't have a measured distance for the current apartment, so I can't say which is closest.";
+      const rank = parseGroundedRankQuestion(text);
+      const ranked = rank && groundedMemory?.lastGroundedResults?.length
+        ? closestGroundedResult(
+            groundedMemory.lastGroundedResults,
+            groundedMemory.selectedListingId,
+            rank,
+          )
+        : null;
+      // No matching anchor or measured row: fall through so a new Nearby search
+      // (or the agent) can run instead of answering from stale rows.
+      if (rank && ranked) {
+        const label = rank === "farthest" ? "farthest" : "closest";
+        const message = ranked.partial
+          ? `Among the places with a measured distance, ${ranked.title} is ${label} — about ${ranked.distanceMeters} m away (straight-line).`
+          : `${ranked.title} is the ${label}, about ${ranked.distanceMeters} m away (straight-line).`;
         showExchange(text, message, submissionId);
         return Promise.resolve(true);
       }
