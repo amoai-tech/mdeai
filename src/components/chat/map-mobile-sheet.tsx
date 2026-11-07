@@ -185,6 +185,10 @@ export function MapMobileSheet() {
         watchFrame = 0;
         const current = composer();
         if (!current) return;
+        // A toolbar removal and composer remount can arrive in one mutation
+        // frame. Remember the remount *before* attachObserver updates observed,
+        // or the settling loop will incorrectly be skipped.
+        const composerRemounted = current !== observed;
         // Re-measure only on toolbar mount/removal (not on every streamed chat
         // message). The toolbar is portaled outside the observed composer.
         const toolbar = document.querySelector<HTMLElement>('[data-testid="rental-compare-toolbar"]');
@@ -193,7 +197,7 @@ export function MapMobileSheet() {
           attachObserver();
           if (typeof ResizeObserver === "undefined") measure();
         }
-        if (current !== observed) startSettle();
+        if (composerRemounted) startSettle();
       });
     });
     watcher.observe(document.body, { childList: true, subtree: true });

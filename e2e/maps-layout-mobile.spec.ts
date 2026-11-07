@@ -198,6 +198,26 @@ test.describe("SAN-524 mobile map interaction — 390×844 touch", () => {
       return current ? Math.abs(current.y - initialMap!.y) : Number.POSITIVE_INFINITY;
     }, { message: "Open map must return to its original position after Clear" })
       .toBeLessThanOrEqual(2);
+
+    // Regression: changing threads can remove the toolbar and remount the
+    // composer in the same mutation frame. The new composer must still settle.
+    await toggles.nth(0).click();
+    await toggles.nth(1).click();
+    await expect(toolbar).toBeVisible();
+    await page.getByTestId("nav-drawer-trigger").click();
+    const drawer = page.getByTestId("nav-drawer-content");
+    await expect(drawer).toBeVisible();
+    await drawer.getByTestId("nav-new-chat").click();
+    await expect(toolbar).toHaveCount(0);
+    await expect.poll(async () => {
+      const [mapBox, inputBox] = await Promise.all([
+        mapTrigger.boundingBox(),
+        page.getByTestId("copilot-chat-input").boundingBox(),
+      ]);
+      if (!mapBox || !inputBox) return Number.NEGATIVE_INFINITY;
+      return inputBox.y - (mapBox.y + mapBox.height);
+    }, { message: "new-thread composer must keep Open map above its top" })
+      .toBeGreaterThanOrEqual(4);
     await expectNoHorizontalOverflow(page);
   });
 
