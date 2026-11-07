@@ -23,6 +23,10 @@ describe("SAN-1041 deterministic rental comparison", () => {
     expect(resolveRentalComparisonRows(rows, ["laureles-1"])).toBeNull();
     expect(resolveRentalComparisonRows(rows, ["laureles-1", "laureles-1"])).toBeNull();
     expect(resolveRentalComparisonRows(rows, ["laureles-1", "forged-id"])).toBeNull();
+    expect(resolveRentalComparisonRows(rows, ["", "poblado-2"])).toBeNull();
+    expect(resolveRentalComparisonRows(rows, ["   ", "poblado-2"])).toBeNull();
+    expect(resolveRentalComparisonRows(rows, ["laureles-1 ", "poblado-2"])).toBeNull();
+    expect(resolveRentalComparisonRows(rows, ["laureles-1", " poblado-2"])).toBeNull();
     expect(resolveRentalComparisonRows(rows, ["laureles-1", "poblado-2", "external_3", "rental-4", "forged"])).toBeNull();
     expect(resolveRentalComparisonRows(rows, ["external_3", "laureles-1"])?.map(r => r.id)).toEqual(["external_3", "laureles-1"]);
     expect(resolveRentalComparisonRows(rows.slice(0, 1), ["laureles-1", "poblado-2"])).toBeNull();

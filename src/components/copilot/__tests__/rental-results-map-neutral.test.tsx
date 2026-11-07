@@ -475,6 +475,68 @@ describe("SAN-1041 · deterministic comparison from rental tool results", () => 
     expect(container.querySelector('[data-testid="rental-compare-open"]')).toBeNull();
   });
 
+  it("clears selection on overlapping IDs and changed source prices, not just changed ID lists", () => {
+    render(result);
+    let toggles = [...container.querySelectorAll<HTMLButtonElement>('[data-testid="rental-compare-toggle"]')];
+    act(() => { toggles[0].click(); toggles[1].click(); });
+    act(() => container.querySelector<HTMLButtonElement>('[data-testid="rental-compare-open"]')?.click());
+    expect(document.querySelector('[data-testid="rental-comparison-modal"]')?.textContent)
+      .toContain("COP 2,400,000/month");
+
+    // Same listing IDs, but the authoritative result now has a new price.
+    render({ ...result, results: [
+      fullRental("first", { price_monthly: 4_100_000 }),
+      fullRental("second", { price_monthly: 2_800_000 }),
+      fullRental("third", { price_monthly: 3_500_000 }),
+    ] });
+    expect(container.querySelector('[data-testid="rental-compare-toolbar"]')).toBeNull();
+    expect(document.querySelector('[data-testid="rental-comparison-modal"]')).toBeNull();
+    toggles = [...container.querySelectorAll<HTMLButtonElement>('[data-testid="rental-compare-toggle"]')];
+    expect(toggles[0].getAttribute("aria-pressed")).toBe("false");
+
+    // Re-selecting uses the replacement facts, not the old comparison.
+    act(() => { toggles[0].click(); toggles[1].click(); });
+    act(() => container.querySelector<HTMLButtonElement>('[data-testid="rental-compare-open"]')?.click());
+    expect(document.querySelector('[data-testid="rental-comparison-modal"]')?.textContent)
+      .toContain("COP 4,100,000/month");
+
+    // Even partially overlapping results must invalidate the old selection.
+    render({ source: "supabase", results: [
+      fullRental("first", { price_monthly: 4_100_000 }), fullRental("new-b"),
+    ] });
+    expect(container.querySelector('[data-testid="rental-compare-toolbar"]')).toBeNull();
+    expect(document.querySelector('[data-testid="rental-comparison-modal"]')).toBeNull();
+  });
+
+  it("releases composer z-index when a selected result unmounts", () => {
+    const callbacks: FrameRequestCallback[] = [];
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      callbacks.push(callback);
+      return callbacks.length;
+    });
+    vi.stubGlobal("cancelAnimationFrame", vi.fn());
+    const panel = document.createElement("div");
+    panel.dataset.testid = "center-chat-panel";
+    const overlay = document.createElement("div");
+    overlay.dataset.testid = "copilot-input-overlay";
+    overlay.style.zIndex = "19";
+    panel.appendChild(overlay);
+    document.body.appendChild(panel);
+    try {
+      render(result);
+      act(() => container.querySelector<HTMLButtonElement>('[data-testid="rental-compare-toggle"]')?.click());
+      act(() => callbacks.forEach((callback) => callback(0)));
+      expect(overlay.style.zIndex).toBe("35");
+      expect(overlay.querySelectorAll('[data-testid="rental-compare-toolbar"]')).toHaveLength(1);
+      act(() => root.render(null));
+      expect(overlay.querySelector('[data-testid="rental-compare-toolbar"]')).toBeNull();
+      expect(overlay.style.zIndex).toBe("19");
+    } finally {
+      panel.remove();
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("keeps the sticky action bar until selection is cleared, then removes it", () => {
     render(result);
     const toggles = [...container.querySelectorAll<HTMLButtonElement>('[data-testid="rental-compare-toggle"]')];

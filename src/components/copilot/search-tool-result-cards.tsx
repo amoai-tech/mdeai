@@ -324,9 +324,10 @@ export function RentalResults({
   // look like two apartments in a chat answer, which is exactly what the production envelope did.
   const duplicateNotes = duplicateListingNotes(rows);
   // Local, deterministic comparison state: only IDs from this actual result.
-  // New result identity resets the selection, so an old turn cannot select
-  // apartments that a new search didn't return.
-  const rowsKey = rows.map((row) => row.id).join("\u001f");
+  // Include source facts and search parameters, not only IDs: a refreshed
+  // result with overlapping IDs or changed prices must not inherit a previous
+  // selection. JSON encoding avoids delimiter collisions in source IDs.
+  const rowsKey = JSON.stringify([searchParams ?? null, rows]);
   const [comparisonState, setComparisonState] = useState<{
     rowsKey: string; ids: string[]; open: boolean;
   }>({ rowsKey: "", ids: [], open: false });

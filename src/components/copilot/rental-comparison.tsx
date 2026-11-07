@@ -19,7 +19,7 @@ export function resolveRentalComparisonRows(
   listingIds: readonly string[],
 ): ComparisonRentalRow[] | null {
   if (listingIds.length < 2 || listingIds.length > 4 ||
-      listingIds.some((id) => typeof id !== "string" || id.length === 0) ||
+      listingIds.some((id) => typeof id !== "string" || !id.trim() || id !== id.trim()) ||
       new Set(listingIds).size !== listingIds.length) return null;
 
   // Resolve from these actual source rows only. A forged, missing, or stale ID
