@@ -59,6 +59,21 @@ describe("SAN-1390 — real grounded card to canonical map context", () => {
     expect(screen.getByTestId("map-truth").textContent).toContain('"pins":[]');
   });
 
+  it("distinguishes guest search results from Ask MDE agent results", () => {
+    const view = render(<MapContextProvider seedMockPin={false}>
+      <DiscoveryGroundedResults rows={[first]} label="Search results" />
+    </MapContextProvider>);
+    const region = screen.getByTestId("discovery-grounded-results");
+    expect(region.getAttribute("aria-label")).toBe("Search results");
+    expect(region.textContent).toContain("Search results — 1 places");
+    expect(region.textContent).not.toContain("Ask MDE —");
+
+    view.rerender(<MapContextProvider seedMockPin={false}>
+      <DiscoveryGroundedResults rows={[first]} />
+    </MapContextProvider>);
+    expect(screen.getByTestId("discovery-grounded-results").getAttribute("aria-label")).toBe("Ask MDE places");
+  });
+
   it("never creates a map pin when the source supplied no coordinates", async () => {
     render(<Journey rows={[{ id: "without-coordinates", title: "Unmapped place" }]} />);
     await waitFor(() => expect(screen.getByTestId("map-truth").textContent).toContain('"pins":[]'));
