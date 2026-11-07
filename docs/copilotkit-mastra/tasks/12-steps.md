@@ -5,8 +5,8 @@
 | Field | Value |
 |---|---|
 | Last updated | **2026-11-07** (merged PRs verified; open work: **#798** this tracker, **#778** support docs, B2/C1 tracing) |
-| `origin/main` | **`14bf8b3926`** |
-| Production `/api/version` | **`14bf8b3926`** — matches main (`#777`, `#787`, `#792`, `#793`, `#786` all in it) |
+| `origin/main` | **`65410767`** |
+| Production `/api/version` | **`65410767`** — matches main, verified 2026-11-07 (`#777`, #786, `#787`, `#792`, `#793`, `#796`, `#799` all in it) |
 | Working worktree | `/home/sk/.worktrees/mde-ai-rel` **removed** after #792 merged (clean, pushed, no processes) |
 | Installed stack | CopilotKit **1.84.1** · AG-UI **1.0.2** · `@ag-ui/mastra` **2.0.2** · Mastra core **1.81.0** · memory 1.40.0 · pg 1.34.0 |
 
@@ -23,7 +23,7 @@
 | A1 duplicate attempt | ✅ closed | same defect implemented twice | [#779](https://github.com/amoai-tech/mdeai/pull/779) **CLOSED** | — |
 | **A2** No answer ≠ success | ✅ | already in main: `sendAndWait` captures `repliesBefore` before submit, waits for a NEW reply and asserts it is nonempty; `waitForConciergeReply` polls for that reply | [#780](https://github.com/amoai-tech/mdeai/pull/780) **CLOSED** as superseded | — |
 | **A3** First-send 401 | ✅ | readiness now requires **HTTP 200** from `POST /api/copilotkit {"method":"info"}` (anonymous returns 401); a rejected fetch no longer counts as ready | [#787](https://github.com/amoai-tech/mdeai/pull/787) merged | — |
-| **A4** Cleanup that survives a killed run | 🟡 | in-process: `#787` ownership sweep + `#792` (merged) failing cleanup now FAILS the run instead of being swallowed (3 unit tests). Independent: `#796` extends the nightly `qa-fixture-cleanup.yml` to the whole `@qa-isolation.mdeai.co` domain, per-identity savepoints, verified rows | [#787](https://github.com/amoai-tech/mdeai/pull/787) · [#792](https://github.com/amoai-tech/mdeai/pull/792) merged · [#796](https://github.com/amoai-tech/mdeai/pull/796) **open** | merge #796; it found **3 real leaks 12–13 days old** that the old `qa-%` pattern could never see |
+| **A4** Cleanup that survives a killed run | 🟡 | in-process: `#787` ownership sweep + `#792` failing cleanup now FAILS the run (3 unit tests). Independent: `#796` **merged** — nightly job covers the whole `@qa-isolation.mdeai.co` domain with per-identity savepoints | [#787](https://github.com/amoai-tech/mdeai/pull/787) · [#792](https://github.com/amoai-tech/mdeai/pull/792) · [#796](https://github.com/amoai-tech/mdeai/pull/796) all merged | [#800](https://github.com/amoai-tech/mdeai/pull/800) closes the remaining privacy finding in the uploaded artifact |
 | **B1** 60 s page readiness | 🟡 **measured** | 5 direct loads: canvas `1690 / 497 / 502 / 443 / 541 ms`, composer +~20 ms, history region ready `1733 / 542 / 544 / 464 / 563 ms` → **0.46–1.73 s**, not 60 s | — | the 60 s event is an **outlier** (edge/network), not a product readiness defect; capture the failing run's network trace if it recurs |
 | **B2** `TypeError: network error` | ⬜ | observed once; **not** proven to be Gemini | — | trace one failure end to end |
 | **C1** End-to-end tracing | ⬜ | turn log + `ai_runs` exist; no correlation ids | — | correlate with existing ids |
@@ -56,7 +56,7 @@
 - [#793](https://github.com/amoai-tech/mdeai/pull/793) merged as `aa9bdfa3`; these trackers.
 - [#786](https://github.com/amoai-tech/mdeai/pull/786) merged; CI-only Playwright container benchmark (no product code).
 - `/home/sk/.worktrees/mde-ai-rel` **removed** after #792 merged — it was clean, its commit was pushed, and no process used it.
-- **2026-11-07:** production verified serving `14bf8b3926` (= `main`), and a desktop + mobile journey smoke passed on that SHA (2 passed, 1.9 min, pinned before and after).
+- **2026-11-07:** production verified serving `65410767` (= `main`). Earlier the same day a desktop + mobile smoke passed on `14bf8b3926` (2 passed, 1.9 min, pinned before and after).
 
 ### Now — smallest safe ordered work
 1. **✅ [#796](https://github.com/amoai-tech/mdeai/pull/796) merged** (`5805440625`) — independent nightly cleanup. Both blockers were fixed before merge: the CI backup now writes **identifiers and row counts only** (a synthetic orphan carrying a marker string was deleted and the marker is absent from the backup), and `review / review` now runs a real current-head review (the old title matched `config.ignore_pr_title`, and a title edit emits no `synchronize` event). It removed **3 real leaked accounts** aged 12–13 days that the previous `qa-%` pattern could never match.
@@ -103,4 +103,5 @@ If that guard fails, follow [Production release verification](../../07-operation
 | 2026-11-06 | `9b8b25c96d3` | PR #777 merge |
 | 2026-11-06 | `8114a5a96382` | **certification run: 20/20** |
 | 2026-11-06 | `583dcbd6a631` | PR #792 merge |
-| 2026-11-07 | **`14bf8b3926`** | current `main` = production; desktop + mobile smoke passed here |
+| 2026-11-07 | `14bf8b3926` | desktop + mobile smoke passed here |
+| 2026-11-07 | **`65410767`** | current `main` = production (verified) |
