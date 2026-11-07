@@ -127,9 +127,33 @@ describe("Clear search", () => {
 
     ask("quiet");
     expect(await screen.findByTestId("guest-venue-summary")).toBeTruthy();
-    fireEvent.click(screen.getByTestId("guest-venue-clear"));
+    fireEvent.click(await screen.findByTestId("guest-venue-clear"));
     expect(onClear).toHaveBeenCalledTimes(1);
     expect(screen.queryByTestId("guest-venue-summary")).toBeNull();
+  });
+
+  it("stays available after a failed follow-up search, and focuses the field", async () => {
+    // First search succeeds, second one 503s: the message clears but the results are still there,
+    // so the visitor still needs a way back.
+    let call = 0;
+    stubFetch(() => {
+      call += 1;
+      return call === 1 ? json({ kind: "cafe", results: [row("a")], total: 1 }) : new Response("{}", { status: 503 });
+    });
+    const onClear = vi.fn();
+    render(<GuestVenueSearch options={{ kind: "cafe", onResults: vi.fn(), onClear }} />);
+
+    ask("quiet");
+    await screen.findByTestId("guest-venue-clear");
+    ask("another");
+    await screen.findByRole("alert");
+    // Results from the first search are still rendered, so clearing must remain possible.
+    expect(screen.getByTestId("guest-venue-clear")).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId("guest-venue-clear"));
+    expect(onClear).toHaveBeenCalledTimes(1);
+    // Focus lands on the search field, not on <body>.
+    expect(document.activeElement).toBe(screen.getByLabelText(/Search cafés/));
   });
 
   it("is not rendered when the page cannot clear", async () => {

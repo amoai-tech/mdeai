@@ -31,6 +31,20 @@ const cafeRows = [
     is_active: true,
   },
 ];
+const nightlifeRows = [
+  {
+    id: "33333333-3333-4333-8333-333333333333",
+    kind: "nightlife",
+    name: "Son Havana",
+    google_place_id: "place-3",
+    neighborhood: "El Poblado",
+    latitude: 6.21,
+    longitude: -75.57,
+    tags: ["salsa"],
+    metadata: null,
+    is_active: true,
+  },
+];
 const failures: { cafe: string | null; nightlife: string | null } = { cafe: null, nightlife: null };
 const calls: Array<{ fn: string; params: unknown }> = [];
 
@@ -49,7 +63,9 @@ vi.mock("@/mastra/tools/search-venue-anchors", async () => {
     searchNightclubVenueAnchorsForBrowse: (params: unknown) => {
       calls.push({ fn: "nightlife", params });
       return Promise.resolve(
-        failures.nightlife ? { rows: [], error: failures.nightlife } : { rows: [], error: null },
+        failures.nightlife
+          ? { rows: [], error: failures.nightlife }
+          : { rows: nightlifeRows, error: null },
       );
     },
   };
@@ -116,7 +132,7 @@ describe("POST /api/venues/search", () => {
   });
 
   it("returns an honest empty result when retrieval succeeded with no matches", async () => {
-    const res = await post({ kind: "nightlife", queryText: "nothing here" });
+    const res = await post({ kind: "nightlife", queryText: "zzz nothing here" });
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(json.results).toEqual([]);
@@ -164,9 +180,10 @@ describe("POST /api/venues/search", () => {
   it("labels café and nightlife rows the way the card shows them", async () => {
     const cafe = await (await post({ kind: "cafe" })).json();
     expect(cafe.results[0].primaryType).toBe("café");
+    // A real nightlife row, so the `nightlife: "bar"` mapping is actually exercised.
     const night = await (await post({ kind: "nightlife" })).json();
-    // Nightlife mock returns no rows, so assert the mapping directly through a café-kind request.
-    expect(night.results).toEqual([]);
+    expect(night.results).toHaveLength(1);
+    expect(night.results[0]).toMatchObject({ title: "Son Havana", primaryType: "bar" });
   });
 
   it("reports when the candidate window was saturated", async () => {

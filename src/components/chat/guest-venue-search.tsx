@@ -23,6 +23,11 @@ export type VenueGuestOptions = {
   onClear?: () => void;
 };
 
+/**
+ * Filter-scoped wrapper around the guest search field.
+ *
+ * @param options Search configuration; the filter scope becomes part of the React key.
+ */
 export function GuestVenueSearchScoped({ options }: { options: VenueGuestOptions }) {
   // A new filter scope means a new result set, so the old summary must not survive it. The key sits
   // on the guest subtree only: a filter change never remounts the signed-in concierge.
@@ -40,6 +45,9 @@ export function GuestVenueSearch({ options }: { options: VenueGuestOptions }) {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const abort = useRef<AbortController | null>(null);
+  const fieldRef = useRef<HTMLTextAreaElement | null>(null);
+  /** True from the first successful search until the page clears it. */
+  const [hasResults, setHasResults] = useState(false);
   const noun = options.kind === "cafe" ? ["café", "cafés"] : ["nightlife venue", "nightlife venues"];
 
   const send = async () => {
@@ -76,6 +84,7 @@ export function GuestVenueSearch({ options }: { options: VenueGuestOptions }) {
       }
       const body = json as { results: GroundedToolRow[]; total?: number };
       options.onResults(body.results);
+      setHasResults(true);
       setMessage(
         body.results.length === 0
           ? `No ${noun[1]} matched “${query}”. Try a neighborhood or a different word.`
@@ -102,6 +111,7 @@ export function GuestVenueSearch({ options }: { options: VenueGuestOptions }) {
           Search {options.kind === "cafe" ? "cafés" : "nightlife venues"}
         </label>
         <textarea
+          ref={fieldRef}
           id={`guest-venue-question-${options.kind}`}
           rows={1}
           value={question}
@@ -129,26 +139,31 @@ export function GuestVenueSearch({ options }: { options: VenueGuestOptions }) {
         </button>
       </div>
       {message ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <p role="status" data-testid="guest-venue-summary" className="text-xs text-muted-foreground">
-            {message}
-          </p>
-          {options.onClear ? (
-            <button
-              type="button"
-              data-testid="guest-venue-clear"
-              className="text-xs text-primary underline-offset-4 hover:underline"
-              onClick={() => {
-                abort.current?.abort();
-                setMessage(null);
-                setError(null);
-                options.onClear?.();
-              }}
-            >
-              Clear search
-            </button>
-          ) : null}
-        </div>
+        <p role="status" data-testid="guest-venue-summary" className="text-xs text-muted-foreground">
+          {message}
+        </p>
+      ) : null}
+      {/*
+        The button follows the *results*, not the message: a failed follow-up search clears the
+        message while the previous results are still on screen, and the visitor still needs a way
+        back. Focus returns to the field so the keyboard user is not dropped on <body>.
+      */}
+      {options.onClear && hasResults ? (
+        <button
+          type="button"
+          data-testid="guest-venue-clear"
+          className="text-xs text-primary underline-offset-4 hover:underline"
+          onClick={() => {
+            abort.current?.abort();
+            setMessage(null);
+            setError(null);
+            setHasResults(false);
+            options.onClear?.();
+            fieldRef.current?.focus();
+          }}
+        >
+          Clear search
+        </button>
       ) : null}
       {error ? (
         <p role="alert" className="text-xs text-destructive">

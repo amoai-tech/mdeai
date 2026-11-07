@@ -24,6 +24,18 @@ export function rateLimitedResponse(): NextResponse {
  * Falls back to the in-process bucket when the store is unavailable: a rate limiter must not turn
  * a database hiccup into a broken search box. `storeAvailable` is what distinguishes the two.
  */
+/** How long the shared limiter may delay a public search before we fall back. */
+const SHARED_LIMIT_TIMEOUT_MS = 400;
+
+/**
+ * Rate-limits a public search request against a store every instance shares.
+ *
+ * @param req Incoming request; its client IP is the bucket key.
+ * @param bucket Logical limiter name, so one route cannot exhaust another's allowance.
+ * @param max Requests allowed per window.
+ * @param windowSeconds Window length in seconds.
+ * @returns A ready 429 response when the visitor is over the limit, otherwise null.
+ */
 export async function checkSearchFastPathSharedRateLimit(
   req: Request,
   bucket: string,
@@ -33,7 +45,13 @@ export async function checkSearchFastPathSharedRateLimit(
   const ip = clientIpFromRequest(req);
   let result: Awaited<ReturnType<typeof checkRateLimitDurable>> | null = null;
   try {
-    result = await checkRateLimitDurable(`${bucket}:ip:${ip}`, max, windowSeconds);
+    // A stalled RPC must not hold the request open: past the budget we use the in-process bucket.
+    // The RPC is supabase-js (fetch-backed) and exposes no abort signal here, so this bounds the
+    // *wait*, not the query itself — the abandoned call is harmless and its result is discarded.
+    result = await Promise.race([
+      checkRateLimitDurable(`${bucket}:ip:${ip}`, max, windowSeconds),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), SHARED_LIMIT_TIMEOUT_MS)),
+    ]);
   } catch {
     result = null;
   }

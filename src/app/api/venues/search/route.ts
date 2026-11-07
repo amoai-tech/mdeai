@@ -85,6 +85,13 @@ function isVibeWord(token: string, kind: "cafe" | "nightlife"): boolean {
   );
 }
 
+/**
+ * Decide whether a venue is described by the query at all.
+ *
+ * @param row Candidate venue anchor.
+ * @param queryText Raw visitor query.
+ * @param kind Vertical, used to recognise that vertical's vibe words.
+ */
 function matchesQuery(row: VenueAnchorRow, queryText: string, kind: "cafe" | "nightlife"): boolean {
   const haystack = foldSearchText(
     [row.name, row.neighborhood ?? "", (row.tags ?? []).join(" "), venueAnchorSummary(row) ?? ""].join(" "),
@@ -113,6 +120,12 @@ const bodySchema = z.object({
 /** Google-style type for the card's media label, so it never falls back to the generic "Place". */
 const KIND_PRIMARY_TYPE = { cafe: "café", nightlife: "bar" } as const;
 
+/**
+ * Shape one venue anchor like the grounded rows the existing card list renders.
+ *
+ * @param row Saved venue anchor.
+ * @param kind Which vertical asked, so the card can label itself "Café" or "Bar".
+ */
 function toGroundedRow(row: VenueAnchorRow, kind: "cafe" | "nightlife"): GroundedToolRow {
   const coords = venueAnchorToCoordinates(row);
   return {

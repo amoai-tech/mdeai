@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
  * Public search must be limited by a store every instance shares, and must still work when that
@@ -19,9 +19,20 @@ vi.mock("@/lib/distributed-rate-limit", async () => {
   };
 });
 
-import { checkSearchFastPathSharedRateLimit } from "@/lib/api-ip-rate-limit";
+import {
+  checkSearchFastPathSharedRateLimit,
+  resetApiIpRateLimitsForTests,
+} from "@/lib/api-ip-rate-limit";
+
+const full = { allowed: false, count: 31, max: 30, retryAfterSeconds: 120, storeAvailable: true };
+const unavailable = { allowed: true, count: 0, max: 30, retryAfterSeconds: 0, storeAvailable: false };
 
 const req = () => new Request("http://localhost/api/venues/search", { method: "POST" });
+
+beforeEach(() => {
+  // The in-process buckets are module state; each test starts from an empty window.
+  resetApiIpRateLimitsForTests();
+});
 
 afterEach(() => {
   durable.impl = async () => ({ allowed: true, count: 1, max: 30, retryAfterSeconds: 0, storeAvailable: true });
@@ -33,20 +44,33 @@ describe("checkSearchFastPathSharedRateLimit", () => {
   });
 
   it("rejects with 429 when the shared store says the bucket is full", async () => {
-    durable.impl = async () => ({ allowed: false, count: 31, max: 30, retryAfterSeconds: 120, storeAvailable: true });
+    durable.impl = async () => full;
     const res = await checkSearchFastPathSharedRateLimit(req(), "venue-search");
     expect(res?.status).toBe(429);
   });
 
-  it("still protects the route when the store is unavailable", async () => {
-    // Falls back to the in-process bucket rather than failing open or returning a 503 to a visitor
-    // who did nothing wrong.
-    durable.impl = async () => ({ allowed: true, count: 0, max: 30, retryAfterSeconds: 0, storeAvailable: false });
-    expect(await checkSearchFastPathSharedRateLimit(req(), "venue-search")).toBeNull();
+  it("falls back to the in-process bucket when the store is unavailable", async () => {
+    // A null alone could also mean "failed open". Exhausting the in-process bucket proves the
+    // fallback really runs: the 31st request in the window must be rejected.
+    durable.impl = async () => unavailable;
+    const results: (number | null)[] = [];
+    for (let i = 0; i < 31; i += 1) {
+      const res = await checkSearchFastPathSharedRateLimit(req(), "venue-search");
+      results.push(res ? res.status : null);
+    }
+    expect(results.slice(0, 30).every((status) => status === null)).toBe(true);
+    expect(results[30]).toBe(429);
   });
 
-  it("falls back when the limiter itself throws", async () => {
-    durable.impl = async () => { throw new Error("rpc down"); };
-    expect(await checkSearchFastPathSharedRateLimit(req(), "venue-search")).toBeNull();
+  it("falls back the same way when the limiter throws", async () => {
+    durable.impl = async () => {
+      throw new Error("rpc down");
+    };
+    const results: (number | null)[] = [];
+    for (let i = 0; i < 31; i += 1) {
+      const res = await checkSearchFastPathSharedRateLimit(req(), "venue-search");
+      results.push(res ? res.status : null);
+    }
+    expect(results[30]).toBe(429);
   });
 });
