@@ -4,6 +4,7 @@ import {
   eventCardsToToolEnvelope,
   canFastPathEventSearch,
   isEventCardRenderRequest,
+  resolveExplicitEventRequest,
   visibleEventSearchReasons,
   shouldInstantEventClarify,
 } from "@/lib/event-search-fast-path";
@@ -239,5 +240,21 @@ describe("SAN-1250 honest ticket offer transport", () => {
       pricePerTicket: 40000, currency: "COP",
       canBuyTickets: true, ticketUrl: "/events/reina",
     });
+  });
+});
+
+describe("resolveExplicitEventRequest", () => {
+  const rows = [
+    { id: "first-id", title: "Feria de las Flores" },
+    { id: "second-id", title: "Reina de Antioquia" },
+  ];
+  it("resolves first, second and named events without the model", () => {
+    expect(resolveExplicitEventRequest("Show the first event as a card.", rows)).toBe("first-id");
+    expect(resolveExplicitEventRequest("Show the second event as a card.", rows)).toBe("second-id");
+    expect(resolveExplicitEventRequest("Show Reina de Antioquia as a card.", rows)).toBe("second-id");
+  });
+  it("does not guess an ambiguous request", () => {
+    expect(resolveExplicitEventRequest("Show an event as a card.", rows)).toBeNull();
+    expect(resolveExplicitEventRequest("Show the second event as a card.", [rows[0]])).toBeNull();
   });
 });

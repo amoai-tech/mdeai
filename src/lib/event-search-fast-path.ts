@@ -228,3 +228,26 @@ export function fastPathAssistantSummary(count: number, pinCount: number): strin
   }
   return withMapCoverage(`Found ${count} event${count === 1 ? "" : "s"}`, count, pinCount);
 }
+
+const DIRECT_ORDINALS: Record<string, number> = {
+  first: 0, "1st": 0, second: 1, "2nd": 1, third: 2, "3rd": 2,
+  fourth: 3, "4th": 3, fifth: 4, "5th": 4,
+};
+
+/** Resolve an explicit event request against current authorized result rows. */
+export function resolveExplicitEventRequest(
+  text: string,
+  rows: ReadonlyArray<{ id: string; title: string }>,
+): string | null {
+  if (rows.length === 0) return null;
+  const normalized = text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const ordinal = normalized.match(/\b(first|1st|second|2nd|third|3rd|fourth|4th|fifth|5th)\b/);
+  if (ordinal) return rows[DIRECT_ORDINALS[ordinal[1]]]?.id ?? null;
+  const named = rows.find((row) => {
+    const title = row.title.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    return title.length > 2 && normalized.includes(title);
+  });
+  if (named) return named.id;
+  if (rows.length === 1 && /\b(the|this|that|it)\s+event\b/i.test(normalized)) return rows[0].id;
+  return null;
+}

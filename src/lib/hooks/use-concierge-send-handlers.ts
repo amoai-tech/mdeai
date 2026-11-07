@@ -9,7 +9,8 @@ import { useOptionalThreadNav } from "@/lib/chat/thread-nav-context";
 import { useConciergeChat } from "@/lib/hooks/use-concierge-chat";
 import type { ConciergeSendHandlers } from "@/lib/concierge-send-user-message";
 import { useEventSearchFastPath } from "@/hooks/use-event-search-fast-path";
-import { isEventCardRenderRequest } from "@/lib/event-search-fast-path";
+import { isEventCardRenderRequest, resolveExplicitEventRequest } from "@/lib/event-search-fast-path";
+import { useOptionalEventSearchResults } from "@/components/chat/event-search-results-context";
 import { useEventVenueBookingFastPath } from "@/hooks/use-event-venue-booking-fast-path";
 import { useGroundedSearchFastPath } from "@/hooks/use-grounded-search-fast-path";
 import { useRentalSearchFastPath } from "@/hooks/use-rental-search-fast-path";
@@ -41,7 +42,8 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
       return (await agentSendRef.current?.(text)) ?? false;
     },
   });
-  const { handleUserMessage: handleEventMessage, activeEventId } = useEventSearchFastPath();
+  const { handleUserMessage: handleEventMessage, activeEventId, activeEventRows } = useEventSearchFastPath();
+  const eventResultsContext = useOptionalEventSearchResults();
   const { handleUserMessage: handleRestaurantMessage } =
     useRestaurantSearchFastPath();
   const { handleUserMessage: handleGroundedFastPathMessage } =
@@ -90,6 +92,18 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
         clearConciergePendingSend();
         return true;
       }
+      const currentEventRows = eventResultsContext?.rows?.length ? eventResultsContext.rows : (activeEventRows ?? []);
+      const directEventId = isEventCardRenderRequest(text)
+        ? resolveExplicitEventRequest(text, currentEventRows)
+        : null;
+      if (directEventId) {
+        showExchange(text, "Here is the event card.", submissionId);
+        window.dispatchEvent(new CustomEvent("mde:event-card-recovery", {
+          detail: { eventId: directEventId },
+        }));
+        clearConciergePendingSend();
+        return true;
+      }
       try {
         if ((await waitForRuntimeReady()) && (await appendMessage(text))) {
           // If the model returns no A2UI surface, the existing real result can
@@ -113,7 +127,7 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
       clearConciergePendingSend();
       return true;
     },
-    [appendMessage, waitForRuntimeReady, retryLastTurn, threadId, showExchange, showNotice, showSignInPrompt, signedIn, sessionLoading, activeEventId],
+    [appendMessage, waitForRuntimeReady, retryLastTurn, threadId, showExchange, showNotice, showSignInPrompt, signedIn, sessionLoading, activeEventId, activeEventRows, eventResultsContext],
   );
 
   // A cold-runtime wait must not turn two clicks into two agent runs.

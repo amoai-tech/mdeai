@@ -241,11 +241,16 @@ export function useEventSearchFastPath() {
     [runSearch, state],
   );
 
-  const activeEventId = useMemo(() => {
+  const activeEventRows = useMemo(() => {
     const rows = toolResult ? normalizeToolEnvelope(toolResult).results : undefined;
-    const row = (rows ?? []).find((value) => isEventA2UIId((value as { id?: unknown }).id));
-    return (row as { id?: string } | undefined)?.id ?? null;
+    return (rows ?? []).flatMap((value) => {
+      const row = value as { id?: unknown; title?: unknown };
+      return isEventA2UIId(row.id) && typeof row.title === "string"
+        ? [{ id: row.id, title: row.title }]
+        : [];
+    });
   }, [toolResult]);
+  const activeEventId = activeEventRows[0]?.id ?? null;
 
-  return { handleUserMessage, handleEventChip, activeEventId };
+  return { handleUserMessage, handleEventChip, activeEventId, activeEventRows };
 }
