@@ -4,7 +4,7 @@
 
 | Field | Value |
 |---|---|
-| Last updated | **2026-11-07** (merged PRs verified; open work: **#796** cleanup, **#798** this tracker, **#778** support docs) |
+| Last updated | **2026-11-07** (merged PRs verified; open work: **#798** this tracker, **#778** support docs, B2/C1 tracing) |
 | `origin/main` | **`14bf8b3926`** |
 | Production `/api/version` | **`14bf8b3926`** — matches main (`#777`, `#787`, `#792`, `#793`, `#786` all in it) |
 | Working worktree | `/home/sk/.worktrees/mde-ai-rel` **removed** after #792 merged (clean, pushed, no processes) |
@@ -59,11 +59,13 @@
 - **2026-11-07:** production verified serving `14bf8b3926` (= `main`), and a desktop + mobile journey smoke passed on that SHA (2 passed, 1.9 min, pinned before and after).
 
 ### Now — smallest safe ordered work
-1. **Finish [#796](https://github.com/amoai-tech/mdeai/pull/796)** — independent nightly cleanup. Two blockers before merge: (a) the CI backup must not export chat/profile contents as an artifact, and (b) the `review / review` job must produce a real current-head review instead of failing `NO_REVIEW` because its configuration ignored the PR title. It already found **3 real leaked accounts** aged 12–13 days that the previous `qa-%` pattern could never match.
+1. **✅ [#796](https://github.com/amoai-tech/mdeai/pull/796) merged** (`5805440625`) — independent nightly cleanup. Both blockers were fixed before merge: the CI backup now writes **identifiers and row counts only** (a synthetic orphan carrying a marker string was deleted and the marker is absent from the backup), and `review / review` now runs a real current-head review (the old title matched `config.ignore_pr_title`, and a title edit emits no `synchronize` event). It removed **3 real leaked accounts** aged 12–13 days that the previous `qa-%` pattern could never match.
 2. **Merge [#798](https://github.com/amoai-tech/mdeai/pull/798)** — this tracker. Docs only; no browser recertification.
 3. **B2 + C1 diagnostics (do them together):** one correlation path across browser → `/api/copilotkit` → AG-UI/Mastra → provider/tool → stream completion, recording failures **without** storing private prompts. Reuse the existing turn log and `ai_runs`; do not add a second observability platform, and do not attach a duration to the historical one-off.
 4. **C2 working memory:** reproduce with two simultaneous writers (two tabs changing preferences in the same conversation) before touching the merge path — Mastra's native atomic merge needs **resource** scope, MDE uses **thread** scope. Change code only if the test proves a defect.
-5. **C3 + search coverage:** measure `buildHandler()` / `new CopilotRuntime()` before optimizing, and compare searchable listings with embedded listings before backfilling. Never invent inventory to fill a coverage gap.
+5. **C3 runtime initialization:** measure `buildHandler()` / `new CopilotRuntime()` before optimizing anything.
+
+Search coverage is **not** part of this plan: embedding backfill and semantic-search freshness belong to [SAN-1523](https://linear.app/amo100/issue/SAN-1523) (Done, verified). If coverage needs work, reopen that task — do not invent inventory or a parallel search workstream from this document.
 
 ### Deployment and promotion — read before touching production
 Promotion is **asynchronous**. The `Prod deploy freshness` guard waited 9, 13 and 19 polls (≈4.5–9.5 min) after a build was READY before the domain served the new commit, and passed every time. **READY ≠ served** — always prove it with `/api/version`.
@@ -82,7 +84,7 @@ If that guard fails, follow [Production release verification](../../07-operation
 |---|---|---|---|
 | 1 | ~~#792 pending approval/merge~~ | **resolved** — merged `583dcbd6a6` and in production | — |
 | 2 | ~~#793 pending docs merge~~ | **resolved** — merged `aa9bdfa3` | — |
-| 3 | **#796 open: CI backup exposure + ignored PR-Agent review** | Chat/profile contents could land in a CI artifact; the review gate fails for a configuration reason | Redact the backup, fix the review configuration, then merge and verify one scheduled run |
+| 3 | ~~#796 CI backup exposure + ignored PR-Agent review~~ | **resolved** — merged `5805440625`: the backup records identifiers and counts only (marker-string test proves no chat text) and the review gate runs a real current-head review | — |
 | 4 | **Kill during teardown not recovered automatically** | A test identity can outlive a killed process (a 2-hour age check is a time assumption, not proof) | #796's nightly sweep today; a run-owner lease is the real fix |
 | 5 | **B2 network error untraced** (one-off; **no evidence for any duration**) | A recurrence cannot be attributed to a boundary | Trace browser → runtime → agent → provider without hiding errors. `420_000` is the configured **test cap**, not a measured hang |
 | 6 | **Production SHA can change during testing** | Mixed-release counts are invalid | Pin `/api/version` before/after, separate releases |
