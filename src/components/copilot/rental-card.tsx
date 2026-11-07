@@ -29,6 +29,10 @@ export type RentalCardProps = RentalResultRow & {
   onSchedule?: () => void;
   onSave?: () => void;
   onOpenDetails?: () => void;
+  /** SAN-1041 — optional comparison action shown inside the existing card footer. */
+  compareSelected?: boolean;
+  compareDisabled?: boolean;
+  onToggleCompare?: () => void;
   /** Optional contextual action from the existing authorized Concierge thread. */
   nearbyAction?: ReactNode;
   /** Monthly price when available (authoritative for monthly display). */
@@ -75,6 +79,9 @@ export function RentalCard({
   onSelect,
   onSchedule,
   onOpenDetails,
+  compareSelected,
+  compareDisabled,
+  onToggleCompare,
   nearbyAction,
   canScheduleViewing,
   duplicateNote,
@@ -294,6 +301,25 @@ export function RentalCard({
             }}
           >
             Details
+          </Button>
+        ) : null}
+        {onToggleCompare ? (
+          <Button
+            type="button"
+            size="sm"
+            variant={compareSelected ? "secondary" : "outline"}
+            className="min-h-card-action lg:min-h-0"
+            data-testid="rental-compare-toggle"
+            aria-pressed={compareSelected === true}
+            aria-label={`${compareSelected ? "Remove" : "Add"} ${title} ${compareSelected ? "from" : "to"} comparison`}
+            disabled={compareDisabled === true}
+            onClick={(event) => {
+              event.stopPropagation();
+              onToggleCompare();
+            }}
+            onKeyDown={(event) => event.stopPropagation()}
+          >
+            {compareSelected ? "✓ Added to comparison" : "Add to comparison"}
           </Button>
         ) : null}
         {tags?.includes("external-source") && externalSourceUrl ? (

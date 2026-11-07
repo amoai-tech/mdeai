@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type RefObject } from "react";
 import Link from "next/link";
 import { createPortal } from "react-dom";
 import type { AbstractAgent } from "@copilotkit/react-core/v2";
 import { useOptionalConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
+import { useRentalComparisonOwner } from "@/components/chat/rental-comparison-owner-context";
 import { useEventSearchFastPath } from "@/hooks/use-event-search-fast-path";
 import { ToolErrorChip } from "@/components/copilot/tool-error-chip";
 import { CafeResultCard } from "@/components/copilot/cafe-result-card";
@@ -38,6 +39,31 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 
 function rentalPinId(listingId: string) {
   return `rental-${listingId}`;
+}
+
+// More than one historical rental result may still be mounted. Keep the
+// composer above CopilotKit's floating Scroll-to-bottom control while ANY
+// active comparison owns it; restore the original stacking only after the
+// final owner unmounts. No new store, provider or chat state is introduced.
+const comparisonOverlayOwners = new WeakMap<HTMLElement, { count: number; originalZIndex: string }>();
+
+function acquireComparisonOverlay(overlay: HTMLElement) {
+  const existing = comparisonOverlayOwners.get(overlay);
+  if (existing) {
+    existing.count += 1;
+    return;
+  }
+  comparisonOverlayOwners.set(overlay, { count: 1, originalZIndex: overlay.style.zIndex });
+  overlay.style.zIndex = "35";
+}
+
+function releaseComparisonOverlay(overlay: HTMLElement) {
+  const existing = comparisonOverlayOwners.get(overlay);
+  if (!existing) return;
+  existing.count -= 1;
+  if (existing.count > 0) return;
+  overlay.style.zIndex = existing.originalZIndex;
+  comparisonOverlayOwners.delete(overlay);
 }
 
 function eventPinId(eventId: string) {
@@ -239,6 +265,11 @@ export function RentalResults({
   searchMeta?: RentalSearchMeta;
 }) {
   const { selectedPinId, panToPin, pins } = useMapContext();
+  // A prior tool result remains in the transcript but cannot own the composer.
+  // The current tool call owns map and result actions; fast-path is unscoped.
+  const isCurrentResult = useCurrentSearchToolResult();
+  const owner = useRentalComparisonOwner();
+  const ownerId = useId();
   const { openScheduleViewing, openVenueDetail } = useRentalUi();
   const listRef = useRef<HTMLDivElement>(null);
   const envelope = normalizeToolEnvelope(result);
@@ -306,26 +337,22 @@ export function RentalResults({
   };
   const comparisonReady = Boolean(resolveRentalComparisonRows(rows, comparisonIds));
   const hasComparisonSelection = rows.length >= 2 && comparisonIds.length > 0;
+  const mayShowComposerToolbar = hasComparisonSelection && isCurrentResult &&
+    (!owner || owner.activeId === ownerId);
   const [composerOverlay, setComposerOverlay] = useState<HTMLElement | null>(null);
   useEffect(() => {
-    if (!hasComparisonSelection) return;
+    if (!mayShowComposerToolbar) return;
     // CopilotKit's nested scroll layers prevent sticky positioning within a
     // tool result. The real input overlay is already anchored to the composer.
     const region = document.querySelector('[data-testid="center-chat-panel"]');
     if (!region) return; // Fall back to an inline action on other pages.
-    let activeOverlay: HTMLElement | null = null;
-    let originalZIndex = "";
+    let ownedOverlay: HTMLElement | null = null;
     const sync = () => {
       const next = region.querySelector<HTMLElement>('[data-testid="copilot-input-overlay"]');
-      if (next !== activeOverlay) {
-        if (activeOverlay) activeOverlay.style.zIndex = originalZIndex;
-        activeOverlay = next;
-        if (activeOverlay) {
-          originalZIndex = activeOverlay.style.zIndex;
-          // The stock Scroll-to-bottom button overlaps the Compare CTA on
-          // phones. Lift the input overlay only for active comparisons.
-          activeOverlay.style.zIndex = "35";
-        }
+      if (ownedOverlay !== next) {
+        if (ownedOverlay) releaseComparisonOverlay(ownedOverlay);
+        ownedOverlay = next;
+        if (ownedOverlay) acquireComparisonOverlay(ownedOverlay);
       }
       setComposerOverlay((previous) => previous === next ? previous : next);
     };
@@ -336,19 +363,28 @@ export function RentalResults({
     return () => {
       cancelAnimationFrame(frame);
       observer.disconnect();
-      if (activeOverlay) activeOverlay.style.zIndex = originalZIndex;
+      if (ownedOverlay) releaseComparisonOverlay(ownedOverlay);
     };
-  }, [hasComparisonSelection]);
+  }, [mayShowComposerToolbar]);
 
   const toggleComparison = (id: string) => {
+    // Use the functional updater so rapid selections in one React batch do not
+    // overwrite each other. Cross-result ownership is updated outside it:
+    // React may retry state updaters, so they must remain pure.
     setComparisonState((previous) => {
       const ids = previous.rowsKey === rowsKey ? previous.ids : [];
       return {
-        rowsKey, open: false,
-        ids: ids.includes(id) ? ids.filter((selected) => selected !== id)
+        rowsKey,
+        open: false,
+        ids: ids.includes(id)
+          ? ids.filter((selected) => selected !== id)
           : ids.length < 4 ? [...ids, id] : ids,
       };
     });
+    // Even when the last selected item is removed, the toolbar is immediately
+    // hidden by hasComparisonSelection. Release the owner on that last removal.
+    if (comparisonIds.length === 1 && comparisonIds.includes(id)) owner?.clear(ownerId);
+    else owner?.activate(ownerId);
   };
   const hasCurrentPin = (id: string) => {
     const pinId = rentalPinId(id);
@@ -373,8 +409,8 @@ export function RentalResults({
     });
   };
 
-  const activeComposerOverlay = composerOverlay?.isConnected ? composerOverlay : null;
-  const compareToolbar = hasComparisonSelection ? (
+  const activeComposerOverlay = mayShowComposerToolbar && composerOverlay?.isConnected ? composerOverlay : null;
+  const compareToolbar = mayShowComposerToolbar ? (
         // The transcript (not the page) scrolls. Keep the action at the bottom
         // of that scrollport, directly above the composer, even when the result
         // count/header is far above the visible rental cards.
@@ -397,7 +433,10 @@ export function RentalResults({
               type="button"
               data-testid="rental-compare-clear"
               className="min-h-11 rounded-md px-3 text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-              onClick={() => setComparisonState({ rowsKey, ids: [], open: false })}
+              onClick={() => {
+                setComparisonState({ rowsKey, ids: [], open: false });
+                owner?.clear(ownerId);
+              }}
             >
               Clear
             </button>
@@ -498,8 +537,7 @@ export function RentalResults({
             });
           };
           return (
-            <div key={r.id} className="flex flex-col gap-1">
-            <RentalCard
+            <RentalCard key={r.id}
               id={pinId}
               pinId={hasPin ? pinId : null}
               listingId={r.id}
@@ -525,6 +563,9 @@ export function RentalResults({
               // reduced pop-up never offered it, and still does not.
               onOpenDetails={r.tags?.includes("external-source") && !detailRental ? undefined : openDetail}
               canScheduleViewing={r.can_schedule_viewing === true}
+              compareSelected={comparisonIds.includes(r.id)}
+              compareDisabled={!comparisonIds.includes(r.id) && comparisonIds.length >= 4}
+              onToggleCompare={rows.length >= 2 && isCurrentResult ? () => toggleComparison(r.id) : undefined}
               onSchedule={() =>
                 openScheduleViewing({
                   listingId: r.id,
@@ -533,17 +574,6 @@ export function RentalResults({
                 })
               }
             />
-            {rows.length >= 2 ? (
-              <button type="button" data-testid="rental-compare-toggle"
-                aria-label={comparisonIds.includes(r.id) ? `Remove ${r.title} from comparison` : `Add ${r.title} to comparison`}
-                aria-pressed={comparisonIds.includes(r.id)}
-                disabled={!comparisonIds.includes(r.id) && comparisonIds.length >= 4}
-                className="min-h-11 self-start rounded-md border border-border px-3 text-xs disabled:opacity-50"
-                onClick={() => toggleComparison(r.id)}>
-                {comparisonIds.includes(r.id) ? "Remove from comparison" : "Add to comparison"}
-              </button>
-            ) : null}
-            </div>
           );
         })}
         </div>

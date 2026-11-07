@@ -6,6 +6,7 @@ import { CopilotChat } from "@copilotkit/react-core/v2";
 import { ChatFilterCopilotInstructions } from "@/components/chat/chat-filter-copilot-instructions";
 import { ChatQueryBar } from "@/components/chat/chat-query-bar";
 import { ConciergeChatView } from "@/components/chat/concierge-copilot-chat-view";
+import { RentalComparisonOwnerProvider } from "@/components/chat/rental-comparison-owner-context";
 import { ConciergeInitialPrompt } from "@/components/chat/concierge-initial-prompt";
 import { ConciergeErrorFeedback } from "@/components/chat/concierge-run-feedback";
 import { DeterministicConciergeChat } from "@/components/chat/deterministic-concierge-chat";
@@ -42,6 +43,7 @@ export function ChatCenterPanel() {
   const history = useSavedThreadHistory();
 
   return (
+    <RentalComparisonOwnerProvider key={sessionKey}>
     <section
       data-testid="center-chat-panel"
       aria-label="Concierge chat"
@@ -105,5 +107,6 @@ export function ChatCenterPanel() {
         </div>
       </div>
     </section>
+    </RentalComparisonOwnerProvider>
   );
 }

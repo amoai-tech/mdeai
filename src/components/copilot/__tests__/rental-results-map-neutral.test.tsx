@@ -26,6 +26,8 @@ vi.mock("@/components/chat/rich-card-results-context", () => ({
 vi.mock("@/components/copilot/tool-pins-sync", () => ({ ToolPinsSync: () => null }));
 
 import { RentalResults } from "@/components/copilot/search-tool-result-cards";
+import { SearchToolResultScope } from "@/components/copilot/search-tool-result-ownership";
+import { RentalComparisonOwnerProvider } from "@/components/chat/rental-comparison-owner-context";
 import type { RentalSearchMeta } from "@/components/chat/rental-fast-path-context";
 
 const rental = (id: string, coords?: { latitude: number; longitude: number }) => ({
@@ -271,6 +273,8 @@ describe("SAN-1041 · deterministic comparison from rental tool results", () => 
     render(result);
     const toggles = [...container.querySelectorAll<HTMLButtonElement>('[data-testid="rental-compare-toggle"]')];
     expect(toggles).toHaveLength(3);
+    expect(toggles[0].closest('[data-testid="rental-card"]')).not.toBeNull();
+    expect(toggles[0].getAttribute("aria-pressed")).toBe("false");
     expect(container.querySelector('[data-testid="rental-compare-open"]')).toBeNull();
     act(() => toggles[0].click());
     const open = container.querySelector<HTMLButtonElement>('[data-testid="rental-compare-open"]');
@@ -279,6 +283,8 @@ describe("SAN-1041 · deterministic comparison from rental tool results", () => 
     expect(toolbar?.className).toMatch(/sticky.*bottom-0/);
     expect(toolbar?.textContent).toContain("1 of 4 apartments selected");
     expect(open?.disabled).toBe(true);
+    expect(toggles[0].getAttribute("aria-pressed")).toBe("true");
+    expect(ui.openVenueDetail).not.toHaveBeenCalled(); // compare must not open Details
     act(() => toggles[1].click());
     expect(toolbar?.textContent).toContain("2 of 4 apartments selected");
     expect(open?.disabled).toBe(false);
@@ -329,6 +335,97 @@ describe("SAN-1041 · deterministic comparison from rental tool results", () => 
       act(() => overlay.querySelector<HTMLButtonElement>('[data-testid="rental-compare-clear"]')?.click());
       expect(overlay.querySelector('[data-testid="rental-compare-toolbar"]')).toBeNull();
       expect(overlay.style.zIndex).toBe("");
+    } finally {
+      panel.remove();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("does not portal the comparison for a stale historical tool result", () => {
+    const panel = document.createElement("div");
+    panel.dataset.testid = "center-chat-panel";
+    const overlay = document.createElement("div");
+    overlay.dataset.testid = "copilot-input-overlay";
+    panel.appendChild(overlay);
+    document.body.appendChild(panel);
+    try {
+      act(() => {
+        root.render(
+          <SearchToolResultScope toolCallId="old-tool-call">
+            <RentalResults result={result} />
+          </SearchToolResultScope>,
+        );
+      });
+      // An old tool result stays readable, but cannot select apartments or
+      // commandeer the current chat's comparison bar.
+      expect(container.querySelectorAll('[data-testid="rental-compare-toggle"]')).toHaveLength(0);
+      expect(overlay.querySelector('[data-testid="rental-compare-toolbar"]')).toBeNull();
+      expect(container.querySelector('[data-testid="rental-compare-toolbar"]')).toBeNull();
+      expect(overlay.style.zIndex).toBe("");
+    } finally {
+      panel.remove();
+    }
+  });
+
+  it("two retained result turns share one composer toolbar, switch ownership, and restore z-index", () => {
+    const callbacks: FrameRequestCallback[] = [];
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      callbacks.push(callback);
+      return callbacks.length;
+    });
+    vi.stubGlobal("cancelAnimationFrame", vi.fn());
+    const panel = document.createElement("div");
+    panel.dataset.testid = "center-chat-panel";
+    const overlay = document.createElement("div");
+    overlay.dataset.testid = "copilot-input-overlay";
+    // Existing inline stacking may be set by other chat features.
+    overlay.style.zIndex = "23";
+    panel.appendChild(overlay);
+    document.body.appendChild(panel);
+    const second = {
+      source: "supabase",
+      results: [fullRental("new-a", { price_monthly: 3_100_000 }), fullRental("new-b", { price_monthly: 6_000_000 })],
+    };
+
+    try {
+      act(() => root.render(
+        <RentalComparisonOwnerProvider>
+          <div data-testid="earlier-turn"><RentalResults result={result} /></div>
+          <div data-testid="newer-turn"><RentalResults result={second} /></div>
+        </RentalComparisonOwnerProvider>,
+      ));
+      const firstButtons = container.querySelectorAll<HTMLButtonElement>(
+        '[data-testid="earlier-turn"] [data-testid="rental-compare-toggle"]',
+      );
+      const nextButtons = container.querySelectorAll<HTMLButtonElement>(
+        '[data-testid="newer-turn"] [data-testid="rental-compare-toggle"]',
+      );
+      expect(firstButtons).toHaveLength(3);
+      expect(nextButtons).toHaveLength(2);
+
+      // Old result selected first: exactly one overlay, with first result data.
+      act(() => { firstButtons[0].click(); firstButtons[1].click(); });
+      act(() => callbacks.forEach((callback) => callback(0)));
+      expect(overlay.querySelectorAll('[data-testid="rental-compare-toolbar"]')).toHaveLength(1);
+      expect(overlay.style.zIndex).toBe("35");
+      expect(overlay.textContent).toContain("2 of 4 apartments selected");
+
+      // A newer selection takes over without two identical overlapping toolbars.
+      act(() => { nextButtons[0].click(); nextButtons[1].click(); });
+      act(() => callbacks.forEach((callback) => callback(0)));
+      expect(overlay.querySelectorAll('[data-testid="rental-compare-toolbar"]')).toHaveLength(1);
+      expect(overlay.textContent).toContain("2 of 4 apartments selected");
+      expect(firstButtons[0].getAttribute("aria-pressed")).toBe("true");
+      expect(nextButtons[0].getAttribute("aria-pressed")).toBe("true");
+      act(() => overlay.querySelector<HTMLButtonElement>('[data-testid="rental-compare-open"]')?.click());
+      const dialog = document.querySelector('[data-testid="rental-comparison-modal"]');
+      expect(dialog?.textContent).toContain("COP 6,000,000/month");
+      expect(dialog?.textContent).not.toContain("COP 2,400,000/month");
+
+      // Clearing the active selection must not resurrect the old result's bar.
+      act(() => overlay.querySelector<HTMLButtonElement>('[data-testid="rental-compare-clear"]')?.click());
+      expect(overlay.querySelector('[data-testid="rental-compare-toolbar"]')).toBeNull();
+      expect(overlay.style.zIndex).toBe("23");
     } finally {
       panel.remove();
       vi.unstubAllGlobals();
