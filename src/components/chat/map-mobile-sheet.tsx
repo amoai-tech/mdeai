@@ -100,6 +100,7 @@ export function MapMobileSheet() {
     const composer = () => document.querySelector<HTMLElement>(composerSelector);
     let observer: ResizeObserver | null = null;
     let observed: HTMLElement | null = null;
+    let lastToolbar: HTMLElement | null = null;
     let frame = 0;
     let watchFrame = 0;
     let frames = 0;
@@ -114,7 +115,11 @@ export function MapMobileSheet() {
       // the keyboard is open (growth, remount) would push the trigger a whole keyboard too high.
       // Only a keyboard-sized gap is a lift (see keyboardLiftPx); a browser-UI gap is not.
       const unliftedTop = element.getBoundingClientRect().top + keyboardLiftPx();
-      const gap = Math.round(window.innerHeight - unliftedTop + 8);
+      // Comparison actions sit directly above the composer. Keep Open map above
+      // that toolbar too, rather than covering Compare selected on narrow phones.
+      const compareToolbar = document.querySelector<HTMLElement>('[data-testid="rental-compare-toolbar"]');
+      const comparisonClearance = compareToolbar ? compareToolbar.getBoundingClientRect().height + 12 : 0;
+      const gap = Math.round(window.innerHeight - unliftedTop + 8 + comparisonClearance);
       if (gap > 0) setComposerGap(gap);
       return gap > 0 ? gap : null;
     };
@@ -167,8 +172,15 @@ export function MapMobileSheet() {
       watchFrame = requestAnimationFrame(() => {
         watchFrame = 0;
         const current = composer();
-        if (!current || current === observed) return;
-        startSettle();
+        if (!current) return;
+        // Re-measure only on toolbar mount/removal (not on every streamed chat
+        // message). The toolbar is portaled outside the observed composer.
+        const toolbar = document.querySelector<HTMLElement>('[data-testid="rental-compare-toolbar"]');
+        if (toolbar !== lastToolbar) {
+          lastToolbar = toolbar;
+          measure();
+        }
+        if (current !== observed) startSettle();
       });
     });
     watcher.observe(document.body, { childList: true, subtree: true });
