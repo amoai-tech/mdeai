@@ -13,12 +13,9 @@ import {
 } from "@/lib/cafe-search-fast-path";
 import { useMapContext } from "@/platform/maps/map-context";
 import { normalizeToolOutput } from "@/platform/maps/normalize-tool-output";
-import {
-  parseGroundedToolResult,
-  resolveGroundedTitle,
-} from "@/lib/parse-grounded-tool-result";
+import { parseGroundedToolResult } from "@/lib/parse-grounded-tool-result";
+import { groundedFastPathMemory } from "@/lib/grounded-fast-path-memory";
 import { isSelectedRentalCafeNearbyRequest, isStoredRentalUuid, nearbyCafeRadiusMeters } from "@/lib/cafe-search-fast-path";
-import { geoDistanceMeters } from "@/lib/geo-distance";
 
 async function fetchGroundedSearch(
   params: CafeSearchApiParams,
@@ -90,31 +87,14 @@ export function useGroundedSearchFastPath() {
             (pin) => pin.category === "rental" && pin.id === metadata.anchorPinId,
           )
         : undefined;
-      const lastGroundedResults = parsed.results.slice(0, 5).map((row, index) => {
-        const measured = anchor && row.latitude != null && row.longitude != null
-          ? {
-              distanceMeters: geoDistanceMeters(
-                { lat: anchor.lat, lng: anchor.lng },
-                { lat: row.latitude, lng: row.longitude },
-              ),
-              // The distance is only meaningful for this apartment. The model
-              // must not reuse it after the selection changes.
-              distanceFromRentalId: anchor.id.replace(/^rental-/, ""),
-            }
-          : {};
-        return {
-          id: row.id,
-          title: resolveGroundedTitle(row, index, parsed.attribution, row.mapsUrl),
-          ...(row.formattedAddress ? { area: row.formattedAddress.slice(0, 140) } : {}),
-          ...(row.summary ? { summary: row.summary.slice(0, 240) } : {}),
-          ...(row.rating != null ? { rating: row.rating } : {}),
-          ...measured,
-        };
-      });
       setState((prev) => ({
         ...(prev ?? {}),
-        lastIntent: "restaurant_discovery",
-        lastGroundedResults,
+        ...groundedFastPathMemory({
+          metadata,
+          results: parsed.results,
+          anchorPin: anchor,
+          attribution: parsed.attribution,
+        }),
       }));
       return { count, pinCount: pins.length, stale: false };
     },
