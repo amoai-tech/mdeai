@@ -16,6 +16,11 @@ interface TextPart {
 interface AssistantLike {
   role?: string;
   content?: unknown;
+  /**
+   * AG-UI assistant tool-call message shape:
+   * `{ role: "assistant", content: "", toolCalls: [...] }` — valid work with no prose.
+   */
+  toolCalls?: unknown[];
 }
 
 /** Text carried by a message, however the runtime encoded it. */
@@ -43,12 +48,18 @@ export function messageText(message: AssistantLike): string {
 /**
  * True only for a finished assistant message that renders nothing.
  *
- * User messages, tool-only messages and messages still streaming are not failures, so
- * they return false: a tool result with no prose is a legitimate turn.
+ * Not failures, and deliberately excluded:
+ * - user messages;
+ * - tool results carried in `content` parts;
+ * - AG-UI assistant tool-call messages (`content: ""` + non-empty `toolCalls`). A run
+ *   that ends on a browser tool (`focusMapPin`) or an approval request has done real
+ *   work and must not show an error notice.
  */
 export function isBlankAssistantMessage(message: AssistantLike | undefined): boolean {
   if (!message || message.role !== "assistant") return false;
   if (messageText(message).trim().length > 0) return false;
+  // AG-UI tool-call message: empty text, real work.
+  if (Array.isArray(message.toolCalls) && message.toolCalls.length > 0) return false;
   // A message that carries only tool parts produced no prose, but it did produce work.
   if (Array.isArray(message.content)) {
     const hasNonTextPart = message.content.some((part) => {

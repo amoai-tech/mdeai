@@ -36,6 +36,20 @@ describe("isBlankAssistantMessage", () => {
     expect(isBlankAssistantMessage({ role: "assistant", content: "Hay dos opciones" })).toBe(false);
   });
 
+  it("never flags an AG-UI assistant tool-call message", () => {
+    // { role: "assistant", content: "", toolCalls: [...] } is valid work, not a failure.
+    expect(
+      isBlankAssistantMessage({
+        role: "assistant",
+        content: "",
+        toolCalls: [{ id: "call-1", function: { name: "focusMapPin", arguments: "{}" } }],
+      }),
+    ).toBe(false);
+    expect(
+      isBlankAssistantMessage({ role: "assistant", content: "", toolCalls: [] }),
+    ).toBe(true);
+  });
+
   it("never flags user messages or tool-only answers", () => {
     expect(isBlankAssistantMessage({ role: "user", content: "" })).toBe(false);
     expect(

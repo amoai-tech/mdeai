@@ -14,6 +14,8 @@ export interface TurnDiagnostics {
   statuses: string[];
   /** One line for a failure message; never contains message text. */
   summary(): string;
+  /** Remove the page listeners. Call this, or a long spec keeps collecting ids. */
+  dispose(): void;
 }
 
 export function watchTurnDiagnostics(page: Page): TurnDiagnostics {
@@ -34,10 +36,18 @@ export function watchTurnDiagnostics(page: Page): TurnDiagnostics {
   page.on("request", onRequest);
   page.on("response", onResponse);
 
+  // The listeners must start BEFORE the send and stop afterwards: a listener attached
+  // after the turn has started can miss its request and report `attemptId=none`.
+  const dispose = () => {
+    page.off("request", onRequest);
+    page.off("response", onResponse);
+  };
+
   return {
     attemptIds,
     requestIds,
     statuses,
+    dispose,
     summary() {
       const last = (values: string[]) => values[values.length - 1] ?? "none";
       return `attemptId=${last(attemptIds)} requestId=${last(requestIds)} status=${last(statuses)}`;

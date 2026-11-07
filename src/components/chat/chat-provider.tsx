@@ -314,7 +314,7 @@ export function SavedThreadHistory({
       if (agent.isRunning) return;
       const last = agent.messages[agent.messages.length - 1];
       if (!last || reported.has(last.id)) return;
-      if (!isBlankAssistantMessage(last as { role?: string; content?: unknown })) return;
+      if (!isBlankAssistantMessage(last as { role?: string; content?: unknown; toolCalls?: unknown[] })) return;
       reported.add(last.id);
       reportConciergeError(threadId);
     };
