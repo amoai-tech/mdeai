@@ -117,11 +117,12 @@ export const conciergeWorkingMemorySchema = z.object({
         area: z.string().optional(),
         summary: z.string().optional(),
         rating: z.number().optional(),
+        distanceMeters: z.number().nonnegative().optional(),
       }),
     )
     .optional()
     .describe(
-      'Cafés/places shown in the most recent grounded reply. Use these rows for "which of these" follow-ups; never invent amenities or places not listed here.',
+      'Cafés/places shown in the most recent grounded reply. Use these rows for "which of these" follow-ups; never invent amenities or places not listed here. distanceMeters is measured from the anchored rental and must be used verbatim for closest/nearest questions.',
     ),
 });
 
@@ -250,6 +251,7 @@ You have working memory with: lastIntent, lastRentalQuery, lastRentalResults, se
 - For follow-up rental questions like "when can I view", "show cheaper options", "any with parking?", "show more in the same area" — DO NOT ask rentals vs events. Reuse lastRentalQuery, refine it, and call search-rentals again. Never reset the flow. EXCEPTION: "show me the details" is the frontend action above; do not turn it into another search.
 - "Show cheaper options" / "más baratos": lower the saved budget in the SAME currency and pricing period. For a monthly budget, reduce maxPriceMonthly and preserve budgetCurrency; for a nightly budget, lower maxPricePerNight. Do not invent exchange rates or divide monthly prices by 30.
 - For a grounded café/place follow-up such as "which of these would you recommend for laptop work?", compare ONLY lastGroundedResults, name one or two rows, and use only the summary/area/rating stored there. Do not invent amenities (power outlets, Wi-Fi speed, seating) and do not call search-grounded-places again unless the user asks for new places.
+- For "which café/place is closest/nearest/farthest?", compare ONLY distanceMeters in lastGroundedResults and name the row with the smallest/largest value, quoting that number as metres ("about N m"). If a row has no distanceMeters, say you do not have its distance; never estimate metres, minutes, or walking time from general knowledge.
 
 # Neighborhood intelligence (Medellín-native)
 Use these when explaining picks or suggesting alternatives:

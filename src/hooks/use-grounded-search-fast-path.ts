@@ -18,6 +18,7 @@ import {
   resolveGroundedTitle,
 } from "@/lib/parse-grounded-tool-result";
 import { isSelectedRentalCafeNearbyRequest, isStoredRentalUuid, nearbyCafeRadiusMeters } from "@/lib/cafe-search-fast-path";
+import { geoDistanceMeters } from "@/lib/geo-distance";
 
 async function fetchGroundedSearch(
   params: CafeSearchApiParams,
@@ -81,12 +82,28 @@ export function useGroundedSearchFastPath() {
       // unless we hand over a compact copy. Follow-ups such as "which of these would you
       // recommend?" must name a real row and must not invent amenities from nothing.
       const parsed = parseGroundedToolResult(envelope);
+      // Nearby answers such as "which café is closest?" need a provider-true
+      // distance. Compute it from the anchored rental pin and the result
+      // coordinates; never let the model estimate.
+      const anchor = metadata?.searchMode === "nearby"
+        ? pinsRef.current.find(
+            (pin) => pin.category === "rental" && pin.id === metadata.anchorPinId,
+          )
+        : undefined;
       const lastGroundedResults = parsed.results.slice(0, 5).map((row, index) => ({
         id: row.id,
         title: resolveGroundedTitle(row, index, parsed.attribution, row.mapsUrl),
         ...(row.formattedAddress ? { area: row.formattedAddress.slice(0, 140) } : {}),
         ...(row.summary ? { summary: row.summary.slice(0, 240) } : {}),
         ...(row.rating != null ? { rating: row.rating } : {}),
+        ...(anchor && row.latitude != null && row.longitude != null
+          ? {
+              distanceMeters: geoDistanceMeters(
+                { lat: anchor.lat, lng: anchor.lng },
+                { lat: row.latitude, lng: row.longitude },
+              ),
+            }
+          : {}),
       }));
       setState((prev) => ({
         ...(prev ?? {}),

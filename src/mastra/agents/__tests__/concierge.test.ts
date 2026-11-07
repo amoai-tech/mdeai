@@ -95,6 +95,8 @@ describe("conciergeAgent", () => {
     expect(instructions).toContain("For a new search, do NOT list cafés or venues by name");
     expect(instructions).toContain("name at most 2 places from lastGroundedResults");
     expect(instructions).toContain("Never invent amenities");
+    expect(instructions).toContain("distanceMeters");
+    expect(instructions).toContain("never estimate metres");
     expect(instructions).toContain("View on Google Maps");
   });
 
@@ -108,10 +110,12 @@ describe("conciergeAgent", () => {
           area: "Laureles",
           summary: "Coworking café with reliable Wi-Fi.",
           rating: 4.7,
+          distanceMeters: 636,
         },
       ],
     });
     expect(parsed.lastGroundedResults?.[0]?.title).toBe("Semilla Café Coworking");
+    expect(parsed.lastGroundedResults?.[0]?.distanceMeters).toBe(636);
   });
 
   it("instructions tell agent to pass search-grounded-places intent for nightlife and cafés", async () => {
