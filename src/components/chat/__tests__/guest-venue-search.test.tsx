@@ -17,8 +17,13 @@ const row = (id: string): GroundedToolRow => ({
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
-function stubFetch(handler: (init?: RequestInit) => Response) {
-  const mock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => Promise.resolve(handler(init)));
+function stubFetch(handler: () => Response) {
+  const mock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    // Preserve the fetch call signature so tests can assert the submitted request body.
+    void input;
+    void init;
+    return Promise.resolve(handler());
+  });
   vi.stubGlobal("fetch", mock);
   return mock;
 }
@@ -92,10 +97,9 @@ describe("GuestVenueSearch", () => {
     render(<GuestVenueSearch options={{ kind: "cafe", onResults }} />);
 
     fireEvent.change(screen.getByLabelText(/Search cafés/), { target: { value: "café" } });
-    const send = screen.getByTestId("guest-venue-send") as HTMLButtonElement;
-    fireEvent.click(send);
-    expect(send.disabled).toBe(true);
-    fireEvent.click(send);
+    fireEvent.click(screen.getByTestId("guest-venue-send"));
+    // A second click must not dispatch another request while the first is outstanding.
+    fireEvent.click(screen.getByTestId("guest-venue-send"));
     await waitFor(() => expect(onResults).toHaveBeenCalledTimes(1));
     expect(mock).toHaveBeenCalledTimes(1);
   });

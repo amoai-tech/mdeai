@@ -18,7 +18,7 @@ import { countWithNoun } from "@/lib/format/count-with-noun";
 export type VenueGuestOptions = {
   kind: "cafe" | "nightlife";
   neighborhood?: string | null;
-  onResults: (_rows: GroundedToolRow[], meta: { total: number; query: string }) => void;
+  onResults(rows: GroundedToolRow[], meta: { total: number; query: string }): void;
 };
 
 export function GuestVenueSearchScoped({ options }: { options: VenueGuestOptions }) {
@@ -103,7 +103,7 @@ export function GuestVenueSearch({ options }: { options: VenueGuestOptions }) {
           id={`guest-venue-question-${options.kind}`}
           rows={1}
           value={question}
-          onChange={(event) => setQuestion(event.target.value)}
+          onChange={(event) => { setQuestion(event.target.value); }}
           className="min-h-11 flex-1 resize-none rounded-lg border bg-background px-3 py-2.5 text-base"
           placeholder={
             options.kind === "cafe" ? "Quiet café in Laureles" : "Salsa clubs in El Poblado"
