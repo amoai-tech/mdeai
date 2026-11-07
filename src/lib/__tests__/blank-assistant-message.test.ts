@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   isBlankAssistantMessage,
   messageText,
+  seedBlankLedgerFromHistory,
   shouldReportBlankOnce,
 } from "../blank-assistant-message";
 
@@ -79,5 +80,28 @@ describe("shouldReportBlankOnce", () => {
     const ledger = { threadId: "t-1", ids: new Set<string>() };
     expect(shouldReportBlankOnce(ledger, "msg-1")).toBe(true);
     expect(shouldReportBlankOnce(ledger, "msg-2")).toBe(true);
+  });
+});
+
+describe("seedBlankLedgerFromHistory", () => {
+  it("never reports a blank reply that was already there when the thread opened", () => {
+    const ledger = { threadId: "t-1", ids: new Set<string>(), seeded: false };
+    // Restored transcript from an earlier visit, ending on a blank assistant message.
+    seedBlankLedgerFromHistory(ledger, ["m-1", "m-2"]);
+    expect(shouldReportBlankOnce(ledger, "m-2")).toBe(false);
+  });
+
+  it("still reports a blank turn that arrives after the thread opened", () => {
+    const ledger = { threadId: "t-1", ids: new Set<string>(), seeded: false };
+    seedBlankLedgerFromHistory(ledger, ["m-1", "m-2"]);
+    expect(shouldReportBlankOnce(ledger, "m-3")).toBe(true);
+  });
+
+  it("waits for the restored transcript before seeding", () => {
+    const ledger = { threadId: "t-1", ids: new Set<string>(), seeded: false };
+    seedBlankLedgerFromHistory(ledger, []);
+    expect(ledger.seeded).toBe(false);
+    seedBlankLedgerFromHistory(ledger, ["m-1"]);
+    expect(ledger.seeded).toBe(true);
   });
 });

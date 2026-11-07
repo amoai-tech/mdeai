@@ -71,10 +71,15 @@ export function isBlankAssistantMessage(message: AssistantLike | undefined): boo
   return true;
 }
 
-/** Per-thread memory of blank messages already reported. */
+/** Per-thread memory of blank messages already reported (or already on screen at open). */
 export interface BlankReportLedger {
   threadId: string;
   ids: Set<string>;
+  /**
+   * Whether the transcript that existed when the thread loaded has been absorbed.
+   * A blank reply from an earlier visit is history, not a failure the customer just saw.
+   */
+  seeded?: boolean;
 }
 
 /**
@@ -92,4 +97,21 @@ export function shouldReportBlankOnce(
   if (ledger.ids.has(messageId)) return false;
   ledger.ids.add(messageId);
   return true;
+}
+
+/**
+ * Absorb the transcript that was already on screen, so opening a saved conversation
+ * never reports an old blank reply. Returns true once, then nothing more.
+ *
+ * Without this, the sequence A → B → A (or a page reload) shows the retryable notice for
+ * a blank message from an earlier visit, even though no run failed in this session.
+ */
+export function seedBlankLedgerFromHistory(
+  ledger: BlankReportLedger,
+  messageIds: readonly string[],
+): void {
+  if (ledger.seeded) return;
+  if (messageIds.length === 0) return; // wait for the restored transcript
+  for (const id of messageIds) ledger.ids.add(id);
+  ledger.seeded = true;
 }

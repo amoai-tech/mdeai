@@ -23,6 +23,7 @@ import { getCopilotKitClientProps } from "@/lib/copilotkit-client-props";
 import { isExpectedGuestStartup401, reportConciergeError } from "@/lib/concierge-error-store";
 import {
   isBlankAssistantMessage,
+  seedBlankLedgerFromHistory,
   shouldReportBlankOnce,
   type BlankReportLedger,
 } from "@/lib/blank-assistant-message";
@@ -320,9 +321,15 @@ export function SavedThreadHistory({
     // re-runs or the same blank turn would re-push the notice. It is reset only when the
     // conversation changes.
     if (blankLedger.current?.threadId !== threadId) {
-      blankLedger.current = { threadId, ids: new Set<string>() };
+      blankLedger.current = { threadId, ids: new Set<string>(), seeded: false };
     }
     const ledger = blankLedger.current;
+    // A blank reply that was already on screen when this conversation opened is history,
+    // not a failure the customer just experienced. Absorb it before inspecting.
+    seedBlankLedgerFromHistory(
+      ledger,
+      agent.messages.map((message) => message.id),
+    );
     const inspect = () => {
       if (agent.isRunning) return;
       const last = agent.messages[agent.messages.length - 1];
