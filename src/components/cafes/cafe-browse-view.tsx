@@ -173,7 +173,8 @@ function CafeBrowseViewInner({
       filterBar={<CafeBrowseFilters neighborhood={neighborhood} feature={feature} />}
     >
       <section className="mt-6" aria-label="Café listings">
-        <DiscoveryGroundedResults rows={activeRows} selectedId={selectedId} onSelectRow={selectForAsk} />
+        <DiscoveryGroundedResults rows={activeRows} selectedId={selectedId} onSelectRow={selectForAsk}
+          label={searched?.source === "catalog" ? "Search results" : "Ask MDE"} />
         {error ? (
           <div
             className="rounded-lg border border-destructive/30 bg-destructive/5 p-6 text-center"

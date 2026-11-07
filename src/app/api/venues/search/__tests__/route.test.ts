@@ -146,6 +146,17 @@ describe("POST /api/venues/search", () => {
     expect(json.total).toBe(2);
   });
 
+  it("matches Spanish venue names without accents and avoids false substring matches", async () => {
+    const plain = await (await post({ kind: "cafe", queryText: "compania" })).json();
+    expect(plain.results.map((r: { title: string }) => r.title)).toEqual(["Rituales Compañía de Café"]);
+
+    const accented = await (await post({ kind: "cafe", queryText: "compañia" })).json();
+    expect(accented.results.map((r: { title: string }) => r.title)).toEqual(["Rituales Compañía de Café"]);
+
+    const short = await (await post({ kind: "cafe", queryText: "all" })).json();
+    expect(short.results).toEqual([]);
+  });
+
   it("rejects invalid json with 400", async () => {
     const res = await POST(
       new Request("http://localhost/api/venues/search", { method: "POST", body: "{not json" }),

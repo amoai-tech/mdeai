@@ -36,19 +36,20 @@ export function hasVenueBrowseMapPins(
   return rows === null ? basePins.length > 0 : groundedDiscoveryPins(rows).length > 0;
 }
 
-export function DiscoveryGroundedResults({ rows, selectedId, onSelectRow }: {
+export function DiscoveryGroundedResults({ rows, selectedId, onSelectRow, label = "Ask MDE" }: {
   rows: GroundedToolRow[] | null;
   selectedId?: string | null;
   onSelectRow?: (id: string | null) => void;
+  label?: "Ask MDE" | "Search results";
 }) {
   const pins = useMemo(() => groundedDiscoveryPins(rows ?? []), [rows]);
   const { selectedPinId, panToPin } = useMapContext();
   useBrowseMapSync(pins, "grounded");
   if (rows === null) return null;
   return (
-    <section aria-label="Ask MDE places" data-testid="discovery-grounded-results" className="mt-3">
+    <section aria-label={label === "Ask MDE" ? "Ask MDE places" : "Search results"} data-testid="discovery-grounded-results" className="mt-3">
       <p className="mb-3 text-sm text-muted-foreground">
-        Ask MDE — {rows.length} places. Map pins appear only for returned coordinates.
+        {label} — {rows.length} places. Map pins appear only for returned coordinates.
       </p>
       {rows.length === 0 ? <p>No matching places were returned. Try another area.</p> : (
         <div className="grid gap-3 sm:grid-cols-2">

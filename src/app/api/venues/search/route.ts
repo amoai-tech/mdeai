@@ -38,18 +38,36 @@ const STOPWORDS = new Set([
  * answer impossible ("zzz" would still return a full page). Token overlap on the real row fields is
  * the smallest truthful filter: no new retrieval engine, and every exclusion is explainable.
  */
+// Locale-aware word boundaries and literal string comparisons avoid constructing regexes from guest input.
+const wordSegmenter = new Intl.Segmenter("es", { granularity: "word" });
+
+/** Fold Spanish accents, including ñ, so mobile queries without diacritics still match. */
+function foldSearchText(value: string): string {
+  let plain = "";
+  for (const char of value.normalize("NFD")) {
+    const point = char.codePointAt(0) ?? 0;
+    if (point < 0x0300 || point > 0x036f) plain += char;
+  }
+  return plain.toLowerCase();
+}
+
+function searchWords(value: string): string[] {
+  return Array.from(wordSegmenter.segment(foldSearchText(value)))
+    .filter((part) => part.isWordLike)
+    .map((part) => part.segment);
+}
+
 function matchesQuery(row: VenueAnchorRow, queryText: string): boolean {
-  const haystack = [row.name, row.neighborhood ?? "", (row.tags ?? []).join(" "), venueAnchorSummary(row) ?? ""]
-    .join(" ")
-    .toLowerCase();
-  const tokens = queryText
-    .toLowerCase()
-    .split(/[^\p{L}\p{N}]+/u)
+  const haystack = foldSearchText(
+    [row.name, row.neighborhood ?? "", (row.tags ?? []).join(" "), venueAnchorSummary(row) ?? ""].join(" "),
+  );
+  const tokens = searchWords(queryText)
     .filter((token) => token.length >= 3 && !STOPWORDS.has(token));
-  if (tokens.length === 0) return true; // nothing meaningful to filter on
+  if (tokens.length === 0) return true; // no meaningful venue terms to filter on
+  const words = new Set(searchWords(haystack));
   return tokens.some((token) =>
-    // Short tokens must match a whole word: "all" would otherwise match inside "Calle".
-    token.length >= 4 ? haystack.includes(token) : new RegExp(`\\b${token}\\b`).test(haystack),
+    // Short terms must match a whole word: "all" must not match inside "Calle".
+    token.length >= 4 ? haystack.includes(token) : words.has(token),
   );
 }
 

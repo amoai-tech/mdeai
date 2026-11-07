@@ -18,7 +18,7 @@ import { countWithNoun } from "@/lib/format/count-with-noun";
 export type VenueGuestOptions = {
   kind: "cafe" | "nightlife";
   neighborhood?: string | null;
-  onResults: (rows: GroundedToolRow[], meta: { total: number; query: string }) => void;
+  onResults: (_rows: GroundedToolRow[], meta: { total: number; query: string }) => void;
 };
 
 export function GuestVenueSearchScoped({ options }: { options: VenueGuestOptions }) {
@@ -120,7 +120,7 @@ export function GuestVenueSearch({ options }: { options: VenueGuestOptions }) {
           data-testid="guest-venue-send"
           className="flex size-11 items-center justify-center rounded-lg bg-primary text-primary-foreground disabled:opacity-40"
           disabled={!question.trim() || busy}
-          onClick={() => void send()}
+          onClick={() => { void send(); }}
           aria-label="Send venue search"
         >
           <ArrowUp className="size-4" />
