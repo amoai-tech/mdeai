@@ -169,8 +169,14 @@ try {
     JSON.stringify(
       {
         createdAt: new Date().toISOString(),
-        events: selected.rows,
-        children,
+        // SAFETY: this file is uploaded as a CI artifact. `events` carries
+        // `email`/`phone`/`description`, and the child tables carry attendee names,
+        // emails and phones, so only identifiers and counts are written. The backup
+        // proves what was removed; it cannot restore personal data.
+        events: selected.rows.map((row) => ({ id: row.id, name: row.name, status: row.status })),
+        childIds: Object.fromEntries(
+          Object.entries(children).map(([table, rows]) => [table, rows.map((row) => row.id)]),
+        ),
         // Identifiers only: no profile fields, no message bodies.
         isolationIdentities: orphanIdentities.rows.map((row) => ({ id: row.id, email: row.email })),
         isolationIdentityImpact: identityImpact,
