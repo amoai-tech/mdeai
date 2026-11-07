@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { checkSearchFastPathRateLimit } from "@/lib/api-ip-rate-limit";
+import { checkSearchFastPathSharedRateLimit } from "@/lib/api-ip-rate-limit";
 import {
   searchCafeVenueAnchorsForBrowse,
   searchNightclubVenueAnchorsForBrowse,
@@ -10,6 +10,8 @@ import {
   type VenueAnchorRow,
 } from "@/mastra/tools/search-venue-anchors";
 import type { GroundedToolRow } from "@/lib/parse-grounded-tool-result";
+import { parseAnchorIntelligenceSlots } from "@/mastra/lib/intelligence-anchor-search";
+import { hasAnyVibeSlot } from "@/lib/venue-vibe-words";
 
 /**
  * Public catalogue search for cafés and nightlife, for visitors without an account.
@@ -57,13 +59,31 @@ function searchWords(value: string): string[] {
     .map((part) => part.segment);
 }
 
-function matchesQuery(row: VenueAnchorRow, queryText: string): boolean {
+/**
+ * Words the *ranking* understands — quiet, wifi, rooftop, salsa, cocktails, date night…
+ *
+ * The list lives in `venue-vibe-words` so the composer describes exactly the preferences the route
+ * ranks. Requiring them to appear literally in a name or tag would discard the venues the ranking
+ * just promoted ("quiet café with wifi" matches no café by text, only by vibe).
+ */
+function isVibeWord(token: string, kind: "cafe" | "nightlife"): boolean {
+  // Parse the single token, then ask whether that token expressed a preference. The token itself
+  // is what makes the question per-word; the helper only inspects the slots it produced.
+  const slots = parseAnchorIntelligenceSlots(token, kind === "cafe" ? "cafe" : "nightclub");
+  return hasAnyVibeSlot(slots);
+}
+
+function matchesQuery(row: VenueAnchorRow, queryText: string, kind: "cafe" | "nightlife"): boolean {
   const haystack = foldSearchText(
     [row.name, row.neighborhood ?? "", (row.tags ?? []).join(" "), venueAnchorSummary(row) ?? ""].join(" "),
   );
   const tokens = searchWords(queryText)
     .filter((token) => token.length >= 3 && !STOPWORDS.has(token));
-  if (tokens.length === 0) return true; // no meaningful venue terms to filter on
+  // Only identity words have to appear literally; vibe words are the ranking's job.
+  const identityTokens = tokens.filter((token) => !isVibeWord(token, kind));
+  if (identityTokens.length === 0) return true;
+  tokens.length = 0;
+  tokens.push(...identityTokens);
   const words = new Set(searchWords(haystack));
   return tokens.some((token) =>
     // Short terms must match a whole word: "all" must not match inside "Calle".
@@ -78,7 +98,18 @@ const bodySchema = z.object({
   limit: z.number().int().min(1).max(20).optional().default(12),
 });
 
-function toGroundedRow(row: VenueAnchorRow): GroundedToolRow {
+/** Google-style type for the card's media label, so it never falls back to the generic "Place". */
+// "Café" for the coffee vertical; nightlife stays "Nightlife venue" because a salsa hall, a
+// cocktail bar and a club are not all bars — the card label should not assert a type we lack.
+const KIND_PRIMARY_TYPE = { cafe: "café", nightlife: "nightlife venue" } as const;
+
+/**
+ * Shape one venue anchor like the grounded rows the existing card list renders.
+ *
+ * @param row Saved venue anchor.
+ * @param kind Which vertical asked, so the card can label itself "Café" or "Bar".
+ */
+function toGroundedRow(row: VenueAnchorRow, kind: "cafe" | "nightlife"): GroundedToolRow {
   const coords = venueAnchorToCoordinates(row);
   return {
     id: row.id,
@@ -89,13 +120,11 @@ function toGroundedRow(row: VenueAnchorRow): GroundedToolRow {
     ...(coords.longitude != null ? { longitude: coords.longitude } : {}),
     ...(venueAnchorSummary(row) ? { summary: venueAnchorSummary(row) ?? undefined } : {}),
     ...(row.neighborhood ? { formattedAddress: row.neighborhood } : {}),
+    primaryType: KIND_PRIMARY_TYPE[kind],
   };
 }
 
 export async function POST(req: Request) {
-  const rateLimited = checkSearchFastPathRateLimit(req);
-  if (rateLimited) return rateLimited;
-
   let json: unknown;
   try {
     json = await req.json();
@@ -112,6 +141,12 @@ export async function POST(req: Request) {
   }
 
   const { kind, queryText, neighborhood, limit } = parsed.data;
+
+  // Shared across instances, and per kind: a café-heavy visitor should not lose nightlife search
+  // to the same allowance. 30 requests per 60 seconds matches what the in-process guard used.
+  const rateLimited = await checkSearchFastPathSharedRateLimit(req, `venue-search:${kind}`);
+  if (rateLimited) return rateLimited;
+
   // The browse retrieval reads a bounded window (limit * 3, no ORDER BY) and slices to `limit`
   // *before* returning, so filtering that slice would report "no matches" for a row that simply
   // fell outside an arbitrary window. Ask for a much wider candidate set, filter it, then apply the
@@ -125,15 +160,38 @@ export async function POST(req: Request) {
 
   // A retrieval failure must not be reported as "no venues match".
   if (error) {
-    return NextResponse.json({ error }, { status: 503 });
+    if (rows.length >= candidateLimit) {
+    console.warn(
+      `[venues/search] candidate window saturated (${rows.length}/${candidateLimit}) for kind=${kind}`,
+    );
   }
 
-  const matched = (queryText ? rows.filter((row) => matchesQuery(row, queryText)) : rows).slice(0, limit);
+  return NextResponse.json({ error }, { status: 503 });
+  }
+
+  const matched = (queryText ? rows.filter((row) => matchesQuery(row, queryText, kind)) : rows).slice(0, limit);
+
+  if (rows.length >= candidateLimit) {
+    console.warn(
+      `[venues/search] candidate window saturated (${rows.length}/${candidateLimit}) for kind=${kind}`,
+    );
+  }
+
+  if (rows.length >= candidateLimit) {
+    // Diagnostics: an incomplete candidate window must never look exhaustive.
+    console.warn(
+      `[venues/search] candidate window saturated (${rows.length}/${candidateLimit}) for kind=${kind}`,
+    );
+  }
 
   return NextResponse.json({
     kind,
-    results: matched.map(toGroundedRow),
+    results: matched.map((row) => toGroundedRow(row, kind)),
     total: matched.length,
     source: "venue_anchors",
+    // True when retrieval hit its candidate ceiling: there may be matches we never looked at.
+    // The UI ignores it today, but the honest fix (a text predicate in the query) is triggered by
+    // this condition rather than by a guess about catalogue size.
+    windowSaturated: rows.length >= candidateLimit,
   });
 }

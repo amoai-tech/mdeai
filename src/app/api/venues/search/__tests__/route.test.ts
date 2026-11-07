@@ -31,6 +31,20 @@ const cafeRows = [
     is_active: true,
   },
 ];
+const nightlifeRows = [
+  {
+    id: "33333333-3333-4333-8333-333333333333",
+    kind: "nightlife",
+    name: "Son Havana",
+    google_place_id: "place-3",
+    neighborhood: "El Poblado",
+    latitude: 6.21,
+    longitude: -75.57,
+    tags: ["salsa"],
+    metadata: null,
+    is_active: true,
+  },
+];
 const failures: { cafe: string | null; nightlife: string | null } = { cafe: null, nightlife: null };
 const calls: Array<{ fn: string; params: unknown }> = [];
 
@@ -49,7 +63,9 @@ vi.mock("@/mastra/tools/search-venue-anchors", async () => {
     searchNightclubVenueAnchorsForBrowse: (params: unknown) => {
       calls.push({ fn: "nightlife", params });
       return Promise.resolve(
-        failures.nightlife ? { rows: [], error: failures.nightlife } : { rows: [], error: null },
+        failures.nightlife
+          ? { rows: [], error: failures.nightlife }
+          : { rows: nightlifeRows, error: null },
       );
     },
   };
@@ -116,7 +132,7 @@ describe("POST /api/venues/search", () => {
   });
 
   it("returns an honest empty result when retrieval succeeded with no matches", async () => {
-    const res = await post({ kind: "nightlife", queryText: "nothing here" });
+    const res = await post({ kind: "nightlife", queryText: "zzz nothing here" });
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(json.results).toEqual([]);
@@ -161,10 +177,61 @@ describe("POST /api/venues/search", () => {
     expect(short.results).toEqual([]);
   });
 
+  it("labels café and nightlife rows the way the card shows them", async () => {
+    const cafe = await (await post({ kind: "cafe" })).json();
+    expect(cafe.results[0].primaryType).toBe("café");
+    // A real nightlife row, so the `nightlife: "bar"` mapping is actually exercised.
+    const night = await (await post({ kind: "nightlife" })).json();
+    expect(night.results).toHaveLength(1);
+    // Nightlife is not assumed to be a bar: a salsa hall, a cocktail bar and a club are not the
+    // same category, so the label stays the honest, general one.
+    expect(night.results[0]).toMatchObject({ title: "Son Havana", primaryType: "nightlife venue" });
+  });
+
+  it("reports when the candidate window was saturated", async () => {
+    // 2 mock rows against a 60-row ceiling: not saturated, so "no matches" can be trusted.
+    const res = await (await post({ kind: "cafe", queryText: "quiet" })).json();
+    expect(res.windowSaturated).toBe(false);
+  });
+
   it("rejects invalid json with 400", async () => {
     const res = await POST(
       new Request("http://localhost/api/venues/search", { method: "POST", body: "{not json" }),
     );
     expect(res.status).toBe(400);
+  });
+});
+
+describe("vibe words are ranked, not required literally", () => {
+  it("returns the café catalogue for a vibe-only query instead of nothing", async () => {
+    // No café name contains "quiet" or "wifi": the ranking uses the signal columns for those,
+    // so a literal-text filter would wrongly answer "no matches".
+    const res = await post({ kind: "cafe", queryText: "quiet café with wifi" });
+    const json = await res.json();
+    expect(json.total).toBe(2);
+  });
+
+  it("still filters on identity words alongside a vibe word", async () => {
+    const res = await post({ kind: "cafe", queryText: "quiet café in Laureles" });
+    const json = await res.json();
+    expect(json.total).toBe(1);
+    expect(json.results[0].title).toBe("Rituales Compañía de Café");
+  });
+
+  it("keeps giving honest empty answers for words nobody describes", async () => {
+    const res = await post({ kind: "cafe", queryText: "zzz nowhere at all" });
+    expect((await res.json()).total).toBe(0);
+  });
+});
+
+describe("nightlife party words are preferences, not literal text", () => {
+  it("keeps venue rows for a query whose words no venue name contains", async () => {
+    // Son Havana has no "party" or "tonight" in its name or tags; before wishesNightlife was in the
+    // shared list, "salsa party tonight" demanded them literally and returned nothing.
+    const res = await post({ kind: "nightlife", queryText: "salsa party tonight" });
+    const json = await res.json();
+    expect(res.status).toBe(200);
+    expect(json.total).toBe(1);
+    expect(json.results[0].title).toBe("Son Havana");
   });
 });
