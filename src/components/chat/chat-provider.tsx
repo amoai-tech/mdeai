@@ -21,7 +21,11 @@ import { useThreadNav } from "@/lib/chat/thread-nav-context";
 import { mdeUI } from "@/components/copilot/a2ui/mde-ui-catalog";
 import { getCopilotKitClientProps } from "@/lib/copilotkit-client-props";
 import { isExpectedGuestStartup401, reportConciergeError } from "@/lib/concierge-error-store";
-import { isBlankAssistantMessage } from "@/lib/blank-assistant-message";
+import {
+  isBlankAssistantMessage,
+  shouldReportBlankOnce,
+  type BlankReportLedger,
+} from "@/lib/blank-assistant-message";
 import { useSession } from "@/hooks/use-session";
 import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 
@@ -257,6 +261,9 @@ export function SavedThreadHistory({
    * wipe be repaired with those newer messages instead of regressing to the older
    * snapshot, and covers a chat that started empty and only later received turns.
    */
+  /** Blank-turn ids already reported for the CURRENT thread (see the B2 detector). */
+  const blankLedger = useRef<BlankReportLedger | null>(null);
+
   const retained = useRef<{
     threadId: string;
     agent: AbstractAgent;
@@ -309,13 +316,19 @@ export function SavedThreadHistory({
   // happens when a run finalises, and it reuses the existing retryable notice.
   useEffect(() => {
     if (!isReady || !agent || agent.threadId !== threadId) return;
-    const reported = new Set<string>();
+    // This effect re-runs on every message-count change, so the ledger must survive the
+    // re-runs or the same blank turn would re-push the notice. It is reset only when the
+    // conversation changes.
+    if (blankLedger.current?.threadId !== threadId) {
+      blankLedger.current = { threadId, ids: new Set<string>() };
+    }
+    const ledger = blankLedger.current;
     const inspect = () => {
       if (agent.isRunning) return;
       const last = agent.messages[agent.messages.length - 1];
-      if (!last || reported.has(last.id)) return;
+      if (!last) return;
       if (!isBlankAssistantMessage(last as { role?: string; content?: unknown; toolCalls?: unknown[] })) return;
-      reported.add(last.id);
+      if (!shouldReportBlankOnce(ledger, last.id)) return;
       reportConciergeError(threadId);
     };
     const subscription = agent.subscribe({ onRunFinalized: inspect });

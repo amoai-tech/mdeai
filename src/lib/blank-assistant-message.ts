@@ -70,3 +70,26 @@ export function isBlankAssistantMessage(message: AssistantLike | undefined): boo
   }
   return true;
 }
+
+/** Per-thread memory of blank messages already reported. */
+export interface BlankReportLedger {
+  threadId: string;
+  ids: Set<string>;
+}
+
+/**
+ * True the first time this blank message is seen for this thread, false afterwards.
+ *
+ * The provider effect re-runs on every message-count change, so a `Set` created inside
+ * it would forget and re-report the same turn, pushing the retryable notice again and
+ * again. The caller keeps the ledger across re-runs and resets it only when the thread
+ * changes.
+ */
+export function shouldReportBlankOnce(
+  ledger: BlankReportLedger,
+  messageId: string,
+): boolean {
+  if (ledger.ids.has(messageId)) return false;
+  ledger.ids.add(messageId);
+  return true;
+}

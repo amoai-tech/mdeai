@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { isBlankAssistantMessage, messageText } from "../blank-assistant-message";
+import {
+  isBlankAssistantMessage,
+  messageText,
+  shouldReportBlankOnce,
+} from "../blank-assistant-message";
 
 describe("messageText", () => {
   it("reads plain string content", () => {
@@ -59,5 +63,21 @@ describe("isBlankAssistantMessage", () => {
       }),
     ).toBe(false);
     expect(isBlankAssistantMessage(undefined)).toBe(false);
+  });
+});
+
+describe("shouldReportBlankOnce", () => {
+  it("reports a blank turn exactly once even when the effect re-runs", () => {
+    const ledger = { threadId: "t-1", ids: new Set<string>() };
+    expect(shouldReportBlankOnce(ledger, "msg-1")).toBe(true);
+    // Every later render sees the same message and must stay quiet.
+    expect(shouldReportBlankOnce(ledger, "msg-1")).toBe(false);
+    expect(shouldReportBlankOnce(ledger, "msg-1")).toBe(false);
+  });
+
+  it("reports a NEW blank turn in the same thread", () => {
+    const ledger = { threadId: "t-1", ids: new Set<string>() };
+    expect(shouldReportBlankOnce(ledger, "msg-1")).toBe(true);
+    expect(shouldReportBlankOnce(ledger, "msg-2")).toBe(true);
   });
 });
