@@ -17,6 +17,9 @@ import { useRestaurantSearchFastPath } from "@/hooks/use-restaurant-search-fast-
 import { useSession } from "@/hooks/use-session";
 import { isSelectedRentalCafeNearbyRequest } from "@/lib/cafe-search-fast-path";
 import { closestGroundedResult, parseGroundedRankQuestion } from "@/lib/closest-grounded-result";
+import { normalizeToolEnvelope } from "@/lib/normalize-tool-envelope";
+import { useOptionalMapContext } from "@/platform/maps/map-context";
+import { useGroundedFastPath } from "@/components/chat/grounded-fast-path-context";
 import { createClient } from "@/lib/supabase/client";
 import { stashConciergeDraft } from "@/lib/concierge-draft-store";
 
@@ -31,6 +34,8 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
   const threadId = nav?.activeThreadId ?? nav?.sessionThreadId;
   const { showExchange, showNotice, showSignInPrompt } = useEventLocalChat();
   const { state } = useConciergeCoAgent();
+  const map = useOptionalMapContext();
+  const { toolResult } = useGroundedFastPath();
   const { user, loading: sessionLoading } = useSession();
   const signedIn = Boolean(user && !user.is_anonymous);
   // The rental hook can need the agent for a message it queued while a search was running and then
@@ -58,12 +63,24 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
         | { lastGroundedResults?: Parameters<typeof closestGroundedResult>[0]; selectedListingId?: string }
         | undefined;
       const rank = parseGroundedRankQuestion(text);
-      const ranked = rank && groundedMemory?.lastGroundedResults?.length
-        ? closestGroundedResult(
-            groundedMemory.lastGroundedResults,
-            groundedMemory.selectedListingId,
-            rank,
-          )
+      const rows = groundedMemory?.lastGroundedResults;
+      // Only rank the result set currently on screen. A restaurant search clears
+      // this context; ranking old rows after that would answer the wrong panel.
+      const displayed = (normalizeToolEnvelope(toolResult).results ?? []) as Array<{ id?: unknown }>;
+      const displayedIds = new Set(displayed.map((row) => row.id));
+      const rowsBelongToDisplay =
+        Boolean(rows?.length) && rows!.every((row) => displayedIds.has(row.id));
+      // Map context is the freshest selection. If a rental pin is selected, use
+      // it; without one, keep the working-memory selection.
+      const selectedRentalPin = map?.pins.some(
+        (pin) => pin.id === map.selectedPinId && pin.category === "rental",
+      );
+      const reconciledListingId =
+        selectedRentalPin && map?.selectedPinId
+          ? map.selectedPinId.replace(/^rental-/, "")
+          : groundedMemory?.selectedListingId;
+      const ranked = rank && rowsBelongToDisplay
+        ? closestGroundedResult(rows, reconciledListingId, rank)
         : null;
       // No matching anchor or measured row: fall through so a new Nearby search
       // (or the agent) can run instead of answering from stale rows.
@@ -85,6 +102,8 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
       signedIn,
       state,
       showExchange,
+      map,
+      toolResult,
     ],
   );
   const { handleUserMessage: handleEventVenueBookingMessage } =

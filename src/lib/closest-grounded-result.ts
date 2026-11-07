@@ -1,4 +1,5 @@
 export type ClosestGroundedRow = {
+  id?: string;
   title?: string;
   distanceMeters?: number;
   distanceFromRentalId?: string;
