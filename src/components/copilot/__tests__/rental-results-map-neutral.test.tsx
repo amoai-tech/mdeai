@@ -8,11 +8,12 @@ const ui = vi.hoisted(() => ({
   openVenueDetail: vi.fn(),
   openScheduleViewing: vi.fn(),
   selectedPinId: null as string | null,
+  pins: [] as Array<{ id: string }>,
   concierge: null as unknown,
 }));
 
 vi.mock("@/platform/maps/map-context", () => ({
-  useMapContext: () => ({ selectedPinId: ui.selectedPinId, panToPin: ui.panToPin }),
+  useMapContext: () => ({ selectedPinId: ui.selectedPinId, panToPin: ui.panToPin, pins: ui.pins }),
 }));
 vi.mock("@/components/chat/rental-ui-context", () => ({
   useRentalUi: () => ({
@@ -34,6 +35,8 @@ vi.mock("@/components/copilot/a2ui/mde-ui-catalog", () => ({
 }));
 
 import { RentalResults } from "@/components/copilot/search-tool-result-cards";
+import { SearchToolResultScope } from "@/components/copilot/search-tool-result-ownership";
+import { RentalComparisonOwnerProvider } from "@/components/chat/rental-comparison-owner-context";
 import type { RentalSearchMeta } from "@/components/chat/rental-fast-path-context";
 
 const rental = (id: string, coords?: { latitude: number; longitude: number }) => ({
@@ -65,6 +68,7 @@ beforeEach(() => {
   ui.openVenueDetail.mockReset();
   ui.openScheduleViewing.mockReset();
   ui.selectedPinId = null;
+  ui.pins = [];
   ui.concierge = null;
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -284,5 +288,266 @@ describe("SAN-1503 · truthful natural-language rental result totals", () => {
     render({ source: "supabase", results: [], total: 42 }, meta("quiet"));
     expect(container.querySelector('[data-testid="rental-results-count"]')).toBeNull();
     expect(container.querySelector('[data-testid="rental-browse-all-link"]')).toBeNull();
+  });
+});
+
+describe("SAN-1041 · deterministic comparison from rental tool results", () => {
+  const result = {
+    source: "supabase",
+    results: [
+      fullRental("first", { latitude: 6.24, longitude: -75.59 }),
+      fullRental("second", { price_monthly: 2_800_000 }),
+      fullRental("third", { price_monthly: 3_500_000 }),
+    ],
+  };
+
+  it("selects two real result IDs, compares their own prices, then opens existing Details", () => {
+    ui.pins = [{ id: "rental-first" }];
+    render(result);
+    const toggles = [...container.querySelectorAll<HTMLButtonElement>('[data-testid="rental-compare-toggle"]')];
+    expect(toggles).toHaveLength(3);
+    expect(toggles[0].closest('[data-testid="rental-card"]')).not.toBeNull();
+    expect(toggles[0].getAttribute("aria-pressed")).toBe("false");
+    expect(container.querySelector('[data-testid="rental-compare-open"]')).toBeNull();
+    act(() => toggles[0].click());
+    const open = container.querySelector<HTMLButtonElement>('[data-testid="rental-compare-open"]');
+    const toolbar = container.querySelector<HTMLElement>('[data-testid="rental-compare-toolbar"]');
+    expect(toolbar).not.toBeNull();
+    expect(toolbar?.className).toMatch(/sticky.*bottom-0/);
+    expect(toolbar?.textContent).toContain("1 of 4 apartments selected");
+    expect(open?.disabled).toBe(true);
+    expect(toggles[0].getAttribute("aria-pressed")).toBe("true");
+    expect(ui.openVenueDetail).not.toHaveBeenCalled(); // compare must not open Details
+    act(() => toggles[1].click());
+    expect(toolbar?.textContent).toContain("2 of 4 apartments selected");
+    expect(open?.disabled).toBe(false);
+    act(() => open?.click());
+    const dialog = document.querySelector('[data-testid="rental-comparison-modal"]');
+    expect(dialog).not.toBeNull();
+    expect(dialog?.textContent).toContain("COP 2,400,000/month");
+    expect(dialog?.textContent).toContain("COP 2,800,000/month");
+    // The shared dialog has sm:max-w-sm by default. Explicitly override it
+    // so the comparison shows multiple columns on a desktop-sized screen.
+    expect(dialog?.className).toContain("sm:max-w-6xl");
+    const details = dialog?.querySelector<HTMLButtonElement>(
+      '[data-testid="rental-comparison-column-first"] button:nth-child(2)',
+    );
+    expect(details?.textContent).toMatch(/Details/);
+    act(() => details?.click());
+    expect(ui.openVenueDetail).toHaveBeenCalledWith(expect.objectContaining({
+      kind: "rental", listingId: "first", pinned: true,
+      rental: expect.objectContaining({ price_monthly: 2_400_000 }),
+    }));
+    expect(ui.panToPin).toHaveBeenCalledWith("rental-first");
+  });
+
+  it("attaches the selected action to the real composer overlay instead of hiding below the transcript", () => {
+    const callbacks: FrameRequestCallback[] = [];
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      callbacks.push(callback);
+      return callbacks.length;
+    });
+    vi.stubGlobal("cancelAnimationFrame", vi.fn());
+    const panel = document.createElement("div");
+    panel.dataset.testid = "center-chat-panel";
+    const overlay = document.createElement("div");
+    overlay.dataset.testid = "copilot-input-overlay";
+    panel.appendChild(overlay);
+    document.body.appendChild(panel);
+    try {
+      render(result);
+      const toggle = container.querySelector<HTMLButtonElement>('[data-testid="rental-compare-toggle"]');
+      act(() => toggle?.click());
+      act(() => callbacks.forEach((callback) => callback(0)));
+      const anchored = overlay.querySelector<HTMLElement>('[data-testid="rental-compare-toolbar"]');
+      expect(anchored).not.toBeNull();
+      expect(anchored?.style.bottom).toBe("100%");
+      expect(anchored?.style.zIndex).toBe("30");
+      expect(overlay.style.zIndex).toBe("35");
+      expect(container.querySelector('[data-testid="rental-compare-toolbar"]')).toBeNull();
+      act(() => overlay.querySelector<HTMLButtonElement>('[data-testid="rental-compare-clear"]')?.click());
+      expect(overlay.querySelector('[data-testid="rental-compare-toolbar"]')).toBeNull();
+      expect(overlay.style.zIndex).toBe("");
+    } finally {
+      panel.remove();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("does not portal the comparison for a stale historical tool result", () => {
+    const panel = document.createElement("div");
+    panel.dataset.testid = "center-chat-panel";
+    const overlay = document.createElement("div");
+    overlay.dataset.testid = "copilot-input-overlay";
+    panel.appendChild(overlay);
+    document.body.appendChild(panel);
+    try {
+      act(() => {
+        root.render(
+          <SearchToolResultScope toolCallId="old-tool-call">
+            <RentalResults result={result} />
+          </SearchToolResultScope>,
+        );
+      });
+      // An old tool result stays readable, but cannot select apartments or
+      // commandeer the current chat's comparison bar.
+      expect(container.querySelectorAll('[data-testid="rental-compare-toggle"]')).toHaveLength(0);
+      expect(overlay.querySelector('[data-testid="rental-compare-toolbar"]')).toBeNull();
+      expect(container.querySelector('[data-testid="rental-compare-toolbar"]')).toBeNull();
+      expect(overlay.style.zIndex).toBe("");
+    } finally {
+      panel.remove();
+    }
+  });
+
+  it("two retained result turns share one composer toolbar, switch ownership, and restore z-index", () => {
+    const callbacks: FrameRequestCallback[] = [];
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      callbacks.push(callback);
+      return callbacks.length;
+    });
+    vi.stubGlobal("cancelAnimationFrame", vi.fn());
+    const panel = document.createElement("div");
+    panel.dataset.testid = "center-chat-panel";
+    const overlay = document.createElement("div");
+    overlay.dataset.testid = "copilot-input-overlay";
+    // Existing inline stacking may be set by other chat features.
+    overlay.style.zIndex = "23";
+    panel.appendChild(overlay);
+    document.body.appendChild(panel);
+    const second = {
+      source: "supabase",
+      results: [fullRental("new-a", { price_monthly: 3_100_000 }), fullRental("new-b", { price_monthly: 6_000_000 })],
+    };
+
+    try {
+      act(() => root.render(
+        <RentalComparisonOwnerProvider>
+          <div data-testid="earlier-turn"><RentalResults result={result} /></div>
+          <div data-testid="newer-turn"><RentalResults result={second} /></div>
+        </RentalComparisonOwnerProvider>,
+      ));
+      const firstButtons = container.querySelectorAll<HTMLButtonElement>(
+        '[data-testid="earlier-turn"] [data-testid="rental-compare-toggle"]',
+      );
+      const nextButtons = container.querySelectorAll<HTMLButtonElement>(
+        '[data-testid="newer-turn"] [data-testid="rental-compare-toggle"]',
+      );
+      expect(firstButtons).toHaveLength(3);
+      expect(nextButtons).toHaveLength(2);
+
+      // Old result selected first: exactly one overlay, with first result data.
+      act(() => { firstButtons[0].click(); firstButtons[1].click(); });
+      act(() => callbacks.forEach((callback) => callback(0)));
+      expect(overlay.querySelectorAll('[data-testid="rental-compare-toolbar"]')).toHaveLength(1);
+      expect(overlay.style.zIndex).toBe("35");
+      expect(overlay.textContent).toContain("2 of 4 apartments selected");
+
+      // A newer selection takes over without two identical overlapping toolbars.
+      act(() => { nextButtons[0].click(); nextButtons[1].click(); });
+      act(() => callbacks.forEach((callback) => callback(0)));
+      expect(overlay.querySelectorAll('[data-testid="rental-compare-toolbar"]')).toHaveLength(1);
+      expect(overlay.textContent).toContain("2 of 4 apartments selected");
+      expect(firstButtons[0].getAttribute("aria-pressed")).toBe("true");
+      expect(nextButtons[0].getAttribute("aria-pressed")).toBe("true");
+      act(() => overlay.querySelector<HTMLButtonElement>('[data-testid="rental-compare-open"]')?.click());
+      const dialog = document.querySelector('[data-testid="rental-comparison-modal"]');
+      expect(dialog?.textContent).toContain("COP 6,000,000/month");
+      expect(dialog?.textContent).not.toContain("COP 2,400,000/month");
+
+      // Clearing the active selection must not resurrect the old result's bar.
+      act(() => overlay.querySelector<HTMLButtonElement>('[data-testid="rental-compare-clear"]')?.click());
+      expect(overlay.querySelector('[data-testid="rental-compare-toolbar"]')).toBeNull();
+      expect(overlay.style.zIndex).toBe("23");
+    } finally {
+      panel.remove();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("invalidates selection when a subsequent result replaces the source IDs", () => {
+    render(result);
+    const toggles = [...container.querySelectorAll<HTMLButtonElement>('[data-testid="rental-compare-toggle"]')];
+    act(() => { toggles[0].click(); toggles[1].click(); });
+    expect(container.querySelector<HTMLButtonElement>('[data-testid="rental-compare-open"]')?.disabled).toBe(false);
+    render({ source: "supabase", results: [fullRental("new-a"), fullRental("new-b")] });
+    expect(container.querySelector('[data-testid="rental-compare-toolbar"]')).toBeNull();
+    expect(container.querySelector('[data-testid="rental-compare-open"]')).toBeNull();
+  });
+
+  it("clears selection on overlapping IDs and changed source prices, not just changed ID lists", () => {
+    render(result);
+    let toggles = [...container.querySelectorAll<HTMLButtonElement>('[data-testid="rental-compare-toggle"]')];
+    act(() => { toggles[0].click(); toggles[1].click(); });
+    act(() => container.querySelector<HTMLButtonElement>('[data-testid="rental-compare-open"]')?.click());
+    expect(document.querySelector('[data-testid="rental-comparison-modal"]')?.textContent)
+      .toContain("COP 2,400,000/month");
+
+    // Same listing IDs, but the authoritative result now has a new price.
+    render({ ...result, results: [
+      fullRental("first", { price_monthly: 4_100_000 }),
+      fullRental("second", { price_monthly: 2_800_000 }),
+      fullRental("third", { price_monthly: 3_500_000 }),
+    ] });
+    expect(container.querySelector('[data-testid="rental-compare-toolbar"]')).toBeNull();
+    expect(document.querySelector('[data-testid="rental-comparison-modal"]')).toBeNull();
+    toggles = [...container.querySelectorAll<HTMLButtonElement>('[data-testid="rental-compare-toggle"]')];
+    expect(toggles[0].getAttribute("aria-pressed")).toBe("false");
+
+    // Re-selecting uses the replacement facts, not the old comparison.
+    act(() => { toggles[0].click(); toggles[1].click(); });
+    act(() => container.querySelector<HTMLButtonElement>('[data-testid="rental-compare-open"]')?.click());
+    expect(document.querySelector('[data-testid="rental-comparison-modal"]')?.textContent)
+      .toContain("COP 4,100,000/month");
+
+    // Even partially overlapping results must invalidate the old selection.
+    render({ source: "supabase", results: [
+      fullRental("first", { price_monthly: 4_100_000 }), fullRental("new-b"),
+    ] });
+    expect(container.querySelector('[data-testid="rental-compare-toolbar"]')).toBeNull();
+    expect(document.querySelector('[data-testid="rental-comparison-modal"]')).toBeNull();
+  });
+
+  it("releases composer z-index when a selected result unmounts", () => {
+    const callbacks: FrameRequestCallback[] = [];
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      callbacks.push(callback);
+      return callbacks.length;
+    });
+    vi.stubGlobal("cancelAnimationFrame", vi.fn());
+    const panel = document.createElement("div");
+    panel.dataset.testid = "center-chat-panel";
+    const overlay = document.createElement("div");
+    overlay.dataset.testid = "copilot-input-overlay";
+    overlay.style.zIndex = "19";
+    panel.appendChild(overlay);
+    document.body.appendChild(panel);
+    try {
+      render(result);
+      act(() => container.querySelector<HTMLButtonElement>('[data-testid="rental-compare-toggle"]')?.click());
+      act(() => callbacks.forEach((callback) => callback(0)));
+      expect(overlay.style.zIndex).toBe("35");
+      expect(overlay.querySelectorAll('[data-testid="rental-compare-toolbar"]')).toHaveLength(1);
+      act(() => root.render(null));
+      expect(overlay.querySelector('[data-testid="rental-compare-toolbar"]')).toBeNull();
+      expect(overlay.style.zIndex).toBe("19");
+    } finally {
+      panel.remove();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("keeps the sticky action bar until selection is cleared, then removes it", () => {
+    render(result);
+    const toggles = [...container.querySelectorAll<HTMLButtonElement>('[data-testid="rental-compare-toggle"]')];
+    act(() => toggles[0].click());
+    const toolbar = container.querySelector<HTMLElement>('[data-testid="rental-compare-toolbar"]');
+    expect(toolbar?.getAttribute("role")).toBe("group");
+    expect(toolbar?.getAttribute("aria-label")).toBe("Apartment comparison selection");
+    expect(container.querySelector<HTMLButtonElement>('[data-testid="rental-compare-open"]')?.disabled).toBe(true);
+    act(() => container.querySelector<HTMLButtonElement>('[data-testid="rental-compare-clear"]')?.click());
+    expect(container.querySelector('[data-testid="rental-compare-toolbar"]')).toBeNull();
+    expect(container.querySelector('[data-testid="rental-compare-open"]')).toBeNull();
+    expect(container.querySelector<HTMLButtonElement>('[data-testid="rental-compare-toggle"]')?.getAttribute("aria-pressed")).toBe("false");
   });
 });
