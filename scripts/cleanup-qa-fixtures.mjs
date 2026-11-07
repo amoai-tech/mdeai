@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import { Client } from "pg";
+import { buildBackupPayload } from "./qa/cleanup-backup-payload.mjs";
 
 /**
  * Remove only the explicitly allowlisted QA fixture prefixes.
@@ -164,28 +165,6 @@ try {
     );
     Object.assign(identityImpact, counts.rows[0]);
   }
-  fs.writeFileSync(
-    backup,
-    JSON.stringify(
-      {
-        createdAt: new Date().toISOString(),
-        // SAFETY: this file is uploaded as a CI artifact. `events` carries
-        // `email`/`phone`/`description`, and the child tables carry attendee names,
-        // emails and phones, so only identifiers and counts are written. The backup
-        // proves what was removed; it cannot restore personal data.
-        events: selected.rows.map((row) => ({ id: row.id, name: row.name, status: row.status })),
-        childIds: Object.fromEntries(
-          Object.entries(children).map(([table, rows]) => [table, rows.map((row) => row.id)]),
-        ),
-        // Identifiers only: no profile fields, no message bodies.
-        isolationIdentities: orphanIdentities.rows.map((row) => ({ id: row.id, email: row.email })),
-        isolationIdentityImpact: identityImpact,
-      },
-      null,
-      2,
-    ),
-  );
-
   const deleted = {};
   for (const table of CHILD_TABLES) {
     const result = await client.query(
@@ -309,6 +288,22 @@ try {
     throw new Error(`QA identity cleanup verified ${leftRows.rows[0].n} leftover row(s)`);
   }
   await client.query("commit");
+
+  // Only now, after a committed transaction, does the report exist.
+  fs.writeFileSync(
+    backup,
+    JSON.stringify(
+      buildBackupPayload({
+        createdAt: new Date().toISOString(),
+        events: selected.rows,
+        children,
+        identities: orphanIdentities.rows,
+        impact: identityImpact,
+      }),
+      null,
+      2,
+    ),
+  );
   console.log(JSON.stringify({ backup, deleted }, null, 2));
 } catch (error) {
   await client.query("rollback").catch(() => {});
