@@ -4,7 +4,7 @@
 
 | Field | Value |
 |---|---|
-| Last updated | **2026-11-07** (all merged PRs verified; #796 is the only open work) |
+| Last updated | **2026-11-07** (merged PRs verified; open work: **#796** cleanup, **#798** this tracker, **#778** support docs) |
 | `origin/main` | **`14bf8b3926`** |
 | Production `/api/version` | **`14bf8b3926`** — matches main (`#777`, `#787`, `#792`, `#793`, `#786` all in it) |
 | Working worktree | `/home/sk/.worktrees/mde-ai-rel` **removed** after #792 merged (clean, pushed, no processes) |
@@ -52,23 +52,26 @@
 - [#777](https://github.com/amoai-tech/mdeai/pull/777) merged; chat restore certified **20/20** on pinned production SHA `8114a5a96382`.
 - [#780](https://github.com/amoai-tech/mdeai/pull/780) closed as superseded; new nonempty assistant replies already required.
 - [#787](https://github.com/amoai-tech/mdeai/pull/787) merged; A3 authenticated readiness requires a **200** response; A4 suite-owned/expired identity cleanup added.
-- Follow-up 4-journey smoke on `7c753cd6b1` reported passed. Historical results remain attached to their own SHAs.
-- **2026-11-07:** production verified serving `14bf8b3926` (= `main`), and a desktop + mobile journey smoke passed on that SHA (2 passed, 1.9 min, SHA pinned before and after).
+- [#792](https://github.com/amoai-tech/mdeai/pull/792) merged as `583dcbd6a6`; a test that fails **while cleaning up** now fails the run instead of swallowing the error (3 failure-injection tests).
+- [#793](https://github.com/amoai-tech/mdeai/pull/793) merged as `aa9bdfa3`; these trackers.
+- [#786](https://github.com/amoai-tech/mdeai/pull/786) merged; CI-only Playwright container benchmark (no product code).
+- `/home/sk/.worktrees/mde-ai-rel` **removed** after #792 merged — it was clean, its commit was pushed, and no process used it.
+- **2026-11-07:** production verified serving `14bf8b3926` (= `main`), and a desktop + mobile journey smoke passed on that SHA (2 passed, 1.9 min, pinned before and after).
 
 ### Now — smallest safe ordered work
-1. **Merge [#796](https://github.com/amoai-tech/mdeai/pull/796)** (scheduled cleanup). It found and removed **3 real leaked accounts** aged 12–13 days that the previous `qa-%` pattern could never match; the partner-row deletion was removed after review because `restaurants/leads/bookings.partner_id` are `ON DELETE SET NULL`.
-2. **B2/C1 diagnostics:** instrument browser → `/api/copilotkit` → AG-UI/Mastra → provider/tool → stream. Correlate existing request/turn IDs and log a future hang/network failure. Do not invent a cause, and do not attach a duration to the historical one-off.
-3. **C2 working memory:** reproduce with two writers before touching the merge path — Mastra's native atomic merge needs resource scope, MDE uses thread scope.
-4. **C3 runtime init:** measure `buildHandler()` / `new CopilotRuntime()` before any change.
+1. **Finish [#796](https://github.com/amoai-tech/mdeai/pull/796)** — independent nightly cleanup. Two blockers before merge: (a) the CI backup must not export chat/profile contents as an artifact, and (b) the `review / review` job must produce a real current-head review instead of failing `NO_REVIEW` because its configuration ignored the PR title. It already found **3 real leaked accounts** aged 12–13 days that the previous `qa-%` pattern could never match.
+2. **Merge [#798](https://github.com/amoai-tech/mdeai/pull/798)** — this tracker. Docs only; no browser recertification.
+3. **B2 + C1 diagnostics (do them together):** one correlation path across browser → `/api/copilotkit` → AG-UI/Mastra → provider/tool → stream completion, recording failures **without** storing private prompts. Reuse the existing turn log and `ai_runs`; do not add a second observability platform, and do not attach a duration to the historical one-off.
+4. **C2 working memory:** reproduce with two simultaneous writers (two tabs changing preferences in the same conversation) before touching the merge path — Mastra's native atomic merge needs **resource** scope, MDE uses **thread** scope. Change code only if the test proves a defect.
+5. **C3 + search coverage:** measure `buildHandler()` / `new CopilotRuntime()` before optimizing, and compare searchable listings with embedded listings before backfilling. Never invent inventory to fill a coverage gap.
 
-### Deployment fact worth keeping
-Promotion is **asynchronous**: the freshness guard waited 9, 13 and 19 polls (≈4.5–9.5 min) after the build was READY before the domain served the new commit, and passed every time. READY ≠ served. Do **not** promote manually unless `Prod deploy freshness` actually fails.
-4. **Interrupted-run hygiene:** add an independent CI/scheduled cleanup job that survives a killed process, with run ownership/lease or deliberately aged cleanup and explicit DB verification. Do not delete another active suite's account.
-5. **Worktree cleanup:** after #792 is merged and no process/files need `mde-ai-rel`, check ancestry, worktree status and processes; then `git worktree remove` normally (never force).
-6. **C2/C3** only after measurement: prove two-writer thread-memory conflict and runtime initialization cost before changing semantics or introducing architecture.
+### Deployment and promotion — read before touching production
+Promotion is **asynchronous**. The `Prod deploy freshness` guard waited 9, 13 and 19 polls (≈4.5–9.5 min) after a build was READY before the domain served the new commit, and passed every time. **READY ≠ served** — always prove it with `/api/version`.
+
+If that guard fails, follow [Production release verification](../../07-operations/production-release-verification.md) (recover a release blocked by Floor) and its exact-SHA certification path. **Never run `vercel promote` to skip certification or to serve an uncertified candidate** — a failed guard is a signal to diagnose, not permission to bypass.
 
 ### Tracking and closeout
-- [SAN-1639](https://linear.app/amo100/issue/SAN-1639) and [SAN-1298](https://linear.app/amo100/issue/SAN-1298) are **Done** for the previously certified product milestone; keep separate instrumentation/cleanup work open until actually implemented.
+- [SAN-1639](https://linear.app/amo100/issue/SAN-1639) and [SAN-1298](https://linear.app/amo100/issue/SAN-1298) are **Done** for the previously certified product milestone; keep instrumentation/cleanup work open until actually implemented.
 - Update this tracker after each exact-head merge and deployment; never combine evidence from different SHAs.
 
 ---
@@ -77,15 +80,16 @@ Promotion is **asynchronous**: the freshness guard waited 9, 13 and 19 polls (�
 
 | # | Current status | Impact | Mitigation |
 |---|---|---|---|
-| 1 | **#792 pending independent approval/merge** | Error-reporting cleanup not yet in `main` | Current-head CI + review, merge, prove failure-injection cleanup |
-| 2 | **#793 pending docs review/merge** | Stale steps mislead the next operator | Correct factual contradictions; docs-only merge |
-| 3 | **Kill during teardown not recovered automatically** | Test identity can remain after a process is terminated | Independent ownership-aware cleanup job; verify all related rows |
-| 4 | **B2 network error untraced** (one-off; **no evidence for any duration**) | A recurrence cannot be attributed to a boundary | Trace browser → runtime → agent → provider without hiding errors. `420_000` in the specs is the configured **test cap**, not a measured hang: one journey once reached the cap, and where the time went was never recorded |
-| 5 | **Production SHA can change during testing** | Mixed-release counts are invalid | Pin `/api/version` before/after, separate releases |
-| 6 | **Maps error owned separately** | Google Maps `503` remains a distinct diagnostic | Map ID presence verified; inspect failed request and Google Cloud metrics, don't suppress errors |
-| 7 | **CopilotKit/Mastra MCP documentation availability varies** | Tool-based docs lookup may fail | Follow installed package types and official code/docs; #778 tracks fallback |
+| 1 | ~~#792 pending approval/merge~~ | **resolved** — merged `583dcbd6a6` and in production | — |
+| 2 | ~~#793 pending docs merge~~ | **resolved** — merged `aa9bdfa3` | — |
+| 3 | **#796 open: CI backup exposure + ignored PR-Agent review** | Chat/profile contents could land in a CI artifact; the review gate fails for a configuration reason | Redact the backup, fix the review configuration, then merge and verify one scheduled run |
+| 4 | **Kill during teardown not recovered automatically** | A test identity can outlive a killed process (a 2-hour age check is a time assumption, not proof) | #796's nightly sweep today; a run-owner lease is the real fix |
+| 5 | **B2 network error untraced** (one-off; **no evidence for any duration**) | A recurrence cannot be attributed to a boundary | Trace browser → runtime → agent → provider without hiding errors. `420_000` is the configured **test cap**, not a measured hang |
+| 6 | **Production SHA can change during testing** | Mixed-release counts are invalid | Pin `/api/version` before/after, separate releases |
+| 7 | **Maps error owned separately** | Google Maps `503` remains a distinct diagnostic | Inspect the failed request and Google Cloud metrics; never suppress the error |
+| 8 | **CopilotKit/Mastra MCP documentation availability varies** | Tool-based docs lookup may fail | Follow installed package types and official docs; [#778](https://github.com/amoai-tech/mdeai/pull/778) tracks the fallback |
 
-**Resolved (not blockers):** #777 merge, #780 duplication, original 8/10 desktop matrix, and the HTTP 401 assertion fix in #787. The 20/20 certification is historical evidence for `8114a5a96382`, not a blanket certification for every later SHA.
+**Resolved (not blockers):** #777 merge, #780 duplication, #792/#793 merges, the original 8/10 desktop matrix, and the HTTP 401 fix in #787. The 20/20 certification is historical evidence for `8114a5a96382`, not a blanket certification for every later SHA.
 
 ---
 
@@ -93,10 +97,8 @@ Promotion is **asynchronous**: the freshness guard waited 9, 13 and 19 polls (�
 
 | When | SHA | Note |
 |---|---|---|
-| earlier today | `36020745cfe8` | PR #769 merge; 18/20 matrix run here |
-| later | `9b8b25c96d3` | PR #777 merge — deployed (`dpl_DZy9MCtksu`) |
-| later | `f0bf7c32c1` | intermediate |
-| later | `8114a5a96382` | **certification run: 20/20** |
-| now | **`7c753cd6b1`** | current main = production; post-merge smoke re-run here |
-
-> A result is only valid for the SHA it ran on. Re-run, do not re-label.
+| 2026-11-05 | `36020745cfe8` | PR #769 merge; 18/20 matrix run here |
+| 2026-11-06 | `9b8b25c96d3` | PR #777 merge |
+| 2026-11-06 | `8114a5a96382` | **certification run: 20/20** |
+| 2026-11-06 | `583dcbd6a631` | PR #792 merge |
+| 2026-11-07 | **`14bf8b3926`** | current `main` = production; desktop + mobile smoke passed here |
