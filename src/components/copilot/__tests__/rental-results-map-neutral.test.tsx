@@ -9,6 +9,7 @@ const ui = vi.hoisted(() => ({
   openScheduleViewing: vi.fn(),
   selectedPinId: null as string | null,
   pins: [] as Array<{ id: string }>,
+  concierge: null as unknown,
 }));
 
 vi.mock("@/platform/maps/map-context", () => ({
@@ -68,6 +69,7 @@ beforeEach(() => {
   ui.openScheduleViewing.mockReset();
   ui.selectedPinId = null;
   ui.pins = [];
+  ui.concierge = null;
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);

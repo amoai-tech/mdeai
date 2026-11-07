@@ -10,6 +10,8 @@ import { useEventSearchFastPath } from "@/hooks/use-event-search-fast-path";
 import { ToolErrorChip } from "@/components/copilot/tool-error-chip";
 import { CafeResultCard } from "@/components/copilot/cafe-result-card";
 import { RentalCard } from "@/components/copilot/rental-card";
+import { NearbyRentalAction } from "@/components/copilot/a2ui/mde-ui-catalog";
+import { isStoredRentalUuid } from "@/lib/cafe-search-fast-path";
 import { RentalComparison, resolveRentalComparisonRows, type ComparisonRentalRow } from "@/components/copilot/rental-comparison";
 import type { RentalSearchMeta } from "@/components/chat/rental-fast-path-context";
 import { EventCard } from "@/components/copilot/event-card";
