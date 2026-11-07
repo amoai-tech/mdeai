@@ -144,23 +144,25 @@ try {
       `refusing to overwrite ${backup}; move the previous backup before applying`,
     );
   }
-  // Backup the identities AND the rows we will delete for them. A profile or auth
-  // delete cascades into other tables (leads, ai_runs, saved_places, …); those rows
-  // are not individually recorded (ponytail: recording every cascade table is a
-  // larger job than this cleanup needs — note the ceiling and move on).
+  // Backup SAFETY: record WHICH identity is removed and how much, never what it says.
+  //
+  // This file is uploaded as a routine CI artifact by
+  // `.github/workflows/qa-fixture-cleanup.yml`. Dumping `profiles` or `mastra_messages`
+  // rows here would retain private chat contents and account details in artifact
+  // storage, so only identifiers and ROW COUNTS are written. The rollback value is
+  // therefore bounded: the file proves what was removed, it does not restore the text.
   const identityIds = orphanIdentities.rows.map((row) => row.id);
-  const identityBackup = {};
+  const identityImpact = { profiles: 0, threads: 0, messages: 0 };
   if (identityIds.length > 0) {
-    const profiles = await client.query(`select * from public.profiles where id = any($1::uuid[])`, [identityIds]);
-    const threads = await client.query(`select * from public.mastra_threads where "resourceId" = any($1::text[])`, [identityIds.map(String)]);
-    const messages = await client.query(
-      `select * from public.mastra_messages where thread_id in (
-         select id from public.mastra_threads where "resourceId" = any($1::text[]))`,
-      [identityIds.map(String)],
+    const counts = await client.query(
+      `select
+         (select count(*)::int from public.profiles where id = any($1::uuid[])) as profiles,
+         (select count(*)::int from public.mastra_threads where "resourceId" = any($2::text[])) as threads,
+         (select count(*)::int from public.mastra_messages where thread_id in (
+            select id from public.mastra_threads where "resourceId" = any($2::text[]))) as messages`,
+      [identityIds, identityIds.map(String)],
     );
-    identityBackup.profiles = profiles.rows;
-    identityBackup.threads = threads.rows;
-    identityBackup.messages = messages.rows;
+    Object.assign(identityImpact, counts.rows[0]);
   }
   fs.writeFileSync(
     backup,
@@ -169,8 +171,9 @@ try {
         createdAt: new Date().toISOString(),
         events: selected.rows,
         children,
-        isolationIdentities: orphanIdentities.rows,
-        isolationIdentityRows: identityBackup,
+        // Identifiers only: no profile fields, no message bodies.
+        isolationIdentities: orphanIdentities.rows.map((row) => ({ id: row.id, email: row.email })),
+        isolationIdentityImpact: identityImpact,
       },
       null,
       2,
