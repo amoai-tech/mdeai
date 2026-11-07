@@ -209,6 +209,24 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: node .trusted/scripts/vercel-release-control.mjs assert-staged
 
+      # Fail before the only command that can change production if the candidate
+      # cannot see its server Places key. A green build is not runtime configuration.
+      - name: Require runtime health on the staged candidate
+        id: candidate_health
+        if: ${{ success() && steps.certify.outcome == 'success' }}
+        env:
+          VERCEL_DEPLOYMENT_URL: ${{ env.VERCEL_DEPLOYMENT_URL }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: |
+          set -euo pipefail
+          url="https://${VERCEL_DEPLOYMENT_URL#https://}"
+          status="$(curl -sS -o /tmp/candidate-health.json -w '%{http_code}' --max-time 30 \
+            -H "x-vercel-protection-bypass: ${VERCEL_AUTOMATION_BYPASS_SECRET}" \
+            "$url/api/health")"
+          cat /tmp/candidate-health.json
+          [ "$status" = "200" ] || { echo "::error::candidate health returned $status"; exit 1; }
+          node -e 'const h=require("/tmp/candidate-health.json"); if (!h.ok || !h.checks || h.checks.placesKey !== true) { console.error("::error::candidate placesKey=false"); process.exit(1); }'
+
       # Fresh GitHub main check INSIDE the promotion step: the trusted checkout may be minutes old.
       # This step alone can change production aliases, and only after exact-candidate certification.
       - name: Promote the exact certified deployment
@@ -253,6 +271,29 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node .trusted/scripts/vercel-release-control.mjs assert-stable
+
+
+      # Independent of the Vercel API: a real HTTP request to the live domain.
+      # The version must be the certified SHA, health must be ok, /rentals must
+      # serve, and a guest Nearby request must stop at 401 before any provider call.
+      - name: Post-promotion production smoke
+        id: prod_smoke
+        if: ${{ success() }}
+        env:
+          TARGET_SHA: ${{ env.VERCEL_DEPLOYMENT_SHA }}
+        run: |
+          set -euo pipefail
+          base="https://www.mdeai.co"
+          live_sha="$(curl -fsS --max-time 20 "$base/api/version" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).sha))')"
+          [ "$live_sha" = "$TARGET_SHA" ] || { echo "::error::live SHA $live_sha != $TARGET_SHA"; exit 1; }
+          health="$(curl -fsS --max-time 20 "$base/api/health")"
+          node -e 'const h=JSON.parse(process.argv[1]); if (!h.ok || h.checks.placesKey !== true) { console.error("::error::live placesKey=false"); process.exit(1); }' "$health"
+          curl -fsS -o /dev/null --max-time 20 "$base/rentals"
+          guest_status="$(curl -sS -o /tmp/guest-nearby.json -w '%{http_code}' --max-time 20 \
+            -X POST "$base/api/grounded/search" -H 'content-type: application/json' \
+            -d '{"query":"cafés","intent":"cafe","nearbyRentalId":"00000000-0000-4000-8000-000000000000"}')"
+          [ "$guest_status" = "401" ] || { echo "::error::guest Nearby returned $guest_status, expected 401"; exit 1; }
+          echo "vercel-release: production smoke passed for $live_sha"
 
       # Publish once, AFTER the final staged/Floor checks, actual promotion, both domain checks,
       # and the stability window. Previously this was posted immediately after the runtime
