@@ -5,6 +5,12 @@ import {
   type GroundedToolRow,
 } from "@/lib/parse-grounded-tool-result";
 type NearbyMetadata = { searchMode?: string; anchorPinId?: string };
+
+function validCoordinates(lat: unknown, lng: unknown): lat is number {
+  return typeof lat === "number" && typeof lng === "number" &&
+    Number.isFinite(lat) && Number.isFinite(lng) &&
+    lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
+}
 type AnchorPin = {
   id: string;
   category: string;
@@ -28,11 +34,18 @@ export function groundedFastPathMemory({
   anchorPin: AnchorPin | undefined;
   attribution: GroundedAttributionRow[];
 }) {
-  const anchorId = metadata?.searchMode === "nearby" && anchorPin
-    ? anchorPin.id.replace(/^rental-/, "")
+  // Never attribute a distance to a different or malformed rental anchor.
+  const anchorId = metadata?.searchMode === "nearby" &&
+    metadata.anchorPinId?.startsWith("rental-") &&
+    anchorPin?.category === "rental" &&
+    anchorPin.id === metadata.anchorPinId &&
+    validCoordinates(anchorPin.lat, anchorPin.lng)
+    ? anchorPin.id.slice("rental-".length)
     : undefined;
   const lastGroundedResults = results.slice(0, 5).map((row, index) => {
-    const measured = anchorPin && row.latitude != null && row.longitude != null
+    const measured = anchorId && anchorPin &&
+      row.latitude != null && row.longitude != null &&
+      validCoordinates(row.latitude, row.longitude)
       ? {
           distanceMeters: geoDistanceMeters(
             { lat: anchorPin.lat, lng: anchorPin.lng },
