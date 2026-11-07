@@ -236,7 +236,48 @@ describe("observeTurnStream · what counts as assistant text", () => {
       .map((call) => JSON.parse(String(call[0]).replace("[mde-turn] ", "")))
       .filter((line) => line.phase === "stream");
     spy.mockRestore();
-    // Not a turn, so nothing is classified.
-    expect(logged).toHaveLength(0);
+    // Observed for transport outcome, but never labelled a missing answer.
+    expect(logged).toHaveLength(1);
+    expect(logged[0].status).toBe("complete");
+    expect(logged.some((line) => line.status === "metadata_only")).toBe(false);
+  });
+});
+
+describe("observeTurnStream · framing edges", () => {
+  const run = async (body: string) => {
+    const spy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const observed = observeTurnStream(
+      new Response(new TextEncoder().encode(body), {
+        status: 200,
+        headers: { "content-type": "text/event-stream" },
+      }),
+      resolveTurnCorrelation(request()),
+    );
+    const reader = observed.body!.getReader();
+    for (;;) {
+      const { done } = await reader.read();
+      if (done) break;
+    }
+    const status = spy.mock.calls
+      .map((call) => JSON.parse(String(call[0]).replace("[mde-turn] ", "")))
+      .filter((line) => line.phase === "stream")
+      .pop()?.status;
+    spy.mockRestore();
+    return status;
+  };
+
+  it("judges a final frame that has no trailing blank line", async () => {
+    // A stream that ends immediately after the text event must not be metadata_only.
+    expect(await run('data: {"type":"TEXT_MESSAGE_CONTENT","delta":"Hay dos"}')).toBe("complete");
+  });
+
+  it("handles CRLF frame separators", async () => {
+    expect(
+      await run('data: {"type":"TEXT_MESSAGE_CONTENT","delta":"Hay dos"}\r\n\r\n'),
+    ).toBe("complete");
+  });
+
+  it("still reports metadata-only for lifecycle events in a complete frame", async () => {
+    expect(await run('data: {"type":"RUN_STARTED"}\n\n')).toBe("metadata_only");
   });
 });

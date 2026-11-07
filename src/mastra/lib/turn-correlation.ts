@@ -96,8 +96,12 @@ export function observeTurnStream(
   // Only an AI event stream can be "missing an answer". A normal JSON response (a thread
   // list, an info payload) is not a turn at all, and classifying it as metadata-only
   // would create false B2 alarms.
-  const contentType = response.headers.get("content-type") ?? "";
-  if (!contentType.includes("text/event-stream")) return response;
+  // Non-SSE responses are still observed for transport outcomes (complete / empty /
+  // cancelled / failed) exactly as before; only the `metadata_only` classification is
+  // skipped, because "no assistant text" is not meaningful for a JSON body.
+  const isEventStream = (response.headers.get("content-type") ?? "").includes(
+    "text/event-stream",
+  );
 
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
@@ -154,16 +158,32 @@ export function observeTurnStream(
       try {
         const { done, value } = await reader.read();
         if (done) {
-          finish("stream", bytes === 0 ? "empty" : sawAssistantText ? "complete" : "metadata_only");
+          if (bytes === 0) {
+            finish("stream", "empty");
+          } else if (!isEventStream) {
+            finish("stream", "complete");
+          } else {
+            // The final frame may never be followed by a blank line, and the decoder may
+            // still hold buffered text: judge it before reporting.
+            if (!sawAssistantText) {
+              const remainder = (buffer + decoder.decode()).replace(/\r\n/g, "\n");
+              if (remainder.trim().length > 0 && frameHasAssistantText(remainder)) {
+                sawAssistantText = true;
+              }
+            }
+            finish("stream", sawAssistantText ? "complete" : "metadata_only");
+          }
           controller.close();
           return;
         }
         if (firstChunkMs === null) firstChunkMs = correlation.elapsedMs();
         bytes += value?.byteLength ?? 0;
-        if (!sawAssistantText && value) {
-          // Frames may be split across reads, so only complete `\n\n` frames are judged
-          // and the remainder is carried into the next chunk.
+        if (!sawAssistantText && value && isEventStream) {
+          // Frames may be split across reads, so only complete frames are judged and the
+          // remainder is carried into the next chunk. CRLF is normalised first, because
+          // the SSE spec allows both `\n\n` and `\r\n\r\n` separators.
           buffer += decoder.decode(value, { stream: true });
+          buffer = buffer.replace(/\r\n/g, "\n");
           let boundary = buffer.indexOf("\n\n");
           while (boundary !== -1) {
             const frame = buffer.slice(0, boundary);
