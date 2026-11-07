@@ -4,7 +4,7 @@ import { useRef, useState, type Dispatch } from "react";
 import { ArrowUp } from "lucide-react";
 import type { GroundedToolRow } from "@/lib/parse-grounded-tool-result";
 import { countWithNoun } from "@/lib/format/count-with-noun";
-import { parseAnchorIntelligenceSlots } from "@/mastra/lib/intelligence-anchor-search";
+import { parseIntelligenceSlots } from "@/lib/intelligence-slots";
 
 /**
  * Guest search for cafés and nightlife over the public venue-anchor route.
@@ -18,7 +18,7 @@ import { parseAnchorIntelligenceSlots } from "@/mastra/lib/intelligence-anchor-s
  */
 /** Preference phrases the ranking understands, matched against the whole query. */
 function preferenceWords(query: string): string[] {
-  const slots = parseAnchorIntelligenceSlots(query, "cafe");
+  const slots = parseIntelligenceSlots(query);
   const found: string[] = [];
   if (slots.wantsQuiet) found.push("quiet");
   if (slots.wantsNomad) found.push("wifi/workspace");
