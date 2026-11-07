@@ -151,7 +151,7 @@ Measure `buildHandler()` and `new CopilotRuntime(...)` per request (route line 1
 | 1 | A1 restoration gating | **Completed:** #777 merged; 20/20 certified at pinned `8114a5a96382` |
 | 2 | A3 desktop 401 + matrix 10/10 | **Completed:** #787 merged; previous 20/20 evidence remains release-pinned |
 | 3 | A2 `requireNewReply` | **Completed:** new nonempty answer assertion already present in #777; #780 closed as duplicate |
-| 4 | A4 killed-run cleanup | **Partially complete:** #787 sweep merged, #792 test finalizer open; independent kill-safe job pending |
+| 4 | A4 killed-run cleanup | **Almost complete:** #787 sweep, #792 test finalizer and #796 independent nightly job are merged; #800 closes the artifact-privacy finding |
 | 5 | B1 / B2 | Two unowned production signals; measure before assigning |
 | 6 | C1 tracing | Makes B1/B2 and future incidents cheap |
 | 7 | C2 / C3 | Only after two-writer and initialization measurements; native atomic memory merge requires resource scope |
@@ -301,13 +301,13 @@ Step-by-step status lives in [`12-steps.md`](./12-steps.md) and is the file to u
 | A1 duplicate | ✅ closed | [#779](https://github.com/amoai-tech/mdeai/pull/779) — one defect, one PR |
 | A2 · No answer ≠ success | ✅ already in main | `sendAndWait` asserts a NEW nonempty reply; [#780](https://github.com/amoai-tech/mdeai/pull/780) **closed** as superseded |
 | A3 · First-send 401 | ✅ | readiness requires HTTP 200 from the runtime info probe; shipped in #787 |
-| A4 · Killed-run cleanup | 🟡 | #787 merged ownership-aware sweep; #792 open for failed-test cleanup and error reporting; external job for kill-during-teardown still needed |
+| A4 · Killed-run cleanup | 🟡 | #787 ownership sweep + #792 failed-test error reporting + #796 independent nightly job all merged; #800 closes the artifact-privacy finding |
 | B1 · 60 s readiness | 🟡 measured | 5 loads: **0.46–1.73 s** to an enabled composer; the 60 s stall did not reproduce |
 | B2 · `network error` | ⬜ | unowned; **not** proven to be Gemini |
 | C1 · Tracing | ⬜ | — |
 | C2 · Working-memory concurrency | ⬜ | two-writer defect unproven; native atomic API requires resource scope, current MDE memory is thread-scoped |
 | C3 · Runtime init | ⬜ | unmeasured |
-| Support · CopilotKit skill fallback | 🟡 | [#778](https://github.com/amoai-tech/mdeai/pull/778) |
+| Support · CopilotKit skill fallback | 🟡 | [#778](https://github.com/amoai-tech/mdeai/pull/778) open |
 
-**Product milestone achieved:** 20/20 desktop+mobile at pinned `8114a5a96382`; SAN-1639 and SAN-1298 are Done. **Next:** merge open #792/#793 after exact-head CI and required independent approval; instrument B2; build an independent kill-safe cleanup job. No need to repeat the product matrix for docs-only changes.
+**Product milestone achieved:** 20/20 desktop+mobile at pinned `8114a5a96382`; SAN-1639 and SAN-1298 are Done. **Next:** close #798/#800/#801; instrument the answer stream for B2; add a run-owner lease instead of the 2-hour age check. No need to repeat the product matrix for docs-only changes.
 
