@@ -61,7 +61,12 @@ function CafeBrowseViewInner({
   const desktop = useIsLgUp();
   useBrowseCardScroll();
   const retryHref = buildFilterUrl({ neighborhood, feature });
-  const [searched, setSearched] = useState<{ scope: string; rows: GroundedToolRow[] } | null>(null);
+  const [searched, setSearched] = useState<{
+    scope: string;
+    rows: GroundedToolRow[];
+    // Who produced these rows: the concierge, or the public catalogue for a guest search.
+    source: "agent" | "catalog";
+  } | null>(null);
   const activeRows = searched?.scope === retryHref ? searched.rows : null;
   // Only real source coordinates become browse pins; AI search owns its grounded pins separately.
   const basePins = useMemo(() => results.flatMap((r) => {
@@ -75,7 +80,7 @@ function CafeBrowseViewInner({
   );
   const onAgentResults = useCallback((result: DiscoveryAgentResult) => {
     if (result.page === "cafes") {
-      setSearched({ scope: retryHref, rows: result.rows });
+      setSearched({ scope: retryHref, rows: result.rows, source: "agent" });
       clearAskSelection();
     }
   }, [retryHref, clearAskSelection]);
@@ -114,7 +119,20 @@ function CafeBrowseViewInner({
     <DiscoveryPageContext page="cafes" filters={{ neighborhood, feature }} selectedId={selectedId} />
     <DiscoveryWorkspace
       activeSlug="cafes"
-      askComposer={<DiscoveryAskComposer page="cafes" onAgentResults={onAgentResults} hasSelectedItem={Boolean(selectedId)} onClearSelection={clearAskSelection} />}
+      askComposer={
+        <DiscoveryAskComposer
+          page="cafes"
+          onAgentResults={onAgentResults}
+          hasSelectedItem={Boolean(selectedId)}
+          onClearSelection={clearAskSelection}
+          guestVenues={{
+            kind: "cafe",
+            neighborhood,
+            // Catalogue search, not the concierge: grounded venue rows, rendered by the same cards.
+            onResults: (rows) => setSearched({ scope: retryHref, rows, source: "catalog" }),
+          }}
+        />
+      }
       rightPanel={
         desktop && detailsListing ? (
           hasMap ? (
@@ -147,13 +165,16 @@ function CafeBrowseViewInner({
       subtitle={
         error
           ? "Specialty coffee & workspace spots in Medellín"
-          : `${countWithNoun((activeRows === null ? results : activeRows).length, "café", "cafés")} in Medellín`
+          : searched?.source === "catalog" && activeRows
+            ? `Search results — ${countWithNoun(activeRows.length, "café", "cafés")}`
+            : `${countWithNoun((activeRows === null ? results : activeRows).length, "café", "cafés")} in Medellín`
       }
       mobileMapTrigger={hasMap ? <BrowseMapSheet inline /> : null}
       filterBar={<CafeBrowseFilters neighborhood={neighborhood} feature={feature} />}
     >
       <section className="mt-6" aria-label="Café listings">
-        <DiscoveryGroundedResults rows={activeRows} selectedId={selectedId} onSelectRow={selectForAsk} />
+        <DiscoveryGroundedResults rows={activeRows} selectedId={selectedId} onSelectRow={selectForAsk}
+          label={searched?.source === "catalog" ? "Search results" : "Ask MDE"} />
         {error ? (
           <div
             className="rounded-lg border border-destructive/30 bg-destructive/5 p-6 text-center"

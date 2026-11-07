@@ -121,9 +121,11 @@ test("order: validate, staged, certify, re-confirm staged, promote, verify, stab
     "Certify exact staged candidate",
     "Wait for exact-SHA Floor success",
     "Re-confirm the candidate is still staged right before promotion",
+    "Require runtime health on the staged candidate",
     "Promote the exact certified deployment",
     "Verify www.mdeai.co serves the exact certified deployment",
     "Verify production aliases remain stable after promotion",
+    "Post-promotion production smoke",
     "Publish final release certification result",
   ].map((name) => stepIndex(job, name));
   assert.deepEqual([...order].sort((a, b) => a - b), order, "steps must run in the safe order");
@@ -155,6 +157,32 @@ test("certification runs on the exact candidate URL, before and never after prom
   );
 });
 
+test("candidate health blocks promotion and the live smoke is ordered before publishing", () => {
+  const job = certifyJob(workflow());
+  const health = stepBody(job, "Require runtime health on the staged candidate");
+  assert.match(health, /api\/health/);
+  assert.match(health, /placesKey/);
+  assert.match(health, /-w '%\{http_code\}'/);
+  assert.ok(
+    stepIndex(job, "Require runtime health on the staged candidate") <
+      stepIndex(job, "Promote the exact certified deployment"),
+    "an unhealthy candidate must never be promoted",
+  );
+
+  const smoke = stepBody(job, "Post-promotion production smoke");
+  assert.match(smoke, /live-health\.json/);
+  assert.match(smoke, /live_sha_after/);
+  assert.ok(
+    stepIndex(job, "Verify production aliases remain stable after promotion") <
+      stepIndex(job, "Post-promotion production smoke"),
+  );
+  assert.ok(
+    stepIndex(job, "Post-promotion production smoke") <
+      stepIndex(job, "Publish final release certification result"),
+    "the smoke must finish before the final status is published",
+  );
+});
+
 test("publishes success only after certification, staged recheck, promotion, domain and stability all passed", () => {
   const job = certifyJob(workflow());
   const result = stepBody(job, "Publish final release certification result");
@@ -162,9 +190,11 @@ test("publishes success only after certification, staged recheck, promotion, dom
   for (const [key, stepId] of [
     ["CERTIFY_OUTCOME", "certify"],
     ["STAGED_OUTCOME", "final_staged"],
+    ["CANDIDATE_HEALTH_OUTCOME", "candidate_health"],
     ["PROMOTE_OUTCOME", "promote"],
     ["VERIFIED_OUTCOME", "verify_promoted"],
     ["STABLE_OUTCOME", "verify_stable"],
+    ["SMOKE_OUTCOME", "prod_smoke"],
   ]) {
     assert.ok(result.includes(`${key}: \${{ steps.${stepId}.outcome }}`), `${key} must come from its exact step`);
     assert.ok(result.includes(`"$${key}" == success`), `${key} must gate success`);

@@ -117,11 +117,13 @@ export const conciergeWorkingMemorySchema = z.object({
         area: z.string().optional(),
         summary: z.string().optional(),
         rating: z.number().optional(),
+        distanceMeters: z.number().nonnegative().optional(),
+        distanceFromRentalId: z.string().optional(),
       }),
     )
     .optional()
     .describe(
-      'Cafés/places shown in the most recent grounded reply. Use these rows for "which of these" follow-ups; never invent amenities or places not listed here.',
+      'Cafés/places shown in the most recent grounded reply. Use these rows for "which of these" follow-ups; never invent amenities or places not listed here. distanceMeters is measured from distanceFromRentalId and must be used verbatim for closest/nearest questions only while that id equals selectedListingId.',
     ),
 });
 
@@ -249,7 +251,8 @@ You have working memory with: lastIntent, lastRentalQuery, lastRentalResults, se
 - When the user references a specific listing/event (number, title, "the cheaper one", "that 2BR"), set selectedListingId / selectedEventId.
 - For follow-up rental questions like "when can I view", "show cheaper options", "any with parking?", "show more in the same area" — DO NOT ask rentals vs events. Reuse lastRentalQuery, refine it, and call search-rentals again. Never reset the flow. EXCEPTION: "show me the details" is the frontend action above; do not turn it into another search.
 - "Show cheaper options" / "más baratos": lower the saved budget in the SAME currency and pricing period. For a monthly budget, reduce maxPriceMonthly and preserve budgetCurrency; for a nightly budget, lower maxPricePerNight. Do not invent exchange rates or divide monthly prices by 30.
-- For a grounded café/place follow-up such as "which of these would you recommend for laptop work?", compare ONLY lastGroundedResults, name one or two rows, and use only the summary/area/rating stored there. Do not invent amenities (power outlets, Wi-Fi speed, seating) and do not call search-grounded-places again unless the user asks for new places.
+- For a grounded café/place follow-up such as "which of these would you recommend for laptop work?", compare ONLY lastGroundedResults, name one or two rows, and use only the summary/area/rating stored there (plus distanceMeters only when distanceFromRentalId matches selectedListingId). Do not invent amenities (power outlets, Wi-Fi speed, seating) and do not call search-grounded-places again unless the user asks for new places.
+- For "which café/place is closest/nearest/farthest?", compare ONLY distanceMeters in lastGroundedResults and name the row with the smallest/largest value, quoting that number as metres ("about N m"). Use it only when distanceFromRentalId equals selectedListingId; if the selected apartment changed, or a row has no distanceMeters, say you do not have its distance. These are straight-line distances, not walking routes or travel times. If any candidate is unmeasured, say the closest is only among measured cafés, not necessarily all results. Never estimate metres, minutes, or walking time from general knowledge.
 
 # Neighborhood intelligence (Medellín-native)
 Use these when explaining picks or suggesting alternatives:
@@ -332,7 +335,7 @@ After a NEW search-grounded-places call, the frontend renders photo cards (ratin
 
 Grounded listing rules (critical):
 - For a new search, do NOT list cafés or venues by name in your reply.
-- Exception — a recommendation or comparison follow-up ("which of these…", "which one…", "compare the first two"): name at most 2 places from lastGroundedResults and explain only with their stored summary/area/rating. Never invent amenities (power outlets, Wi-Fi speed, seating) that are not in those rows.
+- Exception — a recommendation or comparison follow-up ("which of these…", "which one…", "compare the first two"): name at most 2 places from lastGroundedResults and explain only with their stored summary/area/rating (plus distanceMeters only when distanceFromRentalId matches selectedListingId). Never invent amenities (power outlets, Wi-Fi speed, seating) that are not in those rows.
 - NEVER include "View on Google Maps", bullet lists, or numbered lists of places in text.
 - Reply in at most 2 short sentences: (1) how many matches and which area, or the recommendation, (2) one follow-up (e.g. "Want laptop-friendly spots or only Laureles?").
 - If the user adds a new filter ("quiet for work", "only Poblado"), call search-grounded-places again — do not answer from memory alone.
@@ -467,7 +470,7 @@ Conversion boundary (do NOT cross):
 - Never claim to book or charge — only propose options.
 - can_schedule_viewing is the only source of truth for viewing requestability. If it is false, or schedule_viewing_url is null, never tell the user that rental can be scheduled and never print a "Schedule viewing" link for it.
 - Never answer "rentals or events?" if lastIntent=rental_search and the user is continuing.
-- For "which of these" or "which one" follow-ups about cafés/places, use lastGroundedResults and name only those rows. Never claim an amenity or feature that is not in the stored row.
+- For "which of these" or "which one" follow-ups about cafés/places, use lastGroundedResults and name only those rows. Never claim an amenity or feature that is not in the stored row. Distances are allowed only when distanceFromRentalId equals selectedListingId.
 - Max 5 cards per reply.
 - Reply concisely. Plain English. No emoji unless the user uses one first.
 

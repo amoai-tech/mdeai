@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
 import { useEventLocalChat } from "@/components/chat/event-local-chat-context";
 import { useClearOtherFastPathResults } from "@/hooks/use-clear-other-fast-path-results";
@@ -13,10 +13,8 @@ import {
 } from "@/lib/cafe-search-fast-path";
 import { useMapContext } from "@/platform/maps/map-context";
 import { normalizeToolOutput } from "@/platform/maps/normalize-tool-output";
-import {
-  parseGroundedToolResult,
-  resolveGroundedTitle,
-} from "@/lib/parse-grounded-tool-result";
+import { parseGroundedToolResult } from "@/lib/parse-grounded-tool-result";
+import { groundedFastPathMemory } from "@/lib/grounded-fast-path-memory";
 import { isSelectedRentalCafeNearbyRequest, isStoredRentalUuid, nearbyCafeRadiusMeters } from "@/lib/cafe-search-fast-path";
 
 async function fetchGroundedSearch(
@@ -43,6 +41,12 @@ export function useGroundedSearchFastPath() {
   const clearOthers = useClearOtherFastPathResults();
   const { setToolResult } = useGroundedFastPath();
   const { mergePinsByCategory, requestFitBounds, pins: currentPins, selectedPinId } = useMapContext();
+  // The fetch can finish after a newer rental search replaced the map. Compare
+  // against the pins that exist when the response arrives, not the click-time snapshot.
+  const pinsRef = useRef(currentPins);
+  useEffect(() => {
+    pinsRef.current = currentPins;
+  }, [currentPins]);
 
   const applySearchResults = useCallback(
     (envelope: unknown) => {
@@ -53,7 +57,12 @@ export function useGroundedSearchFastPath() {
         ? (envelope as { metadata?: { searchMode?: string; anchorPinId?: string } }).metadata
         : undefined;
       const preserveRental = metadata?.searchMode === "nearby" &&
-        currentPins.some((pin) => pin.category === "rental" && pin.id === metadata.anchorPinId);
+        pinsRef.current.some((pin) => pin.category === "rental" && pin.id === metadata.anchorPinId);
+      // A Nearby response whose anchor was replaced must not merge cafés or clear
+      // the newer rental pins. The caller reports this as a retryable change.
+      if (metadata?.searchMode === "nearby" && !preserveRental) {
+        return { count: 0, pinCount: 0, stale: true };
+      }
       if (!preserveRental) {
         clearOthers("grounded", { clearOtherPins: pins.length > 0 });
       }
@@ -70,21 +79,26 @@ export function useGroundedSearchFastPath() {
       // unless we hand over a compact copy. Follow-ups such as "which of these would you
       // recommend?" must name a real row and must not invent amenities from nothing.
       const parsed = parseGroundedToolResult(envelope);
-      const lastGroundedResults = parsed.results.slice(0, 5).map((row, index) => ({
-        id: row.id,
-        title: resolveGroundedTitle(row, index, parsed.attribution, row.mapsUrl),
-        ...(row.formattedAddress ? { area: row.formattedAddress.slice(0, 140) } : {}),
-        ...(row.summary ? { summary: row.summary.slice(0, 240) } : {}),
-        ...(row.rating != null ? { rating: row.rating } : {}),
-      }));
+      // Nearby answers such as "which café is closest?" need a provider-true
+      // distance. Compute it from the anchored rental pin and the result
+      // coordinates; never let the model estimate.
+      const anchor = metadata?.searchMode === "nearby"
+        ? pinsRef.current.find(
+            (pin) => pin.category === "rental" && pin.id === metadata.anchorPinId,
+          )
+        : undefined;
       setState((prev) => ({
         ...(prev ?? {}),
-        lastIntent: "restaurant_discovery",
-        lastGroundedResults,
+        ...groundedFastPathMemory({
+          metadata,
+          results: parsed.results,
+          anchorPin: anchor,
+          attribution: parsed.attribution,
+        }),
       }));
-      return { count, pinCount: pins.length };
+      return { count, pinCount: pins.length, stale: false };
     },
-    [mergePinsByCategory, requestFitBounds, setState, setToolResult, clearOthers, currentPins],
+    [mergePinsByCategory, requestFitBounds, setState, setToolResult, clearOthers],
   );
 
   const runSearch = useCallback(
@@ -97,7 +111,15 @@ export function useGroundedSearchFastPath() {
       groundedSearchesInFlight.add(setToolResult);
       try {
         const envelope = await fetchGroundedSearch(params);
-        const { count, pinCount } = applySearchResults(envelope);
+        const { count, pinCount, stale } = applySearchResults(envelope);
+        if (stale) {
+          showExchange(
+            userText,
+            "The selected apartment changed while cafés were loading. Try again.",
+            submissionId,
+          );
+          return true;
+        }
         const reason = envelope && typeof envelope === "object"
           ? (envelope as { metadata?: { reason?: string } }).metadata?.reason
           : undefined;

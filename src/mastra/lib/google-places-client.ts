@@ -92,16 +92,27 @@ export const DEFAULT_NEARBY_SEARCH_MASK = [
 ] as const;
 
 export function requirePlacesApiKey(): string {
-  const key =
+  const key = (
     process.env.GOOGLE_PLACES_API_KEY ??
     process.env.GOOGLE_MAPS_SERVER_API_KEY ??
-    process.env.GOOGLE_MAPS_API_KEY;
+    process.env.GOOGLE_MAPS_API_KEY
+  )?.trim();
   if (!key || key.length < 8) {
     throw new PlacesConfigError(
       "Missing GOOGLE_PLACES_API_KEY (or GOOGLE_MAPS_SERVER_API_KEY / GOOGLE_MAPS_API_KEY) for Places API (New)",
     );
   }
   return key;
+}
+
+/** Boolean-only probe for release health; never returns or logs the key. */
+export function hasPlacesApiKey(): boolean {
+  try {
+    requirePlacesApiKey();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 let _client: PlacesClient | null = null;
