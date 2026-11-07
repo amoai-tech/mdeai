@@ -61,6 +61,8 @@ function NightlifeBrowseViewInner({
   const desktop = useIsLgUp();
   useBrowseCardScroll();
   const retryHref = buildFilterUrl({ neighborhood, vibe });
+  /** Preference labels for the rows currently on screen; empty for a name search. */
+  const [searchPreferences, setSearchPreferences] = useState<string[]>([]);
   const [searched, setSearched] = useState<{
     scope: string;
     rows: GroundedToolRow[];
@@ -139,7 +141,11 @@ function NightlifeBrowseViewInner({
             neighborhood,
             // Catalogue search, not the concierge: grounded venue rows, rendered by the same cards.
             onResults: (rows) => setSearched({ scope: retryHref, rows, source: "catalog" }),
-            onClear: () => setSearched(null),
+            onSearchMeta: ({ preferences }) => setSearchPreferences(preferences),
+            onClear: () => {
+              setSearched(null);
+              setSearchPreferences([]);
+            },
           }}
         />
       }
@@ -176,7 +182,7 @@ function NightlifeBrowseViewInner({
         error
           ? "Clubs & bars in Medellín"
           : searched?.source === "catalog" && activeRows
-            ? `Search results — ${countWithNoun(activeRows.length, "nightlife venue", "nightlife venues")}`
+            ? `${searchPreferences.length > 0 ? "Suggestions" : "Search results"} — ${countWithNoun(activeRows.length, "nightlife venue", "nightlife venues")}`
             : `${countWithNoun((activeRows === null ? results : activeRows).length, "nightlife venue", "nightlife venues")} in Medellín`
       }
       mobileMapTrigger={hasMap ? <BrowseMapSheet inline /> : null}

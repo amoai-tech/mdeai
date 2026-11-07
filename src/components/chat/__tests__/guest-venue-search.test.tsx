@@ -243,3 +243,25 @@ describe("preference labels match what the ranking used", () => {
     expect(summary).toContain("value");
   });
 });
+
+describe("preference labels reach the page", () => {
+  it("reports the preferences with the rows, so the subtitle can match the summary", async () => {
+    const onSearchMeta = vi.fn();
+    stubFetch(() => json({ kind: "cafe", results: [row("a")], total: 1 }));
+    render(<GuestVenueSearch options={{ kind: "cafe", onResults: vi.fn(), onSearchMeta }} />);
+
+    ask("quiet café with wifi");
+    await waitFor(() => expect(onSearchMeta).toHaveBeenCalledTimes(1));
+    expect(onSearchMeta.mock.calls[0][0].preferences).toEqual(["quiet", "wifi/workspace"]);
+  });
+
+  it("reports no preferences for a name query", async () => {
+    const onSearchMeta = vi.fn();
+    stubFetch(() => json({ kind: "cafe", results: [row("a")], total: 1 }));
+    render(<GuestVenueSearch options={{ kind: "cafe", onResults: vi.fn(), onSearchMeta }} />);
+
+    ask("Pergamino");
+    await waitFor(() => expect(onSearchMeta).toHaveBeenCalledTimes(1));
+    expect(onSearchMeta.mock.calls[0][0].preferences).toEqual([]);
+  });
+});
