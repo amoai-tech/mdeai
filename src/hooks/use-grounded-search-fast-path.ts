@@ -13,10 +13,8 @@ import {
 } from "@/lib/cafe-search-fast-path";
 import { useMapContext } from "@/platform/maps/map-context";
 import { normalizeToolOutput } from "@/platform/maps/normalize-tool-output";
-import {
-  parseGroundedToolResult,
-  resolveGroundedTitle,
-} from "@/lib/parse-grounded-tool-result";
+import { parseGroundedToolResult } from "@/lib/parse-grounded-tool-result";
+import { groundedFastPathMemory } from "@/lib/grounded-fast-path-memory";
 import { isSelectedRentalCafeNearbyRequest, isStoredRentalUuid, nearbyCafeRadiusMeters } from "@/lib/cafe-search-fast-path";
 
 async function fetchGroundedSearch(
@@ -81,17 +79,22 @@ export function useGroundedSearchFastPath() {
       // unless we hand over a compact copy. Follow-ups such as "which of these would you
       // recommend?" must name a real row and must not invent amenities from nothing.
       const parsed = parseGroundedToolResult(envelope);
-      const lastGroundedResults = parsed.results.slice(0, 5).map((row, index) => ({
-        id: row.id,
-        title: resolveGroundedTitle(row, index, parsed.attribution, row.mapsUrl),
-        ...(row.formattedAddress ? { area: row.formattedAddress.slice(0, 140) } : {}),
-        ...(row.summary ? { summary: row.summary.slice(0, 240) } : {}),
-        ...(row.rating != null ? { rating: row.rating } : {}),
-      }));
+      // Nearby answers such as "which café is closest?" need a provider-true
+      // distance. Compute it from the anchored rental pin and the result
+      // coordinates; never let the model estimate.
+      const anchor = metadata?.searchMode === "nearby"
+        ? pinsRef.current.find(
+            (pin) => pin.category === "rental" && pin.id === metadata.anchorPinId,
+          )
+        : undefined;
       setState((prev) => ({
         ...(prev ?? {}),
-        lastIntent: "restaurant_discovery",
-        lastGroundedResults,
+        ...groundedFastPathMemory({
+          metadata,
+          results: parsed.results,
+          anchorPin: anchor,
+          attribution: parsed.attribution,
+        }),
       }));
       return { count, pinCount: pins.length, stale: false };
     },
