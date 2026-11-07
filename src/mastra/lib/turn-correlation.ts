@@ -93,10 +93,52 @@ export function observeTurnStream(
   correlation: TurnCorrelation,
 ): Response {
   if (!response.body) return response;
+  // Only an AI event stream can be "missing an answer". A normal JSON response (a thread
+  // list, an info payload) is not a turn at all, and classifying it as metadata-only
+  // would create false B2 alarms.
+  // Non-SSE responses are still observed for transport outcomes (complete / empty /
+  // cancelled / failed) exactly as before; only the `metadata_only` classification is
+  // skipped, because "no assistant text" is not meaningful for a JSON body.
+  const isEventStream = (response.headers.get("content-type") ?? "").includes(
+    "text/event-stream",
+  );
+
   const reader = response.body.getReader();
+  const decoder = new TextDecoder();
   let bytes = 0;
   let firstChunkMs: number | null = null;
   let settled = false;
+  let sawAssistantText = false;
+  let buffer = "";
+  const TEXT_MARKER = "TEXT_MESSAGE_CONTENT";
+
+  /**
+   * Inspect one SSE frame for a REAL assistant text delta.
+   *
+   * Searching for the marker string anywhere is not enough: a tool payload can mention
+   * it, and a `TEXT_MESSAGE_CONTENT` with an empty or whitespace `delta` still carries no
+   * answer. The AG-UI contract is `{ type, delta }`, so both are checked.
+   */
+  const frameHasAssistantText = (frame: string) => {
+    for (const line of frame.split("\n")) {
+      if (!line.startsWith("data:")) continue;
+      const payload = line.slice(5).trim();
+      if (!payload || payload === "[DONE]") continue;
+      try {
+        const event = JSON.parse(payload) as { type?: string; delta?: unknown };
+        if (
+          event?.type === "TEXT_MESSAGE_CONTENT" &&
+          typeof event.delta === "string" &&
+          event.delta.trim().length > 0
+        ) {
+          return true;
+        }
+      } catch {
+        // A non-JSON data line cannot prove assistant text.
+      }
+    }
+    return false;
+  };
 
   const finish = (phase: TurnPhase, status: string) => {
     if (settled) return;
@@ -116,12 +158,48 @@ export function observeTurnStream(
       try {
         const { done, value } = await reader.read();
         if (done) {
-          finish("stream", bytes === 0 ? "empty" : "complete");
+          if (bytes === 0) {
+            finish("stream", "empty");
+          } else if (!isEventStream) {
+            finish("stream", "complete");
+          } else {
+            // The final frame may never be followed by a blank line, and the decoder may
+            // still hold buffered text: judge it before reporting.
+            if (!sawAssistantText) {
+              const remainder = (buffer + decoder.decode()).replace(/\r\n/g, "\n");
+              if (remainder.trim().length > 0 && frameHasAssistantText(remainder)) {
+                sawAssistantText = true;
+              }
+            }
+            finish("stream", sawAssistantText ? "complete" : "metadata_only");
+          }
           controller.close();
           return;
         }
         if (firstChunkMs === null) firstChunkMs = correlation.elapsedMs();
         bytes += value?.byteLength ?? 0;
+        if (!sawAssistantText && value && isEventStream) {
+          // Frames may be split across reads, so only complete frames are judged and the
+          // remainder is carried into the next chunk. CRLF is normalised first, because
+          // the SSE spec allows both `\n\n` and `\r\n\r\n` separators.
+          buffer += decoder.decode(value, { stream: true });
+          buffer = buffer.replace(/\r\n/g, "\n");
+          let boundary = buffer.indexOf("\n\n");
+          while (boundary !== -1) {
+            const frame = buffer.slice(0, boundary);
+            buffer = buffer.slice(boundary + 2);
+            if (frameHasAssistantText(frame)) {
+              sawAssistantText = true;
+              break;
+            }
+            boundary = buffer.indexOf("\n\n");
+          }
+          // Keep the buffer bounded: a stream that never emits a blank line must not grow
+          // without limit, and the marker alone is longer than this window.
+          if (!sawAssistantText && buffer.length > 64_000) {
+            buffer = buffer.slice(-(TEXT_MARKER.length * 4));
+          }
+        }
         controller.enqueue(value);
       } catch (error) {
         finish("error", "stream_failed");
