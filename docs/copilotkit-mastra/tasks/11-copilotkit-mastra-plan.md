@@ -307,7 +307,7 @@ Step-by-step status lives in [`12-steps.md`](./12-steps.md) and is the file to u
 | C1 · Tracing | ⬜ | — |
 | C2 · Working-memory concurrency | ⬜ | two-writer defect unproven; native atomic API requires resource scope, current MDE memory is thread-scoped |
 | C3 · Runtime init | ⬜ | unmeasured |
-| Support · CopilotKit skill fallback | 🟡 | [#778](https://github.com/amoai-tech/mdeai/pull/778) |
+| Support · CopilotKit skill fallback | 🟡 | [#778](https://github.com/amoai-tech/mdeai/pull/778) open |
 
 **Product milestone achieved:** 20/20 desktop+mobile at pinned `8114a5a96382`; SAN-1639 and SAN-1298 are Done. **Next:** merge open #792/#793 after exact-head CI and required independent approval; instrument B2; build an independent kill-safe cleanup job. No need to repeat the product matrix for docs-only changes.
 

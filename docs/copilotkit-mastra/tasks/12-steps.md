@@ -4,10 +4,10 @@
 
 | Field | Value |
 |---|---|
-| Last updated | 2026-11-06 (after PR #787 merge; PR #792/#793 still open) |
-| `origin/main` | **`7c753cd6b1`** |
-| Production `/api/version` | **`7c753cd6b1`** — matches main; #777 and #787 are both in it |
-| Working worktree | `/home/sk/.worktrees/mde-ai-rel` retained for PR #792 until merged; verify clean/no processes before removing |
+| Last updated | **2026-11-07** (all merged PRs verified; #796 is the only open work) |
+| `origin/main` | **`14bf8b3926`** |
+| Production `/api/version` | **`14bf8b3926`** — matches main (`#777`, `#787`, `#792`, `#793`, `#786` all in it) |
+| Working worktree | `/home/sk/.worktrees/mde-ai-rel` **removed** after #792 merged (clean, pushed, no processes) |
 | Installed stack | CopilotKit **1.84.1** · AG-UI **1.0.2** · `@ag-ui/mastra` **2.0.2** · Mastra core **1.81.0** · memory 1.40.0 · pg 1.34.0 |
 
 **Legend:** ✅ done & verified · 🟡 implemented, awaiting merge/verification · ⬜ not started · 🔴 blocked · ⚫ not needed (measurement said no)
@@ -23,14 +23,14 @@
 | A1 duplicate attempt | ✅ closed | same defect implemented twice | [#779](https://github.com/amoai-tech/mdeai/pull/779) **CLOSED** | — |
 | **A2** No answer ≠ success | ✅ | already in main: `sendAndWait` captures `repliesBefore` before submit, waits for a NEW reply and asserts it is nonempty; `waitForConciergeReply` polls for that reply | [#780](https://github.com/amoai-tech/mdeai/pull/780) **CLOSED** as superseded | — |
 | **A3** First-send 401 | ✅ | readiness now requires **HTTP 200** from `POST /api/copilotkit {"method":"info"}` (anonymous returns 401); a rejected fetch no longer counts as ready | [#787](https://github.com/amoai-tech/mdeai/pull/787) merged | — |
-| **A4** Cleanup that survives a killed run | 🟡 | existing ownership-aware sweep from #787 checks its own run IDs and older identities; #792 adds `try/finally` and error-propagating cleanup with 3 unit tests | [#787](https://github.com/amoai-tech/mdeai/pull/787) merged · [#792](https://github.com/amoai-tech/mdeai/pull/792) open | merge #792 after current-head CI/approval; a process killed during teardown still requires independent cleanup |
+| **A4** Cleanup that survives a killed run | 🟡 | in-process: `#787` ownership sweep + `#792` (merged) failing cleanup now FAILS the run instead of being swallowed (3 unit tests). Independent: `#796` extends the nightly `qa-fixture-cleanup.yml` to the whole `@qa-isolation.mdeai.co` domain, per-identity savepoints, verified rows | [#787](https://github.com/amoai-tech/mdeai/pull/787) · [#792](https://github.com/amoai-tech/mdeai/pull/792) merged · [#796](https://github.com/amoai-tech/mdeai/pull/796) **open** | merge #796; it found **3 real leaks 12–13 days old** that the old `qa-%` pattern could never see |
 | **B1** 60 s page readiness | 🟡 **measured** | 5 direct loads: canvas `1690 / 497 / 502 / 443 / 541 ms`, composer +~20 ms, history region ready `1733 / 542 / 544 / 464 / 563 ms` → **0.46–1.73 s**, not 60 s | — | the 60 s event is an **outlier** (edge/network), not a product readiness defect; capture the failing run's network trace if it recurs |
 | **B2** `TypeError: network error` | ⬜ | observed once; **not** proven to be Gemini | — | trace one failure end to end |
 | **C1** End-to-end tracing | ⬜ | turn log + `ai_runs` exist; no correlation ids | — | correlate with existing ids |
 | **C2** Working-memory concurrency | ⬜ | MDE uses **thread-scoped** memory and a local read-modify-write; Mastra native atomic `mergeWorkingMemory()` requires **resource scope** | — | reproduce with two writers; preserve thread isolation and `selectedPinId: null`; do not blindly swap APIs |
 | **C3** Runtime init cost | ⬜ | unmeasured | — | measure before touching |
 | **Support** CopilotKit skill fallback | 🟡 | docs search fails in the MCP; skill now documents the explorer fallback | [#778](https://github.com/amoai-tech/mdeai/pull/778) | approve or fold into C1 work |
-| Plan document | 🟡 | **325-line** plan and this tracker prepared in existing docs PR | [#793](https://github.com/amoai-tech/mdeai/pull/793) **open** | resolve review, pass exact-head CI, merge; avoid duplicate docs PRs |
+| Plan document | ✅ | **313-line** plan, merged with this tracker | [#793](https://github.com/amoai-tech/mdeai/pull/793) **merged** `aa9bdfa3` | — |
 
 ---
 
@@ -53,11 +53,16 @@
 - [#780](https://github.com/amoai-tech/mdeai/pull/780) closed as superseded; new nonempty assistant replies already required.
 - [#787](https://github.com/amoai-tech/mdeai/pull/787) merged; A3 authenticated readiness requires a **200** response; A4 suite-owned/expired identity cleanup added.
 - Follow-up 4-journey smoke on `7c753cd6b1` reported passed. Historical results remain attached to their own SHAs.
+- **2026-11-07:** production verified serving `14bf8b3926` (= `main`), and a desktop + mobile journey smoke passed on that SHA (2 passed, 1.9 min, SHA pinned before and after).
 
 ### Now — smallest safe ordered work
-1. Finish [#792](https://github.com/amoai-tech/mdeai/pull/792): preserve the original test failure, propagate or log cleanup failure correctly, pass exact-head CI, obtain required independent approval, then merge. Recheck orphan users, profiles, threads and messages.
-2. Finish [#793](https://github.com/amoai-tech/mdeai/pull/793): resolve contradictory tracker wording, pass CI and independent approval, then merge as **docs-only** work (no browser recertification for docs).
-3. **B2/C1 diagnostics:** instrument browser → `/api/copilotkit` → AG-UI/Mastra → provider/tool → stream. Correlate existing request/turn IDs and log a future hang/network failure. Do not invent a cause for the historical one-off.
+1. **Merge [#796](https://github.com/amoai-tech/mdeai/pull/796)** (scheduled cleanup). It found and removed **3 real leaked accounts** aged 12–13 days that the previous `qa-%` pattern could never match; the partner-row deletion was removed after review because `restaurants/leads/bookings.partner_id` are `ON DELETE SET NULL`.
+2. **B2/C1 diagnostics:** instrument browser → `/api/copilotkit` → AG-UI/Mastra → provider/tool → stream. Correlate existing request/turn IDs and log a future hang/network failure. Do not invent a cause, and do not attach a duration to the historical one-off.
+3. **C2 working memory:** reproduce with two writers before touching the merge path — Mastra's native atomic merge needs resource scope, MDE uses thread scope.
+4. **C3 runtime init:** measure `buildHandler()` / `new CopilotRuntime()` before any change.
+
+### Deployment fact worth keeping
+Promotion is **asynchronous**: the freshness guard waited 9, 13 and 19 polls (≈4.5–9.5 min) after the build was READY before the domain served the new commit, and passed every time. READY ≠ served. Do **not** promote manually unless `Prod deploy freshness` actually fails.
 4. **Interrupted-run hygiene:** add an independent CI/scheduled cleanup job that survives a killed process, with run ownership/lease or deliberately aged cleanup and explicit DB verification. Do not delete another active suite's account.
 5. **Worktree cleanup:** after #792 is merged and no process/files need `mde-ai-rel`, check ancestry, worktree status and processes; then `git worktree remove` normally (never force).
 6. **C2/C3** only after measurement: prove two-writer thread-memory conflict and runtime initialization cost before changing semantics or introducing architecture.
