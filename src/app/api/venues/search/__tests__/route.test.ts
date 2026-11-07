@@ -223,3 +223,15 @@ describe("vibe words are ranked, not required literally", () => {
     expect((await res.json()).total).toBe(0);
   });
 });
+
+describe("nightlife party words are preferences, not literal text", () => {
+  it("keeps venue rows for a query whose words no venue name contains", async () => {
+    // Son Havana has no "party" or "tonight" in its name or tags; before wishesNightlife was in the
+    // shared list, "salsa party tonight" demanded them literally and returned nothing.
+    const res = await post({ kind: "nightlife", queryText: "salsa party tonight" });
+    const json = await res.json();
+    expect(res.status).toBe(200);
+    expect(json.total).toBe(1);
+    expect(json.results[0].title).toBe("Son Havana");
+  });
+});

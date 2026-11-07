@@ -11,7 +11,7 @@ import {
 } from "@/mastra/tools/search-venue-anchors";
 import type { GroundedToolRow } from "@/lib/parse-grounded-tool-result";
 import { parseAnchorIntelligenceSlots } from "@/mastra/lib/intelligence-anchor-search";
-import { isVibeWord as isVibeWordFromList } from "@/lib/venue-vibe-words";
+import { hasAnyVibeSlot } from "@/lib/venue-vibe-words";
 
 /**
  * Public catalogue search for cafés and nightlife, for visitors without an account.
@@ -67,8 +67,10 @@ function searchWords(value: string): string[] {
  * just promoted ("quiet café with wifi" matches no café by text, only by vibe).
  */
 function isVibeWord(token: string, kind: "cafe" | "nightlife"): boolean {
+  // Parse the single token, then ask whether that token expressed a preference. The token itself
+  // is what makes the question per-word; the helper only inspects the slots it produced.
   const slots = parseAnchorIntelligenceSlots(token, kind === "cafe" ? "cafe" : "nightclub");
-  return isVibeWordFromList(token, slots);
+  return hasAnyVibeSlot(slots);
 }
 
 function matchesQuery(row: VenueAnchorRow, queryText: string, kind: "cafe" | "nightlife"): boolean {

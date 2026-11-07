@@ -20,11 +20,20 @@ export const VIBE_SLOT_LABELS: ReadonlyArray<readonly [keyof IntelligenceSlots, 
   ["wantsAntiTouristy", "not touristy"],
   ["wantsValue", "value"],
   ["wantsService", "good service"],
+  // Set by the venue wrapper (`parseAnchorIntelligenceSlots`) for party/club/tonight/discotec.
+  // Only the route sees it, because the client-side parser does not classify venue kind.
+  ["wantsNightlife", "nightlife"],
   ["wantsSpecialtyCoffee", "specialty coffee"],
 ];
 
-/** True when this single word sets any preference slot, i.e. the ranking can satisfy it. */
-export function isVibeWord(word: string, slots: IntelligenceSlots): boolean {
+/**
+ * True when the parsed slots contain at least one preference the ranking can satisfy.
+ *
+ * Named for what it does: it answers "is *a* vibe present", not "is *this* word a vibe". Callers
+ * parse a single token first, which is what makes the per-token question meaningful — the earlier
+ * `isVibeWord(word, slots)` signature took a word and then ignored it.
+ */
+export function hasAnyVibeSlot(slots: IntelligenceSlots): boolean {
   return VIBE_SLOT_LABELS.some(([flag]) => slots[flag] === true);
 }
 
