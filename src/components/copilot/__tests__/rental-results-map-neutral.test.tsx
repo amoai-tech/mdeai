@@ -8,6 +8,7 @@ const ui = vi.hoisted(() => ({
   openVenueDetail: vi.fn(),
   openScheduleViewing: vi.fn(),
   selectedPinId: null as string | null,
+  concierge: null as unknown,
 }));
 
 vi.mock("@/platform/maps/map-context", () => ({
@@ -23,6 +24,14 @@ vi.mock("@/components/chat/rich-card-results-context", () => ({
   RichCardResultsRegistrar: () => null,
 }));
 vi.mock("@/components/copilot/tool-pins-sync", () => ({ ToolPinsSync: () => null }));
+vi.mock("@/components/chat/concierge-coagent-context", () => ({
+  useOptionalConciergeCoAgent: () => ui.concierge,
+}));
+vi.mock("@/components/copilot/a2ui/mde-ui-catalog", () => ({
+  NearbyRentalAction: ({ listingId }: { listingId: string }) => (
+    <button data-testid="nearby-cta-stub" data-listing-id={listingId} />
+  ),
+}));
 
 import { RentalResults } from "@/components/copilot/search-tool-result-cards";
 import type { RentalSearchMeta } from "@/components/chat/rental-fast-path-context";
@@ -56,6 +65,7 @@ beforeEach(() => {
   ui.openVenueDetail.mockReset();
   ui.openScheduleViewing.mockReset();
   ui.selectedPinId = null;
+  ui.concierge = null;
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -125,6 +135,29 @@ describe("SAN-472 chat rental card/map parity", () => {
     const card = Array.from(container.querySelectorAll('[data-testid="rental-card"]'))
       .find((el) => el.textContent?.includes("Rental unmapped"));
     expect(card?.getAttribute("data-selected")).toBe("false");
+  });
+});
+
+describe("Nearby CTA on fast-path rental cards", () => {
+  const uuid = "550e8400-e29b-41d4-a716-446655440000";
+
+  it("shows one CTA for a mapped stored rental when Concierge is present", () => {
+    ui.concierge = { setState: vi.fn() };
+    render({ source: "supabase", results: [rental(uuid, { latitude: 6.24, longitude: -75.59 })] });
+    expect(container.querySelectorAll('[data-testid="nearby-cta-stub"]').length).toBe(1);
+  });
+
+  it("hides the CTA without Concierge, without a pin, or for a non-UUID listing", () => {
+    ui.concierge = null;
+    render({ source: "supabase", results: [rental(uuid, { latitude: 6.24, longitude: -75.59 })] });
+    expect(container.querySelectorAll('[data-testid="nearby-cta-stub"]').length).toBe(0);
+
+    ui.concierge = { setState: vi.fn() };
+    render({ source: "supabase", results: [rental("external-slug", { latitude: 6.24, longitude: -75.59 })] });
+    expect(container.querySelectorAll('[data-testid="nearby-cta-stub"]').length).toBe(0);
+
+    render({ source: "supabase", results: [rental(uuid)] });
+    expect(container.querySelectorAll('[data-testid="nearby-cta-stub"]').length).toBe(0);
   });
 });
 
