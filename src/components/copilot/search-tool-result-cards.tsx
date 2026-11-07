@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import Link from "next/link";
+import { createPortal } from "react-dom";
 import type { AbstractAgent } from "@copilotkit/react-core/v2";
 import { useOptionalConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
 import { useEventSearchFastPath } from "@/hooks/use-event-search-fast-path";
@@ -304,6 +305,41 @@ export function RentalResults({
     }));
   };
   const comparisonReady = Boolean(resolveRentalComparisonRows(rows, comparisonIds));
+  const hasComparisonSelection = rows.length >= 2 && comparisonIds.length > 0;
+  const [composerOverlay, setComposerOverlay] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    if (!hasComparisonSelection) return;
+    // CopilotKit's nested scroll layers prevent sticky positioning within a
+    // tool result. The real input overlay is already anchored to the composer.
+    const region = document.querySelector('[data-testid="center-chat-panel"]');
+    if (!region) return; // Fall back to an inline action on other pages.
+    let activeOverlay: HTMLElement | null = null;
+    let originalZIndex = "";
+    const sync = () => {
+      const next = region.querySelector<HTMLElement>('[data-testid="copilot-input-overlay"]');
+      if (next !== activeOverlay) {
+        if (activeOverlay) activeOverlay.style.zIndex = originalZIndex;
+        activeOverlay = next;
+        if (activeOverlay) {
+          originalZIndex = activeOverlay.style.zIndex;
+          // The stock Scroll-to-bottom button overlaps the Compare CTA on
+          // phones. Lift the input overlay only for active comparisons.
+          activeOverlay.style.zIndex = "35";
+        }
+      }
+      setComposerOverlay((previous) => previous === next ? previous : next);
+    };
+    const frame = requestAnimationFrame(sync);
+    // Reattach if thread navigation replaces the input node.
+    const observer = new MutationObserver(sync);
+    observer.observe(region, { childList: true, subtree: true });
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+      if (activeOverlay) activeOverlay.style.zIndex = originalZIndex;
+    };
+  }, [hasComparisonSelection]);
+
   const toggleComparison = (id: string) => {
     setComparisonState((previous) => {
       const ids = previous.rowsKey === rowsKey ? previous.ids : [];
@@ -337,6 +373,47 @@ export function RentalResults({
     });
   };
 
+  const activeComposerOverlay = composerOverlay?.isConnected ? composerOverlay : null;
+  const compareToolbar = hasComparisonSelection ? (
+        // The transcript (not the page) scrolls. Keep the action at the bottom
+        // of that scrollport, directly above the composer, even when the result
+        // count/header is far above the visible rental cards.
+        <div
+          data-testid="rental-compare-toolbar"
+          role="group"
+          aria-label="Apartment comparison selection"
+          className={activeComposerOverlay
+            ? "pointer-events-auto absolute z-30 flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-background/95 px-3 py-2 shadow-lg backdrop-blur-sm"
+            : "sticky bottom-0 z-20 -mx-2 flex min-w-0 flex-wrap items-center justify-between gap-2 border-t border-border bg-background/95 px-3 py-2 shadow-lg backdrop-blur-sm sm:mx-0 sm:rounded-lg sm:border"}
+          // CopilotKit's input height changes on mobile and with multi-line drafts.
+          // Anchor to its top; avoid a guessed fixed composer-height offset.
+          style={activeComposerOverlay ? { bottom: "100%", left: 8, right: 8, zIndex: 30 } : undefined}
+        >
+          <span aria-live="polite" className="text-xs font-medium text-foreground">
+            {comparisonIds.length} of 4 apartments selected
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              data-testid="rental-compare-clear"
+              className="min-h-11 rounded-md px-3 text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+              onClick={() => setComparisonState({ rowsKey, ids: [], open: false })}
+            >
+              Clear
+            </button>
+            <button
+              type="button"
+              data-testid="rental-compare-open"
+              className="min-h-11 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+              disabled={!comparisonReady}
+              onClick={() => setComparisonOpen(true)}
+            >
+              Compare selected ({comparisonIds.length})
+            </button>
+          </div>
+        </div>
+  ) : null;
+
   useEffect(() => {
     if (!selectedPinId || !listRef.current) return;
     const card = listRef.current.querySelector(
@@ -360,13 +437,6 @@ export function RentalResults({
                 : `${rows.length} matching apartment${rows.length === 1 ? "" : "s"}`}
           </span>
           <div className="flex flex-wrap items-center gap-3">
-            {rows.length >= 2 ? (
-              <button type="button" data-testid="rental-compare-open"
-                className="min-h-11 rounded-md border border-border px-3 font-medium disabled:opacity-50"
-                disabled={!comparisonReady} onClick={() => setComparisonOpen(true)}>
-                Compare selected ({comparisonIds.length}/4)
-              </button>
-            ) : null}
             <Link href="/rentals" className="font-medium text-primary underline-offset-4 hover:underline"
               data-testid="rental-browse-all-link">
               Browse all apartments
@@ -478,8 +548,9 @@ export function RentalResults({
         })}
         </div>
       )}
+      {compareToolbar && (composerOverlay?.isConnected ? createPortal(compareToolbar, composerOverlay) : compareToolbar)}
       <Dialog open={comparisonOpen} onOpenChange={setComparisonOpen}>
-        <DialogContent className="w-[calc(100vw-1rem)] max-w-6xl max-h-[85dvh] overflow-y-auto p-3 sm:p-5"
+        <DialogContent className="w-[calc(100vw-1rem)] max-w-6xl max-h-[85dvh] overflow-y-auto p-3 sm:max-w-6xl sm:p-5"
           data-testid="rental-comparison-modal">
           <DialogHeader><DialogTitle>Compare apartments</DialogTitle></DialogHeader>
           <RentalComparison rows={rows} listingIds={comparisonIds}

@@ -271,15 +271,25 @@ describe("SAN-1041 · deterministic comparison from rental tool results", () => 
     render(result);
     const toggles = [...container.querySelectorAll<HTMLButtonElement>('[data-testid="rental-compare-toggle"]')];
     expect(toggles).toHaveLength(3);
+    expect(container.querySelector('[data-testid="rental-compare-open"]')).toBeNull();
+    act(() => toggles[0].click());
     const open = container.querySelector<HTMLButtonElement>('[data-testid="rental-compare-open"]');
+    const toolbar = container.querySelector<HTMLElement>('[data-testid="rental-compare-toolbar"]');
+    expect(toolbar).not.toBeNull();
+    expect(toolbar?.className).toMatch(/sticky.*bottom-0/);
+    expect(toolbar?.textContent).toContain("1 of 4 apartments selected");
     expect(open?.disabled).toBe(true);
-    act(() => { toggles[0].click(); toggles[1].click(); });
+    act(() => toggles[1].click());
+    expect(toolbar?.textContent).toContain("2 of 4 apartments selected");
     expect(open?.disabled).toBe(false);
     act(() => open?.click());
     const dialog = document.querySelector('[data-testid="rental-comparison-modal"]');
     expect(dialog).not.toBeNull();
     expect(dialog?.textContent).toContain("COP 2,400,000/month");
     expect(dialog?.textContent).toContain("COP 2,800,000/month");
+    // The shared dialog has sm:max-w-sm by default. Explicitly override it
+    // so the comparison shows multiple columns on a desktop-sized screen.
+    expect(dialog?.className).toContain("sm:max-w-6xl");
     const details = dialog?.querySelector<HTMLButtonElement>(
       '[data-testid="rental-comparison-column-first"] button:nth-child(2)',
     );
@@ -292,14 +302,60 @@ describe("SAN-1041 · deterministic comparison from rental tool results", () => 
     expect(ui.panToPin).toHaveBeenCalledWith("rental-first");
   });
 
+  it("attaches the selected action to the real composer overlay instead of hiding below the transcript", () => {
+    const callbacks: FrameRequestCallback[] = [];
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      callbacks.push(callback);
+      return callbacks.length;
+    });
+    vi.stubGlobal("cancelAnimationFrame", vi.fn());
+    const panel = document.createElement("div");
+    panel.dataset.testid = "center-chat-panel";
+    const overlay = document.createElement("div");
+    overlay.dataset.testid = "copilot-input-overlay";
+    panel.appendChild(overlay);
+    document.body.appendChild(panel);
+    try {
+      render(result);
+      const toggle = container.querySelector<HTMLButtonElement>('[data-testid="rental-compare-toggle"]');
+      act(() => toggle?.click());
+      act(() => callbacks.forEach((callback) => callback(0)));
+      const anchored = overlay.querySelector<HTMLElement>('[data-testid="rental-compare-toolbar"]');
+      expect(anchored).not.toBeNull();
+      expect(anchored?.style.bottom).toBe("100%");
+      expect(anchored?.style.zIndex).toBe("30");
+      expect(overlay.style.zIndex).toBe("35");
+      expect(container.querySelector('[data-testid="rental-compare-toolbar"]')).toBeNull();
+      act(() => overlay.querySelector<HTMLButtonElement>('[data-testid="rental-compare-clear"]')?.click());
+      expect(overlay.querySelector('[data-testid="rental-compare-toolbar"]')).toBeNull();
+      expect(overlay.style.zIndex).toBe("");
+    } finally {
+      panel.remove();
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("invalidates selection when a subsequent result replaces the source IDs", () => {
     render(result);
     const toggles = [...container.querySelectorAll<HTMLButtonElement>('[data-testid="rental-compare-toggle"]')];
     act(() => { toggles[0].click(); toggles[1].click(); });
     expect(container.querySelector<HTMLButtonElement>('[data-testid="rental-compare-open"]')?.disabled).toBe(false);
     render({ source: "supabase", results: [fullRental("new-a"), fullRental("new-b")] });
-    const open = container.querySelector<HTMLButtonElement>('[data-testid="rental-compare-open"]');
-    expect(open?.disabled).toBe(true);
-    expect(open?.textContent).toContain("(0/4)");
+    expect(container.querySelector('[data-testid="rental-compare-toolbar"]')).toBeNull();
+    expect(container.querySelector('[data-testid="rental-compare-open"]')).toBeNull();
+  });
+
+  it("keeps the sticky action bar until selection is cleared, then removes it", () => {
+    render(result);
+    const toggles = [...container.querySelectorAll<HTMLButtonElement>('[data-testid="rental-compare-toggle"]')];
+    act(() => toggles[0].click());
+    const toolbar = container.querySelector<HTMLElement>('[data-testid="rental-compare-toolbar"]');
+    expect(toolbar?.getAttribute("role")).toBe("group");
+    expect(toolbar?.getAttribute("aria-label")).toBe("Apartment comparison selection");
+    expect(container.querySelector<HTMLButtonElement>('[data-testid="rental-compare-open"]')?.disabled).toBe(true);
+    act(() => container.querySelector<HTMLButtonElement>('[data-testid="rental-compare-clear"]')?.click());
+    expect(container.querySelector('[data-testid="rental-compare-toolbar"]')).toBeNull();
+    expect(container.querySelector('[data-testid="rental-compare-open"]')).toBeNull();
+    expect(container.querySelector<HTMLButtonElement>('[data-testid="rental-compare-toggle"]')?.getAttribute("aria-pressed")).toBe("false");
   });
 });
