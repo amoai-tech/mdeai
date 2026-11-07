@@ -105,6 +105,14 @@ export function observeTurnStream(
    * actually streamed. No event payload is stored.
    */
   let sawTextEvent = false;
+  /**
+   * The marker can be split across two reads (`…TEXT_MESSAGE_CON` + `TENT…`), and
+   * `{ stream: true }` only protects split UTF-8 bytes, not tokens. Carrying the tail of
+   * the previous chunk is what keeps a REAL answer from being mislabelled
+   * `metadata_only` — which is the exact B2 signal this observation exists to report.
+   */
+  const TEXT_MARKER = "TEXT_MESSAGE_CONTENT";
+  let carry = "";
 
   const finish = (phase: TurnPhase, status: string) => {
     if (settled) return;
@@ -134,8 +142,12 @@ export function observeTurnStream(
         if (firstChunkMs === null) firstChunkMs = correlation.elapsedMs();
         bytes += value?.byteLength ?? 0;
         if (!sawTextEvent && value) {
-          const chunk = decoder.decode(value, { stream: true });
-          if (chunk.includes("TEXT_MESSAGE_CONTENT")) sawTextEvent = true;
+          const haystack = carry + decoder.decode(value, { stream: true });
+          if (haystack.includes(TEXT_MARKER)) {
+            sawTextEvent = true;
+          } else {
+            carry = haystack.slice(-(TEXT_MARKER.length - 1));
+          }
         }
         controller.enqueue(value);
       } catch (error) {

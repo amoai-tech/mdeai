@@ -154,3 +154,30 @@ describe("observeTurnStream · metadata vs text", () => {
     expect(status).toBe("complete");
   });
 });
+
+describe("observeTurnStream · split marker", () => {
+  it("still sees TEXT_MESSAGE_CONTENT when a read boundary splits it", async () => {
+    const spy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    // The marker is deliberately severed mid-token, as a real network chunk can do.
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode('data: {"type":"TEXT_MESSAGE_CON'));
+        controller.enqueue(encoder.encode('TENT","delta":"Hay dos"}\n\n'));
+        controller.close();
+      },
+    });
+    const observed = observeTurnStream(new Response(stream, { status: 200 }), resolveTurnCorrelation(request()));
+    const reader = observed.body!.getReader();
+    for (;;) {
+      const { done } = await reader.read();
+      if (done) break;
+    }
+    const status = spy.mock.calls
+      .map((call) => JSON.parse(String(call[0]).replace("[mde-turn] ", "")))
+      .filter((line) => line.phase === "stream")
+      .pop()?.status;
+    spy.mockRestore();
+    expect(status).toBe("complete");
+  });
+});
