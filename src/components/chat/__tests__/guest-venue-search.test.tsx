@@ -174,6 +174,51 @@ describe("Clear search", () => {
     expect(document.activeElement).toBe(screen.getByLabelText(/Search cafés/));
   });
 
+  it("recovers when Clear is pressed while the fetch is still pending", async () => {
+    // The regression the review found: aborting skips the `finally` that clears busy, so the
+    // composer stayed dead until a remount. A pending fetch is the only way to reproduce it.
+    let resolveFetch: ((value: Response) => void) | null = null;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        () =>
+          new Promise<Response>((resolve) => {
+            resolveFetch = resolve;
+          }),
+      ),
+    );
+    const onClear = vi.fn();
+    render(<GuestVenueSearch options={{ kind: "cafe", onResults: vi.fn(), onClear }} />);
+
+    fireEvent.change(screen.getByLabelText(/Search cafés/), { target: { value: "quiet" } });
+    const send = screen.getByTestId("guest-venue-send") as HTMLButtonElement;
+    fireEvent.click(send);
+    expect(send.disabled).toBe(true); // in flight
+
+    // Clear is visible during the search only once results exist, so simulate a prior search.
+    expect(onClear).not.toHaveBeenCalled();
+    resolveFetch?.(json({ kind: "cafe", results: [row("a")], total: 1 }));
+    await screen.findByTestId("guest-venue-summary");
+
+    // Second search, still pending, then Clear mid-flight.
+    vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => {})));
+    fireEvent.change(screen.getByLabelText(/Search cafés/), { target: { value: "another" } });
+    fireEvent.click(send);
+    await waitFor(() => expect(send.disabled).toBe(true));
+    fireEvent.click(await screen.findByTestId("guest-venue-clear"));
+
+    expect(onClear).toHaveBeenCalledTimes(1);
+    // The composer must be usable again: with text in the field, send is enabled once Clear has
+    // released `busy`. Before the fix this stayed disabled forever.
+    await waitFor(() =>
+      expect((screen.getByTestId("guest-venue-send") as HTMLButtonElement).disabled).toBe(false),
+    );
+    fireEvent.change(screen.getByLabelText(/Search cafés/), { target: { value: "third" } });
+    await waitFor(() =>
+      expect((screen.getByTestId("guest-venue-send") as HTMLButtonElement).disabled).toBe(false),
+    );
+  });
+
   it("is not rendered when the page cannot clear", async () => {
     stubFetch(() => json({ kind: "cafe", results: [row("a")], total: 1 }));
     render(<GuestVenueSearch options={{ kind: "cafe", onResults: vi.fn() }} />);
