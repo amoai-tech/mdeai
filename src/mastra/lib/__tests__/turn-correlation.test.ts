@@ -73,7 +73,7 @@ describe("observeTurnStream", () => {
     const spy = vi.spyOn(console, "log").mockImplementation(() => undefined);
     const correlation = resolveTurnCorrelation(request(), Date.now());
     const body = new TextEncoder().encode('data: {"type":"TEXT_MESSAGE_CONTENT","delta":"hi"}\n\n');
-    const observed = observeTurnStream(new Response(body, { status: 200 }), correlation);
+    const observed = observeTurnStream(new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } }), correlation);
     await readAll(observed);
     const lines = spy.mock.calls.map((call) => JSON.parse(String(call[0]).replace("[mde-turn] ", "")));
     spy.mockRestore();
@@ -86,7 +86,7 @@ describe("observeTurnStream", () => {
   it("marks an empty 200 stream as empty rather than successful", async () => {
     const spy = vi.spyOn(console, "log").mockImplementation(() => undefined);
     const correlation = resolveTurnCorrelation(request(), Date.now());
-    const observed = observeTurnStream(new Response(new Uint8Array(0), { status: 200 }), correlation);
+    const observed = observeTurnStream(new Response(new Uint8Array(0), { status: 200, headers: { "content-type": "text/event-stream" } }), correlation);
     await readAll(observed);
     const lines = spy.mock.calls.map((call) => JSON.parse(String(call[0]).replace("[mde-turn] ", "")));
     spy.mockRestore();
@@ -137,7 +137,7 @@ describe("observeTurnStream · metadata vs text", () => {
     const body = new TextEncoder().encode(
       'data: {"type":"RUN_STARTED"}\n\ndata: {"type":"RUN_FINISHED"}\n\n',
     );
-    await readAll(observeTurnStream(new Response(body, { status: 200 }), resolveTurnCorrelation(request())));
+    await readAll(observeTurnStream(new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } }), resolveTurnCorrelation(request())));
     const status = lastStatus(spy);
     spy.mockRestore();
     expect(status).toBe("metadata_only");
@@ -148,7 +148,7 @@ describe("observeTurnStream · metadata vs text", () => {
     const body = new TextEncoder().encode(
       'data: {"type":"TEXT_MESSAGE_CONTENT","delta":"Hay dos opciones"}\n\n',
     );
-    await readAll(observeTurnStream(new Response(body, { status: 200 }), resolveTurnCorrelation(request())));
+    await readAll(observeTurnStream(new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } }), resolveTurnCorrelation(request())));
     const status = lastStatus(spy);
     spy.mockRestore();
     expect(status).toBe("complete");
@@ -167,7 +167,7 @@ describe("observeTurnStream · split marker", () => {
         controller.close();
       },
     });
-    const observed = observeTurnStream(new Response(stream, { status: 200 }), resolveTurnCorrelation(request()));
+    const observed = observeTurnStream(new Response(stream, { status: 200, headers: { "content-type": "text/event-stream" } }), resolveTurnCorrelation(request()));
     const reader = observed.body!.getReader();
     for (;;) {
       const { done } = await reader.read();
@@ -179,5 +179,64 @@ describe("observeTurnStream · split marker", () => {
       .pop()?.status;
     spy.mockRestore();
     expect(status).toBe("complete");
+  });
+});
+
+describe("observeTurnStream · what counts as assistant text", () => {
+  const SSE_HEADERS = { "content-type": "text/event-stream" };
+  const run = async (body: string) => {
+    const spy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const observed = observeTurnStream(
+      new Response(new TextEncoder().encode(body), { status: 200, headers: SSE_HEADERS }),
+      resolveTurnCorrelation(request()),
+    );
+    const reader = observed.body!.getReader();
+    for (;;) {
+      const { done } = await reader.read();
+      if (done) break;
+    }
+    const status = spy.mock.calls
+      .map((call) => JSON.parse(String(call[0]).replace("[mde-turn] ", "")))
+      .filter((line) => line.phase === "stream")
+      .pop()?.status;
+    spy.mockRestore();
+    return status;
+  };
+
+  it("is not fooled by a tool payload that merely mentions the marker", async () => {
+    const body = 'data: {"type":"TOOL_CALL_RESULT","result":{"note":"TEXT_MESSAGE_CONTENT"}}\n\n';
+    expect(await run(body)).toBe("metadata_only");
+  });
+
+  it("does not accept an empty delta as an answer", async () => {
+    expect(await run('data: {"type":"TEXT_MESSAGE_CONTENT","delta":""}\n\n')).toBe("metadata_only");
+  });
+
+  it("does not accept a whitespace-only delta as an answer", async () => {
+    expect(await run('data: {"type":"TEXT_MESSAGE_CONTENT","delta":"   \\n"}\n\n')).toBe("metadata_only");
+  });
+
+  it("accepts a real delta as an answer", async () => {
+    expect(await run('data: {"type":"TEXT_MESSAGE_CONTENT","delta":"Hay dos"}\n\n')).toBe("complete");
+  });
+
+  it("leaves a plain JSON response alone instead of calling it metadata_only", async () => {
+    const spy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const response = new Response(JSON.stringify({ threads: [] }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+    const observed = observeTurnStream(response, resolveTurnCorrelation(request()));
+    const reader = observed.body!.getReader();
+    for (;;) {
+      const { done } = await reader.read();
+      if (done) break;
+    }
+    const logged = spy.mock.calls
+      .map((call) => JSON.parse(String(call[0]).replace("[mde-turn] ", "")))
+      .filter((line) => line.phase === "stream");
+    spy.mockRestore();
+    // Not a turn, so nothing is classified.
+    expect(logged).toHaveLength(0);
   });
 });
