@@ -19,8 +19,16 @@ test.describe("SAN-577B /rentals map workspace", () => {
     const card = page.locator('[data-testid^="rental-card-"]')
       .filter({ has: page.locator('[data-testid^="rental-card-map-select-"]') }).first();
     await expect(card).toBeVisible();
+    const pinId = await card.getAttribute("data-pin-id");
+    if (!pinId) throw new Error("Map-selectable rental has no pin ID");
+    const mapPanel = page.getByTestId("browse-map-panel");
+    await expect(mapPanel.locator(".gm-style").first()).toBeVisible({ timeout: 20_000 });
     await card.locator('[data-testid^="rental-card-map-select-"]').click();
     await expect(card).toHaveAttribute("data-selected", "true");
+    // At city zoom, markerclusterer hides individual rental pin DOM nodes.
+    // The real Google Maps info window still proves the exact pin was selected.
+    await expect(mapPanel.getByTestId("selected-place-overlay"))
+      .toHaveAttribute("data-pin-id", pinId, { timeout: 15_000 });
   });
 
   test("mobile: FAB visible and opens map sheet", async ({ page }) => {
