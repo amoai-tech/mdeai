@@ -44,8 +44,18 @@ describe("SAN-1041 deterministic rental comparison", () => {
     expect(screen.queryByText(/USD 2,850/)).toBeNull();
     expect(screen.getByText("Balcony")).not.toBeNull();
     expect(screen.getByText("Studio")).not.toBeNull();
-    expect(screen.getByText("No")).not.toBeNull();
+    // The search tool can encode an unknown Wi-Fi speed as false, not proven "No".
+    expect(screen.queryByText("No")).toBeNull();
     expect(screen.getAllByText("Not specified").length).toBeGreaterThan(0);
+  });
+
+  it("shows every listing-provided amenity rather than silently hiding items after four", () => {
+    const rich = { ...rows[0], amenities: ["Balcony", "Parking", "Elevator", "Gym", "Pets allowed"] };
+    render(<RentalComparison rows={[rich, rows[1]]} listingIds={["laureles-1", "poblado-2"]} />);
+    expect(screen.getByText("Balcony, Parking, Elevator, Gym, Pets allowed")).not.toBeNull();
+    const wifi = screen.getByRole("row", { name: /Wi-Fi/i });
+    expect(wifi.textContent).toContain("Not specified");
+    expect(wifi.querySelectorAll("td")[1]?.textContent).toBe("Not specified");
   });
 
   it("only focuses genuine pins, uses existing Details and viewing callbacks", () => {

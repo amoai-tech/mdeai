@@ -57,8 +57,7 @@ function bedrooms(row: ComparisonRentalRow): string {
 
 function listedAmenities(row: ComparisonRentalRow): string {
   const amenities = (Array.isArray(row.amenities) ? row.amenities : [])
-    .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
-    .slice(0, 4);
+    .filter((item): item is string => typeof item === "string" && item.trim().length > 0);
   return amenities.length ? amenities.join(", ") : "Not specified";
 }
 
@@ -103,7 +102,7 @@ export function RentalComparison({
               ["Monthly rent", exactMonthlyRent],
               ["Nightly rate", (row: ComparisonRentalRow) => exactPrice(row, "nightly")],
               ["Bedrooms", bedrooms],
-              ["Wi-Fi", (row: ComparisonRentalRow) => row.wifi === true ? "Yes" : row.wifi === false ? "No" : "Not specified"],
+              ["Wi-Fi", (row: ComparisonRentalRow) => row.wifi === true ? "Yes" : "Not specified"],
               ["Listed amenities", listedAmenities],
             ] as Array<[string, (row: ComparisonRentalRow) => string]>).map(([label, display]) => (
               <tr key={label} className="border-b last:border-b-0">
