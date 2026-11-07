@@ -40,13 +40,17 @@ vi.mock("@/mastra/tools/search-venue-anchors", async () => {
   );
   return {
     ...actual,
-    searchCafeVenueAnchorsForBrowse: async (params: unknown) => {
+    searchCafeVenueAnchorsForBrowse: (params: unknown) => {
       calls.push({ fn: "cafe", params });
-      return failures.cafe ? { rows: [], error: failures.cafe } : { rows: cafeRows, error: null };
+      return Promise.resolve(
+        failures.cafe ? { rows: [], error: failures.cafe } : { rows: cafeRows, error: null },
+      );
     },
-    searchNightclubVenueAnchorsForBrowse: async (params: unknown) => {
+    searchNightclubVenueAnchorsForBrowse: (params: unknown) => {
       calls.push({ fn: "nightlife", params });
-      return failures.nightlife ? { rows: [], error: failures.nightlife } : { rows: [], error: null };
+      return Promise.resolve(
+        failures.nightlife ? { rows: [], error: failures.nightlife } : { rows: [], error: null },
+      );
     },
   };
 });

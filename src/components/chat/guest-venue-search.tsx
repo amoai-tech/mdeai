@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, type Dispatch } from "react";
 import { ArrowUp } from "lucide-react";
 import type { GroundedToolRow } from "@/lib/parse-grounded-tool-result";
 import { countWithNoun } from "@/lib/format/count-with-noun";
@@ -18,7 +18,7 @@ import { countWithNoun } from "@/lib/format/count-with-noun";
 export type VenueGuestOptions = {
   kind: "cafe" | "nightlife";
   neighborhood?: string | null;
-  onResults(rows: GroundedToolRow[], meta: { total: number; query: string }): void;
+  onResults: Dispatch<GroundedToolRow[]>;
 };
 
 export function GuestVenueSearchScoped({ options }: { options: VenueGuestOptions }) {
@@ -73,7 +73,7 @@ export function GuestVenueSearch({ options }: { options: VenueGuestOptions }) {
         throw new Error("Invalid venue search response. Please retry.");
       }
       const body = json as { results: GroundedToolRow[]; total?: number };
-      options.onResults(body.results, { total: body.total ?? body.results.length, query });
+      options.onResults(body.results);
       setMessage(
         body.results.length === 0
           ? `No ${noun[1]} matched “${query}”. Try a neighborhood or a different word.`
