@@ -1,4 +1,5 @@
 import type { EnrichedGroundedPlaceFields } from "./adk-grounding-types";
+import type { GroundedPlaceSourceMode } from "@/lib/grounded-place-source";
 import type { AdkGroundingInvokeResponse } from "./adk-grounding-types";
 
 export type GroundedPlaceResult = {
@@ -8,6 +9,8 @@ export type GroundedPlaceResult = {
   latitude?: number;
   longitude?: number;
   placeId?: string;
+  /** Where the facts originated, separate from the tool envelope. */
+  sourceMode?: GroundedPlaceSourceMode;
   mapsUrl?: string;
   directionsUrl?: string;
   reviewsUrl?: string;
@@ -135,6 +138,7 @@ export function mapAdkGroundingPins(
         latitude,
         longitude,
         placeId: r.placeId ? String(r.placeId) : undefined,
+        sourceMode: "google_grounding",
         mapsUrl,
         directionsUrl: enriched.directionsUrl,
         reviewsUrl: enriched.reviewsUrl,

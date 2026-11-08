@@ -1,5 +1,6 @@
 import { normalizeToolEnvelope } from "@/lib/normalize-tool-envelope";
 import { readGroundedVenueKind } from "@/lib/grounded-venue-kind";
+import { groundedPinSource } from "@/lib/grounded-place-source";
 import {
   parseGroundedToolResult,
   resolveGroundedTitle,
@@ -31,6 +32,7 @@ type LatLngItem = {
   directionsUrl?: string | null;
   reviewsUrl?: string | null;
   fieldMaskVersion?: string | null;
+  sourceMode?: import("@/lib/grounded-place-source").GroundedPlaceSourceMode;
 };
 
 function itemToPin(
@@ -100,6 +102,9 @@ function itemToPin(
       ...(category === "grounded" && item.reviewsUrl
         ? { reviewsUrl: item.reviewsUrl }
         : {}),
+      ...(category === "grounded" && item.sourceMode
+        ? { sourceMode: item.sourceMode }
+        : {}),
       ...(category === "grounded" && venueKind
         ? { venueKind }
         : {}),
@@ -146,9 +151,10 @@ export function normalizeToolOutput(
           directionsUrl: row.directionsUrl,
           reviewsUrl: row.reviewsUrl,
           fieldMaskVersion: row.fieldMaskVersion,
+          sourceMode: row.sourceMode,
         },
         category,
-        "grounding",
+        groundedPinSource(row.sourceMode),
         pins.length,
         parsed.attribution,
         venueKind,

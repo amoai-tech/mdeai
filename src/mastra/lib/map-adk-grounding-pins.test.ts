@@ -42,6 +42,7 @@ describe("mapAdkGroundingPins", () => {
     });
     expect(rows[0]?.title).toBe("Café Euge");
     expect(rows[0]?.mapsUrl).toContain("maps.google.com");
+    expect(rows[0]?.sourceMode).toBe("google_grounding");
   });
 
   it("recovers title from attribution when pin title is Place", () => {

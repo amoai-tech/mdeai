@@ -32,6 +32,7 @@ export type NearbyRentalResult = {
     latitude: number;
     longitude: number;
     placeId: string;
+    sourceMode: "google_places";
     mapsUrl?: string;
     primaryType?: string;
   }>;
@@ -94,7 +95,7 @@ export function mapNearbyProviderPlaces(response: unknown): NearbyRentalResult["
     const mapsUrlCandidate = place.googleMapsLinks?.placeUri ?? place.googleMapsUri;
     const mapsUrl = validatedMapsUrl(mapsUrlCandidate);
     results.push({
-      id, title, latitude, longitude, placeId: id,
+      id, title, latitude, longitude, placeId: id, sourceMode: "google_places",
       ...(mapsUrl ? { mapsUrl } : {}),
       ...(typeof place.primaryType === "string" && place.primaryType
         ? { primaryType: place.primaryType } : {}),

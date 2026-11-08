@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { GroundingAttribution } from "@/components/maps/GroundingAttribution";
+import { groundedSourceLabel } from "@/lib/grounded-place-source";
 import { Badge } from "@/components/ui/badge";
 import {
   useRentalUi,
@@ -444,7 +445,17 @@ export function CafeDetailPanel({
               </dl>
 
               <div className="flex flex-wrap gap-1.5">
-                <Badge variant="secondary">Google-verified</Badge>
+                {(detail.sourceMode !== "saved_catalog" && detail.sourceMode !== "demo_fixture" &&
+                  (enrichment.status === "ready" || detail.groundingSource)) ? (
+                  <Badge variant="secondary">Google-verified</Badge>
+                ) : null}
+                {groundedSourceLabel(detail.sourceMode, Boolean(detail.groundingSource)) ? (
+                  <Badge data-testid="detail-source-label" variant="outline">
+                    {detail.sourceMode === "saved_catalog" && enrichment.status === "ready"
+                      ? "Saved MDE catalog · details refreshed from Google"
+                      : groundedSourceLabel(detail.sourceMode, Boolean(detail.groundingSource))}
+                  </Badge>
+                ) : null}
                 {detail.placeId ? <Badge variant="outline">Place ID</Badge> : null}
                 {merged.factsCheckedAt ? (
                   <Badge variant="outline">Checked {merged.factsCheckedAt}</Badge>

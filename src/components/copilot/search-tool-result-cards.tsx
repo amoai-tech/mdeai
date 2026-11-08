@@ -97,6 +97,7 @@ function groundedRowToBase(row: GroundedRow, rank: number) {
     photoAuthorAttributions: row.photoAuthorAttributions,
     fieldMaskVersion: row.fieldMaskVersion,
     groundingSource: row.groundingSource,
+    sourceMode: row.sourceMode,
     rank,
   };
 }
@@ -187,6 +188,7 @@ export function GroundedNightlifeResults({ result }: { result: unknown }) {
               placeId={detail.placeId}
               fieldMaskVersion={detail.fieldMaskVersion}
               groundingSource={detail.groundingSource}
+              sourceMode={detail.sourceMode}
               selected={selectedPinId === detail.pinId}
               onSelect={mappedPinIds.has(detail.pinId) ? () => panToPin(detail.pinId) : undefined}
               onOpenDetails={() =>
@@ -246,6 +248,7 @@ export function GroundedCafeResults({ result }: { result: unknown }) {
               placeId={detail.placeId}
               fieldMaskVersion={detail.fieldMaskVersion}
               groundingSource={detail.groundingSource}
+              sourceMode={detail.sourceMode}
               selected={selectedPinId === detail.pinId}
               onSelect={mappedPinIds.has(detail.pinId) ? () => panToPin(detail.pinId) : undefined}
               onOpenDetails={() => openCafeDetail(detail, cafeRows)}
