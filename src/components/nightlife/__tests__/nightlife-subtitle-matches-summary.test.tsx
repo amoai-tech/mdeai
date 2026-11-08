@@ -2,6 +2,7 @@
 import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GroundedToolRow } from "@/lib/parse-grounded-tool-result";
+import type { Dispatch } from "react";
 
 /**
  * The page subtitle and the search summary describe the same rows, so they must use the same word.
@@ -50,12 +51,12 @@ vi.mock("@/components/chat/guest-venue-search", () => ({ GuestVenueSearchScoped:
 vi.mock("@/components/chat/discovery-ask-composer", () => ({
   DiscoveryAskComposer: (props: {
     guestVenues?: {
-      onResults: (rows: GroundedToolRow[]) => void;
-      onSearchMeta?: (meta: { preferences: string[] }) => void;
+      onResults: Dispatch<GroundedToolRow[]>;
+      onSearchMeta?: Dispatch<{ preferences: string[] }>;
     };
   }) => {
     // Behave like the composer after a search: rows first, then the preference labels.
-    (globalThis as unknown as { __fire: (rows: GroundedToolRow[], prefs: string[]) => void }).__fire = (
+    (globalThis as unknown as { __fire: (...args: [GroundedToolRow[], string[]]) => void }).__fire = (
       rows,
       prefs,
     ) => {
@@ -71,7 +72,7 @@ import { NightlifeBrowseView } from "@/components/nightlife/nightlife-browse-vie
 const row = (id: string): GroundedToolRow => ({ id, title: `Venue ${id}`, latitude: 6.2, longitude: -75.5 });
 const fire = (rows: GroundedToolRow[], prefs: string[]) => {
   act(() => {
-    (globalThis as unknown as { __fire: (r: GroundedToolRow[], p: string[]) => void }).__fire(rows, prefs);
+    (globalThis as unknown as { __fire: (...args: [GroundedToolRow[], string[]]) => void }).__fire(rows, prefs);
   });
 };
 /** The results-section heading describes the same rows a second time. */

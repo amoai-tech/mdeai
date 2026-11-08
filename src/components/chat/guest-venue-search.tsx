@@ -34,7 +34,7 @@ export type VenueGuestOptions = {
    * The page needs them for its own subtitle: a subtitle that says "Search results" above a
    * summary that says "Suggestions — ranked for quiet" describes one result set two ways.
    */
-  onSearchMeta?: (meta: { preferences: string[] }) => void;
+  onSearchMeta?: Dispatch<{ preferences: string[] }>;
 };
 
 /**
