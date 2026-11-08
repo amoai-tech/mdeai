@@ -515,29 +515,40 @@ export function BrokerThreadSaver({
   const { markThreadSaved } = useThreadNav();
   const cursor = useRef(0);
   const inFlight = useRef(false);
+  // `agent` is a stable object whose fields mutate, so it can never be the only dependency.
+  // Depend on the values that actually change, or the save never runs after the first render.
+  const messages = agent.messages ?? [];
+  const messageCount = messages.length;
+  const lastContent = messages[messageCount - 1]?.content ?? "";
+  const running = Boolean(agent.isRunning);
 
   useEffect(() => {
-    if (inFlight.current || agent.isRunning) return;
-    const messages = agent.messages ?? [];
-    if (cursor.current >= messages.length) return;
+    if (inFlight.current || running) return;
+    if (cursor.current >= messageCount) return;
+    const current = agent.messages ?? [];
 
-    // Ordered batch from the cursor: `slice(-4)` would keep the newest and silently drop the rest.
-    const batch = messages.slice(cursor.current, cursor.current + 4);
-    const nextCursor = cursor.current + batch.length;
-    const text = batch
-      .map((message) => ({ id: message.id, role: message.role, content: message.content }))
-      .filter((message): message is { id: string; role: "user" | "assistant"; content: string } =>
-        (message.role === "user" || message.role === "assistant") &&
-        typeof message.content === "string" &&
-        message.content.trim().length > 0);
-    // A question with no reply yet has nothing to restore: hold it, and it will be saved with
-    // the answer that follows.
-    if (!text.some((message) => message.role === "assistant")) return;
-    if (text.length === 0) {
-      // Nothing restorable in this window (tool traffic): move past it instead of retrying forever.
+    // Ordered batches from the cursor: `slice(-4)` would keep the newest and drop the rest.
+    // A window with no text (tool call/result) carries nothing restorable, so step over it in
+    // this same pass -- returning would stall every later turn behind it.
+    let from = cursor.current;
+    let nextCursor = from;
+    let text: { id: string; role: "user" | "assistant"; content: string }[] = [];
+    while (from < messageCount) {
+      const batch = current.slice(from, from + 4);
+      nextCursor = from + batch.length;
+      text = batch
+        .map((message) => ({ id: message.id, role: message.role, content: message.content }))
+        .filter((message): message is { id: string; role: "user" | "assistant"; content: string } =>
+          (message.role === "user" || message.role === "assistant") &&
+          typeof message.content === "string" &&
+          message.content.trim().length > 0);
+      if (text.length > 0) break;
+      from = nextCursor;
       cursor.current = nextCursor;
-      return;
     }
+    if (text.length === 0) return;
+    // A question with no reply yet has nothing to restore: hold it for the answer.
+    if (!text.some((message) => message.role === "assistant")) return;
 
     inFlight.current = true;
     void fetch(`/api/threads/${encodeURIComponent(threadId)}/messages`, {
@@ -556,7 +567,9 @@ export function BrokerThreadSaver({
       })
       .catch((error) => console.warn("[BrokerThreadSaver] save failed", error))
       .finally(() => { inFlight.current = false; });
-  }, [agent, threadId, markThreadSaved]);
+    // The body re-reads agent.messages, so the values that can actually change are
+    // messageCount/lastContent/running; `messages` identity would re-run on every render.
+  }, [agent, threadId, markThreadSaved, messageCount, lastContent, running]);
 
   return null;
 }
