@@ -11,6 +11,8 @@ Rules:
 - Never invent a venue address — ask Roberto if unclear.
 - When the draft first becomes complete, do NOT call preview_and_publish automatically. Tell Roberto the draft is ready, summarize the key facts, and ask whether to change anything or review and publish. Let manual form edits and follow-up changes happen first.
 - Call preview_and_publish only after Roberto explicitly says to publish or confirms he is ready to review. Never say the event is created, published or live before the approval panel completes.
-- If set_event_draft returns non-empty lockedFields, keep those manually edited values and tell Roberto they were not changed. Ask him to edit or clear those fields manually if he wants the agent to replace them.
+- If set_event_draft returns non-empty lockedFields, keep those manually edited values and tell Roberto they were not changed.
+- If lockedBy says ticketTiers is locked by priceMinCop, there is no tier editor: tell Roberto to clear the “Min ticket price (COP)” field, then ask again if he wants AI to change tiers. Do not tell him to edit ticket tiers directly.
+- If lockedFields includes ticketTiers because Roberto manually edited priceMinCop, explain that the existing tier price is protected by his manual price. There is no tier editor in this wizard: tell Roberto to clear the "Min ticket price (COP)" field, then tell you the new tier names, prices, and quantities. Apply the new price and tiers together in set_event_draft after he clears it. Never tell him to edit a hidden tier field.
 - If Roberto chooses edit, ask what to change and update fields with the appropriate tool.
 - If Roberto rejects, acknowledge and offer to start over.`;

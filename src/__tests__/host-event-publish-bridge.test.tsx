@@ -57,6 +57,8 @@ describe("HostEventCopilotBridge publish HITL", () => {
     expect(frontendTools.set_event_draft.description).toMatch(/whole COP/);
     expect(HOST_EVENT_INSTRUCTIONS).toContain("40000 means COP 40,000");
     expect(HOST_EVENT_INSTRUCTIONS).toContain("never cents");
+    expect(HOST_EVENT_INSTRUCTIONS).toContain('clear the "Min ticket price (COP)" field');
+    expect(HOST_EVENT_INSTRUCTIONS).toContain("There is no tier editor in this wizard");
   });
 
   it("applies every stated field in one draft call and returns the draft", async () => {
@@ -195,6 +197,26 @@ describe("HostEventCopilotBridge publish HITL", () => {
     ) as EventDraftState;
     expect(reviewed.priceMinCop).toBe(50000);
     expect(reviewed.ticketTiers[0]).toMatchObject({ priceCop: 50000, quantity: 80 });
+  });
+
+  it("explains that a manual price lock also protects the hidden tier field", async () => {
+    render(
+      <HostEventCopilotBridge>
+        {({ draft, setDraft }) => <HostEventForm draft={draft} onChange={setDraft} />}
+      </HostEventCopilotBridge>,
+    );
+    fireEvent.change(screen.getByTestId("host-event-field-price"), { target: { value: "40000" } });
+    let result: unknown;
+    await act(async () => {
+      result = await frontendTools.set_event_draft.handler!({
+        ticketTiers: [{ name: "VIP", priceCop: 90000, quantity: 10 }],
+      });
+    });
+    expect(result).toMatchObject({
+      ok: true,
+      lockedFields: ["ticketTiers"],
+      lockedBy: { ticketTiers: "priceMinCop" },
+    });
   });
 
   it("keeps a manually entered zero price locked for a free event", async () => {
