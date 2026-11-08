@@ -30,7 +30,7 @@ All coding/browser agents (Claude, Codex, ChatGPT/Desktop Commander, Chrome DevT
 | Interactive Chrome DevTools MCP debugging | `npm run qa:browser` (existing non-admin event-host QA role; see `--help`) |
 | Actual E2E cases | Import `test` from `e2e/fixtures.ts`, request `superAdminPage` / `qaRolePage`, and use `e2e/helpers/auth.ts` |
 
-`qa:browser` creates an **ephemeral, local-only CDP** browser at port 9227; attach a **trusted** Chrome DevTools MCP using `--browser-url=http://127.0.0.1:9227`. Super Admin CDP access needs explicit `--role=super-admin --allow-admin`; prefer non-admin for visual debugging. CDP agents can read cookies and protected page data. Always stop the launcher afterwards. For RLS checks, use separate temporary identities and verified cleanup. Authenticated Playwright tests must disable screenshot, trace, and video and must never upload private reports.
+`qa:browser` launches an isolated Chrome QA profile with a loopback-only CDP listener (default port 9227, adjustable via `--port`). Attach a **trusted** Chrome DevTools MCP using `--browser-url=http://127.0.0.1:9227` or the chosen port. Chrome is located using platform-specific paths or an operator-provided `CHROME_PATH`. Super Admin CDP access needs explicit `--role=super-admin --allow-admin`; prefer non-admin for visual debugging. CDP agents can read cookies and protected page data. Always stop the launcher afterwards. For RLS checks, use separate temporary identities and verified cleanup. Authenticated Playwright tests must disable screenshot, trace, and video and must never upload private reports.
 
 Details, copy-paste commands, and non-admin role setup: [e2e/README.md](e2e/README.md#agent-qa-commands--authenticated-chrome).
 

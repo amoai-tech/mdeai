@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
+import { once } from "node:events";
 import { createRequire } from "node:module";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
@@ -34,7 +37,7 @@ test("missing QA env fails closed without logging credentials", () => {
 });
 
 test("shape-valid QA env passes without printing keys", () => {
-  const secret = "fixture-secret-must-remain-hidden";
+  const secret = randomBytes(16).toString("hex");
   const result = run(check, [], {
     NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co",
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_fixture",
@@ -42,7 +45,7 @@ test("shape-valid QA env passes without printing keys", () => {
   });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /PASS/);
-  assert.doesNotMatch(result.stdout + result.stderr, /fixture-secret-must-remain-hidden|sb_publishable_fixture/);
+  assert.doesNotMatch(result.stdout + result.stderr, new RegExp(secret + "|sb_publishable_fixture"));
 });
 
 test("qa browser help succeeds without secrets or Chrome", () => {
@@ -57,17 +60,99 @@ test("QA browser disallows automatic Super Admin exposure over CDP", () => {
   assert.match(result.stderr, /requires explicit --allow-admin/);
 });
 
-test("QA browser rejects untrusted origins, malformed ports, and unknown flags", () => {
-  for (const flags of [
-    ["--origin=https://evil.example", "--allow-remote"],
-    ["--origin=https://www.mdeai.co.evil.example", "--allow-remote"],
-    ["--origin=http://www.mdeai.co", "--allow-remote"],
-    ["--port=12"],
-    ["--role=anonymous"],
-    ["--password=abc"],
-  ]) {
+test("QA browser rejects untrusted origins, malformed ports, and unknown flags for the RIGHT reason", () => {
+  const cases = [
+    { flags: ["--origin=https://evil.example", "--allow-remote"], message: /QA browser supports local URLs/ },
+    { flags: ["--origin=https://www.mdeai.co.evil.example", "--allow-remote"], message: /QA browser supports local URLs/ },
+    { flags: ["--origin=http://www.mdeai.co", "--allow-remote"], message: /QA browser supports local URLs/ },
+    { flags: ["--origin=http://localhost:3001/evil"], message: /Provide an origin without/ },
+    { flags: ["--port=12"], message: /CDP port must be an integer/ },
+    { flags: ["--port=not-a-number"], message: /CDP port must be an integer/ },
+    { flags: ["--role=anonymous"], message: /Unsupported QA role/ },
+    { flags: ["--password=abc"], message: /Unknown QA browser option/ },
+  ];
+  for (const { flags, message } of cases) {
     const result = run(browser, flags);
     assert.equal(result.status, 1, flags.join(" "));
+    assert.match(result.stderr, message, flags.join(" "));
+    assert.doesNotMatch(result.stderr, /QA Supabase configuration missing/, "must fail before credential check");
+  }
+});
+
+test("Chrome binary lookup supports macOS, Windows, Linux and CHROME_PATH override", () => {
+  const source = fileURLToPath(new URL("../qa-browser.ts", import.meta.url));
+  const script = [
+    "import { findChromeExecutable } from " + JSON.stringify(source) + ";",
+    "const mac = findChromeExecutable({ HOME: '/Users/qa' }, 'darwin', p => p.startsWith('/Applications/'));",
+    "const windows = findChromeExecutable({ PROGRAMFILES: 'C:/Program Files' }, 'win32', p => p.endsWith('chrome.exe'));",
+    "const linux = findChromeExecutable({ PATH: '/opt/bin' }, 'linux', p => p === '/opt/bin/chromium');",
+    "const custom = findChromeExecutable({ CHROME_PATH: '/test/custom-chrome' }, 'linux', () => false);",
+    "console.log(JSON.stringify({mac,windows,linux,custom}));",
+  ].join("\n");
+  const result = spawnSync(process.execPath, ["--import", tsxLoader, "--input-type=module", "--eval", script], {
+    cwd: root, encoding: "utf8", timeout: 12_000,
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const values = JSON.parse(result.stdout.trim());
+  assert.match(values.mac, /Google Chrome/);
+  assert.match(values.windows, /chrome\.exe$/);
+  assert.equal(values.linux, "/opt/bin/chromium");
+  assert.equal(values.custom, "/test/custom-chrome");
+});
+
+test("missing custom Chrome binary explains ENOENT and fails closed", () => {
+  const missing = join(tmpdir(), "missing-mde-chrome-" + randomBytes(8).toString("hex"));
+  const result = run(browser, ["--headless"], {
+    NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co",
+    NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_fixture",
+    SUPABASE_SERVICE_ROLE_KEY: randomBytes(16).toString("hex"),
+    MDE_QA_EVENT_HOST_EMAIL: "qa-test@mdeai.co",
+    CHROME_PATH: missing,
+  });
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /Chrome executable not found at/);
+  assert.match(result.stderr, /CHROME_PATH/);
+});
+
+test("SIGINT during Chrome startup deletes its isolated profile", { timeout: 12_000 }, async (t) => {
+  if (process.platform === "win32") return t.skip("Unix test uses a fake shell Chrome executable");
+  const dir = mkdtempSync(join(tmpdir(), "mde-qa-signal-fixture-"));
+  const fakeChrome = join(dir, "fake-chrome");
+  writeFileSync(fakeChrome, "#!/bin/sh\nexec sleep 30\n", { mode: 0o755 });
+  const child = spawn(process.execPath, ["--import", tsxLoader, browser, "--headless"], {
+    cwd: dir,
+    env: {
+      HOME: process.env.HOME,
+      PATH: process.env.PATH,
+      TMPDIR: dir,
+      NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co",
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_fixture",
+      SUPABASE_SERVICE_ROLE_KEY: randomBytes(16).toString("hex"),
+      MDE_QA_EVENT_HOST_EMAIL: "qa-test@mdeai.co",
+      CHROME_PATH: fakeChrome,
+    },
+    stdio: "ignore",
+  });
+  try {
+    await Promise.race([
+      (async () => {
+        while (!readdirSync(dir).some((entry) => entry.startsWith("mde-qa-chrome-"))) {
+          if (child.exitCode !== null) throw new Error("launcher exited before Chrome startup");
+          await delay(40);
+        }
+      })(),
+      delay(5_000).then(() => { throw new Error("launcher failed to create temporary profile"); }),
+    ]);
+    child.kill("SIGINT");
+    const [exitCode] = await Promise.race([
+      once(child, "exit"),
+      delay(5_000).then(() => { throw new Error("launcher failed to stop after Ctrl+C"); }),
+    ]);
+    assert.notEqual(exitCode, 0);
+    assert.deepEqual(readdirSync(dir).filter((entry) => entry.startsWith("mde-qa-chrome-")), []);
+  } finally {
+    child.kill("SIGKILL");
+    rmSync(dir, { recursive: true, force: true, maxRetries: 5 });
   }
 });
 

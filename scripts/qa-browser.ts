@@ -7,9 +7,12 @@
  * and removed on exit. Deliberately NOT a Playwright test fixture.
  */
 import { spawn, type ChildProcess } from "node:child_process";
+import { existsSync } from "node:fs";
+import { request } from "node:http";
+import { connect } from "node:net";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { chromium, type Browser } from "playwright";
 import { hasE2eEnv, loadEnvLocalForE2E, signInAsOnOrigin } from "../e2e/helpers/auth";
@@ -77,21 +80,105 @@ export function chromeProcessEnvironment(env: NodeJS.ProcessEnv): NodeJS.Process
   };
 }
 
-async function waitForChrome(port: number, process: ChildProcess): Promise<string> {
-  const endpoint = `http://127.0.0.1:${port}`;
+/** Select Chrome on Linux, macOS and Windows, or use an explicit local override. */
+export function findChromeExecutable(
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform,
+  fileExists: (path: string) => boolean = existsSync,
+): string {
+  if (env.CHROME_PATH?.trim()) return env.CHROME_PATH.trim();
+  if (platform === "darwin") {
+    const candidates = [
+      "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+      ...(env.HOME ? [join(env.HOME, "Applications/Google Chrome.app/Contents/MacOS/Google Chrome")] : []),
+    ];
+    const found = candidates.find(fileExists);
+    if (found) return found;
+  } else if (platform === "win32") {
+    const candidates = [
+      env.PROGRAMFILES, env["PROGRAMFILES(X86)"], env.LOCALAPPDATA,
+    ].filter((directory): directory is string => Boolean(directory))
+      .map((directory) => join(directory, "Google", "Chrome", "Application", "chrome.exe"));
+    const found = candidates.find(fileExists);
+    if (found) return found;
+  } else {
+    const paths = (env.PATH ?? "").split(delimiter).filter(Boolean);
+    for (const binary of ["google-chrome", "google-chrome-stable", "chromium", "chromium-browser"]) {
+      const found = paths.map((directory) => join(directory, binary)).find(fileExists);
+      if (found) return found;
+    }
+  }
+  throw new Error("Chrome executable not found. Install Chrome or set CHROME_PATH to its executable.");
+}
+
+/** Use only a fixed loopback host, never a URL supplied by the agent. */
+export function probeLocalChrome(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (value: boolean) => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+    };
+    const req = request({
+      hostname: "127.0.0.1",
+      port,
+      path: "/json/version",
+      method: "GET",
+      timeout: 350,
+    }, (response) => {
+      let raw = "";
+      response.setEncoding("utf8");
+      response.on("data", (chunk: string) => {
+        raw += chunk;
+        if (raw.length > 4096) req.destroy();
+      });
+      response.on("end", () => {
+        try {
+          const metadata = JSON.parse(raw) as { webSocketDebuggerUrl?: unknown };
+          finish(response.statusCode === 200 && typeof metadata.webSocketDebuggerUrl === "string");
+        } catch {
+          finish(false);
+        }
+      });
+    });
+    req.on("timeout", () => req.destroy());
+    req.on("error", () => finish(false));
+    req.end();
+  });
+}
+
+/** Reject any listener already occupying the requested Chrome CDP port. */
+export function isLoopbackPortOccupied(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = connect({ host: "127.0.0.1", port });
+    socket.once("connect", () => { socket.destroy(); resolve(true); });
+    socket.once("error", () => resolve(false));
+    socket.setTimeout(500, () => { socket.destroy(); resolve(false); });
+  });
+}
+
+async function waitForChrome(
+  port: number,
+  child: ChildProcess,
+  getLaunchError: () => NodeJS.ErrnoException | undefined,
+  signal: AbortSignal,
+  executable: string,
+): Promise<string> {
+  const endpoint = "http://127.0.0.1:" + port;
   for (let attempt = 0; attempt < 80; attempt++) {
-    if (process.pid === undefined || process.exitCode !== null || process.signalCode !== null) {
+    if (signal.aborted) throw new Error("QA browser interrupted during startup.");
+    const error = getLaunchError();
+    if (error) {
+      if (error.code === "ENOENT") {
+        throw new Error("Chrome executable not found at " + executable + ". Install Chrome or set CHROME_PATH.");
+      }
+      throw new Error("Chrome failed to start: " + error.message);
+    }
+    if (child.exitCode !== null || child.signalCode !== null) {
       throw new Error("Chrome quit before its local debugger was ready. Check Chrome installation/display.");
     }
-    try {
-      const response = await fetch(endpoint + "/json/version", { signal: AbortSignal.timeout(350) });
-      if (response.ok) {
-        const data = await response.json() as { webSocketDebuggerUrl?: string };
-        if (data.webSocketDebuggerUrl) return endpoint;
-      }
-    } catch {
-      // Chrome is still starting.
-    }
+    if (await probeLocalChrome(port)) return endpoint;
     await delay(250);
   }
   throw new Error("Chrome debugger did not start on the expected local port.");
@@ -110,69 +197,94 @@ async function main(): Promise<void> {
   }
   const email = resolveQaRoleEmail(options.role);
   if (!email) throw new Error("An authenticated QA browser needs an existing non-anonymous QA role.");
-  // Never accidentally attach to some other Chrome/browser on the configured CDP port.
-  try {
-    const response = await fetch(`http://127.0.0.1:${options.port}/json/version`, {
-      signal: AbortSignal.timeout(500),
-    });
-    if (response.ok) throw new Error("QA browser CDP port is already occupied. Close that session or use --port=...");
-  } catch (error) {
-    if (error instanceof Error && error.message.includes("already occupied")) throw error;
+  // Fail closed if any process already holds the selected port.
+  if (await isLoopbackPortOccupied(options.port)) {
+    throw new Error("QA browser CDP port is already occupied. Close that session or use --port=...");
   }
 
   const directory = await mkdtemp(join(tmpdir(), "mde-qa-chrome-"));
   let child: ChildProcess | undefined;
   let connected: Browser | undefined;
-  try {
-    const args = [
-      `--user-data-dir=${directory}`,
-      `--remote-debugging-port=${options.port}`,
-      "--remote-debugging-address=127.0.0.1",
-      "--no-first-run",
-      "--no-default-browser-check",
-      ...(options.headless ? ["--headless=new"] : []),
-      "about:blank",
-    ];
-    child = spawn("google-chrome", args, {
-      env: chromeProcessEnvironment(process.env),
-      stdio: "ignore",
-    });
-    child.on("error", () => {}); // waitForChrome reports startup failures without leaking environment.
-    const endpoint = await waitForChrome(options.port, child);
-    connected = await chromium.connectOverCDP(endpoint);
-    const context = connected.contexts()[0];
-    if (!context) throw new Error("Chrome did not expose a default browser context.");
-    const page = context.pages()[0] ?? await context.newPage();
-    await signInAsOnOrigin(page, options.origin, email, { requireExisting: true });
-    const response = await page.goto(new URL("/saved", options.origin).toString(), {
-      waitUntil: "domcontentloaded",
-      timeout: 30_000,
-    });
-    if (!response || response.status() !== 200 || /\/(login|sign-in|sign_up|auth)(\/|$)/i.test(new URL(page.url()).pathname)) {
-      throw new Error("QA browser authentication was not confirmed on /saved; closing the session.");
-    }
-    await page.getByTestId("saved-page").waitFor({ state: "visible", timeout: 15_000 });
-    if (await page.getByTestId("saved-empty-signin").count()) {
-      throw new Error("QA browser still shows sign-in UI; closing the session.");
-    }
-    console.log(`MDE QA browser READY: role=${options.role}, origin=${options.origin}`);
-    console.log(`Chrome DevTools MCP: --browser-url=${endpoint}`);
-    console.log("Only allow trusted agents to connect. CDP can read cookies/session data. Press Ctrl+C to close and erase the temporary profile.");
-    await new Promise<void>((resolve) => {
-      const terminate = () => child?.kill("SIGTERM");
-      process.once("SIGINT", terminate);
-      process.once("SIGTERM", terminate);
-      child!.once("exit", () => {
-        process.off("SIGINT", terminate);
-        process.off("SIGTERM", terminate);
-        resolve();
-      });
-    });
-  } finally {
-    await connected?.close().catch(() => undefined);
+  // Install immediately after mkdtemp so Ctrl+C during login cannot leak a profile.
+  const stop = new AbortController();
+  const terminate = () => {
+    stop.abort();
     if (child && child.exitCode === null && child.signalCode === null) child.kill("SIGTERM");
-    // Use a temporary profile so privileged cookies are never committed or reused.
-    await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 300 });
+  };
+  process.on("SIGINT", terminate);
+  process.on("SIGTERM", terminate);
+
+  try {
+    const initialize = async (): Promise<void> => {
+      if (stop.signal.aborted) return;
+      const executable = findChromeExecutable();
+      const args = [
+        "--user-data-dir=" + directory,
+        "--remote-debugging-port=" + options.port,
+        "--remote-debugging-address=127.0.0.1",
+        "--no-first-run",
+        "--no-default-browser-check",
+        ...(options.headless ? ["--headless=new"] : []),
+        "about:blank",
+      ];
+      child = spawn(executable, args, {
+        env: chromeProcessEnvironment(process.env),
+        stdio: "ignore",
+      });
+      let launchError: NodeJS.ErrnoException | undefined;
+      child.on("error", (error: NodeJS.ErrnoException) => { launchError = error; });
+      const endpoint = await waitForChrome(options.port, child, () => launchError, stop.signal, executable);
+      if (stop.signal.aborted) return;
+      connected = await chromium.connectOverCDP(endpoint);
+      const context = connected.contexts()[0];
+      if (!context) throw new Error("Chrome did not expose a default browser context.");
+      const page = context.pages()[0] ?? await context.newPage();
+      await signInAsOnOrigin(page, options.origin, email, { requireExisting: true });
+      const response = await page.goto(new URL("/saved", options.origin).toString(), {
+        waitUntil: "domcontentloaded",
+        timeout: 30_000,
+      });
+      const currentPath = new URL(page.url()).pathname;
+      if (!response || response.status() !== 200 || ["/login", "/sign-in", "/sign_up", "/auth"].includes(currentPath)) {
+        throw new Error("QA browser authentication was not confirmed on /saved; closing the session.");
+      }
+      await page.getByTestId("saved-page").waitFor({ state: "visible", timeout: 15_000 });
+      if (await page.getByTestId("saved-empty-signin").count()) {
+        throw new Error("QA browser still shows sign-in UI; closing the session.");
+      }
+      if (stop.signal.aborted) return;
+      console.log("MDE QA browser READY: role=" + options.role + ", origin=" + options.origin);
+      console.log("Chrome DevTools MCP: --browser-url=" + endpoint);
+      console.log("Only allow trusted agents to connect. CDP can read cookies/session data. Press Ctrl+C to close and erase the temporary profile.");
+    };
+
+    const interrupted = new Promise<void>((resolve) => {
+      if (stop.signal.aborted) resolve();
+      else stop.signal.addEventListener("abort", () => resolve(), { once: true });
+    });
+    await Promise.race([initialize(), interrupted]);
+    if (stop.signal.aborted) throw new Error("QA browser interrupted; temporary profile cleanup completed.");
+    if (!child) throw new Error("Chrome was not launched.");
+    if (child.exitCode === null && child.signalCode === null) {
+      await new Promise<void>((resolve) => { child!.once("close", () => resolve()); });
+    }
+  } finally {
+    try {
+      await connected?.close().catch(() => undefined);
+      if (child && child.exitCode === null && child.signalCode === null) {
+        const closed = new Promise<void>((resolve) => { child!.once("close", () => resolve()); });
+        child.kill("SIGTERM");
+        await Promise.race([closed, delay(2_000)]);
+        if (child.exitCode === null && child.signalCode === null) {
+          child.kill("SIGKILL");
+          await Promise.race([closed, delay(2_000)]);
+        }
+      }
+      await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 300 });
+    } finally {
+      process.off("SIGINT", terminate);
+      process.off("SIGTERM", terminate);
+    }
   }
 }
 
