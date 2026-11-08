@@ -138,7 +138,12 @@ export const computeRouteTool = createTool({
         try {
           const route = await computeGoogleRoute(input);
           if (route && cache) {
-            cache.set("mdeaiRouteToolCache", { ...(cached ?? {}), [cacheKey]: { route } });
+            try {
+              cache.set("mdeaiRouteToolCache", { ...(cached ?? {}), [cacheKey]: { route } });
+            } catch {
+              // A paid route must still be returned when the cache write fails.
+              console.warn("[compute-route] route cache write failed");
+            }
           }
           return route
             ? { route, source: "google_routes" as const }

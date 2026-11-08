@@ -147,6 +147,25 @@ describe("computeRouteTool", () => {
     expect(out).toMatchObject({ route: { distanceMeters: 100, durationSeconds: 60 }, source: "google_routes" });
   });
 
+  it("returns a paid route when the cache write throws", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      routes: [{ distanceMeters: 120, duration: "90s" }],
+    }), { status: 200 })));
+    const context = {
+      requestContext: {
+        get: () => undefined,
+        set: (key: string) => {
+          if (key === "mdeaiRouteToolCache") throw new Error("cache write down");
+        },
+      },
+    };
+    const out = await computeRouteTool.execute!({
+      origin: { address: "Laureles" },
+      destination: { address: "Provenza" },
+    }, context as never);
+    expect(out).toMatchObject({ route: { distanceMeters: 120, durationSeconds: 90 }, source: "google_routes" });
+  });
+
   it("returns route:null when Google has no route", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ routes: [] }), { status: 200 })));
     const out = await computeRouteTool.execute!({
