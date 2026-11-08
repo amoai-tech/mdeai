@@ -22,6 +22,37 @@ describe("page filter control", () => {
     expect(parseRentalPageCommand("On this page, show 2-bedroom apartments in Laureles for COP 3M max.")).toBeNull();
     expect(parseRentalPageCommand("On this page, show 2-bedroom apartments in Laureles with wifi.")).toBeNull();
     expect(parseRentalPageCommand("On this page, show 4-bedroom apartments in Laureles.")).toBeNull();
+    expect(parseRentalPageCommand("On this page, remove the Laureles filter.")).toBeNull();
+    expect(parseRentalPageCommand("On this page, don't show 1-bedroom apartments.")).toBeNull();
+  });
+
+  it("only fast-paths complete affirmative native page commands", () => {
+    expect(parseRentalPageCommand("Change the page to 2 bedrooms in Envigado.")).toEqual({
+      neighborhood: "Envigado", beds: "2",
+    });
+    // Negation/removal must not accidentally ADD the named filter.
+    for (const message of [
+      "On this page, remove the Laureles filter.",
+      "On this page, don't show 1-bedroom apartments in Laureles.",
+      "On this page, show apartments without 1 bedroom in Laureles.",
+      "On this page, show all bedrooms in Laureles.",
+      "On this page, show apartments in any neighborhood.",
+      "On this page, exclude 2-bedroom apartments in Envigado.",
+      "On this page, show 1-bedroom rentals in Laureles, not Envigado.",
+    ]) expect(parseRentalPageCommand(message), message).toBeNull();
+  });
+
+  it("keeps all semantic or location requirements on the search path", () => {
+    for (const message of [
+      "On this page, show quiet 1-bedroom apartments in Laureles near cafés.",
+      "On this page, show 2-bedroom apartments in Laureles for remote work.",
+      "On this page, show 1-bedroom apartments in Laureles near the metro.",
+      "On this page, show family rentals with 2 bedrooms in Envigado.",
+      "On this page, show 2-bedroom apartments in Laureles with a terrace.",
+      "On this page, show 1-bedroom apartments in Laureles overlooking the park.",
+      "On this page, show 1-bedroom apartments in Laureles for a digital nomad.",
+      "On this page, show the top 5 apartments with 1 bedroom in Laureles.",
+    ]) expect(parseRentalPageCommand(message), message).toBeNull();
   });
 
   it("rejects a date order that is reversed only after merging current filters", () => {

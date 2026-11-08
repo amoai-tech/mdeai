@@ -11,10 +11,7 @@ export const rentalPageControlSchema = z.object({
   through: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
 }).strict()
   .refine((b) => !b.from || isRealCalendarDate(b.from), { message: "from must be a real date", path: ["from"] })
-  .refine((b) => !b.through || isRealCalendarDate(b.through), { message: "through must be a real date", path: ["through"] })
-  .refine((b) => isOrderedStay(b.from ?? undefined, b.through ?? undefined), {
-    message: "through must not be before from", path: ["through"],
-  });
+  .refine((b) => !b.through || isRealCalendarDate(b.through), { message: "through must be a real date", path: ["through"] });
 
 export type RentalPageControlPatch = z.infer<typeof rentalPageControlSchema>;
 
@@ -40,7 +37,7 @@ export function parseRentalPageCommand(text: string): RentalPageControlPatch | n
   if (!/\bon (this|the) page\b|\bpage filters?\b|\bset the (visible )?filters?\b/i.test(text)) {
     return null;
   }
-  if (/\b(furnished|balcony|pets?|parking|pool|gym|wifi|internet|workspace|desk|budget|under|below|less than)\b/i.test(text)) {
+  if (/\b(remove|clear|without|not|don't|do not|any|all|furnished|balcony|pets?|parking|pool|gym|wifi|internet|workspace|desk|budget|under|below|less than)\b/i.test(text)) {
     return null;
   }
   const parsed = buildRentalSearchParams(text, {});

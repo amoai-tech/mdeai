@@ -292,6 +292,31 @@ describe("RentalAskComposer (SAN-1421)", () => {
     await waitFor(() => expect(draftValue()).toBe(""));
   });
 
+  it("reports a reversed merged date range without navigating", async () => {
+    render(<RentalAskComposer context={{ neighborhood: null, beds: null, from: "2026-11-10", through: null }} />);
+    type("On this page, show only 1-bedroom apartments in Laureles Nov 10 to 1.");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+
+    expect(router.push).not.toHaveBeenCalled();
+    expect(chat.appendMessage).not.toHaveBeenCalled();
+    expect((await screen.findByTestId("rental-ask-error")).textContent).toContain("reversed");
+  });
+
+  it("sends negated or semantic page requests through the full search instead of partial navigation", async () => {
+    render(<RentalAskComposer context={{ neighborhood: null, beds: null, from: null, through: null }} />);
+    for (const message of [
+      "On this page, remove the Laureles filter.",
+      "On this page, show quiet 1-bedroom apartments in Laureles near cafés.",
+    ]) {
+      type(message);
+      fireEvent.click(screen.getByTestId("rental-ask-send"));
+      await waitFor(() => expect(chat.appendMessage).toHaveBeenCalled());
+      expect(router.push).not.toHaveBeenCalled();
+      chat.appendMessage.mockClear();
+      // A mocked successful turn has no in-flight work after dispatch.
+    }
+  });
+
   it("sends an explicit bedroom request above the native range to the agent, not a widened page", async () => {
     render(<RentalAskComposer context={{ neighborhood: null, beds: null, from: null, through: null }} />);
     type("On this page, show only 4-bedroom apartments in Laureles.");
