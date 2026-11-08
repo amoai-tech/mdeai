@@ -28,8 +28,9 @@ The previous detail path stored the raw response (including `photos` and
   suppression) and rate limits remain.
 - `src/app/api/places/detail/route.ts`: `Cache-Control: no-store`.
 - `src/app/api/places/photo/route.ts`: `Cache-Control: private, no-store`.
-- `supabase/migrations/20261108025310_places_cache_policy_cleanup.sql` deletes expired detail and
-  search rows (reviewed SAN-105 cleanup, applied before deploy).
+- `supabase/migrations/20261108025310_places_cache_policy_cleanup.sql` deletes **all** detail and
+  search rows, including recent rows the old code may write until deploy. Applied before deploy, and
+  must be re-run after deploy to prove the count returns to 0.
 
 ## Tests
 
