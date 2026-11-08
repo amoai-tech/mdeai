@@ -175,6 +175,17 @@ describe("searchGroundedPlacesTool fallback", () => {
     expect(invokeAdkGrounding).not.toHaveBeenCalled();
   });
 
+  it("returns an empty result if catalog lookup fails with no ADK configured", async () => {
+    vi.mocked(isAdkGroundingConfigured).mockReturnValue(false);
+    vi.mocked(searchRestaurants).mockRejectedValue(new Error("db down"));
+
+    const out = await runGrounded("rooftop dinner in Provenza");
+
+    expect(out.results).toEqual([]);
+    expect(out.metadata?.reason).toBe("adk_not_configured");
+    expect(incrementAndCheckGroundingQuota).not.toHaveBeenCalled();
+  });
+
   it("labels real Supabase fallback rows as saved catalog, not live Google", async () => {
     vi.mocked(invokeAdkGrounding).mockResolvedValue(
       adkUnavailableMock({ reason: "adk_unavailable", status: 503 }),

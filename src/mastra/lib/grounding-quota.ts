@@ -9,8 +9,8 @@ export type GroundingQuotaResult =
 
 /**
  * Reserve one paid provider call atomically before it is issued.
- * No database/service key => fail closed when a cap is configured; dev without
- * Supabase still runs so local development does not need production secrets.
+ * No database/service key => fail closed (`quota_unavailable`); paid provider calls
+ * require quota storage. Local tests must mock the service environment.
  */
 export async function incrementAndCheckGroundingQuota(): Promise<GroundingQuotaResult> {
   const limitRaw = process.env.MAPS_GROUNDING_DAILY_LIMIT;

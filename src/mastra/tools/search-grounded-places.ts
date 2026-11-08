@@ -409,17 +409,31 @@ export const searchGroundedPlacesTool = createTool({
     const query = normalizeVenueGroundingQuery(rawQuery);
     // No configured ADK endpoint => no paid provider call and no quota unit.
     if (!isCafeGroundingIntent(rawQuery, intent) && !isAdkGroundingConfigured()) {
-      const fallbackResults = await curatedFallback(rawQuery, pageSize ?? 5, intent);
-      return withVenueKindMetadata(
-        {
-          results: fallbackResults,
-          attribution: [],
-          source: "grounding" as const,
-          metadata: { fallback: "curated", reason: "adk_not_configured" },
-        },
-        rawQuery,
-        intent,
-      );
+      try {
+        const fallbackResults = await curatedFallback(rawQuery, pageSize ?? 5, intent);
+        return withVenueKindMetadata(
+          {
+            results: fallbackResults,
+            attribution: [],
+            source: "grounding" as const,
+            metadata: { fallback: "curated", reason: "adk_not_configured" },
+          },
+          rawQuery,
+          intent,
+        );
+      } catch (err) {
+        console.warn("[search-grounded-places] catalog fallback failed:", err);
+        return withVenueKindMetadata(
+          {
+            results: [],
+            attribution: [],
+            source: "grounding" as const,
+            metadata: { fallback: "curated", reason: "adk_not_configured" },
+          },
+          rawQuery,
+          intent,
+        );
+      }
     }
     const quota = await incrementAndCheckGroundingQuota();
     if (!quota.allowed) {
