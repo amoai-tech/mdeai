@@ -337,6 +337,31 @@ describe("a finished answer makes the thread reloadable", () => {
     expect(calls()).toHaveLength(1);
   });
 
+  it("a rejected network promise waits for run end and retries only once", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new TypeError("network disconnected"); }));
+    agentRunning = true;
+    agentMessages = [{ id: "u1", role: "user", content: "q" }];
+    const { rerender } = render(<BrokerThreadSaver threadId={THREAD} />);
+    await vi.waitFor(() => expect(calls()).toHaveLength(1));
+
+    for (const chunk of ["par", "partial", "partial answer"]) {
+      agentMessages = [
+        { id: "u1", role: "user", content: "q" },
+        { id: "a1", role: "assistant", content: chunk },
+      ];
+      rerender(<BrokerThreadSaver threadId={THREAD} />);
+      await new Promise((r) => setTimeout(r, 30));
+    }
+    expect(calls()).toHaveLength(1);
+
+    agentRunning = false;
+    rerender(<BrokerThreadSaver threadId={THREAD} />);
+    await vi.waitFor(() => expect(calls()).toHaveLength(2));
+    await new Promise((r) => setTimeout(r, 60));
+    expect(calls()).toHaveLength(2);
+    expect(markThreadSaved).not.toHaveBeenCalled();
+  });
+
   it("retries a failed question exactly once when the run ends", async () => {
     // First save fails, the reply finishes, then the retry succeeds.
     let attempt = 0;

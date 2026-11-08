@@ -662,7 +662,12 @@ export function BrokerThreadSaver({
           markThreadSaved(threadId);
         }
       })
-      .catch((error) => console.warn("[BrokerThreadSaver] save failed", error))
+      .catch((error) => {
+        console.warn("[BrokerThreadSaver] save failed", error);
+        // A rejected fetch is a failed save too. Hold these IDs until the bounded post-run
+        // retry; otherwise each streamed chunk can resend the same rejected question.
+        for (const id of handledInBatch) state.failedIds.add(id);
+      })
       .finally(() => {
         state.inFlight = false;
         // A finished POST is not an agent update. Drain pending complete answers explicitly,
