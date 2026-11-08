@@ -8,7 +8,12 @@ import type { GroundedPlaceResult } from "./map-adk-grounding-pins";
 const CAFE_TEXT_SEARCH_MASK = [
   ...DEFAULT_TEXT_SEARCH_MASK,
   "places.primaryType",
+  "places.types",
 ] as const;
+
+const MEDELLIN_BIAS = { latitude: 6.2442, longitude: -75.5812 };
+const MEDELLIN_CONTEXT = /\b(medell[ií]n|laureles|poblado|envigado|sabaneta|bel[eé]n|provenza|estadio|centro)\b/i;
+const CAFE_TYPES = new Set(["cafe", "coffee_shop", "bakery", "brunch_restaurant"]);
 
 type GooglePlace = {
   id?: unknown;
@@ -34,30 +39,46 @@ function text(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
-function httpUrl(value: unknown): string | undefined {
-  const raw = text(value);
+/** Only Google Maps' exact HTTPS hosts are accepted for public result links. */
+function validatedMapsUrl(candidate: unknown): string | undefined {
+  const raw = text(candidate);
   if (!raw) return undefined;
   try {
     const url = new URL(raw);
-    return url.protocol === "https:" || url.protocol === "http:" ? url.toString() : undefined;
+    if (url.protocol !== "https:" || url.username || url.password) return undefined;
+    if (url.hostname === "maps.google.com") return raw;
+    if ((url.hostname === "google.com" || url.hostname === "www.google.com") &&
+        (url.pathname === "/maps" || url.pathname.startsWith("/maps/"))) return raw;
   } catch {
     return undefined;
   }
+  return undefined;
 }
 
 function finite(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
-function isBarOrClub(place: GooglePlace): boolean {
-  const primary = text(place.primaryType)?.toLowerCase();
-  if (primary === "bar" || primary === "night_club" || primary === "liquor_store") {
-    return true;
-  }
-  const types = Array.isArray(place.types)
-    ? place.types.filter((t): t is string => typeof t === "string").map((t) => t.toLowerCase())
+function placeTypes(place: GooglePlace): string[] {
+  const raw = Array.isArray(place.types)
+    ? place.types.filter((t): t is string => typeof t === "string")
     : [];
+  const primary = text(place.primaryType);
+  return [...(primary ? [primary] : []), ...raw].map((t) => t.toLowerCase());
+}
+
+function isBarOrClub(place: GooglePlace): boolean {
+  const types = placeTypes(place);
   return types.some((t) => t === "bar" || t === "night_club" || t === "liquor_store");
+}
+
+function isCafe(place: GooglePlace): boolean {
+  return placeTypes(place).some((t) => CAFE_TYPES.has(t));
+}
+
+/** Add Medellín context when the user did not name a city/neighborhood. */
+export function withMedellinScope(query: string): string {
+  return MEDELLIN_CONTEXT.test(query) ? query : `${query} Medellín, Colombia`;
 }
 
 /** Map the real Places Text Search response to the existing grounded card/pin contract. */
@@ -72,14 +93,14 @@ export function mapGoogleTextSearchToGrounded(response: unknown): GoogleCafeSear
   for (const raw of places) {
     if (!raw || typeof raw !== "object") continue;
     const place = raw as GooglePlace;
-    if (isBarOrClub(place)) continue;
+    if (isBarOrClub(place) || !isCafe(place)) continue;
     const placeId = text(place.id);
     const title = text(place.displayName?.text);
-    if (!placeId || !title || seen.has(placeId)) continue;
+    const mapsUrl = validatedMapsUrl(place.googleMapsLinks?.placeUri);
+    if (!placeId || !title || !mapsUrl || seen.has(placeId)) continue;
     seen.add(placeId);
 
-    const mapsUrl = httpUrl(place.googleMapsLinks?.placeUri);
-    const row: GroundedPlaceResult = {
+    results.push({
       id: `google-${placeId}`,
       title,
       placeId,
@@ -87,14 +108,11 @@ export function mapGoogleTextSearchToGrounded(response: unknown): GoogleCafeSear
       latitude: finite(place.location?.latitude),
       longitude: finite(place.location?.longitude),
       mapsUrl,
-      directionsUrl: httpUrl(place.googleMapsLinks?.directionsUri),
-      reviewsUrl: httpUrl(place.googleMapsLinks?.reviewsUri),
+      directionsUrl: validatedMapsUrl(place.googleMapsLinks?.directionsUri),
+      reviewsUrl: validatedMapsUrl(place.googleMapsLinks?.reviewsUri),
       primaryType: text(place.primaryType),
-    };
-    results.push(row);
-    if (mapsUrl) {
-      attribution.push({ source: "Google Maps", placeUri: mapsUrl, title });
-    }
+    });
+    attribution.push({ source: "Google Maps", placeUri: mapsUrl, title });
   }
   return { results, attribution };
 }
@@ -109,22 +127,15 @@ export async function searchGoogleCafes(params: {
   locationBias?: { latitude: number; longitude: number };
 }): Promise<GoogleCafeSearchResult> {
   const pageSize = Math.min(Math.max(params.pageSize ?? 5, 1), 5);
-  const bias = params.locationBias
-    ? {
-        circle: {
-          center: {
-            latitude: params.locationBias.latitude,
-            longitude: params.locationBias.longitude,
-          },
-          radius: 5000,
-        },
-      }
-    : undefined;
+  const center = params.locationBias ?? MEDELLIN_BIAS;
   const response = await searchText({
-    textQuery: params.query,
+    textQuery: withMedellinScope(params.query),
     pageSize,
     fieldMask: [...CAFE_TEXT_SEARCH_MASK],
-    locationBias: bias,
+    maxAttempts: 1,
+    locationBias: {
+      circle: { center, radius: 5000 },
+    },
   });
   return mapGoogleTextSearchToGrounded(response);
 }

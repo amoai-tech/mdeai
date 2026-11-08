@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 vi.mock("../../lib/google-places-cafe-search", () => ({
   searchGoogleCafes: vi.fn().mockResolvedValue({ results: [], attribution: [] }),
+  withMedellinScope: (query: string) => query,
 }));
 
 vi.mock("../../lib/adk-grounding-client", () => ({

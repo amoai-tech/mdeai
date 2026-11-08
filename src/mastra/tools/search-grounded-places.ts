@@ -2,7 +2,7 @@ import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { enrichedGroundedPlaceFieldsSchema } from "../lib/adk-grounding-types";
 import { invokeAdkGrounding } from "../lib/adk-grounding-client";
-import { searchGoogleCafes } from "../lib/google-places-cafe-search";
+import { searchGoogleCafes, withMedellinScope } from "../lib/google-places-cafe-search";
 import { groundedPlaceSourceModes, type GroundedPlaceSourceMode } from "@/lib/grounded-place-source";
 import {
   mapAdkGroundingPins,
@@ -153,6 +153,9 @@ export function filterCafeGroundingRows(
   if (!isCafeGroundingIntent(query, intent)) return rows;
   return rows.filter((row) => {
     if (isBarLoungeDistractor(row.title)) return false;
+    if (/^(cafe|coffee_shop|bakery|brunch_restaurant)$/i.test(row.primaryType ?? "")) {
+      return true;
+    }
     return isCafeCandidateTitle(row.title);
   });
 }
@@ -441,17 +444,20 @@ export const searchGroundedPlacesTool = createTool({
     }
     // Real Google cafés first: the installed Places SDK supplies stable IDs,
     // coordinates and links without depending on the absent ADK sidecar.
+    let directCafeAttempted = false;
     if (isCafeGroundingIntent(rawQuery, intent)) {
+      directCafeAttempted = true;
       try {
         const direct = await searchGoogleCafes({
-          query: rawQuery,
+          query: withMedellinScope(normalizeVenueGroundingQuery(rawQuery)),
           pageSize: pageSize ?? 5,
           locationBias: inputBias,
         });
-        if (direct.results.length > 0) {
+        const filteredDirect = filterCafeGroundingRows(direct.results, rawQuery, intent);
+        if (filteredDirect.length > 0) {
           return withVenueKindMetadata(
             {
-              results: direct.results,
+              results: filteredDirect,
               attribution: direct.attribution,
               source: "grounding" as const,
               metadata: { provider: "google_places", searchMode: "text" },
@@ -462,6 +468,24 @@ export const searchGroundedPlacesTool = createTool({
         }
       } catch (err) {
         console.warn("[search-grounded-places] Google Places café search failed:", err);
+      }
+    }
+    // A café query can reach the ADK path after the direct Places attempt.
+    // Reserve a second unit so two provider searches are never counted as one.
+    if (directCafeAttempted) {
+      const secondQuota = await incrementAndCheckGroundingQuota();
+      if (!secondQuota.allowed) {
+        const fallbackResults = await curatedFallback(rawQuery, pageSize ?? 5, intent);
+        return withVenueKindMetadata(
+          {
+            results: fallbackResults,
+            attribution: [],
+            source: "grounding" as const,
+            metadata: { provider: "google_places", fallback: "curated", reason: secondQuota.reason },
+          },
+          rawQuery,
+          intent,
+        );
       }
     }
     const locationBias = resolveGroundingLocationBias({

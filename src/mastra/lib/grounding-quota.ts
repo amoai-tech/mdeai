@@ -5,11 +5,12 @@ const DEFAULT_DAILY_CAP = 200;
 
 export type GroundingQuotaResult =
   | { allowed: true }
-  | { allowed: false; reason: "quota" | "disabled" };
+  | { allowed: false; reason: "quota" | "disabled" | "quota_unavailable" };
 
 /**
- * MAP-002B — durable daily cap via `grounding_quota_log` (legacy migration applied).
- * Fail-closed when at cap or MAPS_GROUNDING_DAILY_LIMIT=0.
+ * Reserve one paid provider call atomically before it is issued.
+ * No database/service key => fail closed when a cap is configured; dev without
+ * Supabase still runs so local development does not need production secrets.
  */
 export async function incrementAndCheckGroundingQuota(): Promise<GroundingQuotaResult> {
   const limitRaw = process.env.MAPS_GROUNDING_DAILY_LIMIT;
@@ -30,34 +31,16 @@ export async function incrementAndCheckGroundingQuota(): Promise<GroundingQuotaR
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  const today = new Date().toISOString().slice(0, 10);
-
-  const { data: existing, error: readErr } = await supabase
-    .from("grounding_quota_log")
-    .select("count")
-    .eq("date", today)
-    .maybeSingle();
-
-  if (readErr) {
-    console.warn("[grounding-quota] read failed, allowing call:", readErr.message);
-    return { allowed: true };
+  try {
+    const { data, error } = await supabase.rpc("reserve_places_grounding_quota", {
+      p_daily_cap: dailyCap,
+    });
+    if (error || typeof data !== "boolean") {
+      console.warn("[grounding-quota] atomic reserve unavailable", error?.message);
+      return { allowed: false, reason: "quota_unavailable" };
+    }
+    return data ? { allowed: true } : { allowed: false, reason: "quota" };
+  } catch {
+    return { allowed: false, reason: "quota_unavailable" };
   }
-
-  const current = existing?.count ?? 0;
-  if (current >= dailyCap) {
-    return { allowed: false, reason: "quota" };
-  }
-
-  const next = current + 1;
-  const { error: writeErr } = await supabase.from("grounding_quota_log").upsert(
-    { date: today, count: next },
-    { onConflict: "date" },
-  );
-
-  if (writeErr) {
-    console.warn("[grounding-quota] increment failed, allowing call:", writeErr.message);
-    return { allowed: true };
-  }
-
-  return { allowed: true };
 }

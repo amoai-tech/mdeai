@@ -37,3 +37,17 @@ returned 5 rows including Café Euge, Proyecto Café, Café Primavera, Amelier a
 - ESLint/TypeScript clean for changed files.
 
 Not claimed: hosted MCP/ADK completion, production deployment, UI screenshots. Those follow.
+
+## Review hardening (same PR)
+
+- Default Medellín scope: city/neighborhood is added when absent; a 5 km Medellín bias is always sent.
+- `places.types` requested; non-café/bar rows are rejected by provider types, not title words.
+- Direct results still pass the shared café filter; brand-only cafés with `primaryType=cafe` survive.
+- Maps links accept only HTTPS Google Maps hosts; a row without a valid place URI is dropped.
+- `requirePlacesApiKey` trims each candidate and uses the first non-empty key.
+- ADK fallback after a direct café attempt reserves a **second** quota unit.
+- Daily cap is now atomic via `reserve_places_grounding_quota` (migration
+  `20261108082148_atomic_places_grounding_quota.sql`); DB errors fail closed with `quota_unavailable`.
+- Café Places call uses `maxAttempts=1`, so a timeout cannot trigger hidden retries.
+
+Tests: mapper 5, tool 7, atomic quota 3, related 17 total.

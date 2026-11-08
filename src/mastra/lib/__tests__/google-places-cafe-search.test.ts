@@ -1,5 +1,12 @@
-import { describe, expect, it } from "vitest";
-import { mapGoogleTextSearchToGrounded } from "../google-places-cafe-search";
+import { describe, expect, it, vi } from "vitest";
+
+const { searchTextMock } = vi.hoisted(() => ({ searchTextMock: vi.fn() }));
+vi.mock("../google-places-client", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../google-places-client")>();
+  return { ...actual, searchText: searchTextMock };
+});
+
+import { mapGoogleTextSearchToGrounded, searchGoogleCafes, withMedellinScope } from "../google-places-cafe-search";
 
 const response = {
   places: [
@@ -57,17 +64,34 @@ describe("mapGoogleTextSearchToGrounded", () => {
     expect(brand?.longitude).toBeUndefined();
   });
 
+  it("adds Medellín and a default bias when the query names no city", async () => {
+    searchTextMock.mockResolvedValue({ places: [] });
+    await searchGoogleCafes({ query: "quiet cafés" });
+    expect(searchTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        textQuery: expect.stringContaining("Medellín"),
+        locationBias: {
+          circle: { center: { latitude: 6.2442, longitude: -75.5812 }, radius: 5000 },
+        },
+      }),
+    );
+    expect(withMedellinScope("cafés in Laureles")).toBe("cafés in Laureles");
+  });
+
   it("drops bars and malformed provider payloads", () => {
     const out = mapGoogleTextSearchToGrounded({
       places: [
         ...response.places,
         { id: "ChIJBadUrl", displayName: { text: "Bad URL" }, googleMapsLinks: { placeUri: "javascript:alert(1)" } },
         { id: "", displayName: { text: "No ID" } },
+        { id: "ChIJRestaurant", displayName: { text: "Not a Café" }, primaryType: "restaurant", types: ["restaurant"], googleMapsLinks: { placeUri: "https://maps.google.com/?cid=321" } },
+        { id: "ChIJBarType", displayName: { text: "Bar With Cafe Name" }, primaryType: "restaurant", types: ["restaurant", "bar"], googleMapsLinks: { placeUri: "https://maps.google.com/?cid=322" } },
       ],
     });
     expect(out.results.map((r) => r.title)).not.toContain("Skybar");
-    expect(out.results.map((r) => r.title)).toContain("Bad URL");
-    expect(out.results.find((r) => r.title === "Bad URL")?.mapsUrl).toBeUndefined();
+    expect(out.results.map((r) => r.title)).not.toContain("Bad URL");
     expect(out.results.map((r) => r.title)).not.toContain("No ID");
+    expect(out.results.map((r) => r.title)).not.toContain("Not a Café");
+    expect(out.results.map((r) => r.title)).not.toContain("Bar With Cafe Name");
   });
 });
