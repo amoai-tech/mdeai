@@ -8,6 +8,7 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { resetPlacesDetailRateLimitsForTests } from "@/lib/places-detail-rate-limit";
+import { fetchPlaceDetailsWithCache } from "@/lib/place-details-cache";
 
 // Stable top-level mocks — route never calls real Google APIs in tests
 const durableLimit = vi.hoisted(() => ({
@@ -57,6 +58,7 @@ describe("GET /api/places/detail — rate limiting", () => {
   beforeEach(() => {
     resetPlacesDetailRateLimitsForTests();
     durableLimit.checkRateLimitDurable.mockClear();
+    vi.mocked(fetchPlaceDetailsWithCache).mockClear();
   });
 
   it("allows the first 30 requests from the same IP", async () => {
@@ -89,6 +91,22 @@ describe("GET /api/places/detail — rate limiting", () => {
     const res = await GET(makeRequest("6.6.6.6"));
     expect(res.status).toBe(429);
     expect(res.headers.get("Cache-Control")).toBe("no-store");
+  });
+
+  it("fails closed without charging Google when the shared limiter store is unavailable", async () => {
+    durableLimit.checkRateLimitDurable.mockResolvedValueOnce({
+      allowed: true,
+      count: 0,
+      max: 30,
+      retryAfterSeconds: 0,
+      storeAvailable: false,
+    });
+
+    const res = await GET(makeRequest("7.7.7.7"));
+
+    expect(res.status).toBe(503);
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
+    expect(vi.mocked(fetchPlaceDetailsWithCache)).not.toHaveBeenCalled();
   });
 
   it("does not allow public or intermediary caching of provider details", async () => {

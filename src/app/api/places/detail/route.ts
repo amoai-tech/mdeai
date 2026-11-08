@@ -33,13 +33,19 @@ export async function GET(req: Request) {
   const placeId = normalizePlaceId(rawId);
 
   // Shared cap across runtime instances; the in-process limiter above is only
-  // a cheap first line. If the durable store is unavailable it fails open, as
-  // before, and the in-process bucket still applies.
+  // a cheap first line. Fail closed if the quota store is unavailable, so a
+  // database outage cannot turn this endpoint into unmetered Google calls.
   const durable = await checkRateLimitDurable(
     `places-detail:${clientIpFromRequest(req)}`,
     30,
     60,
   );
+  if (!durable.storeAvailable) {
+    return NextResponse.json(
+      { error: "rate_limit_unavailable" },
+      { status: 503, headers: { "Cache-Control": "no-store" } },
+    );
+  }
   if (!durable.allowed) {
     return NextResponse.json(
       { error: "rate_limited" },
