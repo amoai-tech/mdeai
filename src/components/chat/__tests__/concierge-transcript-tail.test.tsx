@@ -43,7 +43,10 @@ vi.mock("@/lib/concierge-send-user-message", () => ({
   sendConciergeUserMessage: vi.fn(),
 }));
 // The result panels read their own contexts; this test is about order and ownership, not cards.
-vi.mock("@/components/chat/rental-fast-path-panel", () => ({ RentalFastPathPanel: () => null }));
+vi.mock("@/components/chat/rental-fast-path-panel", () => ({
+  RentalFastPathPanel: () => null,
+  RentalSearchRecoveryNotice: () => null,
+}));
 vi.mock("@/components/chat/event-fast-path-panel", () => ({ EventFastPathPanel: () => null }));
 vi.mock("@/components/chat/grounded-fast-path-panel", () => ({ GroundedFastPathPanel: () => null }));
 vi.mock("@/components/chat/restaurant-fast-path-panel", () => ({ RestaurantFastPathPanel: () => null }));

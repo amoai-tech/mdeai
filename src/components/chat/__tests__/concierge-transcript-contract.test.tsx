@@ -45,7 +45,10 @@ vi.mock("@/components/chat/rental-ui-context", () => ({
 }));
 vi.mock("@/lib/hooks/use-concierge-send-handlers", () => ({ useConciergeSendHandlers: () => ({}) }));
 vi.mock("@/lib/concierge-send-user-message", () => ({ sendConciergeUserMessage: vi.fn() }));
-vi.mock("@/components/chat/rental-fast-path-panel", () => ({ RentalFastPathPanel: () => null }));
+vi.mock("@/components/chat/rental-fast-path-panel", () => ({
+  RentalFastPathPanel: () => null,
+  RentalSearchRecoveryNotice: () => null,
+}));
 vi.mock("@/components/chat/event-fast-path-panel", () => ({ EventFastPathPanel: () => null }));
 vi.mock("@/components/chat/grounded-fast-path-panel", () => ({ GroundedFastPathPanel: () => null }));
 vi.mock("@/components/chat/restaurant-fast-path-panel", () => ({ RestaurantFastPathPanel: () => null }));

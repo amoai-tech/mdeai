@@ -590,14 +590,15 @@ export async function waitForConciergeReply(
         message: `a new concierge assistant reply (${diagnostics.summary()})`,
       })
       .toBeGreaterThan(before);
-    const text = await replies.last().innerText();
-    if (text.trim().length === 0) {
-      // B2's symptom: a reply bubble that renders nothing.
-      throw new Error(
-        `the new concierge reply rendered no text — ${diagnostics.summary()}`,
-      );
-    }
-    return text;
+    // A message bubble can mount before its first AG-UI text delta arrives.
+    // Wait a *bounded* time for nonempty content instead of reporting a
+    // transient render as a permanently blank agent answer. A truly empty
+    // response still fails this assertion; it is never counted as success.
+    await expect.poll(
+      async () => (await replies.last().innerText()).trim().length,
+      { timeout: Math.min(timeout, 10_000), message: `assistant reply renders nonempty text — ${diagnostics.summary()}` },
+    ).toBeGreaterThan(0);
+    return replies.last().innerText();
   } finally {
     // A long spec must not accumulate listeners (and every id they captured).
     owned?.dispose();

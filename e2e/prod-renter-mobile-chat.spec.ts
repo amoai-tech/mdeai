@@ -70,6 +70,23 @@ test.describe("SAN-1626 · signed-in renter concierge on a 390px phone", () => {
   test("asks, gets grounded cards, follows up and survives a reload", async ({ qaRolePage: page }) => {
     test.setTimeout(420_000);
 
+    // SAN-1074: distinguish transient rental API failure from an empty UI or
+    // a delayed AG-UI bubble. Only log the fixed path, status and the already
+    // sanitized error code; never request bodies, cookies or user data.
+    page.on("response", (response) => {
+      if (new URL(response.url()).pathname === "/api/rentals/search" &&
+          response.request().method() === "POST") {
+        console.info("SAN-1074 rental API", JSON.stringify({
+          path: "/api/rentals/search", status: response.status(),
+        }));
+      }
+    });
+    page.on("console", (message) => {
+      if (message.text().startsWith("[rental-fast-path] /api/rentals/search")) {
+        console.info("SAN-1074 rental API error", message.text().slice(0, 220));
+      }
+    });
+
     await gotoConcierge(page);
     const region = page.getByTestId("copilot-chat-region");
     await expect(region).toBeVisible({ timeout: 30_000 });
