@@ -336,4 +336,52 @@ describe("a finished answer makes the thread reloadable", () => {
     }
     expect(calls()).toHaveLength(1);
   });
+
+  it("retries a failed question exactly once when the run ends", async () => {
+    // First save fails, the reply finishes, then the retry succeeds.
+    let attempt = 0;
+    vi.stubGlobal("fetch", vi.fn(async () => {
+      attempt += 1;
+      return new Response("{}", { status: attempt === 1 ? 503 : 200 });
+    }));
+    agentRunning = true;
+    agentMessages = [{ id: "u1", role: "user", content: "q" }];
+    const { rerender } = render(<BrokerThreadSaver threadId={THREAD} />);
+    await vi.waitFor(() => expect(calls()).toHaveLength(1));
+
+    agentMessages = [
+      { id: "u1", role: "user", content: "q" },
+      { id: "a1", role: "assistant", content: "the answer" },
+    ];
+    agentRunning = false;
+    rerender(<BrokerThreadSaver threadId={THREAD} />);
+
+    // The advertised retry has to actually happen, not just be promised in a comment.
+    await vi.waitFor(() => expect(calls()).toHaveLength(2));
+    await vi.waitFor(() => expect(markThreadSaved).toHaveBeenCalledWith(THREAD));
+  });
+
+  it("stops after one post-run retry when the server keeps failing", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 503 })));
+    agentRunning = true;
+    agentMessages = [{ id: "u1", role: "user", content: "q" }];
+    const { rerender } = render(<BrokerThreadSaver threadId={THREAD} />);
+    await vi.waitFor(() => expect(calls()).toHaveLength(1));
+
+    for (let i = 0; i < 4; i++) {
+      agentMessages = [
+        { id: "u1", role: "user", content: "q" },
+        { id: "a1", role: "assistant", content: `chunk ${i}` },
+      ];
+      rerender(<BrokerThreadSaver threadId={THREAD} />);
+      await new Promise((r) => setTimeout(r, 30));
+    }
+    agentRunning = false;
+    rerender(<BrokerThreadSaver threadId={THREAD} />);
+    await new Promise((r) => setTimeout(r, 120));
+
+    // Two attempts total: the original and the single post-run retry. No loop.
+    expect(calls()).toHaveLength(2);
+    expect(markThreadSaved).not.toHaveBeenCalled();
+  });
 });

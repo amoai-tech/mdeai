@@ -547,6 +547,7 @@ export function BrokerThreadSaver({
     threadId,
     handledIds: new Set<string>(),
     failedIds: new Set<string>(),
+    retriedAfterRun: false,
     inFlight: false,
     ready: restoreMode === "fresh",
   });
@@ -557,6 +558,7 @@ export function BrokerThreadSaver({
         threadId,
         handledIds: new Set<string>(),
         failedIds: new Set<string>(),
+        retriedAfterRun: false,
         inFlight: false,
         ready: restoreMode === "fresh",
       };
@@ -576,6 +578,15 @@ export function BrokerThreadSaver({
     if (!state.ready) {
       if (restoreMode === "waiting") return;
       state.ready = true;
+    }
+    if (running) state.retriedAfterRun = false;
+    // A save that failed mid-run is retried exactly once when the run ends. Driving this from the
+    // POST's `finally` cannot work: that block runs while the turn is still streaming.
+    if (!running && state.failedIds.size > 0 && !state.retriedAfterRun) {
+      state.retriedAfterRun = true;
+      state.failedIds.clear();
+      if (progress.current === state) setDrainTick((n) => n + 1);
+      return;
     }
     // A failed history GET is NOT proof that those messages are saved. Resume from the live
     // transcript (the POST endpoint still independently authenticates and checks ownership).
@@ -651,7 +662,12 @@ export function BrokerThreadSaver({
         state.inFlight = false;
         // A finished POST is not an agent update. Drain pending complete answers explicitly,
         // but never enter an infinite retry loop after a failed POST.
-            if (!agent.isRunning && state.failedIds.size > 0) state.failedIds.clear();
+            // The run may end while this POST is still settling; the effect then returns on
+        // `inFlight` and the retry would never fire. Nudge it once here.
+        if (!agent.isRunning && state.failedIds.size > 0 && !state.retriedAfterRun &&
+            progress.current === state) {
+          setDrainTick((n) => n + 1);
+        }
         const rest = agent.messages ?? [];
         const pending = rest.some((message) => !state.handledIds.has(message.id) &&
             (message.role === "user" || message.role === "assistant") &&
