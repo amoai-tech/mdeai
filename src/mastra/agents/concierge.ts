@@ -9,6 +9,7 @@ import { searchEventsTool } from '../tools/search-events';
 import { searchRestaurantsTool } from '../tools/search-restaurants';
 import { searchAttractionsTool } from '../tools/search-attractions';
 import { searchGroundedPlacesTool } from '../tools/search-grounded-places';
+import { computeRouteTool } from '../tools/compute-route';
 import { lookupPublicDiscoveryItemTool, lookupPublicDiscoveryItemFromServer } from '../tools/lookup-public-discovery-item';
 import { searchWebGroundedEventsTool } from '../tools/search-web-grounded-events';
 import { requestVenueBookingTool } from '../tools/request-venue-booking';
@@ -236,6 +237,7 @@ const conciergeBaseInstructions = `You are the mdeAI Medellín concierge — a h
 - search-grounded-places: caf\u00e9s, bars, salsa venues, rooftop cocktails, clubs, and other map POIs via Google Maps grounding. For salsa bars, hidden bars, rooftop cocktails, nightlife locals recommend, coffee/coworking, or quiet caf\u00e9s (e.g. "salsa bars in Poblado", "rooftop cocktails Provenza", "cafe with strong Wi-Fi Laureles"), call search-grounded-places with the user's exact phrase — never search-restaurants for those.
 - A restaurant name or table-booking request must use search-restaurants or lookup-public-discovery-item for a canonical restaurant UUID. NEVER pass intent "restaurant" to search-grounded-places: that tool only accepts "cafe", "general", "nightlife". If the user asks to request a table, search the real restaurant first and only then propose booking for review.
 - search-grounded-places intent param (optional, pass only when confident): intent "nightlife" for clubs, discotecas, reggaeton, cocktail bars, salsa bars, rooftop bars, bar crawl, "venues tonight", "where to party" — including generic nightlife phrasing without bar keywords (e.g. "popular venues in Provenza tonight"); intent "cafe" for coffee, coworking, laptop-friendly caf\u00e9s; omit intent when ambiguous or mixed. Never intent "nightlife" for sit-down restaurant meals (use search-restaurants) or ticketed events (use search-events — event category "nightlife" is different).
+- compute-route: for travel distance and duration between a selected origin and a destination. Use only when both endpoints are known from the conversation or verified selection; pass travelMode (WALK default, DRIVE, BICYCLE, TRANSIT) and includePolyline only when a map line is needed. Never estimate travel times, steps or routes. If route is null, say the route is unavailable. Do not use it to search for places.
 - search-restaurants: sit-down meals only — dinner, lunch, brunch, cuisine, steakhouse (e.g. "quiet rooftop dinner Provenza", "suggest restaurants medellin"). Do not use for salsa bars, clubs, or cocktail bars.
 - search-attractions: tours, viewpoints, parks, day trips, Comuna 13, Guatap\u00e9, museums.
 - search-web-grounded-events: live web search for time-sensitive or unverified event facts (this weekend, tonight, official lineup) — call ONLY after search-events returns few/zero rows OR user asks to verify online. Never use for caf\u00e9/map/rental/bar queries.
@@ -515,6 +517,7 @@ export const conciergeAgent = new Agent({
     searchRestaurantsTool,
     searchAttractionsTool,
     searchGroundedPlacesTool,
+    computeRouteTool,
     lookupPublicDiscoveryItemTool,
     searchWebGroundedEventsTool,
     requestVenueBooking: requestVenueBookingTool,
