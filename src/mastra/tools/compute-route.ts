@@ -8,6 +8,7 @@ import {
   type RouteTravelMode,
 } from "../lib/google-routes-client";
 import { checkRateLimitDurable } from "@/lib/distributed-rate-limit";
+import { getAuditUserId } from "../lib/tool-audit-context";
 import { runAuditedTool } from "../lib/run-audited-search";
 
 const waypointSchema = z.union([
@@ -91,6 +92,30 @@ export const computeRouteTool = createTool({
         }
         if (!quota.allowed) {
           return { route: null, source: "google_routes" as const, reason: "route_quota_exceeded" };
+        }
+        const userId = getAuditUserId(context);
+        if (userId) {
+          const perUserRaw = process.env.ROUTES_DAILY_LIMIT_PER_USER;
+          const perUserCap = perUserRaw === undefined ? 20 : Number.parseInt(perUserRaw, 10);
+          if (!Number.isSafeInteger(perUserCap) || perUserCap <= 0) {
+            return { route: null, source: "google_routes" as const, reason: "route_quota_disabled" };
+          }
+          let userQuota;
+          try {
+            userQuota = await checkRateLimitDurable(
+              `routes-daily:${today}:${userId}`,
+              perUserCap,
+              86_400,
+            );
+          } catch {
+            return { route: null, source: "google_routes" as const, reason: "route_quota_unavailable" };
+          }
+          if (!userQuota.storeAvailable) {
+            return { route: null, source: "google_routes" as const, reason: "route_quota_unavailable" };
+          }
+          if (!userQuota.allowed) {
+            return { route: null, source: "google_routes" as const, reason: "route_quota_per_user_exceeded" };
+          }
         }
 
         try {

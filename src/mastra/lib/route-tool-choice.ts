@@ -1,15 +1,49 @@
 /**
- * SAN-465: a travel-time question must reach Google Routes before the model
- * answers. The model otherwise estimates from memory; forcing the existing
- * compute-route tool on the first step makes the answer provider-backed.
+ * SAN-465: force the existing route tool only when the user clearly asks for a
+ * route and both endpoints are present. Otherwise the model must ask for the
+ * missing endpoint instead of inventing one.
  */
 type Message = { role: string; content: unknown };
 type ToolStep = { toolCalls?: readonly { toolName?: string }[] };
 
-const ROUTE_QUERY =
-  /\b(how long|how far|distance|walk|walking|drive|driving|bike|bicycling|bicycle|cycle|transit|route|commute|directions|from\b.+\bto\b|cu[aá]nto (?:se )?(?:tarda|camina)|c[oó]mo llegar|distancia|ruta|a pie|caminando|en auto|en bici|desde\b.+\bhasta\b)\b/i;
+const TRAVEL_INTENT =
+  /\b(how long|how far|distance|walk|walking|drive|driving|bike|bicycling|bicycle|cycle|transit|route|commute|directions|a pie|caminando|en auto|en bici|transporte|ruta|distancia|cu[aá]nto (?:se )?(?:tarda|camina)|c[oó]mo llegar)\b/i;
 
-const ROUTE_TOOL_NAMES = new Set(["computeRouteTool", "compute-route"]);
+const ENDPOINT_PATTERNS = [
+  /\bfrom\s+(.{2,80}?)\s+to\s+(.{2,80}?)(?:[?.!,]|$)/i,
+  /\b(?:de|desde)\s+(.{2,80}?)\s+(?:a|hasta)\s+(.{2,80}?)(?:[?.!,]|$)/i,
+  /\bbetween\s+(.{2,80}?)\s+and\s+(.{2,80}?)(?:[?.!,]|$)/i,
+  /\bentre\s+(.{2,80}?)\s+y\s+(.{2,80}?)(?:[?.!,]|$)/i,
+];
+
+const NOT_A_PLACE =
+  /\b(\d+\s*(?:mil|million|millones|habitaciones?|bedrooms?|am|pm|hours?|min|minutes?)|price|precio|usd|cop|table|mesa)\b/i;
+
+const GENERIC_ORIGIN = /^(?:the|this|that)\s+(?:apartment|rental|listing|place|home)$/i;
+
+function isPlaceLike(value: string): boolean {
+  const text = value.trim();
+  if (text.length < 2 || text.length > 80) return false;
+  if (NOT_A_PLACE.test(text) || GENERIC_ORIGIN.test(text)) return false;
+  return /[\p{L}]/u.test(text);
+}
+
+export function routeEndpoints(text: string): { origin: string; destination: string } | null {
+  for (const pattern of ENDPOINT_PATTERNS) {
+    const match = pattern.exec(text);
+    if (!match) continue;
+    const origin = match[1]?.trim();
+    const destination = match[2]?.trim();
+    if (origin && destination && isPlaceLike(origin) && isPlaceLike(destination)) {
+      return { origin, destination };
+    }
+  }
+  return null;
+}
+
+export function isRouteQuestion(text: string): boolean {
+  return TRAVEL_INTENT.test(text) && routeEndpoints(text) !== null;
+}
 
 function userText(content: unknown): string {
   if (typeof content === "string") return content;
@@ -19,16 +53,6 @@ function userText(content: unknown): string {
       p != null && typeof p === "object" && p.type === "text" && typeof p.text === "string")
     .map((p) => p.text)
     .join(" ");
-}
-
-export function isRouteQuestion(text: string): boolean {
-  if (!ROUTE_QUERY.test(text)) return false;
-  // Discovery wording ("cafés within walking distance") is not a route request.
-  const discovery = /\b(find|show|search|recommend|looking for|quiet caf[eé]s|coffee shops|apartments?|rentals?)\b/i.test(text);
-  const explicitRoute = /\b(how long|how far|route|commute|directions|desde|hasta|from\b.+\bto)\b/i.test(text);
-  if (discovery && !explicitRoute) return false;
-  return /\b(from|to|desde|hasta|how long|how far|distance|route|ruta|commute|directions)\b/i.test(text) ||
-    /\bde\b.+\ba\b/i.test(text);
 }
 
 export function shouldForceRouteTool({
@@ -47,3 +71,5 @@ export function shouldForceRouteTool({
     step.toolCalls?.some((call) => ROUTE_TOOL_NAMES.has(call.toolName || "")),
   );
 }
+
+const ROUTE_TOOL_NAMES = new Set(["computeRouteTool", "compute-route"]);
