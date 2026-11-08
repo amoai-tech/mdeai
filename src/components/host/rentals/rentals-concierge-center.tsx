@@ -1,8 +1,10 @@
 "use client";
 
+import type React from "react";
 import { CopilotChat } from "@copilotkit/react-core/v2";
 import { ChatProvider } from "@/components/chat/chat-provider";
 import { BrokerWorkspaceToolRenderer } from "@/components/host/rentals/broker-workspace-tool-renderer";
+import { cn } from "@/lib/utils";
 import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 import type { RentalsWorkspaceMode } from "@/components/host/rentals/rentals-dynamic-workspace";
 
@@ -18,6 +20,19 @@ type RentalsConciergeCenterProps = {
  * Send, Stop and Retry belong to CopilotChat; no parallel chat state,
  * API transport, synthetic replies, or second broker agent.
  */
+/** The welcome copy, as a paragraph: the page already has one heading. */
+function WelcomeMessageCopy({ className }: React.HTMLAttributes<HTMLDivElement>) {
+  return (
+    <p
+      data-testid="rc-welcome"
+      className={cn("px-2 text-sm text-muted-foreground", className)}
+    >
+      I can read your actual rental dashboard. Try: Which viewing requests need my attention? Or:
+      Show my listings in Laureles.
+    </p>
+  );
+}
+
 export function RentalsConciergeCenter({ mode }: RentalsConciergeCenterProps) {
   const deterministic = isDeterministicE2E();
   return (
@@ -41,18 +56,6 @@ export function RentalsConciergeCenter({ mode }: RentalsConciergeCenterProps) {
       ) : (
         <ChatProvider>
           <BrokerWorkspaceToolRenderer />
-          {/*
-            Rendered here rather than through CopilotKit's welcome-message label: that label is
-            output as a top-level heading, which would give this page two (the real title above,
-            and a paragraph of example prompts).
-          */}
-          <p
-            data-testid="rc-welcome"
-            className="px-2 pb-2 text-sm text-muted-foreground"
-          >
-            I can read your actual rental dashboard. Try: Which viewing requests need my
-            attention? Or: Show my listings in Laureles.
-          </p>
           <CopilotChat
             agentId="conciergeAgent"
             className="min-h-0 flex-1"
@@ -60,6 +63,11 @@ export function RentalsConciergeCenter({ mode }: RentalsConciergeCenterProps) {
               modalHeaderTitle: "Rentals concierge",
               chatInputPlaceholder: "Ask about your listings, leads or viewings…",
             }}
+            // CopilotKit renders its welcome message as a top-level heading, which would give this
+            // page two (the real title above, and a paragraph of example prompts). The slot keeps
+            // the copy on CopilotKit's own welcome screen -- so it still disappears after the
+            // first message -- but as a paragraph instead of a heading.
+            welcomeScreen={{ welcomeMessage: WelcomeMessageCopy }}
           />
         </ChatProvider>
       )}

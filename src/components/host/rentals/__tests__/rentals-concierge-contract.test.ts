@@ -40,16 +40,13 @@ describe("SAN-1124 tool render key", () => {
 });
 
 describe("one top-level heading on the broker concierge", () => {
-  it("renders the welcome copy as a paragraph, not as CopilotKit's <h1>", () => {
+  it("replaces CopilotKit's heading-rendered welcome message with a paragraph", () => {
     const center = readComponent("rentals-concierge-center.tsx");
-    // The page already has the real h1 "Your rentals, run by AI"; CopilotKit renders
-    // `welcomeMessageText` as a second <h1>, so the copy lives outside that label now.
-    // The label binding is what CopilotKit turns into an <h1>; a comment may name it.
-    expect(center).not.toMatch(/welcomeMessageText:\s*"/);
+    // CopilotKit hardcodes its welcome message as an <h1> and falls back to default copy when
+    // the label is simply removed, so the copy goes through the welcome slot instead.
+    expect(center).toContain("welcomeScreen={{ welcomeMessage:");
     expect(center).toContain('data-testid="rc-welcome"');
-    // The welcome copy must sit inside a <p>, which is what keeps it out of the heading outline.
-    const paragraph = center.slice(center.lastIndexOf("<p", center.indexOf('data-testid="rc-welcome"')));
-    expect(paragraph.slice(0, 120)).toContain("<p");
+    expect(center).toMatch(/WelcomeMessageCopy[\s\S]{0,200}?<p/);
     expect(center.match(/<h1\s/g) ?? []).toHaveLength(1);
     expect(center).toContain("I can read your actual rental dashboard");
   });
