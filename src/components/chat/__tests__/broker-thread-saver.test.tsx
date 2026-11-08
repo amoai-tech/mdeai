@@ -436,6 +436,51 @@ describe("a finished answer makes the thread reloadable", () => {
     expect(markThreadSaved).not.toHaveBeenCalled();
   });
 
+
+  it("saves a new ID when replay replaces a same-length transcript with matching final text", async () => {
+    agentMessages = [
+      { id: "oldU", role: "user", content: "old question" },
+      { id: "unchangedA", role: "assistant", content: "same ending" },
+    ];
+    const { rerender } = render(<BrokerThreadSaver threadId={THREAD} restoreMode="waiting" />);
+    agentMessages = [
+      { id: "newU", role: "user", content: "new question" },
+      { id: "unchangedA", role: "assistant", content: "same ending" },
+    ];
+    rerender(<BrokerThreadSaver threadId={THREAD} restoreMode="waiting" />);
+    await vi.waitFor(() => expect(calls().some(([, o]) => String(o.body).includes('"newU"'))).toBe(true));
+    expect(calls().some(([, o]) => String(o.body).includes('"oldU"'))).toBe(false);
+  });
+
+  it("saves a new question even when the transcript is replaced during waiting", async () => {
+    agentMessages = [
+      { id: "oldU", role: "user", content: "old question" },
+      { id: "oldA", role: "assistant", content: "old answer" },
+    ];
+    const { rerender } = render(<BrokerThreadSaver threadId={THREAD} restoreMode="waiting" />);
+    await new Promise((r) => setTimeout(r, 30));
+    agentMessages = [{ id: "newU", role: "user", content: "new question after clear" }];
+    rerender(<BrokerThreadSaver threadId={THREAD} restoreMode="waiting" />);
+    await vi.waitFor(() => expect(calls().some(([, o]) => String(o.body).includes('"newU"'))).toBe(true));
+    expect(calls().some(([, o]) => String(o.body).includes('"oldU"'))).toBe(false);
+  });
+
+  it("does not count old-thread messages as the new-thread waiting baseline", async () => {
+    const next = "22222222-3333-4333-8333-555555555555";
+    agentMessages = [
+      { id: "oldU", role: "user", content: "old question" },
+      { id: "oldA", role: "assistant", content: "old answer" },
+    ];
+    const { rerender } = render(<BrokerThreadSaver threadId={THREAD} restoreMode="waiting" />);
+    STABLE_AGENT.threadId = THREAD;
+    rerender(<BrokerThreadSaver threadId={next} restoreMode="waiting" />);
+    agentMessages = [{ id: "newU", role: "user", content: "new thread question" }];
+    STABLE_AGENT.threadId = next;
+    rerender(<BrokerThreadSaver threadId={next} restoreMode="waiting" />);
+    await vi.waitFor(() => expect(calls().some(([url, o]) => url.includes(next) && String(o.body).includes('"newU"'))).toBe(true));
+    expect(calls().some(([url, o]) => url.includes(next) && String(o.body).includes('"oldU"'))).toBe(false);
+  });
+
   it("still saves a second question while a history restore is pending", async () => {
     // After the first exchange the provider starts replaying history and the saver is handed
     // restoreMode "waiting". A question typed in that window used to be swallowed: production

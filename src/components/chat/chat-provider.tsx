@@ -548,35 +548,47 @@ export function BrokerThreadSaver({
     handledIds: new Set<string>(),
     failedIds: new Set<string>(),
     retriedAfterRun: false,
-    firstNewIndex: -1,
+    knownOnWaitIds: null as Set<string> | null,
+    lastSeenIds: new Set<string>(),
     inFlight: false,
   });
   const [drainTick, setDrainTick] = useState(0);
   useEffect(() => {
     if (progress.current.threadId !== threadId) {
+      // The agent may still show the previous thread's transcript during a switch. Keep only
+      // its known IDs, not a length or a snapshot of the new thread's first question.
+      const previous = progress.current;
       progress.current = {
         threadId,
         handledIds: new Set<string>(),
         failedIds: new Set<string>(),
         retriedAfterRun: false,
-        firstNewIndex: (agent.messages ?? []).length,
+        knownOnWaitIds: new Set(previous.lastSeenIds),
+        lastSeenIds: new Set<string>(),
         inFlight: false,
       };
     }
-    // Only a thread switch resets this; the baseline is read once from the live transcript.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [threadId, restoreMode]);
+  }, [threadId]);
 
   // CopilotKit returns one stable, mutable agent: use its moving fields as dependencies.
   const messages = agent.messages ?? [];
   const messageCount = messages.length;
+  const messageIdsKey = messages.map((message) => message.id).join("\u0000");
   const lastContent = messages[messageCount - 1]?.content ?? "";
   const running = Boolean(agent.isRunning);
   const agentThreadId = agent.threadId;
   useEffect(() => {
     const state = progress.current;
     // Never write an old thread's messages to a newly selected thread.
-    if (state.threadId !== threadId || agentThreadId !== threadId || state.inFlight) return;
+    if (state.threadId !== threadId || agentThreadId !== threadId) return;
+    const current = agent.messages ?? [];
+    // Remember the current thread's IDs for a future thread switch, without including the
+    // previous thread's messages in the new thread's baseline.
+    state.lastSeenIds = new Set(current.map((message) => message.id));
+    if (restoreMode === "waiting" && state.knownOnWaitIds === null) {
+      state.knownOnWaitIds = new Set(current.map((message) => message.id));
+    }
+    if (state.inFlight) return;
     if (running) state.retriedAfterRun = false;
     // A save that failed mid-run is retried exactly once when the run ends. Driving this from the
     // POST's `finally` cannot work: that block runs while the turn is still streaming.
@@ -592,14 +604,9 @@ export function BrokerThreadSaver({
       for (const id of restoredMessageIds ?? []) state.handledIds.add(id);
     }
 
-    const current = agent.messages ?? [];
-    // While the owner-checked history is still loading, only messages that arrived *after* mount
-    // are new: the rest may still be returned by the GET, and re-posting them is wasted work.
-    if (restoreMode === "waiting" && state.firstNewIndex < 0) {
-      // First render inside the wait: whatever is already on screen may still arrive from the GET.
-      state.firstNewIndex = current.length;
-    }
-    const floor = restoreMode === "waiting" && state.firstNewIndex >= 0 ? state.firstNewIndex : 0;
+    // A restore may insert, reorder, or replace the transcript. Position-based boundaries
+    // lose new questions; compare stable message IDs captured when the wait began instead.
+    const knownDuringWait = restoreMode === "waiting" ? state.knownOnWaitIds : null;
     // Only questions are ours to write. Stamped when sent, so the history reader (which orders by
     // createdAt) never puts the runtime's reply above the question that produced it.
     const answerFollowsLatestQuestion = (list: typeof current): boolean => {
@@ -615,9 +622,9 @@ export function BrokerThreadSaver({
 
     const text: { id: string; role: "user" | "assistant"; content: string }[] = [];
     const handledInBatch: string[] = [];
-    for (let i = floor; i < current.length; i++) {
-      const message = current[i];
-      if (state.handledIds.has(message.id) || state.failedIds.has(message.id)) continue;
+    for (const message of current) {
+      if (knownDuringWait?.has(message.id) || state.handledIds.has(message.id) ||
+          state.failedIds.has(message.id)) continue;
       // Questions only. The Mastra runtime already stores each assistant reply (as
       // `<id>-agui-text`); posting it again under the plain AG-UI id produced two rows for one
       // answer, and the id-based idempotency cannot dedupe two different ids.
@@ -690,7 +697,7 @@ export function BrokerThreadSaver({
         if (saved && progress.current === state && pending) setDrainTick((n) => n + 1);
       });
   }, [agent, agentThreadId, threadId, markThreadSaved, messageCount, lastContent, running,
-    drainTick, restoreMode, restoredMessageIds]);
+    drainTick, restoreMode, restoredMessageIds, messageIdsKey]);
 
   return null;
 }
