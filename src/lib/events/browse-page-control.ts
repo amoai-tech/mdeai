@@ -27,9 +27,25 @@ export function applyEventPageControl(
   };
 }
 
+export type EventPageControlResult =
+  | { ok: true; url: string }
+  | { ok: false; error: string };
+
+export function resolveEventPageControl(
+  current: EventBrowseFilterState,
+  rawPatch: unknown,
+): EventPageControlResult {
+  const parsed = eventPageControlSchema.safeParse(rawPatch);
+  if (!parsed.success) {
+    return { ok: false, error: "Unsupported or invalid event page filter." };
+  }
+  return { ok: true, url: buildEventBrowseUrl(applyEventPageControl(current, parsed.data)) };
+}
+
 export function buildEventPageControlUrl(
   current: EventBrowseFilterState,
   patch: EventPageControlPatch,
 ): string {
-  return buildEventBrowseUrl(applyEventPageControl(current, patch));
+  const result = resolveEventPageControl(current, patch);
+  return result.ok ? result.url : buildEventBrowseUrl(current);
 }

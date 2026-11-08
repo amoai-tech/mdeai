@@ -38,6 +38,10 @@ describe("page filter tools", () => {
     expect(tool().followUp).toBe(false);
     await tool().handler({ beds: "1" });
     expect(state.push).toHaveBeenCalledWith("/rentals?neighborhood=Laureles&beds=1");
+    state.push.mockClear();
+    const invalid = await tool().handler({ beds: "4" });
+    expect(invalid).toMatchObject({ ok: false });
+    expect(state.push).not.toHaveBeenCalled();
   });
 
   it("registers the event page action and preserves untouched filters", async () => {

@@ -30,9 +30,30 @@ export function applyRentalPageControl(
   };
 }
 
+export type RentalPageControlResult =
+  | { ok: true; url: string }
+  | { ok: false; error: string };
+
+/** Validate both the patch and the final current+patch state before navigation. */
+export function resolveRentalPageControl(
+  current: RentalBrowseFilterState,
+  rawPatch: unknown,
+): RentalPageControlResult {
+  const parsed = rentalPageControlSchema.safeParse(rawPatch);
+  if (!parsed.success) {
+    return { ok: false, error: "Unsupported or invalid rental page filter." };
+  }
+  const merged = applyRentalPageControl(current, parsed.data);
+  if (!isOrderedStay(merged.from ?? undefined, merged.through ?? undefined)) {
+    return { ok: false, error: "The stay dates would be reversed; no page filter was changed." };
+  }
+  return { ok: true, url: buildRentalsUrl(merged) };
+}
+
 export function buildRentalPageControlUrl(
   current: RentalBrowseFilterState,
   patch: RentalPageControlPatch,
 ): string {
-  return buildRentalsUrl(applyRentalPageControl(current, patch));
+  const result = resolveRentalPageControl(current, patch);
+  return result.ok ? result.url : buildRentalsUrl(current);
 }

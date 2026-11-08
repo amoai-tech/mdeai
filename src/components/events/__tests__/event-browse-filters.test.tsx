@@ -14,6 +14,7 @@ describe("EventBrowseFilters", () => {
     const { container } = render(<EventBrowseFilters {...none} category="music" />);
     expect(screen.getByRole("link", { name: "Music" }).getAttribute("aria-current")).toBe("true");
     expect(screen.getByRole("link", { name: "Any date" }).getAttribute("aria-current")).toBe("true");
+    expect(screen.getByRole("link", { name: "Any date" }).getAttribute("href")).toBe("/events?category=music");
     expect(screen.getByRole("link", { name: "Food" }).hasAttribute("aria-current")).toBe(false);
     expect(container.querySelector("[aria-pressed]")).toBeNull();
     expect(screen.getByRole("link", { name: "Clear filters" }).getAttribute("href")).toBe("/events");

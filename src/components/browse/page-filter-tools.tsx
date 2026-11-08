@@ -6,9 +6,9 @@ import { useFrontendTool } from "@copilotkit/react-core/v2";
 import { useOptionalConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
 import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 import type { RentalBrowseFilterState } from "@/lib/rentals/browse-filters";
-import { buildRentalPageControlUrl, rentalPageControlSchema } from "@/lib/rentals/browse-page-control";
+import { rentalPageControlSchema, resolveRentalPageControl } from "@/lib/rentals/browse-page-control";
 import type { EventBrowseFilterState } from "@/lib/events/browse-url";
-import { buildEventPageControlUrl, eventPageControlSchema } from "@/lib/events/browse-page-control";
+import { eventPageControlSchema, resolveEventPageControl } from "@/lib/events/browse-page-control";
 
 function RentalPageControlLive({ filters }: { filters: RentalBrowseFilterState }) {
   const router = useRouter();
@@ -23,9 +23,10 @@ function RentalPageControlLive({ filters }: { filters: RentalBrowseFilterState }
         "Change the native filters on the visible Rentals page. Call this when the renter says 'on this page', 'set the filters', 'show only ... on the page', or otherwise asks to change what is currently displayed. This updates the existing URL and native cards/map; it is not a new search. Never use it to invent listings, prices or availability. Omit fields that stay unchanged; pass null to clear one.",
       parameters: rentalPageControlSchema,
       handler: async (patch) => {
-        const url = buildRentalPageControlUrl(filtersRef.current, patch);
-        router.push(url);
-        return { ok: true, url, applied: patch };
+        const result = resolveRentalPageControl(filtersRef.current, patch);
+        if (!result.ok) return result;
+        router.push(result.url);
+        return { ok: true, url: result.url, applied: patch };
       },
     },
     [],
@@ -46,9 +47,10 @@ function EventPageControlLive({ filters }: { filters: EventBrowseFilterState }) 
         "Change the native filters on the visible Events page. Call this when the visitor says 'on this page', 'set the filters', or asks to change what is currently displayed. Use only page-displayed filters: category, neighborhood, date window (tonight, this weekend, this week, next week, any) or free/paid. Salsa is a search intent, not a category; use the existing event search for it. Never invent events, dates or prices. Omit fields that stay unchanged; pass null to clear one.",
       parameters: eventPageControlSchema,
       handler: async (patch) => {
-        const url = buildEventPageControlUrl(filtersRef.current, patch);
-        router.push(url);
-        return { ok: true, url, applied: patch };
+        const result = resolveEventPageControl(filtersRef.current, patch);
+        if (!result.ok) return result;
+        router.push(result.url);
+        return { ok: true, url: result.url, applied: patch };
       },
     },
     [],
