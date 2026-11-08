@@ -212,7 +212,8 @@ describe("broker restored history is not re-saved", () => {
     await new Promise(resolve => setTimeout(resolve, 30));
     expect(calls()).toHaveLength(0);
 
-    rerender(<BrokerThreadSaver threadId={THREAD} restoreMode="restored" />);
+    rerender(<BrokerThreadSaver threadId={THREAD} restoreMode="restored"
+      restoredMessageIds={["savedU", "savedA"]} />);
     await new Promise(resolve => setTimeout(resolve, 30));
     expect(calls()).toHaveLength(0);
 
@@ -221,9 +222,41 @@ describe("broker restored history is not re-saved", () => {
       { id: "newU", role: "user", content: "new question" },
       { id: "newA", role: "assistant", content: "new answer" },
     ];
-    rerender(<BrokerThreadSaver threadId={THREAD} restoreMode="restored" />);
+    rerender(<BrokerThreadSaver threadId={THREAD} restoreMode="restored"
+      restoredMessageIds={["savedU", "savedA"]} />);
     await vi.waitFor(() => expect(markThreadSaved).toHaveBeenCalledWith(THREAD));
     expect(calls()).toHaveLength(1);
     expect(lastBody().messages.map(m => m.id)).toEqual(["newU", "newA"]);
+  });
+});
+
+
+describe("broker history recovery during restore", () => {
+  it("saves a new exchange that was sent before the history GET finished", async () => {
+    agentMessages = [
+      { id: "savedU", role: "user", content: "previous question" },
+      { id: "savedA", role: "assistant", content: "previous answer" },
+      { id: "newU", role: "user", content: "new question" },
+      { id: "newA", role: "assistant", content: "new answer" },
+    ];
+    const { rerender } = render(<BrokerThreadSaver threadId={THREAD} restoreMode="waiting" />);
+    expect(calls()).toHaveLength(0);
+    rerender(<BrokerThreadSaver threadId={THREAD} restoreMode="restored"
+      restoredMessageIds={["savedU", "savedA"]} />);
+    await vi.waitFor(() => expect(markThreadSaved).toHaveBeenCalledWith(THREAD));
+    expect(calls()).toHaveLength(1);
+    expect(lastBody().messages.map(m => m.id)).toEqual(["newU", "newA"]);
+  });
+
+  it("a failed history GET does not block saving a later successful turn", async () => {
+    agentMessages = [
+      { id: "userAfterError", role: "user", content: "Can you still help?" },
+      { id: "answerAfterError", role: "assistant", content: "Yes, here is your answer" },
+    ];
+    const { rerender } = render(<BrokerThreadSaver threadId={THREAD} restoreMode="waiting" />);
+    expect(calls()).toHaveLength(0);
+    rerender(<BrokerThreadSaver threadId={THREAD} restoreMode="failed" />);
+    await vi.waitFor(() => expect(markThreadSaved).toHaveBeenCalledWith(THREAD));
+    expect(lastBody().messages.map(m => m.id)).toEqual(["userAfterError", "answerAfterError"]);
   });
 });
