@@ -6,6 +6,12 @@
 - `/api/version`: confirmed same SHA
 - PR #828 certification: passed
 
+## Spec commit
+
+`9780694edad70b9a099811f166a84951cfb576b3`
+
+The production suite was run at this spec commit after the final stale-filter and completion assertions.
+
 ## Command
 
 ```bash
@@ -22,14 +28,13 @@ npx playwright test \
 
 **5 passed** against production.
 
-- Rentals native command, 1440px
-- Rentals native command, 390px
-- Manual 2-bedroom filter and Back/Forward
-- Cards/map pin parity, including the 390px map sheet
-- Simulated CopilotKit 503 without unsafe duplicate Retry
-- Stopped slow request cannot restore a 3-bedroom filter over the manual 2-bedroom choice
-- Normal rental AI request completes with grounded results
-- Events regression
+| Test | Scenarios |
+| --- | --- |
+| Page control — desktop 1440 | Fast path, exact URL, real cards or empty state, card↔map pins, manual 2BR, Back/Forward, Events→Rentals |
+| Page control — mobile 390 | Same journey, 390px map sheet, no overflow |
+| Failure recovery — 503 | Error shown, no unsafe duplicate Retry, fast path still works |
+| Failure recovery — stopped slow request | Stale 3BR request cannot overwrite manual 2BR choice |
+| Failure recovery — normal AI | POST 200, AG-UI `TOOL_CALL_RESULT`, `TEXT_MESSAGE_END`, `RUN_FINISHED`, no error |
 
 Authenticated screenshots, traces and video are disabled by QA policy.
 
