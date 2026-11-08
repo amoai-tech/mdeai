@@ -40,16 +40,21 @@ export function parseRentalPageCommand(text: string): RentalPageControlPatch | n
   if (!/\bon (this|the) page\b|\bpage filters?\b|\bset the (visible )?filters?\b/i.test(text)) {
     return null;
   }
-  if (/\b(furnished|balcony|pets?|parking|pool|gym|budget|under|below|less than)\b/i.test(text)) {
+  if (/\b(furnished|balcony|pets?|parking|pool|gym|wifi|internet|workspace|desk|budget|under|below|less than)\b/i.test(text)) {
     return null;
   }
   const parsed = buildRentalSearchParams(text, {});
   if (!parsed) return null;
+  // The page can only apply these native filters. If the question carries a
+  // budget, stay type, broad query text or a bedroom range, send it to the
+  // existing search/agent path rather than dropping part of the request.
+  if (parsed.maxPricePerNight != null || parsed.maxPriceMonthly != null ||
+      parsed.stayType != null) return null;
+  if (parsed.minBedrooms != null && (parsed.minBedrooms < 0 || parsed.minBedrooms > 3)) return null;
+  if (parsed.maxBedrooms != null && parsed.maxBedrooms !== parsed.minBedrooms) return null;
   const patch: RentalPageControlPatch = {};
   if (parsed.neighborhood) patch.neighborhood = parsed.neighborhood;
-  if (parsed.minBedrooms != null && parsed.minBedrooms >= 0 && parsed.minBedrooms <= 3) {
-    patch.beds = String(parsed.minBedrooms) as "0" | "1" | "2" | "3";
-  }
+  if (parsed.minBedrooms != null) patch.beds = String(parsed.minBedrooms) as "0" | "1" | "2" | "3";
   if (parsed.checkIn) patch.from = parsed.checkIn;
   if (parsed.checkOut) patch.through = parsed.checkOut;
   return Object.keys(patch).length > 0 ? patch : null;

@@ -131,6 +131,7 @@ beforeEach(() => {
   coagent.present = true;
   coagent.isReady = true;
   coagent.setState.mockReset();
+  router.push.mockReset();
   nav.pathname = "/rentals";
   nav.search = "";
   agent.messages = [];
@@ -279,6 +280,25 @@ describe("RentalAskComposer (SAN-1421)", () => {
     expect(chat.appendMessage).not.toHaveBeenCalled();
     expect(onResults).not.toHaveBeenCalled();
     await waitFor(() => expect(draftValue()).toBe(""));
+  });
+
+  it("updates the existing Rentals URL for an explicit page command without the agent", async () => {
+    render(<RentalAskComposer context={{ neighborhood: null, beds: null, from: null, through: null }} />);
+    type("On this page, show only 1-bedroom apartments in Laureles.");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+
+    expect(router.push).toHaveBeenCalledWith("/rentals?neighborhood=Laureles&beds=1");
+    expect(chat.appendMessage).not.toHaveBeenCalled();
+    await waitFor(() => expect(draftValue()).toBe(""));
+  });
+
+  it("sends an explicit bedroom request above the native range to the agent, not a widened page", async () => {
+    render(<RentalAskComposer context={{ neighborhood: null, beds: null, from: null, through: null }} />);
+    type("On this page, show only 4-bedroom apartments in Laureles.");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+
+    expect(router.push).not.toHaveBeenCalled();
+    await waitFor(() => expect(chat.appendMessage).toHaveBeenCalled());
   });
 
   it("opens the named position and refuses a position that is not on the page", async () => {

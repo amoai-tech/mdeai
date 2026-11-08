@@ -19,6 +19,9 @@ describe("page filter control", () => {
     });
     expect(parseRentalPageCommand("Find furnished 2-bedroom apartments in Laureles under COP 3M.")).toBeNull();
     expect(parseRentalPageCommand("On this page, show furnished apartments.")).toBeNull();
+    expect(parseRentalPageCommand("On this page, show 2-bedroom apartments in Laureles for COP 3M max.")).toBeNull();
+    expect(parseRentalPageCommand("On this page, show 2-bedroom apartments in Laureles with wifi.")).toBeNull();
+    expect(parseRentalPageCommand("On this page, show 4-bedroom apartments in Laureles.")).toBeNull();
   });
 
   it("rejects a date order that is reversed only after merging current filters", () => {
