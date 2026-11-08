@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildRentalPageControlUrl, rentalPageControlSchema, resolveRentalPageControl } from "@/lib/rentals/browse-page-control";
+import { buildRentalPageControlUrl, parseRentalPageCommand, rentalPageControlSchema, resolveRentalPageControl } from "@/lib/rentals/browse-page-control";
 import { buildEventPageControlUrl, eventPageControlSchema } from "@/lib/events/browse-page-control";
 
 const rental = { neighborhood: "Laureles", beds: "2", from: null, through: null };
@@ -10,6 +10,15 @@ describe("page filter control", () => {
       "/rentals?neighborhood=Laureles&beds=1",
     );
     expect(buildRentalPageControlUrl(rental, { neighborhood: null })).toBe("/rentals?beds=2");
+  });
+
+  it("parses explicit page commands and leaves unsupported criteria to search", () => {
+    expect(parseRentalPageCommand("On this page, show only 1-bedroom apartments in Laureles.")).toEqual({
+      neighborhood: "Laureles",
+      beds: "1",
+    });
+    expect(parseRentalPageCommand("Find furnished 2-bedroom apartments in Laureles under COP 3M.")).toBeNull();
+    expect(parseRentalPageCommand("On this page, show furnished apartments.")).toBeNull();
   });
 
   it("rejects a date order that is reversed only after merging current filters", () => {

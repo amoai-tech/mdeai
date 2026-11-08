@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { buildRentalsUrl, type RentalBrowseFilterState } from "@/lib/rentals/browse-filters";
 import { isOrderedStay, isRealCalendarDate } from "@/lib/rentals/date-only";
+import { buildRentalSearchParams } from "@/lib/rental-query-parser";
 
 /** Only native rental URL filters may be changed by a page-control action. */
 export const rentalPageControlSchema = z.object({
@@ -28,6 +29,30 @@ export function applyRentalPageControl(
     from: patch.from === undefined ? current.from : patch.from,
     through: patch.through === undefined ? current.through : patch.through,
   };
+}
+
+/**
+ * Deterministic fast path for explicit page commands such as "on this page, show
+ * only 1-bedroom apartments in Laureles". It only handles native URL filters;
+ * anything with an unsupported criterion stays on the existing search/agent path.
+ */
+export function parseRentalPageCommand(text: string): RentalPageControlPatch | null {
+  if (!/\bon (this|the) page\b|\bpage filters?\b|\bset the (visible )?filters?\b/i.test(text)) {
+    return null;
+  }
+  if (/\b(furnished|balcony|pets?|parking|pool|gym|budget|under|below|less than)\b/i.test(text)) {
+    return null;
+  }
+  const parsed = buildRentalSearchParams(text, {});
+  if (!parsed) return null;
+  const patch: RentalPageControlPatch = {};
+  if (parsed.neighborhood) patch.neighborhood = parsed.neighborhood;
+  if (parsed.minBedrooms != null && parsed.minBedrooms >= 0 && parsed.minBedrooms <= 3) {
+    patch.beds = String(parsed.minBedrooms) as "0" | "1" | "2" | "3";
+  }
+  if (parsed.checkIn) patch.from = parsed.checkIn;
+  if (parsed.checkOut) patch.through = parsed.checkOut;
+  return Object.keys(patch).length > 0 ? patch : null;
 }
 
 export type RentalPageControlResult =

@@ -8,7 +8,7 @@ import {
   type KeyboardEvent,
 } from "react";
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   useConciergeCoAgent,
   useOptionalConciergeCoAgent,
@@ -45,6 +45,7 @@ import {
 } from "@/lib/rental-display";
 import { toDetailRental } from "@/lib/rentals/chat-rental-detail";
 import { parseDetailsCommand, type DetailsCommand } from "@/lib/rentals/details-command";
+import { parseRentalPageCommand, resolveRentalPageControl } from "@/lib/rentals/browse-page-control";
 import type { Rental } from "@/mastra/tools/search-rentals";
 import type { ConciergeWorkingMemory } from "@/lib/types";
 
@@ -273,6 +274,7 @@ function LiveComposer({
   const { user, loading: sessionLoading } = useSession();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const router = useRouter();
 
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -391,6 +393,30 @@ function LiveComposer({
         setRetryable(false);
       } else {
         setError(outcome.message);
+        setRetryable(false);
+      }
+      return;
+    }
+
+    // Explicit page-filter commands are deterministic: update the existing page
+    // URL and do not depend on a model turn. This is the fast path that keeps
+    // production rental commands from being silently dropped.
+    const pagePatch = parseRentalPageCommand(text);
+    if (pagePatch) {
+      const current = {
+        neighborhood: context?.neighborhood ?? searchParams?.get("neighborhood") ?? null,
+        beds: context?.beds ?? searchParams?.get("beds") ?? null,
+        from: context?.from ?? searchParams?.get("from") ?? null,
+        through: context?.through ?? searchParams?.get("through") ?? null,
+      };
+      const result = resolveRentalPageControl(current, pagePatch);
+      if (result.ok) {
+        setDraft("");
+        setError(null);
+        setRetryable(false);
+        router.push(result.url);
+      } else {
+        setError(result.error);
         setRetryable(false);
       }
       return;
@@ -570,7 +596,7 @@ function LiveComposer({
       sendInFlight.current = false;
       if (mounted.current) setSending(false);
     }
-  }, [agent, appendMessage, busy, draft, signedOut, isReady, onResults, onOpenDetails, context, setState]);
+  }, [agent, appendMessage, busy, draft, signedOut, isReady, onResults, onOpenDetails, context, setState, router, searchParams]);
 
   const onStop = useCallback(() => {
     if (sendInFlight.current) cancelled.current = true;
