@@ -140,6 +140,9 @@ test("SIGINT during Chrome startup deletes its isolated profile", { timeout: 12_
   const port = await isolatedQaPort();
   const dir = mkdtempSync(join(tmpdir(), "mde-qa-signal-fixture-"));
   const fakeChrome = join(dir, "fake-chrome");
+  // Interrupt at the earliest observable point: the profile directory
+  // exists, but Chrome and the rest of startup may not have begun yet.
+  // The launcher must already have SIGINT registered at this moment.
   writeFileSync(fakeChrome, "#!/bin/sh\nexec sleep 30\n", { mode: 0o755 });
   const child = spawn(process.execPath, ["--import", tsxLoader, browser, "--headless", `--port=${port}`], {
     cwd: dir,
