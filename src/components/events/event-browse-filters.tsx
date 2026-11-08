@@ -6,6 +6,7 @@ import { ChevronDown } from "lucide-react";
 import { toggleVariants } from "@/components/ui/toggle";
 import { cn } from "@/lib/utils";
 import type { DateWindow, EventCategory } from "@/mastra/tools/search-events";
+import { buildEventBrowseUrl } from "@/lib/events/browse-url";
 
 const DATE_WINDOWS: { value: DateWindow; label: string }[] = [
   { value: "tonight", label: "Tonight" },
@@ -30,22 +31,6 @@ const PRICES = [
   { value: "paid", label: "Paid" },
 ] as const;
 
-function buildFilterUrl(filters: {
-  category?: EventCategory | null;
-  neighborhood?: string | null;
-  dateWindow?: DateWindow | null;
-  price?: "free" | "paid" | null;
-}): string {
-  const params = new URLSearchParams();
-  if (filters.category) params.set("category", filters.category);
-  if (filters.neighborhood) params.set("neighborhood", filters.neighborhood);
-  if (filters.dateWindow && filters.dateWindow !== "any") {
-    params.set("dateWindow", filters.dateWindow);
-  }
-  if (filters.price) params.set("price", filters.price);
-  const query = params.toString();
-  return query ? `/events?${query}` : "/events";
-}
 
 function toggleChip<T extends string>(current: T | null, value: T): T | null {
   return current === value ? null : value;
@@ -111,7 +96,7 @@ export function EventBrowseFilters({
           return (
             <Link
               key={value}
-              href={buildFilterUrl({
+              href={buildEventBrowseUrl({
                 category,
                 neighborhood,
                 dateWindow: toggleDateWindow(dateWindow, value),
@@ -133,7 +118,7 @@ export function EventBrowseFilters({
           return (
             <Link
               key={value}
-              href={buildFilterUrl({
+              href={buildEventBrowseUrl({
                 category: toggleChip(category, value),
                 neighborhood,
                 dateWindow: dateForUrl,
@@ -170,7 +155,7 @@ export function EventBrowseFilters({
             return (
               <Link
                 key={n}
-                href={buildFilterUrl({
+                href={buildEventBrowseUrl({
                   category,
                   neighborhood: toggleChip(neighborhood, n),
                   dateWindow: dateForUrl,
@@ -192,7 +177,7 @@ export function EventBrowseFilters({
             return (
               <Link
                 key={value}
-                href={buildFilterUrl({
+                href={buildEventBrowseUrl({
                   category,
                   neighborhood,
                   dateWindow: dateForUrl,
