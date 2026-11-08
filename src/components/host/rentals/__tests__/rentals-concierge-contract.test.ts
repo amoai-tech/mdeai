@@ -38,3 +38,16 @@ describe("SAN-1124 tool render key", () => {
     expect(renderer).not.toContain('name: "read-broker-workspace"');
   });
 });
+
+describe("one top-level heading on the broker concierge", () => {
+  it("replaces CopilotKit's heading-rendered welcome message with a paragraph", () => {
+    const center = readComponent("rentals-concierge-center.tsx");
+    // CopilotKit hardcodes its welcome message as an <h1> and falls back to default copy when
+    // the label is simply removed, so the copy goes through the welcome slot instead.
+    expect(center).toContain("welcomeScreen={{ welcomeMessage:");
+    expect(center).toContain('data-testid="rc-welcome"');
+    expect(center).toMatch(/WelcomeMessageCopy[\s\S]{0,200}?<p/);
+    expect(center.match(/<h1\s/g) ?? []).toHaveLength(1);
+    expect(center).toContain("I can read your actual rental dashboard");
+  });
+});
