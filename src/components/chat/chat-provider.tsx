@@ -613,7 +613,8 @@ export function BrokerThreadSaver({
     const handledInBatch: string[] = [];
     for (const message of current) {
       if (state.handledIds.has(message.id) || state.failedIds.has(message.id)) continue;
-      if (restoreMode === "waiting" && !isLiveUserMessage(agent, threadId, message.id)) continue;
+      if (restoreMode === "waiting" &&
+          !isLiveUserMessage(agent, threadId, message.id, message.content)) continue;
       // Questions only. The Mastra runtime already stores each assistant reply (as
       // `<id>-agui-text`); posting it again under the plain AG-UI id produced two rows for one
       // answer, and the id-based idempotency cannot dedupe two different ids.
