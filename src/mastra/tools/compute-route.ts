@@ -78,6 +78,14 @@ export const computeRouteTool = createTool({
           return { route: null, source: "google_routes" as const, reason: "route_unavailable" };
         }
         const today = new Date().toISOString().slice(0, 10);
+        const cache = (context as { requestContext?: { get: (key: string) => unknown; set: (key: string, value: unknown) => void } } | undefined)?.requestContext;
+        const cacheKey = JSON.stringify({ origin: input.origin, destination: input.destination, travelMode: input.travelMode ?? "WALK", includePolyline: input.includePolyline === true });
+        const cached = cache?.get("mdeaiRouteToolCache") as
+          | Record<string, { route: Awaited<ReturnType<typeof computeGoogleRoute>> }>
+          | undefined;
+        if (cached?.[cacheKey]?.route) {
+          return { route: cached[cacheKey].route, source: "google_routes" as const };
+        }
         const userId = getAuditUserId(context);
         if (userId) {
           const perUserRaw = process.env.ROUTES_DAILY_LIMIT_PER_USER;
@@ -121,6 +129,9 @@ export const computeRouteTool = createTool({
 
         try {
           const route = await computeGoogleRoute(input);
+          if (route && cache) {
+            cache.set("mdeaiRouteToolCache", { ...(cached ?? {}), [cacheKey]: { route } });
+          }
           return route
             ? { route, source: "google_routes" as const }
             : { route: null, source: "google_routes" as const, reason: "route_unavailable" };

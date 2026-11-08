@@ -50,6 +50,18 @@ describe("route tool choice", () => {
     })).toBe(true);
   });
 
+  it("forces a mode follow-up after an earlier route question", () => {
+    expect(shouldForceRouteTool({
+      stepNumber: 0,
+      messages: [
+        user("How long is the walk from Parque Lleras to Provenza?"),
+        { role: "assistant", content: "It is 2.3 km." },
+        user("And by car?"),
+      ],
+      steps: [],
+    })).toBe(true);
+  });
+
   it("does not force after the route tool already ran", () => {
     expect(shouldForceRouteTool({
       stepNumber: 1,

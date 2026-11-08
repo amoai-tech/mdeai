@@ -66,8 +66,19 @@ export function shouldForceRouteTool({
   steps: readonly ToolStep[];
 }): boolean {
   if (stepNumber !== 0) return false;
-  const lastUser = messages.findLast((m) => m.role === "user");
-  if (!lastUser || !isRouteQuestion(userText(lastUser.content))) return false;
+  const userMessages = messages.filter((m) => m.role === "user");
+  const lastUser = userMessages.at(-1);
+  if (!lastUser) return false;
+  const text = userText(lastUser.content);
+  if (!isRouteQuestion(text)) {
+    // A short mode/duration follow-up reuses the nearest earlier route question.
+    const priorRoute = userMessages
+      .slice(0, -1)
+      .reverse()
+      .some((m) => routeEndpoints(userText(m.content)) !== null);
+    const modeFollowUp = /\b(by car|driving|walking|by bike|cycling|transit|public transport|what about|and if|y si|en auto|en bici|caminando|transporte)\b/i.test(text);
+    if (!(priorRoute && modeFollowUp)) return false;
+  }
   return !steps.some((step) =>
     step.toolCalls?.some((call) => ROUTE_TOOL_NAMES.has(call.toolName || "")),
   );

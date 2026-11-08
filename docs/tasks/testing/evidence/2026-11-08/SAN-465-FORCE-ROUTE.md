@@ -39,3 +39,12 @@ without endpoints are not forced. These require request-context reuse and are do
 - Negative tests now include rental price ranges, walking-distance listings, booking time windows,
   one-endpoint questions, café discovery and generic/possessive origins.
 - 17 route-intent cases + 8 tool tests pass.
+
+## Final review pass
+
+- Route follow-up “And by car?” after an earlier two-endpoint route question forces the tool using
+  the earlier route context.
+- Tool result cache on the shared RequestContext reuses the same origin/destination/mode result, so a
+  retried turn does not reserve another quota slot or call Google.
+- Prompt now explicitly says a null route must be reported as unavailable with no estimate/substitute.
+- 23 route-intent tests + 8 tool tests pass.
