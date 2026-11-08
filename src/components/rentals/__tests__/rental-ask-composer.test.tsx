@@ -41,11 +41,13 @@ const agent = vi.hoisted(() => ({
 }));
 const coagent = vi.hoisted(() => ({ present: true, isReady: true, setState: vi.fn() }));
 const nav = vi.hoisted(() => ({ pathname: "/rentals", search: "" }));
+const router = vi.hoisted(() => ({ push: vi.fn() }));
 const errorVersion = vi.hoisted(() => ({ value: 0 }));
 
 vi.mock("next/navigation", () => ({
   usePathname: () => nav.pathname,
   useSearchParams: () => new URLSearchParams(nav.search),
+  useRouter: () => router,
 }));
 vi.mock("@/lib/hooks/use-concierge-chat", () => ({
   useConciergeChat: () => ({
