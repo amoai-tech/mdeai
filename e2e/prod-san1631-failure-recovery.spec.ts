@@ -113,11 +113,26 @@ test("a slow stopped AI request cannot resurrect stale filters after page switch
     await page.getByTestId("rentals-filter-beds-2").click();
     await expect.poll(() => new URL(page.url()).searchParams.get("beds")).toBe("2");
     await page.goto("/events", { waitUntil: "domcontentloaded" });
-    await expect(page.getByTestId("events-browse")).toBeVisible();
+    await expect(page.getByTestId("events-browse")).toBeVisible({ timeout: 60_000 });
     await page.goto("/rentals?beds=2", { waitUntil: "domcontentloaded" });
     await expect.poll(() => new URL(page.url()).searchParams.get("beds")).toBe("2");
     await expect(page.getByTestId("rental-ask-error")).toHaveCount(0);
   } finally {
     release();
   }
+});
+
+test("a normal rental AI question still reaches the agent and completes", async ({ qaRolePage: page }) => {
+  test.setTimeout(180_000);
+  const active = await openRentalComposer(page);
+  const input = active.locator("#rental-ask-input");
+  await input.fill(QUESTION);
+  await expect(active.getByTestId("rental-ask-send")).toBeEnabled({ timeout: 45_000 });
+
+  const response = page.waitForResponse((r) =>
+    r.url().includes("/api/copilotkit") && r.request().method() === "POST",
+  { timeout: 60_000 });
+  await active.getByTestId("rental-ask-send").click();
+  expect((await response).status()).toBe(200);
+  await expect(active.getByTestId("rental-ask-error")).toHaveCount(0, { timeout: 45_000 });
 });

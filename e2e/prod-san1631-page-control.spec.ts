@@ -39,10 +39,28 @@ async function expectCurrentResults(page: Page) {
   const cardPins = new Set(await cards.evaluateAll((els) =>
     els.map((el) => el.getAttribute("data-pin-id")).filter((id): id is string => Boolean(id)),
   ));
-  const renderedPins = await page.locator('[data-testid="map-pin"][data-pin-id]').evaluateAll((els) =>
-    els.map((el) => el.getAttribute("data-pin-id")).filter((id): id is string => Boolean(id)),
-  );
-  expect(renderedPins.every((id) => cardPins.has(id))).toBe(true);
+  // On phones the map sheet is mounted lazily; open it from a card before
+  // asserting that rendered pins match the cards.
+  if ((page.viewportSize()?.width ?? 0) <= 390 && cardPins.size > 0) {
+    const openMap = page.getByTestId("browse-map-fab");
+    if (await openMap.isVisible().catch(() => false)) {
+      await openMap.click();
+      await expect(page.getByTestId("browse-map-toolbar")).toBeVisible({ timeout: 15_000 });
+    }
+  }
+  const expected = [...cardPins].sort().join(",");
+  await expect.poll(async () => {
+    const ids = await page.locator('[data-testid="map-pin"][data-pin-id]').evaluateAll((els) =>
+      els.map((el) => el.getAttribute("data-pin-id")).filter((id): id is string => Boolean(id)),
+    );
+    return ids.sort().join(",");
+  }, { timeout: 45_000, message: "map pins must settle to the current cards" }).toBe(expected);
+
+  // Close the phone sheet before navigation; the next page must not inherit its overlay.
+  if ((page.viewportSize()?.width ?? 0) <= 390) {
+    const close = page.getByTestId("browse-map-close");
+    if (await close.isVisible().catch(() => false)) await close.click();
+  }
 }
 
 async function sendNativeCommand(page: Page, question: string, expectedUrl: string) {
