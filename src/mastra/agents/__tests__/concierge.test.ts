@@ -526,3 +526,17 @@ describe("concierge updateWorkingMemory tolerates provider padding", () => {
     expect(conciergeWorkingMemorySchema.safeParse({ lastRentalQuery: { budgetType: "" } }).success).toBe(false);
   });
 });
+
+describe("answers never narrate the work", () => {
+  it("forbids announcing tool use or describing the user", async () => {
+    // The live chat renders whatever the model writes as its answer, and Gemini emits a preamble
+    // as ordinary text — there is no protocol-level reasoning field to hide. A broker watching the
+    // answer therefore read "I need to check the broker's workspace…" above the real result, so the
+    // rule is enforced where the text is generated.
+    const instructions = String(await conciergeAgent.getInstructions());
+    expect(instructions).toContain("Never say what you are about to do");
+    expect(instructions).toContain("Call the tool silently and reply with the result only");
+    expect(instructions).toContain("Never describe the user or reason about who they are");
+    expect(instructions).toContain("A reply that needs a tool is the tool result");
+  });
+});
