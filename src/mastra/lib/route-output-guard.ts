@@ -1,5 +1,31 @@
 import type { Processor, ProcessOutputStreamArgs } from "@mastra/core/processors";
 
+function failureMessage(reason: unknown, spanish: boolean): string {
+  switch (reason) {
+    case "route_quota_per_user_exceeded":
+      return spanish
+        ? "Has alcanzado tu límite diario de consultas de rutas. Inténtalo de nuevo mañana."
+        : "You've reached your daily route-request limit. Please try again tomorrow.";
+    case "route_quota_exceeded":
+      return spanish
+        ? "Se alcanzó el límite diario de consultas de rutas. Inténtalo de nuevo mañana."
+        : "Today's route-request limit has been reached. Please try again tomorrow.";
+    case "route_quota_disabled":
+    case "route_quota_unavailable":
+      return spanish
+        ? "El servicio de rutas no está disponible temporalmente. Inténtalo de nuevo más tarde."
+        : "Route calculations are temporarily unavailable. Please try again later.";
+    case "invalid_route_request":
+      return spanish
+        ? "Necesito un origen y un destino válidos para calcular la ruta. ¿Puedes indicar las ubicaciones exactas?"
+        : "I need valid starting and destination locations. Could you provide the exact places?";
+    default:
+      return spanish
+        ? "Google Maps no pudo calcular esta ruta. No tengo una distancia ni un tiempo de viaje verificados, así que no voy a inventarlos."
+        : "Google Maps could not calculate this route. I don't have a verified distance or travel time, so I won't guess.";
+  }
+}
+
 /**
  * SAN-465: a genuine compute-route result is required for distance/ETA claims.
  * Gemini has been observed estimating "5–10 minutes" even after a null result.
@@ -9,13 +35,21 @@ import type { Processor, ProcessOutputStreamArgs } from "@mastra/core/processors
 export const routeUnavailableOutputGuard = {
   id: "san465-route-unavailable-output",
   async processOutputStream({ part, state, messageList }: ProcessOutputStreamArgs) {
-    if (part.type === "tool-result" && (
-      part.payload.toolName === "computeRouteTool" || part.payload.toolName === "compute-route"
-    )) {
+    if (part.type === "tool-result") {
+      if (part.payload.toolName !== "computeRouteTool" &&
+          part.payload.toolName !== "compute-route") {
+        // Other tools own independent answers in a compound request. Once
+        // another tool completes, do not suppress its café/rental/booking reply.
+        state.routeUnavailable = false;
+        state.routeUnavailableEmitted = false;
+        state.routeFailureReason = undefined;
+        return part;
+      }
       const result = part.payload.result;
       if (result && typeof result === "object" && "route" in result) {
         state.routeUnavailable = result.route === null;
         state.routeUnavailableEmitted = false;
+        state.routeFailureReason = "reason" in result ? result.reason : undefined;
       }
       return part;
     }
@@ -40,10 +74,9 @@ export const routeUnavailableOutputGuard = {
     } catch {
       // A broken message snapshot must not re-enable an unsupported ETA.
     }
-    const answer = spanish
-      ? "Google Maps no pudo calcular esta ruta. No tengo una distancia ni un tiempo de viaje verificados, así que no voy a inventarlos."
-      : "Google Maps could not calculate this route. I don't have a verified distance or travel time, so I won't guess.";
-
-    return { ...part, payload: { ...part.payload, text: answer } };
+    return {
+      ...part,
+      payload: { ...part.payload, text: failureMessage(state.routeFailureReason, spanish) },
+    };
   },
 } satisfies Processor;

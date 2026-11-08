@@ -54,6 +54,46 @@ describe("real route-output guard", () => {
     expect(out).toMatchObject({ payload: { text: "Your booking is ready." } });
   });
 
+  it("preserves an unrelated answer after a failed route and later café search", async () => {
+    const state = {};
+    await pipe("tool-result", { toolName: "computeRouteTool", result: {
+      route: null, reason: "route_unavailable",
+    } }, state, "How far is Provenza from Parque Lleras, and find cafés there?");
+    await pipe("tool-result", { toolName: "searchRestaurantsTool", result: {
+      results: [{ id: "cafe-1", title: "Café A" }],
+    } }, state);
+    const first = await pipe("text-delta", { text: "Café A is one result." }, state);
+    const second = await pipe("text-delta", { text: " Google Maps route is unavailable." }, state);
+    expect(first).toMatchObject({ payload: { text: "Café A is one result." } });
+    expect(second).toMatchObject({
+      payload: { text: " Google Maps route is unavailable." },
+    });
+  });
+
+  it.each([
+    ["route_quota_per_user_exceeded", "your daily route-request limit"],
+    ["route_quota_exceeded", "Today's route-request limit"],
+    ["route_quota_unavailable", "temporarily unavailable"],
+    ["route_quota_disabled", "temporarily unavailable"],
+    ["invalid_route_request", "valid starting and destination locations"],
+  ])("does not mislabel %s as a Google Maps failure", async (reason, expected) => {
+    const state = {};
+    await pipe("tool-result", { toolName: "computeRouteTool",
+      result: { route: null, reason } }, state);
+    const answer = await pipe("text-delta", { text: "It takes 5 minutes" }, state);
+    expect(answer).toMatchObject({ payload: { text: expect.stringContaining(expected) } });
+    expect((answer as {payload:{text:string}}).payload.text).not.toContain("Google Maps could not calculate");
+  });
+
+  it("uses Spanish quota messaging after a provider limit", async () => {
+    const state = {};
+    await pipe("tool-result", { toolName: "computeRouteTool",
+      result: { route: null, reason: "route_quota_exceeded" } }, state);
+    const answer = await pipe("text-delta", { text: "Son 5 minutos" }, state,
+      "¿Cuánto se tarda de Laureles a Provenza?");
+    expect(answer).toMatchObject({ payload: { text: expect.stringContaining("límite diario") } });
+  });
+
   it("falls back to a safe English response when message snapshots fail", async () => {
     const state = {};
     await pipe("tool-result", { toolName: "compute-route", result: { route: null } }, state);
