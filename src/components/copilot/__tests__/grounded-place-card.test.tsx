@@ -71,6 +71,20 @@ describe("GroundedPlaceCard", () => {
     expect(html).not.toContain("Google-verified candidate");
   });
 
+  it("shows matching Google attribution instead of a generic label on browse cards", () => {
+    const html = renderToStaticMarkup(
+      <GroundedPlaceCard
+        testId="grounded-card"
+        title="Live Café"
+        sourceMode="google_grounding"
+        groundingSource={{ uri: "https://maps.google.com/?cid=99", title: "Live Café via Google" }}
+      />,
+    );
+    expect(html).toContain('data-testid="grounding-attribution"');
+    expect(html).toContain("Live Café via Google");
+    expect(html).not.toContain("Grounded search result");
+  });
+
   it("renders photo author attributions when provided", () => {
     const html = renderToStaticMarkup(
       <GroundedPlaceCard

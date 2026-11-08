@@ -1,11 +1,16 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { CafeDetailPanel } from "@/components/cafe/cafe-detail-panel";
 import type { CafeVenueDetail } from "@/components/chat/rental-ui-context";
 
+const placeDetailsState = vi.hoisted(() => ({
+  response: { status: "error" } as
+    | { status: "error" }
+    | { status: "ready"; data: import("@/lib/place-details").PlaceDetailsDto },
+}));
 vi.mock("@/hooks/use-place-details", () => ({
-  usePlaceDetails: () => ({ status: "error" as const }),
+  usePlaceDetails: () => placeDetailsState.response,
 }));
 
 vi.mock("@/lib/hooks/use-concierge-chat", () => ({
@@ -44,6 +49,27 @@ const detail: CafeVenueDetail = {
 };
 
 describe("CafeDetailPanel enrichment fallback", () => {
+  beforeEach(() => { placeDetailsState.response = { status: "error" }; });
+
+  it("shows catalog origin plus live details without contradictory verification badges", () => {
+    placeDetailsState.response = {
+      status: "ready",
+      data: {
+        placeId: detail.placeId!,
+        displayName: "Test Café",
+        formattedAddress: "Calle 10",
+        weekdayDescriptions: [],
+        photoNames: [],
+        fieldMaskVersion: "v1",
+        checkedAt: "2026-11-08",
+      },
+    };
+    const saved = { ...detail, sourceMode: "saved_catalog" as const };
+    const html = renderToStaticMarkup(<CafeDetailPanel detail={saved} siblings={[saved]} />);
+    expect(html).toContain("Saved MDE catalog · details refreshed from Google");
+    expect(html).not.toContain(">Google-verified<");
+  });
+
   it("shows saved catalog provenance when provider enrichment is unavailable", () => {
     const saved = { ...detail, sourceMode: "saved_catalog" as const };
     const html = renderToStaticMarkup(<CafeDetailPanel detail={saved} siblings={[saved]} />);

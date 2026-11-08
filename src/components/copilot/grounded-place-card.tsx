@@ -1,4 +1,5 @@
-import type { GroundedPhotoAttribution, GroundedPlaceSourceMode } from "@/lib/parse-grounded-tool-result";
+import type { GroundedPhotoAttribution, GroundedPlaceSourceMode, GroundingSource } from "@/lib/parse-grounded-tool-result";
+import { GroundingAttribution } from "@/components/maps/GroundingAttribution";
 import { groundedSourceLabel } from "@/lib/grounded-place-source";
 import { mapsDeepLinksEnabled } from "@/lib/maps-deep-links";
 import { placesPhotoProxyUrl } from "@/lib/places-photo-proxy";
@@ -24,6 +25,7 @@ export type GroundedPlaceCardProps = {
   photoName?: string;
   photoAuthorAttributions?: GroundedPhotoAttribution[];
   sourceMode?: GroundedPlaceSourceMode;
+  groundingSource?: GroundingSource;
   testId: string;
   pinId?: string;
   selected?: boolean;
@@ -124,6 +126,7 @@ export function GroundedPlaceCard({
   photoName,
   photoAuthorAttributions,
   sourceMode,
+  groundingSource,
   testId,
   pinId,
   selected,
@@ -247,15 +250,18 @@ export function GroundedPlaceCard({
               ) : null}
             </div>
           )}
-          {sourceMode ? (
+          {groundedSourceLabel(sourceMode, Boolean(groundingSource)) ? (
             <p data-testid="grounded-source-label" className="mt-1 text-xs text-muted-foreground">
-              {groundedSourceLabel(sourceMode)}
+              {groundedSourceLabel(sourceMode, Boolean(groundingSource))}
             </p>
           ) : null}
           {blurb ? (
             <p className="mt-1.5 line-clamp-2 text-xs text-muted-foreground">
               {blurb}
             </p>
+          ) : null}
+          {groundingSource ? (
+            <GroundingAttribution compact rows={[{ placeUri: groundingSource.uri, title: groundingSource.title }]} />
           ) : null}
           <MapsLinkCtas
             mapsUrl={mapsUrl}

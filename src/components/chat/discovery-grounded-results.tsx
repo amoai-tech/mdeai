@@ -86,6 +86,7 @@ export function DiscoveryGroundedResults({ rows, selectedId, onSelectRow, label 
                 photoName={r.photoName}
                 photoAuthorAttributions={r.photoAuthorAttributions}
                 sourceMode={r.sourceMode}
+                groundingSource={r.groundingSource}
                 pinId={mapped ? pinId : undefined}
                 selected={selectedId === r.id || (mapped && selectedPinId === pinId)}
                 onSelect={mapped ? () => { panToPin(pinId); onSelectRow?.(r.id); } : undefined}
