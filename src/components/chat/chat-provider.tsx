@@ -546,6 +546,7 @@ export function BrokerThreadSaver({
   const progress = useRef({
     threadId,
     handledIds: new Set<string>(),
+    failedIds: new Set<string>(),
     inFlight: false,
     ready: restoreMode === "fresh",
   });
@@ -555,6 +556,7 @@ export function BrokerThreadSaver({
       progress.current = {
         threadId,
         handledIds: new Set<string>(),
+        failedIds: new Set<string>(),
         inFlight: false,
         ready: restoreMode === "fresh",
       };
@@ -584,16 +586,22 @@ export function BrokerThreadSaver({
     const current = agent.messages ?? [];
     // Only questions are ours to write. Stamped when sent, so the history reader (which orders by
     // createdAt) never puts the runtime's reply above the question that produced it.
-    const lastAnswer = current.reduce((last, message, index) =>
-      !state.handledIds.has(message.id) &&
-      message.role === "assistant" && typeof message.content === "string" &&
-      message.content.trim().length > 0 ? index : last, -1);
+    const answerFollowsLatestQuestion = (list: typeof current): boolean => {
+      let question = -1;
+      let answer = -1;
+      list.forEach((message, index) => {
+        if (typeof message.content !== "string" || message.content.trim().length === 0) return;
+        if (message.role === "user") question = index;
+        else if (message.role === "assistant" && !state.handledIds.has(message.id)) answer = index;
+      });
+      return answer > question;
+    };
 
     const text: { id: string; role: "user" | "assistant"; content: string }[] = [];
     const handledInBatch: string[] = [];
     for (let i = 0; i < current.length; i++) {
       const message = current[i];
-      if (state.handledIds.has(message.id)) continue;
+      if (state.handledIds.has(message.id) || state.failedIds.has(message.id)) continue;
       // Questions only. The Mastra runtime already stores each assistant reply (as
       // `<id>-agui-text`); posting it again under the plain AG-UI id produced two rows for one
       // answer, and the id-based idempotency cannot dedupe two different ids.
@@ -608,7 +616,7 @@ export function BrokerThreadSaver({
       // Nothing new to write. If the run has finished and its answer exists, the exchange is
       // complete, so the thread can be advertised as reloadable -- this is the common case after
       // the question was posted at send time.
-      if (!running && lastAnswer >= 0) markThreadSaved(threadId);
+      if (!running && answerFollowsLatestQuestion(current)) markThreadSaved(threadId);
       return;
     }
 
@@ -623,6 +631,9 @@ export function BrokerThreadSaver({
       .then((response) => {
         if (!response.ok) {
           console.warn(`[BrokerThreadSaver] save failed: ${response.status}`);
+          // Retrying this question on every streamed chunk would hammer the endpoint; it is
+          // retried once the run ends instead (see the drain guard below).
+          for (const id of handledInBatch) state.failedIds.add(id);
           return;
         }
         saved = true;
@@ -631,11 +642,7 @@ export function BrokerThreadSaver({
         // captured when the effect started would miss it. Restored ids are already handled, so a
         // replayed answer is never counted as a new one.
         const live = agent.messages ?? [];
-        const pendingAnswer = live.some((message) =>
-          !state.handledIds.has(message.id) &&
-          message.role === "assistant" &&
-          typeof message.content === "string" &&
-          message.content.trim().length > 0);
+        const pendingAnswer = answerFollowsLatestQuestion(live);
         // A question alone is not restore-able; the runtime's reply is what replay needs.
         if (!agent.isRunning && pendingAnswer) markThreadSaved(threadId);
       })
@@ -644,6 +651,7 @@ export function BrokerThreadSaver({
         state.inFlight = false;
         // A finished POST is not an agent update. Drain pending complete answers explicitly,
         // but never enter an infinite retry loop after a failed POST.
+            if (!agent.isRunning && state.failedIds.size > 0) state.failedIds.clear();
         const rest = agent.messages ?? [];
         const pending = rest.some((message) => !state.handledIds.has(message.id) &&
             (message.role === "user" || message.role === "assistant") &&

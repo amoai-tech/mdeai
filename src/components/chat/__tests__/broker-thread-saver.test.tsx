@@ -303,4 +303,37 @@ describe("a finished answer makes the thread reloadable", () => {
     await vi.waitFor(() => expect(markThreadSaved).toHaveBeenCalledWith(THREAD));
     expect(calls()).toHaveLength(1);
   });
+
+  it("does not mark the thread saved when the latest question has no answer yet", async () => {
+    // u1 answered, then a second question whose run has not produced an answer.
+    agentMessages = [
+      { id: "u1", role: "user", content: "first" },
+      { id: "a1", role: "assistant", content: "answer one" },
+      { id: "u2", role: "user", content: "second" },
+    ];
+    render(<BrokerThreadSaver threadId={THREAD} />);
+    await vi.waitFor(() => expect(calls()).toHaveLength(1));
+    await new Promise((r) => setTimeout(r, 60));
+    // An earlier answer must not label the unanswered question as restorable.
+    expect(markThreadSaved).not.toHaveBeenCalled();
+  });
+
+  it("retries a rejected question once per run, not on every streamed chunk", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 503 })));
+    agentRunning = true;
+    agentMessages = [{ id: "u1", role: "user", content: "q" }];
+    const { rerender } = render(<BrokerThreadSaver threadId={THREAD} />);
+    await vi.waitFor(() => expect(calls()).toHaveLength(1));
+
+    // The reply streams in: several renders, none may re-send the rejected question.
+    for (const chunk of ["par", "partial", "partial answer"]) {
+      agentMessages = [
+        { id: "u1", role: "user", content: "q" },
+        { id: "a1", role: "assistant", content: chunk },
+      ];
+      rerender(<BrokerThreadSaver threadId={THREAD} />);
+      await new Promise((r) => setTimeout(r, 30));
+    }
+    expect(calls()).toHaveLength(1);
+  });
 });
