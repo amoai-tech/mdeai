@@ -129,7 +129,10 @@
     "test:local:embedding": "node scripts/check-local-embedding-readiness.mjs",
     "test:local:embedding:journey": "node scripts/test-local-embedding-journey.mjs",
     "test:e2e:chromatic-pilot": "node scripts/run-chromatic-pilot.cjs",
-    "chromatic:pilot": "chromatic --playwright --no-interactive"
+    "chromatic:pilot": "chromatic --playwright --no-interactive",
+    "qa:auth:check": "node --import=tsx scripts/qa-auth-check.ts",
+    "qa:test:admin": "npm run qa:auth:check && MDE_SUPER_ADMIN_QA=1 playwright test e2e/qa-super-admin-fixture.spec.ts --project=chromium --workers=1 --retries=0",
+    "qa:browser": "node --import=tsx scripts/qa-browser.ts"
   },
   "dependencies": {
     "@ag-ui/client": "1.0.2",
@@ -207,6 +210,7 @@
     "playwright": "1.64.1",
     "sharp": "^0.35.5",
     "tailwindcss": "^4",
+    "tsx": "^4.23.15",
     "typescript": "^5",
     "vitest": "^4.1.6",
     "yaml": "2.9.1"

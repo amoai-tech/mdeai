@@ -19,6 +19,21 @@ Portable repository guidance for coding agents working from the current Git chec
 
 **Default decision:** When a business restriction prevents building or exercising a core feature, make that feature functional now while retaining technical security and truthful data. **Success in development means working user journeys — not more gates, paperwork, or documentation.**
 
+## Authenticated QA — agent quick start (read BEFORE searching for credentials)
+
+All coding/browser agents (Claude, Codex, ChatGPT/Desktop Commander, Chrome DevTools MCP, DeepSeek harnesses) must reuse **existing** MDE passwordless Supabase QA sessions. Never ask for a password, create another permanent Super Admin, use auth bypass flags, print test tokens, or copy service keys into MCP/browser configuration.
+
+| Task | Canonical entry point |
+| --- | --- |
+| Check E2E credentials (presence only) | `npm run qa:auth:check` |
+| Super Admin Playwright proof | `npm run qa:test:admin` (existing `superAdminPage` fixture; read-only) |
+| Interactive Chrome DevTools MCP debugging | `npm run qa:browser` (existing non-admin event-host QA role; see `--help`) |
+| Actual E2E cases | Import `test` from `e2e/fixtures.ts`, request `superAdminPage` / `qaRolePage`, and use `e2e/helpers/auth.ts` |
+
+`qa:browser` launches an isolated Chrome QA profile with a loopback-only CDP listener (default port 9227, adjustable via `--port`). Attach a **trusted** Chrome DevTools MCP using `--browser-url=http://127.0.0.1:9227` or the chosen port. Chrome is located using platform-specific paths or an operator-provided `CHROME_PATH`. Super Admin CDP access needs explicit `--role=super-admin --allow-admin`; prefer non-admin for visual debugging. CDP agents can read cookies and protected page data. Always stop the launcher afterwards. For RLS checks, use separate temporary identities and verified cleanup. Authenticated Playwright tests must disable screenshot, trace, and video and must never upload private reports.
+
+Details, copy-paste commands, and non-admin role setup: [e2e/README.md](e2e/README.md#agent-qa-commands--authenticated-chrome).
+
 ## Repository truth
 
 - Remote: `https://github.com/amoai-tech/mdeai.git`.
