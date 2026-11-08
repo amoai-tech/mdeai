@@ -388,6 +388,16 @@
       "file": "src/components/copilot/a2ui/__tests__/nearby-guest-guard.test.tsx",
       "classification": "test-only",
       "note": "SAN-106: mocks the v2 agent hook to prove guests never see the billable Nearby CTA, while signed-in renters do."
+    },
+    {
+      "file": "src/components/browse/page-filter-tools.tsx",
+      "classification": "keep",
+      "note": "SAN-1631 uses the installed v2 `useFrontendTool` API to update existing Rentals/Events page filters; no provider or agent is added."
+    },
+    {
+      "file": "src/components/browse/__tests__/page-filter-tools.test.tsx",
+      "classification": "test-only",
+      "note": "SAN-1631 verifies the two page tool registrations and their existing URL builders."
     }
   ]
 }
