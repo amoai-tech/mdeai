@@ -45,3 +45,10 @@
 **Reproducibility note:** adding `routes.googleapis.com` to the existing server key was a GCP
 configuration change, not code. Environments can instead set `GOOGLE_ROUTES_API_KEY`; the client
 prefers it. No secret is committed. A Terraform/managed key policy is still a follow-up.
+
+## Separate Routes budget
+
+Route calls no longer consume the café/nightlife Places quota. They reserve through the existing
+atomic `check_rate_limit` RPC with key `routes-daily:<UTC date>`, window 86,400 s and cap
+`ROUTES_DAILY_LIMIT` (default 100). Missing/failed store fails closed; exceeding the cap returns
+`route_quota_exceeded`. No new table or migration.

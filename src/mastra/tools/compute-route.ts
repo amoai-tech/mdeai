@@ -6,7 +6,7 @@ import {
   validateRouteWaypoints,
   type RouteTravelMode,
 } from "../lib/google-routes-client";
-import { incrementAndCheckGroundingQuota } from "../lib/grounding-quota";
+import { checkRateLimitDurable } from "@/lib/distributed-rate-limit";
 import { runAuditedTool } from "../lib/run-audited-search";
 
 const waypointSchema = z.union([
@@ -61,10 +61,20 @@ export const computeRouteTool = createTool({
           throw err;
         }
 
-        const quota = await incrementAndCheckGroundingQuota();
+        // Routes have their own daily budget; never consume the café/nightlife cap.
+        const capRaw = process.env.ROUTES_DAILY_LIMIT;
+        const cap = capRaw === undefined ? 100 : Number.parseInt(capRaw, 10);
+        if (!Number.isSafeInteger(cap) || cap <= 0) {
+          return { route: null, source: "google_routes" as const, reason: "route_quota_disabled" };
+        }
+        const today = new Date().toISOString().slice(0, 10);
+        const quota = await checkRateLimitDurable(`routes-daily:${today}`, cap, 86_400);
+        if (!quota.storeAvailable) {
+          console.warn("[compute-route] route quota store unavailable");
+          return { route: null, source: "google_routes" as const, reason: "route_quota_unavailable" };
+        }
         if (!quota.allowed) {
-          console.warn("[compute-route] route quota unavailable", quota.reason);
-          return { route: null, source: "google_routes" as const, reason: `route_quota_${quota.reason}` };
+          return { route: null, source: "google_routes" as const, reason: "route_quota_exceeded" };
         }
 
         try {
