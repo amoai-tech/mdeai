@@ -30,6 +30,7 @@ test.beforeAll(() => {
 const composer = (page: Page) =>
   page.locator('[data-testid="rental-ask-composer"]:visible').first();
 const QUESTION = "Find furnished 2-bedroom apartments in Laureles under COP 3 million.";
+const STALE_QUESTION = "Find furnished 3-bedroom apartments in Laureles under COP 3 million.";
 
 async function openRentalComposer(page: Page) {
   const response = await page.goto("/rentals", { waitUntil: "domcontentloaded" });
@@ -88,7 +89,7 @@ test("a slow stopped AI request cannot resurrect stale filters after page switch
   const intercepted = new Promise<void>((resolve) => { started = resolve; });
   const continueRequest = new Promise<void>((resolve) => { release = resolve; });
   const active = await openRentalComposer(page);
-  await active.locator("#rental-ask-input").fill(QUESTION);
+  await active.locator("#rental-ask-input").fill(STALE_QUESTION);
   await expect(active.getByTestId("rental-ask-send")).toBeEnabled({ timeout: 45_000 });
   await page.route("**/api/copilotkit**", async (route) => {
     if (route.request().method() !== "POST") {
@@ -97,8 +98,8 @@ test("a slow stopped AI request cannot resurrect stale filters after page switch
     }
     started();
     await continueRequest;
-    // Simulate a terminated slow request; no real AI response is fabricated.
-    try { await route.abort("failed"); } catch { /* navigation can already have canceled it */ }
+    // Let the real late response reach the browser; Stop must still win.
+    await route.continue();
   });
 
   await active.getByTestId("rental-ask-send").click();
@@ -108,13 +109,21 @@ test("a slow stopped AI request cannot resurrect stale filters after page switch
     const stop = active.getByTestId("rental-ask-stop");
     await expect(stop).toBeVisible({ timeout: 30_000 });
     await stop.click();
+    const lateResponse = page.waitForResponse((r) =>
+      r.url().includes("/api/copilotkit") && r.request().method() === "POST",
+    { timeout: 60_000 }).catch(() => null);
     release();
+    await lateResponse;
 
+    // The manual choice is 2 bedrooms while the stopped question asked for 3.
     await page.getByTestId("rentals-filter-beds-2").click();
     await expect.poll(() => new URL(page.url()).searchParams.get("beds")).toBe("2");
+    await page.waitForTimeout(3_000);
+    expect(new URL(page.url()).searchParams.get("beds")).toBe("2");
     await page.goto("/events", { waitUntil: "domcontentloaded" });
     await expect(page.getByTestId("events-browse")).toBeVisible({ timeout: 60_000 });
-    await page.goto("/rentals?beds=2", { waitUntil: "domcontentloaded" });
+    await page.goBack({ waitUntil: "domcontentloaded" });
+    await expect(page.getByTestId("rentals-browse")).toBeVisible({ timeout: 60_000 });
     await expect.poll(() => new URL(page.url()).searchParams.get("beds")).toBe("2");
     await expect(page.getByTestId("rental-ask-error")).toHaveCount(0);
   } finally {
