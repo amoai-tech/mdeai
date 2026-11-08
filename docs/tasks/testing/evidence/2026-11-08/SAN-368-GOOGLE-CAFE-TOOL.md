@@ -62,3 +62,15 @@ Tests: mapper 5, tool 7, atomic quota 3, related 17 total.
   leave orphan credit.
 - Metadata distinguishes `google_places_empty` (provider answered zero) from
   `google_places_unavailable` (provider error).
+
+## Third review pass
+
+- Quota fails closed (`quota_unavailable`) when Supabase service credentials are absent.
+- Spanish `cafetería/cafeterías` recognized deterministically.
+- Medellín context is **not** appended when an explicit city is present (e.g., Bogotá).
+- Non-café venue intents with no configured ADK endpoint go straight to catalog and consume no quota.
+- Coordinates must be finite and in valid latitude/longitude ranges; partial positions produce no pin.
+- Timeout still does not abort the in-flight SDK request (no supported abort option verified); it only
+  prevents additional attempts. This remains a documented limitation, not a claimed cancellation.
+
+Tests: 25 focused pass.

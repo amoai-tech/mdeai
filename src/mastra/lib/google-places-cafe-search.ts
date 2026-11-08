@@ -13,6 +13,8 @@ const CAFE_TEXT_SEARCH_MASK = [
 
 const MEDELLIN_BIAS = { latitude: 6.2442, longitude: -75.5812 };
 const MEDELLIN_CONTEXT = /\b(medell[ií]n|laureles|poblado|envigado|sabaneta|bel[eé]n|provenza|estadio|centro)\b/i;
+const EXPLICIT_CITY = /\b(bogot[aá]|cali|cartagena|barranquilla|santa marta|pereira|manizales|armenia|bucaramanga|c[uú]cuta|villavicencio|monter[ií]a|ibagu[eé]|pasto|neiva|popay[aá]n|sincelejo|valledupar|tunja|riohacha|quibd[oó]|florencia|yopal|mocoa|leticia|san andr[eé]s)\b/i;
+const EXPLICIT_LOCATION_PHRASE = /\b(?:in|en|near|around|nearby)\s+[A-ZÁÉÍÓÚÑ][\p{L}'-]+/u;
 const CAFE_TYPES = new Set(["cafe", "coffee_shop", "bakery", "brunch_restaurant"]);
 
 type GooglePlace = {
@@ -78,7 +80,10 @@ function isCafe(place: GooglePlace): boolean {
 
 /** Add Medellín context when the user did not name a city/neighborhood. */
 export function withMedellinScope(query: string): string {
-  return MEDELLIN_CONTEXT.test(query) ? query : `${query} Medellín, Colombia`;
+  if (MEDELLIN_CONTEXT.test(query) || EXPLICIT_CITY.test(query) || EXPLICIT_LOCATION_PHRASE.test(query)) {
+    return query;
+  }
+  return `${query} Medellín, Colombia`;
 }
 
 /** Map the real Places Text Search response to the existing grounded card/pin contract. */
@@ -99,14 +104,18 @@ export function mapGoogleTextSearchToGrounded(response: unknown): GoogleCafeSear
     const mapsUrl = validatedMapsUrl(place.googleMapsLinks?.placeUri);
     if (!placeId || !title || !mapsUrl || seen.has(placeId)) continue;
     seen.add(placeId);
+    const latitude = finite(place.location?.latitude);
+    const longitude = finite(place.location?.longitude);
+    const hasPosition = latitude !== undefined && longitude !== undefined &&
+      latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180;
 
     results.push({
       id: `google-${placeId}`,
       title,
       placeId,
       sourceMode: "google_places",
-      latitude: finite(place.location?.latitude),
-      longitude: finite(place.location?.longitude),
+      latitude: hasPosition ? latitude : undefined,
+      longitude: hasPosition ? longitude : undefined,
       mapsUrl,
       directionsUrl: validatedMapsUrl(place.googleMapsLinks?.directionsUri),
       reviewsUrl: validatedMapsUrl(place.googleMapsLinks?.reviewsUri),

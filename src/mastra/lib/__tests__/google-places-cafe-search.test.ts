@@ -76,6 +76,18 @@ describe("mapGoogleTextSearchToGrounded", () => {
       }),
     );
     expect(withMedellinScope("cafés in Laureles")).toBe("cafés in Laureles");
+    expect(withMedellinScope("cafés in Bogotá")).toBe("cafés in Bogotá");
+    expect(withMedellinScope("quiet cafés")).toContain("Medellín");
+  });
+
+  it("omits out-of-range or partial coordinates", () => {
+    const out = mapGoogleTextSearchToGrounded({
+      places: [{ id: "ChIJBadGeo", displayName: { text: "Bad Geo Café" }, primaryType: "cafe",
+        location: { latitude: 999, longitude: -75.5 },
+        googleMapsLinks: { placeUri: "https://maps.google.com/?cid=111" } }],
+    });
+    expect(out.results[0]?.latitude).toBeUndefined();
+    expect(out.results[0]?.longitude).toBeUndefined();
   });
 
   it("drops bars and malformed provider payloads", () => {

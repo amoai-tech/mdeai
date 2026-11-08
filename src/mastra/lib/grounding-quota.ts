@@ -24,7 +24,7 @@ export async function incrementAndCheckGroundingQuota(): Promise<GroundingQuotaR
 
   const env = getSupabaseServiceEnv();
   if (!env) {
-    return { allowed: true };
+    return { allowed: false, reason: "quota_unavailable" };
   }
 
   const supabase = createClient(env.url, env.serviceRoleKey, {

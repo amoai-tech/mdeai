@@ -7,6 +7,7 @@ vi.mock("../../lib/google-places-cafe-search", () => ({
 
 vi.mock("../../lib/adk-grounding-client", () => ({
   invokeAdkGrounding: vi.fn(),
+  isAdkGroundingConfigured: vi.fn(() => true),
 }));
 
 vi.mock("../../lib/grounding-quota", () => ({
@@ -38,7 +39,8 @@ vi.mock("../search-venue-anchors", () => ({
   })),
 }));
 
-import { invokeAdkGrounding } from "../../lib/adk-grounding-client";
+import { invokeAdkGrounding, isAdkGroundingConfigured } from "../../lib/adk-grounding-client";
+import { incrementAndCheckGroundingQuota } from "../../lib/grounding-quota";
 import { searchGoogleCafes } from "../../lib/google-places-cafe-search";
 import { searchRestaurants } from "../search-restaurants";
 import { searchGroundedPlacesTool } from "../search-grounded-places";
@@ -85,6 +87,8 @@ describe("searchGroundedPlacesTool fallback", () => {
     vi.mocked(invokeAdkGrounding).mockReset();
     vi.mocked(searchRestaurants).mockReset();
     vi.mocked(searchGoogleCafes).mockReset().mockResolvedValue({ results: [], attribution: [] });
+    vi.mocked(isAdkGroundingConfigured).mockReturnValue(true);
+    vi.mocked(incrementAndCheckGroundingQuota).mockClear();
   });
 
   it("GM-P0-06 returns curated fallback when ADK unavailable (403)", async () => {
@@ -158,6 +162,17 @@ describe("searchGroundedPlacesTool fallback", () => {
 
     expect(out.metadata?.reason).toBe("google_places_empty");
     expect(out.metadata?.fallback).toBe("curated");
+  });
+
+  it("does not consume quota or call ADK when no endpoint is configured", async () => {
+    vi.mocked(isAdkGroundingConfigured).mockReturnValue(false);
+    vi.mocked(searchRestaurants).mockResolvedValue({ results: [], total: 0, source: "supabase" });
+
+    const out = await runGrounded("rooftop dinner in Provenza");
+
+    expect(out.metadata?.reason).toBe("adk_not_configured");
+    expect(incrementAndCheckGroundingQuota).not.toHaveBeenCalled();
+    expect(invokeAdkGrounding).not.toHaveBeenCalled();
   });
 
   it("labels real Supabase fallback rows as saved catalog, not live Google", async () => {

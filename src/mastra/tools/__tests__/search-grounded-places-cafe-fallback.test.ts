@@ -7,6 +7,7 @@ vi.mock("../../lib/google-places-cafe-search", () => ({
 
 vi.mock("../../lib/adk-grounding-client", () => ({
   invokeAdkGrounding: vi.fn(),
+  isAdkGroundingConfigured: () => true,
 }));
 
 vi.mock("../../lib/grounding-quota", () => ({
@@ -41,7 +42,7 @@ vi.mock("../search-venue-anchors", () => ({
 import { invokeAdkGrounding } from "../../lib/adk-grounding-client";
 import { searchRestaurants } from "../search-restaurants";
 import { searchCafeVenueAnchors, venueAnchorToCoordinates } from "../search-venue-anchors";
-import { searchGroundedPlacesTool } from "../search-grounded-places";
+import { isCafeGroundingQuery, searchGroundedPlacesTool } from "../search-grounded-places";
 import { adkUnavailableMock } from "./grounded-places-test-helpers";
 
 type GroundedOut = {
@@ -72,6 +73,10 @@ describe("searchGroundedPlacesTool café venue_anchors fallback (UX-T-013)", () 
     vi.mocked(invokeAdkGrounding).mockReset();
     vi.mocked(searchRestaurants).mockReset();
     vi.mocked(searchCafeVenueAnchors).mockReset();
+  });
+
+  it("recognizes Colombian Spanish cafeterías deterministically", () => {
+    expect(isCafeGroundingQuery("cafeterías tranquilas en Laureles")).toBe(true);
   });
 
   it("returns venue_anchors rows when ADK unavailable and query is coffee", async () => {

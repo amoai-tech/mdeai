@@ -1,7 +1,7 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { enrichedGroundedPlaceFieldsSchema } from "../lib/adk-grounding-types";
-import { invokeAdkGrounding } from "../lib/adk-grounding-client";
+import { invokeAdkGrounding, isAdkGroundingConfigured } from "../lib/adk-grounding-client";
 import { searchGoogleCafes, withMedellinScope } from "../lib/google-places-cafe-search";
 import { groundedPlaceSourceModes, type GroundedPlaceSourceMode } from "@/lib/grounded-place-source";
 import {
@@ -39,7 +39,7 @@ const groundedPlaceResultSchema = z
   .merge(enrichedGroundedPlaceFieldsSchema);
 
 const CAFE_QUERY =
-  /\b(caf[eé]s?|coffee shops?|quiet caf[eé]s?|top cafes?|list cafes?|coworking|wifi|wi-fi|laptop[- ]friendly)\b/i;
+  /\b(caf[eé]s?|cafeter[ií]as?|coffee shops?|quiet caf[eé]s?|top cafes?|list cafes?|coworking|wifi|wi-fi|laptop[- ]friendly)\b/i;
 
 const NIGHTLIFE_QUERY =
   /\b(nightlife|salsa bars?|hidden bars?|rooftop cocktails?|rooftop bars?|live music bars?|locals go to)\b/i;
@@ -142,7 +142,7 @@ function isBarLoungeDistractor(title: string): boolean {
 }
 
 function isCafeCandidateTitle(title: string): boolean {
-  return /\bcaf[eé]|coffee|brunch/i.test(title);
+  return /\bcaf[eé]|cafeter[ií]a|coffee|brunch/i.test(title);
 }
 
 export function filterCafeGroundingRows(
@@ -407,6 +407,20 @@ export const searchGroundedPlacesTool = createTool({
       }, context);
     }
     const query = normalizeVenueGroundingQuery(rawQuery);
+    // No configured ADK endpoint => no paid provider call and no quota unit.
+    if (!isCafeGroundingIntent(rawQuery, intent) && !isAdkGroundingConfigured()) {
+      const fallbackResults = await curatedFallback(rawQuery, pageSize ?? 5, intent);
+      return withVenueKindMetadata(
+        {
+          results: fallbackResults,
+          attribution: [],
+          source: "grounding" as const,
+          metadata: { fallback: "curated", reason: "adk_not_configured" },
+        },
+        rawQuery,
+        intent,
+      );
+    }
     const quota = await incrementAndCheckGroundingQuota();
     if (!quota.allowed) {
       // Quota exceeded — degrade to curated restaurant results
