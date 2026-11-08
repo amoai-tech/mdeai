@@ -134,5 +134,19 @@ test("a normal rental AI question still reaches the agent and completes", async 
   { timeout: 60_000 });
   await active.getByTestId("rental-ask-send").click();
   expect((await response).status()).toBe(200);
-  await expect(active.getByTestId("rental-ask-error")).toHaveCount(0, { timeout: 45_000 });
+  // 200 only proves the stream started. Wait for the run to end, then prove a
+  // completed assistant turn exists before treating the absence of an error as success.
+  await expect(active.getByTestId("rental-ask-stop")).toHaveCount(0, { timeout: 90_000 });
+  const transcript = active.getByTestId("rental-ask-transcript");
+  if (!(await transcript.isVisible().catch(() => false))) {
+    const toggle = active.getByTestId("rental-ask-toggle-transcript");
+    await expect(toggle).toBeVisible({ timeout: 90_000 });
+    await toggle.click();
+  }
+  await expect(transcript).toBeVisible({ timeout: 90_000 });
+  await expect.poll(async () => (await transcript.innerText()).includes("MDE"), { timeout: 60_000 })
+    .toBe(true);
+  await expect.poll(async () => (await transcript.innerText()).trim().length, { timeout: 30_000 })
+    .toBeGreaterThan(0);
+  await expect(active.getByTestId("rental-ask-error")).toHaveCount(0);
 });

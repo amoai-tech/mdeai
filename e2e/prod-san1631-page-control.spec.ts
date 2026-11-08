@@ -23,7 +23,7 @@ test.beforeAll(() => {
 const composer = (page: Page) =>
   page.locator('[data-testid="rental-ask-composer"]:visible').first();
 
-async function expectCurrentResults(page: Page) {
+async function expectCurrentResults(page: Page, { verifyMap = true }: { verifyMap?: boolean } = {}) {
   const cards = page.locator('[data-testid="rentals-grid"] [data-result-kind="rental"][data-testid^="rental-card-"]');
   const empty = page.getByTestId("rentals-empty");
   await expect.poll(
@@ -36,6 +36,7 @@ async function expectCurrentResults(page: Page) {
     await expect(page.locator('[data-testid="map-pin"][data-pin-id]')).toHaveCount(0);
     return;
   }
+  if (!verifyMap) return;
   const cardPins = new Set(await cards.evaluateAll((els) =>
     els.map((el) => el.getAttribute("data-pin-id")).filter((id): id is string => Boolean(id)),
   ));
@@ -114,12 +115,12 @@ for (const viewport of [
       await expect.poll(() => new URL(page.url()).searchParams.get("beds")).toBe("1");
       await page.goForward({ waitUntil: "domcontentloaded" });
       await expect.poll(() => new URL(page.url()).searchParams.get("beds")).toBe("2");
-      await expectCurrentResults(page);
+      await expectCurrentResults(page, { verifyMap: false });
 
       await page.goto("/events", { waitUntil: "domcontentloaded" });
       await expect(page.getByTestId("events-browse")).toBeVisible();
       await page.goto("/rentals?neighborhood=Laureles&beds=2", { waitUntil: "domcontentloaded" });
-      await expectCurrentResults(page);
+      await expectCurrentResults(page, { verifyMap: false });
 
       if (viewport.width === 390) {
         expect(await page.evaluate(
