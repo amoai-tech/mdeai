@@ -25,6 +25,9 @@ describe("page filter control", () => {
     expect(parseRentalPageCommand("On this page, show only 3 apartments in Laureles.")).toBeNull();
     expect(parseRentalPageCommand("On this page, remove the Laureles filter.")).toBeNull();
     expect(parseRentalPageCommand("On this page, don't show 1-bedroom apartments.")).toBeNull();
+    expect(parseRentalPageCommand("On this page, don’t show 1-bedroom apartments in Laureles.")).toBeNull();
+    expect(parseRentalPageCommand("On this page, show 1-bedroom apartments in Laureles excluding Envigado.")).toBeNull();
+    expect(parseRentalPageCommand("On this page, show 1-bedroom apartments in Laureles other than Envigado.")).toBeNull();
   });
 
   it("only fast-paths complete affirmative native page commands", () => {

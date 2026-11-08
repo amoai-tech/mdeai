@@ -54,7 +54,7 @@ export function parseRentalPageCommand(text: string): RentalPageControlPatch | n
       !/\bon (this|the) page\b|\bpage filters?\b|\bset the (visible )?filters?\b|\bchange (?:the|this) page to\b/i.test(text)) {
     return null;
   }
-  if (/\b(remove|clear|without|exclude|except|not|no|any|all|neither|instead|omit)\b|\bdon['’]?t\b/i.test(text)) {
+  if (/\b(remove|clear|without|exclude|excluding|except|not|no|any|all|neither|instead|omit)\b|\bdon['’]?t\b|\bother\s+than\b/i.test(text)) {
     return null;
   }
   const signals = scoreRentalQuery(text);
