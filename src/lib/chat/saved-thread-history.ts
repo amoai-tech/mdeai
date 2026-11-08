@@ -181,7 +181,27 @@ export function mapSavedThreadHistory(
       writtenAt.push(at);
     }
   }
-  return dropRepeatedTurns(mapped, writtenAt);
+  // PR #822 briefly saved one assistant answer twice: CopilotKit's plain message ID and
+  // Mastra's `<same-id>-agui-text`. Their write times can differ by seconds, so the
+  // older same-batch cleanup below cannot identify this pair. Only collapse exact ID-linked,
+  // same-text assistant copies; never merge independent identical answers. Prefer the row
+  // with tool calls so previously displayed tool cards and their results remain intact.
+  const byId = new Map(mapped.map((message, index) => [message.id, index]));
+  const suppressed = new Set<number>();
+  for (let index = 0; index < mapped.length; index++) {
+    const runtime = mapped[index];
+    if (runtime.role !== "assistant" || !runtime.id.endsWith("-agui-text")) continue;
+    const plainIndex = byId.get(runtime.id.slice(0, -"-agui-text".length));
+    if (plainIndex === undefined) continue;
+    const plain = mapped[plainIndex];
+    if (plain.role !== "assistant" || plain.content !== runtime.content) continue;
+    suppressed.add(plain.toolCalls?.length ? index : plainIndex);
+  }
+  if (suppressed.size === 0) return dropRepeatedTurns(mapped, writtenAt);
+  return dropRepeatedTurns(
+    mapped.filter((_, index) => !suppressed.has(index)),
+    writtenAt.filter((_, index) => !suppressed.has(index)),
+  );
 }
 
 /**
@@ -297,6 +317,11 @@ export function reconcileSavedHistory<T extends LiveMessage>(
   live: readonly T[],
 ): Array<SavedThreadMessage | T> {
   const ids = new Set(persisted.map((m) => m.id));
+  // CopilotKit's reconnect can contain both legacy forms even when the owner-checked
+  // history reader already collapsed them. Do not re-add the text-only duplicate.
+  const savedAssistantById = new Map(
+    persisted.filter((m) => m.role === "assistant").map((m) => [m.id, m]),
+  );
   const callIds = new Set(
     persisted.flatMap((m) => (m.role === "assistant" && m.toolCalls ? m.toolCalls.map((c) => c.id) : [])),
   );
@@ -311,6 +336,17 @@ export function reconcileSavedHistory<T extends LiveMessage>(
   }
   const extras = live.filter((m) => {
     if (ids.has(m.id)) return false;
+    if (m.role === "assistant" && typeof m.content === "string") {
+      const linkedId = m.id.endsWith("-agui-text")
+        ? m.id.slice(0, -"-agui-text".length) : `${m.id}-agui-text`;
+      const savedCopy = savedAssistantById.get(linkedId);
+      // Exact shared ID prefix plus matching displayed text is a known legacy double-write.
+      // Keep a richer live answer only when it contains tool calls missing from the saved one.
+      if (savedCopy?.content === m.content &&
+          !(Array.isArray(m.toolCalls) && m.toolCalls.length > 0 && !savedCopy.toolCalls?.length)) {
+        return false;
+      }
+    }
     if (m.role === "tool") return !(typeof m.toolCallId === "string" && callIds.has(m.toolCallId));
     const calls = liveToolCallIds(m);
     if (calls.length > 0 && calls.some((id) => callIds.has(id))) return false;

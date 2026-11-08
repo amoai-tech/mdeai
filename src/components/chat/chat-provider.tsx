@@ -500,18 +500,9 @@ function LiveChatProvider({ children, persistThread = false }: { children: React
 }
 
 /**
- * Persist a signed-in conversation that CopilotKit runs but never stores.
- *
- * `/chat` writes its turns through the history endpoint and calls `markThreadSaved`, which is what
- * makes a reload replay them. The broker chat mounts the same provider but had no writer, so a
- * broker's questions and the assistant's answers disappeared on refresh.
- *
- * Three things this has to get right:
- *   - only after the run finishes, or the first streamed chunk would be saved as the whole answer;
- *   - in ordered batches of four (the endpoint's limit), tracking accepted message IDs;
- *   - text only — a tool call/result has no text to restore, so it is skipped, not sent.
+ * Bridge between the history replay and the saver: waits for the owner-checked GET to settle, then
+ * hands its restored message ids to the saver so a replayed answer is never written twice.
  */
-/** Only the history GET's owner-checked message IDs are excluded from future POSTs. */
 function BrokerThreadSaverAfterReplay({ threadId }: { threadId: string }) {
   const history = useSavedThreadHistory();
   const restoreMode = history.status === "error" ? "failed"
@@ -525,6 +516,15 @@ function BrokerThreadSaverAfterReplay({ threadId }: { threadId: string }) {
   );
 }
 
+/**
+ * Marks a broker's conversation as reloadable and stores its questions.
+ *
+ * Replies are not written here: the Mastra runtime already stores each one as `<id>-agui-text`,
+ * and a second copy under the plain AG-UI id made a restored transcript show the answer twice.
+ * Questions are posted the moment they are sent, because the reader orders by createdAt and a
+ * later stamp put each question below its answer. Reloadability is claimed only when the run has
+ * finished and an answer exists, so the thread is never advertised before it can be restored.
+ */
 export function BrokerThreadSaver({
   threadId,
   agentId = "conciergeAgent",
@@ -546,6 +546,8 @@ export function BrokerThreadSaver({
   const progress = useRef({
     threadId,
     handledIds: new Set<string>(),
+    failedIds: new Set<string>(),
+    retriedAfterRun: false,
     inFlight: false,
     ready: restoreMode === "fresh",
   });
@@ -555,6 +557,8 @@ export function BrokerThreadSaver({
       progress.current = {
         threadId,
         handledIds: new Set<string>(),
+        failedIds: new Set<string>(),
+        retriedAfterRun: false,
         inFlight: false,
         ready: restoreMode === "fresh",
       };
@@ -570,10 +574,19 @@ export function BrokerThreadSaver({
   useEffect(() => {
     const state = progress.current;
     // Never write an old thread's messages to a newly selected thread.
-    if (state.threadId !== threadId || agentThreadId !== threadId || state.inFlight || running) return;
+    if (state.threadId !== threadId || agentThreadId !== threadId || state.inFlight) return;
     if (!state.ready) {
       if (restoreMode === "waiting") return;
       state.ready = true;
+    }
+    if (running) state.retriedAfterRun = false;
+    // A save that failed mid-run is retried exactly once when the run ends. Driving this from the
+    // POST's `finally` cannot work: that block runs while the turn is still streaming.
+    if (!running && state.failedIds.size > 0 && !state.retriedAfterRun) {
+      state.retriedAfterRun = true;
+      state.failedIds.clear();
+      if (progress.current === state) setDrainTick((n) => n + 1);
+      return;
     }
     // A failed history GET is NOT proof that those messages are saved. Resume from the live
     // transcript (the POST endpoint still independently authenticates and checks ownership).
@@ -582,29 +595,44 @@ export function BrokerThreadSaver({
     }
 
     const current = agent.messages ?? [];
-    let lastAnswer = -1;
-    for (let i = 0; i < current.length; i++) {
-      const message = current[i];
-      if (!state.handledIds.has(message.id) &&
-          message.role === "assistant" && typeof message.content === "string" &&
-          message.content.trim().length > 0) lastAnswer = i;
-    }
-    // A question on its own is not a finished exchange; do not save a streaming fragment.
-    if (lastAnswer < 0) return;
+    // Only questions are ours to write. Stamped when sent, so the history reader (which orders by
+    // createdAt) never puts the runtime's reply above the question that produced it.
+    const answerFollowsLatestQuestion = (list: typeof current): boolean => {
+      let question = -1;
+      let answer = -1;
+      list.forEach((message, index) => {
+        if (typeof message.content !== "string" || message.content.trim().length === 0) return;
+        if (message.role === "user") question = index;
+        else if (message.role === "assistant" && !state.handledIds.has(message.id)) answer = index;
+      });
+      return answer > question;
+    };
 
     const text: { id: string; role: "user" | "assistant"; content: string }[] = [];
     const handledInBatch: string[] = [];
-    for (let i = 0; i <= lastAnswer; i++) {
+    for (let i = 0; i < current.length; i++) {
       const message = current[i];
-      if (state.handledIds.has(message.id)) continue;
-      handledInBatch.push(message.id);
-      if ((message.role === "user" || message.role === "assistant") &&
+      if (state.handledIds.has(message.id) || state.failedIds.has(message.id)) continue;
+      // Questions only. The Mastra runtime already stores each assistant reply (as
+      // `<id>-agui-text`); posting it again under the plain AG-UI id produced two rows for one
+      // answer, and the id-based idempotency cannot dedupe two different ids.
+      if (message.role === "user" &&
           typeof message.content === "string" && message.content.trim().length > 0) {
         text.push({ id: message.id, role: message.role, content: message.content });
+        handledInBatch.push(message.id);
         if (text.length === 4) break; // The messages endpoint accepts at most four per call.
       }
     }
-    if (text.length === 0) return;
+    if (text.length === 0) {
+      // Nothing new to write. If the run has finished and its answer exists, the exchange is
+      // complete, so the thread can be advertised as reloadable -- this is the common case after
+      // the question was posted at send time.
+      // A question that never reached the server means this conversation is not restorable.
+      if (!running && state.failedIds.size === 0 && answerFollowsLatestQuestion(current)) {
+        markThreadSaved(threadId);
+      }
+      return;
+    }
 
     state.inFlight = true;
     let saved = false;
@@ -617,26 +645,44 @@ export function BrokerThreadSaver({
       .then((response) => {
         if (!response.ok) {
           console.warn(`[BrokerThreadSaver] save failed: ${response.status}`);
+          // Retrying this question on every streamed chunk would hammer the endpoint; it is
+          // retried once the run ends instead (see the drain guard below).
+          for (const id of handledInBatch) state.failedIds.add(id);
           return;
         }
         saved = true;
         for (const id of handledInBatch) state.handledIds.add(id);
-        // Only advertise reloadability when every completed assistant answer has been saved.
-        if (!current.some((message) => !state.handledIds.has(message.id) &&
-            message.role === "assistant" && typeof message.content === "string" &&
-            message.content.trim().length > 0)) markThreadSaved(threadId);
+        // Re-read at completion: an answer can land while this POST is in flight, and the values
+        // captured when the effect started would miss it. Restored ids are already handled, so a
+        // replayed answer is never counted as a new one.
+        const live = agent.messages ?? [];
+        const pendingAnswer = answerFollowsLatestQuestion(live);
+        // A question alone is not restore-able; the runtime's reply is what replay needs.
+        if (!agent.isRunning && state.failedIds.size === 0 && pendingAnswer) {
+          markThreadSaved(threadId);
+        }
       })
-      .catch((error) => console.warn("[BrokerThreadSaver] save failed", error))
+      .catch((error) => {
+        console.warn("[BrokerThreadSaver] save failed", error);
+        // A rejected fetch is a failed save too. Hold these IDs until the bounded post-run
+        // retry; otherwise each streamed chunk can resend the same rejected question.
+        for (const id of handledInBatch) state.failedIds.add(id);
+      })
       .finally(() => {
         state.inFlight = false;
         // A finished POST is not an agent update. Drain pending complete answers explicitly,
         // but never enter an infinite retry loop after a failed POST.
-        if (saved && progress.current === state &&
-            (agent.messages ?? []).some((message) => !state.handledIds.has(message.id) &&
-              message.role === "assistant" && typeof message.content === "string" &&
-              message.content.trim().length > 0)) {
+            // The run may end while this POST is still settling; the effect then returns on
+        // `inFlight` and the retry would never fire. Nudge it once here.
+        if (!agent.isRunning && state.failedIds.size > 0 && !state.retriedAfterRun &&
+            progress.current === state) {
           setDrainTick((n) => n + 1);
         }
+        const rest = agent.messages ?? [];
+        const pending = rest.some((message) => !state.handledIds.has(message.id) &&
+            (message.role === "user" || message.role === "assistant") &&
+            typeof message.content === "string" && message.content.trim().length > 0);
+        if (saved && progress.current === state && pending) setDrainTick((n) => n + 1);
       });
   }, [agent, agentThreadId, threadId, markThreadSaved, messageCount, lastContent, running,
     drainTick, restoreMode, restoredMessageIds]);
