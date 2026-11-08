@@ -75,9 +75,10 @@ Deno.serve(async (req: Request) => {
     return jr(errorBody("VALIDATION_ERROR", "title, dateIso and proposalId are required"), 400, req);
   }
   const tiers = Array.isArray(draft.ticketTiers) ? draft.ticketTiers : [];
-  const hasSellableTickets = typeof draft.priceMinCop === "number" && draft.priceMinCop > 0 &&
-    (tiers.length === 0 ||
-      tiers.every((tier) => typeof tier.priceCop === "number" && tier.priceCop > 0));
+  const hasSellableTickets = tiers.length > 0
+    ? tiers.every((tier) => typeof tier.priceCop === "number" && tier.priceCop > 0 &&
+        typeof tier.quantity === "number" && Number.isInteger(tier.quantity) && tier.quantity > 0)
+    : typeof draft.priceMinCop === "number" && draft.priceMinCop > 0;
   if (!hasSellableTickets) {
     return jr(errorBody(
       "TICKET_PRICE_REQUIRED",

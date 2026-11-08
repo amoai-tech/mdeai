@@ -84,6 +84,31 @@ describe("EventDraftStateSchema", () => {
     })).toBe(true);
   });
 
+  it("keeps a single tier quantity below capacity across unrelated changes", () => {
+    const draft = mergeEventDraft(EMPTY_EVENT_DRAFT, {
+      title: "Salsa night",
+      capacity: 100,
+      priceMinCop: 40000,
+      ticketTiers: [{ name: "General", priceCop: 40000, quantity: 80 }],
+    });
+    expect(draft.ticketTiers[0]?.quantity).toBe(80);
+    expect(mergeEventDraft(draft, { capacity: 120 }).ticketTiers[0]?.quantity).toBe(80);
+    expect(mergeEventDraft(draft, { description: "Updated" }).ticketTiers[0]?.quantity).toBe(80);
+    expect(mergeEventDraft(draft, { priceMinCop: 50000 }).ticketTiers[0]).toMatchObject({ priceCop: 50000, quantity: 80 });
+  });
+
+  it("allows paid tiers with an unset priceMinCop but blocks zero-priced tiers", () => {
+    const base = EventDraftStateSchema.parse({
+      title: "Salsa Night", neighborhood: "Laureles", dateIso: "2026-12-15T20:00:00-05:00",
+      venue: "Son Havana", capacity: 100,
+      ticketTiers: [{ name: "General", priceCop: 40000, quantity: 80 }],
+    });
+    expect(base.priceMinCop).toBe(0);
+    expect(isDraftReadyForPublish(base)).toBe(true);
+    expect(isDraftReadyForPublish(mergeEventDraft(base, { priceMinCop: 0 }))).toBe(false);
+    expect(isDraftReadyForPublish({ ...base, ticketTiers: [{ name: "Free", priceCop: 0, quantity: 80 }] })).toBe(false);
+  });
+
   it("never auto-creates a zero-priced tier", () => {
     const draft = mergeEventDraft(EMPTY_EVENT_DRAFT, {
       title: "Free event",
