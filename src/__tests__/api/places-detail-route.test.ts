@@ -13,7 +13,6 @@ import { resetPlacesDetailRateLimitsForTests } from "@/lib/places-detail-rate-li
 vi.mock("@/lib/place-details-cache", () => ({
   fetchPlaceDetailsWithCache: vi.fn(async () => ({
     raw: { id: "ChIJtest", displayName: { text: "Test Place" } },
-    cacheHit: true,
   })),
 }));
 

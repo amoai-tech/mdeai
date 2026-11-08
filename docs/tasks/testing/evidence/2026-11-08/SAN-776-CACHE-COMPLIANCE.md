@@ -21,7 +21,8 @@ The previous detail path stored the raw response (including `photos` and
 ## Change
 
 - `src/lib/place-details-cache.ts`: removed DB read/write; every Details request calls
-  `getPlaceDetails` and returns `cacheHit: false`. Only the existing negative cache (failure
+  `getPlaceDetails` and returns only the fresh payload. The misleading `X-Places-Cache`
+  header and `cacheHit` flag were removed. Only the existing negative cache (failure
   suppression) and rate limits remain.
 - `src/app/api/places/detail/route.ts`: `Cache-Control: no-store`.
 - `src/app/api/places/photo/route.ts`: `Cache-Control: private, no-store`.

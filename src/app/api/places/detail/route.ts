@@ -29,7 +29,7 @@ export async function GET(req: Request) {
   const placeId = normalizePlaceId(rawId);
 
   try {
-    const { raw, cacheHit } = await fetchPlaceDetailsWithCache(placeId);
+    const { raw } = await fetchPlaceDetailsWithCache(placeId);
     const details = normalizePlaceDetails(raw);
     if (!details) {
       return NextResponse.json({ error: "place_not_found" }, { status: 404 });
@@ -37,7 +37,6 @@ export async function GET(req: Request) {
     return NextResponse.json(details, {
       headers: {
         "Cache-Control": "no-store",
-        "X-Places-Cache": cacheHit ? "hit" : "miss",
       },
     });
   } catch (err) {

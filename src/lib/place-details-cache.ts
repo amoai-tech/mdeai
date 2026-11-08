@@ -10,7 +10,6 @@ import {
 
 export type PlaceDetailsFetchResult = {
   raw: unknown;
-  cacheHit: boolean;
 };
 
 /**
@@ -34,7 +33,7 @@ export async function fetchPlaceDetailsWithCache(
 
   try {
     const raw = await getPlaceDetails({ placeId: id });
-    return { raw, cacheHit: false };
+    return { raw };
   } catch (err) {
     if (err instanceof PlacesRequestError) {
       recordPlacesNegativeCache(id);
