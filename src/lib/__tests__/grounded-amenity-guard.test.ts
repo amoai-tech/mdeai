@@ -27,6 +27,7 @@ describe("grounded amenity follow-up classification", () => {
     "¿Qué cafés en Laureles tienen wifi?",
     "Which place in Laureles has Wi-Fi?",
     "Which spot in Poblado has outlets?",
+    "¿Cuál lugar en Envigado tiene Wi-Fi?",
 
 
     "Recommend cafés with Wi-Fi in Laureles",

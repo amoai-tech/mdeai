@@ -16,7 +16,7 @@ export function isGroundedAmenityQuestion(text: string): boolean {
   // unless the user clearly points to already displayed rows ("in this list").
   const refersToShownList =
     /\b(these|those|estos?|estas?|esos?|esas?|this list|the list|the results|these results|esta lista|los resultados)\b/.test(q);
-  const placeNoun = "(?:cafes?|coffee shops?|cafeterias?|places?|spots?|lugares?)";
+  const placeNoun = "(?:cafes?|coffee shops?|cafeterias?|places?|spots?|lugar(?:es)?)";
   const locationWord = "(?:in|near|around|en|cerca)";
   const placeSpecificSearch = new RegExp(
     "\\b(?:which|what|que|cual(?:es)?)\\s+" + placeNoun + "\\s+" + locationWord + "\\b",
