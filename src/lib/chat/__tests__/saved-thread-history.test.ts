@@ -166,8 +166,78 @@ describe("mapSavedThreadHistory", () => {
   });
 });
 
+describe("mapSavedThreadHistory — broker duplicate writes from PR #822", () => {
+  const originalId = "c5744906-930d-481a-92ce-e9ecaddecff1";
+  const toolReply = (message: string) => ({
+    format: 2,
+    parts: [
+      {
+        type: "tool-invocation",
+        toolInvocation: { state: "result", toolCallId: "tc-review", toolName: "getBrokerLeads", args: {}, result: { count: 0 } },
+      },
+      { type: "step-start" },
+      { type: "text", text: message },
+    ],
+  });
+  it("shows one answer for the exact legacy -agui-text pair and keeps its tool card", () => {
+    const input = [
+      row("q1", "user", text("Which rental leads need my attention?"), "2026-11-08T09:07:12.000Z"),
+      row(originalId, "assistant", toolReply("No leads need attention"), "2026-11-08T09:07:13.835Z"),
+      row(originalId + "-agui-text", "assistant", text("No leads need attention"), "2026-11-08T09:07:16.952Z"),
+    ];
+    const result = mapSavedThreadHistory(input);
+    expect(result.map(m => m.id)).toEqual(["q1", originalId, originalId + ":tc-review"]);
+    expect(result.filter(m => m.role === "assistant")).toHaveLength(1);
+    expect(result.find(m => m.role === "tool")).toMatchObject({ toolCallId: "tc-review" });
+    expect(input).toHaveLength(3); // read-time only; never delete stored audit rows
+  });
+
+  it("prefers runtime text when both exact-pair copies carry no tool calls", () => {
+    const result = mapSavedThreadHistory([
+      row("q1", "user", text("Count my listings"), "2026-11-08T09:07:12.000Z"),
+      row(originalId, "assistant", text("0 listings"), "2026-11-08T09:07:13.835Z"),
+      row(originalId + "-agui-text", "assistant", text("0 listings"), "2026-11-08T09:07:16.952Z"),
+    ]);
+    expect(result.map(m => m.id)).toEqual(["q1", originalId + "-agui-text"]);
+  });
+
+  it("keeps same-prefix rows if their answers are actually different", () => {
+    const result = mapSavedThreadHistory([
+      row(originalId, "assistant", text("First version"), "2026-11-08T09:07:13.835Z"),
+      row(originalId + "-agui-text", "assistant", text("Corrected final answer"), "2026-11-08T09:07:16.952Z"),
+    ]);
+    expect(result.map(m => m.id)).toEqual([originalId, originalId + "-agui-text"]);
+  });
+
+  it("keeps separate identical answers when message IDs are unrelated", () => {
+    const result = mapSavedThreadHistory([
+      row("q1", "user", text("Count"), "2026-11-08T09:07:12.000Z"),
+      row(originalId, "assistant", text("0"), "2026-11-08T09:07:13.835Z"),
+      row("independent-answer", "assistant", text("0"), "2026-11-08T09:07:16.952Z"),
+    ]);
+    expect(result.map(m => m.id)).toEqual(["q1", originalId, "independent-answer"]);
+  });
+});
+
 describe("reconcileSavedHistory", () => {
   const p = (id: string, role: "user" | "assistant", content: string) => ({ id, role, content });
+
+  it("does not re-add an exact -agui-text duplicate from the live reconnect", () => {
+    const id = "c5744906-930d-481a-92ce-e9ecaddecff1";
+    const saved = [
+      { id: "q1", role: "user" as const, content: "Which leads?" },
+      { id, role: "assistant" as const, content: "No pending leads",
+        toolCalls: [{ id: "tc1", type: "function" as const, function: { name: "getBrokerLeads", arguments: "{}" } }] },
+      { id: id + ":tc1", role: "tool" as const, toolCallId: "tc1", content: "{}" },
+    ];
+    const live = [
+      { id, role: "assistant", content: "No pending leads" },
+      { id: id + "-agui-text", role: "assistant", content: "No pending leads" },
+    ];
+    const out = reconcileSavedHistory(saved, live);
+    expect(out.filter((m) => m.role === "assistant").map((m) => m.id)).toEqual([id]);
+    expect(out.find((m) => m.role === "tool")).toBeDefined();
+  });
 
   it("durable history is the base; a partial live replay adds nothing", () => {
     const persisted = [p("1", "user", "a"), p("2", "assistant", "b"), p("3", "user", "c")];
