@@ -20,6 +20,28 @@ describe("EventBrowseFilters", () => {
     expect(screen.getByRole("link", { name: "Clear filters" }).getAttribute("href")).toBe("/events");
   });
 
+  it("treats omitted dateWindow and price as Any date and no price filter", () => {
+    const { rerender } = render(<EventBrowseFilters {...none} category="music" dateWindow="this_weekend" price="paid" />);
+    // Each chip's target is the *next* canonical URL, not a serialized null/any literal.
+    expect(screen.getByRole("link", { name: "Any date" }).getAttribute("href"))
+      .toBe("/events?category=music&price=paid");
+    expect(screen.getByRole("link", { name: "Paid" }).getAttribute("href"))
+      .toBe("/events?category=music&dateWindow=this_weekend");
+
+    // Simulate the server returning parsed state after the Any-date navigation.
+    rerender(<EventBrowseFilters {...none} category="music" price="paid" />);
+    expect(screen.getByRole("link", { name: "Any date" }).getAttribute("aria-current")).toBe("true");
+    expect(screen.getByRole("link", { name: "Paid" }).getAttribute("aria-current")).toBe("true");
+
+    // Then clear Paid: the URL omits price, and the date chip remains selected.
+    expect(screen.getByRole("link", { name: "Paid" }).getAttribute("href"))
+      .toBe("/events?category=music");
+    rerender(<EventBrowseFilters {...none} category="music" />);
+    expect(screen.getByRole("link", { name: "Any date" }).getAttribute("aria-current")).toBe("true");
+    expect(screen.getByRole("link", { name: "Paid" }).hasAttribute("aria-current")).toBe(false);
+    expect(screen.getByRole("link", { name: "Music" }).getAttribute("aria-current")).toBe("true");
+  });
+
   it("shows no Clear link when nothing is filtered", () => {
     render(<EventBrowseFilters {...none} />);
     expect(screen.queryByRole("link", { name: "Clear filters" })).toBeNull();
