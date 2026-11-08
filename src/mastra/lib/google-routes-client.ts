@@ -1,11 +1,4 @@
-import { requirePlacesApiKey } from "./google-places-client";
-
 const ROUTES_URL = "https://routes.googleapis.com/directions/v2:computeRoutes";
-const FIELD_MASK = [
-  "routes.distanceMeters",
-  "routes.duration",
-  "routes.polyline.encodedPolyline",
-].join(",");
 
 export type RouteTravelMode = "WALK" | "DRIVE" | "BICYCLE" | "TRANSIT";
 
@@ -24,10 +17,18 @@ export type GoogleRouteResult = {
 
 export class RoutesRequestError extends Error {
   readonly status?: number;
-  constructor(message: string, status?: number) {
+  constructor(message: string, status?: number, cause?: unknown) {
     super(message);
     this.name = "RoutesRequestError";
     this.status = status;
+    this.cause = cause;
+  }
+}
+
+export class RouteInputError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "RouteInputError";
   }
 }
 
@@ -38,18 +39,24 @@ function validCoordinate(n: unknown, min: number, max: number): n is number {
 function waypointBody(point: RouteWaypoint): Record<string, unknown> {
   if ("placeId" in point) {
     const placeId = point.placeId.trim();
-    if (!placeId) throw new RoutesRequestError("Route waypoint placeId is empty");
+    if (!placeId) throw new RouteInputError("Route waypoint placeId is empty");
     return { placeId };
   }
   if ("address" in point) {
     const address = point.address.trim();
-    if (!address) throw new RoutesRequestError("Route waypoint address is empty");
+    if (!address) throw new RouteInputError("Route waypoint address is empty");
     return { address };
   }
   if (!validCoordinate(point.latitude, -90, 90) || !validCoordinate(point.longitude, -180, 180)) {
-    throw new RoutesRequestError("Route waypoint coordinates are out of range");
+    throw new RouteInputError("Route waypoint coordinates are out of range");
   }
   return { location: { latLng: { latitude: point.latitude, longitude: point.longitude } } };
+}
+
+/** Validate local input before spending a paid provider call. */
+export function validateRouteWaypoints(origin: RouteWaypoint, destination: RouteWaypoint): void {
+  waypointBody(origin);
+  waypointBody(destination);
 }
 
 export function parseDurationSeconds(value: unknown): number | null {
@@ -63,17 +70,22 @@ export function parseDurationSeconds(value: unknown): number | null {
 export function parseGoogleRoute(
   response: unknown,
   travelMode: RouteTravelMode,
+  includePolyline = false,
 ): GoogleRouteResult | null {
   const routes = (response as { routes?: unknown } | null)?.routes;
   if (!Array.isArray(routes) || routes.length === 0) return null;
-  const route = routes[0] as Record<string, unknown>;
-  const distanceMeters = route.distanceMeters;
-  const durationSeconds = parseDurationSeconds(route.duration);
+  const route = routes[0];
+  if (!route || typeof route !== "object") return null;
+  const record = route as Record<string, unknown>;
+  const distanceMeters = record.distanceMeters;
+  const durationSeconds = parseDurationSeconds(record.duration);
   if (typeof distanceMeters !== "number" || !Number.isFinite(distanceMeters) || distanceMeters < 0) {
     return null;
   }
   if (durationSeconds === null) return null;
-  const polyline = (route.polyline as { encodedPolyline?: unknown } | undefined)?.encodedPolyline;
+  const polyline = includePolyline
+    ? (record.polyline as { encodedPolyline?: unknown } | undefined)?.encodedPolyline
+    : undefined;
   return {
     distanceMeters,
     durationSeconds,
@@ -83,6 +95,21 @@ export function parseGoogleRoute(
   };
 }
 
+/** Routes-capable key: explicit Routes key first, then the Routes-enabled server key. */
+export function requireRoutesApiKey(): string {
+  const key = [
+    process.env.GOOGLE_ROUTES_API_KEY,
+    process.env.GOOGLE_MAPS_SERVER_API_KEY,
+    process.env.GOOGLE_PLACES_API_KEY,
+  ]
+    .map((value) => value?.trim())
+    .find((value): value is string => Boolean(value && value.length >= 8));
+  if (!key) {
+    throw new RoutesRequestError("Missing a Routes-capable Google API key");
+  }
+  return key;
+}
+
 export async function computeGoogleRoute(params: {
   origin: RouteWaypoint;
   destination: RouteWaypoint;
@@ -90,27 +117,44 @@ export async function computeGoogleRoute(params: {
   includePolyline?: boolean;
 }): Promise<GoogleRouteResult | null> {
   const travelMode = params.travelMode ?? "WALK";
-  const apiKey = requirePlacesApiKey();
+  const includePolyline = params.includePolyline === true;
   const body: Record<string, unknown> = {
     origin: waypointBody(params.origin),
     destination: waypointBody(params.destination),
     travelMode,
     computeAlternativeRoutes: false,
   };
-  if (params.includePolyline) body.polylineQuality = "OVERVIEW";
+  if (includePolyline) body.polylineQuality = "OVERVIEW";
 
-  const res = await fetch(ROUTES_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Goog-Api-Key": apiKey,
-      "X-Goog-FieldMask": FIELD_MASK,
-    },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(10_000),
-  });
+  const fieldMask = [
+    "routes.distanceMeters",
+    "routes.duration",
+    ...(includePolyline ? ["routes.polyline.encodedPolyline"] : []),
+  ].join(",");
+
+  let res: Response;
+  try {
+    res = await fetch(ROUTES_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": requireRoutesApiKey(),
+        "X-Goog-FieldMask": fieldMask,
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(10_000),
+    });
+  } catch (err) {
+    throw new RoutesRequestError("Google Routes request failed before response", undefined, err);
+  }
   if (!res.ok) {
     throw new RoutesRequestError("Google Routes request failed", res.status);
   }
-  return parseGoogleRoute(await res.json(), travelMode);
+  let json: unknown;
+  try {
+    json = await res.json();
+  } catch (err) {
+    throw new RoutesRequestError("Google Routes returned invalid JSON", res.status, err);
+  }
+  return parseGoogleRoute(json, travelMode, includePolyline);
 }

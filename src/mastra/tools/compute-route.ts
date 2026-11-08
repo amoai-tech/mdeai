@@ -2,9 +2,11 @@ import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import {
   computeGoogleRoute,
-  RoutesRequestError,
+  RouteInputError,
+  validateRouteWaypoints,
   type RouteTravelMode,
 } from "../lib/google-routes-client";
+import { incrementAndCheckGroundingQuota } from "../lib/grounding-quota";
 import { runAuditedTool } from "../lib/run-audited-search";
 
 const waypointSchema = z.union([
@@ -38,23 +40,43 @@ export const computeRouteTool = createTool({
     source: z.literal("google_routes"),
     reason: z.string().optional(),
   }),
-  execute: async (input: {
-    origin: z.infer<typeof waypointSchema>;
-    destination: z.infer<typeof waypointSchema>;
-    travelMode?: RouteTravelMode;
-    includePolyline?: boolean;
-  }) =>
-    runAuditedTool("compute-route", async () => {
-      try {
-        const route = await computeGoogleRoute(input);
-        return route
-          ? { route, source: "google_routes" as const }
-          : { route: null, source: "google_routes" as const, reason: "route_unavailable" };
-      } catch (err) {
-        if (err instanceof RoutesRequestError) {
+  execute: async (
+    input: {
+      origin: z.infer<typeof waypointSchema>;
+      destination: z.infer<typeof waypointSchema>;
+      travelMode?: RouteTravelMode;
+      includePolyline?: boolean;
+    },
+    context?: unknown,
+  ) =>
+    runAuditedTool(
+      "compute-route",
+      async () => {
+        try {
+          validateRouteWaypoints(input.origin, input.destination);
+        } catch (err) {
+          if (err instanceof RouteInputError) {
+            return { route: null, source: "google_routes" as const, reason: "invalid_route_request" };
+          }
+          throw err;
+        }
+
+        const quota = await incrementAndCheckGroundingQuota();
+        if (!quota.allowed) {
+          console.warn("[compute-route] route quota unavailable", quota.reason);
+          return { route: null, source: "google_routes" as const, reason: `route_quota_${quota.reason}` };
+        }
+
+        try {
+          const route = await computeGoogleRoute(input);
+          return route
+            ? { route, source: "google_routes" as const }
+            : { route: null, source: "google_routes" as const, reason: "route_unavailable" };
+        } catch (err) {
+          console.warn("[compute-route] provider failure", err instanceof Error ? err.message : err);
           return { route: null, source: "google_routes" as const, reason: "route_unavailable" };
         }
-        throw err;
-      }
-    }),
+      },
+      context,
+    ),
 });

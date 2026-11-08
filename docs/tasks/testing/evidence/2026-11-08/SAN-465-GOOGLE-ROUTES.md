@@ -28,3 +28,20 @@
 
 - Client: 5 pass (parse, empty/malformed, real request, invalid coordinates, 403).
 - Tool: 2 pass (real route, empty → unavailable).
+
+## Review hardening
+
+- Routes key resolver: `GOOGLE_ROUTES_API_KEY` → `GOOGLE_MAPS_SERVER_API_KEY` → Places key; first
+  non-empty.
+- All transport/timeout/JSON/key errors normalized into `RoutesRequestError`; the tool logs and
+  returns `route_unavailable`.
+- Local invalid waypoints return `invalid_route_request` before quota/provider calls.
+- Existing daily quota reservation runs before each paid route request.
+- Polyline is requested/returned only when `includePolyline` is true.
+- Null route entries are rejected.
+- Mastra execution context is passed to `runAuditedTool` for tool-span telemetry.
+- Live re-test after hardening: 5,090 m / 4,506 s WALK, polyline, Google attribution.
+
+**Reproducibility note:** adding `routes.googleapis.com` to the existing server key was a GCP
+configuration change, not code. Environments can instead set `GOOGLE_ROUTES_API_KEY`; the client
+prefers it. No secret is committed. A Terraform/managed key policy is still a follow-up.

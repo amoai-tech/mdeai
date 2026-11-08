@@ -1,9 +1,9 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   computeGoogleRoute,
   parseDurationSeconds,
   parseGoogleRoute,
-  RoutesRequestError,
+  RouteInputError,
 } from "./google-routes-client";
 
 const ok = {
@@ -14,16 +14,12 @@ const ok = {
   }],
 };
 
-vi.mock("./google-places-client", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("./google-places-client")>();
-  return { ...actual, requirePlacesApiKey: () => "test-routes-key" };
-});
-
-afterEach(() => vi.unstubAllGlobals());
+beforeEach(() => vi.stubEnv("GOOGLE_ROUTES_API_KEY", "test-routes-key"));
+afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 
 describe("parseGoogleRoute", () => {
   it("parses distance, seconds and optional polyline", () => {
-    expect(parseGoogleRoute(ok, "WALK")).toEqual({
+    expect(parseGoogleRoute(ok, "WALK", true)).toEqual({
       distanceMeters: 5090,
       durationSeconds: 4506,
       travelMode: "WALK",
@@ -37,6 +33,8 @@ describe("parseGoogleRoute", () => {
     expect(parseGoogleRoute({ routes: [{ distanceMeters: 100, duration: "fast" }] }, "WALK")).toBeNull();
     expect(parseDurationSeconds("120s")).toBe(120);
     expect(parseDurationSeconds("120")).toBeNull();
+    expect(parseGoogleRoute({ routes: [null] }, "WALK")).toBeNull();
+    expect(parseGoogleRoute(ok, "WALK", false)?.encodedPolyline).toBeUndefined();
   });
 });
 
@@ -65,8 +63,16 @@ describe("computeGoogleRoute", () => {
     await expect(computeGoogleRoute({
       origin: { latitude: 999, longitude: 0 },
       destination: { address: "Provenza" },
-    })).rejects.toBeInstanceOf(RoutesRequestError);
+    })).rejects.toBeInstanceOf(RouteInputError);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("normalizes timeout/network errors to RoutesRequestError", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new DOMException("timed out", "TimeoutError"); }));
+    await expect(computeGoogleRoute({
+      origin: { address: "Laureles" },
+      destination: { address: "Provenza" },
+    })).rejects.toMatchObject({ name: "RoutesRequestError" });
   });
 
   it("throws a typed error on provider failure", async () => {
