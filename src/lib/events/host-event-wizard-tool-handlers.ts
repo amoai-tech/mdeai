@@ -170,12 +170,9 @@ function normalizeReviewedEventDate(draft: EventDraftState): EventDraftState {
 export function selectPublishDraft(
   argsDraft: unknown,
   fallbackDraft: EventDraftState,
+  preferLatestDraft = false,
 ): EventDraftState {
-  // The bridge's latest form state is authoritative once it is publish-ready.
-  // The HITL tool args can be older than the host's manual edits (for example,
-  // a title edited after the agent filled the draft), so never let older args
-  // overwrite reviewed values.
-  if (isDraftReadyForPublish(fallbackDraft)) {
+  if (preferLatestDraft && isDraftReadyForPublish(fallbackDraft)) {
     return normalizeReviewedEventDate(fallbackDraft);
   }
   if (argsDraft == null) return normalizeReviewedEventDate(fallbackDraft);

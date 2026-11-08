@@ -159,6 +159,7 @@ export function EventPublishApprovalPanel({
 
   async function commit(decision: ApprovalDecision) {
     if (decided || submitting) return;
+    setLastDecision(decision);
     // Edit/Cancel only change the local draft. No database approval or
     // network round-trip is required during prelaunch development.
     if (decision !== "approved") {
@@ -169,7 +170,6 @@ export function EventPublishApprovalPanel({
     }
     setSubmitting(true);
     setError(null);
-    setLastDecision(decision);
 
     try {
       const normalizedDraft = EventDraftStateSchema.parse(draft);

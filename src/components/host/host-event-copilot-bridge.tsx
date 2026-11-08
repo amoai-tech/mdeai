@@ -61,7 +61,7 @@ function createPublishHitlRender(
     respond,
   }: HitlRenderProps) {
     // The stable CopilotKit callback must read the latest reviewed form data.
-    const draftArg = selectPublishDraft(args.draft, getLatestDraft());
+    const draftArg = selectPublishDraft(args.draft, getLatestDraft(), true);
     const panelStatus =
       status === "inProgress"
         ? "inProgress"
