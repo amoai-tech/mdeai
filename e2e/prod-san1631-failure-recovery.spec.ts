@@ -138,6 +138,9 @@ test("a normal rental AI question still reaches the agent and completes", async 
   await input.fill(QUESTION);
   await expect(active.getByTestId("rental-ask-send")).toBeEnabled({ timeout: 45_000 });
 
+  const initialCards = await page.locator('[data-testid^="rental-card-"]').evaluateAll((els) =>
+    els.map((el) => el.getAttribute("data-testid")).filter(Boolean).sort().join(","),
+  );
   const response = page.waitForResponse((r) =>
     r.url().includes("/api/copilotkit") && r.request().method() === "POST",
   { timeout: 60_000 });
@@ -153,7 +156,14 @@ test("a normal rental AI question still reaches the agent and completes", async 
     await toggle.click();
   }
   await expect(transcript).toBeVisible({ timeout: 90_000 });
-  await expect.poll(async () => (await transcript.innerText()).includes("MDE"), { timeout: 60_000 })
+  // A completed turn may be plain text or grounded cards (some turns are tool-only).
+  await expect.poll(async () => {
+    const hasAssistantText = (await transcript.innerText()).includes("MDE");
+    const cardIds = await page.locator('[data-testid^="rental-card-"]').evaluateAll((els) =>
+      els.map((el) => el.getAttribute("data-testid")).filter(Boolean).sort().join(","),
+    );
+    return hasAssistantText || cardIds !== initialCards;
+  }, { timeout: 60_000, message: "a completed assistant reply or changed grounded results" })
     .toBe(true);
   await expect.poll(async () => (await transcript.innerText()).trim().length, { timeout: 30_000 })
     .toBeGreaterThan(0);
