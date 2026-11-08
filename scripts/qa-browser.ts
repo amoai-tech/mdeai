@@ -226,10 +226,11 @@ async function main(): Promise<void> {
     throw new Error("QA browser CDP port is already occupied. Close that session or use --port=...");
   }
 
-  const directory = await mkdtemp(join(tmpdir(), "mde-qa-chrome-"));
+  let directory: string | undefined;
   let child: ChildProcess | undefined;
   let connected: Browser | undefined;
-  // Install immediately after mkdtemp so Ctrl+C during login cannot leak a profile.
+  // Attach handlers BEFORE creating the profile. A signal while mkdtemp is
+  // pending must not bypass cleanup of a newly created session directory.
   const stop = new AbortController();
   const terminate = () => {
     stop.abort();
@@ -239,11 +240,14 @@ async function main(): Promise<void> {
   process.on("SIGTERM", terminate);
 
   try {
+    directory = await mkdtemp(join(tmpdir(), "mde-qa-chrome-"));
+    if (stop.signal.aborted) throw new Error("QA browser interrupted during profile creation.");
+    const profileDirectory = directory;
     const initialize = async (): Promise<void> => {
       if (stop.signal.aborted) return;
       const executable = findChromeExecutable();
       const args = [
-        "--user-data-dir=" + directory,
+        "--user-data-dir=" + profileDirectory,
         "--remote-debugging-port=" + options.port,
         "--remote-debugging-address=127.0.0.1",
         "--no-first-run",
@@ -316,7 +320,9 @@ async function main(): Promise<void> {
           await Promise.race([closed, delay(2_000)]);
         }
       }
-      await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 300 });
+      if (directory) {
+        await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 300 });
+      }
     } finally {
       process.off("SIGINT", terminate);
       process.off("SIGTERM", terminate);
