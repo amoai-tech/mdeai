@@ -221,6 +221,142 @@ test.describe("SAN-524 mobile map interaction — 390×844 touch", () => {
     await expectNoHorizontalOverflow(page);
   });
 
+  test("rental API outage preserves previous cards and Retry restores the real result", async ({ page }) => {
+    test.setTimeout(120_000);
+    await mockFastPaths(page);
+    let searches = 0;
+    await page.route("**/api/rentals/search", async (route) => {
+      searches += 1;
+      if (searches === 2) {
+        return route.fulfill({
+          status: 503,
+          contentType: "application/json",
+          body: JSON.stringify({ error: "rental_search_unavailable" }),
+        });
+      }
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          results: [{
+            ...rental,
+            id: searches === 1 ? "rnt_previous_001" : "rnt_retry_002",
+            title: searches === 1 ? "Previous sourced apartment" : "Recovered sourced apartment",
+          }],
+          total: 1,
+          source: "mock",
+        }),
+      });
+    });
+    await gotoDeterministicChat(page);
+    await typeAndSubmit(page, RENTAL_QUERY);
+    const card = page.getByTestId("rental-card");
+    await expect(card).toHaveCount(1);
+    await expect(card).toContainText("Previous sourced apartment");
+    const panel = page.getByTestId("rental-fast-path-panel");
+    await expect(panel).toBeVisible();
+
+    // A temporary outage must not turn a known listing into "no results".
+    const response = waitForPost(page, "/api/rentals/search");
+    await typeAndSubmit(page, RENTAL_QUERY);
+    expect((await response).status()).toBe(503);
+    const recovery = page.getByTestId("rental-search-recovery");
+    await expect(recovery).toBeVisible();
+    await expect(recovery).toContainText("Showing your previous apartment results");
+    await expect(recovery).toHaveAttribute("data-status", "503");
+    await expect(recovery).toHaveAttribute("data-error-code", "rental_search_unavailable");
+    await expect(card).toHaveCount(1);
+    await expect(card).toContainText("Previous sourced apartment");
+    await expect(panel).toBeVisible();
+    const userMessages = page.getByTestId("concierge-user-message");
+    // A failed second search must keep the previous chat exchange too,
+    // not just the old cards. Retry must not append a third user question.
+    await expect(userMessages).toHaveCount(2);
+    const userCount = await userMessages.count();
+
+    await recovery.getByRole("button", { name: "Retry search" }).click();
+    await expect(card).toHaveCount(1);
+    await expect(card).toContainText("Recovered sourced apartment");
+    await expect(recovery).toHaveCount(0);
+    // Retry is an assistant-only follow-up. It must not publish/persist a
+    // duplicate user bubble just because the submission ID changed.
+    await expect(userMessages).toHaveCount(userCount);
+    expect(searches).toBe(3);
+    await expectNoHorizontalOverflow(page);
+  });
+
+  test("rate limits, expired sessions, and true empty searches stay distinct", async ({ page }) => {
+    test.setTimeout(120_000);
+    await mockFastPaths(page);
+    let calls = 0;
+    const statuses: number[] = [];
+    page.on("response", (res) => {
+      if (new URL(res.url()).pathname === "/api/rentals/search") statuses.push(res.status());
+    });
+    await page.route("**/api/rentals/search", async (route) => {
+      calls += 1;
+      const outcome = calls === 1 ? 200 : calls === 2 ? 429 : calls === 3 ? 401 : 200;
+      return route.fulfill({
+        status: outcome,
+        contentType: "application/json",
+        body: JSON.stringify(
+          outcome === 429 ? { error: "rate_limited" } :
+          outcome === 401 ? { error: "unauthorized" } :
+          { results: calls === 1 ? [rental] : [], total: calls === 1 ? 1 : 0, source: "mock" },
+        ),
+      });
+    });
+    await gotoDeterministicChat(page);
+    await typeAndSubmit(page, RENTAL_QUERY);
+    await expect(page.getByTestId("rental-card")).toHaveCount(1);
+
+    await typeAndSubmit(page, RENTAL_QUERY);
+    const recovery = page.getByTestId("rental-search-recovery");
+    await expect(recovery).toHaveAttribute("data-status", "429");
+    await expect(recovery).toHaveAttribute("data-error-code", "rate_limited");
+    await expect(page.getByTestId("rental-card")).toHaveCount(1);
+
+    await recovery.getByRole("button", { name: "Retry search" }).click();
+    await expect(recovery).toHaveCount(0);
+    await expect(page.getByTestId("rental-card")).toHaveCount(1);
+    await expect(page.getByTestId("copilot-chat-region")).toContainText(
+      "Your session has expired. Sign in again to search rentals.",
+    );
+
+    await typeAndSubmit(page, RENTAL_QUERY);
+    await expect(page.getByTestId("rental-card")).toHaveCount(0);
+    await expect(recovery).toHaveCount(0);
+    expect(statuses).toEqual([200, 429, 401, 200]);
+  });
+
+  test("a disconnected search retries without pretending there were no matches", async ({ page }) => {
+    test.setTimeout(100_000);
+    await mockFastPaths(page);
+    let calls = 0;
+    await page.route("**/api/rentals/search", async (route) => {
+      calls += 1;
+      if (calls === 1) return route.abort("failed");
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ results: [rental], total: 1, source: "mock" }),
+      });
+    });
+    await gotoDeterministicChat(page);
+    await typeAndSubmit(page, RENTAL_QUERY);
+    const recovery = page.getByTestId("rental-search-recovery");
+    await expect(recovery).toBeVisible();
+    await expect(recovery).toHaveAttribute("data-status", "network");
+    await expect(recovery).toHaveAttribute("data-error-code", "network_error");
+    await expect(recovery).toContainText("No new search results were returned");
+    await expect(page.getByTestId("rental-card")).toHaveCount(0);
+
+    await recovery.getByRole("button", { name: "Retry search" }).click();
+    await expect(page.getByTestId("rental-card")).toHaveCount(1);
+    await expect(recovery).toHaveCount(0);
+    expect(calls).toBe(2);
+  });
+
   test("map trigger is disabled in server HTML until hydrated", async ({
     browser,
     page,

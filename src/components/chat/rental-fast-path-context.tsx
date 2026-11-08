@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -13,6 +14,13 @@ import type { RentalSearchApiParams } from "@/lib/rental-query-parser";
 export type RentalSearchMeta = {
   userText: string;
   params: RentalSearchApiParams;
+};
+
+/** Only sanitized diagnostics from the existing rental API reach the UI. */
+export type RentalSearchFailure = {
+  status: number | null;
+  code: string;
+  retryable: boolean;
 };
 
 type RentalFastPathContextValue = {
@@ -24,6 +32,9 @@ type RentalFastPathContextValue = {
   clearToolResults: () => void;
   searchMeta: RentalSearchMeta | null;
   setSearchMeta: (meta: RentalSearchMeta | null) => void;
+  searchFailure: RentalSearchFailure | null;
+  reportSearchFailure: (failure: RentalSearchFailure | null, retry?: () => void) => void;
+  retryFailedSearch: () => void;
 };
 
 const RentalFastPathContext = createContext<RentalFastPathContextValue | null>(
@@ -36,8 +47,30 @@ export function RentalFastPathProvider({ children }: { children: ReactNode }) {
   const [searchMeta, setSearchMetaState] = useState<RentalSearchMeta | null>(
     null,
   );
+  const [searchFailure, setSearchFailure] = useState<RentalSearchFailure | null>(null);
+  const retryRef = useRef<(() => void) | null>(null);
+
+  const reportSearchFailure = useCallback(
+    (failure: RentalSearchFailure | null, retry?: () => void) => {
+      retryRef.current = failure?.retryable ? (retry ?? null) : null;
+      setSearchFailure(failure);
+    },
+    [],
+  );
+
+  const retryFailedSearch = useCallback(() => {
+    // The same request can only be retried once per visible failure. A new
+    // failure recreates this handler; double taps cannot start duplicate reads.
+    const retry = retryRef.current;
+    if (!retry) return;
+    retryRef.current = null;
+    setSearchFailure(null);
+    retry();
+  }, []);
 
   const setToolResult = useCallback((result: unknown | null) => {
+    retryRef.current = null;
+    setSearchFailure(null);
     setToolResultState(result);
     if (result != null) {
       setToolResults((previous) => [
@@ -50,6 +83,8 @@ export function RentalFastPathProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const clearToolResults = useCallback(() => {
+    retryRef.current = null;
+    setSearchFailure(null);
     setToolResultState(null);
     setToolResults([]);
     setSearchMetaState(null);
@@ -60,8 +95,12 @@ export function RentalFastPathProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ toolResult, toolResults, setToolResult, clearToolResults, searchMeta, setSearchMeta }),
-    [toolResult, toolResults, setToolResult, clearToolResults, searchMeta, setSearchMeta],
+    () => ({
+      toolResult, toolResults, setToolResult, clearToolResults, searchMeta, setSearchMeta,
+      searchFailure, reportSearchFailure, retryFailedSearch,
+    }),
+    [toolResult, toolResults, setToolResult, clearToolResults, searchMeta, setSearchMeta,
+      searchFailure, reportSearchFailure, retryFailedSearch],
   );
 
   return (

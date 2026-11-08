@@ -7,9 +7,7 @@ export const PLACE_DETAILS_CLIENT_FAILURE_TTL_MS = 10 * 60 * 1000;
 
 const NO_RETRY_STATUSES = new Set([403, 502, 503]);
 
-type ClientCacheEntry =
-  | { kind: "ok"; data: PlaceDetailsDto; expiresAt: number }
-  | { kind: "err"; expiresAt: number };
+type ClientCacheEntry = { kind: "err"; expiresAt: number };
 
 const resultByPlaceId = new Map<string, ClientCacheEntry>();
 const inFlightByPlaceId = new Map<string, Promise<PlaceDetailsDto | "error">>();
@@ -36,14 +34,6 @@ function writeFailure(placeId: string): void {
   });
 }
 
-function writeSuccess(placeId: string, data: PlaceDetailsDto): void {
-  resultByPlaceId.set(cacheKey(placeId), {
-    kind: "ok",
-    data,
-    expiresAt: Date.now() + PLACE_DETAILS_CLIENT_FAILURE_TTL_MS,
-  });
-}
-
 async function fetchOnce(
   placeId: string,
   signal: AbortSignal,
@@ -54,18 +44,27 @@ async function fetchOnce(
   );
   if (!res.ok) {
     if (NO_RETRY_STATUSES.has(res.status)) {
-      writeFailure(placeId);
+      // A transient shared-quota outage must not poison this place for 10 minutes.
+      // Other 503 failures keep the existing negative-cache backoff.
+      const body: unknown = res.status === 503
+        ? await res.json().catch(() => null)
+        : null;
+      const quotaStoreUnavailable =
+        body !== null &&
+        typeof body === "object" &&
+        "error" in body &&
+        body.error === "rate_limit_unavailable";
+      if (!quotaStoreUnavailable) writeFailure(placeId);
     }
     return "error";
   }
-  const data = (await res.json()) as PlaceDetailsDto;
-  writeSuccess(placeId, data);
-  return data;
+  return (await res.json()) as PlaceDetailsDto;
 }
 
 /**
- * Deduped Places detail fetch for detail panels — one in-flight request per placeId,
- * no repeat calls while failure TTL is active.
+ * Deduped Places detail fetch for detail panels — one in-flight request per placeId.
+ * Successful DTOs (including photo names) are not retained between renders; only
+ * failures are suppressed briefly.
  */
 export async function fetchPlaceDetailsDto(
   placeId: string,
@@ -76,7 +75,6 @@ export async function fetchPlaceDetailsDto(
 
   const cached = readCache(key);
   if (cached?.kind === "err") return "error";
-  if (cached?.kind === "ok") return cached.data;
 
   const pending = inFlightByPlaceId.get(key);
   if (pending) return pending;

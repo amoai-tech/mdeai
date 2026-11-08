@@ -1,4 +1,4 @@
-import type { BaseEvent, RunAgentInput } from "@ag-ui/client";
+import { EventType, type BaseEvent, type RunAgentInput } from "@ag-ui/client";
 import {
   MastraAgent,
   type GetLocalAgentsOptions,
@@ -159,6 +159,46 @@ export class LoggingMastraAgent extends MastraAgent {
 
     const stream = super.run(runInput).pipe(
       tap({
+        next: (event) => {
+          // AG-UI RUN_ERROR is a terminal *agent* failure but the observable can
+          // complete normally (HTTP 200 SSE). Without inspecting the event this
+          // turn was incorrectly logged as a success in public.ai_runs.
+          if (event.type !== EventType.RUN_ERROR) return;
+          status = "error";
+          const code = typeof event.code === "string" ? event.code.toUpperCase() : "";
+          // Producer-defined codes are authoritative: a RATE_LIMIT event may
+          // mention "cancelled" or "timed out" in its free-text message, but it
+          // was not the user aborting the run. Fall back to the message only
+          // for unknown/untyped codes.
+          const codeToType: Record<string, AgentErrorType> = {
+            RATE_LIMIT: "rate_limit",
+            RESOURCE_EXHAUSTED: "rate_limit",
+            TIMEOUT: "timeout",
+            AUTH_ERROR: "auth",
+            UNAUTHORIZED: "auth",
+            PERMISSION_DENIED: "auth",
+            MODEL_FAILURE: "model_failure",
+            MODEL_ERROR: "model_failure",
+            MALFORMED_FUNCTION_CALL: "model_failure",
+            TOOL_ERROR: "tool_failure",
+            TOOL_FAILURE: "tool_failure",
+            VALIDATION_ERROR: "validation",
+            INVALID_ARGUMENT: "validation",
+            DATABASE_ERROR: "database",
+          };
+          errorType = codeToType[code] ??
+            classifyAgentError(`${code.replaceAll("_", " ")} ${event.message}`);
+          // Do not persist raw model/provider messages: they may include a
+          // user's question or sensitive upstream request details.
+          const safeCodes = new Set([
+            "RATE_LIMIT", "RESOURCE_EXHAUSTED", "TIMEOUT", "MODEL_FAILURE",
+            "MODEL_ERROR", "INVALID_ARGUMENT", "MALFORMED_FUNCTION_CALL",
+            "TOOL_ERROR", "TOOL_FAILURE", "AUTH_ERROR", "UNAUTHORIZED",
+            "PERMISSION_DENIED", "VALIDATION_ERROR", "DATABASE_ERROR",
+            "INTERNAL_ERROR", "RUN_ERROR",
+          ]);
+          errorMessage = `AG-UI RUN_ERROR (${safeCodes.has(code) ? code : "UNSPECIFIED"})`;
+        },
         complete: () => {
           completed = true;
         },

@@ -13,7 +13,7 @@ import { useEventSearchResults } from "@/components/chat/event-search-results-co
 import { useGroundedFastPath } from "@/components/chat/grounded-fast-path-context";
 import { GroundedFastPathPanel } from "@/components/chat/grounded-fast-path-panel";
 import { useRentalFastPath } from "@/components/chat/rental-fast-path-context";
-import { RentalFastPathPanel } from "@/components/chat/rental-fast-path-panel";
+import { RentalFastPathPanel, RentalSearchRecoveryNotice } from "@/components/chat/rental-fast-path-panel";
 import { useRestaurantFastPath } from "@/components/chat/restaurant-fast-path-context";
 import { RestaurantFastPathPanel } from "@/components/chat/restaurant-fast-path-panel";
 
@@ -28,6 +28,7 @@ export function useTranscriptTailHasContent(): boolean {
   return (
     messages.length > 0 ||
     rental.toolResult != null ||
+    rental.searchFailure != null ||
     event.toolResult != null ||
     grounded.toolResult != null ||
     restaurant.toolResult != null ||
@@ -56,6 +57,7 @@ export const ConciergeTranscriptTail = memo(function ConciergeTranscriptTail({
     <div data-testid="concierge-transcript-tail" className="mde-concierge-transcript-tail flex min-w-0 flex-col">
       <ConciergeLocalChatMessages excludeIds={transcriptMessageIds} />
       <ConciergeSignInPrompt />
+      <RentalSearchRecoveryNotice />
       <RentalFastPathPanel />
       <EventFastPathPanel />
       <GroundedFastPathPanel />

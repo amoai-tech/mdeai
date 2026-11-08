@@ -16,18 +16,22 @@ const check = join(root, "scripts/qa-auth-check.ts");
 const browser = join(root, "scripts/qa-browser.ts");
 const tsxLoader = createRequire(import.meta.url).resolve("tsx");
 
-// Use a spare loopback port: developers may already have CDP port 9227 open.
-async function availableQaPort() {
+/**
+ * Do not test the CLI's failure paths against the default CDP port 9227.
+ * The developer may have an authenticated QA Chrome session attached there;
+ * a port collision would mask the ENOENT/SIGINT behavior under test.
+ * Reserve an ephemeral loopback port from the OS and release it immediately
+ * before starting the tested child process. Never kill an unrelated listener.
+ */
+async function isolatedQaPort() {
   const server = createServer();
   await new Promise((resolve, reject) => {
     server.once("error", reject);
     server.listen(0, "127.0.0.1", resolve);
   });
   const address = server.address();
-  assert(address && typeof address !== "string");
-  await new Promise((resolve, reject) => {
-    server.close((error) => error ? reject(error) : resolve());
-  });
+  assert.ok(address && typeof address !== "string");
+  await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
   return address.port;
 }
 
@@ -117,9 +121,9 @@ test("Chrome binary lookup supports macOS, Windows, Linux and CHROME_PATH overri
 });
 
 test("missing custom Chrome binary explains ENOENT and fails closed", async () => {
+  const port = await isolatedQaPort();
   const missing = join(tmpdir(), "missing-mde-chrome-" + randomBytes(8).toString("hex"));
-  const port = await availableQaPort();
-  const result = run(browser, ["--headless", "--port=" + port], {
+  const result = run(browser, ["--headless", `--port=${port}`], {
     NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co",
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_fixture",
     SUPABASE_SERVICE_ROLE_KEY: randomBytes(16).toString("hex"),
@@ -133,11 +137,14 @@ test("missing custom Chrome binary explains ENOENT and fails closed", async () =
 
 test("SIGINT during Chrome startup deletes its isolated profile", { timeout: 12_000 }, async (t) => {
   if (process.platform === "win32") return t.skip("Unix test uses a fake shell Chrome executable");
+  const port = await isolatedQaPort();
   const dir = mkdtempSync(join(tmpdir(), "mde-qa-signal-fixture-"));
   const fakeChrome = join(dir, "fake-chrome");
+  // Interrupt at the earliest observable point: the profile directory
+  // exists, but Chrome and the rest of startup may not have begun yet.
+  // The launcher must already have SIGINT registered at this moment.
   writeFileSync(fakeChrome, "#!/bin/sh\nexec sleep 30\n", { mode: 0o755 });
-  const port = await availableQaPort();
-  const child = spawn(process.execPath, ["--import", tsxLoader, browser, "--headless", "--port=" + port], {
+  const child = spawn(process.execPath, ["--import", tsxLoader, browser, "--headless", `--port=${port}`], {
     cwd: dir,
     env: {
       HOME: process.env.HOME,
