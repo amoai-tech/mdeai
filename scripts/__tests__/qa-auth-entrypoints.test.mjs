@@ -135,7 +135,69 @@ test("missing custom Chrome binary explains ENOENT and fails closed", async () =
   assert.match(result.stderr, /CHROME_PATH/);
 });
 
-test("SIGINT during Chrome startup deletes its isolated profile", { timeout: 12_000 }, async (t) => {
+test("SIGINT during pending Chrome profile creation removes the late-created directory", { timeout: 12_000 }, async (t) => {
+  if (process.platform === "win32") return t.skip("Windows signal handling differs");
+  const port = await isolatedQaPort();
+  const dir = mkdtempSync(join(tmpdir(), "mde-qa-signal-fixture-"));
+  const script = [
+    'import { mkdtemp } from "node:fs/promises";',
+    "import { main } from " + JSON.stringify(browser) + ";",
+    "process.argv = [process.execPath, " + JSON.stringify(browser) + ', "--headless", "--port=' + port + '"];',
+    "const createProfile = async (prefix) => {",
+    '  process.once("SIGINT", () => process.send?.("signal-acknowledged"));',
+    '  process.send?.("profile-pending");',
+    '  await new Promise((resolve) => process.once("message", (message) => { if (message === "release-profile") resolve(); }));',
+    '  const directory = await mkdtemp(prefix);',
+    '  process.send?.("profile-created-after-signal");',
+    '  return directory;',
+    "};",
+    "await main(createProfile).catch(() => { process.exitCode = 1; });",
+  ].join("\n");
+  const child = spawn(process.execPath, ["--import", tsxLoader, "--input-type=module", "--eval", script], {
+    cwd: dir,
+    env: {
+      HOME: process.env.HOME,
+      PATH: process.env.PATH,
+      TMPDIR: dir,
+      NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co",
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_fixture",
+      SUPABASE_SERVICE_ROLE_KEY: randomBytes(16).toString("hex"),
+      MDE_QA_EVENT_HOST_EMAIL: "qa-test@mdeai.co",
+    },
+    stdio: ["ignore", "ignore", "ignore", "ipc"],
+  });
+  const exited = once(child, "exit");
+  // Each phase is acknowledged by the child, not guessed using a timing delay.
+  const phase = async (expected) => {
+    const message = await Promise.race([
+      once(child, "message").then(([value]) => value),
+      exited.then(() => { throw new Error("Launcher exited before " + expected); }),
+      delay(5_000, undefined, { ref: false }).then(() => { throw new Error("Launcher never reached " + expected); }),
+    ]);
+    assert.equal(message, expected);
+  };
+  try {
+    await phase("profile-pending");
+    assert.deepEqual(readdirSync(dir).filter((entry) => entry.startsWith("mde-qa-chrome-")), []);
+    assert.equal(child.kill("SIGINT"), true);
+    await phase("signal-acknowledged");
+    // SIGINT must be processed while profile creation is *still* unresolved.
+    assert.deepEqual(readdirSync(dir).filter((entry) => entry.startsWith("mde-qa-chrome-")), []);
+    child.send("release-profile");
+    await phase("profile-created-after-signal");
+    const [exitCode] = await Promise.race([
+      exited,
+      delay(5_000, undefined, { ref: false }).then(() => { throw new Error("Launcher failed to stop after profile creation"); }),
+    ]);
+    assert.notEqual(exitCode, 0);
+    assert.deepEqual(readdirSync(dir).filter((entry) => entry.startsWith("mde-qa-chrome-")), []);
+  } finally {
+    child.kill("SIGKILL");
+    rmSync(dir, { recursive: true, force: true, maxRetries: 5 });
+  }
+});
+
+test("SIGINT after Chrome profile creation removes its directory", { timeout: 12_000 }, async (t) => {
   if (process.platform === "win32") return t.skip("Unix test uses a fake shell Chrome executable");
   const port = await isolatedQaPort();
   const dir = mkdtempSync(join(tmpdir(), "mde-qa-signal-fixture-"));
