@@ -141,34 +141,20 @@ test("a normal rental AI question still reaches the agent and completes", async 
   await input.fill(QUESTION);
   await expect(active.getByTestId("rental-ask-send")).toBeEnabled({ timeout: 45_000 });
 
-  const initialCards = await page.locator('[data-testid^="rental-card-"]').evaluateAll((els) =>
-    els.map((el) => el.getAttribute("data-testid")).filter(Boolean).sort().join(","),
-  );
-  const response = page.waitForResponse((r) =>
+  const responsePromise = page.waitForResponse((r) =>
     r.url().includes("/api/copilotkit") && r.request().method() === "POST",
   { timeout: 60_000 });
   await active.getByTestId("rental-ask-send").click();
-  expect((await response).status()).toBe(200);
-  // 200 only proves the stream started. Wait for the run to end, then prove a
-  // completed assistant turn exists before treating the absence of an error as success.
+  const response = await responsePromise;
+  expect(response.status()).toBe(200);
+
+  // 200 only proves the stream started. Wait for the run to end, then inspect the
+  // actual AG-UI stream: a tool result plus completed text proves an agent turn,
+  // not the page's local fallback search.
   await expect(active.getByTestId("rental-ask-stop")).toHaveCount(0, { timeout: 90_000 });
-  const transcript = active.getByTestId("rental-ask-transcript");
-  if (!(await transcript.isVisible().catch(() => false))) {
-    const toggle = active.getByTestId("rental-ask-toggle-transcript");
-    await expect(toggle).toBeVisible({ timeout: 90_000 });
-    await toggle.click();
-  }
-  await expect(transcript).toBeVisible({ timeout: 90_000 });
-  // A completed turn may be plain text or grounded cards (some turns are tool-only).
-  await expect.poll(async () => {
-    const hasAssistantText = (await transcript.innerText()).includes("MDE");
-    const cardIds = await page.locator('[data-testid^="rental-card-"]').evaluateAll((els) =>
-      els.map((el) => el.getAttribute("data-testid")).filter(Boolean).sort().join(","),
-    );
-    return hasAssistantText || cardIds !== initialCards;
-  }, { timeout: 60_000, message: "a completed assistant reply or changed grounded results" })
-    .toBe(true);
-  await expect.poll(async () => (await transcript.innerText()).trim().length, { timeout: 30_000 })
-    .toBeGreaterThan(0);
+  const stream = await response.text();
+  expect(stream).toContain('"type":"TOOL_CALL_RESULT"');
+  expect(stream).toContain('"type":"TEXT_MESSAGE_END"');
+  expect(stream).toContain('"type":"RUN_FINISHED"');
   await expect(active.getByTestId("rental-ask-error")).toHaveCount(0);
 });
