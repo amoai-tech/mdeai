@@ -219,6 +219,43 @@ describe("mapSavedThreadHistory — broker duplicate writes from PR #822", () =>
   });
 });
 
+describe("a multi-step assistant turn replays only its answer", () => {
+  it("drops the narration the live chat never showed", () => {
+    // Exactly the shape production stores when the model narrates before calling a tool:
+    // text, tool-invocation, step-start, text.
+    const stored = {
+      format: 2,
+      parts: [
+        { type: "text", text: "I need to check the broker's workspace to answer this. " },
+        {
+          type: "tool-invocation",
+          toolInvocation: {
+            state: "result",
+            toolCallId: "call-1",
+            toolName: "readBrokerWorkspaceTool",
+            args: { focus: "listings" },
+            result: { listings: 0 },
+          },
+        },
+        { type: "step-start" },
+        { type: "text", text: "The dashboard shows 0 active rental listings right now." },
+      ],
+    };
+    const mapped = mapSavedThreadHistory([row("a1", "assistant", stored)]);
+    const message = mapped.find((m) => m.role === "assistant")!;
+    expect(message.content).toBe("The dashboard shows 0 active rental listings right now.");
+    // The tool card still has what it needs.
+    expect(message.toolCalls?.[0]?.function.name).toBe("readBrokerWorkspaceTool");
+  });
+
+  it("keeps a single-part answer unchanged", () => {
+    const [message] = mapSavedThreadHistory([
+      row("a2", "assistant", text("Zero leads need your attention.")),
+    ]);
+    expect(message.content).toBe("Zero leads need your attention.");
+  });
+});
+
 describe("reconcileSavedHistory", () => {
   const p = (id: string, role: "user" | "assistant", content: string) => ({ id, role, content });
 
