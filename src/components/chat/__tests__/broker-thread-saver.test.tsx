@@ -200,3 +200,30 @@ describe("broker thread saver: complete and correctly scoped history", () => {
     expect(ids).toEqual(["u1", "a1"]);
   });
 });
+
+
+describe("broker restored history is not re-saved", () => {
+  it("waits for the owner-checked restore and writes only new turns", async () => {
+    agentMessages = [
+      { id: "savedU", role: "user", content: "saved question" },
+      { id: "savedA", role: "assistant", content: "saved answer" },
+    ];
+    const { rerender } = render(<BrokerThreadSaver threadId={THREAD} restoreMode="waiting" />);
+    await new Promise(resolve => setTimeout(resolve, 30));
+    expect(calls()).toHaveLength(0);
+
+    rerender(<BrokerThreadSaver threadId={THREAD} restoreMode="restored" />);
+    await new Promise(resolve => setTimeout(resolve, 30));
+    expect(calls()).toHaveLength(0);
+
+    agentMessages = [
+      ...agentMessages,
+      { id: "newU", role: "user", content: "new question" },
+      { id: "newA", role: "assistant", content: "new answer" },
+    ];
+    rerender(<BrokerThreadSaver threadId={THREAD} restoreMode="restored" />);
+    await vi.waitFor(() => expect(markThreadSaved).toHaveBeenCalledWith(THREAD));
+    expect(calls()).toHaveLength(1);
+    expect(lastBody().messages.map(m => m.id)).toEqual(["newU", "newA"]);
+  });
+});

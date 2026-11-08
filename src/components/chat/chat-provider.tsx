@@ -478,11 +478,16 @@ function LiveChatProvider({ children, persistThread = false }: { children: React
         threadId={threadId}
         hasExplicitThreadId={shouldReplay}
       >
-        {persistThread && threadId && user ? <BrokerThreadSaver threadId={threadId} /> : null}
         {threadId && shouldReplay && !isDeterministicE2E() ? (
-          <SavedThreadHistory threadId={threadId}>{children}</SavedThreadHistory>
+          <SavedThreadHistory threadId={threadId}>
+            {persistThread && user ? <BrokerThreadSaverAfterReplay threadId={threadId} /> : null}
+            {children}
+          </SavedThreadHistory>
         ) : (
-          children
+          <>
+            {persistThread && threadId && user ? <BrokerThreadSaver threadId={threadId} /> : null}
+            {children}
+          </>
         )}
       </CopilotChatConfigurationProvider>
     </CopilotKitProvider>
@@ -501,12 +506,22 @@ function LiveChatProvider({ children, persistThread = false }: { children: React
  *   - in ordered batches of four (the endpoint's limit), from a cursor, never by slicing the tail;
  *   - text only — a tool call/result has no text to restore, so it is skipped, not sent.
  */
+/** Saved history is already owner-checked by SavedThreadHistory. Do not re-POST its messages. */
+function BrokerThreadSaverAfterReplay({ threadId }: { threadId: string }) {
+  const history = useSavedThreadHistory();
+  const restoreMode = history.status === "idle" && history.threadId === threadId
+    ? "restored" : "waiting";
+  return <BrokerThreadSaver threadId={threadId} restoreMode={restoreMode} />;
+}
+
 export function BrokerThreadSaver({
   threadId,
   agentId = "conciergeAgent",
+  restoreMode = "fresh",
 }: {
   threadId: string;
   agentId?: "conciergeAgent";
+  restoreMode?: "fresh" | "waiting" | "restored";
 }) {
   const { agent } = useAgent({
     agentId,
@@ -515,13 +530,13 @@ export function BrokerThreadSaver({
   const { markThreadSaved } = useThreadNav();
   // A new chat keeps this component mounted. Its progress must not inherit the old thread's
   // cursor, and an in-flight save for the old thread must not advance the new one.
-  const progress = useRef({ threadId, cursor: 0, inFlight: false });
+  const progress = useRef({ threadId, cursor: 0, inFlight: false, ready: restoreMode === "fresh" });
   const [drainTick, setDrainTick] = useState(0);
   useEffect(() => {
     if (progress.current.threadId !== threadId) {
-      progress.current = { threadId, cursor: 0, inFlight: false };
+      progress.current = { threadId, cursor: 0, inFlight: false, ready: restoreMode === "fresh" };
     }
-  }, [threadId]);
+  }, [threadId, restoreMode]);
 
   // CopilotKit mutates one stable agent object. Watch the fields, not just its identity.
   const messages = agent.messages ?? [];
@@ -535,6 +550,14 @@ export function BrokerThreadSaver({
     // CopilotKit may temporarily retain the old transcript while switching threads. Never
     // write that transcript under the newly selected thread id.
     if (state.threadId !== threadId || agentThreadId !== threadId || state.inFlight || running) return;
+    // On reload, SavedThreadHistory first completes its owner-verified GET + agent replay.
+    // Those messages are already persisted. Seed the cursor once, then save only new turns.
+    if (!state.ready) {
+      if (restoreMode !== "restored") return;
+      state.cursor = messageCount;
+      state.ready = true;
+      return;
+    }
     if (state.cursor >= messageCount) return;
     const current = agent.messages ?? [];
 
@@ -590,7 +613,7 @@ export function BrokerThreadSaver({
           setDrainTick((n) => n + 1);
         }
       });
-  }, [agent, agentThreadId, threadId, markThreadSaved, messageCount, lastContent, running, drainTick]);
+  }, [agent, agentThreadId, threadId, markThreadSaved, messageCount, lastContent, running, drainTick, restoreMode]);
 
   return null;
 }
