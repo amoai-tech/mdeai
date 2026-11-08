@@ -27,11 +27,16 @@ describe("place-details-cache policy (SAN-776)", () => {
     vi.clearAllMocks();
   });
 
-  it("fetches fresh details on every call and never reports a DB cache hit", async () => {
-    const first = await fetchPlaceDetailsWithCache("ChIJTest");
-    await fetchPlaceDetailsWithCache("ChIJTest");
+  it("returns each call's own provider response, with no DB cache reuse", async () => {
+    getPlaceDetailsMock
+      .mockResolvedValueOnce({ id: "ChIJTest", displayName: { text: "First" } })
+      .mockResolvedValueOnce({ id: "ChIJTest", displayName: { text: "Second" } });
 
-    expect(first.raw).toEqual({ id: "ChIJTest", displayName: { text: "Test Café" } });
+    const first = await fetchPlaceDetailsWithCache("ChIJTest");
+    const second = await fetchPlaceDetailsWithCache("ChIJTest");
+
+    expect(first.raw).toEqual({ id: "ChIJTest", displayName: { text: "First" } });
+    expect(second.raw).toEqual({ id: "ChIJTest", displayName: { text: "Second" } });
     expect(getPlaceDetailsMock).toHaveBeenCalledTimes(2);
   });
 

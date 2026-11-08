@@ -45,6 +45,23 @@ describe("place-details-client-fetch", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("does not retain a successful DTO between sequential calls", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockImplementation(
+      async () =>
+        new Response(
+          JSON.stringify({ placeId: "ChIJSeq123456789", displayName: "Test", photoNames: ["places/x/photos/y"] }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+    );
+    const signal = new AbortController().signal;
+
+    await fetchPlaceDetailsDto("ChIJSeq123456789", signal);
+    await fetchPlaceDetailsDto("ChIJSeq123456789", signal);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("does not refetch after 502 while failure TTL is active", async () => {
     const fetchMock = vi.mocked(fetch);
     const signal = new AbortController().signal;

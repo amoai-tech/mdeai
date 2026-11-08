@@ -10,6 +10,10 @@ import {
   isPlacesDetailRateLimited,
   placesDetailRateLimitKey,
 } from "@/lib/places-detail-rate-limit";
+import {
+  checkRateLimitDurable,
+  clientIpFromRequest,
+} from "@/lib/distributed-rate-limit";
 
 export async function GET(req: Request) {
   const rateKey = placesDetailRateLimitKey(req);
@@ -27,6 +31,21 @@ export async function GET(req: Request) {
   }
 
   const placeId = normalizePlaceId(rawId);
+
+  // Shared cap across runtime instances; the in-process limiter above is only
+  // a cheap first line. If the durable store is unavailable it fails open, as
+  // before, and the in-process bucket still applies.
+  const durable = await checkRateLimitDurable(
+    `places-detail:${clientIpFromRequest(req)}`,
+    30,
+    60,
+  );
+  if (!durable.allowed) {
+    return NextResponse.json(
+      { error: "rate_limited" },
+      { status: 429, headers: { "Cache-Control": "no-store" } },
+    );
+  }
 
   try {
     const { raw } = await fetchPlaceDetailsWithCache(placeId);

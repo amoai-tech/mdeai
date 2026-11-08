@@ -2,9 +2,11 @@
 
 ## Policy evidence
 
-Google Places policy (Maps Code Assist, current):
-- only the **Place ID** is exempt from caching restrictions;
-- **photo resource names cannot be cached**.
+Google Places policy, accessed 2026-11-08:
+- https://developers.google.com/maps/documentation/places/web-service/policies — only the **Place ID**
+  is exempt from caching restrictions;
+- https://developers.google.com/maps/documentation/places/web-service/place-photos — **photo resource
+  names cannot be cached**.
 
 The previous detail path stored the raw response (including `photos` and
 `photo_name_primary`) for seven days and served it with public HTTP caching.
@@ -26,8 +28,8 @@ The previous detail path stored the raw response (including `photos` and
   suppression) and rate limits remain.
 - `src/app/api/places/detail/route.ts`: `Cache-Control: no-store`.
 - `src/app/api/places/photo/route.ts`: `Cache-Control: private, no-store`.
-- Existing `place_details_cache` rows are **not deleted** here; cleanup is the reviewed SAN-105
-  migration.
+- `supabase/migrations/20261108025310_places_cache_policy_cleanup.sql` deletes expired detail and
+  search rows (reviewed SAN-105 cleanup, applied before deploy).
 
 ## Tests
 
@@ -40,5 +42,13 @@ The previous detail path stored the raw response (including `photos` and
 ## Cost impact — explicitly unmeasured
 
 Removing the 7-day cache **increases** Place Details calls; no savings are claimed. A Cloud Billing
-baseline per method is still required. Narrower masks are a separate optimization and were not
-changed because the UI consumes rating, hours, price and photos.
+baseline per method is still required.
+
+Place Photo traffic also changes: `private, no-store` means every image render/back-navigation
+re-fetches the photo, is billed, and counts toward the 120/min per-IP photo limit. Check list pages
+(`/restaurants`, café panels, chat cards) for 429s/broken images after deploy and include Photo calls
+in the billing baseline. A bounded client-side exception would need explicit policy review, not a
+silent TTL.
+
+Details now also uses the shared `check_rate_limit` RPC (30/min/IP) before provider calls; the
+in-process limiter remains a cheap first line.
