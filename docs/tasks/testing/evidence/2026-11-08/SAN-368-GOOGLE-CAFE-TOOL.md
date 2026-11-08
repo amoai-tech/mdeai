@@ -53,3 +53,12 @@ Not claimed: hosted MCP/ADK completion, production deployment, UI screenshots. T
   request is still bounded by the client timeout; no abort signal is claimed.
 
 Tests: mapper 5, tool 7, atomic quota 3, related 17 total.
+
+## Second review pass
+
+- Google receives `withMedellinScope(rawQuery)`, not the ADK instruction sentence; test asserts the
+  exact query and absence of “Exclude bar”/“Prefer cafés”.
+- Attribution is aligned to the filtered rows with `alignGroundedAttribution`; dropped rows no longer
+  leave orphan credit.
+- Metadata distinguishes `google_places_empty` (provider answered zero) from
+  `google_places_unavailable` (provider error).

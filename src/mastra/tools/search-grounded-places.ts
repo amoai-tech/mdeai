@@ -445,11 +445,12 @@ export const searchGroundedPlacesTool = createTool({
     // Real Google cafés first: the installed Places SDK supplies stable IDs,
     // coordinates and links without depending on the absent ADK sidecar.
     let directCafeAttempted = false;
+    let directCafeError = false;
     if (isCafeGroundingIntent(rawQuery, intent)) {
       directCafeAttempted = true;
       try {
         const direct = await searchGoogleCafes({
-          query: withMedellinScope(normalizeVenueGroundingQuery(rawQuery)),
+          query: withMedellinScope(rawQuery),
           pageSize: pageSize ?? 5,
           locationBias: inputBias,
         });
@@ -458,7 +459,7 @@ export const searchGroundedPlacesTool = createTool({
           return withVenueKindMetadata(
             {
               results: filteredDirect,
-              attribution: direct.attribution,
+              attribution: alignGroundedAttribution(filteredDirect, direct.attribution),
               source: "grounding" as const,
               metadata: { provider: "google_places", searchMode: "text" },
             },
@@ -467,6 +468,7 @@ export const searchGroundedPlacesTool = createTool({
           );
         }
       } catch (err) {
+        directCafeError = true;
         console.warn("[search-grounded-places] Google Places café search failed:", err);
       }
     }
@@ -480,7 +482,11 @@ export const searchGroundedPlacesTool = createTool({
             results: fallbackResults,
             attribution: [],
             source: "grounding" as const,
-            metadata: { provider: "google_places", fallback: "curated", reason: "google_places_unavailable" },
+            metadata: {
+              provider: "google_places",
+              fallback: "curated",
+              reason: directCafeError ? "google_places_unavailable" : "google_places_empty",
+            },
           },
           rawQuery,
           intent,
@@ -492,7 +498,10 @@ export const searchGroundedPlacesTool = createTool({
             results: [],
             attribution: [],
             source: "grounding" as const,
-            metadata: { provider: "google_places", reason: "google_places_unavailable" },
+            metadata: {
+              provider: "google_places",
+              reason: directCafeError ? "google_places_unavailable" : "google_places_empty",
+            },
           },
           rawQuery,
           intent,

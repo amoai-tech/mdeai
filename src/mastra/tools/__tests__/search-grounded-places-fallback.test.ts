@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 vi.mock("../../lib/google-places-cafe-search", () => ({
   searchGoogleCafes: vi.fn().mockResolvedValue({ results: [], attribution: [] }),
-  withMedellinScope: (query: string) => query,
+  withMedellinScope: (query: string) => `${query} Medellín, Colombia`,
 }));
 
 vi.mock("../../lib/adk-grounding-client", () => ({
@@ -117,8 +117,20 @@ describe("searchGroundedPlacesTool fallback", () => {
         mapsUrl: "https://maps.google.com/?cid=999",
         sourceMode: "google_places",
         primaryType: "coffee_shop",
+      }, {
+        id: "google-ChIJBarLounge",
+        title: "Café Bar & Lounge",
+        placeId: "ChIJBarLounge",
+        latitude: 6.25,
+        longitude: -75.59,
+        mapsUrl: "https://maps.google.com/?cid=1000",
+        sourceMode: "google_places",
+        primaryType: "coffee_shop",
       }],
-      attribution: [{ source: "Google Maps", placeUri: "https://maps.google.com/?cid=999", title: "Rituales Compañía de Café" }],
+      attribution: [
+        { source: "Google Maps", placeUri: "https://maps.google.com/?cid=999", title: "Rituales Compañía de Café" },
+        { source: "Google Maps", placeUri: "https://maps.google.com/?cid=1000", title: "Café Bar & Lounge" },
+      ],
     });
 
     const out = await runGrounded("quiet cafés in Laureles", "cafe");
@@ -130,7 +142,22 @@ describe("searchGroundedPlacesTool fallback", () => {
     });
     expect(out.metadata?.provider).toBe("google_places");
     expect(out.attribution).toHaveLength(1);
+    expect(out.attribution[0]?.title).toBe("Rituales Compañía de Café");
+    expect(searchGoogleCafes).toHaveBeenCalledWith(
+      expect.objectContaining({ query: expect.stringMatching(/quiet cafés in Laureles Medellín, Colombia/) }),
+    );
+    expect(vi.mocked(searchGoogleCafes).mock.calls[0]?.[0]?.query).not.toMatch(/Exclude bar|Prefer cafés/);
     expect(invokeAdkGrounding).not.toHaveBeenCalled();
+  });
+
+  it("reports an empty Google result separately from an outage", async () => {
+    vi.mocked(searchGoogleCafes).mockResolvedValue({ results: [], attribution: [] });
+    vi.mocked(searchRestaurants).mockResolvedValue({ results: [], total: 0, source: "supabase" });
+
+    const out = await runGrounded("quiet cafés in Laureles", "cafe");
+
+    expect(out.metadata?.reason).toBe("google_places_empty");
+    expect(out.metadata?.fallback).toBe("curated");
   });
 
   it("labels real Supabase fallback rows as saved catalog, not live Google", async () => {
