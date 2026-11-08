@@ -2,6 +2,7 @@ import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { enrichedGroundedPlaceFieldsSchema } from "../lib/adk-grounding-types";
 import { invokeAdkGrounding } from "../lib/adk-grounding-client";
+import { searchGoogleCafes } from "../lib/google-places-cafe-search";
 import { groundedPlaceSourceModes, type GroundedPlaceSourceMode } from "@/lib/grounded-place-source";
 import {
   mapAdkGroundingPins,
@@ -437,6 +438,31 @@ export const searchGroundedPlacesTool = createTool({
         rawQuery,
         intent,
       );
+    }
+    // Real Google cafés first: the installed Places SDK supplies stable IDs,
+    // coordinates and links without depending on the absent ADK sidecar.
+    if (isCafeGroundingIntent(rawQuery, intent)) {
+      try {
+        const direct = await searchGoogleCafes({
+          query: rawQuery,
+          pageSize: pageSize ?? 5,
+          locationBias: inputBias,
+        });
+        if (direct.results.length > 0) {
+          return withVenueKindMetadata(
+            {
+              results: direct.results,
+              attribution: direct.attribution,
+              source: "grounding" as const,
+              metadata: { provider: "google_places", searchMode: "text" },
+            },
+            rawQuery,
+            intent,
+          );
+        }
+      } catch (err) {
+        console.warn("[search-grounded-places] Google Places café search failed:", err);
+      }
     }
     const locationBias = resolveGroundingLocationBias({
       locationBias: inputBias,

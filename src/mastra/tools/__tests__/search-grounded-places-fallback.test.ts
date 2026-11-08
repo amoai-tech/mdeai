@@ -1,5 +1,9 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
+vi.mock("../../lib/google-places-cafe-search", () => ({
+  searchGoogleCafes: vi.fn().mockResolvedValue({ results: [], attribution: [] }),
+}));
+
 vi.mock("../../lib/adk-grounding-client", () => ({
   invokeAdkGrounding: vi.fn(),
 }));
@@ -34,12 +38,14 @@ vi.mock("../search-venue-anchors", () => ({
 }));
 
 import { invokeAdkGrounding } from "../../lib/adk-grounding-client";
+import { searchGoogleCafes } from "../../lib/google-places-cafe-search";
 import { searchRestaurants } from "../search-restaurants";
 import { searchGroundedPlacesTool } from "../search-grounded-places";
 import { adkUnavailableMock } from "./grounded-places-test-helpers";
 
 type GroundedOut = {
   results: { title?: string; placeId?: string; latitude?: number; longitude?: number; sourceMode?: string }[];
+  attribution: { source: string; placeUri: string; title?: string }[];
   source: string;
   metadata?: Record<string, unknown>;
 };
@@ -77,6 +83,7 @@ describe("searchGroundedPlacesTool fallback", () => {
   beforeEach(() => {
     vi.mocked(invokeAdkGrounding).mockReset();
     vi.mocked(searchRestaurants).mockReset();
+    vi.mocked(searchGoogleCafes).mockReset().mockResolvedValue({ results: [], attribution: [] });
   });
 
   it("GM-P0-06 returns curated fallback when ADK unavailable (403)", async () => {
@@ -96,6 +103,33 @@ describe("searchGroundedPlacesTool fallback", () => {
     expect(out.results[0]?.latitude).toBe(6.2489);
     expect(out.metadata?.fallback).toBe("curated");
     expect(out.results[0]?.sourceMode).toBe("demo_fixture");
+  });
+
+  it("returns real Google Places cafés before invoking ADK", async () => {
+    vi.mocked(searchGoogleCafes).mockResolvedValue({
+      results: [{
+        id: "google-ChIJRituales",
+        title: "Rituales Compañía de Café",
+        placeId: "ChIJRituales",
+        latitude: 6.2489,
+        longitude: -75.5843,
+        mapsUrl: "https://maps.google.com/?cid=999",
+        sourceMode: "google_places",
+        primaryType: "coffee_shop",
+      }],
+      attribution: [{ source: "Google Maps", placeUri: "https://maps.google.com/?cid=999", title: "Rituales Compañía de Café" }],
+    });
+
+    const out = await runGrounded("quiet cafés in Laureles", "cafe");
+
+    expect(out.results[0]).toMatchObject({
+      title: "Rituales Compañía de Café",
+      placeId: "ChIJRituales",
+      sourceMode: "google_places",
+    });
+    expect(out.metadata?.provider).toBe("google_places");
+    expect(out.attribution).toHaveLength(1);
+    expect(invokeAdkGrounding).not.toHaveBeenCalled();
   });
 
   it("labels real Supabase fallback rows as saved catalog, not live Google", async () => {

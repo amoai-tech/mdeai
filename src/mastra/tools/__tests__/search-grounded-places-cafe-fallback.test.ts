@@ -1,5 +1,9 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
+vi.mock("../../lib/google-places-cafe-search", () => ({
+  searchGoogleCafes: vi.fn().mockResolvedValue({ results: [], attribution: [] }),
+}));
+
 vi.mock("../../lib/adk-grounding-client", () => ({
   invokeAdkGrounding: vi.fn(),
 }));
