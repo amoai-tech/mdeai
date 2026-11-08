@@ -27,9 +27,10 @@ export function hasRenderedEventCard(): boolean {
 export function requestEventCardRecovery(
   eventId: string,
   timeoutMs = EVENT_CARD_RECOVERY_TIMEOUT_MS,
+  options: { anyCardBefore?: number } = {},
 ): Promise<boolean> {
   if (typeof window === "undefined") return Promise.resolve(false);
-  const requestId = `${eventId}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
+  const requestId = `${eventId}:${crypto.randomUUID()}`;
   return new Promise<boolean>((resolve) => {
     let settled = false;
     const finish = (opened: boolean) => {
@@ -47,7 +48,9 @@ export function requestEventCardRecovery(
     const timer = window.setTimeout(() => finish(false), timeoutMs);
     window.addEventListener(EVENT_CARD_RECOVERY_RESULT, onResult as EventListener);
     window.dispatchEvent(
-      new CustomEvent(EVENT_CARD_RECOVERY_EVENT, { detail: { eventId, requestId } }),
+      new CustomEvent(EVENT_CARD_RECOVERY_EVENT, {
+        detail: { eventId, requestId, anyCardBefore: options.anyCardBefore },
+      }),
     );
   });
 }
@@ -136,6 +139,9 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
         clearConciergePendingSend();
         return true;
       }
+      const anyCardsBefore = typeof document === "undefined"
+        ? 0
+        : document.querySelectorAll('[data-testid="a2ui-event-card"]').length;
       const currentEventRows = eventResultsContext?.rows?.length ? eventResultsContext.rows : (activeEventRows ?? []);
       const directEventId = isEventCardRenderRequest(text)
         ? resolveExplicitEventRequest(text, currentEventRows)
@@ -164,7 +170,7 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
           //    FIRST event on top of the model's own card.
           if (isEventCardRenderRequest(text) && !hasRenderedEventCard()) {
             const fallbackEventId = directEventId ?? activeEventId;
-            if (fallbackEventId) void requestEventCardRecovery(fallbackEventId);
+            if (fallbackEventId) void requestEventCardRecovery(fallbackEventId, undefined, { anyCardBefore: anyCardsBefore });
           }
           // Another conversation can report a late error during this run.
           // Only this conversation's stream failure should trigger its notice.

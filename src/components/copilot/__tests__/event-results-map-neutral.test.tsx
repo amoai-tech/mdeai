@@ -305,6 +305,29 @@ describe("event card recovery · reports whether it opened", () => {
     listener.stop();
   });
 
+  it("does not open a fallback modal when the model card arrives during the wait", async () => {
+    const results: Array<Record<string, unknown>> = [];
+    const onResult = (event: Event) => results.push((event as CustomEvent).detail);
+    window.addEventListener("mde:event-card-recovery-result", onResult);
+    render();
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)); });
+    act(() => {
+      window.dispatchEvent(new CustomEvent("mde:event-card-recovery", {
+        detail: { eventId: "mapped", requestId: "req-late", anyCardBefore: 0 },
+      }));
+    });
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });
+    const lateCard = document.createElement("div");
+    lateCard.dataset.testid = "a2ui-event-card";
+    lateCard.dataset.eventId = "some-other-event";
+    document.body.appendChild(lateCard);
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 600)); });
+    expect(document.body.querySelectorAll('[data-testid="event-card-modal"]')).toHaveLength(0);
+    expect(results).toContainEqual(expect.objectContaining({ requestId: "req-late", opened: true }));
+    window.removeEventListener("mde:event-card-recovery-result", onResult);
+    lateCard.remove();
+  });
+
   it("does not let another event's card suppress this one", async () => {
     const other = document.createElement("div");
     other.dataset.testid = "a2ui-event-card";

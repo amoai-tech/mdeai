@@ -572,7 +572,7 @@ export function EventResults({ result }: { result: unknown }) {
      * `mde:event-card-recovery-result`, and the caller only confirms on `opened: true`.
      */
     const onRecovery = (event: Event) => {
-      const detail = (event as CustomEvent<{ eventId?: unknown; requestId?: unknown }>).detail ?? {};
+      const detail = (event as CustomEvent<{ eventId?: unknown; requestId?: unknown; anyCardBefore?: unknown }>).detail ?? {};
       const eventId = typeof detail.eventId === "string" ? detail.eventId : null;
       const requestId = typeof detail.requestId === "string" ? detail.requestId : null;
 
@@ -603,6 +603,9 @@ export function EventResults({ result }: { result: unknown }) {
        * with, so any rendered card satisfies it — otherwise a model card for event #3
        * would be followed by a Quick view for event #1.
        */
+      const anyCardBefore = typeof detail.anyCardBefore === "number" ? detail.anyCardBefore : null;
+      const anyCardAppeared = () => anyCardBefore !== null &&
+        document.querySelectorAll('[data-testid="a2ui-event-card"]').length > anyCardBefore;
       const existingCard = () =>
         requestId
           ? document.querySelector<HTMLElement>(renderedSelector)
@@ -612,6 +615,7 @@ export function EventResults({ result }: { result: unknown }) {
         alreadyRendered.scrollIntoView({ block: "nearest", behavior: "smooth" });
         return answer(true);
       }
+      if (anyCardAppeared()) return answer(true);
 
       window.clearTimeout(recoveryTimer);
       recoveryTimer = window.setTimeout(() => {
@@ -620,6 +624,7 @@ export function EventResults({ result }: { result: unknown }) {
           settledCard.scrollIntoView({ block: "nearest", behavior: "smooth" });
           return answer(true);
         }
+        if (anyCardAppeared()) return answer(true);
         recoveryHandled.current.add(key);
         setSelectedEvent(row as EventResultRow);
         answer(true);
