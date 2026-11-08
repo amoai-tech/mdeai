@@ -152,6 +152,12 @@ export function HostEventCopilotBridge({ children }: HostEventCopilotBridgeProps
           const proposed = args[key as keyof typeof args];
           return JSON.stringify(current) !== JSON.stringify(proposed);
         });
+        const lockedBy: Record<string, string> = {};
+        for (const field of lockedFields) {
+          lockedBy[field] = field === "ticketTiers" && manualFields.has("priceMinCop")
+            ? "priceMinCop"
+            : field;
+        }
         const next = applySetEventDraftPreservingManual(
           latestDraftRef.current,
           args,
@@ -159,7 +165,7 @@ export function HostEventCopilotBridge({ children }: HostEventCopilotBridgeProps
         );
         latestDraftRef.current = next;
         setDraftState(next);
-        return { ok: true, draft: next, lockedFields };
+        return { ok: true, draft: next, lockedFields, lockedBy };
       },
     },
     [manualFields],
