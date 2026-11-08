@@ -28,6 +28,9 @@ type RentalFastPathContextValue = {
   /** Recent fast-path result envelopes for historical cards; thread-local. */
   toolResults: unknown[];
   setToolResult: (result: unknown | null) => void;
+  /** Hydration can only fill an empty thread, never replace a newer live search. */
+  restoreToolResult: (result: unknown) => boolean;
+  reportRestoreFailure: (failure: RentalSearchFailure, retry: () => void) => void;
   /** New chat / thread switch: remove every result, not only the current one. */
   clearToolResults: () => void;
   searchMeta: RentalSearchMeta | null;
@@ -49,6 +52,7 @@ export function RentalFastPathProvider({ children }: { children: ReactNode }) {
   );
   const [searchFailure, setSearchFailure] = useState<RentalSearchFailure | null>(null);
   const retryRef = useRef<(() => void) | null>(null);
+  const currentResultRef = useRef<unknown | null>(null);
 
   const reportSearchFailure = useCallback(
     (failure: RentalSearchFailure | null, retry?: () => void) => {
@@ -69,6 +73,7 @@ export function RentalFastPathProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setToolResult = useCallback((result: unknown | null) => {
+    currentResultRef.current = result;
     retryRef.current = null;
     setSearchFailure(null);
     setToolResultState(result);
@@ -82,7 +87,19 @@ export function RentalFastPathProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const restoreToolResult = useCallback((result: unknown) => {
+    if (currentResultRef.current != null) return false;
+    setToolResult(result);
+    return true;
+  }, [setToolResult]);
+
+  const reportRestoreFailure = useCallback((failure: RentalSearchFailure, retry: () => void) => {
+    // A later successful user search supersedes a failed history rehydrate.
+    if (currentResultRef.current == null) reportSearchFailure(failure, retry);
+  }, [reportSearchFailure]);
+
   const clearToolResults = useCallback(() => {
+    currentResultRef.current = null;
     retryRef.current = null;
     setSearchFailure(null);
     setToolResultState(null);
@@ -96,10 +113,12 @@ export function RentalFastPathProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo(
     () => ({
-      toolResult, toolResults, setToolResult, clearToolResults, searchMeta, setSearchMeta,
+      toolResult, toolResults, setToolResult, restoreToolResult, reportRestoreFailure,
+      clearToolResults, searchMeta, setSearchMeta,
       searchFailure, reportSearchFailure, retryFailedSearch,
     }),
-    [toolResult, toolResults, setToolResult, clearToolResults, searchMeta, setSearchMeta,
+    [toolResult, toolResults, setToolResult, restoreToolResult, reportRestoreFailure,
+      clearToolResults, searchMeta, setSearchMeta,
       searchFailure, reportSearchFailure, retryFailedSearch],
   );
 

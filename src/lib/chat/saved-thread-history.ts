@@ -1,3 +1,5 @@
+import { rentalSearchBodySchema } from "@/lib/rental-search-body-schema";
+import type { RentalSearchApiParams } from "@/lib/rental-query-parser";
 /**
  * Saved-thread history (SAN-1389): persisted Mastra v2 messages → the
  * CopilotKit (AG-UI) messages a reopened chat renders.
@@ -68,6 +70,31 @@ function stringify(value: unknown): string {
   } catch {
     return "null";
   }
+}
+
+/**
+ * Recover only validated search criteria from the newest persisted successful
+ * rental assistant turn. Cards themselves come back from the existing RLS-governed
+ * rental API, never from client-authored prices or serialized model prose.
+ */
+export function latestSavedRentalSearch(
+  rows: readonly SavedThreadMessageRow[],
+): RentalSearchApiParams | null {
+  const newest = [...rows].sort(
+    (a, b) => String(b.createdAt ?? "").localeCompare(String(a.createdAt ?? "")),
+  );
+  for (const row of newest) {
+    if (row.role !== "assistant") continue;
+    const content = parseContent(row.content);
+    if (!content || !Array.isArray(content.parts)) continue;
+    for (const rawPart of content.parts) {
+      const part = asRecord(rawPart);
+      if (part?.type !== "data-mde-rental-search") continue;
+      const validated = rentalSearchBodySchema.safeParse(part.data);
+      if (validated.success) return validated.data;
+    }
+  }
+  return null;
 }
 
 /** Map one stored row; `null` when it is not something the chat can show. */

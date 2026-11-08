@@ -111,6 +111,21 @@ describe("EventLocalChatProvider durable save", () => {
     expect(body.messages.every((m) => typeof m.id === "string" && m.id.length > 0)).toBe(true);
   });
 
+  it("saves only the validated rental search criteria beside the assistant turn", async () => {
+    const params = { neighborhood: "Laureles", minBedrooms: 2, maxPriceMonthly: 3_000_000, budgetCurrency: "COP" as const };
+    await act(async () => {
+      api!.showExchange("Find 2BR in Laureles", "3 apartments found.", crypto.randomUUID(), params);
+    });
+    const saved = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body)) as {
+      messages: Array<{ role: string; rentalSearch?: unknown }>;
+    };
+    expect(saved.messages[0].rentalSearch).toBeUndefined();
+    expect(saved.messages[1].rentalSearch).toEqual(params);
+    // Do not smuggle metadata into AG-UI message content or fabricate card rows client-side.
+    expect((mocks.state.agent as { addMessages: ReturnType<typeof vi.fn> }).addMessages)
+      .toHaveBeenCalledWith(expect.arrayContaining([expect.not.objectContaining({ rentalSearch: expect.anything() })]));
+  });
+
   it("reuses stable message IDs for a retry and generates distinct IDs for another submit", async () => {
     // Test-only submission identifiers, not hardcoded UUID/key-looking literals.
     const key1 = crypto.randomUUID();

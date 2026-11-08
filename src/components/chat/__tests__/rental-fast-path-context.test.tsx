@@ -4,19 +4,33 @@ import { describe, expect, it, vi } from "vitest";
 import { RentalFastPathProvider, useRentalFastPath } from "../rental-fast-path-context";
 
 function Probe() {
-  const { toolResult, toolResults, setToolResult, clearToolResults } = useRentalFastPath();
+  const { toolResult, toolResults, setToolResult, restoreToolResult, clearToolResults } = useRentalFastPath();
   return (
     <div>
       <span data-testid="current">{toolResult ? "yes" : "no"}</span>
       <span data-testid="history">{toolResults.length}</span>
       <button onClick={() => setToolResult({ results: [{ id: "old" }] })}>add</button>
       <button onClick={() => setToolResult(null)}>fail</button>
+      <button onClick={() => restoreToolResult({ results: [{ id: "restored" }] })}>rehydrate</button>
       <button onClick={clearToolResults}>clear</button>
     </div>
   );
 }
 
 describe("RentalFastPathProvider history", () => {
+  it("restores an empty thread but never overwrites results from a newer live search", () => {
+    render(<RentalFastPathProvider><Probe /></RentalFastPathProvider>);
+    fireEvent.click(screen.getByText("rehydrate"));
+    expect(screen.getByTestId("current").textContent).toBe("yes");
+    expect(screen.getByTestId("history").textContent).toBe("1");
+    fireEvent.click(screen.getByText("add"));
+    fireEvent.click(screen.getByText("rehydrate"));
+    expect(screen.getByTestId("history").textContent).toBe("2");
+    fireEvent.click(screen.getByText("clear"));
+    fireEvent.click(screen.getByText("rehydrate"));
+    expect(screen.getByTestId("history").textContent).toBe("1");
+  });
+
   it("keeps history on a failed search but clears it on new chat", () => {
     render(<RentalFastPathProvider><Probe /></RentalFastPathProvider>);
     fireEvent.click(screen.getByText("add"));

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   SAVED_THREAD_HISTORY_LIMIT,
+  latestSavedRentalSearch,
   mapSavedThreadHistory,
   reconcileSavedHistory,
   type SavedThreadMessageRow,
@@ -18,6 +19,27 @@ const row = (
   content: typeof content === "string" ? content : JSON.stringify(content),
 });
 const text = (t: string) => ({ format: 2, parts: [{ type: "text", text: t }] });
+
+describe("latestSavedRentalSearch", () => {
+  it("returns the newest successful structured criteria without leaking rendered results", () => {
+    const old = { neighborhood: "Laureles", minBedrooms: 2 };
+    const fresh = { neighborhood: "El Poblado", maxPriceMonthly: 3_000_000 };
+    const saved = (id: string, params: unknown, date: string) => row(id, "assistant", {
+      format: 2, parts: [
+        { type: "text", text: "Search complete" },
+        { type: "data-mde-rental-search", data: params },
+      ],
+    }, date);
+    const result = latestSavedRentalSearch([
+      saved("old", old, "2026-11-01T01:00:00Z"),
+      saved("bad", { maxPriceMonthly: -1 }, "2026-11-01T03:00:00Z"),
+      saved("fresh", fresh, "2026-11-01T02:00:00Z"),
+      row("another", "assistant", text("Followup"), "2026-11-01T04:00:00Z"),
+    ]);
+    expect(result).toEqual({ ...fresh, limit: 8 });
+    expect(JSON.stringify(result)).not.toContain("Search complete");
+  });
+});
 
 describe("mapSavedThreadHistory", () => {
   it("maps user text and assistant structured text", () => {
