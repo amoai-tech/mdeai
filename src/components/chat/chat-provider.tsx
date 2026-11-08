@@ -598,7 +598,10 @@ export function BrokerThreadSaver({
       const message = current[i];
       if (state.handledIds.has(message.id)) continue;
       handledInBatch.push(message.id);
-      if ((message.role === "user" || message.role === "assistant") &&
+      // Questions only. The Mastra runtime already stores each assistant reply (as
+      // `<id>-agui-text`); posting it again under the plain AG-UI id produced two rows for one
+      // answer, and the id-based idempotency cannot dedupe two different ids.
+      if (message.role === "user" &&
           typeof message.content === "string" && message.content.trim().length > 0) {
         text.push({ id: message.id, role: message.role, content: message.content });
         if (text.length === 4) break; // The messages endpoint accepts at most four per call.

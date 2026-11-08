@@ -53,7 +53,9 @@ describe("broker thread persistence", () => {
     render(<BrokerThreadSaver threadId={THREAD} />);
     await vi.waitFor(() => expect(markThreadSaved).toHaveBeenCalledWith(THREAD));
     expect(calls().at(-1)![0]).toBe(`/api/threads/${THREAD}/messages`);
-    expect(lastBody().messages).toEqual(agentMessages);
+    expect(lastBody().messages).toEqual([
+      { id: "u1", role: "user", content: "Which rental leads need my attention?" },
+    ]);
   });
 
   it("holds a question until its answer arrives", async () => {
@@ -83,7 +85,7 @@ describe("broker thread persistence", () => {
     ];
     render(<BrokerThreadSaver threadId={THREAD} />);
     await vi.waitFor(() => expect(markThreadSaved).toHaveBeenCalledWith(THREAD));
-    expect(lastBody().messages.map((m) => m.id)).toEqual(["u1", "a1"]);
+    expect(lastBody().messages.map((m) => m.id)).toEqual(["u1"]);
   });
 
   it("moves past a window of tool-only traffic instead of stalling", async () => {
@@ -97,7 +99,7 @@ describe("broker thread persistence", () => {
     ];
     render(<BrokerThreadSaver threadId={THREAD} />);
     await vi.waitFor(() => expect(markThreadSaved).toHaveBeenCalledWith(THREAD));
-    expect(lastBody().messages.map((m) => m.id)).toEqual(["u1", "a1"]);
+    expect(lastBody().messages.map((m) => m.id)).toEqual(["u1"]);
   });
 
   it("saves a second turn through the same stable agent object", async () => {
@@ -114,11 +116,12 @@ describe("broker thread persistence", () => {
   });
 
   it("keeps each save within the endpoint's four-message limit, oldest first", async () => {
-    agentMessages = Array.from({ length: 6 }, (_, i) => ({
-      id: `m${i}`,
-      role: (i % 2 === 0 ? "user" : "assistant") as Msg["role"],
-      content: `line ${i}`,
-    }));
+    // Six completed exchanges: each question is followed by its reply, and only the questions
+    // are posted (the runtime stores the replies).
+    agentMessages = Array.from({ length: 6 }, (_, i) => ([
+      { id: `m${i}`, role: "user" as Msg["role"], content: `line ${i}` },
+      { id: `r${i}`, role: "assistant" as Msg["role"], content: `answer ${i}` },
+    ])).flat();
     render(<BrokerThreadSaver threadId={THREAD} />);
     await vi.waitFor(() => expect(calls()).toHaveLength(2));
     await vi.waitFor(() => expect(markThreadSaved).toHaveBeenCalledTimes(1));
@@ -126,6 +129,7 @@ describe("broker thread persistence", () => {
     expect(bodies.every((body) => body.messages.length <= 4)).toBe(true);
     // Oldest first: the tail-slicing bug dropped these.
     expect(bodies[0].messages[0].id).toBe("m0");
+    expect(bodies.flatMap((body) => body.messages).every((m) => m.role === "user")).toBe(true);
   });
 
   it("never claims success when the server rejects the save", async () => {
@@ -142,17 +146,16 @@ describe("broker thread persistence", () => {
 
 
 describe("broker thread saver: complete and correctly scoped history", () => {
-  it("drains every message beyond the four-message API batch limit", async () => {
-    agentMessages = Array.from({ length: 6 }, (_, i) => ({
-      id: `multi${i}`,
-      role: (i % 2 === 0 ? "user" : "assistant") as Msg["role"],
-      content: `message ${i}`,
-    }));
+  it("drains every question beyond the four-message API batch limit", async () => {
+    agentMessages = Array.from({ length: 6 }, (_, i) => ([
+      { id: `multi${i}`, role: "user" as Msg["role"], content: `message ${i}` },
+      { id: `reply${i}`, role: "assistant" as Msg["role"], content: `reply ${i}` },
+    ])).flat();
     render(<BrokerThreadSaver threadId={THREAD} />);
     await vi.waitFor(() => expect(calls()).toHaveLength(2));
     await vi.waitFor(() => expect(markThreadSaved).toHaveBeenCalledTimes(1));
     const ids = calls().flatMap(([, opts]) => (JSON.parse(String(opts.body)) as { messages: Msg[] }).messages.map(m => m.id));
-    expect(ids).toEqual(agentMessages.map(m => m.id));
+    expect(ids).toEqual(agentMessages.filter(m => m.role === "user").map(m => m.id));
   });
 
   it("starts fresh when the user selects a different thread", async () => {
@@ -171,7 +174,7 @@ describe("broker thread saver: complete and correctly scoped history", () => {
     rerender(<BrokerThreadSaver threadId={second} />);
     await vi.waitFor(() => expect(markThreadSaved).toHaveBeenCalledWith(second));
     expect(calls().at(-1)![0]).toBe(`/api/threads/${second}/messages`);
-    expect(lastBody().messages.map(m => m.id)).toEqual(["u2", "a2"]);
+    expect(lastBody().messages.map(m => m.id)).toEqual(["u2"]);
   });
 
   it("waits for the agent to select the new thread rather than misfile old messages", async () => {
@@ -197,7 +200,7 @@ describe("broker thread saver: complete and correctly scoped history", () => {
     render(<BrokerThreadSaver threadId={THREAD} />);
     await vi.waitFor(() => expect(markThreadSaved).toHaveBeenCalledWith(THREAD));
     const ids = calls().flatMap(([, opts]) => (JSON.parse(String(opts.body)) as { messages: Msg[] }).messages.map(m => m.id));
-    expect(ids).toEqual(["u1", "a1"]);
+    expect(ids).toEqual(["u1"]);
   });
 });
 
@@ -226,7 +229,7 @@ describe("broker restored history is not re-saved", () => {
       restoredMessageIds={["savedU", "savedA"]} />);
     await vi.waitFor(() => expect(markThreadSaved).toHaveBeenCalledWith(THREAD));
     expect(calls()).toHaveLength(1);
-    expect(lastBody().messages.map(m => m.id)).toEqual(["newU", "newA"]);
+    expect(lastBody().messages.map(m => m.id)).toEqual(["newU"]);
   });
 });
 
@@ -245,7 +248,7 @@ describe("broker history recovery during restore", () => {
       restoredMessageIds={["savedU", "savedA"]} />);
     await vi.waitFor(() => expect(markThreadSaved).toHaveBeenCalledWith(THREAD));
     expect(calls()).toHaveLength(1);
-    expect(lastBody().messages.map(m => m.id)).toEqual(["newU", "newA"]);
+    expect(lastBody().messages.map(m => m.id)).toEqual(["newU"]);
   });
 
   it("a failed history GET does not block saving a later successful turn", async () => {
@@ -257,6 +260,20 @@ describe("broker history recovery during restore", () => {
     expect(calls()).toHaveLength(0);
     rerender(<BrokerThreadSaver threadId={THREAD} restoreMode="failed" />);
     await vi.waitFor(() => expect(markThreadSaved).toHaveBeenCalledWith(THREAD));
-    expect(lastBody().messages.map(m => m.id)).toEqual(["userAfterError", "answerAfterError"]);
+    expect(lastBody().messages.map(m => m.id)).toEqual(["userAfterError"]);
+  });
+});
+
+describe("the runtime already stores replies", () => {
+  it("posts questions only, so one answer is not stored twice", async () => {
+    agentMessages = [
+      { id: "u1", role: "user", content: "Which rental leads need my attention?" },
+      { id: "a1", role: "assistant", content: "You have no viewing requests that need attention." },
+    ];
+    render(<BrokerThreadSaver threadId={THREAD} />);
+    await vi.waitFor(() => expect(markThreadSaved).toHaveBeenCalledWith(THREAD));
+    // Mastra persists the reply as `<id>-agui-text`; posting the plain id as well made the
+    // restored transcript show the same answer twice.
+    expect(lastBody().messages.map((m) => m.role)).toEqual(["user"]);
   });
 });
