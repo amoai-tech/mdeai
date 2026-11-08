@@ -52,7 +52,7 @@ export function DiscoveryGroundedResults({ rows, selectedId, onSelectRow, label 
   if (rows === null) return null;
   return (
     <section
-      aria-label={label === "Ask MDE" ? "Ask MDE places" : label.toLowerCase()}
+      aria-label={label === "Ask MDE" ? "Ask MDE places" : label}
       data-testid="discovery-grounded-results"
       className="mt-3"
     >
