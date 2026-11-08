@@ -1,10 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { computeRouteTool } from "../compute-route";
 
+const audit = vi.hoisted(() => ({ userId: null as string | null }));
+vi.mock("../../lib/tool-audit-context", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../lib/tool-audit-context")>();
+  return { ...actual, getAuditUserId: () => audit.userId };
+});
 const quota = vi.hoisted(() => ({
-  checkRateLimitDurable: vi.fn(async () => ({
-    allowed: true, count: 1, max: 100, retryAfterSeconds: 0, storeAvailable: true,
-  })),
+  checkRateLimitDurable: vi.fn(async (key: string, max: number, window: number) => {
+    void key; void max; void window;
+    return ({
+      allowed: true, count: 1, max: 100, retryAfterSeconds: 0, storeAvailable: true,
+    });
+  }),
 }));
 vi.mock("@/lib/distributed-rate-limit", () => ({
   checkRateLimitDurable: quota.checkRateLimitDurable,
@@ -13,6 +21,7 @@ vi.mock("@/lib/distributed-rate-limit", () => ({
 beforeEach(() => vi.stubEnv("GOOGLE_ROUTES_API_KEY", "test-routes-key"));
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 beforeEach(() => {
+  audit.userId = null;
   quota.checkRateLimitDurable.mockClear();
   quota.checkRateLimitDurable.mockResolvedValue({
   allowed: true, count: 1, max: 100, retryAfterSeconds: 0, storeAvailable: true,
@@ -46,6 +55,21 @@ describe("computeRouteTool", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("checks the per-user cap before consuming the shared slot", async () => {
+    audit.userId = "user-1";
+    quota.checkRateLimitDurable.mockClear();
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      routes: [{ distanceMeters: 100, duration: "60s" }],
+    }), { status: 200 })));
+    await computeRouteTool.execute!({
+      origin: { address: "Laureles" },
+      destination: { address: "Provenza" },
+    }, {} as never);
+    const keys = quota.checkRateLimitDurable.mock.calls.map((call) => call[0]);
+    expect(keys[0]).toMatch(/:user-1$/);
+    expect(keys[1]).toMatch(/^routes-daily:/);
+  });
+
   it("uses a separate Routes budget and blocks when exhausted", async () => {
     quota.checkRateLimitDurable.mockResolvedValueOnce({
       allowed: false, count: 100, max: 100, retryAfterSeconds: 3600, storeAvailable: true,
@@ -61,6 +85,7 @@ describe("computeRouteTool", () => {
     expect(quota.checkRateLimitDurable).toHaveBeenCalledWith(
       expect.stringMatching(/^routes-daily:/), 100, 86400,
     );
+    audit.userId = null;
   });
 
   it("fails closed if quota storage throws rather than issuing a paid request", async () => {

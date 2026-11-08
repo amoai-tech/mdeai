@@ -29,3 +29,13 @@ distance/duration; no model-estimated ETA.
 
 Known remaining: a retry of the same route turn can reserve again; short mode/duration follow-ups
 without endpoints are not forced. These require request-context reuse and are documented.
+
+## Second review pass
+
+- Per-user cap is checked **before** the shared daily slot, so an over-cap user cannot drain the
+  shared 100/day budget.
+- Endpoint parser rejects travel-mode fragments (`a pie`), verb-led destinations (`meet friends`,
+  `eat`, `see`) and possessive/generic origins (`my hotel`, `my apartment`).
+- Negative tests now include rental price ranges, walking-distance listings, booking time windows,
+  one-endpoint questions, café discovery and generic/possessive origins.
+- 17 route-intent cases + 8 tool tests pass.

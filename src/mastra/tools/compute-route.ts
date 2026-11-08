@@ -78,21 +78,6 @@ export const computeRouteTool = createTool({
           return { route: null, source: "google_routes" as const, reason: "route_unavailable" };
         }
         const today = new Date().toISOString().slice(0, 10);
-        let quota;
-        try {
-          quota = await checkRateLimitDurable(`routes-daily:${today}`, cap, 86_400);
-        } catch {
-          // Network failures of the quota service cannot authorize paid calls.
-          console.warn("[compute-route] route quota RPC transport unavailable");
-          return { route: null, source: "google_routes" as const, reason: "route_quota_unavailable" };
-        }
-        if (!quota.storeAvailable) {
-          console.warn("[compute-route] route quota store unavailable");
-          return { route: null, source: "google_routes" as const, reason: "route_quota_unavailable" };
-        }
-        if (!quota.allowed) {
-          return { route: null, source: "google_routes" as const, reason: "route_quota_exceeded" };
-        }
         const userId = getAuditUserId(context);
         if (userId) {
           const perUserRaw = process.env.ROUTES_DAILY_LIMIT_PER_USER;
@@ -116,6 +101,22 @@ export const computeRouteTool = createTool({
           if (!userQuota.allowed) {
             return { route: null, source: "google_routes" as const, reason: "route_quota_per_user_exceeded" };
           }
+        }
+
+        // Only after the per-user check may the shared daily slot be consumed.
+        let quota;
+        try {
+          quota = await checkRateLimitDurable(`routes-daily:${today}`, cap, 86_400);
+        } catch {
+          console.warn("[compute-route] route quota RPC transport unavailable");
+          return { route: null, source: "google_routes" as const, reason: "route_quota_unavailable" };
+        }
+        if (!quota.storeAvailable) {
+          console.warn("[compute-route] route quota store unavailable");
+          return { route: null, source: "google_routes" as const, reason: "route_quota_unavailable" };
+        }
+        if (!quota.allowed) {
+          return { route: null, source: "google_routes" as const, reason: "route_quota_exceeded" };
         }
 
         try {

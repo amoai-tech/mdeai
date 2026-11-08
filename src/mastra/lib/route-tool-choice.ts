@@ -19,12 +19,13 @@ const ENDPOINT_PATTERNS = [
 const NOT_A_PLACE =
   /\b(\d+\s*(?:mil|million|millones|habitaciones?|bedrooms?|am|pm|hours?|min|minutes?)|price|precio|usd|cop|table|mesa)\b/i;
 
-const GENERIC_ORIGIN = /^(?:the|this|that)\s+(?:apartment|rental|listing|place|home)$/i;
+const GENERIC_ORIGIN = /^(?:(?:the|this|that|my|our|your)\s+)?(?:apartment|rental|listing|place|home|hotel|airbnb|house|office)$/i;
+const ENDPOINT_VERB = /^(pie|meet|eat|see|get|walk|drive|bike|ride|take|go|visit|stay|book|pay|leave|arrive)\b/i;
 
 function isPlaceLike(value: string): boolean {
   const text = value.trim();
   if (text.length < 2 || text.length > 80) return false;
-  if (NOT_A_PLACE.test(text) || GENERIC_ORIGIN.test(text)) return false;
+  if (NOT_A_PLACE.test(text) || GENERIC_ORIGIN.test(text) || ENDPOINT_VERB.test(text)) return false;
   return /[\p{L}]/u.test(text);
 }
 

@@ -25,6 +25,10 @@ describe("route intent", () => {
     "Which café has Wi-Fi?",
     "Find quiet cafés in Laureles",
     "Show me the walk to Provenza",
+    "Busco apartamento cerca de Laureles a pie",
+    "Find a cafe I can walk to from Laureles to meet friends",
+    "from my hotel to Provenza",
+    "from my apartment to the airport",
   ])("does not force without two place endpoints: %s", (text) => {
     expect(isRouteQuestion(text)).toBe(false);
   });
