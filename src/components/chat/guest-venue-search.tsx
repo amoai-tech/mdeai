@@ -28,6 +28,13 @@ export type VenueGuestOptions = {
   onResults: Dispatch<GroundedToolRow[]>;
   /** Restore the unfiltered catalogue; the page owns that state. */
   onClear?: () => void;
+  /**
+   * Called with the query's preference labels when a search runs.
+   *
+   * The page needs them for its own subtitle: a subtitle that says "Search results" above a
+   * summary that says "Suggestions — ranked for quiet" describes one result set two ways.
+   */
+  onSearchMeta?: Dispatch<{ preferences: string[] }>;
 };
 
 /**
@@ -92,6 +99,9 @@ export function GuestVenueSearch({ options }: { options: VenueGuestOptions }) {
       const body = json as { results: GroundedToolRow[]; total?: number };
       options.onResults(body.results);
       const preferences = preferenceWords(query);
+      // Hand the labels to the page as well: its subtitle must not describe these rows with a
+      // different word than the summary below it.
+      options.onSearchMeta?.({ preferences });
       setHasResults(true);
       setMessage(
         body.results.length === 0

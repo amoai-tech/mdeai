@@ -61,6 +61,8 @@ function CafeBrowseViewInner({
   const desktop = useIsLgUp();
   useBrowseCardScroll();
   const retryHref = buildFilterUrl({ neighborhood, feature });
+  /** Preference labels for the rows currently on screen; empty for a name search. */
+  const [searchPreferences, setSearchPreferences] = useState<string[]>([]);
   const [searched, setSearched] = useState<{
     scope: string;
     rows: GroundedToolRow[];
@@ -130,7 +132,11 @@ function CafeBrowseViewInner({
             neighborhood,
             // Catalogue search, not the concierge: grounded venue rows, rendered by the same cards.
             onResults: (rows) => setSearched({ scope: retryHref, rows, source: "catalog" }),
-            onClear: () => setSearched(null),
+            onSearchMeta: ({ preferences }) => setSearchPreferences(preferences),
+            onClear: () => {
+              setSearched(null);
+              setSearchPreferences([]);
+            },
           }}
         />
       }
@@ -167,7 +173,9 @@ function CafeBrowseViewInner({
         error
           ? "Specialty coffee & workspace spots in Medellín"
           : searched?.source === "catalog" && activeRows
-            ? `Search results — ${countWithNoun(activeRows.length, "café", "cafés")}`
+            ? activeRows.length === 0
+              ? "No cafés matched"
+              : `${searchPreferences.length > 0 ? "Suggestions" : "Search results"} — ${countWithNoun(activeRows.length, "café", "cafés")}`
             : `${countWithNoun((activeRows === null ? results : activeRows).length, "café", "cafés")} in Medellín`
       }
       mobileMapTrigger={hasMap ? <BrowseMapSheet inline /> : null}
@@ -175,7 +183,14 @@ function CafeBrowseViewInner({
     >
       <section className="mt-6" aria-label="Café listings">
         <DiscoveryGroundedResults rows={activeRows} selectedId={selectedId} onSelectRow={selectForAsk}
-          label={searched?.source === "catalog" ? "Search results" : "Ask MDE"} />
+          label={
+            searched?.source === "catalog"
+              ? searchPreferences.length > 0
+                ? "Suggestions"
+                : "Search results"
+              : "Ask MDE"
+          }
+        />
         {error ? (
           <div
             className="rounded-lg border border-destructive/30 bg-destructive/5 p-6 text-center"
