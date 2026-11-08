@@ -276,7 +276,9 @@ describe("a tool call that trails the answer", () => {
     };
     const mapped = mapSavedThreadHistory([row("a3", "assistant", stored)]);
     const message = mapped.find((m) => m.role === "assistant")!;
-    expect(message.content).toBe("The dashboard shows 0 active rental listings right now.");
+    // Ambiguous shape: no text follows the tool call, so nothing is claimed as the answer.
+    expect(message.content).toBe("");
+    expect(message.toolCalls?.[0]?.function.name).toBe("applyRentalFilters");
   });
 
   it("does not resurrect narration through the legacy flat fallback", () => {
@@ -308,8 +310,8 @@ describe("narration before a tool call whose answer is absent", () => {
     const stored = {
       format: 2,
       parts: [
-        { type: "text", text: "I need to check the broker's workspace to answer this." },
         { type: "step-start" },
+        { type: "text", text: "I need to check the broker's workspace to answer this." },
         {
           type: "tool-invocation",
           toolInvocation: {

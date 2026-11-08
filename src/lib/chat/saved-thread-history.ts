@@ -117,18 +117,12 @@ export function mapSavedThreadRow(row: SavedThreadMessageRow): SavedThreadMessag
     part.type === "tool-invocation" ? index : last, -1);
   const textParts = parts.filter((part) => part.type === "text" && typeof part.text === "string");
   const afterTool = textParts.filter((part) => parts.indexOf(part) > lastTool);
-  // Prefer the text that follows the last tool call. When a tool call *trails* the answer
-  // (`[answer, tool-invocation]`) nothing follows it and the last text part is the answer — but
-  // only when that text was not a work note: Mastra writes a `step-start` part after narration and
-  // before the next step, so a step boundary after the text means it was never the answer.
-  const lastText = textParts.at(-1);
-  const lastTextIndex = lastText ? parts.indexOf(lastText) : -1;
-  const stepAfterLastText = parts.some(
-    (part, index) => index > lastTextIndex && part.type === "step-start",
-  );
-  const answerParts = afterTool.length > 0
-    ? afterTool
-    : (stepAfterLastText ? [] : textParts.slice(-1));
+  // Prefer the text that follows the last tool call. When a tool call trails the text, the stored
+  // shape cannot tell an answer from the work note that preceded the tool, and Mastra writes
+  // `step-start` at the *start* of a step, so a boundary check cannot separate them either. Rather
+  // than risk replaying narration, such a turn shows its tool card and no text.
+  const answerParts = parts.filter((part, index) =>
+    part.type === "text" && typeof part.text === "string" && index > lastTool);
   let text = answerParts.map((part) => part.text as string).join("");
   // Only a row with no parts at all carries the legacy flat string. A row that has parts but no
   // text is a tool-only turn: its flat content would be the narration this change excludes.
