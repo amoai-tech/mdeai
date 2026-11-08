@@ -594,17 +594,23 @@ export function BrokerThreadSaver({
     for (let i = 0; i < current.length; i++) {
       const message = current[i];
       if (state.handledIds.has(message.id)) continue;
-      handledInBatch.push(message.id);
       // Questions only. The Mastra runtime already stores each assistant reply (as
       // `<id>-agui-text`); posting it again under the plain AG-UI id produced two rows for one
       // answer, and the id-based idempotency cannot dedupe two different ids.
       if (message.role === "user" &&
           typeof message.content === "string" && message.content.trim().length > 0) {
         text.push({ id: message.id, role: message.role, content: message.content });
+        handledInBatch.push(message.id);
         if (text.length === 4) break; // The messages endpoint accepts at most four per call.
       }
     }
-    if (text.length === 0) return;
+    if (text.length === 0) {
+      // Nothing new to write. If the run has finished and its answer exists, the exchange is
+      // complete, so the thread can be advertised as reloadable -- this is the common case after
+      // the question was posted at send time.
+      if (!running && lastAnswer >= 0) markThreadSaved(threadId);
+      return;
+    }
 
     state.inFlight = true;
     let saved = false;

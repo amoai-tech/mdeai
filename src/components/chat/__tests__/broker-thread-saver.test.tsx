@@ -111,11 +111,13 @@ describe("broker thread persistence", () => {
       { id: "a1", role: "assistant", content: "a1" },
     ];
     const { rerender } = render(<BrokerThreadSaver threadId={THREAD} />);
-    await vi.waitFor(() => expect(markThreadSaved).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(markThreadSaved).toHaveBeenCalled());
+    const firstCount = markThreadSaved.mock.calls.length;
 
     agentMessages = [...agentMessages, { id: "u2", role: "user", content: "q2" }, { id: "a2", role: "assistant", content: "a2" }];
     rerender(<BrokerThreadSaver threadId={THREAD} />);
-    await vi.waitFor(() => expect(markThreadSaved).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(markThreadSaved.mock.calls.length).toBeGreaterThan(firstCount));
+    expect(calls().some(([, opts]) => String(opts.body).includes('"u2"'))).toBe(true);
   });
 
   it("keeps each save within the endpoint's four-message limit, oldest first", async () => {
@@ -278,5 +280,27 @@ describe("the runtime already stores replies", () => {
     // Mastra persists the reply as `<id>-agui-text`; posting the plain id as well made the
     // restored transcript show the same answer twice.
     expect(lastBody().messages.map((m) => m.role)).toEqual(["user"]);
+  });
+});
+
+describe("a finished answer makes the thread reloadable", () => {
+  it("marks the thread saved when the question was posted before the answer existed", async () => {
+    agentRunning = true;
+    agentMessages = [{ id: "u1", role: "user", content: "Which leads?" }];
+    const { rerender } = render(<BrokerThreadSaver threadId={THREAD} />);
+    await vi.waitFor(() => expect(calls()).toHaveLength(1));
+    // The question is posted at send time; the answer does not exist yet, so nothing is claimed.
+    expect(markThreadSaved).not.toHaveBeenCalled();
+
+    agentMessages = [
+      { id: "u1", role: "user", content: "Which leads?" },
+      { id: "a1", role: "assistant", content: "No leads need your attention." },
+    ];
+    agentRunning = false;
+    rerender(<BrokerThreadSaver threadId={THREAD} />);
+
+    // Nothing new to post, so the claim must not depend on another POST happening.
+    await vi.waitFor(() => expect(markThreadSaved).toHaveBeenCalledWith(THREAD));
+    expect(calls()).toHaveLength(1);
   });
 });
