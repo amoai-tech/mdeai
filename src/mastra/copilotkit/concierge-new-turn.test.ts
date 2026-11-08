@@ -198,6 +198,25 @@ describe("SAN-1074 AG-UI run outcome telemetry", () => {
     expect(JSON.stringify(persist.mock.calls)).not.toContain("private request details");
   });
 
+  it("prefers the authoritative RATE_LIMIT code over a misleading cancellation message", () => {
+    vi.spyOn(MastraAgent.prototype, "run").mockReturnValue(of({
+      type: EventType.RUN_ERROR,
+      code: "RATE_LIMIT",
+      message: "The upstream request was cancelled during a throttling response",
+    } as BaseEvent));
+    const persist = vi.fn();
+    const agent = new LoggingMastraAgent({
+      agentId: "conciergeAgent", agentMapKey: "conciergeAgent",
+      agent: {} as never, resourceId: "user-1", persistTurnLog: persist,
+    });
+    agent.run(input([u("u1", "Search rentals")])).subscribe();
+    expect(persist).toHaveBeenCalledWith(expect.objectContaining({
+      status: "error",
+      errorType: "rate_limit",
+      errorMessage: "AG-UI RUN_ERROR (RATE_LIMIT)",
+    }));
+  });
+
   it("records a normal RUN_FINISHED stream as success", () => {
     vi.spyOn(MastraAgent.prototype, "run").mockReturnValue(of({
       type: EventType.RUN_FINISHED, threadId: "t", runId: "r",

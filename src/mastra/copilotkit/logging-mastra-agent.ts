@@ -166,9 +166,28 @@ export class LoggingMastraAgent extends MastraAgent {
           if (event.type !== EventType.RUN_ERROR) return;
           status = "error";
           const code = typeof event.code === "string" ? event.code.toUpperCase() : "";
-          errorType = classifyAgentError(
-            `${code.replaceAll("_", " ")} ${event.message}`,
-          );
+          // Producer-defined codes are authoritative: a RATE_LIMIT event may
+          // mention "cancelled" or "timed out" in its free-text message, but it
+          // was not the user aborting the run. Fall back to the message only
+          // for unknown/untyped codes.
+          const codeToType: Record<string, AgentErrorType> = {
+            RATE_LIMIT: "rate_limit",
+            RESOURCE_EXHAUSTED: "rate_limit",
+            TIMEOUT: "timeout",
+            AUTH_ERROR: "auth",
+            UNAUTHORIZED: "auth",
+            PERMISSION_DENIED: "auth",
+            MODEL_FAILURE: "model_failure",
+            MODEL_ERROR: "model_failure",
+            MALFORMED_FUNCTION_CALL: "model_failure",
+            TOOL_ERROR: "tool_failure",
+            TOOL_FAILURE: "tool_failure",
+            VALIDATION_ERROR: "validation",
+            INVALID_ARGUMENT: "validation",
+            DATABASE_ERROR: "database",
+          };
+          errorType = codeToType[code] ??
+            classifyAgentError(`${code.replaceAll("_", " ")} ${event.message}`);
           // Do not persist raw model/provider messages: they may include a
           // user's question or sensitive upstream request details.
           const safeCodes = new Set([
