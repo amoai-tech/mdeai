@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   applySetEventBasics,
   applySetPricing,
+  applySetEventDraftPreservingManual,
   applySetVenue,
   publishDecisionDraftPatch,
+  selectPublishDraft,
 } from "@/lib/events/host-event-wizard-tool-handlers";
 import { EMPTY_EVENT_DRAFT } from "@/lib/types";
 
@@ -26,6 +28,38 @@ describe("host-event-wizard-tool-handlers", () => {
     });
     expect(next.venue).toBe("Hotel Intercontinental");
     expect(next.capacity).toBe(200);
+  });
+
+  it("does not let agent patches overwrite a manual form field", () => {
+    const manual = { ...EMPTY_EVENT_DRAFT, title: "QA Host AI Salsa Night", capacity: 80 };
+    const next = applySetEventDraftPreservingManual(
+      manual,
+      { title: "Salsa Night in Laureles", capacity: 100, venue: "Poblado" },
+      new Set(["title"]),
+    );
+    expect(next.title).toBe("QA Host AI Salsa Night");
+    expect(next.capacity).toBe(100);
+    expect(next.venue).toBe("Poblado");
+  });
+
+  it("keeps the latest reviewed form over older publish-tool args", () => {
+    const latest = {
+      ...EMPTY_EVENT_DRAFT,
+      title: "QA Host AI Salsa Night",
+      neighborhood: "Poblado",
+      dateIso: "2026-12-15T20:00:00-05:00",
+      venue: "Son Havana",
+      capacity: 100,
+      priceMinCop: 40000,
+      ticketTiers: [{ name: "GA", priceCop: 40000, quantity: 100 }],
+    };
+    const olderArgs = {
+      ...latest,
+      title: "Salsa Night",
+      capacity: 80,
+    };
+    expect(selectPublishDraft(olderArgs, latest).title).toBe("QA Host AI Salsa Night");
+    expect(selectPublishDraft(olderArgs, latest).capacity).toBe(100);
   });
 
   it("applySetPricing keeps existing tiers when omitted", () => {

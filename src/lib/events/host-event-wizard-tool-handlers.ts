@@ -54,6 +54,34 @@ export function applySetEventDraft(
   return mergeEventDraft(current, args);
 }
 
+const MANUAL_EVENT_FIELDS = [
+  "title",
+  "neighborhood",
+  "dateIso",
+  "venue",
+  "capacity",
+  "priceMinCop",
+  "description",
+  "ticketTiers",
+] as const;
+
+/**
+ * Agent updates must not overwrite a field the host edited by hand. The wizard
+ * remains authoritative for manually changed fields; the host can still edit
+ * them directly or clear them before asking the agent to fill them again.
+ */
+export function applySetEventDraftPreservingManual(
+  current: EventDraftState,
+  args: SetEventDraftArgs,
+  manualFields: ReadonlySet<string>,
+): EventDraftState {
+  const patch = { ...args };
+  for (const field of MANUAL_EVENT_FIELDS) {
+    if (manualFields.has(field)) delete patch[field];
+  }
+  return applySetEventDraft(current, patch);
+}
+
 /** Pure patch helpers — shared by v1 bridge semantics and v2 useFrontendTool handlers. */
 export function applySetEventBasics(
   current: EventDraftState,
@@ -143,6 +171,13 @@ export function selectPublishDraft(
   argsDraft: unknown,
   fallbackDraft: EventDraftState,
 ): EventDraftState {
+  // The bridge's latest form state is authoritative once it is publish-ready.
+  // The HITL tool args can be older than the host's manual edits (for example,
+  // a title edited after the agent filled the draft), so never let older args
+  // overwrite reviewed values.
+  if (isDraftReadyForPublish(fallbackDraft)) {
+    return normalizeReviewedEventDate(fallbackDraft);
+  }
   if (argsDraft == null) return normalizeReviewedEventDate(fallbackDraft);
   const parsed = publishToolFields.safeParse(argsDraft);
   if (!parsed.success) return normalizeReviewedEventDate(fallbackDraft);

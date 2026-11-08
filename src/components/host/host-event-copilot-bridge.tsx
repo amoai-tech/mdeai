@@ -9,7 +9,7 @@ import {
 import { z } from "zod";
 import { EventPublishApprovalPanel } from "@/components/host/event-publish-approval-panel";
 import {
-  applySetEventDraft,
+  applySetEventDraftPreservingManual,
   publishDecisionDraftPatch,
   selectPublishDraft,
 } from "@/lib/events/host-event-wizard-tool-handlers";
@@ -95,7 +95,13 @@ function createPublishHitlRender(
 export function HostEventCopilotBridge({ children }: HostEventCopilotBridgeProps) {
   const [draft, setDraftState] = useState<EventDraftState>(EMPTY_EVENT_DRAFT);
 
+  const [manualFields, setManualFields] = useState<Set<string>>(() => new Set());
   const setDraft = useCallback((patch: Partial<EventDraftState>) => {
+    setManualFields((previous) => {
+      const next = new Set(previous);
+      for (const key of Object.keys(patch)) next.add(key);
+      return next;
+    });
     setDraftState((prev) => mergeEventDraft(prev, patch));
   }, []);
 
@@ -122,13 +128,17 @@ export function HostEventCopilotBridge({ children }: HostEventCopilotBridgeProps
         "Apply every event detail the host stated in one call: title, neighborhood, dateIso, venue, capacity, priceMinCop (whole COP), description, optional ticket tiers. Returns the updated draft so the assistant can continue or ask for missing fields.",
       parameters: setEventDraftParams,
       handler: async (args) => {
-        const next = applySetEventDraft(latestDraftRef.current, args);
+        const next = applySetEventDraftPreservingManual(
+          latestDraftRef.current,
+          args,
+          manualFields,
+        );
         latestDraftRef.current = next;
         setDraftState(next);
         return { ok: true, draft: next };
       },
     },
-    [],
+    [manualFields],
   );
 
   // Creating the getter doesn't read the ref during bridge render. CopilotKit

@@ -233,6 +233,11 @@ export function EventPublishApprovalPanel({
     }
   }
 
+  // Edit/Cancel are not publications. Remove the review card so the host can
+  // continue editing or talking to the assistant without a completed panel
+  // covering the wizard.
+  if (decided && lastDecision && lastDecision !== "approved" && !receipt) return null;
+
   return (
     <Card
       className="mx-2 my-3 max-w-lg border-primary/30 sm:mx-4"
