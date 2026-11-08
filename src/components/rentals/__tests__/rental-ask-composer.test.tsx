@@ -41,11 +41,13 @@ const agent = vi.hoisted(() => ({
 }));
 const coagent = vi.hoisted(() => ({ present: true, isReady: true, setState: vi.fn() }));
 const nav = vi.hoisted(() => ({ pathname: "/rentals", search: "" }));
+const router = vi.hoisted(() => ({ push: vi.fn() }));
 const errorVersion = vi.hoisted(() => ({ value: 0 }));
 
 vi.mock("next/navigation", () => ({
   usePathname: () => nav.pathname,
   useSearchParams: () => new URLSearchParams(nav.search),
+  useRouter: () => router,
 }));
 vi.mock("@/lib/hooks/use-concierge-chat", () => ({
   useConciergeChat: () => ({
@@ -129,6 +131,7 @@ beforeEach(() => {
   coagent.present = true;
   coagent.isReady = true;
   coagent.setState.mockReset();
+  router.push.mockReset();
   nav.pathname = "/rentals";
   nav.search = "";
   agent.messages = [];
@@ -277,6 +280,66 @@ describe("RentalAskComposer (SAN-1421)", () => {
     expect(chat.appendMessage).not.toHaveBeenCalled();
     expect(onResults).not.toHaveBeenCalled();
     await waitFor(() => expect(draftValue()).toBe(""));
+  });
+
+  it("applies a native rental page command even while the chat agent is connecting", async () => {
+    coagent.isReady = false;
+    render(<RentalAskComposer context={{ neighborhood: null, beds: null, from: null, through: null }} />);
+    type("On this page, show only 1-bedroom apartments in Laureles.");
+    const button = screen.getByTestId("rental-ask-send");
+    expect(button.hasAttribute("disabled")).toBe(false);
+    fireEvent.click(button);
+    expect(router.push).toHaveBeenCalledWith("/rentals?neighborhood=Laureles&beds=1");
+    expect(chat.appendMessage).not.toHaveBeenCalled();
+  });
+
+  it("does not dispatch semantic rental search while the agent is still connecting", async () => {
+    coagent.isReady = false;
+    render(<RentalAskComposer context={{ neighborhood: null, beds: null, from: null, through: null }} />);
+    type("On this page, show furnished apartments under COP 3M.");
+    expect(screen.getByTestId("rental-ask-send").hasAttribute("disabled")).toBe(true);
+    expect(chat.appendMessage).not.toHaveBeenCalled();
+    expect(router.push).not.toHaveBeenCalled();
+  });
+
+  it("updates the existing Rentals URL for an explicit page command without the agent", async () => {
+    render(<RentalAskComposer context={{ neighborhood: null, beds: null, from: null, through: null }} />);
+    type("On this page, show only 1-bedroom apartments in Laureles.");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+
+    expect(router.push).toHaveBeenCalledWith("/rentals?neighborhood=Laureles&beds=1");
+    expect(chat.appendMessage).not.toHaveBeenCalled();
+    await waitFor(() => expect(draftValue()).toBe(""));
+  });
+
+  it("reports a reversed merged date range without navigating", async () => {
+    render(<RentalAskComposer context={{ neighborhood: null, beds: null, from: "2026-11-10", through: null }} />);
+    type("On this page, show only 1-bedroom apartments in Laureles Nov 10 to 1.");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+
+    expect(router.push).not.toHaveBeenCalled();
+    expect(chat.appendMessage).not.toHaveBeenCalled();
+    expect((await screen.findByTestId("rental-ask-error")).textContent).toContain("reversed");
+  });
+
+  it.each([
+    "On this page, remove the Laureles filter.",
+    "On this page, show quiet 1-bedroom apartments in Laureles near cafés.",
+  ])("sends the entire unsupported request to the agent: %s", async (message) => {
+    render(<RentalAskComposer context={{ neighborhood: null, beds: null, from: null, through: null }} />);
+    type(message);
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+    await waitFor(() => expect(chat.appendMessage).toHaveBeenCalledOnce());
+    expect(router.push).not.toHaveBeenCalled();
+  });
+
+  it("sends an explicit bedroom request above the native range to the agent, not a widened page", async () => {
+    render(<RentalAskComposer context={{ neighborhood: null, beds: null, from: null, through: null }} />);
+    type("On this page, show only 4-bedroom apartments in Laureles.");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+
+    expect(router.push).not.toHaveBeenCalled();
+    await waitFor(() => expect(chat.appendMessage).toHaveBeenCalled());
   });
 
   it("opens the named position and refuses a position that is not on the page", async () => {
