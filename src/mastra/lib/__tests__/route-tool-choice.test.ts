@@ -12,6 +12,7 @@ describe("route tool choice", () => {
   it("does not treat café discovery as a route request", () => {
     expect(isRouteQuestion("Find quiet cafés in Laureles")).toBe(false);
     expect(isRouteQuestion("Which café has Wi-Fi?")).toBe(false);
+    expect(isRouteQuestion("Find cafés within walking distance")).toBe(false);
   });
 
   it("forces computeRouteTool on the first model step", () => {

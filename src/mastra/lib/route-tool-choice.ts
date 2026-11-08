@@ -23,7 +23,10 @@ function userText(content: unknown): string {
 
 export function isRouteQuestion(text: string): boolean {
   if (!ROUTE_QUERY.test(text)) return false;
-  // A café/place discovery query is not a route request unless it names a route verb.
+  // Discovery wording ("cafés within walking distance") is not a route request.
+  const discovery = /\b(find|show|search|recommend|looking for|quiet caf[eé]s|coffee shops|apartments?|rentals?)\b/i.test(text);
+  const explicitRoute = /\b(how long|how far|route|commute|directions|desde|hasta|from\b.+\bto)\b/i.test(text);
+  if (discovery && !explicitRoute) return false;
   return /\b(from|to|desde|hasta|how long|how far|distance|route|ruta|commute|directions)\b/i.test(text) ||
     /\bde\b.+\ba\b/i.test(text);
 }
