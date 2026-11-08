@@ -9,10 +9,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  */
 const markThreadSaved = vi.fn();
 let agentMessages: { id: string; role: "user" | "assistant"; content: string }[] = [];
+let agentRunning = false;
 
 vi.mock("@copilotkit/react-core/v2", () => ({
   useAgent: () => ({
-    agent: { messages: agentMessages },
+    agent: { messages: agentMessages, isRunning: agentRunning },
     isReady: true,
   }),
   UseAgentUpdate: { OnMessagesChanged: "messages", OnRunStatusChanged: "run" },
@@ -28,6 +29,7 @@ const THREAD = "11111111-2222-4333-8444-555555555555";
 beforeEach(() => {
   markThreadSaved.mockReset();
   agentMessages = [];
+  agentRunning = false;
   vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 200 })));
 });
 afterEach(() => vi.unstubAllGlobals());
@@ -71,6 +73,30 @@ describe("broker thread persistence", () => {
     render(<BrokerThreadSaver threadId={THREAD} />);
     await vi.waitFor(() => expect(send().calls.length).toBeGreaterThan(0));
     expect(markThreadSaved).not.toHaveBeenCalled();
+  });
+
+  it("waits for the run to finish, so a streamed first chunk is not saved as the answer", async () => {
+    agentRunning = true;
+    agentMessages = [
+      { id: "u1", role: "user", content: "q" },
+      { id: "a1", role: "assistant", content: "partial…" },
+    ];
+    render(<BrokerThreadSaver threadId={THREAD} />);
+    await new Promise((r) => setTimeout(r, 60));
+    expect(send().calls).toHaveLength(0);
+    expect(markThreadSaved).not.toHaveBeenCalled();
+  });
+
+  it("skips tool traffic but still advances past it", async () => {
+    agentMessages = [
+      { id: "u1", role: "user", content: "Which leads?" },
+      { id: "t1", role: "assistant", content: "" },
+      { id: "a1", role: "assistant", content: "Zero leads." },
+    ];
+    render(<BrokerThreadSaver threadId={THREAD} />);
+    await vi.waitFor(() => expect(markThreadSaved).toHaveBeenCalledWith(THREAD));
+    const body = JSON.parse(String(send().calls.at(-1)![1].body)) as { messages: { id: string }[] };
+    expect(body.messages.map((m) => m.id)).toEqual(["u1", "a1"]);
   });
 
   it("keeps each save within the endpoint's four-message limit", async () => {

@@ -494,8 +494,12 @@ function LiveChatProvider({ children, persistThread = false }: { children: React
  *
  * `/chat` writes its turns through the history endpoint and calls `markThreadSaved`, which is what
  * makes a reload replay them. The broker chat mounts the same provider but had no writer, so a
- * broker's questions and the assistant's answers disappeared on refresh. This adds the writer only:
- * same endpoint, same Mastra message shape, same idempotency (message ids are the primary key).
+ * broker's questions and the assistant's answers disappeared on refresh.
+ *
+ * Three things this has to get right:
+ *   - only after the run finishes, or the first streamed chunk would be saved as the whole answer;
+ *   - in ordered batches of four (the endpoint's limit), from a cursor, never by slicing the tail;
+ *   - text only — a tool call/result has no text to restore, so it is skipped, not sent.
  */
 export function BrokerThreadSaver({
   threadId,
@@ -504,31 +508,42 @@ export function BrokerThreadSaver({
   threadId: string;
   agentId?: "conciergeAgent";
 }) {
-  const { agent } = useAgent({ agentId, updates: [UseAgentUpdate.OnMessagesChanged] });
+  const { agent } = useAgent({
+    agentId,
+    updates: [UseAgentUpdate.OnMessagesChanged, UseAgentUpdate.OnRunStatusChanged],
+  });
   const { markThreadSaved } = useThreadNav();
-  const saved = useRef(0);
+  const cursor = useRef(0);
   const inFlight = useRef(false);
 
   useEffect(() => {
-    if (inFlight.current) return;
+    if (inFlight.current || agent.isRunning) return;
     const messages = agent.messages ?? [];
-    if (messages.length <= saved.current) return;
-    const last = messages[messages.length - 1];
-    // Only a finished answer is worth writing: a user line alone has no reply to restore.
-    if (!last || last.role !== "assistant") return;
-    const pending = messages
-      .slice(saved.current)
+    if (cursor.current >= messages.length) return;
+
+    // Ordered batch from the cursor: `slice(-4)` would keep the newest and silently drop the rest.
+    const batch = messages.slice(cursor.current, cursor.current + 4);
+    const nextCursor = cursor.current + batch.length;
+    const text = batch
       .map((message) => ({ id: message.id, role: message.role, content: message.content }))
-      .filter((message) => typeof message.content === "string" && message.content.trim().length > 0)
-      .slice(-4);
-    if (pending.length === 0) return;
+      .filter((message): message is { id: string; role: "user" | "assistant"; content: string } =>
+        (message.role === "user" || message.role === "assistant") &&
+        typeof message.content === "string" &&
+        message.content.trim().length > 0);
+    // A question with no reply yet has nothing to restore: hold it, and it will be saved with
+    // the answer that follows.
+    if (!text.some((message) => message.role === "assistant")) return;
+    if (text.length === 0) {
+      // Nothing restorable in this window (tool traffic): move past it instead of retrying forever.
+      cursor.current = nextCursor;
+      return;
+    }
 
     inFlight.current = true;
-    const target = saved.current + pending.length;
     void fetch(`/api/threads/${encodeURIComponent(threadId)}/messages`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ messages: pending }),
+      body: JSON.stringify({ messages: text }),
       keepalive: true,
     })
       .then((response) => {
@@ -536,7 +551,7 @@ export function BrokerThreadSaver({
           console.warn(`[BrokerThreadSaver] save failed: ${response.status}`);
           return;
         }
-        saved.current = target;
+        cursor.current = nextCursor;
         markThreadSaved(threadId);
       })
       .catch((error) => console.warn("[BrokerThreadSaver] save failed", error))
