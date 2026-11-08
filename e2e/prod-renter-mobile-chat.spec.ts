@@ -102,7 +102,8 @@ test.describe("SAN-1626 · signed-in renter concierge on a 390px phone", () => {
     await sendConciergeMessage(page, RENTAL_QUESTION);
     const cards = page.getByTestId("rental-card");
     await expect(cards.first()).toBeVisible({ timeout: 120_000 });
-    expect(await cards.count()).toBeGreaterThan(0);
+    const groundedCardCount = await cards.count();
+    expect(groundedCardCount).toBeGreaterThan(0);
     const firstReply = await replyTextAfter(page, before);
 
     // 2 — a follow-up runs on the same conversation.
@@ -137,7 +138,10 @@ test.describe("SAN-1626 · signed-in renter concierge on a 390px phone", () => {
       outcome: "passed",
       viewportWidth: 390,
       rentalApiStatuses,
-      groundedCardCount: await cards.count(),
+      groundedCardCount,
+      // Snapshot when saved replies have returned; this is not a guarantee that
+      // card restoration will never finish later in the render lifecycle.
+      cardsVisibleWhenRepliesRestored: await cards.count(),
       firstReplyNonempty: firstReply.length > 0,
       followUpNonempty: secondReply.length > 0,
       refreshPreservedBoth: true,
