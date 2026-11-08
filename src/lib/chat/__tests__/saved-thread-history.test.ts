@@ -303,6 +303,33 @@ describe("a tool call that trails the answer", () => {
   });
 });
 
+describe("narration before a tool call whose answer is absent", () => {
+  it("replays the tool card without promoting the work note to an answer", () => {
+    const stored = {
+      format: 2,
+      parts: [
+        { type: "text", text: "I need to check the broker's workspace to answer this." },
+        { type: "step-start" },
+        {
+          type: "tool-invocation",
+          toolInvocation: {
+            state: "result",
+            toolCallId: "call-4",
+            toolName: "readBrokerWorkspaceTool",
+            args: {},
+            result: { listings: 0 },
+          },
+        },
+      ],
+    };
+    const mapped = mapSavedThreadHistory([row("a5", "assistant", stored)]);
+    const message = mapped.find((m) => m.role === "assistant")!;
+    // The step boundary proves this text was a work note, not the answer.
+    expect(message.content).toBe("");
+    expect(message.toolCalls?.[0]?.function.name).toBe("readBrokerWorkspaceTool");
+  });
+});
+
 describe("reconcileSavedHistory", () => {
   const p = (id: string, role: "user" | "assistant", content: string) => ({ id, role, content });
 
