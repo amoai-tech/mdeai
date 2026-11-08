@@ -115,12 +115,12 @@ for (const viewport of [
       await expect.poll(() => new URL(page.url()).searchParams.get("beds")).toBe("1");
       await page.goForward({ waitUntil: "domcontentloaded" });
       await expect.poll(() => new URL(page.url()).searchParams.get("beds")).toBe("2");
-      await expectCurrentResults(page, { verifyMap: false });
+      await expectCurrentResults(page, { verifyMap: viewport.width > 390 });
 
       await page.goto("/events", { waitUntil: "domcontentloaded" });
       await expect(page.getByTestId("events-browse")).toBeVisible();
       await page.goto("/rentals?neighborhood=Laureles&beds=2", { waitUntil: "domcontentloaded" });
-      await expectCurrentResults(page, { verifyMap: false });
+      await expectCurrentResults(page, { verifyMap: viewport.width > 390 });
 
       if (viewport.width === 390) {
         expect(await page.evaluate(

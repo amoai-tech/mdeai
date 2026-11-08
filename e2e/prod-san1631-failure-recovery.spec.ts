@@ -109,16 +109,17 @@ test("a slow stopped AI request cannot resurrect stale filters after page switch
     const stop = active.getByTestId("rental-ask-stop");
     await expect(stop).toBeVisible({ timeout: 30_000 });
     await stop.click();
+
+    // The manual choice is 2 bedrooms while the stopped question asked for 3.
+    await page.getByTestId("rentals-filter-beds-2").click();
+    await expect.poll(() => new URL(page.url()).searchParams.get("beds")).toBe("2");
+
     const lateResponse = page.waitForResponse((r) =>
       r.url().includes("/api/copilotkit") && r.request().method() === "POST",
     { timeout: 60_000 }).catch(() => null);
     release();
     await lateResponse;
-
-    // The manual choice is 2 bedrooms while the stopped question asked for 3.
-    await page.getByTestId("rentals-filter-beds-2").click();
-    await expect.poll(() => new URL(page.url()).searchParams.get("beds")).toBe("2");
-    await page.waitForTimeout(3_000);
+    await expect(active.getByTestId("rental-ask-stop")).toHaveCount(0, { timeout: 60_000 });
     expect(new URL(page.url()).searchParams.get("beds")).toBe("2");
     await page.goto("/events", { waitUntil: "domcontentloaded" });
     await expect(page.getByTestId("events-browse")).toBeVisible({ timeout: 60_000 });
