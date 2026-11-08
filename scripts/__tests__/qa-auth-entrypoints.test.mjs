@@ -156,6 +156,22 @@ test("SIGINT during Chrome startup deletes its isolated profile", { timeout: 12_
   }
 });
 
+test("CDP identity verification rejects a hijacked local port", () => {
+  const source = fileURLToPath(new URL("../qa-browser.ts", import.meta.url));
+  const script = [
+    "import { matchesLaunchedChrome as matches } from " + JSON.stringify(source) + ";",
+    "const expected = 'ws://127.0.0.1:9227/devtools/browser/this-instance';",
+    "const foreign = 'ws://127.0.0.1:9227/devtools/browser/other-instance';",
+    "const hostile = 'ws://evil.example:9227/devtools/browser/this-instance';",
+    "console.log(JSON.stringify([matches(9227,expected,expected),matches(9227,expected,foreign),matches(9227,undefined,expected),matches(9227,expected,hostile),matches(9228,expected,expected)]));",
+  ].join("\n");
+  const result = spawnSync(process.execPath, ["--import", tsxLoader, "--input-type=module", "--eval", script], {
+    cwd: root, encoding: "utf8", timeout: 12_000,
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout.trim()), [true, false, false, false, false]);
+});
+
 test("Chrome child environment drops agent and Supabase secret variables", () => {
   const source = fileURLToPath(new URL("../qa-browser.ts", import.meta.url));
   const js = `import { chromeProcessEnvironment } from ${JSON.stringify(source)}; console.log(JSON.stringify(chromeProcessEnvironment({ PATH: "/usr/bin", HOME: "/tmp", SUPABASE_SERVICE_ROLE_KEY: "unsafe", GH_TOKEN: "unsafe", NODE_OPTIONS: "unsafe" })))`;

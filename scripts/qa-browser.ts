@@ -112,10 +112,10 @@ export function findChromeExecutable(
 }
 
 /** Use only a fixed loopback host, never a URL supplied by the agent. */
-export function probeLocalChrome(port: number): Promise<boolean> {
+export function probeLocalChrome(port: number): Promise<string | null> {
   return new Promise((resolve) => {
     let settled = false;
-    const finish = (value: boolean) => {
+    const finish = (value: string | null) => {
       if (settled) return;
       settled = true;
       resolve(value);
@@ -136,14 +136,14 @@ export function probeLocalChrome(port: number): Promise<boolean> {
       response.on("end", () => {
         try {
           const metadata = JSON.parse(raw) as { webSocketDebuggerUrl?: unknown };
-          finish(response.statusCode === 200 && typeof metadata.webSocketDebuggerUrl === "string");
+          finish(response.statusCode === 200 && typeof metadata.webSocketDebuggerUrl === "string" ? metadata.webSocketDebuggerUrl : null);
         } catch {
-          finish(false);
+          finish(null);
         }
       });
     });
     req.on("timeout", () => req.destroy());
-    req.on("error", () => finish(false));
+    req.on("error", () => finish(null));
     req.end();
   });
 }
@@ -158,10 +158,33 @@ export function isLoopbackPortOccupied(port: number): Promise<boolean> {
   });
 }
 
+/** Match the unguessable browser target printed by THIS Chrome process to CDP discovery. */
+export function matchesLaunchedChrome(
+  port: number,
+  launchedWs: string | undefined,
+  discoveredWs: string | null,
+): boolean {
+  if (!launchedWs || !discoveredWs) return false;
+  try {
+    const launched = new URL(launchedWs);
+    const discovered = new URL(discoveredWs);
+    const allowed = new Set(["127.0.0.1", "localhost", "[::1]"]);
+    return launched.protocol === "ws:" && discovered.protocol === "ws:" &&
+      allowed.has(launched.hostname) && allowed.has(discovered.hostname) &&
+      Number(launched.port) === port && Number(discovered.port) === port &&
+      launched.pathname.startsWith("/devtools/browser/") &&
+      launched.pathname.length > "/devtools/browser/".length &&
+      launched.pathname === discovered.pathname;
+  } catch {
+    return false;
+  }
+}
+
 async function waitForChrome(
   port: number,
   child: ChildProcess,
   getLaunchError: () => NodeJS.ErrnoException | undefined,
+  getLaunchedDebuggerUrl: () => string | undefined,
   signal: AbortSignal,
   executable: string,
 ): Promise<string> {
@@ -178,10 +201,11 @@ async function waitForChrome(
     if (child.exitCode !== null || child.signalCode !== null) {
       throw new Error("Chrome quit before its local debugger was ready. Check Chrome installation/display.");
     }
-    if (await probeLocalChrome(port)) return endpoint;
+    const discovered = await probeLocalChrome(port);
+    if (matchesLaunchedChrome(port, getLaunchedDebuggerUrl(), discovered)) return endpoint;
     await delay(250);
   }
-  throw new Error("Chrome debugger did not start on the expected local port.");
+  throw new Error("Chrome debugger did not start with a matching browser identity on the expected local port.");
 }
 
 async function main(): Promise<void> {
@@ -229,11 +253,23 @@ async function main(): Promise<void> {
       ];
       child = spawn(executable, args, {
         env: chromeProcessEnvironment(process.env),
-        stdio: "ignore",
+        stdio: ["ignore", "ignore", "pipe"],
       });
       let launchError: NodeJS.ErrnoException | undefined;
+      let chromeStderrTail = "";
+      let launchedDebuggerUrl: string | undefined;
       child.on("error", (error: NodeJS.ErrnoException) => { launchError = error; });
-      const endpoint = await waitForChrome(options.port, child, () => launchError, stop.signal, executable);
+      // Chrome prints its own unguessable browser WebSocket identity on stderr.
+      // Do not forward browser stderr to the agent, as it can contain private data.
+      child.stderr?.on("data", (chunk: Buffer) => {
+        chromeStderrTail = (chromeStderrTail + chunk.toString("utf8")).slice(-4096);
+        const marker = "DevTools listening on ";
+        const index = chromeStderrTail.lastIndexOf(marker);
+        if (index >= 0) {
+          launchedDebuggerUrl = chromeStderrTail.slice(index + marker.length).split(/\s/)[0];
+        }
+      });
+      const endpoint = await waitForChrome(options.port, child, () => launchError, () => launchedDebuggerUrl, stop.signal, executable);
       if (stop.signal.aborted) return;
       connected = await chromium.connectOverCDP(endpoint);
       const context = connected.contexts()[0];
