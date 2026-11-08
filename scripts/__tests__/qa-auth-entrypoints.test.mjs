@@ -3,6 +3,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { once } from "node:events";
 import { createRequire } from "node:module";
+import { createServer } from "node:net";
 import { mkdtempSync, rmSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -14,6 +15,21 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const check = join(root, "scripts/qa-auth-check.ts");
 const browser = join(root, "scripts/qa-browser.ts");
 const tsxLoader = createRequire(import.meta.url).resolve("tsx");
+
+// Use a spare loopback port: developers may already have CDP port 9227 open.
+async function availableQaPort() {
+  const server = createServer();
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  const address = server.address();
+  assert(address && typeof address !== "string");
+  await new Promise((resolve, reject) => {
+    server.close((error) => error ? reject(error) : resolve());
+  });
+  return address.port;
+}
 
 function run(file, args = [], env = {}) {
   const cwd = mkdtempSync(join(tmpdir(), "mde-qa-cli-test-"));
@@ -100,9 +116,10 @@ test("Chrome binary lookup supports macOS, Windows, Linux and CHROME_PATH overri
   assert.equal(values.custom, "/test/custom-chrome");
 });
 
-test("missing custom Chrome binary explains ENOENT and fails closed", () => {
+test("missing custom Chrome binary explains ENOENT and fails closed", async () => {
   const missing = join(tmpdir(), "missing-mde-chrome-" + randomBytes(8).toString("hex"));
-  const result = run(browser, ["--headless"], {
+  const port = await availableQaPort();
+  const result = run(browser, ["--headless", "--port=" + port], {
     NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co",
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_fixture",
     SUPABASE_SERVICE_ROLE_KEY: randomBytes(16).toString("hex"),
@@ -119,7 +136,8 @@ test("SIGINT during Chrome startup deletes its isolated profile", { timeout: 12_
   const dir = mkdtempSync(join(tmpdir(), "mde-qa-signal-fixture-"));
   const fakeChrome = join(dir, "fake-chrome");
   writeFileSync(fakeChrome, "#!/bin/sh\nexec sleep 30\n", { mode: 0o755 });
-  const child = spawn(process.execPath, ["--import", tsxLoader, browser, "--headless"], {
+  const port = await availableQaPort();
+  const child = spawn(process.execPath, ["--import", tsxLoader, browser, "--headless", "--port=" + port], {
     cwd: dir,
     env: {
       HOME: process.env.HOME,
