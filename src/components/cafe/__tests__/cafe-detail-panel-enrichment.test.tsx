@@ -44,6 +44,13 @@ const detail: CafeVenueDetail = {
 };
 
 describe("CafeDetailPanel enrichment fallback", () => {
+  it("shows saved catalog provenance when provider enrichment is unavailable", () => {
+    const saved = { ...detail, sourceMode: "saved_catalog" as const };
+    const html = renderToStaticMarkup(<CafeDetailPanel detail={saved} siblings={[saved]} />);
+    expect(html).toContain("Saved MDE catalog");
+    expect(html).not.toContain("Google-verified");
+  });
+
   it("shows place-details-unavailable when enrichment errors", () => {
     const html = renderToStaticMarkup(
       <CafeDetailPanel detail={detail} siblings={[detail]} />,

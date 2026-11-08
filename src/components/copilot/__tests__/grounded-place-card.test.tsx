@@ -63,6 +63,14 @@ describe("GroundedPlaceCard", () => {
     expect(html).toContain('data-testid="grounded-maps-link"');
   });
 
+  it("identifies saved catalog data without claiming a fresh Google source", () => {
+    const html = renderToStaticMarkup(
+      <GroundedPlaceCard testId="grounded-card" title="Saved Café" sourceMode="saved_catalog" />,
+    );
+    expect(html).toContain("Saved MDE catalog");
+    expect(html).not.toContain("Google-verified candidate");
+  });
+
   it("renders photo author attributions when provided", () => {
     const html = renderToStaticMarkup(
       <GroundedPlaceCard

@@ -6,6 +6,7 @@ import { useBrowseMapSync } from "@/hooks/use-browse-map-sync";
 import { mapPinSchema, type MapPin } from "@/platform/contracts/map-pin";
 import { useMapContext } from "@/platform/maps/map-context";
 import type { GroundedToolRow } from "@/lib/parse-grounded-tool-result";
+import { groundedPinSource } from "@/lib/grounded-place-source";
 
 /** The existing grounded-place card and canonical Maps pin converter share a stable ID. */
 export function groundedDiscoveryPins(rows: GroundedToolRow[]) {
@@ -20,7 +21,7 @@ export function groundedDiscoveryPins(rows: GroundedToolRow[]) {
       subtitle: r.formattedAddress,
       placeId: r.placeId,
       placeUri: r.mapsUrl,
-      source: r.groundingSource ? "grounding" : "places",
+      source: groundedPinSource(r.sourceMode),
     });
     return pin.success ? [pin.data] : [];
   });
@@ -84,6 +85,7 @@ export function DiscoveryGroundedResults({ rows, selectedId, onSelectRow, label 
                 formattedAddress={r.formattedAddress}
                 photoName={r.photoName}
                 photoAuthorAttributions={r.photoAuthorAttributions}
+                sourceMode={r.sourceMode}
                 pinId={mapped ? pinId : undefined}
                 selected={selectedId === r.id || (mapped && selectedPinId === pinId)}
                 onSelect={mapped ? () => { panToPin(pinId); onSelectRow?.(r.id); } : undefined}

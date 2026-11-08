@@ -116,6 +116,7 @@ describe("SAN-106 RLS-backed rental Nearby → existing grounded pins", () => {
       latitude: 6.251,
       longitude: -75.591,
       placeId: "ChIJCafeTest",
+      sourceMode: "google_places",
       mapsUrl: "https://www.google.com/maps/place/Real+Provider+Cafe",
       primaryType: "cafe",
     }]);
@@ -124,6 +125,7 @@ describe("SAN-106 RLS-backed rental Nearby → existing grounded pins", () => {
     expect(pins).toMatchObject([{
       id: "grounded-ChIJCafeTest",
       category: "grounded",
+      source: "places",
       lat: 6.251,
       lng: -75.591,
       title: "Real Provider Café",

@@ -74,6 +74,24 @@ describe("normalizeToolOutput", () => {
     expect(pins[0]?.title).toBe("Pausa Coffee & Brunch");
   });
 
+  it("keeps catalog and demo pin provenance instead of calling them grounding", () => {
+    const result = {
+      source: "grounding",
+      metadata: { fallback: "curated" },
+      attribution: [],
+      results: [
+        { id: "catalog-1", title: "Saved Café", sourceMode: "saved_catalog", latitude: 6.24, longitude: -75.58 },
+        { id: "demo-1", title: "Test Café", sourceMode: "demo_fixture", latitude: 6.25, longitude: -75.59 },
+        { id: "missing", title: "No verified location", sourceMode: "saved_catalog" },
+      ],
+    };
+    const { pins } = normalizeToolOutput("grounded", result);
+    expect(pins.map((pin) => [pin.id, pin.source, pin.meta?.sourceMode])).toEqual([
+      ["grounded-catalog-1", "sql", "saved_catalog"],
+      ["grounded-demo-1", "mock", "demo_fixture"],
+    ]);
+  });
+
   it("maps enriched grounded rows into pin meta", () => {
     const { pins } = normalizeToolOutput("grounded", {
       source: "grounding",

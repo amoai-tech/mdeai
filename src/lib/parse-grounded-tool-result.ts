@@ -1,4 +1,6 @@
 import { normalizeToolEnvelope, unwrapAgUiToolPayload } from "@/lib/normalize-tool-envelope";
+import { isGroundedPlaceSourceMode, type GroundedPlaceSourceMode } from "@/lib/grounded-place-source";
+export type { GroundedPlaceSourceMode } from "@/lib/grounded-place-source";
 
 export type GroundedAttributionRow = {
   source?: string;
@@ -30,6 +32,7 @@ export type GroundedToolRow = {
   latitude?: number;
   longitude?: number;
   placeId?: string;
+  sourceMode?: GroundedPlaceSourceMode;
   rating?: number;
   userRatingCount?: number;
   priceLevel?: string;
@@ -188,7 +191,13 @@ export function parseGroundedToolResult(result: unknown): ParsedGroundedToolResu
       latitude: row.latitude,
       longitude: row.longitude,
       placeId: row.placeId,
-      rating: typeof row.rating === "number" ? row.rating : undefined,
+      // The legacy envelope can still say "grounding" on a stored fallback.
+      // Reject any conflicting Google claim when the result explicitly degraded.
+      sourceMode: fallback
+        ? row.sourceMode === "demo_fixture" ? "demo_fixture" : "saved_catalog"
+        : isGroundedPlaceSourceMode(row.sourceMode) ? row.sourceMode : undefined,
+      rating: typeof row.rating === "number" && Number.isFinite(row.rating) &&
+        row.rating >= 0 && row.rating <= 5 ? row.rating : undefined,
       userRatingCount:
         typeof row.userRatingCount === "number"
           ? row.userRatingCount
@@ -212,7 +221,7 @@ export function parseGroundedToolResult(result: unknown): ParsedGroundedToolResu
         typeof row.fieldMaskVersion === "string"
           ? row.fieldMaskVersion
           : undefined,
-      groundingSource: findGroundingSource(attribution, mapsUrl),
+      groundingSource: fallback ? undefined : findGroundingSource(attribution, mapsUrl),
     };
   });
 

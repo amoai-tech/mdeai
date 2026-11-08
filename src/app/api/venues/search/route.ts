@@ -114,6 +114,8 @@ function toGroundedRow(row: VenueAnchorRow, kind: "cafe" | "nightlife"): Grounde
   return {
     id: row.id,
     title: row.name,
+    // This endpoint reads MDE's stored venue anchors, not a fresh Google search.
+    sourceMode: "saved_catalog",
     ...(row.google_place_id ? { placeId: row.google_place_id } : {}),
     mapsUrl: venueAnchorMapsUrl(row.google_place_id),
     ...(coords.latitude != null ? { latitude: coords.latitude } : {}),
