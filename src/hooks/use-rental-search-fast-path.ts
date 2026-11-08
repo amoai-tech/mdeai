@@ -134,7 +134,7 @@ export type RentalSearchFastPathOptions = {
 
 export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOptions = {}) {
   const { state, setState } = useConciergeCoAgent();
-  const { clarifyPending, clarifyKind, showExchange, showNotice, clearLocalMessages } =
+  const { clarifyPending, clarifyKind, showExchange, showNotice } =
     useEventLocalChat();
   const { setToolResult, setSearchMeta, reportSearchFailure } = useRentalFastPath();
   const clearOthers = useClearOtherFastPathResults();
@@ -326,13 +326,14 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
         return true;
       }
 
-      clearLocalMessages();
+      // Keep prior exchanges visible while a later search is pending or fails.
+      // showExchange already appends and deduplicates by message ID; New Chat
+      // still resets through the existing session reset owner.
       return runSearch(trimmed, params, memory, submissionId);
     },
     [
       clarifyKind,
       clarifyPending,
-      clearLocalMessages,
       runSearch,
       state,
     ],

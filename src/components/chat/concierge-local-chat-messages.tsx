@@ -48,13 +48,14 @@ export function ConciergeLocalChatMessages({
         }
 
         const assistantText = sanitizeAssistantChatContent(message.content);
-        const assistant = (
+        // An assistant message whose entire payload was stripped (e.g. leaked
+        // tool JSON or duplicated rental boilerplate) is not a successful
+        // visible answer. Do not render an empty, success-looking bubble.
+        const assistant = assistantText ? (
           <div className="max-w-[90%] rounded-2xl bg-muted px-3 py-2 text-sm text-foreground">
-            {assistantText ? (
-              <p className="whitespace-pre-wrap">{assistantText}</p>
-            ) : null}
+            <p className="whitespace-pre-wrap">{assistantText}</p>
           </div>
-        );
+        ) : null;
 
         if (message.isClarify) {
           const testId =
@@ -69,7 +70,7 @@ export function ConciergeLocalChatMessages({
           );
         }
 
-        return <div key={message.id}>{assistant}</div>;
+        return assistant ? <div key={message.id}>{assistant}</div> : null;
       })}
     </div>
   );

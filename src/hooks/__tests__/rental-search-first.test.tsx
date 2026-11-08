@@ -202,6 +202,33 @@ describe("SAN-407 · rental chat searches before it asks", () => {
     expect(unhandled).toEqual([]);
   });
 
+  it("keeps the previous chat exchange when the next rental search fails", async () => {
+    respond(200, { results: [{
+      id: "prior_rental_001", title: "Sourced Laureles apartment",
+      neighborhood: "Laureles", bedrooms: 2,
+      nightly_price: 75, currency: "USD", latitude: 6.251, longitude: -75.59,
+    }] });
+    const initialQuestion = "Search apartments Medellín";
+    expect(await send(initialQuestion)).toBe(true);
+    expect(probe.messages()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ role: "user", content: initialQuestion }),
+    ]));
+    expect(probe.hasListing("prior_rental_001")).toBe(true);
+    const firstAnswer = probe.messages().find((m) => m.role === "assistant")?.content;
+    expect(firstAnswer?.trim().length).toBeGreaterThan(0);
+
+    respond(503, { error: "rental_search_unavailable" });
+    expect(await send("Only apartments in Laureles")).toBe(true);
+    // The failure should not erase the preceding user question/assistant answer.
+    expect(probe.messages()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ role: "user", content: initialQuestion }),
+      expect.objectContaining({ role: "assistant", content: firstAnswer }),
+      expect.objectContaining({ role: "user", content: "Only apartments in Laureles" }),
+    ]));
+    expect(probe.messages().filter((m) => m.role === "assistant")).toHaveLength(2);
+    expect(probe.hasListing("prior_rental_001")).toBe(true);
+  });
+
   it("a network failure is also 'unavailable', not a silent drop", async () => {
     fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
     const handled = await send("2BR Laureles under COP 4M/month");

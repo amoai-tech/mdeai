@@ -100,6 +100,30 @@ function Scenario({ transcriptHasExchange }: { transcriptHasExchange: boolean })
   return <ConciergeLocalChatMessages excludeIds={excludeIds} />;
 }
 
+function FilteredAssistantScenario() {
+  const { showExchange } = useEventLocalChat();
+  useEffect(() => {
+    // This is recognized rental-results boilerplate and is stripped to empty
+    // by the existing assistant sanitizer. The UI must not show a blank reply.
+    showExchange(
+      "Show apartments in Laureles",
+      "What I searched for: solid short-term rental. Best option. Next step.",
+    );
+  }, [showExchange]);
+  return <ConciergeLocalChatMessages />;
+}
+
+describe("SAN-1074 empty local assistant guard", () => {
+  it("does not show an empty successful-looking assistant bubble after sanitizing", () => {
+    const { container, unmount } = mount(
+      <EventLocalChatProvider><FilteredAssistantScenario /></EventLocalChatProvider>,
+    );
+    expect(container.querySelectorAll('[data-testid="concierge-user-message"]')).toHaveLength(1);
+    expect(container.querySelectorAll(".bg-muted")).toHaveLength(0);
+    unmount();
+  });
+});
+
 describe("ConciergeLocalChatMessages (SAN-966)", () => {
   it("shows a shortcut exchange the transcript does not have, once", () => {
     const { container, unmount } = mount(

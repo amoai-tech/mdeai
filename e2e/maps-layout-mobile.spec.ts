@@ -269,8 +269,10 @@ test.describe("SAN-524 mobile map interaction — 390×844 touch", () => {
     await expect(card).toContainText("Previous sourced apartment");
     await expect(panel).toBeVisible();
     const userMessages = page.getByTestId("concierge-user-message");
+    // A failed second search must keep the previous chat exchange too,
+    // not just the old cards. Retry must not append a third user question.
+    await expect(userMessages).toHaveCount(2);
     const userCount = await userMessages.count();
-    expect(userCount).toBeGreaterThan(0);
 
     await recovery.getByRole("button", { name: "Retry search" }).click();
     await expect(card).toHaveCount(1);
