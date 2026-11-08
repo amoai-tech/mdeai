@@ -125,6 +125,15 @@ test.describe("SAN-1626 · signed-in renter concierge on a 390px phone", () => {
       )
       .toBe(expectedReplies.length);
 
+    // SAN-1639: the saved thread is more than answer text. A fresh tab must
+    // retrieve current sourced rentals from the saved search criteria using
+    // the existing authenticated rental API. This was 0 after 25s in production.
+    await expect(cards.first(), "saved rental cards return after a reload").toBeVisible({
+      timeout: 30_000,
+    });
+    const restoredCardCount = await cards.count();
+    expect(restoredCardCount).toBeGreaterThan(0);
+
     // 4 — an anonymous caller is still refused the runtime.
     const guest = await page.context().browser()!.newContext();
     const anon = await guest.request.get(`${new URL(page.url()).origin}/api/copilotkit/info`);
@@ -141,7 +150,7 @@ test.describe("SAN-1626 · signed-in renter concierge on a 390px phone", () => {
       groundedCardCount,
       // Snapshot when saved replies have returned; this is not a guarantee that
       // card restoration will never finish later in the render lifecycle.
-      cardsVisibleWhenRepliesRestored: await cards.count(),
+      cardsRestoredAfterReload: restoredCardCount,
       firstReplyNonempty: firstReply.length > 0,
       followUpNonempty: secondReply.length > 0,
       refreshPreservedBoth: true,

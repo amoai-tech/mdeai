@@ -1,7 +1,6 @@
-import { isOrderedStay, isRealCalendarDate } from "@/lib/rentals/date-only";
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { checkSearchFastPathRateLimit } from "@/lib/api-ip-rate-limit";
+import { rentalSearchBodySchema } from "@/lib/rental-search-body-schema";
 import {
   describeRentalSearchError,
   isRentalSearchUnavailable,
@@ -12,26 +11,6 @@ import { createClient } from "@/lib/supabase/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 10;
-
-const bodySchema = z.object({
-  neighborhood: z.string().optional(),
-  minBedrooms: z.number().int().min(0).optional(),
-  maxBedrooms: z.number().int().min(0).optional(),
-  maxPricePerNight: z.number().positive().optional(),
-  maxPriceMonthly: z.number().positive().safe().optional(),
-  budgetCurrency: z.enum(["COP", "USD"]).optional(),
-  limit: z.number().int().min(1).max(20).optional().default(8),
-  queryText: z.string().optional(),
-  checkIn: z.string().refine(isRealCalendarDate, "checkIn must be a real date, YYYY-MM-DD").optional(),
-  checkOut: z.string().refine(isRealCalendarDate, "checkOut must be a real date, YYYY-MM-DD").optional(),
-  stayType: z.enum(["nightly", "monthly", "total_trip"]).optional(),
-}).refine((b) => b.minBedrooms === undefined || b.maxBedrooms === undefined || b.minBedrooms <= b.maxBedrooms, {
-  message: "maxBedrooms must be greater than or equal to minBedrooms",
-  path: ["maxBedrooms"],
-}).refine((b) => isOrderedStay(b.checkIn, b.checkOut), {
-  message: "checkOut must not be before checkIn",
-  path: ["checkOut"],
-});
 
 /** Fast path — rental search without conciergeAgent round-trip. */
 export async function POST(req: Request) {
@@ -45,7 +24,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "invalid json" }, { status: 400 });
   }
 
-  const parsed = bodySchema.safeParse(json);
+  const parsed = rentalSearchBodySchema.safeParse(json);
   if (!parsed.success) {
     return NextResponse.json(
       { error: "invalid body", details: parsed.error.flatten() },

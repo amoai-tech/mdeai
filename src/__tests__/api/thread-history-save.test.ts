@@ -172,6 +172,41 @@ describe("SAN-1531 POST /api/threads/[threadId]/messages", () => {
     expect(JSON.parse(String(assistant.content)).parts[0].text).toBe("3 Italian spots in El Poblado.");
   });
 
+  it("stores canonical rental criteria in Mastra assistant parts, never client-authored card facts", async () => {
+    signInAs(OWNER);
+    db.threads.set(THREAD, { id: THREAD, resourceId: OWNER });
+    const rentalSearch = {
+      neighborhood: "Laureles", minBedrooms: 2, maxPriceMonthly: 3_000_000,
+      budgetCurrency: "COP", results: [{ id: "fake-card", price_monthly: 1 }],
+    };
+    const result = await save(THREAD, { messages: [
+      { id: "local-rental-user", role: "user", content: "Find a furnished 2BR in Laureles" },
+      { id: "local-rental-assistant", role: "assistant", content: "Three apartments.", rentalSearch },
+    ] });
+    expect(result.status).toBe(200);
+    const saved = JSON.parse(String(db.rows[1].content));
+    expect(saved.parts).toEqual([
+      { type: "text", text: "Three apartments." },
+      { type: "data-mde-rental-search", data: {
+        neighborhood: "Laureles", minBedrooms: 2, maxPriceMonthly: 3_000_000,
+        budgetCurrency: "COP", limit: 8,
+      } },
+    ]);
+    expect(JSON.stringify(saved)).not.toContain("fake-card");
+  });
+
+  it("rejects a user-row search metadata and invalid rental budget before database writes", async () => {
+    signInAs(OWNER);
+    db.threads.set(THREAD, { id: THREAD, resourceId: OWNER });
+    for (const messages of [
+      [{ id: "u", role: "user", content: "hey", rentalSearch: { neighborhood: "Laureles" } }],
+      [{ id: "a", role: "assistant", content: "hey", rentalSearch: { maxPriceMonthly: -1 } }],
+    ]) {
+      expect((await save(THREAD, { messages })).status).toBe(400);
+    }
+    expect(db.rows).toHaveLength(0);
+  });
+
   it("creates the thread row when the first turn was a fast-path answer", async () => {
     signInAs(OWNER);
 

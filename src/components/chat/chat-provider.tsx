@@ -28,6 +28,7 @@ import {
   type BlankReportLedger,
 } from "@/lib/blank-assistant-message";
 import { useSession } from "@/hooks/use-session";
+import type { RentalSearchApiParams } from "@/lib/rental-query-parser";
 import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 
 /**
@@ -44,6 +45,10 @@ const QUIET_RECONNECT_GRACE_MS = 2_500;
 type SavedHistoryValue = {
   /** `idle` = nothing to wait for (fresh chat, or history is in place). */
   status: "idle" | "loading" | "error";
+  /** Current, owner-checked thread only; never a previous selection. */
+  threadId?: string;
+  /** Search criteria only; grounded cards are fetched by a child of the rental provider. */
+  lastRentalSearch?: RentalSearchApiParams | null;
   retry: () => void;
 };
 
@@ -121,6 +126,7 @@ export function SavedThreadHistory({
     /** UI-visible completion metadata; refs are accessed only in effects. */
     agent?: AbstractAgent;
     hadMessages?: boolean;
+    lastRentalSearch?: RentalSearchApiParams | null;
   } | null>(null);
 
   // Preserve completed history through transient readiness changes. A genuinely
@@ -184,14 +190,19 @@ export function SavedThreadHistory({
     (async () => {
       let failed = false;
       let savedMessages: SavedThreadMessage[] = [];
+      let lastRentalSearch: RentalSearchApiParams | null = null;
       try {
         const res = await fetch(`/api/threads/${encodeURIComponent(threadId)}/messages`, {
           signal,
           cache: "no-store",
         });
         if (!res.ok) throw new Error(`history ${res.status}`);
-        const body = (await res.json()) as { messages?: SavedThreadMessage[] };
+        const body = (await res.json()) as {
+          messages?: SavedThreadMessage[];
+          lastRentalSearch?: RentalSearchApiParams | null;
+        };
         savedMessages = body.messages ?? [];
+        lastRentalSearch = body.lastRentalSearch ?? null;
         // First attempt: the watch started when the chat opened. A Retry cannot
         // reuse a finished (timed-out) watch, so it waits again if the reconnect
         // is still running, and carries on if it has ended.
@@ -247,6 +258,7 @@ export function SavedThreadHistory({
           threadId, attempt, failed, ready: true,
           agent: failed ? undefined : agent,
           hadMessages: !failed && agent.messages.length > 0,
+          lastRentalSearch: failed ? null : lastRentalSearch,
         });
       }
     })();
@@ -384,9 +396,11 @@ export function SavedThreadHistory({
   const value = useMemo<SavedHistoryValue>(
     () => ({
       status: !settled ? "loading" : outcome.failed ? "error" : "idle",
+      threadId: settled && !outcome.failed ? threadId : undefined,
+      lastRentalSearch: settled && !outcome.failed ? outcome.lastRentalSearch : null,
       retry: () => setAttempt((n) => n + 1),
     }),
-    [settled, outcome],
+    [settled, outcome, threadId],
   );
 
   return <SavedHistoryContext.Provider value={value}>{children}</SavedHistoryContext.Provider>;

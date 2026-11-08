@@ -201,9 +201,9 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
       reportSearchFailure(null);
       // Retry is an assistant-only follow-up to the SAME question. It must not
       // publish/persist a duplicate user bubble with a new submission identity.
-      const answer = (message: string) => {
-        if (retry) showNotice(message);
-        else showExchange(userText, message, submissionId);
+      const answer = (message: string, savedSearch?: RentalSearchApiParams) => {
+        if (retry) showNotice(message, savedSearch);
+        else showExchange(userText, message, submissionId, savedSearch);
       };
       try {
         let response: RentalSearchResponse;
@@ -278,6 +278,7 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
             appliedBudget,
             unappliedRequests: unappliedRentalRequests(userText),
           }),
+          params,
         );
         return true;
       } catch (err) {

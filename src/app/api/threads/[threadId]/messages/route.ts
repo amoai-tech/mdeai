@@ -4,7 +4,10 @@ import { createServiceRoleClient } from "@/lib/supabase/service";
 import {
   SAVED_THREAD_HISTORY_LIMIT,
   mapSavedThreadHistory,
+  latestSavedRentalSearch,
 } from "@/lib/chat/saved-thread-history";
+import { rentalSearchBodySchema } from "@/lib/rental-search-body-schema";
+import type { RentalSearchApiParams } from "@/lib/rental-query-parser";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -90,14 +93,24 @@ export async function GET(
   }
 
   return NextResponse.json(
-    { threadId, messages: mapSavedThreadHistory(rows ?? []) },
+    {
+      threadId,
+      messages: mapSavedThreadHistory(rows ?? []),
+      lastRentalSearch: latestSavedRentalSearch(rows ?? []),
+    },
     { headers: NO_STORE },
   );
 }
 
 /** Mastra stores message parts in this shape; the history reader parses it. */
-function mastraTextContent(text: string): string {
-  return JSON.stringify({ format: 2, parts: [{ type: "text", text }] });
+function mastraTextContent(text: string, rentalSearch?: RentalSearchApiParams): string {
+  return JSON.stringify({
+    format: 2,
+    parts: [
+      { type: "text", text },
+      ...(rentalSearch ? [{ type: "data-mde-rental-search", data: rentalSearch }] : []),
+    ],
+  });
 }
 
 const THREAD_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -105,7 +118,12 @@ const MESSAGE_ID_PATTERN = /^[A-Za-z0-9._:-]{1,120}$/;
 const MAX_MESSAGES_PER_SAVE = 4;
 const MAX_CONTENT_LENGTH = 32_000;
 
-type SaveRow = { id: string; role: "user" | "assistant"; content: string };
+type SaveRow = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  rentalSearch?: RentalSearchApiParams;
+};
 
 function parseSaveBody(body: unknown): { rows: SaveRow[] } | { error: string } {
   const messages = (body as { messages?: unknown })?.messages;
@@ -117,7 +135,7 @@ function parseSaveBody(body: unknown): { rows: SaveRow[] } | { error: string } {
   }
   const rows: SaveRow[] = [];
   for (const raw of messages) {
-    const m = raw as { id?: unknown; role?: unknown; content?: unknown };
+    const m = raw as { id?: unknown; role?: unknown; content?: unknown; rentalSearch?: unknown };
     if (typeof m.id !== "string" || !MESSAGE_ID_PATTERN.test(m.id)) return { error: "invalid message id" };
     if (m.role !== "user" && m.role !== "assistant") return { error: "invalid message role" };
     if (typeof m.content !== "string") return { error: "invalid message content" };
@@ -125,7 +143,18 @@ function parseSaveBody(body: unknown): { rows: SaveRow[] } | { error: string } {
     // their message, and the reopened conversation showed different text than the live one.
     if (m.content.trim().length === 0) return { error: "empty message content" };
     if (m.content.length > MAX_CONTENT_LENGTH) return { error: "message content too long" };
-    rows.push({ id: m.id, role: m.role, content: m.content });
+    let rentalSearch: RentalSearchApiParams | undefined;
+    if (m.rentalSearch !== undefined) {
+      // A user may request an authorized search, but may NOT persist fake
+      // listing objects. Bound input size and reuse the API's same schema.
+      if (m.role !== "assistant" || JSON.stringify(m.rentalSearch)?.length > 2048) {
+        return { error: "invalid rental search metadata" };
+      }
+      const verified = rentalSearchBodySchema.safeParse(m.rentalSearch);
+      if (!verified.success) return { error: "invalid rental search metadata" };
+      rentalSearch = verified.data;
+    }
+    rows.push({ id: m.id, role: m.role, content: m.content, ...(rentalSearch ? { rentalSearch } : {}) });
   }
   if (new Set(rows.map((r) => r.id)).size !== rows.length) return { error: "duplicate message id" };
   return { rows };
@@ -217,7 +246,7 @@ async function persistExchange(
       resourceId: userId,
       role: row.role,
       type: "text",
-      content: mastraTextContent(row.content),
+      content: mastraTextContent(row.content, row.rentalSearch),
       createdAt: at,
       createdAtZ: at,
     };
