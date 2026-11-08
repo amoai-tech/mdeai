@@ -31,8 +31,8 @@
 
 ## Review hardening
 
-- Routes key resolver: `GOOGLE_ROUTES_API_KEY` → `GOOGLE_MAPS_SERVER_API_KEY` → Places key; first
-  non-empty.
+- Routes key resolver: `GOOGLE_ROUTES_API_KEY` → Routes-enabled `GOOGLE_MAPS_SERVER_API_KEY`;
+  **no Places-only key fallback**. Missing key returns unavailable without consuming a quota slot.
 - All transport/timeout/JSON/key errors normalized into `RoutesRequestError`; the tool logs and
   returns `route_unavailable`.
 - Local invalid waypoints return `invalid_route_request` before quota/provider calls.
@@ -51,4 +51,37 @@ prefers it. No secret is committed. A Terraform/managed key policy is still a fo
 Route calls no longer consume the café/nightlife Places quota. They reserve through the existing
 atomic `check_rate_limit` RPC with key `routes-daily:<UTC date>`, window 86,400 s and cap
 `ROUTES_DAILY_LIMIT` (default 100). Missing/failed store fails closed; exceeding the cap returns
-`route_quota_exceeded`. No new table or migration.
+`route_quota_exceeded`. No new table; the existing shared limiter RPC has a corrective migration
+`20261108110529_san465_keep_active_daily_rate_limits.sql` with a rolled-back pgTAP regression.
+
+## Additional review hardening — retain daily quotas and avoid misleading routes
+
+- Read-only live SQL confirmed `public.check_rate_limit` performed 1% random deletion of
+  counter rows older than **one hour**. A live daily Routes bucket starts at midnight UTC,
+  so other callers could delete an active daily bucket after 01:00 UTC and reset the paid-call
+  budget. The **canonical function** is changed in an imperative versioned migration to retain
+  rows **48 hours** (all verified MDE callers have windows up to 24h). RLS, server-only execute
+  grants and atomic ON CONFLICT increment are retained. No duplicate limiter.
+- Added local pgTAP regression `supabase/tests/database/san465_rate_limit_daily_retention_test.sql`
+  asserting cleanup retention, grants, and cap behavior. The local Supabase DB container is
+  **not running**; this test has **not** yet executed. Apply/verify through the normal DB
+  migration gate before calling the fix live. Until then the live RPC remains vulnerable.
+- Protobuf JSON duration permits fractional seconds (example `4506.500s`); parser
+  accepts up to 9 decimals and keeps true provider duration.
+- Reject a Places-only API key instead of making a doomed Routes request; preserve Routes
+  key precedence. Missing key does not consume quota. Quota RPC thrown transport errors fail
+  closed, and malformed daily limits such as `100garbage` cannot bypass configuration.
+- Google Routes WALK/BICYCLE responses carry the required safety caution; the existing
+  concierge is instructed to communicate it. SAN-229's CommuteCard must display the caution
+  deterministically when it renders those routes.
+- **Focused after fixes:** 15/15 Routes tests passed.
+- **Repository verification:** lint PASS, TypeScript PASS; full Vitest 5,376 PASS,
+  49 skipped. CI/Floor require a new pass for the corrected PR head.
+- **Current release scope:** backend only, SAN-229 owns CommuteCard/polyline/map.
+  No A2UI/OpenBot/OpenMuse/OpenDot runtime or extra ADK/MCP server needed.
+- **Sources:** https://developers.google.com/maps/documentation/routes/compute_route_directions
+  (request/response field masks), https://protobuf.dev/programming-guides/json/
+  (fractional Duration), https://developers.google.com/maps/documentation/routes/route-travel-modes
+  (walking/bicycling cautions), https://developers.google.com/maps/documentation/routes/get-api-key
+  (Routes-only key restrictions), https://supabase.com/docs/guides/database/functions
+  (SECURITY DEFINER and function execution permissions).

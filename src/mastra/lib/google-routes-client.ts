@@ -12,6 +12,8 @@ export type GoogleRouteResult = {
   durationSeconds: number;
   travelMode: RouteTravelMode;
   encodedPolyline?: string;
+  /** Google requires this caution when WALK/BICYCLE routes are displayed. */
+  warning?: string;
   attribution: "Google Maps";
 };
 
@@ -61,7 +63,8 @@ export function validateRouteWaypoints(origin: RouteWaypoint, destination: Route
 
 export function parseDurationSeconds(value: unknown): number | null {
   if (typeof value !== "string") return null;
-  const match = /^(\d+)s$/.exec(value.trim());
+  // Protobuf Duration JSON supports fractional seconds (up to 9 decimals).
+  const match = /^(\d+(?:\.\d{1,9})?)s$/.exec(value.trim());
   if (!match) return null;
   const seconds = Number(match[1]);
   return Number.isFinite(seconds) && seconds >= 0 ? seconds : null;
@@ -91,6 +94,11 @@ export function parseGoogleRoute(
     durationSeconds,
     travelMode,
     encodedPolyline: typeof polyline === "string" && polyline.trim() ? polyline : undefined,
+    warning: travelMode === "WALK"
+      ? "Walking routes may omit sidewalks or pedestrian paths. Use caution."
+      : travelMode === "BICYCLE"
+        ? "Bicycling routes may omit designated cycling paths. Use caution."
+        : undefined,
     attribution: "Google Maps",
   };
 }
@@ -100,7 +108,6 @@ export function requireRoutesApiKey(): string {
   const key = [
     process.env.GOOGLE_ROUTES_API_KEY,
     process.env.GOOGLE_MAPS_SERVER_API_KEY,
-    process.env.GOOGLE_PLACES_API_KEY,
   ]
     .map((value) => value?.trim())
     .find((value): value is string => Boolean(value && value.length >= 8));

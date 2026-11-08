@@ -2,6 +2,7 @@ import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import {
   computeGoogleRoute,
+  requireRoutesApiKey,
   RouteInputError,
   validateRouteWaypoints,
   type RouteTravelMode,
@@ -34,6 +35,7 @@ export const computeRouteTool = createTool({
         durationSeconds: z.number(),
         travelMode: z.enum(["WALK", "DRIVE", "BICYCLE", "TRANSIT"]),
         encodedPolyline: z.string().optional(),
+        warning: z.string().optional(),
         attribution: z.literal("Google Maps"),
       })
       .nullable(),
@@ -63,12 +65,26 @@ export const computeRouteTool = createTool({
 
         // Routes have their own daily budget; never consume the café/nightlife cap.
         const capRaw = process.env.ROUTES_DAILY_LIMIT;
-        const cap = capRaw === undefined ? 100 : Number.parseInt(capRaw, 10);
+        const cap = capRaw === undefined ? 100 : Number(capRaw);
         if (!Number.isSafeInteger(cap) || cap <= 0) {
           return { route: null, source: "google_routes" as const, reason: "route_quota_disabled" };
         }
+        // A missing Routes key must not consume a paid-call quota slot.
+        try {
+          requireRoutesApiKey();
+        } catch {
+          console.warn("[compute-route] no Routes-capable server key configured");
+          return { route: null, source: "google_routes" as const, reason: "route_unavailable" };
+        }
         const today = new Date().toISOString().slice(0, 10);
-        const quota = await checkRateLimitDurable(`routes-daily:${today}`, cap, 86_400);
+        let quota;
+        try {
+          quota = await checkRateLimitDurable(`routes-daily:${today}`, cap, 86_400);
+        } catch {
+          // Network failures of the quota service cannot authorize paid calls.
+          console.warn("[compute-route] route quota RPC transport unavailable");
+          return { route: null, source: "google_routes" as const, reason: "route_quota_unavailable" };
+        }
         if (!quota.storeAvailable) {
           console.warn("[compute-route] route quota store unavailable");
           return { route: null, source: "google_routes" as const, reason: "route_quota_unavailable" };
