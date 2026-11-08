@@ -85,3 +85,19 @@ atomic `check_rate_limit` RPC with key `routes-daily:<UTC date>`, window 86,400 
   (walking/bicycling cautions), https://developers.google.com/maps/documentation/routes/get-api-key
   (Routes-only key restrictions), https://supabase.com/docs/guides/database/functions
   (SECURITY DEFINER and function execution permissions).
+
+## Reproducible GCP key API target — no Terraform needed
+
+The installed server-only Routes/Maps key must allow `routes.googleapis.com`.
+Use the repo-managed opt-in script:
+
+1. **Read-only check:** `scripts/configure-routes-api-target.sh projects/PROJECT/locations/global/keys/KEY_ID`.
+2. **Apply when authorized:** same command with `--apply`; uses official `gcloud services api-keys update --append --api-target=service=routes.googleapis.com`, preserving existing API targets and key application restrictions.
+3. Verify the key restriction, server-only environment variable and one real route under the normal deployment workflow.
+
+The script never prints the key string and refuses unrecognized or unrestricted keys.
+No GCP key was changed by this PR review. Source:
+https://docs.cloud.google.com/sdk/gcloud/reference/services/api-keys/update
+
+A separate key in `GOOGLE_ROUTES_API_KEY` remains preferred; do not publish the credential
+in any `NEXT_PUBLIC_*` variable.
