@@ -68,6 +68,16 @@ export function parseRentalPageCommand(text: string): RentalPageControlPatch | n
   if (!words.every((word) => NATIVE_PAGE_COMMAND_WORDS.has(word) || /^\d+(?:br|beds?|bedrooms?)?$/.test(word))) {
     return null;
   }
+  // A bare number is allowed only as a bedroom count or part of a date range.
+  // "show only 3 apartments" must not silently become an unfiltered page.
+  const dateRange = /\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+\d{1,2}\s*(?:to|-)\s*\d{1,2}\b/i.test(text);
+  for (let i = 0; i < words.length; i += 1) {
+    if (!/^\d+$/.test(words[i])) continue;
+    const next = words[i + 1] ?? "";
+    const prev = words[i - 1] ?? "";
+    const isBedroom = /^(br|beds?|bedrooms?)$/.test(next) || /^(br|beds?|bedrooms?)$/.test(prev);
+    if (!isBedroom && !dateRange) return null;
+  }
 
   const parsed = buildRentalSearchParams(text, {});
   if (!parsed) return null;

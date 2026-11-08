@@ -22,6 +22,7 @@ describe("page filter control", () => {
     expect(parseRentalPageCommand("On this page, show 2-bedroom apartments in Laureles for COP 3M max.")).toBeNull();
     expect(parseRentalPageCommand("On this page, show 2-bedroom apartments in Laureles with wifi.")).toBeNull();
     expect(parseRentalPageCommand("On this page, show 4-bedroom apartments in Laureles.")).toBeNull();
+    expect(parseRentalPageCommand("On this page, show only 3 apartments in Laureles.")).toBeNull();
     expect(parseRentalPageCommand("On this page, remove the Laureles filter.")).toBeNull();
     expect(parseRentalPageCommand("On this page, don't show 1-bedroom apartments.")).toBeNull();
   });
