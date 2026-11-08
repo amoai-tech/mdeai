@@ -538,5 +538,8 @@ describe("answers never narrate the work", () => {
     expect(instructions).toContain("Call the tool silently and reply with the result only");
     expect(instructions).toContain("Never describe the user or reason about who they are");
     expect(instructions).toContain("A reply that needs a tool is the tool result");
+    // The ban must not silence the disclosures other rules require.
+    expect(instructions).toContain("still state the source, verification status, tool errors");
+    expect(instructions).toContain("subject to the clarification rules below");
   });
 });
