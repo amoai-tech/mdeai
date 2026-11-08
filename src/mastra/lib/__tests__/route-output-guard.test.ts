@@ -38,6 +38,18 @@ describe("real route-output guard", () => {
     expect(first).toMatchObject({ payload: { text: expect.stringContaining("no voy a inventarlos") } });
   });
 
+  it("does not let a memory update re-enable an estimated ETA", async () => {
+    const state = {};
+    await pipe("tool-result", { toolName: "computeRouteTool", result: {
+      route: null, reason: "route_unavailable",
+    } }, state);
+    await pipe("tool-result", { toolName: "updateWorkingMemory", result: { ok: true } }, state);
+    const out = await pipe("text-delta", { text: "It takes about 10 minutes." }, state);
+    expect(out).toMatchObject({
+      payload: { text: expect.stringContaining("could not calculate this route") },
+    });
+  });
+
   it("preserves provider-backed successful routes unchanged", async () => {
     const state = {};
     await pipe("tool-result", { toolName: "computeRouteTool", result: {

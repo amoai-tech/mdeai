@@ -32,17 +32,36 @@ function failureMessage(reason: unknown, spanish: boolean): string {
  * Replace only that failed route turn's text, at the existing Mastra output
  * boundary, before CopilotKit/AG-UI or memory can display/persist the guess.
  */
+const SEPARATE_ANSWER_TOOLS = new Set([
+  "searchGroundedPlacesTool",
+  "search-grounded-places",
+  "searchRestaurantsTool",
+  "search-restaurants",
+  "searchRentalsTool",
+  "search-rentals",
+  "searchEventsTool",
+  "search-events",
+  "searchAttractionsTool",
+  "search-attractions",
+  "lookupPublicDiscoveryItem",
+  "lookup-public-discovery-item",
+  "readBrokerWorkspace",
+  "read-broker-workspace",
+]);
+
 export const routeUnavailableOutputGuard = {
   id: "san465-route-unavailable-output",
   async processOutputStream({ part, state, messageList }: ProcessOutputStreamArgs) {
     if (part.type === "tool-result") {
       if (part.payload.toolName !== "computeRouteTool" &&
           part.payload.toolName !== "compute-route") {
-        // Other tools own independent answers in a compound request. Once
-        // another tool completes, do not suppress its café/rental/booking reply.
-        state.routeUnavailable = false;
-        state.routeUnavailableEmitted = false;
-        state.routeFailureReason = undefined;
+        // Only a separate user-facing result may clear the failed-route guard.
+        // Memory/bookkeeping tools must not re-enable an estimated ETA.
+        if (SEPARATE_ANSWER_TOOLS.has(part.payload.toolName)) {
+          state.routeUnavailable = false;
+          state.routeUnavailableEmitted = false;
+          state.routeFailureReason = undefined;
+        }
         return part;
       }
       const result = part.payload.result;
