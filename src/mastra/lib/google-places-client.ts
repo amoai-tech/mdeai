@@ -92,11 +92,13 @@ export const DEFAULT_NEARBY_SEARCH_MASK = [
 ] as const;
 
 export function requirePlacesApiKey(): string {
-  const key = (
-    process.env.GOOGLE_PLACES_API_KEY ??
-    process.env.GOOGLE_MAPS_SERVER_API_KEY ??
-    process.env.GOOGLE_MAPS_API_KEY
-  )?.trim();
+  const key = [
+    process.env.GOOGLE_PLACES_API_KEY,
+    process.env.GOOGLE_MAPS_SERVER_API_KEY,
+    process.env.GOOGLE_MAPS_API_KEY,
+  ]
+    .map((value) => value?.trim())
+    .find((value): value is string => Boolean(value && value.length >= 8));
   if (!key || key.length < 8) {
     throw new PlacesConfigError(
       "Missing GOOGLE_PLACES_API_KEY (or GOOGLE_MAPS_SERVER_API_KEY / GOOGLE_MAPS_API_KEY) for Places API (New)",
@@ -156,6 +158,8 @@ export interface TextSearchParams {
   languageCode?: string;
   regionCode?: string;
   locationBias?: unknown;
+  /** Bounded retries; café search uses 1 so a timeout cannot issue hidden attempts. */
+  maxAttempts?: number;
   fieldMask?: readonly string[];
 }
 
@@ -203,7 +207,8 @@ export async function searchText(params: TextSearchParams): Promise<unknown> {
   const pageSize = cappedPageSize(params.pageSize);
   try {
     const [response] = await withTimeout(
-      withPlacesRetry(() =>
+      withPlacesRetry(
+        () =>
         client.searchText(
           {
             textQuery: params.textQuery,
@@ -214,6 +219,7 @@ export async function searchText(params: TextSearchParams): Promise<unknown> {
           },
           { otherArgs: { headers: { "X-Goog-FieldMask": fieldMask } } },
         ),
+        params.maxAttempts,
       ),
       PLACES_LIMITS.REQUEST_TIMEOUT_MS,
       "searchText",

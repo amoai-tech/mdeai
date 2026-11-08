@@ -1,7 +1,8 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { enrichedGroundedPlaceFieldsSchema } from "../lib/adk-grounding-types";
-import { invokeAdkGrounding } from "../lib/adk-grounding-client";
+import { invokeAdkGrounding, isAdkGroundingConfigured } from "../lib/adk-grounding-client";
+import { searchGoogleCafes, withMedellinScope } from "../lib/google-places-cafe-search";
 import { groundedPlaceSourceModes, type GroundedPlaceSourceMode } from "@/lib/grounded-place-source";
 import {
   mapAdkGroundingPins,
@@ -38,7 +39,7 @@ const groundedPlaceResultSchema = z
   .merge(enrichedGroundedPlaceFieldsSchema);
 
 const CAFE_QUERY =
-  /\b(caf[eé]s?|coffee shops?|quiet caf[eé]s?|top cafes?|list cafes?|coworking|wifi|wi-fi|laptop[- ]friendly)\b/i;
+  /\b(caf[eé]s?|cafeter[ií]as?|coffee shops?|quiet caf[eé]s?|top cafes?|list cafes?|coworking|wifi|wi-fi|laptop[- ]friendly)\b/i;
 
 const NIGHTLIFE_QUERY =
   /\b(nightlife|salsa bars?|hidden bars?|rooftop cocktails?|rooftop bars?|live music bars?|locals go to)\b/i;
@@ -141,7 +142,7 @@ function isBarLoungeDistractor(title: string): boolean {
 }
 
 function isCafeCandidateTitle(title: string): boolean {
-  return /\bcaf[eé]|coffee|brunch/i.test(title);
+  return /\bcaf[eé]|cafeter[ií]a|coffee|brunch/i.test(title);
 }
 
 export function filterCafeGroundingRows(
@@ -152,6 +153,9 @@ export function filterCafeGroundingRows(
   if (!isCafeGroundingIntent(query, intent)) return rows;
   return rows.filter((row) => {
     if (isBarLoungeDistractor(row.title)) return false;
+    if (/^(cafe|coffee_shop|bakery|brunch_restaurant)$/i.test(row.primaryType ?? "")) {
+      return true;
+    }
     return isCafeCandidateTitle(row.title);
   });
 }
@@ -403,6 +407,34 @@ export const searchGroundedPlacesTool = createTool({
       }, context);
     }
     const query = normalizeVenueGroundingQuery(rawQuery);
+    // No configured ADK endpoint => no paid provider call and no quota unit.
+    if (!isCafeGroundingIntent(rawQuery, intent) && !isAdkGroundingConfigured()) {
+      try {
+        const fallbackResults = await curatedFallback(rawQuery, pageSize ?? 5, intent);
+        return withVenueKindMetadata(
+          {
+            results: fallbackResults,
+            attribution: [],
+            source: "grounding" as const,
+            metadata: { fallback: "curated", reason: "adk_not_configured" },
+          },
+          rawQuery,
+          intent,
+        );
+      } catch (err) {
+        console.warn("[search-grounded-places] catalog fallback failed:", err);
+        return withVenueKindMetadata(
+          {
+            results: [],
+            attribution: [],
+            source: "grounding" as const,
+            metadata: { fallback: "curated", reason: "adk_not_configured" },
+          },
+          rawQuery,
+          intent,
+        );
+      }
+    }
     const quota = await incrementAndCheckGroundingQuota();
     if (!quota.allowed) {
       // Quota exceeded — degrade to curated restaurant results
@@ -437,6 +469,72 @@ export const searchGroundedPlacesTool = createTool({
         rawQuery,
         intent,
       );
+    }
+    // Real Google cafés first: the installed Places SDK supplies stable IDs,
+    // coordinates and links without depending on the absent ADK sidecar.
+    let directCafeAttempted = false;
+    let directCafeError = false;
+    if (isCafeGroundingIntent(rawQuery, intent)) {
+      directCafeAttempted = true;
+      try {
+        const direct = await searchGoogleCafes({
+          query: withMedellinScope(rawQuery),
+          pageSize: pageSize ?? 5,
+          locationBias: inputBias,
+        });
+        const filteredDirect = filterCafeGroundingRows(direct.results, rawQuery, intent);
+        if (filteredDirect.length > 0) {
+          return withVenueKindMetadata(
+            {
+              results: filteredDirect,
+              attribution: alignGroundedAttribution(filteredDirect, direct.attribution),
+              source: "grounding" as const,
+              metadata: { provider: "google_places", searchMode: "text" },
+            },
+            rawQuery,
+            intent,
+          );
+        }
+      } catch (err) {
+        directCafeError = true;
+        console.warn("[search-grounded-places] Google Places café search failed:", err);
+      }
+    }
+    // Google is the single café provider. If it fails or returns nothing, use
+    // the saved catalog immediately; do not run a second billable search.
+    if (directCafeAttempted) {
+      try {
+        const fallbackResults = await curatedFallback(rawQuery, pageSize ?? 5, intent);
+        return withVenueKindMetadata(
+          {
+            results: fallbackResults,
+            attribution: [],
+            source: "grounding" as const,
+            metadata: {
+              provider: "google_places",
+              fallback: "curated",
+              reason: directCafeError ? "google_places_unavailable" : "google_places_empty",
+            },
+          },
+          rawQuery,
+          intent,
+        );
+      } catch (err) {
+        console.warn("[search-grounded-places] café fallback failed:", err);
+        return withVenueKindMetadata(
+          {
+            results: [],
+            attribution: [],
+            source: "grounding" as const,
+            metadata: {
+              provider: "google_places",
+              reason: directCafeError ? "google_places_unavailable" : "google_places_empty",
+            },
+          },
+          rawQuery,
+          intent,
+        );
+      }
     }
     const locationBias = resolveGroundingLocationBias({
       locationBias: inputBias,
