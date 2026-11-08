@@ -120,6 +120,22 @@ describe("HostEventCopilotBridge publish HITL", () => {
     expect(screen.getByTestId("host-event-field-capacity")).toHaveProperty("value", "90");
   });
 
+  it("keeps a manually entered zero price locked for a free event", async () => {
+    render(
+      <HostEventCopilotBridge>
+        {({ draft, setDraft }) => <HostEventForm draft={draft} onChange={setDraft} />}
+      </HostEventCopilotBridge>,
+    );
+    fireEvent.change(screen.getByTestId("host-event-field-price"), { target: { value: "1" } });
+    fireEvent.change(screen.getByTestId("host-event-field-price"), { target: { value: "0" } });
+    let result: unknown;
+    await act(async () => {
+      result = await frontendTools.set_event_draft.handler!({ priceMinCop: 40000 });
+    });
+    expect(result).toMatchObject({ ok: true, lockedFields: ["priceMinCop"] });
+    expect(screen.getByTestId("host-event-field-price")).toHaveProperty("value", "0");
+  });
+
   it("reports a manually locked field instead of silently accepting an agent overwrite", async () => {
     render(
       <HostEventCopilotBridge>

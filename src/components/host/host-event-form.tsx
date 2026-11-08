@@ -75,7 +75,7 @@ export function HostEventForm({ draft, onChange }: HostEventFormProps) {
           data-testid="host-event-field-price"
           type="number"
           min={0}
-          value={draft.priceMinCop || ""}
+          value={draft.priceMinCop}
           onChange={(e) => onChange({ priceMinCop: Number(e.target.value) || 0 })}
         />
       </div>

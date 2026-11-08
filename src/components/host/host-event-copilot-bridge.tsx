@@ -107,7 +107,7 @@ export function HostEventCopilotBridge({ children }: HostEventCopilotBridgeProps
     if (reset) manualFields.clear();
     for (const [key, value] of Object.entries(patch)) {
       if (reset) break;
-      const empty = value == null || value === "" || value === 0 ||
+      const empty = value == null || value === "" ||
         (Array.isArray(value) && value.length === 0);
       if (empty) manualFields.delete(key);
       else manualFields.add(key);
