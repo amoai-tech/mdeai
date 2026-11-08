@@ -73,6 +73,8 @@ const PROD_SPECS = [
   "**/prod-copilotkit-isolation.spec.ts",
   "**/prod-concierge-thread-lifecycle.spec.ts",
   "**/prod-concierge-stop-retry.spec.ts",
+  ...(process.env.MDE_SAN1631_POSTMERGE === "1"
+    ? ["**/prod-san1631-*.spec.ts"] : []),
   "**/prod-renter-mobile-chat.spec.ts",
   "**/prod-release-health.spec.ts",
   "**/san-1413-saved-chat-continuity.spec.ts",
