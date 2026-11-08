@@ -106,6 +106,7 @@ describe("GET /api/places/detail — rate limiting", () => {
 
     expect(res.status).toBe(503);
     expect(res.headers.get("Cache-Control")).toBe("no-store");
+    expect(res.headers.get("Retry-After")).toBe("5");
     expect(vi.mocked(fetchPlaceDetailsWithCache)).not.toHaveBeenCalled();
   });
 

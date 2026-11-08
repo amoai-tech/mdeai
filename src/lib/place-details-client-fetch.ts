@@ -44,7 +44,17 @@ async function fetchOnce(
   );
   if (!res.ok) {
     if (NO_RETRY_STATUSES.has(res.status)) {
-      writeFailure(placeId);
+      // A transient shared-quota outage must not poison this place for 10 minutes.
+      // Other 503 failures keep the existing negative-cache backoff.
+      const body: unknown = res.status === 503
+        ? await res.json().catch(() => null)
+        : null;
+      const quotaStoreUnavailable =
+        body !== null &&
+        typeof body === "object" &&
+        "error" in body &&
+        body.error === "rate_limit_unavailable";
+      if (!quotaStoreUnavailable) writeFailure(placeId);
     }
     return "error";
   }

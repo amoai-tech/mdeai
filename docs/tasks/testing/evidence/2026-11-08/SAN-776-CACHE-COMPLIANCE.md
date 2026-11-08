@@ -37,7 +37,7 @@ The previous detail path stored the raw response (including `photos` and
 - `src/lib/place-details-cache.test.ts` — 2 pass (fresh every call, negative cache).
 - `src/__tests__/api/places-detail-route.test.ts` — 6 pass (no-store, shared cap, fail-closed store outage).
 - `src/app/api/places/photo/route.test.ts` — 3 pass (private no-store).
-- Related Places tests — 10 pass.
+- Related Places tests — 11 pass (including client recovery after a transient quota outage).
 - ESLint and `tsc` clean on changed files.
 
 ## Cost impact — API requests measured, billing charges still unmeasured
@@ -73,4 +73,7 @@ silent TTL.
 
 Details now also uses the shared `check_rate_limit` RPC (30/min/IP) before provider calls; the
 in-process limiter remains a cheap first line. The Details route returns 503 with
-`Cache-Control: no-store` when the shared quota store is unavailable, before calling Google.
+`Cache-Control: no-store` and `Retry-After: 5` when the shared quota store is
+unavailable, before calling Google. Client failure backoff excludes the specific
+`rate_limit_unavailable` 503 so a transient quota outage does not poison a café
+for ten minutes after recovery; other hard failures retain their backoff.

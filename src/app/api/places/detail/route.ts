@@ -43,7 +43,7 @@ export async function GET(req: Request) {
   if (!durable.storeAvailable) {
     return NextResponse.json(
       { error: "rate_limit_unavailable" },
-      { status: 503, headers: { "Cache-Control": "no-store" } },
+      { status: 503, headers: { "Cache-Control": "no-store", "Retry-After": "5" } },
     );
   }
   if (!durable.allowed) {
