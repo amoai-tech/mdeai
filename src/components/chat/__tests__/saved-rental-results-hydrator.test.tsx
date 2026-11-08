@@ -81,6 +81,19 @@ describe("SAN-1639 saved rental card hydration", () => {
     expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toEqual({ neighborhood: "Laureles" });
   });
 
+  it("works when AbortSignal.any is unavailable on an older mobile browser", async () => {
+    // Browsers such as older Safari lack AbortSignal.any. The restored query
+    // must still reach the normal API, not loop through a broken Retry notice.
+    vi.spyOn(AbortSignal, "any").mockImplementation(() => {
+      throw new TypeError("AbortSignal.any is unavailable");
+    });
+    const fetchMock = vi.fn(async () => Response.json({ results: [rental("older-mobile-1")] }));
+    vi.stubGlobal("fetch", fetchMock);
+    await act(async () => { mount(); });
+    await vi.waitFor(() => expect(screen.getByTestId("ids").textContent).toBe("older-mobile-1"));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps an empty state and exposes Retry if history rental fetch returns 503", async () => {
     let calls = 0;
     vi.stubGlobal("fetch", vi.fn(async () => {

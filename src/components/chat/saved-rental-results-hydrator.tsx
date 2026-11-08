@@ -40,13 +40,20 @@ export function SavedRentalResultsHydrator() {
     const isCurrent = () => !signal.aborted;
 
     const loadCards = async () => {
+      if (signal.aborted) return;
       let status: number | null = null;
+      // AbortSignal.any is unavailable on some supported mobile browsers.
+      // Per-attempt aborts also keep Retry usable after a timeout.
+      const requestController = new AbortController();
+      const onAbort = () => requestController.abort();
+      signal.addEventListener("abort", onAbort, { once: true });
+      const timeout = setTimeout(() => requestController.abort(), 15_000);
       try {
         const response = await fetch("/api/rentals/search", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(params),
-          signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
+          signal: requestController.signal,
         });
         status = response.status;
         if (!response.ok) throw new Error("rental history search unavailable");
@@ -73,6 +80,9 @@ export function SavedRentalResultsHydrator() {
           code: "saved_rental_search_unavailable",
           retryable: status == null || status >= 500 || status === 429 || status === 408,
         }, () => { void loadCards(); });
+      } finally {
+        clearTimeout(timeout);
+        signal.removeEventListener("abort", onAbort);
       }
     };
     void loadCards();
