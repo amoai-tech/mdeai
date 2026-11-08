@@ -41,14 +41,24 @@ export function RentalsConciergeCenter({ mode }: RentalsConciergeCenterProps) {
       ) : (
         <ChatProvider>
           <BrokerWorkspaceToolRenderer />
+          {/*
+            Rendered here rather than through CopilotKit's welcome-message label: that label is
+            output as a top-level heading, which would give this page two (the real title above,
+            and a paragraph of example prompts).
+          */}
+          <p
+            data-testid="rc-welcome"
+            className="px-2 pb-2 text-sm text-muted-foreground"
+          >
+            I can read your actual rental dashboard. Try: Which viewing requests need my
+            attention? Or: Show my listings in Laureles.
+          </p>
           <CopilotChat
             agentId="conciergeAgent"
             className="min-h-0 flex-1"
             labels={{
               modalHeaderTitle: "Rentals concierge",
               chatInputPlaceholder: "Ask about your listings, leads or viewings…",
-              welcomeMessageText:
-                "I can read your actual rental dashboard. Try: Which viewing requests need my attention? Or: Show my listings in Laureles.",
             }}
           />
         </ChatProvider>
