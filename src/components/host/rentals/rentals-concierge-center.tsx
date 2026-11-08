@@ -12,14 +12,6 @@ type RentalsConciergeCenterProps = {
   mode: RentalsWorkspaceMode;
 };
 
-/**
- * SAN-1124 — a real CopilotKit v2 chat using the existing conciergeAgent.
- * /app/rentals and /host/rentals are excluded from the root provider,
- * so this subtree owns the ONE runtime connection on broker pages.
- *
- * Send, Stop and Retry belong to CopilotChat; no parallel chat state,
- * API transport, synthetic replies, or second broker agent.
- */
 /** The welcome copy, as a paragraph: the page already has one heading. */
 function WelcomeMessageCopy({ className }: React.HTMLAttributes<HTMLDivElement>) {
   return (
@@ -33,6 +25,14 @@ function WelcomeMessageCopy({ className }: React.HTMLAttributes<HTMLDivElement>)
   );
 }
 
+/**
+ * SAN-1124 — a real CopilotKit v2 chat using the existing conciergeAgent.
+ * /app/rentals and /host/rentals are excluded from the root provider,
+ * so this subtree owns the ONE runtime connection on broker pages.
+ *
+ * Send, Stop and Retry belong to CopilotChat; no parallel chat state,
+ * API transport, synthetic replies, or second broker agent.
+ */
 export function RentalsConciergeCenter({ mode }: RentalsConciergeCenterProps) {
   const deterministic = isDeterministicE2E();
   return (
