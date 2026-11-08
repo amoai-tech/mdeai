@@ -353,6 +353,21 @@ describe("deterministic grounded ranking is limited to the shown result set and 
     expect(shown.some((m) => /típica tiendas is the closest/i.test(m.content))).toBe(false);
   });
 
+  it("answers unknown for Wi-Fi instead of inferring amenities", async () => {
+    coagent.state = {
+      selectedListingId: A,
+      lastGroundedResults: [{ id: "cafe-a", title: "Café Euge", distanceMeters: 36, distanceFromRentalId: A }],
+    };
+    mapState.selectedPinId = null;
+    mapState.pins = [];
+    groundedCtx.toolResult = null;
+    rerender();
+    await act(async () => { expect(await handlers.handleGroundedMessage("Which café has reliable Wi-Fi?")).toBe(true); });
+    expect(groundedNearby.handleUserMessage).not.toHaveBeenCalled();
+    expect(shown.some((m) => m.role === "assistant" && /don't have verified Wi-Fi/i.test(m.content))).toBe(true);
+    expect(shown.some((m) => m.role === "assistant" && /reliable Wi-Fi|has Wi-Fi/i.test(m.content))).toBe(false);
+  });
+
   it("answers deterministically when the shown rows belong to the current map anchor", async () => {
     coagent.state = { selectedListingId: A, lastGroundedResults: rows };
     groundedCtx.toolResult = { source: "grounding", results: [{ id: "cafe-a" }] };

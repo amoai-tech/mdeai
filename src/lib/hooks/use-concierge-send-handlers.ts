@@ -65,6 +65,11 @@ import { useRestaurantSearchFastPath } from "@/hooks/use-restaurant-search-fast-
 import { useSession } from "@/hooks/use-session";
 import { isSelectedRentalCafeNearbyRequest } from "@/lib/cafe-search-fast-path";
 import { closestGroundedResult, parseGroundedRankQuestion } from "@/lib/closest-grounded-result";
+import {
+  GROUNDED_AMENITY_UNKNOWN_MESSAGE,
+  hasExplicitAmenity,
+  isGroundedAmenityQuestion,
+} from "@/lib/grounded-amenity-guard";
 import { normalizeToolEnvelope } from "@/lib/normalize-tool-envelope";
 import { useOptionalMapContext } from "@/platform/maps/map-context";
 import { useGroundedFastPath } from "@/components/chat/grounded-fast-path-context";
@@ -108,6 +113,16 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
     (text: string, submissionId?: string): Promise<boolean> => {
       // Closest/nearest answers come from measured data, not another model turn.
       // This prevents invented distances and raw Place IDs in the reply.
+      const amenityRows = (state as { lastGroundedResults?: Array<Record<string, unknown>> } | undefined)
+        ?.lastGroundedResults;
+      if (
+        amenityRows?.length &&
+        isGroundedAmenityQuestion(text) &&
+        !hasExplicitAmenity(amenityRows)
+      ) {
+        showExchange(text, GROUNDED_AMENITY_UNKNOWN_MESSAGE, submissionId);
+        return Promise.resolve(true);
+      }
       const groundedMemory = state as
         | { lastGroundedResults?: Parameters<typeof closestGroundedResult>[0]; selectedListingId?: string }
         | undefined;
