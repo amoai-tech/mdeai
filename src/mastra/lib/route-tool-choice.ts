@@ -71,13 +71,13 @@ export function shouldForceRouteTool({
   if (!lastUser) return false;
   const text = userText(lastUser.content);
   if (!isRouteQuestion(text)) {
-    // A short mode/duration follow-up reuses the nearest earlier route question.
-    const priorRoute = userMessages
-      .slice(0, -1)
-      .reverse()
-      .some((m) => routeEndpoints(userText(m.content)) !== null);
-    const modeFollowUp = /\b(by car|driving|walking|by bike|cycling|transit|public transport|what about|and if|y si|en auto|en bici|caminando|transporte)\b/i.test(text);
-    if (!(priorRoute && modeFollowUp)) return false;
+    // Only a short mode-only reply directly after a real route question.
+    const previousUser = userMessages.at(-2);
+    if (!previousUser || !isRouteQuestion(userText(previousUser.content))) return false;
+    const followUp = text.trim().replace(/^¿+/, "");
+    if (!/^(?:and\s+|y\s+)?(?:by car|driving|by bike|cycling|walking|transit|public transport|en auto|en bici|caminando|transporte)\s*\??$/i.test(followUp)) {
+      return false;
+    }
   }
   return !steps.some((step) =>
     step.toolCalls?.some((call) => ROUTE_TOOL_NAMES.has(call.toolName || "")),

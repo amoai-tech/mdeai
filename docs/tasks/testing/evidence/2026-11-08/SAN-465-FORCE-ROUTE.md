@@ -42,9 +42,11 @@ without endpoints are not forced. These require request-context reuse and are do
 
 ## Final review pass
 
-- Route follow-up “And by car?” after an earlier two-endpoint route question forces the tool using
-  the earlier route context.
-- Tool result cache on the shared RequestContext reuses the same origin/destination/mode result, so a
-  retried turn does not reserve another quota slot or call Google.
+- A short mode-only follow-up (“And by car?”, “¿Y en bici?”) directly after a real route question
+  forces the tool. Ordinary later messages (“What about cafés…”, “Find apartments within walking
+  distance…”) do not.
+- Tool result cache on the shared RequestContext avoids duplicate calls **within the same agent run**.
+  It does **not** persist across a new HTTP/agent run; retry deduplication remains unverified and is
+  not claimed.
 - Prompt now explicitly says a null route must be reported as unavailable with no estimate/substitute.
-- 23 route-intent tests + 8 tool tests pass.
+- 25 route-intent tests + 8 tool tests pass.
