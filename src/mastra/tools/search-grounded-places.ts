@@ -2,6 +2,7 @@ import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { enrichedGroundedPlaceFieldsSchema } from "../lib/adk-grounding-types";
 import { invokeAdkGrounding } from "../lib/adk-grounding-client";
+import { groundedPlaceSourceModes, type GroundedPlaceSourceMode } from "@/lib/grounded-place-source";
 import {
   mapAdkGroundingPins,
   type GroundedPlaceResult,
@@ -29,6 +30,7 @@ const groundedPlaceResultSchema = z
     latitude: z.number().optional(),
     longitude: z.number().optional(),
     placeId: z.string().optional(),
+    sourceMode: z.enum(groundedPlaceSourceModes).optional(),
     mapsUrl: z.string().url().optional(),
     directionsUrl: z.string().url().optional(),
     reviewsUrl: z.string().url().optional(),
@@ -172,10 +174,11 @@ function neighborhoodFromGroundingQuery(query: string): string | undefined {
  * Map a curated Restaurant row to the GroundedPlaceResult shape expected by
  * parseGroundedToolResult / GroundedCafeResults. Used when ADK is unavailable.
  */
-function restaurantToGroundedRow(r: Restaurant): GroundedPlaceResult {
+function restaurantToGroundedRow(r: Restaurant, sourceMode: GroundedPlaceSourceMode): GroundedPlaceResult {
   return {
     id: r.id,
     title: r.name,
+    sourceMode,
     latitude: r.latitude ?? undefined,
     longitude: r.longitude ?? undefined,
     placeId: r.placeId ?? undefined,
@@ -201,6 +204,7 @@ function anchorToGroundedRow(
   return {
     id: row.id,
     title: row.name,
+    sourceMode: "saved_catalog",
     latitude: latitude ?? undefined,
     longitude: longitude ?? undefined,
     placeId: row.google_place_id,
@@ -267,18 +271,22 @@ async function curatedFallback(
     }
   }
 
-  const { results } = await searchRestaurants({
+  const { results, source } = await searchRestaurants({
     neighborhood,
     cuisine: isCoffee ? ("cafe" as const) : undefined,
     limit: pageSize,
   });
-  if (results.length > 0) return results.map(restaurantToGroundedRow);
+  if (results.length > 0) return results.map((row) => restaurantToGroundedRow(
+    row, source === "fallback" ? "demo_fixture" : "saved_catalog",
+  ));
   if (isCoffee) {
-    const { results: broader } = await searchRestaurants({
+    const { results: broader, source: broaderSource } = await searchRestaurants({
       neighborhood,
       limit: pageSize,
     });
-    return broader.map(restaurantToGroundedRow);
+    return broader.map((row) => restaurantToGroundedRow(
+      row, broaderSource === "fallback" ? "demo_fixture" : "saved_catalog",
+    ));
   }
   return [];
 }
@@ -321,7 +329,7 @@ export const searchGroundedPlacesInputSchema = z.object({
 export const searchGroundedPlacesTool = createTool({
   id: "search-grounded-places",
   description:
-    "Search real places near Medellín using Google Maps Grounding Lite (cafés, venues, POIs). Returns map pins with Google Maps links — never invent coordinates.",
+    "Search places near Medellín using existing Google grounding or clearly source-labeled saved catalog fallback. Each row has a sourceMode; saved listings are NOT live Google verification. Never invent coordinates, ratings, Wi-Fi quality, or opening hours.",
   inputSchema: searchGroundedPlacesInputSchema,
   outputSchema: z.object({
     results: z.array(groundedPlaceResultSchema),

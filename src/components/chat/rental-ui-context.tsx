@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type { GroundedPhotoAttribution, GroundingSource } from "@/lib/parse-grounded-tool-result";
+import type { GroundedPhotoAttribution, GroundingSource, GroundedPlaceSourceMode } from "@/lib/parse-grounded-tool-result";
 import type { EventVenueOfferingsPayload } from "@/lib/venues/event-venue-offerings-types";
 import type { Rental } from "@/mastra/tools/search-rentals";
 
@@ -99,6 +99,7 @@ export type CafeVenueDetail = {
   photoName?: string;
   photoAuthorAttributions?: GroundedPhotoAttribution[];
   fieldMaskVersion?: string;
+  sourceMode?: GroundedPlaceSourceMode;
   factsCheckedAt?: string;
   rank?: number;
   /** Google's own source for this place; absent on curated fallback rows (SAN-878). */
@@ -158,6 +159,7 @@ export type NightlifeVenueDetail = {
   photoName?: string;
   photoAuthorAttributions?: GroundedPhotoAttribution[];
   fieldMaskVersion?: string;
+  sourceMode?: GroundedPlaceSourceMode;
   rank?: number;
   /** Google's own source for this place; absent on curated fallback rows (SAN-878). */
   groundingSource?: GroundingSource;

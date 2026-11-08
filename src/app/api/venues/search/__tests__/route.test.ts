@@ -97,6 +97,7 @@ describe("POST /api/venues/search", () => {
     expect(json.kind).toBe("cafe");
     expect(json.total).toBe(1);
     expect(json.results[0]).toMatchObject({
+      sourceMode: "saved_catalog",
       // The Laureles café, not the El Poblado one the query excluded.
       id: "11111111-1111-4111-8111-111111111111",
       title: "Rituales Compañía de Café",

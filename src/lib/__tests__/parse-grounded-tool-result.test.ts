@@ -106,6 +106,36 @@ describe("parseGroundedToolResult", () => {
     expect(parsed.results[0]?.photoName).toContain("photos/");
   });
 
+  it("preserves provider source and rejects invented ratings/open-now/coordinates", () => {
+    const parsed = parseGroundedToolResult({
+      source: "grounding",
+      results: [{
+        id: "ChIJabc",
+        title: "Café in Laureles",
+        sourceMode: "google_places",
+        placeId: "ChIJabc",
+        rating: Number.POSITIVE_INFINITY,
+        openNow: "probably",
+      }],
+    });
+    expect(parsed.results[0]?.sourceMode).toBe("google_places");
+    expect(parsed.results[0]?.rating).toBeUndefined();
+    expect(parsed.results[0]?.openNow).toBeUndefined();
+    expect(parsed.results[0]?.latitude).toBeUndefined();
+  });
+
+  it("never promotes a curated fallback to live Google even if metadata is inconsistent", () => {
+    const url = "https://maps.google.com/?cid=123";
+    const parsed = parseGroundedToolResult({
+      source: "grounding",
+      metadata: { fallback: "curated" },
+      results: [{ id: "r1", title: "Stored café", sourceMode: "google_places", mapsUrl: url }],
+      attribution: [{ placeUri: url, title: "Google Place", source: "google_maps_grounding" }],
+    });
+    expect(parsed.results[0]?.sourceMode).toBe("saved_catalog");
+    expect(parsed.results[0]?.groundingSource).toBeUndefined();
+  });
+
   it("reads venueKind from metadata", () => {
     const parsed = parseGroundedToolResult({
       source: "grounding",

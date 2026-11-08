@@ -39,7 +39,7 @@ import { searchGroundedPlacesTool } from "../search-grounded-places";
 import { adkUnavailableMock } from "./grounded-places-test-helpers";
 
 type GroundedOut = {
-  results: { title?: string; placeId?: string; latitude?: number; longitude?: number }[];
+  results: { title?: string; placeId?: string; latitude?: number; longitude?: number; sourceMode?: string }[];
   source: string;
   metadata?: Record<string, unknown>;
 };
@@ -94,6 +94,27 @@ describe("searchGroundedPlacesTool fallback", () => {
     expect(out.results.length).toBeGreaterThan(0);
     expect(out.results[0]?.title).toBe("Pergamino Café");
     expect(out.results[0]?.latitude).toBe(6.2489);
+    expect(out.metadata?.fallback).toBe("curated");
+    expect(out.results[0]?.sourceMode).toBe("demo_fixture");
+  });
+
+  it("labels real Supabase fallback rows as saved catalog, not live Google", async () => {
+    vi.mocked(invokeAdkGrounding).mockResolvedValue(
+      adkUnavailableMock({ reason: "adk_unavailable", status: 503 }),
+    );
+    vi.mocked(searchRestaurants).mockResolvedValue({
+      results: [{ ...cafeRow, rating: undefined, latitude: undefined, longitude: undefined, placeId: null, mapsUrl: null }],
+      total: 1,
+      source: "supabase",
+    });
+    const out = await runGrounded("specialty coffee Laureles");
+
+    expect(out.results[0]).toMatchObject({
+      title: "Pergamino Café",
+      sourceMode: "saved_catalog",
+    });
+    expect(out.results[0]?.latitude).toBeUndefined();
+    expect(out.results[0]?.placeId).toBeUndefined();
     expect(out.metadata?.fallback).toBe("curated");
   });
 

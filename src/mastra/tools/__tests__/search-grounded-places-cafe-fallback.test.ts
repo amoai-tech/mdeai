@@ -40,7 +40,7 @@ import { searchGroundedPlacesTool } from "../search-grounded-places";
 import { adkUnavailableMock } from "./grounded-places-test-helpers";
 
 type GroundedOut = {
-  results: { title?: string; placeId?: string; latitude?: number; longitude?: number }[];
+  results: { title?: string; placeId?: string; latitude?: number; longitude?: number; sourceMode?: string }[];
   source: string;
   metadata?: Record<string, unknown>;
 };
@@ -84,6 +84,7 @@ describe("searchGroundedPlacesTool café venue_anchors fallback (UX-T-013)", () 
     expect(out.results.length).toBeGreaterThan(0);
     expect(out.results[0]?.title).toBe("Pergamino Café Laureles");
     expect(out.results[0]?.placeId).toBe("ChIJtest");
+    expect(out.results[0]?.sourceMode).toBe("saved_catalog");
     expect(out.metadata?.fallback).toBe("curated");
   });
 
