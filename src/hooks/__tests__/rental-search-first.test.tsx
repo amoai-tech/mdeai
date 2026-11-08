@@ -43,6 +43,7 @@ type Probe = {
   hasResult: () => boolean;
   failure: () => { code: string; retryable: boolean } | null;
   previousQuery: () => string | undefined;
+  hasListing: (id: string) => boolean;
 };
 let probe: Probe;
 /** Messages the hook gave back to the sender (the real chat sends these to the concierge). */
@@ -68,6 +69,7 @@ function Harness() {
       hasResult: () => rental.toolResult != null,
       failure: () => rental.searchFailure,
       previousQuery: () => rental.searchMeta?.userText,
+      hasListing: (id) => JSON.stringify(rental.toolResult).includes(id),
     };
   });
   return null;
@@ -174,17 +176,27 @@ describe("SAN-407 · rental chat searches before it asks", () => {
     expect(probe.hasResult()).toBe(false);
   });
 
-  it("a display error after HTTP 200 is not mislabeled as a retryable network outage", async () => {
-    respond(200, { results: [] });
+  it("a display error after HTTP 200 keeps prior real cards, metadata and memory", async () => {
+    const previous = {
+      id: "previous_card_101", title: "Earlier apartment", neighborhood: "Laureles",
+      nightly_price: 55, currency: "USD", bedrooms: 1,
+      latitude: 6.2515, longitude: -75.5922,
+    };
+    const replacement = { ...previous, id: "new_card_202", title: "Replacement apartment" };
+    respond(200, { results: [previous] });
     const firstQuestion = "Search apartments Medellín";
     expect(await send(firstQuestion)).toBe(true);
     expect(probe.previousQuery()).toBe(firstQuestion);
+    expect(probe.hasListing(previous.id)).toBe(true);
 
+    respond(200, { results: [replacement] });
     map.throwRentalMergeOnce = true;
     expect(await send("Only apartments in Laureles")).toBe(true);
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(probe.failure()).toEqual({ status: null, code: "result_processing_error", retryable: false });
     expect(probe.previousQuery()).toBe(firstQuestion);
+    expect(probe.hasListing(previous.id)).toBe(true);
+    expect(probe.hasListing(replacement.id)).toBe(false);
     expect(assistantText()).toMatch(/new rental results could not be displayed/i);
     expect(assistantText()).not.toMatch(/rental search is temporarily unavailable/i);
     expect(unhandled).toEqual([]);

@@ -165,20 +165,24 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
         budgetNote?: string;
       },
     ) => {
-      clearOthers("rental");
+      // Compute the next consistent view before publishing any card envelope.
+      // If normalization/map operations throw, keep the previous genuine cards
+      // and their searchMeta/working memory instead of exposing mismatched data.
       const envelope = rentalsToToolEnvelope(cards, meta);
-      setToolResult(envelope);
       const { pins } = normalizeToolOutput("rental", envelope);
-      mergePinsByCategory("rental", pins);
-      if (pins.length >= 2) requestFitBounds();
       const nextMemory: ConciergeWorkingMemory = {
         ...memory,
         lastIntent: "rental_search",
         lastRentalQuery: { ...query, genericAskPending: false },
         lastRentalResults: rentalsToPanelRows(cards),
       };
-      latestMemoryRef.current = nextMemory;
+      clearOthers("rental");
+      mergePinsByCategory("rental", pins);
+      if (pins.length >= 2) requestFitBounds();
       setState(nextMemory);
+      latestMemoryRef.current = nextMemory;
+      // Commit the visible cards last; searchMeta is set only after this returns.
+      setToolResult(envelope);
       return pins.length;
     },
     [mergePinsByCategory, requestFitBounds, setState, setToolResult, clearOthers],
