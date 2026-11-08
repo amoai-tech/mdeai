@@ -12,14 +12,22 @@ export function isGroundedAmenityQuestion(text: string): boolean {
   if (/\b(apartments?|rentals?|listings?|lodging|hotels?|rooms?|bedrooms?|apartamentos?|departamentos?|alojamientos?|habitacion|propiedad)\b/.test(q)) {
     return false;
   }
-  // New requests for places must be sent to the existing search provider.
+  // An explicit location is a new request ("Which place in Laureles?"),
+  // unless the user clearly points to already displayed rows ("in this list").
+  const refersToShownList =
+    /\b(these|those|estos?|estas?|esos?|esas?|this list|the list|the results|these results|esta lista|los resultados)\b/.test(q);
+  const placeNoun = "(?:cafes?|coffee shops?|cafeterias?|places?|spots?|lugares?)";
+  const locationWord = "(?:in|near|around|en|cerca)";
+  const placeSpecificSearch = new RegExp(
+    "\\b(?:which|what|que|cual(?:es)?)\\s+" + placeNoun + "\\s+" + locationWord + "\\b",
+  ).test(q) || new RegExp(
+    "\\b" + placeNoun + "\\s+" + locationWord + "\\s+\\w+\\b",
+  ).test(q);
+  // Explicit commands always search; location questions search unless referring
+  // to this list/results. "Which of these near me..." stays a follow-up.
   if (/\b(find|show|search|looking for|busca(?:r|me)?|buscar|muestrame|encuentra|nuev[oa]s?)\b/.test(q) ||
       /\b(are there|is there|can you find|hay cafeterias|hay cafes)\b/.test(q) ||
-      // Explicit place-specific "which café in X" is a *new* search, not
-      // an answer about "these" rows. Cover singular, plural and Spanish.
-      /\b(which|what|que|cual(?:es)?)\s+(?:cafes?|coffee shops?|cafeterias?)\s+(?:in|near|around|en|cerca)\b/.test(q) ||
-      (/\b(?:cafes?|coffee shops?|cafeterias?)\s+(?:in|near|around|en|cerca)\s+\w+\b/.test(q) &&
-       !/\b(these|those|estos?|estas?|esos?|esas?)\b/.test(q))) {
+      (placeSpecificSearch && !refersToShownList)) {
     return false;
   }
   // A contextual "recommend" or "near" still describes a follow-up when

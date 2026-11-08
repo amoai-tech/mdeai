@@ -10,6 +10,9 @@ describe("grounded amenity follow-up classification", () => {
     "¿Cuál tiene buen wifi?",
     "¿Tienen enchufes?",
     "Does this café have internet?",
+    "Which café in this list has Wi-Fi?",
+    "Which cafe in the results has outlets?",
+
   ])("recognizes a question about displayed places: %s", (question) => {
     expect(isGroundedAmenityQuestion(question)).toBe(true);
   });
@@ -22,6 +25,9 @@ describe("grounded amenity follow-up classification", () => {
     "Which café in Poblado has Wi-Fi?",
     "Which coffee shop in Envigado has Wi-Fi?",
     "¿Qué cafés en Laureles tienen wifi?",
+    "Which place in Laureles has Wi-Fi?",
+    "Which spot in Poblado has outlets?",
+
 
     "Recommend cafés with Wi-Fi in Laureles",
     "¿Hay cafeterías con enchufes cerca?",
