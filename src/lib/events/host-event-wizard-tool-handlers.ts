@@ -170,11 +170,8 @@ function normalizeReviewedEventDate(draft: EventDraftState): EventDraftState {
 export function selectPublishDraft(
   argsDraft: unknown,
   fallbackDraft: EventDraftState,
-  preferLatestDraft = false,
+  manualFields?: ReadonlySet<string>,
 ): EventDraftState {
-  if (preferLatestDraft && isDraftReadyForPublish(fallbackDraft)) {
-    return normalizeReviewedEventDate(fallbackDraft);
-  }
   if (argsDraft == null) return normalizeReviewedEventDate(fallbackDraft);
   const parsed = publishToolFields.safeParse(argsDraft);
   if (!parsed.success) return normalizeReviewedEventDate(fallbackDraft);
@@ -184,7 +181,13 @@ export function selectPublishDraft(
   const patch = dateIso !== undefined && !isValidEventDraftDate(dateIso)
     ? fields
     : parsed.data;
-  const merged = mergeEventDraft(fallbackDraft, patch);
+  // Manual wizard edits win over older publish-tool args, while other valid
+  // AI changes (for example a price or description) still merge and appear in
+  // the review panel.
+  const reviewedPatch = manualFields
+    ? Object.fromEntries(Object.entries(patch).filter(([key]) => !manualFields.has(key)))
+    : patch;
+  const merged = mergeEventDraft(fallbackDraft, reviewedPatch);
   return normalizeReviewedEventDate(
     isDraftReadyForPublish(merged) ? merged : fallbackDraft,
   );

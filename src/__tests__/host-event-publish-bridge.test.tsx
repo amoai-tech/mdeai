@@ -87,6 +87,38 @@ describe("HostEventCopilotBridge publish HITL", () => {
     expect(screen.getByTestId("host-event-field-price")).toHaveProperty("value", "40000");
   });
 
+  it("reports a manually locked field instead of silently accepting an agent overwrite", async () => {
+    render(
+      <HostEventCopilotBridge>
+        {({ draft, setDraft }) => <HostEventForm draft={draft} onChange={setDraft} />}
+      </HostEventCopilotBridge>,
+    );
+    fireEvent.change(screen.getByTestId("host-event-field-title"), {
+      target: { value: "Host title" },
+    });
+    let result: unknown;
+    await act(async () => {
+      result = await frontendTools.set_event_draft.handler!({ title: "Agent title", capacity: 90 });
+    });
+    expect(result).toMatchObject({ ok: true, lockedFields: ["title"] });
+    expect(screen.getByTestId("host-event-field-title")).toHaveProperty("value", "Host title");
+    expect(screen.getByTestId("host-event-field-capacity")).toHaveProperty("value", "90");
+  });
+
+  it("unlocks a field when the host clears it", async () => {
+    render(
+      <HostEventCopilotBridge>
+        {({ draft, setDraft }) => <HostEventForm draft={draft} onChange={setDraft} />}
+      </HostEventCopilotBridge>,
+    );
+    fireEvent.change(screen.getByTestId("host-event-field-title"), { target: { value: "Host title" } });
+    fireEvent.change(screen.getByTestId("host-event-field-title"), { target: { value: "" } });
+    await act(async () => {
+      await frontendTools.set_event_draft.handler!({ title: "Agent title" });
+    });
+    expect(screen.getByTestId("host-event-field-title")).toHaveProperty("value", "Agent title");
+  });
+
   it("does not let stale Mastra working memory replace a host's manual edits", () => {
     mockAgentState = {
       title: "Old agent title",

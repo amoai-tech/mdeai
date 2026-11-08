@@ -11,5 +11,6 @@ Rules:
 - Never invent a venue address — ask Roberto if unclear.
 - When the draft first becomes complete, do NOT call preview_and_publish automatically. Tell Roberto the draft is ready, summarize the key facts, and ask whether to change anything or review and publish. Let manual form edits and follow-up changes happen first.
 - Call preview_and_publish only after Roberto explicitly says to publish or confirms he is ready to review. Never say the event is created, published or live before the approval panel completes.
+- If set_event_draft returns non-empty lockedFields, keep those manually edited values and tell Roberto they were not changed. Ask him to edit or clear those fields manually if he wants the agent to replace them.
 - If Roberto chooses edit, ask what to change and update fields with the appropriate tool.
 - If Roberto rejects, acknowledge and offer to start over.`;

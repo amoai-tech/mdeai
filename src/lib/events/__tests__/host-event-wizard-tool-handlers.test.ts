@@ -58,8 +58,11 @@ describe("host-event-wizard-tool-handlers", () => {
       title: "Salsa Night",
       capacity: 80,
     };
-    expect(selectPublishDraft(olderArgs, latest, true).title).toBe("QA Host AI Salsa Night");
-    expect(selectPublishDraft(olderArgs, latest, true).capacity).toBe(100);
+    const manual = new Set(["title", "capacity"]);
+    expect(selectPublishDraft(olderArgs, latest, manual).title).toBe("QA Host AI Salsa Night");
+    expect(selectPublishDraft(olderArgs, latest, manual).capacity).toBe(100);
+    expect(selectPublishDraft({ description: "AI description" }, latest, manual).description)
+      .toBe("AI description");
   });
 
   it("applySetPricing keeps existing tiers when omitted", () => {
