@@ -282,6 +282,26 @@ describe("RentalAskComposer (SAN-1421)", () => {
     await waitFor(() => expect(draftValue()).toBe(""));
   });
 
+  it("applies a native rental page command even while the chat agent is connecting", async () => {
+    coagent.isReady = false;
+    render(<RentalAskComposer context={{ neighborhood: null, beds: null, from: null, through: null }} />);
+    type("On this page, show only 1-bedroom apartments in Laureles.");
+    const button = screen.getByTestId("rental-ask-send");
+    expect(button.hasAttribute("disabled")).toBe(false);
+    fireEvent.click(button);
+    expect(router.push).toHaveBeenCalledWith("/rentals?neighborhood=Laureles&beds=1");
+    expect(chat.appendMessage).not.toHaveBeenCalled();
+  });
+
+  it("does not dispatch semantic rental search while the agent is still connecting", async () => {
+    coagent.isReady = false;
+    render(<RentalAskComposer context={{ neighborhood: null, beds: null, from: null, through: null }} />);
+    type("On this page, show furnished apartments under COP 3M.");
+    expect(screen.getByTestId("rental-ask-send").hasAttribute("disabled")).toBe(true);
+    expect(chat.appendMessage).not.toHaveBeenCalled();
+    expect(router.push).not.toHaveBeenCalled();
+  });
+
   it("updates the existing Rentals URL for an explicit page command without the agent", async () => {
     render(<RentalAskComposer context={{ neighborhood: null, beds: null, from: null, through: null }} />);
     type("On this page, show only 1-bedroom apartments in Laureles.");
@@ -302,19 +322,15 @@ describe("RentalAskComposer (SAN-1421)", () => {
     expect((await screen.findByTestId("rental-ask-error")).textContent).toContain("reversed");
   });
 
-  it("sends negated or semantic page requests through the full search instead of partial navigation", async () => {
+  it.each([
+    "On this page, remove the Laureles filter.",
+    "On this page, show quiet 1-bedroom apartments in Laureles near cafés.",
+  ])("sends the entire unsupported request to the agent: %s", async (message) => {
     render(<RentalAskComposer context={{ neighborhood: null, beds: null, from: null, through: null }} />);
-    for (const message of [
-      "On this page, remove the Laureles filter.",
-      "On this page, show quiet 1-bedroom apartments in Laureles near cafés.",
-    ]) {
-      type(message);
-      fireEvent.click(screen.getByTestId("rental-ask-send"));
-      await waitFor(() => expect(chat.appendMessage).toHaveBeenCalled());
-      expect(router.push).not.toHaveBeenCalled();
-      chat.appendMessage.mockClear();
-      // A mocked successful turn has no in-flight work after dispatch.
-    }
+    type(message);
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+    await waitFor(() => expect(chat.appendMessage).toHaveBeenCalledOnce());
+    expect(router.push).not.toHaveBeenCalled();
   });
 
   it("sends an explicit bedroom request above the native range to the agent, not a widened page", async () => {

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { buildRentalsUrl, type RentalBrowseFilterState } from "@/lib/rentals/browse-filters";
 import { isOrderedStay, isRealCalendarDate } from "@/lib/rentals/date-only";
-import { buildRentalSearchParams, scoreRentalQuery } from "@/lib/rental-query-parser";
+import { buildRentalSearchParams, scoreRentalQuery, MAX_RENTAL_TEXT_CHARS } from "@/lib/rental-query-parser";
 
 /** Only native rental URL filters may be changed by a page-control action. */
 export const rentalPageControlSchema = z.object({
@@ -29,24 +29,48 @@ export function applyRentalPageControl(
 }
 
 /**
- * Deterministic fast path for explicit page commands such as "on this page, show
- * only 1-bedroom apartments in Laureles". It only handles native URL filters;
- * anything with an unsupported criterion stays on the existing search/agent path.
+ * A native URL command is safe only when every word describes a known page
+ * control. Everything else belongs to the richer rental search/agent path.
+ */
+const NATIVE_PAGE_COMMAND_WORDS = new Set([
+  "on", "this", "the", "page", "filter", "filters", "visible", "set", "change", "to",
+  "show", "only", "me", "please", "find", "display", "get", "for", "in", "at",
+  "from", "through", "and", "of", "a", "an", "are", "be", "as",
+  "apartment", "apartments", "rental", "rentals", "listing", "listings", "home", "homes",
+  "unit", "units", "stay", "stays", "bed", "beds", "br", "bedroom", "bedrooms",
+  "one", "two", "three", "studio", "studios",
+  "laureles", "laureless", "envigado", "poblado", "provenza", "el", "belén", "belen", "estadio",
+  "weekend", "tomorrow", "jan", "january", "feb", "february", "mar", "march",
+  "apr", "april", "may", "jun", "june", "jul", "july", "aug", "august",
+  "sep", "september", "oct", "october", "nov", "november", "dec", "december",
+]);
+
+/**
+ * Deterministic fast path for positive, fully supported page commands.
+ * Negative, semantic and unknown qualifiers must never be silently discarded.
  */
 export function parseRentalPageCommand(text: string): RentalPageControlPatch | null {
-  if (!/\bon (this|the) page\b|\bchange the page\b|\bpage filters?\b|\bset the (visible )?filters?\b/i.test(text)) {
+  if (text.length > MAX_RENTAL_TEXT_CHARS ||
+      !/\bon (this|the) page\b|\bpage filters?\b|\bset the (visible )?filters?\b|\bchange (?:the|this) page to\b/i.test(text)) {
     return null;
   }
-  if (/\b(remove|clear|without|not|don't|do not|exclude|any|all|furnished|balcony|pets?|parking|pool|gym|wifi|internet|workspace|desk|quiet|caf[eé]s?|metro|family|terrace|overlooking|nomad|remote|near|top|budget|under|below|less than)\b/i.test(text)) {
+  if (/\b(remove|clear|without|exclude|except|not|no|any|all|neither|instead|omit)\b|\bdon['’]?t\b/i.test(text)) {
     return null;
   }
   const signals = scoreRentalQuery(text);
-  if (signals.hasVibeOrUseCase || signals.hasNomad || signals.hasCafeOrGym) return null;
+  if (signals.hasBudget || signals.hasVibeOrUseCase || signals.hasNomad ||
+      signals.hasCafeOrGym || signals.cityWide || signals.explicitLimit != null) return null;
+
+  // The canonical broad parser can attach queryText to even a valid 1BR
+  // Laureles command. Validate the original words, not just queryText.
+  // Unknown words such as "near metro" / "terrace" defer the ENTIRE request.
+  const words = text.toLowerCase().match(/[a-z0-9áéíóúñ]+/g) ?? [];
+  if (!words.every((word) => NATIVE_PAGE_COMMAND_WORDS.has(word) || /^\d+(?:br|beds?|bedrooms?)?$/.test(word))) {
+    return null;
+  }
+
   const parsed = buildRentalSearchParams(text, {});
   if (!parsed) return null;
-  // The page can only apply these native filters. If the question carries a
-  // budget, stay type, broad query text or a bedroom range, send it to the
-  // existing search/agent path rather than dropping part of the request.
   if (parsed.maxPricePerNight != null || parsed.maxPriceMonthly != null ||
       parsed.stayType != null) return null;
   if (parsed.minBedrooms != null && (parsed.minBedrooms < 0 || parsed.minBedrooms > 3)) return null;
