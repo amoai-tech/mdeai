@@ -48,5 +48,6 @@ without endpoints are not forced. These require request-context reuse and are do
 - Tool result cache on the shared RequestContext avoids duplicate calls **within the same agent run**.
   It does **not** persist across a new HTTP/agent run; retry deduplication remains unverified and is
   not claimed.
-- Prompt now explicitly says a null route must be reported as unavailable with no estimate/substitute.
+- The existing concierge prompt already requires a null route to be reported as unavailable; this PR
+  does not change prompt text.
 - 25 route-intent tests + 8 tool tests pass.
