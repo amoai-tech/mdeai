@@ -147,12 +147,17 @@ function parseSaveBody(body: unknown): { rows: SaveRow[] } | { error: string } {
     if (m.rentalSearch !== undefined) {
       // A user may request an authorized search, but may NOT persist fake
       // listing objects. Bound input size and reuse the API's same schema.
-      if (m.role !== "assistant" || JSON.stringify(m.rentalSearch)?.length > 2048) {
-        return { error: "invalid rental search metadata" };
+      if (m.role !== "assistant") return { error: "invalid rental search metadata" };
+      // The renter's text is the durable source of truth. The optional search
+      // replay hint cannot make an otherwise valid question/answer disappear.
+      // Allow the same ~32K query budget as the text route plus bounded params
+      // overhead; if too large, omit ONLY the optional hint, not the exchange.
+      const metadataLength = JSON.stringify(m.rentalSearch)?.length ?? 0;
+      if (metadataLength <= MAX_CONTENT_LENGTH + 4_096) {
+        const verified = rentalSearchBodySchema.safeParse(m.rentalSearch);
+        if (!verified.success) return { error: "invalid rental search metadata" };
+        rentalSearch = verified.data;
       }
-      const verified = rentalSearchBodySchema.safeParse(m.rentalSearch);
-      if (!verified.success) return { error: "invalid rental search metadata" };
-      rentalSearch = verified.data;
     }
     rows.push({ id: m.id, role: m.role, content: m.content, ...(rentalSearch ? { rentalSearch } : {}) });
   }

@@ -195,6 +195,40 @@ describe("SAN-1531 POST /api/threads/[threadId]/messages", () => {
     expect(JSON.stringify(saved)).not.toContain("fake-card");
   });
 
+  it("persists a 2500-character rental question and its search criteria without dropping the conversation", async () => {
+    signInAs(OWNER);
+    db.threads.set(THREAD, { id: THREAD, resourceId: OWNER });
+    const queryText = "Laureles furnished two bedrooms " + "balcony ".repeat(320);
+    expect(queryText.length).toBeGreaterThan(2_500);
+    const response = await save(THREAD, { messages: [
+      { id: "lengthy-user", role: "user", content: queryText },
+      { id: "lengthy-assistant", role: "assistant", content: "Results found.", rentalSearch: {
+        neighborhood: "Laureles", minBedrooms: 2, queryText,
+      } },
+    ] });
+    expect(response.status).toBe(200);
+    expect(db.rows).toHaveLength(2);
+    expect(JSON.stringify(db.rows[1].content)).toContain("data-mde-rental-search");
+  });
+
+  it("keeps the user and assistant messages when optional search metadata is too large", async () => {
+    signInAs(OWNER);
+    db.threads.set(THREAD, { id: THREAD, resourceId: OWNER });
+    const tooLongForSearch = "x".repeat(40_000);
+    const response = await save(THREAD, { messages: [
+      { id: "oversize-user", role: "user", content: "Please find a rental" },
+      { id: "oversize-assistant", role: "assistant", content: "Results found.", rentalSearch: {
+        neighborhood: "Laureles", queryText: tooLongForSearch,
+      } },
+    ] });
+    expect(response.status).toBe(200);
+    expect(db.rows).toHaveLength(2);
+    expect(String(db.rows[1].content)).not.toContain(tooLongForSearch);
+    expect(JSON.parse(String(db.rows[1].content)).parts).toEqual([
+      { type: "text", text: "Results found." },
+    ]);
+  });
+
   it("rejects a user-row search metadata and invalid rental budget before database writes", async () => {
     signInAs(OWNER);
     db.threads.set(THREAD, { id: THREAD, resourceId: OWNER });
