@@ -80,9 +80,17 @@ export const computeRouteTool = createTool({
         const today = new Date().toISOString().slice(0, 10);
         const cache = (context as { requestContext?: { get: (key: string) => unknown; set: (key: string, value: unknown) => void } } | undefined)?.requestContext;
         const cacheKey = JSON.stringify({ origin: input.origin, destination: input.destination, travelMode: input.travelMode ?? "WALK", includePolyline: input.includePolyline === true });
-        const cached = cache?.get("mdeaiRouteToolCache") as
+        let cached:
           | Record<string, { route: Awaited<ReturnType<typeof computeGoogleRoute>> }>
           | undefined;
+        try {
+          cached = cache?.get("mdeaiRouteToolCache") as
+            | Record<string, { route: Awaited<ReturnType<typeof computeGoogleRoute>> }>
+            | undefined;
+        } catch {
+          // A broken RequestContext store is a cache miss, never a route failure.
+          cached = undefined;
+        }
         if (cached?.[cacheKey]?.route) {
           return { route: cached[cacheKey].route, source: "google_routes" as const };
         }

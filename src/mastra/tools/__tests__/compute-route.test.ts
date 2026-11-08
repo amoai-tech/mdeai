@@ -127,6 +127,26 @@ describe("computeRouteTool", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("treats a throwing RequestContext cache read as a miss", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      routes: [{ distanceMeters: 100, duration: "60s" }],
+    }), { status: 200 })));
+    const context = {
+      requestContext: {
+        get: (key: string) => {
+          if (key === "mdeaiRouteToolCache") throw new Error("cache store down");
+          return undefined;
+        },
+        set: () => {},
+      },
+    };
+    const out = await computeRouteTool.execute!({
+      origin: { address: "Laureles" },
+      destination: { address: "Provenza" },
+    }, context as never);
+    expect(out).toMatchObject({ route: { distanceMeters: 100, durationSeconds: 60 }, source: "google_routes" });
+  });
+
   it("returns route:null when Google has no route", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ routes: [] }), { status: 200 })));
     const out = await computeRouteTool.execute!({
