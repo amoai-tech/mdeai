@@ -1,7 +1,9 @@
 "use client";
 
 import type React from "react";
-import { CopilotChat } from "@copilotkit/react-core/v2";
+import { CopilotChat, CopilotChatView, useAgent, type CopilotChatViewProps } from "@copilotkit/react-core/v2";
+import { useThreadNav } from "@/lib/chat/thread-nav-context";
+import { beginLiveUserSubmit } from "@/lib/chat/live-user-message-ids";
 import { ChatProvider } from "@/components/chat/chat-provider";
 import { BrokerWorkspaceToolRenderer } from "@/components/host/rentals/broker-workspace-tool-renderer";
 import { cn } from "@/lib/utils";
@@ -24,6 +26,26 @@ function WelcomeMessageCopy({ className }: React.HTMLAttributes<HTMLDivElement>)
     </p>
   );
 }
+
+/** Wrap the native broker composer without replacing CopilotKit's Send, Stop, or Retry. */
+function BrokerChatViewInner(props: CopilotChatViewProps) {
+  const { agent } = useAgent({ agentId: "conciergeAgent" });
+  const nav = useThreadNav();
+  const threadId = nav.activeThreadId ?? nav.sessionThreadId;
+  const submit = props.onSubmitMessage;
+  const onSubmitMessage = (text: string) => {
+    if (!submit) return;
+    const finish = agent && threadId ? beginLiveUserSubmit(agent, threadId, text) : () => {};
+    try {
+      return Promise.resolve(submit(text)).finally(finish);
+    } catch (error) {
+      finish();
+      throw error;
+    }
+  };
+  return <CopilotChatView {...props} onSubmitMessage={submit ? onSubmitMessage : undefined} />;
+}
+export const BrokerChatView = Object.assign(BrokerChatViewInner, CopilotChatView);
 
 /**
  * SAN-1124 — a real CopilotKit v2 chat using the existing conciergeAgent.
@@ -58,6 +80,7 @@ export function RentalsConciergeCenter({ mode }: RentalsConciergeCenterProps) {
           <BrokerWorkspaceToolRenderer />
           <CopilotChat
             agentId="conciergeAgent"
+            chatView={BrokerChatView}
             className="min-h-0 flex-1"
             labels={{
               modalHeaderTitle: "Rentals concierge",

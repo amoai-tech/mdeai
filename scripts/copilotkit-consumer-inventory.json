@@ -9,6 +9,11 @@
   ],
   "consumers": [
     {
+      "file": "src/components/host/rentals/__tests__/broker-chat-view-submit.test.tsx",
+      "classification": "test-only",
+      "note": "Mocks the existing CopilotChat v2 view to prove broker composer submissions are marked as local sends without marking restored history."
+    },
+    {
       "file": "src/components/chat/__tests__/broker-thread-saver.test.tsx",
       "classification": "test-only",
       "note": "Mocks useAgent/UseAgentUpdate to prove the broker chat persists finished turns; no runtime CopilotKit import."

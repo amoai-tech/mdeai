@@ -18,6 +18,7 @@ import {
 } from "react";
 import { reconcileSavedHistory, type SavedThreadMessage } from "@/lib/chat/saved-thread-history";
 import { useThreadNav } from "@/lib/chat/thread-nav-context";
+import { clearLiveUserMessage, isLiveUserMessage } from "@/lib/chat/live-user-message-ids";
 import { mdeUI } from "@/components/copilot/a2ui/mde-ui-catalog";
 import { getCopilotKitClientProps } from "@/lib/copilotkit-client-props";
 import { isExpectedGuestStartup401, reportConciergeError } from "@/lib/concierge-error-store";
@@ -541,15 +542,13 @@ export function BrokerThreadSaver({
     updates: [UseAgentUpdate.OnMessagesChanged, UseAgentUpdate.OnRunStatusChanged],
   });
   const { markThreadSaved } = useThreadNav();
-  // Message IDs are the source of truth. An index is unsafe when a late replay inserts older
-  // messages ahead of fresh turns, or when a new thread reuses the same mounted component.
+  // Track local send identity; SDK replays can also contain user-role messages.
   const progress = useRef({
     threadId,
     handledIds: new Set<string>(),
     failedIds: new Set<string>(),
     retriedAfterRun: false,
     inFlight: false,
-    ready: restoreMode === "fresh",
   });
   const [drainTick, setDrainTick] = useState(0);
   useEffect(() => {
@@ -560,25 +559,23 @@ export function BrokerThreadSaver({
         failedIds: new Set<string>(),
         retriedAfterRun: false,
         inFlight: false,
-        ready: restoreMode === "fresh",
       };
     }
-  }, [threadId, restoreMode]);
+  }, [threadId]);
 
   // CopilotKit returns one stable, mutable agent: use its moving fields as dependencies.
   const messages = agent.messages ?? [];
   const messageCount = messages.length;
+  const messageIdsKey = messages.map((message) => message.id).join("\u0000");
   const lastContent = messages[messageCount - 1]?.content ?? "";
   const running = Boolean(agent.isRunning);
   const agentThreadId = agent.threadId;
   useEffect(() => {
     const state = progress.current;
     // Never write an old thread's messages to a newly selected thread.
-    if (state.threadId !== threadId || agentThreadId !== threadId || state.inFlight) return;
-    if (!state.ready) {
-      if (restoreMode === "waiting") return;
-      state.ready = true;
-    }
+    if (state.threadId !== threadId || agentThreadId !== threadId) return;
+    const current = agent.messages ?? [];
+    if (state.inFlight) return;
     if (running) state.retriedAfterRun = false;
     // A save that failed mid-run is retried exactly once when the run ends. Driving this from the
     // POST's `finally` cannot work: that block runs while the turn is still streaming.
@@ -591,10 +588,14 @@ export function BrokerThreadSaver({
     // A failed history GET is NOT proof that those messages are saved. Resume from the live
     // transcript (the POST endpoint still independently authenticates and checks ownership).
     if (restoreMode === "restored") {
-      for (const id of restoredMessageIds ?? []) state.handledIds.add(id);
+      for (const id of restoredMessageIds ?? []) {
+        state.handledIds.add(id);
+        clearLiveUserMessage(agent, threadId, id);
+      }
     }
 
-    const current = agent.messages ?? [];
+    // During the GET, reconnect can insert old user-role messages. Only IDs explicitly
+    // created at the local send boundary may be posted while waiting.
     // Only questions are ours to write. Stamped when sent, so the history reader (which orders by
     // createdAt) never puts the runtime's reply above the question that produced it.
     const answerFollowsLatestQuestion = (list: typeof current): boolean => {
@@ -610,9 +611,10 @@ export function BrokerThreadSaver({
 
     const text: { id: string; role: "user" | "assistant"; content: string }[] = [];
     const handledInBatch: string[] = [];
-    for (let i = 0; i < current.length; i++) {
-      const message = current[i];
+    for (const message of current) {
       if (state.handledIds.has(message.id) || state.failedIds.has(message.id)) continue;
+      if (restoreMode === "waiting" &&
+          !isLiveUserMessage(agent, threadId, message.id, message.content)) continue;
       // Questions only. The Mastra runtime already stores each assistant reply (as
       // `<id>-agui-text`); posting it again under the plain AG-UI id produced two rows for one
       // answer, and the id-based idempotency cannot dedupe two different ids.
@@ -651,7 +653,10 @@ export function BrokerThreadSaver({
           return;
         }
         saved = true;
-        for (const id of handledInBatch) state.handledIds.add(id);
+        for (const id of handledInBatch) {
+          state.handledIds.add(id);
+          clearLiveUserMessage(agent, threadId, id);
+        }
         // Re-read at completion: an answer can land while this POST is in flight, and the values
         // captured when the effect started would miss it. Restored ids are already handled, so a
         // replayed answer is never counted as a new one.
@@ -685,7 +690,7 @@ export function BrokerThreadSaver({
         if (saved && progress.current === state && pending) setDrainTick((n) => n + 1);
       });
   }, [agent, agentThreadId, threadId, markThreadSaved, messageCount, lastContent, running,
-    drainTick, restoreMode, restoredMessageIds]);
+    drainTick, restoreMode, restoredMessageIds, messageIdsKey]);
 
   return null;
 }
