@@ -14,7 +14,7 @@ let agentRunning = false;
 
 // CopilotKit hands back ONE mutable agent object. A fresh object per render would mask a
 // missing effect dependency, which is exactly the bug this had.
-const STABLE_AGENT = { messages: [] as Msg[], isRunning: false };
+const STABLE_AGENT = { messages: [] as Msg[], isRunning: false, threadId: "" };
 const markThreadSaved = vi.fn();
 
 vi.mock("@copilotkit/react-core/v2", () => ({
@@ -39,6 +39,7 @@ beforeEach(() => {
   markThreadSaved.mockReset();
   agentMessages = [];
   agentRunning = false;
+  STABLE_AGENT.threadId = THREAD;
   vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 200 })));
 });
 afterEach(() => vi.unstubAllGlobals());
@@ -119,11 +120,12 @@ describe("broker thread persistence", () => {
       content: `line ${i}`,
     }));
     render(<BrokerThreadSaver threadId={THREAD} />);
-    await vi.waitFor(() => expect(calls().length).toBeGreaterThan(0));
-    const ids = lastBody().messages.map((m) => m.id);
-    expect(ids.length).toBeLessThanOrEqual(4);
+    await vi.waitFor(() => expect(calls()).toHaveLength(2));
+    await vi.waitFor(() => expect(markThreadSaved).toHaveBeenCalledTimes(1));
+    const bodies = calls().map(([, opts]) => JSON.parse(String(opts.body)) as { messages: Msg[] });
+    expect(bodies.every((body) => body.messages.length <= 4)).toBe(true);
     // Oldest first: the tail-slicing bug dropped these.
-    expect(ids[0]).toBe("m0");
+    expect(bodies[0].messages[0].id).toBe("m0");
   });
 
   it("never claims success when the server rejects the save", async () => {
@@ -135,5 +137,66 @@ describe("broker thread persistence", () => {
     render(<BrokerThreadSaver threadId={THREAD} />);
     await vi.waitFor(() => expect(calls().length).toBeGreaterThan(0));
     expect(markThreadSaved).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("broker thread saver: complete and correctly scoped history", () => {
+  it("drains every message beyond the four-message API batch limit", async () => {
+    agentMessages = Array.from({ length: 6 }, (_, i) => ({
+      id: `multi${i}`,
+      role: (i % 2 === 0 ? "user" : "assistant") as Msg["role"],
+      content: `message ${i}`,
+    }));
+    render(<BrokerThreadSaver threadId={THREAD} />);
+    await vi.waitFor(() => expect(calls()).toHaveLength(2));
+    await vi.waitFor(() => expect(markThreadSaved).toHaveBeenCalledTimes(1));
+    const ids = calls().flatMap(([, opts]) => (JSON.parse(String(opts.body)) as { messages: Msg[] }).messages.map(m => m.id));
+    expect(ids).toEqual(agentMessages.map(m => m.id));
+  });
+
+  it("starts fresh when the user selects a different thread", async () => {
+    const second = "22222222-3333-4333-8333-555555555555";
+    agentMessages = [
+      { id: "u1", role: "user", content: "first question" },
+      { id: "a1", role: "assistant", content: "first answer" },
+    ];
+    const { rerender } = render(<BrokerThreadSaver threadId={THREAD} />);
+    await vi.waitFor(() => expect(markThreadSaved).toHaveBeenCalledWith(THREAD));
+    agentMessages = [
+      { id: "u2", role: "user", content: "next conversation" },
+      { id: "a2", role: "assistant", content: "next answer" },
+    ];
+    STABLE_AGENT.threadId = second;
+    rerender(<BrokerThreadSaver threadId={second} />);
+    await vi.waitFor(() => expect(markThreadSaved).toHaveBeenCalledWith(second));
+    expect(calls().at(-1)![0]).toBe(`/api/threads/${second}/messages`);
+    expect(lastBody().messages.map(m => m.id)).toEqual(["u2", "a2"]);
+  });
+
+  it("waits for the agent to select the new thread rather than misfile old messages", async () => {
+    const next = "33333333-4444-4333-8333-555555555555";
+    agentMessages = [
+      { id: "oldUser", role: "user", content: "old question" },
+      { id: "oldAnswer", role: "assistant", content: "old answer" },
+    ];
+    STABLE_AGENT.threadId = THREAD;
+    render(<BrokerThreadSaver threadId={next} />);
+    await new Promise(resolve => setTimeout(resolve, 60));
+    expect(calls()).toHaveLength(0);
+  });
+
+  it("persists a reply even if three tool-only messages separate it from the question", async () => {
+    agentMessages = [
+      { id: "u1", role: "user", content: "Which leads need my attention?" },
+      { id: "t1", role: "assistant", content: "" },
+      { id: "t2", role: "assistant", content: "" },
+      { id: "t3", role: "assistant", content: "" },
+      { id: "a1", role: "assistant", content: "No pending leads" },
+    ];
+    render(<BrokerThreadSaver threadId={THREAD} />);
+    await vi.waitFor(() => expect(markThreadSaved).toHaveBeenCalledWith(THREAD));
+    const ids = calls().flatMap(([, opts]) => (JSON.parse(String(opts.body)) as { messages: Msg[] }).messages.map(m => m.id));
+    expect(ids).toEqual(["u1", "a1"]);
   });
 });

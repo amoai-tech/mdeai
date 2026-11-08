@@ -513,44 +513,58 @@ export function BrokerThreadSaver({
     updates: [UseAgentUpdate.OnMessagesChanged, UseAgentUpdate.OnRunStatusChanged],
   });
   const { markThreadSaved } = useThreadNav();
-  const cursor = useRef(0);
-  const inFlight = useRef(false);
-  // `agent` is a stable object whose fields mutate, so it can never be the only dependency.
-  // Depend on the values that actually change, or the save never runs after the first render.
+  // A new chat keeps this component mounted. Its progress must not inherit the old thread's
+  // cursor, and an in-flight save for the old thread must not advance the new one.
+  const progress = useRef({ threadId, cursor: 0, inFlight: false });
+  const [drainTick, setDrainTick] = useState(0);
+  useEffect(() => {
+    if (progress.current.threadId !== threadId) {
+      progress.current = { threadId, cursor: 0, inFlight: false };
+    }
+  }, [threadId]);
+
+  // CopilotKit mutates one stable agent object. Watch the fields, not just its identity.
   const messages = agent.messages ?? [];
   const messageCount = messages.length;
   const lastContent = messages[messageCount - 1]?.content ?? "";
   const running = Boolean(agent.isRunning);
+  const agentThreadId = agent.threadId;
 
   useEffect(() => {
-    if (inFlight.current || running) return;
-    if (cursor.current >= messageCount) return;
+    const state = progress.current;
+    // CopilotKit may temporarily retain the old transcript while switching threads. Never
+    // write that transcript under the newly selected thread id.
+    if (state.threadId !== threadId || agentThreadId !== threadId || state.inFlight || running) return;
+    if (state.cursor >= messageCount) return;
     const current = agent.messages ?? [];
 
-    // Ordered batches from the cursor: `slice(-4)` would keep the newest and drop the rest.
-    // A window with no text (tool call/result) carries nothing restorable, so step over it in
-    // this same pass -- returning would stall every later turn behind it.
-    let from = cursor.current;
+    // Wait until this run has a real assistant answer; never save an unanswered question.
+    // The answer can occur beyond four raw messages because tool traffic also occupies slots.
+    let lastAnswer = -1;
+    for (let i = state.cursor; i < current.length; i++) {
+      const message = current[i];
+      if (message.role === "assistant" && typeof message.content === "string" &&
+          message.content.trim().length > 0) lastAnswer = i;
+    }
+    if (lastAnswer < 0) return;
+
+    // Bound each POST to four text messages, preserving oldest-first order. Tool-only messages
+    // advance the cursor but are never sent to the text-only history endpoint.
+    const from = state.cursor;
     let nextCursor = from;
-    let text: { id: string; role: "user" | "assistant"; content: string }[] = [];
-    while (from < messageCount) {
-      const batch = current.slice(from, from + 4);
-      nextCursor = from + batch.length;
-      text = batch
-        .map((message) => ({ id: message.id, role: message.role, content: message.content }))
-        .filter((message): message is { id: string; role: "user" | "assistant"; content: string } =>
-          (message.role === "user" || message.role === "assistant") &&
-          typeof message.content === "string" &&
-          message.content.trim().length > 0);
-      if (text.length > 0) break;
-      from = nextCursor;
-      cursor.current = nextCursor;
+    const text: { id: string; role: "user" | "assistant"; content: string }[] = [];
+    for (let i = from; i <= lastAnswer; i++) {
+      const message = current[i];
+      nextCursor = i + 1;
+      if ((message.role === "user" || message.role === "assistant") &&
+          typeof message.content === "string" && message.content.trim().length > 0) {
+        text.push({ id: message.id, role: message.role, content: message.content });
+        if (text.length === 4) break;
+      }
     }
     if (text.length === 0) return;
-    // A question with no reply yet has nothing to restore: hold it for the answer.
-    if (!text.some((message) => message.role === "assistant")) return;
 
-    inFlight.current = true;
+    state.inFlight = true;
     void fetch(`/api/threads/${encodeURIComponent(threadId)}/messages`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -562,14 +576,21 @@ export function BrokerThreadSaver({
           console.warn(`[BrokerThreadSaver] save failed: ${response.status}`);
           return;
         }
-        cursor.current = nextCursor;
-        markThreadSaved(threadId);
+        state.cursor = nextCursor;
+        // Do not advertise reloadability after only the first chunk of a long exchange.
+        if (nextCursor > lastAnswer) markThreadSaved(threadId);
       })
       .catch((error) => console.warn("[BrokerThreadSaver] save failed", error))
-      .finally(() => { inFlight.current = false; });
-    // The body re-reads agent.messages, so the values that can actually change are
-    // messageCount/lastContent/running; `messages` identity would re-run on every render.
-  }, [agent, threadId, markThreadSaved, messageCount, lastContent, running]);
+      .finally(() => {
+        state.inFlight = false;
+        // Successful saves may leave another batch behind. A resolved Promise is not an agent
+        // update, so explicitly drain the next batch without waiting for another user turn.
+        if (progress.current === state && state.cursor > from &&
+            state.cursor < (agent.messages?.length ?? 0)) {
+          setDrainTick((n) => n + 1);
+        }
+      });
+  }, [agent, agentThreadId, threadId, markThreadSaved, messageCount, lastContent, running, drainTick]);
 
   return null;
 }
