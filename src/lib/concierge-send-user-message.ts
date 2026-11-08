@@ -23,6 +23,8 @@ export type ConciergeSendHandlers = {
   handleEventVenueBookingMessage?: (text: string, submissionId?: string) => Promise<boolean>;
   handleEventMessage: (text: string, submissionId?: string) => Promise<boolean>;
   handleGroundedMessage: (text: string, submissionId?: string) => Promise<boolean>;
+  /** Optional current-results-only guard, checked before an agent route. */
+  handleGroundedAmenityFollowUp?: (text: string, submissionId?: string) => Promise<boolean>;
   handleRestaurantMessage: (text: string, submissionId?: string) => Promise<boolean>;
   onAgentSend: (text: string, submissionId?: string) => Promise<boolean>;
   /** Working-memory lastIntent — enables Flash topicShift (SAN-873). */
@@ -79,6 +81,12 @@ export async function sendConciergeUserMessage(
       setConciergePendingSend(true);
       agentAttempted = true;
       return await handlers.onAgentSend(trimmed, submissionId);
+    }
+
+    // An existing-results question may be classified as general concierge.
+    // Check the current café facts before any model dispatch or other fast path.
+    if (await handlers.handleGroundedAmenityFollowUp?.(trimmed, submissionId)) {
+      return true;
     }
 
     const classification = await resolveRouterClassification(trimmed, {

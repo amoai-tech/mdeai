@@ -5,6 +5,7 @@ import { useCallback } from "react";
 import { useEventFastPath } from "@/components/chat/event-fast-path-context";
 import { useEventSearchResults } from "@/components/chat/event-search-results-context";
 import { useGroundedFastPath } from "@/components/chat/grounded-fast-path-context";
+import { useOptionalRichCardResults } from "@/components/chat/rich-card-results-context";
 import { useRentalFastPath } from "@/components/chat/rental-fast-path-context";
 import { useRestaurantFastPath } from "@/components/chat/restaurant-fast-path-context";
 import { useMapContext } from "@/platform/maps/map-context";
@@ -30,6 +31,7 @@ export function useClearOtherFastPathResults() {
   const { setToolResult: setEvent } = useEventFastPath();
   const { setToolResult: setRestaurant } = useRestaurantFastPath();
   const { setToolResult: setGrounded } = useGroundedFastPath();
+  const setGroundedShownIds = useOptionalRichCardResults()?.setGroundedShownIds;
   const { clearWebCitations } = useEventSearchResults();
   const { mergePinsByCategory } = useMapContext();
 
@@ -44,11 +46,15 @@ export function useClearOtherFastPathResults() {
         clearWebCitations();
       }
       if (keep !== "restaurant") setRestaurant(null);
-      if (keep !== "grounded") setGrounded(null);
+      if (keep !== "grounded") {
+        setGrounded(null);
+        setGroundedShownIds?.([]);
+      }
       if (clearOtherPins) {
         for (const kind of KINDS) if (kind !== keep) mergePinsByCategory(kind, []);
       }
     },
-    [setRental, setRentalSearchMeta, setEvent, setRestaurant, setGrounded, clearWebCitations, mergePinsByCategory],
+    [setRental, setRentalSearchMeta, setEvent, setRestaurant, setGrounded,
+      setGroundedShownIds, clearWebCitations, mergePinsByCategory],
   );
 }

@@ -12,6 +12,11 @@ const chat = vi.hoisted(() => ({ appendMessage: vi.fn(), runtimeUnavailable: fal
 const coagent = vi.hoisted(() => ({ state: {} as Record<string, unknown> }));
 const mapState = vi.hoisted(() => ({ selectedPinId: null as string | null, pins: [] as Array<{ id: string; category: string }> }));
 const groundedCtx = vi.hoisted(() => ({ toolResult: null as unknown }));
+const richShown = vi.hoisted(() => ({ ids: [] as string[] }));
+vi.mock("@/components/chat/rich-card-results-context", () => ({
+  useOptionalRichCardResults: () => ({ groundedShownIds: richShown.ids }),
+}));
+
 vi.mock("@/lib/chat/thread-nav-context", () => ({
   useOptionalThreadNav: () => ({ activeThreadId: "thread-b", sessionThreadId: "thread-b" }),
 }));
@@ -75,6 +80,7 @@ beforeEach(() => {
   mapState.selectedPinId = null;
   mapState.pins = [];
   groundedCtx.toolResult = null;
+  richShown.ids = [];
   eventFast.activeEventId = null;
   eventFast.activeEventRows = [];
   session.user = { id: "u1" };
@@ -351,6 +357,81 @@ describe("deterministic grounded ranking is limited to the shown result set and 
     await act(async () => { expect(await handlers.handleGroundedMessage("Which café is closest?")).toBe(true); });
     expect(groundedNearby.handleUserMessage).toHaveBeenCalled();
     expect(shown.some((m) => /típica tiendas is the closest/i.test(m.content))).toBe(false);
+  });
+
+  it("answers unknown for Wi-Fi instead of inferring amenities", async () => {
+    coagent.state = {
+      selectedListingId: A,
+      lastGroundedResults: [{ id: "cafe-a", title: "Café Euge", distanceMeters: 36, distanceFromRentalId: A }],
+    };
+    mapState.selectedPinId = null;
+    mapState.pins = [];
+    groundedCtx.toolResult = { source: "grounding", results: [{ id: "cafe-a" }] };
+    rerender();
+    await act(async () => { expect(await sendConciergeUserMessage("Which café has reliable Wi-Fi?", handlers)).toBe(true); });
+    expect(groundedNearby.handleUserMessage).not.toHaveBeenCalled();
+    expect(shown.some((m) => m.role === "assistant" && /don't have verified amenity/i.test(m.content))).toBe(true);
+    expect(chat.appendMessage).not.toHaveBeenCalled();
+    expect(shown.some((m) => m.role === "assistant" && /reliable Wi-Fi|has Wi-Fi/i.test(m.content))).toBe(false);
+  });
+
+  it("does not answer from co-agent rows when no grounded cards are shown", async () => {
+    coagent.state = { lastGroundedResults: [{ id: "cafe-a", title: "Old Café" }] };
+    groundedCtx.toolResult = { source: "grounding", results: [{ id: "restaurant-new" }] };
+    chat.appendMessage.mockResolvedValue(true);
+    rerender();
+    await act(async () => { expect(await sendConciergeUserMessage("Which café has Wi-Fi?", handlers)).toBe(true); });
+    expect(shown.some((m) => /don't have verified amenity/i.test(m.content))).toBe(false);
+    expect(chat.appendMessage).toHaveBeenCalledOnce();
+  });
+
+  it("recognizes the current Mastra-rendered IDs without a fast-path tool result", async () => {
+    coagent.state = { lastGroundedResults: [{ id: "cafe-a", title: "Café Euge" }] };
+    richShown.ids = ["cafe-a"];
+    groundedCtx.toolResult = null;
+    rerender();
+    await act(async () => { expect(await sendConciergeUserMessage("Which of these has Wi-Fi?", handlers)).toBe(true); });
+    expect(shown.some((m) => /don't have verified amenity/i.test(m.content))).toBe(true);
+    expect(chat.appendMessage).not.toHaveBeenCalled();
+  });
+
+  it("does not hijack apartment Wi-Fi questions while cafés are still in memory", async () => {
+    coagent.state = { lastGroundedResults: [{ id: "cafe-a", title: "Café Euge" }] };
+    groundedCtx.toolResult = { source: "grounding", results: [{ id: "cafe-a" }] };
+    chat.appendMessage.mockResolvedValue(true);
+    rerender();
+    await act(async () => { expect(await sendConciergeUserMessage("Does the apartment have Wi-Fi?", handlers)).toBe(true); });
+    expect(shown.some((m) => /don't have verified amenity/i.test(m.content))).toBe(false);
+    expect(await handlers.handleGroundedAmenityFollowUp?.("Does the apartment have Wi-Fi?")).toBe(false);
+  });
+
+  it("protects a Spanish current-café Wi-Fi question before the agent", async () => {
+    coagent.state = { lastGroundedResults: [{ id: "cafe-a", title: "Café Euge" }] };
+    groundedCtx.toolResult = { source: "grounding", results: [{ id: "cafe-a" }] };
+    rerender();
+    await act(async () => { expect(await sendConciergeUserMessage("¿Cuál tiene buen Wi-Fi?", handlers)).toBe(true); });
+    expect(shown.some((m) => /don't have verified amenity/i.test(m.content))).toBe(true);
+    expect(chat.appendMessage).not.toHaveBeenCalled();
+  });
+
+  it("does not block a brand-new cafe Wi-Fi discovery query", async () => {
+    coagent.state = { lastGroundedResults: [{ id: "cafe-a", title: "Café Euge" }] };
+    groundedCtx.toolResult = { source: "grounding", results: [{ id: "cafe-a" }] };
+    rerender();
+    const question = "Are there cafés with Wi-Fi in Laureles?";
+    await act(async () => { expect(await sendConciergeUserMessage(question, handlers)).toBe(true); });
+    expect(shown.some((m) => /don't have verified amenity/i.test(m.content))).toBe(false);
+    expect(groundedNearby.handleUserMessage).toHaveBeenCalled();
+  });
+
+  it("preserves real Wi-Fi facts rather than returning the unknown response", async () => {
+    coagent.state = { lastGroundedResults: [{ id: "cafe-a", title: "Café Euge", wifi: false }] };
+    groundedCtx.toolResult = { source: "grounding", results: [{ id: "cafe-a" }] };
+    chat.appendMessage.mockResolvedValue(true);
+    rerender();
+    await act(async () => { expect(await sendConciergeUserMessage("Which café has Wi-Fi?", handlers)).toBe(true); });
+    expect(shown.some((m) => /don't have verified amenity/i.test(m.content))).toBe(false);
+    expect(chat.appendMessage).toHaveBeenCalledOnce();
   });
 
   it("answers deterministically when the shown rows belong to the current map anchor", async () => {

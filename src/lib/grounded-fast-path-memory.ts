@@ -60,6 +60,14 @@ export function groundedFastPathMemory({
       ...(row.formattedAddress ? { area: row.formattedAddress.slice(0, 140) } : {}),
       ...(row.summary ? { summary: row.summary.slice(0, 240) } : {}),
       ...(row.rating != null ? { rating: row.rating } : {}),
+      ...(typeof row.wifi === "boolean" ? { wifi: row.wifi } : {}),
+      ...(typeof row.hasWifi === "boolean" ? { hasWifi: row.hasWifi } : {}),
+      ...(typeof row.powerOutlets === "boolean" ? { powerOutlets: row.powerOutlets } : {}),
+      ...(typeof row.hasPowerOutlets === "boolean" ? { hasPowerOutlets: row.hasPowerOutlets } : {}),
+      ...(typeof row.seating === "boolean" ? { seating: row.seating } :
+        typeof row.seating === "string" && row.seating.trim()
+          ? { seating: row.seating.slice(0, 140) } : {}),
+      ...(typeof row.outdoorSeating === "boolean" ? { outdoorSeating: row.outdoorSeating } : {}),
       ...measured,
     };
   });

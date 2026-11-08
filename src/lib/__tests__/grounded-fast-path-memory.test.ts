@@ -80,6 +80,20 @@ describe("groundedFastPathMemory", () => {
     expect(memory.lastGroundedResults[0]).not.toHaveProperty("distanceMeters");
   });
 
+  it("keeps verified amenity facts for later follow-ups", () => {
+    const memory = groundedFastPathMemory({
+      metadata: undefined,
+      results: [{ ...rows[0], wifi: false, hasPowerOutlets: true, seating: "tables" }],
+      anchorPin: undefined,
+      attribution: [],
+    });
+    expect(memory.lastGroundedResults[0]).toMatchObject({
+      wifi: false,
+      hasPowerOutlets: true,
+      seating: "tables",
+    });
+  });
+
   it("does not select a listing for an independent grounded search", () => {
     const memory = groundedFastPathMemory({
       metadata: undefined,

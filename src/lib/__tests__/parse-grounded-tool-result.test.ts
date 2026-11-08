@@ -253,3 +253,18 @@ describe("grounding source (SAN-878)", () => {
     expect(parsed.results[0]?.groundingSource).toBeUndefined();
   });
 });
+
+describe("structured café amenities are not silently discarded", () => {
+  it("passes provider-backed facts (including false) but drops malformed values", () => {
+    const rows = parseGroundedToolResult({
+      source: "grounding",
+      results: [
+        { id: "one", title: "Café One", wifi: false, powerOutlets: true, seating: "tables" },
+        { id: "two", title: "Café Two", wifi: "very fast", seating: " " },
+      ],
+    }).results;
+    expect(rows[0]).toMatchObject({ wifi: false, powerOutlets: true, seating: "tables" });
+    expect(rows[1]?.wifi).toBeUndefined();
+    expect(rows[1]?.seating).toBeUndefined();
+  });
+});

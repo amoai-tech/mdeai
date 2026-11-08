@@ -28,7 +28,7 @@ import {
 import { readGroundedVenueKind } from "@/lib/grounded-venue-kind";
 import type { ParsedGroundedToolResult } from "@/lib/parse-grounded-tool-result";
 import { useEventSearchResults } from "@/components/chat/event-search-results-context";
-import { RichCardResultsRegistrar } from "@/components/chat/rich-card-results-context";
+import { RichCardResultsRegistrar, useOptionalRichCardResults } from "@/components/chat/rich-card-results-context";
 import { useMapContext } from "@/platform/maps/map-context";
 import { normalizeToolEnvelope, unwrapAgUiToolPayload } from "@/lib/normalize-tool-envelope";
 import { visibleEventSearchReasons } from "@/lib/event-search-fast-path";
@@ -130,6 +130,20 @@ function useGroundedListScroll(listRef: RefObject<HTMLDivElement | null>) {
   }, [selectedPinId, listRef]);
 }
 
+/** Register the current grounded cards, even when a place has no valid pin. */
+function GroundedShownIdsRegistrar({ rows }: { rows: readonly { id: string }[] }) {
+  const isCurrent = useCurrentSearchToolResult();
+  const setGroundedShownIds = useOptionalRichCardResults()?.setGroundedShownIds;
+  const idsKey = rows.map((row) => row.id).join("|");
+  useEffect(() => {
+    if (!setGroundedShownIds) return;
+    if (isCurrent) setGroundedShownIds(idsKey ? idsKey.split("|") : []);
+    else setGroundedShownIds([], idsKey);
+    return () => setGroundedShownIds([], idsKey);
+  }, [idsKey, isCurrent, setGroundedShownIds]);
+  return null;
+}
+
 export function GroundedPlaceResults({ result }: { result: unknown }) {
   const venueKind = readGroundedVenueKind(result);
   if (venueKind === "nightlife") {
@@ -216,6 +230,7 @@ export function GroundedCafeResults({ result }: { result: unknown }) {
   return (
     <>
       <RichCardResultsRegistrar category="grounded" count={rows.length} />
+      <GroundedShownIdsRegistrar rows={rows} />
       <ToolPinsSync category="grounded" result={result} />
       {rows.length === 0 ? (
         <EmptyState

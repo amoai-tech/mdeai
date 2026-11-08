@@ -122,6 +122,16 @@ describe("conciergeAgent", () => {
     );
   });
 
+  it("does not discard supported, structured café amenities in working memory", () => {
+    const parsed = conciergeWorkingMemorySchema.parse({
+      lastGroundedResults: [{ id: "cafe-1", title: "Café One", wifi: false,
+        powerOutlets: true, seating: "several tables" }],
+    });
+    expect(parsed.lastGroundedResults?.[0]).toMatchObject({
+      wifi: false, powerOutlets: true, seating: "several tables",
+    });
+  });
+
   it("every grounded follow-up rule allows distance only for the current anchor", async () => {
     const raw = await conciergeAgent.getInstructions();
     const instructions = Array.isArray(raw)

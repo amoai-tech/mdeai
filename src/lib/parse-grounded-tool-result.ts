@@ -40,6 +40,12 @@ export type GroundedToolRow = {
   formattedAddress?: string;
   primaryType?: string;
   summary?: string;
+  wifi?: boolean;
+  hasWifi?: boolean;
+  powerOutlets?: boolean;
+  hasPowerOutlets?: boolean;
+  seating?: string | boolean;
+  outdoorSeating?: boolean;
   photoName?: string;
   photoAuthorAttributions?: GroundedPhotoAttribution[];
   fieldMaskVersion?: string;
@@ -212,6 +218,14 @@ export function parseGroundedToolResult(result: unknown): ParsedGroundedToolResu
       primaryType:
         typeof row.primaryType === "string" ? row.primaryType : undefined,
       summary: typeof row.summary === "string" ? row.summary : undefined,
+      wifi: typeof row.wifi === "boolean" ? row.wifi : undefined,
+      hasWifi: typeof row.hasWifi === "boolean" ? row.hasWifi : undefined,
+      powerOutlets: typeof row.powerOutlets === "boolean" ? row.powerOutlets : undefined,
+      hasPowerOutlets: typeof row.hasPowerOutlets === "boolean" ? row.hasPowerOutlets : undefined,
+      seating: typeof row.seating === "boolean" ||
+        (typeof row.seating === "string" && row.seating.trim())
+        ? row.seating : undefined,
+      outdoorSeating: typeof row.outdoorSeating === "boolean" ? row.outdoorSeating : undefined,
       photoName:
         typeof row.photoName === "string" ? row.photoName : undefined,
       photoAuthorAttributions: readPhotoAuthorAttributions(
