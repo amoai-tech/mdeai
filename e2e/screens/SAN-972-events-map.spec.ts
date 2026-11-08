@@ -89,6 +89,7 @@ test.describe("SAN-972 /events map workspace", () => {
     expect(errors.filter((e) => !/401|copilotkit/i.test(e))).toEqual([]);
   });
 
+  /** Exercise card, overlay, Details/Back and actual pin clicks when events cluster or share a venue. */
   test("card to map and map to card use the same event ID; Details and Back work", async ({ page }) => {
     await openEvents(page, 1440, 900);
     const cards = await locatedCards(page);
@@ -128,11 +129,14 @@ test.describe("SAN-972 /events map workspace", () => {
     for (let attempt = 0; attempt < 6 && (await cluster.isVisible()); attempt++) {
       const initialZoom = Number(await map.getAttribute("data-map-zoom"));
       await cluster.click();
-      await expect.poll(async () => Number(await map.getAttribute("data-map-zoom")), {
-        timeout: 10_000,
-      }).toBeGreaterThan(initialZoom);
+      const zoomChanged = await expect.poll(
+        async () => Number(await map.getAttribute("data-map-zoom")),
+        { timeout: 2_000 },
+      ).toBeGreaterThan(initialZoom).then(() => true, () => false);
+      if (!zoomChanged) break; // Already at maximum zoom or coincident coordinates.
     }
     const markers = mapPanel.locator('[data-testid="map-pin"][data-pin-id]:visible');
+    await expect(markers.first()).toBeVisible({ timeout: 10_000 });
     let clickTarget: Locator | null = null;
     let clickedId: string | null = null;
     // Prefer a different event. If markers share identical coordinates, only
