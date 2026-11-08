@@ -435,4 +435,24 @@ describe("a finished answer makes the thread reloadable", () => {
 
     expect(markThreadSaved).not.toHaveBeenCalled();
   });
+
+  it("still saves a second question while a history restore is pending", async () => {
+    // After the first exchange the provider starts replaying history and the saver is handed
+    // restoreMode "waiting". A question typed in that window used to be swallowed: production
+    // threads held one exchange although two were on screen.
+    agentMessages = [
+      { id: "u1", role: "user", content: "q1" },
+      { id: "a1", role: "assistant", content: "a1" },
+    ];
+    const { rerender } = render(<BrokerThreadSaver threadId={THREAD} restoreMode="waiting" />);
+    await new Promise((r) => setTimeout(r, 60));
+
+    agentMessages = [
+      ...agentMessages,
+      { id: "u2", role: "user", content: "q2" },
+    ];
+    rerender(<BrokerThreadSaver threadId={THREAD} restoreMode="waiting" />);
+
+    await vi.waitFor(() => expect(calls().some(([, o]) => String(o.body).includes('"u2"'))).toBe(true));
+  });
 });

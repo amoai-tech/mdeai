@@ -548,8 +548,8 @@ export function BrokerThreadSaver({
     handledIds: new Set<string>(),
     failedIds: new Set<string>(),
     retriedAfterRun: false,
+    firstNewIndex: -1,
     inFlight: false,
-    ready: restoreMode === "fresh",
   });
   const [drainTick, setDrainTick] = useState(0);
   useEffect(() => {
@@ -559,10 +559,12 @@ export function BrokerThreadSaver({
         handledIds: new Set<string>(),
         failedIds: new Set<string>(),
         retriedAfterRun: false,
+        firstNewIndex: (agent.messages ?? []).length,
         inFlight: false,
-        ready: restoreMode === "fresh",
       };
     }
+    // Only a thread switch resets this; the baseline is read once from the live transcript.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [threadId, restoreMode]);
 
   // CopilotKit returns one stable, mutable agent: use its moving fields as dependencies.
@@ -575,10 +577,6 @@ export function BrokerThreadSaver({
     const state = progress.current;
     // Never write an old thread's messages to a newly selected thread.
     if (state.threadId !== threadId || agentThreadId !== threadId || state.inFlight) return;
-    if (!state.ready) {
-      if (restoreMode === "waiting") return;
-      state.ready = true;
-    }
     if (running) state.retriedAfterRun = false;
     // A save that failed mid-run is retried exactly once when the run ends. Driving this from the
     // POST's `finally` cannot work: that block runs while the turn is still streaming.
@@ -595,6 +593,13 @@ export function BrokerThreadSaver({
     }
 
     const current = agent.messages ?? [];
+    // While the owner-checked history is still loading, only messages that arrived *after* mount
+    // are new: the rest may still be returned by the GET, and re-posting them is wasted work.
+    if (restoreMode === "waiting" && state.firstNewIndex < 0) {
+      // First render inside the wait: whatever is already on screen may still arrive from the GET.
+      state.firstNewIndex = current.length;
+    }
+    const floor = restoreMode === "waiting" && state.firstNewIndex >= 0 ? state.firstNewIndex : 0;
     // Only questions are ours to write. Stamped when sent, so the history reader (which orders by
     // createdAt) never puts the runtime's reply above the question that produced it.
     const answerFollowsLatestQuestion = (list: typeof current): boolean => {
@@ -610,7 +615,7 @@ export function BrokerThreadSaver({
 
     const text: { id: string; role: "user" | "assistant"; content: string }[] = [];
     const handledInBatch: string[] = [];
-    for (let i = 0; i < current.length; i++) {
+    for (let i = floor; i < current.length; i++) {
       const message = current[i];
       if (state.handledIds.has(message.id) || state.failedIds.has(message.id)) continue;
       // Questions only. The Mastra runtime already stores each assistant reply (as
