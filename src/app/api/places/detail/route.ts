@@ -10,6 +10,10 @@ import {
   isPlacesDetailRateLimited,
   placesDetailRateLimitKey,
 } from "@/lib/places-detail-rate-limit";
+import {
+  checkRateLimitDurable,
+  clientIpFromRequest,
+} from "@/lib/distributed-rate-limit";
 
 export async function GET(req: Request) {
   const rateKey = placesDetailRateLimitKey(req);
@@ -28,16 +32,36 @@ export async function GET(req: Request) {
 
   const placeId = normalizePlaceId(rawId);
 
+  // Shared cap across runtime instances; the in-process limiter above is only
+  // a cheap first line. Fail closed if the quota store is unavailable, so a
+  // database outage cannot turn this endpoint into unmetered Google calls.
+  const durable = await checkRateLimitDurable(
+    `places-detail:${clientIpFromRequest(req)}`,
+    30,
+    60,
+  );
+  if (!durable.storeAvailable) {
+    return NextResponse.json(
+      { error: "rate_limit_unavailable" },
+      { status: 503, headers: { "Cache-Control": "no-store", "Retry-After": "5" } },
+    );
+  }
+  if (!durable.allowed) {
+    return NextResponse.json(
+      { error: "rate_limited" },
+      { status: 429, headers: { "Cache-Control": "no-store" } },
+    );
+  }
+
   try {
-    const { raw, cacheHit } = await fetchPlaceDetailsWithCache(placeId);
+    const { raw } = await fetchPlaceDetailsWithCache(placeId);
     const details = normalizePlaceDetails(raw);
     if (!details) {
       return NextResponse.json({ error: "place_not_found" }, { status: 404 });
     }
     return NextResponse.json(details, {
       headers: {
-        "Cache-Control": "public, max-age=3600, stale-while-revalidate=86400",
-        "X-Places-Cache": cacheHit ? "hit" : "miss",
+        "Cache-Control": "no-store",
       },
     });
   } catch (err) {

@@ -226,10 +226,12 @@ async function main(): Promise<void> {
     throw new Error("QA browser CDP port is already occupied. Close that session or use --port=...");
   }
 
-  const directory = await mkdtemp(join(tmpdir(), "mde-qa-chrome-"));
+  // Register SIGINT/SIGTERM *before* creating the profile. The CI signal
+  // regression can interrupt the launcher as soon as mkdtemp creates its
+  // directory, before the original listener was installed.
+  let directory: string | undefined;
   let child: ChildProcess | undefined;
   let connected: Browser | undefined;
-  // Install immediately after mkdtemp so Ctrl+C during login cannot leak a profile.
   const stop = new AbortController();
   const terminate = () => {
     stop.abort();
@@ -239,6 +241,8 @@ async function main(): Promise<void> {
   process.on("SIGTERM", terminate);
 
   try {
+    directory = await mkdtemp(join(tmpdir(), "mde-qa-chrome-"));
+    if (stop.signal.aborted) throw new Error("QA browser interrupted during startup.");
     const initialize = async (): Promise<void> => {
       if (stop.signal.aborted) return;
       const executable = findChromeExecutable();
@@ -316,7 +320,9 @@ async function main(): Promise<void> {
           await Promise.race([closed, delay(2_000)]);
         }
       }
-      await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 300 });
+      if (directory) {
+        await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 300 });
+      }
     } finally {
       process.off("SIGINT", terminate);
       process.off("SIGTERM", terminate);

@@ -52,17 +52,32 @@ type RentalSearchResponse = {
 
 /** A non-2xx answer from the search API, with its status so callers can tell 4xx from 5xx. */
 class RentalSearchHttpError extends Error {
-  constructor(readonly status: number) {
-    super(`rental search failed: ${status}`);
+  constructor(readonly status: number, readonly code: string) {
+    super(`/api/rentals/search returned ${status} (${code})`);
     this.name = "RentalSearchHttpError";
   }
 }
 
+/** Only a bounded error identifier from the canonical API is exposed, never raw response text. */
+function sanitizedRentalError(err: unknown): { status: number | null; code: string } {
+  if (err instanceof RentalSearchHttpError) return { status: err.status, code: err.code };
+  if ((err as { name?: unknown } | null)?.name === "TimeoutError") {
+    return { status: null, code: "search_timeout" };
+  }
+  if ((err as { name?: unknown } | null)?.name === "AbortError") {
+    return { status: null, code: "search_aborted" };
+  }
+  if (err instanceof SyntaxError || (err instanceof Error && err.message === "invalid_rental_search_response")) {
+    return { status: null, code: "invalid_response" };
+  }
+  return { status: null, code: err instanceof TypeError ? "network_error" : "unexpected_error" };
+}
+
 /**
  * "Temporarily unavailable" is only true for a network failure, a 5xx, a timeout or a rate limit.
- * A 400/401/403/404 is a problem with the request itself, and a malformed answer (bad JSON, an
- * unexpected exception) is a bug: retrying cannot help either, so neither may be presented to the
- * renter as an outage. Those go to the concierge and are logged.
+ * A 400/401/403/404 is a request/auth problem, not an outage. A malformed 200
+ * response is a code-contract issue, not a temporary network outage. Preserve
+ * previous results and keep the existing non-outage fallback contract.
  */
 function isTemporaryOutage(err: unknown): boolean {
   if (err instanceof RentalSearchHttpError) {
@@ -83,11 +98,26 @@ async function fetchRentalSearch(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(params),
+    // The API's own maxDuration is 10s. A bounded client wait also covers a stalled
+    // connection that never delivers a response, without creating a second search engine.
+    signal: AbortSignal.timeout(15_000),
   });
   if (!res.ok) {
-    throw new RentalSearchHttpError(res.status);
+    let code = "http_error";
+    try {
+      const body: unknown = await res.json();
+      const candidate = (body as { error?: unknown } | null)?.error;
+      if (typeof candidate === "string" && /^[a-z][a-z0-9_]{0,63}$/.test(candidate)) {
+        code = candidate;
+      }
+    } catch {
+      // HTML, empty and invalid JSON errors are not echoed to the browser log.
+    }
+    throw new RentalSearchHttpError(res.status, code);
   }
-  return (await res.json()) as RentalSearchResponse;
+  const body: RentalSearchResponse = await res.json();
+  if (!Array.isArray(body?.results)) throw new Error("invalid_rental_search_response");
+  return body;
 }
 
 /** How many messages may wait behind a running search before extra ones go to the concierge. */
@@ -104,12 +134,15 @@ export type RentalSearchFastPathOptions = {
 
 export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOptions = {}) {
   const { state, setState } = useConciergeCoAgent();
-  const { clarifyPending, clarifyKind, showExchange, clearLocalMessages } =
+  const { clarifyPending, clarifyKind, showExchange, showNotice } =
     useEventLocalChat();
-  const { setToolResult, setSearchMeta } = useRentalFastPath();
+  const { setToolResult, setSearchMeta, reportSearchFailure } = useRentalFastPath();
   const clearOthers = useClearOtherFastPathResults();
   const { mergePinsByCategory, requestFitBounds } = useMapContext();
   const busyRef = useRef(false);
+  const runSearchRef = useRef<(
+    (userText: string, params: RentalSearchApiParams, memory: ConciergeWorkingMemory, retry: boolean) => Promise<boolean>
+  ) | undefined>(undefined);
   // Messages sent while a search is running wait here and are answered one at a time, in the
   // order they were sent, as each search ends — instead of being reported "handled" and dropped.
   const pendingRef = useRef<Array<{ text: string; submissionId?: string }>>([]);
@@ -132,20 +165,24 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
         budgetNote?: string;
       },
     ) => {
-      clearOthers("rental");
+      // Compute the next consistent view before publishing any card envelope.
+      // If normalization/map operations throw, keep the previous genuine cards
+      // and their searchMeta/working memory instead of exposing mismatched data.
       const envelope = rentalsToToolEnvelope(cards, meta);
-      setToolResult(envelope);
       const { pins } = normalizeToolOutput("rental", envelope);
-      mergePinsByCategory("rental", pins);
-      if (pins.length >= 2) requestFitBounds();
       const nextMemory: ConciergeWorkingMemory = {
         ...memory,
         lastIntent: "rental_search",
         lastRentalQuery: { ...query, genericAskPending: false },
         lastRentalResults: rentalsToPanelRows(cards),
       };
-      latestMemoryRef.current = nextMemory;
+      clearOthers("rental");
+      mergePinsByCategory("rental", pins);
+      if (pins.length >= 2) requestFitBounds();
       setState(nextMemory);
+      latestMemoryRef.current = nextMemory;
+      // Commit the visible cards last; searchMeta is set only after this returns.
+      setToolResult(envelope);
       return pins.length;
     },
     [mergePinsByCategory, requestFitBounds, setState, setToolResult, clearOthers],
@@ -157,24 +194,43 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
       params: RentalSearchApiParams,
       memory: ConciergeWorkingMemory,
       submissionId?: string,
+      retry = false,
     ): Promise<boolean> => {
       if (busyRef.current) return true;
       busyRef.current = true;
+      reportSearchFailure(null);
+      // Retry is an assistant-only follow-up to the SAME question. It must not
+      // publish/persist a duplicate user bubble with a new submission identity.
+      const answer = (message: string) => {
+        if (retry) showNotice(message);
+        else showExchange(userText, message, submissionId);
+      };
       try {
         let response: RentalSearchResponse;
         try {
           response = await fetchRentalSearch(params);
         } catch (err) {
-          console.error("[rental-fast-path] search failed", err);
-          setToolResult(null);
-          setSearchMeta(null);
-          // A request problem (4xx) is not an outage and retrying cannot fix it: hand the message
-          // to the concierge instead of telling the renter to try again.
+          const { status, code } = sanitizedRentalError(err);
+          console.error("[rental-fast-path] /api/rentals/search", { status, code });
+          // Authentication failures are not outages: give specific guidance
+          // without retrying through another unauthorized agent request.
+          // Other invalid requests retain the established Concierge fallback.
+          if (err instanceof RentalSearchHttpError && (err.status === 401 || err.status === 403)) {
+            answer(
+              err.status === 401
+                ? "Your session has expired. Sign in again to search rentals."
+                : "This account cannot search rentals right now.",
+            );
+            return true;
+          }
           if (!isTemporaryOutage(err)) return false;
-          // SAN-407: a real outage is its own answer. Returning false here used to hand the same
-          // message to the agent, which then gave a second, conflicting reply. Retrying is just
-          // sending the message again; no write happens on this path.
-          showExchange(userText, RENTAL_SEARCH_UNAVAILABLE_SUMMARY, submissionId);
+          // Keep the last successful result and pins. A retry is a fresh read of
+          // the same query, not a synthetic cached search or an invented response.
+          reportSearchFailure({ status, code, retryable: true }, () => {
+            void runSearchRef.current?.(userText, params, memory, true);
+          });
+          // No model fallback for a real outage: it might invent a result.
+          answer(RENTAL_SEARCH_UNAVAILABLE_SUMMARY);
           return true;
         }
         const { results: cards, total, hybridUsed, rankExplanation, budgetNote } = response;
@@ -201,8 +257,10 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
           resultCount: cards.length,
           ts: new Date().toISOString(),
         });
-        setSearchMeta({ userText, params });
         const pinCount = applySearchResults(cards, query, memory, { total, hybridUsed, rankExplanation, budgetNote });
+        // Metadata must describe the cards actually shown, not a request that
+        // may still throw while transforming/rendering the new results.
+        setSearchMeta({ userText, params });
         // SAN-1502 follow-up: when a monthly budget was applied, say so. A truthful empty
         // state must not leave the renter guessing whether the 2,000,000 ceiling was used.
         // Never claim a monthly ceiling was applied when the request also carries a nightly cap:
@@ -211,8 +269,7 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
           params.maxPriceMonthly != null && params.maxPricePerNight == null
             ? `${params.budgetCurrency ?? "COP"} ${params.maxPriceMonthly.toLocaleString("en-US")} per month`
             : undefined;
-        showExchange(
-          userText,
+        answer(
           fastPathRentalSummary(cards.length, pinCount, {
             generic:
               !sig.hasNeighborhood && !sig.hasBedrooms && !sig.hasBudget && !sig.hasDateRange &&
@@ -221,13 +278,16 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
             appliedBudget,
             unappliedRequests: unappliedRentalRequests(userText),
           }),
-          submissionId,
         );
         return true;
       } catch (err) {
-        console.error("[rental-fast-path]", err);
-        setToolResult(null);
-        return false;
+        console.error("[rental-fast-path] unexpected search/render failure", sanitizedRentalError(err));
+        // The search API may have returned 200; a transformation/display bug
+        // is NOT a network outage. Do not retry the same deterministic bug or
+        // replace already-grounded results with a fabricated empty response.
+        reportSearchFailure({ status: null, code: "result_processing_error", retryable: false });
+        answer("The new rental results could not be displayed. Your earlier results may still be available.");
+        return true;
       } finally {
         busyRef.current = false;
         // Replay a queued message only after React has re-rendered (see the effect below), never
@@ -235,8 +295,13 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
         if (pendingRef.current.length > 0) setReplayTick((tick) => tick + 1);
       }
     },
-    [applySearchResults, showExchange, setSearchMeta, setToolResult],
+    [applySearchResults, showExchange, showNotice, setSearchMeta, reportSearchFailure],
   );
+
+  useEffect(() => {
+    runSearchRef.current = (text, params, memory, retry) => runSearch(text, params, memory, undefined, retry);
+    return () => { runSearchRef.current = undefined; };
+  }, [runSearch]);
 
   const dispatchMessage = useCallback(
     async (text: string, submissionId?: string, baseMemory?: ConciergeWorkingMemory | null): Promise<boolean> => {
@@ -261,13 +326,14 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
         return true;
       }
 
-      clearLocalMessages();
+      // Keep prior exchanges visible while a later search is pending or fails.
+      // showExchange already appends and deduplicates by message ID; New Chat
+      // still resets through the existing session reset owner.
       return runSearch(trimmed, params, memory, submissionId);
     },
     [
       clarifyKind,
       clarifyPending,
-      clearLocalMessages,
       runSearch,
       state,
     ],
