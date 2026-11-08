@@ -66,6 +66,20 @@ describe("real route-output guard", () => {
     expect(out).toMatchObject({ payload: { text: "Your booking is ready." } });
   });
 
+  it("preserves answers from new-project and booking tools after a failed route", async () => {
+    const state = {};
+    await pipe("tool-result", { toolName: "computeRouteTool", result: { route: null, reason: "route_unavailable" } }, state);
+    await pipe("tool-result", { toolName: "searchNewProjectsTool", result: { results: [{ id: "np-1" }] } }, state);
+    const out = await pipe("text-delta", { text: "Here is a new project." }, state);
+    expect(out).toMatchObject({ payload: { text: "Here is a new project." } });
+
+    const bookingState = {};
+    await pipe("tool-result", { toolName: "computeRouteTool", result: { route: null } }, bookingState);
+    await pipe("tool-result", { toolName: "requestVenueBooking", result: { status: "proposed" } }, bookingState);
+    const booking = await pipe("text-delta", { text: "Your booking proposal is ready." }, bookingState);
+    expect(booking).toMatchObject({ payload: { text: "Your booking proposal is ready." } });
+  });
+
   it("preserves an unrelated answer after a failed route and later café search", async () => {
     const state = {};
     await pipe("tool-result", { toolName: "computeRouteTool", result: {

@@ -44,9 +44,16 @@ const SEPARATE_ANSWER_TOOLS = new Set([
   "searchAttractionsTool",
   "search-attractions",
   "lookupPublicDiscoveryItem",
+  "lookupPublicDiscoveryItemTool",
   "lookup-public-discovery-item",
   "readBrokerWorkspace",
+  "readBrokerWorkspaceTool",
   "read-broker-workspace",
+  "searchNewProjectsTool",
+  "compareNewProjectsTool",
+  "searchWebGroundedEventsTool",
+  "requestVenueBooking",
+  "request-venue-booking",
 ]);
 
 export const routeUnavailableOutputGuard = {
