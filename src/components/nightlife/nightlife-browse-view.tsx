@@ -193,7 +193,14 @@ function NightlifeBrowseViewInner({
     >
       <section className="mt-6" aria-label="Nightlife listings">
         <DiscoveryGroundedResults rows={activeRows} selectedId={selectedId} onSelectRow={selectForAsk}
-          label={searched?.source === "catalog" ? "Search results" : "Ask MDE"} />
+          label={
+            searched?.source === "catalog"
+              ? searchPreferences.length > 0
+                ? "Suggestions"
+                : "Search results"
+              : "Ask MDE"
+          }
+        />
         {error ? (
           <div
             className="rounded-lg border border-destructive/30 bg-destructive/5 p-6 text-center"

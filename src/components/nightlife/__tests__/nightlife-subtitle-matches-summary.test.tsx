@@ -74,6 +74,9 @@ const fire = (rows: GroundedToolRow[], prefs: string[]) => {
     (globalThis as unknown as { __fire: (r: GroundedToolRow[], p: string[]) => void }).__fire(rows, prefs);
   });
 };
+/** The results-section heading describes the same rows a second time. */
+const resultsHeading = () =>
+  document.querySelector('[data-testid="grounded-results-heading"]')?.textContent ?? "";
 /** The workspace subtitle is the paragraph directly after the page heading. */
 const subtitle = () => document.querySelector("h1 + p")?.textContent ?? "";
 const view = () => <NightlifeBrowseView results={[]} error={null} neighborhood={null} vibe={null} />;
@@ -104,4 +107,22 @@ describe("empty and failed searches describe themselves honestly", () => {
     expect(subtitle()).not.toContain("Suggestions");
   });
 
+});
+
+describe("all three labels agree", () => {
+  it("says Suggestions in the results heading too, not Search results", () => {
+    render(view());
+    fire([row("a"), row("b")], ["quiet"]);
+    expect(subtitle()).toContain("Suggestions");
+    expect(resultsHeading()).toContain("Suggestions — 2 places");
+    expect(resultsHeading()).not.toContain("Search results");
+  });
+
+  it("does not suggest anything when the search returned nothing", () => {
+    render(view());
+    fire([], ["quiet"]);
+    expect(resultsHeading()).toContain("No places matched");
+    expect(resultsHeading()).not.toContain("Suggestions");
+    expect(subtitle()).toContain("No nightlife venues matched");
+  });
 });
