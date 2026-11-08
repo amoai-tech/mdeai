@@ -72,5 +72,25 @@ describe("EventDraftStateSchema", () => {
       priceMinCop: 40000,
     });
     expect(isDraftReadyForPublish(ready)).toBe(true);
+    expect(isDraftReadyForPublish({ ...ready, priceMinCop: 0 })).toBe(false);
+    expect(isDraftReadyForPublish({
+      ...ready,
+      priceMinCop: 0,
+      ticketTiers: [{ name: "Free", priceCop: 0, quantity: 1 }],
+    })).toBe(false);
+    expect(isDraftReadyForPublish({
+      ...ready,
+      ticketTiers: [{ name: "General", priceCop: 40000, quantity: 200 }],
+    })).toBe(true);
+  });
+
+  it("never auto-creates a zero-priced tier", () => {
+    const draft = mergeEventDraft(EMPTY_EVENT_DRAFT, {
+      title: "Free event",
+      capacity: 80,
+      priceMinCop: 0,
+    });
+    expect(draft.ticketTiers).toEqual([]);
+    expect(isDraftReadyForPublish(draft)).toBe(false);
   });
 });

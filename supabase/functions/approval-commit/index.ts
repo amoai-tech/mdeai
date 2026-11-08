@@ -74,6 +74,16 @@ Deno.serve(async (req: Request) => {
   if (!draft.title?.trim() || !draft.dateIso || !body.proposalId) {
     return jr(errorBody("VALIDATION_ERROR", "title, dateIso and proposalId are required"), 400, req);
   }
+  const tiers = Array.isArray(draft.ticketTiers) ? draft.ticketTiers : [];
+  const hasSellableTickets = typeof draft.priceMinCop === "number" && draft.priceMinCop > 0 &&
+    (tiers.length === 0 ||
+      tiers.every((tier) => typeof tier.priceCop === "number" && tier.priceCop > 0));
+  if (!hasSellableTickets) {
+    return jr(errorBody(
+      "TICKET_PRICE_REQUIRED",
+      "A paid ticket tier is required before publishing. Free tickets are not supported yet.",
+    ), 400, req);
+  }
   if (body.draftHash && (await sha256(draft)) !== body.draftHash) {
     return jr(errorBody("DRAFT_CHANGED", "Event changed after review. Review it again."), 409, req);
   }

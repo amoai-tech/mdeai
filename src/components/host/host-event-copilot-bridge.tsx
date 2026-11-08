@@ -119,31 +119,7 @@ export function HostEventCopilotBridge({ children }: HostEventCopilotBridgeProps
         manualFields.add(key);
       }
     }
-    setDraftState((prev) => {
-      const nextPatch = { ...normalized };
-      // The compact wizard exposes one minimum price and one capacity. Keep a
-      // single AI-created tier consistent with manual values so publishing a
-      // free event cannot leave a stale paid tier behind.
-      if (typeof patch.priceMinCop === "number" && patch.ticketTiers === undefined) {
-        if (prev.ticketTiers.length === 1) {
-          nextPatch.ticketTiers = [{ ...prev.ticketTiers[0], priceCop: patch.priceMinCop }];
-        } else if (prev.ticketTiers.length === 0 && patch.priceMinCop === 0 && prev.capacity > 0) {
-          nextPatch.ticketTiers = [{
-            name: "General Admission",
-            priceCop: 0,
-            quantity: prev.capacity,
-          }];
-        }
-      }
-      if (typeof patch.capacity === "number" && patch.ticketTiers === undefined &&
-          prev.ticketTiers.length === 1 && patch.capacity > 0) {
-        nextPatch.ticketTiers = [{
-          ...(nextPatch.ticketTiers?.[0] ?? prev.ticketTiers[0]),
-          quantity: patch.capacity,
-        }];
-      }
-      return mergeEventDraft(prev, nextPatch);
-    });
+    setDraftState((prev) => mergeEventDraft(prev, normalized));
   }, [manualFields]);
 
   // Canonical wizard state is owned by this component. Frontend tools and manual

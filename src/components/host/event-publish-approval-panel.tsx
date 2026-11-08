@@ -24,7 +24,7 @@ import {
   computeDraftHash,
   type ReviewReceipt,
 } from "@/platform/contracts/review-proposal";
-import { EventDraftStateSchema, type EventDraftState } from "@/lib/types";
+import { EventDraftStateSchema, isDraftReadyForPublish, type EventDraftState } from "@/lib/types";
 import type { ApprovalDecision } from "@/lib/events/approval-decision";
 
 const PENDING_EVENT_PROPOSAL = "mde:pending-event-publish";
@@ -157,8 +157,14 @@ export function EventPublishApprovalPanel({
     slug: draft.publishedSlug ?? "preview",
   });
 
+  const canPublish = isDraftReadyForPublish(draft);
+
   async function commit(decision: ApprovalDecision) {
     if (decided || submitting) return;
+    if (decision === "approved" && !canPublish) {
+      setError("A paid ticket tier is required before publishing. Free tickets are not supported yet.");
+      return;
+    }
     setLastDecision(decision);
     // Edit/Cancel only change the local draft. No database approval or
     // network round-trip is required during prelaunch development.
@@ -270,6 +276,11 @@ export function EventPublishApprovalPanel({
             <p>Ticket price: {draft.priceMinCop.toLocaleString("en-US")} COP</p>
           )}
         </div>
+        {!canPublish ? (
+          <p className="text-sm text-destructive">
+            A paid ticket tier is required before publishing. Free tickets are not supported yet.
+          </p>
+        ) : null}
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
         {receipt ? (
           <div
@@ -300,7 +311,7 @@ export function EventPublishApprovalPanel({
           <Button
             type="button"
             data-testid="host-event-approve"
-            disabled={submitting}
+            disabled={submitting || !canPublish}
             onClick={() => commit("approved")}
           >
             Publish event

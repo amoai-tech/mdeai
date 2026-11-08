@@ -140,7 +140,7 @@ describe("HostEventCopilotBridge publish HITL", () => {
     expect(screen.getByTestId("host-event-field-price")).toHaveProperty("value", "40000");
   });
 
-  it("keeps a single published tier consistent with a manually chosen free price and capacity", async () => {
+  it("never rewrites a single tier to zero and blocks free publishing", async () => {
     render(
       <HostEventCopilotBridge>
         {({ draft, setDraft }) => <HostEventForm draft={draft} onChange={setDraft} />}
@@ -162,7 +162,7 @@ describe("HostEventCopilotBridge publish HITL", () => {
     const reviewed = JSON.parse(
       screen.getByTestId("captured-publish-draft").textContent ?? "{}",
     ) as EventDraftState;
-    expect(reviewed.ticketTiers?.[0]).toMatchObject({ name: "General", priceCop: 0, quantity: 100 });
+    expect(reviewed.ticketTiers?.[0]).toMatchObject({ name: "General", priceCop: 40000, quantity: 100 });
   });
 
   it("keeps a manually entered zero price locked for a free event", async () => {

@@ -35,11 +35,32 @@ export type EventTicketTierDraft = z.infer<typeof EventTicketTierDraft>;
 
 export const EMPTY_EVENT_DRAFT: EventDraftState = EventDraftStateSchema.parse({});
 
+/**
+ * A single compact-wizard tier must follow the reviewed price and capacity.
+ * Never rewrite it to zero: ticket checkout cannot sell a zero-priced tier, so
+ * publish readiness stays false until a real no-payment path exists.
+ */
+export function reconcileSingleTicketTier(draft: EventDraftState): EventDraftState {
+  if (draft.ticketTiers.length !== 1) return draft;
+  const tier = draft.ticketTiers[0];
+  return {
+    ...draft,
+    ticketTiers: [{
+      ...tier,
+      // Never rewrite a paid tier to zero; publish readiness blocks instead.
+      priceCop: draft.priceMinCop > 0 ? draft.priceMinCop : tier.priceCop,
+      quantity: draft.capacity > 0 ? draft.capacity : tier.quantity,
+    }],
+  };
+}
+
 export function mergeEventDraft(
   current: EventDraftState,
   patch: Partial<EventDraftState>,
 ): EventDraftState {
-  return EventDraftStateSchema.parse({ ...current, ...patch });
+  return reconcileSingleTicketTier(
+    EventDraftStateSchema.parse({ ...current, ...patch }),
+  );
 }
 
 export function activeHostWizardStep(
@@ -54,8 +75,9 @@ export function activeHostWizardStep(
   }
   const hasBasics = draft.title.trim().length > 0;
   const hasVenue = draft.venue.trim().length > 0 && draft.capacity > 0;
-  const hasTickets =
-    draft.ticketTiers.length > 0 || draft.priceMinCop > 0;
+  const hasTickets = draft.ticketTiers.length > 0
+    ? draft.ticketTiers.every((tier) => tier.priceCop > 0)
+    : draft.priceMinCop > 0;
 
   if (hasBasics && hasVenue && hasTickets) return "preview";
   if (hasBasics && hasVenue) return "tickets";
@@ -73,12 +95,15 @@ export function isValidEventDraftDate(value: string | undefined): boolean {
 }
 
 export function isDraftReadyForPublish(draft: EventDraftState): boolean {
+  const hasSellableTickets = draft.priceMinCop > 0 &&
+    (draft.ticketTiers.length === 0 ||
+      draft.ticketTiers.every((tier) => tier.priceCop > 0));
   return (
     draft.title.trim().length > 0 &&
     draft.neighborhood.trim().length > 0 &&
     isValidEventDraftDate(draft.dateIso) &&
     draft.venue.trim().length > 0 &&
     draft.capacity > 0 &&
-    (draft.ticketTiers.length > 0 || draft.priceMinCop > 0)
+    hasSellableTickets
   );
 }
