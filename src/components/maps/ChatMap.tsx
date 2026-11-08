@@ -39,7 +39,7 @@ export function ChatMap({
   mapDomId?: string;
   onMapSettled?: () => void;
 }) {
-  const { pins, activeMapCategory, selectedPinId, panToPin } = useMapContext();
+  const { pins, activeMapCategory, selectedPinId, panToPin, viewport } = useMapContext();
   const mapsStatus = useMapsStatus();
   // Mock maps have no network tiles. Also settle when the existing Maps
   // unavailable notice renders, or a permanent spinner would hide that notice.
@@ -113,6 +113,7 @@ export function ChatMap({
       data-testid="chat-map"
       data-mapid-present={hasConfiguredMapId() ? "true" : "false"}
       data-map-clustering={useClustering ? "true" : "false"}
+      data-map-zoom={viewport?.zoom}
     >
       <Map
         onTilesLoaded={onMapSettled}

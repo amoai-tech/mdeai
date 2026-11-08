@@ -11,13 +11,31 @@ test.describe("SAN-577B /rentals map workspace", () => {
     await expect(page.getByTestId("browse-map-fab")).not.toBeVisible();
   });
 
-  test("desktop: card hover sets pin selected state", async ({ page }) => {
+  test("desktop: Show on map selects the matching rental", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto("/rentals");
     await expect(page.getByTestId("rentals-grid")).toBeVisible();
-    const firstCard = page.locator('[data-testid^="rental-card-"]').first();
-    await firstCard.hover();
-    await expect(firstCard).toHaveAttribute("data-selected", "true");
+    // Listings without saved coordinates correctly have no map-selection action.
+    const card = page.locator('[data-testid^="rental-card-"]')
+      .filter({ has: page.locator('[data-testid^="rental-card-map-select-"]') }).first();
+    await expect(card).toBeVisible();
+    const pinId = await card.getAttribute("data-pin-id");
+    if (!pinId) throw new Error("Map-selectable rental has no pin ID");
+    const mapPanel = page.getByTestId("browse-map-panel");
+    await expect(mapPanel.locator(".gm-style").first()).toBeVisible({ timeout: 20_000 });
+    const map = mapPanel.getByTestId("chat-map");
+    // This is the observed Google Maps camera, not the card preview state.
+    await expect(map).toHaveAttribute("data-map-zoom", /\d/, { timeout: 15_000 });
+    // fitBounds can already start at zoom 15 when listings are close together.
+    await card.locator('[data-testid^="rental-card-map-select-"]').click();
+    await expect(card).toHaveAttribute("data-selected", "true");
+    await expect.poll(async () => Number(await map.getAttribute("data-map-zoom")), {
+      timeout: 15_000,
+    }).toBeGreaterThanOrEqual(15);
+    // At city zoom, markerclusterer hides individual rental pin DOM nodes.
+    // The real Google Maps info window still proves the exact pin was selected.
+    await expect(mapPanel.getByTestId("selected-place-overlay"))
+      .toHaveAttribute("data-pin-id", pinId, { timeout: 15_000 });
   });
 
   test("mobile: FAB visible and opens map sheet", async ({ page }) => {
