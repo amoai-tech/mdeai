@@ -19,6 +19,10 @@ describe("grounded amenity follow-up classification", () => {
     "Show cafés with laptop seating",
     "Are there cafés with Wi-Fi near me?",
     "Which cafes in Laureles have Wi-Fi?",
+    "Which café in Poblado has Wi-Fi?",
+    "Which coffee shop in Envigado has Wi-Fi?",
+    "¿Qué cafés en Laureles tienen wifi?",
+
     "Recommend cafés with Wi-Fi in Laureles",
     "¿Hay cafeterías con enchufes cerca?",
     "Does the apartment have Wi-Fi?",

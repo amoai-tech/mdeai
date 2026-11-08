@@ -14,7 +14,12 @@ export function isGroundedAmenityQuestion(text: string): boolean {
   }
   // New requests for places must be sent to the existing search provider.
   if (/\b(find|show|search|looking for|busca(?:r|me)?|buscar|muestrame|encuentra|nuev[oa]s?)\b/.test(q) ||
-      /\b(are there|is there|can you find|which cafes in|which cafes near|which coffee shops in|hay cafeterias|hay cafes)\b/.test(q)) {
+      /\b(are there|is there|can you find|hay cafeterias|hay cafes)\b/.test(q) ||
+      // Explicit place-specific "which café in X" is a *new* search, not
+      // an answer about "these" rows. Cover singular, plural and Spanish.
+      /\b(which|what|que|cual(?:es)?)\s+(?:cafes?|coffee shops?|cafeterias?)\s+(?:in|near|around|en|cerca)\b/.test(q) ||
+      (/\b(?:cafes?|coffee shops?|cafeterias?)\s+(?:in|near|around|en|cerca)\s+\w+\b/.test(q) &&
+       !/\b(these|those|estos?|estas?|esos?|esas?)\b/.test(q))) {
     return false;
   }
   // A contextual "recommend" or "near" still describes a follow-up when
