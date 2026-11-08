@@ -500,18 +500,9 @@ function LiveChatProvider({ children, persistThread = false }: { children: React
 }
 
 /**
- * Persist a signed-in conversation that CopilotKit runs but never stores.
- *
- * `/chat` writes its turns through the history endpoint and calls `markThreadSaved`, which is what
- * makes a reload replay them. The broker chat mounts the same provider but had no writer, so a
- * broker's questions and the assistant's answers disappeared on refresh.
- *
- * Three things this has to get right:
- *   - only after the run finishes, or the first streamed chunk would be saved as the whole answer;
- *   - in ordered batches of four (the endpoint's limit), tracking accepted message IDs;
- *   - text only — a tool call/result has no text to restore, so it is skipped, not sent.
+ * Bridge between the history replay and the saver: waits for the owner-checked GET to settle, then
+ * hands its restored message ids to the saver so a replayed answer is never written twice.
  */
-/** Only the history GET's owner-checked message IDs are excluded from future POSTs. */
 function BrokerThreadSaverAfterReplay({ threadId }: { threadId: string }) {
   const history = useSavedThreadHistory();
   const restoreMode = history.status === "error" ? "failed"
@@ -525,6 +516,15 @@ function BrokerThreadSaverAfterReplay({ threadId }: { threadId: string }) {
   );
 }
 
+/**
+ * Marks a broker's conversation as reloadable and stores its questions.
+ *
+ * Replies are not written here: the Mastra runtime already stores each one as `<id>-agui-text`,
+ * and a second copy under the plain AG-UI id made a restored transcript show the answer twice.
+ * Questions are posted the moment they are sent, because the reader orders by createdAt and a
+ * later stamp put each question below its answer. Reloadability is claimed only when the run has
+ * finished and an answer exists, so the thread is never advertised before it can be restored.
+ */
 export function BrokerThreadSaver({
   threadId,
   agentId = "conciergeAgent",
@@ -627,20 +627,28 @@ export function BrokerThreadSaver({
         }
         saved = true;
         for (const id of handledInBatch) state.handledIds.add(id);
+        // Re-read at completion: an answer can land while this POST is in flight, and the values
+        // captured when the effect started would miss it. Restored ids are already handled, so a
+        // replayed answer is never counted as a new one.
+        const live = agent.messages ?? [];
+        const pendingAnswer = live.some((message) =>
+          !state.handledIds.has(message.id) &&
+          message.role === "assistant" &&
+          typeof message.content === "string" &&
+          message.content.trim().length > 0);
         // A question alone is not restore-able; the runtime's reply is what replay needs.
-        if (!running && lastAnswer >= 0) markThreadSaved(threadId);
+        if (!agent.isRunning && pendingAnswer) markThreadSaved(threadId);
       })
       .catch((error) => console.warn("[BrokerThreadSaver] save failed", error))
       .finally(() => {
         state.inFlight = false;
         // A finished POST is not an agent update. Drain pending complete answers explicitly,
         // but never enter an infinite retry loop after a failed POST.
-        if (saved && progress.current === state &&
-            (agent.messages ?? []).some((message) => !state.handledIds.has(message.id) &&
-              message.role === "assistant" && typeof message.content === "string" &&
-              message.content.trim().length > 0)) {
-          setDrainTick((n) => n + 1);
-        }
+        const rest = agent.messages ?? [];
+        const pending = rest.some((message) => !state.handledIds.has(message.id) &&
+            (message.role === "user" || message.role === "assistant") &&
+            typeof message.content === "string" && message.content.trim().length > 0);
+        if (saved && progress.current === state && pending) setDrainTick((n) => n + 1);
       });
   }, [agent, agentThreadId, threadId, markThreadSaved, messageCount, lastContent, running,
     drainTick, restoreMode, restoredMessageIds]);
