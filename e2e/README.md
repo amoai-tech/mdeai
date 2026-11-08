@@ -62,6 +62,39 @@ honestly.
 Do not run `npx playwright test - <<'EOF'` — Playwright ignores inline stdin and runs the
 full discovered suite.
 
+## Agent QA commands + authenticated Chrome
+
+**All coding agents use these same commands, not a new authentication system.** They use `e2e/helpers/auth.ts` and the existing real Supabase QA identities. The trusted Node process receives Supabase secrets; only a normal, scoped user session is placed in the browser.
+
+```bash
+# From repository root: only reports whether required credentials exist.
+npm run qa:auth:check
+
+# Existing passwordless Super Admin read-only Playwright tests.
+npm run qa:test:admin
+
+# Launch temporary, already authenticated Chrome for trusted MCP inspection.
+# Default: the PRE-EXISTING non-admin event-host QA account.
+npm run qa:browser
+
+# If testing a different existing role (no Super Admin fallback):
+npm run qa:browser -- --role=renter
+
+# Only when specifically needed, on a trusted LOCAL machine:
+npm run qa:browser -- --role=super-admin --allow-admin
+
+# To inspect the deployed site, opt into the exact approved production origin:
+npm run qa:browser -- --origin=https://www.mdeai.co --allow-remote
+```
+
+The launcher opens `/saved` and verifies authentication. It uses a private temporary Chrome profile on `127.0.0.1:9227`, not your personal Chrome profile. Chrome DevTools MCP can attach with `--browser-url=http://127.0.0.1:9227`. Keep this terminal running during the inspection and press Ctrl+C afterwards; the launcher removes its profile. Port collision: `--port=9228` and update the MCP connection accordingly. Use `--headless` on machines without a desktop. A dedicated existing QA role email (e.g. `MDE_QA_EVENT_HOST_EMAIL` or `MDE_QA_RENTER_EMAIL`) must be configured in the ignored `.env.local` for non-admin login; absent accounts fail closed. Do not create another admin account.
+
+**Security boundary:** CDP-connected agents have full access to that authenticated browser, including sensitive cookies. Only let trusted agents connect to the local listener; never publish or forward the debug port, reuse a personal Chrome profile, capture privileged screenshots, or upload authenticated Playwright artifacts. Super Admin CDP is an explicit high-trust exception to the normal non-admin debugging default. The launcher removes its temporary profile on normal shutdown but an interrupted/killed process may leave an OS temporary folder; treat it as sensitive and remove it once Chrome is closed.
+
+**Playwright runner remains separate:** import `test` from `e2e/fixtures.ts`, call `superAdminPage` only for admin proof, and specify `test.use({ screenshot: "off", trace: "off", video: "off" })`. Role/RLS checks use `qaRolePage` or controlled throwaway identities; real viewing/write tests require their existing explicit opt-in and cleanup. `npm run qa:browser` is for interactive Chrome debugging, **not** a replacement for Playwright assertions.
+
+**Agent integration:** Claude Code, Codex, ChatGPT with Desktop Commander, and DeepSeek harnesses can use the terminal commands above. Their exact MCP registration varies; do not assume the harness is installed or authenticated. Chrome DevTools MCP endpoint details: https://developer.chrome.com/docs/devtools/agents/get-started/configuration . Never let Playwright and DevTools agents control the same page simultaneously.
+
 ## SAN-1549 — one-command signed-in QA smoke
 
 Run from the repository root (the TypeScript test is a file, **not** a Bash command):
