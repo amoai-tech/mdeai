@@ -627,7 +627,10 @@ export function BrokerThreadSaver({
       // Nothing new to write. If the run has finished and its answer exists, the exchange is
       // complete, so the thread can be advertised as reloadable -- this is the common case after
       // the question was posted at send time.
-      if (!running && answerFollowsLatestQuestion(current)) markThreadSaved(threadId);
+      // A question that never reached the server means this conversation is not restorable.
+      if (!running && state.failedIds.size === 0 && answerFollowsLatestQuestion(current)) {
+        markThreadSaved(threadId);
+      }
       return;
     }
 
@@ -655,7 +658,9 @@ export function BrokerThreadSaver({
         const live = agent.messages ?? [];
         const pendingAnswer = answerFollowsLatestQuestion(live);
         // A question alone is not restore-able; the runtime's reply is what replay needs.
-        if (!agent.isRunning && pendingAnswer) markThreadSaved(threadId);
+        if (!agent.isRunning && state.failedIds.size === 0 && pendingAnswer) {
+          markThreadSaved(threadId);
+        }
       })
       .catch((error) => console.warn("[BrokerThreadSaver] save failed", error))
       .finally(() => {

@@ -384,4 +384,30 @@ describe("a finished answer makes the thread reloadable", () => {
     expect(calls()).toHaveLength(2);
     expect(markThreadSaved).not.toHaveBeenCalled();
   });
+
+  it("does not mark reloadable when the retry also failed", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 503 })));
+    agentRunning = true;
+    agentMessages = [{ id: "u1", role: "user", content: "q" }];
+    const { rerender } = render(<BrokerThreadSaver threadId={THREAD} />);
+    await vi.waitFor(() => expect(calls()).toHaveLength(1));
+
+    agentMessages = [
+      { id: "u1", role: "user", content: "q" },
+      { id: "a1", role: "assistant", content: "answer" },
+    ];
+    agentRunning = false;
+    rerender(<BrokerThreadSaver threadId={THREAD} />);
+    await new Promise((r) => setTimeout(r, 120));
+
+    // A later agent update must not turn an unsaved question into a "restorable" claim.
+    agentMessages = [
+      { id: "u1", role: "user", content: "q" },
+      { id: "a1", role: "assistant", content: "answer, later revision" },
+    ];
+    rerender(<BrokerThreadSaver threadId={THREAD} />);
+    await new Promise((r) => setTimeout(r, 120));
+
+    expect(markThreadSaved).not.toHaveBeenCalled();
+  });
 });
