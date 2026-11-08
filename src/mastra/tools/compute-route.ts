@@ -97,7 +97,7 @@ export const computeRouteTool = createTool({
         const userId = getAuditUserId(context);
         if (userId) {
           const perUserRaw = process.env.ROUTES_DAILY_LIMIT_PER_USER;
-          const perUserCap = perUserRaw === undefined ? 20 : Number.parseInt(perUserRaw, 10);
+          const perUserCap = perUserRaw === undefined ? 20 : Number(perUserRaw);
           if (!Number.isSafeInteger(perUserCap) || perUserCap <= 0) {
             return { route: null, source: "google_routes" as const, reason: "route_quota_disabled" };
           }

@@ -127,6 +127,20 @@ describe("computeRouteTool", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("rejects a malformed per-user limit instead of silently truncating it", async () => {
+    audit.userId = "user-1";
+    vi.stubEnv("ROUTES_DAILY_LIMIT_PER_USER", "20garbage");
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const out = await computeRouteTool.execute!({
+      origin: { address: "Laureles" },
+      destination: { address: "Provenza" },
+    }, {} as never);
+    expect(out).toMatchObject({ route: null, reason: "route_quota_disabled" });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(quota.checkRateLimitDurable).not.toHaveBeenCalled();
+  });
+
   it("treats a throwing RequestContext cache read as a miss", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
       routes: [{ distanceMeters: 100, duration: "60s" }],
