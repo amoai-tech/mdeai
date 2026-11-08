@@ -470,18 +470,29 @@ export const searchGroundedPlacesTool = createTool({
         console.warn("[search-grounded-places] Google Places café search failed:", err);
       }
     }
-    // A café query can reach the ADK path after the direct Places attempt.
-    // Reserve a second unit so two provider searches are never counted as one.
+    // Google is the single café provider. If it fails or returns nothing, use
+    // the saved catalog immediately; do not run a second billable search.
     if (directCafeAttempted) {
-      const secondQuota = await incrementAndCheckGroundingQuota();
-      if (!secondQuota.allowed) {
+      try {
         const fallbackResults = await curatedFallback(rawQuery, pageSize ?? 5, intent);
         return withVenueKindMetadata(
           {
             results: fallbackResults,
             attribution: [],
             source: "grounding" as const,
-            metadata: { provider: "google_places", fallback: "curated", reason: secondQuota.reason },
+            metadata: { provider: "google_places", fallback: "curated", reason: "google_places_unavailable" },
+          },
+          rawQuery,
+          intent,
+        );
+      } catch (err) {
+        console.warn("[search-grounded-places] café fallback failed:", err);
+        return withVenueKindMetadata(
+          {
+            results: [],
+            attribution: [],
+            source: "grounding" as const,
+            metadata: { provider: "google_places", reason: "google_places_unavailable" },
           },
           rawQuery,
           intent,

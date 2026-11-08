@@ -45,9 +45,11 @@ Not claimed: hosted MCP/ADK completion, production deployment, UI screenshots. T
 - Direct results still pass the shared café filter; brand-only cafés with `primaryType=cafe` survive.
 - Maps links accept only HTTPS Google Maps hosts; a row without a valid place URI is dropped.
 - `requirePlacesApiKey` trims each candidate and uses the first non-empty key.
-- ADK fallback after a direct café attempt reserves a **second** quota unit.
+- Café search uses **one** provider: Google first, then saved catalog; ADK is not called after a
+  direct café attempt, so two billable searches cannot run for one user request.
 - Daily cap is now atomic via `reserve_places_grounding_quota` (migration
   `20261108082148_atomic_places_grounding_quota.sql`); DB errors fail closed with `quota_unavailable`.
-- Café Places call uses `maxAttempts=1`, so a timeout cannot trigger hidden retries.
+- Café Places call uses `maxAttempts=1`, so a timeout cannot trigger hidden retries. The in-flight
+  request is still bounded by the client timeout; no abort signal is claimed.
 
 Tests: mapper 5, tool 7, atomic quota 3, related 17 total.
