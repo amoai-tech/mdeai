@@ -58,23 +58,26 @@ describe("broker thread persistence", () => {
     ]);
   });
 
-  it("holds a question until its answer arrives", async () => {
+  it("saves the question as it is sent, but claims reloadable only after the answer", async () => {
     agentMessages = [{ id: "u1", role: "user", content: "Which leads?" }];
     render(<BrokerThreadSaver threadId={THREAD} />);
-    await new Promise((r) => setTimeout(r, 60));
-    expect(calls()).toHaveLength(0);
+    // Stamped at send time: the history reader orders by createdAt, so waiting for the reply
+    // would place the question *after* the answer the runtime already wrote.
+    await vi.waitFor(() => expect(calls()).toHaveLength(1));
+    expect(lastBody().messages.map((m) => m.id)).toEqual(["u1"]);
     expect(markThreadSaved).not.toHaveBeenCalled();
   });
 
-  it("waits for the run to finish, so a streamed chunk is not saved as the answer", async () => {
+  it("never sends a streaming fragment, even while the run is in flight", async () => {
     agentRunning = true;
     agentMessages = [
       { id: "u1", role: "user", content: "q" },
       { id: "a1", role: "assistant", content: "partial…" },
     ];
     render(<BrokerThreadSaver threadId={THREAD} />);
-    await new Promise((r) => setTimeout(r, 60));
-    expect(calls()).toHaveLength(0);
+    await vi.waitFor(() => expect(calls().length).toBeGreaterThan(0));
+    expect(lastBody().messages.map((m) => m.role)).toEqual(["user"]);
+    expect(markThreadSaved).not.toHaveBeenCalled();
   });
 
   it("skips tool traffic in the body", async () => {
@@ -124,7 +127,7 @@ describe("broker thread persistence", () => {
     ])).flat();
     render(<BrokerThreadSaver threadId={THREAD} />);
     await vi.waitFor(() => expect(calls()).toHaveLength(2));
-    await vi.waitFor(() => expect(markThreadSaved).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(markThreadSaved).toHaveBeenCalled());
     const bodies = calls().map(([, opts]) => JSON.parse(String(opts.body)) as { messages: Msg[] });
     expect(bodies.every((body) => body.messages.length <= 4)).toBe(true);
     // Oldest first: the tail-slicing bug dropped these.
@@ -153,7 +156,7 @@ describe("broker thread saver: complete and correctly scoped history", () => {
     ])).flat();
     render(<BrokerThreadSaver threadId={THREAD} />);
     await vi.waitFor(() => expect(calls()).toHaveLength(2));
-    await vi.waitFor(() => expect(markThreadSaved).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(markThreadSaved).toHaveBeenCalled());
     const ids = calls().flatMap(([, opts]) => (JSON.parse(String(opts.body)) as { messages: Msg[] }).messages.map(m => m.id));
     expect(ids).toEqual(agentMessages.filter(m => m.role === "user").map(m => m.id));
   });

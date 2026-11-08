@@ -570,7 +570,7 @@ export function BrokerThreadSaver({
   useEffect(() => {
     const state = progress.current;
     // Never write an old thread's messages to a newly selected thread.
-    if (state.threadId !== threadId || agentThreadId !== threadId || state.inFlight || running) return;
+    if (state.threadId !== threadId || agentThreadId !== threadId || state.inFlight) return;
     if (!state.ready) {
       if (restoreMode === "waiting") return;
       state.ready = true;
@@ -582,19 +582,16 @@ export function BrokerThreadSaver({
     }
 
     const current = agent.messages ?? [];
-    let lastAnswer = -1;
-    for (let i = 0; i < current.length; i++) {
-      const message = current[i];
-      if (!state.handledIds.has(message.id) &&
-          message.role === "assistant" && typeof message.content === "string" &&
-          message.content.trim().length > 0) lastAnswer = i;
-    }
-    // A question on its own is not a finished exchange; do not save a streaming fragment.
-    if (lastAnswer < 0) return;
+    // Only questions are ours to write. Stamped when sent, so the history reader (which orders by
+    // createdAt) never puts the runtime's reply above the question that produced it.
+    const lastAnswer = current.reduce((last, message, index) =>
+      !state.handledIds.has(message.id) &&
+      message.role === "assistant" && typeof message.content === "string" &&
+      message.content.trim().length > 0 ? index : last, -1);
 
     const text: { id: string; role: "user" | "assistant"; content: string }[] = [];
     const handledInBatch: string[] = [];
-    for (let i = 0; i <= lastAnswer; i++) {
+    for (let i = 0; i < current.length; i++) {
       const message = current[i];
       if (state.handledIds.has(message.id)) continue;
       handledInBatch.push(message.id);
@@ -624,10 +621,8 @@ export function BrokerThreadSaver({
         }
         saved = true;
         for (const id of handledInBatch) state.handledIds.add(id);
-        // Only advertise reloadability when every completed assistant answer has been saved.
-        if (!current.some((message) => !state.handledIds.has(message.id) &&
-            message.role === "assistant" && typeof message.content === "string" &&
-            message.content.trim().length > 0)) markThreadSaved(threadId);
+        // A question alone is not restore-able; the runtime's reply is what replay needs.
+        if (!running && lastAnswer >= 0) markThreadSaved(threadId);
       })
       .catch((error) => console.warn("[BrokerThreadSaver] save failed", error))
       .finally(() => {
