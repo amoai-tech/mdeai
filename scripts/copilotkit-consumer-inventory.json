@@ -1,5 +1,5 @@
 {
-  "description": "SAN-1357 Step 8 \u00b7 Every CopilotKit consumer in MDE, classified before the v2 migration so 'verify-only' is falsifiable instead of assumed. Vocabulary \u2014 migrate: must change in a named step; keep: already on the supported v2 surface, no change expected; test-only: a test, fixture or gate that intentionally names v1 or v2 symbols; compatibility-required: must retain a legacy boundary for a documented reason; remove: dead, delete it. Enforced by scripts/__tests__/copilotkit-consumer-inventory.test.mjs in both directions: every detected consumer must be listed, every listed entry must still be a detected consumer unless it declares `implicitContract: true` with a reason, no listed file may vanish, and no compatibility <CopilotKit> boundary may remain (SAN-1378 Stage D migrated the last four).",
+  "description": "SAN-1357 Step 8 · Every CopilotKit consumer in MDE, classified before the v2 migration so 'verify-only' is falsifiable instead of assumed. Vocabulary — migrate: must change in a named step; keep: already on the supported v2 surface, no change expected; test-only: a test, fixture or gate that intentionally names v1 or v2 symbols; compatibility-required: must retain a legacy boundary for a documented reason; remove: dead, delete it. Enforced by scripts/__tests__/copilotkit-consumer-inventory.test.mjs in both directions: every detected consumer must be listed, every listed entry must still be a detected consumer unless it declares `implicitContract: true` with a reason, no listed file may vanish, and no compatibility <CopilotKit> boundary may remain (SAN-1378 Stage D migrated the last four).",
   "classifications": [
     "migrate",
     "keep",
@@ -8,256 +8,6 @@
     "remove"
   ],
   "consumers": [
-    {
-      "file": "src/lib/copilotkit-client-props.ts",
-      "classification": "migrate",
-      "step": 9,
-      "implicitContract": true,
-      "note": "Not a @copilotkit importer \u2014 it declares the shared props shape locally. SAN-1378 Stage D removed the v1 `agent` carrier and the unreachable `publicApiKey` variant once the last compatibility boundary was gone; `agentId` is the only identity."
-    },
-    {
-      "file": "src/lib/__tests__/copilotkit-client-props.test.ts",
-      "classification": "migrate",
-      "step": 9,
-      "implicitContract": true,
-      "note": "Asserts the shared props shape, including `showDevConsole: false` and the absence of the v1 `agent` carrier. Must fail if a legacy prop reappears."
-    },
-    {
-      "file": "src/app/api/copilotkit/[[...path]]/route.ts",
-      "classification": "keep",
-      "note": "SAN-1378 Stage B+C (PR #187, commit 1f648f366) moved this route onto CopilotRuntime + createCopilotRuntimeHandler from @copilotkit/runtime/v2 with mode: COPILOTKIT_HANDLER_MODE. The legacy ExperimentalEmptyAdapter and copilotRuntimeNextJSAppRouterEndpoint are gone; src/__tests__/api/copilotkit-v2-contract.test.ts rejects their return, and SAN-1401 adds a dedicated dependency-cruiser prohibition."
-    },
-    {
-      "file": "src/__tests__/api/copilotkit-rate-limit-route.test.ts",
-      "classification": "migrate",
-      "step": 11,
-      "note": "Mocks the bare `@copilotkit/runtime` at line 18; must mock and assert the v2 handler instead."
-    },
-    {
-      "file": "src/components/copilot/copilot-kit-provider.tsx",
-      "classification": "keep",
-      "note": "SAN-1378 Stage D commit 4: v2 CopilotKitProvider + one CopilotChatConfigurationProvider for non-chat pages; a saved thread is explicit, otherwise one fresh thread per mount. This was the last compatibility boundary."
-    },
-    {
-      "file": "src/components/chat/chat-provider.tsx",
-      "classification": "keep",
-      "note": "SAN-1378 Stage D commit 3: v2 CopilotKitProvider + one CopilotChatConfigurationProvider. A saved thread picked in the nav rail is bound explicitly; otherwise a fresh non-explicit thread, new per /chat visit and per New Chat (ThreadNav newChatCount)."
-    },
-    {
-      "file": "src/components/host/host-event-provider.tsx",
-      "classification": "keep",
-      "note": "SAN-1378 Stage D commit 1: v2 CopilotKitProvider + one CopilotChatConfigurationProvider with no threadId, so the wizard gets one shared, non-explicit thread per mount."
-    },
-    {
-      "file": "src/components/host/host-os-provider.tsx",
-      "classification": "keep",
-      "note": "SAN-1378 Stage D commit 2 / SAN-1577: v2 CopilotKitProvider + one CopilotChatConfigurationProvider with no threadId, extracted so the legacy /host shell and the /app/events workspace share one provider boundary. One shared, non-explicit host thread survives Overview, Events and Analytics; the v2 provider's own onError type replaces the old @copilotkit/shared import."
-    },
-    {
-      "file": "src/components/partners/partner-workspace-chat.tsx",
-      "classification": "keep",
-      "note": "SAN-705: uses the root v2 CopilotKitProvider and the same partnerAgent, with an explicit per-user/per-business conversation thread to prevent unrelated chat replay."
-    },
-    {
-      "file": "src/components/partners/__tests__/partner-workspace-chat.test.tsx",
-      "classification": "test-only",
-      "note": "SAN-705 verifies the existing v2 CopilotChat receives a distinct, stable user+partner threadId; mocks @copilotkit/react-core/v2 instead of creating another provider."
-    },
-    {
-      "file": "src/components/partners/partner-signup-assistant.tsx",
-      "classification": "keep",
-      "note": "SAN-709: v2 CopilotKitProvider + one CopilotChatConfigurationProvider around the existing signup wizard; the frontend tool only proposes fields for review and never writes partner data."
-    },
-    {
-      "file": "src/components/onboarding/onboarding-copilot-bridge.tsx",
-      "classification": "keep",
-      "note": "SAN-709: publishes the current signup form via useAgentContext and exposes one review-only useFrontendTool (suggest_partner_profile). No persistence path."
-    },
-    {
-      "file": "src/components/onboarding/__tests__/onboarding-copilot-bridge.test.tsx",
-      "classification": "test-only",
-      "note": "SAN-709: checks the v2 frontend tool schema, revision rejection and no-save result."
-    },
-    {
-      "file": "src/components/partners/__tests__/partner-signup-assistant.test.tsx",
-      "classification": "test-only",
-      "note": "SAN-709: tests proposal Accept/Ignore, stale-form protection and delayed model replies with mocked CopilotKit transport."
-    },
-    {
-      "file": "src/app/layout.tsx",
-      "classification": "keep",
-      "note": "Imports the v2 stylesheet only."
-    },
-    {
-      "file": "src/app/dev/_probe/concierge-probe.tsx",
-      "classification": "keep",
-      "note": "Shared dev-only probe (moved out of the virtualization page by SAN-966; also used by the empty-thread page). Already uses the <CopilotKitProvider> + <CopilotChatConfigurationProvider> pair, so it is the reference model for Steps 12 to 15."
-    },
-    {
-      "file": "src/components/chat/chat-center-panel.tsx",
-      "classification": "keep",
-      "note": "v2 hooks only."
-    },
-    {
-      "file": "src/components/chat/discovery-page-context.tsx",
-      "classification": "keep",
-      "note": "SAN-737 shared five-route page context via installed v2 useAgentContext; no second provider or thread. Clear on route unmount and never treat client IDs as authority."
-    },
-    {
-      "file": "src/components/chat/chat-filter-copilot-instructions.tsx",
-      "classification": "keep",
-      "note": "v2 hooks only."
-    },
-    {
-      "file": "src/components/chat/concierge-coagent-context.tsx",
-      "classification": "keep",
-      "note": "v2 surface. Step 17 revisits the custom readiness plumbing and may simplify it; verify-only until then."
-    },
-    {
-      "file": "src/components/chat/concierge-booking-receipt.test.tsx",
-      "classification": "test-only",
-      "note": "SAN-1149 post-merge: mocks the v2 HITL boundary to ensure a persisted booking receipt appears immediately even if the CopilotKit result event is lost."
-    },
-    {
-      "file": "src/components/chat/concierge-copilot-bridge.tsx",
-      "classification": "keep",
-      "note": "v2 hooks only."
-    },
-    {
-      "file": "src/components/chat/concierge-copilot-chat-view.tsx",
-      "classification": "keep",
-      "note": "v2 CopilotChatView."
-    },
-    {
-      "file": "src/components/copilot/focus-map-pin-action.tsx",
-      "classification": "keep",
-      "note": "Frontend tool registration; Step 19 verifies render names still match the Mastra tool-map keys."
-    },
-    {
-      "file": "src/components/copilot/search-tool-renders.tsx",
-      "classification": "keep",
-      "note": "Tool renderers; Step 19 territory."
-    },
-    {
-      "file": "src/components/host/host-context-provider.tsx",
-      "classification": "keep",
-      "note": "v2 hooks only."
-    },
-    {
-      "file": "src/components/host/host-event-copilot-bridge.tsx",
-      "classification": "keep",
-      "note": "v2 hooks only."
-    },
-    {
-      "file": "src/components/host/host-event-shell.tsx",
-      "classification": "keep",
-      "note": "v2 surface; confirms no fifth provider boundary is rendered here."
-    },
-    {
-      "file": "src/components/host/host-ops-copilot-bridge.tsx",
-      "classification": "keep",
-      "note": "v2 hooks only."
-    },
-    {
-      "file": "src/components/host/host-os-body.tsx",
-      "classification": "keep",
-      "note": "v2 surface."
-    },
-    {
-      "file": "src/lib/hooks/use-concierge-chat.ts",
-      "classification": "keep",
-      "note": "v2 hooks only; Step 19 verifies identity and RequestContext cross the bridge."
-    },
-    {
-      "file": "src/lib/hooks/use-host-ops-chat.ts",
-      "classification": "keep",
-      "note": "v2 hooks only; Step 19 territory."
-    },
-    {
-      "file": "scripts/audit-copilotkit-v2-no-new-v1.mjs",
-      "classification": "keep",
-      "note": "The no-new-v1 guard itself, repaired in Step 7. Names v1 tokens as detection patterns by design."
-    },
-    {
-      "file": "scripts/audit-copilotkit-v2-depcruise-proof.mjs",
-      "classification": "keep",
-      "note": "Dependency-cruiser proof fixture; creates temporary v1 code deliberately."
-    },
-    {
-      "file": "scripts/check-mastra.mjs",
-      "classification": "keep",
-      "note": "SAN-1301-owned gate, verify-only per Step 18. Holds the alignment invariant that backstops the version-pin hook."
-    },
-    {
-      "file": "scripts/pr-agent/build-evidence.mjs",
-      "classification": "keep",
-      "note": "Builds PR evidence; names package specifiers as data, not as imports."
-    },
-    {
-      "file": "src/components/copilot/__tests__/search-tool-renders-v2.test.tsx",
-      "classification": "test-only",
-      "note": "Asserts a source file imports the /v2 subpath and does not mention the retired react-ui package. It names those specifiers inside regex literals with escaped slashes, which is why the original detector missed it entirely \u2014 found only after the detector was widened."
-    },
-    {
-      "file": "src/components/copilot/__tests__/discovery-provider-guest-401.test.tsx",
-      "classification": "test-only",
-      "note": "Factory-mocks the v2 provider to capture onError, proving the discovery provider applies the same guest-startup-401 classification as /chat (SAN-1592)."
-    },
-    {
-      "file": "src/__tests__/pr-agent-evidence.test.ts",
-      "classification": "test-only",
-      "note": "Reads package.json dependency names as data."
-    },
-    {
-      "file": "src/__tests__/host-event-publish-bridge.test.tsx",
-      "classification": "test-only",
-      "note": "Factory-mocks CopilotKit v2 HITL to prove the registered publish renderer reads the latest edited HostEventForm rather than stale first-render state."
-    },
-    {
-      "file": "src/components/chat/__tests__/chat-provider-startup-race.test.tsx",
-      "classification": "test-only",
-      "note": "Factory-mocks the v2 chat provider to prove a 401 during auth loading is deferred, suppressed for guests, and reported for signed-in users while true run failures remain visible."
-    },
-    {
-      "file": "src/components/chat/__tests__/concierge-coagent-readiness.test.tsx",
-      "classification": "test-only",
-      "note": "Factory-mocks @copilotkit/react-core/v2 hooks only, not the provider."
-    },
-    {
-      "file": "src/components/chat/__tests__/concierge-draft-restore.test.tsx",
-      "classification": "test-only",
-      "note": "SAN-1507: factory-mocks @copilotkit/react-core/v2 CopilotChatView so the REAL ConciergeChatView wrapper can be rendered: proves a stashed question is put in the composer through the onInputChange setter once the visitor is signed in, and is never sent."
-    },
-    {
-      "file": "src/components/chat/__tests__/concierge-composer-ready.test.tsx",
-      "classification": "test-only",
-      "note": "Factory-mocks @copilotkit/react-core/v2 CopilotChatView with a plain textarea so the REAL ConciergeChatView wrapper can be rendered: proves the composer is disabled in the server HTML and enabled after hydration."
-    },
-    {
-      "file": "src/components/chat/__tests__/concierge-initial-prompt-gate.test.tsx",
-      "classification": "test-only",
-      "note": "Factory-mocks @copilotkit/react-core/v2 hooks only."
-    },
-    {
-      "file": "src/components/chat/__tests__/concierge-local-chat-placement.test.tsx",
-      "classification": "test-only",
-      "note": "Factory-mocks @copilotkit/react-core/v2. Must export the new provider names once Step 13 renders them."
-    },
-    {
-      "file": "src/components/chat/__tests__/concierge-transcript-tail.test.tsx",
-      "classification": "test-only",
-      "note": "SAN-966: factory-mocks @copilotkit/react-core/v2 (CopilotChatMessageView, CopilotChatView) to test the concierge messageView wrapper and the results tail."
-    },
-    {
-      "file": "src/components/chat/__tests__/concierge-transcript-contract.test.tsx",
-      "classification": "test-only",
-      "note": "SAN-966: factory-mocks @copilotkit/react-core/v2 to test the welcome-screen rule, the tail-content hook and the transcript dedupe."
-    },
-    {
-      "file": "src/components/host/__tests__/host-os-body.test.tsx",
-      "classification": "test-only",
-      "note": "Factory-mocks CopilotChat. Must export the new provider names once Step 15 renders them."
-    },
     {
       "file": "e2e/chat-virtualization.spec.ts",
       "classification": "test-only",
@@ -285,34 +35,24 @@
       "note": "Deliberate alignment fixture using arbitrary sample versions."
     },
     {
-      "file": "src/__tests__/api/copilotkit-v2-contract.test.ts",
-      "classification": "test-only",
-      "note": "Step 11 combined contract for Steps 9 and 10: asserts the route uses @copilotkit/runtime/v2 with an explicit basePath and mode, that the client and server transport halves agree, that the security gates stay ordered before the handler, and that the v1 agent carrier is present while a compatibility boundary still consumes it. Names the v2 specifier in import-statement assertions rather than in regexes, so comment prose can neither satisfy nor defeat them. Assembles the v1 provider tag from parts so this file is not itself detected as a compatibility boundary."
+      "file": "scripts/audit-copilotkit-v2-depcruise-proof.mjs",
+      "classification": "keep",
+      "note": "Dependency-cruiser proof fixture; creates temporary v1 code deliberately."
     },
     {
-      "file": "src/__tests__/api/copilotkit-stop-body.test.ts",
-      "classification": "test-only",
-      "note": "Step 11 STOP-4: proves the stop request body survives the MDE route intact and reaches the runtime as exactly { runId }, with a built-in negative control showing a non-cloning reader destroys the run scope. Mocks @copilotkit/runtime/v2, so no real runtime is constructed."
+      "file": "scripts/audit-copilotkit-v2-no-new-v1.mjs",
+      "classification": "keep",
+      "note": "The no-new-v1 guard itself, repaired in Step 7. Names v1 tokens as detection patterns by design."
     },
     {
-      "file": "src/__tests__/api/copilotkit-info-authenticated.test.ts",
-      "classification": "test-only",
-      "note": "Step 10 authenticated single-route /info: drives the real route, real v2 handler and real Mastra agent graph with only the Supabase session and rate limiter faked. Asserts 200, the pinned runtime version and the four canonical agents for a signed-in user, and 401 with no agent list without a session. Flipping the handler mode makes it fail with the production symptom, a 404."
+      "file": "scripts/check-mastra.mjs",
+      "classification": "keep",
+      "note": "SAN-1301-owned gate, verify-only per Step 18. Holds the alignment invariant that backstops the version-pin hook."
     },
     {
-      "file": "src/components/__tests__/copilotkit-thread-lifecycle.test.tsx",
-      "classification": "test-only",
-      "note": "SAN-1378 Stage D thread-identity proof. Renders the REAL v2 providers (CopilotKit not mocked) and reads useCopilotChatConfiguration from several consumers: one shared thread per boundary, non-explicit when auto-minted, fresh per mount, persistent across host navigation, and the /chat saved-thread/New Chat rules."
-    },
-    {
-      "file": "src/lib/hooks/__tests__/use-concierge-chat.test.ts",
-      "classification": "test-only",
-      "note": "SAN-1378: mocks useCopilotKit to prove that switching conversation stops a still-streaming reply (stopAgent, with abortRun fallback) before the conversation is cleared."
-    },
-    {
-      "file": "src/components/__tests__/saved-thread-history-hydration.test.tsx",
-      "classification": "test-only",
-      "note": "SAN-1389: renders the real ChatProvider with a faked shared agent (useAgent) to prove a reopened saved chat replays its history once: waits for CopilotKit's reconnect, drops a late response for a chat that was left, never duplicates a warm replay, and a fresh New Chat never fetches."
+      "file": "scripts/pr-agent/build-evidence.mjs",
+      "classification": "keep",
+      "note": "Builds PR evidence; names package specifiers as data, not as imports."
     },
     {
       "file": "scripts/pr-agent/evals/fixtures/semver-boundary-canary-source.mjs",
@@ -325,59 +65,145 @@
       "note": "SAN-1332 recorded evidence: the suite at that same head, which builds synthetic package.json fixtures naming the aligned packages. Read as text, never executed."
     },
     {
-      "file": "src/lib/hooks/__tests__/use-concierge-chat-thread-id.test.tsx",
+      "file": "src/__tests__/api/copilotkit-info-authenticated.test.ts",
       "classification": "test-only",
-      "note": "SAN-1421 regression test for the tab thread pinning in useConciergeChat.appendMessage. Mocks the v2 hooks to prove a fresh authenticated tab adopts sessionThreadId before the first run, and that an explicit or persisted thread is never overridden."
+      "note": "Step 10 authenticated single-route /info: drives the real route, real v2 handler and real Mastra agent graph with only the Supabase session and rate limiter faked. Asserts 200, the pinned runtime version and the four canonical agents for a signed-in user, and 401 with no agent list without a session. Flipping the handler mode makes it fail with the production symptom, a 404."
     },
     {
-      "file": "src/components/rentals/rental-ask-tool-results.ts",
-      "classification": "keep",
-      "note": "SAN-1421 parsing/selection module extracted from the Ask MDE composer. Imports only the v2 AbstractAgent type to read the agent's rental tool result from the thread; it mounts no provider and starts no run."
+      "file": "src/__tests__/api/copilotkit-rate-limit-route.test.ts",
+      "classification": "migrate",
+      "step": 11,
+      "note": "Mocks the bare `@copilotkit/runtime` at line 18; must mock and assert the v2 handler instead."
     },
     {
-      "file": "src/components/rentals/rental-details-tool.tsx",
-      "classification": "keep",
-      "note": "SAN-1421 post-merge frontend tool: openRentalDetails opens the in-page Details panel for an apartment already in the current results. v2 useFrontendTool only; mounts no provider and starts no run."
-    },
-    {
-      "file": "src/components/rentals/rental-date-suggestion-tool.tsx",
-      "classification": "keep",
-      "note": "SAN-1611 v2 useFrontendTool suggests validated date-only values into the renter's editable draft; it never applies filters, submits a booking, or creates a new CopilotKit provider."
-    },
-    {
-      "file": "src/components/rentals/__tests__/rental-details-tool.test.tsx",
+      "file": "src/__tests__/api/copilotkit-stop-body.test.ts",
       "classification": "test-only",
-      "note": "Mocks the v2 useFrontendTool hook to prove the openRentalDetails registration and resolver behavior. Mounts no provider."
+      "note": "Step 11 STOP-4: proves the stop request body survives the MDE route intact and reaches the runtime as exactly { runId }, with a built-in negative control showing a non-cloning reader destroys the run scope. Mocks @copilotkit/runtime/v2, so no real runtime is constructed."
     },
     {
-      "file": "src/components/copilot/search-tool-result-cards.tsx",
-      "classification": "keep",
-      "note": "SAN-546 J09: provider-safe empty event suggestions reuse the canonical event fast path; optional concierge context guards the provider boundary."
-    },
-    {
-      "file": "src/components/host/rentals/rentals-concierge-center.tsx",
-      "classification": "keep",
-      "note": "SAN-1124: existing CopilotKit v2 CopilotChat under the single ChatProvider on broker routes; no second broker runtime."
-    },
-    {
-      "file": "src/components/host/rentals/broker-workspace-tool-renderer.tsx",
-      "classification": "keep",
-      "note": "SAN-1124: v2 useRenderTool binds to the existing readBrokerWorkspaceTool for grounded read-only broker activity."
-    },
-    {
-      "file": "src/components/host/rentals/__tests__/rentals-concierge-contract.test.ts",
+      "file": "src/__tests__/api/copilotkit-v2-contract.test.ts",
       "classification": "test-only",
-      "note": "SAN-1124: guards v2 CopilotChat and useRenderTool registration plus broker workspace contract."
+      "note": "Step 11 combined contract for Steps 9 and 10: asserts the route uses @copilotkit/runtime/v2 with an explicit basePath and mode, that the client and server transport halves agree, that the security gates stay ordered before the handler, and that the v1 agent carrier is present while a compatibility boundary still consumes it. Names the v2 specifier in import-statement assertions rather than in regexes, so comment prose can neither satisfy nor defeat them. Assembles the v1 provider tag from parts so this file is not itself detected as a compatibility boundary."
     },
     {
-      "file": "src/components/copilot/a2ui/mde-ui-catalog.tsx",
-      "classification": "keep",
-      "note": "SAN-1630: one v2 createGenerativeUI catalog with RentalCard and EventCard; each resolves only an authorized ID from the thread result history and mounts no provider or run."
+      "file": "src/__tests__/host-event-publish-bridge.test.tsx",
+      "classification": "test-only",
+      "note": "Factory-mocks CopilotKit v2 HITL to prove the registered publish renderer reads the latest edited HostEventForm rather than stale first-render state."
     },
     {
-      "file": "src/components/chat/rental-a2ui-context.tsx",
+      "file": "src/__tests__/pr-agent-evidence.test.ts",
+      "classification": "test-only",
+      "note": "Reads package.json dependency names as data."
+    },
+    {
+      "file": "src/app/api/copilotkit/[[...path]]/route.ts",
       "classification": "keep",
-      "note": "SAN-1637 post-merge: v2 useAgentContext publishes only the current fast-path rental IDs so the model can call render_ui without inventing one; the catalog revalidates every ID against authorized results."
+      "note": "SAN-1378 Stage B+C (PR #187, commit 1f648f366) moved this route onto CopilotRuntime + createCopilotRuntimeHandler from @copilotkit/runtime/v2 with mode: COPILOTKIT_HANDLER_MODE. The legacy ExperimentalEmptyAdapter and copilotRuntimeNextJSAppRouterEndpoint are gone; src/__tests__/api/copilotkit-v2-contract.test.ts rejects their return, and SAN-1401 adds a dedicated dependency-cruiser prohibition."
+    },
+    {
+      "file": "src/app/dev/_probe/concierge-probe.tsx",
+      "classification": "keep",
+      "note": "Shared dev-only probe (moved out of the virtualization page by SAN-966; also used by the empty-thread page). Already uses the <CopilotKitProvider> + <CopilotChatConfigurationProvider> pair, so it is the reference model for Steps 12 to 15."
+    },
+    {
+      "file": "src/app/layout.tsx",
+      "classification": "keep",
+      "note": "Imports the v2 stylesheet only."
+    },
+    {
+      "file": "src/components/__tests__/copilotkit-thread-lifecycle.test.tsx",
+      "classification": "test-only",
+      "note": "SAN-1378 Stage D thread-identity proof. Renders the REAL v2 providers (CopilotKit not mocked) and reads useCopilotChatConfiguration from several consumers: one shared thread per boundary, non-explicit when auto-minted, fresh per mount, persistent across host navigation, and the /chat saved-thread/New Chat rules."
+    },
+    {
+      "file": "src/components/__tests__/saved-thread-history-hydration.test.tsx",
+      "classification": "test-only",
+      "note": "SAN-1389: renders the real ChatProvider with a faked shared agent (useAgent) to prove a reopened saved chat replays its history once: waits for CopilotKit's reconnect, drops a late response for a chat that was left, never duplicates a warm replay, and a fresh New Chat never fetches."
+    },
+    {
+      "file": "src/components/chat/__tests__/broker-thread-saver.test.tsx",
+      "classification": "test-only",
+      "note": "Mocks useAgent/UseAgentUpdate to prove the broker chat persists finished turns; no runtime CopilotKit import."
+    },
+    {
+      "file": "src/components/chat/__tests__/chat-provider-startup-race.test.tsx",
+      "classification": "test-only",
+      "note": "Factory-mocks the v2 chat provider to prove a 401 during auth loading is deferred, suppressed for guests, and reported for signed-in users while true run failures remain visible."
+    },
+    {
+      "file": "src/components/chat/__tests__/concierge-coagent-readiness.test.tsx",
+      "classification": "test-only",
+      "note": "Factory-mocks @copilotkit/react-core/v2 hooks only, not the provider."
+    },
+    {
+      "file": "src/components/chat/__tests__/concierge-composer-ready.test.tsx",
+      "classification": "test-only",
+      "note": "Factory-mocks @copilotkit/react-core/v2 CopilotChatView with a plain textarea so the REAL ConciergeChatView wrapper can be rendered: proves the composer is disabled in the server HTML and enabled after hydration."
+    },
+    {
+      "file": "src/components/chat/__tests__/concierge-draft-restore.test.tsx",
+      "classification": "test-only",
+      "note": "SAN-1507: factory-mocks @copilotkit/react-core/v2 CopilotChatView so the REAL ConciergeChatView wrapper can be rendered: proves a stashed question is put in the composer through the onInputChange setter once the visitor is signed in, and is never sent."
+    },
+    {
+      "file": "src/components/chat/__tests__/concierge-initial-prompt-gate.test.tsx",
+      "classification": "test-only",
+      "note": "Factory-mocks @copilotkit/react-core/v2 hooks only."
+    },
+    {
+      "file": "src/components/chat/__tests__/concierge-local-chat-placement.test.tsx",
+      "classification": "test-only",
+      "note": "Factory-mocks @copilotkit/react-core/v2. Must export the new provider names once Step 13 renders them."
+    },
+    {
+      "file": "src/components/chat/__tests__/concierge-transcript-contract.test.tsx",
+      "classification": "test-only",
+      "note": "SAN-966: factory-mocks @copilotkit/react-core/v2 to test the welcome-screen rule, the tail-content hook and the transcript dedupe."
+    },
+    {
+      "file": "src/components/chat/__tests__/concierge-transcript-tail.test.tsx",
+      "classification": "test-only",
+      "note": "SAN-966: factory-mocks @copilotkit/react-core/v2 (CopilotChatMessageView, CopilotChatView) to test the concierge messageView wrapper and the results tail."
+    },
+    {
+      "file": "src/components/chat/chat-center-panel.tsx",
+      "classification": "keep",
+      "note": "v2 hooks only."
+    },
+    {
+      "file": "src/components/chat/chat-filter-copilot-instructions.tsx",
+      "classification": "keep",
+      "note": "v2 hooks only."
+    },
+    {
+      "file": "src/components/chat/chat-provider.tsx",
+      "classification": "keep",
+      "note": "SAN-1378 Stage D commit 3: v2 CopilotKitProvider + one CopilotChatConfigurationProvider. A saved thread picked in the nav rail is bound explicitly; otherwise a fresh non-explicit thread, new per /chat visit and per New Chat (ThreadNav newChatCount)."
+    },
+    {
+      "file": "src/components/chat/concierge-booking-receipt.test.tsx",
+      "classification": "test-only",
+      "note": "SAN-1149 post-merge: mocks the v2 HITL boundary to ensure a persisted booking receipt appears immediately even if the CopilotKit result event is lost."
+    },
+    {
+      "file": "src/components/chat/concierge-coagent-context.tsx",
+      "classification": "keep",
+      "note": "v2 surface. Step 17 revisits the custom readiness plumbing and may simplify it; verify-only until then."
+    },
+    {
+      "file": "src/components/chat/concierge-copilot-bridge.tsx",
+      "classification": "keep",
+      "note": "v2 hooks only."
+    },
+    {
+      "file": "src/components/chat/concierge-copilot-chat-view.tsx",
+      "classification": "keep",
+      "note": "v2 CopilotChatView."
+    },
+    {
+      "file": "src/components/chat/discovery-page-context.tsx",
+      "classification": "keep",
+      "note": "SAN-737 shared five-route page context via installed v2 useAgentContext; no second provider or thread. Clear on route unmount and never treat client IDs as authority."
     },
     {
       "file": "src/components/chat/event-a2ui-context.tsx",
@@ -385,9 +211,188 @@
       "note": "SAN-1630 EventCard: v2 useAgentContext publishes only the most recent authorized event UUIDs; the catalog revalidates every ID against authorized results and rejects forged/cross-thread IDs."
     },
     {
+      "file": "src/components/chat/rental-a2ui-context.tsx",
+      "classification": "keep",
+      "note": "SAN-1637 post-merge: v2 useAgentContext publishes only the current fast-path rental IDs so the model can call render_ui without inventing one; the catalog revalidates every ID against authorized results."
+    },
+    {
+      "file": "src/components/copilot/__tests__/discovery-provider-guest-401.test.tsx",
+      "classification": "test-only",
+      "note": "Factory-mocks the v2 provider to capture onError, proving the discovery provider applies the same guest-startup-401 classification as /chat (SAN-1592)."
+    },
+    {
+      "file": "src/components/copilot/__tests__/search-tool-renders-v2.test.tsx",
+      "classification": "test-only",
+      "note": "Asserts a source file imports the /v2 subpath and does not mention the retired react-ui package. It names those specifiers inside regex literals with escaped slashes, which is why the original detector missed it entirely — found only after the detector was widened."
+    },
+    {
       "file": "src/components/copilot/a2ui/__tests__/nearby-guest-guard.test.tsx",
       "classification": "test-only",
       "note": "SAN-106: mocks the v2 agent hook to prove guests never see the billable Nearby CTA, while signed-in renters do."
+    },
+    {
+      "file": "src/components/copilot/a2ui/mde-ui-catalog.tsx",
+      "classification": "keep",
+      "note": "SAN-1630: one v2 createGenerativeUI catalog with RentalCard and EventCard; each resolves only an authorized ID from the thread result history and mounts no provider or run."
+    },
+    {
+      "file": "src/components/copilot/copilot-kit-provider.tsx",
+      "classification": "keep",
+      "note": "SAN-1378 Stage D commit 4: v2 CopilotKitProvider + one CopilotChatConfigurationProvider for non-chat pages; a saved thread is explicit, otherwise one fresh thread per mount. This was the last compatibility boundary."
+    },
+    {
+      "file": "src/components/copilot/focus-map-pin-action.tsx",
+      "classification": "keep",
+      "note": "Frontend tool registration; Step 19 verifies render names still match the Mastra tool-map keys."
+    },
+    {
+      "file": "src/components/copilot/search-tool-renders.tsx",
+      "classification": "keep",
+      "note": "Tool renderers; Step 19 territory."
+    },
+    {
+      "file": "src/components/copilot/search-tool-result-cards.tsx",
+      "classification": "keep",
+      "note": "SAN-546 J09: provider-safe empty event suggestions reuse the canonical event fast path; optional concierge context guards the provider boundary."
+    },
+    {
+      "file": "src/components/host/__tests__/host-os-body.test.tsx",
+      "classification": "test-only",
+      "note": "Factory-mocks CopilotChat. Must export the new provider names once Step 15 renders them."
+    },
+    {
+      "file": "src/components/host/host-context-provider.tsx",
+      "classification": "keep",
+      "note": "v2 hooks only."
+    },
+    {
+      "file": "src/components/host/host-event-copilot-bridge.tsx",
+      "classification": "keep",
+      "note": "v2 hooks only."
+    },
+    {
+      "file": "src/components/host/host-event-provider.tsx",
+      "classification": "keep",
+      "note": "SAN-1378 Stage D commit 1: v2 CopilotKitProvider + one CopilotChatConfigurationProvider with no threadId, so the wizard gets one shared, non-explicit thread per mount."
+    },
+    {
+      "file": "src/components/host/host-event-shell.tsx",
+      "classification": "keep",
+      "note": "v2 surface; confirms no fifth provider boundary is rendered here."
+    },
+    {
+      "file": "src/components/host/host-ops-copilot-bridge.tsx",
+      "classification": "keep",
+      "note": "v2 hooks only."
+    },
+    {
+      "file": "src/components/host/host-os-body.tsx",
+      "classification": "keep",
+      "note": "v2 surface."
+    },
+    {
+      "file": "src/components/host/host-os-provider.tsx",
+      "classification": "keep",
+      "note": "SAN-1378 Stage D commit 2 / SAN-1577: v2 CopilotKitProvider + one CopilotChatConfigurationProvider with no threadId, extracted so the legacy /host shell and the /app/events workspace share one provider boundary. One shared, non-explicit host thread survives Overview, Events and Analytics; the v2 provider's own onError type replaces the old @copilotkit/shared import."
+    },
+    {
+      "file": "src/components/host/rentals/__tests__/rentals-concierge-contract.test.ts",
+      "classification": "test-only",
+      "note": "SAN-1124: guards v2 CopilotChat and useRenderTool registration plus broker workspace contract."
+    },
+    {
+      "file": "src/components/host/rentals/broker-workspace-tool-renderer.tsx",
+      "classification": "keep",
+      "note": "SAN-1124: v2 useRenderTool binds to the existing readBrokerWorkspaceTool for grounded read-only broker activity."
+    },
+    {
+      "file": "src/components/host/rentals/rentals-concierge-center.tsx",
+      "classification": "keep",
+      "note": "SAN-1124: existing CopilotKit v2 CopilotChat under the single ChatProvider on broker routes; no second broker runtime."
+    },
+    {
+      "file": "src/components/onboarding/__tests__/onboarding-copilot-bridge.test.tsx",
+      "classification": "test-only",
+      "note": "SAN-709: checks the v2 frontend tool schema, revision rejection and no-save result."
+    },
+    {
+      "file": "src/components/onboarding/onboarding-copilot-bridge.tsx",
+      "classification": "keep",
+      "note": "SAN-709: publishes the current signup form via useAgentContext and exposes one review-only useFrontendTool (suggest_partner_profile). No persistence path."
+    },
+    {
+      "file": "src/components/partners/__tests__/partner-signup-assistant.test.tsx",
+      "classification": "test-only",
+      "note": "SAN-709: tests proposal Accept/Ignore, stale-form protection and delayed model replies with mocked CopilotKit transport."
+    },
+    {
+      "file": "src/components/partners/__tests__/partner-workspace-chat.test.tsx",
+      "classification": "test-only",
+      "note": "SAN-705 verifies the existing v2 CopilotChat receives a distinct, stable user+partner threadId; mocks @copilotkit/react-core/v2 instead of creating another provider."
+    },
+    {
+      "file": "src/components/partners/partner-signup-assistant.tsx",
+      "classification": "keep",
+      "note": "SAN-709: v2 CopilotKitProvider + one CopilotChatConfigurationProvider around the existing signup wizard; the frontend tool only proposes fields for review and never writes partner data."
+    },
+    {
+      "file": "src/components/partners/partner-workspace-chat.tsx",
+      "classification": "keep",
+      "note": "SAN-705: uses the root v2 CopilotKitProvider and the same partnerAgent, with an explicit per-user/per-business conversation thread to prevent unrelated chat replay."
+    },
+    {
+      "file": "src/components/rentals/__tests__/rental-details-tool.test.tsx",
+      "classification": "test-only",
+      "note": "Mocks the v2 useFrontendTool hook to prove the openRentalDetails registration and resolver behavior. Mounts no provider."
+    },
+    {
+      "file": "src/components/rentals/rental-ask-tool-results.ts",
+      "classification": "keep",
+      "note": "SAN-1421 parsing/selection module extracted from the Ask MDE composer. Imports only the v2 AbstractAgent type to read the agent's rental tool result from the thread; it mounts no provider and starts no run."
+    },
+    {
+      "file": "src/components/rentals/rental-date-suggestion-tool.tsx",
+      "classification": "keep",
+      "note": "SAN-1611 v2 useFrontendTool suggests validated date-only values into the renter's editable draft; it never applies filters, submits a booking, or creates a new CopilotKit provider."
+    },
+    {
+      "file": "src/components/rentals/rental-details-tool.tsx",
+      "classification": "keep",
+      "note": "SAN-1421 post-merge frontend tool: openRentalDetails opens the in-page Details panel for an apartment already in the current results. v2 useFrontendTool only; mounts no provider and starts no run."
+    },
+    {
+      "file": "src/lib/__tests__/copilotkit-client-props.test.ts",
+      "classification": "migrate",
+      "step": 9,
+      "implicitContract": true,
+      "note": "Asserts the shared props shape, including `showDevConsole: false` and the absence of the v1 `agent` carrier. Must fail if a legacy prop reappears."
+    },
+    {
+      "file": "src/lib/copilotkit-client-props.ts",
+      "classification": "migrate",
+      "step": 9,
+      "implicitContract": true,
+      "note": "Not a @copilotkit importer — it declares the shared props shape locally. SAN-1378 Stage D removed the v1 `agent` carrier and the unreachable `publicApiKey` variant once the last compatibility boundary was gone; `agentId` is the only identity."
+    },
+    {
+      "file": "src/lib/hooks/__tests__/use-concierge-chat-thread-id.test.tsx",
+      "classification": "test-only",
+      "note": "SAN-1421 regression test for the tab thread pinning in useConciergeChat.appendMessage. Mocks the v2 hooks to prove a fresh authenticated tab adopts sessionThreadId before the first run, and that an explicit or persisted thread is never overridden."
+    },
+    {
+      "file": "src/lib/hooks/__tests__/use-concierge-chat.test.ts",
+      "classification": "test-only",
+      "note": "SAN-1378: mocks useCopilotKit to prove that switching conversation stops a still-streaming reply (stopAgent, with abortRun fallback) before the conversation is cleared."
+    },
+    {
+      "file": "src/lib/hooks/use-concierge-chat.ts",
+      "classification": "keep",
+      "note": "v2 hooks only; Step 19 verifies identity and RequestContext cross the bridge."
+    },
+    {
+      "file": "src/lib/hooks/use-host-ops-chat.ts",
+      "classification": "keep",
+      "note": "v2 hooks only; Step 19 territory."
     }
   ]
 }

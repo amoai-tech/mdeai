@@ -440,7 +440,7 @@ export function SavedThreadReplay({
  * `useThreadNav` is the single source of truth; nothing here calls the
  * configuration provider's imperative setters.
  */
-function LiveChatProvider({ children }: { children: ReactNode }) {
+function LiveChatProvider({ children, persistThread = false }: { children: ReactNode; persistThread?: boolean }) {
   const { user, loading: sessionLoading } = useSession();
   const { sessionThreadId, activeThreadId, hasPersistedThread, restoredThread } = useThreadNav();
   const threadId = activeThreadId ?? sessionThreadId;
@@ -478,6 +478,7 @@ function LiveChatProvider({ children }: { children: ReactNode }) {
         threadId={threadId}
         hasExplicitThreadId={shouldReplay}
       >
+        {persistThread && threadId && user ? <BrokerThreadSaver threadId={threadId} /> : null}
         {threadId && shouldReplay && !isDeterministicE2E() ? (
           <SavedThreadHistory threadId={threadId}>{children}</SavedThreadHistory>
         ) : (
@@ -489,12 +490,76 @@ function LiveChatProvider({ children }: { children: ReactNode }) {
 }
 
 /**
+ * Persist a signed-in conversation that CopilotKit runs but never stores.
+ *
+ * `/chat` writes its turns through the history endpoint and calls `markThreadSaved`, which is what
+ * makes a reload replay them. The broker chat mounts the same provider but had no writer, so a
+ * broker's questions and the assistant's answers disappeared on refresh. This adds the writer only:
+ * same endpoint, same Mastra message shape, same idempotency (message ids are the primary key).
+ */
+export function BrokerThreadSaver({
+  threadId,
+  agentId = "conciergeAgent",
+}: {
+  threadId: string;
+  agentId?: "conciergeAgent";
+}) {
+  const { agent } = useAgent({ agentId, updates: [UseAgentUpdate.OnMessagesChanged] });
+  const { markThreadSaved } = useThreadNav();
+  const saved = useRef(0);
+  const inFlight = useRef(false);
+
+  useEffect(() => {
+    if (inFlight.current) return;
+    const messages = agent.messages ?? [];
+    if (messages.length <= saved.current) return;
+    const last = messages[messages.length - 1];
+    // Only a finished answer is worth writing: a user line alone has no reply to restore.
+    if (!last || last.role !== "assistant") return;
+    const pending = messages
+      .slice(saved.current)
+      .map((message) => ({ id: message.id, role: message.role, content: message.content }))
+      .filter((message) => typeof message.content === "string" && message.content.trim().length > 0)
+      .slice(-4);
+    if (pending.length === 0) return;
+
+    inFlight.current = true;
+    const target = saved.current + pending.length;
+    void fetch(`/api/threads/${encodeURIComponent(threadId)}/messages`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ messages: pending }),
+      keepalive: true,
+    })
+      .then((response) => {
+        if (!response.ok) {
+          console.warn(`[BrokerThreadSaver] save failed: ${response.status}`);
+          return;
+        }
+        saved.current = target;
+        markThreadSaved(threadId);
+      })
+      .catch((error) => console.warn("[BrokerThreadSaver] save failed", error))
+      .finally(() => { inFlight.current = false; });
+  }, [agent, threadId, markThreadSaved]);
+
+  return null;
+}
+
+/**
  * Deterministic E2E renders its own chat and coagent stand-ins. Do not mount
  * the live CopilotKit provider: it can initiate agent/connection requests
  * while the browser is hydrating a test that exercises only local fast paths.
  * The production path remains the unchanged LiveChatProvider.
  */
-export function ChatProvider({ children }: { children: ReactNode }) {
+export function ChatProvider({
+  children,
+  persistThread = false,
+}: {
+  children: ReactNode;
+  /** Opt in to writing completed turns to history, so a reload can replay them. */
+  persistThread?: boolean;
+}) {
   if (isDeterministicE2E()) return <>{children}</>;
-  return <LiveChatProvider>{children}</LiveChatProvider>;
+  return <LiveChatProvider persistThread={persistThread}>{children}</LiveChatProvider>;
 }
