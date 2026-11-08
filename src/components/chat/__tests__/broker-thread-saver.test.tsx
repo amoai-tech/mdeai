@@ -30,6 +30,7 @@ vi.mock("@/lib/chat/thread-nav-context", () => ({
 }));
 
 import { BrokerThreadSaver } from "@/components/chat/chat-provider";
+import { markLiveUserMessage } from "@/lib/chat/live-user-message-ids";
 
 const THREAD = "11111111-2222-4333-8444-555555555555";
 const calls = () => (globalThis.fetch as unknown as { mock: { calls: [string, RequestInit][] } }).mock.calls;
@@ -437,12 +438,25 @@ describe("a finished answer makes the thread reloadable", () => {
   });
 
 
+  it("never re-posts old questions injected by a reconnect during an empty history wait", async () => {
+    agentMessages = [];
+    const { rerender } = render(<BrokerThreadSaver threadId={THREAD} restoreMode="waiting" />);
+    agentMessages = [
+      { id: "replayedU", role: "user", content: "already saved" },
+      { id: "replayedA", role: "assistant", content: "old answer" },
+    ];
+    rerender(<BrokerThreadSaver threadId={THREAD} restoreMode="waiting" />);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(calls()).toHaveLength(0);
+  });
+
   it("saves a new ID when replay replaces a same-length transcript with matching final text", async () => {
     agentMessages = [
       { id: "oldU", role: "user", content: "old question" },
       { id: "unchangedA", role: "assistant", content: "same ending" },
     ];
     const { rerender } = render(<BrokerThreadSaver threadId={THREAD} restoreMode="waiting" />);
+    markLiveUserMessage(STABLE_AGENT, THREAD, "newU");
     agentMessages = [
       { id: "newU", role: "user", content: "new question" },
       { id: "unchangedA", role: "assistant", content: "same ending" },
@@ -459,6 +473,7 @@ describe("a finished answer makes the thread reloadable", () => {
     ];
     const { rerender } = render(<BrokerThreadSaver threadId={THREAD} restoreMode="waiting" />);
     await new Promise((r) => setTimeout(r, 30));
+    markLiveUserMessage(STABLE_AGENT, THREAD, "newU");
     agentMessages = [{ id: "newU", role: "user", content: "new question after clear" }];
     rerender(<BrokerThreadSaver threadId={THREAD} restoreMode="waiting" />);
     await vi.waitFor(() => expect(calls().some(([, o]) => String(o.body).includes('"newU"'))).toBe(true));
@@ -474,6 +489,7 @@ describe("a finished answer makes the thread reloadable", () => {
     const { rerender } = render(<BrokerThreadSaver threadId={THREAD} restoreMode="waiting" />);
     STABLE_AGENT.threadId = THREAD;
     rerender(<BrokerThreadSaver threadId={next} restoreMode="waiting" />);
+    markLiveUserMessage(STABLE_AGENT, next, "newU");
     agentMessages = [{ id: "newU", role: "user", content: "new thread question" }];
     STABLE_AGENT.threadId = next;
     rerender(<BrokerThreadSaver threadId={next} restoreMode="waiting" />);
@@ -492,6 +508,7 @@ describe("a finished answer makes the thread reloadable", () => {
     const { rerender } = render(<BrokerThreadSaver threadId={THREAD} restoreMode="waiting" />);
     await new Promise((r) => setTimeout(r, 60));
 
+    markLiveUserMessage(STABLE_AGENT, THREAD, "u2");
     agentMessages = [
       ...agentMessages,
       { id: "u2", role: "user", content: "q2" },

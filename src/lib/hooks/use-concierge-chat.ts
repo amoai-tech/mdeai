@@ -12,6 +12,7 @@ import {
   reportConciergeError,
 } from "@/lib/concierge-error-store";
 import { useOptionalThreadNav } from "@/lib/chat/thread-nav-context";
+import { markLiveUserMessage } from "@/lib/chat/live-user-message-ids";
 
 // runAgent awaits detachActiveRun before isRunning becomes true. Two quick
 // Retry clicks can otherwise start the same turn twice, even across hook users.
@@ -158,11 +159,12 @@ function useLiveConciergeChat() {
         // assigns threadId directly too); this is not React render state.
         currentAgent.threadId = threadNav.sessionThreadId;
       }
-      currentAgent.addMessage({
-        id: crypto.randomUUID(),
-        role: "user",
-        content,
-      });
+      const messageId = crypto.randomUUID();
+      if (currentAgent.threadId) {
+        // Differentiate a real new question from restored user-role messages.
+        markLiveUserMessage(currentAgent, currentAgent.threadId, messageId);
+      }
+      currentAgent.addMessage({ id: messageId, role: "user", content });
       await currentCopilotkitRef.current.runAgent({ agent: currentAgent });
       // Only completed turns are recorded as saved, never a freshly minted UUID.
       markThreadSaved?.(currentAgent.threadId);
