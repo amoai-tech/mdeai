@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
@@ -12,6 +13,8 @@ type HostEventFormProps = {
 
 /** Manual edit fields stay in sync with the agent draft state. */
 export function HostEventForm({ draft, onChange }: HostEventFormProps) {
+  const [priceTouched, setPriceTouched] = useState(false);
+
   return (
     <div
       data-testid="host-event-form"
@@ -64,8 +67,10 @@ export function HostEventForm({ draft, onChange }: HostEventFormProps) {
           data-testid="host-event-field-capacity"
           type="number"
           min={0}
-          value={draft.capacity || ""}
-          onChange={(e) => onChange({ capacity: Number(e.target.value) || 0 })}
+          value={draft.capacity ? draft.capacity : ""}
+          onChange={(e) => onChange({
+            capacity: e.target.value === "" ? undefined as unknown as number : Number(e.target.value),
+          })}
         />
       </div>
       <div className="space-y-1.5">
@@ -75,8 +80,14 @@ export function HostEventForm({ draft, onChange }: HostEventFormProps) {
           data-testid="host-event-field-price"
           type="number"
           min={0}
-          value={draft.priceMinCop}
-          onChange={(e) => onChange({ priceMinCop: Number(e.target.value) || 0 })}
+          value={draft.priceMinCop > 0 ? draft.priceMinCop : priceTouched ? "0" : ""}
+          onChange={(e) => {
+            const raw = e.target.value;
+            setPriceTouched(raw !== "");
+            onChange({
+              priceMinCop: raw === "" ? undefined as unknown as number : Number(raw),
+            });
+          }}
         />
       </div>
       <div className="space-y-1.5 sm:col-span-2">

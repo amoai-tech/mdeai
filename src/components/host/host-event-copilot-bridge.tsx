@@ -105,14 +105,21 @@ export function HostEventCopilotBridge({ children }: HostEventCopilotBridgeProps
     const reset = patch.status === "published" || patch.status === "rejected";
     // eslint-disable-next-line react-hooks/immutability -- deliberate non-render lock registry
     if (reset) manualFields.clear();
+    const normalized = { ...patch };
     for (const [key, value] of Object.entries(patch)) {
       if (reset) break;
       const empty = value == null || value === "" ||
         (Array.isArray(value) && value.length === 0);
-      if (empty) manualFields.delete(key);
-      else manualFields.add(key);
+      if (empty) {
+        manualFields.delete(key);
+        if (key === "capacity" || key === "priceMinCop") {
+          normalized[key as "capacity" | "priceMinCop"] = 0;
+        }
+      } else {
+        manualFields.add(key);
+      }
     }
-    setDraftState((prev) => mergeEventDraft(prev, patch));
+    setDraftState((prev) => mergeEventDraft(prev, normalized));
   }, [manualFields]);
 
   // Canonical wizard state is owned by this component. Frontend tools and manual
