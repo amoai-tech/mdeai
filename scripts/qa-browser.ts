@@ -208,7 +208,11 @@ async function waitForChrome(
   throw new Error("Chrome debugger did not start with a matching browser identity on the expected local port.");
 }
 
-async function main(): Promise<void> {
+/**
+ * Launch an authenticated QA browser. Optional profile creation is injected
+ * only by the SIGINT regression test to hold its filesystem promise pending.
+ */
+export async function main(createProfile: typeof mkdtemp = mkdtemp): Promise<void> {
   const options = parseQaBrowserArgs(process.argv.slice(2));
   if (options === "help") {
     console.log("Usage: npm run qa:browser -- [--role=event-host|renter|broker|super-admin] [--allow-admin] [--origin=http://localhost:3001] [--allow-remote] [--headless] [--port=9227]");
@@ -241,7 +245,7 @@ async function main(): Promise<void> {
   process.on("SIGTERM", terminate);
 
   try {
-    directory = await mkdtemp(join(tmpdir(), "mde-qa-chrome-"));
+    directory = await createProfile(join(tmpdir(), "mde-qa-chrome-"));
     if (stop.signal.aborted) throw new Error("QA browser interrupted during startup.");
     const initialize = async (): Promise<void> => {
       if (stop.signal.aborted) return;
