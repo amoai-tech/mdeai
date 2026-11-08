@@ -256,8 +256,8 @@ describe("a multi-step assistant turn replays only its answer", () => {
   });
 });
 
-describe("a tool call that trails the answer", () => {
-  it("replays the answer instead of dropping it", () => {
+describe("a trailing tool call without a later final answer", () => {
+  it("keeps its tool card without guessing that earlier text was the answer", () => {
     const stored = {
       format: 2,
       parts: [
@@ -326,9 +326,38 @@ describe("narration before a tool call whose answer is absent", () => {
     };
     const mapped = mapSavedThreadHistory([row("a5", "assistant", stored)]);
     const message = mapped.find((m) => m.role === "assistant")!;
-    // The step boundary proves this text was a work note, not the answer.
+    // Step-start begins a step, not a final answer; pre-tool text stays hidden.
     expect(message.content).toBe("");
     expect(message.toolCalls?.[0]?.function.name).toBe("readBrokerWorkspaceTool");
+  });
+});
+
+describe("multi-tool saved history", () => {
+  it("keeps the final text after the last tool and both completed results", () => {
+    const stored = {
+      format: 2,
+      parts: [
+        { type: "step-start" },
+        { type: "text", text: "First I should count the listings." },
+        { type: "tool-invocation", toolInvocation: {
+          state: "result", toolCallId: "first", toolName: "searchRentals", args: {}, result: { count: 1 },
+        } },
+        { type: "step-start" },
+        { type: "text", text: "Next I should check pending viewings." },
+        { type: "tool-invocation", toolInvocation: {
+          state: "result", toolCallId: "second", toolName: "readBrokerWorkspaceTool", args: {},
+          result: { pending: 0 },
+        } },
+        { type: "step-start" },
+        { type: "text", text: "You have one listing and no pending viewings." },
+      ],
+    };
+    const mapped = mapSavedThreadHistory([row("multi", "assistant", stored)]);
+    expect(mapped.find((m) => m.role === "assistant")?.content)
+      .toBe("You have one listing and no pending viewings.");
+    expect(mapped.filter((m) => m.role === "tool").map((m) => m.toolCallId))
+      .toEqual(["first", "second"]);
+    expect(JSON.stringify(mapped)).not.toContain("Next I should");
   });
 });
 
