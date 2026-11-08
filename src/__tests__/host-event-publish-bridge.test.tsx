@@ -165,6 +165,38 @@ describe("HostEventCopilotBridge publish HITL", () => {
     expect(reviewed.ticketTiers?.[0]).toMatchObject({ name: "General", priceCop: 0, quantity: 80 });
   });
 
+  it("preserves the host's paid tier price against stale AI tool and publish args", async () => {
+    render(
+      <HostEventCopilotBridge>
+        {({ draft, setDraft }) => <HostEventForm draft={draft} onChange={setDraft} />}
+      </HostEventCopilotBridge>,
+    );
+    const staleTiers = [{ name: "General", priceCop: 40000, quantity: 80 }];
+    await act(async () => {
+      await frontendTools.set_event_draft.handler!({
+        title: "Salsa Night", neighborhood: "Laureles", dateIso: "2026-12-15T20:00:00-05:00",
+        venue: "Son Havana", capacity: 100, priceMinCop: 40000, ticketTiers: staleTiers,
+      });
+    });
+    fireEvent.change(screen.getByTestId("host-event-field-price"), { target: { value: "50000" } });
+    let result: unknown;
+    await act(async () => {
+      result = await frontendTools.set_event_draft.handler!({ ticketTiers: staleTiers });
+    });
+    expect(result).toMatchObject({
+      ok: true, lockedFields: ["ticketTiers"],
+      draft: { priceMinCop: 50000, ticketTiers: [{ priceCop: 50000, quantity: 80 }] },
+    });
+    const PublishPanel = registeredRender;
+    if (!PublishPanel) throw new Error("HITL renderer not registered");
+    render(<PublishPanel args={{ draft: { priceMinCop: 40000, ticketTiers: staleTiers } }} status="executing" />);
+    const reviewed = JSON.parse(
+      screen.getByTestId("captured-publish-draft").textContent ?? "{}",
+    ) as EventDraftState;
+    expect(reviewed.priceMinCop).toBe(50000);
+    expect(reviewed.ticketTiers[0]).toMatchObject({ priceCop: 50000, quantity: 80 });
+  });
+
   it("keeps a manually entered zero price locked for a free event", async () => {
     render(
       <HostEventCopilotBridge>

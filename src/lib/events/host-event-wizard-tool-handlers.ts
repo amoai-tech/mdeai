@@ -65,6 +65,17 @@ const MANUAL_EVENT_FIELDS = [
   "ticketTiers",
 ] as const;
 
+/** A manual minimum-price edit also protects its derived ticket tier price.
+ * Older model snapshots must not revert the reviewed price through ticketTiers.
+ */
+export function isManualEventFieldProtected(
+  field: string,
+  manualFields: ReadonlySet<string>,
+): boolean {
+  return manualFields.has(field) ||
+    (field === "ticketTiers" && manualFields.has("priceMinCop"));
+}
+
 /**
  * Agent updates must not overwrite a field the host edited by hand. The wizard
  * remains authoritative for manually changed fields; the host can still edit
@@ -77,7 +88,7 @@ export function applySetEventDraftPreservingManual(
 ): EventDraftState {
   const patch = { ...args };
   for (const field of MANUAL_EVENT_FIELDS) {
-    if (manualFields.has(field)) delete patch[field];
+    if (isManualEventFieldProtected(field, manualFields)) delete patch[field];
   }
   return applySetEventDraft(current, patch);
 }
@@ -185,7 +196,7 @@ export function selectPublishDraft(
   // AI changes (for example a price or description) still merge and appear in
   // the review panel.
   const reviewedPatch = manualFields
-    ? Object.fromEntries(Object.entries(patch).filter(([key]) => !manualFields.has(key)))
+    ? Object.fromEntries(Object.entries(patch).filter(([key]) => !isManualEventFieldProtected(key, manualFields)))
     : patch;
   const merged = mergeEventDraft(fallbackDraft, reviewedPatch);
   return normalizeReviewedEventDate(

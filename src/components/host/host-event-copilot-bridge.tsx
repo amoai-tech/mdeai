@@ -10,6 +10,7 @@ import { z } from "zod";
 import { EventPublishApprovalPanel } from "@/components/host/event-publish-approval-panel";
 import {
   applySetEventDraftPreservingManual,
+  isManualEventFieldProtected,
   publishDecisionDraftPatch,
   selectPublishDraft,
 } from "@/lib/events/host-event-wizard-tool-handlers";
@@ -146,7 +147,7 @@ export function HostEventCopilotBridge({ children }: HostEventCopilotBridgeProps
       parameters: setEventDraftParams,
       handler: async (args) => {
         const lockedFields = Object.keys(args).filter((key) => {
-          if (!manualFields.has(key)) return false;
+          if (!isManualEventFieldProtected(key, manualFields)) return false;
           const current = latestDraftRef.current[key as keyof EventDraftState];
           const proposed = args[key as keyof typeof args];
           return JSON.stringify(current) !== JSON.stringify(proposed);

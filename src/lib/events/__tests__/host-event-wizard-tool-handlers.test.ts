@@ -42,6 +42,23 @@ describe("host-event-wizard-tool-handlers", () => {
     expect(next.venue).toBe("Poblado");
   });
 
+  it("does not let stale agent tiers undo the price the host entered", () => {
+    const reviewed = {
+      ...EMPTY_EVENT_DRAFT,
+      title: "Salsa Night", neighborhood: "Laureles",
+      dateIso: "2026-12-15T20:00:00-05:00", venue: "Son Havana",
+      capacity: 100, priceMinCop: 50000,
+      ticketTiers: [{ name: "General", priceCop: 50000, quantity: 80 }],
+    };
+    const staleTiers = [{ name: "General", priceCop: 40000, quantity: 80 }];
+    const locks = new Set(["priceMinCop"]);
+    expect(applySetEventDraftPreservingManual(reviewed, { ticketTiers: staleTiers }, locks)
+      .ticketTiers).toEqual(reviewed.ticketTiers);
+    const publish = selectPublishDraft({ priceMinCop: 40000, ticketTiers: staleTiers }, reviewed, locks);
+    expect(publish.priceMinCop).toBe(50000);
+    expect(publish.ticketTiers).toEqual(reviewed.ticketTiers);
+  });
+
   it("keeps the latest reviewed form over older publish-tool args", () => {
     const latest = {
       ...EMPTY_EVENT_DRAFT,
