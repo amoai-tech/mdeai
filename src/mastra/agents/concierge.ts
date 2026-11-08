@@ -24,6 +24,7 @@ import { RESTAURANT_CLARIFY_MESSAGE } from "@/lib/restaurant-clarify-copy";
 import { routerIntentSchema } from "@/lib/router-intent";
 import { buildConciergeChannels } from "./whatsapp-channels";
 import { shouldContinueVenueBookingAfterSearch } from "../lib/booking-continuation";
+import { shouldForceRouteTool } from "../lib/route-tool-choice";
 
 export const conciergeWorkingMemorySchema = z.object({
   // One canonical enum for both deterministic routing and AI thread memory.
@@ -548,6 +549,10 @@ export const conciergeAgent = new Agent({
     { id: 'san1149-booking-continuation', processInputStep: ({ stepNumber, messages, steps, requestContext }) =>
       shouldContinueVenueBookingAfterSearch({ stepNumber, messages, steps, requestContext })
         ? { toolChoice: { type: 'tool' as const, toolName: 'requestVenueBooking' } }
+        : {} },
+    { id: 'san465-route-tool-choice', processInputStep: ({ stepNumber, messages, steps }) =>
+      shouldForceRouteTool({ stepNumber, messages, steps })
+        ? { toolChoice: { type: 'tool' as const, toolName: 'computeRouteTool' } }
         : {} },
     { id: "san737-current-selected-name-history", processInput: ({ messages, requestContext }) =>
       currentSelectedNameOnly(messages, requestContext?.get("ag-ui")) },
