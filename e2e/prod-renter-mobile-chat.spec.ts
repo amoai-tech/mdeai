@@ -70,12 +70,14 @@ test.describe("SAN-1626 · signed-in renter concierge on a 390px phone", () => {
   test("asks, gets grounded cards, follows up and survives a reload", async ({ qaRolePage: page }) => {
     test.setTimeout(420_000);
 
+    const rentalApiStatuses: number[] = [];
     // SAN-1074: distinguish transient rental API failure from an empty UI or
     // a delayed AG-UI bubble. Only log the fixed path, status and the already
     // sanitized error code; never request bodies, cookies or user data.
     page.on("response", (response) => {
       if (new URL(response.url()).pathname === "/api/rentals/search" &&
           response.request().method() === "POST") {
+        rentalApiStatuses.push(response.status());
         console.info("SAN-1074 rental API", JSON.stringify({
           path: "/api/rentals/search", status: response.status(),
         }));
@@ -127,5 +129,19 @@ test.describe("SAN-1626 · signed-in renter concierge on a 390px phone", () => {
     const anon = await guest.request.get(`${new URL(page.url()).origin}/api/copilotkit/info`);
     expect(anon.status()).toBe(401);
     await guest.close();
+
+    // A single successful test is a SAMPLE of an actual signed-in journey,
+    // not the measured production success rate. Emit only non-sensitive
+    // counters so CI can retain a defensible observation per deployed SHA.
+    console.info("SAN-1074 grounded-journey", JSON.stringify({
+      outcome: "passed",
+      viewportWidth: 390,
+      rentalApiStatuses,
+      groundedCardCount: await cards.count(),
+      firstReplyNonempty: firstReply.length > 0,
+      followUpNonempty: secondReply.length > 0,
+      refreshPreservedBoth: true,
+      anonymousRuntimeDenied: true,
+    }));
   });
 });
