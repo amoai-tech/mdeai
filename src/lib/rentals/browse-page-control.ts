@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { buildRentalsUrl, type RentalBrowseFilterState } from "@/lib/rentals/browse-filters";
 import { isOrderedStay, isRealCalendarDate } from "@/lib/rentals/date-only";
-import { buildRentalSearchParams } from "@/lib/rental-query-parser";
+import { buildRentalSearchParams, scoreRentalQuery } from "@/lib/rental-query-parser";
 
 /** Only native rental URL filters may be changed by a page-control action. */
 export const rentalPageControlSchema = z.object({
@@ -40,6 +40,8 @@ export function parseRentalPageCommand(text: string): RentalPageControlPatch | n
   if (/\b(remove|clear|without|not|don't|do not|exclude|any|all|furnished|balcony|pets?|parking|pool|gym|wifi|internet|workspace|desk|quiet|caf[eé]s?|metro|family|terrace|overlooking|nomad|remote|near|top|budget|under|below|less than)\b/i.test(text)) {
     return null;
   }
+  const signals = scoreRentalQuery(text);
+  if (signals.hasVibeOrUseCase || signals.hasNomad || signals.hasCafeOrGym) return null;
   const parsed = buildRentalSearchParams(text, {});
   if (!parsed) return null;
   // The page can only apply these native filters. If the question carries a
