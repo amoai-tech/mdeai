@@ -64,6 +64,12 @@ describe("GET /api/places/detail — rate limiting", () => {
     expect(res.headers.get("Cache-Control")).toBe("no-store");
   });
 
+  it("does not allow public or intermediary caching of provider details", async () => {
+    const res = await GET(makeRequest("5.5.5.5"));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
+  });
+
   it("separate IPs have independent rate-limit buckets", async () => {
     // Exhaust IP A
     for (let i = 0; i < 30; i++) {
