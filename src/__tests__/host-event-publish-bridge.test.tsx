@@ -87,6 +87,39 @@ describe("HostEventCopilotBridge publish HITL", () => {
     expect(screen.getByTestId("host-event-field-price")).toHaveProperty("value", "40000");
   });
 
+  it("preserves locks when the host chooses Edit", async () => {
+    let bridgeSetDraft: ((patch: Partial<EventDraftState>) => void) | undefined;
+    render(
+      <HostEventCopilotBridge>
+        {({ draft, setDraft }) => {
+          bridgeSetDraft = setDraft;
+          return <HostEventForm draft={draft} onChange={setDraft} />;
+        }}
+      </HostEventCopilotBridge>,
+    );
+    fireEvent.change(screen.getByTestId("host-event-field-title"), { target: { value: "Host title" } });
+    act(() => bridgeSetDraft?.({ status: "draft" }));
+    await act(async () => {
+      await frontendTools.set_event_draft.handler!({ title: "Agent title" });
+    });
+    expect(screen.getByTestId("host-event-field-title")).toHaveProperty("value", "Host title");
+  });
+
+  it("does not report an unchanged locked value as a conflict", async () => {
+    render(
+      <HostEventCopilotBridge>
+        {({ draft, setDraft }) => <HostEventForm draft={draft} onChange={setDraft} />}
+      </HostEventCopilotBridge>,
+    );
+    fireEvent.change(screen.getByTestId("host-event-field-title"), { target: { value: "Host title" } });
+    let result: unknown;
+    await act(async () => {
+      result = await frontendTools.set_event_draft.handler!({ title: "Host title", capacity: 90 });
+    });
+    expect(result).toMatchObject({ ok: true, lockedFields: [] });
+    expect(screen.getByTestId("host-event-field-capacity")).toHaveProperty("value", "90");
+  });
+
   it("reports a manually locked field instead of silently accepting an agent overwrite", async () => {
     render(
       <HostEventCopilotBridge>

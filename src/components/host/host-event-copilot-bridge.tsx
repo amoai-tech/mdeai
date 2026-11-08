@@ -100,7 +100,9 @@ export function HostEventCopilotBridge({ children }: HostEventCopilotBridgeProps
   // host edits a field, but the HITL renderer must still see the latest locks.
   const manualFields = useMemo(() => new Set<string>(), []);
   const setDraft = useCallback((patch: Partial<EventDraftState>) => {
-    const reset = patch.status === "published" || patch.status === "rejected" || patch.status === "draft";
+    // Edit returns the draft to editing mode and must preserve the locks taken
+    // while the host was editing. Only terminal outcomes clear them.
+    const reset = patch.status === "published" || patch.status === "rejected";
     // eslint-disable-next-line react-hooks/immutability -- deliberate non-render lock registry
     if (reset) manualFields.clear();
     for (const [key, value] of Object.entries(patch)) {
@@ -136,7 +138,12 @@ export function HostEventCopilotBridge({ children }: HostEventCopilotBridgeProps
         "Apply every event detail the host stated in one call: title, neighborhood, dateIso, venue, capacity, priceMinCop (whole COP), description, optional ticket tiers. Returns the updated draft so the assistant can continue or ask for missing fields.",
       parameters: setEventDraftParams,
       handler: async (args) => {
-        const lockedFields = Object.keys(args).filter((key) => manualFields.has(key));
+        const lockedFields = Object.keys(args).filter((key) => {
+          if (!manualFields.has(key)) return false;
+          const current = latestDraftRef.current[key as keyof EventDraftState];
+          const proposed = args[key as keyof typeof args];
+          return JSON.stringify(current) !== JSON.stringify(proposed);
+        });
         const next = applySetEventDraftPreservingManual(
           latestDraftRef.current,
           args,
