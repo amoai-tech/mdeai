@@ -10323,6 +10323,7 @@ export type Database = {
         | "tour"
         | "creator"
         | "developer"
+        | "landlord"
       payment_status: "pending" | "paid" | "refunded" | "failed"
       resolution_status:
         | "detected"
@@ -10535,6 +10536,7 @@ export const Constants = {
         "tour",
         "creator",
         "developer",
+        "landlord",
       ],
       payment_status: ["pending", "paid", "refunded", "failed"],
       resolution_status: [
