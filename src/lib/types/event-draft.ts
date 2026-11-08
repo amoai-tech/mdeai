@@ -35,11 +35,31 @@ export type EventTicketTierDraft = z.infer<typeof EventTicketTierDraft>;
 
 export const EMPTY_EVENT_DRAFT: EventDraftState = EventDraftStateSchema.parse({});
 
+/** Keep a single tier's ticket count independent from venue capacity.
+ * Only an explicit minimum-price edit updates its price, and an explicit tier
+ * proposal always wins. The host may sell 80 tickets in a 100-person venue.
+ */
+export function reconcileSingleTicketTier(
+  draft: EventDraftState,
+  patch: Partial<EventDraftState> = {},
+): EventDraftState {
+  if (draft.ticketTiers.length !== 1 || patch.ticketTiers !== undefined ||
+      patch.priceMinCop === undefined) return draft;
+  const tier = draft.ticketTiers[0];
+  return {
+    ...draft,
+    ticketTiers: [{ ...tier, priceCop: patch.priceMinCop }],
+  };
+}
+
 export function mergeEventDraft(
   current: EventDraftState,
   patch: Partial<EventDraftState>,
 ): EventDraftState {
-  return EventDraftStateSchema.parse({ ...current, ...patch });
+  return reconcileSingleTicketTier(
+    EventDraftStateSchema.parse({ ...current, ...patch }),
+    patch,
+  );
 }
 
 export function activeHostWizardStep(
@@ -54,8 +74,9 @@ export function activeHostWizardStep(
   }
   const hasBasics = draft.title.trim().length > 0;
   const hasVenue = draft.venue.trim().length > 0 && draft.capacity > 0;
-  const hasTickets =
-    draft.ticketTiers.length > 0 || draft.priceMinCop > 0;
+  const hasTickets = draft.ticketTiers.length > 0
+    ? draft.ticketTiers.every((tier) => tier.priceCop > 0)
+    : draft.priceMinCop > 0;
 
   if (hasBasics && hasVenue && hasTickets) return "preview";
   if (hasBasics && hasVenue) return "tickets";
@@ -73,12 +94,15 @@ export function isValidEventDraftDate(value: string | undefined): boolean {
 }
 
 export function isDraftReadyForPublish(draft: EventDraftState): boolean {
+  const hasSellableTickets = draft.ticketTiers.length > 0
+    ? draft.ticketTiers.every((tier) => tier.priceCop > 0)
+    : draft.priceMinCop > 0;
   return (
     draft.title.trim().length > 0 &&
     draft.neighborhood.trim().length > 0 &&
     isValidEventDraftDate(draft.dateIso) &&
     draft.venue.trim().length > 0 &&
     draft.capacity > 0 &&
-    (draft.ticketTiers.length > 0 || draft.priceMinCop > 0)
+    hasSellableTickets
   );
 }

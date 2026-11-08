@@ -54,6 +54,45 @@ export function applySetEventDraft(
   return mergeEventDraft(current, args);
 }
 
+const MANUAL_EVENT_FIELDS = [
+  "title",
+  "neighborhood",
+  "dateIso",
+  "venue",
+  "capacity",
+  "priceMinCop",
+  "description",
+  "ticketTiers",
+] as const;
+
+/** A manual minimum-price edit also protects its derived ticket tier price.
+ * Older model snapshots must not revert the reviewed price through ticketTiers.
+ */
+export function isManualEventFieldProtected(
+  field: string,
+  manualFields: ReadonlySet<string>,
+): boolean {
+  return manualFields.has(field) ||
+    (field === "ticketTiers" && manualFields.has("priceMinCop"));
+}
+
+/**
+ * Agent updates must not overwrite a field the host edited by hand. The wizard
+ * remains authoritative for manually changed fields; the host can still edit
+ * them directly or clear them before asking the agent to fill them again.
+ */
+export function applySetEventDraftPreservingManual(
+  current: EventDraftState,
+  args: SetEventDraftArgs,
+  manualFields: ReadonlySet<string>,
+): EventDraftState {
+  const patch = { ...args };
+  for (const field of MANUAL_EVENT_FIELDS) {
+    if (isManualEventFieldProtected(field, manualFields)) delete patch[field];
+  }
+  return applySetEventDraft(current, patch);
+}
+
 /** Pure patch helpers — shared by v1 bridge semantics and v2 useFrontendTool handlers. */
 export function applySetEventBasics(
   current: EventDraftState,
@@ -142,6 +181,7 @@ function normalizeReviewedEventDate(draft: EventDraftState): EventDraftState {
 export function selectPublishDraft(
   argsDraft: unknown,
   fallbackDraft: EventDraftState,
+  manualFields?: ReadonlySet<string>,
 ): EventDraftState {
   if (argsDraft == null) return normalizeReviewedEventDate(fallbackDraft);
   const parsed = publishToolFields.safeParse(argsDraft);
@@ -152,7 +192,13 @@ export function selectPublishDraft(
   const patch = dateIso !== undefined && !isValidEventDraftDate(dateIso)
     ? fields
     : parsed.data;
-  const merged = mergeEventDraft(fallbackDraft, patch);
+  // Manual wizard edits win over older publish-tool args, while other valid
+  // AI changes (for example a price or description) still merge and appear in
+  // the review panel.
+  const reviewedPatch = manualFields
+    ? Object.fromEntries(Object.entries(patch).filter(([key]) => !isManualEventFieldProtected(key, manualFields)))
+    : patch;
+  const merged = mergeEventDraft(fallbackDraft, reviewedPatch);
   return normalizeReviewedEventDate(
     isDraftReadyForPublish(merged) ? merged : fallbackDraft,
   );
