@@ -109,12 +109,24 @@ export function mapSavedThreadRow(row: SavedThreadMessageRow): SavedThreadMessag
     ? content.parts.filter((p): p is Part => asRecord(p) !== null)
     : [];
 
+  // A multi-step assistant turn stores the model's narration before each tool call as its own text
+  // part. The live chat shows only the text that follows the last tool call, so replaying every
+  // part showed brokers the assistant's internal reasoning ("I need to check the broker's
+  // workspace…") while the live answer had been clean.
+  const lastTool = parts.reduce((last, part, index) =>
+    part.type === "tool-invocation" ? index : last, -1);
+  // Text that a tool call follows is not replayed: the stored shape cannot tell an answer from the
+  // work note before the tool, and guessing wrong shows a broker internal reasoning.
   let text = parts
-    .filter((p) => p.type === "text" && typeof p.text === "string")
-    .map((p) => p.text as string)
+    .filter((part, index) =>
+      part.type === "text" && typeof part.text === "string" && index > lastTool)
+    .map((part) => part.text as string)
     .join("");
-  // Older rows carry only the flat string.
-  if (text.length === 0 && typeof content.content === "string") text = content.content;
+  // Only a row with no parts at all carries the legacy flat string. A row that has parts but no
+  // text is a tool-only turn: its flat content would be the narration this change excludes.
+  if (text.length === 0 && parts.length === 0 && typeof content.content === "string") {
+    text = content.content;
+  }
 
   if (row.role === "user") {
     return text.trim().length > 0 ? [{ id: row.id, role: "user", content: text }] : null;
