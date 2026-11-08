@@ -140,6 +140,31 @@ describe("HostEventCopilotBridge publish HITL", () => {
     expect(screen.getByTestId("host-event-field-price")).toHaveProperty("value", "40000");
   });
 
+  it("keeps a single published tier consistent with a manually chosen free price and capacity", async () => {
+    render(
+      <HostEventCopilotBridge>
+        {({ draft, setDraft }) => <HostEventForm draft={draft} onChange={setDraft} />}
+      </HostEventCopilotBridge>,
+    );
+    await act(async () => {
+      await frontendTools.set_event_draft.handler!({
+        title: "Free salsa",
+        capacity: 80,
+        priceMinCop: 40000,
+        ticketTiers: [{ name: "General", priceCop: 40000, quantity: 80 }],
+      });
+    });
+    fireEvent.change(screen.getByTestId("host-event-field-price"), { target: { value: "0" } });
+    fireEvent.change(screen.getByTestId("host-event-field-capacity"), { target: { value: "100" } });
+    const PublishPanel = registeredRender;
+    if (!PublishPanel) throw new Error("HITL renderer not registered");
+    render(<PublishPanel args={{}} status="executing" />);
+    const reviewed = JSON.parse(
+      screen.getByTestId("captured-publish-draft").textContent ?? "{}",
+    ) as EventDraftState;
+    expect(reviewed.ticketTiers?.[0]).toMatchObject({ name: "General", priceCop: 0, quantity: 100 });
+  });
+
   it("keeps a manually entered zero price locked for a free event", async () => {
     render(
       <HostEventCopilotBridge>
