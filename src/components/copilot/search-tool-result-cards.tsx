@@ -759,17 +759,70 @@ export function EventResults({ result }: { result: unknown }) {
     // recover, otherwise one event opens duplicate Quick view dialogs.
     if (!isCurrent) return;
     let recoveryTimer: number | undefined;
+    /**
+     * Open Quick view for an explicitly requested event and REPORT whether it opened.
+     *
+     * The caller used to show "Here is the event card." before this ran, so a request
+     * that could not open anything still confirmed success. Every path now answers with
+     * `mde:event-card-recovery-result`, and the caller only confirms on `opened: true`.
+     */
     const onRecovery = (event: Event) => {
-      const eventId = (event as CustomEvent<{ eventId?: unknown }>).detail?.eventId;
-      if (typeof eventId !== "string" || !eventId || recoveryHandled.current.has(eventId)) return;
+      const detail = (event as CustomEvent<{ eventId?: unknown; requestId?: unknown; anyCardBefore?: unknown }>).detail ?? {};
+      const eventId = typeof detail.eventId === "string" ? detail.eventId : null;
+      const requestId = typeof detail.requestId === "string" ? detail.requestId : null;
+
+      const answer = (opened: boolean) => {
+        window.dispatchEvent(
+          new CustomEvent("mde:event-card-recovery-result", {
+            detail: { eventId, requestId, opened },
+          }),
+        );
+      };
+
+      if (!eventId) return answer(false);
+      // Deduplicate the SAME request, not the same event: a repeated "show the first
+      // event as a card" is a new request and must open again.
+      const key = requestId ?? eventId;
+      if (recoveryHandled.current.has(key)) return answer(false);
       const row = rowsRef.current.find((value) => value.id === eventId);
-      if (!row) return;
+      if (!row) return answer(false);
+
+      // Scope the "already rendered" check to THIS event: another event's card must not
+      // suppress this one.
+      const renderedSelector = `[data-testid="a2ui-event-card"][data-event-id="${eventId}"]`;
+      /**
+       * Which existing card satisfies this request?
+       *
+       * A request-scoped call knows the event it asked for, so only that event's card
+       * counts. A LEGACY call (no requestId) cannot know which event the model answered
+       * with, so any rendered card satisfies it — otherwise a model card for event #3
+       * would be followed by a Quick view for event #1.
+       */
+      const anyCardBefore = typeof detail.anyCardBefore === "number" ? detail.anyCardBefore : null;
+      const anyCardAppeared = () => anyCardBefore !== null &&
+        document.querySelectorAll('[data-testid="a2ui-event-card"]').length > anyCardBefore;
+      const existingCard = () =>
+        requestId
+          ? document.querySelector<HTMLElement>(renderedSelector)
+          : document.querySelector<HTMLElement>('[data-testid="a2ui-event-card"]');
+      const alreadyRendered = existingCard();
+      if (alreadyRendered) {
+        alreadyRendered.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        return answer(true);
+      }
+      if (anyCardAppeared()) return answer(true);
+
       window.clearTimeout(recoveryTimer);
       recoveryTimer = window.setTimeout(() => {
-        // A successful A2UI render wins; never add a duplicate card.
-        if (document.querySelector('[data-testid="a2ui-event-card"]')) return;
-        recoveryHandled.current.add(eventId);
+        const settledCard = existingCard();
+        if (settledCard) {
+          settledCard.scrollIntoView({ block: "nearest", behavior: "smooth" });
+          return answer(true);
+        }
+        if (anyCardAppeared()) return answer(true);
+        recoveryHandled.current.add(key);
         setSelectedEvent(row as EventResultRow);
+        answer(true);
       }, 500);
     };
     window.addEventListener("mde:event-card-recovery", onRecovery);

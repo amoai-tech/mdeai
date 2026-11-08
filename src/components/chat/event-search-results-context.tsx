@@ -87,6 +87,10 @@ export function EventSearchResultsProvider({ children }: { children: ReactNode }
   );
 }
 
+export function useOptionalEventSearchResults(): EventSearchResultsContextValue | null {
+  return useContext(EventSearchResultsContext);
+}
+
 export function useEventSearchResults() {
   const ctx = useContext(EventSearchResultsContext);
   if (!ctx) {

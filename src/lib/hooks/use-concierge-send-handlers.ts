@@ -8,8 +8,56 @@ import { getConciergeErrorForThread, reportConciergeError } from "@/lib/concierg
 import { useOptionalThreadNav } from "@/lib/chat/thread-nav-context";
 import { useConciergeChat } from "@/lib/hooks/use-concierge-chat";
 import type { ConciergeSendHandlers } from "@/lib/concierge-send-user-message";
+
+/**
+ * Ask the mounted event results to open Quick view for one event, and report whether it
+ * actually opened. Bounded so a chat turn can never wait on a missing listener: after
+ * the timeout the caller falls through to the model instead of confirming a no-op.
+ */
+const EVENT_CARD_RECOVERY_EVENT = "mde:event-card-recovery";
+const EVENT_CARD_RECOVERY_RESULT = "mde:event-card-recovery-result";
+const EVENT_CARD_RECOVERY_TIMEOUT_MS = 1_800;
+
+/** True when any A2UI event card is already on screen (the model answered with a card). */
+export function hasRenderedEventCard(): boolean {
+  if (typeof document === "undefined") return false;
+  return Boolean(document.querySelector('[data-testid="a2ui-event-card"]'));
+}
+
+export function requestEventCardRecovery(
+  eventId: string,
+  timeoutMs = EVENT_CARD_RECOVERY_TIMEOUT_MS,
+  options: { anyCardBefore?: number } = {},
+): Promise<boolean> {
+  if (typeof window === "undefined") return Promise.resolve(false);
+  const requestId = `${eventId}:${crypto.randomUUID()}`;
+  return new Promise<boolean>((resolve) => {
+    let settled = false;
+    const finish = (opened: boolean) => {
+      if (settled) return;
+      settled = true;
+      window.removeEventListener(EVENT_CARD_RECOVERY_RESULT, onResult as EventListener);
+      window.clearTimeout(timer);
+      resolve(opened);
+    };
+    const onResult = (event: Event) => {
+      const detail = (event as CustomEvent<{ requestId?: unknown; opened?: unknown }>).detail;
+      if (detail?.requestId !== requestId) return;
+      finish(detail.opened === true);
+    };
+    const timer = window.setTimeout(() => finish(false), timeoutMs);
+    window.addEventListener(EVENT_CARD_RECOVERY_RESULT, onResult as EventListener);
+    window.dispatchEvent(
+      new CustomEvent(EVENT_CARD_RECOVERY_EVENT, {
+        detail: { eventId, requestId, anyCardBefore: options.anyCardBefore },
+      }),
+    );
+  });
+}
+
 import { useEventSearchFastPath } from "@/hooks/use-event-search-fast-path";
-import { isEventCardRenderRequest } from "@/lib/event-search-fast-path";
+import { isEventCardRenderRequest, resolveExplicitEventRequest } from "@/lib/event-search-fast-path";
+import { useOptionalEventSearchResults } from "@/components/chat/event-search-results-context";
 import { useEventVenueBookingFastPath } from "@/hooks/use-event-venue-booking-fast-path";
 import { useGroundedSearchFastPath } from "@/hooks/use-grounded-search-fast-path";
 import { useRentalSearchFastPath } from "@/hooks/use-rental-search-fast-path";
@@ -47,7 +95,8 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
       return (await agentSendRef.current?.(text)) ?? false;
     },
   });
-  const { handleUserMessage: handleEventMessage, activeEventId } = useEventSearchFastPath();
+  const { handleUserMessage: handleEventMessage, activeEventId, activeEventRows } = useEventSearchFastPath();
+  const eventResultsContext = useOptionalEventSearchResults();
   const { handleUserMessage: handleRestaurantMessage } =
     useRestaurantSearchFastPath();
   const { handleUserMessage: handleGroundedFastPathMessage } =
@@ -138,13 +187,38 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
         clearConciergePendingSend();
         return true;
       }
+      const anyCardsBefore = typeof document === "undefined"
+        ? 0
+        : document.querySelectorAll('[data-testid="a2ui-event-card"]').length;
+      const currentEventRows = eventResultsContext?.rows?.length ? eventResultsContext.rows : (activeEventRows ?? []);
+      const directEventId = isEventCardRenderRequest(text)
+        ? resolveExplicitEventRequest(text, currentEventRows)
+        : null;
+      if (directEventId) {
+        // Open the card FIRST and confirm only if it actually opened. The old order
+        // showed "Here is the event card." unconditionally, so a request the listener
+        // could not satisfy (already handled, no matching row, card already rendered)
+        // confirmed an action that never happened.
+        const opened = await requestEventCardRecovery(directEventId);
+        if (opened) {
+          showExchange(text, "Here is the event card.", submissionId);
+          clearConciergePendingSend();
+          return true;
+        }
+        // Falling through sends the request to the model, so the user gets a real answer
+        // instead of a false confirmation.
+      }
       try {
         if ((await waitForRuntimeReady()) && (await appendMessage(text))) {
-          // If the model returns no A2UI surface, the existing real result can
-          // still be shown through Quick view. This is a single recovery, not a
-          // second model run or a forced tool choice.
-          if (isEventCardRenderRequest(text) && activeEventId) {
-            window.dispatchEvent(new CustomEvent("mde:event-card-recovery", { detail: { eventId: activeEventId } }));
+          // If the model returns no A2UI surface, the existing real result can still be
+          // shown through Quick view. Two rules keep it honest:
+          //  - never open a card when the model already rendered one (any event), and
+          //  - target the event the user actually asked for, not the first row. Falling
+          //    back to `activeEventId` after a request for the second event opened the
+          //    FIRST event on top of the model's own card.
+          if (isEventCardRenderRequest(text) && !hasRenderedEventCard()) {
+            const fallbackEventId = directEventId ?? activeEventId;
+            if (fallbackEventId) void requestEventCardRecovery(fallbackEventId, undefined, { anyCardBefore: anyCardsBefore });
           }
           // Another conversation can report a late error during this run.
           // Only this conversation's stream failure should trigger its notice.
@@ -161,7 +235,7 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
       clearConciergePendingSend();
       return true;
     },
-    [appendMessage, waitForRuntimeReady, retryLastTurn, threadId, showExchange, showNotice, showSignInPrompt, signedIn, sessionLoading, activeEventId],
+    [appendMessage, waitForRuntimeReady, retryLastTurn, threadId, showExchange, showNotice, showSignInPrompt, signedIn, sessionLoading, activeEventId, activeEventRows, eventResultsContext],
   );
 
   // A cold-runtime wait must not turn two clicks into two agent runs.
