@@ -34,10 +34,10 @@ export function applyRentalPageControl(
  * anything with an unsupported criterion stays on the existing search/agent path.
  */
 export function parseRentalPageCommand(text: string): RentalPageControlPatch | null {
-  if (!/\bon (this|the) page\b|\bpage filters?\b|\bset the (visible )?filters?\b/i.test(text)) {
+  if (!/\bon (this|the) page\b|\bchange the page\b|\bpage filters?\b|\bset the (visible )?filters?\b/i.test(text)) {
     return null;
   }
-  if (/\b(remove|clear|without|not|don't|do not|any|all|furnished|balcony|pets?|parking|pool|gym|wifi|internet|workspace|desk|budget|under|below|less than)\b/i.test(text)) {
+  if (/\b(remove|clear|without|not|don't|do not|exclude|any|all|furnished|balcony|pets?|parking|pool|gym|wifi|internet|workspace|desk|quiet|caf[eé]s?|metro|family|terrace|overlooking|nomad|remote|near|top|budget|under|below|less than)\b/i.test(text)) {
     return null;
   }
   const parsed = buildRentalSearchParams(text, {});
