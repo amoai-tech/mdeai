@@ -73,6 +73,7 @@ import {
 import { normalizeToolEnvelope } from "@/lib/normalize-tool-envelope";
 import { useOptionalMapContext } from "@/platform/maps/map-context";
 import { useGroundedFastPath } from "@/components/chat/grounded-fast-path-context";
+import { useOptionalRichCardResults } from "@/components/chat/rich-card-results-context";
 import { createClient } from "@/lib/supabase/client";
 import { stashConciergeDraft } from "@/lib/concierge-draft-store";
 
@@ -89,6 +90,7 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
   const { state } = useConciergeCoAgent();
   const map = useOptionalMapContext();
   const { toolResult } = useGroundedFastPath();
+  const groundedShownIds = useOptionalRichCardResults()?.groundedShownIds;
   const { user, loading: sessionLoading } = useSession();
   const signedIn = Boolean(user && !user.is_anonymous);
   // The rental hook can need the agent for a message it queued while a search was running and then
@@ -109,20 +111,35 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
   // The composer already knows this session. Decline contextual Nearby for
   // guests before the billable route, allowing the existing Concierge agent
   // fallback to show its sign-in prompt instead of retrying a guaranteed 401.
+  const handleGroundedAmenityFollowUp = useCallback(
+    (text: string, submissionId?: string): Promise<boolean> => {
+      if (!isGroundedAmenityQuestion(text)) return Promise.resolve(false);
+      const remembered = (state as {
+        lastGroundedResults?: Array<Record<string, unknown> & { id: string }>;
+      } | undefined)?.lastGroundedResults;
+      const displayed = (normalizeToolEnvelope(toolResult).results ?? []) as Array<{ id?: unknown }>;
+      // Both fast-path and Mastra tool-rendered cards can own current rows.
+      const displayedIds = new Set<unknown>([...(groundedShownIds ?? []), ...displayed.map((row) => row.id)]);
+      // A subsequent search can replace cards without clearing co-agent memory.
+      if (!remembered?.length || !displayedIds.size ||
+          !remembered.every((row) => displayedIds.has(row.id))) {
+        return Promise.resolve(false);
+      }
+      if (hasExplicitAmenity(remembered, text)) return Promise.resolve(false);
+      showExchange(text, GROUNDED_AMENITY_UNKNOWN_MESSAGE, submissionId);
+      return Promise.resolve(true);
+    },
+    [state, toolResult, groundedShownIds, showExchange],
+  );
+
   const handleGroundedMessage = useCallback(
     (text: string, submissionId?: string): Promise<boolean> => {
+      if (isGroundedAmenityQuestion(text)) {
+        return handleGroundedAmenityFollowUp(text, submissionId).then((handled) =>
+          handled || handleGroundedFastPathMessage(text, submissionId));
+      }
       // Closest/nearest answers come from measured data, not another model turn.
       // This prevents invented distances and raw Place IDs in the reply.
-      const amenityRows = (state as { lastGroundedResults?: Array<Record<string, unknown>> } | undefined)
-        ?.lastGroundedResults;
-      if (
-        amenityRows?.length &&
-        isGroundedAmenityQuestion(text) &&
-        !hasExplicitAmenity(amenityRows)
-      ) {
-        showExchange(text, GROUNDED_AMENITY_UNKNOWN_MESSAGE, submissionId);
-        return Promise.resolve(true);
-      }
       const groundedMemory = state as
         | { lastGroundedResults?: Parameters<typeof closestGroundedResult>[0]; selectedListingId?: string }
         | undefined;
@@ -163,6 +180,7 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
     },
     [
       handleGroundedFastPathMessage,
+      handleGroundedAmenityFollowUp,
       signedIn,
       state,
       showExchange,
@@ -291,6 +309,7 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
       handleEventVenueBookingMessage,
       handleEventMessage,
       handleGroundedMessage,
+      handleGroundedAmenityFollowUp,
       handleRestaurantMessage,
       onAgentSend,
       lastIntent: state?.lastIntent,
@@ -303,6 +322,7 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
       handleEventVenueBookingMessage,
       handleEventMessage,
       handleGroundedMessage,
+      handleGroundedAmenityFollowUp,
       handleRestaurantMessage,
       onAgentSend,
       state?.lastIntent,
