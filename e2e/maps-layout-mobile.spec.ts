@@ -268,11 +268,17 @@ test.describe("SAN-524 mobile map interaction — 390×844 touch", () => {
     await expect(card).toHaveCount(1);
     await expect(card).toContainText("Previous sourced apartment");
     await expect(panel).toBeVisible();
+    const userMessages = page.getByTestId("concierge-user-message");
+    const userCount = await userMessages.count();
+    expect(userCount).toBeGreaterThan(0);
 
     await recovery.getByRole("button", { name: "Retry search" }).click();
     await expect(card).toHaveCount(1);
     await expect(card).toContainText("Recovered sourced apartment");
     await expect(recovery).toHaveCount(0);
+    // Retry is an assistant-only follow-up. It must not publish/persist a
+    // duplicate user bubble just because the submission ID changed.
+    await expect(userMessages).toHaveCount(userCount);
     expect(searches).toBe(3);
     await expectNoHorizontalOverflow(page);
   });

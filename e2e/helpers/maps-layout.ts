@@ -598,7 +598,7 @@ export async function waitForConciergeReply(
       async () => (await replies.last().innerText()).trim().length,
       { timeout: Math.min(timeout, 10_000), message: `assistant reply renders nonempty text — ${diagnostics.summary()}` },
     ).toBeGreaterThan(0);
-    return replies.last().innerText();
+    return await replies.last().innerText();
   } finally {
     // A long spec must not accumulate listeners (and every id they captured).
     owned?.dispose();

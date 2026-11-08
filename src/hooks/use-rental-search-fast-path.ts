@@ -134,14 +134,14 @@ export type RentalSearchFastPathOptions = {
 
 export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOptions = {}) {
   const { state, setState } = useConciergeCoAgent();
-  const { clarifyPending, clarifyKind, showExchange, clearLocalMessages } =
+  const { clarifyPending, clarifyKind, showExchange, showNotice, clearLocalMessages } =
     useEventLocalChat();
   const { setToolResult, setSearchMeta, reportSearchFailure } = useRentalFastPath();
   const clearOthers = useClearOtherFastPathResults();
   const { mergePinsByCategory, requestFitBounds } = useMapContext();
   const busyRef = useRef(false);
   const runSearchRef = useRef<(
-    (userText: string, params: RentalSearchApiParams, memory: ConciergeWorkingMemory) => Promise<boolean>
+    (userText: string, params: RentalSearchApiParams, memory: ConciergeWorkingMemory, retry: boolean) => Promise<boolean>
   ) | undefined>(undefined);
   // Messages sent while a search is running wait here and are answered one at a time, in the
   // order they were sent, as each search ends — instead of being reported "handled" and dropped.
@@ -190,10 +190,17 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
       params: RentalSearchApiParams,
       memory: ConciergeWorkingMemory,
       submissionId?: string,
+      retry = false,
     ): Promise<boolean> => {
       if (busyRef.current) return true;
       busyRef.current = true;
       reportSearchFailure(null);
+      // Retry is an assistant-only follow-up to the SAME question. It must not
+      // publish/persist a duplicate user bubble with a new submission identity.
+      const answer = (message: string) => {
+        if (retry) showNotice(message);
+        else showExchange(userText, message, submissionId);
+      };
       try {
         let response: RentalSearchResponse;
         try {
@@ -205,12 +212,10 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
           // without retrying through another unauthorized agent request.
           // Other invalid requests retain the established Concierge fallback.
           if (err instanceof RentalSearchHttpError && (err.status === 401 || err.status === 403)) {
-            showExchange(
-              userText,
+            answer(
               err.status === 401
                 ? "Your session has expired. Sign in again to search rentals."
                 : "This account cannot search rentals right now.",
-              submissionId,
             );
             return true;
           }
@@ -218,10 +223,10 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
           // Keep the last successful result and pins. A retry is a fresh read of
           // the same query, not a synthetic cached search or an invented response.
           reportSearchFailure({ status, code, retryable: true }, () => {
-            void runSearchRef.current?.(userText, params, memory);
+            void runSearchRef.current?.(userText, params, memory, true);
           });
           // No model fallback for a real outage: it might invent a result.
-          showExchange(userText, RENTAL_SEARCH_UNAVAILABLE_SUMMARY, submissionId);
+          answer(RENTAL_SEARCH_UNAVAILABLE_SUMMARY);
           return true;
         }
         const { results: cards, total, hybridUsed, rankExplanation, budgetNote } = response;
@@ -248,8 +253,10 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
           resultCount: cards.length,
           ts: new Date().toISOString(),
         });
-        setSearchMeta({ userText, params });
         const pinCount = applySearchResults(cards, query, memory, { total, hybridUsed, rankExplanation, budgetNote });
+        // Metadata must describe the cards actually shown, not a request that
+        // may still throw while transforming/rendering the new results.
+        setSearchMeta({ userText, params });
         // SAN-1502 follow-up: when a monthly budget was applied, say so. A truthful empty
         // state must not leave the renter guessing whether the 2,000,000 ceiling was used.
         // Never claim a monthly ceiling was applied when the request also carries a nightly cap:
@@ -258,8 +265,7 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
           params.maxPriceMonthly != null && params.maxPricePerNight == null
             ? `${params.budgetCurrency ?? "COP"} ${params.maxPriceMonthly.toLocaleString("en-US")} per month`
             : undefined;
-        showExchange(
-          userText,
+        answer(
           fastPathRentalSummary(cards.length, pinCount, {
             generic:
               !sig.hasNeighborhood && !sig.hasBedrooms && !sig.hasBudget && !sig.hasDateRange &&
@@ -268,17 +274,15 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
             appliedBudget,
             unappliedRequests: unappliedRentalRequests(userText),
           }),
-          submissionId,
         );
         return true;
       } catch (err) {
         console.error("[rental-fast-path] unexpected search/render failure", sanitizedRentalError(err));
-        // Never erase the last grounded result just because a later search's
-        // presentation failed. The user can explicitly retry the same read.
-        reportSearchFailure({ status: null, code: "unexpected_error", retryable: true }, () => {
-          void runSearchRef.current?.(userText, params, memory);
-        });
-        showExchange(userText, "That search could not finish. Please try again.", submissionId);
+        // The search API may have returned 200; a transformation/display bug
+        // is NOT a network outage. Do not retry the same deterministic bug or
+        // replace already-grounded results with a fabricated empty response.
+        reportSearchFailure({ status: null, code: "result_processing_error", retryable: false });
+        answer("The new rental results could not be displayed. Your earlier results may still be available.");
         return true;
       } finally {
         busyRef.current = false;
@@ -287,11 +291,11 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
         if (pendingRef.current.length > 0) setReplayTick((tick) => tick + 1);
       }
     },
-    [applySearchResults, showExchange, setSearchMeta, reportSearchFailure],
+    [applySearchResults, showExchange, showNotice, setSearchMeta, reportSearchFailure],
   );
 
   useEffect(() => {
-    runSearchRef.current = (text, params, memory) => runSearch(text, params, memory);
+    runSearchRef.current = (text, params, memory, retry) => runSearch(text, params, memory, undefined, retry);
     return () => { runSearchRef.current = undefined; };
   }, [runSearch]);
 

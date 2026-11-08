@@ -23,7 +23,9 @@ export function RentalSearchRecoveryNotice() {
       className="mx-2 mb-3 rounded-lg border border-border bg-muted/50 px-3 py-3 text-sm sm:mx-4"
     >
       <p>
-        Rental search is temporarily unavailable.{" "}
+        {searchFailure.retryable
+          ? "Rental search is temporarily unavailable."
+          : "The new rental results could not be displayed."}{" "}
         {hasPrevious
           ? "Showing your previous apartment results."
           : "No new search results were returned."}

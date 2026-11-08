@@ -11,10 +11,14 @@ import { createRoot, type Root } from "react-dom/client";
 vi.mock("@/components/chat/concierge-coagent-context", () => ({
   useConciergeCoAgent: () => ({ agent: undefined, state: {}, setState: vi.fn() }),
 }));
-const map = vi.hoisted(() => ({ merges: [] as Array<[string, unknown[]]> }));
+const map = vi.hoisted(() => ({ merges: [] as Array<[string, unknown[]]>, throwRentalMergeOnce: false }));
 vi.mock("@/platform/maps/map-context", () => ({
   useMapContext: () => ({
     mergePinsByCategory: (category: string, pins: unknown[]) => {
+      if (category === "rental" && map.throwRentalMergeOnce) {
+        map.throwRentalMergeOnce = false;
+        throw new Error("simulated results display failure");
+      }
       map.merges.push([category, pins]);
     },
     requestFitBounds: vi.fn(),
@@ -37,6 +41,8 @@ type Probe = {
   messages: () => Array<{ role: string; content: string }>;
   clarifyPending: () => boolean;
   hasResult: () => boolean;
+  failure: () => { code: string; retryable: boolean } | null;
+  previousQuery: () => string | undefined;
 };
 let probe: Probe;
 /** Messages the hook gave back to the sender (the real chat sends these to the concierge). */
@@ -60,6 +66,8 @@ function Harness() {
       messages: () => local.messages as Array<{ role: string; content: string }>,
       clarifyPending: () => local.clarifyPending,
       hasResult: () => rental.toolResult != null,
+      failure: () => rental.searchFailure,
+      previousQuery: () => rental.searchMeta?.userText,
     };
   });
   return null;
@@ -82,6 +90,7 @@ function respond(status: number, body: unknown) {
 
 beforeEach(() => {
   map.merges.length = 0;
+  map.throwRentalMergeOnce = false;
   unhandled.length = 0;
   handoffThrows = false;
   fetchMock.mockReset();
@@ -163,6 +172,22 @@ describe("SAN-407 · rental chat searches before it asks", () => {
     expect(assistantText()).toMatch(/temporarily unavailable|try again/i);
     expect(assistantText()).not.toMatch(/no rentals (are available|match)/i);
     expect(probe.hasResult()).toBe(false);
+  });
+
+  it("a display error after HTTP 200 is not mislabeled as a retryable network outage", async () => {
+    respond(200, { results: [] });
+    const firstQuestion = "Search apartments Medellín";
+    expect(await send(firstQuestion)).toBe(true);
+    expect(probe.previousQuery()).toBe(firstQuestion);
+
+    map.throwRentalMergeOnce = true;
+    expect(await send("Only apartments in Laureles")).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(probe.failure()).toEqual({ status: null, code: "result_processing_error", retryable: false });
+    expect(probe.previousQuery()).toBe(firstQuestion);
+    expect(assistantText()).toMatch(/new rental results could not be displayed/i);
+    expect(assistantText()).not.toMatch(/rental search is temporarily unavailable/i);
+    expect(unhandled).toEqual([]);
   });
 
   it("a network failure is also 'unavailable', not a silent drop", async () => {
