@@ -256,6 +256,53 @@ describe("a multi-step assistant turn replays only its answer", () => {
   });
 });
 
+describe("a tool call that trails the answer", () => {
+  it("replays the answer instead of dropping it", () => {
+    const stored = {
+      format: 2,
+      parts: [
+        { type: "text", text: "The dashboard shows 0 active rental listings right now." },
+        {
+          type: "tool-invocation",
+          toolInvocation: {
+            state: "result",
+            toolCallId: "call-2",
+            toolName: "applyRentalFilters",
+            args: {},
+            result: { applied: true },
+          },
+        },
+      ],
+    };
+    const mapped = mapSavedThreadHistory([row("a3", "assistant", stored)]);
+    const message = mapped.find((m) => m.role === "assistant")!;
+    expect(message.content).toBe("The dashboard shows 0 active rental listings right now.");
+  });
+
+  it("does not resurrect narration through the legacy flat fallback", () => {
+    // Parts present, tool present, no answer text: the flat string is narration, not an answer.
+    const stored = {
+      format: 2,
+      parts: [
+        {
+          type: "tool-invocation",
+          toolInvocation: {
+            state: "result",
+            toolCallId: "call-3",
+            toolName: "readBrokerWorkspaceTool",
+            args: {},
+            result: {},
+          },
+        },
+      ],
+      content: "I should use the read-broker-workspace tool to answer this.",
+    };
+    const mapped = mapSavedThreadHistory([row("a4", "assistant", stored)]);
+    const message = mapped.find((m) => m.role === "assistant");
+    expect(message?.content ?? "").not.toContain("I should use");
+  });
+});
+
 describe("reconcileSavedHistory", () => {
   const p = (id: string, role: "user" | "assistant", content: string) => ({ id, role, content });
 

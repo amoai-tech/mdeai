@@ -115,12 +115,15 @@ export function mapSavedThreadRow(row: SavedThreadMessageRow): SavedThreadMessag
   // workspace…") while the live answer had been clean.
   const lastTool = parts.reduce((last, part, index) =>
     part.type === "tool-invocation" ? index : last, -1);
-  const answerParts = parts.filter((part, index) =>
-    part.type === "text" && typeof part.text === "string" && index > lastTool);
+  const textParts = parts.filter((part) => part.type === "text" && typeof part.text === "string");
+  const afterTool = textParts.filter((part) => parts.indexOf(part) > lastTool);
+  // Prefer the text that follows the last tool call. When a tool call *trails* the answer
+  // (`[answer, tool-invocation]`), nothing follows it, so the last text part is the answer.
+  const answerParts = afterTool.length > 0 ? afterTool : textParts.slice(-1);
   let text = answerParts.map((part) => part.text as string).join("");
-  // Older rows carry only the flat string; a turn with no answer text must not fall back to the
-  // narration we just excluded.
-  if (text.length === 0 && lastTool < 0 && typeof content.content === "string") {
+  // Only a row with no parts at all carries the legacy flat string. A row that has parts but no
+  // text is a tool-only turn: its flat content would be the narration this change excludes.
+  if (text.length === 0 && parts.length === 0 && typeof content.content === "string") {
     text = content.content;
   }
 
