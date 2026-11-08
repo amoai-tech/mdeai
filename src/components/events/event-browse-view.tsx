@@ -18,6 +18,8 @@ import {
 import { useIsLgUp } from "@/hooks/use-is-lg-up";
 import { useEscapeToClose } from "@/hooks/use-escape-to-close";
 import { EventBrowseFilters } from "@/components/events/event-browse-filters";
+import { EventPageControlTool } from "@/components/browse/page-filter-tools";
+import { buildEventBrowseUrl } from "@/lib/events/browse-url";
 import { EmptyState } from "@/components/empty/empty-state";
 import { Button } from "@/components/ui/button";
 import { useBrowseCardScroll } from "@/hooks/use-browse-card-scroll";
@@ -28,22 +30,6 @@ import { useMapContext } from "@/platform/maps/map-context";
 import type { DateWindow, EventCategory } from "@/mastra/tools/search-events";
 
 /** Current filter URL for this page, or the bare path when no filter is set. */
-function buildFilterUrl(filters: {
-  category?: EventCategory | null;
-  neighborhood?: string | null;
-  dateWindow?: DateWindow | null;
-  price?: "free" | "paid" | null;
-}): string {
-  const params = new URLSearchParams();
-  if (filters.category) params.set("category", filters.category);
-  if (filters.neighborhood) params.set("neighborhood", filters.neighborhood);
-  if (filters.dateWindow && filters.dateWindow !== "any") {
-    params.set("dateWindow", filters.dateWindow);
-  }
-  if (filters.price) params.set("price", filters.price);
-  const query = params.toString();
-  return query ? `/events?${query}` : "/events";
-}
 
 type EventBrowseViewProps = {
   results: PublishedEventListItem[];
@@ -78,7 +64,7 @@ function EventBrowseViewInner({
   const [lookupFailure, setLookupFailure] = useState<{ scope: string; message: string; ids: string[] } | null>(null);
   const [loadingScope, setLoadingScope] = useState<string | null>(null);
   const inFlight = useRef<AbortController | null>(null);
-  const scope = buildFilterUrl({ category, neighborhood, dateWindow, price });
+  const scope = buildEventBrowseUrl({ category, neighborhood, dateWindow, price });
   useEffect(() => () => inFlight.current?.abort(), []);
 
   // Re-fetch returned IDs through the canonical public event catalog: tool prices
@@ -173,7 +159,7 @@ function EventBrowseViewInner({
     if (selectedEventId && !shownEvents.some((event) => event.id === selectedEventId)) setSelectedEventId(null);
   }
 
-  const retryHref = buildFilterUrl({
+  const retryHref = buildEventBrowseUrl({
     category,
     neighborhood,
     dateWindow,
@@ -204,6 +190,7 @@ function EventBrowseViewInner({
   return (
     <>
     <DiscoveryPageContext page="events" filters={{ category, neighborhood, dateWindow, price }} selectedId={selectedId} />
+    <EventPageControlTool filters={{ category, neighborhood, dateWindow, price }} />
     <DiscoveryWorkspace
       activeSlug="events"
       askComposer={<DiscoveryAskComposer page="events" onAgentResults={onAgentResults} hasSelectedItem={Boolean(selectedId)} onClearSelection={() => selectEvent(null)} guestEvents={{
