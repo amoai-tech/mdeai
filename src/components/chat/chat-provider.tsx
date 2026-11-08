@@ -49,6 +49,8 @@ type SavedHistoryValue = {
   threadId?: string;
   /** Search criteria only; grounded cards are fetched by a child of the rental provider. */
   lastRentalSearch?: RentalSearchApiParams | null;
+  /** IDs returned by the owner-checked history GET; new turns may be interleaved during restore. */
+  restoredMessageIds?: readonly string[];
   retry: () => void;
 };
 
@@ -127,6 +129,7 @@ export function SavedThreadHistory({
     agent?: AbstractAgent;
     hadMessages?: boolean;
     lastRentalSearch?: RentalSearchApiParams | null;
+    savedMessageIds?: readonly string[];
   } | null>(null);
 
   // Preserve completed history through transient readiness changes. A genuinely
@@ -259,6 +262,7 @@ export function SavedThreadHistory({
           agent: failed ? undefined : agent,
           hadMessages: !failed && agent.messages.length > 0,
           lastRentalSearch: failed ? null : lastRentalSearch,
+          savedMessageIds: failed ? undefined : savedMessages.map((message) => message.id),
         });
       }
     })();
@@ -398,6 +402,7 @@ export function SavedThreadHistory({
       status: !settled ? "loading" : outcome.failed ? "error" : "idle",
       threadId: settled && !outcome.failed ? threadId : undefined,
       lastRentalSearch: settled && !outcome.failed ? outcome.lastRentalSearch : null,
+      restoredMessageIds: settled && !outcome.failed ? outcome.savedMessageIds : undefined,
       retry: () => setAttempt((n) => n + 1),
     }),
     [settled, outcome, threadId],
@@ -440,7 +445,7 @@ export function SavedThreadReplay({
  * `useThreadNav` is the single source of truth; nothing here calls the
  * configuration provider's imperative setters.
  */
-function LiveChatProvider({ children }: { children: ReactNode }) {
+function LiveChatProvider({ children, persistThread = false }: { children: ReactNode; persistThread?: boolean }) {
   const { user, loading: sessionLoading } = useSession();
   const { sessionThreadId, activeThreadId, hasPersistedThread, restoredThread } = useThreadNav();
   const threadId = activeThreadId ?? sessionThreadId;
@@ -479,13 +484,164 @@ function LiveChatProvider({ children }: { children: ReactNode }) {
         hasExplicitThreadId={shouldReplay}
       >
         {threadId && shouldReplay && !isDeterministicE2E() ? (
-          <SavedThreadHistory threadId={threadId}>{children}</SavedThreadHistory>
+          <SavedThreadHistory threadId={threadId}>
+            {persistThread && user ? <BrokerThreadSaverAfterReplay threadId={threadId} /> : null}
+            {children}
+          </SavedThreadHistory>
         ) : (
-          children
+          <>
+            {persistThread && threadId && user ? <BrokerThreadSaver threadId={threadId} /> : null}
+            {children}
+          </>
         )}
       </CopilotChatConfigurationProvider>
     </CopilotKitProvider>
   );
+}
+
+/**
+ * Persist a signed-in conversation that CopilotKit runs but never stores.
+ *
+ * `/chat` writes its turns through the history endpoint and calls `markThreadSaved`, which is what
+ * makes a reload replay them. The broker chat mounts the same provider but had no writer, so a
+ * broker's questions and the assistant's answers disappeared on refresh.
+ *
+ * Three things this has to get right:
+ *   - only after the run finishes, or the first streamed chunk would be saved as the whole answer;
+ *   - in ordered batches of four (the endpoint's limit), tracking accepted message IDs;
+ *   - text only — a tool call/result has no text to restore, so it is skipped, not sent.
+ */
+/** Only the history GET's owner-checked message IDs are excluded from future POSTs. */
+function BrokerThreadSaverAfterReplay({ threadId }: { threadId: string }) {
+  const history = useSavedThreadHistory();
+  const restoreMode = history.status === "error" ? "failed"
+    : history.status === "idle" && history.threadId === threadId ? "restored" : "waiting";
+  return (
+    <BrokerThreadSaver
+      threadId={threadId}
+      restoreMode={restoreMode}
+      restoredMessageIds={history.restoredMessageIds}
+    />
+  );
+}
+
+export function BrokerThreadSaver({
+  threadId,
+  agentId = "conciergeAgent",
+  restoreMode = "fresh",
+  restoredMessageIds,
+}: {
+  threadId: string;
+  agentId?: "conciergeAgent";
+  restoreMode?: "fresh" | "waiting" | "restored" | "failed";
+  restoredMessageIds?: readonly string[];
+}) {
+  const { agent } = useAgent({
+    agentId,
+    updates: [UseAgentUpdate.OnMessagesChanged, UseAgentUpdate.OnRunStatusChanged],
+  });
+  const { markThreadSaved } = useThreadNav();
+  // Message IDs are the source of truth. An index is unsafe when a late replay inserts older
+  // messages ahead of fresh turns, or when a new thread reuses the same mounted component.
+  const progress = useRef({
+    threadId,
+    handledIds: new Set<string>(),
+    inFlight: false,
+    ready: restoreMode === "fresh",
+  });
+  const [drainTick, setDrainTick] = useState(0);
+  useEffect(() => {
+    if (progress.current.threadId !== threadId) {
+      progress.current = {
+        threadId,
+        handledIds: new Set<string>(),
+        inFlight: false,
+        ready: restoreMode === "fresh",
+      };
+    }
+  }, [threadId, restoreMode]);
+
+  // CopilotKit returns one stable, mutable agent: use its moving fields as dependencies.
+  const messages = agent.messages ?? [];
+  const messageCount = messages.length;
+  const lastContent = messages[messageCount - 1]?.content ?? "";
+  const running = Boolean(agent.isRunning);
+  const agentThreadId = agent.threadId;
+  useEffect(() => {
+    const state = progress.current;
+    // Never write an old thread's messages to a newly selected thread.
+    if (state.threadId !== threadId || agentThreadId !== threadId || state.inFlight || running) return;
+    if (!state.ready) {
+      if (restoreMode === "waiting") return;
+      state.ready = true;
+    }
+    // A failed history GET is NOT proof that those messages are saved. Resume from the live
+    // transcript (the POST endpoint still independently authenticates and checks ownership).
+    if (restoreMode === "restored") {
+      for (const id of restoredMessageIds ?? []) state.handledIds.add(id);
+    }
+
+    const current = agent.messages ?? [];
+    let lastAnswer = -1;
+    for (let i = 0; i < current.length; i++) {
+      const message = current[i];
+      if (!state.handledIds.has(message.id) &&
+          message.role === "assistant" && typeof message.content === "string" &&
+          message.content.trim().length > 0) lastAnswer = i;
+    }
+    // A question on its own is not a finished exchange; do not save a streaming fragment.
+    if (lastAnswer < 0) return;
+
+    const text: { id: string; role: "user" | "assistant"; content: string }[] = [];
+    const handledInBatch: string[] = [];
+    for (let i = 0; i <= lastAnswer; i++) {
+      const message = current[i];
+      if (state.handledIds.has(message.id)) continue;
+      handledInBatch.push(message.id);
+      if ((message.role === "user" || message.role === "assistant") &&
+          typeof message.content === "string" && message.content.trim().length > 0) {
+        text.push({ id: message.id, role: message.role, content: message.content });
+        if (text.length === 4) break; // The messages endpoint accepts at most four per call.
+      }
+    }
+    if (text.length === 0) return;
+
+    state.inFlight = true;
+    let saved = false;
+    void fetch(`/api/threads/${encodeURIComponent(threadId)}/messages`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ messages: text }),
+      keepalive: true,
+    })
+      .then((response) => {
+        if (!response.ok) {
+          console.warn(`[BrokerThreadSaver] save failed: ${response.status}`);
+          return;
+        }
+        saved = true;
+        for (const id of handledInBatch) state.handledIds.add(id);
+        // Only advertise reloadability when every completed assistant answer has been saved.
+        if (!current.some((message) => !state.handledIds.has(message.id) &&
+            message.role === "assistant" && typeof message.content === "string" &&
+            message.content.trim().length > 0)) markThreadSaved(threadId);
+      })
+      .catch((error) => console.warn("[BrokerThreadSaver] save failed", error))
+      .finally(() => {
+        state.inFlight = false;
+        // A finished POST is not an agent update. Drain pending complete answers explicitly,
+        // but never enter an infinite retry loop after a failed POST.
+        if (saved && progress.current === state &&
+            (agent.messages ?? []).some((message) => !state.handledIds.has(message.id) &&
+              message.role === "assistant" && typeof message.content === "string" &&
+              message.content.trim().length > 0)) {
+          setDrainTick((n) => n + 1);
+        }
+      });
+  }, [agent, agentThreadId, threadId, markThreadSaved, messageCount, lastContent, running,
+    drainTick, restoreMode, restoredMessageIds]);
+
+  return null;
 }
 
 /**
@@ -494,7 +650,14 @@ function LiveChatProvider({ children }: { children: ReactNode }) {
  * while the browser is hydrating a test that exercises only local fast paths.
  * The production path remains the unchanged LiveChatProvider.
  */
-export function ChatProvider({ children }: { children: ReactNode }) {
+export function ChatProvider({
+  children,
+  persistThread = false,
+}: {
+  children: ReactNode;
+  /** Opt in to writing completed turns to history, so a reload can replay them. */
+  persistThread?: boolean;
+}) {
   if (isDeterministicE2E()) return <>{children}</>;
-  return <LiveChatProvider>{children}</LiveChatProvider>;
+  return <LiveChatProvider persistThread={persistThread}>{children}</LiveChatProvider>;
 }

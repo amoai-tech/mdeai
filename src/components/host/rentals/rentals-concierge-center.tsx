@@ -54,7 +54,7 @@ export function RentalsConciergeCenter({ mode }: RentalsConciergeCenterProps) {
           Live AI is disabled during deterministic browser tests. Broker workspace actions remain available.
         </p>
       ) : (
-        <ChatProvider>
+        <ChatProvider persistThread>
           <BrokerWorkspaceToolRenderer />
           <CopilotChat
             agentId="conciergeAgent"
