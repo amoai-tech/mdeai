@@ -20,9 +20,11 @@ test.beforeAll(() => {
   }
 });
 
+/** The visible rental composer for the current viewport. */
 const composer = (page: Page) =>
   page.locator('[data-testid="rental-ask-composer"]:visible').first();
 
+/** Assert real cards or the explicit empty state, then optional card/map parity. */
 async function expectCurrentResults(page: Page, { verifyMap = true }: { verifyMap?: boolean } = {}) {
   const cards = page.locator('[data-testid="rentals-grid"] [data-result-kind="rental"][data-testid^="rental-card-"]');
   const empty = page.getByTestId("rentals-empty");
@@ -64,6 +66,7 @@ async function expectCurrentResults(page: Page, { verifyMap = true }: { verifyMa
   }
 }
 
+/** Send an explicit native command and prove the URL and current results. */
 async function sendNativeCommand(page: Page, question: string, expectedUrl: string) {
   const active = composer(page);
   await expect(active).toBeVisible({ timeout: 30_000 });

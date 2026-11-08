@@ -27,11 +27,13 @@ test.beforeAll(() => {
   }
 });
 
+/** The visible rental composer for the current viewport. */
 const composer = (page: Page) =>
   page.locator('[data-testid="rental-ask-composer"]:visible').first();
 const QUESTION = "Find furnished 2-bedroom apartments in Laureles under COP 3 million.";
 const STALE_QUESTION = "Find furnished 3-bedroom apartments in Laureles under COP 3 million.";
 
+/** Open Rentals and wait for the composer used by every recovery test. */
 async function openRentalComposer(page: Page) {
   const response = await page.goto("/rentals", { waitUntil: "domcontentloaded" });
   expect(response?.ok(), "Rental document must load before testing AI failure behavior").toBe(true);
