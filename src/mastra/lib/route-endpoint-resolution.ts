@@ -22,6 +22,16 @@ const LOCATION_BIAS = {
 /** Smallest mask that returns an ID; avoids Enterprise/Atmosphere fields. */
 const ROUTE_PLACE_FIELD_MASK = ["places.id"] as const;
 
+/**
+ * ponytail: accept the first Places result inside the Medellín bias; Google's
+ * relevance ranking resolves the common names (Parque Lleras, Provenza,
+ * Laureles, Envigado, the airport). A truly ambiguous label can still route to
+ * a plausible-but-wrong match. Upgrade path: request displayName +
+ * formattedAddress, reject candidates with no token overlap, and ask the user
+ * to choose in the existing map/list surface (SAN-229). That needs a new choice
+ * UI, so it is not invented here.
+ */
+
 function placeIdFromResponse(response: unknown): string | null {
   const places = (response as { places?: unknown } | null)?.places;
   if (!Array.isArray(places) || places.length === 0) return null;
