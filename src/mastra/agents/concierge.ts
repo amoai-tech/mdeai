@@ -562,7 +562,14 @@ export const conciergeAgent = new Agent({
       // generated place IDs are untrusted; Google must receive the named places.
       const plan = routePlanForTurn(messages);
       if (!plan) return {};
-      requestContext?.set(MDEAI_ROUTE_PLAN_KEY, plan);
+      // Never force a call the tool cannot receive the plan for: it would fall
+      // back to unverified model waypoints.
+      if (!requestContext) return {};
+      try {
+        requestContext.set(MDEAI_ROUTE_PLAN_KEY, plan);
+      } catch {
+        return {};
+      }
       return { toolChoice: { type: 'tool' as const, toolName: 'computeRouteTool' } };
     } },
     { id: "san737-current-selected-name-history", processInput: ({ messages, requestContext }) =>

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { zodToJsonSchema } from "@mastra/schema-compat/zod-to-json";
 import { createThreadMemory } from "../../lib/agent-memory";
+import { MDEAI_ROUTE_PLAN_KEY } from "../../lib/route-tool-choice";
 import {
   conciergeAgent,
   conciergeMemoryInput,
@@ -18,19 +19,43 @@ describe("conciergeAgent", () => {
     expect(tools.computeRouteTool?.id).toBe("compute-route");
     const configured = await conciergeAgent.listConfiguredInputProcessors();
     const routeChoice = configured.find((processor) => processor.id === "san465-route-tool-choice") as
-      | { processInputStep: (input: { stepNumber: number; messages: unknown[]; steps: unknown[] }) => unknown }
+      | { processInputStep: (input: {
+          stepNumber: number;
+          messages: unknown[];
+          steps: unknown[];
+          requestContext?: { get: (key: string) => unknown; set: (key: string, value: unknown) => void };
+        }) => unknown }
       | undefined;
     expect(routeChoice).toBeDefined();
     const user = (text: string) => ({ role: "user", content: { parts: [{ type: "text", text }] } });
+    const store = new Map<string, unknown>();
+    const requestContext = {
+      get: (key: string) => store.get(key),
+      set: (key: string, value: unknown) => store.set(key, value),
+    };
     expect(await routeChoice!.processInputStep({
       stepNumber: 0,
       messages: [user("Walk from Parque Lleras to Provenza")],
       steps: [],
+      requestContext,
     })).toEqual({ toolChoice: { type: "tool", toolName: "computeRouteTool" } });
+    expect(store.get(MDEAI_ROUTE_PLAN_KEY)).toEqual({
+      origin: "Parque Lleras",
+      destination: "Provenza",
+      travelMode: "WALK",
+    });
+    // Without a context the plan cannot reach the tool, so it must not force a
+    // call that would fall back to unverified model waypoints.
+    expect(await routeChoice!.processInputStep({
+      stepNumber: 0,
+      messages: [user("Walk from Parque Lleras to Provenza")],
+      steps: [],
+    })).toEqual({});
     expect(await routeChoice!.processInputStep({
       stepNumber: 0,
       messages: [user("Find apartments within walking distance of the Metro")],
       steps: [],
+      requestContext,
     })).toEqual({});
   });
 

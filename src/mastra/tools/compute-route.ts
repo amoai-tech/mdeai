@@ -40,7 +40,12 @@ type CachedRouteResult = {
 };
 
 const ROUTE_TOOL_CACHE_KEY = "mdeaiRouteToolCache";
+const ROUTE_INFLIGHT_KEY = "mdeaiRouteToolInflight";
 const ROUTE_PLACE_CACHE_KEY = "mdeaiRoutePlaceCache";
+
+function own<T>(record: Record<string, T>, key: string): T | undefined {
+  return Object.prototype.hasOwnProperty.call(record, key) ? record[key] : undefined;
+}
 
 function readCache<T>(requestContext: RequestContextCache | undefined, key: string): T | undefined {
   try {
@@ -96,11 +101,11 @@ export const computeRouteTool = createTool({
         const plan = getRoutePlan(context);
         const includePolyline = input.includePolyline === true;
 
-        // A forced route question carries the user's own endpoints. Cache that
-        // whole outcome so a model that calls the tool twice in one turn cannot
-        // spend a second billable Routes/Places call or quota slot.
+        // A forced route question carries the user's own endpoints. Its cache
+        // key deliberately ignores `includePolyline`: the same planned route is
+        // one billable outcome, and a repeated call must not buy it again.
         const cacheKey = plan
-          ? `plan:${JSON.stringify(plan)}:${includePolyline}`
+          ? `plan:${JSON.stringify(plan)}`
           : JSON.stringify({
               origin: input.origin,
               destination: input.destination,
@@ -109,135 +114,164 @@ export const computeRouteTool = createTool({
             });
         const routeCache =
           readCache<Record<string, CachedRouteResult>>(requestContext, ROUTE_TOOL_CACHE_KEY) ?? {};
-        const cached = routeCache[cacheKey];
+        const cached = own(routeCache, cacheKey);
         if (cached) {
           return { ...cached, source: "google_routes" as const };
         }
 
-        if (!plan) {
+        // Share an in-flight call as well: two parallel tool calls must await
+        // the same provider result instead of both reserving quota.
+        const inflight =
+          readCache<Record<string, Promise<CachedRouteResult>>>(requestContext, ROUTE_INFLIGHT_KEY) ??
+          {};
+        const pending = own(inflight, cacheKey);
+        if (pending) {
+          return { ...(await pending), source: "google_routes" as const };
+        }
+
+        const work = (async (): Promise<CachedRouteResult> => {
+          if (!plan) {
+            try {
+              validateRouteWaypoints(input.origin, input.destination);
+            } catch (err) {
+              if (err instanceof RouteInputError) {
+                return { route: null, reason: "invalid_route_request" };
+              }
+              throw err;
+            }
+          }
+
+          // Routes have their own daily budget; never consume the café/nightlife cap.
+          const capRaw = process.env.ROUTES_DAILY_LIMIT;
+          const cap = capRaw === undefined ? 100 : Number(capRaw);
+          if (!Number.isSafeInteger(cap) || cap <= 0) {
+            return { route: null, reason: "route_quota_disabled" };
+          }
+          // A missing Routes key must not consume a paid-call quota slot.
           try {
-            validateRouteWaypoints(input.origin, input.destination);
+            requireRoutesApiKey();
+          } catch {
+            console.warn("[compute-route] no Routes-capable server key configured");
+            return { route: null, reason: "route_unavailable" };
+          }
+
+          let origin = input.origin;
+          let destination = input.destination;
+          let travelMode: RouteTravelMode = input.travelMode ?? "WALK";
+
+          if (plan) {
+            // Resolve the names the user typed to real Google Place IDs. A model
+            // that invents an ID can no longer send Google a 404 route request.
+            // Resolve first: a typo must not burn a Routes quota slot.
+            const placeCache =
+              readCache<Record<string, string>>(requestContext, ROUTE_PLACE_CACHE_KEY) ?? {};
+            const resolve = async (name: string): Promise<string | null> => {
+              const key = name.trim().toLowerCase();
+              const hit = own(placeCache, key);
+              if (hit) return hit;
+              const placeId = await resolveRoutePlaceId(name);
+              if (placeId) {
+                placeCache[key] = placeId;
+                writeCache(requestContext, ROUTE_PLACE_CACHE_KEY, placeCache);
+              }
+              return placeId;
+            };
+            const [originPlaceId, destinationPlaceId] = await Promise.all([
+              resolve(plan.origin),
+              resolve(plan.destination),
+            ]);
+            if (!originPlaceId || !destinationPlaceId) {
+              const failed: CachedRouteResult = { route: null, reason: "route_unavailable" };
+              routeCache[cacheKey] = failed;
+              writeCache(requestContext, ROUTE_TOOL_CACHE_KEY, routeCache);
+              return failed;
+            }
+            origin = { placeId: originPlaceId };
+            destination = { placeId: destinationPlaceId };
+            travelMode = plan.travelMode;
+          }
+
+          const today = new Date().toISOString().slice(0, 10);
+          const userId = getAuditUserId(context);
+          if (userId) {
+            const perUserRaw = process.env.ROUTES_DAILY_LIMIT_PER_USER;
+            const perUserCap = perUserRaw === undefined ? 20 : Number(perUserRaw);
+            if (!Number.isSafeInteger(perUserCap) || perUserCap <= 0) {
+              return { route: null, reason: "route_quota_disabled" };
+            }
+            let userQuota;
+            try {
+              userQuota = await checkRateLimitDurable(
+                `routes-daily:${today}:${userId}`,
+                perUserCap,
+                86_400,
+              );
+            } catch {
+              return { route: null, reason: "route_quota_unavailable" };
+            }
+            if (!userQuota.storeAvailable) {
+              return { route: null, reason: "route_quota_unavailable" };
+            }
+            if (!userQuota.allowed) {
+              return { route: null, reason: "route_quota_per_user_exceeded" };
+            }
+          }
+
+          // Only after the per-user check may the shared daily slot be consumed.
+          let quota;
+          try {
+            quota = await checkRateLimitDurable(`routes-daily:${today}`, cap, 86_400);
+          } catch {
+            console.warn("[compute-route] route quota RPC transport unavailable");
+            return { route: null, reason: "route_quota_unavailable" };
+          }
+          if (!quota.storeAvailable) {
+            console.warn("[compute-route] route quota store unavailable");
+            return { route: null, reason: "route_quota_unavailable" };
+          }
+          if (!quota.allowed) {
+            return { route: null, reason: "route_quota_exceeded" };
+          }
+
+          try {
+            validateRouteWaypoints(origin, destination);
           } catch (err) {
             if (err instanceof RouteInputError) {
-              return { route: null, source: "google_routes" as const, reason: "invalid_route_request" };
+              return { route: null, reason: "invalid_route_request" };
             }
             throw err;
           }
-        }
 
-        // Routes have their own daily budget; never consume the café/nightlife cap.
-        const capRaw = process.env.ROUTES_DAILY_LIMIT;
-        const cap = capRaw === undefined ? 100 : Number(capRaw);
-        if (!Number.isSafeInteger(cap) || cap <= 0) {
-          return { route: null, source: "google_routes" as const, reason: "route_quota_disabled" };
-        }
-        // A missing Routes key must not consume a paid-call quota slot.
-        try {
-          requireRoutesApiKey();
-        } catch {
-          console.warn("[compute-route] no Routes-capable server key configured");
-          return { route: null, source: "google_routes" as const, reason: "route_unavailable" };
-        }
-        const today = new Date().toISOString().slice(0, 10);
-        const userId = getAuditUserId(context);
-        if (userId) {
-          const perUserRaw = process.env.ROUTES_DAILY_LIMIT_PER_USER;
-          const perUserCap = perUserRaw === undefined ? 20 : Number(perUserRaw);
-          if (!Number.isSafeInteger(perUserCap) || perUserCap <= 0) {
-            return { route: null, source: "google_routes" as const, reason: "route_quota_disabled" };
-          }
-          let userQuota;
           try {
-            userQuota = await checkRateLimitDurable(
-              `routes-daily:${today}:${userId}`,
-              perUserCap,
-              86_400,
-            );
-          } catch {
-            return { route: null, source: "google_routes" as const, reason: "route_quota_unavailable" };
-          }
-          if (!userQuota.storeAvailable) {
-            return { route: null, source: "google_routes" as const, reason: "route_quota_unavailable" };
-          }
-          if (!userQuota.allowed) {
-            return { route: null, source: "google_routes" as const, reason: "route_quota_per_user_exceeded" };
-          }
-        }
-
-        // Only after the per-user check may the shared daily slot be consumed.
-        let quota;
-        try {
-          quota = await checkRateLimitDurable(`routes-daily:${today}`, cap, 86_400);
-        } catch {
-          console.warn("[compute-route] route quota RPC transport unavailable");
-          return { route: null, source: "google_routes" as const, reason: "route_quota_unavailable" };
-        }
-        if (!quota.storeAvailable) {
-          console.warn("[compute-route] route quota store unavailable");
-          return { route: null, source: "google_routes" as const, reason: "route_quota_unavailable" };
-        }
-        if (!quota.allowed) {
-          return { route: null, source: "google_routes" as const, reason: "route_quota_exceeded" };
-        }
-
-        let origin = input.origin;
-        let destination = input.destination;
-        let travelMode: RouteTravelMode = input.travelMode ?? "WALK";
-
-        if (plan) {
-          // Resolve the names the user typed to real Google Place IDs. A model
-          // that invents an ID can no longer send Google a 404 route request.
-          const placeCache =
-            readCache<Record<string, string>>(requestContext, ROUTE_PLACE_CACHE_KEY) ?? {};
-          const resolve = async (name: string): Promise<string | null> => {
-            const key = name.trim().toLowerCase();
-            const hit = placeCache[key];
-            if (hit) return hit;
-            const placeId = await resolveRoutePlaceId(name);
-            if (placeId) {
-              placeCache[key] = placeId;
-              writeCache(requestContext, ROUTE_PLACE_CACHE_KEY, placeCache);
-            }
-            return placeId;
-          };
-          const [originPlaceId, destinationPlaceId] = await Promise.all([
-            resolve(plan.origin),
-            resolve(plan.destination),
-          ]);
-          if (!originPlaceId || !destinationPlaceId) {
+            const route = await computeGoogleRoute({
+              origin,
+              destination,
+              travelMode,
+              includePolyline,
+            });
+            const result: CachedRouteResult = route
+              ? { route }
+              : { route: null, reason: "route_unavailable" };
+            routeCache[cacheKey] = result;
+            writeCache(requestContext, ROUTE_TOOL_CACHE_KEY, routeCache);
+            return result;
+          } catch (err) {
+            console.warn("[compute-route] provider failure", err instanceof Error ? err.message : err);
             const failed: CachedRouteResult = { route: null, reason: "route_unavailable" };
             routeCache[cacheKey] = failed;
             writeCache(requestContext, ROUTE_TOOL_CACHE_KEY, routeCache);
-            return { route: null, source: "google_routes" as const, reason: "route_unavailable" };
+            return failed;
           }
-          origin = { placeId: originPlaceId };
-          destination = { placeId: destinationPlaceId };
-          travelMode = plan.travelMode;
-        }
+        })();
 
+        inflight[cacheKey] = work;
+        writeCache(requestContext, ROUTE_INFLIGHT_KEY, inflight);
         try {
-          validateRouteWaypoints(origin, destination);
-        } catch (err) {
-          if (err instanceof RouteInputError) {
-            return { route: null, source: "google_routes" as const, reason: "invalid_route_request" };
-          }
-          throw err;
-        }
-
-        try {
-          const route = await computeGoogleRoute({ origin, destination, travelMode, includePolyline });
-          const result: CachedRouteResult = route
-            ? { route }
-            : { route: null, reason: "route_unavailable" };
-          routeCache[cacheKey] = result;
-          writeCache(requestContext, ROUTE_TOOL_CACHE_KEY, routeCache);
+          const result = await work;
           return { ...result, source: "google_routes" as const };
-        } catch (err) {
-          console.warn("[compute-route] provider failure", err instanceof Error ? err.message : err);
-          const failed: CachedRouteResult = { route: null, reason: "route_unavailable" };
-          routeCache[cacheKey] = failed;
-          writeCache(requestContext, ROUTE_TOOL_CACHE_KEY, routeCache);
-          return { route: null, source: "google_routes" as const, reason: "route_unavailable" };
+        } finally {
+          delete inflight[cacheKey];
+          writeCache(requestContext, ROUTE_INFLIGHT_KEY, inflight);
         }
       },
       context,

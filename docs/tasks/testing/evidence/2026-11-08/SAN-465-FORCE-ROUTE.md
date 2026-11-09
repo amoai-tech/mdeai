@@ -78,15 +78,22 @@ The merged PR did make the tool run, but the first real production turn still fa
    `google-places-client.searchText` (Medellín bias, smallest `places.id` mask) and sends
    real Place IDs to the existing Routes client. A resolution failure returns
    `route_unavailable` without calling Routes.
-4. The per-turn result cache now stores honest failures as well as successes, so the
-   model's duplicate second call cannot spend another Routes/Places call or quota slot.
+4. The per-turn result cache now stores honest failures as well as successes, and an
+   in-flight promise is shared, so sequential or concurrent duplicate calls cannot spend
+   another Routes/Places call or quota slot. Planned routes cache independently of the
+   optional polyline flag.
+5. Endpoint resolution runs before the Routes quota is consumed, so a typo cannot burn a
+   route slot. Mode detection scans only the instruction text outside the two endpoints,
+   and an explicit walk wins over an incidental "metro"/"bus"/"bike" place name.
+6. Cache lookups use own-property checks, so a place literally named `constructor` still
+   resolves through Places instead of hitting `Object.prototype`.
 5. Travel mode is derived from the user's wording (walk/drive/bike/transit, English and
    Spanish), including “And by car?” / “¿Y en bici?” follow-ups. A trailing mode clause
    (“… to the airport by car”) is stripped from the place name before Places resolution.
 
 ### Verification
 
-- Focused Vitest: 115/115 pass across route-tool-choice, compute-route, output guard and
+- Focused Vitest: 119/119 pass across route-tool-choice, compute-route, output guard and
   concierge.
 - Live provider probe with the production server key, using the exact tool + plan path:
   - Parque Lleras → Provenza WALK = **361 m / 371 s**

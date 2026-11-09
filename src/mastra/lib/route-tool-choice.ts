@@ -40,7 +40,7 @@ const ENDPOINT_VERB = /^(pie|meet|eat|see|get|walk|drive|bike|ride|take|go|visit
 
 /** A short reply that only changes the travel mode of the previous route. */
 const MODE_FOLLOW_UP =
-  /^(?:and\s+|y\s+)?(?:by car|driving|by bike|cycling|walking|transit|public transport|en auto|en bici|caminando|transporte)\s*\??$/i;
+  /^(?:and\s+|y\s+)?(?:by\s+(?:car|auto|taxi|uber|didi|bike|bicycle|foot|walking|transit|bus|metro|public transport)|on foot|driving|walking|cycling|bicycling|en\s+(?:auto|carro|bici|bicicleta|transporte|bus|metro)|caminando)\s*\??$/i;
 
 /**
  * A destination may end with the mode the user mentioned ("... to the airport
@@ -84,15 +84,34 @@ export function isRouteQuestion(text: string): boolean {
   return TRAVEL_INTENT.test(text) && routeEndpoints(text) !== null;
 }
 
-/** The user's requested travel mode; default WALK, matching the tool schema. */
-export function routeTravelMode(text: string): RouteTravelMode {
-  if (/\b(?:bike|bikes|bicycling|bicycle|cycling|cycle|en bici|en bicicleta)\b/i.test(text)) {
+/**
+ * The user's requested travel mode; default WALK, matching the tool schema.
+ *
+ * Endpoint names are removed before scanning so a destination such as
+ * "the Poblado metro station" or "Bike House" cannot choose the mode. An
+ * explicit walk wins over incidental keywords, and a mode instruction outside
+ * the endpoints ("… by car") still wins over the walk default.
+ */
+export function routeTravelMode(
+  text: string,
+  endpoints?: { origin: string; destination: string } | null,
+): RouteTravelMode {
+  let modeText = text;
+  if (endpoints) {
+    for (const place of [endpoints.origin, endpoints.destination]) {
+      if (place) modeText = modeText.split(place).join(" ");
+    }
+  }
+  if (/\b(?:walk|walking|a pie|caminando|on foot)\b/i.test(modeText)) {
+    return "WALK";
+  }
+  if (/\b(?:bike|bikes|bicycling|bicycle|cycling|cycle|en bici|en bicicleta)\b/i.test(modeText)) {
     return "BICYCLE";
   }
-  if (/\b(?:drive|driving|car|auto|taxi|uber|didi|en carro)\b/i.test(text)) {
+  if (/\b(?:drive|driving|car|auto|taxi|uber|didi|en carro)\b/i.test(modeText)) {
     return "DRIVE";
   }
-  if (/\b(?:transit|public transport|bus|metro|transporte)\b/i.test(text)) {
+  if (/\b(?:transit|public transport|bus|metro|transporte)\b/i.test(modeText)) {
     return "TRANSIT";
   }
   return "WALK";
@@ -121,7 +140,7 @@ export function routePlanForTurn(messages: readonly Message[]): RouteTurnPlan | 
 
   if (isRouteQuestion(text)) {
     const endpoints = routeEndpoints(text);
-    return endpoints ? { ...endpoints, travelMode: routeTravelMode(text) } : null;
+    return endpoints ? { ...endpoints, travelMode: routeTravelMode(text, endpoints) } : null;
   }
 
   const previousUser = userMessages.at(-2);
@@ -131,7 +150,7 @@ export function routePlanForTurn(messages: readonly Message[]): RouteTurnPlan | 
   const followUp = text.trim().replace(/^¿+/, "");
   if (!MODE_FOLLOW_UP.test(followUp)) return null;
   const endpoints = routeEndpoints(previousText);
-  return endpoints ? { ...endpoints, travelMode: routeTravelMode(text) } : null;
+  return endpoints ? { ...endpoints, travelMode: routeTravelMode(text, endpoints) } : null;
 }
 
 export function shouldForceRouteTool({
@@ -162,6 +181,13 @@ export function getRoutePlan(context?: unknown): RouteTurnPlan | null {
   }
   if (!raw || typeof raw !== "object") return null;
   const record = raw as Record<string, unknown>;
+  if (
+    !Object.prototype.hasOwnProperty.call(record, "origin") ||
+    !Object.prototype.hasOwnProperty.call(record, "destination") ||
+    !Object.prototype.hasOwnProperty.call(record, "travelMode")
+  ) {
+    return null;
+  }
   const { origin, destination, travelMode } = record;
   if (typeof origin !== "string" || typeof destination !== "string") return null;
   if (!origin.trim() || !destination.trim()) return null;

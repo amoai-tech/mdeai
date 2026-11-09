@@ -163,6 +163,31 @@ describe("deterministic route plan", () => {
     expect(routeTravelMode("¿Cuánto se tarda en auto?")).toBe("DRIVE");
   });
 
+  it("does not let an endpoint name choose the mode, and explicit walk wins", () => {
+    expect(routeTravelMode(
+      "Walk from Parque Lleras to the Poblado metro station",
+      { origin: "Parque Lleras", destination: "the Poblado metro station" },
+    )).toBe("WALK");
+    expect(routeTravelMode(
+      "How far is it from Laureles to Bike House by car?",
+      { origin: "Laureles", destination: "Bike House" },
+    )).toBe("DRIVE");
+    expect(routeTravelMode(
+      "Distance between Laureles and Provenza by bus",
+      { origin: "Laureles", destination: "Provenza" },
+    )).toBe("TRANSIT");
+  });
+
+  it("accepts the mode phrases the follow-up recognizer also honors", () => {
+    for (const followUp of ["And by taxi?", "¿Y en bus?", "And on foot?", "¿Y en carro?"]) {
+      expect(routePlanForTurn([
+        user("How long is the walk from Parque Lleras to Provenza?"),
+        { role: "assistant", content: "It is 2.3 km." },
+        user(followUp),
+      ])).not.toBeNull();
+    }
+  });
+
   it("strips a trailing travel-mode clause from the destination", () => {
     expect(routePlanForTurn([
       user("How far is it from Parque Lleras to the airport by car?"),

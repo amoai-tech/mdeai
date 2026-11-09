@@ -249,7 +249,8 @@ describe("computeRouteTool", () => {
     }) as never);
     expect(out).toMatchObject({ route: null, source: "google_routes", reason: "route_unavailable" });
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(quota.checkRateLimitDurable).toHaveBeenCalledTimes(1);
+    // A typo must not consume a Routes quota slot.
+    expect(quota.checkRateLimitDurable).not.toHaveBeenCalled();
   });
 
   it("does not spend a second Routes call or quota slot when the model repeats the same forced route", async () => {
@@ -269,11 +270,59 @@ describe("computeRouteTool", () => {
     const second = await computeRouteTool.execute!({
       origin: { placeId: "invented-second" },
       destination: { placeId: "invented-second" },
-      includePolyline: false,
+      includePolyline: true,
     }, context as never);
     expect(second).toEqual(first);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(resolution.resolveRoutePlaceId).toHaveBeenCalledTimes(2);
     expect(quota.checkRateLimitDurable).toHaveBeenCalledTimes(1);
+  });
+
+  it("shares one in-flight provider call across concurrent duplicate tool calls", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      routes: [{ distanceMeters: 362, duration: "377s" }],
+    }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const context = planContext({
+      origin: "Parque Lleras",
+      destination: "Provenza",
+      travelMode: "WALK",
+    });
+    const [first, second] = await Promise.all([
+      computeRouteTool.execute!({
+        origin: { placeId: "invented-a" },
+        destination: { placeId: "invented-a" },
+      }, context as never),
+      computeRouteTool.execute!({
+        origin: { placeId: "invented-b" },
+        destination: { placeId: "invented-b" },
+      }, context as never),
+    ]);
+    expect(second).toEqual(first);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(resolution.resolveRoutePlaceId).toHaveBeenCalledTimes(2);
+    expect(quota.checkRateLimitDurable).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not treat an inherited object name as a cached place", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      routes: [{ distanceMeters: 100, duration: "60s" }],
+    }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const out = await computeRouteTool.execute!({
+      origin: { placeId: "invented" },
+      destination: { placeId: "invented" },
+    }, planContext({
+      origin: "constructor",
+      destination: "toString",
+      travelMode: "WALK",
+    }) as never);
+    expect(out).toMatchObject({
+      source: "google_routes",
+      route: { distanceMeters: 100, durationSeconds: 60 },
+    });
+    expect(resolution.resolveRoutePlaceId).toHaveBeenCalledWith("constructor");
+    expect(resolution.resolveRoutePlaceId).toHaveBeenCalledWith("toString");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
