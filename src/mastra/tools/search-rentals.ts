@@ -346,20 +346,14 @@ export function rentalPricePredicate(maxNightly: number | null): string {
  * silently deletes real supply, so the budget applies **only** to listings in its own currency.
  * A same-currency listing must carry a stored monthly price to be a confirmed match — a
  * nightly-only row is never presented as within a monthly budget. Listings in other currencies
- * are retained (their card shows their own currency) and never compared to this budget.
+ * are excluded: a hard currency-specific ceiling must never return uncomparable alternatives.
  */
 export function rentalMonthlyBudgetPredicate(maxMonthly: number, currency: string): string {
   if (!Number.isFinite(maxMonthly) || maxMonthly <= 0) {
     throw new RangeError('Monthly budget must be a finite positive number');
   }
   const budgetCurrency = monthlyBudgetCurrencySchema.parse(currency);
-  const sameCurrency = `currency.eq.${budgetCurrency}`;
-  const otherCurrency = `currency.neq.${budgetCurrency}`;
-  return [
-    `and(${otherCurrency},price_daily.not.is.null)`,
-    `and(${otherCurrency},price_monthly.not.is.null)`,
-    `and(${sameCurrency},price_monthly.not.is.null,price_monthly.lte.${maxMonthly})`,
-  ].join(',');
+  return `and(currency.eq.${budgetCurrency},price_monthly.not.is.null,price_monthly.lte.${maxMonthly})`;
 }
 
 /** The price predicate for whichever budget the caller supplied. Monthly wins when both are set. */
@@ -375,10 +369,10 @@ export function rentalBudgetPredicate(
 
 /**
  * The note shown with results when a monthly budget applied. Monthly budgets never compare across
- * currencies, so say so rather than implying a converted or global match.
+ * currencies, so exclude uncomparable rows rather than implying they matched.
  */
 export const MONTHLY_BUDGET_NOTE =
-  'Only listings priced in the requested currency at or below the monthly budget are confirmed matches. Listings in other currencies are shown without a budget comparison.';
+  'Only listings with a stored monthly price in the requested currency at or below the monthly budget are shown. Other currencies are excluded because no exchange rate is available.';
 
 /** The note that matches whichever budget the query applied. */
 export function budgetNoteFor(query: RentalQuery): string | undefined {
@@ -584,11 +578,8 @@ async function searchRentalsFromSupabase(
   let alternativeRows: ApartmentRow[] = [];
   let total: number;
   if (monthlyBudget || maxNightly !== null) {
-    // A budget is only comparable inside its own currency, so rows that CONFIRM it must not be
-    // crowded out of the page by cheaper-looking rows in another currency (USD 1,300 sorts before
-    // COP 2,100,000 as a raw number). Fetch the confirmed same-currency set first, then fill the
-    // remainder with the labelled, never-compared alternatives. Ordering stays inside one currency,
-    // so no cross-currency amount comparison is ever made.
+    // A hard monthly budget returns ONLY comparable monthly prices in the named currency.
+    // For a nightly cap, keep the existing clearly labelled other-currency alternatives.
     const budgetCurrency = monthlyBudget ? monthlyBudget.currency : NIGHTLY_BUDGET_CURRENCY;
     const predicate = rentalBudgetPredicate(maxNightly, monthlyBudget);
     const confirmed = await runQuery(
@@ -615,9 +606,11 @@ async function searchRentalsFromSupabase(
       return count ?? 0;
     };
     const alternatives =
-      remaining === 0
-        ? { rows: [] as ApartmentRow[], count: await countAlternatives() }
-        : await runQuery(
+      monthlyBudget
+        ? { rows: [] as ApartmentRow[], count: 0 }
+        : remaining === 0
+          ? { rows: [] as ApartmentRow[], count: await countAlternatives() }
+          : await runQuery(
             baseQuery()
               .neq('currency', budgetCurrency)
               .or(predicate)
@@ -636,8 +629,8 @@ async function searchRentalsFromSupabase(
     total = all.count;
   }
 
-  // Group order is the contract: confirmed matches first, labelled alternatives after. Monthly
-  // ordering runs INSIDE each group, so it can never move an alternative above a match.
+  // Monthly hard caps return confirmed comparable rows only. Nightly budget alternatives
+  // remain labelled and always appear after confirmed matches.
   const toRentals = (list: ApartmentRow[]) =>
     query.stayType === 'monthly' ? sortForMonthlyStay(list.map(rowToRental)) : list.map(rowToRental);
   const results = [...toRentals(confirmedRows), ...toRentals(alternativeRows)];
@@ -672,6 +665,17 @@ export async function searchRentals(
   // Never add a second, allowlisted external search that can duplicate or hide it.
   const developmentMode = client ? await readRentalDevelopmentPhase(client) : false;
 
+  // Optional source-linked advertisements are also subject to the SAME strict monthly cap.
+  // Keep source attribution; never display an uncomparable amount as a budget match.
+  const monthlyBudget = monthlyBudgetFromQuery(query);
+  const onlyComparableExternal = (rows: Rental[]): Rental[] =>
+    monthlyBudget
+      ? rows.filter((row) =>
+          row.currency === monthlyBudget.currency &&
+          typeof row.price_monthly === 'number' &&
+          row.price_monthly <= monthlyBudget.amount)
+      : rows;
+
   // Exact browse/API ceilings use canonical SQL counting, not a truncated semantic candidate window.
   if (query.queryText?.trim() && query.maxBedrooms === undefined) {
     try {
@@ -693,7 +697,7 @@ export async function searchRentals(
         groundingUsed: false,
         rankExplanation: intel.rankExplanation,
       });
-      const external = developmentMode ? [] : await getOptionalExternalRentals(query);
+      const external = developmentMode ? [] : onlyComparableExternal(await getOptionalExternalRentals(query));
       const mixed = mixRentalResults(intel.results, external, limit);
       return {
         results: mixed.results,
@@ -719,7 +723,7 @@ export async function searchRentals(
       ...options,
       developmentPhase: developmentMode,
     });
-    const external = developmentMode ? [] : await getOptionalExternalRentals(query);
+    const external = developmentMode ? [] : onlyComparableExternal(await getOptionalExternalRentals(query));
     const mixed = mixRentalResults(results, external, limit);
     return {
       results: mixed.results, total: total + mixed.distinctExternal, source,

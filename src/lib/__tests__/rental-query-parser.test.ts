@@ -8,6 +8,7 @@ import {
 describe("SAN-1502 postmerge — real COP monthly budget", () => {
   it.each([
     ["Furnished 2BR in Laureles under COP 3.5 million per month", 3_500_000],
+    ["Only show apartments under COP 3 million", 3_000_000],
     ["2BR Laureles under COP 4M/month", 4_000_000],
     ["apartments in Laureles up to 3.500.000 pesos/mes", 3_500_000],
     ["2BR Laureles bajo COP 3,5 millones por mes", 3_500_000],

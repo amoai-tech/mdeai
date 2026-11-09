@@ -373,8 +373,6 @@ describe("monthly budget PostgREST filter input safety", () => {
   it("allows ordinary three-letter currencies and preserves the original COP comparison", async () => {
     const { rentalMonthlyBudgetPredicate } = await import("../search-rentals");
     expect(rentalMonthlyBudgetPredicate(3_500_000, "cop")).toBe(
-      "and(currency.neq.COP,price_daily.not.is.null)," +
-      "and(currency.neq.COP,price_monthly.not.is.null)," +
       "and(currency.eq.COP,price_monthly.not.is.null,price_monthly.lte.3500000)",
     );
     expect(rentalMonthlyBudgetPredicate(1200, "USD")).toContain(
@@ -412,13 +410,10 @@ describe("searchRentals — a monthly budget confirms only same-currency matches
     expect(result.budgetNote).toBe(MONTHLY_BUDGET_NOTE);
   });
 
-  it("excludes a COP monthly listing above the cap and keeps other currencies as alternatives", async () => {
-    const ids = (await search({ maxPriceMonthly: 2_000_000, budgetCurrency: "COP" })).results.map(
-      (r) => r.id,
-    );
-    expect(ids).not.toContain("apt-cop-monthly");
-    // A USD listing is retained as an uncompared alternative, never silently deleted.
-    expect(ids).toContain("apt-usd-nightly");
+  it("returns zero confirmed matches instead of USD alternatives for a hard COP monthly cap", async () => {
+    const result = await search({ maxPriceMonthly: 2_000_000, budgetCurrency: "COP" });
+    expect(result.results).toEqual([]);
+    expect(result.total).toBe(0);
   });
 
   it("applies a USD monthly cap only to USD monthly prices", async () => {
@@ -428,7 +423,7 @@ describe("searchRentals — a monthly budget confirms only same-currency matches
     expect(ids).toContain("apt-usd-boundary-in"); // 2414 <= 2414
     expect(ids).not.toContain("apt-usd-boundary-out"); // 2415 > 2414
     expect(ids).not.toContain("apt-usd-both"); // 9000 > 2414
-    expect(ids).toContain("apt-cop-monthly"); // other currency: shown, not compared
+    expect(ids).not.toContain("apt-cop-monthly"); // unmatched currency is not a confirmed match
   });
 });
 
@@ -522,7 +517,7 @@ describe("ordering must not truncate the matches a monthly budget asks for (SAN-
   it("orders the monthly figure first when a monthly budget is applied", async () => {
     await search({ maxPriceMonthly: 3_000_000, budgetCurrency: "COP" });
     // Monthly matches have no nightly price, so a nightly-first sort would push them past .limit().
-    expect(orderCalls.map((o) => o.column)).toEqual(["price_monthly", "id", "price_daily", "id"]);
+    expect(orderCalls.map((o) => o.column)).toEqual(["price_monthly", "id"]);
   });
 
   it("keeps the stored nightly order when no monthly budget is applied", async () => {

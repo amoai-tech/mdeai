@@ -20,10 +20,10 @@ describe("rentalMonthlyBudgetPredicate", () => {
     expect(clause).toContain("and(currency.eq.COP,price_monthly.not.is.null,price_monthly.lte.3500000)");
   });
 
-  it("keeps other-currency listings without comparing them to the budget", () => {
+  it("allows only confirmed same-currency monthly prices under a hard budget", () => {
     const clause = rentalMonthlyBudgetPredicate(3_500_000, "COP");
-    expect(clause).toContain("and(currency.neq.COP,price_daily.not.is.null)");
-    expect(clause).toContain("and(currency.neq.COP,price_monthly.not.is.null)");
+    expect(clause).toBe("and(currency.eq.COP,price_monthly.not.is.null,price_monthly.lte.3500000)");
+    expect(clause).not.toContain("currency.neq");
   });
 
   it("never compares a monthly budget against a nightly price", () => {
