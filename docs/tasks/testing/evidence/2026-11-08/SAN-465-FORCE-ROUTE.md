@@ -93,7 +93,7 @@ The merged PR did make the tool run, but the first real production turn still fa
 
 ### Verification
 
-- Focused Vitest: 123/123 pass across route-tool-choice, compute-route, output guard and
+- Focused Vitest: 125/125 pass across route-tool-choice, compute-route, output guard and
   concierge (18 output-guard cases, including a two-successful-route turn).
 - Live provider probe with the production server key, using the exact tool + plan path:
   - Parque Lleras → Provenza WALK = **361 m / 371 s**

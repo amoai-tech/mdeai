@@ -37,12 +37,13 @@ const MODE_LABEL = {
   WALK: { en: "walking", es: "a pie" },
   DRIVE: { en: "driving", es: "en auto" },
   BICYCLE: { en: "cycling", es: "en bici" },
-  TRANSIT: { en: "by transit", es: "en transporte público" },
+  TRANSIT: { en: "riding transit", es: "en transporte público" },
 } as const;
 
 function distanceLabel(metres: number): string {
   if (metres >= 1000) {
     const km = metres / 1000;
+    if (Number.isInteger(km)) return `${km} km`;
     return `${km.toFixed(km < 10 ? 1 : 0)} km`;
   }
   return `${Math.round(metres)} m`;
@@ -77,7 +78,7 @@ function recentUserIsSpanish(messageList: ProcessOutputStreamArgs["messageList"]
       ?.filter((p) => p.type === "text")
       .map((p) => p.text)
       .join(" ") ?? "";
-    return /[¿¡]|\b(cu[aá]nto|cu[aá]l|desde|entre|ruta|caminar|caminando)\b/i.test(userText);
+    return /[¿¡]|\b(cu[aá]nto|cu[aá]l|desde|entre|ruta|caminar|caminando|andando|a pie)\b/i.test(userText);
   } catch {
     return false;
   }

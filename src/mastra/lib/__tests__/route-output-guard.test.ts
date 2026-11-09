@@ -70,6 +70,24 @@ describe("real route-output guard", () => {
     expect(await pipe("text-delta", { text: " And it is a lovely walk." }, state)).toBeNull();
   });
 
+  it("formats exact kilometres without a decimal and detects Spanish a pie", async () => {
+    const state = {};
+    await pipe("tool-result", { toolName: "computeRouteTool", result: {
+      route: { distanceMeters: 1000, durationSeconds: 600, travelMode: "WALK", attribution: "Google Maps" },
+    } }, state);
+    const text = await pipe("text-delta", { text: "10 minutes." }, state, "¿Cuánto se tarda a pie de Laureles a Provenza?");
+    expect(text).toMatchObject({ payload: { text: "Google Maps: 1 km, unos 10 minutos a pie." } });
+  });
+
+  it("labels transit consistently with the other modes", async () => {
+    const state = {};
+    await pipe("tool-result", { toolName: "computeRouteTool", result: {
+      route: { distanceMeters: 5000, durationSeconds: 900, travelMode: "TRANSIT", attribution: "Google Maps" },
+    } }, state);
+    const text = await pipe("text-delta", { text: "15 minutes." }, state);
+    expect(text).toMatchObject({ payload: { text: "Google Maps: 5 km, about 15 minutes riding transit." } });
+  });
+
   it("keeps every successful route in a multi-route turn", async () => {
     const state = {};
     await pipe("tool-result", { toolName: "computeRouteTool", result: {
