@@ -109,7 +109,7 @@ If a detailed rule already lives in a canonical skill, link to it here rather th
 | Validate a real browser/user journey | `e2e` | `testing` for execution and regression proof |
 | Verify after a merge | `merge` | `tasks` for worktree cleanup; `task-verifier` for independent Done |
 | Certify a deployed production release | `prod` | `task-verifier` independently challenges readiness claims |
-| Report evidence-based work status | `progress` | Linear and GitHub remain sources of truth |
+| Report evidence-based work status | `progress` | Always follow its delta-first, `efficient` tracker refresh workflow; preserve existing issue rows and prove changed claims |
 | Research current technical behavior | `research` | Canonical single `research` owner, short workflow in references |
 | Work on Supabase/RLS/migration specifics | `supabase` | Canonical security owner; short workflow in references |
 | Known domain implementation or question | Matching domain skill | E.g., `real-estate`, `events`, `copilotkit`, `mastra`, `stripe` |
