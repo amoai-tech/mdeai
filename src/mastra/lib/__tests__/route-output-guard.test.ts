@@ -70,6 +70,20 @@ describe("real route-output guard", () => {
     expect(await pipe("text-delta", { text: " And it is a lovely walk." }, state)).toBeNull();
   });
 
+  it("keeps every successful route in a multi-route turn", async () => {
+    const state = {};
+    await pipe("tool-result", { toolName: "computeRouteTool", result: {
+      route: { distanceMeters: 361, durationSeconds: 371, travelMode: "WALK", attribution: "Google Maps" },
+    } }, state);
+    await pipe("tool-result", { toolName: "computeRouteTool", result: {
+      route: { distanceMeters: 6269, durationSeconds: 5477, travelMode: "WALK", attribution: "Google Maps" },
+    } }, state);
+    const text = await pipe("text-delta", { text: "Here are the routes." }, state);
+    const rendered = (text as { payload: { text: string } }).payload.text;
+    expect(rendered).toContain("Google Maps: 361 m, about 6 minutes walking.");
+    expect(rendered).toContain("Google Maps: 6.3 km, about 91 minutes walking.");
+  });
+
   it("uses the Spanish route wording and caution from the provider result", async () => {
     const state = {};
     await pipe("tool-result", { toolName: "computeRouteTool", result: {

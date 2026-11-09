@@ -40,7 +40,7 @@ const ENDPOINT_VERB = /^(pie|meet|eat|see|get|walk|drive|bike|ride|take|go|visit
 
 /** A short reply that only changes the travel mode of the previous route. */
 const MODE_FOLLOW_UP =
-  /^(?:and\s+|y\s+)?(?:by\s+(?:car|auto|taxi|uber|didi|bike|bicycle|foot|walking|transit|bus|metro|public transport)|on foot|driving|walking|cycling|bicycling|en\s+(?:auto|carro|bici|bicicleta|transporte|bus|metro)|caminando)\s*\??$/i;
+  /^(?:and\s+|y\s+)?(?:by\s+(?:car|auto|taxi|uber|didi|bike|bicycle|foot|walking|transit|bus|metro|public transport)|on foot|driving|walking|cycling|bicycling|en\s+(?:auto|carro|bici|bicicleta|transporte|bus|metro)|a\s+pie|caminando|andando)\s*\??$/i;
 
 /**
  * A destination may end with the mode the user mentioned ("... to the airport

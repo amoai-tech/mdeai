@@ -179,7 +179,7 @@ describe("deterministic route plan", () => {
   });
 
   it("accepts the mode phrases the follow-up recognizer also honors", () => {
-    for (const followUp of ["And by taxi?", "¿Y en bus?", "And on foot?", "¿Y en carro?"]) {
+    for (const followUp of ["And by taxi?", "¿Y en bus?", "And on foot?", "¿Y en carro?", "¿Y a pie?", "¿Y andando?"]) {
       expect(routePlanForTurn([
         user("How long is the walk from Parque Lleras to Provenza?"),
         { role: "assistant", content: "It is 2.3 km." },

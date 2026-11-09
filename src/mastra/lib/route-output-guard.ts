@@ -126,7 +126,7 @@ export const routeUnavailableOutputGuard = {
           state.routeUnavailable = false;
           state.routeUnavailableEmitted = false;
           state.routeFailureReason = undefined;
-          state.routeResult = undefined;
+          state.routeResults = [];
           state.routeResultEmitted = false;
         }
         return part;
@@ -134,16 +134,22 @@ export const routeUnavailableOutputGuard = {
       const result = part.payload.result;
       if (result && typeof result === "object" && "route" in result) {
         if (result.route === null) {
-          state.routeUnavailable = true;
-          state.routeUnavailableEmitted = false;
-          state.routeFailureReason = "reason" in result ? result.reason : undefined;
-          state.routeResult = undefined;
+          // A later failure must not erase a route that already succeeded.
+          const existing = Array.isArray(state.routeResults) ? state.routeResults : [];
+          if (existing.length === 0) {
+            state.routeUnavailable = true;
+            state.routeUnavailableEmitted = false;
+            state.routeFailureReason = "reason" in result ? result.reason : undefined;
+          }
           state.routeResultEmitted = false;
         } else {
+          const existing = Array.isArray(state.routeResults) ? state.routeResults : [];
+          // One turn may contain more than one real route (e.g. two selected
+          // origins). Keep every provider result, not just the last.
+          state.routeResults = [...existing, result.route];
           state.routeUnavailable = false;
           state.routeUnavailableEmitted = false;
           state.routeFailureReason = undefined;
-          state.routeResult = result.route;
           state.routeResultEmitted = false;
         }
       }
@@ -152,6 +158,29 @@ export const routeUnavailableOutputGuard = {
 
     if (part.type !== "text-delta") {
       return part;
+    }
+
+    const routes = Array.isArray(state.routeResults) ? (state.routeResults as GuardRoute[]) : [];
+
+    if (routes.length > 0) {
+      if (state.routeResultEmitted === true) {
+        // ponytail: a successful route replaces the route-only reply. A compound
+        // question that needs route facts *and* prose must call another
+        // user-facing tool (which clears this guard); splitting arbitrary prose
+        // into route vs non-route claims needs claim-level parsing. Upgrade path:
+        // emit one sentence per route and preserve non-route paragraphs with the
+        // SAN-229 commute card.
+        return null;
+      }
+      state.routeResultEmitted = true;
+      const spanish = recentUserIsSpanish(messageList);
+      return {
+        ...part,
+        payload: {
+          ...part.payload,
+          text: routes.map((route) => successMessage(route, spanish)).join("\n\n"),
+        },
+      };
     }
 
     if (state.routeUnavailable === true) {
@@ -169,21 +198,6 @@ export const routeUnavailableOutputGuard = {
       };
     }
 
-    const route = state.routeResult as GuardRoute | undefined;
-    if (!route) {
-      return part;
-    }
-    if (state.routeResultEmitted === true) {
-      // The canonical provider-backed answer is already emitted.
-      return null;
-    }
-    state.routeResultEmitted = true;
-    return {
-      ...part,
-      payload: {
-        ...part.payload,
-        text: successMessage(route, recentUserIsSpanish(messageList)),
-      },
-    };
+    return part;
   },
 } satisfies Processor;
