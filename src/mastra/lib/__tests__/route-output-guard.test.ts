@@ -50,13 +50,62 @@ describe("real route-output guard", () => {
     });
   });
 
-  it("preserves provider-backed successful routes unchanged", async () => {
+  it("builds the walking answer from Google's numbers and drops model embellishment", async () => {
     const state = {};
     await pipe("tool-result", { toolName: "computeRouteTool", result: {
-      route: { distanceMeters: 362, durationSeconds: 377, attribution: "Google Maps" },
+      route: {
+        distanceMeters: 362,
+        durationSeconds: 377,
+        travelMode: "WALK",
+        warning: "Walking routes may omit sidewalks or pedestrian paths. Use caution.",
+        attribution: "Google Maps",
+      },
     } }, state);
-    const text = await pipe("text-delta", { text: "Google says 362 metres." }, state);
-    expect(text).toMatchObject({ payload: { text: "Google says 362 metres." } });
+    const first = await pipe("text-delta", { text: "It is 362 m along Calle 70 in 5 minutes." }, state);
+    expect(first).toMatchObject({
+      payload: {
+        text: "Google Maps: 362 m, about 6 minutes walking. Walking routes may omit sidewalks or pedestrian paths. Use caution.",
+      },
+    });
+    expect(await pipe("text-delta", { text: " And it is a lovely walk." }, state)).toBeNull();
+  });
+
+  it("uses the Spanish route wording and caution from the provider result", async () => {
+    const state = {};
+    await pipe("tool-result", { toolName: "computeRouteTool", result: {
+      route: {
+        distanceMeters: 6269,
+        durationSeconds: 5477,
+        travelMode: "WALK",
+        warning: "Walking routes may omit sidewalks or pedestrian paths. Use caution.",
+        attribution: "Google Maps",
+      },
+    } }, state);
+    const first = await pipe("text-delta", { text: "Son 5 minutos." }, state, "¿Cuánto se tarda de Laureles a Provenza?");
+    expect(first).toMatchObject({
+      payload: {
+        text: "Google Maps: 6.3 km, unos 91 minutos a pie. Las rutas a pie pueden omitir aceras o senderos peatonales; ten cuidado.",
+      },
+    });
+  });
+
+  it("reports a driving route in minutes without a walking caution", async () => {
+    const state = {};
+    await pipe("tool-result", { toolName: "computeRouteTool", result: {
+      route: { distanceMeters: 440, durationSeconds: 221, travelMode: "DRIVE", attribution: "Google Maps" },
+    } }, state);
+    const first = await pipe("text-delta", { text: "About 5 minutes by car." }, state);
+    expect(first).toMatchObject({ payload: { text: "Google Maps: 440 m, about 4 minutes driving." } });
+  });
+
+  it("keeps a separate answer after a successful route and later café search", async () => {
+    const state = {};
+    await pipe("tool-result", { toolName: "computeRouteTool", result: {
+      route: { distanceMeters: 362, durationSeconds: 377, travelMode: "WALK", attribution: "Google Maps" },
+    } }, state);
+    await pipe("tool-result", { toolName: "searchRestaurantsTool", result: { results: [{ id: "cafe-1" }] } }, state);
+    const out = await pipe("text-delta", { text: "Café A is one result." }, state);
+    expect(out).toMatchObject({ payload: { text: "Café A is one result." } });
   });
 
   it("does not touch unrelated café, booking or rental results", async () => {

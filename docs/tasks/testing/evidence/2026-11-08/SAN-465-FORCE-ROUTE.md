@@ -93,8 +93,8 @@ The merged PR did make the tool run, but the first real production turn still fa
 
 ### Verification
 
-- Focused Vitest: 119/119 pass across route-tool-choice, compute-route, output guard and
-  concierge.
+- Focused Vitest: 122/122 pass across route-tool-choice, compute-route, output guard and
+  concierge (17 output-guard cases).
 - Live provider probe with the production server key, using the exact tool + plan path:
   - Parque Lleras → Provenza WALK = **361 m / 371 s**
   - Parque Lleras → Provenza DRIVE = **440 m / 221 s**
@@ -103,3 +103,29 @@ The merged PR did make the tool run, but the first real production turn still fa
 
 Cross-request retries remain intentionally uncached: a fresh user turn asks for a fresh
 ETA. Quota limits still apply, and the answer never estimates when Google fails.
+
+### Success-path hallucination caught and fixed
+
+The first fixed local candidate answered well on desktop but the 390px run said
+“361 m, roughly **5 minutes along Calle 70**”. The tool result was 371 seconds and contained
+no street name. The model was still embellishing a real route.
+
+`route-output-guard.ts` now builds the whole successful route answer from the provider
+result — distance, duration rounded to whole minutes, mode, the supplied caution and
+Google Maps attribution — and drops the model's route text. The direct local SSE now emits
+exactly:
+
+> Google Maps: 361 m, about 6 minutes walking. Walking routes may omit sidewalks or
+> pedestrian paths. Use caution.
+
+The same guard preserves a separate café/rental/booking answer when another user-facing
+tool ran after the route (regression covered).
+
+### Promotion status at the time of this record
+
+The code, tests, live provider probe and local real-browser journey pass. PR #836 is
+**not merged**: GitHub reports `REVIEW_REQUIRED` and the only available automation account
+is the PR author, so it cannot record the required review. Vercel previews are protected by
+SSO and the automation bypass secret did not establish a browser session. Therefore this
+record does **not** claim a deployed production route; it claims a proven candidate plus a
+documented promotion blocker.
