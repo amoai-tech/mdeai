@@ -24,7 +24,7 @@ import { RESTAURANT_CLARIFY_MESSAGE } from "@/lib/restaurant-clarify-copy";
 import { routerIntentSchema } from "@/lib/router-intent";
 import { buildConciergeChannels } from "./whatsapp-channels";
 import { shouldContinueVenueBookingAfterSearch } from "../lib/booking-continuation";
-import { shouldForceRouteTool } from "../lib/route-tool-choice";
+import { MDEAI_ROUTE_PLAN_KEY, routePlanForTurn, shouldForceRouteTool } from "../lib/route-tool-choice";
 import { routeUnavailableOutputGuard } from "../lib/route-output-guard";
 
 export const conciergeWorkingMemorySchema = z.object({
@@ -556,10 +556,15 @@ export const conciergeAgent = new Agent({
       shouldContinueVenueBookingAfterSearch({ stepNumber, messages, steps, requestContext })
         ? { toolChoice: { type: 'tool' as const, toolName: 'requestVenueBooking' } }
         : {} },
-    { id: 'san465-route-tool-choice', processInputStep: ({ stepNumber, messages, steps }) =>
-      shouldForceRouteTool({ stepNumber, messages, steps })
-        ? { toolChoice: { type: 'tool' as const, toolName: 'computeRouteTool' } }
-        : {} },
+    { id: 'san465-route-tool-choice', processInputStep: ({ stepNumber, messages, steps, requestContext }) => {
+      if (!shouldForceRouteTool({ stepNumber, messages, steps })) return {};
+      // Hand the user's own endpoints and travel mode to the tool. The model's
+      // generated place IDs are untrusted; Google must receive the named places.
+      const plan = routePlanForTurn(messages);
+      if (!plan) return {};
+      requestContext?.set(MDEAI_ROUTE_PLAN_KEY, plan);
+      return { toolChoice: { type: 'tool' as const, toolName: 'computeRouteTool' } };
+    } },
     { id: "san737-current-selected-name-history", processInput: ({ messages, requestContext }) =>
       currentSelectedNameOnly(messages, requestContext?.get("ag-ui")) },
     // SAN-1600 — an explicit comparison needs the previous item's record too, resolved
