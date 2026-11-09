@@ -81,11 +81,12 @@ The merged PR did make the tool run, but the first real production turn still fa
 4. The per-turn result cache now stores honest failures as well as successes, so the
    model's duplicate second call cannot spend another Routes/Places call or quota slot.
 5. Travel mode is derived from the user's wording (walk/drive/bike/transit, English and
-   Spanish), including “And by car?” / “¿Y en bici?” follow-ups.
+   Spanish), including “And by car?” / “¿Y en bici?” follow-ups. A trailing mode clause
+   (“… to the airport by car”) is stripped from the place name before Places resolution.
 
 ### Verification
 
-- Focused Vitest: 114/114 pass across route-tool-choice, compute-route, output guard and
+- Focused Vitest: 115/115 pass across route-tool-choice, compute-route, output guard and
   concierge.
 - Live provider probe with the production server key, using the exact tool + plan path:
   - Parque Lleras → Provenza WALK = **361 m / 371 s**

@@ -162,4 +162,25 @@ describe("deterministic route plan", () => {
     expect(routeTravelMode("How long by public transport?")).toBe("TRANSIT");
     expect(routeTravelMode("¿Cuánto se tarda en auto?")).toBe("DRIVE");
   });
+
+  it("strips a trailing travel-mode clause from the destination", () => {
+    expect(routePlanForTurn([
+      user("How far is it from Parque Lleras to the airport by car?"),
+    ])).toEqual({
+      origin: "Parque Lleras",
+      destination: "the airport",
+      travelMode: "DRIVE",
+    });
+    expect(routeEndpoints("Distance between Laureles and Provenza by bike")).toEqual({
+      origin: "Laureles",
+      destination: "Provenza",
+    });
+    expect(routePlanForTurn([
+      user("¿Cuánto se tarda de Laureles a Provenza en bici?"),
+    ])).toEqual({
+      origin: "Laureles",
+      destination: "Provenza",
+      travelMode: "BICYCLE",
+    });
+  });
 });

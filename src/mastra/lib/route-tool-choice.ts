@@ -42,6 +42,24 @@ const ENDPOINT_VERB = /^(pie|meet|eat|see|get|walk|drive|bike|ride|take|go|visit
 const MODE_FOLLOW_UP =
   /^(?:and\s+|y\s+)?(?:by car|driving|by bike|cycling|walking|transit|public transport|en auto|en bici|caminando|transporte)\s*\??$/i;
 
+/**
+ * A destination may end with the mode the user mentioned ("... to the airport
+ * by car"). That clause is a mode, not part of the place name; Places must
+ * search "the airport", not "the airport by car".
+ */
+const TRAILING_MODE =
+  /\s+(?:(?:by|on)\s+(?:car|auto|taxi|uber|didi|bike|bicycle|foot|walking|transit|bus|metro|public transport)|en\s+(?:auto|carro|bici|bicicleta|transporte|bus|metro)|(?:driving|walking|cycling|bicycling))\s*$/i;
+
+function cleanEndpoint(value: string): string {
+  let text = value.trim();
+  let previous = "";
+  while (text !== previous) {
+    previous = text;
+    text = text.replace(TRAILING_MODE, "").trim();
+  }
+  return text;
+}
+
 function isPlaceLike(value: string): boolean {
   const text = value.trim();
   if (text.length < 2 || text.length > 80) return false;
@@ -53,8 +71,8 @@ export function routeEndpoints(text: string): { origin: string; destination: str
   for (const pattern of ENDPOINT_PATTERNS) {
     const match = pattern.exec(text);
     if (!match) continue;
-    const origin = match[1]?.trim();
-    const destination = match[2]?.trim();
+    const origin = cleanEndpoint(match[1] ?? "");
+    const destination = cleanEndpoint(match[2] ?? "");
     if (origin && destination && isPlaceLike(origin) && isPlaceLike(destination)) {
       return { origin, destination };
     }
