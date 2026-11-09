@@ -67,3 +67,10 @@ test('scoped preview access is created, revoked before reporting, and cleanup fa
   assert.match(workflow, /started_at=/);
   assert.match(workflow, /completed_at=/);
 });
+
+test('Momentic installs on a supported pinned runner and reports setup failure as BLOCKED, not an app regression', () => {
+  assert.match(workflow, /runs-on: ubuntu-24\.04/);
+  assert.match(workflow, /id: browser_install/);
+  assert.match(workflow, /BROWSER_INSTALL: \$\{\{ steps\.browser_install\.outcome \}\}/);
+  assert.match(workflow, /BLOCKED — Momentic Chromium installation failed \(0\/\$count executed\)/);
+});

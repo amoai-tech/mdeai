@@ -20,7 +20,8 @@ concurrency:
 jobs:
   discovery:
     if: github.event.workflow_run.event == 'pull_request'
-    runs-on: ubuntu-latest
+    # Momentic 3.69.0 / Playwright 1.60 cannot install browsers on ubuntu26.04.
+    runs-on: ubuntu-24.04
     timeout-minutes: 12
     # PILOT: failures are visible in the job and summary but cannot block merging.
     continue-on-error: true
@@ -152,6 +153,7 @@ jobs:
           node --test scripts/__tests__/momentic-rentals-preview-url.test.mjs scripts/__tests__/momentic-pilot-scope.test.mjs
           echo 'present=true' >> "$GITHUB_OUTPUT"
       - name: Install Momentic Chromium only
+        id: browser_install
         if: steps.installed.outputs.present == 'true'
         run: npx --yes momentic@3.69.0 install-browsers chromium
       - name: Run selected read-only public journeys
@@ -199,6 +201,7 @@ jobs:
           TEST_COUNT: ${{ steps.scope.outputs.count }}
           TESTS_JSON: ${{ steps.scope.outputs.tests }}
           OUTCOME: ${{ steps.momentic.outcome }}
+          BROWSER_INSTALL: ${{ steps.browser_install.outcome }}
           VERIFIED: ${{ steps.preview.outputs.verified }}
           INSTALLED: ${{ steps.installed.outputs.present }}
           SHARED: ${{ steps.share.outputs.available }}
@@ -216,6 +219,8 @@ jobs:
           elif [[ "$SHARED" == true && "$REVOKED" != success ]]; then
             result="ERROR — temporary preview access revocation failed"
             conclusion=failure
+          elif [[ "$BROWSER_INSTALL" == failure ]]; then
+            result="BLOCKED — Momentic Chromium installation failed (0/$count executed)"
           elif [[ "$OUTCOME" == cancelled ]]; then
             result="BLOCKED — browser test run was cancelled; result unknown"
           elif [[ "$OUTCOME" == success ]]; then
