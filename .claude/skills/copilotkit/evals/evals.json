@@ -117,7 +117,7 @@
     {
       "id": 17, "should_trigger": true,
       "prompt": "The agent says it sent render_ui, but GenerativeUISurface displays the fallback. How should we use official CopilotKit Inspector to decide whether the issue is provider, catalog, model tool exposure, rejected operation or Mastra transport? No code edits.",
-      "expected_output": "Content review criteria: Names relevant Inspector tabs and their signals; Checks whether render_ui reached model and browser; Does not install parallel A2UI middleware or replace fallback.; First mounts a minimal, inert provider QA catalog so render_ui is advertised for the debugging run.",
+      "expected_output": "Content review criteria: Names relevant Inspector tabs and their signals; Checks whether render_ui reached model and browser; Does not install parallel A2UI middleware or replace fallback.; First checks that the existing route provider passes mdeUI and advertises render_ui in the debugging run; only adds a temporary inert QA component within that catalog if needed.",
       "files": [],
       "expectations": [{"id":"catalog","kind":"deterministic","check":"catalog_contains","value":"copilotkit"},{"id":"skill-called","kind":"deterministic","check":"skill_called","value":"copilotkit"},{"id":"instructions-loaded","kind":"deterministic","check":"skill_result_ok","value":"copilotkit"},{"id":"turn-completed","kind":"deterministic","check":"turn_completed"}]
     },
