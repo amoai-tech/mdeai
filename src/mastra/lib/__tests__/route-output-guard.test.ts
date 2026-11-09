@@ -88,6 +88,16 @@ describe("real route-output guard", () => {
     expect(text).toMatchObject({ payload: { text: "Google Maps: 5 km, about 15 minutes riding transit." } });
   });
 
+  it("does not repeat the same route when the model calls the tool twice", async () => {
+    const state = {};
+    const route = { distanceMeters: 361, durationSeconds: 371, travelMode: "WALK", attribution: "Google Maps" };
+    await pipe("tool-result", { toolName: "computeRouteTool", result: { route } }, state);
+    await pipe("tool-result", { toolName: "computeRouteTool", result: { route } }, state);
+    const text = await pipe("text-delta", { text: "Here is the route." }, state);
+    const rendered = (text as { payload: { text: string } }).payload.text;
+    expect(rendered.match(/Google Maps: 361 m/g)).toHaveLength(1);
+  });
+
   it("keeps every successful route in a multi-route turn", async () => {
     const state = {};
     await pipe("tool-result", { toolName: "computeRouteTool", result: {

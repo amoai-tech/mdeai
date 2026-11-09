@@ -144,10 +144,19 @@ export const routeUnavailableOutputGuard = {
           }
           state.routeResultEmitted = false;
         } else {
-          const existing = Array.isArray(state.routeResults) ? state.routeResults : [];
+          const existing = Array.isArray(state.routeResults)
+            ? (state.routeResults as GuardRoute[])
+            : [];
           // One turn may contain more than one real route (e.g. two selected
-          // origins). Keep every provider result, not just the last.
-          state.routeResults = [...existing, result.route];
+          // origins). Keep every distinct provider result, but do not repeat the
+          // same route when the model calls the tool twice for one question.
+          const incoming = result.route as GuardRoute;
+          const duplicate = existing.some((route) =>
+            route.distanceMeters === incoming.distanceMeters &&
+            route.durationSeconds === incoming.durationSeconds &&
+            route.travelMode === incoming.travelMode,
+          );
+          state.routeResults = duplicate ? existing : [...existing, incoming];
           state.routeUnavailable = false;
           state.routeUnavailableEmitted = false;
           state.routeFailureReason = undefined;
@@ -161,6 +170,12 @@ export const routeUnavailableOutputGuard = {
       return part;
     }
 
+    // ponytail: a multi-route turn currently has no per-route place labels, and a
+    // mixed success/failure turn only reports the successful routes. Both need
+    // the plan's display names in the tool result and a richer card (SAN-229);
+    // the primary one-route journey is complete. Upgrade path: return
+    // origin/destination labels from compute-route and emit one labeled line per
+    // result, including failures.
     const routes = Array.isArray(state.routeResults) ? (state.routeResults as GuardRoute[]) : [];
 
     if (routes.length > 0) {
