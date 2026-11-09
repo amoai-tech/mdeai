@@ -207,5 +207,17 @@ describe("deterministic route plan", () => {
       destination: "Provenza",
       travelMode: "BICYCLE",
     });
+    expect(routeEndpoints("How far from Laureles to Provenza a pie")).toEqual({
+      origin: "Laureles",
+      destination: "Provenza",
+    });
+    expect(routeEndpoints("¿Cuánto se tarda de Laureles a Provenza caminando?")).toEqual({
+      origin: "Laureles",
+      destination: "Provenza",
+    });
+    expect(routeEndpoints("Distance from Laureles to Provenza andando")).toEqual({
+      origin: "Laureles",
+      destination: "Provenza",
+    });
   });
 });

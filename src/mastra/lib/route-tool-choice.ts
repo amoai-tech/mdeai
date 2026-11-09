@@ -48,16 +48,10 @@ const MODE_FOLLOW_UP =
  * search "the airport", not "the airport by car".
  */
 const TRAILING_MODE =
-  /\s+(?:(?:by|on)\s+(?:car|auto|taxi|uber|didi|bike|bicycle|foot|walking|transit|bus|metro|public transport)|en\s+(?:auto|carro|bici|bicicleta|transporte|bus|metro)|(?:driving|walking|cycling|bicycling))\s*$/i;
+  /\s+(?:(?:by|on)\s+(?:car|auto|taxi|uber|didi|bike|bicycle|foot|walking|transit|bus|metro|public transport)|en\s+(?:auto|carro|bici|bicicleta|moto|taxi|uber|didi|transporte|bus|metro)|a\s+pie|caminando|andando|(?:driving|walking|cycling|bicycling))\s*$/i;
 
 function cleanEndpoint(value: string): string {
-  let text = value.trim();
-  let previous = "";
-  while (text !== previous) {
-    previous = text;
-    text = text.replace(TRAILING_MODE, "").trim();
-  }
-  return text;
+  return value.trim().replace(TRAILING_MODE, "").trim();
 }
 
 function isPlaceLike(value: string): boolean {
