@@ -40,7 +40,25 @@ const appUI = createGenerativeUI({
 });
 ```
 
-For MDE's **small** catalog, use `createGenerativeUI` with only approved domain components and strict synchronous Zod props; follow `native-generative-ui.md`. Do **not** add `extends: [standardUI]` just to get a `Card`/layout: reuse MDE's own React card internals or explicitly document an approved subset after checking version-matched catalog APIs. If proposing omission/replacement of built-ins, read the exact official [standard catalog](https://docs.copilotkit.ai/generative-ui/components/standard-catalog) and [catalog guide](https://docs.copilotkit.ai/generative-ui/components/catalogs) for supported configuration; do not invent an `exclude` option.
+For MDE's **existing small catalog**, extend `src/components/copilot/a2ui/mde-ui-catalog.tsx` with only the needed domain components. Do **not** expose all `standardUI` merely for one `Card`; reuse MDE cards first. If a real feature needs several built-ins, the installed CopilotKit **v1.84.1** API supports `standardUI.omit([...])` and typed `overrides`:
+
+```tsx
+import { createGenerativeUI, standardUI } from "@copilotkit/react-core/v2/generative-ui";
+
+// Illustration only; apply to MDE only after checking needed component names.
+const narrowedStandard = standardUI.omit(["Map", "Video", "HtmlView"]);
+const ui = createGenerativeUI({
+  id: "example/limited@1",
+  extends: [narrowedStandard],
+  components: {}, // MDE-specific typed definitions when required
+  // overrides: { Card: { component: MdeStyledCard } }, // same Card props contract
+});
+```
+
+- `omit` *removes named built-ins*; it does not produce an automatic domain allowlist. Check the remaining advertised names in Inspector, not just the removed names.
+- `overrides` only replaces the React renderer of an included component, using that component's exact existing props; typecheck before using.
+- Declare the catalog once at module scope; avoid `extends: [standardUI]` when unused components increase the prompt surface.
+- https://docs.copilotkit.ai/generative-ui/components/standard-catalog → **ADAPT** selective omission and override semantics; https://github.com/CopilotKit/CopilotKit/blob/v1.84.1/packages/react-core/src/v2/generative-ui/catalog.ts → **REFERENCE ONLY** installed-version source; destination: existing MDE catalog *only if needed*; verify TypeScript, Inspector catalog and unsupported-name rejection.
 
 ## 3. Catalog scope and prompt-cost verification
 
@@ -62,7 +80,11 @@ Choose the smallest vocabulary supported by the **existing route-owner provider 
 - **Provider**: use the existing `src/components/copilot/copilot-kit-provider.tsx` and `src/components/chat/chat-provider.tsx` owners; share one stable domain catalog; no nested runtime/provider or hosted Intelligence switch.
 - **Release**: test 390px/keyboard, forged/stale IDs, user-edited controls, unknown component names, failed `render_ui`, old-turn results winning after a new turn, and existing card fallback.
 
-## 5. References with destinations and proof
+## 5. Theme built-ins only when used
+
+https://docs.copilotkit.ai/generative-ui/components/theming → **ADAPT** the typed `GenerativeUITheme` and provider `generativeUI.theme` configuration only for enabled standard components → the existing route-owner provider / MDE styling tokens (check `DESIGN.MD` and `src/app/globals.css`). **VERIFY:** typed `--a2ui-color-*`, `--a2ui-radius-*`, focus, dark/light mode and 390px layouts. Never add a second design system, and do not introduce generic charts/maps when existing MDE maps and domain cards suffice.
+
+## 6. References with destinations and proof
 
 - https://docs.copilotkit.ai/generative-ui/components/standard-catalog — **REFERENCE** the 69 built-ins, `standardUI`, input behaviors and MapLibre requirement; **destination**: catalog design decision; **proof**: count actual exposed components and check version-matched schemas.
 - https://docs.copilotkit.ai/generative-ui/components/catalogs — **ADAPT** `createGenerativeUI`, component schemas and optional `extends`; **destination**: `src/components/copilot/a2ui/mde-ui-catalog.tsx`; **proof**: TypeScript and unsupported-component tests.
