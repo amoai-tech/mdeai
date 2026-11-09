@@ -82,6 +82,6 @@ Use Inspector only in authorized development/QA. Debug endpoints/events may expo
 
 - **6.1 Focused tests:** valid/invalid schema; real/stale/forged IDs; missing values; concurrent searches; failed tool or `render_ui`; thread switching/refresh; guest and signed-in isolation; keyboard and 390px; existing tool renderer fallback.
 - **6.2 Real browser:** https://playwright.dev/docs/writing-tests → **ADAPT** existing MDE `e2e/` suites; capture one actual `render_ui` request/tool-event/UI display, screenshots and any errors. Do not use synthetic-only traces as production proof.
-- **4.3 Release:** focused tests → lint/typecheck → `npm run check:skills` → `npm run floor` once on exact final SHA → authorized staged browser validation. Attach test outputs and matching deployed SHA. No production certification based solely on doc changes.
+- **6.3 Release:** focused tests → lint/typecheck → `npm run check:skills` → `npm run floor` once on exact final SHA → authorized staged browser validation. Attach test outputs and matching deployed SHA. No production certification based solely on doc changes.
 
 **Do not change database schema, install other AG-UI renderers, copy the upstream shop's commerce stack, or add browser automation agents to satisfy an unproven UI problem.** If a real domain-level SQL gap is found, hand it to the appropriate MDE domain owner with targeted reviewed migration/RLS tests.
