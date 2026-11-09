@@ -24,6 +24,8 @@ import { RESTAURANT_CLARIFY_MESSAGE } from "@/lib/restaurant-clarify-copy";
 import { routerIntentSchema } from "@/lib/router-intent";
 import { buildConciergeChannels } from "./whatsapp-channels";
 import { shouldContinueVenueBookingAfterSearch } from "../lib/booking-continuation";
+import { shouldForceRouteTool } from "../lib/route-tool-choice";
+import { routeUnavailableOutputGuard } from "../lib/route-output-guard";
 
 export const conciergeWorkingMemorySchema = z.object({
   // One canonical enum for both deterministic routing and AI thread memory.
@@ -554,6 +556,10 @@ export const conciergeAgent = new Agent({
       shouldContinueVenueBookingAfterSearch({ stepNumber, messages, steps, requestContext })
         ? { toolChoice: { type: 'tool' as const, toolName: 'requestVenueBooking' } }
         : {} },
+    { id: 'san465-route-tool-choice', processInputStep: ({ stepNumber, messages, steps }) =>
+      shouldForceRouteTool({ stepNumber, messages, steps })
+        ? { toolChoice: { type: 'tool' as const, toolName: 'computeRouteTool' } }
+        : {} },
     { id: "san737-current-selected-name-history", processInput: ({ messages, requestContext }) =>
       currentSelectedNameOnly(messages, requestContext?.get("ag-ui")) },
     // SAN-1600 — an explicit comparison needs the previous item's record too, resolved
@@ -563,6 +569,9 @@ export const conciergeAgent = new Agent({
     { id: "san1600-verified-selection-facts", processInput: ({ messages, requestContext }) =>
       withVerifiedSelectionFacts(messages, requestContext?.get("ag-ui"), lookupPublicDiscoveryItemFromServer) },
   ],
+  // A failed Google route cannot become a model-estimated distance or ETA.
+  // This filters streaming text before CopilotKit renders it or memory saves it.
+  outputProcessors: [routeUnavailableOutputGuard],
   channels: buildConciergeChannels(),
   // PERF-002: 10-message window (was 20). Follow-up state lives in working memory
   // (lastRentalQuery/lastEventQuery/…), so a shorter raw-history replay cuts input

@@ -8,6 +8,7 @@ import {
   type RouteTravelMode,
 } from "../lib/google-routes-client";
 import { checkRateLimitDurable } from "@/lib/distributed-rate-limit";
+import { getAuditUserId } from "../lib/tool-audit-context";
 import { runAuditedTool } from "../lib/run-audited-search";
 
 const waypointSchema = z.union([
@@ -77,11 +78,52 @@ export const computeRouteTool = createTool({
           return { route: null, source: "google_routes" as const, reason: "route_unavailable" };
         }
         const today = new Date().toISOString().slice(0, 10);
+        const cache = (context as { requestContext?: { get: (key: string) => unknown; set: (key: string, value: unknown) => void } } | undefined)?.requestContext;
+        const cacheKey = JSON.stringify({ origin: input.origin, destination: input.destination, travelMode: input.travelMode ?? "WALK", includePolyline: input.includePolyline === true });
+        let cached:
+          | Record<string, { route: Awaited<ReturnType<typeof computeGoogleRoute>> }>
+          | undefined;
+        try {
+          cached = cache?.get("mdeaiRouteToolCache") as
+            | Record<string, { route: Awaited<ReturnType<typeof computeGoogleRoute>> }>
+            | undefined;
+        } catch {
+          // A broken RequestContext store is a cache miss, never a route failure.
+          cached = undefined;
+        }
+        if (cached?.[cacheKey]?.route) {
+          return { route: cached[cacheKey].route, source: "google_routes" as const };
+        }
+        const userId = getAuditUserId(context);
+        if (userId) {
+          const perUserRaw = process.env.ROUTES_DAILY_LIMIT_PER_USER;
+          const perUserCap = perUserRaw === undefined ? 20 : Number(perUserRaw);
+          if (!Number.isSafeInteger(perUserCap) || perUserCap <= 0) {
+            return { route: null, source: "google_routes" as const, reason: "route_quota_disabled" };
+          }
+          let userQuota;
+          try {
+            userQuota = await checkRateLimitDurable(
+              `routes-daily:${today}:${userId}`,
+              perUserCap,
+              86_400,
+            );
+          } catch {
+            return { route: null, source: "google_routes" as const, reason: "route_quota_unavailable" };
+          }
+          if (!userQuota.storeAvailable) {
+            return { route: null, source: "google_routes" as const, reason: "route_quota_unavailable" };
+          }
+          if (!userQuota.allowed) {
+            return { route: null, source: "google_routes" as const, reason: "route_quota_per_user_exceeded" };
+          }
+        }
+
+        // Only after the per-user check may the shared daily slot be consumed.
         let quota;
         try {
           quota = await checkRateLimitDurable(`routes-daily:${today}`, cap, 86_400);
         } catch {
-          // Network failures of the quota service cannot authorize paid calls.
           console.warn("[compute-route] route quota RPC transport unavailable");
           return { route: null, source: "google_routes" as const, reason: "route_quota_unavailable" };
         }
@@ -95,6 +137,14 @@ export const computeRouteTool = createTool({
 
         try {
           const route = await computeGoogleRoute(input);
+          if (route && cache) {
+            try {
+              cache.set("mdeaiRouteToolCache", { ...(cached ?? {}), [cacheKey]: { route } });
+            } catch {
+              // A paid route must still be returned when the cache write fails.
+              console.warn("[compute-route] route cache write failed");
+            }
+          }
           return route
             ? { route, source: "google_routes" as const }
             : { route: null, source: "google_routes" as const, reason: "route_unavailable" };

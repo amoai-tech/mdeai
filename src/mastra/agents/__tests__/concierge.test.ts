@@ -13,6 +13,27 @@ describe("conciergeAgent", () => {
     expect(conciergeAgent.id).toBe("concierge-agent");
   });
 
+  it("wires real route questions to the registered Google route tool", async () => {
+    const tools = await conciergeAgent.listTools();
+    expect(tools.computeRouteTool?.id).toBe("compute-route");
+    const configured = await conciergeAgent.listConfiguredInputProcessors();
+    const routeChoice = configured.find((processor) => processor.id === "san465-route-tool-choice") as
+      | { processInputStep: (input: { stepNumber: number; messages: unknown[]; steps: unknown[] }) => unknown }
+      | undefined;
+    expect(routeChoice).toBeDefined();
+    const user = (text: string) => ({ role: "user", content: { parts: [{ type: "text", text }] } });
+    expect(await routeChoice!.processInputStep({
+      stepNumber: 0,
+      messages: [user("Walk from Parque Lleras to Provenza")],
+      steps: [],
+    })).toEqual({ toolChoice: { type: "tool", toolName: "computeRouteTool" } });
+    expect(await routeChoice!.processInputStep({
+      stepNumber: 0,
+      messages: [user("Find apartments within walking distance of the Metro")],
+      steps: [],
+    })).toEqual({});
+  });
+
   it("registers all search tools including grounding and web events", async () => {
     const tools = await conciergeAgent.listTools();
     const toolIds = Object.values(tools).map((tool) => tool.id);
