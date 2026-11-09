@@ -9,6 +9,16 @@
   ],
   "consumers": [
     {
+      "file": "src/components/host/rentals/__tests__/broker-chat-view-submit.test.tsx",
+      "classification": "test-only",
+      "note": "Mocks the existing CopilotChat v2 view to prove broker composer submissions are marked as local sends without marking restored history."
+    },
+    {
+      "file": "src/components/chat/__tests__/broker-thread-saver.test.tsx",
+      "classification": "test-only",
+      "note": "Mocks useAgent/UseAgentUpdate to prove the broker chat persists finished turns; no runtime CopilotKit import."
+    },
+    {
       "file": "src/lib/copilotkit-client-props.ts",
       "classification": "migrate",
       "step": 9,
@@ -383,6 +393,21 @@
       "file": "src/components/chat/event-a2ui-context.tsx",
       "classification": "keep",
       "note": "SAN-1630 EventCard: v2 useAgentContext publishes only the most recent authorized event UUIDs; the catalog revalidates every ID against authorized results and rejects forged/cross-thread IDs."
+    },
+    {
+      "file": "src/components/copilot/a2ui/__tests__/nearby-guest-guard.test.tsx",
+      "classification": "test-only",
+      "note": "SAN-106: mocks the v2 agent hook to prove guests never see the billable Nearby CTA, while signed-in renters do."
+    },
+    {
+      "file": "src/components/browse/page-filter-tools.tsx",
+      "classification": "keep",
+      "note": "SAN-1631 uses the installed v2 `useFrontendTool` API to update existing Rentals/Events page filters; no provider or agent is added."
+    },
+    {
+      "file": "src/components/browse/__tests__/page-filter-tools.test.tsx",
+      "classification": "test-only",
+      "note": "SAN-1631 verifies the two page tool registrations and their existing URL builders."
     }
   ]
 }

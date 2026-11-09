@@ -1,7 +1,13 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
+vi.mock("../../lib/google-places-cafe-search", () => ({
+  searchGoogleCafes: vi.fn().mockResolvedValue({ results: [], attribution: [] }),
+  withMedellinScope: (query: string) => `${query} Medellín, Colombia`,
+}));
+
 vi.mock("../../lib/adk-grounding-client", () => ({
   invokeAdkGrounding: vi.fn(),
+  isAdkGroundingConfigured: vi.fn(() => true),
 }));
 
 vi.mock("../../lib/grounding-quota", () => ({
@@ -33,13 +39,16 @@ vi.mock("../search-venue-anchors", () => ({
   })),
 }));
 
-import { invokeAdkGrounding } from "../../lib/adk-grounding-client";
+import { invokeAdkGrounding, isAdkGroundingConfigured } from "../../lib/adk-grounding-client";
+import { incrementAndCheckGroundingQuota } from "../../lib/grounding-quota";
+import { searchGoogleCafes } from "../../lib/google-places-cafe-search";
 import { searchRestaurants } from "../search-restaurants";
 import { searchGroundedPlacesTool } from "../search-grounded-places";
 import { adkUnavailableMock } from "./grounded-places-test-helpers";
 
 type GroundedOut = {
-  results: { title?: string; placeId?: string; latitude?: number; longitude?: number }[];
+  results: { title?: string; placeId?: string; latitude?: number; longitude?: number; sourceMode?: string }[];
+  attribution: { source: string; placeUri: string; title?: string }[];
   source: string;
   metadata?: Record<string, unknown>;
 };
@@ -77,6 +86,9 @@ describe("searchGroundedPlacesTool fallback", () => {
   beforeEach(() => {
     vi.mocked(invokeAdkGrounding).mockReset();
     vi.mocked(searchRestaurants).mockReset();
+    vi.mocked(searchGoogleCafes).mockReset().mockResolvedValue({ results: [], attribution: [] });
+    vi.mocked(isAdkGroundingConfigured).mockReturnValue(true);
+    vi.mocked(incrementAndCheckGroundingQuota).mockClear();
   });
 
   it("GM-P0-06 returns curated fallback when ADK unavailable (403)", async () => {
@@ -94,6 +106,103 @@ describe("searchGroundedPlacesTool fallback", () => {
     expect(out.results.length).toBeGreaterThan(0);
     expect(out.results[0]?.title).toBe("Pergamino Café");
     expect(out.results[0]?.latitude).toBe(6.2489);
+    expect(out.metadata?.fallback).toBe("curated");
+    expect(out.results[0]?.sourceMode).toBe("demo_fixture");
+  });
+
+  it("returns real Google Places cafés before invoking ADK", async () => {
+    vi.mocked(searchGoogleCafes).mockResolvedValue({
+      results: [{
+        id: "google-ChIJRituales",
+        title: "Rituales Compañía de Café",
+        placeId: "ChIJRituales",
+        latitude: 6.2489,
+        longitude: -75.5843,
+        mapsUrl: "https://maps.google.com/?cid=999",
+        sourceMode: "google_places",
+        primaryType: "coffee_shop",
+      }, {
+        id: "google-ChIJBarLounge",
+        title: "Café Bar & Lounge",
+        placeId: "ChIJBarLounge",
+        latitude: 6.25,
+        longitude: -75.59,
+        mapsUrl: "https://maps.google.com/?cid=1000",
+        sourceMode: "google_places",
+        primaryType: "coffee_shop",
+      }],
+      attribution: [
+        { source: "Google Maps", placeUri: "https://maps.google.com/?cid=999", title: "Rituales Compañía de Café" },
+        { source: "Google Maps", placeUri: "https://maps.google.com/?cid=1000", title: "Café Bar & Lounge" },
+      ],
+    });
+
+    const out = await runGrounded("quiet cafés in Laureles", "cafe");
+
+    expect(out.results[0]).toMatchObject({
+      title: "Rituales Compañía de Café",
+      placeId: "ChIJRituales",
+      sourceMode: "google_places",
+    });
+    expect(out.metadata?.provider).toBe("google_places");
+    expect(out.attribution).toHaveLength(1);
+    expect(out.attribution[0]?.title).toBe("Rituales Compañía de Café");
+    expect(searchGoogleCafes).toHaveBeenCalledWith(
+      expect.objectContaining({ query: expect.stringMatching(/quiet cafés in Laureles Medellín, Colombia/) }),
+    );
+    expect(vi.mocked(searchGoogleCafes).mock.calls[0]?.[0]?.query).not.toMatch(/Exclude bar|Prefer cafés/);
+    expect(invokeAdkGrounding).not.toHaveBeenCalled();
+  });
+
+  it("reports an empty Google result separately from an outage", async () => {
+    vi.mocked(searchGoogleCafes).mockResolvedValue({ results: [], attribution: [] });
+    vi.mocked(searchRestaurants).mockResolvedValue({ results: [], total: 0, source: "supabase" });
+
+    const out = await runGrounded("quiet cafés in Laureles", "cafe");
+
+    expect(out.metadata?.reason).toBe("google_places_empty");
+    expect(out.metadata?.fallback).toBe("curated");
+  });
+
+  it("does not consume quota or call ADK when no endpoint is configured", async () => {
+    vi.mocked(isAdkGroundingConfigured).mockReturnValue(false);
+    vi.mocked(searchRestaurants).mockResolvedValue({ results: [], total: 0, source: "supabase" });
+
+    const out = await runGrounded("rooftop dinner in Provenza");
+
+    expect(out.metadata?.reason).toBe("adk_not_configured");
+    expect(incrementAndCheckGroundingQuota).not.toHaveBeenCalled();
+    expect(invokeAdkGrounding).not.toHaveBeenCalled();
+  });
+
+  it("returns an empty result if catalog lookup fails with no ADK configured", async () => {
+    vi.mocked(isAdkGroundingConfigured).mockReturnValue(false);
+    vi.mocked(searchRestaurants).mockRejectedValue(new Error("db down"));
+
+    const out = await runGrounded("rooftop dinner in Provenza");
+
+    expect(out.results).toEqual([]);
+    expect(out.metadata?.reason).toBe("adk_not_configured");
+    expect(incrementAndCheckGroundingQuota).not.toHaveBeenCalled();
+  });
+
+  it("labels real Supabase fallback rows as saved catalog, not live Google", async () => {
+    vi.mocked(invokeAdkGrounding).mockResolvedValue(
+      adkUnavailableMock({ reason: "adk_unavailable", status: 503 }),
+    );
+    vi.mocked(searchRestaurants).mockResolvedValue({
+      results: [{ ...cafeRow, rating: undefined, latitude: undefined, longitude: undefined, placeId: null, mapsUrl: null }],
+      total: 1,
+      source: "supabase",
+    });
+    const out = await runGrounded("specialty coffee Laureles");
+
+    expect(out.results[0]).toMatchObject({
+      title: "Pergamino Café",
+      sourceMode: "saved_catalog",
+    });
+    expect(out.results[0]?.latitude).toBeUndefined();
+    expect(out.results[0]?.placeId).toBeUndefined();
     expect(out.metadata?.fallback).toBe("curated");
   });
 

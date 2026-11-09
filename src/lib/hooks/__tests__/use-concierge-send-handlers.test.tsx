@@ -10,10 +10,17 @@ import { createRoot, type Root } from "react-dom/client";
 
 const chat = vi.hoisted(() => ({ appendMessage: vi.fn(), runtimeUnavailable: false, waitForRuntimeReady: vi.fn() }));
 const coagent = vi.hoisted(() => ({ state: {} as Record<string, unknown> }));
+const mapState = vi.hoisted(() => ({ selectedPinId: null as string | null, pins: [] as Array<{ id: string; category: string }> }));
+const groundedCtx = vi.hoisted(() => ({ toolResult: null as unknown }));
+const richShown = vi.hoisted(() => ({ ids: [] as string[] }));
+vi.mock("@/components/chat/rich-card-results-context", () => ({
+  useOptionalRichCardResults: () => ({ groundedShownIds: richShown.ids }),
+}));
+
 vi.mock("@/lib/chat/thread-nav-context", () => ({
   useOptionalThreadNav: () => ({ activeThreadId: "thread-b", sessionThreadId: "thread-b" }),
 }));
-const session = vi.hoisted(() => ({ user: { id: "u1" } as { id: string } | null, loading: false }));
+const session = vi.hoisted(() => ({ user: { id: "u1" } as { id: string; is_anonymous?: boolean } | null, loading: false }));
 vi.mock("@/hooks/use-session", () => ({ useSession: () => session }));
 const supa = vi.hoisted(() => ({ getUser: vi.fn() }));
 vi.mock("@/lib/supabase/client", () => ({ createClient: () => ({ auth: { getUser: supa.getUser } }) }));
@@ -26,17 +33,25 @@ vi.mock("@/components/chat/concierge-coagent-context", () => ({
 }));
 // The fast-path searches are not under test here.
 const noMatch = vi.hoisted(() => ({ handleUserMessage: async () => false }));
-vi.mock("@/hooks/use-event-search-fast-path", () => ({ useEventSearchFastPath: () => noMatch }));
+const eventFast = vi.hoisted(() => ({
+  handleUserMessage: async () => false,
+  activeEventId: null as string | null,
+  activeEventRows: [] as Array<{ id: string; title: string }>,
+}));
+vi.mock("@/hooks/use-event-search-fast-path", () => ({ useEventSearchFastPath: () => eventFast }));
 vi.mock("@/hooks/use-event-venue-booking-fast-path", () => ({ useEventVenueBookingFastPath: () => noMatch }));
-vi.mock("@/hooks/use-grounded-search-fast-path", () => ({ useGroundedSearchFastPath: () => noMatch }));
+const groundedNearby = vi.hoisted(() => ({ handleUserMessage: vi.fn(async () => true) }));
+vi.mock("@/hooks/use-grounded-search-fast-path", () => ({ useGroundedSearchFastPath: () => groundedNearby }));
+vi.mock("@/platform/maps/map-context", () => ({ useOptionalMapContext: () => mapState }));
+vi.mock("@/components/chat/grounded-fast-path-context", () => ({ useGroundedFastPath: () => groundedCtx }));
 vi.mock("@/hooks/use-rental-search-fast-path", () => ({ useRentalSearchFastPath: () => noMatch }));
 vi.mock("@/hooks/use-restaurant-search-fast-path", () => ({ useRestaurantSearchFastPath: () => noMatch }));
 
 import { EventLocalChatProvider, useEventLocalChat } from "@/components/chat/event-local-chat-context";
 import { SIGN_IN_REQUIRED_MESSAGE } from "@/lib/concierge-sign-in-message";
-import { clearConciergeError, reportConciergeError } from "@/lib/concierge-error-store";
+import { clearConciergeError, getConciergeErrorForThread, reportConciergeError } from "@/lib/concierge-error-store";
 import { AGENT_UNAVAILABLE_MESSAGE, useConciergeSendHandlers } from "@/lib/hooks/use-concierge-send-handlers";
-import type { ConciergeSendHandlers } from "@/lib/concierge-send-user-message";
+import { sendConciergeUserMessage, type ConciergeSendHandlers } from "@/lib/concierge-send-user-message";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -62,9 +77,16 @@ beforeEach(() => {
   chat.runtimeUnavailable = false;
   chat.waitForRuntimeReady.mockImplementation(async () => !chat.runtimeUnavailable);
   coagent.state = {};
+  mapState.selectedPinId = null;
+  mapState.pins = [];
+  groundedCtx.toolResult = null;
+  richShown.ids = [];
+  eventFast.activeEventId = null;
+  eventFast.activeEventRows = [];
   session.user = { id: "u1" };
   session.loading = false;
   supa.getUser.mockReset();
+  groundedNearby.handleUserMessage.mockResolvedValue(true);
   window.sessionStorage.clear();
   clearConciergeError();
   vi.spyOn(console, "error").mockImplementation(() => {});
@@ -255,6 +277,175 @@ describe("SAN-407 · INT-004 — is the conversation in a rental search?", () =>
 
 // SAN-1507 — a signed-out visitor's AI question got "The assistant can't answer right now. Please try
 // again", although the runtime refuses guests on purpose and a retry can never work.
+describe("SAN-106 guest Nearby chat routing", () => {
+  const text = "Show cafés within 800 meters of this apartment";
+  const rerender = () => act(() => root.render(<EventLocalChatProvider><Harness /></EventLocalChatProvider>));
+
+  it("offers sign-in rather than sending a selected-rental Nearby request or retrying 401", async () => {
+    session.user = null;
+    rerender();
+    let handled: boolean | undefined;
+    await act(async () => { handled = await sendConciergeUserMessage(text, handlers); });
+    expect(handled).toBe(true);
+    expect(groundedNearby.handleUserMessage).not.toHaveBeenCalled();
+    expect(chat.appendMessage).not.toHaveBeenCalled();
+    expect(promptShown).toBe(true);
+    expect(getConciergeErrorForThread("thread-b").version).toBe(0);
+    expect(shown.map((m) => ({ role: m.role, content: m.content }))).toEqual([{ role: "user", content: text }]);
+  });
+
+  it("shows sign-in during an unresolved session without a billable Nearby request", async () => {
+    session.user = null;
+    session.loading = true;
+    supa.getUser.mockResolvedValue({ data: { user: null } });
+    rerender();
+    await act(async () => { expect(await sendConciergeUserMessage(text, handlers)).toBe(true); });
+    expect(groundedNearby.handleUserMessage).not.toHaveBeenCalled();
+    expect(supa.getUser).toHaveBeenCalledOnce();
+    expect(promptShown).toBe(true);
+  });
+
+  it("rejects anonymous Supabase identities while keeping a visible sign-in prompt", async () => {
+    session.user = { id: "temporary-user", is_anonymous: true };
+    rerender();
+    await act(async () => { expect(await sendConciergeUserMessage(text, handlers)).toBe(true); });
+    expect(groundedNearby.handleUserMessage).not.toHaveBeenCalled();
+    expect(chat.appendMessage).not.toHaveBeenCalled();
+    expect(promptShown).toBe(true);
+  });
+
+  it("keeps contextual Nearby on the grounded fast path for signed-in users", async () => {
+    await act(async () => { expect(await sendConciergeUserMessage(text, handlers)).toBe(true); });
+    expect(groundedNearby.handleUserMessage).toHaveBeenCalledWith(text, expect.any(String));
+    expect(chat.appendMessage).not.toHaveBeenCalled();
+    expect(promptShown).toBe(false);
+  });
+
+  it("keeps general café search public for signed-out users", async () => {
+    session.user = null;
+    rerender();
+    const general = "best cafes in Laureles";
+    await act(async () => { expect(await handlers.handleGroundedMessage(general)).toBe(true); });
+    expect(groundedNearby.handleUserMessage).toHaveBeenCalledWith(general, undefined);
+    expect(promptShown).toBe(false);
+  });
+});
+
+describe("deterministic grounded ranking is limited to the shown result set and current anchor", () => {
+  const A = "37a05b09-f560-4776-92fd-b8bb2b92e611";
+  const B = "e404023e-ad2f-4446-896d-e085ecdacaf1";
+  const rows = [{ id: "cafe-a", title: "típica tiendas", distanceMeters: 36, distanceFromRentalId: A }];
+  const rerender = () => act(() => root.render(<EventLocalChatProvider><Harness /></EventLocalChatProvider>));
+
+  it("falls through when the map selection is a different apartment", async () => {
+    coagent.state = { selectedListingId: A, lastGroundedResults: rows, lastIntent: "restaurant_discovery" };
+    groundedCtx.toolResult = { source: "grounding", results: [{ id: "cafe-a" }] };
+    mapState.selectedPinId = `rental-${B}`;
+    mapState.pins = [{ id: `rental-${B}`, category: "rental" }];
+    rerender();
+    await act(async () => { expect(await handlers.handleGroundedMessage("Which café is closest?")).toBe(true); });
+    expect(groundedNearby.handleUserMessage).toHaveBeenCalled();
+    expect(shown.some((m) => /típica tiendas is the closest/i.test(m.content))).toBe(false);
+  });
+
+  it("falls through when a restaurant search cleared the grounded panel", async () => {
+    coagent.state = { selectedListingId: A, lastGroundedResults: rows };
+    groundedCtx.toolResult = null;
+    mapState.selectedPinId = null;
+    mapState.pins = [];
+    rerender();
+    await act(async () => { expect(await handlers.handleGroundedMessage("Which café is closest?")).toBe(true); });
+    expect(groundedNearby.handleUserMessage).toHaveBeenCalled();
+    expect(shown.some((m) => /típica tiendas is the closest/i.test(m.content))).toBe(false);
+  });
+
+  it("answers unknown for Wi-Fi instead of inferring amenities", async () => {
+    coagent.state = {
+      selectedListingId: A,
+      lastGroundedResults: [{ id: "cafe-a", title: "Café Euge", distanceMeters: 36, distanceFromRentalId: A }],
+    };
+    mapState.selectedPinId = null;
+    mapState.pins = [];
+    groundedCtx.toolResult = { source: "grounding", results: [{ id: "cafe-a" }] };
+    rerender();
+    await act(async () => { expect(await sendConciergeUserMessage("Which café has reliable Wi-Fi?", handlers)).toBe(true); });
+    expect(groundedNearby.handleUserMessage).not.toHaveBeenCalled();
+    expect(shown.some((m) => m.role === "assistant" && /don't have verified amenity/i.test(m.content))).toBe(true);
+    expect(chat.appendMessage).not.toHaveBeenCalled();
+    expect(shown.some((m) => m.role === "assistant" && /reliable Wi-Fi|has Wi-Fi/i.test(m.content))).toBe(false);
+  });
+
+  it("does not answer from co-agent rows when no grounded cards are shown", async () => {
+    coagent.state = { lastGroundedResults: [{ id: "cafe-a", title: "Old Café" }] };
+    groundedCtx.toolResult = { source: "grounding", results: [{ id: "restaurant-new" }] };
+    chat.appendMessage.mockResolvedValue(true);
+    rerender();
+    await act(async () => { expect(await sendConciergeUserMessage("Which café has Wi-Fi?", handlers)).toBe(true); });
+    expect(shown.some((m) => /don't have verified amenity/i.test(m.content))).toBe(false);
+    expect(chat.appendMessage).toHaveBeenCalledOnce();
+  });
+
+  it("recognizes the current Mastra-rendered IDs without a fast-path tool result", async () => {
+    coagent.state = { lastGroundedResults: [{ id: "cafe-a", title: "Café Euge" }] };
+    richShown.ids = ["cafe-a"];
+    groundedCtx.toolResult = null;
+    rerender();
+    await act(async () => { expect(await sendConciergeUserMessage("Which of these has Wi-Fi?", handlers)).toBe(true); });
+    expect(shown.some((m) => /don't have verified amenity/i.test(m.content))).toBe(true);
+    expect(chat.appendMessage).not.toHaveBeenCalled();
+  });
+
+  it("does not hijack apartment Wi-Fi questions while cafés are still in memory", async () => {
+    coagent.state = { lastGroundedResults: [{ id: "cafe-a", title: "Café Euge" }] };
+    groundedCtx.toolResult = { source: "grounding", results: [{ id: "cafe-a" }] };
+    chat.appendMessage.mockResolvedValue(true);
+    rerender();
+    await act(async () => { expect(await sendConciergeUserMessage("Does the apartment have Wi-Fi?", handlers)).toBe(true); });
+    expect(shown.some((m) => /don't have verified amenity/i.test(m.content))).toBe(false);
+    expect(await handlers.handleGroundedAmenityFollowUp?.("Does the apartment have Wi-Fi?")).toBe(false);
+  });
+
+  it("protects a Spanish current-café Wi-Fi question before the agent", async () => {
+    coagent.state = { lastGroundedResults: [{ id: "cafe-a", title: "Café Euge" }] };
+    groundedCtx.toolResult = { source: "grounding", results: [{ id: "cafe-a" }] };
+    rerender();
+    await act(async () => { expect(await sendConciergeUserMessage("¿Cuál tiene buen Wi-Fi?", handlers)).toBe(true); });
+    expect(shown.some((m) => /don't have verified amenity/i.test(m.content))).toBe(true);
+    expect(chat.appendMessage).not.toHaveBeenCalled();
+  });
+
+  it("does not block a brand-new cafe Wi-Fi discovery query", async () => {
+    coagent.state = { lastGroundedResults: [{ id: "cafe-a", title: "Café Euge" }] };
+    groundedCtx.toolResult = { source: "grounding", results: [{ id: "cafe-a" }] };
+    rerender();
+    const question = "Are there cafés with Wi-Fi in Laureles?";
+    await act(async () => { expect(await sendConciergeUserMessage(question, handlers)).toBe(true); });
+    expect(shown.some((m) => /don't have verified amenity/i.test(m.content))).toBe(false);
+    expect(groundedNearby.handleUserMessage).toHaveBeenCalled();
+  });
+
+  it("preserves real Wi-Fi facts rather than returning the unknown response", async () => {
+    coagent.state = { lastGroundedResults: [{ id: "cafe-a", title: "Café Euge", wifi: false }] };
+    groundedCtx.toolResult = { source: "grounding", results: [{ id: "cafe-a" }] };
+    chat.appendMessage.mockResolvedValue(true);
+    rerender();
+    await act(async () => { expect(await sendConciergeUserMessage("Which café has Wi-Fi?", handlers)).toBe(true); });
+    expect(shown.some((m) => /don't have verified amenity/i.test(m.content))).toBe(false);
+    expect(chat.appendMessage).toHaveBeenCalledOnce();
+  });
+
+  it("answers deterministically when the shown rows belong to the current map anchor", async () => {
+    coagent.state = { selectedListingId: A, lastGroundedResults: rows };
+    groundedCtx.toolResult = { source: "grounding", results: [{ id: "cafe-a" }] };
+    mapState.selectedPinId = `rental-${A}`;
+    mapState.pins = [{ id: `rental-${A}`, category: "rental" }];
+    rerender();
+    await act(async () => { expect(await handlers.handleGroundedMessage("Which café is closest?")).toBe(true); });
+    expect(groundedNearby.handleUserMessage).not.toHaveBeenCalled();
+    expect(shown.some((m) => /típica tiendas is the closest, about 36 m/i.test(m.content))).toBe(true);
+  });
+});
+
 describe("onAgentSend for a signed-out visitor", () => {
   const rerender = () =>
     act(() =>
@@ -335,4 +526,44 @@ describe("onAgentSend for a signed-out visitor", () => {
       expect(promptShown).toBe(true);
     });
   });
+
+  it("confirms only after the exact Quick view opens", async () => {
+    eventFast.activeEventId = "a1b2c3d4-0001-0001-0001-000000000003";
+    eventFast.activeEventRows = [{ id: eventFast.activeEventId, title: "Feria de las Flores" }];
+    act(() => root.render(<EventLocalChatProvider><Harness /></EventLocalChatProvider>));
+    const onRecovery = (event: Event) => {
+      const detail = (event as CustomEvent<{ requestId?: string }>).detail;
+      window.dispatchEvent(new CustomEvent("mde:event-card-recovery-result", {
+        detail: { requestId: detail?.requestId, opened: true },
+      }));
+    };
+    window.addEventListener("mde:event-card-recovery", onRecovery);
+    await act(async () => {
+      await handlers.onAgentSend("Show the first event as a card.");
+    });
+    window.removeEventListener("mde:event-card-recovery", onRecovery);
+    expect(chat.appendMessage).not.toHaveBeenCalled();
+    expect(shown).toContainEqual(expect.objectContaining({ role: "assistant", content: "Here is the event card." }));
+  });
+
+  it("falls through to the model when the card does not open", async () => {
+    eventFast.activeEventId = "a1b2c3d4-0001-0001-0001-000000000003";
+    eventFast.activeEventRows = [{ id: eventFast.activeEventId, title: "Feria de las Flores" }];
+    act(() => root.render(<EventLocalChatProvider><Harness /></EventLocalChatProvider>));
+    chat.appendMessage.mockResolvedValue(true);
+    const onRecovery = (event: Event) => {
+      const detail = (event as CustomEvent<{ requestId?: string }>).detail;
+      window.dispatchEvent(new CustomEvent("mde:event-card-recovery-result", {
+        detail: { requestId: detail?.requestId, opened: false },
+      }));
+    };
+    window.addEventListener("mde:event-card-recovery", onRecovery);
+    await act(async () => {
+      await handlers.onAgentSend("Show the first event as a card.");
+    });
+    window.removeEventListener("mde:event-card-recovery", onRecovery);
+    expect(chat.appendMessage).toHaveBeenCalledTimes(1);
+    expect(shown.some((message) => message.content === "Here is the event card.")).toBe(false);
+  });
+
 });

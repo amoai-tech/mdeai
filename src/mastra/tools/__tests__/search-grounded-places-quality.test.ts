@@ -173,3 +173,23 @@ describe("search-grounded-places café quality filter", () => {
     ]);
   });
 });
+
+describe("SAN-106 Nearby tool input validation", () => {
+  const rentalId = "550e8400-e29b-41d4-a716-446655440000";
+  it("accepts an authenticated/visible rental UUID with a bounded radius", () => {
+    const result = searchGroundedPlacesInputSchema.safeParse({
+      query: "Show cafés near this apartment", intent: "cafe",
+      nearbyRentalId: rentalId, nearbyRadiusMeters: 800, pageSize: 5,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects invented listing IDs and unbounded search radii", () => {
+    expect(searchGroundedPlacesInputSchema.safeParse({
+      query: "cafés", nearbyRentalId: "Laureles apartment",
+    }).success).toBe(false);
+    expect(searchGroundedPlacesInputSchema.safeParse({
+      query: "cafés", nearbyRentalId: rentalId, nearbyRadiusMeters: 90_000,
+    }).success).toBe(false);
+  });
+});

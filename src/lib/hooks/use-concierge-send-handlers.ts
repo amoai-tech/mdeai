@@ -8,12 +8,72 @@ import { getConciergeErrorForThread, reportConciergeError } from "@/lib/concierg
 import { useOptionalThreadNav } from "@/lib/chat/thread-nav-context";
 import { useConciergeChat } from "@/lib/hooks/use-concierge-chat";
 import type { ConciergeSendHandlers } from "@/lib/concierge-send-user-message";
+
+/**
+ * Ask the mounted event results to open Quick view for one event, and report whether it
+ * actually opened. Bounded so a chat turn can never wait on a missing listener: after
+ * the timeout the caller falls through to the model instead of confirming a no-op.
+ */
+const EVENT_CARD_RECOVERY_EVENT = "mde:event-card-recovery";
+const EVENT_CARD_RECOVERY_RESULT = "mde:event-card-recovery-result";
+const EVENT_CARD_RECOVERY_TIMEOUT_MS = 1_800;
+
+/** True when any A2UI event card is already on screen (the model answered with a card). */
+export function hasRenderedEventCard(): boolean {
+  if (typeof document === "undefined") return false;
+  return Boolean(document.querySelector('[data-testid="a2ui-event-card"]'));
+}
+
+export function requestEventCardRecovery(
+  eventId: string,
+  timeoutMs = EVENT_CARD_RECOVERY_TIMEOUT_MS,
+  options: { anyCardBefore?: number } = {},
+): Promise<boolean> {
+  if (typeof window === "undefined") return Promise.resolve(false);
+  const requestId = `${eventId}:${crypto.randomUUID()}`;
+  return new Promise<boolean>((resolve) => {
+    let settled = false;
+    const finish = (opened: boolean) => {
+      if (settled) return;
+      settled = true;
+      window.removeEventListener(EVENT_CARD_RECOVERY_RESULT, onResult as EventListener);
+      window.clearTimeout(timer);
+      resolve(opened);
+    };
+    const onResult = (event: Event) => {
+      const detail = (event as CustomEvent<{ requestId?: unknown; opened?: unknown }>).detail;
+      if (detail?.requestId !== requestId) return;
+      finish(detail.opened === true);
+    };
+    const timer = window.setTimeout(() => finish(false), timeoutMs);
+    window.addEventListener(EVENT_CARD_RECOVERY_RESULT, onResult as EventListener);
+    window.dispatchEvent(
+      new CustomEvent(EVENT_CARD_RECOVERY_EVENT, {
+        detail: { eventId, requestId, anyCardBefore: options.anyCardBefore },
+      }),
+    );
+  });
+}
+
 import { useEventSearchFastPath } from "@/hooks/use-event-search-fast-path";
+import { isEventCardRenderRequest, resolveExplicitEventRequest } from "@/lib/event-search-fast-path";
+import { useOptionalEventSearchResults } from "@/components/chat/event-search-results-context";
 import { useEventVenueBookingFastPath } from "@/hooks/use-event-venue-booking-fast-path";
 import { useGroundedSearchFastPath } from "@/hooks/use-grounded-search-fast-path";
 import { useRentalSearchFastPath } from "@/hooks/use-rental-search-fast-path";
 import { useRestaurantSearchFastPath } from "@/hooks/use-restaurant-search-fast-path";
 import { useSession } from "@/hooks/use-session";
+import { isSelectedRentalCafeNearbyRequest } from "@/lib/cafe-search-fast-path";
+import { closestGroundedResult, parseGroundedRankQuestion } from "@/lib/closest-grounded-result";
+import {
+  GROUNDED_AMENITY_UNKNOWN_MESSAGE,
+  hasExplicitAmenity,
+  isGroundedAmenityQuestion,
+} from "@/lib/grounded-amenity-guard";
+import { normalizeToolEnvelope } from "@/lib/normalize-tool-envelope";
+import { useOptionalMapContext } from "@/platform/maps/map-context";
+import { useGroundedFastPath } from "@/components/chat/grounded-fast-path-context";
+import { useOptionalRichCardResults } from "@/components/chat/rich-card-results-context";
 import { createClient } from "@/lib/supabase/client";
 import { stashConciergeDraft } from "@/lib/concierge-draft-store";
 
@@ -28,8 +88,11 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
   const threadId = nav?.activeThreadId ?? nav?.sessionThreadId;
   const { showExchange, showNotice, showSignInPrompt } = useEventLocalChat();
   const { state } = useConciergeCoAgent();
+  const map = useOptionalMapContext();
+  const { toolResult } = useGroundedFastPath();
+  const groundedShownIds = useOptionalRichCardResults()?.groundedShownIds;
   const { user, loading: sessionLoading } = useSession();
-  const signedIn = Boolean(user);
+  const signedIn = Boolean(user && !user.is_anonymous);
   // The rental hook can need the agent for a message it queued while a search was running and then
   // could not answer; `onAgentSend` is defined below, so it is reached through a ref.
   const agentSendRef = useRef<((text: string) => Promise<boolean>) | null>(null);
@@ -39,11 +102,92 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
       return (await agentSendRef.current?.(text)) ?? false;
     },
   });
-  const { handleUserMessage: handleEventMessage } = useEventSearchFastPath();
+  const { handleUserMessage: handleEventMessage, activeEventId, activeEventRows } = useEventSearchFastPath();
+  const eventResultsContext = useOptionalEventSearchResults();
   const { handleUserMessage: handleRestaurantMessage } =
     useRestaurantSearchFastPath();
-  const { handleUserMessage: handleGroundedMessage } =
+  const { handleUserMessage: handleGroundedFastPathMessage } =
     useGroundedSearchFastPath();
+  // The composer already knows this session. Decline contextual Nearby for
+  // guests before the billable route, allowing the existing Concierge agent
+  // fallback to show its sign-in prompt instead of retrying a guaranteed 401.
+  const handleGroundedAmenityFollowUp = useCallback(
+    (text: string, submissionId?: string): Promise<boolean> => {
+      if (!isGroundedAmenityQuestion(text)) return Promise.resolve(false);
+      const remembered = (state as {
+        lastGroundedResults?: Array<Record<string, unknown> & { id: string }>;
+      } | undefined)?.lastGroundedResults;
+      const displayed = (normalizeToolEnvelope(toolResult).results ?? []) as Array<{ id?: unknown }>;
+      // Both fast-path and Mastra tool-rendered cards can own current rows.
+      const displayedIds = new Set<unknown>([...(groundedShownIds ?? []), ...displayed.map((row) => row.id)]);
+      // A subsequent search can replace cards without clearing co-agent memory.
+      if (!remembered?.length || !displayedIds.size ||
+          !remembered.every((row) => displayedIds.has(row.id))) {
+        return Promise.resolve(false);
+      }
+      if (hasExplicitAmenity(remembered, text)) return Promise.resolve(false);
+      showExchange(text, GROUNDED_AMENITY_UNKNOWN_MESSAGE, submissionId);
+      return Promise.resolve(true);
+    },
+    [state, toolResult, groundedShownIds, showExchange],
+  );
+
+  const handleGroundedMessage = useCallback(
+    (text: string, submissionId?: string): Promise<boolean> => {
+      if (isGroundedAmenityQuestion(text)) {
+        return handleGroundedAmenityFollowUp(text, submissionId).then((handled) =>
+          handled || handleGroundedFastPathMessage(text, submissionId));
+      }
+      // Closest/nearest answers come from measured data, not another model turn.
+      // This prevents invented distances and raw Place IDs in the reply.
+      const groundedMemory = state as
+        | { lastGroundedResults?: Parameters<typeof closestGroundedResult>[0]; selectedListingId?: string }
+        | undefined;
+      const rank = parseGroundedRankQuestion(text);
+      const rows = groundedMemory?.lastGroundedResults;
+      // Only rank the result set currently on screen. A restaurant search clears
+      // this context; ranking old rows after that would answer the wrong panel.
+      const displayed = (normalizeToolEnvelope(toolResult).results ?? []) as Array<{ id?: unknown }>;
+      const displayedIds = new Set(displayed.map((row) => row.id));
+      const rowsBelongToDisplay =
+        Boolean(rows?.length) && rows!.every((row) => displayedIds.has(row.id));
+      // Map context is the freshest selection. If a rental pin is selected, use
+      // it; without one, keep the working-memory selection.
+      const selectedRentalPin = map?.pins.some(
+        (pin) => pin.id === map.selectedPinId && pin.category === "rental",
+      );
+      const reconciledListingId =
+        selectedRentalPin && map?.selectedPinId
+          ? map.selectedPinId.replace(/^rental-/, "")
+          : groundedMemory?.selectedListingId;
+      const ranked = rank && rowsBelongToDisplay
+        ? closestGroundedResult(rows, reconciledListingId, rank)
+        : null;
+      // No matching anchor or measured row: fall through so a new Nearby search
+      // (or the agent) can run instead of answering from stale rows.
+      if (rank && ranked) {
+        const label = rank === "farthest" ? "farthest" : "closest";
+        const message = ranked.partial
+          ? `Among the places with a measured distance, ${ranked.title} is ${label} — about ${ranked.distanceMeters} m away (straight-line).`
+          : `${ranked.title} is the ${label}, about ${ranked.distanceMeters} m away (straight-line).`;
+        showExchange(text, message, submissionId);
+        return Promise.resolve(true);
+      }
+      if (isSelectedRentalCafeNearbyRequest(text) && !signedIn) {
+        return Promise.resolve(false);
+      }
+      return handleGroundedFastPathMessage(text, submissionId);
+    },
+    [
+      handleGroundedFastPathMessage,
+      handleGroundedAmenityFollowUp,
+      signedIn,
+      state,
+      showExchange,
+      map,
+      toolResult,
+    ],
+  );
   const { handleUserMessage: handleEventVenueBookingMessage } =
     useEventVenueBookingFastPath();
 
@@ -64,7 +208,7 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
       if (sessionLoading) {
         try {
           const { data } = await createClient().auth.getUser();
-          hasAccount = Boolean(data.user);
+          hasAccount = Boolean(data.user && !data.user.is_anonymous);
         } catch {
           // keep `signedIn`
         }
@@ -76,8 +220,39 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
         clearConciergePendingSend();
         return true;
       }
+      const anyCardsBefore = typeof document === "undefined"
+        ? 0
+        : document.querySelectorAll('[data-testid="a2ui-event-card"]').length;
+      const currentEventRows = eventResultsContext?.rows?.length ? eventResultsContext.rows : (activeEventRows ?? []);
+      const directEventId = isEventCardRenderRequest(text)
+        ? resolveExplicitEventRequest(text, currentEventRows)
+        : null;
+      if (directEventId) {
+        // Open the card FIRST and confirm only if it actually opened. The old order
+        // showed "Here is the event card." unconditionally, so a request the listener
+        // could not satisfy (already handled, no matching row, card already rendered)
+        // confirmed an action that never happened.
+        const opened = await requestEventCardRecovery(directEventId);
+        if (opened) {
+          showExchange(text, "Here is the event card.", submissionId);
+          clearConciergePendingSend();
+          return true;
+        }
+        // Falling through sends the request to the model, so the user gets a real answer
+        // instead of a false confirmation.
+      }
       try {
         if ((await waitForRuntimeReady()) && (await appendMessage(text))) {
+          // If the model returns no A2UI surface, the existing real result can still be
+          // shown through Quick view. Two rules keep it honest:
+          //  - never open a card when the model already rendered one (any event), and
+          //  - target the event the user actually asked for, not the first row. Falling
+          //    back to `activeEventId` after a request for the second event opened the
+          //    FIRST event on top of the model's own card.
+          if (isEventCardRenderRequest(text) && !hasRenderedEventCard()) {
+            const fallbackEventId = directEventId ?? activeEventId;
+            if (fallbackEventId) void requestEventCardRecovery(fallbackEventId, undefined, { anyCardBefore: anyCardsBefore });
+          }
           // Another conversation can report a late error during this run.
           // Only this conversation's stream failure should trigger its notice.
           if (getConciergeErrorForThread(threadId).version === 0) return true;
@@ -93,7 +268,7 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
       clearConciergePendingSend();
       return true;
     },
-    [appendMessage, waitForRuntimeReady, retryLastTurn, threadId, showExchange, showNotice, showSignInPrompt, signedIn, sessionLoading],
+    [appendMessage, waitForRuntimeReady, retryLastTurn, threadId, showExchange, showNotice, showSignInPrompt, signedIn, sessionLoading, activeEventId, activeEventRows, eventResultsContext],
   );
 
   // A cold-runtime wait must not turn two clicks into two agent runs.
@@ -134,6 +309,7 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
       handleEventVenueBookingMessage,
       handleEventMessage,
       handleGroundedMessage,
+      handleGroundedAmenityFollowUp,
       handleRestaurantMessage,
       onAgentSend,
       lastIntent: state?.lastIntent,
@@ -146,6 +322,7 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
       handleEventVenueBookingMessage,
       handleEventMessage,
       handleGroundedMessage,
+      handleGroundedAmenityFollowUp,
       handleRestaurantMessage,
       onAgentSend,
       state?.lastIntent,

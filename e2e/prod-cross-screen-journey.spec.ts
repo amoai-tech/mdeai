@@ -5,14 +5,17 @@ import {
   getSupabaseAdmin,
   hasE2eEnv,
   signInAsOnOrigin,
+  sweepThrowawayIdentities,
   type ThrowawayIdentity,
 } from "./helpers/auth";
 import {
+  countConciergeReplies,
   gotoConcierge,
   sendConciergeMessage,
-  waitForCopilotIdle,
+  waitForConciergeReply,
 } from "./helpers/maps-layout";
 import { establishVercelAutomationBypass } from "./fixtures/vercel-bypass";
+import { watchTurnDiagnostics } from "./helpers/attempt-diagnostics";
 
 /**
  * SAN-1298 · one continuous cross-screen conversation on the real application.
@@ -81,12 +84,78 @@ async function persistedCount(threadId: string): Promise<number> {
   return count ?? 0;
 }
 
-async function sendAndWait(page: Page, text: string) {
-  await sendConciergeMessage(page, text);
-  await waitForCopilotIdle(page, 120_000);
+/**
+ * A3: a 401 on the first send means the runtime had not accepted the session yet.
+ * `POST /api/copilotkit {"method":"info"}` answers 401 `{"error":"unauthorized"}`
+ * for an unauthenticated caller, so polling it until it stops being 401 is a real
+ * readiness signal — no sleep and no filtered error.
+ */
+async function waitForAuthenticatedRuntime(page: Page, timeoutMs = 30_000) {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(async () => {
+          try {
+            const res = await fetch("/api/copilotkit", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ method: "info" }),
+            });
+            return res.status;
+          } catch {
+            // A fetch that rejects (mid-navigation, network) proves nothing about
+            // the session. Report it as unauthenticated so the poll keeps waiting.
+            return 401;
+          }
+        }),
+      { timeout: timeoutMs, message: "the runtime accepted this session (HTTP 200)", intervals: [100, 250, 500, 1000] },
+    )
+    .toBe(200);
 }
 
+async function sendAndWait(page: Page, text: string) {
+  // A clean HTTP 200 without an assistant answer is not a successful journey.
+  // Capture the baseline before submitting so the previous answer never counts.
+  const repliesBefore = await countConciergeReplies(page);
+  // C1 diagnostics start BEFORE the send: a watcher attached afterwards can miss the
+  // request and report `attemptId=none`. Disposed in `finally` so listeners never pile up.
+  const diagnostics = watchTurnDiagnostics(page);
+  try {
+    await waitForAuthenticatedRuntime(page);
+    await sendConciergeMessage(page, text);
+    const answer = await waitForConciergeReply(page, repliesBefore, 120_000, diagnostics);
+    expect(answer.trim(), "the new AI turn rendered a nonempty answer").not.toBe("");
+  } finally {
+    diagnostics.dispose();
+  }
+}
+
+/**
+ * A4: identities this suite created. Per-test cleanup normally removes them; a killed
+ * process skips that, so the suite-level sweep is handed their ids explicitly.
+ */
+const OWNED_IDENTITIES: string[] = [];
+/**
+ * Only identities older than this can belong to no live run. The margin must exceed
+ * the longest possible journey (420 s + setup), so an overlapping run's in-use
+ * identity is never treated as abandoned.
+ */
+const ABANDONED_AFTER_MS = 60 * 60_000;
+
 test.describe("SAN-1298 cross-screen conversation (/chat → /rentals → /events → /chat)", () => {
+  // A killed run skips per-test `finally`; sweep what earlier runs left behind.
+  test.afterAll(async () => {
+    if (!enabled) return;
+    const { orphans, problems } = await sweepThrowawayIdentities({
+      prefix: "qa-san1298-",
+      olderThan: new Date(Date.now() - ABANDONED_AFTER_MS),
+      ownedIds: OWNED_IDENTITIES,
+    });
+    // An error while listing, deleting or verifying is a failure, never a zero count.
+    expect(problems, "cleanup reported no errors").toEqual([]);
+    expect(orphans, "no orphaned QA identities remain after the suite").toBe(0);
+  });
+
   test.skip(
     !enabled,
     "Opt-in only: set PROD_SMOKE_BASE_URL and MDE_SAN1298_CROSS_SCREEN=1 (writes a QA identity and chat rows)",
@@ -110,6 +179,7 @@ test.describe("SAN-1298 cross-screen conversation (/chat → /rentals → /event
     let identity: ThrowawayIdentity | undefined;
     try {
     identity = await createThrowawayIdentity("qa-san1298");
+    OWNED_IDENTITIES.push(identity.userId);
     if (isVercelPreview) await establishVercelAutomationBypass(page, baseUrl, bypassSecret);
     await signInAsOnOrigin(page, baseUrl, identity.email);
     if (isVercelPreview) await establishVercelAutomationBypass(page, baseUrl, bypassSecret);

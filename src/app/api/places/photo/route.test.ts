@@ -34,6 +34,7 @@ describe("GET /api/places/photo", () => {
     );
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toBe("image/jpeg");
+    expect(res.headers.get("Cache-Control")).toBe("private, no-store");
     expect(fetchMock).toHaveBeenCalled();
     const calledUrl = String(
       (fetchMock.mock.calls as unknown as [RequestInfo | URL][])[0][0],

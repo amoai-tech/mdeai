@@ -1,0 +1,60 @@
+# SAN-1642 — Non-production A/B timing only; never a release or branch-protection gate.
+# The push trigger allows testing this new workflow on its PR branch before it is
+# present on the default branch (workflow_dispatch alone cannot be used there).
+name: Playwright Container Benchmark
+
+on:
+  push:
+    branches: [test/san-1642-container-benchmark]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  existing-ubuntu:
+    name: Ubuntu + browser install
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install project dependencies
+        run: npm ci
+      - name: Install browser and Ubuntu dependencies (existing production method)
+        run: npx playwright install chromium --with-deps
+      - name: Verify isolated browser interaction
+        run: node scripts/ci/playwright-container-probe.mjs
+
+  preinstalled-container:
+    name: Preinstalled Playwright container
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    container:
+      # Official Microsoft multi-architecture manifest digest for Playwright 1.64.1.
+      image: mcr.microsoft.com/playwright:v1.64.1-noble@sha256:2f05f8a734509a7b3f26a912639488ee08f58a7b292d14d62271bcff9038768f
+      options: --ipc=host
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install project dependencies
+        run: npm ci
+      # The official image already contains Chromium and its OS libraries.
+      - name: Verify isolated browser interaction
+        run: node scripts/ci/playwright-container-probe.mjs

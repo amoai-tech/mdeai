@@ -1,0 +1,115 @@
+// @vitest-environment jsdom
+import { act, cleanup, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Restaurant } from "@/mastra/tools/search-restaurants";
+
+/**
+ * Guest catalog search must not be credited to the concierge, and its result summary must not
+ * outlive the filters that produced it.
+ *
+ * The Ask composer is mocked down to the one prop under test (`guestRestaurants.onResults`), and
+ * it counts its own mounts: a filter change has to remount it, because the summary it renders
+ * belongs to a result set that the filter has already replaced.
+ */
+let emit: ((rows: Restaurant[]) => void) | null = null;
+
+vi.mock("@/hooks/use-is-lg-up", () => ({ useIsLgUp: () => true }));
+vi.mock("@/components/browse/DiscoveryWorkspace", () => ({
+  DiscoveryWorkspace: (p: {
+    subtitle?: string;
+    rightPanel?: unknown;
+    askComposer?: unknown;
+    children: unknown;
+  }) => (
+    <div>
+      <h1>{p.subtitle as never}</h1>
+      {p.askComposer as never}
+      {p.rightPanel as never}
+      {p.children as never}
+    </div>
+  ),
+}));
+vi.mock("@/components/browse/BrowseMapSheet", () => ({ BrowseMapSheet: () => <i /> }));
+vi.mock("@/components/browse/BrowseMapPanel", () => ({ BrowseMapPanel: () => <div /> }));
+vi.mock("@/components/chat/discovery-page-context", () => ({
+  DiscoveryPageContext: () => <i data-testid="ask-context" />,
+}));
+vi.mock("@/components/chat/discovery-ask-composer", () => ({
+  DiscoveryAskComposer: (props: {
+    guestRestaurants?: { onResults: (rows: Restaurant[]) => void };
+  }) => {
+    emit = props.guestRestaurants?.onResults ?? null;
+    return <i data-testid="ask-composer" />;
+  },
+}));
+
+import { RestaurantBrowseView } from "@/components/restaurants/restaurant-browse-view";
+
+const make = (id: string, name: string): Restaurant => ({
+  id,
+  name,
+  cuisine: "colombian",
+  neighborhood: "Laureles",
+  priceTier: "$$",
+  rating: 4.5,
+  aiSummary: `${name} summary`,
+  mapsUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name)}`,
+  latitude: 6.24,
+  longitude: -75.59,
+} as Restaurant);
+
+const A = make("a", "Alpha Kitchen");
+
+/** The subtitle is the only place that tells a visitor who produced these rows. */
+const subtitle = () => screen.getByText(/in Medellín|Search results|Ask MDE/).textContent ?? "";
+const renderView = (cuisine: string | null = null) =>
+  render(
+    <RestaurantBrowseView results={[A]} error={null} neighborhood={null} cuisine={cuisine} />,
+  );
+
+beforeEach(() => {
+  emit = null;
+});
+
+afterEach(cleanup);
+
+describe("guest catalog search stays honest", () => {
+  it("never claims zero restaurants when the catalogue failed to load", () => {
+    // An error is not a fact about the world; "0 restaurants in Medellín" would be.
+    render(
+      <RestaurantBrowseView results={[]} error="Restaurant catalog temporarily unavailable" neighborhood={null} cuisine={null} />,
+    );
+    expect(subtitle()).toContain("Food & dining in Medellín");
+    expect(subtitle()).not.toContain("0 restaurants");
+  });
+
+  it("pluralises a one-result catalogue", () => {
+    render(<RestaurantBrowseView results={[A]} error={null} neighborhood={null} cuisine={null} />);
+    expect(subtitle()).toContain("1 restaurant in Medellín");
+    expect(subtitle()).not.toContain("1 restaurants");
+  });
+
+  it("does not credit the concierge for catalog results", () => {
+    renderView();
+    // The default subtitle is the catalogue count, never a concierge claim.
+    // The fixture has one restaurant, so the copy is singular and must agree with the grid.
+    expect(subtitle()).toMatch(/1 restaurant in Medellín/);
+    expect(subtitle()).not.toContain("Ask MDE");
+
+    act(() => emit?.([A]));
+    expect(subtitle()).toContain("Search results — 1 restaurants");
+    expect(subtitle()).not.toContain("Ask MDE");
+  });
+
+  it("shows the neutral subtitle again once the filters change the rows", () => {
+    const { rerender } = renderView(null);
+    act(() => emit?.([A]));
+    expect(subtitle()).toContain("Search results");
+
+    // A filter change replaces the rows, so the concierge-credit label must not linger.
+    rerender(<RestaurantBrowseView results={[A]} error={null} neighborhood={null} cuisine="seafood" />);
+    // The fixture has one restaurant, so the copy is singular and must agree with the grid.
+    expect(subtitle()).toMatch(/1 restaurant in Medellín/);
+    expect(subtitle()).not.toContain("Search results");
+  });
+});

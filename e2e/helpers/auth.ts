@@ -82,6 +82,130 @@ export async function getSupabaseAdmin() {
 /** A confirmed auth user that exists only for the duration of one proof run. */
 export type ThrowawayIdentity = { email: string; userId: string };
 
+/** Every disposable QA identity lives on this domain (see createThrowawayIdentity). */
+const QA_IDENTITY_DOMAIN = "@qa-isolation.mdeai.co";
+/** A page cap that is still returning full pages means the listing is unreadable. */
+const MAX_AUTH_USER_PAGES = 100;
+
+/** List every auth user, to completion, or throw. A partial listing is never a count. */
+async function listAllAuthUsers(
+  admin: Awaited<ReturnType<typeof getSupabaseAdmin>>,
+): Promise<Array<{ id: string; email?: string | null; created_at?: string }>> {
+  const all: Array<{ id: string; email?: string | null; created_at?: string }> = [];
+  for (let page = 1; page <= MAX_AUTH_USER_PAGES; page++) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 200 });
+    if (error) throw new Error(`listUsers failed on page ${page}: ${error.message}`);
+    const users = data?.users ?? [];
+    all.push(...users);
+    if (users.length < 200) return all;
+  }
+  throw new Error(
+    `listUsers still returned full pages after ${MAX_AUTH_USER_PAGES} pages; refusing to report a count`,
+  );
+}
+
+/**
+ * Settle a test's own disposable identity without hiding a leak.
+ *
+ * `deleteThrowawayIdentity` throws on partial cleanup on purpose: swallowing that is
+ * what previously left orphaned rows behind. So:
+ * - if the test body PASSED and cleanup fails, rethrow — a green run must prove that
+ *   nothing leaked;
+ * - if the body already FAILED, report the cleanup failure loudly but let the original
+ *   failure surface, so the real reason is not masked.
+ */
+export async function settleOwnedCleanup(options: {
+  email: string;
+  bodyError: unknown;
+  cleanup: () => Promise<void>;
+  log?: (message: string) => void;
+}): Promise<void> {
+  try {
+    await options.cleanup();
+  } catch (cleanupError) {
+    const detail = cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
+    if (!options.bodyError) throw cleanupError;
+    const log = options.log ?? ((message: string) => console.error(message));
+    log(`[qa cleanup] the test failed AND its identity could not be removed (${options.email}): ${detail}`);
+  }
+}
+
+/**
+ * Clean up disposable identities left behind by an interrupted run.
+ *
+ * Ownership rules (a sweep must never interfere with a live journey):
+ * - identities created by THIS suite (`ownedIds`) are always eligible, so a failed
+ *   per-test cleanup cannot leave them behind;
+ * - any other identity is eligible only when it is older than `olderThan`, which the
+ *   caller sets beyond the longest possible run, so an overlapping run's identity is
+ *   never treated as abandoned;
+ * - listing, deletion and verification errors are THROWN or reported, never ignored:
+ *   an unreadable state is not zero orphans.
+ */
+export async function sweepThrowawayIdentities(options: {
+  prefix: string;
+  olderThan: Date;
+  ownedIds?: readonly string[];
+}): Promise<{ orphans: number; problems: string[] }> {
+  const admin = await getSupabaseAdmin();
+  const owned = new Set(options.ownedIds ?? []);
+  const isCandidate = (user: { email?: string | null }) =>
+    (user.email ?? "").startsWith(options.prefix) && (user.email ?? "").endsWith(QA_IDENTITY_DOMAIN);
+  const isAbandoned = (user: { id: string; created_at?: string }) =>
+    owned.has(user.id) ||
+    Boolean(user.created_at) && new Date(user.created_at!).getTime() < options.olderThan.getTime();
+
+  const users = await listAllAuthUsers(admin);
+  const doomed = users.filter((user) => isCandidate(user) && isAbandoned(user));
+  const problems: string[] = [];
+
+  for (const user of doomed) {
+    const { data: threads, error: threadsError } = await admin
+      .from("mastra_threads").select("id").eq("resourceId", user.id);
+    if (threadsError) {
+      problems.push(`select threads for ${user.id}: ${threadsError.message}`);
+      continue;
+    }
+    const threadIds = (threads ?? []).map((row) => row.id);
+    if (threadIds.length) {
+      const { error } = await admin.from("mastra_messages").delete().in("thread_id", threadIds);
+      if (error) {
+        problems.push(`delete messages for ${user.id}: ${error.message}`);
+        continue;
+      }
+    }
+    const { error: threadsDeleteError } = await admin.from("mastra_threads").delete().eq("resourceId", user.id);
+    if (threadsDeleteError) {
+      problems.push(`delete threads for ${user.id}: ${threadsDeleteError.message}`);
+      continue;
+    }
+    const { error: profileError } = await admin.from("profiles").delete().eq("id", user.id);
+    if (profileError) {
+      problems.push(`delete profile for ${user.id}: ${profileError.message}`);
+      continue;
+    }
+    const { error: authError } = await admin.auth.admin.deleteUser(user.id);
+    if (authError && authError.status !== 404) {
+      problems.push(`delete identity ${user.id}: ${authError.message}`);
+    }
+  }
+
+  // Verify from a fresh read: the account AND its rows must be gone.
+  const after = await listAllAuthUsers(admin);
+  const remaining = after.filter((user) => isCandidate(user) && isAbandoned(user));
+  for (const user of remaining) {
+    problems.push(`identity still present: ${user.id}`);
+    const { data: threads, error } = await admin.from("mastra_threads").select("id").eq("resourceId", user.id);
+    if (error) problems.push(`verify threads for ${user.id}: ${error.message}`);
+    else if ((threads ?? []).length > 0) problems.push(`threads remain for ${user.id}`);
+    const { data: profile, error: profileError } = await admin.from("profiles").select("id").eq("id", user.id);
+    if (profileError) problems.push(`verify profile for ${user.id}: ${profileError.message}`);
+    else if ((profile ?? []).length > 0) problems.push(`profile remains for ${user.id}`);
+  }
+
+  return { orphans: remaining.length, problems };
+}
+
 /** Best-effort removal of any account created under an exact email (ambiguous create). */
 async function deleteAuthUsersByEmail(
   admin: Awaited<ReturnType<typeof getSupabaseAdmin>>,

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
-import { EMPTY, NEVER } from "rxjs";
-import type { RunAgentInput } from "@ag-ui/client";
+import { EMPTY, NEVER, of } from "rxjs";
+import { EventType, type BaseEvent, type RunAgentInput } from "@ag-ui/client";
 import { MastraAgent } from "@ag-ui/mastra";
 import { LoggingMastraAgent, trimToNewestTurn } from "./logging-mastra-agent";
 
@@ -146,5 +146,87 @@ describe("SAN-1588 full turn deadline", () => {
     expect(errors).toHaveLength(1);
     expect(String(errors[0])).toMatch(/timed out/);
     expect(persist).toHaveBeenCalledWith(expect.objectContaining({status:"error", errorType:"timeout"}));
+  });
+});
+
+describe("SAN-1074 AG-UI run outcome telemetry", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("records a RUN_ERROR event as a failed turn even when the stream completes normally", () => {
+    const runError = {
+      type: EventType.RUN_ERROR,
+      message: "Gemini rate limit exceeded — sensitive model response text must not be persisted",
+      code: "RATE_LIMIT",
+    } as BaseEvent;
+    vi.spyOn(MastraAgent.prototype, "run").mockReturnValue(of(runError));
+    const persist = vi.fn();
+    const agent = new LoggingMastraAgent({
+      agentId: "conciergeAgent", agentMapKey: "conciergeAgent",
+      agent: {} as never, resourceId: "user-1", persistTurnLog: persist,
+    });
+    const seen: BaseEvent[] = [];
+    agent.run(input([u("u1", "Search rentals")])).subscribe({ next: (event) => seen.push(event) });
+    expect(seen).toEqual([runError]);
+    expect(persist).toHaveBeenCalledTimes(1);
+    expect(persist).toHaveBeenCalledWith(expect.objectContaining({
+      status: "error",
+      errorType: "rate_limit",
+      errorMessage: "AG-UI RUN_ERROR (RATE_LIMIT)",
+      metadata: expect.objectContaining({ turn_status: "error", error_type: "rate_limit" }),
+    }));
+    expect(JSON.stringify(persist.mock.calls)).not.toContain("sensitive model response text");
+  });
+
+  it("classifies terminal AG-UI timeout without a thrown exception", () => {
+    const runError = {
+      type: EventType.RUN_ERROR,
+      message: "Upstream call stopped; private request details should remain private",
+      code: "TIMEOUT",
+    } as BaseEvent;
+    vi.spyOn(MastraAgent.prototype, "run").mockReturnValue(of(runError));
+    const persist = vi.fn();
+    const agent = new LoggingMastraAgent({
+      agentId: "conciergeAgent", agentMapKey: "conciergeAgent",
+      agent: {} as never, resourceId: "user-1", persistTurnLog: persist,
+    });
+    agent.run(input([u("u1", "Search rentals")])).subscribe();
+    expect(persist).toHaveBeenCalledWith(expect.objectContaining({
+      status: "error",
+      errorType: "timeout",
+      errorMessage: "AG-UI RUN_ERROR (TIMEOUT)",
+    }));
+    expect(JSON.stringify(persist.mock.calls)).not.toContain("private request details");
+  });
+
+  it("prefers the authoritative RATE_LIMIT code over a misleading cancellation message", () => {
+    vi.spyOn(MastraAgent.prototype, "run").mockReturnValue(of({
+      type: EventType.RUN_ERROR,
+      code: "RATE_LIMIT",
+      message: "The upstream request was cancelled during a throttling response",
+    } as BaseEvent));
+    const persist = vi.fn();
+    const agent = new LoggingMastraAgent({
+      agentId: "conciergeAgent", agentMapKey: "conciergeAgent",
+      agent: {} as never, resourceId: "user-1", persistTurnLog: persist,
+    });
+    agent.run(input([u("u1", "Search rentals")])).subscribe();
+    expect(persist).toHaveBeenCalledWith(expect.objectContaining({
+      status: "error",
+      errorType: "rate_limit",
+      errorMessage: "AG-UI RUN_ERROR (RATE_LIMIT)",
+    }));
+  });
+
+  it("records a normal RUN_FINISHED stream as success", () => {
+    vi.spyOn(MastraAgent.prototype, "run").mockReturnValue(of({
+      type: EventType.RUN_FINISHED, threadId: "t", runId: "r",
+    } as BaseEvent));
+    const persist = vi.fn();
+    const agent = new LoggingMastraAgent({
+      agentId: "conciergeAgent", agentMapKey: "conciergeAgent",
+      agent: {} as never, resourceId: "user-1", persistTurnLog: persist,
+    });
+    agent.run(input([u("u1", "Search rentals")])).subscribe();
+    expect(persist).toHaveBeenCalledWith(expect.objectContaining({ status: "success" }));
   });
 });

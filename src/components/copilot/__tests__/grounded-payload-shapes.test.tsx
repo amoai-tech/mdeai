@@ -19,6 +19,7 @@ vi.mock("@/components/chat/rental-ui-context", () => ({
 }));
 vi.mock("@/components/chat/rich-card-results-context", () => ({
   RichCardResultsRegistrar: () => null,
+  useOptionalRichCardResults: () => null,
 }));
 
 import { GroundedCafeResults } from "@/components/copilot/search-tool-result-cards";

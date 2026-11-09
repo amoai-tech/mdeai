@@ -58,6 +58,7 @@ const PROD_SPECS = [
   "**/app/host-ai-sales-accuracy.spec.ts",
   "**/prod-candidate-certification.spec.ts",
   ...OPT_IN_PROD_SPECS,
+  "**/qa-cleanup-sweep.spec.ts",
   // SAN-1606's read-only deployed mobile navigation probe is explicitly opt-in.
   ...(process.env.MDE_SAN1606_REMOTE_MOBILE_NAV === "1"
     ? ["**/mobile-bottom-nav.spec.ts"]
@@ -72,6 +73,8 @@ const PROD_SPECS = [
   "**/prod-copilotkit-isolation.spec.ts",
   "**/prod-concierge-thread-lifecycle.spec.ts",
   "**/prod-concierge-stop-retry.spec.ts",
+  ...(process.env.MDE_SAN1631_POSTMERGE === "1"
+    ? ["**/prod-san1631-*.spec.ts"] : []),
   "**/prod-renter-mobile-chat.spec.ts",
   "**/prod-release-health.spec.ts",
   "**/san-1413-saved-chat-continuity.spec.ts",

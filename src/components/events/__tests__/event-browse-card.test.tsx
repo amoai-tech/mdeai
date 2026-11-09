@@ -39,13 +39,15 @@ describe("EventBrowseCard", () => {
     expect(html).toContain('data-testid="event-card"');
     expect(html).toContain('data-result-kind="event"');
     expect(html).toContain("aspect-[16/10]");
-    expect(html).toContain('data-testid="event-browse-card-photo-placeholder"');
+    // A photo-less event now shows its real date instead of the generic tile.
+    expect(html).toContain('data-testid="event-browse-card-date-badge"');
+    // 2026-06-13T03:00Z is still Jun 12 in Medellín (UTC-5): the badge must use local time.
+    expect(html).toContain("JUN");
+    expect(html).toContain(">12<");
     expect(html).toContain('data-testid="event-details-cta"');
     expect(html).toContain('data-testid="event-buy-cta"');
     expect(html).toContain("/events/salsa-night-laureles");
-    const heroIndex = html.indexOf(
-      'data-testid="event-browse-card-photo-placeholder"',
-    );
+    const heroIndex = html.indexOf('data-testid="event-browse-card-date-badge"');
     const headingIndex = html.indexOf("<h3");
     expect(heroIndex).toBeLessThan(headingIndex);
   });
@@ -163,5 +165,24 @@ describe("EventBrowseCard", () => {
     const noBuy = renderToStaticMarkup(<EventBrowseCard event={{ ...event, pricePerTicket: null, canBuyTickets: false }} />);
     expect(noBuy).not.toContain('data-testid="event-buy-cta"');
     expect(detailsTag(noBuy)).not.toContain("border-border");
+  });
+});
+
+describe("photo-less event media fits its frame", () => {
+  it.each(["cover", "inline"] as const)("fits the %s layout", (mediaLayout) => {
+    const html = renderToStaticMarkup(
+      <EventBrowseCard event={event} mediaLayout={mediaLayout} />,
+    );
+    expect(html).toContain('data-testid="event-browse-card-date-badge"');
+    if (mediaLayout === "inline") {
+      // One compact line: the stacked month/day plus the label overflows a 96x60 frame.
+      expect(html).toContain("JUN 12");
+      expect(html).not.toContain("text-2xl");
+    } else {
+      // Full tile keeps the month over a large day.
+      expect(html).toContain("text-2xl");
+    }
+    // The category label survives in both layouts.
+    expect(html).toContain("Event");
   });
 });

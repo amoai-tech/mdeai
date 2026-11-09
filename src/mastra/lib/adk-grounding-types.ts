@@ -9,6 +9,14 @@ export const enrichedGroundedPlaceFieldsSchema = z.object({
   formattedAddress: z.string().optional(),
   primaryType: z.string().optional(),
   summary: z.string().optional(),
+  // Future provider-backed facts only. Google Places Text Search does not
+  // currently provide these, and unknown amenities must stay unknown.
+  wifi: z.boolean().optional(),
+  hasWifi: z.boolean().optional(),
+  powerOutlets: z.boolean().optional(),
+  hasPowerOutlets: z.boolean().optional(),
+  seating: z.union([z.boolean(), z.string()]).optional(),
+  outdoorSeating: z.boolean().optional(),
   photoName: z.string().optional(),
   photoAuthorAttributions: z
     .array(

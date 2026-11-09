@@ -10,6 +10,7 @@ import {
 import type { RentalSearchApiParams } from "@/lib/rental-query-parser";
 import { approvedExternalSourceUrl } from "@/lib/rentals/external-source";
 import { Calendar } from "lucide-react";
+import type { ReactNode } from "react";
 import type { CardInteractionProps, ResultKind } from "@/components/cards/card-interaction-props";
 
 export type RentalCardProps = RentalResultRow & {
@@ -28,6 +29,12 @@ export type RentalCardProps = RentalResultRow & {
   onSchedule?: () => void;
   onSave?: () => void;
   onOpenDetails?: () => void;
+  /** SAN-1041 — optional comparison action shown inside the existing card footer. */
+  compareSelected?: boolean;
+  compareDisabled?: boolean;
+  onToggleCompare?: () => void;
+  /** Optional contextual action from the existing authorized Concierge thread. */
+  nearbyAction?: ReactNode;
   /** Monthly price when available (authoritative for monthly display). */
   price_monthly?: number;
   /**
@@ -72,6 +79,10 @@ export function RentalCard({
   onSelect,
   onSchedule,
   onOpenDetails,
+  compareSelected,
+  compareDisabled,
+  onToggleCompare,
+  nearbyAction,
   canScheduleViewing,
   duplicateNote,
 }: RentalCardProps) {
@@ -260,6 +271,7 @@ export function RentalCard({
       ) : null}
 
       <div className="mde-rental-card-actions mt-3 flex flex-wrap items-center gap-2">
+        {nearbyAction}
         {showScheduleCta ? (
           <Button
             type="button"
@@ -289,6 +301,25 @@ export function RentalCard({
             }}
           >
             Details
+          </Button>
+        ) : null}
+        {onToggleCompare ? (
+          <Button
+            type="button"
+            size="sm"
+            variant={compareSelected ? "secondary" : "outline"}
+            className="min-h-card-action lg:min-h-0"
+            data-testid="rental-compare-toggle"
+            aria-pressed={compareSelected === true}
+            aria-label={`${compareSelected ? "Remove" : "Add"} ${title} ${compareSelected ? "from" : "to"} comparison`}
+            disabled={compareDisabled === true}
+            onClick={(event) => {
+              event.stopPropagation();
+              onToggleCompare();
+            }}
+            onKeyDown={(event) => event.stopPropagation()}
+          >
+            {compareSelected ? "✓ Added to comparison" : "Add to comparison"}
           </Button>
         ) : null}
         {tags?.includes("external-source") && externalSourceUrl ? (

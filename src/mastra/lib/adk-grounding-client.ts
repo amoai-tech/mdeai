@@ -32,6 +32,11 @@ export type AdkSearchGroundingInvokeInput = {
   requestId?: string;
 };
 
+/** True only when a real ADK endpoint is configured; localhost default is not a provider. */
+export function isAdkGroundingConfigured(): boolean {
+  return Boolean(process.env.ADK_GROUNDING_URL?.trim());
+}
+
 export async function invokeAdkGrounding(
   input: AdkGroundingInvokeInput,
 ): Promise<AdkGroundingInvokeResponse> {

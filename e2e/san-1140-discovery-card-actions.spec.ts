@@ -28,8 +28,10 @@ type RouteSpec = {
   ask: string;
   /** Only routes with a real public details destination get one. */
   details?: string;
-  /** Café/nightlife cards expose a coordinate-gated "View on map" control. */
+  /** Every discovery card exposes a coordinate-gated "View on map" control. */
   mapAction?: boolean;
+  /** Test id of that control (restaurants and venues use different ids). */
+  mapActionTestId?: string;
 };
 
 const ROUTES: RouteSpec[] = [
@@ -39,6 +41,8 @@ const ROUTES: RouteSpec[] = [
     card: '[data-result-kind="restaurant"]',
     ask: '[data-testid="restaurant-ask-select"]',
     details: '[data-testid^="restaurant-details-open-"]',
+    mapAction: true,
+    mapActionTestId: "restaurant-map-select",
   },
   {
     route: "/cafes",
@@ -47,6 +51,7 @@ const ROUTES: RouteSpec[] = [
     ask: '[data-testid="venue-ask-select"]',
     details: '[data-testid="venue-details-open"]',
     mapAction: true,
+    mapActionTestId: "venue-map-select",
   },
   {
     route: "/nightlife",
@@ -55,6 +60,7 @@ const ROUTES: RouteSpec[] = [
     ask: '[data-testid="venue-ask-select"]',
     details: '[data-testid="venue-details-open"]',
     mapAction: true,
+    mapActionTestId: "venue-map-select",
   },
 ];
 
@@ -163,7 +169,7 @@ async function expectAskContainment(page: Page, spec: RouteSpec) {
     ).toBeGreaterThanOrEqual(44);
 
     if (spec.mapAction) {
-      const mapAction = card.locator('[data-testid="venue-map-select"]');
+      const mapAction = card.locator(`[data-testid="${spec.mapActionTestId}"]`);
       if (await mapAction.count()) {
         const mapBox = await mapAction.boundingBox();
         expect(
@@ -324,8 +330,8 @@ for (const spec of ROUTES) {
         if (skipOrFail(count === 0, spec, "rendered no cards")) return;
         const first = cards.first();
         const second = cards.nth(1);
-        const firstMap = first.locator('[data-testid="venue-map-select"]');
-        const secondMap = second.locator('[data-testid="venue-map-select"]');
+        const firstMap = first.locator(`[data-testid="${spec.mapActionTestId}"]`);
+        const secondMap = second.locator(`[data-testid="${spec.mapActionTestId}"]`);
         // A venue without grounded coordinates must not offer a map action at all.
         if (
           skipOrFail(

@@ -93,6 +93,25 @@ describe("GET /api/threads/[threadId]/messages", () => {
     expect(body.messages).toEqual([{ id: "m1", role: "user", content: MARKER }]);
   });
 
+  it("returns owner-scoped validated rental search metadata only from the saved assistant turn", async () => {
+    getUserMock.mockResolvedValue({ data: { user: { id: SOFIA } } });
+    const params = { neighborhood: "Laureles", minBedrooms: 2, maxPriceMonthly: 3_000_000, budgetCurrency: "COP" };
+    serviceState.messages.push({
+      id: "m2", thread_id: THREAD_A, role: "assistant", createdAt: "2026-10-01T10:00:01.000Z",
+      content: JSON.stringify({ format: 2, parts: [
+        { type: "text", text: "3 apartments found." },
+        { type: "data-mde-rental-search", data: params },
+      ] }),
+    });
+    const res = await call(THREAD_A);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.lastRentalSearch).toEqual({ ...params, limit: 8 });
+    expect(body.messages).toEqual(expect.arrayContaining([
+      { id: "m2", role: "assistant", content: "3 apartments found." },
+    ]));
+  });
+
   it("401 with no session, and reads nothing", async () => {
     getUserMock.mockResolvedValue({ data: { user: null } });
     const res = await call(THREAD_A);

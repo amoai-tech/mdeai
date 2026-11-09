@@ -43,7 +43,10 @@ vi.mock("@/lib/concierge-send-user-message", () => ({
   sendConciergeUserMessage: vi.fn(),
 }));
 // The result panels read their own contexts; this test is about order and ownership, not cards.
-vi.mock("@/components/chat/rental-fast-path-panel", () => ({ RentalFastPathPanel: () => null }));
+vi.mock("@/components/chat/rental-fast-path-panel", () => ({
+  RentalFastPathPanel: () => null,
+  RentalSearchRecoveryNotice: () => null,
+}));
 vi.mock("@/components/chat/event-fast-path-panel", () => ({ EventFastPathPanel: () => null }));
 vi.mock("@/components/chat/grounded-fast-path-panel", () => ({ GroundedFastPathPanel: () => null }));
 vi.mock("@/components/chat/restaurant-fast-path-panel", () => ({ RestaurantFastPathPanel: () => null }));
@@ -96,6 +99,30 @@ function Scenario({ transcriptHasExchange }: { transcriptHasExchange: boolean })
     : new Set<string>();
   return <ConciergeLocalChatMessages excludeIds={excludeIds} />;
 }
+
+function FilteredAssistantScenario() {
+  const { showExchange } = useEventLocalChat();
+  useEffect(() => {
+    // This is recognized rental-results boilerplate and is stripped to empty
+    // by the existing assistant sanitizer. The UI must not show a blank reply.
+    showExchange(
+      "Show apartments in Laureles",
+      "What I searched for: solid short-term rental. Best option. Next step.",
+    );
+  }, [showExchange]);
+  return <ConciergeLocalChatMessages />;
+}
+
+describe("SAN-1074 empty local assistant guard", () => {
+  it("does not show an empty successful-looking assistant bubble after sanitizing", () => {
+    const { container, unmount } = mount(
+      <EventLocalChatProvider><FilteredAssistantScenario /></EventLocalChatProvider>,
+    );
+    expect(container.querySelectorAll('[data-testid="concierge-user-message"]')).toHaveLength(1);
+    expect(container.querySelectorAll(".bg-muted")).toHaveLength(0);
+    unmount();
+  });
+});
 
 describe("ConciergeLocalChatMessages (SAN-966)", () => {
   it("shows a shortcut exchange the transcript does not have, once", () => {

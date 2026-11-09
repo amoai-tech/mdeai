@@ -2,6 +2,7 @@
 import React, { act, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { UseAgentUpdate } from "@copilotkit/react-core/v2";
 
 // The navigation owner waits for a verified auth identity. Test the anonymous path
 // without making Supabase network calls during provider lifecycle unit tests.
@@ -47,10 +48,16 @@ class FakeAgent {
   }
 }
 
-const fakeAgent = vi.hoisted(() => ({ current: null as unknown }));
+const fakeAgent = vi.hoisted(() => ({ current: null as unknown, ready: true, lastUpdates: [] as unknown[] }));
 vi.mock("@copilotkit/react-core/v2", async (importOriginal) => {
   const real = await importOriginal<typeof import("@copilotkit/react-core/v2")>();
-  return { ...real, useAgent: () => ({ agent: fakeAgent.current }) };
+  return {
+    ...real,
+    useAgent: (options: { updates?: unknown[] }) => {
+      fakeAgent.lastUpdates = options.updates ?? [];
+      return { agent: fakeAgent.current, isReady: fakeAgent.ready };
+    },
+  };
 });
 
 const A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -98,6 +105,8 @@ beforeEach(async () => {
   window.history.replaceState(null, "", "/");
   agent = new FakeAgent();
   fakeAgent.current = agent;
+  fakeAgent.ready = true;
+  fakeAgent.lastUpdates = [];
   requests = {};
   vi.stubGlobal(
     "fetch",
@@ -139,6 +148,334 @@ afterEach(async () => {
 });
 
 describe("saved chat history", () => {
+  it("waits for the REAL agent before fetching and replaying a saved thread", async () => {
+    const provisional = new FakeAgent();
+    provisional.threadId = A;
+    fakeAgent.current = provisional;
+    fakeAgent.ready = false;
+    await act(async () => {
+      root.render(
+        <ThreadNavProvider><ChatProvider><Probe /></ChatProvider></ThreadNavProvider>,
+      );
+    });
+    await select(A, { connect: false });
+    expect(seen.history.status).toBe("loading");
+    // A provisional agent must not receive the private history or a connect watch.
+    expect(requests[A]).toBeUndefined();
+    expect(provisional.setMessages).not.toHaveBeenCalled();
+
+    fakeAgent.current = agent;
+    fakeAgent.ready = true;
+    await act(async () => {
+      root.render(
+        <ThreadNavProvider><ChatProvider><Probe /></ChatProvider></ThreadNavProvider>,
+      );
+    });
+    expect(requests[A]).toBeDefined();
+    await act(async () => requests[A].resolve(msgs("A")));
+    await tick();
+    expect(seen.history.status).toBe("loading");
+    expect(agent.setMessages).not.toHaveBeenCalled(); // connected is not replay complete
+    await act(async () => agent.finishRun());
+    await tick();
+    expect(agent.messages).toEqual(msgs("A"));
+    expect(seen.history.status).toBe("idle");
+    expect(provisional.setMessages).not.toHaveBeenCalled();
+  });
+
+  it("recovers when the real agent arrives AFTER a readiness timeout", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      fakeAgent.ready = false;
+      await act(async () => {
+        root.render(
+          <ThreadNavProvider><ChatProvider><Probe /></ChatProvider></ThreadNavProvider>,
+        );
+      });
+      await select(A, { connect: false });
+      await act(async () => { await vi.advanceTimersByTimeAsync(31_000); });
+      expect(seen.history.status).toBe("error");
+
+      // Late SDK readiness must invalidate the provisional error and start the
+      // real agent's owner-checked history fetch (without requiring a page reload).
+      fakeAgent.current = agent;
+      fakeAgent.ready = true;
+      await act(async () => {
+        root.render(
+          <ThreadNavProvider><ChatProvider><Probe /></ChatProvider></ThreadNavProvider>,
+        );
+      });
+      expect(seen.history.status).toBe("loading");
+      expect(requests[A]).toBeDefined();
+      await act(async () => requests[A].resolve(msgs("A")));
+      expect(agent.setMessages).not.toHaveBeenCalled();
+      await act(async () => agent.finishRun());
+      expect(agent.messages).toEqual(msgs("A"));
+      expect(seen.history.status).toBe("idle");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps an already-restored conversation usable when readiness flips true → false → true", async () => {
+    await select(A);
+    await act(async () => requests[A].resolve(msgs("A")));
+    await act(async () => agent.finishRun());
+    await tick();
+    expect(seen.history.status).toBe("idle");
+    const priorRequest = requests[A];
+    const priorWrites = agent.setMessages.mock.calls.length;
+
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      fakeAgent.ready = false;
+      await act(async () => {
+        root.render(<ThreadNavProvider><ChatProvider><Probe /></ChatProvider></ThreadNavProvider>);
+      });
+      expect(seen.history.status).toBe("idle");
+      // A transient loss AFTER successful restore must not show the 30s error.
+      await act(async () => { await vi.advanceTimersByTimeAsync(31_000); });
+      expect(seen.history.status).toBe("idle");
+
+      fakeAgent.ready = true;
+      await act(async () => {
+        root.render(<ThreadNavProvider><ChatProvider><Probe /></ChatProvider></ThreadNavProvider>);
+      });
+      expect(seen.history.status).toBe("idle");
+      expect(agent.messages).toEqual(msgs("A"));
+      expect(requests[A]).toBe(priorRequest);
+      expect(agent.setMessages).toHaveBeenCalledTimes(priorWrites);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("restores again if the real agent is replaced during a readiness loss", async () => {
+    await select(A);
+    await act(async () => requests[A].resolve(msgs("A")));
+    await act(async () => agent.finishRun());
+    await tick();
+    const originalRequest = requests[A];
+    expect(seen.history.status).toBe("idle");
+
+    fakeAgent.ready = false;
+    fakeAgent.current = new FakeAgent(); // SDK provisional replacement
+    await act(async () => {
+      root.render(<ThreadNavProvider><ChatProvider><Probe /></ChatProvider></ThreadNavProvider>);
+    });
+    expect(seen.history.status).toBe("idle");
+
+    const replacement = new FakeAgent();
+    replacement.threadId = A;
+    fakeAgent.current = replacement;
+    fakeAgent.ready = true;
+    await act(async () => {
+      root.render(<ThreadNavProvider><ChatProvider><Probe /></ChatProvider></ThreadNavProvider>);
+    });
+    expect(seen.history.status).toBe("loading");
+    expect(requests[A]).not.toBe(originalRequest);
+    await act(async () => requests[A].resolve(msgs("A")));
+    await act(async () => replacement.finishRun());
+    await tick();
+    expect(replacement.messages).toEqual(msgs("A"));
+    expect(seen.history.status).toBe("idle");
+  });
+
+  it("repairs the same agent after readiness returns without refetching history", async () => {
+    await select(A);
+    await act(async () => requests[A].resolve(msgs("A")));
+    await act(async () => agent.finishRun());
+    await tick();
+    expect(seen.history.status).toBe("idle");
+    const originalRequest = requests[A];
+
+    fakeAgent.ready = false;
+    await act(async () => {
+      root.render(<ThreadNavProvider><ChatProvider><Probe /></ChatProvider></ThreadNavProvider>);
+    });
+    agent.messages = [];
+    fakeAgent.ready = true;
+    await act(async () => {
+      root.render(<ThreadNavProvider><ChatProvider><Probe /></ChatProvider></ThreadNavProvider>);
+    });
+    // The history already passed the owner check. No second API request needed.
+    expect(agent.messages).toEqual(msgs("A"));
+    expect(requests[A]).toBe(originalRequest);
+    // The test mock does not emit OnMessagesChanged; simulate the SDK update.
+    await act(async () => {
+      root.render(<ThreadNavProvider><ChatProvider><Probe /></ChatProvider></ThreadNavProvider>);
+    });
+    expect(seen.history.status).toBe("idle");
+  });
+
+  it("repairs a message wipe that occurs AFTER readiness has returned", async () => {
+    await select(A);
+    // The real useAgent hook must rerender on messages changing, not only runs.
+    expect(fakeAgent.lastUpdates).toContain(UseAgentUpdate.OnMessagesChanged);
+    await act(async () => requests[A].resolve(msgs("A")));
+    await act(async () => agent.finishRun());
+    await tick();
+    const originalRequest = requests[A];
+
+    fakeAgent.ready = false;
+    await act(async () => {
+      root.render(<ThreadNavProvider><ChatProvider><Probe /></ChatProvider></ThreadNavProvider>);
+    });
+    fakeAgent.ready = true;
+    await act(async () => {
+      root.render(<ThreadNavProvider><ChatProvider><Probe /></ChatProvider></ThreadNavProvider>);
+    });
+    expect(seen.history.status).toBe("idle");
+
+    // A delayed same-agent reconnect clears the transcript after the effects ran.
+    agent.messages = [];
+    await act(async () => {
+      root.render(<ThreadNavProvider><ChatProvider><Probe /></ChatProvider></ThreadNavProvider>);
+    });
+    expect(agent.messages).toEqual(msgs("A"));
+    await act(async () => {
+      root.render(<ThreadNavProvider><ChatProvider><Probe /></ChatProvider></ThreadNavProvider>);
+    });
+    expect(seen.history.status).toBe("idle");
+    expect(requests[A]).toBe(originalRequest);
+  });
+
+  it("shows a retryable error if a cleared chat cannot be repaired during a stuck run", async () => {
+    await select(A);
+    await act(async () => requests[A].resolve(msgs("A")));
+    await act(async () => agent.finishRun());
+    await tick();
+    expect(seen.history.status).toBe("idle");
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      agent.beginConnect(); // clears messages while a run stays active forever
+      await act(async () => {
+        root.render(<ThreadNavProvider><ChatProvider><Probe /></ChatProvider></ThreadNavProvider>);
+      });
+      expect(seen.history.status).toBe("loading");
+      await act(async () => { await vi.advanceTimersByTimeAsync(31_000); });
+      expect(seen.history.status).toBe("error");
+      expect(agent.messages).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("recovers the retained transcript when durable history is empty (warm agent)", async () => {
+    // A warm agent may hold turns Mastra has not persisted yet. Losing them on a
+    // reconnect is a real regression, so recovery prefers the newest transcript we
+    // observed rather than erroring on the empty durable snapshot.
+    await select(A);
+    agent.messages = msgs("warm");
+    await act(async () => requests[A].resolve([]));
+    await act(async () => agent.finishRun());
+    await tick();
+    expect(seen.history.status).toBe("idle");
+
+    agent.messages = [];
+    await act(async () => {
+      root.render(<ThreadNavProvider><ChatProvider><Probe /></ChatProvider></ThreadNavProvider>);
+    });
+    await tick();
+
+    // The requirement is that the conversation is not lost; status settles after.
+    expect(agent.messages.map((m) => m.id)).toEqual(["warm-u", "warm-a"]);
+  });
+
+  it("keeps follow-ups sent AFTER the restore when a reconnect clears the transcript", async () => {
+    await select(A);
+    await act(async () => requests[A].resolve(msgs("A")));
+    await act(async () => agent.finishRun());
+    await tick();
+    expect(agent.messages.map((m) => m.id)).toEqual(["A-u", "A-a"]);
+
+    // Camila asks a follow-up: these turns are newer than the restore snapshot.
+    agent.messages = [...msgs("A"), ...msgs("follow")];
+    await act(async () => {
+      root.render(<ThreadNavProvider><ChatProvider><Probe /></ChatProvider></ThreadNavProvider>);
+    });
+
+    // A delayed reconnect clears the visible transcript.
+    agent.messages = [];
+    await act(async () => {
+      root.render(<ThreadNavProvider><ChatProvider><Probe /></ChatProvider></ThreadNavProvider>);
+    });
+    await tick();
+
+    // The newest conversation comes back once, newest turns included.
+    expect(agent.messages.map((m) => m.id)).toEqual(["A-u", "A-a", "follow-u", "follow-a"]);
+  });
+
+  it("recovers a chat that started empty and received its first turns afterwards", async () => {
+    // `hadMessages` is false for a brand-new chat; that must not blind recovery.
+    await select(A);
+    await act(async () => requests[A].resolve([]));
+    await act(async () => agent.finishRun());
+    await tick();
+    expect(seen.history.status).toBe("idle");
+    expect(agent.messages).toEqual([]);
+
+    agent.messages = msgs("first");
+    await act(async () => {
+      root.render(<ThreadNavProvider><ChatProvider><Probe /></ChatProvider></ThreadNavProvider>);
+    });
+    agent.messages = [];
+    await act(async () => {
+      root.render(<ThreadNavProvider><ChatProvider><Probe /></ChatProvider></ThreadNavProvider>);
+    });
+    await tick();
+
+    expect(agent.messages.map((m) => m.id)).toEqual(["first-u", "first-a"]);
+  });
+
+  it("never replays the previous thread's messages into the new one", async () => {
+    // CopilotKit can set the new threadId BEFORE it clears the old transcript. In that
+    // window the agent still holds thread A's messages while `threadId` is already B;
+    // retaining them as B's would replay them into the wrong conversation.
+    await select(A);
+    await act(async () => requests[A].resolve(msgs("A")));
+    await act(async () => agent.finishRun());
+    await tick();
+    expect(agent.messages.map((m) => m.id)).toEqual(["A-u", "A-a"]);
+
+    agent.threadId = B;
+    await act(async () => seen.nav.setActiveThreadId(B));
+    await act(async () => {
+      root.render(<ThreadNavProvider><ChatProvider><Probe /></ChatProvider></ThreadNavProvider>);
+    });
+    // Still showing A's transcript while B's restore has not run.
+    expect(agent.messages.map((m) => m.id)).toEqual(["A-u", "A-a"]);
+
+    // B's transcript clears before its history arrives.
+    agent.messages = [];
+    await act(async () => {
+      root.render(<ThreadNavProvider><ChatProvider><Probe /></ChatProvider></ThreadNavProvider>);
+    });
+    await tick();
+
+    // A's conversation must not appear in B, and B must not claim to be ready.
+    expect(agent.messages).toEqual([]);
+    expect(seen.history.status).toBe("loading");
+  });
+
+  it("shows a retryable error if the runtime never becomes ready", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      fakeAgent.ready = false;
+      await act(async () => {
+        root.render(
+          <ThreadNavProvider><ChatProvider><Probe /></ChatProvider></ThreadNavProvider>,
+        );
+      });
+      await select(A, { connect: false });
+      expect(seen.history.status).toBe("loading");
+      await act(async () => { await vi.advanceTimersByTimeAsync(30_500); });
+      expect(seen.history.status).toBe("error");
+      expect(requests[A]).toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
   it("shows loading, installs the saved messages, then releases the chat", async () => {
     await select(A);
     expect(seen.history.status).toBe("loading");

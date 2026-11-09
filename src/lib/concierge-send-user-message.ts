@@ -1,4 +1,5 @@
 import { clearConciergeError, reportConciergeError } from "@/lib/concierge-error-store";
+import { isSelectedRentalCafeNearbyRequest } from "@/lib/cafe-search-fast-path";
 import {
   routerHandlerOrderFromClassification,
   type RouterRoutingTarget,
@@ -22,6 +23,8 @@ export type ConciergeSendHandlers = {
   handleEventVenueBookingMessage?: (text: string, submissionId?: string) => Promise<boolean>;
   handleEventMessage: (text: string, submissionId?: string) => Promise<boolean>;
   handleGroundedMessage: (text: string, submissionId?: string) => Promise<boolean>;
+  /** Optional current-results-only guard, checked before an agent route. */
+  handleGroundedAmenityFollowUp?: (text: string, submissionId?: string) => Promise<boolean>;
   handleRestaurantMessage: (text: string, submissionId?: string) => Promise<boolean>;
   onAgentSend: (text: string, submissionId?: string) => Promise<boolean>;
   /** Working-memory lastIntent — enables Flash topicShift (SAN-873). */
@@ -68,6 +71,24 @@ export async function sendConciergeUserMessage(
   let agentAttempted = false;
 
   try {
+    // Contextual cafés beside the selected rental are NOT a new rental search.
+    // If no genuine selected rental exists the handler declines safely.
+    if (isSelectedRentalCafeNearbyRequest(trimmed)) {
+      if (await handlers.handleGroundedMessage(trimmed, submissionId)) return true;
+      // No selected, server-resolvable rental: do not misroute this café follow-up
+      // to apartment search. Signed-in Concierge can ask which listing; guests
+      // receive the existing sign-in prompt rather than fabricated Nearby pins.
+      setConciergePendingSend(true);
+      agentAttempted = true;
+      return await handlers.onAgentSend(trimmed, submissionId);
+    }
+
+    // An existing-results question may be classified as general concierge.
+    // Check the current café facts before any model dispatch or other fast path.
+    if (await handlers.handleGroundedAmenityFollowUp?.(trimmed, submissionId)) {
+      return true;
+    }
+
     const classification = await resolveRouterClassification(trimmed, {
       lastIntent: handlers.lastIntent,
       inRentalSearch: handlers.inRentalSearch,

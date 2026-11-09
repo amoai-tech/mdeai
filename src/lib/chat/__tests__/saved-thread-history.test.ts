@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   SAVED_THREAD_HISTORY_LIMIT,
+  latestSavedRentalSearch,
   mapSavedThreadHistory,
   reconcileSavedHistory,
   type SavedThreadMessageRow,
@@ -18,6 +19,27 @@ const row = (
   content: typeof content === "string" ? content : JSON.stringify(content),
 });
 const text = (t: string) => ({ format: 2, parts: [{ type: "text", text: t }] });
+
+describe("latestSavedRentalSearch", () => {
+  it("returns the newest successful structured criteria without leaking rendered results", () => {
+    const old = { neighborhood: "Laureles", minBedrooms: 2 };
+    const fresh = { neighborhood: "El Poblado", maxPriceMonthly: 3_000_000 };
+    const saved = (id: string, params: unknown, date: string) => row(id, "assistant", {
+      format: 2, parts: [
+        { type: "text", text: "Search complete" },
+        { type: "data-mde-rental-search", data: params },
+      ],
+    }, date);
+    const result = latestSavedRentalSearch([
+      saved("old", old, "2026-11-01T01:00:00Z"),
+      saved("bad", { maxPriceMonthly: -1 }, "2026-11-01T03:00:00Z"),
+      saved("fresh", fresh, "2026-11-01T02:00:00Z"),
+      row("another", "assistant", text("Followup"), "2026-11-01T04:00:00Z"),
+    ]);
+    expect(result).toEqual({ ...fresh, limit: 8 });
+    expect(JSON.stringify(result)).not.toContain("Search complete");
+  });
+});
 
 describe("mapSavedThreadHistory", () => {
   it("maps user text and assistant structured text", () => {
@@ -144,8 +166,220 @@ describe("mapSavedThreadHistory", () => {
   });
 });
 
+describe("mapSavedThreadHistory — broker duplicate writes from PR #822", () => {
+  const originalId = "c5744906-930d-481a-92ce-e9ecaddecff1";
+  const toolReply = (message: string) => ({
+    format: 2,
+    parts: [
+      {
+        type: "tool-invocation",
+        toolInvocation: { state: "result", toolCallId: "tc-review", toolName: "getBrokerLeads", args: {}, result: { count: 0 } },
+      },
+      { type: "step-start" },
+      { type: "text", text: message },
+    ],
+  });
+  it("shows one answer for the exact legacy -agui-text pair and keeps its tool card", () => {
+    const input = [
+      row("q1", "user", text("Which rental leads need my attention?"), "2026-11-08T09:07:12.000Z"),
+      row(originalId, "assistant", toolReply("No leads need attention"), "2026-11-08T09:07:13.835Z"),
+      row(originalId + "-agui-text", "assistant", text("No leads need attention"), "2026-11-08T09:07:16.952Z"),
+    ];
+    const result = mapSavedThreadHistory(input);
+    expect(result.map(m => m.id)).toEqual(["q1", originalId, originalId + ":tc-review"]);
+    expect(result.filter(m => m.role === "assistant")).toHaveLength(1);
+    expect(result.find(m => m.role === "tool")).toMatchObject({ toolCallId: "tc-review" });
+    expect(input).toHaveLength(3); // read-time only; never delete stored audit rows
+  });
+
+  it("prefers runtime text when both exact-pair copies carry no tool calls", () => {
+    const result = mapSavedThreadHistory([
+      row("q1", "user", text("Count my listings"), "2026-11-08T09:07:12.000Z"),
+      row(originalId, "assistant", text("0 listings"), "2026-11-08T09:07:13.835Z"),
+      row(originalId + "-agui-text", "assistant", text("0 listings"), "2026-11-08T09:07:16.952Z"),
+    ]);
+    expect(result.map(m => m.id)).toEqual(["q1", originalId + "-agui-text"]);
+  });
+
+  it("keeps same-prefix rows if their answers are actually different", () => {
+    const result = mapSavedThreadHistory([
+      row(originalId, "assistant", text("First version"), "2026-11-08T09:07:13.835Z"),
+      row(originalId + "-agui-text", "assistant", text("Corrected final answer"), "2026-11-08T09:07:16.952Z"),
+    ]);
+    expect(result.map(m => m.id)).toEqual([originalId, originalId + "-agui-text"]);
+  });
+
+  it("keeps separate identical answers when message IDs are unrelated", () => {
+    const result = mapSavedThreadHistory([
+      row("q1", "user", text("Count"), "2026-11-08T09:07:12.000Z"),
+      row(originalId, "assistant", text("0"), "2026-11-08T09:07:13.835Z"),
+      row("independent-answer", "assistant", text("0"), "2026-11-08T09:07:16.952Z"),
+    ]);
+    expect(result.map(m => m.id)).toEqual(["q1", originalId, "independent-answer"]);
+  });
+});
+
+describe("a multi-step assistant turn replays only its answer", () => {
+  it("drops the narration the live chat never showed", () => {
+    // Exactly the shape production stores when the model narrates before calling a tool:
+    // text, tool-invocation, step-start, text.
+    const stored = {
+      format: 2,
+      parts: [
+        { type: "text", text: "I need to check the broker's workspace to answer this. " },
+        {
+          type: "tool-invocation",
+          toolInvocation: {
+            state: "result",
+            toolCallId: "call-1",
+            toolName: "readBrokerWorkspaceTool",
+            args: { focus: "listings" },
+            result: { listings: 0 },
+          },
+        },
+        { type: "step-start" },
+        { type: "text", text: "The dashboard shows 0 active rental listings right now." },
+      ],
+    };
+    const mapped = mapSavedThreadHistory([row("a1", "assistant", stored)]);
+    const message = mapped.find((m) => m.role === "assistant")!;
+    expect(message.content).toBe("The dashboard shows 0 active rental listings right now.");
+    // The tool card still has what it needs.
+    expect(message.toolCalls?.[0]?.function.name).toBe("readBrokerWorkspaceTool");
+  });
+
+  it("keeps a single-part answer unchanged", () => {
+    const [message] = mapSavedThreadHistory([
+      row("a2", "assistant", text("Zero leads need your attention.")),
+    ]);
+    expect(message.content).toBe("Zero leads need your attention.");
+  });
+});
+
+describe("a trailing tool call without a later final answer", () => {
+  it("keeps its tool card without guessing that earlier text was the answer", () => {
+    const stored = {
+      format: 2,
+      parts: [
+        { type: "text", text: "The dashboard shows 0 active rental listings right now." },
+        {
+          type: "tool-invocation",
+          toolInvocation: {
+            state: "result",
+            toolCallId: "call-2",
+            toolName: "applyRentalFilters",
+            args: {},
+            result: { applied: true },
+          },
+        },
+      ],
+    };
+    const mapped = mapSavedThreadHistory([row("a3", "assistant", stored)]);
+    const message = mapped.find((m) => m.role === "assistant")!;
+    // Ambiguous shape: no text follows the tool call, so nothing is claimed as the answer.
+    expect(message.content).toBe("");
+    expect(message.toolCalls?.[0]?.function.name).toBe("applyRentalFilters");
+  });
+
+  it("does not resurrect narration through the legacy flat fallback", () => {
+    // Parts present, tool present, no answer text: the flat string is narration, not an answer.
+    const stored = {
+      format: 2,
+      parts: [
+        {
+          type: "tool-invocation",
+          toolInvocation: {
+            state: "result",
+            toolCallId: "call-3",
+            toolName: "readBrokerWorkspaceTool",
+            args: {},
+            result: {},
+          },
+        },
+      ],
+      content: "I should use the read-broker-workspace tool to answer this.",
+    };
+    const mapped = mapSavedThreadHistory([row("a4", "assistant", stored)]);
+    const message = mapped.find((m) => m.role === "assistant");
+    expect(message?.content ?? "").not.toContain("I should use");
+  });
+});
+
+describe("narration before a tool call whose answer is absent", () => {
+  it("replays the tool card without promoting the work note to an answer", () => {
+    const stored = {
+      format: 2,
+      parts: [
+        { type: "step-start" },
+        { type: "text", text: "I need to check the broker's workspace to answer this." },
+        {
+          type: "tool-invocation",
+          toolInvocation: {
+            state: "result",
+            toolCallId: "call-4",
+            toolName: "readBrokerWorkspaceTool",
+            args: {},
+            result: { listings: 0 },
+          },
+        },
+      ],
+    };
+    const mapped = mapSavedThreadHistory([row("a5", "assistant", stored)]);
+    const message = mapped.find((m) => m.role === "assistant")!;
+    // Step-start begins a step, not a final answer; pre-tool text stays hidden.
+    expect(message.content).toBe("");
+    expect(message.toolCalls?.[0]?.function.name).toBe("readBrokerWorkspaceTool");
+  });
+});
+
+describe("multi-tool saved history", () => {
+  it("keeps the final text after the last tool and both completed results", () => {
+    const stored = {
+      format: 2,
+      parts: [
+        { type: "step-start" },
+        { type: "text", text: "First I should count the listings." },
+        { type: "tool-invocation", toolInvocation: {
+          state: "result", toolCallId: "first", toolName: "searchRentals", args: {}, result: { count: 1 },
+        } },
+        { type: "step-start" },
+        { type: "text", text: "Next I should check pending viewings." },
+        { type: "tool-invocation", toolInvocation: {
+          state: "result", toolCallId: "second", toolName: "readBrokerWorkspaceTool", args: {},
+          result: { pending: 0 },
+        } },
+        { type: "step-start" },
+        { type: "text", text: "You have one listing and no pending viewings." },
+      ],
+    };
+    const mapped = mapSavedThreadHistory([row("multi", "assistant", stored)]);
+    expect(mapped.find((m) => m.role === "assistant")?.content)
+      .toBe("You have one listing and no pending viewings.");
+    expect(mapped.filter((m) => m.role === "tool").map((m) => m.toolCallId))
+      .toEqual(["first", "second"]);
+    expect(JSON.stringify(mapped)).not.toContain("Next I should");
+  });
+});
+
 describe("reconcileSavedHistory", () => {
   const p = (id: string, role: "user" | "assistant", content: string) => ({ id, role, content });
+
+  it("does not re-add an exact -agui-text duplicate from the live reconnect", () => {
+    const id = "c5744906-930d-481a-92ce-e9ecaddecff1";
+    const saved = [
+      { id: "q1", role: "user" as const, content: "Which leads?" },
+      { id, role: "assistant" as const, content: "No pending leads",
+        toolCalls: [{ id: "tc1", type: "function" as const, function: { name: "getBrokerLeads", arguments: "{}" } }] },
+      { id: id + ":tc1", role: "tool" as const, toolCallId: "tc1", content: "{}" },
+    ];
+    const live = [
+      { id, role: "assistant", content: "No pending leads" },
+      { id: id + "-agui-text", role: "assistant", content: "No pending leads" },
+    ];
+    const out = reconcileSavedHistory(saved, live);
+    expect(out.filter((m) => m.role === "assistant").map((m) => m.id)).toEqual([id]);
+    expect(out.find((m) => m.role === "tool")).toBeDefined();
+  });
 
   it("durable history is the base; a partial live replay adds nothing", () => {
     const persisted = [p("1", "user", "a"), p("2", "assistant", "b"), p("3", "user", "c")];

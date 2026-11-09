@@ -45,6 +45,48 @@ describe("place-details-client-fetch", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("does not retain a successful DTO between sequential calls", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockImplementation(
+      async () =>
+        new Response(
+          JSON.stringify({ placeId: "ChIJSeq123456789", displayName: "Test", photoNames: ["places/x/photos/y"] }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+    );
+    const signal = new AbortController().signal;
+
+    await fetchPlaceDetailsDto("ChIJSeq123456789", signal);
+    await fetchPlaceDetailsDto("ChIJSeq123456789", signal);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not cache a transient quota-store outage after the store recovers", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: "rate_limit_unavailable" }), {
+          status: 503,
+          headers: { "Content-Type": "application/json", "Retry-After": "5" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ placeId: "ChIJRecover12345", displayName: "Recovered" }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      );
+
+    const signal = new AbortController().signal;
+    expect(await fetchPlaceDetailsDto("ChIJRecover12345", signal)).toBe("error");
+    expect(await fetchPlaceDetailsDto("ChIJRecover12345", signal)).toEqual({
+      placeId: "ChIJRecover12345",
+      displayName: "Recovered",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("does not refetch after 502 while failure TTL is active", async () => {
     const fetchMock = vi.mocked(fetch);
     const signal = new AbortController().signal;

@@ -3,6 +3,8 @@ import {
   buildEventSearchParams,
   eventCardsToToolEnvelope,
   canFastPathEventSearch,
+  isEventCardRenderRequest,
+  resolveExplicitEventRequest,
   visibleEventSearchReasons,
   shouldInstantEventClarify,
 } from "@/lib/event-search-fast-path";
@@ -21,6 +23,16 @@ describe("event-search customer-facing reasons", () => {
       { factor: "date_window_relaxed", note: "no tonight matches" },
       { factor: "date_window", note: "untrusted backend note" },
     ])).toEqual([]);
+  });
+});
+
+describe("event card render routing", () => {
+  it("does not treat a card-render request as a new event search", () => {
+    expect(isEventCardRenderRequest("Show the first event as a card.")).toBe(true);
+    expect(isEventCardRenderRequest("Show the first one as a card.")).toBe(true);
+    expect(isEventCardRenderRequest("Use render_ui with the first event.")).toBe(true);
+    expect(isEventCardRenderRequest("Show me cultural events in Medellín.")).toBe(false);
+    expect(isEventCardRenderRequest("Show me event cards in Medellín.")).toBe(false);
   });
 });
 
@@ -228,5 +240,59 @@ describe("SAN-1250 honest ticket offer transport", () => {
       pricePerTicket: 40000, currency: "COP",
       canBuyTickets: true, ticketUrl: "/events/reina",
     });
+  });
+});
+
+describe("resolveExplicitEventRequest", () => {
+  const rows = [
+    { id: "first-id", title: "Feria de las Flores" },
+    { id: "second-id", title: "Reina de Antioquia" },
+  ];
+  it("resolves first, second and named events without the model", () => {
+    expect(resolveExplicitEventRequest("Show the first event as a card.", rows)).toBe("first-id");
+    expect(resolveExplicitEventRequest("Show the second event as a card.", rows)).toBe("second-id");
+    expect(resolveExplicitEventRequest("Show Reina de Antioquia as a card.", rows)).toBe("second-id");
+  });
+  it("does not guess an ambiguous request", () => {
+    expect(resolveExplicitEventRequest("Show an event as a card.", rows)).toBeNull();
+    expect(resolveExplicitEventRequest("Show the second event as a card.", [rows[0]])).toBeNull();
+  });
+});
+
+describe("resolveExplicitEventRequest · identity before position", () => {
+  it("treats a named event as a title, not as an ordinal", () => {
+    const rows = [
+      { id: "jazz", title: "Sunday Jazz" },
+      { id: "salsa", title: "Second Sunday Salsa" },
+    ];
+    // "Second" is part of the NAME here; the old order returned rows[1] by accident and
+    // would return the wrong event whenever the ordinal did not line up.
+    expect(resolveExplicitEventRequest("Show Sunday Jazz as a card.", rows)).toBe("jazz");
+    expect(resolveExplicitEventRequest("Show Second Sunday Salsa as a card.", rows)).toBe("salsa");
+  });
+
+  it("prefers the longest matching title", () => {
+    const rows = [
+      { id: "short", title: "Jazz Night" },
+      { id: "long", title: "Jazz Night Medellin" },
+    ];
+    expect(resolveExplicitEventRequest("Open Jazz Night Medellin please", rows)).toBe("long");
+    expect(resolveExplicitEventRequest("Open Jazz Night please", rows)).toBe("short");
+  });
+
+  it("does not guess when two different rows match equally", () => {
+    const rows = [
+      { id: "a", title: "Jazz Night" },
+      { id: "b", title: "Jazz Night" },
+    ];
+    expect(resolveExplicitEventRequest("Show Jazz Night as a card", rows)).toBeNull();
+  });
+
+  it("still resolves a pure ordinal request", () => {
+    const rows = [
+      { id: "one", title: "Alpha" },
+      { id: "two", title: "Beta" },
+    ];
+    expect(resolveExplicitEventRequest("Show the second event as a card", rows)).toBe("two");
   });
 });

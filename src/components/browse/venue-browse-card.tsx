@@ -103,7 +103,7 @@ function DirectionsLink({
       <Button
         variant="outline"
         size="sm"
-        className="h-8 px-2 text-xs"
+        className="h-card-action px-3 text-xs"
         nativeButton={false}
         render={
           <a
@@ -125,7 +125,7 @@ function DirectionsLink({
     <Button
       variant="link"
       size="sm"
-      className="h-8 px-2 text-xs"
+      className="h-card-action px-3 text-xs"
       nativeButton={false}
       render={
         <Link
@@ -141,6 +141,20 @@ function DirectionsLink({
       Google Maps
     </Button>
   );
+}
+
+/** First letters of the first two words, e.g. "Dulce Jesús Mío" → "DJ". */
+function venueInitials(name: string): string | undefined {
+  const words = name
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (words.length === 0) return undefined;
+  return words
+    .slice(0, 2)
+    .map((word) => word[0]?.toUpperCase() ?? "")
+    .join("");
 }
 
 /** One café or nightlife result: media, facts, and the Ask and Details actions. */
@@ -174,14 +188,16 @@ export function VenueBrowseCard({
         <VenueCardPlaceholder
           label={config.label}
           icon={<Icon className="size-5" aria-hidden />}
+          initials={venueInitials(listing.name)}
           mediaLayout={mediaLayout}
           testId={config.placeholderTestId}
         />
       }
       footer={<div className="flex w-full flex-wrap items-center gap-2">
-        {/* SAN-1122: same 44px action height as RestaurantCard so all three venue
-            cards read and tap the same. Directions stays the compact link it is on
-            restaurants; the primary controls wrap inside the card at 320px. */}
+        {/* One action contract on every discovery card, in this order:
+            Directions · View on map · Ask about this · Details. All four read the
+            same 44px action height so they tap the same on a phone. */}
+        <DirectionsLink mapsUrl={listing.mapsUrl} directionsTestId={config.directionsTestId} mapsTestId={config.mapsTestId} />
         {pinId && onMapSelect ? <Button type="button" size="sm" variant={selectedForMap ? "secondary" : "outline"}
           className="h-card-action min-w-card-action px-3"
           aria-pressed={Boolean(selectedForMap)} data-testid="venue-map-select" onClick={onMapSelect}>
@@ -200,7 +216,6 @@ export function VenueBrowseCard({
           onClick={(event) => onDetails(event.currentTarget)}>
           Details
         </Button> : null}
-        <DirectionsLink mapsUrl={listing.mapsUrl} directionsTestId={config.directionsTestId} mapsTestId={config.mapsTestId} />
       </div>}
     >
       {listing.neighborhood ? (

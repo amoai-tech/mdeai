@@ -22,6 +22,7 @@ import { LeadConfirmationBanner } from "@/components/chat/lead-confirmation-bann
 import { RentalUiProvider, useRentalUi } from "@/components/chat/rental-ui-context";
 import { useOptionalConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
 import { RentalDetailsFrontendTool } from "@/components/rentals/rental-details-tool";
+import { RentalPageControlTool } from "@/components/browse/page-filter-tools";
 import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 import { resolveRentalForDetails } from "@/lib/rentals/details-target";
 import { bookingReviewHref } from "@/lib/rentals/booking-review-url";
@@ -193,6 +194,7 @@ function RentalBrowseViewInner({
         <RentalDetailsFrontendTool results={shownResults} onOpen={openDetailsFor} />
       ) : null}
       <DiscoveryPageContext page="rentals" filters={filterState} selectedId={selectedForAskId ?? detailsRental?.id ?? null} />
+      <RentalPageControlTool filters={filterState} />
       <DiscoveryWorkspace
         testId="rentals-browse"
         activeSlug="rentals"

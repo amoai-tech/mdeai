@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { GroundingAttribution } from "@/components/maps/GroundingAttribution";
+import { groundedSourceLabel } from "@/lib/grounded-place-source";
 import { Badge } from "@/components/ui/badge";
 import {
   useRentalUi,
@@ -222,6 +223,12 @@ export function NightlifeDetailPanel({
               />
             ) : null}
           </>
+        ) : null}
+
+        {groundedSourceLabel(detail.sourceMode, Boolean(detail.groundingSource)) ? (
+          <p data-testid="detail-source-label" className="mt-2 text-xs text-muted-foreground">
+            {groundedSourceLabel(detail.sourceMode, Boolean(detail.groundingSource))}
+          </p>
         ) : null}
 
         {enrichment.status === "loading" ? (

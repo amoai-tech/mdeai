@@ -9,7 +9,8 @@ import {
 import { z } from "zod";
 import { EventPublishApprovalPanel } from "@/components/host/event-publish-approval-panel";
 import {
-  applySetEventDraft,
+  applySetEventDraftPreservingManual,
+  isManualEventFieldProtected,
   publishDecisionDraftPatch,
   selectPublishDraft,
 } from "@/lib/events/host-event-wizard-tool-handlers";
@@ -53,6 +54,7 @@ type HitlRenderProps = {
 function createPublishHitlRender(
   getLatestDraft: () => EventDraftState,
   setDraft: (patch: Partial<EventDraftState>) => void,
+  manualFields: ReadonlySet<string>,
 ) {
   return function HostEventPublishHitlRender({
     args,
@@ -61,7 +63,7 @@ function createPublishHitlRender(
     respond,
   }: HitlRenderProps) {
     // The stable CopilotKit callback must read the latest reviewed form data.
-    const draftArg = selectPublishDraft(args.draft, getLatestDraft());
+    const draftArg = selectPublishDraft(args.draft, getLatestDraft(), manualFields);
     const panelStatus =
       status === "inProgress"
         ? "inProgress"
@@ -95,9 +97,31 @@ function createPublishHitlRender(
 export function HostEventCopilotBridge({ children }: HostEventCopilotBridgeProps) {
   const [draft, setDraftState] = useState<EventDraftState>(EMPTY_EVENT_DRAFT);
 
+  // Stable mutable lock set: renderer registration must not change when the
+  // host edits a field, but the HITL renderer must still see the latest locks.
+  const manualFields = useMemo(() => new Set<string>(), []);
   const setDraft = useCallback((patch: Partial<EventDraftState>) => {
-    setDraftState((prev) => mergeEventDraft(prev, patch));
-  }, []);
+    // Edit returns the draft to editing mode and must preserve the locks taken
+    // while the host was editing. Only terminal outcomes clear them.
+    const reset = patch.status === "published" || patch.status === "rejected";
+    // eslint-disable-next-line react-hooks/immutability -- deliberate non-render lock registry
+    if (reset) manualFields.clear();
+    const normalized = { ...patch };
+    for (const [key, value] of Object.entries(patch)) {
+      if (reset) break;
+      const empty = value == null || value === "" ||
+        (Array.isArray(value) && value.length === 0);
+      if (empty) {
+        manualFields.delete(key);
+        if (key === "capacity" || key === "priceMinCop") {
+          normalized[key as "capacity" | "priceMinCop"] = 0;
+        }
+      } else {
+        manualFields.add(key);
+      }
+    }
+    setDraftState((prev) => mergeEventDraft(prev, normalized));
+  }, [manualFields]);
 
   // Canonical wizard state is owned by this component. Frontend tools and manual
   // edits both write through setDraftState; stale Mastra working memory must not
@@ -122,13 +146,29 @@ export function HostEventCopilotBridge({ children }: HostEventCopilotBridgeProps
         "Apply every event detail the host stated in one call: title, neighborhood, dateIso, venue, capacity, priceMinCop (whole COP), description, optional ticket tiers. Returns the updated draft so the assistant can continue or ask for missing fields.",
       parameters: setEventDraftParams,
       handler: async (args) => {
-        const next = applySetEventDraft(latestDraftRef.current, args);
+        const lockedFields = Object.keys(args).filter((key) => {
+          if (!isManualEventFieldProtected(key, manualFields)) return false;
+          const current = latestDraftRef.current[key as keyof EventDraftState];
+          const proposed = args[key as keyof typeof args];
+          return JSON.stringify(current) !== JSON.stringify(proposed);
+        });
+        const lockedBy: Record<string, string> = {};
+        for (const field of lockedFields) {
+          lockedBy[field] = field === "ticketTiers" && manualFields.has("priceMinCop")
+            ? "priceMinCop"
+            : field;
+        }
+        const next = applySetEventDraftPreservingManual(
+          latestDraftRef.current,
+          args,
+          manualFields,
+        );
         latestDraftRef.current = next;
         setDraftState(next);
-        return { ok: true, draft: next };
+        return { ok: true, draft: next, lockedFields, lockedBy };
       },
     },
-    [],
+    [manualFields],
   );
 
   // Creating the getter doesn't read the ref during bridge render. CopilotKit
@@ -137,8 +177,8 @@ export function HostEventCopilotBridge({ children }: HostEventCopilotBridgeProps
   // Keep the HITL tool stable across form edits, but never capture a stale draft.
   const PublishHitlRender = useMemo(
     // eslint-disable-next-line react-hooks/refs -- Factory stores the getter but never invokes it during registration; the HITL panel invokes it after commit.
-    () => createPublishHitlRender(getLatestDraft, setDraft),
-    [getLatestDraft, setDraft],
+    () => createPublishHitlRender(getLatestDraft, setDraft, manualFields),
+    [getLatestDraft, setDraft, manualFields],
   );
 
   useHumanInTheLoop(

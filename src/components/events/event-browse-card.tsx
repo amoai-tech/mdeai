@@ -3,8 +3,8 @@ import { CalendarDays, Ticket } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { VenueCardShell } from "@/components/browse/venue-card-shell";
-import { VenueCardPlaceholder } from "@/components/browse/venue-card-placeholder";
-import { formatEventCardPrice, formatEventStartsAt } from "@/lib/events/format-event";
+import { VenueCardPlaceholder, venueCardMediaFrame } from "@/components/browse/venue-card-placeholder";
+import { formatEventBadgeDate, formatEventCardPrice, formatEventStartsAt } from "@/lib/events/format-event";
 import type { PublishedEventListItem } from "@/lib/events/list-published-events";
 import type { EventCategory } from "@/mastra/tools/search-events";
 import { cn } from "@/lib/utils";
@@ -31,42 +31,65 @@ const CATEGORY_LABELS: Record<EventCategory, string> = {
   nightlife: "Nightlife",
 };
 
-/** Card media: the real event image, or the placeholder when none is available. */
+/**
+ * Card media: the real event image, or a date badge when none is available.
+ *
+ * A photo-less event used to render the same generic tile as every other photo-less card, which
+ * made the events list read as unfinished. The date is the fact a visitor scans for anyway, and
+ * it is derived from the real record in Medellín local time. The badge is decorative — the
+ * readable schedule line stays the accessible source of truth.
+ */
 function EventBrowseCardMedia({
   imageUrl,
   imageAlt,
   mediaLayout,
+  startsAt,
 }: {
   imageUrl?: string;
   imageAlt: string;
   mediaLayout: "inline" | "cover";
+  startsAt: string;
 }) {
   if (imageUrl) {
-    const frameClass = cn(
-      "relative overflow-hidden rounded-xl bg-muted text-xs text-muted-foreground",
-      mediaLayout === "cover"
-        ? "aspect-[16/10] w-full"
-        : "aspect-[16/10] w-24 shrink-0 self-start",
-    );
-
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
         src={imageUrl}
         alt={imageAlt}
-        className={cn(frameClass, "object-cover")}
+        className={cn(venueCardMediaFrame(mediaLayout), "bg-muted text-xs text-muted-foreground object-cover")}
         loading="lazy"
         data-testid="event-browse-card-photo"
       />
     );
   }
 
+  const badge = formatEventBadgeDate(startsAt);
+
+  // One owner for the media frame: the shared placeholder decides radius, aspect, gradient and
+  // gap. This card only supplies what sits in the middle, so it can never drift from the family.
   return (
     <VenueCardPlaceholder
       label="Event"
       icon={<CalendarDays className="size-5" aria-hidden />}
       mediaLayout={mediaLayout}
-      testId="event-browse-card-photo-placeholder"
+      testId={badge ? "event-browse-card-date-badge" : "event-browse-card-photo-placeholder"}
+      content={
+        badge ? (
+          mediaLayout === "cover" ? (
+            // Full tile: month over a large day.
+            <>
+              <span className="text-[11px] font-semibold tracking-wide">{badge.month}</span>
+              <span className="text-2xl font-semibold leading-none">{badge.day}</span>
+            </>
+          ) : (
+            // 96x60 inline frame: two stacked lines plus the label and gaps exceed 60px and get
+            // clipped, so the inline layout keeps one compact line and still shows the label.
+            <span className="text-sm font-semibold tracking-wide">
+              {badge.month} {badge.day}
+            </span>
+          )
+        ) : undefined
+      }
     />
   );
 }
@@ -103,6 +126,7 @@ export function EventBrowseCard({
       media={
         <EventBrowseCardMedia
           imageUrl={event.imageUrl}
+          startsAt={event.startsAt}
           imageAlt={event.title}
           mediaLayout={mediaLayout}
         />

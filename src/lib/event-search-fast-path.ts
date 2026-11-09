@@ -43,6 +43,12 @@ function attachEventQueryText(
   return params;
 }
 
+/** A request to render an already-visible result must reach the model, not start a new search. */
+export function isEventCardRenderRequest(text: string): boolean {
+  const normalized = text.trim();
+  return /\brender_ui\b/i.test(normalized) || /\bas\s+an?\s+card\b/i.test(normalized);
+}
+
 /** Only a bare "events?" needs clarification; a citywide event request can search all categories. */
 export function shouldInstantEventClarify(
   text: string,
@@ -221,4 +227,38 @@ export function fastPathAssistantSummary(count: number, pinCount: number): strin
     return "No events matched — try another category, neighborhood, or date.";
   }
   return withMapCoverage(`Found ${count} event${count === 1 ? "" : "s"}`, count, pinCount);
+}
+
+const DIRECT_ORDINALS: Record<string, number> = {
+  first: 0, "1st": 0, second: 1, "2nd": 1, third: 2, "3rd": 2,
+  fourth: 3, "4th": 3, fifth: 4, "5th": 4,
+};
+
+/** Resolve an explicit event request against current authorized result rows. */
+export function resolveExplicitEventRequest(
+  text: string,
+  rows: ReadonlyArray<{ id: string; title: string }>,
+): string | null {
+  if (rows.length === 0) return null;
+  const normalize = (value: string) =>
+    value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const normalized = normalize(text);
+
+  // A named event wins over an ordinal word: "Show Second Sunday Salsa as a card" is a
+  // title, not "the second one". Among names, the LONGEST match wins, because a request
+  // for "Jazz Night Medellín" must not open "Jazz Night". Two different rows matching
+  // equally is ambiguous, and this function does not guess.
+  const named = rows
+    .map((row) => ({ row, title: normalize(row.title) }))
+    .filter(({ title }) => title.length > 2 && normalized.includes(title));
+  if (named.length > 0) {
+    const longest = Math.max(...named.map(({ title }) => title.length));
+    const best = named.filter(({ title }) => title.length === longest);
+    return new Set(best.map(({ row }) => row.id)).size === 1 ? best[0].row.id : null;
+  }
+
+  const ordinal = normalized.match(/\b(first|1st|second|2nd|third|3rd|fourth|4th|fifth|5th)\b/);
+  if (ordinal) return rows[DIRECT_ORDINALS[ordinal[1]]]?.id ?? null;
+  if (rows.length === 1 && /\b(the|this|that|it)\s+event\b/i.test(normalized)) return rows[0].id;
+  return null;
 }

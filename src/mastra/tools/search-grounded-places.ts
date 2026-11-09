@@ -1,7 +1,9 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { enrichedGroundedPlaceFieldsSchema } from "../lib/adk-grounding-types";
-import { invokeAdkGrounding } from "../lib/adk-grounding-client";
+import { invokeAdkGrounding, isAdkGroundingConfigured } from "../lib/adk-grounding-client";
+import { searchGoogleCafes, withMedellinScope } from "../lib/google-places-cafe-search";
+import { groundedPlaceSourceModes, type GroundedPlaceSourceMode } from "@/lib/grounded-place-source";
 import {
   mapAdkGroundingPins,
   type GroundedPlaceResult,
@@ -9,6 +11,7 @@ import {
 import { incrementAndCheckGroundingQuota } from "../lib/grounding-quota";
 import { resolveGroundingLocationBias } from "../lib/grounding-location-bias";
 import { runAuditedTool } from "../lib/run-audited-search";
+import { hasVerifiedNearbyRentalUser, searchNearbyRentalPlaces } from "./nearby-rental-places";
 import { searchRestaurants, type Restaurant } from "./search-restaurants";
 import {
   isCoffeeVenueQuery,
@@ -28,6 +31,7 @@ const groundedPlaceResultSchema = z
     latitude: z.number().optional(),
     longitude: z.number().optional(),
     placeId: z.string().optional(),
+    sourceMode: z.enum(groundedPlaceSourceModes).optional(),
     mapsUrl: z.string().url().optional(),
     directionsUrl: z.string().url().optional(),
     reviewsUrl: z.string().url().optional(),
@@ -35,7 +39,7 @@ const groundedPlaceResultSchema = z
   .merge(enrichedGroundedPlaceFieldsSchema);
 
 const CAFE_QUERY =
-  /\b(caf[eé]s?|coffee shops?|quiet caf[eé]s?|top cafes?|list cafes?|coworking|wifi|wi-fi|laptop[- ]friendly)\b/i;
+  /\b(caf[eé]s?|cafeter[ií]as?|coffee shops?|quiet caf[eé]s?|top cafes?|list cafes?|coworking|wifi|wi-fi|laptop[- ]friendly)\b/i;
 
 const NIGHTLIFE_QUERY =
   /\b(nightlife|salsa bars?|hidden bars?|rooftop cocktails?|rooftop bars?|live music bars?|locals go to)\b/i;
@@ -138,7 +142,7 @@ function isBarLoungeDistractor(title: string): boolean {
 }
 
 function isCafeCandidateTitle(title: string): boolean {
-  return /\bcaf[eé]|coffee|brunch/i.test(title);
+  return /\bcaf[eé]|cafeter[ií]a|coffee|brunch/i.test(title);
 }
 
 export function filterCafeGroundingRows(
@@ -149,6 +153,9 @@ export function filterCafeGroundingRows(
   if (!isCafeGroundingIntent(query, intent)) return rows;
   return rows.filter((row) => {
     if (isBarLoungeDistractor(row.title)) return false;
+    if (/^(cafe|coffee_shop|bakery|brunch_restaurant)$/i.test(row.primaryType ?? "")) {
+      return true;
+    }
     return isCafeCandidateTitle(row.title);
   });
 }
@@ -171,10 +178,11 @@ function neighborhoodFromGroundingQuery(query: string): string | undefined {
  * Map a curated Restaurant row to the GroundedPlaceResult shape expected by
  * parseGroundedToolResult / GroundedCafeResults. Used when ADK is unavailable.
  */
-function restaurantToGroundedRow(r: Restaurant): GroundedPlaceResult {
+function restaurantToGroundedRow(r: Restaurant, sourceMode: GroundedPlaceSourceMode): GroundedPlaceResult {
   return {
     id: r.id,
     title: r.name,
+    sourceMode,
     latitude: r.latitude ?? undefined,
     longitude: r.longitude ?? undefined,
     placeId: r.placeId ?? undefined,
@@ -200,6 +208,7 @@ function anchorToGroundedRow(
   return {
     id: row.id,
     title: row.name,
+    sourceMode: "saved_catalog",
     latitude: latitude ?? undefined,
     longitude: longitude ?? undefined,
     placeId: row.google_place_id,
@@ -266,18 +275,22 @@ async function curatedFallback(
     }
   }
 
-  const { results } = await searchRestaurants({
+  const { results, source } = await searchRestaurants({
     neighborhood,
     cuisine: isCoffee ? ("cafe" as const) : undefined,
     limit: pageSize,
   });
-  if (results.length > 0) return results.map(restaurantToGroundedRow);
+  if (results.length > 0) return results.map((row) => restaurantToGroundedRow(
+    row, source === "fallback" ? "demo_fixture" : "saved_catalog",
+  ));
   if (isCoffee) {
-    const { results: broader } = await searchRestaurants({
+    const { results: broader, source: broaderSource } = await searchRestaurants({
       neighborhood,
       limit: pageSize,
     });
-    return broader.map(restaurantToGroundedRow);
+    return broader.map((row) => restaurantToGroundedRow(
+      row, broaderSource === "fallback" ? "demo_fixture" : "saved_catalog",
+    ));
   }
   return [];
 }
@@ -304,6 +317,8 @@ export const searchGroundedPlacesInputSchema = z.object({
       "Optional venue kind: cafe, nightlife (clubs/bars), or general POI search",
     ),
   pageSize: z.number().int().min(1).max(10).default(5).optional(),
+  nearbyRentalId: z.string().uuid().optional().describe("Selected rental UUID from the current authorized search. Server resolves real coordinates; never invent an ID."),
+  nearbyRadiusMeters: z.number().int().min(100).max(5000).optional().describe("Nearby radius in metres, default 800; only with a selected rental."),
   locationBias: z
     .object({
       latitude: z.number(),
@@ -318,7 +333,7 @@ export const searchGroundedPlacesInputSchema = z.object({
 export const searchGroundedPlacesTool = createTool({
   id: "search-grounded-places",
   description:
-    "Search real places near Medellín using Google Maps Grounding Lite (cafés, venues, POIs). Returns map pins with Google Maps links — never invent coordinates.",
+    "Search places near Medellín using existing Google grounding or clearly source-labeled saved catalog fallback. Each row has a sourceMode; saved listings are NOT live Google verification. Never invent coordinates, ratings, Wi-Fi quality, or opening hours.",
   inputSchema: searchGroundedPlacesInputSchema,
   outputSchema: z.object({
     results: z.array(groundedPlaceResultSchema),
@@ -337,6 +352,8 @@ export const searchGroundedPlacesTool = createTool({
       query: string;
       intent?: VenueGroundingIntent;
       pageSize?: number;
+      nearbyRentalId?: string;
+      nearbyRadiusMeters?: number;
       locationBias?: { latitude: number; longitude: number };
     },
     context?: unknown,
@@ -346,7 +363,78 @@ export const searchGroundedPlacesTool = createTool({
       async () => {
     const { query: rawQuery, intent, pageSize, locationBias: inputBias } =
       inputData;
+    // Nearby discovery is one mode of the existing grounded tool, not a second
+    // provider or client-owned coordinates. The server checks the rental via RLS.
+    if (inputData.nearbyRentalId) {
+      if (!isCafeGroundingIntent(rawQuery, intent)) {
+        return {
+          results: [], attribution: [], source: "grounding" as const,
+          metadata: { reason: "nearby_supported_for_cafes_only", venueKind: "general" },
+        };
+      }
+      // Agent calls bypass the HTTP fast-path route: require a verified,
+      // non-anonymous Supabase user before even reserving paid Places quota.
+      // Service bearer alone and public anonymous clients never authorize Nearby.
+      if (!(await hasVerifiedNearbyRentalUser(context))) {
+        return {
+          results: [], attribution: [], source: "grounding" as const,
+          metadata: {
+            venueKind: "cafe" as const,
+            searchMode: "nearby" as const,
+            anchorPinId: `rental-${inputData.nearbyRentalId}`,
+            reason: "authentication_required",
+          },
+        };
+      }
+      // Nearby is billed too: enforce the existing daily Places/grounding
+      // budget and kill switch before a single Google request (Autosana).
+      const nearbyQuota = await incrementAndCheckGroundingQuota();
+      if (!nearbyQuota.allowed) {
+        return {
+          results: [], attribution: [], source: "grounding" as const,
+          metadata: {
+            venueKind: "cafe" as const,
+            searchMode: "nearby" as const,
+            anchorPinId: `rental-${inputData.nearbyRentalId}`,
+            reason: nearbyQuota.reason,
+          },
+        };
+      }
+      return searchNearbyRentalPlaces({
+        rentalId: inputData.nearbyRentalId,
+        radiusMeters: inputData.nearbyRadiusMeters ?? 800,
+        limit: pageSize ?? 5,
+      }, context);
+    }
     const query = normalizeVenueGroundingQuery(rawQuery);
+    // No configured ADK endpoint => no paid provider call and no quota unit.
+    if (!isCafeGroundingIntent(rawQuery, intent) && !isAdkGroundingConfigured()) {
+      try {
+        const fallbackResults = await curatedFallback(rawQuery, pageSize ?? 5, intent);
+        return withVenueKindMetadata(
+          {
+            results: fallbackResults,
+            attribution: [],
+            source: "grounding" as const,
+            metadata: { fallback: "curated", reason: "adk_not_configured" },
+          },
+          rawQuery,
+          intent,
+        );
+      } catch (err) {
+        console.warn("[search-grounded-places] catalog fallback failed:", err);
+        return withVenueKindMetadata(
+          {
+            results: [],
+            attribution: [],
+            source: "grounding" as const,
+            metadata: { fallback: "curated", reason: "adk_not_configured" },
+          },
+          rawQuery,
+          intent,
+        );
+      }
+    }
     const quota = await incrementAndCheckGroundingQuota();
     if (!quota.allowed) {
       // Quota exceeded — degrade to curated restaurant results
@@ -381,6 +469,72 @@ export const searchGroundedPlacesTool = createTool({
         rawQuery,
         intent,
       );
+    }
+    // Real Google cafés first: the installed Places SDK supplies stable IDs,
+    // coordinates and links without depending on the absent ADK sidecar.
+    let directCafeAttempted = false;
+    let directCafeError = false;
+    if (isCafeGroundingIntent(rawQuery, intent)) {
+      directCafeAttempted = true;
+      try {
+        const direct = await searchGoogleCafes({
+          query: withMedellinScope(rawQuery),
+          pageSize: pageSize ?? 5,
+          locationBias: inputBias,
+        });
+        const filteredDirect = filterCafeGroundingRows(direct.results, rawQuery, intent);
+        if (filteredDirect.length > 0) {
+          return withVenueKindMetadata(
+            {
+              results: filteredDirect,
+              attribution: alignGroundedAttribution(filteredDirect, direct.attribution),
+              source: "grounding" as const,
+              metadata: { provider: "google_places", searchMode: "text" },
+            },
+            rawQuery,
+            intent,
+          );
+        }
+      } catch (err) {
+        directCafeError = true;
+        console.warn("[search-grounded-places] Google Places café search failed:", err);
+      }
+    }
+    // Google is the single café provider. If it fails or returns nothing, use
+    // the saved catalog immediately; do not run a second billable search.
+    if (directCafeAttempted) {
+      try {
+        const fallbackResults = await curatedFallback(rawQuery, pageSize ?? 5, intent);
+        return withVenueKindMetadata(
+          {
+            results: fallbackResults,
+            attribution: [],
+            source: "grounding" as const,
+            metadata: {
+              provider: "google_places",
+              fallback: "curated",
+              reason: directCafeError ? "google_places_unavailable" : "google_places_empty",
+            },
+          },
+          rawQuery,
+          intent,
+        );
+      } catch (err) {
+        console.warn("[search-grounded-places] café fallback failed:", err);
+        return withVenueKindMetadata(
+          {
+            results: [],
+            attribution: [],
+            source: "grounding" as const,
+            metadata: {
+              provider: "google_places",
+              reason: directCafeError ? "google_places_unavailable" : "google_places_empty",
+            },
+          },
+          rawQuery,
+          intent,
+        );
+      }
     }
     const locationBias = resolveGroundingLocationBias({
       locationBias: inputBias,
