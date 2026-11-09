@@ -219,5 +219,12 @@ describe("deterministic route plan", () => {
       origin: "Laureles",
       destination: "Provenza",
     });
+    expect(routePlanForTurn([
+      user("¿Cuánto se tarda de Laureles a Provenza en moto?"),
+    ])).toEqual({
+      origin: "Laureles",
+      destination: "Provenza",
+      travelMode: "DRIVE",
+    });
   });
 });

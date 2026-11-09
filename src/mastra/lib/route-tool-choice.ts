@@ -102,7 +102,7 @@ export function routeTravelMode(
   if (/\b(?:bike|bikes|bicycling|bicycle|cycling|cycle|en bici|en bicicleta)\b/i.test(modeText)) {
     return "BICYCLE";
   }
-  if (/\b(?:drive|driving|car|auto|taxi|uber|didi|en carro)\b/i.test(modeText)) {
+  if (/\b(?:drive|driving|car|auto|taxi|uber|didi|moto|motorbike|motorcycle|mototaxi|en carro)\b/i.test(modeText)) {
     return "DRIVE";
   }
   if (/\b(?:transit|public transport|bus|metro|transporte)\b/i.test(modeText)) {
