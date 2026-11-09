@@ -1,11 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { computeRouteTool } from "../compute-route";
+import { MDEAI_ROUTE_PLAN_KEY } from "../../lib/route-tool-choice";
 
 const audit = vi.hoisted(() => ({ userId: null as string | null }));
 vi.mock("../../lib/tool-audit-context", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../lib/tool-audit-context")>();
   return { ...actual, getAuditUserId: () => audit.userId };
 });
+const resolution = vi.hoisted(() => ({
+  resolveRoutePlaceId: vi.fn(async (query: string): Promise<string | null> => `place:${query}`),
+}));
+vi.mock("../../lib/route-endpoint-resolution", () => ({
+  resolveRoutePlaceId: resolution.resolveRoutePlaceId,
+}));
 const quota = vi.hoisted(() => ({
   checkRateLimitDurable: vi.fn(async (key: string, max: number, window: number) => {
     void key; void max; void window;
@@ -26,7 +33,20 @@ beforeEach(() => {
   quota.checkRateLimitDurable.mockResolvedValue({
   allowed: true, count: 1, max: 100, retryAfterSeconds: 0, storeAvailable: true,
   });
+  resolution.resolveRoutePlaceId.mockClear();
+  resolution.resolveRoutePlaceId.mockImplementation(async (query: string): Promise<string | null> => `place:${query}`);
 });
+
+function planContext(plan: { origin: string; destination: string; travelMode: string }) {
+  const store = new Map<string, unknown>();
+  store.set(MDEAI_ROUTE_PLAN_KEY, plan);
+  return {
+    requestContext: {
+      get: (key: string) => store.get(key),
+      set: (key: string, value: unknown) => store.set(key, value),
+    },
+  };
+}
 
 describe("computeRouteTool", () => {
   it("returns a genuine route and attribution", async () => {
@@ -187,5 +207,122 @@ describe("computeRouteTool", () => {
       destination: { address: "Provenza" },
     }, {} as never);
     expect(out).toMatchObject({ route: null, source: "google_routes", reason: "route_unavailable" });
+  });
+
+  it("uses the user's parsed endpoints and mode instead of model-invented place IDs", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      routes: [{ distanceMeters: 714, duration: "294s" }],
+    }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const out = await computeRouteTool.execute!({
+      origin: { placeId: "ChIJC5nPIzP024QRZo05wS3p8SI" },
+      destination: { placeId: "ChIJ1z6y7zJ624QRR0fKV0Lx6FI" },
+      travelMode: "WALK",
+    }, planContext({
+      origin: "Parque Lleras",
+      destination: "Provenza",
+      travelMode: "DRIVE",
+    }) as never);
+    expect(out).toMatchObject({
+      route: { distanceMeters: 714, durationSeconds: 294, travelMode: "DRIVE" },
+      source: "google_routes",
+    });
+    expect(resolution.resolveRoutePlaceId).toHaveBeenCalledWith("Parque Lleras");
+    expect(resolution.resolveRoutePlaceId).toHaveBeenCalledWith("Provenza");
+    const body = JSON.parse(String((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body));
+    expect(body.origin).toEqual({ placeId: "place:Parque Lleras" });
+    expect(body.destination).toEqual({ placeId: "place:Provenza" });
+    expect(body.travelMode).toBe("DRIVE");
+  });
+
+  it("reports unavailable without calling Routes when Places cannot resolve an endpoint", async () => {
+    resolution.resolveRoutePlaceId.mockResolvedValueOnce(null);
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const out = await computeRouteTool.execute!({
+      origin: { placeId: "invented" },
+      destination: { placeId: "invented" },
+    }, planContext({
+      origin: "Nowhere at all",
+      destination: "Provenza",
+      travelMode: "WALK",
+    }) as never);
+    expect(out).toMatchObject({ route: null, source: "google_routes", reason: "route_unavailable" });
+    expect(fetchMock).not.toHaveBeenCalled();
+    // A typo must not consume a Routes quota slot.
+    expect(quota.checkRateLimitDurable).not.toHaveBeenCalled();
+  });
+
+  it("does not spend a second Routes call or quota slot when the model repeats the same forced route", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      routes: [{ distanceMeters: 362, duration: "377s" }],
+    }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const context = planContext({
+      origin: "Parque Lleras",
+      destination: "Provenza",
+      travelMode: "WALK",
+    });
+    const first = await computeRouteTool.execute!({
+      origin: { placeId: "invented-first" },
+      destination: { placeId: "invented-first" },
+    }, context as never);
+    const second = await computeRouteTool.execute!({
+      origin: { placeId: "invented-second" },
+      destination: { placeId: "invented-second" },
+      includePolyline: true,
+    }, context as never);
+    expect(second).toEqual(first);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(resolution.resolveRoutePlaceId).toHaveBeenCalledTimes(2);
+    expect(quota.checkRateLimitDurable).toHaveBeenCalledTimes(1);
+  });
+
+  it("shares one in-flight provider call across concurrent duplicate tool calls", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      routes: [{ distanceMeters: 362, duration: "377s" }],
+    }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const context = planContext({
+      origin: "Parque Lleras",
+      destination: "Provenza",
+      travelMode: "WALK",
+    });
+    const [first, second] = await Promise.all([
+      computeRouteTool.execute!({
+        origin: { placeId: "invented-a" },
+        destination: { placeId: "invented-a" },
+      }, context as never),
+      computeRouteTool.execute!({
+        origin: { placeId: "invented-b" },
+        destination: { placeId: "invented-b" },
+      }, context as never),
+    ]);
+    expect(second).toEqual(first);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(resolution.resolveRoutePlaceId).toHaveBeenCalledTimes(2);
+    expect(quota.checkRateLimitDurable).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not treat an inherited object name as a cached place", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      routes: [{ distanceMeters: 100, duration: "60s" }],
+    }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const out = await computeRouteTool.execute!({
+      origin: { placeId: "invented" },
+      destination: { placeId: "invented" },
+    }, planContext({
+      origin: "constructor",
+      destination: "toString",
+      travelMode: "WALK",
+    }) as never);
+    expect(out).toMatchObject({
+      source: "google_routes",
+      route: { distanceMeters: 100, durationSeconds: 60 },
+    });
+    expect(resolution.resolveRoutePlaceId).toHaveBeenCalledWith("constructor");
+    expect(resolution.resolveRoutePlaceId).toHaveBeenCalledWith("toString");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

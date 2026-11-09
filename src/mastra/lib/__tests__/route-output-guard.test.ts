@@ -50,13 +50,104 @@ describe("real route-output guard", () => {
     });
   });
 
-  it("preserves provider-backed successful routes unchanged", async () => {
+  it("builds the walking answer from Google's numbers and drops model embellishment", async () => {
     const state = {};
     await pipe("tool-result", { toolName: "computeRouteTool", result: {
-      route: { distanceMeters: 362, durationSeconds: 377, attribution: "Google Maps" },
+      route: {
+        distanceMeters: 362,
+        durationSeconds: 377,
+        travelMode: "WALK",
+        warning: "Walking routes may omit sidewalks or pedestrian paths. Use caution.",
+        attribution: "Google Maps",
+      },
     } }, state);
-    const text = await pipe("text-delta", { text: "Google says 362 metres." }, state);
-    expect(text).toMatchObject({ payload: { text: "Google says 362 metres." } });
+    const first = await pipe("text-delta", { text: "It is 362 m along Calle 70 in 5 minutes." }, state);
+    expect(first).toMatchObject({
+      payload: {
+        text: "Google Maps: 362 m, about 6 minutes walking. Walking routes may omit sidewalks or pedestrian paths. Use caution.",
+      },
+    });
+    expect(await pipe("text-delta", { text: " And it is a lovely walk." }, state)).toBeNull();
+  });
+
+  it("formats exact kilometres without a decimal and detects Spanish a pie", async () => {
+    const state = {};
+    await pipe("tool-result", { toolName: "computeRouteTool", result: {
+      route: { distanceMeters: 1000, durationSeconds: 600, travelMode: "WALK", attribution: "Google Maps" },
+    } }, state);
+    const text = await pipe("text-delta", { text: "10 minutes." }, state, "¿Cuánto se tarda a pie de Laureles a Provenza?");
+    expect(text).toMatchObject({ payload: { text: "Google Maps: 1 km, unos 10 minutos a pie." } });
+  });
+
+  it("labels transit consistently with the other modes", async () => {
+    const state = {};
+    await pipe("tool-result", { toolName: "computeRouteTool", result: {
+      route: { distanceMeters: 5000, durationSeconds: 900, travelMode: "TRANSIT", attribution: "Google Maps" },
+    } }, state);
+    const text = await pipe("text-delta", { text: "15 minutes." }, state);
+    expect(text).toMatchObject({ payload: { text: "Google Maps: 5 km, about 15 minutes riding transit." } });
+  });
+
+  it("does not repeat the same route when the model calls the tool twice", async () => {
+    const state = {};
+    const route = { distanceMeters: 361, durationSeconds: 371, travelMode: "WALK", attribution: "Google Maps" };
+    await pipe("tool-result", { toolName: "computeRouteTool", result: { route } }, state);
+    await pipe("tool-result", { toolName: "computeRouteTool", result: { route } }, state);
+    const text = await pipe("text-delta", { text: "Here is the route." }, state);
+    const rendered = (text as { payload: { text: string } }).payload.text;
+    expect(rendered.match(/Google Maps: 361 m/g)).toHaveLength(1);
+  });
+
+  it("keeps every successful route in a multi-route turn", async () => {
+    const state = {};
+    await pipe("tool-result", { toolName: "computeRouteTool", result: {
+      route: { distanceMeters: 361, durationSeconds: 371, travelMode: "WALK", attribution: "Google Maps" },
+    } }, state);
+    await pipe("tool-result", { toolName: "computeRouteTool", result: {
+      route: { distanceMeters: 6269, durationSeconds: 5477, travelMode: "WALK", attribution: "Google Maps" },
+    } }, state);
+    const text = await pipe("text-delta", { text: "Here are the routes." }, state);
+    const rendered = (text as { payload: { text: string } }).payload.text;
+    expect(rendered).toContain("Google Maps: 361 m, about 6 minutes walking.");
+    expect(rendered).toContain("Google Maps: 6.3 km, about 91 minutes walking.");
+  });
+
+  it("uses the Spanish route wording and caution from the provider result", async () => {
+    const state = {};
+    await pipe("tool-result", { toolName: "computeRouteTool", result: {
+      route: {
+        distanceMeters: 6269,
+        durationSeconds: 5477,
+        travelMode: "WALK",
+        warning: "Walking routes may omit sidewalks or pedestrian paths. Use caution.",
+        attribution: "Google Maps",
+      },
+    } }, state);
+    const first = await pipe("text-delta", { text: "Son 5 minutos." }, state, "¿Cuánto se tarda de Laureles a Provenza?");
+    expect(first).toMatchObject({
+      payload: {
+        text: "Google Maps: 6.3 km, unos 91 minutos a pie. Las rutas a pie pueden omitir aceras o senderos peatonales; ten cuidado.",
+      },
+    });
+  });
+
+  it("reports a driving route in minutes without a walking caution", async () => {
+    const state = {};
+    await pipe("tool-result", { toolName: "computeRouteTool", result: {
+      route: { distanceMeters: 440, durationSeconds: 221, travelMode: "DRIVE", attribution: "Google Maps" },
+    } }, state);
+    const first = await pipe("text-delta", { text: "About 5 minutes by car." }, state);
+    expect(first).toMatchObject({ payload: { text: "Google Maps: 440 m, about 4 minutes driving." } });
+  });
+
+  it("keeps a separate answer after a successful route and later café search", async () => {
+    const state = {};
+    await pipe("tool-result", { toolName: "computeRouteTool", result: {
+      route: { distanceMeters: 362, durationSeconds: 377, travelMode: "WALK", attribution: "Google Maps" },
+    } }, state);
+    await pipe("tool-result", { toolName: "searchRestaurantsTool", result: { results: [{ id: "cafe-1" }] } }, state);
+    const out = await pipe("text-delta", { text: "Café A is one result." }, state);
+    expect(out).toMatchObject({ payload: { text: "Café A is one result." } });
   });
 
   it("does not touch unrelated café, booking or rental results", async () => {
