@@ -49,8 +49,12 @@ const NEW_SEARCH_CRITERIA =
 const BEDROOM_WORD = /\b(bedrooms?|beds?|habitaci[oó]n(?:es)?|dormitorios?)\b/i;
 const CONTROL_NOUN = /\b(control|selector|picker|slider|controlador)\b/i;
 const ADJUST_VERB = /\b(adjust|change|set|update|choose|pick|edit|cambiar|ajustar|elegir|seleccionar|poner)\b/i;
-const NOT_A_PAGE_CONTROL =
-  /\b(show|display|list|see|how many|search|find|new search|details?|open|book|schedule|price|budget|under|over)\b|\?\s*$|\b\d+\s*(?:br|bed|bedroom)\b/i;
+/** A bedroom count always means a filter or search request, in either language. */
+const BEDROOM_COUNT =
+  /\b\d+\s*(?:br|bed|bedrooms?|habitaci[oó]n(?:es)?|dormitorios?|rec[áa]maras?)\b/i;
+/** Results/questions phrasing, only when no explicit control noun is present. */
+const RESULTS_PHRASING =
+  /\b(show|display|list|see|how many|search|find|new search|details?|open|book|schedule|price|budget|under|over|mu[eé]strame|mostrar|buscar|encontrar)\b|\?\s*$/i;
 
 export function shouldRenderRentalFilterControl({
   stepNumber,
@@ -67,8 +71,14 @@ export function shouldRenderRentalFilterControl({
   const text = messageText(lastUser).trim();
   if (!text) return false;
   if (!BEDROOM_WORD.test(text)) return false;
-  if (!CONTROL_NOUN.test(text) && !ADJUST_VERB.test(text)) return false;
-  return !NOT_A_PAGE_CONTROL.test(text);
+  const hasControlNoun = CONTROL_NOUN.test(text);
+  const hasAdjustVerb = ADJUST_VERB.test(text);
+  if (!hasControlNoun && !hasAdjustVerb) return false;
+  // A count means "search/filter for N bedrooms", never "show me a picker".
+  if (BEDROOM_COUNT.test(text)) return false;
+  // An explicit control noun wins over a results verb: "show me the bedroom control".
+  if (!hasControlNoun && RESULTS_PHRASING.test(text)) return false;
+  return true;
 }
 
 export function shouldRequestRecommendations({
