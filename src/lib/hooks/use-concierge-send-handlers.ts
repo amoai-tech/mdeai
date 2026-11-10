@@ -364,17 +364,22 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
     meta: rentalFastPath?.searchMeta,
     result: rentalFastPath?.toolResult,
   });
-  currentRentalViewRef.current = {
-    meta: rentalFastPath?.searchMeta,
-    result: rentalFastPath?.toolResult,
-  };
   const topicShiftRecoveryRef = useRef<{
     threadId: string | undefined;
     view: { meta: RentalSearchMeta | null | undefined; result: unknown };
     previous: Pick<ConciergeWorkingMemory, "lastIntent" | "lastRentalQuery" | "lastRentalResults" | "selectedListingId">;
   } | null>(null);
   const currentThreadRef = useRef(threadId);
-  currentThreadRef.current = threadId;
+  // React refs must only be updated outside render. The effect refreshes the
+  // visible search identity after every committed provider/thread change, so
+  // a late agent callback cannot clean up a newer apartment search.
+  useEffect(() => {
+    currentRentalViewRef.current = {
+      meta: rentalFastPath?.searchMeta,
+      result: rentalFastPath?.toolResult,
+    };
+    currentThreadRef.current = threadId;
+  }, [rentalFastPath?.searchMeta, rentalFastPath?.toolResult, threadId]);
   const onTopicShift = useCallback((intent: RouterIntent, stage: "accepted" | "completed" | "failed") => {
     if (stage === "accepted") {
       // Model turns may fail after the user message was accepted. Capture only
