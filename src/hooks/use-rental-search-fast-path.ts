@@ -15,7 +15,7 @@ import {
   type RentalSearchApiParams,
 } from "@/lib/rental-search-fast-path";
 import { logRoutingDecision } from "@/lib/intelligence-telemetry";
-import { budgetNotApplied, scoreRentalQuery } from "@/lib/rental-query-parser";
+import { budgetNotApplied, isExactMonthlyBudgetOnlyRefinement, scoreRentalQuery } from "@/lib/rental-query-parser";
 import {
   RENTAL_HANDOFF_FAILED_SUMMARY,
   RENTAL_SEARCH_UNAVAILABLE_SUMMARY,
@@ -337,6 +337,28 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
 
       const params = buildRentalSearchParams(trimmed, memory);
       if (!params) return false;
+
+      // Narrow the same visible rental search without broadening semantic results.
+      // An authenticated AI turn may have replaced working memory while leaving
+      // older fast-path cards visible: never carry that stale query text forward.
+      const shown = searchMeta?.params;
+      const previous = memory.lastRentalQuery;
+      const sameVisibleSearch = shown && previous &&
+        previous.neighborhood === shown.neighborhood &&
+        previous.minBedrooms === shown.minBedrooms &&
+        previous.maxPricePerNight === shown.maxPricePerNight &&
+        previous.maxPriceMonthly === shown.maxPriceMonthly &&
+        previous.budgetCurrency === shown.budgetCurrency &&
+        previous.budgetType === shown.stayType &&
+        previous.checkIn === shown.checkIn &&
+        previous.checkOut === shown.checkOut;
+      if (isExactMonthlyBudgetOnlyRefinement(trimmed) &&
+          params.maxPriceMonthly != null &&
+          sameVisibleSearch &&
+          params.budgetCurrency === shown.budgetCurrency &&
+          shown.queryText) {
+        params.queryText = shown.queryText;
+      }
 
       if (busyRef.current) {
         // A full queue declines the message (false), so the sender routes it to the concierge
