@@ -97,9 +97,15 @@ export function ItineraryPanel({
                         <p className="font-medium text-foreground">{item.title}</p>
                         <p className="text-xs text-muted-foreground">
                           {itemTypeLabel(item.item_type)}
-                          {item.location_name ? ` · ${item.location_name}` : ""}
+                          {item.location_name
+                            ? ` · ${item.location_name}`
+                            : item.latitude == null || item.longitude == null
+                              ? " · Location unavailable"
+                              : ""}
                         </p>
-                        {onShowOnMap ? (
+                        {onShowOnMap &&
+                        item.latitude != null &&
+                        item.longitude != null ? (
                           <button
                             type="button"
                             data-testid={`itinerary-show-on-map-${item.id}`}
