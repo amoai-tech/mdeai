@@ -213,16 +213,27 @@ export async function resolveRouterClassification(
   // Agent working memory may not update lastIntent during that answer. Mark
   // the switch at dispatch instead, without a separate intent engine.
   // "Apartments near coworking" is still a rental request.
-  // Booking/hiring a coworking space is an action request, not discovery.
-  // Leave it to the existing router/Flash classifier instead of forcing the
-  // discovery-only state reset. Do not infer a reservation or booking success.
+  // Only an actual booking INSTRUCTION ("Book a coworking space") skips the
+  // discovery topic shift. "Which spaces can I book?" is still discovery.
+  // Let booking actions use the existing router/Flash/agent; never invent a booking.
   const coworkingBookingRequest =
-    /\b(?:book(?:ing)?|reserv(?:e|ation)|rent(?:ing)?|hir(?:e|ing))\b/i.test(text);
-  if (regex.routingTarget === "agent" &&
-      /\b(?:co[-\s]?working|coworking|shared\s+(?:workspaces?|offices?))\b/i.test(text) &&
-      !looksLikeRentalSearch(text) && !coworkingBookingRequest) {
+    /^\s*(?:(?:can|could|would)\s+you\s+)?(?:please\s+)?(?:book|reserve|rent|hire)\b/i.test(text) ||
+    /^\s*i\s+(?:want|need)\s+to\s+(?:book|reserve|rent|hire)\b/i.test(text);
+  const coworkingSubject =
+    /\b(?:co[-\s]?working|coworking|shared\s+(?:workspaces?|offices?))\b/i.test(text);
+  // "Coworking spaces for rent" refers to workplaces, not apartment listings.
+  // The generic rental regex detects "for rent", so recognize the coworking
+  // subject explicitly without hijacking "apartments near coworking" queries.
+  const coworkingForRent =
+    /\b(?:co[-\s]?working|coworking|shared\s+(?:workspaces?|offices?))\s+(?:spaces?|desks?|offices?)?\s*for\s+rent\b/i.test(text) &&
+    !/\b(?:apartments?|rentals?|flats?|condos?|homes?|houses?|airbnbs?|lodging|stays?)\b/i.test(text);
+  if (coworkingSubject && !coworkingBookingRequest &&
+      (coworkingForRent || (regex.routingTarget === "agent" && !looksLikeRentalSearch(text)))) {
     return {
       ...regex,
+      intent: "general_concierge",
+      action: "agent",
+      routingTarget: "agent",
       reason: "explicit coworking discovery topic change",
       explicitTopicShift: "coworking",
       topicShift: true,

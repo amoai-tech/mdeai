@@ -143,6 +143,18 @@ describe("SAN-874 coworking switches the conversation without hijacking rentals"
     expect(result.reason).not.toBe("explicit coworking discovery topic change");
   });
 
+  it.each([
+    "Which coworking spaces can I book by the day?",
+    "Find coworking spaces for rent in Laureles",
+  ])("treats %s as coworking discovery, not booking or apartments", async (question) => {
+    const result = await resolveRouterClassification(question, {
+      lastIntent: "rental_search", inRentalSearch: true,
+    });
+    expect(result.explicitTopicShift).toBe("coworking");
+    expect(result.intent).toBe("general_concierge");
+    expect(result.routingTarget).toBe("agent");
+  });
+
   it("keeps apartments near coworking spaces on the rental search", async () => {
     const result = await resolveRouterClassification("Find apartments near coworking spaces in Laureles", {
       lastIntent: "rental_search", inRentalSearch: true,
