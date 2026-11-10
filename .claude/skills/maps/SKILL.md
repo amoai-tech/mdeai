@@ -1,7 +1,7 @@
 ---
 name: maps
 description: >-
-  Use whenever MDE work implements, changes, reviews, or diagnoses Google Maps Platform: Maps JavaScript, Places, markers, routes/ETA, location search, geocoding, Maps grounding, map state, API keys, attribution, or Maps-related cost/security. Do not use for generic GIS or Mapbox/Leaflet/OpenStreetMap-only work with no Google Maps Platform dependency.
+  Use whenever MDE work implements, changes, reviews, or diagnoses Google Maps Platform: Maps JavaScript, Places, markers, routes/ETA, location search, geocoding, Maps grounding, Google Maps Agentic UI toolkit, A2UI map integration, CopilotKit Google Maps interoperability, map state, API keys, attribution, or Maps-related cost/security. Do not use for generic GIS, A2UI without Google Maps integration, or Mapbox/Leaflet/OpenStreetMap-only work with no Google Maps Platform dependency.
 title: maps — Google Maps Platform (comprehensive)
 impact: HIGH
 impactDescription: Places enrichment, Maps grounding, ChatMap, batch APIs, security, AI code assist
@@ -98,6 +98,7 @@ Do not select a product from memory when current Google guidance is available.
 |------|-------|
 | **CLI batch** — use the maintained batch helper and behavior notes | [`scripts/gmaps.py`](scripts/gmaps.py) + [`references/gmaps-cli-behavior.md`](references/gmaps-cli-behavior.md) |
 | **Security** — API key architecture, HTML pages, embed iframes | [`references/security-and-optimization.md`](references/security-and-optimization.md) |
+| **Agentic UI / A2UI** — Google Maps toolkit vs CopilotKit Map vs existing MDE Google Maps | [`references/a2ui-and-agentic-maps.md`](references/a2ui-and-agentic-maps.md) |
 | **Source selection / current docs** | [`references/reference-index.md`](references/reference-index.md) |
 
 ## mdeAI environment

@@ -1,0 +1,26 @@
+[
+  {
+    "id": "maps-1",
+    "prompt": "Should we integrate Google's A2UI Maps Agentic UI toolkit into MDE's existing Trips map? Review only.",
+    "should_trigger": true,
+    "expected_owner": "maps"
+  },
+  {
+    "id": "maps-2",
+    "prompt": "Show actual Google Routes driving legs and ETA between MDE trip stops instead of marker-connecting straight lines. Review only.",
+    "should_trigger": true,
+    "expected_owner": "maps"
+  },
+  {
+    "id": "maps-3",
+    "prompt": "Compare the standard CopilotKit Map renderer with MDE's Google Maps and verify why MapLibre should stay excluded. Review only.",
+    "should_trigger": true,
+    "expected_owner": "maps"
+  },
+  {
+    "id": "maps-4",
+    "prompt": "Create a generic A2UI customer-feedback form with no map, place, geolocation or Google Maps Platform integration.",
+    "should_trigger": false,
+    "expected_owner": "copilotkit"
+  }
+]

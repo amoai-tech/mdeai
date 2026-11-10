@@ -31,6 +31,102 @@
       "prompt": "Make a generic PostGIS query that finds points inside a polygon; this project does not use Google Maps for the operation.",
       "expected_output": "Maps skill should not be selected because the task is generic GIS with no Google Maps Platform dependency.",
       "files": []
+    },
+    {
+      "id": 6,
+      "prompt": "We're considering integrating Google's A2UI Maps Agentic UI toolkit into MDE Trips. Review the choice, explain the existing architecture and the smallest safe adaptation; do not modify files.",
+      "expected_output": "Loads the existing Maps skill and its A2UI reference, compares experimental Google toolkit with MDE's vis.gl Maps, and recommends reusing current MapsShell/pins, rather than importing a second map renderer, Python ADK/A2A server, or trip writer.",
+      "files": [],
+      "expectations": [
+        {
+          "id": "catalog-exposes-maps",
+          "kind": "deterministic",
+          "check": "catalog_contains",
+          "value": "maps"
+        },
+        {
+          "id": "agent-loaded-maps",
+          "kind": "deterministic",
+          "check": "skill_called",
+          "value": "maps"
+        },
+        {
+          "id": "maps-instructions-read",
+          "kind": "deterministic",
+          "check": "skill_result_ok",
+          "value": "maps"
+        },
+        {
+          "id": "agent-completed-turn",
+          "kind": "deterministic",
+          "check": "turn_completed"
+        }
+      ],
+      "should_trigger": true
+    },
+    {
+      "id": 7,
+      "prompt": "Could we enable CopilotKit's standard Map and Button to let Ask MDE save cafés to Trips? Review the existing catalog, component limitations, and safe current workflow; do not modify files.",
+      "expected_output": "Recognizes Map and Button are currently omitted in MDE_OMITTED_STANDARD_COMPONENTS and SAN-1655/SAN-1658 must wire registered functions and tests before AI inputs can be enabled. Reuses the existing native AddToTripButton/addTripItem/RPC and Google Maps; never presents dead controls or bypasses user confirmation.",
+      "files": [],
+      "expectations": [
+        {
+          "id": "catalog-exposes-maps",
+          "kind": "deterministic",
+          "check": "catalog_contains",
+          "value": "maps"
+        },
+        {
+          "id": "agent-loaded-maps",
+          "kind": "deterministic",
+          "check": "skill_called",
+          "value": "maps"
+        },
+        {
+          "id": "maps-instructions-read",
+          "kind": "deterministic",
+          "check": "skill_result_ok",
+          "value": "maps"
+        },
+        {
+          "id": "agent-completed-turn",
+          "kind": "deterministic",
+          "check": "turn_completed"
+        }
+      ],
+      "should_trigger": true
+    },
+    {
+      "id": 8,
+      "prompt": "We want real driving routes between saved trip stops on the MDE Google Map. Recommend the current implementation path and how to prove accurate ETA; do not modify files.",
+      "expected_output": "Loads Maps guidance, keeps Google Routes client, source-backed waypoints, provider-computed legs/polyline/duration, and explicitly rejects straight-line connecting markers, invented ETA or deprecated directions services.",
+      "files": [],
+      "expectations": [
+        {
+          "id": "catalog-exposes-maps",
+          "kind": "deterministic",
+          "check": "catalog_contains",
+          "value": "maps"
+        },
+        {
+          "id": "agent-loaded-maps",
+          "kind": "deterministic",
+          "check": "skill_called",
+          "value": "maps"
+        },
+        {
+          "id": "maps-instructions-read",
+          "kind": "deterministic",
+          "check": "skill_result_ok",
+          "value": "maps"
+        },
+        {
+          "id": "agent-completed-turn",
+          "kind": "deterministic",
+          "check": "turn_completed"
+        }
+      ],
+      "should_trigger": true
     }
   ]
 }
