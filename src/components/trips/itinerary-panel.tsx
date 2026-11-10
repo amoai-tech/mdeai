@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, MapPin } from "lucide-react";
 import type { TripItemRow } from "@/lib/trips/trip-item-types";
 import {
@@ -31,21 +31,29 @@ export function ItineraryPanel({
 }: ItineraryPanelProps) {
   const dayGroups = groupTripItemsByDay(items, timeZone);
   const overlaps = detectScheduleOverlaps(items, timeZone);
-  // Server time is the hydration-safe initial value; client time resumes after mount.
-  const [nowMs, setNowMs] = useState(() => {
+  // Server time is the hydration-safe base. After mount, advance it using the
+  // monotonic clock elapsed since mount, not the client's wall clock, so a
+  // skewed device clock cannot flip Up Next.
+  const [nowMs, setNowMs] = useState<number | null>(() => {
     const parsed = nowIso ? Date.parse(nowIso) : Number.NaN;
-    return Number.isFinite(parsed) ? parsed : 0;
+    return Number.isFinite(parsed) ? parsed : null;
   });
+  const mountedAtRef = useRef<number | null>(null);
   useEffect(() => {
-    const sync = () => setNowMs(Date.now());
-    const initial = window.setTimeout(sync, 0);
-    const id = window.setInterval(sync, 60_000);
-    return () => {
-      window.clearTimeout(initial);
-      window.clearInterval(id);
+    const parsed = nowIso ? Date.parse(nowIso) : Number.NaN;
+    if (!Number.isFinite(parsed)) {
+      mountedAtRef.current = null;
+      return;
+    }
+    mountedAtRef.current = performance.now();
+    const sync = () => {
+      if (mountedAtRef.current == null) return;
+      setNowMs(parsed + (performance.now() - mountedAtRef.current));
     };
-  }, []);
-  const upNext = getUpNextItem(items, new Date(nowMs));
+    const id = window.setInterval(sync, 60_000);
+    return () => window.clearInterval(id);
+  }, [nowIso]);
+  const upNext = nowMs == null ? null : getUpNextItem(items, new Date(nowMs));
 
   return (
     <section data-testid="itinerary-panel" className="space-y-4">

@@ -49,6 +49,23 @@ describe("ItineraryPanel location state", () => {
     expect(screen.getByTestId("itinerary-panel")).not.toBeNull();
   });
 
+  it("does not invent a 1970 Up Next when the server time is missing", () => {
+    render(
+      <ItineraryPanel
+        items={[
+          item({
+            id: "future-no-now",
+            start_at: "2099-11-21T04:30:00.000Z",
+            latitude: 6.25,
+            longitude: -75.59,
+          }),
+        ]}
+        onShowOnMap={() => {}}
+      />,
+    );
+    expect(screen.queryByTestId("itinerary-up-next")).toBeNull();
+  });
+
   it("shows Up Next for the first future persisted stop", () => {
     renderItems([
       item({
