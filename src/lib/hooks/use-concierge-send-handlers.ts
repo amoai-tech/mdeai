@@ -241,7 +241,7 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
   // error signal at the start of every send, so a non-zero version here belongs to this run.
   /** Validate session, wait for the existing agent, and show an honest result. */
   const performAgentSend = useCallback(
-    async (text: string, submissionId?: string) => {
+    async (text: string, submissionId?: string, onAccepted?: () => void) => {
       // A fast guest can send before the session check has finished. Ask once, now, instead of
       // letting that send reach the protected runtime (401 -> "try again"). If the check itself throws
       // (network down) we keep what we already know: no user yet means the sign-in offer, which heals
@@ -285,6 +285,10 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
       }
       try {
         if ((await waitForRuntimeReady()) && (await appendMessage(text))) {
+          // A signed-in agent accepted this turn. Now the outgoing topic can
+          // replace the previous rental cards and memory without hiding a
+          // guest's apartments behind a sign-in prompt or clearing on failures.
+          onAccepted?.();
           // If the model returns no A2UI surface, the existing real result can still be
           // shown through Quick view. Two rules keep it honest:
           //  - never open a card when the model already rendered one (any event), and
@@ -320,10 +324,10 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
    * Coalesce identical in-flight questions and serialize distinct questions.
    * Release each key after completion so later deliberate repeats still work.
    */
-  const onAgentSend = useCallback((text: string, submissionId?: string): Promise<boolean> => {
+  const onAgentSend = useCallback((text: string, submissionId?: string, onAccepted?: () => void): Promise<boolean> => {
     const existing = pendingAgentSendsRef.current.get(text);
     if (existing) return existing;
-    const pending = lastAgentSendRef.current.then(() => performAgentSend(text, submissionId));
+    const pending = lastAgentSendRef.current.then(() => performAgentSend(text, submissionId, onAccepted));
     pendingAgentSendsRef.current.set(text, pending);
     lastAgentSendRef.current = pending.then(() => undefined, () => undefined);
     void pending.finally(() => {
