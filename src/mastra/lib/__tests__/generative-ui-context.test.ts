@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { RENTAL_A2UI_CONTEXT_DESCRIPTION } from "@/lib/rentals/a2ui-context";
 import { hasGenerativeUIGuide, MDE_A2UI_GUIDE, readEventResultHints, readRentalResultHints } from "../generative-ui-context";
 import { EVENT_A2UI_CONTEXT_DESCRIPTION } from "@/lib/events/a2ui-context";
+import { mdeUI } from "@/components/copilot/a2ui/mde-ui-catalog";
 
 function context(value: string) {
   return {
@@ -155,6 +156,22 @@ describe("A2UI system instructions", () => {
     expect(MDE_A2UI_GUIDE).toContain("Do not promise one");
     expect(MDE_A2UI_GUIDE).toContain("Offer a FollowUp instead");
     expect(MDE_A2UI_GUIDE).not.toMatch(/component: "Button"/);
+  });
+
+  it("documents every component the catalog exposes, and only those", () => {
+    // The model never receives upstream schemas: MDE builds its own guide. If
+    // the catalog exposes a component the guide does not name, the model has no
+    // prop contract and will guess; if the guide names one the catalog dropped,
+    // the model will call a component the runtime rejects.
+    for (const name of mdeUI.components.keys()) {
+      expect(
+        new RegExp(`\\b${name}\\b`).test(MDE_A2UI_GUIDE),
+        `${name} is exposed in mdeUI but not documented in the guide`,
+      ).toBe(true);
+    }
+    // Word-boundary match, so "Card" is not satisfied by "RentalCard".
+    expect(new RegExp("\\bCard\\b").test(MDE_A2UI_GUIDE)).toBe(true);
+    expect(new RegExp("\\bRentalCard\\b").test(MDE_A2UI_GUIDE)).toBe(true);
   });
 
   it("scopes the no-prose rule so a short heading is not contradictory", () => {

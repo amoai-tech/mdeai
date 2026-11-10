@@ -5,6 +5,7 @@ import {
   useGenerativeUIRuntime,
 } from "@copilotkit/react-core/v2/generative-ui";
 import { mdeUI } from "@/components/copilot/a2ui/mde-ui-catalog";
+import { useOptionalConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
 
 /**
  * SAN-1656 — the first named page Surface: grounded apartment recommendations
@@ -37,10 +38,17 @@ export const RENTAL_RECOMMENDATIONS_COMPONENTS = [
 ] as const;
 
 export function RentalRecommendationsSurface() {
-  // Deterministic browser tests mount the app without CopilotKit; the stock
-  // surface requires the generative-UI runtime and throws without it.
+  // Mount only where the page actually has a concierge agent. Without one there
+  // is nothing that could target this panel, so registering the target would be
+  // dead weight on every visit — and deterministic browser tests mount the app
+  // without CopilotKit at all, where the stock Surface would throw.
+  //
+  // The guard is deliberately NOT "is this surface targeted": the runtime builds
+  // the tool's target enum from surfaces that are mounted, so waiting for a
+  // target before mounting is circular and the panel could never be reached.
   const runtime = useGenerativeUIRuntime();
-  if (!runtime) return null;
+  const coAgent = useOptionalConciergeCoAgent();
+  if (!runtime || !coAgent) return null;
 
   return (
     <GenerativeUISurface
