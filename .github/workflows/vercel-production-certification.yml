@@ -190,6 +190,16 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: npm run test:e2e:prod-candidate-certification
 
+      # SAN-755: a cheap, anonymous two-turn browser regression blocks the
+      # release if the monthly-budget follow-up falls into sign-in or stale cards.
+      # Keep it separate from the expensive signed-in agent journey.
+      - name: Verify guest COP budget refinement before promotion
+        if: ${{ success() && steps.certify.outcome == 'success' }}
+        env:
+          PROD_SMOKE_BASE_URL: ${{ env.VERCEL_DEPLOYMENT_URL }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: npm run test:e2e:prod-guest-budget
+
       # Only the exact main-push Floor workflow can clear this gate. Missing or pending
       # runs wait within a fixed budget; failed/unknown/timeout stop before promotion.
       # Do not accept PR checks or a status context named "floor".
