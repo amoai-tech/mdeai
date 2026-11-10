@@ -185,8 +185,9 @@ describe("SAN-874 latest-topic context", () => {
       } });
     });
     expect(handlers.inRentalSearch).toBe(true);
-    const agent = vi.fn(async (_text: string, _id?: string, onAccepted?: () => void) => {
+    const agent = vi.fn(async (_text: string, _id?: string, onAccepted?: () => void, onCompleted?: () => void) => {
       onAccepted?.();
+      onCompleted?.();
       return true;
     });
     await act(async () => {
