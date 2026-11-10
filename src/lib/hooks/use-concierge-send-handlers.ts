@@ -68,7 +68,7 @@ import { useRentalSearchFastPath } from "@/hooks/use-rental-search-fast-path";
 import { useRestaurantSearchFastPath } from "@/hooks/use-restaurant-search-fast-path";
 import { parseDetailsCommand } from "@/lib/rentals/details-command";
 import { toDetailRental } from "@/lib/rentals/chat-rental-detail";
-import { useOptionalRentalFastPath } from "@/components/chat/rental-fast-path-context";
+import { useOptionalRentalFastPath, type RentalSearchMeta } from "@/components/chat/rental-fast-path-context";
 import type { RouterIntent } from "@/lib/router-intent";
 import type { ConciergeWorkingMemory } from "@/lib/types";
 import { useRentalUi } from "@/components/chat/rental-ui-context";
@@ -370,7 +370,7 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
   };
   const topicShiftRecoveryRef = useRef<{
     threadId: string | undefined;
-    view: { meta: typeof rentalFastPath.searchMeta | undefined; result: unknown };
+    view: { meta: RentalSearchMeta | null | undefined; result: unknown };
     previous: Pick<ConciergeWorkingMemory, "lastIntent" | "lastRentalQuery" | "lastRentalResults" | "selectedListingId">;
   } | null>(null);
   const currentThreadRef = useRef(threadId);
