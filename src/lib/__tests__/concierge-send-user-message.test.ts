@@ -150,18 +150,20 @@ describe("SAN-867 · VEB-MVP-001 — Router hijack fix — sendConciergeUserMess
     const handlers = {
       ...makeHandlers(), inRentalSearch: true,
       onTopicShift: vi.fn<(intent: import("@/lib/router-intent").RouterIntent) => void>(),
-      onAgentSend: vi.fn<(text: string, id?: string, onAccepted?: () => void) => Promise<boolean>>(
-        async (_text, _id, onAccepted) => {
+      onAgentSend: vi.fn<(text: string, id?: string, onAccepted?: () => void, onCompleted?: () => void) => Promise<boolean>>(
+        async (_text, _id, onAccepted, onCompleted) => {
           onAccepted?.();
+          onCompleted?.();
           return true;
         },
       ),
     };
     await sendConciergeUserMessage("What coworking spaces are in Laureles?", handlers);
-    expect(handlers.onTopicShift).toHaveBeenCalledOnce();
-    expect(handlers.onTopicShift).toHaveBeenCalledWith("general_concierge");
+    expect(handlers.onTopicShift).toHaveBeenCalledTimes(2);
+    expect(handlers.onTopicShift).toHaveBeenNthCalledWith(1, "general_concierge", "accepted");
+    expect(handlers.onTopicShift).toHaveBeenNthCalledWith(2, "general_concierge", "completed");
     expect(handlers.onAgentSend).toHaveBeenCalledWith(
-      "What coworking spaces are in Laureles?", expect.any(String), expect.any(Function),
+      "What coworking spaces are in Laureles?", expect.any(String), expect.any(Function), expect.any(Function),
     );
     expect(handlers.handleRentalMessage).not.toHaveBeenCalled();
   });
