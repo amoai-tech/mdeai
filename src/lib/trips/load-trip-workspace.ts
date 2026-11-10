@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import type { TripItemRow, TripWorkspaceData } from "./trip-item-types";
+import { resolveTripTimeZone } from "./timezone";
 
 type TripItemQueryRow = {
   id: string;
@@ -61,6 +62,7 @@ export async function loadTripWorkspace(
 
   return {
     ...trip,
+    timezone: resolveTripTimeZone(trip.timezone),
     items: ((items ?? []) as TripItemQueryRow[]).map((row) => ({
       id: row.id,
       item_type: row.item_type,

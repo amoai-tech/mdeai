@@ -7,6 +7,7 @@ import {
   groupTripItemsByDay,
 } from "../itinerary-logic";
 import type { TripItemRow } from "../trip-item-types";
+import { resolveTripTimeZone } from "../timezone";
 
 const base = (over: Partial<TripItemRow>): TripItemRow => ({
   id: over.id ?? "1",
@@ -49,6 +50,15 @@ describe("groupTripItemsByDay", () => {
 });
 
 describe("trip-local timezone", () => {
+  it("falls back to Bogotá for an invalid owner-controlled value", () => {
+    expect(resolveTripTimeZone("Bogota")).toBe("America/Bogota");
+    const late = base({
+      start_at: "2026-11-22T04:30:00.000Z",
+    });
+    expect(() => groupTripItemsByDay([late], "Bogota")).not.toThrow();
+    expect(groupTripItemsByDay([late], "Bogota")[0].dayKey).toBe("2026-11-21");
+  });
+
   it("uses the trip timezone for the day key and displayed time", () => {
     const late = base({
       id: "late",

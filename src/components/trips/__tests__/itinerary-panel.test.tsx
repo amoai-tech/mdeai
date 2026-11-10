@@ -32,6 +32,16 @@ describe("ItineraryPanel location state", () => {
     );
   });
 
+  it("renders with a safe fallback when the stored timezone is invalid", () => {
+    render(
+      <ItineraryPanel
+        items={[item({ id: "tz", latitude: 6.25, longitude: -75.59 })]}
+        timeZone="Bogota"
+      />,
+    );
+    expect(screen.getByTestId("itinerary-panel")).not.toBeNull();
+  });
+
   it("shows Up Next for the first future persisted stop", () => {
     renderItems([
       item({
