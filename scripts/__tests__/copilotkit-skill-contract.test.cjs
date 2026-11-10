@@ -89,6 +89,18 @@ test("custom component work loads the focused catalog reference instead of creat
   assert.match(guide, /src\/components\/copilot\/a2ui\/mde-ui-catalog\.tsx/);
   assert.match(guide, /\*\*EXTEND\*\*, never CREATE/);
   assert.match(guide, /strict, synchronous Zod/);
+  // Keep the existing authorized-result/ID hydration owners discoverable after any refactor.
+  for (const source of [
+    "src/components/copilot/rental-card.tsx",
+    "src/components/copilot/search-tool-renders.tsx",
+    "src/components/chat/rental-ui-context.tsx",
+    "src/components/rentals/rental-browse-view.tsx",
+    "src/components/events/event-browse-view.tsx",
+    "src/lib/events/get-public-event.ts",
+  ]) {
+    assert.ok(guide.includes(source), `missing canonical data owner pointer: ${source}`);
+    assert.ok(existsSync(join(process.cwd(), source)), `canonical data owner not found: ${source}`);
+  }
   assert.match(pack.evals.find((item) => item.id === 20)?.expected_output ?? "", /references\/component-catalogs\.md/);
 });
 
