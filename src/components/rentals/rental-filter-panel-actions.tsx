@@ -41,7 +41,7 @@ export function decideApply({
 }
 
 export function RentalFilterPanelActions({ filters }: { filters: RentalBrowseFilterState }) {
-  const { draft, draftRef, setApplyError } = useRentalFilterDraft();
+  const { draftRef, setApplyError } = useRentalFilterDraft();
   const router = useRouter();
   const filtersRef = useRef(filters);
   const inFlightRef = useRef(false);
@@ -50,7 +50,8 @@ export function RentalFilterPanelActions({ filters }: { filters: RentalBrowseFil
     inFlightRef.current = false;
   }, [filters]);
 
-  useGenerativeUIState(mdeUI, "rentalFilters", { beds: draft.beds });
+  // AI must see applied URL filters; an unapplied selection remains private draft state.
+  useGenerativeUIState(mdeUI, "rentalFilters", { beds: filters.beds });
 
   useGenerativeUIFunction(mdeUI, "applyRentalFilters", () => {
     const beds = draftRef.current.beds;
