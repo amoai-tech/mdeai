@@ -92,6 +92,12 @@ export const RENTAL_BED_OPTIONS = [
 
 const NATIVE_BED_VALUES = new Set(["0", "1", "2", "3"]);
 
+/** A select's empty/whitespace value means "Any", never a real bedroom count. */
+export function normalizeBedSelection(value: string): string | null {
+  const trimmed = value.trim();
+  return trimmed === "" ? null : trimmed;
+}
+
 export function isRentalBedValue(value: string | null): boolean {
   return value === null || NATIVE_BED_VALUES.has(value);
 }

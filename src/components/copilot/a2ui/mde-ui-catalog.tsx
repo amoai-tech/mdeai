@@ -16,7 +16,7 @@ import { useOptionalRentalUi } from "@/components/chat/rental-ui-context";
 import { useOptionalMapContext } from "@/platform/maps/map-context";
 import { useOptionalRentalFastPath } from "@/components/chat/rental-fast-path-context";
 import { useOptionalEventFastPath } from "@/components/chat/event-fast-path-context";
-import { RENTAL_BED_OPTIONS, useOptionalRentalFilterDraft } from "@/components/rentals/rental-filter-draft";
+import { RENTAL_BED_OPTIONS, normalizeBedSelection, useOptionalRentalFilterDraft } from "@/components/rentals/rental-filter-draft";
 import { EVENT_A2UI_ID_PATTERN } from "@/lib/events/a2ui-id";
 import { isFinishedToolPayload, normalizeToolEnvelope } from "@/lib/normalize-tool-envelope";
 import { toDetailRental } from "@/lib/rentals/chat-rental-detail";
@@ -435,7 +435,7 @@ function MdeBedroomFilter({ label }: { label?: string }) {
         aria-label={label ?? "Bedrooms"}
         className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground"
         value={draft.draft.beds ?? ""}
-        onChange={(event) => draft.setBeds(event.target.value === "" ? null : event.target.value)}
+        onChange={(event) => draft.setBeds(normalizeBedSelection(event.target.value))}
       >
         {RENTAL_BED_OPTIONS.map((option) => (
           <option key={option.label} value={option.value ?? ""}>{option.label}</option>
