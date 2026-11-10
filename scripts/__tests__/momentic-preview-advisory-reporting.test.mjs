@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import { test } from 'node:test';
 import { RENTAL_TESTS, EVENT_TESTS, CONCIERGE_TESTS, selectMomenticPilotTests } from '../momentic-pilot-scope.mjs';
@@ -66,4 +67,43 @@ test('scoped preview access is created, revoked before reporting, and cleanup fa
   assert.match(workflow, /--url-override/);
   assert.match(workflow, /started_at=/);
   assert.match(workflow, /completed_at=/);
+});
+
+test('Momentic installs on a supported pinned runner and reports setup failure as BLOCKED, not an app regression', () => {
+  assert.match(workflow, /runs-on: ubuntu-24\.04/);
+  assert.match(workflow, /id: browser_install/);
+  assert.match(workflow, /BROWSER_INSTALL: \$\{\{ steps\.browser_install\.outcome \}\}/);
+  const publisher = workflow.split('- name: Publish advisory PR check with honest status\n')[1]?.split('\n      - name: Upload JUnit')[0];
+  assert.ok(publisher, 'advisory publisher exists after browser setup and cleanup');
+  assert.match(publisher, /if: always\(\) && steps\.scope\.outputs\.pr != ''/);
+  assert.match(publisher, /conclusion=neutral/);
+  assert.match(publisher, /elif \[\[ "\$SHARED" == true && "\$REVOKED" != success \]\]; then[\s\S]*?conclusion=failure\s+elif \[\[ "\$BROWSER_INSTALL" == failure \]\]; then\s+result="BLOCKED — Momentic Chromium installation failed \(0\/\$count executed\)"/);
+  assert.match(publisher, /elif \[\[ "\$BROWSER_INSTALL" == failure \]\]; then[\s\S]*?elif \[\[ "\$OUTCOME" == success \]\]; then/);
+  assert.match(publisher, /elif \[\[ "\$BROWSER_INSTALL" == cancelled \]\]; then\s+result="BLOCKED — Momentic Chromium installation cancelled \(0\/\$count executed\)"/);
+});
+
+test('publisher executes real shell decision for setup failure, cancellation, and cleanup priority', () => {
+  const body = workflow.split('- name: Publish advisory PR check with honest status\n')[1]?.split('\n      - name: Upload JUnit')[0];
+  const run = body?.split('        run: |\n')[1]?.split('\n          url=')[0];
+  assert.ok(run, 'extract the real publisher decision without invoking GitHub API');
+  const script = run.split('\n').map(line => line.replace(/^          /, '')).join('\n')
+    + '\nprintf "%s|%s\\n" "$result" "$conclusion"';
+  const defaults = {
+    SELECTION_OK: 'true', SELECTED: 'true', SHARED: 'true', REVOKED: 'success',
+    BROWSER_INSTALL: 'success', OUTCOME: 'skipped', VERIFIED: 'true',
+    INSTALLED: 'true', TEST_COUNT: '3',
+  };
+  const cases = [
+    ['install failure', { BROWSER_INSTALL: 'failure' }, 'BLOCKED — Momentic Chromium installation failed (0/3 executed)|neutral'],
+    ['install cancellation', { BROWSER_INSTALL: 'cancelled' }, 'BLOCKED — Momentic Chromium installation cancelled (0/3 executed)|neutral'],
+    ['cleanup takes priority', { BROWSER_INSTALL: 'failure', REVOKED: 'failure' }, 'ERROR — temporary preview access revocation failed|failure'],
+    ['real test success', { OUTCOME: 'success' }, 'PASS — 3/3 selected read-only journeys|success'],
+  ];
+  for (const [name, changes, expected] of cases) {
+    const result = spawnSync('bash', ['-c', script], {
+      env: { ...defaults, ...changes }, encoding: 'utf8',
+    });
+    assert.equal(result.status, 0, name + ': ' + result.stderr);
+    assert.equal(result.stdout.trim(), expected, name);
+  }
 });
