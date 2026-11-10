@@ -70,6 +70,7 @@ import { parseDetailsCommand } from "@/lib/rentals/details-command";
 import { toDetailRental } from "@/lib/rentals/chat-rental-detail";
 import { useOptionalRentalFastPath } from "@/components/chat/rental-fast-path-context";
 import type { RouterIntent } from "@/lib/router-intent";
+import type { ConciergeWorkingMemory } from "@/lib/types";
 import { useRentalUi } from "@/components/chat/rental-ui-context";
 import { useSession } from "@/hooks/use-session";
 import { isSelectedRentalCafeNearbyRequest } from "@/lib/cafe-search-fast-path";
@@ -239,7 +240,7 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
   // error signal at the start of every send, so a non-zero version here belongs to this run.
   /** Validate session, wait for the existing agent, and show an honest result. */
   const performAgentSend = useCallback(
-    async (text: string, submissionId?: string, onAccepted?: () => void, onCompleted?: () => void) => {
+    async (text: string, submissionId?: string, onAccepted?: () => void, onCompleted?: () => void, onFailed?: () => void) => {
       // A fast guest can send before the session check has finished. Ask once, now, instead of
       // letting that send reach the protected runtime (401 -> "try again"). If the check itself throws
       // (network down) we keep what we already know: no user yet means the sign-in offer, which heals
@@ -302,11 +303,14 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
             onCompleted?.();
             return true;
           }
+          onFailed?.();
           showNotice(AGENT_UNAVAILABLE_MESSAGE);
         } else {
+          onFailed?.();
           showExchange(text, AGENT_UNAVAILABLE_MESSAGE, submissionId);
         }
       } catch (error) {
+        onFailed?.();
         console.error("[concierge-agent-send]", error);
         reportConciergeError({ threadId, retry: retryLastTurn });
         showNotice(AGENT_UNAVAILABLE_MESSAGE);
@@ -324,10 +328,10 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
    * Coalesce identical in-flight questions and serialize distinct questions.
    * Release each key after completion so later deliberate repeats still work.
    */
-  const onAgentSend = useCallback((text: string, submissionId?: string, onAccepted?: () => void, onCompleted?: () => void): Promise<boolean> => {
+  const onAgentSend = useCallback((text: string, submissionId?: string, onAccepted?: () => void, onCompleted?: () => void, onFailed?: () => void): Promise<boolean> => {
     const existing = pendingAgentSendsRef.current.get(text);
     if (existing) return existing;
-    const pending = lastAgentSendRef.current.then(() => performAgentSend(text, submissionId, onAccepted, onCompleted));
+    const pending = lastAgentSendRef.current.then(() => performAgentSend(text, submissionId, onAccepted, onCompleted, onFailed));
     pendingAgentSendsRef.current.set(text, pending);
     lastAgentSendRef.current = pending.then(() => undefined, () => undefined);
     void pending.finally(() => {
@@ -353,26 +357,49 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
   const inRentalSearch = rentalIntentIsCurrent &&
     (Boolean(visibleRentalSearch) || Boolean(state?.lastRentalQuery));
 
-  const onTopicShift = useCallback((intent: RouterIntent, stage: "accepted" | "completed") => {
+  const topicShiftRecoveryRef = useRef<{
+    threadId: string | undefined;
+    previous: Pick<ConciergeWorkingMemory, "lastIntent" | "lastRentalQuery" | "lastRentalResults" | "selectedListingId">;
+  } | null>(null);
+  const currentThreadRef = useRef(threadId);
+  currentThreadRef.current = threadId;
+  const onTopicShift = useCallback((intent: RouterIntent, stage: "accepted" | "completed" | "failed") => {
     if (stage === "accepted") {
-      // Mark the latest topic as soon as the signed-in message is in the thread.
-      // Keep old results visible until a successful agent run; this blocks a
-      // rental budget hijack during streaming without hiding cards on errors.
-      setState((previous) => ({
-        ...previous,
-        lastIntent: intent,
-        lastRentalQuery: undefined,
-        lastRentalResults: undefined,
-        selectedListingId: undefined,
-      }));
+      // Model turns may fail after the user message was accepted. Capture only
+      // rental-specific memory for a safe rollback, never the whole CoAgent.
+      setState((previous) => {
+        topicShiftRecoveryRef.current = {
+          threadId,
+          previous: {
+            lastIntent: previous.lastIntent,
+            lastRentalQuery: previous.lastRentalQuery,
+            lastRentalResults: previous.lastRentalResults,
+            selectedListingId: previous.selectedListingId,
+          },
+        };
+        return {
+          ...previous,
+          lastIntent: intent,
+          lastRentalQuery: undefined,
+          lastRentalResults: undefined,
+          selectedListingId: undefined,
+        };
+      });
+      return;
+    }
+    const recovery = topicShiftRecoveryRef.current;
+    topicShiftRecoveryRef.current = null;
+    // An old stream must not clear or restore a different saved chat.
+    if (!recovery || recovery.threadId !== currentThreadRef.current) return;
+    if (stage === "failed") {
+      // Keep old rental cards/pins available after a failed coworking response;
+      // restore their matching query so a legitimate refinement still works.
+      setState((previous) => ({ ...previous, ...recovery.previous }));
     } else {
-      // Remove ONLY the stale rental surface. Newly grounded coworking places
-      // and their genuine pins from the agent run must remain visible.
-      // Saved messages, other verticals and their map pins are untouched.
       rentalFastPath?.clearToolResults();
       map?.mergePinsByCategory?.("rental", []);
     }
-  }, [rentalFastPath, map, setState]);
+  }, [rentalFastPath, map, setState, threadId]);
 
   return useMemo(
     () => ({
