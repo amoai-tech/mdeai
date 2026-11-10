@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { RENTAL_A2UI_CONTEXT_DESCRIPTION } from "@/lib/rentals/a2ui-context";
-import { hasGenerativeUIGuide, MDE_A2UI_GUIDE, readEventResultHints, readRentalResultHints, readRentalResultIds } from "../generative-ui-context";
+import { MDE_GENERATIVE_UI_RULES, buildGenerativeUiInstruction, hasGenerativeUIGuide, MDE_A2UI_GUIDE, readEventResultHints, readGenerativeUiGuide, readRentalResultHints, readRentalResultIds } from "../generative-ui-context";
 import { EVENT_A2UI_CONTEXT_DESCRIPTION } from "@/lib/events/a2ui-context";
 import { mdeUI } from "@/components/copilot/a2ui/mde-ui-catalog";
 
@@ -206,5 +206,54 @@ describe("A2UI system instructions", () => {
     expect(MDE_A2UI_GUIDE).toContain("short labels (8 words or fewer)");
     expect(MDE_A2UI_GUIDE).toContain("Never put paragraphs");
     expect(MDE_A2UI_GUIDE).not.toContain("Never put prose");
+  });
+});
+
+describe("official generative-UI guide forwarding", () => {
+  const official = {
+    context: [
+      { description: "App context", value: "{\"page\":\"rentals\"}" },
+      {
+        description: "Generative UI guide: available components, functions, targets, and how to call render_ui.",
+        value: "# Components\nRentalCard: props { listingId }\nTargets: chat, rental-recommendations\nEvery operation needs version 1.0",
+      },
+    ],
+  };
+
+  it("reads the guide the runtime generated for this run", () => {
+    expect(readGenerativeUiGuide(official)).toContain("RentalCard: props { listingId }");
+    expect(readGenerativeUiGuide(official)).toContain("version 1.0");
+  });
+
+  it("returns nothing for malformed or absent context", () => {
+    expect(readGenerativeUiGuide(undefined)).toBe("");
+    expect(readGenerativeUiGuide({})).toBe("");
+    expect(readGenerativeUiGuide({ context: [] })).toBe("");
+    expect(readGenerativeUiGuide({ context: [{ description: "Generative UI guide: x", value: 42 }] })).toBe("");
+  });
+
+  it("bounds an oversized guide instead of blowing the prompt budget", () => {
+    const huge = `${"component line\n".repeat(4000)}end`;
+    const read = readGenerativeUiGuide({ context: [{ description: "Generative UI guide: x", value: huge }] });
+    expect(read.length).toBeLessThan(huge.length);
+    expect(read).not.toContain("end");
+  });
+
+  it("puts MDE rules after the official guide so they win", () => {
+    const built = buildGenerativeUiInstruction(official);
+    expect(built).toContain("RentalCard: props { listingId }");
+    expect(built).toContain(MDE_GENERATIVE_UI_RULES);
+    expect(built.indexOf(MDE_GENERATIVE_UI_RULES)).toBeGreaterThan(built.indexOf("version 1.0"));
+    // The fallback's custom tool instruction is not used when the real guide exists.
+    expect(built).not.toContain("showRecommendations");
+  });
+
+  it("falls back to the static guide when the entry exists but carries no text", () => {
+    const blank = buildGenerativeUiInstruction({
+      context: [{ description: "Generative UI guide: x", value: "   " }],
+    });
+    expect(blank).toBe(MDE_A2UI_GUIDE);
+    expect(buildGenerativeUiInstruction(undefined)).toBe("");
+    expect(buildGenerativeUiInstruction({ context: [] })).toBe("");
   });
 });

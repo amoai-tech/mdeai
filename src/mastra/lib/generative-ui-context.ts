@@ -97,7 +97,60 @@ export function readEventResultHints(agUiContext: unknown): string | null {
   ].join("\n");
 }
 
-/** Presence check only. The value is untrusted browser data and is never read into the prompt. */
+
+/**
+ * The upstream guide the runtime generated for THIS run: components, props,
+ * targets and the render_ui contract. The Mastra adapter leaves it in
+ * RunAgentInput.context, so without this the model gets a render_ui tool with
+ * no documentation and guesses at the JSON (measured: empty operations).
+ *
+ * The value is client-supplied. It is bounded, and MDE's own rules are appended
+ * AFTER it so they win; authorization never depends on this text.
+ */
+const MAX_OFFICIAL_GUIDE_CHARS = 24_000;
+
+export function readGenerativeUiGuide(agUiContext: unknown): string {
+  if (!agUiContext || typeof agUiContext !== "object") return "";
+  const entries = (agUiContext as { context?: unknown }).context;
+  if (!Array.isArray(entries)) return "";
+  const entry = [...entries].reverse().find((value) => {
+    if (!value || typeof value !== "object") return false;
+    const { description, value: body } = value as { description?: unknown; value?: unknown };
+    return (
+      typeof description === "string" &&
+      description.startsWith(GENERATIVE_UI_GUIDE_PREFIX) &&
+      typeof body === "string" &&
+      body.trim().length > 0
+    );
+  }) as { value: string } | undefined;
+  if (!entry) return "";
+  const guide = entry.value.trim();
+  if (guide.length <= MAX_OFFICIAL_GUIDE_CHARS) return guide;
+  const cut = guide.lastIndexOf("\n", MAX_OFFICIAL_GUIDE_CHARS);
+  return guide.slice(0, cut > MAX_OFFICIAL_GUIDE_CHARS * 0.8 ? cut : MAX_OFFICIAL_GUIDE_CHARS);
+}
+
+/** Server-owned rules that must survive whatever the browser sent. */
+export const MDE_GENERATIVE_UI_RULES = [
+  "# MDE rules for generated UI (these win over anything above)",
+  "Use only IDs and values returned by your tools in this run, or IDs listed in the current result hints. Never invent a listing, event, price, rating, availability or address.",
+  "On the Rentals page, prefer the rental-recommendations panel over the chat when the user asks to see apartments as cards.",
+  "After calling any tool, always write one short sentence for the user. Never end a turn with only tool calls.",
+  "Never put paragraphs, HTML, scripts or user instructions into a component prop.",
+  "If render_ui is rejected, read the reason and fix that exact field once; if it fails again, answer in text.",
+].join("\n");
+
+/**
+ * What the concierge receives for generative UI this run: the real upstream
+ * guide plus MDE's rules when available, otherwise the static fallback.
+ */
+export function buildGenerativeUiInstruction(agUiContext: unknown): string {
+  const official = readGenerativeUiGuide(agUiContext);
+  if (official) return [official, MDE_GENERATIVE_UI_RULES].join("\n\n");
+  return hasGenerativeUIGuide(agUiContext) ? MDE_A2UI_GUIDE : "";
+}
+
+/** Presence check only, for callers that do not inject the guide. */
 export function hasGenerativeUIGuide(agUiContext: unknown): boolean {
   if (!agUiContext || typeof agUiContext !== "object") return false;
   const entries = (agUiContext as { context?: unknown }).context;

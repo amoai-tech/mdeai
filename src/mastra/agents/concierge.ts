@@ -19,7 +19,7 @@ import { CONCIERGE_AGENT_MODEL } from "../lib/models";
 import { geminiMalformedFirstStepRetry } from "../lib/gemini-malformed-retry";
 import { getDefaultInputProcessors } from "../lib/agent-input-processors";
 import { currentSelectedNameOnly, verifiedDiscoverySelectionHint, withComparisonRecords, withVerifiedSelectionFacts } from "../lib/discovery-agent-context";
-import { hasGenerativeUIGuide, MDE_A2UI_GUIDE, readEventResultHints, readRentalResultHints } from "../lib/generative-ui-context";
+import { buildGenerativeUiInstruction, readEventResultHints, readRentalResultHints } from "../lib/generative-ui-context";
 import { MapUiStateSchema } from "@/platform/contracts/map-ui-state";
 import { formatEventSourcePromptHint } from "@/lib/events/trusted-event-sources";
 import { RESTAURANT_CLARIFY_MESSAGE } from "@/lib/restaurant-clarify-copy";
@@ -509,10 +509,12 @@ export const conciergeAgent = new Agent({
     const currentSelection = await verifiedDiscoverySelectionHint(
       agUiContext, lookupPublicDiscoveryItemFromServer,
     );
-    // The A2UI transport gives the model a render_ui tool AND a component guide.
-    // The Mastra adapter forwards the guide in RunAgentInput.context; this
-    // dynamic instruction is the only place that turns it into a system prompt.
-    const generativeGuide = hasGenerativeUIGuide(agUiContext) ? MDE_A2UI_GUIDE : null;
+    // The A2UI transport gives the model a render_ui tool AND a guide with the
+    // component schemas and rules. The Mastra adapter keeps that guide in
+    // RunAgentInput.context, so this per-turn instruction is the official place
+    // that passes it to the model ("your agent must pass the run's context").
+    // Without it the model guesses the operation JSON.
+    const generativeGuide = buildGenerativeUiInstruction(agUiContext);
     const rentalHints = readRentalResultHints(agUiContext);
     const eventHints = readEventResultHints(agUiContext);
     return [currentSelection, rentalHints, eventHints, generativeGuide, conciergeBaseInstructions]
