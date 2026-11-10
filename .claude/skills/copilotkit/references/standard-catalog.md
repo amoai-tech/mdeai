@@ -75,7 +75,7 @@ Choose the smallest vocabulary supported by the **existing route-owner provider 
 
 - **Inputs**: built-in inputs validate and preserve user edits; verify this on the actual installed version, especially after a later agent update. Do not let AI reset a user-edited ticket quantity.
 - **Actions**: `Button` and `Pressable` can trigger browser behavior. Only enable whitelisted, user-invoked actions; backend/RPC owns authorization, price, inventory, viewing and payment.
-- **Map**: the standard `Map` may need `maplibre-gl` and can fall back to a list; MDE already owns a map and pin mapping. Do not install MapLibre or replace the MDE map simply to exercise a built-in component.
+- **Map**: the standard `Map` may need `maplibre-gl` and can fall back to a list; MDE already owns a map and pin mapping. Do not install MapLibre or replace the MDE map simply to exercise a built-in component. For the Google A2UI toolkit comparison and MDE integration decision, read [`../../maps/references/a2ui-and-agentic-maps.md`](../../maps/references/a2ui-and-agentic-maps.md).
 - **Chart**: standard `Chart` uses the built-in chart integration. Accept only validated source-backed metrics, never invented counts or amounts.
 - **Media/HTML/links**: do not allow untrusted URLs, arbitrary HTML execution or external embeds just because the catalog contains media components.
 - **Surface boundary**: when an AI-controlled page target is requested, load `surfaces.md` directly; generated UI must not become a second source of results, filters or pins.

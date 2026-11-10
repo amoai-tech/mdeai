@@ -12,6 +12,22 @@ const chat = vi.hoisted(() => ({ appendMessage: vi.fn(), runtimeUnavailable: fal
 const coagent = vi.hoisted(() => ({ state: {} as Record<string, unknown> }));
 const mapState = vi.hoisted(() => ({ selectedPinId: null as string | null, pins: [] as Array<{ id: string; category: string }> }));
 const groundedCtx = vi.hoisted(() => ({ toolResult: null as unknown }));
+const rentalDetails = vi.hoisted(() => ({ toolResult: null as unknown, openVenueDetail: vi.fn() }));
+// Reuse the real rental context (including searchMeta updates); override only
+// the shown Details cards for the unrelated deterministic Details tests.
+vi.mock("@/components/chat/rental-fast-path-context", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/components/chat/rental-fast-path-context")>();
+  return {
+    ...actual,
+    useOptionalRentalFastPath: () => {
+      const current = actual.useOptionalRentalFastPath();
+      return current ? { ...current, toolResult: rentalDetails.toolResult ?? current.toolResult } : null;
+    },
+  };
+});
+vi.mock("@/components/chat/rental-ui-context", () => ({
+  useRentalUi: () => ({ openVenueDetail: rentalDetails.openVenueDetail }),
+}));
 const richShown = vi.hoisted(() => ({ ids: [] as string[] }));
 vi.mock("@/components/chat/rich-card-results-context", () => ({
   useOptionalRichCardResults: () => ({ groundedShownIds: richShown.ids }),
@@ -84,6 +100,7 @@ beforeEach(() => {
   mapState.selectedPinId = null;
   mapState.pins = [];
   groundedCtx.toolResult = null;
+  rentalDetails.toolResult = null;
   richShown.ids = [];
   eventFast.activeEventId = null;
   eventFast.activeEventRows = [];
@@ -415,6 +432,7 @@ describe("deterministic grounded ranking is limited to the shown result set and 
   it("falls through when a restaurant search cleared the grounded panel", async () => {
     coagent.state = { selectedListingId: A, lastGroundedResults: rows };
     groundedCtx.toolResult = null;
+  rentalDetails.toolResult = null;
     mapState.selectedPinId = null;
     mapState.pins = [];
     rerender();
@@ -453,6 +471,7 @@ describe("deterministic grounded ranking is limited to the shown result set and 
     coagent.state = { lastGroundedResults: [{ id: "cafe-a", title: "Café Euge" }] };
     richShown.ids = ["cafe-a"];
     groundedCtx.toolResult = null;
+  rentalDetails.toolResult = null;
     rerender();
     await act(async () => { expect(await sendConciergeUserMessage("Which of these has Wi-Fi?", handlers)).toBe(true); });
     expect(shown.some((m) => /don't have verified amenity/i.test(m.content))).toBe(true);
@@ -628,4 +647,63 @@ describe("onAgentSend for a signed-out visitor", () => {
     expect(shown.some((message) => message.content === "Here is the event card.")).toBe(false);
   });
 
+});
+
+
+describe("full chat Details requests use the currently shown rental IDs", () => {
+  const rental = (id: string, title: string) => ({
+    id, title, neighborhood: "Laureles", nightly_price: 0, currency: "COP",
+    bedrooms: 2, wifi: false, amenities: ["workspace"],
+    image: "https://example.test/a.webp", images: ["https://example.test/a.webp"],
+    photo_count: 1, tags: ["external-source"],
+    source_url: "https://example.test/listing", can_schedule_viewing: false,
+    schedule_viewing_url: null, host_name: "Advertiser",
+    availability: "Availability unconfirmed", price_monthly: 2_400_000,
+  });
+
+  it("opens the second displayed apartment without a new search or model run", async () => {
+    const first = rental("first-listing", "Laureles apartment A");
+    const second = rental("second-listing", "Laureles apartment B");
+    rentalDetails.toolResult = { results: [first, second] };
+    act(() => root.render(<EventLocalChatProvider><RentalFastPathProvider><Harness /></RentalFastPathProvider></EventLocalChatProvider>));
+    await act(async () => {
+      expect(await sendConciergeUserMessage("Show me the details of the second apartment", handlers)).toBe(true);
+    });
+    expect(rentalDetails.openVenueDetail).toHaveBeenCalledTimes(1);
+    expect(rentalDetails.openVenueDetail).toHaveBeenCalledWith(expect.objectContaining({
+      kind: "rental", listingId: "second-listing", title: "Laureles apartment B",
+    }));
+    expect(chat.appendMessage).not.toHaveBeenCalled();
+    expect(shown.some((m) => m.content.includes("Opened details for Laureles apartment B"))).toBe(true);
+  });
+
+  it.each([
+    "Show me the details of the second restaurant",
+    "Show me the details of the second event",
+    "Show me the details of the second hotel",
+  ])("leaves other categories for their own handlers even with rental cards visible: %s", async (text) => {
+    rentalDetails.toolResult = { results: [
+      rental("first-listing", "Laureles apartment A"),
+      rental("second-listing", "Laureles apartment B"),
+    ] };
+    act(() => root.render(<EventLocalChatProvider><RentalFastPathProvider><Harness /></RentalFastPathProvider></EventLocalChatProvider>));
+    expect(await handlers.handleRentalDetailsMessage?.(text)).toBe(false);
+    expect(rentalDetails.openVenueDetail).not.toHaveBeenCalled();
+  });
+
+  it("refuses an out-of-range position without opening a different apartment", async () => {
+    rentalDetails.toolResult = { results: [rental("first-listing", "Laureles apartment A")] };
+    act(() => root.render(<EventLocalChatProvider><RentalFastPathProvider><Harness /></RentalFastPathProvider></EventLocalChatProvider>));
+    await act(async () => {
+      expect(await handlers.handleRentalDetailsMessage?.("Show me the details of the third apartment")).toBe(true);
+    });
+    expect(rentalDetails.openVenueDetail).not.toHaveBeenCalled();
+    expect(shown.some((m) => m.content.includes("No apartment 3"))).toBe(true);
+  });
+
+  it("does not resurrect a stale listing when search results were cleared", async () => {
+    rentalDetails.toolResult = null;
+    expect(await handlers.handleRentalDetailsMessage?.("Show me the details of the second apartment")).toBe(false);
+    expect(rentalDetails.openVenueDetail).not.toHaveBeenCalled();
+  });
 });

@@ -37,7 +37,15 @@ export function parseDetailsCommand(text: string): DetailsCommand | null {
   }
 
   const word = tail.toLowerCase().match(/\b(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)\b/);
-  if (word) return { index: ORDINALS[word[1]] };
+  if (word) {
+    // The full chat also contains restaurants and events. Reuse this parser only
+    // when the position names a rental (or gives no category), never another domain.
+    const remaining = tail.replace(/\b(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)\b/i, "").trim();
+    if (remaining && !/^(?:apartment|apartments|listing|listings|rental|rentals|one)$/i.test(remaining)) {
+      return null;
+    }
+    return { index: ORDINALS[word[1]] };
+  }
 
   // A named apartment ("details for Calle 10") is not resolved blindly here.
   return null;

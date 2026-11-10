@@ -117,6 +117,13 @@ beforeEach(() => {
 });
 afterEach(() => cleanup());
 
+describe("restaurant Add to trip", () => {
+  it("offers Add to trip for genuine restaurants even without coordinates", () => {
+    expect(screen.getByTestId("restaurant-add-to-trip-a")).not.toBeNull();
+    expect(screen.getByTestId("restaurant-add-to-trip-c")).not.toBeNull();
+  });
+});
+
 describe("restaurant Details and the selected pin", () => {
   it("opens the panel for the card whose Details was pressed, whatever pin is selected", () => {
     selectPin("b");

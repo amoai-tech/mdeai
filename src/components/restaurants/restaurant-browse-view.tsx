@@ -12,6 +12,7 @@ import { BrowseMapPanel } from "@/components/browse/BrowseMapPanel";
 import { BrowseMapSheet } from "@/components/browse/BrowseMapSheet";
 import { RestaurantCard } from "@/components/copilot/restaurant-card";
 import { RestaurantBrowseFilters } from "@/components/restaurants/restaurant-browse-filters";
+import { AddToTripButton } from "@/components/trips/add-to-trip-button";
 import { RestaurantDetailsPanel, RestaurantDetailsSheet } from "@/components/restaurants/restaurant-details-panel";
 import { useIsLgUp } from "@/hooks/use-is-lg-up";
 import { useEscapeToClose } from "@/hooks/use-escape-to-close";
@@ -201,12 +202,19 @@ function RestaurantBrowseViewInner({
             >
               {shownResults.map((r) => {
                 const pinId = `restaurant-${r.id}`;
-                // `restaurantToMapPin` drops rows without coordinates, so this is the one
-                // source of truth for "the map can show this restaurant".
-                const hasPin = pins.some((pin) => pin.id === pinId);
+                // Reuse the memoized pin list: one conversion per row. A missing
+                // coordinate removes the map action only; saving stays available.
+                const pin = pins.find((candidate) => candidate.id === pinId);
+                const hasPin = Boolean(pin);
+                const addTarget = {
+                  id: pinId,
+                  category: "restaurant" as const,
+                  title: r.name,
+                  placeId: r.placeId ?? undefined,
+                };
                 return (
+                  <div key={r.id} className="flex flex-col gap-2">
                   <RestaurantCard
-                    key={r.id}
                     title={r.name}
                     neighborhood={r.neighborhood}
                     cuisine={r.cuisine}
@@ -250,6 +258,12 @@ function RestaurantBrowseViewInner({
                     composition="nova"
                     mediaLayout="inline"
                   />
+                  <AddToTripButton
+                    pin={addTarget}
+                    variant="card"
+                    testId={`restaurant-add-to-trip-${r.id}`}
+                  />
+                  </div>
                 );
               })}
             </div>
