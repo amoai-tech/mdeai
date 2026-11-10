@@ -139,19 +139,23 @@ export const payloadRows = (payload: RentalAskResults) =>
 const TRANSCRIPT_LIMIT = 6;
 
 /** What a tool-only assistant step did, in the user's words. */
-const TOOL_OUTCOMES: Array<{ pattern: RegExp; done: string; failed?: string }> = [
+type ToolOutcomeRule = { matches: (name: string) => boolean; done: string; failed?: string };
+
+/** Plain substring checks: model/user-supplied tool names must never reach a regex. */
+const TOOL_OUTCOMES: ToolOutcomeRule[] = [
   {
-    pattern: /render[-_]?ui/i,
+    matches: (name) => name.includes("render_ui") || name.includes("render-ui"),
     done: "Updated the recommendations.",
     failed: "I couldn't display those cards. Try asking again.",
   },
   {
-    pattern: /search[-_]?rentals|searchRentalsTool/i,
+    matches: (name) =>
+      name.includes("search-rentals") || name.includes("search_rentals") || name.includes("searchRentalsTool"),
     done: "Searched the listings and updated the results.",
     failed: "The rental search did not complete. Please try again.",
   },
   {
-    pattern: /openRentalDetails/i,
+    matches: (name) => name.includes("openRentalDetails"),
     done: "Opened the details for that apartment.",
     failed: "I couldn't open those apartment details.",
   },
@@ -181,9 +185,9 @@ function toolOutcomeTurn(
   resultText: string,
   id: string,
 ): PlainTurn | null {
-  const rule = TOOL_OUTCOMES.find((entry) => entry.pattern.test(callName));
+  const rule = TOOL_OUTCOMES.find((entry) => entry.matches(callName));
   if (!rule) return null;
-  if (/render[-_]?ui/i.test(callName)) {
+  if (callName.includes("render_ui") || callName.includes("render-ui")) {
     const outcome = renderUiOutcome(resultText);
     if (outcome === "rejected" && rule.failed) return { id, role: "assistant", text: rule.failed };
     if (outcome === "applied") return { id, role: "assistant", text: rule.done };
@@ -191,11 +195,11 @@ function toolOutcomeTurn(
   }
   // No result yet means no confirmed action; never invent success.
   if (!resultText.trim()) return null;
-  if (/openRentalDetails/i.test(callName)) {
+  if (callName.includes("openRentalDetails")) {
     return { id, role: "assistant",
-      text: /^Opened details for\b/i.test(resultText.trim()) ? rule.done : rule.failed! };
+      text: resultText.trim().startsWith("Opened details for") ? rule.done : rule.failed! };
   }
-  if (/search[-_]?rentals|searchRentalsTool/i.test(callName)) {
+  if (callName.includes("search-rentals") || callName.includes("search_rentals") || callName.includes("searchRentalsTool")) {
     let succeeded = false;
     try {
       const parsed: unknown = JSON.parse(resultText);

@@ -7,6 +7,7 @@ import { useGroundedSearchFastPath } from "@/hooks/use-grounded-search-fast-path
 import { useSession } from "@/hooks/use-session";
 import { isStoredRentalUuid } from "@/lib/cafe-search-fast-path";
 import { useAgent, UseAgentUpdate } from "@copilotkit/react-core/v2";
+import { useOptionalEventLocalChat } from "@/components/chat/event-local-chat-context";
 import { createGenerativeUI, standardUI } from "@copilotkit/react-core/v2/generative-ui";
 import { RentalCard as ExistingRentalCard } from "@/components/copilot/rental-card";
 import { EventCard as ExistingEventCard } from "@/components/copilot/event-card";
@@ -261,6 +262,10 @@ function MdeRentalCard({ listingId }: { listingId: string }) {
   const map = useOptionalMapContext();
   const rentalUi = useOptionalRentalUi();
   const concierge = useOptionalConciergeCoAgent();
+  // Nearby needs the event-local chat stack (it starts a grounded search through
+  // it). The Rentals page renders these cards without that stack, where mounting
+  // it would throw and the renderer would show a fallback instead of the card.
+  const canRenderNearby = Boolean(useOptionalEventLocalChat());
   const selectedPinId = map?.selectedPinId;
   const panToPin = map?.panToPin;
   const openVenueDetail = rentalUi?.openVenueDetail;
@@ -327,7 +332,7 @@ function MdeRentalCard({ listingId }: { listingId: string }) {
         selected={hasPin && selectedPinId === pinId}
         onSelect={hasPin ? () => panToPin?.(pinId) : undefined}
         onOpenDetails={row.tags?.includes("external-source") && !detailRental ? undefined : openDetail}
-        nearbyAction={hasPin && concierge && isStoredRentalUuid(row.id) ? <NearbyRentalAction listingId={row.id} pinId={pinId} onSelect={panToPin} /> : undefined}
+        nearbyAction={hasPin && concierge && canRenderNearby && isStoredRentalUuid(row.id) ? <NearbyRentalAction listingId={row.id} pinId={pinId} onSelect={panToPin} /> : undefined}
         canScheduleViewing={row.can_schedule_viewing === true}
         onSchedule={openScheduleViewing ? () => openScheduleViewing({
           listingId: row.id,

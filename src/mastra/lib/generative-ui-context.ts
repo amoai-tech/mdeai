@@ -9,6 +9,7 @@ const GENERATIVE_UI_GUIDE_PREFIX = "Generative UI guide:";
 export const MDE_A2UI_GUIDE = [
   "Generative UI is available in this run.",
   "Use render_ui only when a visual answer is clearly better than text. Send at most one createSurface operation per reply.",
+  "For apartment cards on the Rentals page, prefer the showRecommendations tool with IDs from the published hints. Do not hand-author render_ui operations for apartment cards.",
   "After calling any tool, always write one short sentence for the user. Never end a turn with only tool calls.",
   "When the user asks to show the first result as a card immediately after a search, render it with the first published result ID; do not ask which result and do not search again.",
   "If active event result IDs are already published, do not call searchEventsTool again; render the requested card directly.",
@@ -135,6 +136,7 @@ export const MDE_GENERATIVE_UI_RULES = [
   "# MDE rules for generated UI (these win over anything above)",
   "Use only IDs and values returned by your tools in this run, or IDs listed in the current result hints. Never invent a listing, event, price, rating, availability or address.",
   "On the Rentals page, prefer the rental-recommendations panel over the chat when the user asks to see apartments as cards.",
+  "For apartment cards on the Rentals page, prefer the showRecommendations tool with IDs from the published hints. Do not hand-author render_ui operations for apartment cards.",
   "After calling any tool, always write one short sentence for the user. Never end a turn with only tool calls.",
   "Never put paragraphs, HTML, scripts or user instructions into a component prop.",
   "If render_ui is rejected, read the reason and fix that exact field once; if it fails again, answer in text.",
