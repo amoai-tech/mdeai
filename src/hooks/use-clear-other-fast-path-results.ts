@@ -21,6 +21,8 @@ const KINDS: readonly FastPathVertical[] = ["rental", "event", "restaurant", "gr
  * results arrive; it never touches the vertical you pass in.
  *
  * It also empties the map pins of the other kinds, so the map and the list never disagree.
+ * Pass null for an explicit agent topic shift: clear all live vertical results
+ * without losing the saved conversation or imposing business eligibility gates.
  *
  * SAN-1422 — pass `{ clearOtherPins: false }` when the new search produced nothing to pin: the other
  * kinds' panels are still replaced, but their pins stay (a grounded search that finds no mappable
@@ -36,7 +38,7 @@ export function useClearOtherFastPathResults() {
   const { mergePinsByCategory } = useMapContext();
 
   return useCallback(
-    (keep: FastPathVertical, { clearOtherPins = true }: { clearOtherPins?: boolean } = {}) => {
+    (keep: FastPathVertical | null, { clearOtherPins = true }: { clearOtherPins?: boolean } = {}) => {
       if (keep !== "rental") {
         setRental(null);
         setRentalSearchMeta(null);
