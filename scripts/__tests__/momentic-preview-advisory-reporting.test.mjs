@@ -72,5 +72,10 @@ test('Momentic installs on a supported pinned runner and reports setup failure a
   assert.match(workflow, /runs-on: ubuntu-24\.04/);
   assert.match(workflow, /id: browser_install/);
   assert.match(workflow, /BROWSER_INSTALL: \$\{\{ steps\.browser_install\.outcome \}\}/);
-  assert.match(workflow, /BLOCKED — Momentic Chromium installation failed \(0\/\$count executed\)/);
+  const publisher = workflow.split('- name: Publish advisory PR check with honest status\n')[1]?.split('\n      - name: Upload JUnit')[0];
+  assert.ok(publisher, 'advisory publisher exists after browser setup and cleanup');
+  assert.match(publisher, /if: always\(\) && steps\.scope\.outputs\.pr != ''/);
+  assert.match(publisher, /conclusion=neutral/);
+  assert.match(publisher, /elif \[\[ "\$SHARED" == true && "\$REVOKED" != success \]\]; then[\s\S]*?conclusion=failure\s+elif \[\[ "\$BROWSER_INSTALL" == failure \]\]; then\s+result="BLOCKED — Momentic Chromium installation failed \(0\/\$count executed\)"/);
+  assert.match(publisher, /elif \[\[ "\$BROWSER_INSTALL" == failure \]\]; then[\s\S]*?elif \[\[ "\$OUTCOME" == success \]\]; then/);
 });
