@@ -3,6 +3,7 @@ import { isActiveRentalsDiscoveryPage } from "./discovery-agent-context";
 
 type MessageLike = { role?: string; content?: unknown };
 
+/** Read the latest message text from either plain content or CopilotKit text parts. */
 function messageText(message: MessageLike | undefined): string {
   const content = message?.content;
   if (typeof content === "string") {
@@ -37,7 +38,7 @@ const CURRENT_RESULTS_REFERENCE =
   /\b(these|those|them|here|first|second|third|fourth|fifth|last|current|existing|already|shown|visible)\b|\bon (?:this|the) page\b/i;
 /** New filters must go through rental search, even when a card is requested. */
 const NEW_SEARCH_CRITERIA =
-  /\b(bedrooms?|beds?|studio|furnished|unfurnished|balcony|parking|budget|under|below|above|over|between|less|more|price|cost|monthly|nightly|cop|usd|in|near|around|with|without|before|after|from|until|for)\b|\b\d+\s*(?:br|bed)\b/i;
+  /\b(bedrooms?|beds?|studio|furnished|unfurnished|balcony|parking|budget|under|below|above|over|between|less|more|price|cost|monthly|nightly|cop|usd|in|near|around|with|without|before|after|from|until|for|max(?:imum)?|min(?:imum)?|up\s+to|at\s+most)\b|\b\d+\s*(?:br|bed)\b/i;
 
 /**
  * "From/in the current results" identifies existing cards, not a new search filter.
@@ -45,7 +46,11 @@ const NEW_SEARCH_CRITERIA =
  * "under COP 3M", "in Laureles" etc.). Never strip actual filter words.
  */
 const CURRENT_RESULTS_POINTER =
-  /\b(?:from|in)\s+(?:the\s+)?(?:current|existing|shown|visible)\s+(?:results?|listings?|apartments?|ones?)\b/gi;
+  /\b(?:from|in)\s+(?:(?:the\s+)?(?:current|existing|shown|visible)|these|those)\s+(?:results?|listings?|apartments?|ones?)\b/gi;
+
+/** Negated references explicitly exclude the displayed results; do not use the current cards. */
+const NEGATED_CURRENT_RESULTS_POINTER =
+  /\b(?:not|never)\s+(?:from|in)\s+(?:(?:the\s+)?(?:current|existing|shown|visible)|these|those)\s+(?:results?|listings?|apartments?|ones?)\b/i;
 
 /**
  * Bedroom-control requests: a page control, not a new search.
@@ -64,6 +69,7 @@ const BEDROOM_COUNT =
 const RESULTS_PHRASING =
   /\b(show|display|list|see|how many|search|find|new search|details?|open|book|schedule|price|budget|under|over|mu[eé]strame|mostrar|buscar|encontrar)\b/i;
 
+/** Route a bedroom-picker request only when the Rentals page owns the control. */
 export function shouldRenderRentalFilterControl({
   stepNumber,
   messages,
@@ -91,6 +97,7 @@ export function shouldRenderRentalFilterControl({
   return true;
 }
 
+/** Force the existing card tool only for positive, filter-free current-result requests. */
 export function shouldRequestRecommendations({
   stepNumber,
   messages,
@@ -108,6 +115,7 @@ export function shouldRequestRecommendations({
   const text = messageText(lastUser).trim();
   if (!text) return false;
   if (!SHOW_AS_CARDS.test(text) && !SHOW_PAGE_RESULTS.test(text)) return false;
+  if (NEGATED_CURRENT_RESULTS_POINTER.test(text)) return false;
   const requestWithoutCurrentPointer = text.replace(CURRENT_RESULTS_POINTER, " ");
   if (!CURRENT_RESULTS_REFERENCE.test(text) || NEW_SEARCH_CRITERIA.test(requestWithoutCurrentPointer)) return false;
   return !ASKS_FOR_DETAILS.test(text);
