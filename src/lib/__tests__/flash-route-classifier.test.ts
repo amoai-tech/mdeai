@@ -135,6 +135,10 @@ describe("SAN-874 coworking switches the conversation without hijacking rentals"
   it.each([
     "Book a coworking space for my team",
     "Reserve a coworking office for our group",
+    "I'd like to book a coworking desk",
+    "I would like to reserve a coworking office",
+    "Hi, please book a coworking space",
+    "We need to rent a coworking desk",
   ])("does not force a booking request %s into coworking discovery", async (question) => {
     const result = await resolveRouterClassification(question, {
       lastIntent: "rental_search", inRentalSearch: true,
