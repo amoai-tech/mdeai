@@ -16,7 +16,7 @@ import { useOptionalRentalUi } from "@/components/chat/rental-ui-context";
 import { useOptionalMapContext } from "@/platform/maps/map-context";
 import { useOptionalRentalFastPath } from "@/components/chat/rental-fast-path-context";
 import { useOptionalEventFastPath } from "@/components/chat/event-fast-path-context";
-import { RENTAL_BED_OPTIONS, normalizeBedSelection, useOptionalRentalFilterDraft } from "@/components/rentals/rental-filter-draft";
+import { RENTAL_BED_OPTIONS, normalizeBedSelection, useRentalFilterStore } from "@/components/rentals/rental-filter-draft";
 import { EVENT_A2UI_ID_PATTERN } from "@/lib/events/a2ui-id";
 import { isFinishedToolPayload, normalizeToolEnvelope } from "@/lib/normalize-tool-envelope";
 import { toDetailRental } from "@/lib/rentals/chat-rental-detail";
@@ -426,8 +426,7 @@ function MdeEventCard({ eventId }: { eventId: string }) {
  * draft, not in the model's payload, so a later AI turn cannot reset it.
  */
 function MdeBedroomFilter({ label }: { label?: string }) {
-  const draft = useOptionalRentalFilterDraft();
-  if (!draft) return null;
+  const draft = useRentalFilterStore();
   return (
     <label className="flex w-full flex-col gap-1 text-sm">
       <span className="font-medium text-foreground">{label ?? "Bedrooms"}</span>
@@ -453,7 +452,7 @@ function MdeApplyFilters({
   label?: string;
   onApplyRentalFilters?: () => void;
 }) {
-  const draft = useOptionalRentalFilterDraft();
+  const draft = useRentalFilterStore();
   // No page draft and no registered action means nothing could be applied: show
   // the control disabled with the reason instead of a dead click.
   const ready = Boolean(draft && onApplyRentalFilters);
