@@ -41,7 +41,7 @@ Wait for `MDE QA browser READY` and the verified `/saved` authentication check. 
 
 ## 3. Localhost — real application
 
-On this host, start the existing dedicated QA worktree (currently `/home/sk/mdeai/.worktrees/qa-main`, **not a portable path**):
+On the configured host, start the **dedicated QA worktree selected by the existing `mde-qa-op` helper**. Find it from the host setup or `git worktree list`; do not assume a machine-specific path:
 
 ```bash
 npm run dev:ui:worktree     # from that QA worktree; localhost:3002
