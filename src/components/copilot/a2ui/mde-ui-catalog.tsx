@@ -7,7 +7,8 @@ import { useGroundedSearchFastPath } from "@/hooks/use-grounded-search-fast-path
 import { useSession } from "@/hooks/use-session";
 import { isStoredRentalUuid } from "@/lib/cafe-search-fast-path";
 import { useAgent, UseAgentUpdate } from "@copilotkit/react-core/v2";
-import { createGenerativeUI } from "@copilotkit/react-core/v2/generative-ui";
+import { useOptionalEventLocalChat } from "@/components/chat/event-local-chat-context";
+import { createGenerativeUI, standardUI } from "@copilotkit/react-core/v2/generative-ui";
 import { RentalCard as ExistingRentalCard } from "@/components/copilot/rental-card";
 import { EventCard as ExistingEventCard } from "@/components/copilot/event-card";
 import { useOptionalConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
@@ -261,6 +262,10 @@ function MdeRentalCard({ listingId }: { listingId: string }) {
   const map = useOptionalMapContext();
   const rentalUi = useOptionalRentalUi();
   const concierge = useOptionalConciergeCoAgent();
+  // Nearby needs the event-local chat stack (it starts a grounded search through
+  // it). The Rentals page renders these cards without that stack, where mounting
+  // it would throw and the renderer would show a fallback instead of the card.
+  const canRenderNearby = Boolean(useOptionalEventLocalChat());
   const selectedPinId = map?.selectedPinId;
   const panToPin = map?.panToPin;
   const openVenueDetail = rentalUi?.openVenueDetail;
@@ -327,7 +332,7 @@ function MdeRentalCard({ listingId }: { listingId: string }) {
         selected={hasPin && selectedPinId === pinId}
         onSelect={hasPin ? () => panToPin?.(pinId) : undefined}
         onOpenDetails={row.tags?.includes("external-source") && !detailRental ? undefined : openDetail}
-        nearbyAction={hasPin && concierge && isStoredRentalUuid(row.id) ? <NearbyRentalAction listingId={row.id} pinId={pinId} onSelect={panToPin} /> : undefined}
+        nearbyAction={hasPin && concierge && canRenderNearby && isStoredRentalUuid(row.id) ? <NearbyRentalAction listingId={row.id} pinId={pinId} onSelect={panToPin} /> : undefined}
         canScheduleViewing={row.can_schedule_viewing === true}
         onSchedule={openScheduleViewing ? () => openScheduleViewing({
           listingId: row.id,
@@ -410,8 +415,98 @@ function MdeEventCard({ eventId }: { eventId: string }) {
   );
 }
 
+/**
+ * SAN-1654 — the official Standard Catalog is the base of MDE's one catalog, so
+ * the agent can arrange and label real cards instead of only ever rendering one.
+ *
+ * The kept vocabulary is deliberately tiny and is documented prop-by-prop in
+ * the server guide (`src/mastra/lib/generative-ui-context.ts`). The model does
+ * not receive the upstream component schemas: MDE builds its own guide from a
+ * presence flag, so a component the guide does not document is a component the
+ * model would have to guess at. Two consequences:
+ *
+ * - **Controls are omitted until they are wired.** Button, Pressable and every
+ *   input (Form, TextField, Select, CheckBox, Radio, Slider, DateTimeInput,
+ *   SegmentedControl, ChoicePicker, Tabs) render a dead control when no
+ *   catalog function is registered: a fake "Book viewing" next to real
+ *   listings. RentalCard already owns grounded Details and viewing actions.
+ *   SAN-1655/SAN-1658 add these back together with their functions.
+ * - **Complex data structures are omitted until documented.** Table* needs a
+ *   nested shape the guide would have to teach; MDE already renders real
+ *   comparison tables from tool results (SAN-1041). Charts and maps need peer
+ *   libraries MDE does not install, HtmlView/Svg would let the model author
+ *   markup, and Image/Link/Citation would accept model-chosen URLs.
+ *
+ * Every omitted name must still exist in the installed `standardUI`, and the
+ * exposed set must equal exactly what the guide documents — both enforced by
+ * `mde-ui-catalog.test.ts`, so an SDK upgrade cannot silently drift.
+ */
+export const MDE_OMITTED_STANDARD_COMPONENTS = [
+  // Optional peer libraries MDE does not ship (chart.js, maplibre-gl, lucide).
+  "Chart",
+  "Icon",
+  "Map",
+  // Model-authored markup or model-chosen URLs.
+  "HtmlView",
+  "Svg",
+  "Image",
+  "ImageGrid",
+  "Link",
+  "LinkCard",
+  "Citation",
+  // Controls with no registered catalog function yet (SAN-1655 / SAN-1658).
+  "Button",
+  "Pressable",
+  "Form",
+  "TextField",
+  "TextArea",
+  "Select",
+  "CheckBox",
+  "Radio",
+  "RadioGroup",
+  "Slider",
+  "DateTimeInput",
+  "SegmentedControl",
+  "ChoicePicker",
+  "Tabs",
+  // Nested data structures the guide does not teach yet.
+  "Table",
+  "TableSection",
+  "TableRow",
+  "TableCell",
+  "List",
+  "ListItem",
+  "EntityCard",
+  // Media, overlay and typographic ornament with no discovery answer behind it.
+  "AudioPlayer",
+  "Blockquote",
+  "Bold",
+  "Carousel",
+  "CarouselItem",
+  "CarouselMediaItem",
+  "Code",
+  "Favicon",
+  "FlashcardFlip",
+  "Flow",
+  "FlowItem",
+  "Italic",
+  "Markdown",
+  "Math",
+  "Modal",
+  "Popover",
+  "PopoverContent",
+  "PopoverTrigger",
+  "PulseIndicator",
+  "ShimmerText",
+  "Strikethrough",
+  "Tooltip",
+  "Underline",
+  "Video",
+] as const;
+
 export const mdeUI = createGenerativeUI({
   id: "mde/discovery@1",
+  extends: [standardUI.omit(MDE_OMITTED_STANDARD_COMPONENTS)],
   components: {
     RentalCard: {
       component: MdeRentalCard,

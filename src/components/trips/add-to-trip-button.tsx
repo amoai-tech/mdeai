@@ -19,15 +19,27 @@ import {
 } from "@/components/ui/dialog";
 import type { MapPin } from "@/platform/contracts";
 
+/** The source reference needed to save an item; coordinates are intentionally optional. */
+export type AddToTripTarget = Pick<
+  MapPin,
+  "id" | "category" | "title" | "placeId"
+>;
+
 type AddToTripButtonProps = {
-  pin: MapPin;
+  pin: AddToTripTarget;
+  variant?: "icon" | "card";
+  testId?: string;
 };
 
 /**
  * One Add-to-trip path for the map overlay and the trip page.
  * The server action owns auth, source resolution and the canonical RPC.
  */
-export function AddToTripButton({ pin }: AddToTripButtonProps) {
+export function AddToTripButton({
+  pin,
+  variant = "icon",
+  testId = "selected-place-overlay-add-trip",
+}: AddToTripButtonProps) {
   const [open, setOpen] = useState(false);
   const [trips, setTrips] = useState<TripOption[]>([]);
   const [tripId, setTripId] = useState("");
@@ -101,13 +113,18 @@ export function AddToTripButton({ pin }: AddToTripButtonProps) {
     <>
       <button
         type="button"
-        data-testid="selected-place-overlay-add-trip"
+        data-testid={testId}
         title="Add to trip"
         aria-label={`Add ${pin.title} to a trip`}
         onClick={openDialog}
-        className="flex size-9 items-center justify-center rounded-full bg-black/55 text-lg text-white backdrop-blur-sm hover:bg-black/70"
+        className={
+          variant === "card"
+            ? "inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md border border-input px-3 text-sm font-medium hover:bg-muted"
+            : "flex size-9 items-center justify-center rounded-full bg-black/55 text-lg text-white backdrop-blur-sm hover:bg-black/70"
+        }
       >
         <Plus className="size-4" aria-hidden />
+        {variant === "card" ? "Add to trip" : null}
       </button>
 
       <Dialog open={open} onOpenChange={setOpen}>

@@ -105,6 +105,37 @@ describe("LoggingMastraAgent.run — which agents get the trimmed input", () => 
   it("other agents: untouched", () => {
     expect(sent("hostOpsAgent", history)).toEqual(history);
   });
+
+  it("concierge keeps the runtime-injected render_ui tool and the generative UI context", () => {
+    // SAN-1653: the runtime adds `render_ui` and one context entry per run. The
+    // concierge trims history; if that trim rebuilt the input instead of
+    // spreading it, the agent would lose the tool and silently never render.
+    const renderUi = {
+      name: "render_ui",
+      description: "Render or update generative UI surfaces",
+      parameters: { type: "object", properties: {}, required: ["target", "operations"] },
+    };
+    const guide = {
+      description: "Generative UI guide: available components, functions, targets, and how to call render_ui.",
+      value: "targets: chat, rental-recommendations",
+    };
+    const spy = vi.spyOn(MastraAgent.prototype, "run").mockReturnValue(EMPTY);
+    const agent = new LoggingMastraAgent({
+      agentId: "conciergeAgent", agentMapKey: "conciergeAgent",
+      agent: {} as never, resourceId: "user-1", persistTurnLog: () => undefined,
+    });
+    agent
+      .run({
+        ...input([u("1", "q1"), a("2", "a1"), u("3", "which apartments match?")]),
+        tools: [renderUi as never],
+        context: [guide],
+      })
+      .subscribe();
+    const forwarded = spy.mock.calls[0][0] as RunAgentInput;
+    expect(forwarded.messages).toEqual([u("3", "which apartments match?")]);
+    expect(forwarded.tools?.map((tool) => tool.name)).toEqual(["render_ui"]);
+    expect(forwarded.context).toEqual([guide]);
+  });
 });
 
 describe("SAN-1588 full turn deadline", () => {

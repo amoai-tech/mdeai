@@ -18,6 +18,8 @@ export type ConciergeSendHandlers = {
   threadId?: string;
   /** Retry the existing agent turn instead of sending the text again. */
   retryLastTurn?: () => Promise<boolean>;
+  /** Open a shown rental by its current position; never launch another search for Details. */
+  handleRentalDetailsMessage?: (text: string, submissionId?: string) => Promise<boolean>;
   handleRentalMessage: (text: string, submissionId?: string) => Promise<boolean>;
   /** Wired when SAN-494 · EVT-035 — Restaurant card Event Venue CTA venue fast-path lands; optional until then. */
   handleEventVenueBookingMessage?: (text: string, submissionId?: string) => Promise<boolean>;
@@ -88,6 +90,9 @@ export async function sendConciergeUserMessage(
     if (await handlers.handleGroundedAmenityFollowUp?.(trimmed, submissionId)) {
       return true;
     }
+
+    // A shown-apartment Details request is a UI action, not another search/model run.
+    if (await handlers.handleRentalDetailsMessage?.(trimmed, submissionId)) return true;
 
     const classification = await resolveRouterClassification(trimmed, {
       lastIntent: handlers.lastIntent,

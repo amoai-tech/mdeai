@@ -57,6 +57,27 @@ describe("AddToTripButton", () => {
     expect(screen.queryByText(/Loading your trips/i)).toBeNull();
   });
 
+  it("shows an honest unknown-place rejection and keeps retry enabled", async () => {
+    listTripOptions.mockResolvedValue({ ok: true, trips: [trip] });
+    addTripItem.mockResolvedValue({
+      ok: false,
+      error: "This place is not in MDE's saved place catalog yet, so it cannot be added to a trip.",
+    });
+
+    render(<AddToTripButton pin={pin} />);
+    fireEvent.click(screen.getByTestId("selected-place-overlay-add-trip"));
+    await screen.findByTestId("add-to-trip-select");
+    fireEvent.change(screen.getByTestId("add-to-trip-select"), {
+      target: { value: trip.id },
+    });
+    fireEvent.click(screen.getByTestId("add-to-trip-confirm"));
+
+    const error = await screen.findByTestId("add-to-trip-error");
+    expect(error.textContent).toContain("not in MDE's saved place catalog");
+    expect(screen.queryByTestId("add-to-trip-success")).toBeNull();
+    expect((screen.getByTestId("add-to-trip-confirm") as HTMLButtonElement).disabled).toBe(false);
+  });
+
   it("shows Done instead of Cancel after a successful save", async () => {
     listTripOptions.mockResolvedValue({ ok: true, trips: [trip] });
     addTripItem.mockResolvedValue({ ok: true, itemId: "22222222-2222-4222-8222-222222222222" });

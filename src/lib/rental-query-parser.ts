@@ -2,6 +2,7 @@
  * Pure rental query classifier — used by rental fast-path (mirrors concierge gate).
  */
 import type { ConciergeWorkingMemory } from "@/lib/types";
+import { monthlyBudgetHasCurrency } from "@/lib/rental-search-body-schema";
 
 export type RentalSearchApiParams = {
   neighborhood?: string;
@@ -266,12 +267,12 @@ function isThousandsGroupedInteger(value: string): boolean {
  * explicit monthly word, and any nightly marker wins over the COP inference.
  */
 function parseExactMonthlyBudget(text: string): { amount: number; currency: "COP" | "USD" } | null {
-  const magnitude = "(millones?|mill[oó]n|million|millions|m|mil|k)";
+  const magnitude = "(millones?|mill[oó]n|million|millions|thousands?|m|mil|k)";
   const number = "(\\d[\\d.,]{0,16})";
   // Named currency before price, a dollar symbol, or currency after price.
-  const prefix = text.match(new RegExp(`\\b(cop|usd|pesos?|dollars?)\\s*${number}\\s*${magnitude}?`, "i"));
+  const prefix = text.match(new RegExp(`\\b(cop|usd|pesos?|dollars?|d[oó]lar(?:es)?)\\s*${number}\\s*${magnitude}?`, "i"));
   const dollars = text.match(new RegExp(`\\$\\s*${number}\\s*${magnitude}?`, "i"));
-  const suffix = text.match(new RegExp(`${number}\\s*${magnitude}?\\s*(cop|usd|pesos?|dollars?)\\b`, "i"));
+  const suffix = text.match(new RegExp(`${number}\\s*${magnitude}?\\s*(cop|usd|pesos?|dollars?|d[oó]lar(?:es)?)\\b`, "i"));
   const match = prefix ?? dollars ?? suffix;
   if (!match) return null;
   const currencyToken = (prefix ? prefix[1] : dollars ? "$" : suffix?.[3] ?? "").toLowerCase();
@@ -281,7 +282,7 @@ function parseExactMonthlyBudget(text: string): { amount: number; currency: "COP
   const grouped = isThousandsGroupedInteger(rawAmount);
   const amount = Number(grouped ? rawAmount.replace(/[.,]/g, "") : rawAmount.replace(",", "."));
   const multiple = /^(m|millones?|mill[oó]n|millions?)$/.test(magnitudeToken)
-    ? 1_000_000 : /^(mil|k)$/.test(magnitudeToken) ? 1_000 : 1;
+    ? 1_000_000 : /^(mil|k|thousands?)$/.test(magnitudeToken) ? 1_000 : 1;
   const ceiling = amount * multiple;
   if (!Number.isSafeInteger(ceiling) || ceiling <= 0) return null;
 
@@ -542,7 +543,8 @@ function mergedBudgetFields(
   if (!isBudgetReplacement(text, s)) {
     return {
       maxPricePerNight: q?.maxPricePerNight,
-      maxPriceMonthly: q?.maxPriceMonthly,
+      // Old saved memory may contain a monthly amount without its currency. Never replay it.
+      maxPriceMonthly: q && monthlyBudgetHasCurrency(q) ? q.maxPriceMonthly : undefined,
       budgetCurrency: q?.budgetCurrency,
     };
   }
@@ -709,6 +711,23 @@ export function buildRentalSearchParams(
   };
 }
 
+// Only budget words may refine an unnamed rental search. A user asking about
+// gyms, coworking, energy bills, or other costs must still reach the concierge.
+// The amount and currency are validated separately by scoreRentalQuery().
+const RENTAL_BUDGET_FOLLOWUP_WORDS = new Set([
+  "now", "actually", "only", "just", "please", "show", "me", "options", "option",
+  "under", "below", "up", "to", "at", "most", "less", "than", "no", "more",
+  "max", "maximum", "budget", "of", "a", "per", "month", "monthly",
+  "cop", "usd", "peso", "pesos", "dollar", "dollars", "million", "millions",
+  "m", "k", "mil", "thousand", "thousands", "millones", "millón", "mes", "al", "hasta", "solo",
+  "menos", "por", "de", "mensual", "máximo", "ahora", "dólar", "dólares", "dolar", "dolares",
+]);
+
+function isBudgetOnlyRentalRefinement(text: string): boolean {
+  const tokens = text.toLowerCase().replace(/[\d.,]+/g, " ").match(/[\p{L}]+/gu) ?? [];
+  return tokens.length > 0 && tokens.every((token) => RENTAL_BUDGET_FOLLOWUP_WORDS.has(token));
+}
+
 export function canFastPathRentalSearch(
   text: string,
   memory: ConciergeWorkingMemory,
@@ -718,7 +737,18 @@ export function canFastPathRentalSearch(
   if (memory.lastRentalQuery?.genericAskPending) {
     return buildRentalSearchParams(text, memory) != null;
   }
-  if (!looksLikeRentalSearch(text) && !(memory.lastRentalQuery && requestsWholeCity(text))) {
+  // A guest can refine an earlier rental's *explicit* monthly ceiling without repeating
+  // "apartments". Route that grounded follow-up through the public search, not the
+  // authenticated AI concierge. Do not hijack another discovery vertical or an
+  // ambiguous currency-free amount.
+  const monthlyRentalRefinement = Boolean(
+    memory.lastRentalQuery &&
+    scoreRentalQuery(text).maxPriceMonthly != null &&
+    isBudgetOnlyRentalRefinement(text)
+  );
+  if (!looksLikeRentalSearch(text) &&
+      !(memory.lastRentalQuery && requestsWholeCity(text)) &&
+      !monthlyRentalRefinement) {
     return false;
   }
   return buildRentalSearchParams(text, memory) != null;

@@ -23,7 +23,7 @@ const text = (t: string) => ({ format: 2, parts: [{ type: "text", text: t }] });
 describe("latestSavedRentalSearch", () => {
   it("returns the newest successful structured criteria without leaking rendered results", () => {
     const old = { neighborhood: "Laureles", minBedrooms: 2 };
-    const fresh = { neighborhood: "El Poblado", maxPriceMonthly: 3_000_000 };
+    const fresh = { neighborhood: "El Poblado", maxPriceMonthly: 3_000_000, budgetCurrency: "COP" };
     const saved = (id: string, params: unknown, date: string) => row(id, "assistant", {
       format: 2, parts: [
         { type: "text", text: "Search complete" },
@@ -38,6 +38,19 @@ describe("latestSavedRentalSearch", () => {
     ]);
     expect(result).toEqual({ ...fresh, limit: 8 });
     expect(JSON.stringify(result)).not.toContain("Search complete");
+  });
+
+  it("skips historical monthly budgets missing currency and keeps the latest valid search", () => {
+    const valid = { neighborhood: "Laureles", minBedrooms: 2 };
+    const rows = [
+      row("valid", "assistant", { format: 2, parts: [
+        { type: "data-mde-rental-search", data: valid },
+      ] }, "2026-11-01T01:00:00Z"),
+      row("ambiguous", "assistant", { format: 2, parts: [
+        { type: "data-mde-rental-search", data: { neighborhood: "El Poblado", maxPriceMonthly: 2_000 } },
+      ] }, "2026-11-01T03:00:00Z"),
+    ];
+    expect(latestSavedRentalSearch(rows)).toEqual({ ...valid, limit: 8 });
   });
 });
 

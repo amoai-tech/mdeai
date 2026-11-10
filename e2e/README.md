@@ -80,8 +80,8 @@ npm run qa:browser
 # If testing a different existing role (no Super Admin fallback):
 npm run qa:browser -- --role=renter
 
-# Only when specifically needed, on a trusted LOCAL machine:
-npm run qa:browser -- --role=super-admin --allow-admin
+# Super Admin must use the protected Playwright fixture (not Chrome CDP).
+# npm run qa:test:admin
 
 # To inspect the deployed site, opt into the exact approved production origin:
 npm run qa:browser -- --origin=https://www.mdeai.co --allow-remote
@@ -89,7 +89,7 @@ npm run qa:browser -- --origin=https://www.mdeai.co --allow-remote
 
 The launcher opens `/saved` and verifies authentication. It uses a private temporary Chrome profile on `127.0.0.1:9227`, not your personal Chrome profile. Chrome DevTools MCP can attach with `--browser-url=http://127.0.0.1:9227`. Keep this terminal running during the inspection and press Ctrl+C afterwards; the launcher removes its profile. Port collision: `--port=9228` and update the MCP connection accordingly. Use `--headless` on machines without a desktop. Chrome is located on Linux, macOS or Windows; if it lives elsewhere, set `CHROME_PATH=/absolute/path/to/chrome` in your trusted terminal. An invalid path reports a clear error rather than silently failing. A dedicated existing QA role email (e.g. `MDE_QA_EVENT_HOST_EMAIL` or `MDE_QA_RENTER_EMAIL`) must be configured in the ignored `.env.local` for non-admin login; absent accounts fail closed. Do not create another admin account.
 
-**Security boundary:** CDP-connected agents have full access to that authenticated browser, including sensitive cookies. Only let trusted agents connect to the local listener; never publish or forward the debug port, reuse a personal Chrome profile, capture privileged screenshots, or upload authenticated Playwright artifacts. Super Admin CDP is an explicit high-trust exception to the normal non-admin debugging default. The launcher removes its temporary profile on normal shutdown and handles Ctrl+C/SIGTERM even during sign-in. A forced SIGKILL, crash or power loss cannot run cleanup; in that case, treat an orphaned OS temporary profile as sensitive and remove it after Chrome is closed.
+**Security boundary:** CDP-connected agents have full access to that authenticated browser, including sensitive cookies. Only let trusted agents connect to the local listener; never publish or forward the debug port, reuse a personal Chrome profile, capture privileged screenshots, or upload authenticated Playwright artifacts. Super Admin CDP is not supported, even on a trusted local machine; use the protected `superAdminPage` fixture. The launcher removes its temporary profile on normal shutdown and handles Ctrl+C/SIGTERM even during sign-in. A forced SIGKILL, crash or power loss cannot run cleanup. Identify and stop **only** the QA Chrome process launched with the selected CDP port and temporary `--user-data-dir`, confirm that the port is closed, then remove that temporary profile **after Chrome exits**. Treat all leftover profile data as sensitive; never kill an unrelated Chrome session.
 
 **Playwright runner remains separate:** import `test` from `e2e/fixtures.ts`, call `superAdminPage` only for admin proof, and specify `test.use({ screenshot: "off", trace: "off", video: "off" })`. Role/RLS checks use `qaRolePage` or controlled throwaway identities; real viewing/write tests require their existing explicit opt-in and cleanup. `npm run qa:browser` is for interactive Chrome debugging, **not** a replacement for Playwright assertions.
 

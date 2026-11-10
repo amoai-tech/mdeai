@@ -271,6 +271,7 @@ This revision's catalog contains **163 active-document entries** plus **two `_ar
 | Design | [`05-design/screens/product-wireframes/restaurants/002-restaurant-contest-ux.md`](05-design/screens/product-wireframes/restaurants/002-restaurant-contest-ux.md) | Markdown | Current |
 | Design | [`05-design/screens/product-wireframes/restaurants/contest-ux-preview.html`](05-design/screens/product-wireframes/restaurants/contest-ux-preview.html) | HTML wireframe | Current |
 | Testing | [`06-testing/README.md`](06-testing/README.md) | Markdown | Current |
+| Testing | [`06-testing/1password-qa-agent-guide.md`](06-testing/1password-qa-agent-guide.md) | Markdown | Current |
 | Testing | [`06-testing/localhost-qa-runbook.md`](06-testing/localhost-qa-runbook.md) | Markdown | Current |
 | Testing | [`06-testing/playwright/2026-09-20-san-1341-playwright-architecture-design.md`](06-testing/playwright/2026-09-20-san-1341-playwright-architecture-design.md) | Markdown | Current |
 | Testing | [`06-testing/playwright/2026-09-20-san-1341-playwright-architecture.md`](06-testing/playwright/2026-09-20-san-1341-playwright-architecture.md) | Markdown | Current |

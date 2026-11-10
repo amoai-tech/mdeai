@@ -8,6 +8,7 @@ import {
 describe("SAN-1502 postmerge — real COP monthly budget", () => {
   it.each([
     ["Furnished 2BR in Laureles under COP 3.5 million per month", 3_500_000],
+    ["Only show apartments under COP 3 million", 3_000_000],
     ["2BR Laureles under COP 4M/month", 4_000_000],
     ["apartments in Laureles up to 3.500.000 pesos/mes", 3_500_000],
     ["2BR Laureles bajo COP 3,5 millones por mes", 3_500_000],
@@ -291,6 +292,18 @@ describe("rental-query-parser — refinements keep the applied budget", () => {
     expect(params?.budgetCurrency).toBe("COP");
     expect(params?.maxPricePerNight).toBeUndefined();
     expect(params?.stayType).toBe("monthly");
+  });
+
+  it("ignores a legacy currency-free monthly cap on a bedroom-only follow-up", () => {
+    const params = buildRentalSearchParams("now 2 bedrooms", {
+      lastRentalQuery: {
+        neighborhood: "Laureles", minBedrooms: 1,
+        maxPriceMonthly: 2_000, budgetType: "monthly",
+      },
+    });
+    expect(params?.minBedrooms).toBe(2);
+    expect(params?.maxPriceMonthly).toBeUndefined();
+    expect(params?.budgetCurrency).toBeUndefined();
   });
 
   it("drops the stored monthly ceiling when the renter asks for a nightly budget", () => {

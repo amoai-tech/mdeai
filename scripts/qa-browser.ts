@@ -21,7 +21,7 @@ import { resolveQaRoleEmail, type QaRole } from "../e2e/helpers/qa-roles";
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 const LIVE_HOSTS = new Set(["www.mdeai.co", "mdeai.co"]);
 const DEFAULT_PORT = 9227;
-const ALLOWED_ROLES = new Set<QaRole>(["event-host", "renter", "broker", "super-admin"]);
+const ALLOWED_ROLES = new Set<QaRole>(["event-host", "renter", "broker"]);
 
 export type QaBrowserOptions = {
   role: QaRole;
@@ -36,7 +36,7 @@ export function parseQaBrowserArgs(args: string[]): QaBrowserOptions | "help" {
   const flags = new Set<string>();
   for (const arg of args) {
     const [name, ...pieces] = arg.split("=");
-    if (["--allow-admin", "--allow-remote", "--headless"].includes(name) && pieces.length === 0) {
+    if (["--allow-remote", "--headless"].includes(name) && pieces.length === 0) {
       flags.add(name);
     } else if (["--role", "--origin", "--port"].includes(name) && pieces.length > 0) {
       if (values.has(name)) throw new Error("Duplicate option: " + name);
@@ -46,10 +46,7 @@ export function parseQaBrowserArgs(args: string[]): QaBrowserOptions | "help" {
     }
   }
   const role = (values.get("--role") ?? "event-host") as QaRole;
-  if (!ALLOWED_ROLES.has(role)) throw new Error("Unsupported QA role. Use event-host, renter, broker, or super-admin.");
-  if (role === "super-admin" && !flags.has("--allow-admin")) {
-    throw new Error("Super Admin over CDP requires explicit --allow-admin; use a non-admin role for normal debugging.");
-  }
+  if (!ALLOWED_ROLES.has(role)) throw new Error("Unsupported QA role. Use event-host, renter, or broker; Super Admin requires the protected Playwright fixture.");
   const origin = values.get("--origin") ?? "http://localhost:3001";
   const target = new URL(origin);
   const local = LOCAL_HOSTS.has(target.hostname) && ["http:", "https:"].includes(target.protocol);
@@ -215,7 +212,7 @@ async function waitForChrome(
 export async function main(createProfile: typeof mkdtemp = mkdtemp): Promise<void> {
   const options = parseQaBrowserArgs(process.argv.slice(2));
   if (options === "help") {
-    console.log("Usage: npm run qa:browser -- [--role=event-host|renter|broker|super-admin] [--allow-admin] [--origin=http://localhost:3001] [--allow-remote] [--headless] [--port=9227]");
+    console.log("Usage: npm run qa:browser -- [--role=event-host|renter|broker] [--origin=http://localhost:3001] [--allow-remote] [--headless] [--port=9227]");
     console.log("Uses EXISTING QA users only. For Chrome DevTools MCP use --browser-url=http://127.0.0.1:9227. Ctrl+C closes Chrome and removes its profile.");
     return;
   }
