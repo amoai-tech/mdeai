@@ -400,6 +400,11 @@
       "note": "SAN-1630 EventCard: v2 useAgentContext publishes only the most recent authorized event UUIDs; the catalog revalidates every ID against authorized results and rejects forged/cross-thread IDs."
     },
     {
+      "file": "src/components/copilot/a2ui/__tests__/mde-ui-catalog.test.ts",
+      "classification": "test-only",
+      "note": "SAN-1654/1656: imports the installed standardUI to prove the exposed catalog vocabulary matches the documented guide and cannot drift from the pinned SDK."
+    },
+    {
       "file": "src/components/copilot/a2ui/__tests__/nearby-guest-guard.test.tsx",
       "classification": "test-only",
       "note": "SAN-106: mocks the v2 agent hook to prove guests never see the billable Nearby CTA, while signed-in renters do."
