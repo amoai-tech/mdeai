@@ -164,6 +164,28 @@ describe("SAN-874 latest-topic context", () => {
     expect(coagent.state.lastIntent).toBeUndefined();
   });
 
+  it("restores a failed coworking turn's rental memory without clearing its cards", async () => {
+    coagent.state = { lastIntent: "rental_search", lastRentalQuery: {
+      maxPriceMonthly: 3_000_000, budgetCurrency: "COP",
+    } };
+    await act(async () => {
+      restoreRentalSearch({ userText: "Apartments under COP 3M", params: {
+        maxPriceMonthly: 3_000_000, budgetCurrency: "COP", stayType: "monthly",
+      } });
+    });
+    await act(async () => {
+      handlers.onTopicShift?.("general_concierge", "accepted");
+    });
+    expect(coagent.state.lastIntent).toBe("general_concierge");
+    expect(coagent.state.lastRentalQuery).toBeUndefined();
+    await act(async () => {
+      handlers.onTopicShift?.("general_concierge", "failed");
+    });
+    expect(coagent.state.lastIntent).toBe("rental_search");
+    expect(coagent.state.lastRentalQuery).toMatchObject({ maxPriceMonthly: 3_000_000 });
+    expect(mapState.mergePinsByCategory).not.toHaveBeenCalled();
+  });
+
   it("clears stale rental criteria after coworking even if Mastra has not updated lastIntent", async () => {
     await act(async () => {
       restoreRentalSearch({ userText: "Apartments under COP 3M", params: {
