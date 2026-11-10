@@ -149,3 +149,26 @@ test("accepts nonempty YAML block scalars with chomping indicators", () => {
   const result = run(root);
   assert.equal(result.status, 0, result.stderr || result.stdout);
 });
+
+test("QA evidence writers do not recreate retired docs/tasks/testing folders", () => {
+  const repoRoot = path.resolve(import.meta.dirname, "../..");
+  const writers = [
+    "e2e/ck-v2-015-events-chip.spec.ts",
+    "e2e/san-896-ck-v2-evidence.spec.ts",
+    "e2e/san-1092-broker-onboarding.spec.ts",
+    "scripts/san-869-duplicate-proposal-proof.mjs",
+  ];
+  for (const file of writers) {
+    const source = fs.readFileSync(path.join(repoRoot, file), "utf8");
+    assert.doesNotMatch(
+      source,
+      /docs\/tasks\/testing\/evidence/,
+      file + " would recreate a forbidden docs tree during tests",
+    );
+    assert.match(
+      source,
+      /test-results\/mde-evidence/,
+      file + " must keep generated screenshots/proofs in the ignored test output directory",
+    );
+  }
+});

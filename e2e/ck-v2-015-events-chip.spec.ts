@@ -1,6 +1,6 @@
 /**
  * CK-V2-015 — Events chip agent path: category resolution + card render.
- * Evidence → docs/tasks/testing/evidence/CK-V2-015/screenshots/
+ * Evidence → test-results/mde-evidence/CK-V2-015/screenshots/
  *
  * Run (dev on :3001 with secrets):
  *   infisical run --silent --env=dev --path=/ -- \
@@ -8,6 +8,7 @@
  */
 import { test, expect } from "@playwright/test";
 import path from "node:path";
+import { mkdirSync } from "node:fs";
 import {
   activateEventsChip,
   hideCopilotWebInspector,
@@ -24,7 +25,7 @@ import {
 
 const EVIDENCE_DIR = path.resolve(
   process.cwd(),
-  "docs/tasks/testing/evidence/CK-V2-015/screenshots",
+  "test-results/mde-evidence/CK-V2-015/screenshots",
 );
 const EVENT_CHIP_QUERY = "salsa events this weekend in Medellín";
 const RENTAL_QUERY = "1BR in Laureles under $80/night";
@@ -37,6 +38,7 @@ test.describe("CK-V2-015 — Events chip category resolution", () => {
   test.setTimeout(240_000);
 
   test.beforeEach(async ({ page }) => {
+    mkdirSync(EVIDENCE_DIR, { recursive: true });
     await hideCopilotWebInspector(page);
   });
 

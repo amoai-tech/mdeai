@@ -5,7 +5,7 @@
 -- bounded retries with dead-letter, and RPC privileges.
 --
 -- True simultaneous SKIP LOCKED contention needs two connections; see the concurrency script
--- in docs/audits/san-1444-durable-inbound.md.
+-- in docs/_archive/legacy-2026-11-10/audits/san-1444-durable-inbound.md.
 
 begin;
 select plan(25);
