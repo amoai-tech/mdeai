@@ -1,6 +1,6 @@
 # 21a · GEN UI task tracker (29 records, verified 2026-11-10)
 
-View `GEN_UI` (`db9b1adf8b8d`). Count: **29**. Todo 16 · In Progress 3 · Done 7 · Backlog 3.
+View `GEN_UI` (`db9b1adf8b8d`). Snapshot 2026-11-10: **29** records — Todo 13 · In Progress 4 · In Review 2 · Done 7 · Backlog 3. Counts are derived from the table below; re-query Linear for later status changes.
 Legend: dep = must ship first; PR = implementation; next = the one action that moves it.
 
 | Task | Title (exact) | Status | dep | PR | Next |
@@ -11,7 +11,7 @@ Legend: dep = must ship first; PR = implementation; next = the one action that m
 | SAN-1655 | MDE AI — Make AI Controls Use Live State, Real Actions, and Preserve User Edits | Todo | 1654 | — | one writable filter chip |
 | SAN-1656 | MDE AI — Show Grounded AI Recommendations in Page Panels With CopilotKit Surfaces | In Review | 1653 | #839 | live run on /rentals |
 | SAN-1658 | MDE AI — Add Editable AI Forms and Connect Them to Real MDE Workflows | Todo | 1654,1655 | — | one form that saves |
-| SAN-1659 | MDE AI — Add Reusable AI Insights Panels to Existing Dashboards | Todo | 1656,1655 | — | extract panel |
+| SAN-1659 | MDE AI — Add Reusable AI Insights Panels to Existing Dashboards | Todo | 1654,1656 | — | extract read-only panel; 1655 needed only for writable actions |
 | SAN-1630 | MDE AI — Build One Reusable CopilotKit A2UI Component Catalog | Done | — | main | keep Done |
 | SAN-739 | Show Rental Cards Directly Inside AI Chat | Done | — | main | keep |
 | SAN-1041 | MDE Rentals — Compare Real Apartments With Interactive AI Cards and Maps | Done | — | main | keep |
@@ -21,7 +21,7 @@ Legend: dep = must ship first; PR = implementation; next = the one action that m
 | SAN-1250 | Events — Find Real Events With Ask MDE on the Events Page | Done | — | main | keep |
 | SAN-1039 | MDE Rentals — Show Accurate, Interactive AI Picks Beside Real Apartments | Todo | 1656 | — | reuse Rentals panel |
 | SAN-1666 | MDE Restaurants — Show Grounded AI Recommendations Beside Cards and Map | Todo | 1656 | — | second panel |
-| SAN-1667 | MDE Trips — Preview and Save AI Itinerary Suggestions on the Existing Trip Page | Todo | 1656,1655 | — | after 1658 |
+| SAN-1667 | MDE Trips — Preview and Save AI Itinerary Suggestions on the Existing Trip Page | Todo | 1656 | — | read-only preview first; reviewed save needs 1655/SAN-279 and map proof needs SAN-280 |
 | SAN-1660 | MDE App Home — Help Users Navigate Their Workspaces With Smart AI Suggestions | Todo | 1654 | — | P4 |
 | SAN-1661 | MDE Events Dashboard — Compare Real Ticket Sales With Interactive AI Insights | Todo | 1659 | — | reuse panel |
 | SAN-1662 | MDE Broker Dashboard — Explore Real Listings, Leads, and Viewings With AI Panels | Todo | 1659 | — | reuse panel |
@@ -31,7 +31,7 @@ Legend: dep = must ship first; PR = implementation; next = the one action that m
 | SAN-1632 | MDE Events — Select Real Ticket Tiers and Quantities Through Interactive AI | In Progress | 1655 | — | bind existing selector |
 | SAN-1555 | MDE AI OpenDots — Map Editable AI Reviews and Saved Results to Existing Workflows | In Progress | 1658 | — | one domain first |
 | SAN-1076 | RE-FAVORITES-001 — Saved apartments | Backlog | — | — | no save handler exists |
-| SAN-761 | MDE Host Analytics — Show AI Results as Clear KPI Cards | Backlog | 1659 | — | fold into 1659 |
+| SAN-761 | MDE Host Analytics — Show AI Results as Clear KPI Cards | Backlog | 1659 | — | reuse 1659 display pattern; preserve native KPI calculation ownership |
 | SAN-785 | MDE Events — Let Hosts Edit and Copy AI Marketing Drafts | Backlog | 1658 | — | OpenDots pattern |
 | SAN-1637 | EPIC · MDE AI — Deliver Interactive Rentals, Events, Tickets & Trusted AI | In Progress | — | — | add acceptance criteria |
 
@@ -41,7 +41,7 @@ Legend: dep = must ship first; PR = implementation; next = the one action that m
 - **Product:** 1039, 1632, 1660–1667, 1201, 1250, 739, 1041, 1555, 761, 785.
 - **Supporting:** 1631, 1645, 1076.
 - **Completed:** 1630, 739, 1041, 1631, 1645, 1201, 1250.
-- **Duplicate/obsolete:** none proven. 761 folds into 1659.
+- **Duplicate/obsolete:** none proven. SAN-761 retains KPI calculation ownership; SAN-1659 owns optional AI insights and shared rendering.
 - **Post-MVP:** 785, 1665, 1076.
 
 ## Known status conflicts

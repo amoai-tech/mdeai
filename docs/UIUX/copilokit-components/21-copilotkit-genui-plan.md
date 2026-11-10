@@ -43,14 +43,17 @@ Security rule that must not change: the browser's context entry is **only a feat
 ## 5. Order of work
 
 ```
-1653 prove transport
-  |- 1654 standard catalog -- 1655 state/actions -- 1658 editable form -- 1663 / 785 / 1555
-  `- 1656 named Surface ----- 1659 dashboard panel -- 1661 / 1662 / 1664 / 1665
-         `- 1039 / 1666 / 1667
-1654 -- 1660
+1653 — prove existing render_ui transport and signed-in journey
+  ├─ 1654 — Standard Catalog ── 1655 — state/actions ── 1658 — editable form ── 1663 / 785 / 1555
+  │                         └─ 1660 — App Home
+  └─ 1656 — named Rentals Surface ── 1039 / 1666
+                            └─ 1667 — read-only Trip preview
+1654 + 1656 ── 1659 — read-only dashboard insights ── 1661 / 1662 / 1664 / 1665
 ```
 
-1654 and 1656 are parallel after 1653 (proven: same PR, no shared file). 1655 does not block 1656. Do not invent dependencies.
+**Formal Linear blockers:** SAN-1659 is blocked by SAN-1654 and SAN-1656; SAN-1667 is blocked by SAN-1656. SAN-1655 is *related*, not a formal blocker for either read-only Surface. For a **writable** insight or reviewed Trip save, the real State & Actions and authorized domain write paths must additionally work (SAN-1655 and the existing SAN-279 Trip action). The Trip Map remains SAN-280's responsibility.
+
+**Parallel-work limit:** after SAN-1653, SAN-1654 (catalog) and SAN-1656 (read-only page target) can be developed as separate work streams; they still share the agent/runtime integration and PR #839 combines changes to the server guide. The fact they landed in one PR does **not** prove file-level independence. Test the integrated result. SAN-1655 does not block a read-only SAN-1656; do not invent blockers.
 
 ## 6. Smallest next steps
 

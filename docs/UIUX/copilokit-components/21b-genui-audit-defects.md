@@ -35,10 +35,10 @@
 | Multi-card `Column` children unexplained | Major | Valid | Guide documents `children` as node ids and ships a two-card example; a test asserts it. |
 | Omitted list may drift / under-tested | Medium | Valid | `MDE_OMITTED_STANDARD_COMPONENTS` exported and tested: every name exists upstream, every upstream name is exposed or omitted, no name is in both. |
 | Guide references chat exclusively | Medium | Stale | Already replaced: "pick from the target list on the render_ui tool". |
-| Surface missing from consumer inventory | Medium | Incorrect | Entry exists at `scripts/copilotkit-consumer-inventory.json:388`. |
+| Surface missing from consumer inventory | Medium | Fixed in [PR #839](https://github.com/amoai-tech/mdeai/pull/839), not in this docs-only branch | PR #839 adds `src/components/copilot/a2ui/rental-recommendations-surface.tsx` to `scripts/copilotkit-consumer-inventory.json`. The base `main` and PR #841 do not contain that new entry. Verify it against PR #839's exact latest head, not `:388` on `main`. |
 | Surface mounted unconditionally | Medium | Rejected | It must mount to register its target; conditional-on-target is circular. Renders nothing until targeted; one hook. |
 
-## 3. Measured results (this branch)
+## 3. Historical validation reported by implementation PR #839 (not tests executed on this docs-only branch)
 
 | Check | Result |
 | --- | --- |
@@ -48,10 +48,10 @@
 | `npm run lint` (`--max-warnings 0`) | pass |
 | Consumer-inventory contract | 9/9 pass |
 | `audit:copilotkit-v2` | 0 violations, 0 new v1 imports |
-| PR #839 required gates | `floor`, `mastra-schema-init`, `review` all pass |
+| PR #839 required gates (separate from local checks) | Verify actual status against **latest PR #839 SHA**; earlier passing runs do not certify a newer commit. Not counted in the six local checks below. |
 | Live browser `render_ui` | **not measured** (no authenticated QA session) |
 
-`Passed / executed` = 6/6 for the changed surface. This is not a product success rate.
+**Reported local checks:** 6/6 passed in PR #839's implementation work (focused Vitest, full Vitest, tsc, lint, consumer-inventory contract, dependency audit). The separate PR #839 CI-gate row is **not** a seventh local check and must be re-verified on the latest head. These figures are *historical implementation evidence*, not tests run on PR #841 or a measured product success rate. Live browser `render_ui` remains unmeasured.
 
 ## 4. Scores /100 (rubric, not measured percentages)
 
