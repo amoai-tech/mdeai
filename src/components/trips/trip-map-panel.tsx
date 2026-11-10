@@ -8,6 +8,7 @@ import {
   DEFAULT_MAP_ZOOM,
   MEDELLIN_CENTER,
   getGoogleMapsMapId,
+  isE2EMapsMockEnabled,
 } from "@/platform/maps/map-config";
 import type { TripItemRow } from "@/lib/trips/trip-item-types";
 
@@ -65,6 +66,37 @@ function FitToTripStops({ pins }: { pins: TripMapPin[] }) {
   return null;
 }
 
+function TripStopPin({
+  pin,
+  selected,
+  onSelectItem,
+}: {
+  pin: TripMapPin;
+  selected: boolean;
+  onSelectItem: (id: string) => void;
+}) {
+  return (
+    <button
+      type="button"
+      data-testid={`trip-map-pin-${pin.id}`}
+      data-stop-number={pin.stopNumber}
+      aria-label={`Stop ${pin.stopNumber}: ${pin.title}`}
+      aria-pressed={selected}
+      onClick={(event) => {
+        event.stopPropagation();
+        onSelectItem(pin.id);
+      }}
+      className={
+        selected
+          ? "flex size-10 items-center justify-center rounded-full border-2 border-white bg-primary text-sm font-bold text-primary-foreground shadow-lg ring-4 ring-primary/30"
+          : "flex size-9 items-center justify-center rounded-full border-2 border-white bg-foreground text-sm font-bold text-background shadow-md hover:scale-105"
+      }
+    >
+      {pin.stopNumber}
+    </button>
+  );
+}
+
 function TripMapCanvas({
   pins,
   selectedItemId,
@@ -74,6 +106,25 @@ function TripMapCanvas({
   selectedItemId: string | null;
   onSelectItem: (id: string) => void;
 }) {
+  if (isE2EMapsMockEnabled()) {
+    return (
+      <div
+        data-testid="trip-map-mock"
+        data-e2e-mock-map="true"
+        className="flex h-full min-h-[280px] w-full flex-wrap content-start gap-3 overflow-auto bg-muted/30 p-4"
+      >
+        {pins.map((pin) => (
+          <TripStopPin
+            key={pin.id}
+            pin={pin}
+            selected={pin.id === selectedItemId}
+            onSelectItem={onSelectItem}
+          />
+        ))}
+      </div>
+    );
+  }
+
   const mapId = getGoogleMapsMapId();
   if (!mapId) {
     return (
@@ -111,24 +162,11 @@ function TripMapCanvas({
             title={`Stop ${pin.stopNumber}: ${pin.title}`}
             onClick={() => onSelectItem(pin.id)}
           >
-            <button
-              type="button"
-              data-testid={`trip-map-pin-${pin.id}`}
-              data-stop-number={pin.stopNumber}
-              aria-label={`Stop ${pin.stopNumber}: ${pin.title}`}
-              aria-pressed={selected}
-              onClick={(event) => {
-                event.stopPropagation();
-                onSelectItem(pin.id);
-              }}
-              className={
-                selected
-                  ? "flex size-10 items-center justify-center rounded-full border-2 border-white bg-primary text-sm font-bold text-primary-foreground shadow-lg ring-4 ring-primary/30"
-                  : "flex size-9 items-center justify-center rounded-full border-2 border-white bg-foreground text-sm font-bold text-background shadow-md hover:scale-105"
-              }
-            >
-              {pin.stopNumber}
-            </button>
+            <TripStopPin
+              pin={pin}
+              selected={selected}
+              onSelectItem={onSelectItem}
+            />
           </AdvancedMarker>
         );
       })}

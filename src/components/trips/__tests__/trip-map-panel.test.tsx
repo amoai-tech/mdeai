@@ -6,6 +6,7 @@ import type { TripItemRow } from "@/lib/trips/trip-item-types";
 import { TripMapPanel, mappableTripPins } from "../trip-map-panel";
 
 const mapsStatus = vi.hoisted(() => ({ value: "ok" as string }));
+const mockMaps = vi.hoisted(() => ({ value: false }));
 
 vi.mock("@vis.gl/react-google-maps", () => ({
   Map: ({ children }: { children: ReactNode }) => (
@@ -33,6 +34,7 @@ vi.mock("@/platform/maps/map-config", () => ({
   MEDELLIN_CENTER: { lat: 6.2442, lng: -75.5812 },
   DEFAULT_MAP_ZOOM: 13,
   getGoogleMapsMapId: () => "test-map-id",
+  isE2EMapsMockEnabled: () => mockMaps.value,
 }));
 
 function item(overrides: Partial<TripItemRow> & Pick<TripItemRow, "id" | "title">): TripItemRow {
@@ -106,6 +108,20 @@ describe("TripMapPanel", () => {
     );
     expect(screen.getByTestId("trip-map-empty")).not.toBeNull();
     expect(screen.queryByTestId("google-map")).toBeNull();
+  });
+
+  it("renders usable pins in E2E mock-maps mode without an APIProvider", () => {
+    mockMaps.value = true;
+    render(
+      <TripMapPanel
+        items={[item({ id: "a", title: "Apartment A" })]}
+        selectedItemId="a"
+        onSelectItem={() => {}}
+      />,
+    );
+    expect(screen.getByTestId("trip-map-mock")).not.toBeNull();
+    expect(screen.getByTestId("trip-map-pin-a").getAttribute("aria-pressed")).toBe("true");
+    mockMaps.value = false;
   });
 
   it("degrades only the map when Google Maps is unavailable", () => {
