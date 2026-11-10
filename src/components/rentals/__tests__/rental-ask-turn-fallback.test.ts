@@ -54,12 +54,46 @@ describe("plainTurns — tool-only steps always leave something readable", () =>
         ],
       },
       { id: "t1", role: "tool", toolCallId: "s1", content: "{\"results\":[]}" },
-      { id: "t2", role: "tool", toolCallId: "d1", content: "Opened details." },
+      { id: "t2", role: "tool", toolCallId: "d1", content: "Opened details for the first apartment." },
     ];
     expect(plainTurns(messages).map((t) => t.text)).toEqual([
       "Searched the listings and updated the results.",
       "Opened the details for that apartment.",
     ]);
+  });
+
+  it("does not invent a success line before the tool result arrives", () => {
+    const messages: AgentMessage[] = [
+      { id: "a1", role: "assistant", toolCalls: [
+        { id: "s1", function: { name: "searchRentalsTool" } },
+        { id: "d1", function: { name: "openRentalDetails" } },
+      ] },
+    ];
+    expect(plainTurns(messages)).toEqual([]);
+  });
+
+  it("reports failed search and failed Details without claiming success", () => {
+    const messages: AgentMessage[] = [
+      { id: "a1", role: "assistant", toolCalls: [
+        { id: "s1", function: { name: "searchRentalsTool" } },
+        { id: "d1", function: { name: "openRentalDetails" } },
+      ] },
+      { id: "t1", role: "tool", toolCallId: "s1", content: '{"error":"Database unavailable"}' },
+      { id: "t2", role: "tool", toolCallId: "d1", content: "No apartment 7 is in the current results." },
+    ];
+    expect(plainTurns(messages).map((t) => t.text)).toEqual([
+      "The rental search did not complete. Please try again.",
+      "I couldn't open those apartment details.",
+    ]);
+  });
+
+  it("does not call a zero-operation render successful", () => {
+    const messages: AgentMessage[] = [
+      { id: "a1", role: "assistant", toolCalls: [{ id: "r1", function: { name: "render_ui" } }] },
+      { id: "t1", role: "tool", toolCallId: "r1",
+        content: JSON.stringify({ status: "rendered", applied: 0, rejected: [] }) },
+    ];
+    expect(plainTurns(messages)[0].text).toBe("I couldn't display those cards. Try asking again.");
   });
 
   it("keeps a normal written answer and does not add a synthetic line", () => {

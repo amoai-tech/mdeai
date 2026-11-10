@@ -145,8 +145,16 @@ const TOOL_OUTCOMES: Array<{ pattern: RegExp; done: string; failed?: string }> =
     done: "Updated the recommendations.",
     failed: "I couldn't display those cards. Try asking again.",
   },
-  { pattern: /search[-_]?rentals|searchRentalsTool/i, done: "Searched the listings and updated the results." },
-  { pattern: /openRentalDetails/i, done: "Opened the details for that apartment." },
+  {
+    pattern: /search[-_]?rentals|searchRentalsTool/i,
+    done: "Searched the listings and updated the results.",
+    failed: "The rental search did not complete. Please try again.",
+  },
+  {
+    pattern: /openRentalDetails/i,
+    done: "Opened the details for that apartment.",
+    failed: "I couldn't open those apartment details.",
+  },
 ];
 
 /** A render_ui result says how many operations the runtime accepted. */
@@ -156,7 +164,7 @@ function renderUiOutcome(result: unknown): "applied" | "rejected" | null {
     const parsed = JSON.parse(result) as { status?: string; applied?: number; rejected?: unknown[] };
     if (typeof parsed?.applied === "number" && parsed.applied > 0) return "applied";
     if (Array.isArray(parsed?.rejected) && parsed.rejected.length > 0) return "rejected";
-    return parsed?.status === "rendered" ? "applied" : null;
+    return parsed?.applied === 0 ? "rejected" : null;
   } catch {
     return null;
   }
@@ -181,7 +189,23 @@ function toolOutcomeTurn(
     if (outcome === "applied") return { id, role: "assistant", text: rule.done };
     return null;
   }
-  return { id, role: "assistant", text: rule.done };
+  // No result yet means no confirmed action; never invent success.
+  if (!resultText.trim()) return null;
+  if (/openRentalDetails/i.test(callName)) {
+    return { id, role: "assistant",
+      text: /^Opened details for\b/i.test(resultText.trim()) ? rule.done : rule.failed! };
+  }
+  if (/search[-_]?rentals|searchRentalsTool/i.test(callName)) {
+    let succeeded = false;
+    try {
+      const parsed: unknown = JSON.parse(resultText);
+      succeeded = !!parsed && typeof parsed === "object" &&
+        Array.isArray((parsed as { results?: unknown }).results) &&
+        !("error" in parsed && (parsed as { error?: unknown }).error);
+    } catch { /* No completed search envelope. */ }
+    return { id, role: "assistant", text: succeeded ? rule.done : rule.failed! };
+  }
+  return null;
 }
 
 export function plainTurns(messages: readonly AgentMessage[]): PlainTurn[] {

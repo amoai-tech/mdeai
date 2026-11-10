@@ -43,26 +43,30 @@ const RENTAL_HINT_MAX = 5;
  * an opaque id plus display labels. This is still untrusted browser data; the
  * catalog re-resolves the id from the current authorized tool result.
  */
-export function readRentalResultHints(agUiContext: unknown): string | null {
-  if (!agUiContext || typeof agUiContext !== "object") return null;
+/** Browser-published IDs are hints only; RentalCard revalidates the actual row. */
+export function readRentalResultIds(agUiContext: unknown): string[] {
+  if (!agUiContext || typeof agUiContext !== "object") return [];
   const entries = (agUiContext as { context?: unknown }).context;
-  if (!Array.isArray(entries)) return null;
+  if (!Array.isArray(entries)) return [];
   const entry = entries.slice(0, 20).find((value) => {
     if (!value || typeof value !== "object") return false;
     const description = (value as { description?: unknown }).description;
     return typeof description === "string" && description.startsWith(RENTAL_HINT_PREFIX);
   }) as { value?: unknown } | undefined;
-  if (!entry || typeof entry.value !== "string" || entry.value.length > 4000) return null;
+  if (!entry || typeof entry.value !== "string" || entry.value.length > 4000) return [];
   let rows: unknown;
-  try { rows = JSON.parse(entry.value); } catch { return null; }
-  if (!Array.isArray(rows)) return null;
-  const hints = rows.slice(0, RENTAL_HINT_MAX).flatMap((row) => {
-    return isRentalA2UIId(row) ? [row] : [];
-  });
+  try { rows = JSON.parse(entry.value); } catch { return []; }
+  if (!Array.isArray(rows)) return [];
+  return rows.slice(0, RENTAL_HINT_MAX).flatMap((row) => isRentalA2UIId(row) ? [row] : []);
+}
+
+/** Plain-text prompt hint, never arbitrary browser instructions. */
+export function readRentalResultHints(agUiContext: unknown): string | null {
+  const hints = readRentalResultIds(agUiContext);
   if (hints.length === 0) return null;
   return [
-    "Current authorized rental result IDs, in display order (first is the top result). Use one exact id for render_ui; the card revalidates it:",
-    ...hints.map((id) => `- ${id}`),
+    "Current browser-published rental result IDs, in display order (first is the top result). The RentalCard resolver revalidates the real authorized row:",
+    ...hints.map((id) => "- " + id),
   ].join("\n");
 }
 

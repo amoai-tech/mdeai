@@ -2,12 +2,18 @@ import { describe, expect, it } from "vitest";
 import { shouldRequestRecommendations } from "../recommendation-intent";
 import { RENTAL_A2UI_CONTEXT_DESCRIPTION } from "@/lib/rentals/a2ui-context";
 
-const hints = {
+const page = (route: string) => ({
   get: (key: string) =>
     key === "ag-ui"
-      ? { context: [{ description: RENTAL_A2UI_CONTEXT_DESCRIPTION, value: JSON.stringify(["37a05b09-f560-4776-92fd-b8bb2b92e611"]) }] }
+      ? { context: [
+          { description: RENTAL_A2UI_CONTEXT_DESCRIPTION,
+            value: JSON.stringify(["37a05b09-f560-4776-92fd-b8bb2b92e611"]) },
+          { description: "Active MDE discovery page, filters, and explicitly selected visible public item.",
+            value: JSON.stringify({ route, selectedPublicEntityId: null }) },
+        ] }
       : undefined,
-};
+});
+const hints = page("/rentals");
 const noHints = { get: () => ({ context: [] }) };
 const ask = (text: string) => [{ role: "user", content: text }];
 
@@ -19,6 +25,25 @@ describe("shouldRequestRecommendations", () => {
     "Show three apartments here.",
   ])("pins the card tool for %s", (text) => {
     expect(shouldRequestRecommendations({ stepNumber: 0, messages: ask(text), requestContext: hints })).toBe(true);
+  });
+
+  it.each([
+    "show me 2 bedroom apartments in Poblado",
+    "show Poblado apartments as cards",
+    "show the first two in Poblado as cards",
+    "show these furnished apartments as cards",
+    "show apartments under COP 3000000 as cards",
+  ])("does not hijack a new search: %s", (text) => {
+    expect(shouldRequestRecommendations({ stepNumber: 0, messages: ask(text), requestContext: hints })).toBe(false);
+  });
+
+  it("does not send /chat requests to an unmounted Rentals surface", () => {
+    expect(shouldRequestRecommendations({
+      stepNumber: 0, messages: ask("show first two as cards"), requestContext: page("/chat"),
+    })).toBe(false);
+    expect(shouldRequestRecommendations({
+      stepNumber: 0, messages: ask("show first two as cards"), requestContext: page("/events"),
+    })).toBe(false);
   });
 
   it("does nothing without published IDs", () => {
