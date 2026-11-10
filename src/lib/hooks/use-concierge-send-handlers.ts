@@ -241,7 +241,7 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
   // error signal at the start of every send, so a non-zero version here belongs to this run.
   /** Validate session, wait for the existing agent, and show an honest result. */
   const performAgentSend = useCallback(
-    async (text: string, submissionId?: string, onAccepted?: () => void) => {
+    async (text: string, submissionId?: string, onAccepted?: () => void, onCompleted?: () => void) => {
       // A fast guest can send before the session check has finished. Ask once, now, instead of
       // letting that send reach the protected runtime (401 -> "try again"). If the check itself throws
       // (network down) we keep what we already know: no user yet means the sign-in offer, which heals
@@ -284,11 +284,10 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
         // instead of a false confirmation.
       }
       try {
-        if ((await waitForRuntimeReady()) && (await appendMessage(text))) {
-          // A signed-in agent accepted this turn. Now the outgoing topic can
-          // replace the previous rental cards and memory without hiding a
-          // guest's apartments behind a sign-in prompt or clearing on failures.
-          onAccepted?.();
+        if ((await waitForRuntimeReady()) &&
+            (await (onAccepted ? appendMessage(text, onAccepted) : appendMessage(text)))) {
+          // The sender published the new intent immediately after addMessage,
+          // before the model stream. Only erase old cards on a successful run.
           // If the model returns no A2UI surface, the existing real result can still be
           // shown through Quick view. Two rules keep it honest:
           //  - never open a card when the model already rendered one (any event), and
@@ -301,7 +300,10 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
           }
           // Another conversation can report a late error during this run.
           // Only this conversation's stream failure should trigger its notice.
-          if (getConciergeErrorForThread(threadId).version === 0) return true;
+          if (getConciergeErrorForThread(threadId).version === 0) {
+            onCompleted?.();
+            return true;
+          }
           showNotice(AGENT_UNAVAILABLE_MESSAGE);
         } else {
           showExchange(text, AGENT_UNAVAILABLE_MESSAGE, submissionId);
@@ -324,10 +326,10 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
    * Coalesce identical in-flight questions and serialize distinct questions.
    * Release each key after completion so later deliberate repeats still work.
    */
-  const onAgentSend = useCallback((text: string, submissionId?: string, onAccepted?: () => void): Promise<boolean> => {
+  const onAgentSend = useCallback((text: string, submissionId?: string, onAccepted?: () => void, onCompleted?: () => void): Promise<boolean> => {
     const existing = pendingAgentSendsRef.current.get(text);
     if (existing) return existing;
-    const pending = lastAgentSendRef.current.then(() => performAgentSend(text, submissionId, onAccepted));
+    const pending = lastAgentSendRef.current.then(() => performAgentSend(text, submissionId, onAccepted, onCompleted));
     pendingAgentSendsRef.current.set(text, pending);
     lastAgentSendRef.current = pending.then(() => undefined, () => undefined);
     void pending.finally(() => {
@@ -353,17 +355,23 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
   const inRentalSearch = rentalIntentIsCurrent &&
     (Boolean(visibleRentalSearch) || Boolean(state?.lastRentalQuery));
 
-  const onTopicShift = useCallback((intent: RouterIntent) => {
-    // Change only current discovery state; keep the saved transcript intact.
-    // Reuse the canonical provider owner for panels and all categories of pins.
-    clearVerticalResults(null);
-    setState((previous) => ({
-      ...previous,
-      lastIntent: intent,
-      lastRentalQuery: undefined,
-      lastRentalResults: undefined,
-      selectedListingId: undefined,
-    }));
+  const onTopicShift = useCallback((intent: RouterIntent, stage: "accepted" | "completed") => {
+    if (stage === "accepted") {
+      // Mark the latest topic as soon as the signed-in message is in the thread.
+      // Keep old results visible until a successful agent run; this blocks a
+      // rental budget hijack during streaming without hiding cards on errors.
+      setState((previous) => ({
+        ...previous,
+        lastIntent: intent,
+        lastRentalQuery: undefined,
+        lastRentalResults: undefined,
+        selectedListingId: undefined,
+      }));
+    } else {
+      // Only a completed answer replaces the current results and map pins.
+      // Saved transcript/history is deliberately untouched.
+      clearVerticalResults(null);
+    }
   }, [clearVerticalResults, setState]);
 
   return useMemo(
