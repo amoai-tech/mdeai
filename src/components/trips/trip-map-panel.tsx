@@ -12,6 +12,7 @@ import {
   isE2EMapsMockEnabled,
 } from "@/platform/maps/map-config";
 import type { TripItemRow } from "@/lib/trips/trip-item-types";
+import { hasValidCoordinates } from "@/lib/trips/coordinates";
 
 export type TripMapPin = {
   id: string;
@@ -26,23 +27,10 @@ export type TripMapPin = {
 };
 
 /** Only finite coordinates become pins. A missing location never becomes a fake pin. */
-function isValidCoordinate(lat: number, lng: number): boolean {
-  return (
-    Number.isFinite(lat) &&
-    Number.isFinite(lng) &&
-    lat >= -90 &&
-    lat <= 90 &&
-    lng >= -180 &&
-    lng <= 180
-  );
-}
-
 export function mappableTripPins(items: TripItemRow[]): TripMapPin[] {
   const mappable = items.filter(
     (item): item is TripItemRow & { latitude: number; longitude: number } =>
-      item.latitude != null &&
-      item.longitude != null &&
-      isValidCoordinate(item.latitude, item.longitude),
+      hasValidCoordinates(item),
   );
   // Number only the pins that actually render, 1..N. The missing-location item
   // still appears in the itinerary; it just has no pin.

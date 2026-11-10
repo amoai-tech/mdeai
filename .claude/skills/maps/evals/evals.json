@@ -66,8 +66,8 @@
     },
     {
       "id": 7,
-      "prompt": "Could we enable CopilotKit's standard Map and Button to let Ask MDE save cafés to Trips? Review the existing catalog, component limitations, and safe current workflow; do not modify files.",
-      "expected_output": "Recognizes Map and Button are currently omitted in MDE_OMITTED_STANDARD_COMPONENTS and SAN-1655/SAN-1658 must wire registered functions and tests before AI inputs can be enabled. Reuses the existing native AddToTripButton/addTripItem/RPC and Google Maps; never presents dead controls or bypasses user confirmation.",
+      "prompt": "MDE Trips already uses Google Maps via @vis.gl/react-google-maps. Should we replace its real Google map, saved café pins, and route display with CopilotKit standardUI.Map (MapLibre) and a generated Add-to-trip Button? Review the current Google Maps renderer and routing architecture, then recommend the smallest safe integration. Do not modify files.",
+      "expected_output": "Loads Maps skill and its A2UI comparison because the decision concerns replacing MDE's real Google map. Retains existing MapsShell, saved pins, selection, and Google Routes rather than adding MapLibre or treating marker connections as road routes. Notes that AI Button remains omitted by the CopilotKit catalog until SAN-1655/SAN-1658 wire tested handlers; reuses native AddToTripButton and authenticated addTripItem.",
       "files": [],
       "expectations": [
         {

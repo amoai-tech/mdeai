@@ -13,9 +13,18 @@ const coagent = vi.hoisted(() => ({ state: {} as Record<string, unknown> }));
 const mapState = vi.hoisted(() => ({ selectedPinId: null as string | null, pins: [] as Array<{ id: string; category: string }> }));
 const groundedCtx = vi.hoisted(() => ({ toolResult: null as unknown }));
 const rentalDetails = vi.hoisted(() => ({ toolResult: null as unknown, openVenueDetail: vi.fn(), closeRentalDetails: vi.fn() }));
-vi.mock("@/components/chat/rental-fast-path-context", () => ({
-  useOptionalRentalFastPath: () => ({ toolResult: rentalDetails.toolResult }),
-}));
+// Reuse the real rental context (including searchMeta updates); override only
+// the shown Details cards for the unrelated deterministic Details tests.
+vi.mock("@/components/chat/rental-fast-path-context", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/components/chat/rental-fast-path-context")>();
+  return {
+    ...actual,
+    useOptionalRentalFastPath: () => {
+      const current = actual.useOptionalRentalFastPath();
+      return current ? { ...current, toolResult: rentalDetails.toolResult ?? current.toolResult } : null;
+    },
+  };
+});
 vi.mock("@/components/chat/rental-ui-context", () => ({
   useRentalUi: () => ({ openVenueDetail: rentalDetails.openVenueDetail, closeRentalDetails: rentalDetails.closeRentalDetails }),
 }));
@@ -55,6 +64,7 @@ vi.mock("@/hooks/use-rental-search-fast-path", () => ({ useRentalSearchFastPath:
 vi.mock("@/hooks/use-restaurant-search-fast-path", () => ({ useRestaurantSearchFastPath: () => noMatch }));
 
 import { EventLocalChatProvider, useEventLocalChat } from "@/components/chat/event-local-chat-context";
+import { RentalFastPathProvider, useRentalFastPath } from "@/components/chat/rental-fast-path-context";
 import { SIGN_IN_REQUIRED_MESSAGE } from "@/lib/concierge-sign-in-message";
 import { clearConciergeError, getConciergeErrorForThread, reportConciergeError } from "@/lib/concierge-error-store";
 import { AGENT_UNAVAILABLE_MESSAGE, useConciergeSendHandlers } from "@/lib/hooks/use-concierge-send-handlers";
@@ -65,14 +75,17 @@ import { sendConciergeUserMessage, type ConciergeSendHandlers } from "@/lib/conc
 let handlers: ConciergeSendHandlers;
 let shown: Array<{ role: string; content: string }>;
 let promptShown = false;
+let restoreRentalSearch: ReturnType<typeof useRentalFastPath>["setSearchMeta"];
 
 function Harness() {
   const h = useConciergeSendHandlers();
   const { messages, signInPrompt } = useEventLocalChat();
+  const { setSearchMeta } = useRentalFastPath();
   useEffect(() => {
     handlers = h;
     shown = messages;
     promptShown = signInPrompt;
+    restoreRentalSearch = setSearchMeta;
   });
   return null;
 }
@@ -104,7 +117,7 @@ beforeEach(() => {
   act(() =>
     root.render(
       <EventLocalChatProvider>
-        <Harness />
+        <RentalFastPathProvider><Harness /></RentalFastPathProvider>
       </EventLocalChatProvider>,
     ),
   );
@@ -113,6 +126,68 @@ afterEach(() => {
   act(() => root.unmount());
   container.remove();
   vi.restoreAllMocks();
+});
+
+describe("guest context from visible rental search", () => {
+  it("recognizes visible rental search criteria even without authenticated CoAgent state", async () => {
+    coagent.state = {};
+    session.user = null;
+    await act(async () => {
+      restoreRentalSearch({ userText: "Only apartments under COP 3M", params: {
+        maxPriceMonthly: 3_000_000, budgetCurrency: "COP", stayType: "monthly",
+      } });
+    });
+    expect(handlers.inRentalSearch).toBe(true);
+    await act(async () => { restoreRentalSearch(null); });
+    expect(handlers.inRentalSearch).toBe(false);
+  });
+});
+
+describe("signed-in intent changes after rental discovery", () => {
+  it.each([
+    ["coworking", "general_concierge"],
+    ["events", "event_discovery"],
+    ["restaurants", "restaurant_discovery"],
+  ])("does not revive rental cards after switching to %s", async (_topic, latestIntent) => {
+    // Old rental search cards can remain displayed while a signed-in AI turn
+    // changes the latest intent to general concierge/coworking.
+    await act(async () => {
+      restoreRentalSearch({ userText: "Show apartments under COP 3 million", params: {
+        neighborhood: "Laureles", maxPriceMonthly: 3_000_000,
+        budgetCurrency: "COP", stayType: "monthly",
+      } });
+    });
+    coagent.state = { lastIntent: latestIntent, lastRentalQuery: {
+      neighborhood: "Laureles", maxPriceMonthly: 3_000_000,
+      budgetCurrency: "COP", budgetType: "monthly",
+    } };
+    await act(async () => {
+      root.render(<EventLocalChatProvider><RentalFastPathProvider><Harness /></RentalFastPathProvider></EventLocalChatProvider>);
+    });
+    expect(handlers.inRentalSearch).toBe(false);
+    for (const message of ["only under COP 800k per month", "anywhere is fine"]) {
+      const rental = vi.fn(async () => true);
+      const agent = vi.fn(async () => true);
+      expect(await sendConciergeUserMessage(message, {
+        ...handlers, handleRentalMessage: rental, onAgentSend: agent,
+      })).toBe(true);
+      expect(rental).not.toHaveBeenCalled();
+      expect(agent).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it("preserves the current signed-in rental refinement when the latest intent is rental", async () => {
+    await act(async () => {
+      restoreRentalSearch({ userText: "Apartments under COP 3 million", params: {
+        maxPriceMonthly: 3_000_000, budgetCurrency: "COP", stayType: "monthly",
+      } });
+    });
+    coagent.state = { lastIntent: "rental_search" };
+    await act(async () => {
+      root.render(<EventLocalChatProvider><RentalFastPathProvider><Harness /></RentalFastPathProvider></EventLocalChatProvider>);
+    });
+    expect(handlers.inRentalSearch).toBe(true);
+  });
 });
 
 describe("onAgentSend never leaves the renter with nothing", () => {
@@ -263,9 +338,7 @@ describe("SAN-407 · INT-004 — is the conversation in a rental search?", () =>
   const rerender = () =>
     act(() =>
       root.render(
-        <EventLocalChatProvider>
-          <Harness />
-        </EventLocalChatProvider>,
+        <EventLocalChatProvider><RentalFastPathProvider><Harness /></RentalFastPathProvider></EventLocalChatProvider>,
       ),
     );
 
@@ -287,7 +360,7 @@ describe("SAN-407 · INT-004 — is the conversation in a rental search?", () =>
 // again", although the runtime refuses guests on purpose and a retry can never work.
 describe("SAN-106 guest Nearby chat routing", () => {
   const text = "Show cafés within 800 meters of this apartment";
-  const rerender = () => act(() => root.render(<EventLocalChatProvider><Harness /></EventLocalChatProvider>));
+  const rerender = () => act(() => root.render(<EventLocalChatProvider><RentalFastPathProvider><Harness /></RentalFastPathProvider></EventLocalChatProvider>));
 
   it("offers sign-in rather than sending a selected-rental Nearby request or retrying 401", async () => {
     session.user = null;
@@ -343,7 +416,7 @@ describe("deterministic grounded ranking is limited to the shown result set and 
   const A = "37a05b09-f560-4776-92fd-b8bb2b92e611";
   const B = "e404023e-ad2f-4446-896d-e085ecdacaf1";
   const rows = [{ id: "cafe-a", title: "típica tiendas", distanceMeters: 36, distanceFromRentalId: A }];
-  const rerender = () => act(() => root.render(<EventLocalChatProvider><Harness /></EventLocalChatProvider>));
+  const rerender = () => act(() => root.render(<EventLocalChatProvider><RentalFastPathProvider><Harness /></RentalFastPathProvider></EventLocalChatProvider>));
 
   it("falls through when the map selection is a different apartment", async () => {
     coagent.state = { selectedListingId: A, lastGroundedResults: rows, lastIntent: "restaurant_discovery" };
@@ -460,9 +533,7 @@ describe("onAgentSend for a signed-out visitor", () => {
   const rerender = () =>
     act(() =>
       root.render(
-        <EventLocalChatProvider>
-          <Harness />
-        </EventLocalChatProvider>,
+        <EventLocalChatProvider><RentalFastPathProvider><Harness /></RentalFastPathProvider></EventLocalChatProvider>,
       ),
     );
 
@@ -540,7 +611,7 @@ describe("onAgentSend for a signed-out visitor", () => {
   it("confirms only after the exact Quick view opens", async () => {
     eventFast.activeEventId = "a1b2c3d4-0001-0001-0001-000000000003";
     eventFast.activeEventRows = [{ id: eventFast.activeEventId, title: "Feria de las Flores" }];
-    act(() => root.render(<EventLocalChatProvider><Harness /></EventLocalChatProvider>));
+    act(() => root.render(<EventLocalChatProvider><RentalFastPathProvider><Harness /></RentalFastPathProvider></EventLocalChatProvider>));
     const onRecovery = (event: Event) => {
       const detail = (event as CustomEvent<{ requestId?: string }>).detail;
       window.dispatchEvent(new CustomEvent("mde:event-card-recovery-result", {
@@ -559,7 +630,7 @@ describe("onAgentSend for a signed-out visitor", () => {
   it("falls through to the model when the card does not open", async () => {
     eventFast.activeEventId = "a1b2c3d4-0001-0001-0001-000000000003";
     eventFast.activeEventRows = [{ id: eventFast.activeEventId, title: "Feria de las Flores" }];
-    act(() => root.render(<EventLocalChatProvider><Harness /></EventLocalChatProvider>));
+    act(() => root.render(<EventLocalChatProvider><RentalFastPathProvider><Harness /></RentalFastPathProvider></EventLocalChatProvider>));
     chat.appendMessage.mockResolvedValue(true);
     const onRecovery = (event: Event) => {
       const detail = (event as CustomEvent<{ requestId?: string }>).detail;
@@ -594,7 +665,7 @@ describe("full chat Details requests use the currently shown rental IDs", () => 
     const first = rental("first-listing", "Laureles apartment A");
     const second = rental("second-listing", "Laureles apartment B");
     rentalDetails.toolResult = { results: [first, second] };
-    act(() => root.render(<EventLocalChatProvider><Harness /></EventLocalChatProvider>));
+    act(() => root.render(<EventLocalChatProvider><RentalFastPathProvider><Harness /></RentalFastPathProvider></EventLocalChatProvider>));
     await act(async () => {
       expect(await sendConciergeUserMessage("Show me the details of the second apartment", handlers)).toBe(true);
     });
@@ -615,7 +686,7 @@ describe("full chat Details requests use the currently shown rental IDs", () => 
       rental("first-listing", "Laureles apartment A"),
       rental("second-listing", "Laureles apartment B"),
     ] };
-    act(() => root.render(<EventLocalChatProvider><Harness /></EventLocalChatProvider>));
+    act(() => root.render(<EventLocalChatProvider><RentalFastPathProvider><Harness /></RentalFastPathProvider></EventLocalChatProvider>));
     expect(await handlers.handleRentalDetailsMessage?.(text)).toBe(false);
     expect(rentalDetails.openVenueDetail).not.toHaveBeenCalled();
   });
@@ -628,7 +699,7 @@ describe("full chat Details requests use the currently shown rental IDs", () => 
       rental("first-listing", "Laureles apartment A"),
       rental("second-listing", "Laureles apartment B"),
     ] };
-    act(() => root.render(<EventLocalChatProvider><Harness /></EventLocalChatProvider>));
+    act(() => root.render(<EventLocalChatProvider><RentalFastPathProvider><Harness /></RentalFastPathProvider></EventLocalChatProvider>));
     await act(async () => {
       await sendConciergeUserMessage("Show me the details of the second apartment", handlers);
       expect(rentalDetails.openVenueDetail).toHaveBeenCalledOnce();
@@ -640,7 +711,7 @@ describe("full chat Details requests use the currently shown rental IDs", () => 
 
   it("refuses an out-of-range position without opening a different apartment", async () => {
     rentalDetails.toolResult = { results: [rental("first-listing", "Laureles apartment A")] };
-    act(() => root.render(<EventLocalChatProvider><Harness /></EventLocalChatProvider>));
+    act(() => root.render(<EventLocalChatProvider><RentalFastPathProvider><Harness /></RentalFastPathProvider></EventLocalChatProvider>));
     await act(async () => {
       expect(await handlers.handleRentalDetailsMessage?.("Show me the details of the third apartment")).toBe(true);
     });
