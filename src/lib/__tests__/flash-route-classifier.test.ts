@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   classifyRouteWithFlash,
+  resolveRouterClassification,
   isFlashRouteEnabled,
   mergeRegexAndFlashClassification,
   shouldInvokeFlashClassifier,
@@ -111,5 +112,31 @@ describe("classifyRouteWithFlash", () => {
     const out = await classifyRouteWithFlash("somewhere for a birthday");
     expect(out?.intent).toBe("venue_booking");
     expect(out?.slots.eventType).toBe("birthday");
+  });
+});
+
+
+describe("SAN-874 coworking switches the conversation without hijacking rentals", () => {
+  it("marks coworking as a new Concierge topic without another model call", async () => {
+    const result = await resolveRouterClassification("What coworking spaces are in Laureles?", {
+      lastIntent: "rental_search", inRentalSearch: true,
+    });
+    expect(result.intent).toBe("general_concierge");
+    expect(result.routingTarget).toBe("agent");
+    expect(result.topicShift).toBe(true);
+  });
+  it("keeps apartments near coworking spaces on the rental search", async () => {
+    const result = await resolveRouterClassification("Find apartments near coworking spaces in Laureles", {
+      lastIntent: "rental_search", inRentalSearch: true,
+    });
+    expect(result.routingTarget).toBe("rental");
+    expect(result.topicShift).not.toBe(true);
+  });
+  it("still treats a cheaper monthly apartment follow-up as a rental refinement", async () => {
+    const result = await resolveRouterClassification("Now only under COP 2.5 million per month", {
+      inRentalSearch: true,
+    });
+    expect(result.routingTarget).toBe("rental");
+    expect(result.topicShift).not.toBe(true);
   });
 });
