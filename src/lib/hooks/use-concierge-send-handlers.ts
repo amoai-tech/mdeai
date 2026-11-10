@@ -101,7 +101,7 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
   const rentalFastPath = useOptionalRentalFastPath();
   const visibleRentalSearch = rentalFastPath?.searchMeta;
   const visibleRentals = rentalFastPath?.toolResult;
-  const { openVenueDetail } = useRentalUi();
+  const { openVenueDetail, closeRentalDetails } = useRentalUi();
   const map = useOptionalMapContext();
   const { toolResult } = useGroundedFastPath();
   const groundedShownIds = useOptionalRichCardResults()?.groundedShownIds;
@@ -350,6 +350,7 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
     () => ({
       handleRentalMessage,
       handleRentalDetailsMessage,
+      closeRentalDetails,
       handleEventVenueBookingMessage,
       handleEventMessage,
       handleGroundedMessage,
@@ -364,6 +365,7 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
     [
       handleRentalMessage,
       handleRentalDetailsMessage,
+      closeRentalDetails,
       handleEventVenueBookingMessage,
       handleEventMessage,
       handleGroundedMessage,

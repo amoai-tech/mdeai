@@ -18,6 +18,8 @@ export type ConciergeSendHandlers = {
   threadId?: string;
   /** Retry the existing agent turn instead of sending the text again. */
   retryLastTurn?: () => Promise<boolean>;
+  /** Clear old apartment Details on a confirmed cross-category topic switch. */
+  closeRentalDetails?: () => void;
   /** Open a shown rental by its current position; never launch another search for Details. */
   handleRentalDetailsMessage?: (text: string, submissionId?: string) => Promise<boolean>;
   handleRentalMessage: (text: string, submissionId?: string) => Promise<boolean>;
@@ -98,6 +100,17 @@ export async function sendConciergeUserMessage(
       lastIntent: handlers.lastIntent,
       inRentalSearch: handlers.inRentalSearch,
     });
+
+    // The user switched from apartments to a separate discovery vertical.
+    // Reuse RentalUiProvider's existing close operation; keep the old Details
+    // visible for rental refinements, contextual nearby cafés, and small talk.
+    if (
+      classification.intent === "restaurant_discovery" ||
+      classification.intent === "event_discovery" ||
+      classification.intent === "venue_booking"
+    ) {
+      handlers.closeRentalDetails?.();
+    }
 
     for (const target of routerHandlerOrderFromClassification(classification)) {
       if (await invokeConciergeHandler(target, trimmed, handlers, submissionId)) return true;
