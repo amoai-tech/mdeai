@@ -101,6 +101,15 @@ describe("deterministic ordering", () => {
     ]);
   });
 
+  it("orders unscheduled items by position, created_at, then id", () => {
+    const groups = groupTripItemsByDay([
+      base({ id: "later", position: 0, created_at: "2026-11-01T00:00:02.000Z" }),
+      base({ id: "earlier", position: 0, created_at: "2026-11-01T00:00:01.000Z" }),
+    ]);
+    expect(groups[0].dayKey).toBe("unscheduled");
+    expect(groups[0].items.map((item) => item.id)).toEqual(["earlier", "later"]);
+  });
+
   it("orders equal start times by created_at then id", () => {
     const groups = groupTripItemsByDay([
       base({
