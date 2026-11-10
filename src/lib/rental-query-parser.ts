@@ -2,6 +2,7 @@
  * Pure rental query classifier — used by rental fast-path (mirrors concierge gate).
  */
 import type { ConciergeWorkingMemory } from "@/lib/types";
+import { monthlyBudgetHasCurrency } from "@/lib/rental-search-body-schema";
 
 export type RentalSearchApiParams = {
   neighborhood?: string;
@@ -542,7 +543,8 @@ function mergedBudgetFields(
   if (!isBudgetReplacement(text, s)) {
     return {
       maxPricePerNight: q?.maxPricePerNight,
-      maxPriceMonthly: q?.maxPriceMonthly,
+      // Old saved memory may contain a monthly amount without its currency. Never replay it.
+      maxPriceMonthly: q && monthlyBudgetHasCurrency(q) ? q.maxPriceMonthly : undefined,
       budgetCurrency: q?.budgetCurrency,
     };
   }

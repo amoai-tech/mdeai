@@ -24,6 +24,7 @@ import { MapUiStateSchema } from "@/platform/contracts/map-ui-state";
 import { formatEventSourcePromptHint } from "@/lib/events/trusted-event-sources";
 import { RESTAURANT_CLARIFY_MESSAGE } from "@/lib/restaurant-clarify-copy";
 import { routerIntentSchema } from "@/lib/router-intent";
+import { monthlyBudgetHasCurrency } from "@/lib/rental-search-body-schema";
 import { buildConciergeChannels } from "./whatsapp-channels";
 import { shouldContinueVenueBookingAfterSearch } from "../lib/booking-continuation";
 import { MDEAI_ROUTE_PLAN_KEY, routePlanForTurn, shouldForceRouteTool } from "../lib/route-tool-choice";
@@ -212,13 +213,18 @@ function normalizeModelMemory(raw: unknown): unknown {
   const clean = omitPaddedMemoryFields(raw);
   if (!isPlainObject(clean)) return clean;
   const normalized = { ...clean };
-  // Gemini can output maxPriceMonthly: 0 to mean "monthly prices, no ceiling".
-  // Zero is NOT a valid budget; drop the placeholder rather than rejecting
-  // the entire working-memory update or inventing a zero-peso filter.
-  if (isPlainObject(clean.lastRentalQuery) && clean.lastRentalQuery.maxPriceMonthly === 0) {
+  // A model may emit a zero placeholder or a monthly amount with no currency.
+  // Neither is a meaningful ceiling; discard it instead of poisoning future follow-ups.
+  if (isPlainObject(clean.lastRentalQuery)) {
     const query = { ...clean.lastRentalQuery };
-    delete query.maxPriceMonthly;
-    normalized.lastRentalQuery = query;
+    const amount = query.maxPriceMonthly;
+    const currency = typeof query.budgetCurrency === 'string' && query.budgetCurrency.trim()
+      ? query.budgetCurrency : undefined;
+    if (amount === 0 || (typeof amount === 'number' &&
+        !monthlyBudgetHasCurrency({ maxPriceMonthly: amount, budgetCurrency: currency }))) {
+      delete query.maxPriceMonthly;
+      normalized.lastRentalQuery = query;
+    }
   }
   if (typeof clean.lastIntent === 'string' && GROUNDED_INTENT_ALIASES.has(clean.lastIntent)) {
     normalized.lastIntent = 'restaurant_discovery';
@@ -397,7 +403,7 @@ Restaurant listing rules (critical):
 - Reply in at most 2 short sentences: (1) how many matches and which area, (2) optional one short next-action (e.g. "Refine by cuisine", "Show more options") when results exist, or a recovery hint when empty.
 
 # Monthly rental search and WhatsApp channel replies
-- A renter giving a MONTHLY cap (e.g. "under COP 3.5M/month", "máximo 3 millones al mes") needs search-rentals maxPriceMonthly=3500000, budgetCurrency=COP, stayType=monthly; do not convert to nightly USD.
+- A renter giving a MONTHLY cap (e.g. "under COP 3.5M/month", "máximo 3 millones al mes") needs search-rentals maxPriceMonthly=3500000, budgetCurrency=COP, stayType=monthly; for "under USD 2,000/month", use budgetCurrency=USD. Never guess COP for an amount with no stated currency: ask which currency before applying maxPriceMonthly. Do not convert to nightly USD.
 - When search-rentals returns whatsapp_reply, **only on WhatsApp** send that tool-generated text rather than the web-card summary. It contains grounded apartment details and actual recorded prices/links. Do not invent, re-price, or reorder options; you may add one short follow-up question.
 - On the web, tool-rendered cards and pins remain the source of listing details; do not repeat their fields in prose.
 
