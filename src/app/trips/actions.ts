@@ -83,6 +83,7 @@ export async function listTripOptions(): Promise<ListTripOptionsResult> {
   };
 }
 
+/** Validate and persist the owner's trip timezone, then refresh the workspace. */
 export async function updateTripTimezone(
   input: unknown,
 ): Promise<UpdateTripTimezoneResult> {

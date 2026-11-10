@@ -41,16 +41,20 @@ export function ItineraryPanel({
   const mountedAtRef = useRef<number | null>(null);
   useEffect(() => {
     const parsed = nowIso ? Date.parse(nowIso) : Number.NaN;
-    if (!Number.isFinite(parsed)) {
+    const valid = Number.isFinite(parsed);
+    const reset = window.setTimeout(() => {
+      setNowMs(valid ? parsed : null);
+    }, 0);
+
+    if (!valid) {
       mountedAtRef.current = null;
-      return;
+      return () => window.clearTimeout(reset);
     }
+
     mountedAtRef.current = performance.now();
     const sync = () => {
       if (mountedAtRef.current == null) return;
-      const elapsed = performance.now() - mountedAtRef.current;
-      // Wall clock may move forward while the device sleeps; never move backward.
-      setNowMs(Math.max(parsed + elapsed, Date.now()));
+      setNowMs(parsed + (performance.now() - mountedAtRef.current));
     };
     const id = window.setInterval(sync, 60_000);
     const onVisibility = () => {
@@ -58,6 +62,7 @@ export function ItineraryPanel({
     };
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
+      window.clearTimeout(reset);
       window.clearInterval(id);
       document.removeEventListener("visibilitychange", onVisibility);
     };

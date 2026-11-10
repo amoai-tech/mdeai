@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import type { TripItemRow } from "@/lib/trips/trip-item-types";
 import { ItineraryPanel } from "../itinerary-panel";
 
@@ -47,6 +47,27 @@ describe("ItineraryPanel location state", () => {
       />,
     );
     expect(screen.getByTestId("itinerary-panel")).not.toBeNull();
+  });
+
+  it("clears Up Next when a valid server time becomes invalid", async () => {
+    const future = item({
+      id: "future-toggle",
+      start_at: "2099-11-21T04:30:00.000Z",
+      latitude: 6.25,
+      longitude: -75.59,
+    });
+    const { rerender } = render(
+      <ItineraryPanel
+        items={[future]}
+        nowIso="2026-11-10T12:00:00.000Z"
+        onShowOnMap={() => {}}
+      />,
+    );
+    expect(screen.getByTestId("itinerary-up-next")).not.toBeNull();
+    rerender(<ItineraryPanel items={[future]} onShowOnMap={() => {}} />);
+    await waitFor(() =>
+      expect(screen.queryByTestId("itinerary-up-next")).toBeNull(),
+    );
   });
 
   it("does not invent a 1970 Up Next when the server time is missing", () => {

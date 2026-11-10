@@ -36,6 +36,7 @@ const TIMEZONE_OPTIONS = [
   "UTC",
 ];
 
+/** Keep the current value selectable even when it is outside the curated list. */
 function availableTimezones(current: string): string[] {
   return TIMEZONE_OPTIONS.includes(current)
     ? TIMEZONE_OPTIONS
@@ -47,6 +48,7 @@ type TripTimezoneEditorProps = {
   timeZone: string;
 };
 
+/** Owner-only editor for the IANA timezone used by the itinerary. */
 export function TripTimezoneEditor({
   tripId,
   timeZone,
