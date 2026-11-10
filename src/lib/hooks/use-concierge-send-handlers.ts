@@ -62,6 +62,10 @@ import { useEventVenueBookingFastPath } from "@/hooks/use-event-venue-booking-fa
 import { useGroundedSearchFastPath } from "@/hooks/use-grounded-search-fast-path";
 import { useRentalSearchFastPath } from "@/hooks/use-rental-search-fast-path";
 import { useRestaurantSearchFastPath } from "@/hooks/use-restaurant-search-fast-path";
+import { parseDetailsCommand } from "@/lib/rentals/details-command";
+import { toDetailRental } from "@/lib/rentals/chat-rental-detail";
+import { useOptionalRentalFastPath } from "@/components/chat/rental-fast-path-context";
+import { useRentalUi } from "@/components/chat/rental-ui-context";
 import { useSession } from "@/hooks/use-session";
 import { isSelectedRentalCafeNearbyRequest } from "@/lib/cafe-search-fast-path";
 import { closestGroundedResult, parseGroundedRankQuestion } from "@/lib/closest-grounded-result";
@@ -88,6 +92,8 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
   const threadId = nav?.activeThreadId ?? nav?.sessionThreadId;
   const { showExchange, showNotice, showSignInPrompt } = useEventLocalChat();
   const { state } = useConciergeCoAgent();
+  const visibleRentals = useOptionalRentalFastPath()?.toolResult;
+  const { openVenueDetail } = useRentalUi();
   const map = useOptionalMapContext();
   const { toolResult } = useGroundedFastPath();
   const groundedShownIds = useOptionalRichCardResults()?.groundedShownIds;
@@ -102,6 +108,31 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
       return (await agentSendRef.current?.(text)) ?? false;
     },
   });
+  const handleRentalDetailsMessage = useCallback(async (text: string, submissionId?: string) => {
+    const target = parseDetailsCommand(text);
+    if (!target) return false;
+    const rows = normalizeToolEnvelope(visibleRentals).results;
+    if (!rows?.length) return false;
+    const row = rows[target.index - 1];
+    if (!row) {
+      showExchange(text, `No apartment ${target.index} is in the current results.`, submissionId);
+      return true;
+    }
+    const rental = toDetailRental(row);
+    if (!rental) {
+      showExchange(text, "Details for that apartment are unavailable. Please open its source listing.", submissionId);
+      return true;
+    }
+    const pinId = `rental-${rental.id}`;
+    const pinned = map?.pins.some((pin) => pin.id === pinId) ?? false;
+    openVenueDetail({
+      kind: "rental", listingId: rental.id, pinId, pinned,
+      rental, title: rental.title, neighborhood: rental.neighborhood,
+    });
+    showExchange(text, `Opened details for ${rental.title}.`, submissionId);
+    return true;
+  }, [visibleRentals, map?.pins, openVenueDetail, showExchange]);
+
   const { handleUserMessage: handleEventMessage, activeEventId, activeEventRows } = useEventSearchFastPath();
   const eventResultsContext = useOptionalEventSearchResults();
   const { handleUserMessage: handleRestaurantMessage } =
@@ -306,6 +337,7 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
   return useMemo(
     () => ({
       handleRentalMessage,
+      handleRentalDetailsMessage,
       handleEventVenueBookingMessage,
       handleEventMessage,
       handleGroundedMessage,
@@ -319,6 +351,7 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
     }),
     [
       handleRentalMessage,
+      handleRentalDetailsMessage,
       handleEventVenueBookingMessage,
       handleEventMessage,
       handleGroundedMessage,
