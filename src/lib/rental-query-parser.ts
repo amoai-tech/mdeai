@@ -723,6 +723,7 @@ const RENTAL_BUDGET_FOLLOWUP_WORDS = new Set([
   "menos", "por", "de", "mensual", "máximo", "ahora", "dólar", "dólares", "dolar", "dolares",
 ]);
 
+/** Prevent named non-rental costs from being mistaken for rental budget follow-ups. */
 function isBudgetOnlyRentalRefinement(text: string): boolean {
   const tokens = text.toLowerCase().replace(/[\d.,]+/g, " ").match(/[\p{L}]+/gu) ?? [];
   return tokens.length > 0 && tokens.every((token) => RENTAL_BUDGET_FOLLOWUP_WORDS.has(token));
@@ -733,6 +734,7 @@ export function isExactMonthlyBudgetOnlyRefinement(text: string): boolean {
   return scoreRentalQuery(text).maxPriceMonthly != null && isBudgetOnlyRentalRefinement(text);
 }
 
+/** Use the public rental search only for grounded rental intent or safe refinements. */
 export function canFastPathRentalSearch(
   text: string,
   memory: ConciergeWorkingMemory,

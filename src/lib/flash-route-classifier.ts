@@ -196,6 +196,11 @@ export function mergeRegexAndFlashClassification(
   };
 }
 
+/**
+ * Classify a chat message using the shared router. Route an unambiguous budget
+ * refinement to rentals only when the current conversation is still about rentals;
+ * otherwise keep its original intent (including a newer non-rental topic).
+ */
 export async function resolveRouterClassification(
   text: string,
   options?: { lastIntent?: RouterIntent; inRentalSearch?: boolean },

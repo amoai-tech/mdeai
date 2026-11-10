@@ -126,6 +126,53 @@ describe("guest context from visible rental search", () => {
   });
 });
 
+describe("signed-in intent changes after rental discovery", () => {
+  it.each([
+    ["coworking", "general_concierge"],
+    ["events", "event_discovery"],
+    ["restaurants", "restaurant_discovery"],
+  ])("does not revive rental cards after switching to %s", async (_topic, latestIntent) => {
+    // Old rental search cards can remain displayed while a signed-in AI turn
+    // changes the latest intent to general concierge/coworking.
+    await act(async () => {
+      restoreRentalSearch({ userText: "Show apartments under COP 3 million", params: {
+        neighborhood: "Laureles", maxPriceMonthly: 3_000_000,
+        budgetCurrency: "COP", stayType: "monthly",
+      } });
+    });
+    coagent.state = { lastIntent: latestIntent, lastRentalQuery: {
+      neighborhood: "Laureles", maxPriceMonthly: 3_000_000,
+      budgetCurrency: "COP", budgetType: "monthly",
+    } };
+    await act(async () => {
+      root.render(<EventLocalChatProvider><RentalFastPathProvider><Harness /></RentalFastPathProvider></EventLocalChatProvider>);
+    });
+    expect(handlers.inRentalSearch).toBe(false);
+    for (const message of ["only under COP 800k per month", "anywhere is fine"]) {
+      const rental = vi.fn(async () => true);
+      const agent = vi.fn(async () => true);
+      expect(await sendConciergeUserMessage(message, {
+        ...handlers, handleRentalMessage: rental, onAgentSend: agent,
+      })).toBe(true);
+      expect(rental).not.toHaveBeenCalled();
+      expect(agent).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it("preserves the current signed-in rental refinement when the latest intent is rental", async () => {
+    await act(async () => {
+      restoreRentalSearch({ userText: "Apartments under COP 3 million", params: {
+        maxPriceMonthly: 3_000_000, budgetCurrency: "COP", stayType: "monthly",
+      } });
+    });
+    coagent.state = { lastIntent: "rental_search" };
+    await act(async () => {
+      root.render(<EventLocalChatProvider><RentalFastPathProvider><Harness /></RentalFastPathProvider></EventLocalChatProvider>);
+    });
+    expect(handlers.inRentalSearch).toBe(true);
+  });
+});
+
 describe("onAgentSend never leaves the renter with nothing", () => {
   it("shows the question and an unavailable notice when there is no agent", async () => {
     chat.appendMessage.mockResolvedValue(false);
