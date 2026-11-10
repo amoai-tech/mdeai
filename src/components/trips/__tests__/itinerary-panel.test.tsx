@@ -21,7 +21,13 @@ const item = (overrides: Partial<TripItemRow>): TripItemRow => ({
 });
 
 function renderItems(items: TripItemRow[]) {
-  return render(<ItineraryPanel items={items} onShowOnMap={() => {}} />);
+  return render(
+    <ItineraryPanel
+      items={items}
+      nowIso="2026-11-10T12:00:00.000Z"
+      onShowOnMap={() => {}}
+    />,
+  );
 }
 
 describe("ItineraryPanel location state", () => {

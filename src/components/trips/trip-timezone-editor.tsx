@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { updateTripTimezone } from "@/app/trips/actions";
 import { DEFAULT_TRIP_TIMEZONE } from "@/lib/trips/timezone";
@@ -54,14 +54,16 @@ export function TripTimezoneEditor({
   const router = useRouter();
   const [value, setValue] = useState(timeZone || DEFAULT_TRIP_TIMEZONE);
   const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
+  const [pending, setPending] = useState(false);
   const zones = availableTimezones(value);
 
-  function onChange(next: string) {
+  async function onChange(next: string) {
+    if (pending) return;
     const previous = value;
     setValue(next);
     setError(null);
-    startTransition(async () => {
+    setPending(true);
+    try {
       const result = await updateTripTimezone({ tripId, timezone: next });
       if (!result.ok) {
         setValue(previous);
@@ -70,7 +72,9 @@ export function TripTimezoneEditor({
       }
       setValue(result.timezone);
       router.refresh();
-    });
+    } finally {
+      setPending(false);
+    }
   }
 
   return (

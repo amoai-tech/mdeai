@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { AlertTriangle, MapPin } from "lucide-react";
 import type { TripItemRow } from "@/lib/trips/trip-item-types";
 import {
@@ -30,7 +31,21 @@ export function ItineraryPanel({
 }: ItineraryPanelProps) {
   const dayGroups = groupTripItemsByDay(items, timeZone);
   const overlaps = detectScheduleOverlaps(items, timeZone);
-  const upNext = getUpNextItem(items, nowIso ? new Date(nowIso) : new Date());
+  // Server time is the hydration-safe initial value; client time resumes after mount.
+  const [nowMs, setNowMs] = useState(() => {
+    const parsed = nowIso ? Date.parse(nowIso) : Number.NaN;
+    return Number.isFinite(parsed) ? parsed : 0;
+  });
+  useEffect(() => {
+    const sync = () => setNowMs(Date.now());
+    const initial = window.setTimeout(sync, 0);
+    const id = window.setInterval(sync, 60_000);
+    return () => {
+      window.clearTimeout(initial);
+      window.clearInterval(id);
+    };
+  }, []);
+  const upNext = getUpNextItem(items, new Date(nowMs));
 
   return (
     <section data-testid="itinerary-panel" className="space-y-4">
