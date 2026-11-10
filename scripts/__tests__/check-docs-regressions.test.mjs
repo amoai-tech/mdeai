@@ -151,12 +151,12 @@ test("accepts nonempty YAML block scalars with chomping indicators", () => {
 });
 
 test("QA evidence writers do not recreate retired docs/tasks/testing folders", () => {
-  // Keep source paths literal: test fixtures are trusted repository files, not user input.
+  // This test runs from the repository root, like the docs-checker fixtures above. Source paths are fixed literals.
   const writers = [
-    ["e2e/ck-v2-015-events-chip.spec.ts", fs.readFileSync(new URL("../../e2e/ck-v2-015-events-chip.spec.ts", import.meta.url), "utf8")],
-    ["e2e/san-896-ck-v2-evidence.spec.ts", fs.readFileSync(new URL("../../e2e/san-896-ck-v2-evidence.spec.ts", import.meta.url), "utf8")],
-    ["e2e/san-1092-broker-onboarding.spec.ts", fs.readFileSync(new URL("../../e2e/san-1092-broker-onboarding.spec.ts", import.meta.url), "utf8")],
-    ["scripts/san-869-duplicate-proposal-proof.mjs", fs.readFileSync(new URL("../san-869-duplicate-proposal-proof.mjs", import.meta.url), "utf8")],
+    ["e2e/ck-v2-015-events-chip.spec.ts", fs.readFileSync("e2e/ck-v2-015-events-chip.spec.ts", "utf8")],
+    ["e2e/san-896-ck-v2-evidence.spec.ts", fs.readFileSync("e2e/san-896-ck-v2-evidence.spec.ts", "utf8")],
+    ["e2e/san-1092-broker-onboarding.spec.ts", fs.readFileSync("e2e/san-1092-broker-onboarding.spec.ts", "utf8")],
+    ["scripts/san-869-duplicate-proposal-proof.mjs", fs.readFileSync("scripts/san-869-duplicate-proposal-proof.mjs", "utf8")],
   ];
   for (const [file, source] of writers) {
     assert.doesNotMatch(
