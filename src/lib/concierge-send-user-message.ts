@@ -20,6 +20,8 @@ export type ConciergeSendHandlers = {
   retryLastTurn?: () => Promise<boolean>;
   /** Clear old apartment Details on a confirmed cross-category topic switch. */
   closeRentalDetails?: () => void;
+  /** Publish a confirmed new topic and clear prior vertical display state. */
+  onTopicShift?: (intent: FlashRouteClassification["intent"]) => void;
   /** Open a shown rental by its current position; never launch another search for Details. */
   handleRentalDetailsMessage?: (text: string, submissionId?: string) => Promise<boolean>;
   handleRentalMessage: (text: string, submissionId?: string) => Promise<boolean>;
@@ -101,15 +103,16 @@ export async function sendConciergeUserMessage(
       inRentalSearch: handlers.inRentalSearch,
     });
 
-    // The user switched from apartments to a separate discovery vertical.
-    // Reuse RentalUiProvider's existing close operation; keep the old Details
-    // visible for rental refinements, contextual nearby cafés, and small talk.
-    if (
-      classification.intent === "restaurant_discovery" ||
+    // Publish confirmed cross-topic changes before a Mastra turn. A successful
+    // agent answer does not necessarily update lastIntent promptly. Without
+    // this clear, the next bare monthly budget can revive old rental results.
+    const distinctTopic = classification.intent === "restaurant_discovery" ||
       classification.intent === "event_discovery" ||
-      classification.intent === "venue_booking"
-    ) {
+      classification.intent === "venue_booking" ||
+      (classification.topicShift === true && classification.intent !== "rental_search");
+    if (distinctTopic) {
       handlers.closeRentalDetails?.();
+      if (handlers.inRentalSearch) handlers.onTopicShift?.(classification.intent);
     }
 
     for (const target of routerHandlerOrderFromClassification(classification)) {
