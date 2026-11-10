@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Building2 } from "lucide-react";
@@ -20,6 +20,11 @@ import {
 } from "@/components/rentals/rental-ask-composer";
 import { LeadConfirmationBanner } from "@/components/chat/lead-confirmation-banner";
 import { RentalRecommendationsSurface } from "@/components/copilot/a2ui/rental-recommendations-surface";
+import { RentalA2UIContext } from "@/components/chat/rental-a2ui-context";
+import {
+  RentalFastPathProvider,
+  useRentalFastPath,
+} from "@/components/chat/rental-fast-path-context";
 import { RentalUiProvider, useRentalUi } from "@/components/chat/rental-ui-context";
 import { useOptionalConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
 import { RentalDetailsFrontendTool } from "@/components/rentals/rental-details-tool";
@@ -191,9 +196,14 @@ function RentalBrowseViewInner({
 
   return (
     <>
+      <PageRentalResultsBridge results={shownResults} />
       {coAgent && !isDeterministicE2E() ? (
         <RentalDetailsFrontendTool results={shownResults} onOpen={openDetailsFor} />
       ) : null}
+      {/* SAN-1656 — the page's own authorized rows feed the fast-path context the
+          catalog already resolves cards from, and the existing A2UI context
+          publishes their IDs. No second query and no second data path. */}
+      {coAgent && !isDeterministicE2E() ? <RentalA2UIContext /> : null}
       <DiscoveryPageContext page="rentals" filters={filterState} selectedId={selectedForAskId ?? detailsRental?.id ?? null} />
       <RentalPageControlTool filters={filterState} />
       <DiscoveryWorkspace
@@ -377,19 +387,34 @@ function RentalBrowseViewInner({
   );
 }
 
+/**
+ * SAN-1656 — hand the page's server-authorized rows to the fast-path context.
+ * `RentalCard` already resolves IDs from it, so the AI panel needs no second
+ * query, no duplicate search and no new data path.
+ */
+function PageRentalResultsBridge({ results }: { results: Rental[] }) {
+  const { setToolResult } = useRentalFastPath();
+  useEffect(() => {
+    setToolResult({ results });
+  }, [results, setToolResult]);
+  return null;
+}
+
 /** Supply the shared rental UI and map contexts for the browse workspace. */
 export function RentalBrowseView(props: RentalBrowseViewProps) {
   const nav = useOptionalThreadNav();
   const threadId = nav?.activeThreadId ?? nav?.sessionThreadId;
   return (
     <RentalUiProvider>
-      <BrowseMapContextShell>
-        <RentalBrowseViewInner
-          key={JSON.stringify([threadId, props.neighborhood, props.beds, props.from, props.through, props.previewMode, props.dateError])}
-          {...props}
-        />
-      </BrowseMapContextShell>
-      <ScheduleViewingModal />
+      <RentalFastPathProvider>
+        <BrowseMapContextShell>
+          <RentalBrowseViewInner
+            key={JSON.stringify([threadId, props.neighborhood, props.beds, props.from, props.through, props.previewMode, props.dateError])}
+            {...props}
+          />
+        </BrowseMapContextShell>
+        <ScheduleViewingModal />
+      </RentalFastPathProvider>
     </RentalUiProvider>
   );
 }

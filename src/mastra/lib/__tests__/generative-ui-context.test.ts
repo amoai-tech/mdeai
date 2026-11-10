@@ -149,6 +149,23 @@ describe("A2UI system instructions", () => {
     expect(MDE_A2UI_GUIDE).toContain('{"id":"card-2","component":"RentalCard","listingId":"<id-2>"}');
   });
 
+  it("requires the version envelope the runtime rejects without", () => {
+    // A live run called render_ui with operations that omitted "version":"1.0";
+    // the runtime rejected every operation and the panel stayed empty. The guide
+    // must state the envelope and show the complete render_ui arguments.
+    expect(MDE_A2UI_GUIDE).toContain('EVERY operation must be an object with "version": "1.0"');
+    expect(MDE_A2UI_GUIDE).toContain("An operation without");
+    expect(MDE_A2UI_GUIDE).toContain('{"target":"rental-recommendations","operations":[{"version":"1.0","createSurface"');
+  });
+
+  it("asks for a written sentence after tools and reserves openRentalDetails", () => {
+    // The live run ended with tool calls and no text, so the composer showed
+    // nothing. It also called openRentalDetails when asked to show cards.
+    expect(MDE_A2UI_GUIDE).toContain("After calling any tool, always write one short sentence");
+    expect(MDE_A2UI_GUIDE).toContain("Never end a turn with only tool calls");
+    expect(MDE_A2UI_GUIDE).toContain("Use openRentalDetails only when the user asks to open one apartment's details");
+  });
+
   it("does not promise controls that have no registered action", () => {
     // A rendered Button/input with no catalog function is a dead control next
     // to real listings. The catalog omits them until SAN-1655/1658.
