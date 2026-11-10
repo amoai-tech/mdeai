@@ -12,12 +12,12 @@ const chat = vi.hoisted(() => ({ appendMessage: vi.fn(), runtimeUnavailable: fal
 const coagent = vi.hoisted(() => ({ state: {} as Record<string, unknown> }));
 const mapState = vi.hoisted(() => ({ selectedPinId: null as string | null, pins: [] as Array<{ id: string; category: string }> }));
 const groundedCtx = vi.hoisted(() => ({ toolResult: null as unknown }));
-const rentalDetails = vi.hoisted(() => ({ toolResult: null as unknown, openVenueDetail: vi.fn() }));
+const rentalDetails = vi.hoisted(() => ({ toolResult: null as unknown, openVenueDetail: vi.fn(), closeVenueDetail: vi.fn() }));
 vi.mock("@/components/chat/rental-fast-path-context", () => ({
   useOptionalRentalFastPath: () => ({ toolResult: rentalDetails.toolResult }),
 }));
 vi.mock("@/components/chat/rental-ui-context", () => ({
-  useRentalUi: () => ({ openVenueDetail: rentalDetails.openVenueDetail }),
+  useRentalUi: () => ({ openVenueDetail: rentalDetails.openVenueDetail, closeVenueDetail: rentalDetails.closeVenueDetail }),
 }));
 const richShown = vi.hoisted(() => ({ ids: [] as string[] }));
 vi.mock("@/components/chat/rich-card-results-context", () => ({
@@ -618,6 +618,24 @@ describe("full chat Details requests use the currently shown rental IDs", () => 
     act(() => root.render(<EventLocalChatProvider><Harness /></EventLocalChatProvider>));
     expect(await handlers.handleRentalDetailsMessage?.(text)).toBe(false);
     expect(rentalDetails.openVenueDetail).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    "Show me the details of the second restaurant",
+    "Find salsa events this weekend",
+  ])("closes prior rental Details on a real new-category send: %s", async (text) => {
+    rentalDetails.toolResult = { results: [
+      rental("first-listing", "Laureles apartment A"),
+      rental("second-listing", "Laureles apartment B"),
+    ] };
+    act(() => root.render(<EventLocalChatProvider><Harness /></EventLocalChatProvider>));
+    await act(async () => {
+      await sendConciergeUserMessage("Show me the details of the second apartment", handlers);
+      expect(rentalDetails.openVenueDetail).toHaveBeenCalledOnce();
+      await sendConciergeUserMessage(text, handlers);
+    });
+    expect(rentalDetails.closeVenueDetail).toHaveBeenCalledOnce();
+    expect(rentalDetails.openVenueDetail).toHaveBeenCalledOnce();
   });
 
   it("refuses an out-of-range position without opening a different apartment", async () => {
