@@ -151,15 +151,14 @@ test("accepts nonempty YAML block scalars with chomping indicators", () => {
 });
 
 test("QA evidence writers do not recreate retired docs/tasks/testing folders", () => {
-  const repoRoot = path.resolve(import.meta.dirname, "../..");
+  // Keep source paths literal: test fixtures are trusted repository files, not user input.
   const writers = [
-    "e2e/ck-v2-015-events-chip.spec.ts",
-    "e2e/san-896-ck-v2-evidence.spec.ts",
-    "e2e/san-1092-broker-onboarding.spec.ts",
-    "scripts/san-869-duplicate-proposal-proof.mjs",
+    ["e2e/ck-v2-015-events-chip.spec.ts", fs.readFileSync(new URL("../../e2e/ck-v2-015-events-chip.spec.ts", import.meta.url), "utf8")],
+    ["e2e/san-896-ck-v2-evidence.spec.ts", fs.readFileSync(new URL("../../e2e/san-896-ck-v2-evidence.spec.ts", import.meta.url), "utf8")],
+    ["e2e/san-1092-broker-onboarding.spec.ts", fs.readFileSync(new URL("../../e2e/san-1092-broker-onboarding.spec.ts", import.meta.url), "utf8")],
+    ["scripts/san-869-duplicate-proposal-proof.mjs", fs.readFileSync(new URL("../san-869-duplicate-proposal-proof.mjs", import.meta.url), "utf8")],
   ];
-  for (const file of writers) {
-    const source = fs.readFileSync(path.join(repoRoot, file), "utf8");
+  for (const [file, source] of writers) {
     assert.doesNotMatch(
       source,
       /docs\/tasks\/testing\/evidence/,
