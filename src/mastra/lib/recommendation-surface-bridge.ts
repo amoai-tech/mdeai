@@ -47,12 +47,13 @@ export function renderUiEventsFor(ids: readonly string[], toolCallId: string): B
 }
 
 /*
- * ponytail: this bridge is a deliberate ceiling. The official path (the model
- * calling render_ui with the forwarded guide) produced ONE card in its first
- * live run; this path produced two cards in three consecutive runs. Keep both
- * until the official path matches that, then delete this file, the tool and the
- * intent processor in one change. Upgrade path: forward the official guide only
- * (already shipped), verify 3x with no tool, then remove.
+ * ponytail: this bridge is a deliberate ceiling. The deterministic path has
+ * produced two grounded cards in three consecutive signed-in runs. The free-form
+ * official path has one live observation (one card), and that observation
+ * predates the NearbyRentalAction provider fix, so it is not a fair comparison:
+ * re-measure the official path after that fix before removing anything. Upgrade
+ * path: forward the official guide only (already shipped), run 3x with no tool,
+ * and delete this file, the tool and the intent processor in one change.
  *
  * Live evidence for that decision: 2026-11-10, signed-in rental QA, three
  * consecutive runs, two grounded cards each (0cdd6677…, 0db74081…).

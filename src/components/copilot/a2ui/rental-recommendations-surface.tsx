@@ -55,7 +55,7 @@ export function RentalRecommendationsSurface() {
       id={RENTAL_RECOMMENDATIONS_SURFACE_ID}
       ui={mdeUI}
       components={[...RENTAL_RECOMMENDATIONS_COMPONENTS]}
-      description="Grounded apartment recommendations for this Rentals page. Use this instead of the chat when someone asks which apartments match the page, its filters, or a rental search you just ran. One RentalCard per real listing returned by search-rentals in this run, inside a Column whose children are the card node ids; optionally one Title of 8 words or fewer. No commentary, no controls. Never state or invent a price, rating, availability or address."
+      description="Grounded apartment recommendations for this Rentals page. Use this instead of the chat when someone asks which apartments match the page or its filters. One RentalCard per real listing from the current authorized results or the published rental-result IDs; do not run a new search just to fill this panel. Put the cards in a Column whose children are the card node ids; optionally one Title of 8 words or fewer. No commentary, no controls. Never state or invent a price, rating, availability or address."
       className="mb-4 rounded-xl border border-border bg-card px-4 py-3 shadow-sm"
       fallback={null}
       autoScroll={false}
