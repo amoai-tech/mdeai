@@ -59,6 +59,11 @@ export function AddToTripButton({ pin }: AddToTripButtonProps) {
         setTrips(result.trips);
         setTripId((current) => current || result.trips[0]?.id || "");
       })
+      .catch(() => {
+        if (cancelled) return;
+        setError("Could not load your trips. Check your connection and try again.");
+        setTrips([]);
+      })
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
@@ -71,20 +76,25 @@ export function AddToTripButton({ pin }: AddToTripButtonProps) {
     if (!tripId || saving) return;
     setSaving(true);
     setError(null);
-    const result = await addTripItem({
-      tripId,
-      pinId: pin.id,
-      category: pin.category,
-      placeId: pin.placeId,
-      startAt: startAt ? new Date(startAt).toISOString() : null,
-      endAt: endAt ? new Date(endAt).toISOString() : null,
-    });
-    setSaving(false);
-    if (!result.ok) {
-      setError(result.error);
-      return;
+    try {
+      const result = await addTripItem({
+        tripId,
+        pinId: pin.id,
+        category: pin.category,
+        placeId: pin.placeId,
+        startAt: startAt ? new Date(startAt).toISOString() : null,
+        endAt: endAt ? new Date(endAt).toISOString() : null,
+      });
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setSavedId(result.itemId);
+    } catch {
+      setError("Could not reach the server. Check your connection and try again.");
+    } finally {
+      setSaving(false);
     }
-    setSavedId(result.itemId);
   }
 
   return (
@@ -132,12 +142,14 @@ export function AddToTripButton({ pin }: AddToTripButtonProps) {
           ) : trips.length === 0 ? (
             <div className="space-y-2 text-sm">
               <p className="text-muted-foreground">
-                You need a trip first. Create or open one from the Trips page, then
-                return to this place.
+                {error ??
+                  "You need a trip first. Create or open one from the Trips page, then return to this place."}
               </p>
-              <Link href="/trips" className="font-medium text-primary hover:underline">
-                Go to Trips
-              </Link>
+              {error ? null : (
+                <Link href="/trips" className="font-medium text-primary hover:underline">
+                  Go to Trips
+                </Link>
+              )}
             </div>
           ) : (
             <div className="space-y-3">
@@ -181,20 +193,31 @@ export function AddToTripButton({ pin }: AddToTripButtonProps) {
             </div>
           )}
 
-          {error ? (
+          {error && trips.length > 0 ? (
             <p role="alert" data-testid="add-to-trip-error" className="text-sm text-destructive">
               {error}
             </p>
           ) : null}
 
           <DialogFooter>
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              className="h-9 rounded-md border border-input px-3 text-sm"
-            >
-              Cancel
-            </button>
+            {savedId ? (
+              <button
+                type="button"
+                data-testid="add-to-trip-done"
+                onClick={() => setOpen(false)}
+                className="h-9 rounded-md border border-input px-3 text-sm"
+              >
+                Done
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="h-9 rounded-md border border-input px-3 text-sm"
+              >
+                Cancel
+              </button>
+            )}
             <button
               type="button"
               data-testid="add-to-trip-confirm"

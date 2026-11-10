@@ -73,6 +73,17 @@ describe("TripMapPanel", () => {
     expect(screen.queryByTestId("trip-map-pin-b")).toBeNull();
   });
 
+  it("rejects coordinates outside valid geographic ranges", () => {
+    const items = [
+      item({ id: "valid", title: "Valid", latitude: 6.25, longitude: -75.59 }),
+      item({ id: "bad-lat", title: "Bad latitude", latitude: 91, longitude: -75.59 }),
+      item({ id: "bad-lng", title: "Bad longitude", latitude: 6.25, longitude: -181 }),
+    ];
+    expect(mappableTripPins(items)).toEqual([
+      expect.objectContaining({ id: "valid", stopNumber: 1 }),
+    ]);
+  });
+
   it("calls onSelectItem when a numbered pin is clicked", () => {
     const onSelect = vi.fn();
     render(

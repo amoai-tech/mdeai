@@ -23,13 +23,23 @@ export type TripMapPin = {
 };
 
 /** Only finite coordinates become pins. A missing location never becomes a fake pin. */
+function isValidCoordinate(lat: number, lng: number): boolean {
+  return (
+    Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    lat >= -90 &&
+    lat <= 90 &&
+    lng >= -180 &&
+    lng <= 180
+  );
+}
+
 export function mappableTripPins(items: TripItemRow[]): TripMapPin[] {
   const mappable = items.filter(
     (item): item is TripItemRow & { latitude: number; longitude: number } =>
       item.latitude != null &&
       item.longitude != null &&
-      Number.isFinite(item.latitude) &&
-      Number.isFinite(item.longitude),
+      isValidCoordinate(item.latitude, item.longitude),
   );
   // Number only the pins that actually render, 1..N. The missing-location item
   // still appears in the itinerary; it just has no pin.
