@@ -8,6 +8,7 @@ import type { TripItemRow } from "../trip-item-types";
 const base = (over: Partial<TripItemRow>): TripItemRow => ({
   id: over.id ?? "1",
   item_type: over.item_type ?? "event",
+  source_id: over.source_id ?? "11111111-1111-4111-8111-111111111111",
   title: over.title ?? "Item",
   description: null,
   start_at: over.start_at ?? null,

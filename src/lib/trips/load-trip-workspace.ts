@@ -4,6 +4,7 @@ import type { TripItemRow, TripWorkspaceData } from "./trip-item-types";
 type TripItemQueryRow = {
   id: string;
   item_type: TripItemRow["item_type"];
+  source_id: string;
   title: string;
   description: string | null;
   start_at: string | null;
@@ -35,7 +36,7 @@ export async function loadTripWorkspace(
   const { data: items, error: itemsError } = await supabase
     .from("trip_items")
     .select(
-      "id, item_type, title, description, start_at, end_at, location_name, latitude, longitude",
+      "id, item_type, source_id, title, description, start_at, end_at, location_name, latitude, longitude",
     )
     .eq("trip_id", tripId)
     .order("start_at", { ascending: true, nullsFirst: false });
@@ -60,6 +61,7 @@ export async function loadTripWorkspace(
     items: ((items ?? []) as TripItemQueryRow[]).map((row) => ({
       id: row.id,
       item_type: row.item_type,
+      source_id: row.source_id,
       title: row.title,
       description: row.description,
       start_at: row.start_at,
