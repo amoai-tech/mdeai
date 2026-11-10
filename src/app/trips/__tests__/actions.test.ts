@@ -24,6 +24,33 @@ vi.mock("@/lib/supabase/server", () => ({
 import { addTripItem } from "../actions";
 
 describe("addTripItem unknown place", () => {
+  beforeEach(() => {
+    rpc.mockReset();
+  });
+
+  it("saves a source-backed restaurant even when it has no coordinates", async () => {
+    rpc.mockResolvedValueOnce({
+      data: "33333333-3333-4333-8333-333333333333",
+      error: null,
+    });
+
+    const result = await addTripItem({
+      tripId: "22222222-2222-4222-8222-222222222222",
+      pinId: "restaurant-44444444-4444-4444-8444-444444444444",
+      category: "restaurant",
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      itemId: "33333333-3333-4333-8333-333333333333",
+    });
+    expect(rpc).toHaveBeenCalledWith("insert_trip_item_for_user", {
+      p_trip_id: "22222222-2222-4222-8222-222222222222",
+      p_item_type: "restaurant",
+      p_source_id: "44444444-4444-4444-8444-444444444444",
+    });
+  });
+
   it("rejects an uncatalogued Place ID without calling the trip RPC", async () => {
     const result = await addTripItem({
       tripId: "22222222-2222-4222-8222-222222222222",
