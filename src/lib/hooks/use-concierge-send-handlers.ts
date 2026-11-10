@@ -357,8 +357,20 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
   const inRentalSearch = rentalIntentIsCurrent &&
     (Boolean(visibleRentalSearch) || Boolean(state?.lastRentalQuery));
 
+  // Snapshot the current provider identities: a NEW rental search can finish
+  // while the coworking agent is streaming. It must never be cleared/rolled
+  // back by completion of the older coworking turn.
+  const currentRentalViewRef = useRef({
+    meta: rentalFastPath?.searchMeta,
+    result: rentalFastPath?.toolResult,
+  });
+  currentRentalViewRef.current = {
+    meta: rentalFastPath?.searchMeta,
+    result: rentalFastPath?.toolResult,
+  };
   const topicShiftRecoveryRef = useRef<{
     threadId: string | undefined;
+    view: { meta: typeof rentalFastPath.searchMeta | undefined; result: unknown };
     previous: Pick<ConciergeWorkingMemory, "lastIntent" | "lastRentalQuery" | "lastRentalResults" | "selectedListingId">;
   } | null>(null);
   const currentThreadRef = useRef(threadId);
@@ -370,6 +382,7 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
       setState((previous) => {
         topicShiftRecoveryRef.current = {
           threadId,
+          view: { ...currentRentalViewRef.current },
           previous: {
             lastIntent: previous.lastIntent,
             lastRentalQuery: previous.lastRentalQuery,
@@ -391,6 +404,8 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
     topicShiftRecoveryRef.current = null;
     // An old stream must not clear or restore a different saved chat.
     if (!recovery || recovery.threadId !== currentThreadRef.current) return;
+    if (currentRentalViewRef.current.meta !== recovery.view.meta ||
+        currentRentalViewRef.current.result !== recovery.view.result) return;
     if (stage === "failed") {
       // Keep old rental cards/pins available after a failed coworking response;
       // restore their matching query so a legitimate refinement still works.
