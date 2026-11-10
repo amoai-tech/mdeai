@@ -117,6 +117,13 @@ beforeEach(() => {
 });
 afterEach(() => cleanup());
 
+describe("restaurant Add to trip", () => {
+  it("offers the real Add action only for restaurants with a map pin", () => {
+    expect(screen.getByTestId("restaurant-add-to-trip-a")).not.toBeNull();
+    expect(screen.queryByTestId("restaurant-add-to-trip-c")).toBeNull();
+  });
+});
+
 describe("restaurant Details and the selected pin", () => {
   it("opens the panel for the card whose Details was pressed, whatever pin is selected", () => {
     selectPin("b");

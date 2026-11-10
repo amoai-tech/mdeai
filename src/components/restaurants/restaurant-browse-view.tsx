@@ -12,6 +12,7 @@ import { BrowseMapPanel } from "@/components/browse/BrowseMapPanel";
 import { BrowseMapSheet } from "@/components/browse/BrowseMapSheet";
 import { RestaurantCard } from "@/components/copilot/restaurant-card";
 import { RestaurantBrowseFilters } from "@/components/restaurants/restaurant-browse-filters";
+import { AddToTripButton } from "@/components/trips/add-to-trip-button";
 import { RestaurantDetailsPanel, RestaurantDetailsSheet } from "@/components/restaurants/restaurant-details-panel";
 import { useIsLgUp } from "@/hooks/use-is-lg-up";
 import { useEscapeToClose } from "@/hooks/use-escape-to-close";
@@ -204,9 +205,10 @@ function RestaurantBrowseViewInner({
                 // `restaurantToMapPin` drops rows without coordinates, so this is the one
                 // source of truth for "the map can show this restaurant".
                 const hasPin = pins.some((pin) => pin.id === pinId);
+                const pin = restaurantToMapPin(r);
                 return (
+                  <div key={r.id} className="flex flex-col gap-2">
                   <RestaurantCard
-                    key={r.id}
                     title={r.name}
                     neighborhood={r.neighborhood}
                     cuisine={r.cuisine}
@@ -250,6 +252,14 @@ function RestaurantBrowseViewInner({
                     composition="nova"
                     mediaLayout="inline"
                   />
+                  {pin ? (
+                    <AddToTripButton
+                      pin={pin}
+                      variant="card"
+                      testId={`restaurant-add-to-trip-${r.id}`}
+                    />
+                  ) : null}
+                  </div>
                 );
               })}
             </div>
