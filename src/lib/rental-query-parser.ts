@@ -3,11 +3,6 @@
  */
 import type { ConciergeWorkingMemory } from "@/lib/types";
 import { monthlyBudgetHasCurrency } from "@/lib/rental-search-body-schema";
-import {
-  looksLikeCafeSearch,
-  looksLikeNightlifeGroundingSearch,
-  looksLikeRestaurantDiscovery,
-} from "@/lib/restaurant-query-classifier";
 
 export type RentalSearchApiParams = {
   neighborhood?: string;
@@ -716,6 +711,23 @@ export function buildRentalSearchParams(
   };
 }
 
+// Only budget words may refine an unnamed rental search. A user asking about
+// gyms, coworking, energy bills, or other costs must still reach the concierge.
+// The amount and currency are validated separately by scoreRentalQuery().
+const RENTAL_BUDGET_FOLLOWUP_WORDS = new Set([
+  "now", "actually", "only", "just", "please", "show", "me", "options", "option",
+  "under", "below", "up", "to", "at", "most", "less", "than", "no", "more",
+  "max", "maximum", "budget", "of", "a", "per", "month", "monthly",
+  "cop", "usd", "peso", "pesos", "dollar", "dollars", "million", "millions",
+  "m", "mil", "millones", "millón", "mes", "al", "hasta", "solo",
+  "menos", "por", "de", "mensual", "máximo", "ahora",
+]);
+
+function isBudgetOnlyRentalRefinement(text: string): boolean {
+  const tokens = text.toLowerCase().replace(/[\d.,]+/g, " ").match(/[\p{L}]+/gu) ?? [];
+  return tokens.length > 0 && tokens.every((token) => RENTAL_BUDGET_FOLLOWUP_WORDS.has(token));
+}
+
 export function canFastPathRentalSearch(
   text: string,
   memory: ConciergeWorkingMemory,
@@ -732,9 +744,7 @@ export function canFastPathRentalSearch(
   const monthlyRentalRefinement = Boolean(
     memory.lastRentalQuery &&
     scoreRentalQuery(text).maxPriceMonthly != null &&
-    !looksLikeRestaurantDiscovery(text) &&
-    !looksLikeCafeSearch(text) &&
-    !looksLikeNightlifeGroundingSearch(text)
+    isBudgetOnlyRentalRefinement(text)
   );
   if (!looksLikeRentalSearch(text) &&
       !(memory.lastRentalQuery && requestsWholeCity(text)) &&

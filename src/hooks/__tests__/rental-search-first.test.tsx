@@ -45,6 +45,7 @@ type Probe = {
   previousQuery: () => string | undefined;
   hasListing: (id: string) => boolean;
   reset: () => void;
+  restoreSearch: (params: { neighborhood?: string; maxPriceMonthly?: number; budgetCurrency?: "COP" | "USD"; stayType?: "monthly" }) => void;
 };
 let probe: Probe;
 /** Messages the hook gave back to the sender (the real chat sends these to the concierge). */
@@ -72,6 +73,7 @@ function Harness() {
       previousQuery: () => rental.searchMeta?.userText,
       hasListing: (id) => JSON.stringify(rental.toolResult).includes(id),
       reset: () => rental.clearToolResults(),
+      restoreSearch: (params) => rental.setSearchMeta({ userText: "Saved rental search", params }),
     };
   });
   return null;
@@ -175,6 +177,21 @@ describe("SAN-407 · rental chat searches before it asks", () => {
     await act(async () => { probe.reset(); });
     expect(await send("Now only under COP 2.5 million per month")).toBe(false);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("a saved-chat switch uses the visible saved budget, not the old guest thread's filters", async () => {
+    respond(200, { results: [] });
+    expect(await send("Show apartments in Laureles under COP 3 million per month")).toBe(true);
+    await act(async () => {
+      probe.reset();
+      probe.restoreSearch({ neighborhood: "Envigado", maxPriceMonthly: 2_700_000, budgetCurrency: "COP", stayType: "monthly" });
+    });
+    expect(await send("Now only under COP 2.5 million per month")).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const next = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body));
+    expect(next.neighborhood).toBe("Envigado");
+    expect(next.maxPriceMonthly).toBe(2_500_000);
+    expect(next.budgetCurrency).toBe("COP");
   });
 
   it("a true empty marketplace is an honest answer with zero pins", async () => {

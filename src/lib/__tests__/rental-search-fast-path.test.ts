@@ -157,6 +157,9 @@ describe("rental-search-fast-path", () => {
     expect(canFastPathRentalSearch(followup, {})).toBe(false);
     expect(canFastPathRentalSearch("salsa events under COP 2.5 million/month", memory)).toBe(false);
     expect(canFastPathRentalSearch("restaurants under COP 2.5 million/month", memory)).toBe(false);
+    expect(canFastPathRentalSearch("coworking under COP 800k per month", memory)).toBe(false);
+    expect(canFastPathRentalSearch("gym under COP 200k per month", memory)).toBe(false);
+    expect(canFastPathRentalSearch("electricity bill under COP 500k per month", memory)).toBe(false);
   });
 
   it("does not fast path event queries", () => {

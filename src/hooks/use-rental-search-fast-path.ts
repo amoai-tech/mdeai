@@ -317,8 +317,20 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
       // is unavailable. Reuse the last *visible, thread-local* rental query only
       // while its searchMeta still exists; New Chat and cross-vertical searches
       // clear searchMeta, preventing an older rental from leaking into a new chat.
-      if (!memory.lastRentalQuery && searchMeta && latestMemoryRef.current?.lastRentalQuery) {
-        memory.lastRentalQuery = latestMemoryRef.current.lastRentalQuery;
+      if (!memory.lastRentalQuery && searchMeta) {
+        // Only the currently visible search metadata is safe across a saved-chat
+        // switch. latestMemoryRef may still belong to the previous thread.
+        const params = searchMeta.params;
+        memory.lastRentalQuery = {
+          neighborhood: params.neighborhood,
+          minBedrooms: params.minBedrooms,
+          maxPricePerNight: params.maxPricePerNight,
+          maxPriceMonthly: params.maxPriceMonthly,
+          budgetCurrency: params.budgetCurrency,
+          budgetType: params.stayType,
+          checkIn: params.checkIn,
+          checkOut: params.checkOut,
+        };
       }
 
       if (!canFastPathRentalSearch(trimmed, memory)) return false;
