@@ -33,7 +33,7 @@ Do not rebuild the catalog, agent, provider or query engine. Verify `mde/discove
 
 ### 4. Verify exact head and deliver
 
-- [ ] Use targeted tests → lint/typecheck → `npm run floor` if implementation changed and the issue requires exact-head certification → authenticated browser proof. Use the same existing issue and **fewest PRs**; no docs-only PR just for SAN-1653.
+- [ ] Use targeted tests → lint/typecheck → `npm run floor` (mandatory before claiming Done for code changes) → authenticated browser proof. For docs-only changes, run the applicable documentation/skill checks and disclose any existing baseline failure. Use the same existing issue and **fewest PRs**; no docs-only PR just for SAN-1653.
 - [ ] Inspect current-head GitHub review threads, verify each finding before fixing, reply/resolve with evidence, and record exact SHA/test results in the original Linear task.
 - **Proof:** links to tests/PR/CI/redacted browser evidence and broker-free/guest-safe role handling as applicable.
 - **STOP:** never assert Done/merged/deployed until separately verified.
