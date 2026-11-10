@@ -35,9 +35,9 @@ Security rule that must not change: the browser's context entry is **only a feat
 
 ## 4. Implemented in PR #839
 
-- Catalog now `extends: [standardUI.omit([...])]` — official layout/text/table/input components; `RentalCard`/`EventCard` stay the grounded first choice.
-- First named Surface `rental-recommendations` on `/rentals`: allowlist (RentalCard + layout), `fallback={null}`, `autoScroll={false}`. It stores and fetches nothing.
-- Guide takes the target from the tool's target enum, prefers the panel on Rentals, forbids invented values.
+- Catalog extends the official Standard Catalog with a deliberately small, **documented** vocabulary: 14 layout/label components (Box, Column, Row, Grid, GridItem, Card, Spacer, Divider, Title, Text, Caption, Label, Badge, FollowUp) plus the grounded `RentalCard`/`EventCard`. 55 standard components are omitted — see "Review round 1" in [21b](21b-genui-audit-defects.md) for the rule.
+- First named Surface `rental-recommendations` on `/rentals`: allowlist `RentalCard, Column, Row, Divider, Title` (one heading, 8 words max), `fallback={null}`, `autoScroll={false}`. It stores and fetches nothing.
+- Guide takes the target from the tool's target enum, prefers the panel on Rentals, documents every exposed prop, and ships a working multi-card example (`children: ["card-1","card-2"]`).
 - Test proving the concierge history trim keeps `render_ui` and the guide context.
 
 ## 5. Order of work

@@ -26,12 +26,24 @@
 | D8 | Low | `generativeUI={{…}}` object rebuilt each render | inline literal | hoist to module const (open) |
 | D9 | Low | `standardUI` pulls a Lit-based dependency | upstream implementation | check bundle delta before merge (open) |
 
+## 2b. Review round 1 — findings and resolution
+
+| Finding | Sev | Verdict | Resolution |
+| --- | --- | --- | --- |
+| Surface description conflicts with the no-prose rule | Minor | Valid | One rule: props carry tool data or a short label (8 words max). Panel allows one `Title`, no Text/Caption/Badge. |
+| `Button` allowed with no bound action | Major | Valid | Button, Pressable and all inputs omitted until SAN-1655/1658 register functions. Guide says so. |
+| Multi-card `Column` children unexplained | Major | Valid | Guide documents `children` as node ids and ships a two-card example; a test asserts it. |
+| Omitted list may drift / under-tested | Medium | Valid | `MDE_OMITTED_STANDARD_COMPONENTS` exported and tested: every name exists upstream, every upstream name is exposed or omitted, no name is in both. |
+| Guide references chat exclusively | Medium | Stale | Already replaced: "pick from the target list on the render_ui tool". |
+| Surface missing from consumer inventory | Medium | Incorrect | Entry exists at `scripts/copilotkit-consumer-inventory.json:388`. |
+| Surface mounted unconditionally | Medium | Rejected | It must mount to register its target; conditional-on-target is circular. Renders nothing until targeted; one hook. |
+
 ## 3. Measured results (this branch)
 
 | Check | Result |
 | --- | --- |
-| Focused Vitest (3 files) | 44/44 pass |
-| Full Vitest | 640 files, 5535 pass, 51 skip, 0 fail |
+| Focused Vitest (3 files) | 49/49 pass |
+| Full Vitest | 640 files, 5540 pass, 51 skip, 0 fail |
 | `tsc --noEmit` | pass |
 | `npm run lint` (`--max-warnings 0`) | pass |
 | Consumer-inventory contract | 9/9 pass |
