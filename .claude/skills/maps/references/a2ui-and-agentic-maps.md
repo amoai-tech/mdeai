@@ -51,6 +51,8 @@ For a CopilotKit-controlled inline Google map, prefer a **small typed MDE custom
 
 Do **not** copy the example Python ADK/A2A agent, its separate A2A server, the Lit UI renderer, an extra Google Maps provider, additional agent orchestration, or a parallel database/write workflow. The official samples demonstrate an alternative end-to-end stack, not a mandatory integration for MDE's Next.js + CopilotKit + Mastra application.
 
+**Experimental requirements and cost (revalidate before any prototype):** The [current Google toolkit README](https://github.com/googlemaps/a2ui) says the toolkit requires Maps JavaScript API `v: "alpha"`. Google's [Maps JavaScript versioning guidance](https://developers.google.com/maps/documentation/javascript/versions) says alpha is for development only, not production; **do not switch MDE's existing production Maps loader to alpha**. [Google's toolkit documentation](https://developers.google.com/maps/ai/agentic-ui-toolkit) says the toolkit has no charge while experimental, **but underlying Google Maps Platform services may be billable**. Check current API enablement, quotas, attribution, terms and key restrictions before a separate experiment; none of this changes MDE's currently deployed map.
+
 ## Correctness and acceptance checklist
 
 - **Grounding:** Coordinates must be finite, in range, and linked to source-backed listing/place records; never invent Google Place IDs, availability, prices or ETA.

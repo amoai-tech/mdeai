@@ -1,7 +1,7 @@
 ---
 name: maps
 description: >-
-  Use whenever MDE work implements, changes, reviews, or diagnoses Google Maps Platform: Maps JavaScript, Places, markers, routes/ETA, location search, geocoding, Maps grounding, map state, API keys, attribution, or Maps-related cost/security. Do not use for generic GIS or Mapbox/Leaflet/OpenStreetMap-only work with no Google Maps Platform dependency.
+  Use whenever MDE work implements, changes, reviews, or diagnoses Google Maps Platform: Maps JavaScript, Places, markers, routes/ETA, location search, geocoding, Maps grounding, Google Maps Agentic UI toolkit, A2UI map integration, CopilotKit Google Maps interoperability, map state, API keys, attribution, or Maps-related cost/security. Do not use for generic GIS, A2UI without Google Maps integration, or Mapbox/Leaflet/OpenStreetMap-only work with no Google Maps Platform dependency.
 title: maps — Google Maps Platform (comprehensive)
 impact: HIGH
 impactDescription: Places enrichment, Maps grounding, ChatMap, batch APIs, security, AI code assist
