@@ -294,6 +294,18 @@ describe("rental-query-parser — refinements keep the applied budget", () => {
     expect(params?.stayType).toBe("monthly");
   });
 
+  it("ignores a legacy currency-free monthly cap on a bedroom-only follow-up", () => {
+    const params = buildRentalSearchParams("now 2 bedrooms", {
+      lastRentalQuery: {
+        neighborhood: "Laureles", minBedrooms: 1,
+        maxPriceMonthly: 2_000, budgetType: "monthly",
+      },
+    });
+    expect(params?.minBedrooms).toBe(2);
+    expect(params?.maxPriceMonthly).toBeUndefined();
+    expect(params?.budgetCurrency).toBeUndefined();
+  });
+
   it("drops the stored monthly ceiling when the renter asks for a nightly budget", () => {
     const params = buildRentalSearchParams("actually under $80 per night", {
       lastRentalQuery: {

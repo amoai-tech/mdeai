@@ -22,6 +22,7 @@ import { MapUiStateSchema } from "@/platform/contracts/map-ui-state";
 import { formatEventSourcePromptHint } from "@/lib/events/trusted-event-sources";
 import { RESTAURANT_CLARIFY_MESSAGE } from "@/lib/restaurant-clarify-copy";
 import { routerIntentSchema } from "@/lib/router-intent";
+import { monthlyBudgetHasCurrency } from "@/lib/rental-search-body-schema";
 import { buildConciergeChannels } from "./whatsapp-channels";
 import { shouldContinueVenueBookingAfterSearch } from "../lib/booking-continuation";
 import { shouldForceRouteTool } from "../lib/route-tool-choice";
@@ -210,13 +211,18 @@ function normalizeModelMemory(raw: unknown): unknown {
   const clean = omitPaddedMemoryFields(raw);
   if (!isPlainObject(clean)) return clean;
   const normalized = { ...clean };
-  // Gemini can output maxPriceMonthly: 0 to mean "monthly prices, no ceiling".
-  // Zero is NOT a valid budget; drop the placeholder rather than rejecting
-  // the entire working-memory update or inventing a zero-peso filter.
-  if (isPlainObject(clean.lastRentalQuery) && clean.lastRentalQuery.maxPriceMonthly === 0) {
+  // A model may emit a zero placeholder or a monthly amount with no currency.
+  // Neither is a meaningful ceiling; discard it instead of poisoning future follow-ups.
+  if (isPlainObject(clean.lastRentalQuery)) {
     const query = { ...clean.lastRentalQuery };
-    delete query.maxPriceMonthly;
-    normalized.lastRentalQuery = query;
+    const amount = query.maxPriceMonthly;
+    const currency = typeof query.budgetCurrency === 'string' && query.budgetCurrency.trim()
+      ? query.budgetCurrency : undefined;
+    if (amount === 0 || (typeof amount === 'number' &&
+        !monthlyBudgetHasCurrency({ maxPriceMonthly: amount, budgetCurrency: currency }))) {
+      delete query.maxPriceMonthly;
+      normalized.lastRentalQuery = query;
+    }
   }
   if (typeof clean.lastIntent === 'string' && GROUNDED_INTENT_ALIASES.has(clean.lastIntent)) {
     normalized.lastIntent = 'restaurant_discovery';

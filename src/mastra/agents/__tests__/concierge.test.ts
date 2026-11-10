@@ -307,6 +307,16 @@ describe("concierge updateWorkingMemory tolerates provider padding", () => {
     expect((saved?.lastRentalQuery as { maxPriceMonthly?: number }).maxPriceMonthly).toBeUndefined();
   });
 
+  it("drops a model-stored monthly cap without currency but keeps other rental filters", async () => {
+    const { out, saved } = await update({
+      lastIntent: "rental_search",
+      lastRentalQuery: { neighborhood: "Laureles", minBedrooms: 2, budgetType: "monthly", maxPriceMonthly: 2_000 },
+    });
+    expect(out.error).toBeUndefined();
+    expect(saved?.lastRentalQuery).toMatchObject({ neighborhood: "Laureles", minBedrooms: 2 });
+    expect((saved?.lastRentalQuery as { maxPriceMonthly?: number })?.maxPriceMonthly).toBeUndefined();
+  });
+
   it("keeps only source-identifiable grounded rows when the model omits a title", async () => {
     const { out, saved } = await update({
       lastIntent: "restaurant_discovery",
