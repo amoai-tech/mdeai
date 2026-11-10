@@ -160,6 +160,16 @@ describe("rental-search-fast-path", () => {
     expect(canFastPathRentalSearch("coworking under COP 800k per month", memory)).toBe(false);
     expect(canFastPathRentalSearch("gym under COP 200k per month", memory)).toBe(false);
     expect(canFastPathRentalSearch("electricity bill under COP 500k per month", memory)).toBe(false);
+    const kBudget = "Now only under COP 2500k per month";
+    expect(canFastPathRentalSearch(kBudget, memory)).toBe(true);
+    expect(buildRentalSearchParams(kBudget, memory)).toMatchObject({
+      maxPriceMonthly: 2_500_000, budgetCurrency: "COP", stayType: "monthly",
+    });
+    const spanishDollars = "menos de 800 dólares al mes";
+    expect(canFastPathRentalSearch(spanishDollars, memory)).toBe(true);
+    expect(buildRentalSearchParams(spanishDollars, memory)).toMatchObject({
+      maxPriceMonthly: 800, budgetCurrency: "USD", stayType: "monthly",
+    });
   });
 
   it("does not fast path event queries", () => {

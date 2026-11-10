@@ -267,12 +267,12 @@ function isThousandsGroupedInteger(value: string): boolean {
  * explicit monthly word, and any nightly marker wins over the COP inference.
  */
 function parseExactMonthlyBudget(text: string): { amount: number; currency: "COP" | "USD" } | null {
-  const magnitude = "(millones?|mill[oó]n|million|millions|m|mil|k)";
+  const magnitude = "(millones?|mill[oó]n|million|millions|thousands?|m|mil|k)";
   const number = "(\\d[\\d.,]{0,16})";
   // Named currency before price, a dollar symbol, or currency after price.
-  const prefix = text.match(new RegExp(`\\b(cop|usd|pesos?|dollars?)\\s*${number}\\s*${magnitude}?`, "i"));
+  const prefix = text.match(new RegExp(`\\b(cop|usd|pesos?|dollars?|d[oó]lar(?:es)?)\\s*${number}\\s*${magnitude}?`, "i"));
   const dollars = text.match(new RegExp(`\\$\\s*${number}\\s*${magnitude}?`, "i"));
-  const suffix = text.match(new RegExp(`${number}\\s*${magnitude}?\\s*(cop|usd|pesos?|dollars?)\\b`, "i"));
+  const suffix = text.match(new RegExp(`${number}\\s*${magnitude}?\\s*(cop|usd|pesos?|dollars?|d[oó]lar(?:es)?)\\b`, "i"));
   const match = prefix ?? dollars ?? suffix;
   if (!match) return null;
   const currencyToken = (prefix ? prefix[1] : dollars ? "$" : suffix?.[3] ?? "").toLowerCase();
@@ -282,7 +282,7 @@ function parseExactMonthlyBudget(text: string): { amount: number; currency: "COP
   const grouped = isThousandsGroupedInteger(rawAmount);
   const amount = Number(grouped ? rawAmount.replace(/[.,]/g, "") : rawAmount.replace(",", "."));
   const multiple = /^(m|millones?|mill[oó]n|millions?)$/.test(magnitudeToken)
-    ? 1_000_000 : /^(mil|k)$/.test(magnitudeToken) ? 1_000 : 1;
+    ? 1_000_000 : /^(mil|k|thousands?)$/.test(magnitudeToken) ? 1_000 : 1;
   const ceiling = amount * multiple;
   if (!Number.isSafeInteger(ceiling) || ceiling <= 0) return null;
 
@@ -719,8 +719,8 @@ const RENTAL_BUDGET_FOLLOWUP_WORDS = new Set([
   "under", "below", "up", "to", "at", "most", "less", "than", "no", "more",
   "max", "maximum", "budget", "of", "a", "per", "month", "monthly",
   "cop", "usd", "peso", "pesos", "dollar", "dollars", "million", "millions",
-  "m", "mil", "millones", "millón", "mes", "al", "hasta", "solo",
-  "menos", "por", "de", "mensual", "máximo", "ahora",
+  "m", "k", "mil", "thousand", "thousands", "millones", "millón", "mes", "al", "hasta", "solo",
+  "menos", "por", "de", "mensual", "máximo", "ahora", "dólar", "dólares", "dolar", "dolares",
 ]);
 
 function isBudgetOnlyRentalRefinement(text: string): boolean {
