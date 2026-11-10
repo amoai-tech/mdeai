@@ -67,6 +67,7 @@ describe("SAN-1655 bedroom control intent", () => {
     "Give me a bedroom control.",
     "Change the bedrooms here.",
     "set beds",
+    "Quiero cambiar las habitaciones.",
   ])("renders for %s", (text) => {
     expect(shouldRenderRentalFilterControl({ stepNumber: 0, messages: ask(text), requestContext: page("/rentals") })).toBe(true);
   });
@@ -79,6 +80,7 @@ describe("SAN-1655 bedroom control intent", () => {
     "Open details for the first one.",
     "What is the price?",
     "Change the page to 1 bedroom.",
+    "Muéstrame 2 apartamentos en Laureles.",
   ])("does not render for %s", (text) => {
     expect(shouldRenderRentalFilterControl({ stepNumber: 0, messages: ask(text), requestContext: page("/rentals") })).toBe(false);
   });

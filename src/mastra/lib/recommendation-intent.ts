@@ -46,9 +46,9 @@ const NEW_SEARCH_CRITERIA =
  * ("change the bedrooms"), and refuses results/questions phrasings such as
  * "show me 2 bedroom apartments here" or "how many bedrooms does it have?".
  */
-const BEDROOM_WORD = /\b(bedrooms?|beds?)\b/i;
-const CONTROL_NOUN = /\b(control|selector|picker|slider)\b/i;
-const ADJUST_VERB = /\b(adjust|change|set|update|choose|pick|edit)\b/i;
+const BEDROOM_WORD = /\b(bedrooms?|beds?|habitaci[oó]n(?:es)?|dormitorios?)\b/i;
+const CONTROL_NOUN = /\b(control|selector|picker|slider|controlador)\b/i;
+const ADJUST_VERB = /\b(adjust|change|set|update|choose|pick|edit|cambiar|ajustar|elegir|seleccionar|poner)\b/i;
 const NOT_A_PAGE_CONTROL =
   /\b(show|display|list|see|how many|search|find|new search|details?|open|book|schedule|price|budget|under|over)\b|\?\s*$|\b\d+\s*(?:br|bed|bedroom)\b/i;
 
