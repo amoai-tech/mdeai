@@ -1,0 +1,1 @@
+../../../.claude/skills/poteto-mode/SKILL.md

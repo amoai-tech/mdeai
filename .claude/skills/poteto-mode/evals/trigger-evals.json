@@ -1,0 +1,32 @@
+[
+  {
+    "id": "poteto-1",
+    "prompt": "/poteto-mode Fix apartment search returning rentals over the user's COP 3M cap; repro, fix, prove results.",
+    "should_trigger": true,
+    "expected_owner": "poteto-mode"
+  },
+  {
+    "id": "poteto-2",
+    "prompt": "Use PStack poteto-mode to finish the event-ticket retry bug with proof.",
+    "should_trigger": true,
+    "expected_owner": "poteto-mode"
+  },
+  {
+    "id": "poteto-3",
+    "prompt": "Run poteto-mode for this PR to reach a verified result without a second approval system.",
+    "should_trigger": true,
+    "expected_owner": "poteto-mode"
+  },
+  {
+    "id": "poteto-4",
+    "prompt": "Implement the rental-card spacing change.",
+    "should_trigger": false,
+    "expected_owner": "implement"
+  },
+  {
+    "id": "poteto-5",
+    "prompt": "Audit PR #825 for merge readiness.",
+    "should_trigger": false,
+    "expected_owner": "praudit"
+  }
+]

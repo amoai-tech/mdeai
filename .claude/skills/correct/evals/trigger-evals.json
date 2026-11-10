@@ -1,0 +1,32 @@
+[
+  {
+    "id": "correct-1",
+    "prompt": "/correct Agents keep creating a second rental-search service. Prove and prevent the repeated mistake.",
+    "should_trigger": true,
+    "expected_owner": "correct"
+  },
+  {
+    "id": "correct-2",
+    "prompt": "Use correct to stop recurring duplicate viewing writes after retries; add enforceable regression protection.",
+    "should_trigger": true,
+    "expected_owner": "correct"
+  },
+  {
+    "id": "correct-3",
+    "prompt": "We keep fixing the same API schema drift on multiple PRs. Correct the underlying agent mistake class.",
+    "should_trigger": true,
+    "expected_owner": "correct"
+  },
+  {
+    "id": "correct-4",
+    "prompt": "There is one new console error in events; investigate.",
+    "should_trigger": false,
+    "expected_owner": "errors"
+  },
+  {
+    "id": "correct-5",
+    "prompt": "Make a small fix to the event description typo.",
+    "should_trigger": false,
+    "expected_owner": "implement"
+  }
+]
