@@ -217,7 +217,7 @@ export async function resolveRouterClassification(
   // discovery topic shift. "Which spaces can I book?" is still discovery.
   // Let booking actions use the existing router/Flash/agent; never invent a booking.
   const coworkingBookingRequest =
-    /^\s*(?:(?:hi|hello|hey)\s*,?\s*)?(?:(?:(?:can|could|would)\s+you|(?:i|we)\s+(?:want|need)\s+to|(?:i|we)(?:'d| would)\s+like\s+to|help\s+me)\s+)?(?:please\s+)?(?:book|reserve|rent|hire)\b/i.test(text);
+    /^\s*(?:(?:hi|hello|hey)\s*,?\s*)?(?:(?:(?:can|could|would)\s+you|(?:i|we)\s+(?:want|need)\s+to|(?:i|we)(?:['’]d| would)\s+like\s+to|help\s+me)\s+)?(?:please\s+)?(?:book|reserve|rent|hire)\b/i.test(text);
   const coworkingSubject =
     /\b(?:co[-\s]?working|coworking|shared\s+(?:workspaces?|offices?))\b/i.test(text);
   // "Coworking spaces for rent" refers to workplaces, not apartment listings.

@@ -136,6 +136,8 @@ describe("SAN-874 coworking switches the conversation without hijacking rentals"
     "Book a coworking space for my team",
     "Reserve a coworking office for our group",
     "I'd like to book a coworking desk",
+    "I’d like to book a coworking desk",
+    "We’d like to reserve a coworking office",
     "I would like to reserve a coworking office",
     "Hi, please book a coworking space",
     "We need to rent a coworking desk",
