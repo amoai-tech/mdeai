@@ -1,0 +1,38 @@
+[
+  {
+    "id": "interrogate-1",
+    "prompt": "/interrogate this viewing-request diff; try to prove duplicates are possible on retry.",
+    "should_trigger": true,
+    "expected_owner": "interrogate"
+  },
+  {
+    "id": "interrogate-2",
+    "prompt": "Run an adversarial review of this Supabase RLS PR and keep only reproduced findings.",
+    "should_trigger": true,
+    "expected_owner": "interrogate"
+  },
+  {
+    "id": "interrogate-3",
+    "prompt": "Stress-test this branch diff; report expected/actual output of each reproduced regression.",
+    "should_trigger": true,
+    "expected_owner": "interrogate"
+  },
+  {
+    "id": "interrogate-4",
+    "prompt": "Is PR #825 merge ready? Check CI, reviews and security.",
+    "should_trigger": false,
+    "expected_owner": "praudit"
+  },
+  {
+    "id": "interrogate-5",
+    "prompt": "Fix the apartment search bug now.",
+    "should_trigger": false,
+    "expected_owner": "implement"
+  },
+  {
+    "id": "interrogate-6",
+    "prompt": "Give a conventional readability review of this React component snippet with no adversarial reproduction.",
+    "should_trigger": false,
+    "expected_owner": "code-review"
+  }
+]

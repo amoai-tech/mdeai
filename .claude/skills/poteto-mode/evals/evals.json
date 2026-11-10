@@ -1,0 +1,96 @@
+{
+  "skill_name": "poteto-mode",
+  "version": "1.0.0",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "/poteto-mode Fix rental search returning 0 while structured SQL search finds 3 results. Repro first, then smallest fix.",
+      "expected_output": "Select one MDE bug/implementation owner, verify the real retrieval path, reproduce zero vs three, fix canonical search, test cards/map and persisted truth; no duplicate engine or business gates.",
+      "files": [],
+      "expectations": [
+        {
+          "id": "catalog-poteto-mode",
+          "kind": "deterministic",
+          "check": "catalog_contains",
+          "value": "poteto-mode"
+        },
+        {
+          "id": "called-poteto-mode",
+          "kind": "deterministic",
+          "check": "skill_called",
+          "value": "poteto-mode"
+        },
+        {
+          "id": "loaded-poteto-mode",
+          "kind": "deterministic",
+          "check": "skill_result_ok",
+          "value": "poteto-mode"
+        },
+        {
+          "id": "completed",
+          "kind": "deterministic",
+          "check": "turn_completed"
+        }
+      ],
+      "should_trigger": true
+    },
+    {
+      "id": 2,
+      "prompt": "/poteto-mode Explain why this Supabase RPC exists; do not modify any code.",
+      "expected_output": "Route read-only investigation to architect/research; cite current SQL and callers; do not create a PR or make edits.",
+      "files": [],
+      "expectations": [
+        {
+          "id": "catalog-poteto-mode",
+          "kind": "deterministic",
+          "check": "catalog_contains",
+          "value": "poteto-mode"
+        },
+        {
+          "id": "called-poteto-mode",
+          "kind": "deterministic",
+          "check": "skill_called",
+          "value": "poteto-mode"
+        },
+        {
+          "id": "loaded-poteto-mode",
+          "kind": "deterministic",
+          "check": "skill_result_ok",
+          "value": "poteto-mode"
+        },
+        {
+          "id": "completed",
+          "kind": "deterministic",
+          "check": "turn_completed"
+        }
+      ],
+      "should_trigger": true
+    },
+    {
+      "id": 3,
+      "prompt": "Change the icon size on a page.",
+      "expected_output": "Ordinary implementation; poteto-mode is not invoked and no swarm or new router is needed.",
+      "files": [],
+      "expectations": [
+        {
+          "id": "catalog-poteto-mode",
+          "kind": "deterministic",
+          "check": "catalog_contains",
+          "value": "poteto-mode"
+        },
+        {
+          "id": "not-called-poteto-mode",
+          "kind": "deterministic",
+          "check": "skill_not_called",
+          "value": "poteto-mode"
+        },
+        {
+          "id": "completed",
+          "kind": "deterministic",
+          "check": "turn_completed"
+        }
+      ],
+      "should_trigger": false
+    }
+  ]
+}

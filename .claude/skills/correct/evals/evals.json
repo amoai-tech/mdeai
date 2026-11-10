@@ -1,0 +1,96 @@
+{
+  "skill_name": "correct",
+  "version": "1.0.0",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "/correct The last two rental PRs added duplicate eligibility filters despite an existing canonical owner.",
+      "expected_output": "Find both commits, fix shared ownership at source or add a precise static guard, demonstrate the guard failing on the prior mistake then passing; do not add prelaunch gates.",
+      "files": [],
+      "expectations": [
+        {
+          "id": "catalog-correct",
+          "kind": "deterministic",
+          "check": "catalog_contains",
+          "value": "correct"
+        },
+        {
+          "id": "called-correct",
+          "kind": "deterministic",
+          "check": "skill_called",
+          "value": "correct"
+        },
+        {
+          "id": "loaded-correct",
+          "kind": "deterministic",
+          "check": "skill_result_ok",
+          "value": "correct"
+        },
+        {
+          "id": "completed",
+          "kind": "deterministic",
+          "check": "turn_completed"
+        }
+      ],
+      "should_trigger": true
+    },
+    {
+      "id": 2,
+      "prompt": "/correct Agents keep writing ticket/webhook success before verifying the persisted Stripe event, on multiple PRs.",
+      "expected_output": "Prove two prior occurrences; fix canonical transactional or type boundary first, add idempotent retry regression; preserve auth and test payment integrity.",
+      "files": [],
+      "expectations": [
+        {
+          "id": "catalog-correct",
+          "kind": "deterministic",
+          "check": "catalog_contains",
+          "value": "correct"
+        },
+        {
+          "id": "called-correct",
+          "kind": "deterministic",
+          "check": "skill_called",
+          "value": "correct"
+        },
+        {
+          "id": "loaded-correct",
+          "kind": "deterministic",
+          "check": "skill_result_ok",
+          "value": "correct"
+        },
+        {
+          "id": "completed",
+          "kind": "deterministic",
+          "check": "turn_completed"
+        }
+      ],
+      "should_trigger": true
+    },
+    {
+      "id": 3,
+      "prompt": "One rental search test fails, please fix it.",
+      "expected_output": "Without evidence of two past occurrences route to errors/implement; do not launch the repeat-mistake workflow.",
+      "files": [],
+      "expectations": [
+        {
+          "id": "catalog-correct",
+          "kind": "deterministic",
+          "check": "catalog_contains",
+          "value": "correct"
+        },
+        {
+          "id": "not-called-correct",
+          "kind": "deterministic",
+          "check": "skill_not_called",
+          "value": "correct"
+        },
+        {
+          "id": "completed",
+          "kind": "deterministic",
+          "check": "turn_completed"
+        }
+      ],
+      "should_trigger": false
+    }
+  ]
+}

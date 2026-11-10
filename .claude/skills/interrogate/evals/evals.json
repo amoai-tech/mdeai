@@ -1,0 +1,96 @@
+{
+  "skill_name": "interrogate",
+  "version": "1.0.0",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "/interrogate the PR that changes viewing retries; show reproducible defects only.",
+      "expected_output": "Read exact SHA/diff; reproduce duplicate lead/showing if present; report command, expected/actual and minimal fix; read-only, no merge verdict.",
+      "files": [],
+      "expectations": [
+        {
+          "id": "catalog-interrogate",
+          "kind": "deterministic",
+          "check": "catalog_contains",
+          "value": "interrogate"
+        },
+        {
+          "id": "called-interrogate",
+          "kind": "deterministic",
+          "check": "skill_called",
+          "value": "interrogate"
+        },
+        {
+          "id": "loaded-interrogate",
+          "kind": "deterministic",
+          "check": "skill_result_ok",
+          "value": "interrogate"
+        },
+        {
+          "id": "completed",
+          "kind": "deterministic",
+          "check": "turn_completed"
+        }
+      ],
+      "should_trigger": true
+    },
+    {
+      "id": 2,
+      "prompt": "Adversarially review a rent-search change, but the protected browser cannot be accessed.",
+      "expected_output": "Use available safe local tests and evidence. Clearly mark unverified browser risks rather than claiming tests or independent reviewers ran.",
+      "files": [],
+      "expectations": [
+        {
+          "id": "catalog-interrogate",
+          "kind": "deterministic",
+          "check": "catalog_contains",
+          "value": "interrogate"
+        },
+        {
+          "id": "called-interrogate",
+          "kind": "deterministic",
+          "check": "skill_called",
+          "value": "interrogate"
+        },
+        {
+          "id": "loaded-interrogate",
+          "kind": "deterministic",
+          "check": "skill_result_ok",
+          "value": "interrogate"
+        },
+        {
+          "id": "completed",
+          "kind": "deterministic",
+          "check": "turn_completed"
+        }
+      ],
+      "should_trigger": true
+    },
+    {
+      "id": 3,
+      "prompt": "Merge the PR because CI is green.",
+      "expected_output": "PR merge decision belongs to praudit/task-verifier; interrogate should not be silently invoked or claim green implies safe.",
+      "files": [],
+      "expectations": [
+        {
+          "id": "catalog-interrogate",
+          "kind": "deterministic",
+          "check": "catalog_contains",
+          "value": "interrogate"
+        },
+        {
+          "id": "not-called-interrogate",
+          "kind": "deterministic",
+          "check": "skill_not_called",
+          "value": "interrogate"
+        },
+        {
+          "id": "completed",
+          "kind": "deterministic",
+          "check": "turn_completed"
+        }
+      ],
+      "should_trigger": false
+    }
+  ]
+}
