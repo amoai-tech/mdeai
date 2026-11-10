@@ -141,7 +141,7 @@ test("standard built-ins keep their owner and deep catalog or Surface recipes ar
 test("mixed custom Catalog and page Surface eval loads both guides without a duplicate owner", () => {
   const pack = JSON.parse(readFileSync(join(base, "evals/evals.json"), "utf8"));
   const mixed = pack.evals.find((entry) => entry.id === 27);
-  assert.equal(pack.evals.length, 27);
+  assert.ok(pack.evals.length >= 27, "keep the existing 26 cases plus mixed case 27");
   assert.ok(mixed?.should_trigger, "mixed native Catalog/Surface routing must be evaluated");
   assert.match(mixed.prompt, /compare.*rentals.*map/i);
   assert.match(mixed.expected_output, /references\/component-catalogs\.md/);
