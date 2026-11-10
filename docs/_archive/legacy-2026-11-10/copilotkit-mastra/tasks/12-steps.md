@@ -70,7 +70,7 @@ Search coverage is **not** part of this plan: embedding backfill and semantic-se
 ### Deployment and promotion — read before touching production
 Promotion is **asynchronous**. The `Prod deploy freshness` guard waited 9, 13 and 19 polls (≈4.5–9.5 min) after a build was READY before the domain served the new commit, and passed every time. **READY ≠ served** — always prove it with `/api/version`.
 
-If that guard fails, follow [Production release verification](../../07-operations/production-release-verification.md) (recover a release blocked by Floor) and its exact-SHA certification path. **Never run `vercel promote` to skip certification or to serve an uncertified candidate** — a failed guard is a signal to diagnose, not permission to bypass.
+If that guard fails, follow [Production release verification](../../../../07-operations/production-release-verification.md) (recover a release blocked by Floor) and its exact-SHA certification path. **Never run `vercel promote` to skip certification or to serve an uncertified candidate** — a failed guard is a signal to diagnose, not permission to bypass.
 
 ### Tracking and closeout
 - [SAN-1639](https://linear.app/amo100/issue/SAN-1639) and [SAN-1298](https://linear.app/amo100/issue/SAN-1298) are **Done** for the previously certified product milestone; keep instrumentation/cleanup work open until actually implemented.

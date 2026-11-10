@@ -10,13 +10,13 @@
 # It runs against a scratch database restored from a pg_dump of the local stack taken BEFORE the
 # SAN-1349 migrations were applied, so the starting state is the real pre-fix schema.
 #
-# Usage:  bash docs/tasks/evidence/SAN-1349/replay-san1349-chain.sh
+# Usage:  bash docs/_archive/legacy-2026-11-10/task-evidence/SAN-1349/replay-san1349-chain.sh
 set -euo pipefail
 
 CONTAINER=${CONTAINER:-supabase_db_mdeapp}
 REPLAY_DB=${REPLAY_DB:-san1349_replay}
-ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)
-EVID="$ROOT/docs/tasks/evidence/SAN-1349"
+ROOT=$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --show-toplevel)
+EVID="$ROOT/docs/_archive/legacy-2026-11-10/task-evidence/SAN-1349"
 PSQL=(docker exec -i "$CONTAINER" psql -U postgres -d "$REPLAY_DB" -v ON_ERROR_STOP=1)
 
 # ── 0. Fresh scratch database from the pre-SAN-1349 dump ────────────────────────────────────
