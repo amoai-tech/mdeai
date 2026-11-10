@@ -146,6 +146,18 @@ describe("SAN-867 · VEB-MVP-001 — Router hijack fix — sendConciergeUserMess
     expect(handlers.onAgentSend).not.toHaveBeenCalled();
   });
 
+  it("SAN-874 marks a signed-in coworking question as a topic switch before the next budget", async () => {
+    const handlers = {
+      ...makeHandlers(), inRentalSearch: true,
+      onTopicShift: vi.fn<(intent: import("@/lib/router-intent").RouterIntent) => void>(),
+    };
+    await sendConciergeUserMessage("What coworking spaces are in Laureles?", handlers);
+    expect(handlers.onTopicShift).toHaveBeenCalledOnce();
+    expect(handlers.onTopicShift).toHaveBeenCalledWith("general_concierge");
+    expect(handlers.onAgentSend).toHaveBeenCalledOnce();
+    expect(handlers.handleRentalMessage).not.toHaveBeenCalled();
+  });
+
   describe("SAN-407 · INT-004 — a whole-city follow-up reaches the rental search", () => {
     it.each(["Anywhere is fine", "Anywhere in Medellín is fine", "any neighborhood works"])(
       "%j after a rental search is tried on the rental fast path before the assistant",
