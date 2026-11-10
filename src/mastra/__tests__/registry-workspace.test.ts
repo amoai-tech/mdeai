@@ -90,6 +90,7 @@ describe("Mastra registration in hosted runtimes", () => {
     vi.stubEnv("VERCEL", "");
     vi.stubEnv("MDE_MASTRA_AGENT_BUILDER", "1");
     vi.stubEnv("MASTRA_DEV", "true");
+    vi.stubEnv("MASTRA_DEV_LIBSQL", "1");
     vi.stubEnv("NEXT_PHASE", "");
     vi.stubEnv("PWD", undefined);
     vi.spyOn(process, "cwd").mockReturnValue(invalidRoot);
@@ -99,6 +100,16 @@ describe("Mastra registration in hosted runtimes", () => {
     } finally {
       rmSync(invalidRoot, { recursive: true, force: true });
     }
+  }, 15_000);
+
+  it("rejects Builder when local-only agent memory storage is not configured", async () => {
+    vi.stubEnv("VERCEL", "");
+    vi.stubEnv("MDE_MASTRA_AGENT_BUILDER", "1");
+    vi.stubEnv("MASTRA_DEV", "true");
+    vi.stubEnv("MASTRA_DEV_LIBSQL", "");
+    vi.stubEnv("NEXT_PHASE", undefined);
+    vi.resetModules();
+    await expect(import("../../mastra-studio")).rejects.toThrow(/MASTRA_DEV_LIBSQL=1/);
   }, 15_000);
 
   it("enables standalone local Studio with NEXT_PHASE absent and stores drafts outside .mastra", async () => {
@@ -115,8 +126,10 @@ describe("Mastra registration in hosted runtimes", () => {
 
     try {
       const { mastra } = await import("../../mastra-studio");
-      expect(Object.keys(mastra.listAgents())).toHaveLength(10);
+      expect(Object.keys(mastra.listAgents())).toHaveLength(1);
       expect(mastra.listAgents()).toHaveProperty("builderAgent");
+      expect(mastra.listAgents()).not.toHaveProperty("rentalAgent");
+      expect(mastra.listAgents()).not.toHaveProperty("conciergeAgent");
       expect(mastra.getEditor()).toBeDefined();
       expect(mastra.getStorage()).toBeDefined();
       // The editor database path is projectRoot/.mde-builder.db, never inside

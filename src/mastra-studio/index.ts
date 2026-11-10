@@ -6,15 +6,14 @@ import { MastraCompositeStore } from "@mastra/core/storage";
 import { LibSQLStore } from "@mastra/libsql";
 import { MastraEditor } from "@mastra/editor";
 import { createBuilderAgent } from "@mastra/editor/ee";
-import { createMastraConfig } from "../mastra/config";
-import { isNextProductionBuild } from "../mastra/lib/storage";
 
 // The Builder agent is EE-licensed; the vendor permits LOCAL DEVELOPMENT and
 // TESTING without an EE production license. Never expose it in an app deployment.
 if (process.env.MDE_MASTRA_AGENT_BUILDER !== "1" ||
     process.env.MASTRA_DEV !== "true" ||
-    process.env.VERCEL === "1" || isNextProductionBuild()) {
-  throw new Error("Local Builder requires explicit opt-in in mastra dev; prohibited in Next/Vercel.");
+    process.env.MASTRA_DEV_LIBSQL !== "1" ||
+    process.env.VERCEL === "1" || process.env.NEXT_PHASE === "phase-production-build") {
+  throw new Error("Local Builder requires explicit opt-in, mastra dev and MASTRA_DEV_LIBSQL=1; prohibited in Next/Vercel.");
 }
 
 // The CLI can change process.cwd() during bundling. Accept PWD as launcher root,
@@ -24,16 +23,15 @@ if (!existsSync(resolve(projectRoot, "src/mastra/index.ts"))) {
   throw new Error("Builder needs PWD pointing to the MDE project root; refuse to write outside it.");
 }
 
-// A local Builder must not even construct the remote Supabase/Postgres store.
-// Agent Builder chat memory and application runtime state stay in this local DB.
+// This standalone Studio imports *no* MDE product agents or their memory. Those
+// agents construct their own storage on import, which may connect to Supabase.
+// The original Mastra Studio retains all nine product agents and workflows.
 const localRuntimeStorage = new LibSQLStore({
   id: "mde-builder-runtime",
   url: `file:${resolve(projectRoot, ".mde-builder-runtime.db")}`,
 });
-const appConfig = createMastraConfig(localRuntimeStorage);
 export const mastra = new Mastra({
-  ...appConfig,
-  agents: { ...appConfig.agents, builderAgent: createBuilderAgent() },
+  agents: { builderAgent: createBuilderAgent() },
   storage: new MastraCompositeStore({
     id: "mde-builder-local-storage",
     default: localRuntimeStorage,
