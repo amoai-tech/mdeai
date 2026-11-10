@@ -118,9 +118,9 @@ beforeEach(() => {
 afterEach(() => cleanup());
 
 describe("restaurant Add to trip", () => {
-  it("offers the real Add action only for restaurants with a map pin", () => {
+  it("offers Add to trip for genuine restaurants even without coordinates", () => {
     expect(screen.getByTestId("restaurant-add-to-trip-a")).not.toBeNull();
-    expect(screen.queryByTestId("restaurant-add-to-trip-c")).toBeNull();
+    expect(screen.getByTestId("restaurant-add-to-trip-c")).not.toBeNull();
   });
 });
 

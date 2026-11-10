@@ -19,8 +19,14 @@ import {
 } from "@/components/ui/dialog";
 import type { MapPin } from "@/platform/contracts";
 
+/** The source reference needed to save an item; coordinates are intentionally optional. */
+export type AddToTripTarget = Pick<
+  MapPin,
+  "id" | "category" | "title" | "placeId"
+>;
+
 type AddToTripButtonProps = {
-  pin: MapPin;
+  pin: AddToTripTarget;
   variant?: "icon" | "card";
   testId?: string;
 };

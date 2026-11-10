@@ -202,10 +202,16 @@ function RestaurantBrowseViewInner({
             >
               {shownResults.map((r) => {
                 const pinId = `restaurant-${r.id}`;
-                // Reuse the memoized pin list: one conversion per row, and a missing
-                // coordinate means both no map action and no Add action.
+                // Reuse the memoized pin list: one conversion per row. A missing
+                // coordinate removes the map action only; saving stays available.
                 const pin = pins.find((candidate) => candidate.id === pinId);
                 const hasPin = Boolean(pin);
+                const addTarget = {
+                  id: pinId,
+                  category: "restaurant" as const,
+                  title: r.name,
+                  placeId: r.placeId ?? undefined,
+                };
                 return (
                   <div key={r.id} className="flex flex-col gap-2">
                   <RestaurantCard
@@ -252,13 +258,11 @@ function RestaurantBrowseViewInner({
                     composition="nova"
                     mediaLayout="inline"
                   />
-                  {pin ? (
-                    <AddToTripButton
-                      pin={pin}
-                      variant="card"
-                      testId={`restaurant-add-to-trip-${r.id}`}
-                    />
-                  ) : null}
+                  <AddToTripButton
+                    pin={addTarget}
+                    variant="card"
+                    testId={`restaurant-add-to-trip-${r.id}`}
+                  />
                   </div>
                 );
               })}
