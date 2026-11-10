@@ -28,7 +28,8 @@ Do not rebuild the catalog, agent, provider or query engine. Verify `mde/discove
 
 - [ ] If the agent selects a wrong ID, check `generative-ui-context.ts` and relevant existing chat context. If catalog lookup fails with a correct ID, fix existing `findRentalRow`/`findEventRow`. Add one focused regression per proven defect.
 - [ ] Test forged/stale/cross-thread or cross-user IDs, Stop/Retry late response, saved-thread revisit and refresh, and 390px error recovery.
-- **Proof:** relevant `mde-ui-catalog.test.ts`, `generative-ui-context` tests, `e2e/chat-thread-history.spec.ts` and appropriate existing recovery/browser specs.
+- [ ] Add a focused **authenticated A2UI card-replay browser assertion** in the relevant existing E2E suite (or a focused SAN-1653 spec): capture a real `render_ui` card and its source ID, save/reopen the thread and refresh, then assert the rehydrated A2UI card carries the **same authorized ID** and opens the same Details target—or shows an explicit unavailable state when no longer authorized. Do not count native cards or restored thread selection as an A2UI replay pass.
+- **Proof:** relevant `mde-ui-catalog.test.ts` and `generative-ui-context` tests, existing `e2e/chat-thread-history.spec.ts` **for thread selection only**, a separate exact-ID A2UI card-replay browser check, and relevant recovery/browser specs.
 - **STOP:** unauthorized data, duplicate action, misleading "success", or replay regression.
 
 ### 4. Verify exact head and deliver

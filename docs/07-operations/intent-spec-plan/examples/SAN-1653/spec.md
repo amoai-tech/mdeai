@@ -25,7 +25,7 @@ An authenticated user searches Rentals or Events → receives ordered, authorize
 | Duplicate titles | Correct **ID** is used, not title or position guessed from prose | Browser assertion |
 | Unknown, forged or stale ID | No card/Details from unauthorized or unrelated result | Catalog tests + browser negative case |
 | Switched user/thread, late Stop/Retry | No previous-user result or late card reappears; no duplicate consequence | Isolation/recovery tests |
-| Saved conversation reopened/refreshed | Authorized card restores or honest unavailable state | `e2e/chat-thread-history.spec.ts` |
+| Saved conversation reopened/refreshed | Reopen a saved thread containing a **real `render_ui` A2UI rental/event card**; after refresh, assert the authorized A2UI card restores with the **same source ID** and Details target, or displays an explicit unavailable state when that result is no longer authorized. A native search-result card or restored chat selection alone does not count. | Dedicated authenticated A2UI replay browser assertion (add to the existing relevant E2E suite or a focused SAN-1653 spec). `e2e/chat-thread-history.spec.ts` covers **thread selection only**, not A2UI card replay. |
 | AI failure/abort | Native cards, map, filters and composer still usable | Existing failure E2E + 390px check |
 
 ## Interfaces and owners

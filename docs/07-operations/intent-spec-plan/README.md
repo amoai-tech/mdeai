@@ -6,7 +6,7 @@
 
 1. Read [`AGENTS.md`](../../../AGENTS.md), the relevant `.claude/skills/tasks/SKILL.md`, and the live Linear issue before drafting.
 2. Inspect current `main`, the task branch/PR, relevant code, and tests; distinguish evidence from assumptions.
-3. For a **substantial or ambiguous S2–S4 task**, copy the three templates into a single task folder when the detail will genuinely help future sessions. For a focused S0/S1 fix, use the Linear issue and existing `implement` skill instead. No docs-only gate for normal development.
+3. For a **substantial or ambiguous S2–S4 task**, copy the three templates into a single task folder when the detail will genuinely help future sessions. If adding Markdown files under `docs/07-operations/`, add a corresponding row for **each new file** in the complete active documentation catalog in `docs/index-docs.md` (required by `npm run check:docs`). For a focused S0/S1 fix, use the Linear issue and existing `implement` skill instead. No docs-only gate for normal development.
 4. Draft [`intent.md`](templates/intent.md) (**why / problem**) → [`spec.md`](templates/spec.md) (**what / observable behavior**) → [`plan.md`](templates/plan.md) (**how / exact implementation and proof**). Resolve contradictions against the live issue and source before coding.
 5. Follow the existing `tasks` and `implement` skills to edit the *real* code; run the smallest decisive tests first. Record progress/PRs/evidence in **Linear**, not a second task tracker. Update files when a decision or interface changes.
 6. Before handoff, record verified state, remaining work, blockers and the next command in Linear. Do not mark a feature Done because the Markdown is complete.

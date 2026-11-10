@@ -13,7 +13,7 @@ MDE AI already renders rental/event result cards. The existing catalog unit test
 
 For a real, authorized set of search results, a person can ask Ask MDE to show a specific rental or event. The AI card represents that same result, and Details opens the exact same ID. Missing/stale results are rejected honestly, while native cards, filters and maps remain usable.
 
-**Real-world example:** A visitor says "Show the second event as a card" → an event card appears for the *second real event* → clicking Details opens that event, not the first or another similarly named event.
+**Real-world example:** An authenticated user says "Show the second event as a card" → an event card appears for the *second real event* → clicking Details opens that event, not the first or another similarly named event.
 
 ## In scope / not in scope
 
