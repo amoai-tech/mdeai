@@ -132,6 +132,7 @@ Use for local development, deployment, security operations, observability, runbo
 
 Current workflow plan:
 - [agent-workflow-plan.md](07-operations/agent-workflow-plan.md) — Linear, agent handoffs, GitHub, docs/GitBook, and changelog ownership.
+- [Intent → specification → plan](07-operations/intent-spec-plan/README.md) — optional per-task agent handoff templates and Gen UI example.
 - [production-rollback-runbook.md](07-operations/production-rollback-runbook.md) — confirm production is really broken, roll back to the previous release, prove it, keep auto-assign OFF.
 
 ### Strategy
@@ -273,6 +274,13 @@ This revision's catalog contains **163 active-document entries** plus **two `_ar
 | Testing | [`06-testing/ui-verification.md`](06-testing/ui-verification.md) | Markdown | Current |
 | Operations | [`07-operations/README.md`](07-operations/README.md) | Markdown | Current |
 | Operations | [`07-operations/agent-workflow-plan.md`](07-operations/agent-workflow-plan.md) | Markdown | Current |
+| Operations | [`07-operations/intent-spec-plan/README.md`](07-operations/intent-spec-plan/README.md) | Markdown | Current |
+| Operations | [`07-operations/intent-spec-plan/templates/intent.md`](07-operations/intent-spec-plan/templates/intent.md) | Markdown | Template |
+| Operations | [`07-operations/intent-spec-plan/templates/spec.md`](07-operations/intent-spec-plan/templates/spec.md) | Markdown | Template |
+| Operations | [`07-operations/intent-spec-plan/templates/plan.md`](07-operations/intent-spec-plan/templates/plan.md) | Markdown | Template |
+| Operations | [`07-operations/intent-spec-plan/examples/SAN-1653/intent.md`](07-operations/intent-spec-plan/examples/SAN-1653/intent.md) | Markdown | Reference |
+| Operations | [`07-operations/intent-spec-plan/examples/SAN-1653/spec.md`](07-operations/intent-spec-plan/examples/SAN-1653/spec.md) | Markdown | Reference |
+| Operations | [`07-operations/intent-spec-plan/examples/SAN-1653/plan.md`](07-operations/intent-spec-plan/examples/SAN-1653/plan.md) | Markdown | Reference |
 | Operations | [`07-operations/graphify-reference.md`](07-operations/graphify-reference.md) | Markdown | Current |
 | Operations | [`07-operations/merge-approval-history.md`](07-operations/merge-approval-history.md) | Markdown | Current |
 | Operations | [`07-operations/production-rollback-runbook.md`](07-operations/production-rollback-runbook.md) | Markdown | Current |

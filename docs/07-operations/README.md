@@ -24,6 +24,7 @@ Canonical navigation for running, validating, deploying, securing, and troublesh
 ## Development workflow
 
 - [`agent-workflow-plan.md`](agent-workflow-plan.md) — plan for Linear, agent handoffs, GitHub, docs/GitBook, and changelog ownership.
+- [Intent → specification → implementation plan](intent-spec-plan/README.md) — optional, task-scoped Markdown templates and a verified Gen UI planning example for agents.
 
 ## Local development
 

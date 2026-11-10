@@ -29,6 +29,8 @@ The Linear issue is the live task-specific execution runbook and progress source
 
 When this task creates or materially changes a skill, also follow [`references/shared/skill-authoring-standard.md`](references/shared/skill-authoring-standard.md).
 
+For substantial or ambiguous task handoffs where persistent design context adds value, optionally use the three Markdown templates in [`docs/07-operations/intent-spec-plan/README.md`](../../../docs/07-operations/intent-spec-plan/README.md). Keep live steps/status/evidence in Linear, skip this overhead for focused fixes, and never treat completed documents as feature proof.
+
 For every substantial S2-S4 task, define the durable outcome and independently gradeable rubric before implementation. Use [`references/shared/outcome-rubric-standard.md`](references/shared/outcome-rubric-standard.md).
 
 Write substantial task instructions and handoffs using [`references/shared/prompting-standard.md`](references/shared/prompting-standard.md). Keep S0/S1 prompts proportionally smaller. `/goal` may extend a long-running session toward an already-defined outcome, but it never replaces Linear scope, permissions, STOP conditions, or independent verification. Because the `/goal` evaluator only sees surfaced conversation evidence, decisive test/build/runtime results must be reported explicitly.
