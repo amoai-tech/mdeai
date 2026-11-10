@@ -1,6 +1,6 @@
 /**
  * SAN-896 · CK-V2-008 — Refresh post-cutover v2 evidence (localhost).
- * Evidence → docs/tasks/testing/evidence/SAN-896/screenshots/
+ * Evidence → test-results/mde-evidence/SAN-896/screenshots/
  *
  * Run (dev on :3001 with secrets):
  *   infisical run --silent --env=dev --path=/ -- \
@@ -9,6 +9,7 @@
 import { test, expect } from "@playwright/test";
 import { sendHostChatMessage } from "./helpers/host-chat";
 import path from "node:path";
+import { mkdirSync } from "node:fs";
 import {
   activateEventsChip,
   hideCopilotWebInspector,
@@ -24,7 +25,7 @@ import { getTestSession, hasE2eEnv, injectSession } from "./helpers/auth";
 
 const EVIDENCE_DIR = path.resolve(
   process.cwd(),
-  "docs/tasks/testing/evidence/SAN-896/screenshots",
+  "test-results/mde-evidence/SAN-896/screenshots",
 );
 const HOST_EMAIL = "ai@socialmediaville.ca";
 const EVENT_CHIP_QUERY = "salsa events this weekend in Medellín";
@@ -45,6 +46,7 @@ test.describe("SAN-896 · CK-V2-008 evidence", () => {
   test.setTimeout(240_000);
 
   test.beforeEach(async ({ page }) => {
+    mkdirSync(EVIDENCE_DIR, { recursive: true });
     await hideCopilotWebInspector(page);
   });
 

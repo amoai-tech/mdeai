@@ -17,7 +17,7 @@ import { hasE2eEnv, loadEnvLocalForE2E, injectSession, getTestSession } from "./
 const EVIDENCE_DATE = "2026-06-16";
 const EVIDENCE_DIR = path.join(
   process.cwd(),
-  "docs/tasks/testing/evidence",
+  "test-results/mde-evidence",
   EVIDENCE_DATE,
 );
 

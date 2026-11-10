@@ -382,7 +382,7 @@ and updated unit expectations whose contracts moved (discovery Ask bar pinning, 
 **Evidence:** nav unit 32/32; full Vitest 4325 passed / 0 failed; `mobile-bottom-nav` 8/8; `MOB-CK-001` 8/8;
 `SCREEN-003` 6/6; `mobile-header` + `maps-layout-mobile` + `browse-map-close-touch` 15/15; `san-1469` 2/2; typecheck,
 lint, build, `check:mastra` and the CopilotKit v2 audits exit 0; 138/138 rendered-geometry checks with before/after
-screenshots in `docs/tasks/evidence/SAN-1606/`. Locally unrunnable: `pr-agent-pinned-loader`, because the pinned
+screenshots in `docs/_archive/legacy-2026-11-10/task-evidence/SAN-1606/`. Locally unrunnable: `pr-agent-pinned-loader`, because the pinned
 container reads the checkout as uid 65534 and this worktree sits under a 750 home directory — CI runs it from
 `/github/workspace`.
 
@@ -412,7 +412,7 @@ project; add `scripts/verify-mobile-nav.mjs` (`npm run verify:mobile-nav -- <url
 No navigation architecture, business gate, schema or API change.
 
 **Evidence:** production build of the tested tree `2630adff53fd5efa2a4acfc3f63d5887abdf0366` → **35/35** checks in
-34s (`docs/tasks/evidence/SAN-1606/deployed/`); the same command against the pre-fix deployed release `bdac360e72`
+34s (`docs/_archive/legacy-2026-11-10/task-evidence/SAN-1606/deployed/`); the same command against the pre-fix deployed release `bdac360e72`
 reports **34/36**, failing exactly on the map control this PR fixes.
 
 **What an independent reviewer would be asked:** does the map control genuinely return after the keyboard closes; is
@@ -584,7 +584,7 @@ The check evidence comes from the exact-head check runs. The review-thread colum
 
 **Post-merge production verification.** The deployed build at the time reported `c347162191` on `/api/version`, equal to `main` and containing **all four** merge commits above (`ab24e576`, `c4c510da`, `582c27fb`, `4b7d250e`). On that build, at 1440px and 390px, `/restaurants`, `/cafes`, `/nightlife`, `/rentals` and `/events` each opened Details beside the map (desktop) or in the bottom Sheet (phone), without changing the URL, closed cleanly, with no horizontal overflow and no page error. Restaurant sequences: A → B repoints the panel, Ask selects the opened record, Escape closes from inside the panel, a pin gives way to an explicit Details click, and releasing a pin closes the panel. Events rendered real tiers (Reina de Antioquia — GA $40,000 · VIP $120,000 · Backstage $400,000 · Frontrow $80,000 COP) and "Price TBD" for the unticketed event.
 
-The full evidence record is `docs/tasks/testing/evidence/2026-11-05/SAN-1638-RESULTS.md`. The screenshots were written to `docs/screenshots/san-1638/`, which is **gitignored** (`.gitignore:106`), so those PNGs are local artifacts, not repository files; the evidence record lists their exact filenames and the SHA they were taken against.
+The full evidence record is `docs/_archive/legacy-2026-11-10/task-testing/evidence/2026-11-05/SAN-1638-RESULTS.md`. The screenshots were written to `docs/screenshots/san-1638/`, which is **gitignored** (`.gitignore:106`), so those PNGs are local artifacts, not repository files; the evidence record lists their exact filenames and the SHA they were taken against.
 
 **Open questions.** No live event currently carries an `imageUrl` or an external ticket URL, so the panel's photo and "Buy tickets" branches are proven only with a controlled API response. Event 404/503 were proven with intercepted responses rather than a live outage, and the signed-in Ask → Answer journey was not executed.
 

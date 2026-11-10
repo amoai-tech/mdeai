@@ -9,7 +9,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 const EVIDENCE = path.resolve(
-  "docs/tasks/testing/evidence/2026-06-11/SAN-869-bookings-idempotency-duplicate-proof.json",
+  "test-results/mde-evidence/2026-06-11/SAN-869-bookings-idempotency-duplicate-proof.json",
 );
 
 async function main() {

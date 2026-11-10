@@ -10,7 +10,7 @@ owner_task: SAN-1443
 # SAN-1443 — WhatsApp channel, sender and provider inventory
 
 Read-only recovery and inventory for the WhatsApp audit. Complements
-[edge-functions.md](../02-architecture/edge-functions.md) (the 2026-09-17 platform-wide snapshot); this file
+[edge-functions.md](../../../02-architecture/edge-functions.md) (the 2026-09-17 platform-wide snapshot); this file
 focuses on the WhatsApp/messaging senders and the containment decision.
 
 **Method:** deployed source recovered with Supabase `get_edge_function`; SHA-256 computed over the

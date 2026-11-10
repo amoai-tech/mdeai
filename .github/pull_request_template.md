@@ -52,7 +52,7 @@ Closes SAN-___ · <SPEC-ID> — <full Linear title>
 ## Test plan & evidence
 - [ ] `npm run floor` green (lint · typecheck · build · test · audit)
 - [ ] Tests added/updated for the change (unit for logic, e2e for a user path)
-- [ ] Evidence: `docs/tasks/testing/evidence/YYYY-MM-DD/<id>-RESULTS.md` (link below)
+- [ ] Evidence: `docs/06-testing/playwright/evidence/YYYY-MM-DD/<id>-RESULTS.md` (link below)
 <!-- Paste the floor result / test counts / evidence path here. State honestly what was NOT run. -->
 <!-- Source proof and implementation proof are different: a URL is not a test, and a passing test does not validate an unchecked assumption. -->
 
