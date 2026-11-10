@@ -55,7 +55,6 @@ export function renderUiEventsFor(ids: readonly string[], toolCallId: string): B
  * path: forward the official guide only (already shipped), run 3x with no tool,
  * and delete this file, the tool and the intent processor in one change.
  *
- * Runner note: the previous CI run hung on a dead runner; the tree is unchanged.
  * Live evidence for that decision: 2026-11-10, signed-in rental QA, three
  * consecutive runs, two grounded cards each (0cdd6677…, 0db74081…).
  */
