@@ -22,5 +22,11 @@
     "prompt": "Create a generic A2UI customer-feedback form with no map, place, geolocation or Google Maps Platform integration.",
     "should_trigger": false,
     "expected_owner": "copilotkit"
+  },
+  {
+    "id": "maps-5",
+    "prompt": "In CopilotKit's standardUI catalog, can we enable Button, ChoicePicker and an editable Form with registered handlers? This does not change the existing Google Maps renderer or routing.",
+    "should_trigger": false,
+    "expected_owner": "copilotkit"
   }
 ]
