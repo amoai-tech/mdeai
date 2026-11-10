@@ -108,7 +108,7 @@ export async function sendConciergeUserMessage(
     // paths already have their own result/pin policy (including empty results).
     // The agent calls onAccepted only after an authenticated message was
     // actually appended, so guests and failed runtime starts keep rental cards.
-    const coworkingShift = classification.reason === "explicit coworking discovery topic change" &&
+    const coworkingShift = classification.explicitTopicShift === "coworking" &&
       classification.intent === "general_concierge" && handlers.inRentalSearch;
     if (coworkingShift) {
       setConciergePendingSend(true);

@@ -292,6 +292,9 @@ describe("SAN-874 latest-topic context", () => {
     expect(coagent.state.lastIntent).toBe("general_concierge");
     expect(coagent.state.lastRentalQuery).toBeUndefined();
     expect(mapState.mergePinsByCategory).toHaveBeenCalledWith("rental", []);
+    // SAN-1422: switching away from finished rental results retires ONLY the
+    // rental category. An empty grounded search never clears unrelated pins.
+    expect(mapState.mergePinsByCategory).toHaveBeenCalledTimes(1);
     expect(handlers.inRentalSearch).toBe(false);
     const rental = vi.fn(async () => true);
     await act(async () => {

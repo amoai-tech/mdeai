@@ -125,6 +125,24 @@ describe("SAN-874 coworking switches the conversation without hijacking rentals"
     expect(result.routingTarget).toBe("agent");
     expect(result.topicShift).toBe(true);
   });
+  it("exposes a typed coworking topic-switch signal independent of the diagnostic reason", async () => {
+    const result = await resolveRouterClassification("What coworking spaces are in Laureles?", {
+      lastIntent: "rental_search", inRentalSearch: true,
+    });
+    expect(result.explicitTopicShift).toBe("coworking");
+  });
+
+  it.each([
+    "Book a coworking space for my team",
+    "Reserve a coworking office for our group",
+  ])("does not force a booking request %s into coworking discovery", async (question) => {
+    const result = await resolveRouterClassification(question, {
+      lastIntent: "rental_search", inRentalSearch: true,
+    });
+    expect(result.explicitTopicShift).toBeUndefined();
+    expect(result.reason).not.toBe("explicit coworking discovery topic change");
+  });
+
   it("keeps apartments near coworking spaces on the rental search", async () => {
     const result = await resolveRouterClassification("Find apartments near coworking spaces in Laureles", {
       lastIntent: "rental_search", inRentalSearch: true,

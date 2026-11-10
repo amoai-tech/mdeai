@@ -56,6 +56,8 @@ export type FlashRouteResult = z.infer<typeof flashRouteResultSchema>;
 
 export type FlashRouteClassification = RouterIntentClassification & {
   topicShift?: boolean;
+  /** Deterministic discovery switch; free-text reason is for diagnostics only. */
+  explicitTopicShift?: "coworking";
   flashSlots?: FlashRouteSlots;
   source?: "regex" | "flash" | "merged";
 };
@@ -211,10 +213,21 @@ export async function resolveRouterClassification(
   // Agent working memory may not update lastIntent during that answer. Mark
   // the switch at dispatch instead, without a separate intent engine.
   // "Apartments near coworking" is still a rental request.
+  // Booking/hiring a coworking space is an action request, not discovery.
+  // Leave it to the existing router/Flash classifier instead of forcing the
+  // discovery-only state reset. Do not infer a reservation or booking success.
+  const coworkingBookingRequest =
+    /\b(?:book(?:ing)?|reserv(?:e|ation)|rent(?:ing)?|hir(?:e|ing))\b/i.test(text);
   if (regex.routingTarget === "agent" &&
       /\b(?:co[-\s]?working|coworking|shared\s+(?:workspaces?|offices?))\b/i.test(text) &&
-      !looksLikeRentalSearch(text)) {
-    return { ...regex, reason: "explicit coworking discovery topic change", topicShift: true, source: "regex" };
+      !looksLikeRentalSearch(text) && !coworkingBookingRequest) {
+    return {
+      ...regex,
+      reason: "explicit coworking discovery topic change",
+      explicitTopicShift: "coworking",
+      topicShift: true,
+      source: "regex",
+    };
   }
 
   // "Anywhere is fine" says nothing about rentals on its own, so the regex hands it to the

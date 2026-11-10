@@ -168,6 +168,22 @@ describe("SAN-867 · VEB-MVP-001 — Router hijack fix — sendConciergeUserMess
     expect(handlers.handleRentalMessage).not.toHaveBeenCalled();
   });
 
+  it("does not preempt a coworking booking request with the discovery-only topic switch", async () => {
+    const handlers = {
+      ...makeHandlers(), inRentalSearch: true, onTopicShift: vi.fn(),
+      onAgentSend: vi.fn(async (_text: string, _id?: string,
+        onAccepted?: () => void, onCompleted?: () => void) => {
+        onAccepted?.();
+        onCompleted?.();
+        return true;
+      }),
+    };
+    await sendConciergeUserMessage("Book a coworking space for my team", handlers);
+    expect(handlers.onTopicShift).not.toHaveBeenCalled();
+    expect(handlers.handleRentalMessage).not.toHaveBeenCalled();
+    expect(handlers.onAgentSend).toHaveBeenCalledOnce();
+  });
+
   it("SAN-874 rolls back topic intent when a coworking stream fails", async () => {
     const handlers = {
       ...makeHandlers(), inRentalSearch: true,
