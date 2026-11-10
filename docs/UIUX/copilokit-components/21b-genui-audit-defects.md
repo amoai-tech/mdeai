@@ -26,6 +26,8 @@
 | D8 | Low | `generativeUI={{…}}` object rebuilt each render | inline literal | hoist to module const (open) |
 | D9 | Low | `standardUI` pulls a Lit-based dependency | upstream implementation | check bundle delta before merge (open) |
 
+**Known prompt-label limitation (not changed by docs PR #841):** `readRentalResultHints` currently labels these browser-supplied IDs as `Current authorized rental result IDs` in its model-facing text, even though the source is untrusted. That label is **not an authorization check**. The card’s separate revalidation is the actual boundary. Align this wording in the application owner PR (#839 or a focused follow-up), not by copying browser values into trusted instructions.
+
 ## 2b. PR #839 implementation review round 1 — findings and resolution
 
 The resolution descriptions below refer to changes made in **companion implementation PR #839**, not to code on this documentation-only PR #841 branch. On #841’s base `main`, the server guide still requires the `chat` target and exactly one custom card. This documentation PR does not modify that guide.
