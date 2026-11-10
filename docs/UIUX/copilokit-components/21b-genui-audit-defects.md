@@ -21,12 +21,14 @@
 | D3 | Medium | SAN-1201 body says "In Progress / not authorized" | stale header | rewrite with verified bridge + HITL limitation |
 | D4 | Medium | SAN-1645 title claims A2UI | title written before design settled | correct title/scope; keep Done |
 | D5 | Medium | SAN-1637 has no acceptance criteria | fixed-format tracker | add measurable DoD |
-| D6 | High (avoided) | Browser context could become prompt text | trusting client input | presence flag only; never inject `value` |
+| D6 | High (bounded trust boundary) | Untrusted browser context could be mistaken for instructions or authorization | The Generative UI guide entry is client-controlled; separate client ID hints also reach the agent | `hasGenerativeUIGuide` reads **only the guide entry’s presence**, never its value. `readRentalResultHints` / `readEventResultHints` parse bounded browser-supplied ID lists (first 20 context entries, at most 5 typed IDs, max 4000-character JSON), which `conciergeAgent` includes as *untrusted hints* in server-composed instructions; they do **not** authorize access. Each RentalCard/EventCard separately revalidates the selected ID against retained authorized tool results before displaying facts. Do not claim that all browser context is presence-only. |
 | D7 | High | Standard components accept model-authored values | ungrounded family by design | guide forbids invention; grounded cards first; page allowlists |
 | D8 | Low | `generativeUI={{…}}` object rebuilt each render | inline literal | hoist to module const (open) |
 | D9 | Low | `standardUI` pulls a Lit-based dependency | upstream implementation | check bundle delta before merge (open) |
 
-## 2b. Review round 1 — findings and resolution
+## 2b. PR #839 implementation review round 1 — findings and resolution
+
+The resolution descriptions below refer to changes made in **companion implementation PR #839**, not to code on this documentation-only PR #841 branch. On #841’s base `main`, the server guide still requires the `chat` target and exactly one custom card. This documentation PR does not modify that guide.
 
 | Finding | Sev | Verdict | Resolution |
 | --- | --- | --- | --- |
@@ -72,7 +74,7 @@ Open checks: 1440/768/390 layouts, keyboard-open, dark mode for standard compone
 
 ## 6. Supabase / pgvector
 
-No table, column, RPC, policy, index or migration added. `searchRentals` runs with the caller's RLS client; cards re-resolve from those results. Free-text rental search already uses hybrid retrieval (`searchRentalsIntelligent`, `hybridUsed`/`embedStatus` in `search-rentals.ts`), so this feature needs no new embedding, index or `match_*` function. A read-only DB probe was attempted and abandoned when the pooler hung; no query ran, nothing changed.
+No table, column, RPC, policy, index or migration added. `searchRentals` uses the **caller-supplied, user-scoped RLS client when present**, otherwise a **shared anonymous client** for canonical rental search (`src/mastra/tools/search-rentals.ts`). In eligible non-development searches it may also include separately retrieved, explicitly allowlisted **public external advertisements** from `getOptionalExternalRentals` → `searchPublicExternalRentals` (`src/lib/rentals/mixed-rental-results.ts`, `public-external-discovery.ts`). That bounded, server-only path uses a service-role client to read specific slugs/landlord/metadata, then filters and projects public ad fields; it is **not a service-role path for user-scoped rentals or private broker inventory**. Public-source results remain source-attributed, unverified and non-bookable; the optional path is disabled in development mode. Cards separately re-resolve IDs against the authorized results retained on the current thread. Free-text rental search already uses hybrid retrieval (`searchRentalsIntelligent`, `hybridUsed`/`embedStatus`), so no new embedding, index or `match_*` function is needed. A read-only DB probe was attempted and abandoned when the pooler hung; no query ran, nothing changed.
 
 ## 7. Upstream references
 
