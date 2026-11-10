@@ -25,6 +25,20 @@ vi.mock("@/components/chat/rental-fast-path-context", async (importOriginal) => 
     },
   };
 });
+// This focused hook test mounts only the rental provider. Reuse its real
+// clear method rather than mounting unrelated event and map providers here.
+vi.mock("@/hooks/use-clear-other-fast-path-results", async () => {
+  const rental = await vi.importActual<typeof import("@/components/chat/rental-fast-path-context")>(
+    "@/components/chat/rental-fast-path-context");
+  return {
+    useClearOtherFastPathResults: () => {
+      const context = rental.useOptionalRentalFastPath();
+      return (keep: string | null) => {
+        if (keep === null) context?.clearToolResults();
+      };
+    },
+  };
+});
 vi.mock("@/components/chat/rental-ui-context", () => ({
   useRentalUi: () => ({ openVenueDetail: rentalDetails.openVenueDetail, closeRentalDetails: rentalDetails.closeRentalDetails }),
 }));
@@ -45,7 +59,12 @@ vi.mock("@/lib/hooks/use-concierge-chat", () => ({
   useConciergeChat: () => ({ appendMessage: chat.appendMessage, isRuntimeUnavailable: () => chat.runtimeUnavailable, waitForRuntimeReady: chat.waitForRuntimeReady }),
 }));
 vi.mock("@/components/chat/concierge-coagent-context", () => ({
-  useConciergeCoAgent: () => ({ agent: undefined, state: coagent.state, setState: () => {} }),
+  useConciergeCoAgent: () => ({
+    agent: undefined, state: coagent.state,
+    setState: (patch: Record<string, unknown> | ((prev: Record<string, unknown>) => Record<string, unknown>)) => {
+      coagent.state = typeof patch === "function" ? patch(coagent.state) : { ...coagent.state, ...patch };
+    },
+  }),
 }));
 // The fast-path searches are not under test here.
 const noMatch = vi.hoisted(() => ({ handleUserMessage: async () => false }));
@@ -140,6 +159,34 @@ describe("guest context from visible rental search", () => {
     expect(handlers.inRentalSearch).toBe(true);
     await act(async () => { restoreRentalSearch(null); });
     expect(handlers.inRentalSearch).toBe(false);
+  });
+});
+
+describe("SAN-874 latest-topic context", () => {
+  it("clears stale rental criteria after coworking even if Mastra has not updated lastIntent", async () => {
+    await act(async () => {
+      restoreRentalSearch({ userText: "Apartments under COP 3M", params: {
+        maxPriceMonthly: 3_000_000, budgetCurrency: "COP", stayType: "monthly",
+      } });
+    });
+    expect(handlers.inRentalSearch).toBe(true);
+    const agent = vi.fn(async () => true);
+    await act(async () => {
+      await sendConciergeUserMessage("What coworking spaces are in Laureles?", {
+        ...handlers, onAgentSend: agent,
+      });
+    });
+    expect(agent).toHaveBeenCalledOnce();
+    expect(coagent.state.lastIntent).toBe("general_concierge");
+    expect(coagent.state.lastRentalQuery).toBeUndefined();
+    expect(handlers.inRentalSearch).toBe(false);
+    const rental = vi.fn(async () => true);
+    await act(async () => {
+      await sendConciergeUserMessage("Only under COP 800k per month", {
+        ...handlers, handleRentalMessage: rental, onAgentSend: agent,
+      });
+    });
+    expect(rental).not.toHaveBeenCalled();
   });
 });
 
