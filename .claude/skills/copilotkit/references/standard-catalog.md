@@ -1,6 +1,6 @@
 # Standard catalog — use CopilotKit's built-ins without overexposing MDE
 
-Read for `standardUI`, built-in layout/inputs/tables/charts/maps, extending a catalog, replacing built-ins, or deciding whether SAN-1630 should use all standard components. For the actual MDE implementation sequence, also read `native-generative-ui.md`.
+Read for **built-in** `standardUI` layouts, inputs, tables, charts, maps, selective omission and renderer overrides. For a **custom MDE component**, load `component-catalogs.md` directly; for an AI-controlled **page target**, load `surfaces.md` directly. Use `native-generative-ui.md` only if tracing the provider/transport bridge. The parent `SKILL.md` is the single routing owner.
 
 ## 1. Pick the smallest needed vocabulary
 
@@ -14,7 +14,7 @@ The official [CopilotKit Standard Catalog](https://docs.copilotkit.ai/generative
 | “Show a non-sensitive summary table/chart” | Consider a **small allowlisted subset** of `Table`, `Chart`, `Text`, `Card` | Useful when underlying data is already verified |
 | “Show my apartments on a map” | **Existing MDE map and pin sync**, not generic standard `Map` | Avoids second map, dependency and unverified coordinates |
 
-**Default for SAN-1630:** create a **small custom domain catalog**, not `standardUI` with all 69 exposed. The entire standard catalog is an **opt-in** for a separately reviewed general-purpose UI use case. Passing `extends: [standardUI]` makes its components available too; it is **not** a narrowing/filtering mechanism.
+**Existing MDE default:** preserve and extend the **small domain `mdeUI` catalog** already present in `src/components/copilot/a2ui/mde-ui-catalog.tsx`. The entire Standard Catalog is an **opt-in** for a demonstrated general-purpose UI need. Passing `extends: [standardUI]` makes all of its built-ins available; it is **not** a narrowing/filtering mechanism.
 
 ## 2. Official usage examples (adapt, never paste into prod blindly)
 
@@ -76,7 +76,7 @@ Choose the smallest vocabulary supported by the **existing route-owner provider 
 - **Map**: the standard `Map` may need `maplibre-gl` and can fall back to a list; MDE already owns a map and pin mapping. Do not install MapLibre or replace the MDE map simply to exercise a built-in component.
 - **Chart**: standard `Chart` uses the built-in chart integration. Accept only validated source-backed metrics, never invented counts or amounts.
 - **Media/HTML/links**: do not allow untrusted URLs, arbitrary HTML execution or external embeds just because the catalog contains media components.
-- **Surfaces**: allowed component names and a native fallback should be constrained per page; `GenerativeUISurface` never becomes a second source of results, filters or pins.
+- **Surface boundary**: when an AI-controlled page target is requested, load `surfaces.md` directly; generated UI must not become a second source of results, filters or pins.
 - **Provider**: use the existing `src/components/copilot/copilot-kit-provider.tsx` and `src/components/chat/chat-provider.tsx` owners; share one stable domain catalog; no nested runtime/provider or hosted Intelligence switch.
 - **Release**: test 390px/keyboard, forged/stale IDs, user-edited controls, unknown component names, failed `render_ui`, old-turn results winning after a new turn, and existing card fallback.
 
@@ -87,8 +87,6 @@ https://docs.copilotkit.ai/generative-ui/components/theming → **ADAPT** the ty
 ## 6. References with destinations and proof
 
 - https://docs.copilotkit.ai/generative-ui/components/standard-catalog — **REFERENCE** the 69 built-ins, `standardUI`, input behaviors and MapLibre requirement; **destination**: catalog design decision; **proof**: count actual exposed components and check version-matched schemas.
-- https://docs.copilotkit.ai/generative-ui/components/catalogs — **ADAPT** `createGenerativeUI`, component schemas and optional `extends`; **destination**: `src/components/copilot/a2ui/mde-ui-catalog.tsx`; **proof**: TypeScript and unsupported-component tests.
-- https://docs.copilotkit.ai/generative-ui/components/surfaces — **ADAPT** bounded page Surface + fallback; **destination**: `src/components/rentals/rental-browse-view.tsx`, `src/components/events/event-browse-view.tsx`; **proof**: A→B→Clear and map/result ownership.
 - https://github.com/CopilotKit/CopilotKit/blob/v1.84.1/packages/react-core/src/v2/generative-ui/index.ts — **REFERENCE** exact pinned exports; **destination**: version-check; **proof**: compare current `package.json` and installed typings.
 - https://github.com/CopilotKit/CopilotKit/blob/v1.84.1/examples/v2/generative-ui-shop/README.md — **MODEL ONLY** bounded catalog/Surface/fallback; do **not** copy TanStack, Prisma or shop payments.
 

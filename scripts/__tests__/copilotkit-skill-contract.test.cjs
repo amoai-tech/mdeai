@@ -80,8 +80,47 @@ test("installed v2 Standard Catalog omit example remains valid", async () => {
   assert.ok(after.includes("Card"), "Card remains available for typed overrides");
 });
 
+test("custom component work loads the focused catalog reference instead of creating a second catalog", () => {
+  const ref = "references/component-catalogs.md";
+  const guide = readFileSync(join(base, ref), "utf8");
+  const pack = JSON.parse(readFileSync(join(base, "evals/evals.json"), "utf8"));
+  assert.match(skill, /`references\/component-catalogs\.md`/);
+  assert.match(guide, /https:\/\/docs\.copilotkit\.ai\/generative-ui\/components\/catalogs/);
+  assert.match(guide, /src\/components\/copilot\/a2ui\/mde-ui-catalog\.tsx/);
+  assert.match(guide, /\*\*EXTEND\*\*, never CREATE/);
+  assert.match(guide, /strict, synchronous Zod/);
+  assert.match(pack.evals.find((item) => item.id === 20)?.expected_output ?? "", /references\/component-catalogs\.md/);
+});
+
+test("named page targets load the Surfaces guide and preserve fallback and map ownership", () => {
+  const ref = "references/surfaces.md";
+  const guide = readFileSync(join(base, ref), "utf8");
+  const pack = JSON.parse(readFileSync(join(base, "evals/evals.json"), "utf8"));
+  assert.match(skill, /`references\/surfaces\.md`/);
+  assert.match(guide, /https:\/\/docs\.copilotkit\.ai\/generative-ui\/components\/surfaces/);
+  assert.match(guide, /GenerativeUISurface/);
+  assert.match(guide, /autoScroll/);
+  assert.match(guide, /fallback/);
+  assert.match(guide, /shownResults/);
+  assert.match(guide, /Overlapping requests A/);
+  assert.match(pack.evals.find((item) => item.id === 22)?.expected_output ?? "", /references\/surfaces\.md/);
+});
+
+test("standard built-ins keep their owner and deep catalog or Surface recipes are not duplicated", () => {
+  const guide = readFileSync(join(base, "references/standard-catalog.md"), "utf8");
+  const native = readFileSync(join(base, "references/native-generative-ui.md"), "utf8");
+  const pack = JSON.parse(readFileSync(join(base, "evals/evals.json"), "utf8"));
+  assert.match(skill, /`references\/standard-catalog\.md`/);
+  assert.match(guide, /standardUI\.omit/);
+  assert.match(guide, /overrides/);
+  assert.match(pack.evals.find((item) => item.id === 21)?.expected_output ?? "", /references\/standard-catalog\.md/);
+  assert.doesNotMatch(native, /### 4\.1 Typed components, slots and existing data/);
+  assert.doesNotMatch(native, /### 4\.2 Named page Surfaces and fallback/);
+  assert.doesNotMatch(native, /\*\*CREATE\*\* `src\/components\/copilot\/a2ui\/mde-ui-catalog\.tsx`/);
+});
+
 test("mixed A2UI route is consistent with model eval 11", () => {
-  assert.match(skill, /5\. For native React `render_ui`[\s\S]*read `references\/native-generative-ui\.md`\.[\s\S]*also read `references\/a2ui-protocol\.md`/);
+  assert.match(skill, /5\. For native React `render_ui`[\s\S]*read `references\/native-generative-ui\.md`[\s\S]*also read `references\/a2ui-protocol\.md`/);
   const pack = JSON.parse(readFileSync(join(base, "evals/evals.json"), "utf8"));
   const mixed = pack.evals.find((entry) => entry.id === 11);
   assert.ok(mixed?.should_trigger, "eval 11 must exercise both A2UI paths");

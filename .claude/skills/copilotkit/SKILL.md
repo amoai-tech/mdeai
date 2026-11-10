@@ -16,7 +16,7 @@ metadata:
 2. Read the pinned official CopilotKit core skill in `references/official/copilotkit/SKILL.md`.
 3. For wiring/debugging, also read `references/official/copilotkit-cli/SKILL.md`. MDE is self-hosted OSS: start with `verify --expect-runtime oss --agent <id>`; add `--round-trip` only for an explicitly authorized live QA agent check, never merely to satisfy a hosted-Intelligence check.
 4. For Channels or Intelligence work, load only the matching vendored official reference named under **Official feature routing** below.
-5. For native React `render_ui`, typed catalogs, or page Surfaces, read `references/native-generative-ui.md`. For protocol A2UI operations or fixed/dynamic schemas, also read `references/a2ui-protocol.md`; never assume the two integration paths share setup, and load both when a single task mentions both.
+5. For native React `render_ui`, typed catalogs, or page Surfaces, read `references/native-generative-ui.md` **only for integration/bridge proof**; for a custom catalog entry load `references/component-catalogs.md` directly, and for a named page target load `references/surfaces.md` directly. For protocol A2UI operations or fixed/dynamic schemas, also read `references/a2ui-protocol.md`; never assume the two integration paths share setup, and load both when a single task mentions both.
 6. For `standardUI`, built-in charts/maps/forms, or extending the 69-component standard catalog, read `references/standard-catalog.md` and expose only the approved vocabulary.
 7. Use current official CopilotKit/AG-UI docs and version-matched source when the pinned skill directs you there.
 8. Apply the MDE-specific invariants below.
@@ -149,7 +149,7 @@ is a false positive.
 
 **Implementation truth (recheck checkout):** MDE already has `src/components/copilot/a2ui/mde-ui-catalog.tsx` and wires `generativeUI={{ ui: mdeUI, agentIds: ["conciergeAgent"] }}` into the discovery/chat route-owner providers. The catalog currently registers grounded rental/event cards. Preserve the existing `useRenderTool` fallback. Source presence and TypeScript success are **not** proof of a live model → Mastra → AG-UI → browser `render_ui` journey. Verify that separately.
 
-**Load the implementation map:** `references/native-generative-ui.md` (full version/route checklist, catalog, Surfaces, existing UI, actions and tests). Also read `references/a2ui-protocol.md` for legacy/fixed/dynamic protocol A2UI, and `references/standard-catalog.md` for the approved component vocabulary. Do not mix native and legacy middleware or add a second agent, renderer, provider, search, or checkout system.
+**Load only the relevant guide:** `references/component-catalogs.md` (custom components/strict props and ID grounding), `references/surfaces.md` (bounded page targets and fallback), `references/standard-catalog.md` (selective built-ins), `references/native-generative-ui.md` (provider/Mastra/AG-UI integration), or `references/a2ui-protocol.md` (separate protocol). Do not mix native and legacy middleware or add a second agent, renderer, provider, search, or checkout system.
 
 **Required order:**
 1. Check installed versions, existing same-origin runtime, both route-owner providers, existing `mdeUI`, and auth/thread contracts. Confirm the **actual** run advertises `render_ui`; never test a catalog-free run and blame Mastra. Only use a temporary inert QA component inside the existing catalog if that helps isolate a failure. Trace the tool/guide through `src/mastra/copilotkit/logging-mastra-agent.ts`, `@ag-ui/mastra`, AG-UI events and a real browser render. Fix only the evidenced boundary.
@@ -223,7 +223,7 @@ Official Mastra-specific CopilotKit guidance:
 
 1. Classify the issue: wiring/runtime, React/provider, AG-UI/tool rendering, shared state, CLI verification, or Mastra bridge.
 2. Use the official core/CLI skill as the default procedure and lookup guide.
-3. Load only the matching MDE references: `runtime-and-react.md` (provider/route), `ag-ui-and-tools.md` + `mastra-bridge.md` (missing cards/tool results/streaming), `native-generative-ui.md` (native Components/Surfaces), `a2ui-protocol.md` (protocol operations; load **both** for mixed A2UI tasks), or `standard-catalog.md` (built-ins and catalog cost). Follow the failure-isolation table and Inspector evidence before changing agent/search code.
+3. Load only the matching MDE references: `runtime-and-react.md` (provider/route), `ag-ui-and-tools.md` + `mastra-bridge.md` (missing cards/tool results/streaming), `component-catalogs.md` (custom components), `surfaces.md` (page targets), `native-generative-ui.md` (bridge proof), `a2ui-protocol.md` (protocol operations; load **both** paths for mixed tasks), or `standard-catalog.md` (built-ins and catalog cost). Follow Inspector evidence before changing agent/search code.
 4. Reproduce before editing when debugging.
 5. Keep the smallest safe contract change and hand Mastra-internal changes to `mastra`.
 6. Prove the affected contract with targeted tests plus browser/stream evidence when user-visible behavior changed.
@@ -247,7 +247,9 @@ For changes to this skill, run `npm run check:skills` and `node --test scripts/_
 - `references/runtime-and-react.md`
 - `references/ag-ui-and-tools.md`
 - `references/mastra-bridge.md`
-- `references/native-generative-ui.md` — native React `render_ui` catalog / Surfaces and proof checklist
+- `references/component-catalogs.md` — extend existing typed MDE catalog, slots, IDs and negative tests
+- `references/surfaces.md` — bounded AI-controlled page targets, fallback, update/clear, mobile and race tests
+- `references/native-generative-ui.md` — existing provider, Mastra and AG-UI integration proof checklist
 - `references/a2ui-protocol.md` — A2UI protocol v0.8/v0.9/v1.0, fixed/dynamic schema, alternative integration boundary
 - `references/standard-catalog.md` — 69 built-ins, extends versus allowlist, existing MDE map/payment guardrails
 - https://docs.copilotkit.ai/
