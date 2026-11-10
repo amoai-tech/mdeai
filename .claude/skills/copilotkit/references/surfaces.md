@@ -12,7 +12,8 @@
 
 - https://docs.copilotkit.ai/generative-ui/components/surfaces → **ADAPT** the existing React `<GenerativeUISurface />` with a stable `id`, meaningful `description`, `ui={mdeUI}`, minimal allowed `components` and a **real native** `fallback`. **Destination:** the owning existing browse page; **proof:** agent sees only mounted targets and can render only advertised component names.
 - Use `autoScroll={false}` where generated output would unexpectedly move the map/composer; otherwise retain the default. On item-specific targets, stable item identity avoids stale updates when selection changes.
-- Fallback must remain usable **before generation and after delete/clear**. **Installed-version proof:** CopilotKit React **1.84.1** declares `GenerativeUIBaseConfig.errorBoundary?: GenerativeUIErrorBoundaryConfig` in `node_modules/@copilotkit/react-core/dist/runtime-context-*.d.mts`, with `onError(info)` and optional `fallback({ error, retry, surfaceId, componentId })`. This is the existing provider's `generativeUI.errorBoundary` configuration, **not** a new Surface prop. Recheck the installed type when upgrading; configure it only when error reporting/custom retry is needed. Never add another provider or error subsystem.
+- Fallback must remain usable **before generation and after all applicable generated surfaces are cleared**. **Lifecycle caveat:** the official Surfaces guide says that deleting the newest surface may reveal an **older live surface of the same target and thread** instead of immediately showing the native fallback. The native fallback returns when **no applicable generated surface remains**. Before promising a Clear action restores native UI, verify whether MDE clears the entire current-target/thread history or only the latest surface; never clear another user's thread. Re-test creation A → replacement B → delete B (A may reappear) → clear remaining A → native fallback, plus thread switch/refresh.
+- **Installed-version proof:** CopilotKit React **1.84.1** declares `GenerativeUIBaseConfig.errorBoundary?: GenerativeUIErrorBoundaryConfig` in `node_modules/@copilotkit/react-core/dist/runtime-context-*.d.mts`, with `onError(info)` and optional `fallback({ error, retry, surfaceId, componentId })`. This is the existing provider's `generativeUI.errorBoundary` configuration, **not** a new Surface prop. Recheck the installed type when upgrading; configure it only when error reporting/custom retry is needed. Never add another provider or error subsystem.
 - Only include a component name after checking it exists in the selected catalog. Example: the existing `RentalCard` can be allowlisted; a new `RentalComparison` must be registered first, then a target may permit it. **Do not paste fictitious unregistered components into production.**
 
 ## 3. MDE example — comparisons beside the map
@@ -22,7 +23,7 @@
 1. Locate the existing results/map/detail state; keep it authoritative. Load `component-catalogs.md` only if the current comparison component is not yet accessible through the catalog.
 2. Mount one comparison target only when that panel is present. Give it a stable purpose and allow only the registered MDE components needed for comparison.
 3. Default to the page's current comparison/result presentation. An accepted agent update may replace this area but must **not** silently mutate search filters, the result set, coordinates, booking authority or active Details.
-4. When the user clears comparison or changes thread, restore the native panel and remove stale generated content. If run A resolves after run B, B/current page state wins.
+4. On Clear, remove generated content for the current authorized target/thread until the native panel actually returns; deleting only the newest surface might reveal an older live one. A thread switch must not leak an older thread's generated UI. If run A resolves after run B, B/current page state wins.
 
 ## 4. Verification matrix
 
@@ -31,7 +32,8 @@
 | No agent operation | Native fallback visible and usable |
 | Valid `render_ui` to a mounted target | Correct allowed component and current authorized data |
 | Invalid component, target, schema or record ID | Rejected/safe fallback; no fabricated data or map pins |
-| Update then delete/clear | Existing native UI returns |
+| Generate A → update B → delete B | An older live surface A may reappear for the same target/thread; do not assume fallback |
+| Delete/clear all applicable generated surfaces | Existing native fallback returns (not merely the latest delete) |
 | Overlapping requests A → B | No stale A result replaces B |
 | Refresh / thread switch | Correct thread and current page context, no orphan UI |
 | 390px / keyboard / focus | No body overflow, inaccessible controls or unexpected scrolling |

@@ -46,6 +46,8 @@ For MDE's **existing small catalog**, extend `src/components/copilot/a2ui/mde-ui
 import { createGenerativeUI, standardUI } from "@copilotkit/react-core/v2/generative-ui";
 
 // Illustration only; apply to MDE only after checking needed component names.
+// CopilotKit 1.84.1: this removes 3 of 69 built-ins; 66 remain.
+// It is an example of exclusion, not an allowlist for only Table/Card.
 const narrowedStandard = standardUI.omit(["Map", "Video", "HtmlView"]);
 const ui = createGenerativeUI({
   id: "example/limited@1",
@@ -55,7 +57,7 @@ const ui = createGenerativeUI({
 });
 ```
 
-- `omit` *removes named built-ins*; it does not produce an automatic domain allowlist. Check the remaining advertised names in Inspector, not just the removed names. **Automated compatibility check:** `node --test scripts/__tests__/copilotkit-skill-contract.test.cjs` verifies the installed v2 export and example component names; recheck the catalog against the actual pinned SDK after an upgrade.
+- **Measured on installed 1.84.1:** removing `Map`, `Video`, and `HtmlView` leaves **66 of 69** built-ins available. The three-name `omit` example is **not an allowlist**; it remains too broad for a single MDE table or card. Prefer adding a typed domain component to existing `mdeUI` instead of expanding the entire catalog. Check remaining advertised names in Inspector, not just the removed names. **Automated compatibility check:** `node --test scripts/__tests__/copilotkit-skill-contract.test.cjs` verifies the installed v2 export and example component names; recheck the catalog against the actual pinned SDK after an upgrade.
 - `overrides` only replaces the React renderer of an included component, using that component's exact existing props; typecheck before using.
 - Declare the catalog once at module scope; avoid `extends: [standardUI]` when unused components increase the prompt surface.
 - https://docs.copilotkit.ai/generative-ui/components/standard-catalog → **ADAPT** selective omission and override semantics; https://github.com/CopilotKit/CopilotKit/blob/v1.84.1/packages/react-core/src/v2/generative-ui/catalog.ts → **REFERENCE ONLY** installed-version source; destination: existing MDE catalog *only if needed*; verify TypeScript, Inspector catalog and unsupported-name rejection.
