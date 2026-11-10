@@ -606,6 +606,20 @@ describe("full chat Details requests use the currently shown rental IDs", () => 
     expect(shown.some((m) => m.content.includes("Opened details for Laureles apartment B"))).toBe(true);
   });
 
+  it.each([
+    "Show me the details of the second restaurant",
+    "Show me the details of the second event",
+    "Show me the details of the second hotel",
+  ])("leaves other categories for their own handlers even with rental cards visible: %s", async (text) => {
+    rentalDetails.toolResult = { results: [
+      rental("first-listing", "Laureles apartment A"),
+      rental("second-listing", "Laureles apartment B"),
+    ] };
+    act(() => root.render(<EventLocalChatProvider><Harness /></EventLocalChatProvider>));
+    expect(await handlers.handleRentalDetailsMessage?.(text)).toBe(false);
+    expect(rentalDetails.openVenueDetail).not.toHaveBeenCalled();
+  });
+
   it("refuses an out-of-range position without opening a different apartment", async () => {
     rentalDetails.toolResult = { results: [rental("first-listing", "Laureles apartment A")] };
     act(() => root.render(<EventLocalChatProvider><Harness /></EventLocalChatProvider>));

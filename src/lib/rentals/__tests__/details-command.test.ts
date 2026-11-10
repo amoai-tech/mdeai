@@ -16,6 +16,15 @@ describe("parseDetailsCommand", () => {
     expect(parseDetailsCommand(text)).toEqual({ index });
   });
 
+  it.each([
+    "Show me the details of the second restaurant",
+    "Show me the details of the second event",
+    "Open details for the second café",
+    "Show details for the third hotel",
+  ])("does not redirect a different category to rental Details: %s", (text) => {
+    expect(parseDetailsCommand(text)).toBeNull();
+  });
+
   it("leaves a named apartment or a new search to the agent", () => {
     expect(parseDetailsCommand("Show me the details for Calle 10 #42-15.")).toBeNull();
     expect(parseDetailsCommand("Show me details about furnished apartments.")).toBeNull();
