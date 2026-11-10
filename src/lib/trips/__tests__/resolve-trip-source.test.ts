@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("server-only", () => ({}));
 
 import { resolveTripSource } from "../resolve-trip-source";
 
