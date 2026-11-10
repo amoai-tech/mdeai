@@ -1,6 +1,7 @@
 # Google Maps reference index
 
-Original index reviewed: 2026-09-22; Agentic UI / A2UI additions reviewed: 2026-11-10
+Last reviewed: 2026-09-22
+Agentic UI / A2UI additions reviewed: 2026-11-10
 Freshness: volatile — AI/grounding availability, pricing, quotas, regional support, product status, and API behavior must be revalidated from current primary sources.
 
 Use this index to choose the smallest authoritative source for a Maps task. Score = MDE reference priority (10 = primary/current implementation authority; lower scores = discovery/community only). Volatile facts such as pricing, quotas, preview/GA status, regional coverage, and limits must be rechecked at use time.
