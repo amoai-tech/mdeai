@@ -19,6 +19,7 @@ import {
   type RentalAskDetailsOutcome,
 } from "@/components/rentals/rental-ask-composer";
 import { LeadConfirmationBanner } from "@/components/chat/lead-confirmation-banner";
+import { RentalRecommendationsSurface } from "@/components/copilot/a2ui/rental-recommendations-surface";
 import { RentalUiProvider, useRentalUi } from "@/components/chat/rental-ui-context";
 import { useOptionalConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
 import { RentalDetailsFrontendTool } from "@/components/rentals/rental-details-tool";
@@ -251,6 +252,9 @@ function RentalBrowseViewInner({
         }
       >
         <section className="mt-4" aria-label="Rental listings">
+          {/* SAN-1656 — the named AI recommendations panel. It renders nothing
+              until Ask MDE targets it, so native results/map/Details are unchanged. */}
+          <RentalRecommendationsSurface />
           {/* A saved viewing request must be visible where it was made, not only in the chat. */}
           <LeadConfirmationBanner />
           {error ? (

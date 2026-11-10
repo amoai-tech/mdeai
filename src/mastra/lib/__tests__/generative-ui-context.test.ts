@@ -115,4 +115,22 @@ describe("A2UI system instructions", () => {
     }));
     expect(hasGenerativeUIGuide({ context: entries })).toBe(false);
   });
+
+  it("teaches the named page target without hard-coding it as always available", () => {
+    // SAN-1656: the target list lives on the render_ui tool schema (built from
+    // mounted surfaces). The static guide must point at that list rather than
+    // telling the model a panel exists on every page.
+    expect(MDE_A2UI_GUIDE).toContain('"rental-recommendations"');
+    expect(MDE_A2UI_GUIDE).toContain("target list on the render_ui tool");
+    expect(MDE_A2UI_GUIDE).toContain("only accepts RentalCard plus layout components");
+    expect(MDE_A2UI_GUIDE).not.toContain('Call render_ui with target "chat" and exactly one');
+  });
+
+  it("tells the model the catalog also carries the Standard Catalog", () => {
+    // SAN-1654: layout/table/form answers come from standardUI, but grounded
+    // cards stay the first choice for real apartments and events.
+    expect(MDE_A2UI_GUIDE).toContain("official CopilotKit Standard Catalog");
+    expect(MDE_A2UI_GUIDE).toContain("Always prefer RentalCard/EventCard");
+    expect(MDE_A2UI_GUIDE).toContain("Do not render the same apartments in both");
+  });
 });

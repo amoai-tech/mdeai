@@ -12,6 +12,10 @@ import {
   rentalDetailHref,
   selectRentalMessages,
 } from "../mde-ui-catalog";
+import {
+  RENTAL_RECOMMENDATIONS_COMPONENTS,
+  RENTAL_RECOMMENDATIONS_SURFACE_ID,
+} from "../rental-recommendations-surface";
 
 const laureles = {
   results: [
@@ -25,9 +29,55 @@ const poblado = {
 };
 
 describe("MDE A2UI catalog", () => {
-  it("exports a small, versioned catalog with RentalCard and EventCard", () => {
+  it("keeps a small, versioned grounded core with RentalCard and EventCard", () => {
     expect(mdeUI.id).toBe("mde/discovery@1");
-    expect([...mdeUI.components.keys()]).toEqual(["RentalCard", "EventCard"]);
+    expect(mdeUI.components.has("RentalCard")).toBe(true);
+    expect(mdeUI.components.has("EventCard")).toBe(true);
+  });
+
+  it("extends the official Standard Catalog for layout and presentation", () => {
+    // SAN-1654: a real answer often needs a table or a short form, not one card.
+    for (const name of [
+      "Card",
+      "Column",
+      "Row",
+      "Title",
+      "Text",
+      "Table",
+      "TableRow",
+      "TableCell",
+      "TextField",
+      "Select",
+      "Form",
+      "Button",
+      "Badge",
+    ]) {
+      expect(mdeUI.components.has(name), `${name} must be renderable`).toBe(true);
+    }
+  });
+
+  it("omits components whose optional library MDE does not install", () => {
+    // Chart → chart.js, Map → maplibre-gl, Icon → lucide. A silent fallback
+    // would draw a table where the model promised a chart.
+    for (const name of ["Chart", "Map", "Icon"]) {
+      expect(mdeUI.components.has(name), `${name} must stay omitted`).toBe(false);
+    }
+    expect(mdeUI.components.has("HtmlView")).toBe(false);
+    expect(mdeUI.components.has("Svg")).toBe(false);
+  });
+
+  it("lets only the Rentals panel's allowlist onto that Surface", () => {
+    // The panel is a place for real apartments, not a second free-form canvas.
+    expect([...RENTAL_RECOMMENDATIONS_COMPONENTS]).toContain("RentalCard");
+    expect([...RENTAL_RECOMMENDATIONS_COMPONENTS]).not.toContain("EventCard");
+    for (const name of RENTAL_RECOMMENDATIONS_COMPONENTS) {
+      expect(mdeUI.components.has(name), `${name} is allowed on the panel but missing from mdeUI`).toBe(true);
+    }
+  });
+
+  it("uses a page target that is not the chat target", () => {
+    expect(RENTAL_RECOMMENDATIONS_SURFACE_ID).toBe("rental-recommendations");
+    expect(RENTAL_RECOMMENDATIONS_SURFACE_ID).not.toBe("chat");
   });
 
   it("keeps an older card usable after a newer search", () => {

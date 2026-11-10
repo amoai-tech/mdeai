@@ -382,7 +382,12 @@
     {
       "file": "src/components/copilot/a2ui/mde-ui-catalog.tsx",
       "classification": "keep",
-      "note": "SAN-1630: one v2 createGenerativeUI catalog with RentalCard and EventCard; each resolves only an authorized ID from the thread result history and mounts no provider or run."
+      "note": "SAN-1630 + SAN-1654: one v2 createGenerativeUI catalog extending the official standardUI with RentalCard and EventCard; each card resolves only an authorized ID from the thread result history and mounts no provider or run."
+    },
+    {
+      "file": "src/components/copilot/a2ui/rental-recommendations-surface.tsx",
+      "classification": "keep",
+      "note": "SAN-1656: one v2 GenerativeUISurface named rental-recommendations, mounted on the Rentals page only; it registers a target plus component allowlist and fetches or stores nothing, so cards keep resolving through the existing catalog."
     },
     {
       "file": "src/components/chat/rental-a2ui-context.tsx",

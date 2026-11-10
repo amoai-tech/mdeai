@@ -7,7 +7,7 @@ import { useGroundedSearchFastPath } from "@/hooks/use-grounded-search-fast-path
 import { useSession } from "@/hooks/use-session";
 import { isStoredRentalUuid } from "@/lib/cafe-search-fast-path";
 import { useAgent, UseAgentUpdate } from "@copilotkit/react-core/v2";
-import { createGenerativeUI } from "@copilotkit/react-core/v2/generative-ui";
+import { createGenerativeUI, standardUI } from "@copilotkit/react-core/v2/generative-ui";
 import { RentalCard as ExistingRentalCard } from "@/components/copilot/rental-card";
 import { EventCard as ExistingEventCard } from "@/components/copilot/event-card";
 import { useOptionalConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
@@ -410,8 +410,61 @@ function MdeEventCard({ eventId }: { eventId: string }) {
   );
 }
 
+/**
+ * SAN-1654 — the official Standard Catalog is the base of MDE's one catalog, so
+ * the agent can lay out a real answer (a comparison table, a short form, a
+ * list) instead of only ever rendering one card.
+ *
+ * Components that need a package MDE does not install are omitted rather than
+ * offered with a silent fallback, because "render a chart" that actually draws a
+ * table is a worse answer than "use a table". `mde-ui-catalog.test.ts` fails if
+ * one of these silently starts existing again.
+ *
+ * Keeping the list small also matters for cost: the provider sends the catalog
+ * and its writing guide with every concierge run, so each omitted component is
+ * prompt tokens on every turn. A page that needs a different subset mounts a
+ * `GenerativeUISurface` with its own `components` allowlist instead of widening
+ * this global catalog.
+ */
+const MDE_OMITTED_STANDARD_COMPONENTS = [
+  // Optional peer libraries MDE does not ship: Chart → chart.js, Map → maplibre-gl,
+  // Icon → lucide. An unmounted provider would show a fallback, not the component.
+  "Chart",
+  "Icon",
+  "Map",
+  // Markup injection: the model would control HTML/SVG rather than data.
+  "HtmlView",
+  "Svg",
+  // Media and typographic ornament with no MDE discovery answer behind it.
+  "AudioPlayer",
+  "Blockquote",
+  "Bold",
+  "Carousel",
+  "CarouselItem",
+  "CarouselMediaItem",
+  "Code",
+  "Favicon",
+  "FlashcardFlip",
+  "Flow",
+  "FlowItem",
+  "Italic",
+  "Math",
+  "Modal",
+  "Popover",
+  "PopoverContent",
+  "PopoverTrigger",
+  "Pressable",
+  "PulseIndicator",
+  "ShimmerText",
+  "Strikethrough",
+  "Tooltip",
+  "Underline",
+  "Video",
+] as const;
+
 export const mdeUI = createGenerativeUI({
   id: "mde/discovery@1",
+  extends: [standardUI.omit(MDE_OMITTED_STANDARD_COMPONENTS)],
   components: {
     RentalCard: {
       component: MdeRentalCard,
