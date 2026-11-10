@@ -116,6 +116,29 @@ describe("POST /api/rentals/search", () => {
     );
   });
 
+  it("rejects a currency-free monthly budget with HTTP 400 before querying", async () => {
+    const res = await POST(post({ maxPriceMonthly: 2_000, stayType: "monthly" }));
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.details.fieldErrors.budgetCurrency).toContain(
+      "budgetCurrency is required when maxPriceMonthly is supplied",
+    );
+    expect(searchRentals).not.toHaveBeenCalled();
+    expect(createServerClient).not.toHaveBeenCalled();
+  });
+
+  it("keeps an explicit USD monthly budget as USD", async () => {
+    searchRentals.mockResolvedValue({ results: [], total: 0, source: "supabase" });
+    const params = buildRentalSearchParams("Show rentals under USD 2000 per month", {});
+    expect(params).toMatchObject({ maxPriceMonthly: 2_000, budgetCurrency: "USD" });
+    const res = await POST(post(params));
+    expect(res.status).toBe(200);
+    expect(searchRentals).toHaveBeenCalledWith(
+      expect.objectContaining({ maxPriceMonthly: 2_000, budgetCurrency: "USD" }),
+      expect.anything(),
+    );
+  });
+
   it("rejects a malformed currency at the HTTP boundary without searching", async () => {
     const res = await POST(post({
       maxPriceMonthly: 3_500_000,

@@ -20,6 +20,7 @@ import {
 } from '../lib/rental-search-unavailable';
 import { unappliedRentalRequests } from '@/lib/rental-display';
 import { exactBedroomsFromQueryText } from '@/lib/rental-query-parser';
+import { MONTHLY_CURRENCY_REQUIRED, monthlyBudgetHasCurrency } from '@/lib/rental-search-body-schema';
 import { writeSearchLog, type EmbedStatus } from '../lib/search-logs';
 import type { EmbedFailureReason } from '../lib/query-embedding';
 
@@ -102,7 +103,7 @@ export type RentalQuery = {
    * so it is never converted or compared across currencies.
    */
   maxPriceMonthly?: number;
-  /** Currency `maxPriceMonthly` is expressed in. @default "COP" */
+  /** Required whenever `maxPriceMonthly` is supplied; never guess the currency. */
   budgetCurrency?: string;
   limit?: number;
   queryText?: string;
@@ -395,9 +396,10 @@ export function monthlyBudgetFromQuery(
   query: RentalQuery,
 ): { amount: number; currency: string } | null {
   if (typeof query.maxPriceMonthly !== 'number') return null;
+  if (!monthlyBudgetHasCurrency(query)) throw new TypeError(MONTHLY_CURRENCY_REQUIRED);
   return {
     amount: query.maxPriceMonthly,
-    currency: monthlyBudgetCurrencySchema.parse(query.budgetCurrency ?? 'COP'),
+    currency: monthlyBudgetCurrencySchema.parse(query.budgetCurrency),
   };
 }
 
@@ -650,6 +652,8 @@ export async function searchRentals(
       (!Number.isFinite(query.maxPriceMonthly) || query.maxPriceMonthly <= 0)) {
     throw new RangeError('Monthly budget must be a finite positive number');
   }
+  // Direct callers bypass both the API schema and Mastra tool input schema.
+  monthlyBudgetFromQuery(query);
   for (const [name, value] of [['minBedrooms', query.minBedrooms], ['maxBedrooms', query.maxBedrooms]] as const) {
     if (value !== undefined && (!Number.isInteger(value) || value < 0)) {
       throw new RangeError(`${name} must be a nonnegative integer`);
@@ -764,12 +768,15 @@ export const searchRentalsTool = createTool({
       ),
     budgetCurrency: monthlyBudgetCurrencySchema
       .optional()
-      .describe('Three-letter budget currency code (e.g. COP). Defaults to COP.'),
+      .describe('Required with maxPriceMonthly: exact three-letter currency code, e.g. COP or USD. Do not guess.'),
     limit: z.number().int().min(1).max(20).default(8),
     queryText: z
       .string()
       .optional()
       .describe('Natural-language rental search e.g. digital nomad rental in Laureles near cafes'),
+  }).refine(monthlyBudgetHasCurrency, {
+    message: MONTHLY_CURRENCY_REQUIRED,
+    path: ['budgetCurrency'],
   }),
   outputSchema: z.object({
     results: z.array(

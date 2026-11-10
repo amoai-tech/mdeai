@@ -6,6 +6,7 @@
  * this repository, so the predicate must never compare across currencies.
  */
 import { describe, expect, it } from "vitest";
+import { rentalSearchBodySchema } from "@/lib/rental-search-body-schema";
 import {
   MONTHLY_BUDGET_NOTE,
   budgetNoteFor,
@@ -55,11 +56,12 @@ describe("rentalBudgetPredicate", () => {
 });
 
 describe("monthlyBudgetFromQuery", () => {
-  it("defaults the currency to COP", () => {
-    expect(monthlyBudgetFromQuery({ maxPriceMonthly: 2_900_000 })).toEqual({
-      amount: 2_900_000,
-      currency: "COP",
-    });
+  it("rejects a monthly cap without an explicit currency rather than assuming COP", () => {
+    expect(() => monthlyBudgetFromQuery({ maxPriceMonthly: 2_000 })).toThrow(/budgetCurrency is required/);
+    const invalidApi = rentalSearchBodySchema.safeParse({ maxPriceMonthly: 2_000 });
+    expect(invalidApi.success).toBe(false);
+    if (!invalidApi.success) expect(invalidApi.error.issues[0]?.path).toEqual(["budgetCurrency"]);
+    expect(rentalSearchBodySchema.safeParse({ maxPriceMonthly: 2_000, budgetCurrency: "USD" }).success).toBe(true);
   });
 
   it("honours an explicit currency and canonicalises it", () => {

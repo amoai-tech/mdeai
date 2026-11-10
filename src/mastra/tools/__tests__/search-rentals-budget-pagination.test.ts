@@ -6,6 +6,8 @@
  * page. A strict monthly budget must return all 5 COP rows and zero USD rows.
  */
 import { describe, expect, it, vi } from "vitest";
+import { searchPublicExternalRentals } from "@/lib/rentals/public-external-discovery";
+import type { Rental } from "../search-rentals";
 
 const COP_COUNT = 5;
 const USD_COUNT = 8;
@@ -144,6 +146,26 @@ describe("a monthly budget never lets another currency crowd out the confirmed m
     // A hard COP-only budget excludes uncomparable currencies entirely.
     expect(results.filter((r) => r.currency === "USD")).toHaveLength(0);
     expect(total).toBe(COP_COUNT);
+  });
+
+  it("counts only in-cap external COP ads when the database has no matches", async () => {
+    const externalAd = (id: string, amount: number): Rental => ({
+      id, title: id, neighborhood: "Laureles", nightly_price: 0,
+      price_monthly: amount, currency: "COP", bedrooms: 2, wifi: false,
+      amenities: [], image: "", source_url: `https://www.fincaraiz.com.co/${id}`,
+      can_schedule_viewing: false, schedule_viewing_url: null,
+      host_name: "External advertiser", availability: "Not verified", tags: ["external-source"],
+    });
+    vi.mocked(searchPublicExternalRentals).mockResolvedValueOnce([
+      externalAd("in-cap-ad", 1_900_000), externalAd("over-cap-ad", 3_100_000),
+    ]);
+    const { searchRentals } = await import("../search-rentals");
+    const { results, total } = await searchRentals({
+      maxPriceMonthly: 2_000_000, budgetCurrency: "COP", limit: 8,
+    });
+    expect(results.map((row) => row.id)).toEqual(["in-cap-ad"]);
+    expect(total).toBe(1);
+    expect(results[0]?.source_url).toBe("https://www.fincaraiz.com.co/in-cap-ad");
   });
 
   it("reports the true total even when the confirmed matches fill the whole page", async () => {
