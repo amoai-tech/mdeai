@@ -37,7 +37,7 @@ select plan(2);
 --
 -- MARKED `todo` — KNOWN OUTSTANDING DEFECT, NOT A SILENCED ONE.
 -- This assertion was already failing before SAN-1283 (recorded as `1 not_ok` in
--- docs/tasks/evidence/SAN-1349/18-review-focus-areas-verification.md). It is NOT caused by
+-- docs/_archive/legacy-2026-11-10/task-evidence/SAN-1349/18-review-focus-areas-verification.md). It is NOT caused by
 -- dropping the fashionos tables — those had RLS enabled and were never the offenders.
 --
 -- The offenders are `mastra_*` tables: 33 of them lack RLS while `anon`/`authenticated` hold

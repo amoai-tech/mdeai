@@ -5,6 +5,7 @@ import { sendConciergeUserMessage } from "../concierge-send-user-message";
 function makeHandlers() {
   return {
     threadId: undefined as string | undefined,
+    closeRentalDetails: vi.fn(),
     retryLastTurn: undefined as (() => Promise<boolean>) | undefined,
     handleRentalMessage: vi.fn<(text: string, submissionId?: string) => Promise<boolean>>(async () => false),
     handleEventVenueBookingMessage: vi.fn<(text: string, submissionId?: string) => Promise<boolean>>(async () => false),
@@ -170,6 +171,24 @@ describe("SAN-867 · VEB-MVP-001 — Router hijack fix — sendConciergeUserMess
       },
     );
 
+    it("keeps explicit budget-only follow-ups on public rental search after a previous rental", async () => {
+      const text = "Now only under COP 2.5 million per month";
+      const handlers = { ...makeHandlers(), lastIntent: undefined, inRentalSearch: true };
+      handlers.handleRentalMessage.mockResolvedValueOnce(true);
+      await sendConciergeUserMessage(text, handlers);
+      expect(handlers.handleRentalMessage).toHaveBeenCalledWith(text, expect.any(String));
+      expect(handlers.onAgentSend).not.toHaveBeenCalled();
+    });
+
+    it("does not hijack cost questions for gyms or coworking from an earlier rental", async () => {
+      const handlers = { ...makeHandlers(), inRentalSearch: true };
+      for (const text of ["gym under COP 200k per month", "coworking under COP 800k per month"]) {
+        await sendConciergeUserMessage(text, handlers);
+      }
+      expect(handlers.handleRentalMessage).not.toHaveBeenCalled();
+      expect(handlers.onAgentSend).toHaveBeenCalledTimes(2);
+    });
+
     it("uses inRentalSearch over lastIntent, so saved older conversations still widen", async () => {
       const handlers = { ...makeHandlers(), lastIntent: undefined, inRentalSearch: true };
       handlers.handleRentalMessage.mockResolvedValueOnce(true);
@@ -214,5 +233,30 @@ describe("SAN-106 contextual rental café routing", () => {
     expect(handlers.handleGroundedMessage).toHaveBeenCalledOnce();
     expect(handlers.handleRentalMessage).not.toHaveBeenCalled();
     expect(handlers.onAgentSend).toHaveBeenCalledWith(text, expect.any(String));
+  });
+});
+
+
+describe("cross-domain chat switches clear stale apartment Details", () => {
+  it.each([
+    "Show me the details of the second restaurant",
+    "Find restaurants in Laureles",
+    "Find salsa events this weekend",
+    "I need a venue for a birthday party for 30 people",
+  ])("closes the old rental Details when switching vertical: %s", async (text) => {
+    const handlers = makeHandlers();
+    expect(await sendConciergeUserMessage(text, handlers)).toBe(true);
+    expect(handlers.closeRentalDetails).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    "Show me the details of the second apartment",
+    "Search 2 bedroom rentals in Laureles",
+    "Show cafés within 800 meters of this apartment",
+    "Hi there",
+  ])("keeps apartment Details open for same-topic and contextual requests: %s", async (text) => {
+    const handlers = makeHandlers();
+    expect(await sendConciergeUserMessage(text, handlers)).toBe(true);
+    expect(handlers.closeRentalDetails).not.toHaveBeenCalled();
   });
 });

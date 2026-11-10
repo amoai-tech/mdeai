@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { shouldRequestRecommendations } from "../recommendation-intent";
+import { shouldRenderRentalFilterControl, shouldRequestRecommendations } from "../recommendation-intent";
 import { RENTAL_A2UI_CONTEXT_DESCRIPTION } from "@/lib/rentals/a2ui-context";
 
 const page = (route: string) => ({
@@ -75,5 +75,47 @@ describe("shouldRequestRecommendations", () => {
 
   it("only acts on the first step", () => {
     expect(shouldRequestRecommendations({ stepNumber: 1, messages: ask("show them as cards"), requestContext: hints })).toBe(false);
+  });
+});
+
+describe("SAN-1655 bedroom control intent", () => {
+
+  it.each([
+    "Let me adjust the bedrooms on this page.",
+    "Give me a bedroom control.",
+    "Change the bedrooms here.",
+    "set beds",
+    "Quiero cambiar las habitaciones.",
+    "Show me the bedroom control.",
+    "Can you show a bedroom selector here?",
+    "Can you change the bedrooms?",
+    "¿Puedes cambiar las recámaras?",
+  ])("renders for %s", (text) => {
+    expect(shouldRenderRentalFilterControl({ stepNumber: 0, messages: ask(text), requestContext: page("/rentals") })).toBe(true);
+  });
+
+  it.each([
+    "Show me 2 apartments in Laureles.",
+    "Show me 2 bedroom apartments here.",
+    "How many bedrooms does the one here have?",
+    "Search for 1 bedroom apartments.",
+    "Open details for the first one.",
+    "What is the price?",
+    "Change the page to 1 bedroom.",
+    "Muéstrame 2 apartamentos en Laureles.",
+    "Cambiar a 2 habitaciones.",
+    "Buscar 3 dormitorios en Laureles.",
+  ])("does not render for %s", (text) => {
+    expect(shouldRenderRentalFilterControl({ stepNumber: 0, messages: ask(text), requestContext: page("/rentals") })).toBe(false);
+  });
+
+  it("needs the Rentals page", () => {
+    expect(
+      shouldRenderRentalFilterControl({
+        stepNumber: 0,
+        messages: ask("adjust the bedrooms"),
+        requestContext: { get: () => undefined },
+      }),
+    ).toBe(false);
   });
 });

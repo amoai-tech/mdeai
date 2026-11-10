@@ -101,7 +101,7 @@ Archived and deliberately excluded from the comparison: `supabase/migrations/_ar
 
 | Reference | Location | Decision |
 |---|---|---|
-| `20260608120000`, `20260609120000`, `20260616150000…153000` | `docs/tasks/testing/evidence/2026-06-*/` (5 result/audit files) | **Leave as-is.** These are dated historical evidence of what was run at the time; rewriting them would falsify the record. |
+| `20260608120000`, `20260609120000`, `20260616150000…153000` | `docs/_archive/legacy-2026-11-10/task-testing/evidence/2026-06-*/` (5 result/audit files) | **Leave as-is.** These are dated historical evidence of what was run at the time; rewriting them would falsify the record. |
 | `20260616120000` | `src/mastra/lib/ai-runs.ts` L31 | **Updated to `20260616084031`** — a live code comment pointing at the current migration identifier would otherwise dangle. |
 
 ---

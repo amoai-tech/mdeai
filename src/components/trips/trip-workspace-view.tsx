@@ -69,6 +69,7 @@ export function TripWorkspaceView({ trip }: TripWorkspaceViewProps) {
       {tab === "itinerary" ? (
         <ItineraryPanel
           items={trip.items}
+          timeZone={trip.timezone}
           selectedItemId={selectedItemId}
           onShowOnMap={showOnMap}
         />

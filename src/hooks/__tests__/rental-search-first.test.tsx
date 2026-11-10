@@ -8,8 +8,9 @@ import React, { useEffect } from "react";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
+const coagent = vi.hoisted(() => ({ state: {} as Record<string, unknown> }));
 vi.mock("@/components/chat/concierge-coagent-context", () => ({
-  useConciergeCoAgent: () => ({ agent: undefined, state: {}, setState: vi.fn() }),
+  useConciergeCoAgent: () => ({ agent: undefined, state: coagent.state, setState: vi.fn() }),
 }));
 const map = vi.hoisted(() => ({ merges: [] as Array<[string, unknown[]]>, throwRentalMergeOnce: false }));
 vi.mock("@/platform/maps/map-context", () => ({
@@ -95,6 +96,7 @@ function respond(status: number, body: unknown) {
 }
 
 beforeEach(() => {
+  coagent.state = {};
   map.merges.length = 0;
   map.throwRentalMergeOnce = false;
   unhandled.length = 0;
@@ -169,6 +171,46 @@ describe("SAN-407 · rental chat searches before it asks", () => {
     expect(next.maxPriceMonthly).toBe(2_500_000);
     expect(next.budgetCurrency).toBe("COP");
     expect(next.maxPricePerNight).toBeUndefined();
+    // The second budget narrows the first search's actual candidate set,
+    // rather than rediscovering unrelated apartments through new query text.
+    expect(next.queryText).toBe("Only show apartments under COP 3 million per month");
+  });
+
+  it("never reuses stale visible Laureles query text after the signed-in AI moved to Envigado", async () => {
+    respond(200, { results: [] });
+    const previousText = "Show apartments in Laureles under COP 3 million per month";
+    expect(await send(previousText)).toBe(true);
+    // The AI can update its rental working memory without updating the older
+    // fast-path searchMeta. Keep that newer context instead of stale UI text.
+    coagent.state = { lastIntent: "rental_search", lastRentalQuery: {
+      neighborhood: "Envigado", maxPriceMonthly: 3_000_000,
+      budgetCurrency: "COP", budgetType: "monthly",
+    } };
+    await act(async () => {
+      root.render(
+        <EventLocalChatProvider><EventSearchResultsProvider><RentalFastPathProvider>
+          <EventFastPathProvider><GroundedFastPathProvider><RestaurantFastPathProvider>
+            <Harness />
+          </RestaurantFastPathProvider></GroundedFastPathProvider></EventFastPathProvider>
+        </RentalFastPathProvider></EventSearchResultsProvider></EventLocalChatProvider>,
+      );
+    });
+    expect(await send("Now only under COP 2.5 million per month")).toBe(true);
+    const next = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body));
+    expect(next.neighborhood).toBe("Envigado");
+    expect(next.maxPriceMonthly).toBe(2_500_000);
+    expect(next.budgetCurrency).toBe("COP");
+    expect(next.queryText).not.toBe(previousText);
+  });
+
+  it("a budget currency switch starts a new semantic search, never reuses COP query text", async () => {
+    respond(200, { results: [] });
+    expect(await send("Only show apartments under COP 3 million per month")).toBe(true);
+    expect(await send("Now only under USD 2000 per month")).toBe(true);
+    const next = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body));
+    expect(next.budgetCurrency).toBe("USD");
+    expect(next.maxPriceMonthly).toBe(2_000);
+    expect(next.queryText).not.toBe("Only show apartments under COP 3 million per month");
   });
 
   it("a new chat cannot reuse the previous guest rental budget", async () => {

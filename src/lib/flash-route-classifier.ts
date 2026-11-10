@@ -13,7 +13,7 @@ import { google } from "@ai-sdk/google";
 import { generateObject } from "ai";
 import { z } from "zod";
 import { GEMINI_FLASH_MODEL_ID, parseAiProvider } from "@/lib/ai-model-ids";
-import { isWholeCityReply } from "@/lib/rental-query-parser";
+import { isExactMonthlyBudgetOnlyRefinement, isWholeCityReply } from "@/lib/rental-query-parser";
 // Uses the raw Gemini model (not the COST-001-wrapped FLASH_MODEL): this module
 // is reachable from the client chat bundle, and the wrapped model pulls in the
 // server-only node:async_hooks token sink. Same model *id* via
@@ -196,6 +196,11 @@ export function mergeRegexAndFlashClassification(
   };
 }
 
+/**
+ * Classify a chat message using the shared router. Route an unambiguous budget
+ * refinement to rentals only when the current conversation is still about rentals;
+ * otherwise keep its original intent (including a newer non-rental topic).
+ */
 export async function resolveRouterClassification(
   text: string,
   options?: { lastIntent?: RouterIntent; inRentalSearch?: boolean },
@@ -207,12 +212,22 @@ export async function resolveRouterClassification(
   // widening that search: keep it on the rental fast path, which resets the neighborhood (SAN-407).
   // Only a plain whole-city reply qualifies, so "Is Medellín safe at night?" still goes to the assistant.
   const inRentalSearch = options?.inRentalSearch ?? options?.lastIntent === "rental_search";
-  if (inRentalSearch && regex.routingTarget === "agent" && isWholeCityReply(text)) {
+  const wholeCityRefinement = isWholeCityReply(text);
+  // The shared router runs before the rental handler. In a visible rental chat,
+  // an explicit budget-only refinement is a search even without a repeated
+  // "apartment" noun. Reuse the canonical rental predicate; it rejects gym,
+  // coworking, café and event topic shifts before they reach the rental handler.
+  const contextualBudgetRefinement =
+    !wholeCityRefinement && isExactMonthlyBudgetOnlyRefinement(text);
+  if (inRentalSearch && regex.routingTarget === "agent" &&
+      (wholeCityRefinement || contextualBudgetRefinement)) {
     return {
       ...regex,
       intent: "rental_search",
       confidence: 0.7,
-      reason: "whole-city follow-up to a rental search",
+      reason: wholeCityRefinement
+        ? "whole-city follow-up to a rental search"
+        : "same-currency budget-only follow-up to a rental search",
       action: "search_now",
       routingTarget: "rental",
       source: "regex",

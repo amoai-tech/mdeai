@@ -7038,6 +7038,7 @@ export type Database = {
           id: string
           start_date: string
           status: string
+          timezone: string
           title: string
           updated_at: string
           user_id: string
@@ -7053,6 +7054,7 @@ export type Database = {
           id?: string
           start_date: string
           status?: string
+          timezone?: string
           title: string
           updated_at?: string
           user_id: string
@@ -7068,6 +7070,7 @@ export type Database = {
           id?: string
           start_date?: string
           status?: string
+          timezone?: string
           title?: string
           updated_at?: string
           user_id?: string

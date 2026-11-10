@@ -24,6 +24,10 @@ export function hasRenderedEventCard(): boolean {
   return Boolean(document.querySelector('[data-testid="a2ui-event-card"]'));
 }
 
+/**
+ * Request an existing event Quick view and resolve only after that exact event
+ * confirms opening. Time out safely if no listener responds.
+ */
 export function requestEventCardRecovery(
   eventId: string,
   timeoutMs = EVENT_CARD_RECOVERY_TIMEOUT_MS,
@@ -92,8 +96,12 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
   const threadId = nav?.activeThreadId ?? nav?.sessionThreadId;
   const { showExchange, showNotice, showSignInPrompt } = useEventLocalChat();
   const { state } = useConciergeCoAgent();
-  const visibleRentals = useOptionalRentalFastPath()?.toolResult;
-  const { openVenueDetail } = useRentalUi();
+  // Both the visible rental cards and thread-local search criteria must come
+  // from the same provider. Guests lack authenticated CoAgent working memory.
+  const rentalFastPath = useOptionalRentalFastPath();
+  const visibleRentalSearch = rentalFastPath?.searchMeta;
+  const visibleRentals = rentalFastPath?.toolResult;
+  const { openVenueDetail, closeRentalDetails } = useRentalUi();
   const map = useOptionalMapContext();
   const { toolResult } = useGroundedFastPath();
   const groundedShownIds = useOptionalRichCardResults()?.groundedShownIds;
@@ -330,14 +338,19 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
   // A rental search is under way when its query is saved and the last intent is still a rental one.
   // Saved older conversations carry "rental_refine", which the current intent list no longer has.
   const lastIntentName: string | undefined = state?.lastIntent;
-  const inRentalSearch =
-    Boolean(state?.lastRentalQuery) &&
-    (lastIntentName === undefined || lastIntentName === "rental_search" || lastIntentName === "rental_refine");
+  // The latest intent wins: old rental cards may still be visible after an
+  // authenticated AI turn about coworking, events or another subject. Guests
+  // have no CoAgent intent, so current rental searchMeta remains their context.
+  const rentalIntentIsCurrent = lastIntentName === undefined ||
+    lastIntentName === "rental_search" || lastIntentName === "rental_refine";
+  const inRentalSearch = rentalIntentIsCurrent &&
+    (Boolean(visibleRentalSearch) || Boolean(state?.lastRentalQuery));
 
   return useMemo(
     () => ({
       handleRentalMessage,
       handleRentalDetailsMessage,
+      closeRentalDetails,
       handleEventVenueBookingMessage,
       handleEventMessage,
       handleGroundedMessage,
@@ -352,6 +365,7 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
     [
       handleRentalMessage,
       handleRentalDetailsMessage,
+      closeRentalDetails,
       handleEventVenueBookingMessage,
       handleEventMessage,
       handleGroundedMessage,

@@ -47,6 +47,50 @@ const NEW_SEARCH_CRITERIA =
 const CURRENT_RESULTS_POINTER =
   /\b(?:from|in)\s+(?:the\s+)?(?:current|existing|shown|visible)\s+(?:results?|listings?|apartments?|ones?)\b/gi;
 
+/**
+ * Bedroom-control requests: a page control, not a new search.
+ *
+ * Requires an explicit control noun ("bedroom control") or an adjust verb
+ * ("change the bedrooms"), and refuses results/questions phrasings such as
+ * "show me 2 bedroom apartments here" or "how many bedrooms does it have?".
+ */
+const BEDROOM_WORD = /\b(bedrooms?|beds?|habitaci[oó]n(?:es)?|dormitorios?|rec[áa]maras?)\b/i;
+const CONTROL_NOUN = /\b(control|selector|picker|slider|controlador)\b/i;
+const ADJUST_VERB = /\b(adjust|change|set|update|choose|pick|edit|cambiar|ajustar|elegir|seleccionar|poner)\b/i;
+/** A bedroom count always means a filter or search request, in either language. */
+const BEDROOM_COUNT =
+  /\b\d+\s*(?:br|bed|bedrooms?|habitaci[oó]n(?:es)?|dormitorios?|rec[áa]maras?)\b/i;
+/** Results phrasing, only when the request has neither a control noun nor an adjust verb. */
+const RESULTS_PHRASING =
+  /\b(show|display|list|see|how many|search|find|new search|details?|open|book|schedule|price|budget|under|over|mu[eé]strame|mostrar|buscar|encontrar)\b/i;
+
+export function shouldRenderRentalFilterControl({
+  stepNumber,
+  messages,
+  requestContext,
+}: {
+  stepNumber: number;
+  messages: readonly MessageLike[];
+  requestContext?: { get?: (key: string) => unknown };
+}): boolean {
+  if (stepNumber !== 0) return false;
+  if (!isActiveRentalsDiscoveryPage(requestContext?.get?.("ag-ui"))) return false;
+  const lastUser = [...messages].reverse().find((message) => message?.role === "user");
+  const text = messageText(lastUser).trim();
+  if (!text) return false;
+  if (!BEDROOM_WORD.test(text)) return false;
+  const hasControlNoun = CONTROL_NOUN.test(text);
+  const hasAdjustVerb = ADJUST_VERB.test(text);
+  if (!hasControlNoun && !hasAdjustVerb) return false;
+  // A count means "search/filter for N bedrooms", never "show me a picker".
+  if (BEDROOM_COUNT.test(text)) return false;
+  // An explicit ask wins over a results verb or a question mark:
+  // "show me the bedroom control" and "can you change the bedrooms?" both work.
+  if (!hasControlNoun && !hasAdjustVerb && RESULTS_PHRASING.test(text)) return false;
+  if (!hasControlNoun && !hasAdjustVerb && /\?\s*$/.test(text)) return false;
+  return true;
+}
+
 export function shouldRequestRecommendations({
   stepNumber,
   messages,
