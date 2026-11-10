@@ -13,7 +13,7 @@ import { google } from "@ai-sdk/google";
 import { generateObject } from "ai";
 import { z } from "zod";
 import { GEMINI_FLASH_MODEL_ID, parseAiProvider } from "@/lib/ai-model-ids";
-import { isExactMonthlyBudgetOnlyRefinement, isWholeCityReply } from "@/lib/rental-query-parser";
+import { isExactMonthlyBudgetOnlyRefinement, isWholeCityReply, looksLikeRentalSearch } from "@/lib/rental-query-parser";
 // Uses the raw Gemini model (not the COST-001-wrapped FLASH_MODEL): this module
 // is reachable from the client chat bundle, and the wrapped model pulls in the
 // server-only node:async_hooks token sink. Same model *id* via
@@ -206,6 +206,16 @@ export async function resolveRouterClassification(
   options?: { lastIntent?: RouterIntent; inRentalSearch?: boolean },
 ): Promise<FlashRouteClassification> {
   const regex = classifyRouterIntent(text);
+
+  // Coworking is a Concierge-agent topic, but an explicit change from rentals.
+  // Agent working memory may not update lastIntent during that answer. Mark
+  // the switch at dispatch instead, without a separate intent engine.
+  // "Apartments near coworking" is still a rental request.
+  if (regex.routingTarget === "agent" &&
+      /\b(?:co[-\s]?working|coworking|shared\s+(?:workspaces?|offices?))\b/i.test(text) &&
+      !looksLikeRentalSearch(text)) {
+    return { ...regex, reason: "explicit coworking discovery topic change", topicShift: true, source: "regex" };
+  }
 
   // "Anywhere is fine" says nothing about rentals on its own, so the regex hands it to the
   // assistant, which anonymous visitors cannot reach. Right after a rental search it is the renter

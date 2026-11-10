@@ -146,6 +146,64 @@ describe("SAN-867 · VEB-MVP-001 — Router hijack fix — sendConciergeUserMess
     expect(handlers.onAgentSend).not.toHaveBeenCalled();
   });
 
+  it("SAN-874 marks a signed-in coworking question as a topic switch before the next budget", async () => {
+    const handlers = {
+      ...makeHandlers(), inRentalSearch: true,
+      onTopicShift: vi.fn<(intent: import("@/lib/router-intent").RouterIntent) => void>(),
+      onAgentSend: vi.fn<(text: string, id?: string, onAccepted?: () => void, onCompleted?: () => void, onFailed?: () => void) => Promise<boolean>>(
+        async (_text, _id, onAccepted, onCompleted) => {
+          onAccepted?.();
+          onCompleted?.();
+          return true;
+        },
+      ),
+    };
+    await sendConciergeUserMessage("What coworking spaces are in Laureles?", handlers);
+    expect(handlers.onTopicShift).toHaveBeenCalledTimes(2);
+    expect(handlers.onTopicShift).toHaveBeenNthCalledWith(1, "general_concierge", "accepted");
+    expect(handlers.onTopicShift).toHaveBeenNthCalledWith(2, "general_concierge", "completed");
+    expect(handlers.onAgentSend).toHaveBeenCalledWith(
+      "What coworking spaces are in Laureles?", expect.any(String), expect.any(Function), expect.any(Function), expect.any(Function),
+    );
+    expect(handlers.handleRentalMessage).not.toHaveBeenCalled();
+  });
+
+  it("SAN-874 rolls back topic intent when a coworking stream fails", async () => {
+    const handlers = {
+      ...makeHandlers(), inRentalSearch: true,
+      onTopicShift: vi.fn(),
+      onAgentSend: vi.fn(async (_text: string, _id?: string, onAccepted?: () => void,
+        _onCompleted?: () => void, onFailed?: () => void) => {
+        onAccepted?.();
+        onFailed?.();
+        return true;
+      }),
+    };
+    await sendConciergeUserMessage("What coworking spaces are in Laureles?", handlers);
+    expect(handlers.onTopicShift).toHaveBeenNthCalledWith(1, "general_concierge", "accepted");
+    expect(handlers.onTopicShift).toHaveBeenNthCalledWith(2, "general_concierge", "failed");
+  });
+
+  it("SAN-874 keeps rental cards when a coworking agent turn did not start", async () => {
+    const handlers = {
+      ...makeHandlers(), inRentalSearch: true,
+      onTopicShift: vi.fn(),
+    };
+    await sendConciergeUserMessage("What coworking spaces are in Laureles?", handlers);
+    // A mock that never reports acceptance must not clear the old results.
+    expect(handlers.onTopicShift).not.toHaveBeenCalled();
+    expect(handlers.handleRentalMessage).not.toHaveBeenCalled();
+  });
+
+  it("SAN-874 does not clear rental state for a general question or Flash hint", async () => {
+    const handlers = {
+      ...makeHandlers(), inRentalSearch: true,
+      onTopicShift: vi.fn(),
+    };
+    await sendConciergeUserMessage("Is Laureles safe at night?", handlers);
+    expect(handlers.onTopicShift).not.toHaveBeenCalled();
+  });
+
   describe("SAN-407 · INT-004 — a whole-city follow-up reaches the rental search", () => {
     it.each(["Anywhere is fine", "Anywhere in Medellín is fine", "any neighborhood works"])(
       "%j after a rental search is tried on the rental fast path before the assistant",

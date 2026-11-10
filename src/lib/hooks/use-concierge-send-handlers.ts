@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { useConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
 import { useEventLocalChat } from "@/components/chat/event-local-chat-context";
 import { clearConciergePendingSend, setConciergePendingSend } from "@/lib/concierge-pending-store";
@@ -68,7 +68,9 @@ import { useRentalSearchFastPath } from "@/hooks/use-rental-search-fast-path";
 import { useRestaurantSearchFastPath } from "@/hooks/use-restaurant-search-fast-path";
 import { parseDetailsCommand } from "@/lib/rentals/details-command";
 import { toDetailRental } from "@/lib/rentals/chat-rental-detail";
-import { useOptionalRentalFastPath } from "@/components/chat/rental-fast-path-context";
+import { useOptionalRentalFastPath, type RentalSearchMeta } from "@/components/chat/rental-fast-path-context";
+import type { RouterIntent } from "@/lib/router-intent";
+import type { ConciergeWorkingMemory } from "@/lib/types";
 import { useRentalUi } from "@/components/chat/rental-ui-context";
 import { useSession } from "@/hooks/use-session";
 import { isSelectedRentalCafeNearbyRequest } from "@/lib/cafe-search-fast-path";
@@ -95,7 +97,7 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
   const nav = useOptionalThreadNav();
   const threadId = nav?.activeThreadId ?? nav?.sessionThreadId;
   const { showExchange, showNotice, showSignInPrompt } = useEventLocalChat();
-  const { state } = useConciergeCoAgent();
+  const { state, setState } = useConciergeCoAgent();
   // Both the visible rental cards and thread-local search criteria must come
   // from the same provider. Guests lack authenticated CoAgent working memory.
   const rentalFastPath = useOptionalRentalFastPath();
@@ -238,7 +240,7 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
   // error signal at the start of every send, so a non-zero version here belongs to this run.
   /** Validate session, wait for the existing agent, and show an honest result. */
   const performAgentSend = useCallback(
-    async (text: string, submissionId?: string) => {
+    async (text: string, submissionId?: string, onAccepted?: () => void, onCompleted?: () => void, onFailed?: () => void) => {
       // A fast guest can send before the session check has finished. Ask once, now, instead of
       // letting that send reach the protected runtime (401 -> "try again"). If the check itself throws
       // (network down) we keep what we already know: no user yet means the sign-in offer, which heals
@@ -281,7 +283,10 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
         // instead of a false confirmation.
       }
       try {
-        if ((await waitForRuntimeReady()) && (await appendMessage(text))) {
+        if ((await waitForRuntimeReady()) &&
+            (await (onAccepted ? appendMessage(text, onAccepted) : appendMessage(text)))) {
+          // The sender published the new intent immediately after addMessage,
+          // before the model stream. Only erase old cards on a successful run.
           // If the model returns no A2UI surface, the existing real result can still be
           // shown through Quick view. Two rules keep it honest:
           //  - never open a card when the model already rendered one (any event), and
@@ -294,12 +299,18 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
           }
           // Another conversation can report a late error during this run.
           // Only this conversation's stream failure should trigger its notice.
-          if (getConciergeErrorForThread(threadId).version === 0) return true;
+          if (getConciergeErrorForThread(threadId).version === 0) {
+            onCompleted?.();
+            return true;
+          }
+          onFailed?.();
           showNotice(AGENT_UNAVAILABLE_MESSAGE);
         } else {
+          onFailed?.();
           showExchange(text, AGENT_UNAVAILABLE_MESSAGE, submissionId);
         }
       } catch (error) {
+        onFailed?.();
         console.error("[concierge-agent-send]", error);
         reportConciergeError({ threadId, retry: retryLastTurn });
         showNotice(AGENT_UNAVAILABLE_MESSAGE);
@@ -317,10 +328,10 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
    * Coalesce identical in-flight questions and serialize distinct questions.
    * Release each key after completion so later deliberate repeats still work.
    */
-  const onAgentSend = useCallback((text: string, submissionId?: string): Promise<boolean> => {
+  const onAgentSend = useCallback((text: string, submissionId?: string, onAccepted?: () => void, onCompleted?: () => void, onFailed?: () => void): Promise<boolean> => {
     const existing = pendingAgentSendsRef.current.get(text);
     if (existing) return existing;
-    const pending = lastAgentSendRef.current.then(() => performAgentSend(text, submissionId));
+    const pending = lastAgentSendRef.current.then(() => performAgentSend(text, submissionId, onAccepted, onCompleted, onFailed));
     pendingAgentSendsRef.current.set(text, pending);
     lastAgentSendRef.current = pending.then(() => undefined, () => undefined);
     void pending.finally(() => {
@@ -346,11 +357,76 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
   const inRentalSearch = rentalIntentIsCurrent &&
     (Boolean(visibleRentalSearch) || Boolean(state?.lastRentalQuery));
 
+  // Snapshot the current provider identities: a NEW rental search can finish
+  // while the coworking agent is streaming. It must never be cleared/rolled
+  // back by completion of the older coworking turn.
+  const currentRentalViewRef = useRef({
+    meta: rentalFastPath?.searchMeta,
+    result: rentalFastPath?.toolResult,
+  });
+  const topicShiftRecoveryRef = useRef<{
+    threadId: string | undefined;
+    view: { meta: RentalSearchMeta | null | undefined; result: unknown };
+    previous: Pick<ConciergeWorkingMemory, "lastIntent" | "lastRentalQuery" | "lastRentalResults" | "selectedListingId">;
+  } | null>(null);
+  const currentThreadRef = useRef(threadId);
+  // Update refs during commit, before another layout callback can finish an
+  // older agent stream. A passive effect runs too late and can erase a newer
+  // rental search or restore stale rental criteria.
+  useLayoutEffect(() => {
+    currentRentalViewRef.current = {
+      meta: rentalFastPath?.searchMeta,
+      result: rentalFastPath?.toolResult,
+    };
+    currentThreadRef.current = threadId;
+  }, [rentalFastPath?.searchMeta, rentalFastPath?.toolResult, threadId]);
+  const onTopicShift = useCallback((intent: RouterIntent, stage: "accepted" | "completed" | "failed") => {
+    if (stage === "accepted") {
+      // Model turns may fail after the user message was accepted. Capture only
+      // rental-specific memory for a safe rollback, never the whole CoAgent.
+      setState((previous) => {
+        topicShiftRecoveryRef.current = {
+          threadId,
+          view: { ...currentRentalViewRef.current },
+          previous: {
+            lastIntent: previous.lastIntent,
+            lastRentalQuery: previous.lastRentalQuery,
+            lastRentalResults: previous.lastRentalResults,
+            selectedListingId: previous.selectedListingId,
+          },
+        };
+        return {
+          ...previous,
+          lastIntent: intent,
+          lastRentalQuery: undefined,
+          lastRentalResults: undefined,
+          selectedListingId: undefined,
+        };
+      });
+      return;
+    }
+    const recovery = topicShiftRecoveryRef.current;
+    topicShiftRecoveryRef.current = null;
+    // An old stream must not clear or restore a different saved chat.
+    if (!recovery || recovery.threadId !== currentThreadRef.current) return;
+    if (currentRentalViewRef.current.meta !== recovery.view.meta ||
+        currentRentalViewRef.current.result !== recovery.view.result) return;
+    if (stage === "failed") {
+      // Keep old rental cards/pins available after a failed coworking response;
+      // restore their matching query so a legitimate refinement still works.
+      setState((previous) => ({ ...previous, ...recovery.previous }));
+    } else {
+      rentalFastPath?.clearToolResults();
+      map?.mergePinsByCategory?.("rental", []);
+    }
+  }, [rentalFastPath, map, setState, threadId]);
+
   return useMemo(
     () => ({
       handleRentalMessage,
       handleRentalDetailsMessage,
       closeRentalDetails,
+      onTopicShift,
       handleEventVenueBookingMessage,
       handleEventMessage,
       handleGroundedMessage,
@@ -366,6 +442,7 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
       handleRentalMessage,
       handleRentalDetailsMessage,
       closeRentalDetails,
+      onTopicShift,
       handleEventVenueBookingMessage,
       handleEventMessage,
       handleGroundedMessage,
