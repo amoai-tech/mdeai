@@ -21,7 +21,7 @@ Portable rules for agents working from the **current checkout root**. Product-ow
 
 ## Source of truth and task context
 
-- **Product intent:** [`prd.md`](prd.md); **strategy:** [`roadmap.md`](roadmap.md); **public-launch definition only:** [`mvp.md`](mvp.md). **Live task title, scope, acceptance, dependencies and status:** Linear. **Shipped implementation:** merged `main`, current source, tests and live Supabase.
+- **Product intent:** [`prd.md`](prd.md); **strategy:** [`roadmap.md`](roadmap.md); **public-launch definition only:** [`mvp.md`](mvp.md). **Live task title, scope, acceptance, dependencies and status:** Linear. **Shipped implementation code:** merged `main`. **Current verification evidence:** target-checkout source and tests, plus live Supabase where applicable; unmerged changes are not shipped.
 - Before substantial implementation: **intent (why) → spec (testable what) → plan (how) → real proof**. Read the current Linear issue and relevant existing task files; do not invent missing specifications.
 - **Existing optional templates:** [`intent.md`](docs/07-operations/intent-spec-plan/templates/intent.md) · [`spec.md`](docs/07-operations/intent-spec-plan/templates/spec.md) · [`plan.md`](docs/07-operations/intent-spec-plan/templates/plan.md). See [intent/spec/plan guide](docs/07-operations/intent-spec-plan/README.md). For S2–S4 tasks, use a task-specific folder only when it helps; focused tasks use Linear directly. **`specs.md` (plural) is not the canonical template.** The older root [`plan.md`](plan.md) is a dated snapshot, **not** today's task queue.
 - Do not treat complete Markdown as feature completion. Link current code, exact tests, PR and operational evidence in the existing Linear issue.

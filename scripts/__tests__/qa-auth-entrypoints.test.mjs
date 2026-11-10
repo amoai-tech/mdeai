@@ -72,12 +72,16 @@ test("qa browser help succeeds without secrets or Chrome", () => {
   const result = run(browser, ["--help"]);
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /--browser-url=http:\/\/127\.0\.0\.1:9227/);
+  assert.doesNotMatch(result.stdout, /--allow-admin|super-admin/);
 });
 
-test("QA browser disallows automatic Super Admin exposure over CDP", () => {
-  const result = run(browser, ["--role=super-admin"]);
-  assert.equal(result.status, 1);
-  assert.match(result.stderr, /requires explicit --allow-admin/);
+test("QA browser refuses Super Admin over CDP, including the retired allow-admin flag", () => {
+  for (const flags of [["--role=super-admin"], ["--role=super-admin", "--allow-admin"], ["--allow-admin"]]) {
+    const result = run(browser, flags);
+    assert.equal(result.status, 1, flags.join(" "));
+    assert.match(result.stderr, /Unsupported QA role|Unknown QA browser option/, flags.join(" "));
+    assert.doesNotMatch(result.stderr, /QA Supabase configuration missing/, "reject before loading credentials");
+  }
 });
 
 test("QA browser rejects untrusted origins, malformed ports, and unknown flags for the RIGHT reason", () => {
