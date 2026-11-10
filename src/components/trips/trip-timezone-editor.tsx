@@ -72,6 +72,10 @@ export function TripTimezoneEditor({
       }
       setValue(result.timezone);
       router.refresh();
+    } catch {
+      // Server Actions can reject on transport failures, not only return { ok: false }.
+      setValue(previous);
+      setError("Could not update this trip. Please try again.");
     } finally {
       setPending(false);
     }
