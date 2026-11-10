@@ -69,7 +69,6 @@ import { useRestaurantSearchFastPath } from "@/hooks/use-restaurant-search-fast-
 import { parseDetailsCommand } from "@/lib/rentals/details-command";
 import { toDetailRental } from "@/lib/rentals/chat-rental-detail";
 import { useOptionalRentalFastPath } from "@/components/chat/rental-fast-path-context";
-import { useClearOtherFastPathResults } from "@/hooks/use-clear-other-fast-path-results";
 import type { RouterIntent } from "@/lib/router-intent";
 import { useRentalUi } from "@/components/chat/rental-ui-context";
 import { useSession } from "@/hooks/use-session";
@@ -98,7 +97,6 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
   const threadId = nav?.activeThreadId ?? nav?.sessionThreadId;
   const { showExchange, showNotice, showSignInPrompt } = useEventLocalChat();
   const { state, setState } = useConciergeCoAgent();
-  const clearVerticalResults = useClearOtherFastPathResults();
   // Both the visible rental cards and thread-local search criteria must come
   // from the same provider. Guests lack authenticated CoAgent working memory.
   const rentalFastPath = useOptionalRentalFastPath();
@@ -368,11 +366,13 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
         selectedListingId: undefined,
       }));
     } else {
-      // Only a completed answer replaces the current results and map pins.
-      // Saved transcript/history is deliberately untouched.
-      clearVerticalResults(null);
+      // Remove ONLY the stale rental surface. Newly grounded coworking places
+      // and their genuine pins from the agent run must remain visible.
+      // Saved messages, other verticals and their map pins are untouched.
+      rentalFastPath?.clearToolResults();
+      map?.mergePinsByCategory?.("rental", []);
     }
-  }, [clearVerticalResults, setState]);
+  }, [rentalFastPath, map, setState]);
 
   return useMemo(
     () => ({
