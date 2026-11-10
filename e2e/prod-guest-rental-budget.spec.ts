@@ -51,7 +51,7 @@ async function askGuestBudget(page: Page, question: string, maximum: number) {
     // release. Do require a truthful user-facing empty answer, not a vacuous
     // passing price loop; seeded budget-predicate unit tests own price math.
     await expect(page.getByTestId("copilot-chat-region")).toContainText(
-      "No rentals are available in this search right now.",
+      /No rentals (?:match that search|are available in this search) right now\./,
     );
   }
   for (const card of await cards.allInnerTexts()) {

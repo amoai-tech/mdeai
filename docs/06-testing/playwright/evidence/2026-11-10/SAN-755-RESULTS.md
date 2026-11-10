@@ -20,7 +20,7 @@
 | Signed-in apartments → coworking → monthly follow-up | **FAIL intermittently** | `/tmp/san755-signed-coworking2.log`: first run unexpected second rental API call, retry passed; `/tmp/san755-signed-review-green.log`: repeat run failed without retry |
 | Full floor on original PR head (`f67ff6b526`) | **PASS** | `/tmp/san755-final-floor.log`: 5,673 Vitest passed, 49 skipped, 653 test files passed, 13 skipped; lint, TypeScript, optimized build, audits, Mastra |
 
-The guest tests assert two real API POSTs, COP currency and monthly budget caps, displayed card prices, stable semantic query text, no forced sign-in, no horizontal overflow, and a grounded mobile map CTA. Catalog counts must be allowed to change; zero real listings are a legitimate marketplace state, but require a truthful visible empty answer. A listing without real coordinates must not receive a fabricated pin. Browser failure screenshots/traces stay on the trusted workstation; authenticated QA recording is disabled.
+The guest tests assert two real API POSTs, COP currency and monthly budget caps, displayed card prices, stable semantic query text, no forced sign-in, no horizontal overflow, and a grounded mobile map CTA. Catalog counts must be allowed to change; zero real listings are a legitimate marketplace state, but require the truthful, source-defined budget-specific or generic empty answer. A listing without real coordinates must not receive a fabricated pin. Browser failure screenshots/traces stay on the trusted workstation; authenticated QA recording is disabled.
 
 ## Separate rental content observation
 
