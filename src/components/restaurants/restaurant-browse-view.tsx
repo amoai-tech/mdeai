@@ -202,10 +202,10 @@ function RestaurantBrowseViewInner({
             >
               {shownResults.map((r) => {
                 const pinId = `restaurant-${r.id}`;
-                // `restaurantToMapPin` drops rows without coordinates, so this is the one
-                // source of truth for "the map can show this restaurant".
-                const hasPin = pins.some((pin) => pin.id === pinId);
-                const pin = restaurantToMapPin(r);
+                // Reuse the memoized pin list: one conversion per row, and a missing
+                // coordinate means both no map action and no Add action.
+                const pin = pins.find((candidate) => candidate.id === pinId);
+                const hasPin = Boolean(pin);
                 return (
                   <div key={r.id} className="flex flex-col gap-2">
                   <RestaurantCard
