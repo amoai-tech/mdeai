@@ -4,7 +4,7 @@
  * agent, `appendMessage` returns false, and the renter used to see nothing: no bubble, no error.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import React, { useEffect } from "react";
+import React, { useEffect, useLayoutEffect } from "react";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
@@ -81,11 +81,20 @@ let handlers: ConciergeSendHandlers;
 let shown: Array<{ role: string; content: string }>;
 let promptShown = false;
 let restoreRentalSearch: ReturnType<typeof useRentalFastPath>["setSearchMeta"];
+let finishCoworkingAtRentalCommit: "completed" | "failed" | null = null;
 
 function Harness() {
   const h = useConciergeSendHandlers();
   const { messages, signInPrompt } = useEventLocalChat();
-  const { setSearchMeta } = useRentalFastPath();
+  const { setSearchMeta, searchMeta } = useRentalFastPath();
+  // Emulate a late agent callback during the new rental search's layout phase:
+  // its identity must already be current, before passive effects execute.
+  useLayoutEffect(() => {
+    if (!finishCoworkingAtRentalCommit || !searchMeta?.userText?.startsWith("New Envigado")) return;
+    const stage = finishCoworkingAtRentalCommit;
+    finishCoworkingAtRentalCommit = null;
+    h.onTopicShift?.("general_concierge", stage);
+  }, [h, searchMeta]);
   useEffect(() => {
     handlers = h;
     shown = messages;
@@ -99,6 +108,7 @@ let root: Root;
 let container: HTMLElement;
 beforeEach(() => {
   vi.clearAllMocks();
+  finishCoworkingAtRentalCommit = null;
   chat.runtimeUnavailable = false;
   chat.waitForRuntimeReady.mockImplementation(async () => !chat.runtimeUnavailable);
   coagent.state = {};
@@ -226,6 +236,38 @@ describe("SAN-874 latest-topic context", () => {
       });
       expect(handlers.inRentalSearch).toBe(true);
       expect(mapState.mergePinsByCategory).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(["completed", "failed"] as const)(
+    "protects new rental results when a coworking stream %s in the next commit layout phase",
+    async (stage) => {
+      coagent.state = { lastIntent: "rental_search", lastRentalQuery: {
+        neighborhood: "Laureles", maxPriceMonthly: 3_000_000,
+      } };
+      await act(async () => {
+        restoreRentalSearch({ userText: "Old Laureles apartments", params: {
+          neighborhood: "Laureles", maxPriceMonthly: 3_000_000,
+          budgetCurrency: "COP", stayType: "monthly",
+        } });
+      });
+      await act(async () => { handlers.onTopicShift?.("general_concierge", "accepted"); });
+      coagent.state = { lastIntent: "rental_search", lastRentalQuery: {
+        neighborhood: "Envigado", maxPriceMonthly: 2_500_000,
+      } };
+      finishCoworkingAtRentalCommit = stage;
+      await act(async () => {
+        restoreRentalSearch({ userText: "New Envigado apartments", params: {
+          neighborhood: "Envigado", maxPriceMonthly: 2_500_000,
+          budgetCurrency: "COP", stayType: "monthly",
+        } });
+      });
+      expect(finishCoworkingAtRentalCommit).toBeNull();
+      expect(mapState.mergePinsByCategory).not.toHaveBeenCalled();
+      expect(coagent.state.lastIntent).toBe("rental_search");
+      expect(coagent.state.lastRentalQuery).toMatchObject({
+        neighborhood: "Envigado", maxPriceMonthly: 2_500_000,
+      });
     },
   );
 

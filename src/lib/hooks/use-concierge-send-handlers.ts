@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { useConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
 import { useEventLocalChat } from "@/components/chat/event-local-chat-context";
 import { clearConciergePendingSend, setConciergePendingSend } from "@/lib/concierge-pending-store";
@@ -370,10 +370,10 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
     previous: Pick<ConciergeWorkingMemory, "lastIntent" | "lastRentalQuery" | "lastRentalResults" | "selectedListingId">;
   } | null>(null);
   const currentThreadRef = useRef(threadId);
-  // React refs must only be updated outside render. The effect refreshes the
-  // visible search identity after every committed provider/thread change, so
-  // a late agent callback cannot clean up a newer apartment search.
-  useEffect(() => {
+  // Update refs during commit, before another layout callback can finish an
+  // older agent stream. A passive effect runs too late and can erase a newer
+  // rental search or restore stale rental criteria.
+  useLayoutEffect(() => {
     currentRentalViewRef.current = {
       meta: rentalFastPath?.searchMeta,
       result: rentalFastPath?.toolResult,
