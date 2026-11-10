@@ -3,6 +3,8 @@ import { EventType, type BaseEvent } from "@ag-ui/client";
 import { of, toArray } from "rxjs";
 import {
   emitRecommendationSurface,
+  filterControlOk,
+  filterControlRenderEvents,
   recommendationIdsFromResult,
   renderUiEventsFor,
 } from "../recommendation-surface-bridge";
@@ -75,5 +77,50 @@ describe("emitRecommendationSurface", () => {
         .subscribe(resolve);
     });
     expect(rejected).toHaveLength(2);
+  });
+});
+
+describe("SAN-1655 filter control surface", () => {
+  const startEvent = (id: string, name: string) => ({ type: EventType.TOOL_CALL_START, toolCallId: id, toolCallName: name }) as BaseEvent;
+  const resultEvent = (id: string, content: unknown) => ({ type: EventType.TOOL_CALL_RESULT, toolCallId: id, content }) as BaseEvent;
+  it("emits one valid render_ui with the server-built control ops", () => {
+    const events = filterControlRenderEvents("tc-1");
+    expect(events).toHaveLength(3);
+    const args = JSON.parse((events[1] as unknown as { delta: string }).delta) as {
+      target: string; operations: Array<{ version: string; createSurface: { components: Array<{ component: string }> } }>;
+    };
+    expect(args.target).toBe("rental-recommendations");
+    expect(args.operations[0].version).toBe("1.0");
+    expect(args.operations[0].createSurface.components.map((c) => c.component)).toEqual([
+      "Column", "BedroomFilter", "ApplyFiltersButton",
+    ]);
+  });
+
+  it("refuses to render a rejected control result", async () => {
+    const events = await new Promise<BaseEvent[]>((resolve) => {
+      of(startEvent("f2", "showRentalFilterControl"), resultEvent("f2", JSON.stringify({ ok: false, message: "not the rentals page" })))
+        .pipe(emitRecommendationSurface(), toArray())
+        .subscribe(resolve);
+    });
+    const renders = events.filter(
+      (e) => e.type === EventType.TOOL_CALL_START && (e as { toolCallName?: string }).toolCallName === "render_ui",
+    );
+    expect(renders).toHaveLength(0);
+    expect(filterControlOk({ ok: false })).toBe(false);
+    expect(filterControlOk({ ok: true })).toBe(true);
+    expect(filterControlOk("not json")).toBe(false);
+  });
+
+  it("renders the control instead of cards for its tool result", async () => {
+    const events = await new Promise<BaseEvent[]>((resolve) => {
+      of(startEvent("f1", "showRentalFilterControl"), resultEvent("f1", JSON.stringify({ ok: true })))
+        .pipe(emitRecommendationSurface(), toArray())
+        .subscribe(resolve);
+    });
+    const renders = events.filter(
+      (e) => e.type === EventType.TOOL_CALL_START && (e as { toolCallName?: string }).toolCallName === "render_ui",
+    );
+    expect(renders).toHaveLength(1);
+    expect(events.some((e) => e.type === EventType.TOOL_CALL_START && (e as { toolCallName?: string }).toolCallName === "render_ui")).toBe(true);
   });
 });

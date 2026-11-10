@@ -1,12 +1,20 @@
 import { EventType, type BaseEvent } from "@ag-ui/client";
 import { Observable } from "rxjs";
 import { buildRentalRecommendationOps } from "./rental-recommendations-ui";
+import { buildRentalFilterControlOps } from "./rental-filter-control-ui";
 
 /** The model-facing tool name is the Mastra map key; the id may also appear. */
 const RECOMMENDATION_TOOLS = new Set([
   "showRecommendations",
   "showRecommendationsTool",
   "show-recommendations",
+]);
+
+/** SAN-1655 — the bedroom control is its own tool, with the same transport. */
+const FILTER_CONTROL_TOOLS = new Set([
+  "showRentalFilterControl",
+  "showRentalFilterControlTool",
+  "show-rental-filter-control",
 ]);
 
 /** The tool result may arrive as an object or as a JSON string, with or without an envelope. */
@@ -35,6 +43,38 @@ export function recommendationIdsFromResult(content: unknown): string[] {
  * runtime's generative-UI middleware validates and turns into surface
  * activities; the model never authors the operation JSON.
  */
+/**
+ * A rejected control call must not render: `{ ok: false }` carries no control.
+ * The recommendation path already refuses failed results; this is the same rule.
+ */
+export function filterControlOk(content: unknown): boolean {
+  let value: unknown = content;
+  if (typeof value === "string") {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      return false;
+    }
+  }
+  if (!value || typeof value !== "object") return false;
+  const payload = value as { ok?: unknown; result?: unknown };
+  if (payload.ok === false) return false;
+  if (payload.ok === true) return true;
+  if (payload.result && typeof payload.result === "object") return filterControlOk(payload.result);
+  return false;
+}
+
+export function filterControlRenderEvents(toolCallId: string): BaseEvent[] {
+  // Stable surface id: a replayed result replaces the same control.
+  const built = buildRentalFilterControlOps();
+  const callId = `render-ui-filters-${toolCallId}`;
+  return [
+    { type: EventType.TOOL_CALL_START, toolCallId: callId, toolCallName: "render_ui" },
+    { type: EventType.TOOL_CALL_ARGS, toolCallId: callId, delta: JSON.stringify(built) },
+    { type: EventType.TOOL_CALL_END, toolCallId: callId },
+  ] as BaseEvent[];
+}
+
 export function renderUiEventsFor(ids: readonly string[], toolCallId: string): BaseEvent[] | null {
   const built = buildRentalRecommendationOps(ids, `rental-recs-${toolCallId}`);
   if (!built) return null;
@@ -77,6 +117,13 @@ export function emitRecommendationSurface<T extends BaseEvent>(): (source: Obser
           subscriber.next(event);
           if (e.type !== EventType.TOOL_CALL_RESULT || !e.toolCallId) return;
           const name = names.get(e.toolCallId) ?? "";
+          if (FILTER_CONTROL_TOOLS.has(name)) {
+            if (!filterControlOk(e.content)) return;
+            for (const synthetic of filterControlRenderEvents(e.toolCallId)) {
+              subscriber.next(synthetic as unknown as T);
+            }
+            return;
+          }
           if (!RECOMMENDATION_TOOLS.has(name)) return;
           const ids = recommendationIdsFromResult(e.content);
           for (const synthetic of renderUiEventsFor(ids, e.toolCallId) ?? []) {

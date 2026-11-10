@@ -14,7 +14,8 @@ import { lookupPublicDiscoveryItemTool, lookupPublicDiscoveryItemFromServer } fr
 import { searchWebGroundedEventsTool } from '../tools/search-web-grounded-events';
 import { requestVenueBookingTool } from '../tools/request-venue-booking';
 import { showRecommendationsTool } from '../tools/show-recommendations';
-import { shouldRequestRecommendations } from '../lib/recommendation-intent';
+import { showRentalFilterControlTool } from '../tools/show-rental-filter-control';
+import { shouldRenderRentalFilterControl, shouldRequestRecommendations } from '../lib/recommendation-intent';
 import { CONCIERGE_AGENT_MODEL } from "../lib/models";
 import { geminiMalformedFirstStepRetry } from "../lib/gemini-malformed-retry";
 import { getDefaultInputProcessors } from "../lib/agent-input-processors";
@@ -553,6 +554,7 @@ export const conciergeAgent = new Agent({
     searchWebGroundedEventsTool,
     requestVenueBooking: requestVenueBookingTool,
     showRecommendations: showRecommendationsTool,
+    showRentalFilterControl: showRentalFilterControlTool,
   },
   inputProcessors: [
     // SAN-737: the verified current selection, tool schemas and working memory must
@@ -566,6 +568,10 @@ export const conciergeAgent = new Agent({
     // SAN-1656 — explicit "show ... as cards" is a UI command, not a question.
     // Pin the simple ID-list tool (never render_ui: forcing that produced empty
     // operations); the tool validates IDs and the transport builds the surface.
+    { id: 'san1655-filter-control-intent', processInputStep: ({ stepNumber, messages, requestContext }) =>
+      shouldRenderRentalFilterControl({ stepNumber, messages, requestContext })
+        ? { toolChoice: { type: 'tool' as const, toolName: 'showRentalFilterControl' } }
+        : {} },
     { id: 'san1656-recommendation-intent', processInputStep: ({ stepNumber, messages, requestContext }) =>
       shouldRequestRecommendations({ stepNumber, messages, requestContext })
         ? { toolChoice: { type: 'tool' as const, toolName: 'showRecommendations' } }
