@@ -18,6 +18,24 @@ const noHints = { get: () => ({ context: [] }) };
 const ask = (text: string) => [{ role: "user", content: text }];
 
 describe("shouldRequestRecommendations", () => {
+  it("treats from the current results as a reference, not as a new filter", () => {
+    expect(shouldRequestRecommendations({
+      stepNumber: 0,
+      messages: ask("Show the second apartment as a card from the current results"),
+      requestContext: hints,
+    })).toBe(true);
+    expect(shouldRequestRecommendations({
+      stepNumber: 0,
+      messages: ask("Show the first apartment as a card in the current results"),
+      requestContext: hints,
+    })).toBe(true);
+    expect(shouldRequestRecommendations({
+      stepNumber: 0,
+      messages: ask("Show the second apartment with a balcony as a card from the current results"),
+      requestContext: hints,
+    })).toBe(false);
+  });
+
   it.each([
     "Show the first two as cards.",
     "Show these apartments as cards.",

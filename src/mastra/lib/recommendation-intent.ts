@@ -39,6 +39,14 @@ const CURRENT_RESULTS_REFERENCE =
 const NEW_SEARCH_CRITERIA =
   /\b(bedrooms?|beds?|studio|furnished|unfurnished|balcony|parking|budget|under|below|above|over|between|less|more|price|cost|monthly|nightly|cop|usd|in|near|around|with|without|before|after|from|until|for)\b|\b\d+\s*(?:br|bed)\b/i;
 
+/**
+ * "From/in the current results" identifies existing cards, not a new search filter.
+ * Remove only that exact pointer before detecting new criteria ("with balcony",
+ * "under COP 3M", "in Laureles" etc.). Never strip actual filter words.
+ */
+const CURRENT_RESULTS_POINTER =
+  /\b(?:from|in)\s+(?:the\s+)?(?:current|existing|shown|visible)\s+(?:results?|listings?|apartments?|ones?)\b/gi;
+
 export function shouldRequestRecommendations({
   stepNumber,
   messages,
@@ -56,6 +64,7 @@ export function shouldRequestRecommendations({
   const text = messageText(lastUser).trim();
   if (!text) return false;
   if (!SHOW_AS_CARDS.test(text) && !SHOW_PAGE_RESULTS.test(text)) return false;
-  if (!CURRENT_RESULTS_REFERENCE.test(text) || NEW_SEARCH_CRITERIA.test(text)) return false;
+  const requestWithoutCurrentPointer = text.replace(CURRENT_RESULTS_POINTER, " ");
+  if (!CURRENT_RESULTS_REFERENCE.test(text) || NEW_SEARCH_CRITERIA.test(requestWithoutCurrentPointer)) return false;
   return !ASKS_FOR_DETAILS.test(text);
 }
