@@ -32,7 +32,7 @@ export type ConciergeSendHandlers = {
   /** Optional current-results-only guard, checked before an agent route. */
   handleGroundedAmenityFollowUp?: (text: string, submissionId?: string) => Promise<boolean>;
   handleRestaurantMessage: (text: string, submissionId?: string) => Promise<boolean>;
-  onAgentSend: (text: string, submissionId?: string) => Promise<boolean>;
+  onAgentSend: (text: string, submissionId?: string, onAccepted?: () => void) => Promise<boolean>;
   /** Working-memory lastIntent — enables Flash topicShift (SAN-873). */
   lastIntent?: FlashRouteClassification["intent"];
   /** True while the conversation is in a rental search (current or saved legacy intent). */
@@ -103,16 +103,25 @@ export async function sendConciergeUserMessage(
       inRentalSearch: handlers.inRentalSearch,
     });
 
-    // Publish confirmed cross-topic changes before a Mastra turn. A successful
-    // agent answer does not necessarily update lastIntent promptly. Without
-    // this clear, the next bare monthly budget can revive old rental results.
-    const distinctTopic = classification.intent === "restaurant_discovery" ||
-      classification.intent === "event_discovery" ||
-      classification.intent === "venue_booking" ||
-      (classification.topicShift === true && classification.intent !== "rental_search");
-    if (distinctTopic) {
+    // Only the deterministic explicit coworking route changes the active
+    // rental context here. Flash topicShift hints and restaurant/event fast
+    // paths already have their own result/pin policy (including empty results).
+    // The agent calls onAccepted only after an authenticated message was
+    // actually appended, so guests and failed runtime starts keep rental cards.
+    const coworkingShift = classification.reason === "explicit coworking discovery topic change" &&
+      classification.intent === "general_concierge" && handlers.inRentalSearch;
+    if (coworkingShift) {
+      setConciergePendingSend(true);
+      agentAttempted = true;
+      return await handlers.onAgentSend(trimmed, submissionId, () => {
+        handlers.closeRentalDetails?.();
+        handlers.onTopicShift?.(classification.intent);
+      });
+    }
+    if (classification.intent === "restaurant_discovery" ||
+        classification.intent === "event_discovery" ||
+        classification.intent === "venue_booking") {
       handlers.closeRentalDetails?.();
-      if (handlers.inRentalSearch) handlers.onTopicShift?.(classification.intent);
     }
 
     for (const target of routerHandlerOrderFromClassification(classification)) {
