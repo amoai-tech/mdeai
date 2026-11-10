@@ -46,6 +46,15 @@ export function renderUiEventsFor(ids: readonly string[], toolCallId: string): B
   ] as BaseEvent[];
 }
 
+/*
+ * ponytail: this bridge is a deliberate ceiling. The official path (the model
+ * calling render_ui with the forwarded guide) produced ONE card in its first
+ * live run; this path produced two cards in three consecutive runs. Keep both
+ * until the official path matches that, then delete this file, the tool and the
+ * intent processor in one change. Upgrade path: forward the official guide only
+ * (already shipped), verify 3x with no tool, then remove.
+ */
+
 /**
  * Watches the agent stream for a completed `show_recommendations` call and
  * appends the synthetic `render_ui` call that renders its IDs. Other tools and
