@@ -19,20 +19,40 @@ Portable repository guidance for coding agents working from the current Git chec
 
 **Default decision:** When a business restriction prevents building or exercising a core feature, make that feature functional now while retaining technical security and truthful data. **Success in development means working user journeys — not more gates, paperwork, or documentation.**
 
-## Authenticated QA — agent quick start (read BEFORE searching for credentials)
+## Authenticated QA — 1Password, Playwright and Chrome (read before testing)
 
-All coding/browser agents (Claude, Codex, ChatGPT/Desktop Commander, Chrome DevTools MCP, DeepSeek harnesses) must reuse **existing** MDE passwordless Supabase QA sessions. Never ask for a password, create another permanent Super Admin, use auth bypass flags, print test tokens, or copy service keys into MCP/browser configuration.
+All coding/browser agents must reuse the existing MDE passwordless Supabase QA identities and `e2e/fixtures.ts` / `e2e/helpers/auth.ts`. No duplicate login helpers, permanent test accounts, auth bypass, browser service keys or exposed session tokens.
 
-| Task | Canonical entry point |
-| --- | --- |
-| Check E2E credentials (presence only) | `npm run qa:auth:check` |
-| Super Admin Playwright proof | `npm run qa:test:admin` (existing `superAdminPage` fixture; read-only) |
-| Interactive Chrome DevTools MCP debugging | `npm run qa:browser` (existing non-admin event-host QA role; see `--help`) |
-| Actual E2E cases | Import `test` from `e2e/fixtures.ts`, request `superAdminPage` / `qaRolePage`, and use `e2e/helpers/auth.ts` |
+**1Password (configured Ubuntu QA host only):** Developer Environment `MDE-QA`, account `my`. The existing local `mde-qa-op` helper runs only approved npm QA commands from its configured QA worktree and verifies the expected Supabase project. It is **not** a committed repository executable and may not exist on another host or in CI. If unavailable, follow the existing authorized QA setup in [e2e/README.md](e2e/README.md#agent-qa-commands--authenticated-chrome); do not improvise another authentication system.
 
-`qa:browser` launches an isolated Chrome QA profile with a loopback-only CDP listener (default port 9227, adjustable via `--port`). Attach a **trusted** Chrome DevTools MCP using `--browser-url=http://127.0.0.1:9227` or the chosen port. Chrome is located using platform-specific paths or an operator-provided `CHROME_PATH`. Super Admin CDP access needs explicit `--role=super-admin --allow-admin`; prefer non-admin for visual debugging. CDP agents can read cookies and protected page data. Always stop the launcher afterwards. For RLS checks, use separate temporary identities and verified cleanup. Authenticated Playwright tests must disable screenshot, trace, and video and must never upload private reports.
+**Before an authenticated test (require both `MDE QA 1Password: PASS` and `MDE QA auth: PASS`):**
 
-Details, copy-paste commands, and non-admin role setup: [e2e/README.md](e2e/README.md#agent-qa-commands--authenticated-chrome).
+```bash
+op vault list --account my >/dev/null  # account access only; NOT proof of Environment access
+mde-qa-op npm run qa:auth:check          # checks the MDE-QA Environment and expected project
+```
+
+If 1Password denies access, unlock the Desktop app and approve the trusted CLI request; fail closed rather than bypass. Never use `op environment secret list` as a harmless metadata check: current CLI versions can print secret **values**.
+
+**Live site — non-admin interactive QA (read-only by default):**
+
+```bash
+mde-qa-op npm run qa:browser -- --role=renter --origin=https://www.mdeai.co --allow-remote --port=9255
+```
+
+**Localhost — start `npm run dev:ui:worktree` in the same dedicated QA worktree used by the local helper (UI :3002), then in another terminal:**
+
+```bash
+mde-qa-op npm run qa:browser -- --role=renter --origin=http://localhost:3002 --port=9255
+```
+
+The launcher authenticates at `/saved`, then allows navigation to Rentals, Events, Broker and other authorized pages. Existing roles: `renter`, `event-host`, `broker`; use the protected `superAdminPage` Playwright fixture via `mde-qa-op npm run qa:test:admin` for Super Admin tests, **not** interactive admin CDP. The default direct `npm run qa:browser` role is event-host, port 9227; 9255 is only the explicit example above.
+
+**Browser automation:** Chrome DevTools MCP connects to `http://127.0.0.1:9255` (`--browser-url`); Playwright should normally use existing `qaRolePage` and `superAdminPage` fixtures, or trusted Chromium CDP attachment when needed. Do not let two agents control one page simultaneously. Keep CDP loopback-only. All authenticated Playwright tests set `screenshot`, `trace` and `video` to `"off"`, and never upload authenticated artifacts. Test real UI/API/DB results, exact identities, 390px layout and retries; writes on the shared live database require explicit test-specific authorization, idempotency and verified cleanup. Never assert persistence from a success toast alone.
+
+**Finish:** Press Ctrl+C in the `qa:browser` launcher terminal and confirm the temporary profile/CDP listener closes. Never print passwords, API keys, cookies, tokens, service-role secrets or session data.
+
+**Full 1Password runbook:** [docs/06-testing/1password-qa-agent-guide.md](docs/06-testing/1password-qa-agent-guide.md). **Canonical browser fixtures and role/security contracts:** [e2e/README.md](e2e/README.md#agent-qa-commands--authenticated-chrome).
 
 ## Repository truth
 
@@ -42,6 +62,17 @@ Details, copy-paste commands, and non-admin role setup: [e2e/README.md](e2e/READ
 - `.claude/skills/` is the canonical project skill library. `.agents/skills/` mirrors every canonical entry (`SKILL.md`, `references/`, `scripts/`, `evals/`) as **relative symlinks** so other agents resolve the same files. `npm run check:skills` fails on a copy, an absolute link, or a missing entry; if a mirror genuinely needs a different shape, change the checker in the same PR and say why.
 - Linear is the durable task/progress source of truth for substantial SAN work.
 - Never rely on machine-specific absolute paths; resolve the current checkout root dynamically.
+
+## Intent, specifications and plans — reuse the existing sources
+
+Before substantive implementation, establish **intent → specification → plan → proof**, then execute the smallest verified change:
+- **Intent (why / user outcome):** `prd.md` owns product requirements; the existing Linear issue owns the task's real-world outcome.
+- **Specification (what / acceptance criteria):** read the *current* Linear issue and any concrete spec it links. Record exact behavior, data/auth boundaries, negative cases and observable success; do not invent requirements.
+- **Plan (how / dependency order):** use the existing issue's implementation steps, the current code and `roadmap.md` strategic direction. Reuse installed features before custom code; identify the smallest file changes and focused tests.
+- **Proof (did it work?):** run focused tests, applicable RLS/integration and browser journeys, then exact-head CI. Link the results back to the existing Linear task and PR. `mvp.md` owns **Phase B launch** criteria, not Phase A business-development gates.
+
+`intent.md`, `spec.md`, and `specs.md` are **not required project-wide filenames**; load them only if they actually exist and the task references them. Root `plan.md` is not the live task queue: verify its date against Linear before using it. Do not create four competing specs for one task. Use `AGENTS.md` for cross-repo rules, the Linear issue for task-level intent/spec/plan, and specialized skills for execution details.
+
 
 ## Build and test commands
 
