@@ -120,3 +120,20 @@ Choose the smallest pre-merge test set that proves the risks introduced by this 
 ## User-journey gate
 
 For user-facing or AI-native workflows, apply [user-journey-testing.md](user-journey-testing.md). Test the affected MDE outcome across UI, services, data, authorization and persistence; no Phase A business approval prerequisites. Preserve user confirmation and independent S4 technical review when actually applicable. For AI-native journeys, Playwright alone is insufficient: add AI quality and guardrail evidence when applicable.
+
+
+## MDE-specific local and worktree failure traps
+
+The following operational edge cases were consolidated from repository-level instructions. Check their current applicability against the target commit and local environment:
+
+- `check:env:ci` fails in a fresh worktree with no `.env`; export `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, and `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` first.
+- `.env` and `.env.local` can disagree (notably `VERCEL_*`). State which file you used.
+- Tests under `scripts/__tests__/*.test.mjs` run with `node --test` through `check:release-gates`, not Vitest. Vitest only collects `src/**` and `e2e/**/*.test.ts`.
+- A fresh git worktree needs `scripts/worktree-bootstrap.sh` (clean `npm ci`, copies local Codacy config). Production-backed `.env`/`.env.local` links require explicit `MDE_WORKTREE_LINK_ENV=1` opt-in. `npm run floor` also needs `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`, which lives in the main checkout's `.env`, not `.env.local`.
+- There is one Supabase project and it is production. Any test that uses the service-role key writes real rows, so it must clean up after itself and re-query to prove nothing is left (pattern: `e2e/san-1204-broker-viewing-requests.spec.ts`). An unknown count is never zero.
+- Anonymous viewing requests are limited to 20 per IP per hour (`chat-lead-capture`). Repeated E2E runs hit `RATE_LIMIT`; do not retry around it.
+- Local Codacy (`codacy-analysis analyze --pr`) needs `.codacy/`, which is untracked and exists only in the main checkout. With no config it runs zero tools and proves nothing: check `toolResults` is non-empty.
+- Never run `pkill -f <pattern>` from the agent shell: the pattern matches the shell's own command line and kills it. Stop a dev server by its port instead.
+- `next dev` maintains the `nextjs-agent-rules` block at the bottom of this file. It is committed on purpose so the tree stays clean; do not delete it.
+
+The canonical browser/role and private-artifact contract remains in [`e2e/README.md`](../../../../e2e/README.md). Never use an unknown/untested production row count as proof of cleanup.
