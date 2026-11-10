@@ -150,7 +150,7 @@ describe("SAN-867 · VEB-MVP-001 — Router hijack fix — sendConciergeUserMess
     const handlers = {
       ...makeHandlers(), inRentalSearch: true,
       onTopicShift: vi.fn<(intent: import("@/lib/router-intent").RouterIntent) => void>(),
-      onAgentSend: vi.fn<(text: string, id?: string, onAccepted?: () => void, onCompleted?: () => void) => Promise<boolean>>(
+      onAgentSend: vi.fn<(text: string, id?: string, onAccepted?: () => void, onCompleted?: () => void, onFailed?: () => void) => Promise<boolean>>(
         async (_text, _id, onAccepted, onCompleted) => {
           onAccepted?.();
           onCompleted?.();
@@ -163,9 +163,25 @@ describe("SAN-867 · VEB-MVP-001 — Router hijack fix — sendConciergeUserMess
     expect(handlers.onTopicShift).toHaveBeenNthCalledWith(1, "general_concierge", "accepted");
     expect(handlers.onTopicShift).toHaveBeenNthCalledWith(2, "general_concierge", "completed");
     expect(handlers.onAgentSend).toHaveBeenCalledWith(
-      "What coworking spaces are in Laureles?", expect.any(String), expect.any(Function), expect.any(Function),
+      "What coworking spaces are in Laureles?", expect.any(String), expect.any(Function), expect.any(Function), expect.any(Function),
     );
     expect(handlers.handleRentalMessage).not.toHaveBeenCalled();
+  });
+
+  it("SAN-874 rolls back topic intent when a coworking stream fails", async () => {
+    const handlers = {
+      ...makeHandlers(), inRentalSearch: true,
+      onTopicShift: vi.fn(),
+      onAgentSend: vi.fn(async (_text: string, _id?: string, onAccepted?: () => void,
+        _onCompleted?: () => void, onFailed?: () => void) => {
+        onAccepted?.();
+        onFailed?.();
+        return true;
+      }),
+    };
+    await sendConciergeUserMessage("What coworking spaces are in Laureles?", handlers);
+    expect(handlers.onTopicShift).toHaveBeenNthCalledWith(1, "general_concierge", "accepted");
+    expect(handlers.onTopicShift).toHaveBeenNthCalledWith(2, "general_concierge", "failed");
   });
 
   it("SAN-874 keeps rental cards when a coworking agent turn did not start", async () => {
