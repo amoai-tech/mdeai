@@ -122,15 +122,46 @@ describe("A2UI system instructions", () => {
     // telling the model a panel exists on every page.
     expect(MDE_A2UI_GUIDE).toContain('"rental-recommendations"');
     expect(MDE_A2UI_GUIDE).toContain("target list on the render_ui tool");
-    expect(MDE_A2UI_GUIDE).toContain("only accepts RentalCard plus layout components");
+    expect(MDE_A2UI_GUIDE).toContain("use only RentalCard, Column, Row, Divider and at most one Title");
     expect(MDE_A2UI_GUIDE).not.toContain('Call render_ui with target "chat" and exactly one');
   });
 
-  it("tells the model the catalog also carries the Standard Catalog", () => {
-    // SAN-1654: layout/table/form answers come from standardUI, but grounded
-    // cards stay the first choice for real apartments and events.
-    expect(MDE_A2UI_GUIDE).toContain("official CopilotKit Standard Catalog");
-    expect(MDE_A2UI_GUIDE).toContain("Always prefer RentalCard/EventCard");
-    expect(MDE_A2UI_GUIDE).toContain("Do not render the same apartments in both");
+  it("documents the component vocabulary instead of leaving props to guesswork", () => {
+    // SAN-1654: MDE builds its own guide, so the model never sees upstream
+    // schemas. Everything exposed in the catalog must be documented here, or the
+    // model invents prop names and the runtime rejects the operation.
+    for (const name of ["Column", "Row", "Title", "Text", "Caption", "Label", "Badge", "FollowUp"]) {
+      expect(MDE_A2UI_GUIDE).toContain(name);
+    }
+    for (const prop of ["children", "text", "label"]) {
+      expect(MDE_A2UI_GUIDE).toContain(prop);
+    }
+  });
+
+  it("gives a working multi-card example that references child node ids", () => {
+    // The earlier guide said "use a Column for more than one card" without
+    // saying how the Column references the cards, so the model produced an empty
+    // Column or a tree the validator rejected.
+    expect(MDE_A2UI_GUIDE).toContain('"children":["card-1","card-2"]');
+    expect(MDE_A2UI_GUIDE).toContain('{"id":"root","component":"Column"');
+    expect(MDE_A2UI_GUIDE).toContain('{"id":"card-1","component":"RentalCard","listingId":"<id-1>"}');
+    expect(MDE_A2UI_GUIDE).toContain('{"id":"card-2","component":"RentalCard","listingId":"<id-2>"}');
+  });
+
+  it("does not promise controls that have no registered action", () => {
+    // A rendered Button/input with no catalog function is a dead control next
+    // to real listings. The catalog omits them until SAN-1655/1658.
+    expect(MDE_A2UI_GUIDE).toContain("no buttons, inputs, forms");
+    expect(MDE_A2UI_GUIDE).toContain("Do not promise one");
+    expect(MDE_A2UI_GUIDE).toContain("Offer a FollowUp instead");
+    expect(MDE_A2UI_GUIDE).not.toMatch(/component: "Button"/);
+  });
+
+  it("scopes the no-prose rule so a short heading is not contradictory", () => {
+    // The Surface asks for a short Title; the old rule banned all prose in
+    // props. One rule now: data or a short label, never a paragraph.
+    expect(MDE_A2UI_GUIDE).toContain("short labels (8 words or fewer)");
+    expect(MDE_A2UI_GUIDE).toContain("Never put paragraphs");
+    expect(MDE_A2UI_GUIDE).not.toContain("Never put prose");
   });
 });

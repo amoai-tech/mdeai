@@ -412,30 +412,67 @@ function MdeEventCard({ eventId }: { eventId: string }) {
 
 /**
  * SAN-1654 — the official Standard Catalog is the base of MDE's one catalog, so
- * the agent can lay out a real answer (a comparison table, a short form, a
- * list) instead of only ever rendering one card.
+ * the agent can arrange and label real cards instead of only ever rendering one.
  *
- * Components that need a package MDE does not install are omitted rather than
- * offered with a silent fallback, because "render a chart" that actually draws a
- * table is a worse answer than "use a table". `mde-ui-catalog.test.ts` fails if
- * one of these silently starts existing again.
+ * The kept vocabulary is deliberately tiny and is documented prop-by-prop in
+ * the server guide (`src/mastra/lib/generative-ui-context.ts`). The model does
+ * not receive the upstream component schemas: MDE builds its own guide from a
+ * presence flag, so a component the guide does not document is a component the
+ * model would have to guess at. Two consequences:
  *
- * Keeping the list small also matters for cost: the provider sends the catalog
- * and its writing guide with every concierge run, so each omitted component is
- * prompt tokens on every turn. A page that needs a different subset mounts a
- * `GenerativeUISurface` with its own `components` allowlist instead of widening
- * this global catalog.
+ * - **Controls are omitted until they are wired.** Button, Pressable and every
+ *   input (Form, TextField, Select, CheckBox, Radio, Slider, DateTimeInput,
+ *   SegmentedControl, ChoicePicker, Tabs) render a dead control when no
+ *   catalog function is registered: a fake "Book viewing" next to real
+ *   listings. RentalCard already owns grounded Details and viewing actions.
+ *   SAN-1655/SAN-1658 add these back together with their functions.
+ * - **Complex data structures are omitted until documented.** Table* needs a
+ *   nested shape the guide would have to teach; MDE already renders real
+ *   comparison tables from tool results (SAN-1041). Charts and maps need peer
+ *   libraries MDE does not install, HtmlView/Svg would let the model author
+ *   markup, and Image/Link/Citation would accept model-chosen URLs.
+ *
+ * Every omitted name must still exist in the installed `standardUI`, and the
+ * exposed set must equal exactly what the guide documents — both enforced by
+ * `mde-ui-catalog.test.ts`, so an SDK upgrade cannot silently drift.
  */
-const MDE_OMITTED_STANDARD_COMPONENTS = [
-  // Optional peer libraries MDE does not ship: Chart → chart.js, Map → maplibre-gl,
-  // Icon → lucide. An unmounted provider would show a fallback, not the component.
+export const MDE_OMITTED_STANDARD_COMPONENTS = [
+  // Optional peer libraries MDE does not ship (chart.js, maplibre-gl, lucide).
   "Chart",
   "Icon",
   "Map",
-  // Markup injection: the model would control HTML/SVG rather than data.
+  // Model-authored markup or model-chosen URLs.
   "HtmlView",
   "Svg",
-  // Media and typographic ornament with no MDE discovery answer behind it.
+  "Image",
+  "ImageGrid",
+  "Link",
+  "LinkCard",
+  "Citation",
+  // Controls with no registered catalog function yet (SAN-1655 / SAN-1658).
+  "Button",
+  "Pressable",
+  "Form",
+  "TextField",
+  "TextArea",
+  "Select",
+  "CheckBox",
+  "Radio",
+  "RadioGroup",
+  "Slider",
+  "DateTimeInput",
+  "SegmentedControl",
+  "ChoicePicker",
+  "Tabs",
+  // Nested data structures the guide does not teach yet.
+  "Table",
+  "TableSection",
+  "TableRow",
+  "TableCell",
+  "List",
+  "ListItem",
+  "EntityCard",
+  // Media, overlay and typographic ornament with no discovery answer behind it.
   "AudioPlayer",
   "Blockquote",
   "Bold",
@@ -448,12 +485,12 @@ const MDE_OMITTED_STANDARD_COMPONENTS = [
   "Flow",
   "FlowItem",
   "Italic",
+  "Markdown",
   "Math",
   "Modal",
   "Popover",
   "PopoverContent",
   "PopoverTrigger",
-  "Pressable",
   "PulseIndicator",
   "ShimmerText",
   "Strikethrough",

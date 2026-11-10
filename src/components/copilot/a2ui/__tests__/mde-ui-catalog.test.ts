@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { z } from "zod";
+import { standardUI } from "@copilotkit/react-core/v2/generative-ui";
 import {
+  MDE_OMITTED_STANDARD_COMPONENTS,
   collectEventResults,
   collectRentalResults,
   eventDetailHref,
@@ -35,41 +37,66 @@ describe("MDE A2UI catalog", () => {
     expect(mdeUI.components.has("EventCard")).toBe(true);
   });
 
-  it("extends the official Standard Catalog for layout and presentation", () => {
-    // SAN-1654: a real answer often needs a table or a short form, not one card.
+  it("exposes exactly the documented vocabulary", () => {
+    // The server guide documents these props by name; anything else in the
+    // catalog would be a component the model has to guess at. Update both
+    // together, never one alone.
+    expect([...mdeUI.components.keys()].sort()).toEqual([
+      "Badge", "Box", "Caption", "Card", "Column", "Divider", "EventCard",
+      "FollowUp", "Grid", "GridItem", "Label", "RentalCard", "Row", "Spacer",
+      "Text", "Title",
+    ]);
+  });
+
+  it("omits every control until a catalog function is registered", () => {
+    // A rendered Button or input with no bound action is a dead control next to
+    // real listings. SAN-1655/SAN-1658 add these back with their functions.
     for (const name of [
-      "Card",
-      "Column",
-      "Row",
-      "Title",
-      "Text",
-      "Table",
-      "TableRow",
-      "TableCell",
-      "TextField",
-      "Select",
-      "Form",
-      "Button",
-      "Badge",
+      "Button", "Pressable", "Form", "TextField", "TextArea", "Select",
+      "CheckBox", "Radio", "RadioGroup", "Slider", "DateTimeInput",
+      "SegmentedControl", "ChoicePicker", "Tabs",
     ]) {
-      expect(mdeUI.components.has(name), `${name} must be renderable`).toBe(true);
+      expect(mdeUI.components.has(name), `${name} must stay omitted`).toBe(false);
     }
   });
 
-  it("omits components whose optional library MDE does not install", () => {
-    // Chart → chart.js, Map → maplibre-gl, Icon → lucide. A silent fallback
-    // would draw a table where the model promised a chart.
-    for (const name of ["Chart", "Map", "Icon"]) {
+  it("omits data structures and remote-content components the guide does not teach", () => {
+    for (const name of [
+      "Table", "TableSection", "TableRow", "TableCell", "List", "ListItem",
+      "Chart", "Map", "Icon", "Image", "ImageGrid", "Link", "LinkCard",
+      "Citation", "HtmlView", "Svg",
+    ]) {
       expect(mdeUI.components.has(name), `${name} must stay omitted`).toBe(false);
     }
-    expect(mdeUI.components.has("HtmlView")).toBe(false);
-    expect(mdeUI.components.has("Svg")).toBe(false);
+  });
+
+  it("cannot drift from the installed Standard Catalog", () => {
+    // Every omitted name must still exist upstream (a typo or a removed name
+    // would make omit() throw or silently hide nothing)...
+    for (const name of MDE_OMITTED_STANDARD_COMPONENTS) {
+      expect(standardUI.components.has(name), `${name} is not a standardUI component`).toBe(true);
+    }
+    // ...and every installed standard component is either exposed or explicitly
+    // omitted. A new upstream component fails here instead of appearing in the
+    // prompt undocumented.
+    const exposedStandard = [...mdeUI.components.keys()].filter((name) =>
+      standardUI.components.has(name),
+    );
+    const accounted = new Set([...exposedStandard, ...MDE_OMITTED_STANDARD_COMPONENTS]);
+    expect([...standardUI.components.keys()].filter((name) => !accounted.has(name))).toEqual([]);
+    expect(exposedStandard.length + MDE_OMITTED_STANDARD_COMPONENTS.length).toBe(
+      standardUI.components.size,
+    );
+    // No duplicates: a name in both lists would make the accounting above lie.
+    expect(MDE_OMITTED_STANDARD_COMPONENTS.filter((name) => exposedStandard.includes(name))).toEqual([]);
   });
 
   it("lets only the Rentals panel's allowlist onto that Surface", () => {
-    // The panel is a place for real apartments, not a second free-form canvas.
-    expect([...RENTAL_RECOMMENDATIONS_COMPONENTS]).toContain("RentalCard");
-    expect([...RENTAL_RECOMMENDATIONS_COMPONENTS]).not.toContain("EventCard");
+    // The panel is a place for real apartments, not a second free-form canvas
+    // and not a place for dead controls.
+    expect([...RENTAL_RECOMMENDATIONS_COMPONENTS]).toEqual([
+      "RentalCard", "Column", "Row", "Divider", "Title",
+    ]);
     for (const name of RENTAL_RECOMMENDATIONS_COMPONENTS) {
       expect(mdeUI.components.has(name), `${name} is allowed on the panel but missing from mdeUI`).toBe(true);
     }
