@@ -189,6 +189,8 @@ type RentalUiContextValue = {
   openVenueDetail: (target: VenueDetailTarget) => void;
   setEventVenueStep: (step: EventVenueSheetStep) => void;
   closeVenueDetail: () => void;
+  /** Close only a stale rental; preserve an event detail or checkout. */
+  closeRentalDetails: () => void;
   openCafeDetail: (detail: CafeVenueDetail, siblings?: CafeVenueDetail[]) => void;
   closeCafeDetail: () => void;
   openCafeBooking: (target: CafeVenueDetail) => void;
@@ -272,6 +274,10 @@ export function RentalUiProvider({ children }: { children: ReactNode }) {
 
   const closeVenueDetail = useCallback(() => {
     setVenueDetail(null);
+  }, []);
+
+  const closeRentalDetails = useCallback(() => {
+    setVenueDetail((previous) => previous?.kind === "rental" ? null : previous);
   }, []);
 
   const openCafeDetail = useCallback(
@@ -395,6 +401,7 @@ export function RentalUiProvider({ children }: { children: ReactNode }) {
       openVenueDetail,
       setEventVenueStep,
       closeVenueDetail,
+      closeRentalDetails,
       openCafeDetail,
       closeCafeDetail,
       openCafeBooking,
@@ -438,6 +445,7 @@ export function RentalUiProvider({ children }: { children: ReactNode }) {
       openVenueDetail,
       setEventVenueStep,
       closeVenueDetail,
+      closeRentalDetails,
       openCafeDetail,
       closeCafeDetail,
       openCafeBooking,

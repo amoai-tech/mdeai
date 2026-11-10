@@ -12,12 +12,12 @@ const chat = vi.hoisted(() => ({ appendMessage: vi.fn(), runtimeUnavailable: fal
 const coagent = vi.hoisted(() => ({ state: {} as Record<string, unknown> }));
 const mapState = vi.hoisted(() => ({ selectedPinId: null as string | null, pins: [] as Array<{ id: string; category: string }> }));
 const groundedCtx = vi.hoisted(() => ({ toolResult: null as unknown }));
-const rentalDetails = vi.hoisted(() => ({ toolResult: null as unknown, openVenueDetail: vi.fn(), closeVenueDetail: vi.fn() }));
+const rentalDetails = vi.hoisted(() => ({ toolResult: null as unknown, openVenueDetail: vi.fn(), closeRentalDetails: vi.fn() }));
 vi.mock("@/components/chat/rental-fast-path-context", () => ({
   useOptionalRentalFastPath: () => ({ toolResult: rentalDetails.toolResult }),
 }));
 vi.mock("@/components/chat/rental-ui-context", () => ({
-  useRentalUi: () => ({ openVenueDetail: rentalDetails.openVenueDetail, closeVenueDetail: rentalDetails.closeVenueDetail }),
+  useRentalUi: () => ({ openVenueDetail: rentalDetails.openVenueDetail, closeRentalDetails: rentalDetails.closeRentalDetails }),
 }));
 const richShown = vi.hoisted(() => ({ ids: [] as string[] }));
 vi.mock("@/components/chat/rich-card-results-context", () => ({
@@ -634,7 +634,7 @@ describe("full chat Details requests use the currently shown rental IDs", () => 
       expect(rentalDetails.openVenueDetail).toHaveBeenCalledOnce();
       await sendConciergeUserMessage(text, handlers);
     });
-    expect(rentalDetails.closeVenueDetail).toHaveBeenCalledOnce();
+    expect(rentalDetails.closeRentalDetails).toHaveBeenCalledOnce();
     expect(rentalDetails.openVenueDetail).toHaveBeenCalledOnce();
   });
 
