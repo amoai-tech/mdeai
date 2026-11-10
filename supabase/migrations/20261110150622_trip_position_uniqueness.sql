@@ -8,18 +8,31 @@ ALTER TABLE public.trip_items
 LOCK TABLE public.trip_items IN ACCESS EXCLUSIVE MODE;
 WITH duplicates AS (
   SELECT id,
+         trip_id,
          row_number() OVER (
            PARTITION BY trip_id, position
            ORDER BY created_at, id
          ) AS duplicate_number,
          max(position) OVER (PARTITION BY trip_id) AS max_position
   FROM public.trip_items
+),
+pending AS (
+  SELECT id, trip_id, max_position
+  FROM duplicates
+  WHERE duplicate_number > 1
+),
+renumbered AS (
+  SELECT id,
+         max_position + row_number() OVER (
+           PARTITION BY trip_id
+           ORDER BY id
+         ) AS new_position
+  FROM pending
 )
 UPDATE public.trip_items ti
-SET position = duplicates.max_position + duplicates.duplicate_number
-FROM duplicates
-WHERE ti.id = duplicates.id
-  AND duplicates.duplicate_number > 1;
+SET position = renumbered.new_position
+FROM renumbered
+WHERE ti.id = renumbered.id;
 
 ALTER TABLE public.trip_items
   ADD CONSTRAINT trip_items_trip_id_position_unique UNIQUE (trip_id, position);
