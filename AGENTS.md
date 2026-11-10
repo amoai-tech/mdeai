@@ -25,14 +25,14 @@ All coding/browser agents must reuse the existing MDE passwordless Supabase QA i
 
 **1Password (configured Ubuntu QA host only):** Developer Environment `MDE-QA`, account `my`. The existing local `mde-qa-op` helper runs only approved npm QA commands from its configured QA worktree and verifies the expected Supabase project. It is **not** a committed repository executable and may not exist on another host or in CI. If unavailable, follow the existing authorized QA setup in [e2e/README.md](e2e/README.md#agent-qa-commands--authenticated-chrome); do not improvise another authentication system.
 
-**Before an authenticated test (require both `MDE QA 1Password: PASS` and `MDE QA auth: PASS`):**
+**On the configured 1Password host, require both `MDE QA 1Password: PASS` and `MDE QA auth: PASS` before authenticated testing:**
 
 ```bash
 op vault list --account my >/dev/null  # account access only; NOT proof of Environment access
 mde-qa-op npm run qa:auth:check          # checks the MDE-QA Environment and expected project
 ```
 
-If 1Password denies access, unlock the Desktop app and approve the trusted CLI request; fail closed rather than bypass. Never use `op environment secret list` as a harmless metadata check: current CLI versions can print secret **values**.
+If 1Password denies access, unlock the Desktop app and approve the trusted CLI request; fail closed rather than bypass. On other hosts or in CI, use the existing supported environment setup in `e2e/README.md` and require **`MDE QA auth: PASS`**; the host-local 1Password PASS marker does not apply. Never use `op environment secret list` as a harmless metadata check: current CLI versions can print secret **values**.
 
 **Live site — non-admin interactive QA (read-only by default):**
 
@@ -48,7 +48,7 @@ mde-qa-op npm run qa:browser -- --role=renter --origin=http://localhost:3002 --p
 
 The launcher authenticates at `/saved`, then allows navigation to Rentals, Events, Broker and other authorized pages. Existing roles: `renter`, `event-host`, `broker`; use the protected `superAdminPage` Playwright fixture via `mde-qa-op npm run qa:test:admin` for Super Admin tests, **not** interactive admin CDP. The default direct `npm run qa:browser` role is event-host, port 9227; 9255 is only the explicit example above.
 
-**Browser automation:** Chrome DevTools MCP connects to `http://127.0.0.1:9255` (`--browser-url`); Playwright should normally use existing `qaRolePage` and `superAdminPage` fixtures, or trusted Chromium CDP attachment when needed. Do not let two agents control one page simultaneously. Keep CDP loopback-only. All authenticated Playwright tests set `screenshot`, `trace` and `video` to `"off"`, and never upload authenticated artifacts. Test real UI/API/DB results, exact identities, 390px layout and retries; writes on the shared live database require explicit test-specific authorization, idempotency and verified cleanup. Never assert persistence from a success toast alone.
+**Browser automation:** Chrome DevTools MCP connects via `--browser-url=http://127.0.0.1:<chosen-port>` (9255 in the explicit examples above; 9227 for the default launcher); Playwright should normally use existing `qaRolePage` and `superAdminPage` fixtures, or trusted Chromium CDP attachment when needed. Do not let two agents control one page simultaneously. Keep CDP loopback-only. All authenticated Playwright tests set `screenshot`, `trace` and `video` to `"off"`, and never upload authenticated artifacts. Test real UI/API/DB results, exact identities, 390px layout and retries; writes on the shared live database require explicit test-specific authorization, idempotency and verified cleanup. Never assert persistence from a success toast alone.
 
 **Finish:** Press Ctrl+C in the `qa:browser` launcher terminal and confirm the temporary profile/CDP listener closes. Never print passwords, API keys, cookies, tokens, service-role secrets or session data.
 
