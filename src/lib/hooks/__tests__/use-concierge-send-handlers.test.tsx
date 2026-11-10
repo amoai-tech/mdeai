@@ -163,6 +163,21 @@ describe("guest context from visible rental search", () => {
 });
 
 describe("SAN-874 latest-topic context", () => {
+  it("keeps a guest's apartment cards when coworking requires sign-in", async () => {
+    session.user = null;
+    await act(async () => {
+      restoreRentalSearch({ userText: "Apartments under COP 3M", params: {
+        maxPriceMonthly: 3_000_000, budgetCurrency: "COP", stayType: "monthly",
+      } });
+    });
+    expect(handlers.inRentalSearch).toBe(true);
+    await act(async () => {
+      await sendConciergeUserMessage("What coworking spaces are in Laureles?", handlers);
+    });
+    expect(handlers.inRentalSearch).toBe(true);
+    expect(coagent.state.lastIntent).toBeUndefined();
+  });
+
   it("clears stale rental criteria after coworking even if Mastra has not updated lastIntent", async () => {
     await act(async () => {
       restoreRentalSearch({ userText: "Apartments under COP 3M", params: {
@@ -170,7 +185,10 @@ describe("SAN-874 latest-topic context", () => {
       } });
     });
     expect(handlers.inRentalSearch).toBe(true);
-    const agent = vi.fn(async () => true);
+    const agent = vi.fn(async (_text: string, _id?: string, onAccepted?: () => void) => {
+      onAccepted?.();
+      return true;
+    });
     await act(async () => {
       await sendConciergeUserMessage("What coworking spaces are in Laureles?", {
         ...handlers, onAgentSend: agent,
