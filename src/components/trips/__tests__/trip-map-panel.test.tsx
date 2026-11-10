@@ -42,6 +42,7 @@ function item(overrides: Partial<TripItemRow> & Pick<TripItemRow, "id" | "title"
   return {
     id,
     title,
+    source_id: "11111111-1111-4111-8111-111111111111",
     item_type: "rental",
     description: null,
     start_at: null,
@@ -107,6 +108,9 @@ describe("TripMapPanel", () => {
     );
     expect(screen.getByTestId("trip-map-selected-stop").textContent).toContain("Apartment A");
     expect(screen.getByTestId("trip-map-pin-a").getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByTestId("trip-map-selected-details").getAttribute("href")).toBe(
+      "/rentals/11111111-1111-4111-8111-111111111111",
+    );
   });
 
   it("shows an honest empty state when no item has coordinates", () => {

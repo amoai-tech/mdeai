@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import Link from "next/link";
 import { AdvancedMarker, Map, useMap } from "@vis.gl/react-google-maps";
 import { MapsUnavailable } from "@/components/maps/map-referer-help";
 import { useMapsStatus } from "@/components/maps/use-maps-auth-failure";
@@ -14,6 +15,8 @@ import type { TripItemRow } from "@/lib/trips/trip-item-types";
 
 export type TripMapPin = {
   id: string;
+  itemType: TripItemRow["item_type"];
+  sourceId: string;
   title: string;
   locationName: string | null;
   lat: number;
@@ -45,6 +48,8 @@ export function mappableTripPins(items: TripItemRow[]): TripMapPin[] {
   // still appears in the itinerary; it just has no pin.
   return mappable.map((item, index) => ({
     id: item.id,
+    itemType: item.item_type,
+    sourceId: item.source_id,
     title: item.title,
     locationName: item.location_name,
     lat: item.latitude,
@@ -247,6 +252,15 @@ export function TripMapPanel({
                 Stop {selectedPin.stopNumber}
                 {selectedPin.locationName ? ` · ${selectedPin.locationName}` : ""}
               </p>
+              {selectedPin.itemType === "rental" ? (
+                <Link
+                  href={`/rentals/${selectedPin.sourceId}`}
+                  data-testid="trip-map-selected-details"
+                  className="mt-1 inline-block text-xs font-medium text-primary hover:underline"
+                >
+                  Open rental details
+                </Link>
+              ) : null}
             </div>
           ) : null}
         </>

@@ -12,6 +12,7 @@ export type TripItemType =
 export type TripItemRow = {
   id: string;
   item_type: TripItemType;
+  source_id: string;
   title: string;
   description: string | null;
   start_at: string | null;
