@@ -7,6 +7,7 @@ import {
   itemTypeLabel,
 } from "@/lib/trips/itinerary-logic";
 import { cn } from "@/lib/utils";
+import { hasValidCoordinates } from "@/lib/trips/coordinates";
 
 type ItineraryPanelProps = {
   items: TripItemRow[];
@@ -97,15 +98,14 @@ export function ItineraryPanel({
                         <p className="font-medium text-foreground">{item.title}</p>
                         <p className="text-xs text-muted-foreground">
                           {itemTypeLabel(item.item_type)}
-                          {item.location_name
-                            ? ` · ${item.location_name}`
-                            : item.latitude == null || item.longitude == null
-                              ? " · Location unavailable"
-                              : ""}
+                          {item.location_name ? ` · ${item.location_name}` : ""}
+                          {!hasValidCoordinates(item)
+                            ? item.location_name
+                              ? " · Map location unavailable"
+                              : " · Location unavailable"
+                            : ""}
                         </p>
-                        {onShowOnMap &&
-                        item.latitude != null &&
-                        item.longitude != null ? (
+                        {onShowOnMap && hasValidCoordinates(item) ? (
                           <button
                             type="button"
                             data-testid={`itinerary-show-on-map-${item.id}`}
