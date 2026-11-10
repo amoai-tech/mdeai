@@ -338,15 +338,26 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
       const params = buildRentalSearchParams(trimmed, memory);
       if (!params) return false;
 
-      // A same-currency budget-only follow-up narrows the current discovery,
-      // not a new text search over the whole catalog. Keep the visible search's
-      // original semantic terms while the structured monthly ceiling changes.
-      // A currency switch is a fresh search: never reuse COP text for USD prices.
+      // Narrow the same visible rental search without broadening semantic results.
+      // An authenticated AI turn may have replaced working memory while leaving
+      // older fast-path cards visible: never carry that stale query text forward.
+      const shown = searchMeta?.params;
+      const previous = memory.lastRentalQuery;
+      const sameVisibleSearch = shown && previous &&
+        previous.neighborhood === shown.neighborhood &&
+        previous.minBedrooms === shown.minBedrooms &&
+        previous.maxPricePerNight === shown.maxPricePerNight &&
+        previous.maxPriceMonthly === shown.maxPriceMonthly &&
+        previous.budgetCurrency === shown.budgetCurrency &&
+        previous.budgetType === shown.stayType &&
+        previous.checkIn === shown.checkIn &&
+        previous.checkOut === shown.checkOut;
       if (isExactMonthlyBudgetOnlyRefinement(trimmed) &&
           params.maxPriceMonthly != null &&
-          params.budgetCurrency === searchMeta?.params.budgetCurrency &&
-          searchMeta?.params.queryText) {
-        params.queryText = searchMeta.params.queryText;
+          sameVisibleSearch &&
+          params.budgetCurrency === shown.budgetCurrency &&
+          shown.queryText) {
+        params.queryText = shown.queryText;
       }
 
       if (busyRef.current) {

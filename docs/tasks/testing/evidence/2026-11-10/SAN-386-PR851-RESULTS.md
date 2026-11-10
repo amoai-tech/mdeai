@@ -23,6 +23,13 @@ After an existing guest rental search, a monthly COP/USD budget-only refinement 
 - RED: 1 failing regression, 25 passing, showing missing original query text; GREEN: 293/293 focused tests (six suites, including guest 2-message and currency-switch negatives plus signed-in topic changes and rental Details).
 - Local browser runs used the real Next.js optimized build with public Supabase credentials, not mocks. Guest read-only rental search worked; unrelated local env warnings (missing Map ID, private DATABASE_URL for thread API) mean map marker rendering and private persistence need staged/production verification rather than being claimed from this localhost run.
 
+## Reviewer follow-up: newer authenticated rental context
+- A later Autosana review found a separate stale-query risk: a signed-in AI rental query for **Envigado** can update the CoAgent memory while an older **Laureles** fast-path `searchMeta` remains visible. Applying the old Laureles semantic query to the new Envigado structured filters would rank the wrong candidates.
+- Reproduced independently before the fix: one new regression **failed**, 26 other tests passed. The test performs a Laureles fast-path search, simulates a newer authenticated Envigado rental intent, then refines the budget.
+- The existing hook now retains previous semantic text **only when the current CoAgent query and visible search agree on neighborhood, bedrooms, original monthly ceiling/currency, stay type and dates**. Mismatched/newer AI queries and currency changes start fresh; matching guest refinements continue to narrow the visible search.
+- GREEN: **294/294 focused tests** across six suites, covering both review findings, guest budget search, saved thread and New Chat, currency changes, stale cross-topic/AI context, and existing rental Details behavior.
+- The earlier exact-head `ace6de3a43` **local `npm run floor` passed** (5,654 tests passed, 49 skipped); browser at 390px and 1440px passed 3→2 COP results with two POSTs, zero sign-in or JS errors, and mobile map location count 2→1. Protected Vercel preview on that SHA passed version and four real API cases. These are **prior-head proof**; new-head floor, browser, preview and CI must be repeated before merge readiness.
+
 ## Remaining release gates
 - Exact-head `npm run floor` (lint, typecheck, optimized production build, full Vitest, audits and Mastra) — pending.
 - Desktop (1440px) and mobile (390px) real-browser two-turn guest journey, with two backend POSTs, result counts 3 → 2, correct currency and hard ceiling, map/card synchronization, and no sign-in prompt — pending.
