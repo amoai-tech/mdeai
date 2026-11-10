@@ -54,7 +54,7 @@ test("agent QA ports, origins and cleanup match the real launcher", () => {
   assert.match(browser, /new URL\("\/saved", options\.origin\)/);
 });
 
-test("safety and development policy survive shortening the root instructions", () => {
+test("required CI gate identifiers remain referenced in the agent instructions", () => {
   assert.match(agents, /\bmastra-schema-init\b/);
   assert.match(agents, /\bfloor\b/);
 });
