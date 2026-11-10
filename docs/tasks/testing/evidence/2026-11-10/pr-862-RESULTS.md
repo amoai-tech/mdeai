@@ -20,4 +20,4 @@
 ## Not run
 
 - No browser/E2E journey on this branch; production has not been deployed.
-- No pgTAP execution locally because the shared database lacks the `pgtap` extension. The new test file is picked up by CI's `supabase-acl` job.
+- pgTAP executed on the local Supabase database: **8/8 passed** (all position/uniqueness/deferred assertions). CI `supabase-acl` will replay it against a fresh stack.
