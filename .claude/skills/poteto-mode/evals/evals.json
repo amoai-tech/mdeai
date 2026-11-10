@@ -21,6 +21,12 @@
           "value": "poteto-mode"
         },
         {
+          "id": "loaded-poteto-mode",
+          "kind": "deterministic",
+          "check": "skill_result_ok",
+          "value": "poteto-mode"
+        },
+        {
           "id": "completed",
           "kind": "deterministic",
           "check": "turn_completed"
@@ -44,6 +50,12 @@
           "id": "called-poteto-mode",
           "kind": "deterministic",
           "check": "skill_called",
+          "value": "poteto-mode"
+        },
+        {
+          "id": "loaded-poteto-mode",
+          "kind": "deterministic",
+          "check": "skill_result_ok",
           "value": "poteto-mode"
         },
         {

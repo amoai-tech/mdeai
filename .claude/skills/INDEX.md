@@ -42,7 +42,7 @@ Each name below is an active canonical skill, exposed through a corresponding re
 | Mirrored symlink entries | **167** | File/directory exposures point back to canonical owners |
 | Skills with behavioral `evals.json` | **36/56** | JSON definitions, not executed behavior tests |
 | Skills with `trigger-evals.json` | **25/56** | Positive and near-miss case definitions, not routing pass rate |
-| Defined trigger probes | **184** | Parsed cases across trigger files |
+| Defined trigger probes | **187** | Parsed cases across trigger files |
 | Defined behavioral probes | **180** | Parsed cases across behavior files |
 | Router `routing-evals.json` cases | **110** | Separate historical router-case format, not counted as trigger files |
 

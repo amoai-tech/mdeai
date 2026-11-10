@@ -1,12 +1,11 @@
 ---
 name: poteto-mode
 description: Use when the user explicitly asks for poteto-mode or PStack-style outcome-first execution; route MDE bugs, features, investigations, refactors, performance work, and PR tasks to one existing canonical MDE workflow with verifiable outcomes.
-disable-model-invocation: true
 ---
 
 # Poteto mode — MDE outcome-first adapter
 
-**Job:** turn a concrete goal into a small verified outcome, not another implementation engine. Adapted from [PStack poteto-mode](https://github.com/cursor/plugins/blob/main/pstack/skills/poteto-mode/SKILL.md) and its [guide](https://github.com/cursor/plugins/blob/main/pstack/docs/guide/02-poteto-mode.md); this is not the Cursor plugin and has no dependency on Cursor's Task API, custom modes, or other PStack skills.
+**Job:** turn a concrete goal into a small verified outcome, not another implementation engine. Adapted from [PStack poteto-mode](https://github.com/cursor/plugins/blob/de8ee15dd1194627d21eb5fcd41cb1873208dabb/pstack/skills/poteto-mode/SKILL.md) and its [guide](https://github.com/cursor/plugins/blob/de8ee15dd1194627d21eb5fcd41cb1873208dabb/pstack/docs/guide/02-poteto-mode.md); this is not the Cursor plugin and has no dependency on Cursor's Task API, custom modes, or other PStack skills.
 
 ## Ownership and trigger
 

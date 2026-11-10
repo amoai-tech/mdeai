@@ -1,12 +1,11 @@
 ---
 name: correct
 description: Use when the user explicitly asks for correct or to prevent the same coding-agent mistake from recurring; trace repeated MDE failure patterns and enforce the smallest durable fix through architecture, types, targeted checks, or regression tests.
-disable-model-invocation: true
 ---
 
 # Correct — prevent recurring development mistakes
 
-**Job:** stop a proven mistake class from recurring, rather than adding another prompt reminder. Adapted from [PStack correct](https://github.com/cursor/plugins/blob/main/pstack/skills/correct/SKILL.md).
+**Job:** stop a proven mistake class from recurring, rather than adding another prompt reminder. Adapted from [PStack correct](https://github.com/cursor/plugins/blob/de8ee15dd1194627d21eb5fcd41cb1873208dabb/pstack/skills/correct/SKILL.md).
 
 ## Ownership and scope
 

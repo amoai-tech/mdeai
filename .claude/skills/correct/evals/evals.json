@@ -21,6 +21,12 @@
           "value": "correct"
         },
         {
+          "id": "loaded-correct",
+          "kind": "deterministic",
+          "check": "skill_result_ok",
+          "value": "correct"
+        },
+        {
           "id": "completed",
           "kind": "deterministic",
           "check": "turn_completed"
@@ -44,6 +50,12 @@
           "id": "called-correct",
           "kind": "deterministic",
           "check": "skill_called",
+          "value": "correct"
+        },
+        {
+          "id": "loaded-correct",
+          "kind": "deterministic",
+          "check": "skill_result_ok",
           "value": "correct"
         },
         {

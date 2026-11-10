@@ -32,6 +32,12 @@ import opendotsBehavior from "../../.claude/skills/opendots/evals/evals.json" wi
 import opendotsTriggers from "../../.claude/skills/opendots/evals/trigger-evals.json" with { type: "json" };
 import openbotBehavior from "../../.claude/skills/openbot/evals/evals.json" with { type: "json" };
 import openbotTriggers from "../../.claude/skills/openbot/evals/trigger-evals.json" with { type: "json" };
+import potetoModeBehavior from "../../.claude/skills/poteto-mode/evals/evals.json" with { type: "json" };
+import potetoModeTriggers from "../../.claude/skills/poteto-mode/evals/trigger-evals.json" with { type: "json" };
+import interrogateBehavior from "../../.claude/skills/interrogate/evals/evals.json" with { type: "json" };
+import interrogateTriggers from "../../.claude/skills/interrogate/evals/trigger-evals.json" with { type: "json" };
+import correctBehavior from "../../.claude/skills/correct/evals/evals.json" with { type: "json" };
+import correctTriggers from "../../.claude/skills/correct/evals/trigger-evals.json" with { type: "json" };
 
 const SKILLS = path.resolve(".claude/skills");
 
@@ -222,6 +228,50 @@ test("short execution skills cover routing positives, negatives, and behavior", 
   }
 });
 
+
+// Static shape checks only: actual model invocation still needs a live DSH run.
+test("PStack-adapted skills allow explicit natural-language triggers and require successful loads", () => {
+  const fixtures = {
+    "poteto-mode": [potetoModeBehavior, potetoModeTriggers],
+    interrogate: [interrogateBehavior, interrogateTriggers],
+    correct: [correctBehavior, correctTriggers],
+  };
+  for (const [name, [behavior, triggers]] of Object.entries(fixtures)) {
+    const text = fs.readFileSync(path.join(SKILLS, name, "SKILL.md"), "utf8");
+    assert.doesNotMatch(text, /^disable-model-invocation:\s*true\s*$/m, name + ": natural-language trigger disabled");
+    assert.equal(behavior.skill_name, name);
+    assertTriggerCases(name, triggers);
+    assert.ok(behavior.evals.length >= 3, name + ": missing behavior cases");
+    for (const item of behavior.evals) {
+      const checks = item.expectations.map((e) => e.check);
+      assert.ok(checks.includes("catalog_contains"), name + ": no catalog check");
+      assert.ok(checks.includes("turn_completed"), name + ": no turn completion check");
+      assert.equal(checks.includes("skill_called"), item.should_trigger, name + ": skill_called mismatch");
+      assert.equal(checks.includes("skill_result_ok"), item.should_trigger, name + ": failed skill load could pass");
+      assert.equal(checks.includes("skill_not_called"), !item.should_trigger, name + ": negative owner mismatch");
+    }
+  }
+  const prompts = Object.values(fixtures).flatMap(([, triggers]) => triggers.map(({prompt}) => prompt));
+  assert.equal(new Set(prompts).size, prompts.length, "duplicate PStack routing prompts");
+});
+
+test("PStack-adapted evaluation fixtures load through the actual DSH runner", () => {
+  const program = [
+    "import importlib.util",
+    "s=importlib.util.spec_from_file_location('mde_runner','scripts/run-skill-behavior-eval.py')",
+    "m=importlib.util.module_from_spec(s)",
+    "s.loader.exec_module(m)",
+    "for name in ('poteto-mode','interrogate','correct'):",
+    "  for n in range(1,4): m.load_case(name,n)",
+    "  for n in range(1,7): m.load_trigger_case(name,n)",
+    "print('PSTACK_CASES_VALID: behavior=9 trigger=18')",
+  ].join("\n");
+  const run = spawnSync("python3", ["-c", program], {
+    cwd: process.cwd(), encoding: "utf8", timeout: 10000,
+  });
+  assert.equal(run.status, 0, run.stderr || run.stdout);
+  assert.match(run.stdout, /PSTACK_CASES_VALID: behavior=9 trigger=18/);
+});
 
 test("critical routing workflows and production domains have positive and near-miss probes", () => {
   const fixtures = {

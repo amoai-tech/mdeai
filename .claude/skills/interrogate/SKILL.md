@@ -1,12 +1,11 @@
 ---
 name: interrogate
 description: Use when the user explicitly requests interrogate, adversarial review, stress-test this diff, or prove a suspected regression; challenge MDE changes with executable reproductions and report only verified findings without replacing praudit or independent task-verifier.
-disable-model-invocation: true
 ---
 
 # Interrogate — evidence-only adversarial review
 
-**Job:** attempt to break a change and keep findings only when they can be reproduced. Adapted from [PStack interrogate](https://github.com/cursor/plugins/blob/main/pstack/skills/interrogate/SKILL.md). This skill supplies review *method*, not merge authorization.
+**Job:** attempt to break a change and keep findings only when they can be reproduced. Adapted from [PStack interrogate](https://github.com/cursor/plugins/blob/de8ee15dd1194627d21eb5fcd41cb1873208dabb/pstack/skills/interrogate/SKILL.md). This skill supplies review *method*, not merge authorization.
 
 ## Ownership
 

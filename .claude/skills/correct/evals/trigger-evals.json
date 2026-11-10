@@ -28,5 +28,11 @@
     "prompt": "Make a small fix to the event description typo.",
     "should_trigger": false,
     "expected_owner": "implement"
+  },
+  {
+    "id": "correct-6",
+    "prompt": "Reproduce this single new checkout test failure and fix it without a repeated-mistake investigation.",
+    "should_trigger": false,
+    "expected_owner": "errors"
   }
 ]

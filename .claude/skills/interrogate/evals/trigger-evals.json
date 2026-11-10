@@ -28,5 +28,11 @@
     "prompt": "Fix the apartment search bug now.",
     "should_trigger": false,
     "expected_owner": "implement"
+  },
+  {
+    "id": "interrogate-6",
+    "prompt": "Give a conventional readability review of this React component snippet with no adversarial reproduction.",
+    "should_trigger": false,
+    "expected_owner": "code-review"
   }
 ]
