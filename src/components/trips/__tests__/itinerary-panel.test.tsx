@@ -57,6 +57,14 @@ describe("ItineraryPanel location state", () => {
     );
   });
 
+  it("hides View on map and labels NaN coordinates", () => {
+    renderItems([item({ id: "nan", latitude: Number.NaN, longitude: -75.59 })]);
+    expect(screen.queryByTestId("itinerary-show-on-map-nan")).toBeNull();
+    expect(screen.getByTestId("itinerary-item-nan").textContent).toContain(
+      "Location unavailable",
+    );
+  });
+
   it("hides View on map when only one coordinate is present", () => {
     renderItems([item({ id: "partial", latitude: 6.25, longitude: null })]);
     expect(screen.queryByTestId("itinerary-show-on-map-partial")).toBeNull();

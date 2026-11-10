@@ -1,4 +1,7 @@
-/** One coordinate rule shared by the itinerary and the map. */
+/**
+ * One coordinate rule shared by the itinerary and the map.
+ * `Number.isFinite` rejects NaN, Infinity and -Infinity, so NaN cannot pass.
+ */
 export function isValidCoordinate(lat: number, lng: number): boolean {
   return (
     Number.isFinite(lat) &&
