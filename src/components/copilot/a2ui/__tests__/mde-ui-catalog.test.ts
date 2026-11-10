@@ -43,6 +43,47 @@ describe("MDE A2UI catalog", () => {
     expect(findRentalRow([], "real-1")).toBeNull();
   });
 
+  it("does not hydrate near-miss rental IDs or change meaningful leading zeros", () => {
+    // Rental IDs are opaque; a leading zero or a separator can be part of a real source ID.
+    const results = [{ results: [
+      { id: "00123", title: "Leading-zero rental" },
+      { id: "external:00123", title: "Composite source rental" },
+    ] }];
+    expect(findRentalRow(results, "00123")).toMatchObject({ title: "Leading-zero rental" });
+    expect(findRentalRow(results, "external:00123")).toMatchObject({ title: "Composite source rental" });
+
+    // Invalid or lookalike IDs must not pick a different authorized result.
+    for (const nearMiss of [
+      "", " ", "\t", "123", "00123 ", " 00123", "00123/", "00123:",
+      "00123,", "00123;external:00123", "external:00123:", "external:00123 ",
+    ]) {
+      expect(findRentalRow(results, nearMiss), `near miss: ${JSON.stringify(nearMiss)}`).toBeNull();
+    }
+    const props = mdeUI.components.get("RentalCard")?.props as z.ZodTypeAny;
+    expect(props.safeParse({ listingId: "" }).success).toBe(false);
+    expect(props.safeParse({ listingId: 123 }).success).toBe(false);
+    expect(props.safeParse({ listingId: "00123" }).success).toBe(true);
+    expect(props.safeParse({ listingId: "external:00123" }).success).toBe(true);
+  });
+
+  it("rejects malformed event UUID near misses before looking up current results", () => {
+    const id = "b5f1f4b2-9d63-4d2c-8a2a-4e5f0d6c1a11";
+    const results = [{ results: [{ id, title: "Authorized concert" }] }];
+    const props = mdeUI.components.get("EventCard")?.props as z.ZodTypeAny;
+    expect(props.safeParse({ eventId: id }).success).toBe(true);
+    expect(findEventRow(results, id)).toMatchObject({ title: "Authorized concert" });
+    for (const nearMiss of [
+      "", " ", "\t", ` ${id}`, `${id} `, `${id}/`, `${id}:`,
+      `${id},`, `${id};other`, id.slice(1), "00000000-0000-0000-0000-000000000001",
+    ]) {
+      expect(findEventRow(results, nearMiss), `near miss: ${JSON.stringify(nearMiss)}`).toBeNull();
+      // A syntactically valid UUID that is absent from this thread must still not hydrate.
+      if (nearMiss !== "00000000-0000-0000-0000-000000000001") {
+        expect(props.safeParse({ eventId: nearMiss }).success).toBe(false);
+      }
+    }
+  });
+
   it("merges fast-path and agent results without duplicates", () => {
     const fast = { results: [{ id: "fast-1" }] };
     const agent = { results: [{ id: "agent-1" }] };
