@@ -53,6 +53,9 @@ export function renderUiEventsFor(ids: readonly string[], toolCallId: string): B
  * until the official path matches that, then delete this file, the tool and the
  * intent processor in one change. Upgrade path: forward the official guide only
  * (already shipped), verify 3x with no tool, then remove.
+ *
+ * Live evidence for that decision: 2026-11-10, signed-in rental QA, three
+ * consecutive runs, two grounded cards each (0cdd6677…, 0db74081…).
  */
 
 /**
