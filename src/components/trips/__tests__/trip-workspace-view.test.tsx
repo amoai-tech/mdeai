@@ -85,6 +85,30 @@ describe("TripWorkspaceView selection", () => {
     expect(screen.getByTestId("trip-map-panel-mock").getAttribute("data-selected")).toBe("a");
   });
 
+  it("renders equal-start stops in explicit position order", () => {
+    const tied: TripItemRow[] = [
+      {
+        ...items[0],
+        id: "pos-2",
+        title: "Second slot",
+        start_at: "2026-11-14T20:00:00.000Z",
+        position: 2,
+        created_at: "2026-11-01T00:00:01.000Z",
+      },
+      {
+        ...items[0],
+        id: "pos-1",
+        title: "First slot",
+        start_at: "2026-11-14T20:00:00.000Z",
+        position: 1,
+        created_at: "2026-11-01T00:00:02.000Z",
+      },
+    ];
+    render(<TripWorkspaceView trip={{ ...trip, items: tied }} />);
+    const text = screen.getByTestId("itinerary-panel").textContent ?? "";
+    expect(text.indexOf("First slot")).toBeLessThan(text.indexOf("Second slot"));
+  });
+
   it("keeps the selected stop when moving between map and itinerary", () => {
     render(<TripWorkspaceView trip={trip} />);
     fireEvent.click(screen.getByTestId("trip-tab-map"));
