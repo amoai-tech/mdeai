@@ -11,6 +11,8 @@
  * real filter action; nothing here carries listing facts or model-authored UI.
  */
 export const RENTAL_FILTER_CONTROL_TARGET = "rental-recommendations";
+/** One panel, one control surface: a replayed tool event replaces it, not adds. */
+export const RENTAL_FILTER_CONTROL_SURFACE_ID = "rental-filter-control";
 const A2UI_VERSION = "1.0";
 
 export type RentalFilterControlOps = {
@@ -18,7 +20,9 @@ export type RentalFilterControlOps = {
   operations: Array<Record<string, unknown>>;
 };
 
-export function buildRentalFilterControlOps(surfaceId: string): RentalFilterControlOps {
+export function buildRentalFilterControlOps(
+  surfaceId: string = RENTAL_FILTER_CONTROL_SURFACE_ID,
+): RentalFilterControlOps {
   return {
     target: RENTAL_FILTER_CONTROL_TARGET,
     operations: [

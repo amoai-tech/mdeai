@@ -65,7 +65,8 @@ export function filterControlOk(content: unknown): boolean {
 }
 
 export function filterControlRenderEvents(toolCallId: string): BaseEvent[] {
-  const built = buildRentalFilterControlOps(`rental-filters-${toolCallId}`);
+  // Stable surface id: a replayed result replaces the same control.
+  const built = buildRentalFilterControlOps();
   const callId = `render-ui-filters-${toolCallId}`;
   return [
     { type: EventType.TOOL_CALL_START, toolCallId: callId, toolCallName: "render_ui" },

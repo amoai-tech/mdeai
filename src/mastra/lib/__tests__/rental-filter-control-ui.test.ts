@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildRentalFilterControlOps, RENTAL_FILTER_CONTROL_TARGET } from "../rental-filter-control-ui";
+import { buildRentalFilterControlOps, RENTAL_FILTER_CONTROL_SURFACE_ID, RENTAL_FILTER_CONTROL_TARGET } from "../rental-filter-control-ui";
 import { RENTAL_RECOMMENDATIONS_COMPONENTS } from "@/components/copilot/a2ui/rental-recommendations-surface";
 import { mdeUI } from "@/components/copilot/a2ui/mde-ui-catalog";
 import { isRentalBedValue } from "@/components/rentals/rental-filter-draft";
@@ -40,5 +40,16 @@ describe("SAN-1655 native bedroom values", () => {
     );
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.url).toContain("beds=0");
+  });
+});
+
+describe("SAN-1655 control surface identity", () => {
+  it("uses one stable surface id so a replayed event replaces the control", () => {
+    const first = buildRentalFilterControlOps();
+    const replay = buildRentalFilterControlOps();
+    const op = (built: ReturnType<typeof buildRentalFilterControlOps>) =>
+      (built.operations[0] as { createSurface: { surfaceId: string } }).createSurface.surfaceId;
+    expect(op(first)).toBe(RENTAL_FILTER_CONTROL_SURFACE_ID);
+    expect(op(replay)).toBe(op(first));
   });
 });
