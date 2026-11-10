@@ -236,9 +236,14 @@ test("PStack-adapted skills allow explicit natural-language triggers and require
     interrogate: [interrogateBehavior, interrogateTriggers],
     correct: [correctBehavior, correctTriggers],
   };
+  // Fixed, repository-owned paths: never construct a file path from a fixture key.
+  const skillSources = {
+    "poteto-mode": fs.readFileSync(".claude/skills/poteto-mode/SKILL.md", "utf8"),
+    interrogate: fs.readFileSync(".claude/skills/interrogate/SKILL.md", "utf8"),
+    correct: fs.readFileSync(".claude/skills/correct/SKILL.md", "utf8"),
+  };
   for (const [name, [behavior, triggers]] of Object.entries(fixtures)) {
-    const text = fs.readFileSync(path.join(SKILLS, name, "SKILL.md"), "utf8");
-    assert.doesNotMatch(text, /^disable-model-invocation:\s*true\s*$/m, name + ": natural-language trigger disabled");
+    assert.doesNotMatch(skillSources[name], /^disable-model-invocation:\s*true\s*$/m, name + ": natural-language trigger disabled");
     assert.equal(behavior.skill_name, name);
     assertTriggerCases(name, triggers);
     assert.ok(behavior.evals.length >= 3, name + ": missing behavior cases");
