@@ -46,6 +46,14 @@ async function askGuestBudget(page: Page, question: string, maximum: number) {
   );
   const cards = page.locator('[data-result-kind="rental"]');
   await expect(cards).toHaveCount(body.results.length, { timeout: 30_000 });
+  if (body.results.length === 0) {
+    // Empty real inventory is a valid Phase A marketplace state, not a broken
+    // release. Do require a truthful user-facing empty answer, not a vacuous
+    // passing price loop; seeded budget-predicate unit tests own price math.
+    await expect(page.getByTestId("copilot-chat-region")).toContainText(
+      "No rentals are available in this search right now.",
+    );
+  }
   for (const card of await cards.allInnerTexts()) {
     const match = card.match(/COP\s*([\d,.]+)\s*\/mo/);
     expect(match, "card must display a comparable COP monthly price").not.toBeNull();
@@ -89,11 +97,12 @@ test.describe("SAN-755 guest budget refinement on public rental search", () => {
       if (width === 390) {
         const mapped = refined.body.results.filter((row) =>
           typeof row.latitude === "number" && typeof row.longitude === "number").length;
-        // This is a floating map CTA, not necessarily a native <button>.
-        // Assert the user-visible label; the prior role selector falsely
-        // failed despite the correct "Open map (1)" CTA in the screenshot.
-        await expect(page.getByText(`Open map (${mapped})`, { exact: true }))
-          .toBeVisible({ timeout: 20_000 });
+        // The floating map CTA intentionally omits its count for zero pins.
+        // Check its canonical accessible label, including an honest empty map.
+        const trigger = page.getByTestId("map-sheet-trigger");
+        await expect(trigger).toBeVisible({ timeout: 20_000 });
+        await expect(trigger).toHaveAttribute("aria-label",
+          mapped ? `Open map with ${mapped} pins` : "Open map");
       }
       expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 2)).toBe(false);
       expect(errors).toEqual([]);

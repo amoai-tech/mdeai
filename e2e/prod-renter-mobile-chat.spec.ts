@@ -187,9 +187,14 @@ test.describe("SAN-755 signed-in AI topic switches do not revive stale rentals",
       const beforeRentals = await countConciergeReplies(page);
       await sendConciergeMessage(page, "Only show apartments under COP 3 million per month");
       await waitForConciergeReply(page, beforeRentals);
+      expect(rentalRequests.length, "the initial renter turn must actually search apartments")
+        .toBeGreaterThan(0);
+      const initialRentalCalls = rentalRequests.length;
       const beforeTopic = await countConciergeReplies(page);
       await sendConciergeMessage(page, scenario.prompt);
       await waitForConciergeReply(page, beforeTopic);
+      expect(rentalRequests.length, `asking about ${scenario.topic} must not search rentals`)
+        .toBe(initialRentalCalls);
       const beforeBudget = await countConciergeReplies(page);
       const rentalCount = rentalRequests.length;
       await sendConciergeMessage(page, "Only under COP 800k per month");
