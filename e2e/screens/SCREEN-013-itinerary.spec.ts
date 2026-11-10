@@ -45,7 +45,7 @@ test.describe(`${SCREEN_ID} itinerary panel`, () => {
       await page.goto(`/trips/${DEMO_TRIP_ID}`, { waitUntil: "networkidle" });
       await page.getByTestId("trip-tab-map").click();
       await expect(page.getByTestId("trip-map-panel")).toBeVisible();
-      await expect(page.getByTestId("trip-map-pin").first()).toBeVisible();
+      await expect(page.locator('[data-testid^="trip-map-pin-"]').first()).toBeVisible();
       assertConsoleClean(errors);
     });
   });
