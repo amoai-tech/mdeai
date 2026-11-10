@@ -43,12 +43,15 @@ export function decideApply({
 export function RentalFilterPanelActions({ filters }: { filters: RentalBrowseFilterState }) {
   const { draftRef, setApplyError } = useRentalFilterDraft();
   const router = useRouter();
+  const { neighborhood, beds: appliedBeds, from, through } = filters;
   const filtersRef = useRef(filters);
   const inFlightRef = useRef(false);
+  // Depend on the primitive values: `filters` is a new object each render, so
+  // using it would clear the in-flight guard mid-navigation and allow a second push.
   useEffect(() => {
-    filtersRef.current = filters;
+    filtersRef.current = { neighborhood, beds: appliedBeds, from, through };
     inFlightRef.current = false;
-  }, [filters]);
+  }, [neighborhood, appliedBeds, from, through]);
 
   // AI must see applied URL filters; an unapplied selection remains private draft state.
   useGenerativeUIState(mdeUI, "rentalFilters", { beds: filters.beds });

@@ -197,10 +197,9 @@ function RentalBrowseViewInner({
         : `Long-stay rentals — ${formatCountSubtitle(total, results.length)}${stayLabel ? ` · open ${stayLabel}` : ""}`;
 
   return (
-    // Keyed by the URL beds value so a native filter change resynchronises the
-    // draft. Mounted inside the already-keyed inner view: the map and the
-    // viewing modal stay mounted, only this boundary resets.
-    <RentalFilterDraftProvider key={String(beds ?? "any")} initialBeds={beds ?? null}>
+    // The inner view is already keyed on the URL filters, so a native change
+    // remounts it and reseeds this draft. A key here would duplicate that reset.
+    <RentalFilterDraftProvider initialBeds={beds ?? null}>
     <>
       <PageRentalResultsBridge results={shownResults} />
       {coAgent && !isDeterministicE2E() ? (
