@@ -29,6 +29,7 @@ const items: TripItemRow[] = [
     id: "a",
     item_type: "rental",
     source_id: "11111111-1111-4111-8111-111111111111",
+    created_at: "2026-11-01T00:00:00.000Z",
     title: "Apartment A",
     description: null,
     start_at: "2026-11-14T15:00:00.000Z",
@@ -41,6 +42,7 @@ const items: TripItemRow[] = [
     id: "b",
     item_type: "restaurant",
     source_id: "22222222-2222-4222-8222-222222222222",
+    created_at: "2026-11-01T00:00:00.000Z",
     title: "Café B",
     description: null,
     start_at: "2026-11-14T18:00:00.000Z",
@@ -61,6 +63,7 @@ const trip: TripWorkspaceData = {
   status: "planning",
   budget: null,
   currency: "COP",
+  timezone: "America/Bogota",
   items,
   conflicts: [],
 };

@@ -1,4 +1,10 @@
 import type { TripItemRow } from "./trip-item-types";
+import {
+  DEFAULT_TRIP_TIMEZONE,
+  resolveTripTimeZone,
+} from "./timezone";
+
+export { DEFAULT_TRIP_TIMEZONE } from "./timezone";
 
 export type ItineraryDayGroup = {
   dayKey: string;
@@ -19,42 +25,75 @@ export type ScheduleOverlap = {
 
 const UNSCHEDULED_KEY = "unscheduled";
 
-function parseDateOnly(iso: string): Date {
-  const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
-  return new Date(y, m - 1, d);
+function isValidInstant(iso: string): boolean {
+  return Number.isFinite(new Date(iso).getTime());
 }
 
-function dayKeyFromIso(iso: string): string {
-  return iso.slice(0, 10);
+/** Calendar date in the trip's timezone, not the browser's timezone. */
+function dayKeyFromIso(iso: string, timeZone: string): string | null {
+  if (!isValidInstant(iso)) return null;
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date(iso));
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
+  return year && month && day ? `${year}-${month}-${day}` : null;
 }
 
 function formatDayLabel(dayKey: string): string {
   if (dayKey === UNSCHEDULED_KEY) return "Unscheduled";
-  const fmt = new Intl.DateTimeFormat("en-US", {
+  const [year, month, day] = dayKey.split("-").map(Number);
+  // Noon UTC avoids a date shift when the label is formatted.
+  const date = new Date(Date.UTC(year, month - 1, day, 12));
+  return new Intl.DateTimeFormat("en-US", {
     weekday: "short",
     month: "short",
     day: "numeric",
-  });
-  return fmt.format(parseDateOnly(dayKey));
+    timeZone: "UTC",
+  }).format(date);
 }
 
-function formatTime(iso: string): string {
-  const d = new Date(iso);
+function formatTime(iso: string, timeZone: string): string {
   return new Intl.DateTimeFormat("en-US", {
     hour: "numeric",
     minute: "2-digit",
-  }).format(d);
+    timeZone,
+  }).format(new Date(iso));
 }
 
-/** Group trip_items by calendar day (local date from start_at). */
-export function groupTripItemsByDay(items: TripItemRow[]): ItineraryDayGroup[] {
+function itemSortValue(item: TripItemRow): number {
+  return item.start_at ? new Date(item.start_at).getTime() : Number.POSITIVE_INFINITY;
+}
+
+/** Deterministic order: scheduled time, then creation time, then id. */
+export function compareTripItems(a: TripItemRow, b: TripItemRow): number {
+  const timeDiff = itemSortValue(a) - itemSortValue(b);
+  if (Number.isFinite(timeDiff) && timeDiff !== 0) return timeDiff;
+  if (a.start_at === null && b.start_at !== null) return 1;
+  if (a.start_at !== null && b.start_at === null) return -1;
+  const createdDiff = (a.created_at ?? "").localeCompare(b.created_at ?? "");
+  if (createdDiff !== 0) return createdDiff;
+  return a.id.localeCompare(b.id);
+}
+
+/** Group trip_items by the trip-local calendar day. */
+export function groupTripItemsByDay(
+  items: TripItemRow[],
+  timeZone: string = DEFAULT_TRIP_TIMEZONE,
+): ItineraryDayGroup[] {
+  const zone = resolveTripTimeZone(timeZone);
   const buckets = new Map<string, TripItemRow[]>();
 
   for (const item of items) {
-    const key = item.start_at ? dayKeyFromIso(item.start_at) : UNSCHEDULED_KEY;
-    const list = buckets.get(key) ?? [];
+    const key = item.start_at ? dayKeyFromIso(item.start_at, zone) : null;
+    const bucketKey = key ?? UNSCHEDULED_KEY;
+    const list = buckets.get(bucketKey) ?? [];
     list.push(item);
-    buckets.set(key, list);
+    buckets.set(bucketKey, list);
   }
 
   const keys = [...buckets.keys()].sort((a, b) => {
@@ -66,11 +105,7 @@ export function groupTripItemsByDay(items: TripItemRow[]): ItineraryDayGroup[] {
   return keys.map((dayKey) => ({
     dayKey,
     label: formatDayLabel(dayKey),
-    items: (buckets.get(dayKey) ?? []).sort((a, b) => {
-      const ta = a.start_at ? new Date(a.start_at).getTime() : 0;
-      const tb = b.start_at ? new Date(b.start_at).getTime() : 0;
-      return ta - tb;
-    }),
+    items: (buckets.get(dayKey) ?? []).sort(compareTripItems),
   }));
 }
 
@@ -84,15 +119,19 @@ function itemWindow(item: TripItemRow): { start: number; end: number } | null {
   return { start, end };
 }
 
-/** Detect time overlaps among scheduled items on the same day. */
+/** Detect time overlaps among scheduled items on the same trip-local day. */
 export function detectScheduleOverlaps(
   items: TripItemRow[],
+  timeZone: string = DEFAULT_TRIP_TIMEZONE,
 ): ScheduleOverlap[] {
+  const zone = resolveTripTimeZone(timeZone);
   const overlaps: ScheduleOverlap[] = [];
-  const groups = groupTripItemsByDay(items).filter((g) => g.dayKey !== UNSCHEDULED_KEY);
+  const groups = groupTripItemsByDay(items, zone).filter(
+    (group) => group.dayKey !== UNSCHEDULED_KEY,
+  );
 
   for (const group of groups) {
-    const scheduled = group.items.filter((i) => i.start_at);
+    const scheduled = group.items.filter((item) => item.start_at);
     for (let i = 0; i < scheduled.length; i++) {
       for (let j = i + 1; j < scheduled.length; j++) {
         const a = scheduled[i];
@@ -110,7 +149,7 @@ export function detectScheduleOverlaps(
           itemBId: b.id,
           itemATitle: a.title,
           itemBTitle: b.title,
-          message: `${formatTime(a.start_at!)} ${a.title} overlaps ${formatTime(b.start_at!)} ${b.title}`,
+          message: `${formatTime(a.start_at!, zone)} ${a.title} overlaps ${formatTime(b.start_at!, zone)} ${b.title}`,
         });
       }
     }
@@ -119,11 +158,39 @@ export function detectScheduleOverlaps(
   return overlaps;
 }
 
-export function formatItemTimeRange(item: TripItemRow): string {
-  if (!item.start_at) return "Time TBD";
-  const start = formatTime(item.start_at);
-  if (!item.end_at) return start;
-  return `${start} – ${formatTime(item.end_at)}`;
+export function formatItemTimeRange(
+  item: TripItemRow,
+  timeZone: string = DEFAULT_TRIP_TIMEZONE,
+): string {
+  if (!item.start_at || !isValidInstant(item.start_at)) return "Time TBD";
+  const zone = resolveTripTimeZone(timeZone);
+  const start = formatTime(item.start_at, zone);
+  if (!item.end_at || !isValidInstant(item.end_at)) return start;
+  return `${start} – ${formatTime(item.end_at, zone)}`;
+}
+
+export function formatTripDateTime(
+  iso: string,
+  timeZone: string = DEFAULT_TRIP_TIMEZONE,
+): string {
+  const zone = resolveTripTimeZone(timeZone);
+  const dayKey = dayKeyFromIso(iso, zone);
+  if (!dayKey) return "Time TBD";
+  return `${formatDayLabel(dayKey)} · ${formatTime(iso, zone)}`;
+}
+
+/** First scheduled item at or after `now`, ordered deterministically. */
+export function getUpNextItem(
+  items: TripItemRow[],
+  now: Date = new Date(),
+): TripItemRow | null {
+  const nowMs = now.getTime();
+  return (
+    items
+      .filter((item) => item.start_at && isValidInstant(item.start_at))
+      .sort(compareTripItems)
+      .find((item) => new Date(item.start_at!).getTime() >= nowMs) ?? null
+  );
 }
 
 export function itemTypeLabel(type: TripItemRow["item_type"]): string {
