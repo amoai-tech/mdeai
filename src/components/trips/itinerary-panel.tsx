@@ -10,10 +10,16 @@ import { cn } from "@/lib/utils";
 
 type ItineraryPanelProps = {
   items: TripItemRow[];
+  selectedItemId?: string | null;
+  onShowOnMap?: (id: string) => void;
 };
 
 /** SCREEN-013 — day-grouped timeline from trip_items. */
-export function ItineraryPanel({ items }: ItineraryPanelProps) {
+export function ItineraryPanel({
+  items,
+  selectedItemId = null,
+  onShowOnMap,
+}: ItineraryPanelProps) {
   const dayGroups = groupTripItemsByDay(items);
   const overlaps = detectScheduleOverlaps(items);
 
@@ -75,9 +81,13 @@ export function ItineraryPanel({ items }: ItineraryPanelProps) {
                     <li
                       key={item.id}
                       data-testid={`itinerary-item-${item.id}`}
+                      data-selected={selectedItemId === item.id ? "true" : undefined}
+                      aria-current={selectedItemId === item.id ? "true" : undefined}
                       className={cn(
-                        "flex gap-3 px-4 py-3",
+                        "flex gap-3 px-4 py-3 outline-none",
                         hasConflict && "bg-amber-500/5",
+                        selectedItemId === item.id &&
+                          "bg-primary/5 ring-1 ring-inset ring-primary/30",
                       )}
                     >
                       <div className="w-24 shrink-0 text-xs text-muted-foreground">
@@ -89,6 +99,20 @@ export function ItineraryPanel({ items }: ItineraryPanelProps) {
                           {itemTypeLabel(item.item_type)}
                           {item.location_name ? ` · ${item.location_name}` : ""}
                         </p>
+                        {onShowOnMap ? (
+                          <button
+                            type="button"
+                            data-testid={`itinerary-show-on-map-${item.id}`}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              onShowOnMap(item.id);
+                            }}
+                            className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                          >
+                            <MapPin className="size-3" aria-hidden />
+                            View on map
+                          </button>
+                        ) : null}
                       </div>
                     </li>
                   );
@@ -97,51 +121,6 @@ export function ItineraryPanel({ items }: ItineraryPanelProps) {
             </section>
           ))}
         </div>
-      )}
-    </section>
-  );
-}
-
-type TripMapPanelProps = {
-  items: TripItemRow[];
-};
-
-/** Static pin list for scheduled items with coordinates (MAP-011 routes deferred). */
-export function TripMapPanel({ items }: TripMapPanelProps) {
-  const mappable = items.filter(
-    (i) =>
-      i.latitude != null &&
-      i.longitude != null &&
-      Number.isFinite(i.latitude) &&
-      Number.isFinite(i.longitude),
-  );
-
-  return (
-    <section data-testid="trip-map-panel" className="space-y-3">
-      {mappable.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          No map pins yet — items need a location from chat saves.
-        </p>
-      ) : (
-        <ul className="space-y-2">
-          {mappable.map((item) => (
-            <li
-              key={item.id}
-              data-testid="trip-map-pin"
-              data-item-id={item.id}
-              className="flex items-start gap-2 rounded-lg border border-border px-3 py-2 text-sm"
-            >
-              <MapPin className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
-              <div>
-                <p className="font-medium">{item.title}</p>
-                <p className="text-xs text-muted-foreground">
-                  {item.location_name ?? "Medellín"} · {item.latitude?.toFixed(4)},{" "}
-                  {item.longitude?.toFixed(4)}
-                </p>
-              </div>
-            </li>
-          ))}
-        </ul>
       )}
     </section>
   );

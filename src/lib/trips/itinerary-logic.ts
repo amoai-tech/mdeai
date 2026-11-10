@@ -130,8 +130,12 @@ export function itemTypeLabel(type: TripItemRow["item_type"]): string {
   const labels: Record<TripItemRow["item_type"], string> = {
     event: "Event",
     restaurant: "Restaurant",
+    venue: "Café / venue",
     rental: "Rental",
     poi: "Place",
+    showing: "Viewing",
+    booking: "Booking",
+    custom_note: "Note",
     other: "Other",
   };
   return labels[type] ?? type;

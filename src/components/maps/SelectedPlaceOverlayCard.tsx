@@ -11,6 +11,7 @@ import {
 } from "@/lib/places-display";
 import { getCategoryMarkerGlyph } from "@/components/maps/markers/category-map-marker";
 import { parseMapPinPreviewMeta } from "@/components/maps/map-pin-meta";
+import { AddToTripButton } from "@/components/trips/add-to-trip-button";
 
 export type SelectedPlaceOverlayCardProps = {
   pin: MapPin;
@@ -72,30 +73,21 @@ export function SelectedPlaceOverlayCard({ pin }: SelectedPlaceOverlayCardProps)
             {glyph}
           </div>
         )}
-        {pin.category === "event" ? null : (
         <div className="absolute right-2 top-2 flex gap-1.5">
-          <button
-            type="button"
-            disabled
-            title="Save — coming soon"
-            aria-label="Save place (coming soon)"
-            className="flex size-9 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur-sm disabled:opacity-90"
-            data-testid="selected-place-overlay-save"
-          >
-            ♥
-          </button>
-          <button
-            type="button"
-            disabled
-            title="Add to trip — coming soon"
-            aria-label="Add to trip (coming soon)"
-            className="flex size-9 items-center justify-center rounded-full bg-black/55 text-lg text-white backdrop-blur-sm disabled:opacity-90"
-            data-testid="selected-place-overlay-add-trip"
-          >
-            +
-          </button>
+          {pin.category === "event" ? null : (
+            <button
+              type="button"
+              disabled
+              title="Save — coming soon"
+              aria-label="Save place (coming soon)"
+              className="flex size-9 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur-sm disabled:opacity-90"
+              data-testid="selected-place-overlay-save"
+            >
+              ♥
+            </button>
+          )}
+          <AddToTripButton pin={pin} />
         </div>
-        )}
       </div>
 
       <div className="space-y-2 p-3">
