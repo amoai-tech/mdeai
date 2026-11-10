@@ -6,6 +6,7 @@ type TripItemQueryRow = {
   item_type: TripItemRow["item_type"];
   source_id: string;
   title: string;
+  created_at: string;
   description: string | null;
   start_at: string | null;
   end_at: string | null;
@@ -24,7 +25,7 @@ export async function loadTripWorkspace(
   const { data: trip, error: tripError } = await supabase
     .from("trips")
     .select(
-      "id, title, description, destination, start_date, end_date, status, budget, currency",
+      "id, title, description, destination, start_date, end_date, status, budget, currency, timezone",
     )
     .eq("id", tripId)
     .eq("user_id", userId)
@@ -36,10 +37,12 @@ export async function loadTripWorkspace(
   const { data: items, error: itemsError } = await supabase
     .from("trip_items")
     .select(
-      "id, item_type, source_id, title, description, start_at, end_at, location_name, latitude, longitude",
+      "id, item_type, source_id, title, created_at, description, start_at, end_at, location_name, latitude, longitude",
     )
     .eq("trip_id", tripId)
-    .order("start_at", { ascending: true, nullsFirst: false });
+    .order("start_at", { ascending: true, nullsFirst: false })
+    .order("created_at", { ascending: true })
+    .order("id", { ascending: true });
 
   if (itemsError) {
     console.error("[trips] loadTripWorkspace items:", itemsError.message);
@@ -63,6 +66,7 @@ export async function loadTripWorkspace(
       item_type: row.item_type,
       source_id: row.source_id,
       title: row.title,
+      created_at: row.created_at,
       description: row.description,
       start_at: row.start_at,
       end_at: row.end_at,

@@ -43,6 +43,7 @@ function item(overrides: Partial<TripItemRow> & Pick<TripItemRow, "id" | "title"
     id,
     title,
     source_id: "11111111-1111-4111-8111-111111111111",
+    created_at: "2026-11-01T00:00:00.000Z",
     item_type: "rental",
     description: null,
     start_at: null,

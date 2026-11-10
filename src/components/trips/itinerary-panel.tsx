@@ -1,8 +1,11 @@
 import { AlertTriangle, MapPin } from "lucide-react";
 import type { TripItemRow } from "@/lib/trips/trip-item-types";
 import {
+  DEFAULT_TRIP_TIMEZONE,
   detectScheduleOverlaps,
   formatItemTimeRange,
+  formatTripDateTime,
+  getUpNextItem,
   groupTripItemsByDay,
   itemTypeLabel,
 } from "@/lib/trips/itinerary-logic";
@@ -11,6 +14,7 @@ import { hasValidCoordinates } from "@/lib/trips/coordinates";
 
 type ItineraryPanelProps = {
   items: TripItemRow[];
+  timeZone?: string;
   selectedItemId?: string | null;
   onShowOnMap?: (id: string) => void;
 };
@@ -18,14 +22,31 @@ type ItineraryPanelProps = {
 /** SCREEN-013 — day-grouped timeline from trip_items. */
 export function ItineraryPanel({
   items,
+  timeZone = DEFAULT_TRIP_TIMEZONE,
   selectedItemId = null,
   onShowOnMap,
 }: ItineraryPanelProps) {
-  const dayGroups = groupTripItemsByDay(items);
-  const overlaps = detectScheduleOverlaps(items);
+  const dayGroups = groupTripItemsByDay(items, timeZone);
+  const overlaps = detectScheduleOverlaps(items, timeZone);
+  const upNext = getUpNextItem(items);
 
   return (
     <section data-testid="itinerary-panel" className="space-y-4">
+      {upNext?.start_at ? (
+        <div
+          data-testid="itinerary-up-next"
+          className="rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 text-sm"
+        >
+          <p className="text-xs font-medium uppercase tracking-wide text-primary">
+            Up Next
+          </p>
+          <p className="mt-1 font-medium text-foreground">{upNext.title}</p>
+          <p className="text-xs text-muted-foreground">
+            {formatTripDateTime(upNext.start_at, timeZone)}
+          </p>
+        </div>
+      ) : null}
+
       {overlaps.length > 0 ? (
         <div
           data-testid="itinerary-conflict"
@@ -92,7 +113,7 @@ export function ItineraryPanel({
                       )}
                     >
                       <div className="w-24 shrink-0 text-xs text-muted-foreground">
-                        {formatItemTimeRange(item)}
+                        {formatItemTimeRange(item, timeZone)}
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="font-medium text-foreground">{item.title}</p>

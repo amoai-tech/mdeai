@@ -9,6 +9,7 @@ const item = (overrides: Partial<TripItemRow>): TripItemRow => ({
   item_type: "restaurant",
   source_id: "11111111-1111-4111-8111-111111111111",
   title: "Restaurant",
+  created_at: "2026-11-01T00:00:00.000Z",
   description: null,
   start_at: "2026-11-22T12:00:00.000Z",
   end_at: null,
@@ -28,6 +29,21 @@ describe("ItineraryPanel location state", () => {
     expect(screen.getByTestId("itinerary-show-on-map-valid")).not.toBeNull();
     expect(screen.getByTestId("itinerary-item-valid").textContent).not.toContain(
       "unavailable",
+    );
+  });
+
+  it("shows Up Next for the first future persisted stop", () => {
+    renderItems([
+      item({
+        id: "future",
+        title: "Late dinner",
+        start_at: "2099-11-21T04:30:00.000Z",
+        latitude: 6.25,
+        longitude: -75.59,
+      }),
+    ]);
+    expect(screen.getByTestId("itinerary-up-next").textContent).toContain(
+      "Late dinner",
     );
   });
 

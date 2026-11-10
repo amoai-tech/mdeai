@@ -14,6 +14,7 @@ export type TripItemRow = {
   item_type: TripItemType;
   source_id: string;
   title: string;
+  created_at: string;
   description: string | null;
   start_at: string | null;
   end_at: string | null;
@@ -41,6 +42,7 @@ export type TripWorkspaceData = {
   status: string;
   budget: number | null;
   currency: string | null;
+  timezone: string;
   items: TripItemRow[];
   conflicts: TripConflictRow[];
 };
