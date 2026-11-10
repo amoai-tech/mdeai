@@ -1,4 +1,7 @@
 -- A trip cannot have two stops in the same explicit slot.
+-- Keep the lock, duplicate repair, constraint, and trigger change atomic on
+-- clean Supabase migration replay (LOCK TABLE needs a transaction block).
+BEGIN;
 ALTER TABLE public.trip_items
   DROP CONSTRAINT IF EXISTS trip_items_trip_id_position_unique;
 
@@ -55,3 +58,5 @@ BEGIN
   RETURN NEW;
 END;
 $$;
+
+COMMIT;
