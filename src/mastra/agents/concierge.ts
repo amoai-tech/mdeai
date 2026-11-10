@@ -13,6 +13,8 @@ import { computeRouteTool } from '../tools/compute-route';
 import { lookupPublicDiscoveryItemTool, lookupPublicDiscoveryItemFromServer } from '../tools/lookup-public-discovery-item';
 import { searchWebGroundedEventsTool } from '../tools/search-web-grounded-events';
 import { requestVenueBookingTool } from '../tools/request-venue-booking';
+import { showRecommendationsTool } from '../tools/show-recommendations';
+import { shouldRequestRecommendations } from '../lib/recommendation-intent';
 import { CONCIERGE_AGENT_MODEL } from "../lib/models";
 import { geminiMalformedFirstStepRetry } from "../lib/gemini-malformed-retry";
 import { getDefaultInputProcessors } from "../lib/agent-input-processors";
@@ -542,6 +544,7 @@ export const conciergeAgent = new Agent({
     lookupPublicDiscoveryItemTool,
     searchWebGroundedEventsTool,
     requestVenueBooking: requestVenueBookingTool,
+    showRecommendations: showRecommendationsTool,
   },
   inputProcessors: [
     // SAN-737: the verified current selection, tool schemas and working memory must
@@ -552,6 +555,13 @@ export const conciergeAgent = new Agent({
     // proposal. Once the current run grounded the exact named venue and the
     // customer already supplied every mandatory field, require the *existing*
     // proposal-only HITL tool for the next Mastra step. No database writer here.
+    // SAN-1656 — explicit "show ... as cards" is a UI command, not a question.
+    // Pin the simple ID-list tool (never render_ui: forcing that produced empty
+    // operations); the tool validates IDs and the transport builds the surface.
+    { id: 'san1656-recommendation-intent', processInputStep: ({ stepNumber, messages, requestContext }) =>
+      shouldRequestRecommendations({ stepNumber, messages, requestContext })
+        ? { toolChoice: { type: 'tool' as const, toolName: 'showRecommendations' } }
+        : {} },
     { id: 'san1149-booking-continuation', processInputStep: ({ stepNumber, messages, steps, requestContext }) =>
       shouldContinueVenueBookingAfterSearch({ stepNumber, messages, steps, requestContext })
         ? { toolChoice: { type: 'tool' as const, toolName: 'requestVenueBooking' } }
