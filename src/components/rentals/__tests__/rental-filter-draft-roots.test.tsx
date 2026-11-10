@@ -7,6 +7,7 @@ import {
   RentalFilterDraftProvider,
   getRentalFilterDraftSnapshot,
   resetRentalFilterDraft,
+  useRentalFilterDraft,
   useRentalFilterStore,
 } from "../rental-filter-draft";
 
@@ -23,6 +24,13 @@ function Control() {
       <option value="2">2 BR</option>
     </select>
   );
+}
+
+/** Reads the same context (and latest-value ref) the Apply action uses. */
+function PageDraftProbe() {
+  const { draft } = useRentalFilterDraft();
+  const snapshot = getRentalFilterDraftSnapshot();
+  return <output data-testid="page-draft">{`${draft.beds ?? "any"}|${snapshot.beds ?? "any"}`}</output>;
 }
 
 let roots: Root[] = [];
@@ -45,7 +53,9 @@ afterEach(() => {
 describe("SAN-1655 across two React roots", () => {
   it("reflects an edit made in the AI panel root in the page root", () => {
     // Root 1: the page and its provider (no control rendered there).
-    const pageEl = mount(<RentalFilterDraftProvider initialBeds="1"><div /></RentalFilterDraftProvider>);
+    const pageEl = mount(
+      <RentalFilterDraftProvider initialBeds="1"><PageDraftProbe /></RentalFilterDraftProvider>,
+    );
     // Root 2: the AI surface, a separate React root without a provider.
     const panelEl = mount(<Control />);
 
@@ -54,7 +64,7 @@ describe("SAN-1655 across two React roots", () => {
     fireEvent.change(select, { target: { value: "2" } });
     expect((panelEl.querySelector("select") as HTMLSelectElement).value).toBe("2");
     expect(getRentalFilterDraftSnapshot()).toMatchObject({ beds: "2", edited: true });
-    // The page root is still mounted and sees the same draft.
-    expect(pageEl.isConnected).toBe(true);
+    // The page root's own context (the one Apply reads) now reports the edit.
+    expect(pageEl.querySelector('[data-testid="page-draft"]')?.textContent).toBe("2|2");
   });
 });

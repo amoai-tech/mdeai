@@ -7,7 +7,11 @@ import {
   useGenerativeUIState,
 } from "@copilotkit/react-core/v2/generative-ui";
 import { mdeUI } from "@/components/copilot/a2ui/mde-ui-catalog";
-import { isRentalBedValue, useRentalFilterDraft } from "@/components/rentals/rental-filter-draft";
+import {
+  getRentalFilterDraftSnapshot,
+  isRentalBedValue,
+  useRentalFilterDraft,
+} from "@/components/rentals/rental-filter-draft";
 import { buildRentalsUrl } from "@/lib/rentals/browse-filters";
 import { resolveRentalPageControl } from "@/lib/rentals/browse-page-control";
 import type { RentalBrowseFilterState } from "@/lib/rentals/browse-filters";
@@ -41,7 +45,7 @@ export function decideApply({
 }
 
 export function RentalFilterPanelActions({ filters }: { filters: RentalBrowseFilterState }) {
-  const { draftRef, setApplyError } = useRentalFilterDraft();
+  const { setApplyError } = useRentalFilterDraft();
   const router = useRouter();
   const { neighborhood, beds: appliedBeds, from, through } = filters;
   const filtersRef = useRef(filters);
@@ -57,7 +61,9 @@ export function RentalFilterPanelActions({ filters }: { filters: RentalBrowseFil
   useGenerativeUIState(mdeUI, "rentalFilters", { beds: filters.beds });
 
   useGenerativeUIFunction(mdeUI, "applyRentalFilters", () => {
-    const beds = draftRef.current.beds;
+    // Read the store, not the mirrored ref: the ref lags a commit behind and a
+    // fast select-then-Apply would otherwise send the previous value.
+    const beds = getRentalFilterDraftSnapshot().beds;
     if (!isRentalBedValue(beds)) {
       const error = "Unsupported bedroom selection; nothing was applied.";
       setApplyError(error);
