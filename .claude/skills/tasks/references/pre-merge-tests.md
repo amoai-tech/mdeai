@@ -134,6 +134,6 @@ The following operational edge cases were consolidated from repository-level ins
 - Anonymous viewing requests are limited to 20 per IP per hour (`chat-lead-capture`). Repeated E2E runs hit `RATE_LIMIT`; do not retry around it.
 - Local Codacy (`codacy-analysis analyze --pr`) needs `.codacy/`, which is untracked and exists only in the main checkout. With no config it runs zero tools and proves nothing: check `toolResults` is non-empty.
 - Never run `pkill -f <pattern>` from the agent shell: the pattern matches the shell's own command line and kills it. Stop a dev server by its port instead.
-- `next dev` maintains the `nextjs-agent-rules` block at the bottom of this file. It is committed on purpose so the tree stays clean; do not delete it.
+- `next dev` maintains the `nextjs-agent-rules` block at the bottom of `AGENTS.md`. It is committed on purpose so the tree stays clean; do not delete it.
 
 The canonical browser/role and private-artifact contract remains in [`e2e/README.md`](../../../../e2e/README.md). Never use an unknown/untested production row count as proof of cleanup.
