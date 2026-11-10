@@ -423,6 +423,11 @@
       "file": "scripts/check-mastra-builder-isolation.mjs",
       "classification": "test-only",
       "note": "SAN-1255 PR #842 deterministic release gate: scans built Next server code for absent Mastra Editor imports and asserts the CopilotKit runtime stays pinned to its original OpenAI 4.104.0 SDK. It does not import or invoke CopilotKit."
+    },
+    {
+      "file": "src/components/rentals/rental-filter-panel-actions.tsx",
+      "classification": "keep",
+      "note": "Uses the v2 generative-UI state/function hooks to publish the Rentals page filters and register the single apply action; no legacy boundary."
     }
   ]
 }

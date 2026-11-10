@@ -42,9 +42,9 @@ describe("MDE A2UI catalog", () => {
     // catalog would be a component the model has to guess at. Update both
     // together, never one alone.
     expect([...mdeUI.components.keys()].sort()).toEqual([
-      "Badge", "Box", "Caption", "Card", "Column", "Divider", "EventCard",
-      "FollowUp", "Grid", "GridItem", "Label", "RentalCard", "Row", "Spacer",
-      "Text", "Title",
+      "ApplyFiltersButton", "Badge", "BedroomFilter", "Box", "Caption", "Card",
+      "Column", "Divider", "EventCard", "FollowUp", "Grid", "GridItem",
+      "Label", "RentalCard", "Row", "Spacer", "Text", "Title",
     ]);
   });
 
@@ -96,6 +96,7 @@ describe("MDE A2UI catalog", () => {
     // and not a place for dead controls.
     expect([...RENTAL_RECOMMENDATIONS_COMPONENTS]).toEqual([
       "RentalCard", "Column", "Row", "Divider", "Title",
+      "BedroomFilter", "ApplyFiltersButton",
     ]);
     for (const name of RENTAL_RECOMMENDATIONS_COMPONENTS) {
       expect(mdeUI.components.has(name), `${name} is allowed on the panel but missing from mdeUI`).toBe(true);

@@ -21,6 +21,8 @@ import {
 import { LeadConfirmationBanner } from "@/components/chat/lead-confirmation-banner";
 import { RentalRecommendationsSurface } from "@/components/copilot/a2ui/rental-recommendations-surface";
 import { RentalA2UIContext } from "@/components/chat/rental-a2ui-context";
+import { RentalFilterDraftProvider } from "@/components/rentals/rental-filter-draft";
+import { RentalFilterPanelActions } from "@/components/rentals/rental-filter-panel-actions";
 import {
   RentalFastPathProvider,
   useRentalFastPath,
@@ -195,6 +197,10 @@ function RentalBrowseViewInner({
         : `Long-stay rentals — ${formatCountSubtitle(total, results.length)}${stayLabel ? ` · open ${stayLabel}` : ""}`;
 
   return (
+    // Keyed by the URL beds value so a native filter change resynchronises the
+    // draft. Mounted inside the already-keyed inner view: the map and the
+    // viewing modal stay mounted, only this boundary resets.
+    <RentalFilterDraftProvider key={String(beds ?? "any")} initialBeds={beds ?? null}>
     <>
       <PageRentalResultsBridge results={shownResults} />
       {coAgent && !isDeterministicE2E() ? (
@@ -204,6 +210,8 @@ function RentalBrowseViewInner({
           catalog already resolves cards from, and the existing A2UI context
           publishes their IDs. No second query and no second data path. */}
       {coAgent && !isDeterministicE2E() ? <RentalA2UIContext /> : null}
+      {/* SAN-1655 — live filters for the model + the one real Apply action. */}
+      {coAgent && !isDeterministicE2E() ? <RentalFilterPanelActions filters={filterState} /> : null}
       <DiscoveryPageContext page="rentals" filters={filterState} selectedId={selectedForAskId ?? detailsRental?.id ?? null} />
       <RentalPageControlTool filters={filterState} />
       <DiscoveryWorkspace
@@ -384,6 +392,7 @@ function RentalBrowseViewInner({
         />
       ) : null}
     </>
+    </RentalFilterDraftProvider>
   );
 }
 

@@ -35,6 +35,9 @@ export const RENTAL_RECOMMENDATIONS_COMPONENTS = [
   // One short heading at most. No Text/Caption/Badge: the panel is for real
   // apartments, not model commentary, and the page already has its own heading.
   "Title",
+  // SAN-1655 — the one interactive control, wired to the page's real filter action.
+  "BedroomFilter",
+  "ApplyFiltersButton",
 ] as const;
 
 export function RentalRecommendationsSurface() {

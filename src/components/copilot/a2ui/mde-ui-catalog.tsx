@@ -16,6 +16,7 @@ import { useOptionalRentalUi } from "@/components/chat/rental-ui-context";
 import { useOptionalMapContext } from "@/platform/maps/map-context";
 import { useOptionalRentalFastPath } from "@/components/chat/rental-fast-path-context";
 import { useOptionalEventFastPath } from "@/components/chat/event-fast-path-context";
+import { RENTAL_BED_OPTIONS, useOptionalRentalFilterDraft } from "@/components/rentals/rental-filter-draft";
 import { EVENT_A2UI_ID_PATTERN } from "@/lib/events/a2ui-id";
 import { isFinishedToolPayload, normalizeToolEnvelope } from "@/lib/normalize-tool-envelope";
 import { toDetailRental } from "@/lib/rentals/chat-rental-detail";
@@ -416,6 +417,60 @@ function MdeEventCard({ eventId }: { eventId: string }) {
 }
 
 /**
+ * SAN-1655 — the bedroom control the agent may render on the Rentals panel.
+ *
+ * The standard `Select` cannot carry a user edit: `writable` is a catalog
+ * definition field and the installed standard definition does not declare it,
+ * while `overrides` only replaces the renderer. This component therefore owns
+ * the small wrapper around MDE's own markup. The value lives in the page's
+ * draft, not in the model's payload, so a later AI turn cannot reset it.
+ */
+function MdeBedroomFilter({ label }: { label?: string }) {
+  const draft = useOptionalRentalFilterDraft();
+  if (!draft) return null;
+  return (
+    <label className="flex w-full flex-col gap-1 text-sm">
+      <span className="font-medium text-foreground">{label ?? "Bedrooms"}</span>
+      <select
+        aria-label={label ?? "Bedrooms"}
+        className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground"
+        value={draft.draft.beds ?? ""}
+        onChange={(event) => draft.setBeds(event.target.value === "" ? null : event.target.value)}
+      >
+        {RENTAL_BED_OPTIONS.map((option) => (
+          <option key={option.label} value={option.value ?? ""}>{option.label}</option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+/** SAN-1655 — Apply goes through the page's real filter action, never a new service. */
+function MdeApplyFilters({
+  label,
+  onApplyRentalFilters,
+}: {
+  label?: string;
+  onApplyRentalFilters?: () => void;
+}) {
+  const draft = useOptionalRentalFilterDraft();
+  // No page draft and no registered action means nothing could be applied: show
+  // the control disabled with the reason instead of a dead click.
+  const ready = Boolean(draft && onApplyRentalFilters);
+  return (
+    <Button
+      type="button"
+      size="sm"
+      disabled={!ready}
+      title={ready ? undefined : "Filters are not connected on this page."}
+      onClick={() => onApplyRentalFilters?.()}
+    >
+      {label ?? "Apply filters"}
+    </Button>
+  );
+}
+
+/**
  * SAN-1654 — the official Standard Catalog is the base of MDE's one catalog, so
  * the agent can arrange and label real cards instead of only ever rendering one.
  *
@@ -507,6 +562,15 @@ export const MDE_OMITTED_STANDARD_COMPONENTS = [
 export const mdeUI = createGenerativeUI({
   id: "mde/discovery@1",
   extends: [standardUI.omit(MDE_OMITTED_STANDARD_COMPONENTS)],
+  // Live page filters, published read-only for the model. The editable draft
+  // lives in the page provider so the agent can never overwrite a user's edit.
+  state: {
+    rentalFilters: z.object({ beds: z.string().nullable() }),
+  },
+  // Renderer-only action: the page decides what "apply" means.
+  functions: {
+    applyRentalFilters: { parameters: z.object({}) },
+  },
   components: {
     RentalCard: {
       component: MdeRentalCard,
@@ -524,6 +588,19 @@ export const mdeUI = createGenerativeUI({
         "Show one real event from the current authorized search by its eventId UUID. The component resolves venue, date, price, image and ticket link from the stored result; never pass or invent event facts.",
       props: z.object({ eventId: z.string().regex(EVENT_A2UI_ID_PATTERN) }),
       slots: { children: "multiple" },
+    },
+    BedroomFilter: {
+      component: MdeBedroomFilter,
+      description:
+        "A bedroom-count selector for the Rentals page. Render it when the renter asks to adjust or choose bedrooms. The value is the renter's draft (Any, Studio, 1 BR, 2 BR, 3 BR+); it changes the page only when Apply filters is pressed.",
+      props: z.object({ label: z.string().optional() }),
+    },
+    ApplyFiltersButton: {
+      component: MdeApplyFilters,
+      description:
+        "Applies the bedroom selection shown beside it to the real Rentals page filters. Only render it together with BedroomFilter.",
+      props: z.object({ label: z.string().optional() }),
+      events: { onApplyRentalFilters: { parameters: z.object({}) } },
     },
   },
 });
