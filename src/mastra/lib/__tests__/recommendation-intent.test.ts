@@ -70,6 +70,8 @@ describe("SAN-1655 bedroom control intent", () => {
     "Quiero cambiar las habitaciones.",
     "Show me the bedroom control.",
     "Can you show a bedroom selector here?",
+    "Can you change the bedrooms?",
+    "¿Puedes cambiar las recámaras?",
   ])("renders for %s", (text) => {
     expect(shouldRenderRentalFilterControl({ stepNumber: 0, messages: ask(text), requestContext: page("/rentals") })).toBe(true);
   });
