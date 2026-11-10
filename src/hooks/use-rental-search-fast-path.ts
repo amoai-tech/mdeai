@@ -15,7 +15,7 @@ import {
   type RentalSearchApiParams,
 } from "@/lib/rental-search-fast-path";
 import { logRoutingDecision } from "@/lib/intelligence-telemetry";
-import { budgetNotApplied, scoreRentalQuery } from "@/lib/rental-query-parser";
+import { budgetNotApplied, isExactMonthlyBudgetOnlyRefinement, scoreRentalQuery } from "@/lib/rental-query-parser";
 import {
   RENTAL_HANDOFF_FAILED_SUMMARY,
   RENTAL_SEARCH_UNAVAILABLE_SUMMARY,
@@ -337,6 +337,17 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
 
       const params = buildRentalSearchParams(trimmed, memory);
       if (!params) return false;
+
+      // A same-currency budget-only follow-up narrows the current discovery,
+      // not a new text search over the whole catalog. Keep the visible search's
+      // original semantic terms while the structured monthly ceiling changes.
+      // A currency switch is a fresh search: never reuse COP text for USD prices.
+      if (isExactMonthlyBudgetOnlyRefinement(trimmed) &&
+          params.maxPriceMonthly != null &&
+          params.budgetCurrency === searchMeta?.params.budgetCurrency &&
+          searchMeta?.params.queryText) {
+        params.queryText = searchMeta.params.queryText;
+      }
 
       if (busyRef.current) {
         // A full queue declines the message (false), so the sender routes it to the concierge

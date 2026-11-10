@@ -169,6 +169,19 @@ describe("SAN-407 · rental chat searches before it asks", () => {
     expect(next.maxPriceMonthly).toBe(2_500_000);
     expect(next.budgetCurrency).toBe("COP");
     expect(next.maxPricePerNight).toBeUndefined();
+    // The second budget narrows the first search's actual candidate set,
+    // rather than rediscovering unrelated apartments through new query text.
+    expect(next.queryText).toBe("Only show apartments under COP 3 million per month");
+  });
+
+  it("a budget currency switch starts a new semantic search, never reuses COP query text", async () => {
+    respond(200, { results: [] });
+    expect(await send("Only show apartments under COP 3 million per month")).toBe(true);
+    expect(await send("Now only under USD 2000 per month")).toBe(true);
+    const next = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body));
+    expect(next.budgetCurrency).toBe("USD");
+    expect(next.maxPriceMonthly).toBe(2_000);
+    expect(next.queryText).not.toBe("Only show apartments under COP 3 million per month");
   });
 
   it("a new chat cannot reuse the previous guest rental budget", async () => {

@@ -16,6 +16,13 @@ After an existing guest rental search, a monthly COP/USD budget-only refinement 
 - After merging current `origin/main` and preserving new rental Details behavior: **292/292** focused tests passed (6 suites), including Details cases.
 - Tests use deterministic React hooks, real router/parsers and mocked network. They are not substitutes for browser proof.
 
+## Browser-driven refinement correction
+- A real guest 390px and 1440px browser test on the updated chat router proved that **both** messages now reached the genuine `/api/rentals/search` route (HTTP 200; no sign-in prompt), but the second search initially returned **4** in-budget cards rather than narrowing the original three to two: the fast path discarded the first search's semantic query text and rediscovered unrelated cheaper results.
+- Read-only Supabase-backed API proof: searching at COP 2.5M with the *original* rental search query text returned exactly the **2 original, qualifying listings**; without that original query text, the API returned 4 broader qualifying listings. No price filtering or currency bug was present.
+- Minimal correction in existing `use-rental-search-fast-path`: for an exact **same-currency monthly-budget-only refinement**, preserve the visible thread's original `searchMeta.params.queryText` while replacing the structured monthly price ceiling. Currency changes intentionally start a new semantic query; New Chat has no saved text to reuse. No new database/API engine or client-side fake filter.
+- RED: 1 failing regression, 25 passing, showing missing original query text; GREEN: 293/293 focused tests (six suites, including guest 2-message and currency-switch negatives plus signed-in topic changes and rental Details).
+- Local browser runs used the real Next.js optimized build with public Supabase credentials, not mocks. Guest read-only rental search worked; unrelated local env warnings (missing Map ID, private DATABASE_URL for thread API) mean map marker rendering and private persistence need staged/production verification rather than being claimed from this localhost run.
+
 ## Remaining release gates
 - Exact-head `npm run floor` (lint, typecheck, optimized production build, full Vitest, audits and Mastra) — pending.
 - Desktop (1440px) and mobile (390px) real-browser two-turn guest journey, with two backend POSTs, result counts 3 → 2, correct currency and hard ceiling, map/card synchronization, and no sign-in prompt — pending.
