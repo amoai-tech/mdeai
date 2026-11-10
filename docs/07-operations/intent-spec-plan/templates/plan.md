@@ -6,6 +6,13 @@
 **Status:** Draft (document only; feature status is in Linear)
 **Graphify:** [required for broad code; or N/A — narrow known docs]
 
+## Resume checkpoint — update at each handoff
+
+- **Last verified:** [date + exact SHA/branch; what actually passed, link to proof]
+- **Current blocker or uncertainty:** [one specific unresolved item; or None]
+- **Exact next action:** [one runnable command or test + expected evidence]
+- **Status owner:** [link to current Linear issue; this document does not replace it]
+
 ## Decision: fastest safe reuse
 
 [Existing source-of-truth owner] → [smallest code change]. State what is reused and what is explicitly not being rebuilt.
@@ -34,6 +41,10 @@
 - [ ] Inspect exact diff, run applicable repo gates, commit, push and open/update one PR.
 - [ ] Triage current-head review comments, fix validated findings, rerun proof; update existing Linear issue with status, blockers and precise next action.
 - **Proof:** [SHA, PR, CI, checks, Linear update]. **STOP:** do not claim merge/deploy without evidence.
+
+## Optional efficiency pilot — do not invent savings
+
+When this is an actual implementation task, record in the **existing Linear issue**: elapsed minutes from start to first decisive test, repeated investigation loops, duplicate/unnecessary code paths introduced, and valid reviewer corrections. Compare against up to three similarly scoped earlier tasks if their evidence exists; otherwise mark baseline **unavailable**. A single pilot is evidence of feasibility, **not** proof of faster delivery.
 
 ## Actual evidence (append only after execution)
 

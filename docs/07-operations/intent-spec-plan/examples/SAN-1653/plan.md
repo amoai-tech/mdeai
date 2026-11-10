@@ -2,9 +2,26 @@
 
 **Linear:** https://linear.app/amo100/issue/SAN-1653
 **Intent:** [intent.md](intent.md) · **Spec:** [spec.md](spec.md)
-**Feature status:** Todo; **document example:** drafted November 9, 2026
+**Feature status:** In Progress in Linear (checked November 10, 2026); **document example:** not feature-verified
 **Baseline inspected:** `main` `4d51af18e83c7bfeabcbe7957af43adab46d0d00`
 **Graphify:** N/A for this documentation-only pilot; use Graphify when executing the cross-file feature work.
+
+## Resume checkpoint — verified November 10, 2026
+
+- **Last verified:** [SAN-1653 · MDE AI — Prove the Shared CopilotKit A2UI Foundation](https://linear.app/amo100/issue/SAN-1653) is **In Progress**. In a separate read-only worktree at current `main` `be3355b4947e`, the real catalog and agent-context unit suites passed **22/22 tests across 2 files** (`vitest run src/components/copilot/a2ui/__tests__/mde-ui-catalog.test.ts src/mastra/lib/__tests__/generative-ui-context.test.ts`; reported runtime **3.08s**). No feature code changed.
+- **Current blocker:** There is still **no authenticated browser proof** that a real AI card opens the selected event/rental ID or that saved A2UI cards replay correctly. Existing native-card and thread-selection tests cannot substitute.
+- **Exact next action:** From a current-main QA worktree, run `npm run qa:auth:check` (credentials presence only), then execute the authenticated first/second/named/sixth Rentals + Events card→Details browser matrix with actual `render_ui` event capture. Use the existing role fixtures, record exact IDs and the head SHA in Linear; do not claim a PASS until the real browser journey succeeds.
+- **Status owner:** Live Linear SAN-1653; this documentation example is not a progress tracker or feature certification.
+
+## Pilot measurement — actual implementation-task verification
+
+| Observable metric | Value | What this proves |
+| --- | --- | --- |
+| Focused verification | **22/22 unit tests pass**, runtime **3.08s**, current `main` SHA above | Existing catalog/context logic passes its current unit contracts |
+| Repeated investigations / duplicate implementation | **Not measured**; no feature code changed in this pilot | No justified claim of reduced duplicate work |
+| Valid code-review corrections from this pilot | **Not measured**; no implementation PR created | No justified claim of fewer review corrections |
+| Comparable historical baseline / time saved | **Unavailable** | Do **not** claim the workflow is faster from one pilot |
+| Real authorized browser A2UI + replay | **UNVERIFIED** | Must be completed in the existing SAN-1653 task |
 
 ## Fastest safe path
 

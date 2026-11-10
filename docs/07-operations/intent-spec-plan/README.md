@@ -52,6 +52,10 @@
 - https://github.com/Digital-Tvilling/plan.md — **REFERENCE ONLY** Markdown portability; no separate schema standard needed; verify templates are plain text and agent-neutral.
 - https://www.datacamp.com/tutorial/spec-driven-development-with-claude-code — **REFERENCE ONLY** third-party comparison of heavier workflows; no new dependency or forced phase gates.
 
+## Measure the real-world benefit
+
+For the next substantial **implementation** issue, use a live Linear task rather than creating a demonstration-only issue. Capture the time to the first decisive test and count repeated investigation loops, unnecessary duplicate changes and valid review corrections in that same Linear issue. Compare with up to three comparable past tasks **only when evidence exists**. Without a credible baseline, report the actual numbers and **do not claim time savings**. The worked SAN-1653 example is a starting context, not a completed feature pilot.
+
 ## Pilot and limits
 
 See [SAN-1653 example](examples/SAN-1653/intent.md). It documents the real task and a planned proof route; **this docs PR does not implement or certify the Gen UI feature**. A future agent must execute the task's real tests/browser checks before claiming success.
