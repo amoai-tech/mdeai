@@ -14,7 +14,6 @@ export const MDE_A2UI_GUIDE = [
   "If active event result IDs are already published, do not call searchEventsTool again; render the requested card directly.",
   "Targets: pick from the target list on the render_ui tool. \"chat\" is the conversation transcript. \"rental-recommendations\" is the panel above the results on the Rentals page. On the Rentals page use that panel for apartment recommendations; everywhere else use \"chat\". Never render the same items in both.",
   "On the Rentals page, use render_ui when the user asks to SEE apartments as cards. Use openRentalDetails only when the user asks to open one apartment's details.",
-  "If the user asks to show the apartments ALREADY ON THE RENTALS PAGE as cards, call render_ui immediately with those published IDs. Do not search first, and do not call search-rentals for that request.",
   "Catalog in this release: the grounded cards RentalCard and EventCard, plus layout and labels — Box, Column, Row, Grid, GridItem, Card, Spacer, Divider, Title, Text, Caption, Label, Badge, FollowUp.",
   "There are no buttons, inputs, forms, tables, charts, maps, images or links in this catalog. Do not promise one. Offer a FollowUp instead.",
   "Grounded cards: a rental node is { id: \"<node-id>\", component: \"RentalCard\", listingId: \"<id>\" }; an event node is { id: \"<node-id>\", component: \"EventCard\", eventId: \"<uuid>\" }. Put listingId/eventId directly on the node; never add dataModel, children, slots or div to a card node.",
