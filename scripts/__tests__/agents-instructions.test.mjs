@@ -3,7 +3,8 @@ import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { test } from "node:test";
 
-const read = (path) => readFileSync(resolve(path), "utf8");
+const repoRoot = resolve(import.meta.dirname, "../..");
+const read = (path) => readFileSync(resolve(repoRoot, path), "utf8");
 const agents = read("AGENTS.md");
 const qaGuide = read("docs/06-testing/1password-qa-agent-guide.md");
 const browser = read("scripts/qa-browser.ts");
@@ -17,7 +18,7 @@ test("agent instructions resolve the existing intent, spec and plan templates", 
     "docs/07-operations/intent-spec-plan/templates/plan.md",
   ];
   for (const path of paths) {
-    assert.ok(existsSync(resolve(path)), `missing template/guide: ${path}`);
+    assert.ok(existsSync(resolve(repoRoot, path)), `missing template/guide: ${path}`);
     assert.ok(agents.includes(`(${path})`), `AGENTS.md must link ${path}`);
   }
   assert.match(agents, /specs\.md.*not the canonical template/);
@@ -40,7 +41,7 @@ test("agent QA commands exist and reuse the tracked fixtures and guide", () => {
     "e2e/README.md",
     "docs/06-testing/1password-qa-agent-guide.md",
   ]) {
-    assert.ok(existsSync(resolve(path)), `missing QA dependency: ${path}`);
+    assert.ok(existsSync(resolve(repoRoot, path)), `missing QA dependency: ${path}`);
   }
   assert.match(agents, /\(docs\/06-testing\/1password-qa-agent-guide\.md\)/);
   assert.match(agents, /host-local, untracked/);
