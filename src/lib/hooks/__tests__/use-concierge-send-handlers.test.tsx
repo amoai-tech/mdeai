@@ -186,6 +186,49 @@ describe("SAN-874 latest-topic context", () => {
     expect(mapState.mergePinsByCategory).not.toHaveBeenCalled();
   });
 
+  it.each(["completed", "failed"] as const)(
+    "does not erase newer rental results after a coworking stream %s",
+    async (stage) => {
+      coagent.state = { lastIntent: "rental_search", lastRentalQuery: {
+        maxPriceMonthly: 3_000_000, budgetCurrency: "COP",
+      } };
+      await act(async () => {
+        restoreRentalSearch({ userText: "Older Laureles apartments under COP 3M", params: {
+          neighborhood: "Laureles", maxPriceMonthly: 3_000_000,
+          budgetCurrency: "COP", stayType: "monthly",
+        } });
+      });
+      expect(handlers.inRentalSearch).toBe(true);
+      await act(async () => {
+        handlers.onTopicShift?.("general_concierge", "accepted");
+      });
+      expect(coagent.state.lastIntent).toBe("general_concierge");
+      // Another legitimate rental search completes while the coworking agent
+      // is still streaming. Its searchMeta identity supersedes the older view.
+      coagent.state = { lastIntent: "rental_search", lastRentalQuery: {
+        neighborhood: "Envigado", maxPriceMonthly: 2_500_000, budgetCurrency: "COP",
+      } };
+      await act(async () => {
+        restoreRentalSearch({ userText: "New Envigado apartments under COP 2.5M", params: {
+          neighborhood: "Envigado", maxPriceMonthly: 2_500_000,
+          budgetCurrency: "COP", stayType: "monthly",
+        } });
+      });
+      expect(handlers.inRentalSearch).toBe(true);
+      await act(async () => {
+        handlers.onTopicShift?.("general_concierge", stage);
+      });
+      // Neither a late successful stream nor a failed stream can replace a
+      // newer rental request with the stale Laureles memory or clear its pins.
+      expect(coagent.state.lastIntent).toBe("rental_search");
+      expect(coagent.state.lastRentalQuery).toMatchObject({
+        neighborhood: "Envigado", maxPriceMonthly: 2_500_000,
+      });
+      expect(handlers.inRentalSearch).toBe(true);
+      expect(mapState.mergePinsByCategory).not.toHaveBeenCalled();
+    },
+  );
+
   it("clears stale rental criteria after coworking even if Mastra has not updated lastIntent", async () => {
     await act(async () => {
       restoreRentalSearch({ userText: "Apartments under COP 3M", params: {
