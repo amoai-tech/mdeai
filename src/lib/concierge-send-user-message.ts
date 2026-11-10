@@ -21,7 +21,7 @@ export type ConciergeSendHandlers = {
   /** Clear old apartment Details on a confirmed cross-category topic switch. */
   closeRentalDetails?: () => void;
   /** Publish a confirmed new topic and clear prior vertical display state. */
-  onTopicShift?: (intent: FlashRouteClassification["intent"], stage: "accepted" | "completed") => void;
+  onTopicShift?: (intent: FlashRouteClassification["intent"], stage: "accepted" | "completed" | "failed") => void;
   /** Open a shown rental by its current position; never launch another search for Details. */
   handleRentalDetailsMessage?: (text: string, submissionId?: string) => Promise<boolean>;
   handleRentalMessage: (text: string, submissionId?: string) => Promise<boolean>;
@@ -32,7 +32,7 @@ export type ConciergeSendHandlers = {
   /** Optional current-results-only guard, checked before an agent route. */
   handleGroundedAmenityFollowUp?: (text: string, submissionId?: string) => Promise<boolean>;
   handleRestaurantMessage: (text: string, submissionId?: string) => Promise<boolean>;
-  onAgentSend: (text: string, submissionId?: string, onAccepted?: () => void, onCompleted?: () => void) => Promise<boolean>;
+  onAgentSend: (text: string, submissionId?: string, onAccepted?: () => void, onCompleted?: () => void, onFailed?: () => void) => Promise<boolean>;
   /** Working-memory lastIntent — enables Flash topicShift (SAN-873). */
   lastIntent?: FlashRouteClassification["intent"];
   /** True while the conversation is in a rental search (current or saved legacy intent). */
@@ -120,6 +120,7 @@ export async function sendConciergeUserMessage(
           handlers.closeRentalDetails?.();
           handlers.onTopicShift?.(classification.intent, "completed");
         },
+        () => handlers.onTopicShift?.(classification.intent, "failed"),
       );
     }
     if (classification.intent === "restaurant_discovery" ||
