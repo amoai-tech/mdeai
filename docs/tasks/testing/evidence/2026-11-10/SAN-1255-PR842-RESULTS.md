@@ -16,6 +16,13 @@
 | Builder script skipped remote DB warning and reused 4111 | **Valid, fixed on latest review:** exact existing `predev:agent` warning is reused as `predev:agent:builder`, and Builder defaults to independent port 4112. Warning is informational, not a development business gate. |
 | Description template incomplete | **Valid, fixed:** PR body now fills ownership/layer, size budget, reuse, source receipts, test plan, evidence path, and self-review, with no placeholder claims. |
 
+## PR842 client bundle follow-up — 2026-11-10
+
+- **Verified defect:** original `scripts/check-mastra-builder-isolation.mjs` traversed `.next/server` only; a synthetic `.next/static/chunks/app.js` containing `createBuilderAgent()` incorrectly passed. Next.js documents browser asset output at `.next/static` (https://nextjs.org/docs/app/api-reference/config/next-config-js/assetPrefix).
+- **Minimal fix:** scan both `.next/server` and `.next/static` recursively for JavaScript; require each output directory to exist and contain JavaScript before reporting success. In the built worktree, the two trees contained **415 server JS and 599 browser JS files**, with no prohibited imports.
+- **Codacy:** `console.error` now uses a constant format string; structured violation details use JSON over stderr (rather than a dynamic console format string). The local `.codacy/codacy.config.json` is absent in this isolated worktree, so **local Codacy analysis was not run**. Verify the cloud result on the new PR head.
+- **Regression:** `node --test scripts/__tests__/check-mastra-builder-isolation.test.mjs`: **6/6** cases including clean output, malicious server/client code, absent output tree and empty client tree. Existing CopilotKit consumer inventory **9/9** still passes. Full exact-head `npm run floor` and GitHub CI to be recorded after final commit.
+
 ## Verification — actual executions
 
 | Check | Result | Evidence |
