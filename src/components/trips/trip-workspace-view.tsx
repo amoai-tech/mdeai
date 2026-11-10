@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import type { TripWorkspaceData } from "@/lib/trips/trip-item-types";
-import { ItineraryPanel, TripMapPanel } from "@/components/trips/itinerary-panel";
+import { ItineraryPanel } from "@/components/trips/itinerary-panel";
+import { TripMapPanel } from "@/components/trips/trip-map-panel";
 import { cn } from "@/lib/utils";
 
 const TABS = [
@@ -21,6 +22,12 @@ type TripWorkspaceViewProps = {
 /** SCREEN-013 — workspace tabs (Ideas · Itinerary · Map · Bookings stub). */
 export function TripWorkspaceView({ trip }: TripWorkspaceViewProps) {
   const [tab, setTab] = useState<TabId>("itinerary");
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+
+  function showOnMap(itemId: string) {
+    setSelectedItemId(itemId);
+    setTab("map");
+  }
 
   return (
     <div className="space-y-4">
@@ -59,9 +66,21 @@ export function TripWorkspaceView({ trip }: TripWorkspaceViewProps) {
         </p>
       ) : null}
 
-      {tab === "itinerary" ? <ItineraryPanel items={trip.items} /> : null}
+      {tab === "itinerary" ? (
+        <ItineraryPanel
+          items={trip.items}
+          selectedItemId={selectedItemId}
+          onShowOnMap={showOnMap}
+        />
+      ) : null}
 
-      {tab === "map" ? <TripMapPanel items={trip.items} /> : null}
+      {tab === "map" ? (
+        <TripMapPanel
+          items={trip.items}
+          selectedItemId={selectedItemId}
+          onSelectItem={setSelectedItemId}
+        />
+      ) : null}
 
       {tab === "bookings" ? (
         <p

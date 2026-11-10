@@ -1,4 +1,13 @@
-export type TripItemType = "event" | "restaurant" | "rental" | "poi" | "other";
+export type TripItemType =
+  | "event"
+  | "restaurant"
+  | "venue"
+  | "rental"
+  | "poi"
+  | "showing"
+  | "booking"
+  | "custom_note"
+  | "other";
 
 export type TripItemRow = {
   id: string;

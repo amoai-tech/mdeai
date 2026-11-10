@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { MapsShell } from "@/components/maps/MapProvider";
 import { TripWorkspaceView } from "@/components/trips/trip-workspace-view";
 import { createClient } from "@/lib/supabase/server";
 import { formatTripDateRange } from "@/lib/trips/load-user-trips";
@@ -18,7 +19,7 @@ export default async function TripDetailPage({ params }: TripDetailPageProps) {
 
   if (!user) {
     return (
-      <main data-testid="trips-workspace" className="mx-auto max-w-3xl px-4 py-8">
+      <main data-testid="trips-workspace" className="mx-auto max-w-6xl px-4 py-8">
         <p className="text-sm text-muted-foreground">
           <Link href={`/login?next=/trips/${id}`} className="text-primary hover:underline">
             Sign in
@@ -33,7 +34,7 @@ export default async function TripDetailPage({ params }: TripDetailPageProps) {
   if (!trip) notFound();
 
   return (
-    <main data-testid="trips-workspace" className="mx-auto max-w-3xl px-4 py-8">
+    <main data-testid="trips-workspace" className="mx-auto max-w-6xl px-4 py-8">
       <div className="mb-6 flex items-center justify-between gap-4">
         <div>
           <h1 className="font-serif text-2xl font-semibold">{trip.title}</h1>
@@ -48,7 +49,9 @@ export default async function TripDetailPage({ params }: TripDetailPageProps) {
           All trips
         </Link>
       </div>
-      <TripWorkspaceView trip={trip} />
+      <MapsShell>
+        <TripWorkspaceView trip={trip} />
+      </MapsShell>
     </main>
   );
 }
