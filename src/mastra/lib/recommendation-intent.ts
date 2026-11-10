@@ -48,9 +48,9 @@ const NEW_SEARCH_CRITERIA =
 const CURRENT_RESULTS_POINTER =
   /\b(?:from|in)\s+(?:(?:the\s+)?(?:current|existing|shown|visible)|these|those)\s+(?:results?|listings?|apartments?|ones?)\b/gi;
 
-/** Negated references explicitly exclude the displayed results; do not use the current cards. */
+/** Exclusion wording near a result pointer must not force cards the user rejected. */
 const NEGATED_CURRENT_RESULTS_POINTER =
-  /\b(?:not|never)\s+(?:from|in)\s+(?:(?:the\s+)?(?:current|existing|shown|visible)|these|those)\s+(?:results?|listings?|apartments?|ones?)\b/i;
+  /\b(?:not|never|aren['’]t|isn['’]t|excluding|except|other\s+than|besides)\b[^\n.!?]{0,55}\b(?:from|in)\s+(?:(?:the\s+)?(?:current|existing|shown|visible)|these|those)\s+(?:results?|listings?|apartments?|ones?)\b/i;
 
 /**
  * Bedroom-control requests: a page control, not a new search.
