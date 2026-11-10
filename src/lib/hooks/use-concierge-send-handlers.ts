@@ -69,6 +69,8 @@ import { useRestaurantSearchFastPath } from "@/hooks/use-restaurant-search-fast-
 import { parseDetailsCommand } from "@/lib/rentals/details-command";
 import { toDetailRental } from "@/lib/rentals/chat-rental-detail";
 import { useOptionalRentalFastPath } from "@/components/chat/rental-fast-path-context";
+import { useClearOtherFastPathResults } from "@/hooks/use-clear-other-fast-path-results";
+import type { RouterIntent } from "@/lib/router-intent";
 import { useRentalUi } from "@/components/chat/rental-ui-context";
 import { useSession } from "@/hooks/use-session";
 import { isSelectedRentalCafeNearbyRequest } from "@/lib/cafe-search-fast-path";
@@ -95,7 +97,8 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
   const nav = useOptionalThreadNav();
   const threadId = nav?.activeThreadId ?? nav?.sessionThreadId;
   const { showExchange, showNotice, showSignInPrompt } = useEventLocalChat();
-  const { state } = useConciergeCoAgent();
+  const { state, setState } = useConciergeCoAgent();
+  const clearVerticalResults = useClearOtherFastPathResults();
   // Both the visible rental cards and thread-local search criteria must come
   // from the same provider. Guests lack authenticated CoAgent working memory.
   const rentalFastPath = useOptionalRentalFastPath();
@@ -346,11 +349,25 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
   const inRentalSearch = rentalIntentIsCurrent &&
     (Boolean(visibleRentalSearch) || Boolean(state?.lastRentalQuery));
 
+  const onTopicShift = useCallback((intent: RouterIntent) => {
+    // Change only current discovery state; keep the saved transcript intact.
+    // Reuse the canonical provider owner for panels and all categories of pins.
+    clearVerticalResults(null);
+    setState((previous) => ({
+      ...previous,
+      lastIntent: intent,
+      lastRentalQuery: undefined,
+      lastRentalResults: undefined,
+      selectedListingId: undefined,
+    }));
+  }, [clearVerticalResults, setState]);
+
   return useMemo(
     () => ({
       handleRentalMessage,
       handleRentalDetailsMessage,
       closeRentalDetails,
+      onTopicShift,
       handleEventVenueBookingMessage,
       handleEventMessage,
       handleGroundedMessage,
@@ -366,6 +383,7 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
       handleRentalMessage,
       handleRentalDetailsMessage,
       closeRentalDetails,
+      onTopicShift,
       handleEventVenueBookingMessage,
       handleEventMessage,
       handleGroundedMessage,
