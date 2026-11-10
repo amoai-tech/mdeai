@@ -62,6 +62,7 @@ next-env.d.ts
 .mastra/
 # Local-only Mastra Studio Builder drafts (never ship or commit).
 .mde-builder.db*
+.mde-builder-runtime.db*
 
 # Mastra local dev DB
 mastra-agent-memory.db

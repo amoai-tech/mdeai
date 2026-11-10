@@ -24,13 +24,19 @@ if (!existsSync(resolve(projectRoot, "src/mastra/index.ts"))) {
   throw new Error("Builder needs PWD pointing to the MDE project root; refuse to write outside it.");
 }
 
-const appConfig = createMastraConfig();
+// A local Builder must not even construct the remote Supabase/Postgres store.
+// Agent Builder chat memory and application runtime state stay in this local DB.
+const localRuntimeStorage = new LibSQLStore({
+  id: "mde-builder-runtime",
+  url: `file:${resolve(projectRoot, ".mde-builder-runtime.db")}`,
+});
+const appConfig = createMastraConfig(localRuntimeStorage);
 export const mastra = new Mastra({
   ...appConfig,
   agents: { ...appConfig.agents, builderAgent: createBuilderAgent() },
   storage: new MastraCompositeStore({
     id: "mde-builder-local-storage",
-    default: appConfig.storage,
+    default: localRuntimeStorage,
     editor: new LibSQLStore({
       id: "mde-builder-editor",
       // Separate ignored project-root DB survives CLI-generated `.mastra/` deletion.

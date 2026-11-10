@@ -22,7 +22,7 @@ import { scorers } from "./scorers";
 
 const LOG_LEVEL = (process.env.LOG_LEVEL as LogLevel) || "info";
 
-export const createMastraConfig = () => ({
+export const createMastraConfig = (storage = getMastraStorage()) => ({
   agents: {
     pingAgent,
     routerAgent,
@@ -42,7 +42,7 @@ export const createMastraConfig = () => ({
   },
   workspace: getRuntimeWorkspace(),
   scorers,
-  storage: getMastraStorage(),
+  storage,
   logger: new ConsoleLogger({
     level: LOG_LEVEL,
   }),

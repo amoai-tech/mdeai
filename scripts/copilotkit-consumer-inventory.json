@@ -408,6 +408,11 @@
       "file": "src/components/browse/__tests__/page-filter-tools.test.tsx",
       "classification": "test-only",
       "note": "SAN-1631 verifies the two page tool registrations and their existing URL builders."
+    },
+    {
+      "file": "scripts/check-mastra-builder-isolation.mjs",
+      "classification": "test-only",
+      "note": "SAN-1255 PR #842 deterministic release gate: scans built Next server code for absent Mastra Editor imports and asserts the CopilotKit runtime stays pinned to its original OpenAI 4.104.0 SDK. It does not import or invoke CopilotKit."
     }
   ]
 }
