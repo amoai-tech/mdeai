@@ -60,6 +60,8 @@ yarn-error.log*
 next-env.d.ts
 
 .mastra/
+# Local-only Mastra Studio Builder drafts (never ship or commit).
+.mde-builder.db*
 
 # Mastra local dev DB
 mastra-agent-memory.db

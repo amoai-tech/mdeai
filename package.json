@@ -7,6 +7,7 @@
     "dev": "MDE_DATABASE_URL_GUARD_RUNNING=1 concurrently \"npm run dev:ui\" \"npm run dev:agent\" --names ui,agent --prefix-colors blue,green --kill-others",
     "predev:agent": "node scripts/warn-remote-database-url.mjs",
     "dev:agent": "PORT=4111 mastra dev",
+    "dev:agent:builder": "MDE_MASTRA_AGENT_BUILDER=1 mastra dev --dir src/mastra-studio",
     "predev:ui": "node scripts/warn-remote-database-url.mjs",
     "dev:ui": "next dev --webpack -p 3001",
     "predev:ui:worktree": "node scripts/warn-remote-database-url.mjs",
@@ -53,6 +54,7 @@
     "record:rental-certification-evidence": "node --env-file=.env.local scripts/record-rental-certification-evidence.mjs",
     "verify:inventory-quality": "node --env-file=.env.local scripts/verify-rental-inventory-quality.mjs",
     "check:mastra": "node scripts/check-mastra.mjs && node scripts/check-mastra-schema-contract.mjs --strict",
+    "check:builder:isolation": "node scripts/check-mastra-builder-isolation.mjs",
     "check:mastra:schema": "node scripts/check-mastra-schema-contract.mjs",
     "check:mastra:schema:strict": "node scripts/check-mastra-schema-contract.mjs --strict",
     "check:mastra:schema:init": "node scripts/verify-mastra-schema-init.mjs",
@@ -67,7 +69,7 @@
     "audit:copilotkit-v2": "npm run audit:copilotkit-v2:depcruise",
     "audit:copilotkit-v2:depcruise": "depcruise --config .dependency-cruiser.cjs src && node scripts/audit-copilotkit-v2-no-new-v1.mjs",
     "audit:copilotkit-v2:depcruise:proof": "node scripts/audit-copilotkit-v2-depcruise-proof.mjs",
-    "floor": "npm run audit:floor && npm run check:skills && npm run check:db-url-guard && npm run check:release-gates && npm run audit:copilotkit-v2 && npm run audit:copilotkit-v2:depcruise:proof && npm run lint && npm run typecheck && npm run check:env:ci && npm run build && npm test && npm run check:mastra",
+    "floor": "npm run audit:floor && npm run check:skills && npm run check:db-url-guard && npm run check:release-gates && npm run audit:copilotkit-v2 && npm run audit:copilotkit-v2:depcruise:proof && npm run lint && npm run typecheck && npm run check:env:ci && npm run build && npm test && npm run check:mastra && npm run check:builder:isolation",
     "graphify:update": "bash scripts/graphify-run.sh update . --no-cluster",
     "graphify:query": "bash scripts/graphify-run.sh query",
     "graphify:explain": "bash scripts/graphify-run.sh explain",
@@ -226,7 +228,10 @@
     "dompurify": "3.4.17",
     "undici": "7.30.1",
     "@ai-sdk/provider-utils@>=4.0.0-beta.10 <4.0.33": "4.0.33",
-    "@ai-sdk/provider-utils@>=3.0.0 <3.0.28": "3.0.28"
+    "@ai-sdk/provider-utils@>=3.0.0 <3.0.28": "3.0.28",
+    "@copilotkit/runtime": {
+      "openai": "4.104.0"
+    }
   },
   "engines": {
     "node": "24.x"
