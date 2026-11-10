@@ -214,7 +214,7 @@ export async function resolveRouterClassification(
   if (regex.routingTarget === "agent" &&
       /\b(?:co[-\s]?working|coworking|shared\s+(?:workspaces?|offices?))\b/i.test(text) &&
       !looksLikeRentalSearch(text)) {
-    return { ...regex, topicShift: true, source: "regex" };
+    return { ...regex, reason: "explicit coworking discovery topic change", topicShift: true, source: "regex" };
   }
 
   // "Anywhere is fine" says nothing about rentals on its own, so the regex hands it to the
