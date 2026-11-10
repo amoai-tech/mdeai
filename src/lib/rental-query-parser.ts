@@ -3,6 +3,11 @@
  */
 import type { ConciergeWorkingMemory } from "@/lib/types";
 import { monthlyBudgetHasCurrency } from "@/lib/rental-search-body-schema";
+import {
+  looksLikeCafeSearch,
+  looksLikeNightlifeGroundingSearch,
+  looksLikeRestaurantDiscovery,
+} from "@/lib/restaurant-query-classifier";
 
 export type RentalSearchApiParams = {
   neighborhood?: string;
@@ -720,7 +725,20 @@ export function canFastPathRentalSearch(
   if (memory.lastRentalQuery?.genericAskPending) {
     return buildRentalSearchParams(text, memory) != null;
   }
-  if (!looksLikeRentalSearch(text) && !(memory.lastRentalQuery && requestsWholeCity(text))) {
+  // A guest can refine an earlier rental's *explicit* monthly ceiling without repeating
+  // "apartments". Route that grounded follow-up through the public search, not the
+  // authenticated AI concierge. Do not hijack another discovery vertical or an
+  // ambiguous currency-free amount.
+  const monthlyRentalRefinement = Boolean(
+    memory.lastRentalQuery &&
+    scoreRentalQuery(text).maxPriceMonthly != null &&
+    !looksLikeRestaurantDiscovery(text) &&
+    !looksLikeCafeSearch(text) &&
+    !looksLikeNightlifeGroundingSearch(text)
+  );
+  if (!looksLikeRentalSearch(text) &&
+      !(memory.lastRentalQuery && requestsWholeCity(text)) &&
+      !monthlyRentalRefinement) {
     return false;
   }
   return buildRentalSearchParams(text, memory) != null;

@@ -44,6 +44,7 @@ type Probe = {
   failure: () => { code: string; retryable: boolean } | null;
   previousQuery: () => string | undefined;
   hasListing: (id: string) => boolean;
+  reset: () => void;
 };
 let probe: Probe;
 /** Messages the hook gave back to the sender (the real chat sends these to the concierge). */
@@ -70,6 +71,7 @@ function Harness() {
       failure: () => rental.searchFailure,
       previousQuery: () => rental.searchMeta?.userText,
       hasListing: (id) => JSON.stringify(rental.toolResult).includes(id),
+      reset: () => rental.clearToolResults(),
     };
   });
   return null;
@@ -153,6 +155,26 @@ describe("SAN-407 · rental chat searches before it asks", () => {
     expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/rentals/search");
     expect(probe.clarifyPending()).toBe(false);
     expect(assistantText()).not.toMatch(/what dates, budget/i);
+  });
+
+  it("keeps a guest COP budget refinement on the real fast-path instead of handing it to sign-in", async () => {
+    respond(200, { results: [] });
+    expect(await send("Only show apartments under COP 3 million per month")).toBe(true);
+    expect(await send("Now only under COP 2.5 million per month")).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(unhandled).toEqual([]);
+    const next = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body));
+    expect(next.maxPriceMonthly).toBe(2_500_000);
+    expect(next.budgetCurrency).toBe("COP");
+    expect(next.maxPricePerNight).toBeUndefined();
+  });
+
+  it("a new chat cannot reuse the previous guest rental budget", async () => {
+    respond(200, { results: [] });
+    expect(await send("Only show apartments under COP 3 million per month")).toBe(true);
+    await act(async () => { probe.reset(); });
+    expect(await send("Now only under COP 2.5 million per month")).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("a true empty marketplace is an honest answer with zero pins", async () => {

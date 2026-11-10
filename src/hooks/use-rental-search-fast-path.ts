@@ -136,7 +136,7 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
   const { state, setState } = useConciergeCoAgent();
   const { clarifyPending, clarifyKind, showExchange, showNotice } =
     useEventLocalChat();
-  const { setToolResult, setSearchMeta, reportSearchFailure } = useRentalFastPath();
+  const { searchMeta, setToolResult, setSearchMeta, reportSearchFailure } = useRentalFastPath();
   const clearOthers = useClearOtherFastPathResults();
   const { mergePinsByCategory, requestFitBounds } = useMapContext();
   const busyRef = useRef(false);
@@ -313,6 +313,13 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
       if (clarifyPending && clarifyKind === "restaurant") return false;
 
       const memory: ConciergeWorkingMemory = { ...(baseMemory ?? state ?? {}) };
+      // Guest fast-path searches can succeed when the authenticated CoAgent state
+      // is unavailable. Reuse the last *visible, thread-local* rental query only
+      // while its searchMeta still exists; New Chat and cross-vertical searches
+      // clear searchMeta, preventing an older rental from leaking into a new chat.
+      if (!memory.lastRentalQuery && searchMeta && latestMemoryRef.current?.lastRentalQuery) {
+        memory.lastRentalQuery = latestMemoryRef.current.lastRentalQuery;
+      }
 
       if (!canFastPathRentalSearch(trimmed, memory)) return false;
 
@@ -336,6 +343,7 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
       clarifyKind,
       clarifyPending,
       runSearch,
+      searchMeta,
       state,
     ],
   );

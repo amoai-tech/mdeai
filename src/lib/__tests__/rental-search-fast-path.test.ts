@@ -142,6 +142,23 @@ describe("rental-search-fast-path", () => {
     expect(params?.maxPricePerNight).toBeUndefined();
   });
 
+  it("routes a price-only COP monthly follow-up through the rental search with saved context", () => {
+    const memory: ConciergeWorkingMemory = { lastRentalQuery: {
+      neighborhood: "Laureles", maxPriceMonthly: 3_000_000,
+      budgetCurrency: "COP", budgetType: "monthly",
+    } };
+    const followup = "Now only under COP 2.5 million per month";
+    expect(canFastPathRentalSearch(followup, memory)).toBe(true);
+    expect(buildRentalSearchParams(followup, memory)).toMatchObject({
+      neighborhood: "Laureles", maxPriceMonthly: 2_500_000,
+      budgetCurrency: "COP", stayType: "monthly",
+    });
+    // A fresh, context-free budget is not a named rental request.
+    expect(canFastPathRentalSearch(followup, {})).toBe(false);
+    expect(canFastPathRentalSearch("salsa events under COP 2.5 million/month", memory)).toBe(false);
+    expect(canFastPathRentalSearch("restaurants under COP 2.5 million/month", memory)).toBe(false);
+  });
+
   it("does not fast path event queries", () => {
     expect(canFastPathRentalSearch("salsa events this weekend", {})).toBe(false);
   });
