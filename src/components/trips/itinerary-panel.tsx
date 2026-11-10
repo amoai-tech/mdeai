@@ -48,10 +48,19 @@ export function ItineraryPanel({
     mountedAtRef.current = performance.now();
     const sync = () => {
       if (mountedAtRef.current == null) return;
-      setNowMs(parsed + (performance.now() - mountedAtRef.current));
+      const elapsed = performance.now() - mountedAtRef.current;
+      // Wall clock may move forward while the device sleeps; never move backward.
+      setNowMs(Math.max(parsed + elapsed, Date.now()));
     };
     const id = window.setInterval(sync, 60_000);
-    return () => window.clearInterval(id);
+    const onVisibility = () => {
+      if (!document.hidden) sync();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, [nowIso]);
   const upNext = nowMs == null ? null : getUpNextItem(items, new Date(nowMs));
 
