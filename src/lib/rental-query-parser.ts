@@ -728,6 +728,11 @@ function isBudgetOnlyRentalRefinement(text: string): boolean {
   return tokens.length > 0 && tokens.every((token) => RENTAL_BUDGET_FOLLOWUP_WORDS.has(token));
 }
 
+/** A currency-grounded monthly budget with only refinement words, no other topic. */
+export function isExactMonthlyBudgetOnlyRefinement(text: string): boolean {
+  return scoreRentalQuery(text).maxPriceMonthly != null && isBudgetOnlyRentalRefinement(text);
+}
+
 export function canFastPathRentalSearch(
   text: string,
   memory: ConciergeWorkingMemory,
@@ -743,8 +748,7 @@ export function canFastPathRentalSearch(
   // ambiguous currency-free amount.
   const monthlyRentalRefinement = Boolean(
     memory.lastRentalQuery &&
-    scoreRentalQuery(text).maxPriceMonthly != null &&
-    isBudgetOnlyRentalRefinement(text)
+    isExactMonthlyBudgetOnlyRefinement(text)
   );
   if (!looksLikeRentalSearch(text) &&
       !(memory.lastRentalQuery && requestsWholeCity(text)) &&

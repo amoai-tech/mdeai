@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
 import { useEventLocalChat } from "@/components/chat/event-local-chat-context";
+import { useOptionalRentalFastPath } from "@/components/chat/rental-fast-path-context";
 import { clearConciergePendingSend, setConciergePendingSend } from "@/lib/concierge-pending-store";
 import { getConciergeErrorForThread, reportConciergeError } from "@/lib/concierge-error-store";
 import { useOptionalThreadNav } from "@/lib/chat/thread-nav-context";
@@ -88,6 +89,9 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
   const threadId = nav?.activeThreadId ?? nav?.sessionThreadId;
   const { showExchange, showNotice, showSignInPrompt } = useEventLocalChat();
   const { state } = useConciergeCoAgent();
+  // The public guest search has real thread-local criteria even when there is
+  // no authenticated CoAgent memory; the shared router must see that context.
+  const visibleRentalSearch = useOptionalRentalFastPath()?.searchMeta;
   const map = useOptionalMapContext();
   const { toolResult } = useGroundedFastPath();
   const groundedShownIds = useOptionalRichCardResults()?.groundedShownIds;
@@ -299,9 +303,10 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
   // A rental search is under way when its query is saved and the last intent is still a rental one.
   // Saved older conversations carry "rental_refine", which the current intent list no longer has.
   const lastIntentName: string | undefined = state?.lastIntent;
-  const inRentalSearch =
+  const inRentalSearch = Boolean(visibleRentalSearch) || (
     Boolean(state?.lastRentalQuery) &&
-    (lastIntentName === undefined || lastIntentName === "rental_search" || lastIntentName === "rental_refine");
+    (lastIntentName === undefined || lastIntentName === "rental_search" || lastIntentName === "rental_refine")
+  );
 
   return useMemo(
     () => ({

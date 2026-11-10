@@ -170,6 +170,24 @@ describe("SAN-867 · VEB-MVP-001 — Router hijack fix — sendConciergeUserMess
       },
     );
 
+    it("keeps explicit budget-only follow-ups on public rental search after a previous rental", async () => {
+      const text = "Now only under COP 2.5 million per month";
+      const handlers = { ...makeHandlers(), lastIntent: undefined, inRentalSearch: true };
+      handlers.handleRentalMessage.mockResolvedValueOnce(true);
+      await sendConciergeUserMessage(text, handlers);
+      expect(handlers.handleRentalMessage).toHaveBeenCalledWith(text, expect.any(String));
+      expect(handlers.onAgentSend).not.toHaveBeenCalled();
+    });
+
+    it("does not hijack cost questions for gyms or coworking from an earlier rental", async () => {
+      const handlers = { ...makeHandlers(), inRentalSearch: true };
+      for (const text of ["gym under COP 200k per month", "coworking under COP 800k per month"]) {
+        await sendConciergeUserMessage(text, handlers);
+      }
+      expect(handlers.handleRentalMessage).not.toHaveBeenCalled();
+      expect(handlers.onAgentSend).toHaveBeenCalledTimes(2);
+    });
+
     it("uses inRentalSearch over lastIntent, so saved older conversations still widen", async () => {
       const handlers = { ...makeHandlers(), lastIntent: undefined, inRentalSearch: true };
       handlers.handleRentalMessage.mockResolvedValueOnce(true);
