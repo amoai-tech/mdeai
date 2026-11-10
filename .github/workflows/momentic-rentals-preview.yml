@@ -221,6 +221,8 @@ jobs:
             conclusion=failure
           elif [[ "$BROWSER_INSTALL" == failure ]]; then
             result="BLOCKED — Momentic Chromium installation failed (0/$count executed)"
+          elif [[ "$BROWSER_INSTALL" == cancelled ]]; then
+            result="BLOCKED — Momentic Chromium installation cancelled (0/$count executed)"
           elif [[ "$OUTCOME" == cancelled ]]; then
             result="BLOCKED — browser test run was cancelled; result unknown"
           elif [[ "$OUTCOME" == success ]]; then
