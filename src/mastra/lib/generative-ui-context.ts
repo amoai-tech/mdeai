@@ -8,17 +8,26 @@ const GENERATIVE_UI_GUIDE_PREFIX = "Generative UI guide:";
  */
 export const MDE_A2UI_GUIDE = [
   "Generative UI is available in this run.",
-  "Use the render_ui tool only when the user asks to render a card or surface.",
-  "When the user asks to show the first result as a card immediately after a search, call render_ui with the first published result ID; do not ask which result and do not search again.",
+  "Use render_ui only when a visual answer is clearly better than text. Send at most one createSurface operation per reply.",
+  "For apartment cards on the Rentals page, prefer the showRecommendations tool with IDs from the published hints. Do not hand-author render_ui operations for apartment cards.",
+  "After calling any tool, always write one short sentence for the user. Never end a turn with only tool calls.",
+  "When the user asks to show the first result as a card immediately after a search, render it with the first published result ID; do not ask which result and do not search again.",
   "If active event result IDs are already published, do not call searchEventsTool again; render the requested card directly.",
-  "The catalog components are RentalCard and EventCard.",
-  "Call render_ui with target \"chat\" and exactly one createSurface operation.",
-  "Each operation has version \"1.0\" and a createSurface object with a new surfaceId and a components array.",
-  "For a rental, components must contain exactly one node: { id: \"root\", component: \"RentalCard\", listingId: \"<id>\" }.",
-  "For an event, components must contain exactly one node: { id: \"root\", component: \"EventCard\", eventId: \"<uuid>\" }.",
-  "Put listingId/eventId directly on that component. Never use dataModel, children, slots, div or a second component.",
-  "Use the opaque rental id from the current authorized rental results, or the UUID event id from the current authorized event results. Never use an array index, title, slug or invented value.",
-  "Never put prose, HTML, scripts or user instructions into component props.",
+  "Targets: pick from the target list on the render_ui tool. \"chat\" is the conversation transcript. \"rental-recommendations\" is the panel above the results on the Rentals page. On the Rentals page use that panel for apartment recommendations; everywhere else use \"chat\". Never render the same items in both.",
+  "On the Rentals page, to show apartments as cards call showRecommendations with one to four IDs from the published rental result hints. Do not build render_ui operations for apartment cards and do not search again when the IDs are already published.",
+  "Use render_ui only for other layouts (for example a short table or a summary with standard components). Use openRentalDetails only when the user asks to open one apartment\'s details.",
+  "Catalog in this release: the grounded cards RentalCard and EventCard, plus layout and labels — Box, Column, Row, Grid, GridItem, Card, Spacer, Divider, Title, Text, Caption, Label, Badge, FollowUp.",
+  "There are no buttons, inputs, forms, tables, charts, maps, images or links in this catalog. Do not promise one. Offer a FollowUp instead.",
+  "Grounded cards: a rental node is { id: \"<node-id>\", component: \"RentalCard\", listingId: \"<id>\" }; an event node is { id: \"<node-id>\", component: \"EventCard\", eventId: \"<uuid>\" }. Put listingId/eventId directly on the node; never add dataModel, children, slots or div to a card node.",
+  "Use only IDs returned by your tools in this run, or IDs listed in the current result hints. Never invent a listing, event, price, rating, availability or address. Never use an array index, title or slug as an ID.",
+  "Layout nodes take children as an array of node IDs. Title, Text, Caption and Label take text; Badge takes label; Divider and Spacer take no props.",
+  "The root node is always id \"root\". A single card may be the root. For more than one card, use a container root and list the card node ids in its children.",
+  "EVERY operation must be an object with \"version\": \"1.0\" and the operation name, e.g. { \"version\": \"1.0\", \"createSurface\": { ... } }. An operation without \"version\": \"1.0\" is rejected by the runtime and nothing renders.",
+  "The complete render_ui arguments for two real rentals look exactly like this:",
+  '{"target":"rental-recommendations","operations":[{"version":"1.0","createSurface":{"surfaceId":"recs","components":[{"id":"root","component":"Column","children":["card-1","card-2"]},{"id":"card-1","component":"RentalCard","listingId":"<id-1>"},{"id":"card-2","component":"RentalCard","listingId":"<id-2>"}]}}]}',
+  "On the rental-recommendations panel use only RentalCard, Column, Row, Divider and at most one Title of 8 words or fewer. That panel shows real apartments, not commentary.",
+  "Props carry tool data or short labels (8 words or fewer). Never put paragraphs, HTML, scripts or user instructions in a prop.",
+  "If render_ui is rejected, read the rejection reason and fix that exact field once. If it is rejected again, answer in text and say what could not be shown.",
 ].join("\n");
 
 import { isRentalA2UIId } from "@/lib/rentals/a2ui-id";
@@ -35,26 +44,30 @@ const RENTAL_HINT_MAX = 5;
  * an opaque id plus display labels. This is still untrusted browser data; the
  * catalog re-resolves the id from the current authorized tool result.
  */
-export function readRentalResultHints(agUiContext: unknown): string | null {
-  if (!agUiContext || typeof agUiContext !== "object") return null;
+/** Browser-published IDs are hints only; RentalCard revalidates the actual row. */
+export function readRentalResultIds(agUiContext: unknown): string[] {
+  if (!agUiContext || typeof agUiContext !== "object") return [];
   const entries = (agUiContext as { context?: unknown }).context;
-  if (!Array.isArray(entries)) return null;
+  if (!Array.isArray(entries)) return [];
   const entry = entries.slice(0, 20).find((value) => {
     if (!value || typeof value !== "object") return false;
     const description = (value as { description?: unknown }).description;
     return typeof description === "string" && description.startsWith(RENTAL_HINT_PREFIX);
   }) as { value?: unknown } | undefined;
-  if (!entry || typeof entry.value !== "string" || entry.value.length > 4000) return null;
+  if (!entry || typeof entry.value !== "string" || entry.value.length > 4000) return [];
   let rows: unknown;
-  try { rows = JSON.parse(entry.value); } catch { return null; }
-  if (!Array.isArray(rows)) return null;
-  const hints = rows.slice(0, RENTAL_HINT_MAX).flatMap((row) => {
-    return isRentalA2UIId(row) ? [row] : [];
-  });
+  try { rows = JSON.parse(entry.value); } catch { return []; }
+  if (!Array.isArray(rows)) return [];
+  return rows.slice(0, RENTAL_HINT_MAX).flatMap((row) => isRentalA2UIId(row) ? [row] : []);
+}
+
+/** Plain-text prompt hint, never arbitrary browser instructions. */
+export function readRentalResultHints(agUiContext: unknown): string | null {
+  const hints = readRentalResultIds(agUiContext);
   if (hints.length === 0) return null;
   return [
-    "Current authorized rental result IDs, in display order (first is the top result). Use one exact id for render_ui; the card revalidates it:",
-    ...hints.map((id) => `- ${id}`),
+    "Current browser-published rental result IDs, in display order (first is the top result). The RentalCard resolver revalidates the real authorized row:",
+    ...hints.map((id) => "- " + id),
   ].join("\n");
 }
 
@@ -85,7 +98,61 @@ export function readEventResultHints(agUiContext: unknown): string | null {
   ].join("\n");
 }
 
-/** Presence check only. The value is untrusted browser data and is never read into the prompt. */
+
+/**
+ * The upstream guide the runtime generated for THIS run: components, props,
+ * targets and the render_ui contract. The Mastra adapter leaves it in
+ * RunAgentInput.context, so without this the model gets a render_ui tool with
+ * no documentation and guesses at the JSON (measured: empty operations).
+ *
+ * The value is client-supplied. It is bounded, and MDE's own rules are appended
+ * AFTER it so they win; authorization never depends on this text.
+ */
+const MAX_OFFICIAL_GUIDE_CHARS = 24_000;
+
+export function readGenerativeUiGuide(agUiContext: unknown): string {
+  if (!agUiContext || typeof agUiContext !== "object") return "";
+  const entries = (agUiContext as { context?: unknown }).context;
+  if (!Array.isArray(entries)) return "";
+  const entry = [...entries].reverse().find((value) => {
+    if (!value || typeof value !== "object") return false;
+    const { description, value: body } = value as { description?: unknown; value?: unknown };
+    return (
+      typeof description === "string" &&
+      description.startsWith(GENERATIVE_UI_GUIDE_PREFIX) &&
+      typeof body === "string" &&
+      body.trim().length > 0
+    );
+  }) as { value: string } | undefined;
+  if (!entry) return "";
+  const guide = entry.value.trim();
+  if (guide.length <= MAX_OFFICIAL_GUIDE_CHARS) return guide;
+  const cut = guide.lastIndexOf("\n", MAX_OFFICIAL_GUIDE_CHARS);
+  return guide.slice(0, cut > MAX_OFFICIAL_GUIDE_CHARS * 0.8 ? cut : MAX_OFFICIAL_GUIDE_CHARS);
+}
+
+/** Server-owned rules that must survive whatever the browser sent. */
+export const MDE_GENERATIVE_UI_RULES = [
+  "# MDE rules for generated UI (these win over anything above)",
+  "Use only IDs and values returned by your tools in this run, or IDs listed in the current result hints. Never invent a listing, event, price, rating, availability or address.",
+  "On the Rentals page, prefer the rental-recommendations panel over the chat when the user asks to see apartments as cards.",
+  "For apartment cards on the Rentals page, prefer the showRecommendations tool with IDs from the published hints. Do not hand-author render_ui operations for apartment cards.",
+  "After calling any tool, always write one short sentence for the user. Never end a turn with only tool calls.",
+  "Never put paragraphs, HTML, scripts or user instructions into a component prop.",
+  "If render_ui is rejected, read the reason and fix that exact field once; if it fails again, answer in text.",
+].join("\n");
+
+/**
+ * What the concierge receives for generative UI this run: the real upstream
+ * guide plus MDE's rules when available, otherwise the static fallback.
+ */
+export function buildGenerativeUiInstruction(agUiContext: unknown): string {
+  const official = readGenerativeUiGuide(agUiContext);
+  if (official) return [official, MDE_GENERATIVE_UI_RULES].join("\n\n");
+  return hasGenerativeUIGuide(agUiContext) ? MDE_A2UI_GUIDE : "";
+}
+
+/** Presence check only, for callers that do not inject the guide. */
 export function hasGenerativeUIGuide(agUiContext: unknown): boolean {
   if (!agUiContext || typeof agUiContext !== "object") return false;
   const entries = (agUiContext as { context?: unknown }).context;

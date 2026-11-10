@@ -13,11 +13,13 @@ import { computeRouteTool } from '../tools/compute-route';
 import { lookupPublicDiscoveryItemTool, lookupPublicDiscoveryItemFromServer } from '../tools/lookup-public-discovery-item';
 import { searchWebGroundedEventsTool } from '../tools/search-web-grounded-events';
 import { requestVenueBookingTool } from '../tools/request-venue-booking';
+import { showRecommendationsTool } from '../tools/show-recommendations';
+import { shouldRequestRecommendations } from '../lib/recommendation-intent';
 import { CONCIERGE_AGENT_MODEL } from "../lib/models";
 import { geminiMalformedFirstStepRetry } from "../lib/gemini-malformed-retry";
 import { getDefaultInputProcessors } from "../lib/agent-input-processors";
 import { currentSelectedNameOnly, verifiedDiscoverySelectionHint, withComparisonRecords, withVerifiedSelectionFacts } from "../lib/discovery-agent-context";
-import { hasGenerativeUIGuide, MDE_A2UI_GUIDE, readEventResultHints, readRentalResultHints } from "../lib/generative-ui-context";
+import { buildGenerativeUiInstruction, readEventResultHints, readRentalResultHints } from "../lib/generative-ui-context";
 import { MapUiStateSchema } from "@/platform/contracts/map-ui-state";
 import { formatEventSourcePromptHint } from "@/lib/events/trusted-event-sources";
 import { RESTAURANT_CLARIFY_MESSAGE } from "@/lib/restaurant-clarify-copy";
@@ -507,10 +509,12 @@ export const conciergeAgent = new Agent({
     const currentSelection = await verifiedDiscoverySelectionHint(
       agUiContext, lookupPublicDiscoveryItemFromServer,
     );
-    // The A2UI transport gives the model a render_ui tool AND a component guide.
-    // The Mastra adapter forwards the guide in RunAgentInput.context; this
-    // dynamic instruction is the only place that turns it into a system prompt.
-    const generativeGuide = hasGenerativeUIGuide(agUiContext) ? MDE_A2UI_GUIDE : null;
+    // The A2UI transport gives the model a render_ui tool AND a guide with the
+    // component schemas and rules. The Mastra adapter keeps that guide in
+    // RunAgentInput.context, so this per-turn instruction is the official place
+    // that passes it to the model ("your agent must pass the run's context").
+    // Without it the model guesses the operation JSON.
+    const generativeGuide = buildGenerativeUiInstruction(agUiContext);
     const rentalHints = readRentalResultHints(agUiContext);
     const eventHints = readEventResultHints(agUiContext);
     return [currentSelection, rentalHints, eventHints, generativeGuide, conciergeBaseInstructions]
@@ -542,6 +546,7 @@ export const conciergeAgent = new Agent({
     lookupPublicDiscoveryItemTool,
     searchWebGroundedEventsTool,
     requestVenueBooking: requestVenueBookingTool,
+    showRecommendations: showRecommendationsTool,
   },
   inputProcessors: [
     // SAN-737: the verified current selection, tool schemas and working memory must
@@ -552,6 +557,13 @@ export const conciergeAgent = new Agent({
     // proposal. Once the current run grounded the exact named venue and the
     // customer already supplied every mandatory field, require the *existing*
     // proposal-only HITL tool for the next Mastra step. No database writer here.
+    // SAN-1656 — explicit "show ... as cards" is a UI command, not a question.
+    // Pin the simple ID-list tool (never render_ui: forcing that produced empty
+    // operations); the tool validates IDs and the transport builds the surface.
+    { id: 'san1656-recommendation-intent', processInputStep: ({ stepNumber, messages, requestContext }) =>
+      shouldRequestRecommendations({ stepNumber, messages, requestContext })
+        ? { toolChoice: { type: 'tool' as const, toolName: 'showRecommendations' } }
+        : {} },
     { id: 'san1149-booking-continuation', processInputStep: ({ stepNumber, messages, steps, requestContext }) =>
       shouldContinueVenueBookingAfterSearch({ stepNumber, messages, steps, requestContext })
         ? { toolChoice: { type: 'tool' as const, toolName: 'requestVenueBooking' } }

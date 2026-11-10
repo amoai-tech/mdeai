@@ -28,6 +28,8 @@ import {
   runWithTokenSink,
 } from "@/mastra/lib/token-usage-als";
 import { CONCIERGE_TURN_TIMEOUT_MS } from "@/mastra/lib/models";
+import { normalizeRenderUiToolArgs } from "@/mastra/lib/normalize-render-ui-args";
+import { emitRecommendationSurface } from "@/mastra/lib/recommendation-surface-bridge";
 /**
  * [SAN-905 · CK-V2-007d — Console clean on hostEventAgent stream](https://linear.app/sanjiovani/issue/SAN-905/ck-v2-007d-console-clean-on-hosteventagent-stream):
  * CopilotKit replays AG-UI messages without Gemini thought_signature on assistant
@@ -158,6 +160,13 @@ export class LoggingMastraAgent extends MastraAgent {
     const tokenSink = createTokenSink();
 
     const stream = super.run(runInput).pipe(
+      // SAN-1656 — the model omits the A2UI "version" envelope, so the runtime
+      // rejects every render_ui operation. Normalise that one constant before the
+      // generative-UI middleware validates the stream; other tools pass through.
+      normalizeRenderUiToolArgs(),
+      // SAN-1656 — a validated show_recommendations result becomes a render_ui
+      // call with server-built operations, so the runtime renders real cards.
+      emitRecommendationSurface(),
       tap({
         next: (event) => {
           // AG-UI RUN_ERROR is a terminal *agent* failure but the observable can

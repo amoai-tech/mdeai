@@ -349,3 +349,12 @@ export function useEventLocalChat() {
   }
   return ctx;
 }
+
+/**
+ * Some pages render shared catalog cards without the event-local chat stack
+ * (the Rentals page). A child that needs it must be able to detect that instead
+ * of throwing, which the renderer would turn into a blank card.
+ */
+export function useOptionalEventLocalChat() {
+  return useContext(EventLocalChatContext);
+}
