@@ -18,6 +18,46 @@ const noHints = { get: () => ({ context: [] }) };
 const ask = (text: string) => [{ role: "user", content: text }];
 
 describe("shouldRequestRecommendations", () => {
+  it("treats from the current results as a reference, not as a new filter", () => {
+    expect(shouldRequestRecommendations({
+      stepNumber: 0,
+      messages: ask("Show the second apartment as a card from the current results"),
+      requestContext: hints,
+    })).toBe(true);
+    expect(shouldRequestRecommendations({
+      stepNumber: 0,
+      messages: ask("Show the first apartment as a card in the current results"),
+      requestContext: hints,
+    })).toBe(true);
+    expect(shouldRequestRecommendations({
+      stepNumber: 0,
+      messages: ask("Show the second apartment with a balcony as a card from the current results"),
+      requestContext: hints,
+    })).toBe(false);
+  });
+
+  it.each([
+    ["Show the second apartment as a card from these results", true],
+    ["Show the first apartment as a card in those results", true],
+    ["Show the second apartment as a card not from the current results", false],
+    ["Show the second apartment as a card not from these results", false],
+    ["Show other apartments as cards, not the ones in the current results", false],
+    ["Show apartments as cards that aren't in the current results", false],
+    ["Show apartments as cards excluding those in the current results", false],
+    ["Show apartments as cards except the ones in these results", false],
+    ["Show apartments as cards other than those in the current results", false],
+    ["Show new apartments as cards instead of the ones in the current results", false],
+    ["Show apartments as cards but none from the current results", false],
+    ["Show apartments as cards that don't appear in the current results", false],
+    ["Show apartments as cards that doesn't appear in the current results", false],
+    ["Show apartments as cards from the current results, max $1,000", false],
+    ["Show apartments as cards from these results, max $1,000", false],
+    ["Show the second apartment as a card from the current results with a balcony", false],
+    ["Show the second apartment as a card from the current results in Laureles", false],
+  ])("keeps current-results pointers separate from real search criteria: %s", (text, expected) => {
+    expect(shouldRequestRecommendations({ stepNumber: 0, messages: ask(text), requestContext: hints })).toBe(expected);
+  });
+
   it.each([
     "Show the first two as cards.",
     "Show these apartments as cards.",
