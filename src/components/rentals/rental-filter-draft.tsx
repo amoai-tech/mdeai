@@ -32,8 +32,8 @@ const DraftContext = createContext<DraftContextValue | null>(null);
  * lives in a tiny external store both can read. A remount of either tree keeps
  * the renter's edit; only a new URL value reseeds it while it is unedited.
  */
-type DraftState = { beds: string | null; edited: boolean; applyError: string | null; seededFrom: string | null };
-let draftStore: DraftState = { beds: null, edited: false, applyError: null, seededFrom: null };
+type DraftState = { beds: string | null; edited: boolean; applyError: string | null; seededFrom: string | null; connected: boolean };
+let draftStore: DraftState = { beds: null, edited: false, applyError: null, seededFrom: null, connected: false };
 const draftListeners = new Set<() => void>();
 function emitDraft() { for (const listener of draftListeners) listener(); }
 function subscribeDraft(listener: () => void) {
@@ -45,9 +45,20 @@ function getDraftSnapshot() { return draftStore; }
 /** Test/debug access to the shared draft. */
 export function getRentalFilterDraftSnapshot() { return draftStore; }
 
+/**
+ * The URL is canonical: a new value reseeds the draft. A remount that reports
+ * the same value keeps the renter's current edit.
+ */
 export function resetRentalFilterDraft(initialBeds: string | null) {
   if (draftStore.edited && draftStore.seededFrom === initialBeds) return;
-  draftStore = { beds: initialBeds, edited: false, applyError: null, seededFrom: initialBeds };
+  draftStore = { ...draftStore, beds: initialBeds, edited: false, applyError: null, seededFrom: initialBeds };
+  emitDraft();
+}
+
+/** True only while the Rentals page mounts the draft provider. */
+export function setRentalFilterDraftConnected(connected: boolean) {
+  if (draftStore.connected === connected) return;
+  draftStore = { ...draftStore, connected };
   emitDraft();
 }
 
@@ -70,6 +81,7 @@ export function useRentalFilterStore() {
     edited: snapshot.edited,
     applyError: snapshot.applyError,
     setApplyError: setRentalFilterDraftError,
+    connected: snapshot.connected,
   };
 }
 
@@ -91,6 +103,8 @@ export function RentalFilterDraftProvider({
   // Seed from the URL once per mount; an existing edit survives a remount.
   useEffect(() => {
     resetRentalFilterDraft(initialBeds);
+    setRentalFilterDraftConnected(true);
+    return () => setRentalFilterDraftConnected(false);
   }, [initialBeds]);
   const draftRef = useRef<RentalFilterDraft>({ beds: snapshot.beds });
   useEffect(() => {

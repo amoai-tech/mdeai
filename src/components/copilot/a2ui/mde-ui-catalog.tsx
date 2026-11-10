@@ -427,6 +427,9 @@ function MdeEventCard({ eventId }: { eventId: string }) {
  */
 function MdeBedroomFilter({ label }: { label?: string }) {
   const draft = useRentalFilterStore();
+  // The catalog also renders outside the Rentals page; there the value could
+  // never be applied, so do not offer it.
+  if (!draft.connected) return null;
   return (
     <label className="flex w-full flex-col gap-1 text-sm">
       <span className="font-medium text-foreground">{label ?? "Bedrooms"}</span>
@@ -455,7 +458,7 @@ function MdeApplyFilters({
   const draft = useRentalFilterStore();
   // No page draft and no registered action means nothing could be applied: show
   // the control disabled with the reason instead of a dead click.
-  const ready = Boolean(draft && onApplyRentalFilters);
+  const ready = Boolean(draft.connected && onApplyRentalFilters);
   return (
     <div className="flex flex-col gap-1">
       <Button
