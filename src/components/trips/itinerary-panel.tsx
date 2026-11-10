@@ -15,6 +15,7 @@ import { hasValidCoordinates } from "@/lib/trips/coordinates";
 type ItineraryPanelProps = {
   items: TripItemRow[];
   timeZone?: string;
+  nowIso?: string;
   selectedItemId?: string | null;
   onShowOnMap?: (id: string) => void;
 };
@@ -23,12 +24,13 @@ type ItineraryPanelProps = {
 export function ItineraryPanel({
   items,
   timeZone = DEFAULT_TRIP_TIMEZONE,
+  nowIso,
   selectedItemId = null,
   onShowOnMap,
 }: ItineraryPanelProps) {
   const dayGroups = groupTripItemsByDay(items, timeZone);
   const overlaps = detectScheduleOverlaps(items, timeZone);
-  const upNext = getUpNextItem(items);
+  const upNext = getUpNextItem(items, nowIso ? new Date(nowIso) : new Date());
 
   return (
     <section data-testid="itinerary-panel" className="space-y-4">

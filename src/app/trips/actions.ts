@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
 import { resolveTripSource } from "@/lib/trips/resolve-trip-source";
+import { isValidTimeZone } from "@/lib/trips/timezone";
 
 const addTripItemSchema = z.object({
   tripId: z.string().uuid(),
@@ -14,6 +15,15 @@ const addTripItemSchema = z.object({
   startAt: z.string().min(1).max(64).nullable().optional(),
   endAt: z.string().min(1).max(64).nullable().optional(),
 });
+
+const updateTripTimezoneSchema = z.object({
+  tripId: z.string().uuid(),
+  timezone: z.string().min(1).max(64),
+});
+
+export type UpdateTripTimezoneResult =
+  | { ok: true; timezone: string }
+  | { ok: false; error: string };
 
 export type AddTripItemResult =
   | { ok: true; itemId: string }
@@ -71,6 +81,37 @@ export async function listTripOptions(): Promise<ListTripOptionsResult> {
       endDate: trip.end_date,
     })),
   };
+}
+
+export async function updateTripTimezone(
+  input: unknown,
+): Promise<UpdateTripTimezoneResult> {
+  const parsed = updateTripTimezoneSchema.safeParse(input);
+  if (!parsed.success || !isValidTimeZone(parsed.data.timezone)) {
+    return { ok: false, error: "Choose a valid IANA timezone." };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Sign in to change the trip timezone." };
+
+  const { data, error } = await supabase
+    .from("trips")
+    .update({ timezone: parsed.data.timezone })
+    .eq("id", parsed.data.tripId)
+    .eq("user_id", user.id)
+    .is("deleted_at", null)
+    .select("id, timezone")
+    .maybeSingle();
+
+  if (error || !data) {
+    return { ok: false, error: "Could not update this trip. Please try again." };
+  }
+
+  revalidatePath(`/trips/${parsed.data.tripId}`);
+  return { ok: true, timezone: data.timezone };
 }
 
 export async function addTripItem(input: unknown): Promise<AddTripItemResult> {

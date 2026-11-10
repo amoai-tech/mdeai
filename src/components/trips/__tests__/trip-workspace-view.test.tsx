@@ -4,6 +4,13 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import type { TripItemRow, TripWorkspaceData } from "@/lib/trips/trip-item-types";
 import { TripWorkspaceView } from "../trip-workspace-view";
 
+vi.mock("@/app/trips/actions", () => ({
+  updateTripTimezone: vi.fn(async () => ({ ok: true, timezone: "America/Bogota" })),
+}));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: vi.fn() }),
+}));
+
 vi.mock("@/components/trips/trip-map-panel", () => ({
   TripMapPanel: ({
     items,
@@ -30,6 +37,7 @@ const items: TripItemRow[] = [
     item_type: "rental",
     source_id: "11111111-1111-4111-8111-111111111111",
     created_at: "2026-11-01T00:00:00.000Z",
+    position: 0,
     title: "Apartment A",
     description: null,
     start_at: "2026-11-14T15:00:00.000Z",
@@ -43,6 +51,7 @@ const items: TripItemRow[] = [
     item_type: "restaurant",
     source_id: "22222222-2222-4222-8222-222222222222",
     created_at: "2026-11-01T00:00:00.000Z",
+    position: 0,
     title: "Café B",
     description: null,
     start_at: "2026-11-14T18:00:00.000Z",

@@ -10,6 +10,7 @@ const item = (overrides: Partial<TripItemRow>): TripItemRow => ({
   source_id: "11111111-1111-4111-8111-111111111111",
   title: "Restaurant",
   created_at: "2026-11-01T00:00:00.000Z",
+    position: 0,
   description: null,
   start_at: "2026-11-22T12:00:00.000Z",
   end_at: null,

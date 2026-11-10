@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { TripWorkspaceData } from "@/lib/trips/trip-item-types";
 import { ItineraryPanel } from "@/components/trips/itinerary-panel";
 import { TripMapPanel } from "@/components/trips/trip-map-panel";
+import { TripTimezoneEditor } from "@/components/trips/trip-timezone-editor";
 import { cn } from "@/lib/utils";
 
 const TABS = [
@@ -17,10 +18,11 @@ type TabId = (typeof TABS)[number]["id"];
 
 type TripWorkspaceViewProps = {
   trip: TripWorkspaceData;
+  nowIso?: string;
 };
 
 /** SCREEN-013 — workspace tabs (Ideas · Itinerary · Map · Bookings stub). */
-export function TripWorkspaceView({ trip }: TripWorkspaceViewProps) {
+export function TripWorkspaceView({ trip, nowIso }: TripWorkspaceViewProps) {
   const [tab, setTab] = useState<TabId>("itinerary");
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
 
@@ -31,6 +33,8 @@ export function TripWorkspaceView({ trip }: TripWorkspaceViewProps) {
 
   return (
     <div className="space-y-4">
+      <TripTimezoneEditor tripId={trip.id} timeZone={trip.timezone} />
+
       <nav
         aria-label="Trip workspace"
         data-testid="trip-workspace-tabs"
@@ -70,6 +74,7 @@ export function TripWorkspaceView({ trip }: TripWorkspaceViewProps) {
         <ItineraryPanel
           items={trip.items}
           timeZone={trip.timezone}
+          nowIso={nowIso}
           selectedItemId={selectedItemId}
           onShowOnMap={showOnMap}
         />
