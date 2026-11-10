@@ -1,6 +1,6 @@
 # Google Maps reference index
 
-Last reviewed: 2026-09-22
+Original index reviewed: 2026-09-22; Agentic UI / A2UI additions reviewed: 2026-11-10
 Freshness: volatile — AI/grounding availability, pricing, quotas, regional support, product status, and API behavior must be revalidated from current primary sources.
 
 Use this index to choose the smallest authoritative source for a Maps task. Score = MDE reference priority (10 = primary/current implementation authority; lower scores = discovery/community only). Volatile facts such as pricing, quotas, preview/GA status, regional coverage, and limits must be rechecked at use time.
@@ -40,6 +40,11 @@ Use this index to choose the smallest authoritative source for a Maps task. Scor
 | [Maps Grounding](https://mapsplatform.google.com/maps-products/grounding/) | Google product page | Grounding product family | Compare Grounding, Grounding Lite, Agentic UI, Imagery | 7/10 |
 | [Grounding Lite](https://mapsplatform.google.com/maps-products/grounding/#maps-grounding-lite) | Google product page | MCP-based fresh Maps context | Give a non-Gemini LLM current place/location context | 7/10 |
 | [Maps Agentic UI Toolkit](https://mapsplatform.google.com/maps-products/grounding/#maps-agentic-ui-toolkit) | Google product page | Agent-native interactive Maps UI | Render a map/tool surface inside an agent experience | 7/10 |
+| [MDE A2UI / agentic maps decision](a2ui-and-agentic-maps.md) | MDE architecture reference | Choose Google Maps, CopilotKit, or A2UI without a duplicate renderer | Show a grounded café choice and save it through the existing trip action | 10/10 |
+| [Google Maps Agentic UI toolkit docs](https://developers.google.com/maps/ai/agentic-ui-toolkit) | Google official docs | Current experimental product scope and requirements | Evaluate an inline Maps/Places agent visualization | 10/10 |
+| [Google Maps A2UI toolkit source](https://github.com/googlemaps/a2ui) | Google official GitHub | Components and implementation patterns (reference only) | Adapt place-display patterns into MDE's existing map | 9/10 |
+| [Google Maps A2UI samples](https://github.com/googlemaps-samples/a2ui) | Google official samples | React, ADK/A2A and Lit example architecture (reference only) | Compare inline map/choice UX without importing their agent/runtime | 9/10 |
+| [CopilotKit standard Map](https://docs.copilotkit.ai/generative-ui/components/standard-catalog/map) | CopilotKit canonical docs | Component props and limitations; optional MapLibre | Do not mistake marker-connecting lines for Google road routes | 10/10 |
 | [Maps Imagery Grounding](https://mapsplatform.google.com/maps-products/grounding/#maps-imagery-grounding) | Google product page | Imagery-grounded generative workflows | Ground generated media in real-world imagery | 7/10 |
 | [Maps AI / summaries](https://mapsplatform.google.com/ai/#ai-summaries) | Google product page | Discover AI summaries/features | Evaluate place/area/review summaries for MDE cards | 7/10 |
 | [Maps AI / product agents](https://mapsplatform.google.com/ai/#product-ai-agents) | Google product page | Discover agentic Maps products | Evaluate Google-provided agent tools before custom-building | 7/10 |

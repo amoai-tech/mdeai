@@ -98,6 +98,7 @@ Do not select a product from memory when current Google guidance is available.
 |------|-------|
 | **CLI batch** — use the maintained batch helper and behavior notes | [`scripts/gmaps.py`](scripts/gmaps.py) + [`references/gmaps-cli-behavior.md`](references/gmaps-cli-behavior.md) |
 | **Security** — API key architecture, HTML pages, embed iframes | [`references/security-and-optimization.md`](references/security-and-optimization.md) |
+| **Agentic UI / A2UI** — Google Maps toolkit vs CopilotKit Map vs existing MDE Google Maps | [`references/a2ui-and-agentic-maps.md`](references/a2ui-and-agentic-maps.md) |
 | **Source selection / current docs** | [`references/reference-index.md`](references/reference-index.md) |
 
 ## mdeAI environment
