@@ -14,6 +14,14 @@ Read when work mentions A2UI schemas, declarative UI operations, fixed/dynamic s
 
 **MDE rule:** Do not enable `a2ui: {}` in the existing `CopilotRuntime` or install `@copilotkit/a2ui-renderer` just to enable native `render_ui` Components/Surfaces. Those are distinct integration paths. The [generic CopilotKit A2UI setup](https://docs.copilotkit.ai/generative-ui/a2ui) documents the protocol middleware and is not a drop-in requirement for MDE's native catalog. Check current installed package signatures before selecting either path.
 
+## 1.1 Decision gate — do not turn on dynamic A2UI by default
+
+- **Native Components/Surfaces:** MDE already exposes `mdeUI` from two route-owner providers; extend it for grounded rental/event cards and limited page regions. No `a2ui: {}` middleware is required.
+- **Protocol fixed schema:** appropriate only when a distinct protocol renderer is explicitly required and the screen structure is known; send validated real data without a second layout-generating model.
+- **Protocol dynamic schema:** https://docs.copilotkit.ai/generative-ui/a2ui/dynamic-schema → **REFERENCE ONLY** until a concrete view cannot be expressed by existing MDE components, `useRenderTool`, native Surface or fixed schema. Document added model latency, cost, schema-validation and repair behavior before prototyping.
+- **Compatibility proof:** inspect installed renderer/middleware and the exact negotiated v0.8/v0.9/v1.0 operation envelope. Capture an actual agent output and browser render. Reject mixed-version operations and fall back safely; never execute model-generated code/HTML.
+- **Owner:** `references/native-generative-ui.md` for native page rendering; this file owns protocol choices. `mastra` owns any new agent orchestration. **Verification:** invalid operations, stale IDs, auth isolation, user action/permissions, fallback, and measured comparison against the simplest existing path.
+
 ## 2. Protocol concepts and version compatibility
 
 A2UI means **declarative data, not model-generated executable React/HTML/JavaScript**. The receiving client resolves a declared catalog and validates each component, property, data binding and action. The relevant protocol concepts are:
