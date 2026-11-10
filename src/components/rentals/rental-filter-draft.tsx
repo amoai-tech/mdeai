@@ -20,6 +20,9 @@ type DraftContextValue = {
   draftRef: { current: RentalFilterDraft };
   /** True once the renter changed the control; an AI update must not reset it. */
   edited: boolean;
+  /** Inline reason the last Apply was refused (stale value, duplicate click). */
+  applyError: string | null;
+  setApplyError: (error: string | null) => void;
 };
 
 const DraftContext = createContext<DraftContextValue | null>(null);
@@ -39,6 +42,7 @@ export function RentalFilterDraftProvider({
 }) {
   // `undefined` means "not edited yet", so the canonical URL value wins until a
   // real gesture. Deriving instead of syncing keeps the effect-free path safe.
+  const [applyError, setApplyError] = useState<string | null>(null);
   const [editedBeds, setEditedBeds] = useState<string | null | undefined>(undefined);
   const beds = editedBeds === undefined ? initialBeds : editedBeds;
   const edited = editedBeds !== undefined;
@@ -51,12 +55,13 @@ export function RentalFilterDraftProvider({
 
   const setBeds = useCallback((next: string | null) => {
     draftRef.current = { beds: next };
+    setApplyError(null);
     setEditedBeds(next);
   }, []);
 
   const value = useMemo(
-    () => ({ draft: { beds }, setBeds, draftRef, edited }),
-    [beds, setBeds, edited],
+    () => ({ draft: { beds }, setBeds, draftRef, edited, applyError, setApplyError }),
+    [beds, setBeds, edited, applyError],
   );
   return <DraftContext.Provider value={value}>{children}</DraftContext.Provider>;
 }

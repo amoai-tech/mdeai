@@ -458,15 +458,20 @@ function MdeApplyFilters({
   // the control disabled with the reason instead of a dead click.
   const ready = Boolean(draft && onApplyRentalFilters);
   return (
-    <Button
-      type="button"
-      size="sm"
-      disabled={!ready}
-      title={ready ? undefined : "Filters are not connected on this page."}
-      onClick={() => onApplyRentalFilters?.()}
-    >
-      {label ?? "Apply filters"}
-    </Button>
+    <div className="flex flex-col gap-1">
+      <Button
+        type="button"
+        size="sm"
+        disabled={!ready}
+        title={ready ? undefined : "Filters are not connected on this page."}
+        onClick={() => onApplyRentalFilters?.()}
+      >
+        {label ?? "Apply filters"}
+      </Button>
+      {draft?.applyError ? (
+        <p role="alert" className="text-xs text-destructive">{draft.applyError}</p>
+      ) : null}
+    </div>
   );
 }
 

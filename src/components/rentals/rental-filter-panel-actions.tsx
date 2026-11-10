@@ -8,6 +8,7 @@ import {
 } from "@copilotkit/react-core/v2/generative-ui";
 import { mdeUI } from "@/components/copilot/a2ui/mde-ui-catalog";
 import { isRentalBedValue, useRentalFilterDraft } from "@/components/rentals/rental-filter-draft";
+import { buildRentalsUrl } from "@/lib/rentals/browse-filters";
 import { resolveRentalPageControl } from "@/lib/rentals/browse-page-control";
 import type { RentalBrowseFilterState } from "@/lib/rentals/browse-filters";
 
@@ -20,12 +21,33 @@ import type { RentalBrowseFilterState } from "@/lib/rentals/browse-filters";
  * as the existing `updateRentalBrowseFilters` tool and reports
  * "navigation_requested", not "search completed".
  */
+/**
+ * Refuse a duplicate or stale Apply without adding a second action system:
+ * one click while a navigation is in flight, or a value the URL already has,
+ * must not push again or fail silently.
+ */
+export function decideApply({
+  inFlight,
+  currentUrl,
+  nextUrl,
+}: {
+  inFlight: boolean;
+  currentUrl: string;
+  nextUrl: string;
+}): { ok: true } | { ok: false; error: string } {
+  if (inFlight) return { ok: false, error: "Apply is already in progress." };
+  if (currentUrl === nextUrl) return { ok: false, error: "Those filters are already applied." };
+  return { ok: true };
+}
+
 export function RentalFilterPanelActions({ filters }: { filters: RentalBrowseFilterState }) {
-  const { draft, draftRef } = useRentalFilterDraft();
+  const { draft, draftRef, setApplyError } = useRentalFilterDraft();
   const router = useRouter();
   const filtersRef = useRef(filters);
+  const inFlightRef = useRef(false);
   useEffect(() => {
     filtersRef.current = filters;
+    inFlightRef.current = false;
   }, [filters]);
 
   useGenerativeUIState(mdeUI, "rentalFilters", { beds: draft.beds });
@@ -33,10 +55,26 @@ export function RentalFilterPanelActions({ filters }: { filters: RentalBrowseFil
   useGenerativeUIFunction(mdeUI, "applyRentalFilters", () => {
     const beds = draftRef.current.beds;
     if (!isRentalBedValue(beds)) {
-      return { ok: false, error: "Unsupported bedroom selection; nothing was applied." };
+      const error = "Unsupported bedroom selection; nothing was applied.";
+      setApplyError(error);
+      return { ok: false, error };
     }
     const result = resolveRentalPageControl(filtersRef.current, { beds });
-    if (!result.ok) return result;
+    if (!result.ok) {
+      setApplyError(result.error);
+      return result;
+    }
+    const decision = decideApply({
+      inFlight: inFlightRef.current,
+      currentUrl: buildRentalsUrl(filtersRef.current),
+      nextUrl: result.url,
+    });
+    if (!decision.ok) {
+      setApplyError(decision.error);
+      return decision;
+    }
+    setApplyError(null);
+    inFlightRef.current = true;
     router.push(result.url);
     return { ok: true, status: "navigation_requested", url: result.url };
   });
