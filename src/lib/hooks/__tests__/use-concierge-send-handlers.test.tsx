@@ -10,7 +10,7 @@ import { createRoot, type Root } from "react-dom/client";
 
 const chat = vi.hoisted(() => ({ appendMessage: vi.fn(), runtimeUnavailable: false, waitForRuntimeReady: vi.fn() }));
 const coagent = vi.hoisted(() => ({ state: {} as Record<string, unknown> }));
-const mapState = vi.hoisted(() => ({ selectedPinId: null as string | null, pins: [] as Array<{ id: string; category: string }> }));
+const mapState = vi.hoisted(() => ({ selectedPinId: null as string | null, pins: [] as Array<{ id: string; category: string }>, mergePinsByCategory: vi.fn() }));
 const groundedCtx = vi.hoisted(() => ({ toolResult: null as unknown }));
 const rentalDetails = vi.hoisted(() => ({ toolResult: null as unknown, openVenueDetail: vi.fn(), closeRentalDetails: vi.fn() }));
 // Reuse the real rental context (including searchMeta updates); override only
@@ -22,20 +22,6 @@ vi.mock("@/components/chat/rental-fast-path-context", async (importOriginal) => 
     useOptionalRentalFastPath: () => {
       const current = actual.useOptionalRentalFastPath();
       return current ? { ...current, toolResult: rentalDetails.toolResult ?? current.toolResult } : null;
-    },
-  };
-});
-// This focused hook test mounts only the rental provider. Reuse its real
-// clear method rather than mounting unrelated event and map providers here.
-vi.mock("@/hooks/use-clear-other-fast-path-results", async () => {
-  const rental = await vi.importActual<typeof import("@/components/chat/rental-fast-path-context")>(
-    "@/components/chat/rental-fast-path-context");
-  return {
-    useClearOtherFastPathResults: () => {
-      const context = rental.useOptionalRentalFastPath();
-      return (keep: string | null) => {
-        if (keep === null) context?.clearToolResults();
-      };
     },
   };
 });
@@ -198,6 +184,7 @@ describe("SAN-874 latest-topic context", () => {
     expect(agent).toHaveBeenCalledOnce();
     expect(coagent.state.lastIntent).toBe("general_concierge");
     expect(coagent.state.lastRentalQuery).toBeUndefined();
+    expect(mapState.mergePinsByCategory).toHaveBeenCalledWith("rental", []);
     expect(handlers.inRentalSearch).toBe(false);
     const rental = vi.fn(async () => true);
     await act(async () => {
