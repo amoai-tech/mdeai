@@ -30,4 +30,4 @@ disable-model-invocation: true
 
 ## Output
 
-For each repeated mistake: **two evidence links → root cause → enforcement level and changed files → failing-before/passing-after check → remaining risk**. If the repetition or new guard was not proven, say so. Commit/PR only when explicitly requested, and route through the existing [tasks](../tasks/SKILL.md) lifecycle.
+For each repeated mistake: **two evidence links → root cause → enforcement level and changed files → failing-before/passing-after check → remaining risk**. If the repetition or new guard was not proven, say so. When requested to correct the pattern, implement the minimal verified enforcement and follow the existing [tasks](../tasks/SKILL.md) commit/PR lifecycle. For an explicitly read-only request, report without modifying code.

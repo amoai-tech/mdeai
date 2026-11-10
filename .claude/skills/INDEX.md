@@ -39,11 +39,11 @@ Each name below is an active canonical skill, exposed through a corresponding re
 | Metric | Current candidate | What is actually verified |
 | --- | ---: | --- |
 | Canonical active skills | **56** | Exists as `SKILL.md` with metadata |
-| Mirrored symlink entries | **170** | File/directory exposures point back to canonical owners |
+| Mirrored symlink entries | **167** | File/directory exposures point back to canonical owners |
 | Skills with behavioral `evals.json` | **36/56** | JSON definitions, not executed behavior tests |
-| Skills with `trigger-evals.json` | **24/56** | Positive and near-miss case definitions, not routing pass rate |
-| Defined trigger probes | **180** | Parsed cases across trigger files |
-| Defined behavioral probes | **158** | Parsed cases across behavior files |
+| Skills with `trigger-evals.json` | **25/56** | Positive and near-miss case definitions, not routing pass rate |
+| Defined trigger probes | **184** | Parsed cases across trigger files |
+| Defined behavioral probes | **180** | Parsed cases across behavior files |
 | Router `routing-evals.json` cases | **110** | Separate historical router-case format, not counted as trigger files |
 
 The `npm run check:skills` command enforces skill/mirror layout, links inside `SKILL.md` and nested supporting `references/**/*.md` documents, and vendored upstream integrity. A link must resolve **from the Markdown file containing it**, both in the canonical tree and the agent exposure mirror. `node --test scripts/__tests__/skill-evals-conformance.test.mjs scripts/__tests__/skill-behavior-runner.test.mjs scripts/__tests__/check-skill-layout.test.mjs` validates case schemas, negative controls, fake-tool-call rejection, and link regressions.
