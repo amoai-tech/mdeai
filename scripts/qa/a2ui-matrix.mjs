@@ -121,14 +121,14 @@ async function rentCase(c) {
     });
   }
   const reply = cards.length ? "" : await chatText();
-  // Only a requested result that does not exist in the published source may pass
-  // as honest-unavailable; a refusal for an available result is a failure.
-  const sourceCount = sourceTitles.length;
-  const requestedAbsent = Boolean(c.index) && sourceCount > 0 && c.index > sourceCount;
+  // Rentals have no published title list; the requested result is absent when the
+  // page exposes fewer rows than the requested position. A refusal for a row that
+  // exists is a failure, not an honest-unavailable pass.
+  const requestedAbsent = Boolean(c.index) && native.length > 0 && c.index > native.length;
   const unavailable =
     !cards.length &&
     requestedAbsent &&
-    /only|no (?:other|more|second|third|fourth)|can.?t|cannot|not (?:in|among)|unavailable|\d+ events? (?:were|was) returned/i.test(reply);
+    /only|no (?:other|more|second|third|fourth|sixth)|can.?t|cannot|not (?:in|among)|unavailable|\d+ (?:apartments?|results?) (?:were|was) (?:returned|found)/i.test(reply);
   const pass = Boolean(expected) && cards.includes(expected) && details === expected;
   record({
     id: c.id,
@@ -254,7 +254,13 @@ async function eventCase(c) {
     });
   }
   const reply = cards.length ? "" : await chatText();
-  const unavailable = !cards.length && /only|five|5 |can.?t|cannot|unavailable/i.test(reply);
+  // Events: the requested result must be genuinely absent from the published grid,
+  // and the reply must name that limitation; a refusal for an available event fails.
+  const requestedAbsent = Boolean(c.index) && sourceIds.length > 0 && c.index > sourceIds.length;
+  const unavailable =
+    !cards.length &&
+    requestedAbsent &&
+    /only|no (?:other|more|second|third|fourth)|can.?t|cannot|not (?:in|among)|unavailable|\d+ events? (?:were|was) (?:returned|found)/i.test(reply);
   const titleMatchesRequested = expectedTitle
     ? cardTitle.includes(expectedTitle.slice(0, 30))
     : true;

@@ -122,12 +122,16 @@ export function renderUiEventsFor(ids: readonly string[], toolCallId: string): B
 export function renderEventUiEventsFor(
   ids: readonly string[],
   toolCallId: string,
+  mode: "create" | "replace" | "clear" = "create",
 ): BaseEvent[] | null {
-  // One stable surface id: a new search replaces the previous cards, and an empty
-  // search deletes them, so stale results never remain on screen.
-  const built = ids.length
-    ? buildEventRecommendationOps(ids, EVENT_RECOMMENDATIONS_SURFACE_ID)
-    : buildEventClearOps(EVENT_RECOMMENDATIONS_SURFACE_ID);
+  // One stable surface id. createSurface is only valid while the surface does not
+  // exist, so a later search replaces it and an empty search clears it.
+  const built =
+    mode === "clear"
+      ? buildEventClearOps(EVENT_RECOMMENDATIONS_SURFACE_ID)
+      : buildEventRecommendationOps(ids, EVENT_RECOMMENDATIONS_SURFACE_ID, {
+          replace: mode === "replace",
+        });
   if (!built) return null;
   const callId = `render-ui-event-${toolCallId}`;
   return [
@@ -177,7 +181,11 @@ export function emitRecommendationSurface<T extends BaseEvent>(): (source: Obser
           }
           if (EVENT_RECOMMENDATION_TOOLS.has(name)) {
             const eventIds = eventIdsFromResult(e.content);
-            for (const synthetic of renderEventUiEventsFor(eventIds, e.toolCallId) ?? []) {
+            // The surface id is stable for the thread and this bridge cannot know
+            // whether an earlier turn created it, so every non-empty search deletes
+            // then re-creates (delete is a no-op when absent); an empty one clears.
+            const mode = eventIds.length ? "replace" : "clear";
+            for (const synthetic of renderEventUiEventsFor(eventIds, e.toolCallId, mode) ?? []) {
               subscriber.next(synthetic as unknown as T);
             }
             return;

@@ -175,11 +175,21 @@ describe("event recommendations (SAN-1653)", () => {
     expect(args?.delta).toContain("event-recommendations");
     expect(args?.delta).toContain(eventId(3));
     // An empty search must clear the surface rather than leave earlier cards.
-    const clear = renderEventUiEventsFor([], "e1") ?? [];
+    const clear = renderEventUiEventsFor([], "e1", "clear") ?? [];
     const clearArgs = clear.find(
       (e) => e.type === EventType.TOOL_CALL_ARGS && (e as { toolCallId?: string }).toolCallId === "render-ui-event-e1",
     ) as { delta?: string } | undefined;
     expect(clearArgs?.delta).toContain("deleteSurface");
+    // A re-search must delete before createSurface, or A2UI throws "already exists".
+    const replace = renderEventUiEventsFor([eventId(5)], "e2", "replace") ?? [];
+    const replaceArgs = replace.find(
+      (e) => e.type === EventType.TOOL_CALL_ARGS && (e as { toolCallId?: string }).toolCallId === "render-ui-event-e2",
+    ) as { delta?: string } | undefined;
+    const ops = JSON.parse(replaceArgs?.delta ?? "{}");
+    expect(ops.operations.map((op: Record<string, unknown>) => Object.keys(op)[1])).toEqual([
+      "deleteSurface",
+      "createSurface",
+    ]);
     // Path traversal / script characters never reach the surface operation.
     const built = buildEventRecommendationOps(
       ["evt-1<script>alert(1)</script>", "../../etc/passwd", eventId(4)],

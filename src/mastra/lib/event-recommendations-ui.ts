@@ -38,6 +38,7 @@ export function normalizeEventRecommendationIds(input: readonly unknown[]): stri
 export function buildEventRecommendationOps(
   ids: readonly string[],
   surfaceId: string = EVENT_RECOMMENDATIONS_SURFACE_ID,
+  options: { replace?: boolean } = {},
 ): EventRecommendationOps | null {
   const safe = normalizeEventRecommendationIds(ids);
   if (safe.length === 0) return null;
@@ -45,6 +46,9 @@ export function buildEventRecommendationOps(
   return {
     target: EVENT_RECOMMENDATIONS_TARGET,
     operations: [
+      // A2UI rejects createSurface for an id that already exists, so a re-search
+      // deletes the previous surface first and re-creates it in the same call.
+      ...(options.replace ? [{ version: A2UI_VERSION, deleteSurface: { surfaceId } }] : []),
       {
         version: A2UI_VERSION,
         createSurface: {
