@@ -10,7 +10,7 @@ source_of_truth: current repository code and tests
 
 Knowledge graph tool for codebase + docs analysis. Builds a queryable graph of every function, component, file, and document and the connections between them.
 
-**Verified CLI:** `graphifyy[sql]==0.9.101` (November 3, 2026); command `graphify`
+**Verified CLI:** `graphifyy[sql]==0.9.106` (November 10, 2026); command `graphify`
 **Install:** isolated `uv tool`, normally `~/.local/bin/graphify` (no activation required)
 **Output:** `graphify-out/` (gitignored, per checkout/worktree)
 **Builder:** `npm run graphify:update` (code-only AST, no LLM or clustering)
@@ -73,8 +73,8 @@ you have an exact identifier to anchor on.
 
 ```bash
 # Official PyPI package is graphifyy (double y). Pin the verified version + SQL support.
-uv tool install --reinstall --force 'graphifyy[sql]==0.9.101'
-GRAPHIFY_NO_AUTO_REFRESH=1 graphify --version    # expect 0.9.101; no skill modifications
+uv tool install --reinstall --force 'graphifyy[sql]==0.9.106'
+GRAPHIFY_NO_AUTO_REFRESH=1 graphify --version    # expect 0.9.106; no skill modifications
 uv tool list
 
 # Run from the checkout containing the code you are editing.
@@ -83,19 +83,19 @@ npm run graphify:update                    # regenerate code index for this chec
 npm run graphify:explain -- conciergeAgent
 ```
 
-If Graphify reports `ModuleNotFoundError`, reinstall with the `uv tool` command above. The wrapper resolves an explicit `GRAPHIFY_BIN` first, then the isolated `uv` tool environment, `~/.local/bin/graphify`, and finally the legacy venv. It never executes arbitrary Graphify binaries from `PATH`; it verifies version 0.9.101 and checks SQL support when updating. In nonstandard installations, set `GRAPHIFY_BIN` explicitly. Direct CLI commands must use `GRAPHIFY_NO_AUTO_REFRESH=1` or the wrapper to avoid refreshing unrelated agent configurations.
+If Graphify reports `ModuleNotFoundError`, reinstall with the `uv tool` command above. The wrapper resolves an explicit `GRAPHIFY_BIN` first, then the isolated `uv` tool environment, `~/.local/bin/graphify`, and finally the legacy venv. It never executes arbitrary Graphify binaries from `PATH`; it verifies version 0.9.106 and checks SQL support when updating. In nonstandard installations, set `GRAPHIFY_BIN` explicitly. Direct CLI commands must use `GRAPHIFY_NO_AUTO_REFRESH=1` or the wrapper to avoid refreshing unrelated agent configurations.
 
-### Upstream source receipt (v0.9.101)
+### Upstream source receipt (v0.9.106)
 
 | Field | Verified source / decision |
 | --- | --- |
-| URL and exact source | [v0.9.101 README — Install](https://github.com/Graphify-Labs/graphify/blob/v0.9.101/README.md#install); [v0.9.101 pyproject.toml — `project.optional-dependencies.sql` and `project.scripts`](https://github.com/Graphify-Labs/graphify/blob/v0.9.101/pyproject.toml); [v0.9.101 `graphify/__main__.py` — automatic skill refresh opt-out](https://github.com/Graphify-Labs/graphify/blob/v0.9.101/graphify/__main__.py) |
+| URL and exact source | [v0.9.106 README — Install](https://github.com/Graphify-Labs/graphify/blob/v0.9.106/README.md#install); [v0.9.106 pyproject.toml — `project.optional-dependencies.sql` and `project.scripts`](https://github.com/Graphify-Labs/graphify/blob/v0.9.106/pyproject.toml); [v0.9.106 `graphify/__main__.py` — automatic skill refresh opt-out](https://github.com/Graphify-Labs/graphify/blob/v0.9.106/graphify/__main__.py) |
 | Decision | Use the official `graphifyy` CLI and optional SQL grammar, pin the tested version, keep skill auto-refresh disabled during ordinary repository queries, and index the active checkout |
 | Disposition | **ADAPT** official package/CLI configuration; do not copy upstream agent settings |
 | Destination | `scripts/graphify-run.sh`; `scripts/__tests__/graphify-run.test.mjs`; this guide; `.claude/skills/tasks/SKILL.md`; `.claude/skills/tasks/references/domain-routing.md` |
 | Implementation | Prefer the isolated `uv` executable over arbitrary PATH; verify version and SQL support, preserve argument and working-directory behavior, and route agent commands through the wrapper |
 | Verification | `GRAPHIFY_NO_AUTO_REFRESH=1 graphify --version`; `npm run graphify:update`; `npm run graphify:explain -- conciergeAgent`; `node --test scripts/__tests__/graphify-run.test.mjs` |
-| Version / commit | Graphify **v0.9.101**, released November 2, 2026 |
+| Version / commit | Graphify **v0.9.106**, released November 10, 2026 |
 
 ---
 
