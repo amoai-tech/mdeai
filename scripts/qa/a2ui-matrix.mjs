@@ -204,6 +204,7 @@ async function eventCase(c) {
       const panel =
         document.querySelector('[data-testid="event-card-modal"]') ??
         document.querySelector('[data-testid="event-browse-details-panel"]') ??
+        document.querySelector('[data-testid="event-browse-details-sheet"]') ??
         document.querySelector('[role="dialog"]');
       return panel ? panel.textContent ?? "" : null;
     });
@@ -211,6 +212,7 @@ async function eventCase(c) {
       const panel =
         document.querySelector('[data-testid="event-card-modal"]') ??
         document.querySelector('[data-testid="event-browse-details-panel"]') ??
+        document.querySelector('[data-testid="event-browse-details-sheet"]') ??
         document.querySelector('[role="dialog"]');
       return panel ? panel.getAttribute("data-event-id") : null;
     });
