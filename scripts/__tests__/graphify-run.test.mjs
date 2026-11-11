@@ -116,7 +116,7 @@ test("ignores skill-version warnings that Graphify prints on stderr", (t) => {
   const real = readFileSync(exe, "utf8");
   const patched = real.replace(
     "if [ \"$1\" = \"--version\" ]; then",
-    "if [ \"$1\" = \"--version\" ]; then\n  echo 'warning: skill is from graphify 0.9.105' >&2",
+    "if [ \"$1\" = \"--version\" ]; then\n  echo 'warning: skill is from graphify 0.9.105' >&2\n  echo 'warning: skill at /tmp/devin/skills/graphify is from graphify 0.9.105, package is 0.9.106.' >&2",
   );
   // String.replace is a no-op when the search text is missing; fail loudly instead of testing nothing.
   assert.match(patched, /skill is from graphify 0\.9\.105' >&2/);
@@ -131,14 +131,17 @@ test("keeps real version-probe errors but drops skill-version warnings", (t) => 
   const exe = join(temp, "graphify");
   writeFileSync(exe, `#!/bin/sh
 echo 'warning: skill is from graphify 0.9.105' >&2
+echo 'warning: skill at /tmp/kilo/skills/graphify is from graphify 0.9.105, package is 0.9.106.' >&2
 echo 'boom: cannot load config' >&2
+echo 'boom: text containing skill is from graphify must remain visible' >&2
 exit 1
 `, { mode: 0o755 });
   const result = run(["query", "conciergeAgent"], { GRAPHIFY_BIN: exe }, root);
   assert.equal(result.status, 1);
   assert.match(result.stderr, /Incompatible Graphify/);
   assert.match(result.stderr, /boom: cannot load config/);
-  assert.doesNotMatch(result.stderr, /skill is from graphify/);
+  assert.match(result.stderr, /boom: text containing skill is from graphify must remain visible/);
+  assert.doesNotMatch(result.stderr, /warning: skill (?:is|at) /);
 });
 
 test("checks the SQL extra before rebuilding a graph", (t) => {

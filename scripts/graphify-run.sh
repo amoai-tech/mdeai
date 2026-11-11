@@ -33,11 +33,12 @@ fi
 # tested CLI contract. The version check itself also disables auto-refresh.
 # Compare stdout only: other tools' stale global skill copies make Graphify print
 # "skill is from graphify X" warnings on stderr, which must not read as a version.
-# Any other stderr text is kept and shown if the probe fails.
+# Only precisely formatted Graphify skill-version warnings are filtered;
+# genuine diagnostics remain visible if the version probe fails.
 VERSION_ERR_FILE="$(mktemp)"
 VERSION_STATUS=0
 VERSION="$("$GRAPHIFY" --version 2>"$VERSION_ERR_FILE")" || VERSION_STATUS=$?
-VERSION_DIAG="$(grep -v 'skill is from graphify' "$VERSION_ERR_FILE" || true)"
+VERSION_DIAG="$(grep -Ev '^[[:space:]]*warning: skill (is from graphify|at .+ is from graphify) [0-9]+(\.[0-9]+){2}(,|$)' "$VERSION_ERR_FILE" || true)"
 rm -f "$VERSION_ERR_FILE"
 if [[ "$VERSION_STATUS" -ne 0 || "$VERSION" != "$EXPECTED_VERSION" ]]; then
   echo "Incompatible Graphify at $GRAPHIFY (expected $EXPECTED_VERSION; got ${VERSION:-none})." >&2
