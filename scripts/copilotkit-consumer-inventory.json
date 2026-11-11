@@ -433,6 +433,11 @@
       "file": "src/components/copilot/a2ui/event-recommendations-surface.tsx",
       "classification": "keep",
       "note": "SAN-1653: the event counterpart of the rentals Surface. One v2 GenerativeUISurface named event-recommendations mounted in the concierge chat; it registers a target plus EventCard allowlist and fetches or stores nothing, so every card keeps resolving through the existing catalog's authorized results."
+    },
+    {
+      "file": "src/components/copilot/a2ui/__tests__/event-recommendations-surface.test.tsx",
+      "classification": "keep",
+      "note": "SAN-1653: test-only mock of the v2 generative-ui module proving the Events surface registers the target with a runtime and renders nothing without one; no provider or run is created."
     }
   ]
 }

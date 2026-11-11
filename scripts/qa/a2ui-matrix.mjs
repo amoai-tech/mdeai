@@ -101,9 +101,12 @@ async function rentCase(c) {
       btn?.click();
     });
     await page.waitForTimeout(2500);
-    details = await page.evaluate(
-      () => document.querySelector("[data-listing-id]")?.getAttribute("data-listing-id") ?? null,
-    );
+    details = await page.evaluate(() => {
+      const panel =
+        document.querySelector('[data-testid="rental-details-panel"]') ??
+        document.querySelector('[data-testid="rental-details-sheet"]');
+      return panel ? panel.getAttribute("data-listing-id") : null;
+    });
   }
   const reply = cards.length ? "" : await chatText();
   const unavailable = !cards.length && /only|five|5 |can.?t|cannot|not (in|among)|unavailable/i.test(reply);
@@ -133,7 +136,7 @@ async function eventCase(c) {
   );
   // The composer can render before the browse results do; wait for real events.
   await page.waitForFunction(
-    () => document.querySelectorAll('[data-testid="event-browse-card"]').length > 0,
+    () => document.querySelectorAll('[data-testid="event-card"]').length > 0,
     undefined,
     { timeout: 45000 },
   );
