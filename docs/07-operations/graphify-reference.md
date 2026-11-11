@@ -2,7 +2,7 @@
 title: Graphify Reference — MDE AI
 description: Canonical Graphify usage, repository intelligence workflow, and limitations for MDE agents.
 status: current
-updated: 2026-11-03
+updated: 2026-11-11
 source_of_truth: current repository code and tests
 ---
 
@@ -17,6 +17,8 @@ Knowledge graph tool for codebase + docs analysis. Builds a queryable graph of e
 **Historical baseline:** [Phase 2 snapshot](../_archive/legacy-active-docs-2026-09-18/task-130/ai-second-brain/GRAPHIFY-BASELINE.md) — not the current code graph.
 
 **Important:** a graph describes the checkout that generated it, **not** automatically current GitHub `main`. Rebuild on the branch/worktree you intend to inspect. Check the timestamp and confirm the exact symbol against current source before trusting dependency conclusions.
+
+**Cloud vs local (avoid duplicate indexing):** use the connected Graphify Cloud MCP for shared `main` code navigation, impact and related-test discovery when its indexed commit is current. Use this local CLI only for uncommitted work, exact PR branches, offline work, or a stale/missing Cloud index. The Cloud index and local `graphify-out/` are separate snapshots; neither synchronizes the other. Do not rebuild the local graph merely because you queried Cloud.
 
 
 ## Contents
@@ -142,9 +144,11 @@ npm run graphify:query -- "what calls createClient" --budget 3000
 npm run graphify:query -- "Mastra tool registration" --dfs
 ```
 
+Graphify 0.9.106 ranks source nodes ahead of test/document/config nodes (without excluding them). The committed `.graphifyrc` sets the default query budget to 4000 tokens; explicit `--budget 2000` overrides it. For noisy or truncated results, **narrow by an exact symbol** and use `graphify:explain` or `affected` rather than repeatedly increasing the budget. To prove the real pinned CLI reads this setting after `graphify:update`, run `MDE_GRAPHIFY_REAL_SMOKE=1 node --test scripts/__tests__/graphify-run.test.mjs` with the 0.9.106 binary installed.
+
 ### Blast radius — what depends on X
 
-Graphify **v0.9.101 includes `affected`**, which performs bounded reverse dependency traversal:
+Graphify **v0.9.106 includes `affected`**, which performs bounded reverse dependency traversal:
 
 ```bash
 bash scripts/graphify-run.sh affected "conciergeAgent" --depth 1
@@ -167,6 +171,8 @@ npm run graphify:explain -- conciergeAgent
 ```
 
 This extracts code (including SQL when installed with `[sql]`), without an LLM or clustering. It writes the current checkout's `graphify-out/graph.json`. It does **not** refresh a historical semantic document graph, communities, or old `GRAPH_REPORT.md`. Generate a tree visualization separately with `npm run graphify:tree`; use the official `/graphify --update` assistant workflow only if semantic documents are needed.
+
+**Known parser-coverage warning (fresh 0.9.106 extraction, November 11, 2026):** Graphify reports partial TSX extraction for `src/components/copilot/__tests__/cafe-result-card.test.tsx` (near line 68, no symbols) and `src/components/modals/booking-checkout-modal.tsx` (near line 142, five symbols). TypeScript's own TSX parser reports **zero diagnostics** for both files. Do not alter valid application JSX or silently ignore the files just to make the graph warning disappear; inspect their real source and relevant tests until upstream extraction improves. An incremental Graphify update may not repeat the warning if the files were cached.
 
 **One-time migration:** If the old combined graph is much larger, Graphify refuses to overwrite it. Preserve `graph.json`, `GRAPH_REPORT.md` and `manifest.json` first. Only when deliberately replacing the default graph with a code-only graph, set `GRAPHIFY_FORCE=1 npm run graphify:update`. Never force an unexplained decrease in nodes.
 

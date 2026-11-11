@@ -167,6 +167,8 @@ test("provides an actionable repair command for a unique missing executable", (t
 
 test("the active agent guidance routes Graphify through the safe wrapper", () => {
   const guide = readFileSync(join(root, "docs/07-operations/graphify-reference.md"), "utf8");
+  const graphConfig = readFileSync(join(root, ".graphifyrc"), "utf8");
+  assert.match(graphConfig, /^query_budget=4000$/m);
   const tasks = readFileSync(join(root, ".claude/skills/tasks/SKILL.md"), "utf8");
   const routing = readFileSync(join(root, ".claude/skills/tasks/references/domain-routing.md"), "utf8");
   assert.match(guide, /bash scripts\/graphify-run\.sh affected "conciergeAgent"/);
@@ -178,4 +180,18 @@ test("the active agent guidance routes Graphify through the safe wrapper", () =>
   assert.match(tasks, /npm run graphify:query --/);
   assert.doesNotMatch(tasks, /PATH="\$HOME\/\.local\/bin:\$PATH" graphify query/);
   assert.match(routing, /active PR\/feature checkout/);
+});
+
+// Optional integration check: run with MDE_GRAPHIFY_REAL_SMOKE=1 after building
+// graphify-out/ with the pinned CLI. Regular CI runs only deterministic fixtures.
+test("real Graphify query obeys the project's default budget", {
+  skip: process.env.MDE_GRAPHIFY_REAL_SMOKE !== "1",
+}, () => {
+  assert.ok(existsSync(join(root, "graphify-out", "graph.json")), "Run npm run graphify:update first");
+  const defaultQuery = run(["query", "rental map pins"], {}, root);
+  assert.equal(defaultQuery.status, 0, defaultQuery.stderr);
+  assert.match(defaultQuery.stdout, /~4000-token budget/, "Expected the real CLI to read .graphifyrc");
+  const overriddenQuery = run(["query", "rental map pins", "--budget=2000"], {}, root);
+  assert.equal(overriddenQuery.status, 0, overriddenQuery.stderr);
+  assert.match(overriddenQuery.stdout, /~2000-token budget/, "Expected the CLI flag to override .graphifyrc");
 });
