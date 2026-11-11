@@ -22,6 +22,10 @@ function messageText(message: MessageLike | undefined): string {
 }
 
 const SHOW_AS_CARDS = /\b(show|display|render|see)\b[\s\S]*\bcards?\b/i;
+// Avoid hijacking generic card-payment questions or native Details requests.
+// An explicit event type is necessary before pinning the event search tool.
+const EVENT_TOPIC = /\b(?:events?|concerts?|festivals?|gigs?|parties|performances?)\b/i;
+const ASKS_FOR_DETAILS = /\b(?:details?|open|book|schedule)\b/i;
 
 // New discovery criteria still require search, but display phrasing such as
 // "in the current results" or "in a grid" does not introduce a filter.
@@ -58,7 +62,7 @@ export function shouldSearchEventsForCards({
   const lastUser = [...messages].reverse().find((message) => message?.role === "user");
   const text = messageText(lastUser).trim();
   if (!text) return false;
-  if (!SHOW_AS_CARDS.test(text)) return false;
+  if (!SHOW_AS_CARDS.test(text) || !EVENT_TOPIC.test(text) || ASKS_FOR_DETAILS.test(text)) return false;
   // Existing-result ordinal commands must use the published IDs, not force
   // another search that might reorder or exclude the requested event.
   if (CURRENT_EVENT_REFERENCE.test(text) && readEventResultHints(agUiContext)) {

@@ -72,6 +72,20 @@ describe("shouldSearchEventsForCards", () => {
     }
   });
 
+  it("does not route payment questions or native Details actions into event search", () => {
+    for (const text of [
+      "Can I see if they accept card payments?",
+      "Show the details card for this event",
+      "Open the first event details card",
+      "Show me rental cards",
+      "Show Reina de Antioquia as a card",
+    ]) {
+      expect(shouldSearchEventsForCards({
+        stepNumber: 0, messages: [user(text)], requestContext: context("/events"),
+      }), text).toBe(false);
+    }
+  });
+
   it("does not fire off the Events page, on a later step, or for a details request", () => {
     expect(
       shouldSearchEventsForCards({
