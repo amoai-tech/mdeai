@@ -1,6 +1,7 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { VenueCardShell } from "@/components/browse/venue-card-shell";
 import { VenueCardPlaceholder } from "@/components/browse/venue-card-placeholder";
@@ -39,8 +40,42 @@ export type RestaurantCardProps = {
   onOpenEventVenue?: () => void;
   onBookRequest?: () => void;
   bookingTestId?: string;
+  /**
+   * Browse grid only: this restaurant is the current Ask MDE selection (SAN-1140).
+   * Selection is context, not a send — nothing runs until the visitor submits a question.
+   */
+  selectedForAsk?: boolean;
+  /** Browse grid only: toggle this restaurant as the Ask MDE selection. */
+  onAskSelect?: () => void;
+  /**
+   * Browse grid only (SAN-1638): open Details in the page's existing right panel instead of
+   * navigating. The full /restaurants/[id] page stays reachable from the panel itself.
+   * The triggering control is passed back so closing can restore focus to it.
+   */
+  onDetails?: (trigger: HTMLElement) => void;
+  /**
+   * Browse grid only: the real public details route for this restaurant. The footer
+   * renders it as a link, never a dead button. Chat uses `onOpenDetails` instead;
+   * passing both would show two Details controls, so callers pass exactly one.
+   */
+  detailsHref?: string;
+  /** Browse grid only: test id for the Details action (link or button). */
+  detailsTestId?: string;
+  /** Browse grid only: this card's Details panel is currently open (announced to AT). */
+  detailsOpen?: boolean;
+  /**
+   * Browse grid only: select this restaurant's map pin, and nothing else.
+   *
+   * Deliberately separate from `onSelect`: the card body opens Details and sets the Ask topic,
+   * while this action must do exactly what "View on map" does on café and nightlife cards —
+   * move the map selection and leave the list, the panel and the AI context alone.
+   * Omitted when the restaurant has no coordinates, so the action never renders for a row the
+   * map cannot show.
+   */
+  onMapSelect?: () => void;
 };
 
+/** Display label for a cuisine code, or null when it is unknown. */
 function cuisineLabel(cuisine?: string): string | null {
   if (!cuisine) return null;
   return cuisine
@@ -49,6 +84,7 @@ function cuisineLabel(cuisine?: string): string | null {
     .join(" ");
 }
 
+/** Directions link for a restaurant with a real maps URL. */
 function RestaurantMapLinks({ mapsUrl }: { mapsUrl?: string | null }) {
   if (!mapsUrl) return null;
   const deepLinks = mapsDeepLinksEnabled();
@@ -58,7 +94,7 @@ function RestaurantMapLinks({ mapsUrl }: { mapsUrl?: string | null }) {
       <Button
         variant="link"
         size="sm"
-        className="h-8 px-2 text-xs"
+        className="h-card-action px-3 text-xs"
         nativeButton={false}
         render={
           <a
@@ -81,7 +117,7 @@ function RestaurantMapLinks({ mapsUrl }: { mapsUrl?: string | null }) {
     <Button
       variant="outline"
       size="sm"
-      className="h-8 px-2 text-xs"
+      className="h-card-action px-3 text-xs"
       nativeButton={false}
       render={
         <a
@@ -100,6 +136,7 @@ function RestaurantMapLinks({ mapsUrl }: { mapsUrl?: string | null }) {
   );
 }
 
+/** Card media: the real photo, or the placeholder when none is usable. */
 function RestaurantCardMedia({
   imageUrl,
   mediaLayout,
@@ -138,6 +175,7 @@ function RestaurantCardMedia({
   );
 }
 
+/** One restaurant result with its facts and the Ask and Details actions. */
 export function RestaurantCard({
   title,
   neighborhood,
@@ -159,6 +197,13 @@ export function RestaurantCard({
   onOpenEventVenue,
   onBookRequest,
   bookingTestId = "restaurant-booking-cta",
+  selectedForAsk,
+  onAskSelect,
+  onDetails,
+  detailsHref,
+  detailsTestId,
+  detailsOpen = false,
+  onMapSelect,
 }: RestaurantCardProps) {
   const ratingText = formatGroundedRating(rating);
   const typeLabel = cuisineLabel(cuisine) ?? "Restaurant";
@@ -188,18 +233,40 @@ export function RestaurantCard({
     Boolean(mapsUrl) ||
     Boolean(onOpenDetails) ||
     Boolean(onOpenEventVenue) ||
-    Boolean(onBookRequest);
+    Boolean(onBookRequest) ||
+    Boolean(detailsHref) ||
+    Boolean(onDetails) ||
+    Boolean(onAskSelect);
 
   const footerContent = (
     <>
-      <RestaurantMapLinks mapsUrl={mapsUrl} />
-      <div className="flex flex-wrap gap-1.5">
+      <div className="flex flex-wrap items-center gap-2">
+        {/* One action contract on every discovery card, in this order:
+            Directions · View on map · Ask about this · Details. */}
+        <RestaurantMapLinks mapsUrl={mapsUrl} />
+        {onMapSelect ? (
+          <Button
+            type="button"
+            size="sm"
+            variant={selected ? "secondary" : "outline"}
+            className="h-card-action min-w-card-action px-3"
+            aria-pressed={Boolean(selected)}
+            data-testid="restaurant-map-select"
+            onClick={(e) => {
+              e.stopPropagation();
+              onMapSelect();
+            }}
+          >
+            <MapPin data-icon="inline-start" aria-hidden />
+            {selected ? "Selected on map" : "View on map"}
+          </Button>
+        ) : null}
         {onOpenEventVenue ? (
           <Button
             type="button"
             size="sm"
             variant="secondary"
-            className="h-11 min-w-11 px-3"
+            className="h-card-action min-w-card-action px-3"
             data-testid="event-venue-cta"
             onClick={(e) => {
               e.stopPropagation();
@@ -208,6 +275,22 @@ export function RestaurantCard({
           >
             <PartyPopper data-icon="inline-start" aria-hidden />
             Event Venue
+          </Button>
+        ) : null}
+        {onAskSelect ? (
+          <Button
+            type="button"
+            size="sm"
+            variant={selectedForAsk ? "secondary" : "outline"}
+            className="h-card-action min-w-card-action px-3"
+            data-testid="restaurant-ask-select"
+            aria-pressed={Boolean(selectedForAsk)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onAskSelect();
+            }}
+          >
+            {selectedForAsk ? "Clear selection" : "Ask about this"}
           </Button>
         ) : null}
         {onOpenDetails ? (
@@ -225,11 +308,41 @@ export function RestaurantCard({
             Details
           </Button>
         ) : null}
+        {onDetails ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-card-action min-w-card-action px-3"
+            data-testid={detailsTestId ?? "restaurant-details-open"}
+            aria-expanded={detailsOpen}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDetails(e.currentTarget);
+            }}
+          >
+            <Info data-icon="inline-start" aria-hidden />
+            Details
+          </Button>
+        ) : detailsHref ? (
+          <Link
+            href={detailsHref}
+            data-testid={detailsTestId}
+            className={cn(
+              buttonVariants({ size: "sm", variant: "outline" }),
+              "h-card-action min-w-card-action px-3",
+            )}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Info data-icon="inline-start" aria-hidden />
+            Details
+          </Link>
+        ) : null}
         {onBookRequest ? (
           <Button
             type="button"
             size="sm"
-            className="h-11 min-w-11 px-3"
+            className="h-card-action min-w-card-action px-3"
             data-testid={bookingTestId}
             onClick={(e) => {
               e.stopPropagation();

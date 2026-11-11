@@ -98,6 +98,24 @@ describe("SAN-1349 rental card viewing CTA gating", () => {
   });
 });
 
+describe("rental price markers", () => {
+  it("uses distinct nightly and monthly test ids on one card", () => {
+    const html = renderToStaticMarkup(
+      <RentalCard
+        id="r1"
+        listingId="a1"
+        title="Both prices"
+        neighborhood="Laureles"
+        nightly_price={100}
+        currency="COP"
+      />,
+    );
+    expect(html.match(/data-testid="rental-price-nightly"/g)).toHaveLength(1);
+    expect(html.match(/data-testid="rental-price-monthly"/g)).toHaveLength(1);
+    expect(html).not.toContain('data-testid="rental-price"');
+  });
+});
+
 describe("external source rental cards", () => {
   it("shows a real monthly COP price, unknown bedrooms, and the original-advertisement link", () => {
     const html = renderToStaticMarkup(
@@ -275,5 +293,24 @@ describe("SAN-1226 customer match reasons on rendered cards", () => {
     );
     expect(html).not.toContain("within your");
     expect(html).toContain("Wi-Fi listed");
+  });
+});
+
+describe("SAN-106 Nearby action on the existing RentalCard", () => {
+  it("shows the action only when its existing Concierge context supplies one", () => {
+    const common = {
+      id: "rental-550e8400-e29b-41d4-a716-446655440000",
+      listingId: "550e8400-e29b-41d4-a716-446655440000",
+      title: "Real Laureles apartment",
+      neighborhood: "Laureles",
+      nightly_price: 0,
+    };
+    const without = renderToStaticMarkup(<RentalCard {...common} />);
+    expect(without).not.toContain("Show nearby cafés");
+    const withAction = renderToStaticMarkup(
+      <RentalCard {...common} nearbyAction={<button type="button">Show nearby cafés</button>} />,
+    );
+    expect(withAction).toContain("Show nearby cafés");
+    expect(withAction).toContain('data-testid="rental-card"');
   });
 });

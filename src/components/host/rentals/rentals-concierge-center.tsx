@@ -1,14 +1,51 @@
 "use client";
 
-import { CopilotChat } from "@copilotkit/react-core/v2";
+import type React from "react";
+import { CopilotChat, CopilotChatView, useAgent, type CopilotChatViewProps } from "@copilotkit/react-core/v2";
+import { useThreadNav } from "@/lib/chat/thread-nav-context";
+import { beginLiveUserSubmit } from "@/lib/chat/live-user-message-ids";
 import { ChatProvider } from "@/components/chat/chat-provider";
 import { BrokerWorkspaceToolRenderer } from "@/components/host/rentals/broker-workspace-tool-renderer";
+import { cn } from "@/lib/utils";
 import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 import type { RentalsWorkspaceMode } from "@/components/host/rentals/rentals-dynamic-workspace";
 
 type RentalsConciergeCenterProps = {
   mode: RentalsWorkspaceMode;
 };
+
+/** The welcome copy, as a paragraph: the page already has one heading. */
+function WelcomeMessageCopy({ className }: React.HTMLAttributes<HTMLDivElement>) {
+  return (
+    <p
+      data-testid="rc-welcome"
+      className={cn("px-2 text-sm text-muted-foreground", className)}
+    >
+      I can read your actual rental dashboard. Try: Which viewing requests need my attention? Or:
+      Show my listings in Laureles.
+    </p>
+  );
+}
+
+/** Wrap the native broker composer without replacing CopilotKit's Send, Stop, or Retry. */
+function BrokerChatViewInner(props: CopilotChatViewProps) {
+  const { agent } = useAgent({ agentId: "conciergeAgent" });
+  const nav = useThreadNav();
+  const threadId = nav.activeThreadId ?? nav.sessionThreadId;
+  const submit = props.onSubmitMessage;
+  const onSubmitMessage = (text: string) => {
+    if (!submit) return;
+    const finish = agent && threadId ? beginLiveUserSubmit(agent, threadId, text) : () => {};
+    try {
+      return Promise.resolve(submit(text)).finally(finish);
+    } catch (error) {
+      finish();
+      throw error;
+    }
+  };
+  return <CopilotChatView {...props} onSubmitMessage={submit ? onSubmitMessage : undefined} />;
+}
+export const BrokerChatView = Object.assign(BrokerChatViewInner, CopilotChatView);
 
 /**
  * SAN-1124 — a real CopilotKit v2 chat using the existing conciergeAgent.
@@ -39,17 +76,21 @@ export function RentalsConciergeCenter({ mode }: RentalsConciergeCenterProps) {
           Live AI is disabled during deterministic browser tests. Broker workspace actions remain available.
         </p>
       ) : (
-        <ChatProvider>
+        <ChatProvider persistThread>
           <BrokerWorkspaceToolRenderer />
           <CopilotChat
             agentId="conciergeAgent"
+            chatView={BrokerChatView}
             className="min-h-0 flex-1"
             labels={{
               modalHeaderTitle: "Rentals concierge",
               chatInputPlaceholder: "Ask about your listings, leads or viewings…",
-              welcomeMessageText:
-                "I can read your actual rental dashboard. Try: Which viewing requests need my attention? Or: Show my listings in Laureles.",
             }}
+            // CopilotKit renders its welcome message as a top-level heading, which would give this
+            // page two (the real title above, and a paragraph of example prompts). The slot keeps
+            // the copy on CopilotKit's own welcome screen -- so it still disappears after the
+            // first message -- but as a paragraph instead of a heading.
+            welcomeScreen={{ welcomeMessage: WelcomeMessageCopy }}
           />
         </ChatProvider>
       )}

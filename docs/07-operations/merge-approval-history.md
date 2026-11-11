@@ -382,7 +382,7 @@ and updated unit expectations whose contracts moved (discovery Ask bar pinning, 
 **Evidence:** nav unit 32/32; full Vitest 4325 passed / 0 failed; `mobile-bottom-nav` 8/8; `MOB-CK-001` 8/8;
 `SCREEN-003` 6/6; `mobile-header` + `maps-layout-mobile` + `browse-map-close-touch` 15/15; `san-1469` 2/2; typecheck,
 lint, build, `check:mastra` and the CopilotKit v2 audits exit 0; 138/138 rendered-geometry checks with before/after
-screenshots in `docs/tasks/evidence/SAN-1606/`. Locally unrunnable: `pr-agent-pinned-loader`, because the pinned
+screenshots in `docs/_archive/legacy-2026-11-10/task-evidence/SAN-1606/`. Locally unrunnable: `pr-agent-pinned-loader`, because the pinned
 container reads the checkout as uid 65534 and this worktree sits under a 750 home directory — CI runs it from
 `/github/workspace`.
 
@@ -412,7 +412,7 @@ project; add `scripts/verify-mobile-nav.mjs` (`npm run verify:mobile-nav -- <url
 No navigation architecture, business gate, schema or API change.
 
 **Evidence:** production build of the tested tree `2630adff53fd5efa2a4acfc3f63d5887abdf0366` → **35/35** checks in
-34s (`docs/tasks/evidence/SAN-1606/deployed/`); the same command against the pre-fix deployed release `bdac360e72`
+34s (`docs/_archive/legacy-2026-11-10/task-evidence/SAN-1606/deployed/`); the same command against the pre-fix deployed release `bdac360e72`
 reports **34/36**, failing exactly on the map control this PR fixes.
 
 **What an independent reviewer would be asked:** does the map control genuinely return after the keyboard closes; is
@@ -535,6 +535,58 @@ certification.
 **Environment note:** the proof needs a dedicated `qa-renter@mdeai.co` identity (created through the existing Supabase Auth admin path, no password) configured via `MDE_QA_RENTER_EMAIL` in the ignored local env. It is deliberately not committed anywhere.
 
 **Open question:** should `MDE_PROD_CERTIFICATION=1` be set in the scheduled production workflow so a missing renter identity fails that job instead of skipping locally?
+
+## PR #746 — restaurant Ask and Details inside the discovery card (SAN-1140)
+
+**Date:** 2026-11-05. **Reason:** the repository has exactly one collaborator (`amoai-tech`) and that account authored the PR, so GitHub cannot record the required approving review; `main` still requires one approving review, so this was an administrator merge under the documented sole-collaborator exception.
+
+**Head merged:** `69409775fa33e089b77c148fec2afa8e495928d4` (merge commit `9cbaa5f7c3aacfc3b9e26214ddb4307db5ea53ea`, verified by `https://www.mdeai.co/api/version` immediately after deploy).
+
+**Required checks green on that exact head:** `floor`, `mastra-schema-init`, `review / review`, `review / verify-review-result`. Unresolved review threads: **0**.
+
+**Advisory analyzers, reviewed and not gating:** Codacy reported `fail` with exactly two Opengrep findings, both in the new *test* file `e2e/san-1140-discovery-card-actions.spec.ts`: a non-literal regular expression / ReDoS rule fired on a `RegExp` built from the details route. That value came from an href already constrained to the `/restaurants/<uuid>` pattern, so there was no untrusted input and no production code involved. The finding was not suppressed: PR #748 (merged `3a4d597297c0c307280a4aad6a54b31ae81871df`) replaced the constructed pattern with a `URL.pathname` comparison. Kilo Code Review: no issues found. DeepSource: pass. Canonical MDE PR review: no concerns, score 93.
+
+**What a reviewer would have been asked:** whether moving the two controls into `RestaurantCard` could break the chat card (it cannot — the new props are optional and chat still renders `restaurant-details-cta`), whether Ask selection could start a model turn (measured: the only `/api/copilotkit` POST on selection is the runtime's `{"method":"info"}` call, so no `agent/run`), and whether the card really contains the controls rather than merely painting them in the same area (the spec asserts DOM descent **and** geometric containment at 320/390/768/1440px and at 200% zoom).
+
+**Open question:** should the deterministic CI lane run the new card-action spec? It currently skips when the environment has no inventory, because that lane points at an intentionally unreachable database, so live browser proof of these cards only happens locally or against production. A seeded inventory fixture for the deterministic lane would close that gap without making CI depend on production data.
+
+## PR #748 — one action size across restaurant, café and nightlife cards (SAN-1122)
+
+**Date:** 2026-11-05. **Reason:** same sole-collaborator condition as PR #746.
+
+**Head merged:** `e275ff7da05d37d5e46f4d021ac7ff7321df3f31` (merge commit `3a4d597297c0c307280a4aad6a54b31ae81871df`).
+
+**Required checks green on that exact head:** `floor`, `mastra-schema-init`, `review / review`, `review / verify-review-result`. Unresolved review threads: **0**.
+
+**Advisory analyzers, reviewed and not gating:** Codacy and DeepSource returned no blocking item on this head. The two Opengrep findings inherited from PR #746 were removed at source here rather than waved through.
+
+**What a reviewer would have been asked:** whether a one-class sizing change needed a browser test (it does — the spec now asserts the 44px action height on every rendered card at 320/390/768/1440px and at 200% zoom, so a restyle that shrinks the target fails instead of shipping), whether `venue` map-sync behaviour was already proven (it was not: the existing regression only exercised the `rental` category, so a `venue` stale-selection case was added), and whether omitting a Details action on café/nightlife cards is a gap (it is a recorded owner deferral — neither route exists, so a button would be a dead link).
+
+**Open question:** event cards still use 28px actions. Should the same shared action height be applied there under SAN-972, or do events deliberately keep a denser footer because they carry a price and a ticket action?
+
+
+## 2026-11-05 — PRs #751, #753, #754 and #755 (administrator merges; exception conditions documented)
+
+Four PRs merged on one day by `amoai-tech`, who was the sole repository collaborator and PR author; GitHub did not record an approving review (`reviewDecision: REVIEW_REQUIRED` on all four). **These were administrator merges, but full compliance with the documented sole-collaborator exception is not established for all four.** Exact-head `floor`, `mastra-schema-init` and `review / verify-review-result` checks passed, as tabulated below. The PR-body requirement (exception plus exact head) was **not met by #753, #754 or #755 at merge time**. Current resolved-thread counts cannot establish the historical thread state at the moment of each merge. Retrospective notes are not evidence of prior approval.
+
+The check evidence comes from the exact-head check runs. The review-thread column is the **current** state read from the API, not a reconstruction of the moment of merge: GitHub does not expose when a thread was resolved relative to a merge, and no historical count is claimed here.
+
+| PR | Head | `floor` | `mastra-schema-init` | `review / verify-review-result` | Review threads | Merge commit | Merged (UTC) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| #751 Make Discovery Card Buttons Easier to Tap and Catch Regressions | `b8bdaf8aa2` | success | success | success | 2 total, **0 unresolved** | `ab24e576df` | 06:29:17 |
+| #753 Make the event card tap-size test actually fail when the token regresses | `0a06066c22` | success | success | success | 0 total, **0 unresolved** | `c4c510da74` | 06:43:13 |
+| #754 Restaurant, café and nightlife Details open in the page instead of a new page | `c0863e476f` | success | success | success | 27 total, **0 unresolved** | `582c27fb21` | 21:29:50 |
+| #755 Event Details opens in the page, with real ticket tiers | `79ed3ae5c1` | success | success | success | 12 total, **0 unresolved** | `4b7d250e9e` | 22:41:23 |
+
+**Which PRs recorded the exception in their own body.** Only **#751** did, with its exact head. **#753, #754 and #755 did not** — their bodies name no exception and no final head, so the record for those three lives only here. Retrospective notes added to those PRs after this entry are labelled as retrospective; they were not written at merge time.
+
+**What a reviewer would have been asked.** #751 and #753: whether a shared action height needed a browser proof. It has one in `e2e/san-1140-discovery-card-actions.spec.ts`, scoped to `/restaurants`, `/cafes` and `/nightlife` — up to five cards per route — at 320/390/768/1440px and at **200 % document zoom** (Playwright cannot script browser zoom, so document zoom is the documented proxy in that spec). #753 repairs that test so it fails when the token regresses. The 44px claim is not universal: `/rentals` keeps a deliberate dense desktop footer (28px at 1440px, 44px at 320px per the SAN-1122 evidence), and venue `Directions` actions measure 32px. #754: whether one selected record should drive the map pin, the Details panel and the Ask MDE context together, and whether a released pin should close the panel rather than reopen an older record (both are covered by five regression tests). #755: whether a confirmed 404 should hide the Buy-tickets and full-page actions (it does, with a mocked 404), and whether the panel should show real tiers only (it shows real tiers, "Free", "Sold out" and "Price TBD", never invented prices).
+
+**Post-merge production verification.** The deployed build at the time reported `c347162191` on `/api/version`, equal to `main` and containing **all four** merge commits above (`ab24e576`, `c4c510da`, `582c27fb`, `4b7d250e`). On that build, at 1440px and 390px, `/restaurants`, `/cafes`, `/nightlife`, `/rentals` and `/events` each opened Details beside the map (desktop) or in the bottom Sheet (phone), without changing the URL, closed cleanly, with no horizontal overflow and no page error. Restaurant sequences: A → B repoints the panel, Ask selects the opened record, Escape closes from inside the panel, a pin gives way to an explicit Details click, and releasing a pin closes the panel. Events rendered real tiers (Reina de Antioquia — GA $40,000 · VIP $120,000 · Backstage $400,000 · Frontrow $80,000 COP) and "Price TBD" for the unticketed event.
+
+The full evidence record is `docs/_archive/legacy-2026-11-10/task-testing/evidence/2026-11-05/SAN-1638-RESULTS.md`. The screenshots were written to `docs/screenshots/san-1638/`, which is **gitignored** (`.gitignore:106`), so those PNGs are local artifacts, not repository files; the evidence record lists their exact filenames and the SHA they were taken against.
+
+**Open questions.** No live event currently carries an `imageUrl` or an external ticket URL, so the panel's photo and "Buy tickets" branches are proven only with a controlled API response. Event 404/503 were proven with intercepted responses rather than a live outage, and the signed-in Ask → Answer journey was not executed.
 
 ## Adding an entry
 

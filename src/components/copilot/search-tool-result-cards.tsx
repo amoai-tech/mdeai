@@ -1,13 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type RefObject } from "react";
 import Link from "next/link";
+import { createPortal } from "react-dom";
 import type { AbstractAgent } from "@copilotkit/react-core/v2";
 import { useOptionalConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
+import { useRentalComparisonOwner } from "@/components/chat/rental-comparison-owner-context";
 import { useEventSearchFastPath } from "@/hooks/use-event-search-fast-path";
 import { ToolErrorChip } from "@/components/copilot/tool-error-chip";
 import { CafeResultCard } from "@/components/copilot/cafe-result-card";
 import { RentalCard } from "@/components/copilot/rental-card";
+import { NearbyRentalAction } from "@/components/copilot/a2ui/mde-ui-catalog";
+import { isStoredRentalUuid } from "@/lib/cafe-search-fast-path";
+import { RentalComparison, resolveRentalComparisonRows, type ComparisonRentalRow } from "@/components/copilot/rental-comparison";
 import type { RentalSearchMeta } from "@/components/chat/rental-fast-path-context";
 import { EventCard } from "@/components/copilot/event-card";
 import { DomainResults } from "@/components/copilot/domain-results";
@@ -23,7 +28,7 @@ import {
 import { readGroundedVenueKind } from "@/lib/grounded-venue-kind";
 import type { ParsedGroundedToolResult } from "@/lib/parse-grounded-tool-result";
 import { useEventSearchResults } from "@/components/chat/event-search-results-context";
-import { RichCardResultsRegistrar } from "@/components/chat/rich-card-results-context";
+import { RichCardResultsRegistrar, useOptionalRichCardResults } from "@/components/chat/rich-card-results-context";
 import { useMapContext } from "@/platform/maps/map-context";
 import { normalizeToolEnvelope, unwrapAgUiToolPayload } from "@/lib/normalize-tool-envelope";
 import { visibleEventSearchReasons } from "@/lib/event-search-fast-path";
@@ -32,9 +37,35 @@ import { emptyRentalNotice, unappliedRentalNotice } from "@/lib/rental-display";
 import { duplicateListingNotes } from "@/lib/rentals/duplicate-listings";
 import { normalizeToolOutput } from "@/platform/maps/normalize-tool-output";
 import { parseGroundedToolResult } from "@/lib/parse-grounded-tool-result";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 function rentalPinId(listingId: string) {
   return `rental-${listingId}`;
+}
+
+// More than one historical rental result may still be mounted. Keep the
+// composer above CopilotKit's floating Scroll-to-bottom control while ANY
+// active comparison owns it; restore the original stacking only after the
+// final owner unmounts. No new store, provider or chat state is introduced.
+const comparisonOverlayOwners = new WeakMap<HTMLElement, { count: number; originalZIndex: string }>();
+
+function acquireComparisonOverlay(overlay: HTMLElement) {
+  const existing = comparisonOverlayOwners.get(overlay);
+  if (existing) {
+    existing.count += 1;
+    return;
+  }
+  comparisonOverlayOwners.set(overlay, { count: 1, originalZIndex: overlay.style.zIndex });
+  overlay.style.zIndex = "35";
+}
+
+function releaseComparisonOverlay(overlay: HTMLElement) {
+  const existing = comparisonOverlayOwners.get(overlay);
+  if (!existing) return;
+  existing.count -= 1;
+  if (existing.count > 0) return;
+  overlay.style.zIndex = existing.originalZIndex;
+  comparisonOverlayOwners.delete(overlay);
 }
 
 function eventPinId(eventId: string) {
@@ -66,6 +97,7 @@ function groundedRowToBase(row: GroundedRow, rank: number) {
     photoAuthorAttributions: row.photoAuthorAttributions,
     fieldMaskVersion: row.fieldMaskVersion,
     groundingSource: row.groundingSource,
+    sourceMode: row.sourceMode,
     rank,
   };
 }
@@ -96,6 +128,20 @@ function useGroundedListScroll(listRef: RefObject<HTMLDivElement | null>) {
     );
     card?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [selectedPinId, listRef]);
+}
+
+/** Register the current grounded cards, even when a place has no valid pin. */
+function GroundedShownIdsRegistrar({ rows }: { rows: readonly { id: string }[] }) {
+  const isCurrent = useCurrentSearchToolResult();
+  const setGroundedShownIds = useOptionalRichCardResults()?.setGroundedShownIds;
+  const idsKey = rows.map((row) => row.id).join("|");
+  useEffect(() => {
+    if (!setGroundedShownIds) return;
+    if (isCurrent) setGroundedShownIds(idsKey ? idsKey.split("|") : []);
+    else setGroundedShownIds([], idsKey);
+    return () => setGroundedShownIds([], idsKey);
+  }, [idsKey, isCurrent, setGroundedShownIds]);
+  return null;
 }
 
 export function GroundedPlaceResults({ result }: { result: unknown }) {
@@ -156,6 +202,7 @@ export function GroundedNightlifeResults({ result }: { result: unknown }) {
               placeId={detail.placeId}
               fieldMaskVersion={detail.fieldMaskVersion}
               groundingSource={detail.groundingSource}
+              sourceMode={detail.sourceMode}
               selected={selectedPinId === detail.pinId}
               onSelect={mappedPinIds.has(detail.pinId) ? () => panToPin(detail.pinId) : undefined}
               onOpenDetails={() =>
@@ -183,6 +230,7 @@ export function GroundedCafeResults({ result }: { result: unknown }) {
   return (
     <>
       <RichCardResultsRegistrar category="grounded" count={rows.length} />
+      <GroundedShownIdsRegistrar rows={rows} />
       <ToolPinsSync category="grounded" result={result} />
       {rows.length === 0 ? (
         <EmptyState
@@ -215,6 +263,7 @@ export function GroundedCafeResults({ result }: { result: unknown }) {
               placeId={detail.placeId}
               fieldMaskVersion={detail.fieldMaskVersion}
               groundingSource={detail.groundingSource}
+              sourceMode={detail.sourceMode}
               selected={selectedPinId === detail.pinId}
               onSelect={mappedPinIds.has(detail.pinId) ? () => panToPin(detail.pinId) : undefined}
               onOpenDetails={() => openCafeDetail(detail, cafeRows)}
@@ -235,8 +284,15 @@ export function RentalResults({
   result: unknown;
   searchMeta?: RentalSearchMeta;
 }) {
-  const { selectedPinId, panToPin } = useMapContext();
+  const { selectedPinId, panToPin, pins } = useMapContext();
+  // A prior tool result remains in the transcript but cannot own the composer.
+  // The current tool call owns map and result actions; fast-path is unscoped.
+  const isCurrentResult = useCurrentSearchToolResult();
+  const owner = useRentalComparisonOwner();
+  const ownerId = useId();
   const { openScheduleViewing, openVenueDetail } = useRentalUi();
+  // Nearby is a question on the Concierge thread; broker chat has no such provider.
+  const concierge = useOptionalConciergeCoAgent();
   const listRef = useRef<HTMLDivElement>(null);
   const envelope = normalizeToolEnvelope(result);
   const rows = (envelope.results ?? []) as Array<{
@@ -285,6 +341,140 @@ export function RentalResults({
   // SAN-1235 — the same duplicate rule the /rentals page uses. Two feeds for one home must not
   // look like two apartments in a chat answer, which is exactly what the production envelope did.
   const duplicateNotes = duplicateListingNotes(rows);
+  // Local, deterministic comparison state: only IDs from this actual result.
+  // Include source facts and search parameters, not only IDs: a refreshed
+  // result with overlapping IDs or changed prices must not inherit a previous
+  // selection. JSON encoding avoids delimiter collisions in source IDs.
+  const rowsKey = JSON.stringify([searchParams ?? null, rows]);
+  const [comparisonState, setComparisonState] = useState<{
+    rowsKey: string; ids: string[]; open: boolean;
+  }>({ rowsKey: "", ids: [], open: false });
+  // Derive only the active result's selection. A new search invalidates the old
+  // selection immediately, without a setState-in-effect render race.
+  const comparisonIds = comparisonState.rowsKey === rowsKey ? comparisonState.ids : [];
+  const comparisonOpen = comparisonState.rowsKey === rowsKey && comparisonState.open;
+  const setComparisonOpen = (open: boolean) => {
+    setComparisonState((previous) => ({
+      rowsKey, ids: previous.rowsKey === rowsKey ? previous.ids : [], open,
+    }));
+  };
+  const comparisonReady = Boolean(resolveRentalComparisonRows(rows, comparisonIds));
+  const hasComparisonSelection = rows.length >= 2 && comparisonIds.length > 0;
+  const mayShowComposerToolbar = hasComparisonSelection && isCurrentResult &&
+    (!owner || owner.activeId === ownerId);
+  const [composerOverlay, setComposerOverlay] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    if (!mayShowComposerToolbar) return;
+    // CopilotKit's nested scroll layers prevent sticky positioning within a
+    // tool result. The real input overlay is already anchored to the composer.
+    const region = document.querySelector('[data-testid="center-chat-panel"]');
+    if (!region) return; // Fall back to an inline action on other pages.
+    let ownedOverlay: HTMLElement | null = null;
+    const sync = () => {
+      const next = region.querySelector<HTMLElement>('[data-testid="copilot-input-overlay"]');
+      if (ownedOverlay !== next) {
+        if (ownedOverlay) releaseComparisonOverlay(ownedOverlay);
+        ownedOverlay = next;
+        if (ownedOverlay) acquireComparisonOverlay(ownedOverlay);
+      }
+      setComposerOverlay((previous) => previous === next ? previous : next);
+    };
+    const frame = requestAnimationFrame(sync);
+    // Reattach if thread navigation replaces the input node.
+    const observer = new MutationObserver(sync);
+    observer.observe(region, { childList: true, subtree: true });
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+      if (ownedOverlay) releaseComparisonOverlay(ownedOverlay);
+    };
+  }, [mayShowComposerToolbar]);
+
+  const toggleComparison = (id: string) => {
+    // Use the functional updater so rapid selections in one React batch do not
+    // overwrite each other. Cross-result ownership is updated outside it:
+    // React may retry state updaters, so they must remain pure.
+    setComparisonState((previous) => {
+      const ids = previous.rowsKey === rowsKey ? previous.ids : [];
+      return {
+        rowsKey,
+        open: false,
+        ids: ids.includes(id)
+          ? ids.filter((selected) => selected !== id)
+          : ids.length < 4 ? [...ids, id] : ids,
+      };
+    });
+    // Even when the last selected item is removed, the toolbar is immediately
+    // hidden by hasComparisonSelection. Release the owner on that last removal.
+    if (comparisonIds.length === 1 && comparisonIds.includes(id)) owner?.clear(ownerId);
+    else owner?.activate(ownerId);
+  };
+  const hasCurrentPin = (id: string) => {
+    const pinId = rentalPinId(id);
+    return mappedRentalIds.has(pinId) && pins.some((pin) => pin.id === pinId);
+  };
+  const openComparedDetails = (row: ComparisonRentalRow) => {
+    const pinId = rentalPinId(row.id);
+    const hasPin = hasCurrentPin(row.id);
+    const detailRental = toDetailRental(row);
+    // Same source guard as the existing card, never a fabricated detail sheet.
+    if (row.tags?.includes("external-source") && !detailRental) return;
+    if (hasPin) panToPin(pinId);
+    setComparisonOpen(false);
+    openVenueDetail({
+      kind: "rental", listingId: row.id, pinId, pinned: hasPin,
+      rental: detailRental ?? undefined,
+      title: row.title, neighborhood: row.neighborhood,
+      nightlyPrice: row.nightly_price, bedrooms: row.bedrooms,
+      photoUrl: row.photo_url ?? row.image_url,
+      amenities: row.amenities, availability: row.availability,
+      hostName: row.host_name, canScheduleViewing: row.can_schedule_viewing === true,
+    });
+  };
+
+  const activeComposerOverlay = mayShowComposerToolbar && composerOverlay?.isConnected ? composerOverlay : null;
+  const compareToolbar = mayShowComposerToolbar ? (
+        // The transcript (not the page) scrolls. Keep the action at the bottom
+        // of that scrollport, directly above the composer, even when the result
+        // count/header is far above the visible rental cards.
+        <div
+          data-testid="rental-compare-toolbar"
+          role="group"
+          aria-label="Apartment comparison selection"
+          className={activeComposerOverlay
+            ? "pointer-events-auto absolute z-30 flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-background/95 px-3 py-2 shadow-lg backdrop-blur-sm"
+            : "sticky bottom-0 z-20 -mx-2 flex min-w-0 flex-wrap items-center justify-between gap-2 border-t border-border bg-background/95 px-3 py-2 shadow-lg backdrop-blur-sm sm:mx-0 sm:rounded-lg sm:border"}
+          // CopilotKit's input height changes on mobile and with multi-line drafts.
+          // Anchor to its top; avoid a guessed fixed composer-height offset.
+          style={activeComposerOverlay ? { bottom: "100%", left: 8, right: 8, zIndex: 30 } : undefined}
+        >
+          <span aria-live="polite" className="text-xs font-medium text-foreground">
+            {comparisonIds.length} of 4 apartments selected
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              data-testid="rental-compare-clear"
+              className="min-h-11 rounded-md px-3 text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+              onClick={() => {
+                setComparisonState({ rowsKey, ids: [], open: false });
+                owner?.clear(ownerId);
+              }}
+            >
+              Clear
+            </button>
+            <button
+              type="button"
+              data-testid="rental-compare-open"
+              className="min-h-11 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+              disabled={!comparisonReady}
+              onClick={() => setComparisonOpen(true)}
+            >
+              Compare selected ({comparisonIds.length})
+            </button>
+          </div>
+        </div>
+  ) : null;
 
   useEffect(() => {
     if (!selectedPinId || !listRef.current) return;
@@ -308,10 +498,12 @@ export function RentalResults({
                 ? `${rows.length} suggested apartment${rows.length === 1 ? "" : "s"}`
                 : `${rows.length} matching apartment${rows.length === 1 ? "" : "s"}`}
           </span>
-          <Link href="/rentals" className="font-medium text-primary underline-offset-4 hover:underline"
-            data-testid="rental-browse-all-link">
-            Browse all apartments
-          </Link>
+          <div className="flex flex-wrap items-center gap-3">
+            <Link href="/rentals" className="font-medium text-primary underline-offset-4 hover:underline"
+              data-testid="rental-browse-all-link">
+              Browse all apartments
+            </Link>
+          </div>
         </div>
       ) : null}
       {rows.length > 0 && envelope.budgetNote ? (
@@ -368,8 +560,7 @@ export function RentalResults({
             });
           };
           return (
-            <RentalCard
-              key={r.id}
+            <RentalCard key={r.id}
               id={pinId}
               pinId={hasPin ? pinId : null}
               listingId={r.id}
@@ -395,6 +586,9 @@ export function RentalResults({
               // reduced pop-up never offered it, and still does not.
               onOpenDetails={r.tags?.includes("external-source") && !detailRental ? undefined : openDetail}
               canScheduleViewing={r.can_schedule_viewing === true}
+              compareSelected={comparisonIds.includes(r.id)}
+              compareDisabled={!comparisonIds.includes(r.id) && comparisonIds.length >= 4}
+              onToggleCompare={rows.length >= 2 && isCurrentResult ? () => toggleComparison(r.id) : undefined}
               onSchedule={() =>
                 openScheduleViewing({
                   listingId: r.id,
@@ -402,11 +596,40 @@ export function RentalResults({
                   neighborhood: r.neighborhood,
                 })
               }
+              nearbyAction={
+                hasPin && concierge && isStoredRentalUuid(r.id)
+                  ? <NearbyRentalAction listingId={r.id} pinId={pinId} onSelect={panToPin} />
+                  : undefined
+              }
             />
           );
         })}
         </div>
       )}
+      {compareToolbar && (composerOverlay?.isConnected ? createPortal(compareToolbar, composerOverlay) : compareToolbar)}
+      <Dialog open={comparisonOpen} onOpenChange={setComparisonOpen}>
+        <DialogContent className="w-[calc(100vw-1rem)] max-w-6xl max-h-[85dvh] overflow-y-auto p-3 sm:max-w-6xl sm:p-5"
+          data-testid="rental-comparison-modal">
+          <DialogHeader><DialogTitle>Compare apartments</DialogTitle></DialogHeader>
+          <RentalComparison rows={rows} listingIds={comparisonIds}
+            hasPin={hasCurrentPin}
+            onFocusPin={(id) => {
+              if (!hasCurrentPin(id)) return;
+              panToPin(rentalPinId(id));
+              setComparisonOpen(false);
+            }}
+            canOpenDetails={(row) => !(row.tags?.includes("external-source") && !toDetailRental(row))}
+            onOpenDetails={openComparedDetails}
+            onScheduleViewing={(row) => {
+              if (row.can_schedule_viewing !== true) return;
+              setComparisonOpen(false);
+              openScheduleViewing({
+                listingId: row.id, title: row.title, neighborhood: row.neighborhood,
+              });
+            }}
+          />
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
@@ -472,6 +695,20 @@ function EventSearchEmptyState() {
   );
 }
 
+type EventResultRow = {
+  id: string;
+  title: string;
+  venue: string;
+  neighborhood: string;
+  startsAt: string;
+  pricePerTicket: number | null;
+  canBuyTickets?: boolean;
+  ticketUrl?: string;
+  currency?: string;
+  imageUrl?: string;
+  sourceUrl?: string;
+};
+
 export function EventResults({ result }: { result: unknown }) {
   const { selectedPinId, panToPin } = useMapContext();
   const { openVenueDetail } = useRentalUi();
@@ -491,6 +728,32 @@ export function EventResults({ result }: { result: unknown }) {
     () => new Set(normalizeToolOutput("event", result).pins.map((pin) => pin.id)),
     [result],
   );
+  const [selectedEvent, setSelectedEvent] = useState<EventResultRow | null>(null);
+  const recoveryHandled = useRef(new Set<string>());
+  const openSelectedEventDetail = () => {
+    if (!selectedEvent) return;
+    const pinId = `event-${selectedEvent.id}`;
+    const hasPin = pinnedIds.has(pinId);
+    const ticketUrl = selectedEvent.ticketUrl ?? `/events/${encodeURIComponent(selectedEvent.id)}`;
+    setSelectedEvent(null);
+    if (hasPin) panToPin(pinId);
+    openVenueDetail({
+      kind: "event",
+      eventId: selectedEvent.id,
+      pinId,
+      title: selectedEvent.title,
+      neighborhood: selectedEvent.neighborhood,
+      venue: selectedEvent.venue,
+      startsAt: selectedEvent.startsAt,
+      pricePerTicket: selectedEvent.pricePerTicket,
+      currency: selectedEvent.currency,
+      canBuyTickets: selectedEvent.canBuyTickets === true,
+      imageUrl: selectedEvent.imageUrl,
+      ticketUrl,
+      sourceUrl: selectedEvent.sourceUrl,
+    });
+  };
+
   const rows = (envelope.results ?? []) as Array<{
     id: string;
     title: string;
@@ -504,6 +767,88 @@ export function EventResults({ result }: { result: unknown }) {
     imageUrl?: string;
     sourceUrl?: string;
   }>;
+  const rowsRef = useRef<EventResultRow[]>([]);
+  useEffect(() => {
+    rowsRef.current = (envelope.results ?? []) as EventResultRow[];
+  }, [envelope.results]);
+
+  useEffect(() => {
+    // Historical EventResults stay mounted. Only the current result set may
+    // recover, otherwise one event opens duplicate Quick view dialogs.
+    if (!isCurrent) return;
+    let recoveryTimer: number | undefined;
+    /**
+     * Open Quick view for an explicitly requested event and REPORT whether it opened.
+     *
+     * The caller used to show "Here is the event card." before this ran, so a request
+     * that could not open anything still confirmed success. Every path now answers with
+     * `mde:event-card-recovery-result`, and the caller only confirms on `opened: true`.
+     */
+    const onRecovery = (event: Event) => {
+      const detail = (event as CustomEvent<{ eventId?: unknown; requestId?: unknown; anyCardBefore?: unknown }>).detail ?? {};
+      const eventId = typeof detail.eventId === "string" ? detail.eventId : null;
+      const requestId = typeof detail.requestId === "string" ? detail.requestId : null;
+
+      const answer = (opened: boolean) => {
+        window.dispatchEvent(
+          new CustomEvent("mde:event-card-recovery-result", {
+            detail: { eventId, requestId, opened },
+          }),
+        );
+      };
+
+      if (!eventId) return answer(false);
+      // Deduplicate the SAME request, not the same event: a repeated "show the first
+      // event as a card" is a new request and must open again.
+      const key = requestId ?? eventId;
+      if (recoveryHandled.current.has(key)) return answer(false);
+      const row = rowsRef.current.find((value) => value.id === eventId);
+      if (!row) return answer(false);
+
+      // Scope the "already rendered" check to THIS event: another event's card must not
+      // suppress this one.
+      const renderedSelector = `[data-testid="a2ui-event-card"][data-event-id="${eventId}"]`;
+      /**
+       * Which existing card satisfies this request?
+       *
+       * A request-scoped call knows the event it asked for, so only that event's card
+       * counts. A LEGACY call (no requestId) cannot know which event the model answered
+       * with, so any rendered card satisfies it — otherwise a model card for event #3
+       * would be followed by a Quick view for event #1.
+       */
+      const anyCardBefore = typeof detail.anyCardBefore === "number" ? detail.anyCardBefore : null;
+      const anyCardAppeared = () => anyCardBefore !== null &&
+        document.querySelectorAll('[data-testid="a2ui-event-card"]').length > anyCardBefore;
+      const existingCard = () =>
+        requestId
+          ? document.querySelector<HTMLElement>(renderedSelector)
+          : document.querySelector<HTMLElement>('[data-testid="a2ui-event-card"]');
+      const alreadyRendered = existingCard();
+      if (alreadyRendered) {
+        alreadyRendered.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        return answer(true);
+      }
+      if (anyCardAppeared()) return answer(true);
+
+      window.clearTimeout(recoveryTimer);
+      recoveryTimer = window.setTimeout(() => {
+        const settledCard = existingCard();
+        if (settledCard) {
+          settledCard.scrollIntoView({ block: "nearest", behavior: "smooth" });
+          return answer(true);
+        }
+        if (anyCardAppeared()) return answer(true);
+        recoveryHandled.current.add(key);
+        setSelectedEvent(row as EventResultRow);
+        answer(true);
+      }, 500);
+    };
+    window.addEventListener("mde:event-card-recovery", onRecovery);
+    return () => {
+      window.removeEventListener("mde:event-card-recovery", onRecovery);
+      window.clearTimeout(recoveryTimer);
+    };
+  }, [isCurrent]);
 
   useEffect(() => {
     if (!isCurrent) return;
@@ -608,24 +953,33 @@ export function EventResults({ result }: { result: unknown }) {
             });
           };
           return (
-            <EventCard
-              key={e.id}
-              id={pinId}
-              eventId={e.id}
-              title={e.title}
-              venue={e.venue}
-              neighborhood={e.neighborhood}
-              startsAt={e.startsAt}
-              pricePerTicket={e.pricePerTicket}
-              canBuyTickets={e.canBuyTickets === true}
-              currency={e.currency}
-              imageUrl={e.imageUrl}
-              ticketUrl={ticketUrl}
-              sourceUrl={e.sourceUrl}
-              selected={hasPin && selectedPinId === pinId}
-              onSelect={selectOnMap}
-              onOpenDetails={openDetail}
-            />
+            <div key={e.id} className="flex flex-col gap-1">
+              <EventCard
+                id={pinId}
+                eventId={e.id}
+                title={e.title}
+                venue={e.venue}
+                neighborhood={e.neighborhood}
+                startsAt={e.startsAt}
+                pricePerTicket={e.pricePerTicket}
+                canBuyTickets={e.canBuyTickets === true}
+                currency={e.currency}
+                imageUrl={e.imageUrl}
+                ticketUrl={ticketUrl}
+                sourceUrl={e.sourceUrl}
+                selected={hasPin && selectedPinId === pinId}
+                onSelect={selectOnMap}
+                onOpenDetails={openDetail}
+              />
+              <button
+                type="button"
+                data-testid="event-show-card"
+                className="min-h-11 self-start rounded-md border border-border px-3 text-xs"
+                onClick={() => setSelectedEvent(e as EventResultRow)}
+              >
+                Quick view
+              </button>
+            </div>
           );
         })}
         </div>
@@ -648,6 +1002,30 @@ export function EventResults({ result }: { result: unknown }) {
           }
         />
       ) : null}
+      <Dialog open={Boolean(selectedEvent)} onOpenChange={(open) => { if (!open) setSelectedEvent(null); }}>
+        <DialogContent className="max-w-md p-3" data-testid="event-card-modal">
+          <DialogHeader className="sr-only">
+            <DialogTitle>{selectedEvent?.title ?? "Event card"}</DialogTitle>
+          </DialogHeader>
+          {selectedEvent ? (
+            <EventCard
+              id={`event-${selectedEvent.id}`}
+              eventId={selectedEvent.id}
+              title={selectedEvent.title}
+              venue={selectedEvent.venue}
+              neighborhood={selectedEvent.neighborhood}
+              startsAt={selectedEvent.startsAt}
+              pricePerTicket={selectedEvent.pricePerTicket}
+              canBuyTickets={selectedEvent.canBuyTickets === true}
+              currency={selectedEvent.currency}
+              imageUrl={selectedEvent.imageUrl}
+              ticketUrl={selectedEvent.ticketUrl ?? `/events/${encodeURIComponent(selectedEvent.id)}`}
+              sourceUrl={selectedEvent.sourceUrl}
+              onOpenDetails={openSelectedEventDetail}
+            />
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

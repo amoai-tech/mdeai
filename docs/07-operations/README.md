@@ -24,6 +24,7 @@ Canonical navigation for running, validating, deploying, securing, and troublesh
 ## Development workflow
 
 - [`agent-workflow-plan.md`](agent-workflow-plan.md) — plan for Linear, agent handoffs, GitHub, docs/GitBook, and changelog ownership.
+- [Intent → specification → implementation plan](intent-spec-plan/README.md) — optional, task-scoped Markdown templates and a worked (not feature-verified) Gen UI planning example for agents.
 
 ## Local development
 
@@ -67,6 +68,8 @@ Production promotion should follow the current release task/runbook and provider
 Representative production check: `npm run test:e2e:prod-synthetic`.
 
 For any map, sheet, or chat-layout change, also run `npm run test:e2e:maps-lifecycle`. It exercises the real Google Maps JavaScript API on production: 10 cold first mounts with live grounded pins, 10 empty-state cycles, and 10 warm grounded-pin cycles, failing on any uncaught page error or rejection. Pin counts are read from the live result set; the test does not hardcode 3. `e2e/maps-mobile-lifecycle.spec.ts` is part of the explicit `prod-smoke` lane because it requires real Maps and production data; it is not a mocked deterministic test.
+
+If an **unpromoted** candidate is blocked by a failed, pending, or timed-out GitHub `Floor`, follow the [failed-Floor recovery steps](production-release-verification.md#recover-a-release-blocked-by-github-floor-san-1362). Never bypass the staged release gate to recover.
 
 If a certified release still turns out bad after it is live, follow [`production-rollback-runbook.md`](production-rollback-runbook.md): confirm production is really broken, roll back with `vercel rollback <exact id>`, prove the domains moved, and keep auto-assign OFF.
 

@@ -15,6 +15,33 @@ implicate restaurant or CopilotKit budget work.
 **Precondition:** `npm run dev` (UI `:3001`, Mastra `:4111`). Restart dev
 between budget runs if a prior session triggered a CopilotKit POST storm.
 
+## Discovery card changes — the 60-second loop
+
+A change to a discovery card (`RestaurantCard`, `VenueBrowseCard`, `EventBrowseCard`,
+`RentalBrowseCard`, or their footers/tokens) does **not** need `npm run floor` to know whether it
+worked. `e2e/san-1140-discovery-card-actions.spec.ts` is the inner loop:
+
+```bash
+# Against any running dev server, real data, ~60s for all three venue pages
+SMOKE_BASE_URL=http://localhost:3011 PW_SKIP_WEBSERVER=1 \
+  npx playwright test e2e/san-1140-discovery-card-actions.spec.ts --project=chromium --workers=1
+
+# Against the live site
+PROD_SMOKE_BASE_URL=https://www.mdeai.co PW_SKIP_WEBSERVER=1 MDE_REMOTE_DISCOVERY_CARDS=1 \
+  npx playwright test e2e/san-1140-discovery-card-actions.spec.ts --project=prod-smoke --workers=1
+```
+
+It proves, per card: DOM **and** geometric containment of every action, exactly one Ask per card,
+the shared `--spacing-card-action` height, 320/390/768/1440px, 200% zoom, no sideways scroll, a real
+click, Tab/Enter/Space with visible focus, no `agent/run` on selection, Details navigation, and
+café/nightlife A→B→Clear map selection. Use it while iterating; run `npm run floor` once before merge.
+
+The spec also runs in the deterministic CI lane (`test:e2e:deterministic`). That lane has no
+database, so `search-venue-anchors.ts` serves a labelled `DETERMINISTIC_E2E_VENUES` fixture gated by
+`isDeterministicE2E()` — never in production. Because inventory is guaranteed there, a zero-card run
+**fails** in that lane instead of skipping. Against any other URL a missing inventory still skips
+honestly.
+
 ## Query ownership
 
 | Query | Used in | Path |
@@ -34,6 +61,39 @@ between budget runs if a prior session triggered a CopilotKit POST storm.
 
 Do not run `npx playwright test - <<'EOF'` — Playwright ignores inline stdin and runs the
 full discovered suite.
+
+## Agent QA commands + authenticated Chrome
+
+**All coding agents use these same commands, not a new authentication system.** They use `e2e/helpers/auth.ts` and the existing real Supabase QA identities. The trusted Node process receives Supabase secrets; only a normal, scoped user session is placed in the browser.
+
+```bash
+# From repository root: only reports whether required credentials exist.
+npm run qa:auth:check
+
+# Existing passwordless Super Admin read-only Playwright tests.
+npm run qa:test:admin
+
+# Launch temporary, already authenticated Chrome for trusted MCP inspection.
+# Default: the PRE-EXISTING non-admin event-host QA account.
+npm run qa:browser
+
+# If testing a different existing role (no Super Admin fallback):
+npm run qa:browser -- --role=renter
+
+# Super Admin must use the protected Playwright fixture (not Chrome CDP).
+# npm run qa:test:admin
+
+# To inspect the deployed site, opt into the exact approved production origin:
+npm run qa:browser -- --origin=https://www.mdeai.co --allow-remote
+```
+
+The launcher opens `/saved` and verifies authentication. It uses a private temporary Chrome profile on `127.0.0.1:9227`, not your personal Chrome profile. Chrome DevTools MCP can attach with `--browser-url=http://127.0.0.1:9227`. Keep this terminal running during the inspection and press Ctrl+C afterwards; the launcher removes its profile. Port collision: `--port=9228` and update the MCP connection accordingly. Use `--headless` on machines without a desktop. Chrome is located on Linux, macOS or Windows; if it lives elsewhere, set `CHROME_PATH=/absolute/path/to/chrome` in your trusted terminal. An invalid path reports a clear error rather than silently failing. A dedicated existing QA role email (e.g. `MDE_QA_EVENT_HOST_EMAIL` or `MDE_QA_RENTER_EMAIL`) must be configured in the ignored `.env.local` for non-admin login; absent accounts fail closed. Do not create another admin account.
+
+**Security boundary:** CDP-connected agents have full access to that authenticated browser, including sensitive cookies. Only let trusted agents connect to the local listener; never publish or forward the debug port, reuse a personal Chrome profile, capture privileged screenshots, or upload authenticated Playwright artifacts. Super Admin CDP is not supported, even on a trusted local machine; use the protected `superAdminPage` fixture. The launcher removes its temporary profile on normal shutdown and handles Ctrl+C/SIGTERM even during sign-in. A forced SIGKILL, crash or power loss cannot run cleanup. Identify and stop **only** the QA Chrome process launched with the selected CDP port and temporary `--user-data-dir`, confirm that the port is closed, then remove that temporary profile **after Chrome exits**. Treat all leftover profile data as sensitive; never kill an unrelated Chrome session.
+
+**Playwright runner remains separate:** import `test` from `e2e/fixtures.ts`, call `superAdminPage` only for admin proof, and specify `test.use({ screenshot: "off", trace: "off", video: "off" })`. Role/RLS checks use `qaRolePage` or controlled throwaway identities; real viewing/write tests require their existing explicit opt-in and cleanup. `npm run qa:browser` is for interactive Chrome debugging, **not** a replacement for Playwright assertions.
+
+**Agent integration:** Claude Code, Codex, ChatGPT with Desktop Commander, and DeepSeek harnesses can use the terminal commands above. Their exact MCP registration varies; do not assume the harness is installed or authenticated. Chrome DevTools MCP endpoint details: https://developer.chrome.com/docs/devtools/agents/get-started/configuration . Never let Playwright and DevTools agents control the same page simultaneously.
 
 ## SAN-1549 — one-command signed-in QA smoke
 
@@ -60,7 +120,7 @@ ignored `.env.local` or CI secret store. Never print, commit or upload these
 secrets, Supabase session cookies, Playwright traces, storage-state JSON or
 authenticated screenshots. On a clean worktree, provide the env locally
 without committing it. Missing credentials must make this explicit smoke fail,
-not skip to green. Playwright 1.61 may create `error-context.md` with page content
+not skip to green. Playwright may create `error-context.md` with page content
 on a failed assertion even when trace/screenshot/video are off; treat local
 `test-results/` and HTML reports as sensitive and never publish them from
 authenticated runs. There is no supported `error-context: "off"` test option.
@@ -98,7 +158,9 @@ role with `test.use({ qaRole: "..." })` and receives `qaRolePage`:
 | `broker` | Existing dedicated account from `MDE_QA_BROKER_EMAIL` |
 
 Renter and broker accounts must already exist, be named `qa-*@mdeai.co`, and
-have the intended **actual app role**. The fixture refuses a missing or
+have the intended **actual app role**. `qaRolePage` signs into its own browser
+context and checks the session identity; it does **not** use the legacy
+Super Admin `authSession`/`authenticatedPage` fixture (which is lazy, not auto). The fixture refuses a missing or
 unconfigured identity; it never creates a user or silently substitutes Super Admin.
 For authenticated tests, **explicitly disable screenshot, trace and video**:
 
@@ -111,12 +173,32 @@ test("host QA can open Saved", async ({ qaRolePage }) => {
 });
 ```
 
+The existing MDE Supabase QA accounts can be selected with these **ignored**
+`.env.local` settings (never commit this file or put the service key in GitHub PRs):
+
+```dotenv
+MDE_QA_RENTER_EMAIL=qa-renter@mdeai.co
+MDE_QA_BROKER_EMAIL=qa-landlord@mdeai.co
+MDE_QA_EVENT_HOST_EMAIL=qa-landlord@mdeai.co
+```
+
+The landlord identity has a **development-labelled Rentals profile** as well as
+an Event Host partner record; these are two different app roles, not a
+`user_roles.landlord` enum or an admin permission. The runner explicitly
+reads `.env.local` before registering role tests, so missing configuration
+cannot quietly convert an opted-in test into a skip.
+
 Read-only browser verification with the configured existing accounts:
 
 ```bash
-MDE_ROLE_QA_E2E=1 PW_SKIP_WEBSERVER=1 SMOKE_BASE_URL=https://www.mdeai.co \
-  npm run test:e2e:qa-roles
+MDE_ROLE_QA_E2E=1 PW_SKIP_WEBSERVER=1 PROD_SMOKE_BASE_URL=https://www.mdeai.co \
+  npx playwright test e2e/qa-role-selection.spec.ts --project=prod-smoke --workers=1 --retries=0
 ```
+
+Expect **5 passed, 0 skipped**: guest deny, Super Admin, Event Host,
+renter and broker. Renter and broker also prove `403` against the admin
+Rentals API. Do not replace these accounts with the Super Admin identity; the
+real server must enforce non-admin access.
 
 The fixture marks authenticated tests' private output directories. Before generic
 Playwright artifacts are uploaded, CI calls
@@ -170,11 +252,11 @@ or trusted CI secrets (both commands intentionally opt in):
 MDE_SUPER_ADMIN_QA=1 PW_SKIP_WEBSERVER=1 SMOKE_BASE_URL=http://localhost:3001 \
   npx playwright test e2e/qa-super-admin-fixture.spec.ts --project=chromium --workers=1
 
-MDE_SUPER_ADMIN_QA=1 PW_SKIP_WEBSERVER=1 SMOKE_BASE_URL=https://www.mdeai.co \
-  npx playwright test e2e/qa-super-admin-fixture.spec.ts --project=chromium --workers=1
+MDE_SUPER_ADMIN_QA=1 PW_SKIP_WEBSERVER=1 PROD_SMOKE_BASE_URL=https://www.mdeai.co \
+  npx playwright test e2e/qa-super-admin-fixture.spec.ts --project=prod-smoke --workers=1
 ```
 
-Playwright 1.61 defines `screenshot`, `trace` and `video` as injectable
+Playwright defines `screenshot`, `trace` and `video` as injectable
 worker-scoped option fixtures. The safe/unsafe regression in
 `e2e/qa-playwright-artifact-options*.spec.ts` verifies the resolved values and
 the guard without signing into any account:
@@ -222,9 +304,9 @@ The fast deterministic regression `e2e/app/partner-ai-signup-persistence.spec.ts
 
 ```bash
 MDE_PARTNER_LIVE_SOURCE_E2E=1 PW_SKIP_WEBSERVER=1 \
-  SMOKE_BASE_URL=https://www.mdeai.co \
+  PROD_SMOKE_BASE_URL=https://www.mdeai.co \
   npx playwright test e2e/app/partner-ai-signup-live-source.spec.ts \
-    --project=chromium --workers=1
+    --project=prod-smoke --workers=1 --retries=0
 ```
 
 4. Verify **1 passed, 0 failed, 0 skipped** plus `SAN1193_LIVE_PASS` and `SAN1193_LIVE_CLEANUP_VERIFIED`. Confirm test identities and any synthetic partner rows were removed. Failed tests require cleanup investigation before another run; no automatic paid-provider retries.

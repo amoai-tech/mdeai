@@ -19,6 +19,8 @@ type RichCardResultsContextValue = {
   counts: RichCardCounts;
   setRichCardCount: (category: MapPinCategory, count: number) => void;
   clearRichCardCounts: () => void;
+  groundedShownIds: readonly string[];
+  setGroundedShownIds: (ids: readonly string[], onlyIfCurrentKey?: string) => void;
   hasRichCards: (category: MapPinCategory | null) => boolean;
   shouldSuppressGenericMapResults: (activeMapCategory: MapPinCategory | null) => boolean;
 };
@@ -29,6 +31,16 @@ const RichCardResultsContext = createContext<RichCardResultsContextValue | null>
 
 export function RichCardResultsProvider({ children }: { children: ReactNode }) {
   const [counts, setCounts] = useState<RichCardCounts>({});
+  const [groundedShown, setGroundedShown] = useState<{ key: string; ids: readonly string[] }>({
+    key: "", ids: [],
+  });
+  const setGroundedShownIds = useCallback((ids: readonly string[], onlyIfCurrentKey?: string) => {
+    const key = ids.join("|");
+    setGroundedShown((prev) => {
+      if (onlyIfCurrentKey !== undefined && prev.key !== onlyIfCurrentKey) return prev;
+      return prev.key === key ? prev : { key, ids: [...ids] };
+    });
+  }, []);
 
   const setRichCardCount = useCallback(
     (category: MapPinCategory, count: number) => {
@@ -48,6 +60,7 @@ export function RichCardResultsProvider({ children }: { children: ReactNode }) {
 
   const clearRichCardCounts = useCallback(() => {
     setCounts({});
+    setGroundedShown({ key: "", ids: [] });
   }, []);
 
   const hasRichCards = useCallback(
@@ -69,6 +82,8 @@ export function RichCardResultsProvider({ children }: { children: ReactNode }) {
       counts,
       setRichCardCount,
       clearRichCardCounts,
+      groundedShownIds: groundedShown.ids,
+      setGroundedShownIds,
       hasRichCards,
       shouldSuppressGenericMapResults: suppressGenericMapResults,
     }),
@@ -76,6 +91,8 @@ export function RichCardResultsProvider({ children }: { children: ReactNode }) {
       counts,
       setRichCardCount,
       clearRichCardCounts,
+      groundedShown.ids,
+      setGroundedShownIds,
       hasRichCards,
       suppressGenericMapResults,
     ],
@@ -86,6 +103,11 @@ export function RichCardResultsProvider({ children }: { children: ReactNode }) {
       {children}
     </RichCardResultsContext.Provider>
   );
+}
+
+/** Optional for isolated tool renderers that are mounted outside the chat shell. */
+export function useOptionalRichCardResults() {
+  return useContext(RichCardResultsContext);
 }
 
 export function useRichCardResults() {

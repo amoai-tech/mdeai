@@ -8,8 +8,8 @@ export function previewStartUrl(previewUrl, yaml, testPath) {
       preview.username || preview.password || preview.port || preview.search || preview.hash || preview.pathname !== '/') {
     throw new Error('Expected a verified, root-path HTTPS Vercel preview origin');
   }
-  if (!/^momentic\/rentals\/[a-z0-9-]+\.test\.yaml$/.test(testPath)) {
-    throw new Error('Only trusted Rentals test paths are allowed');
+  if (!/^momentic\/(rentals|events|concierge|maps)\/[a-z0-9-]+\.test\.yaml$/.test(testPath)) {
+    throw new Error('Only trusted public-journey test paths are allowed');
   }
   const match = yaml.match(/^url:\s*(https?:\/\/[^\s#]+)\s*$/m);
   if (!match) throw new Error(`Missing explicit test start URL: ${testPath}`);

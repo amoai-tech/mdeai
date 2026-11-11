@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type { GroundedPhotoAttribution, GroundingSource } from "@/lib/parse-grounded-tool-result";
+import type { GroundedPhotoAttribution, GroundingSource, GroundedPlaceSourceMode } from "@/lib/parse-grounded-tool-result";
 import type { EventVenueOfferingsPayload } from "@/lib/venues/event-venue-offerings-types";
 import type { Rental } from "@/mastra/tools/search-rentals";
 
@@ -99,6 +99,7 @@ export type CafeVenueDetail = {
   photoName?: string;
   photoAuthorAttributions?: GroundedPhotoAttribution[];
   fieldMaskVersion?: string;
+  sourceMode?: GroundedPlaceSourceMode;
   factsCheckedAt?: string;
   rank?: number;
   /** Google's own source for this place; absent on curated fallback rows (SAN-878). */
@@ -158,6 +159,7 @@ export type NightlifeVenueDetail = {
   photoName?: string;
   photoAuthorAttributions?: GroundedPhotoAttribution[];
   fieldMaskVersion?: string;
+  sourceMode?: GroundedPlaceSourceMode;
   rank?: number;
   /** Google's own source for this place; absent on curated fallback rows (SAN-878). */
   groundingSource?: GroundingSource;
@@ -187,6 +189,8 @@ type RentalUiContextValue = {
   openVenueDetail: (target: VenueDetailTarget) => void;
   setEventVenueStep: (step: EventVenueSheetStep) => void;
   closeVenueDetail: () => void;
+  /** Close only a stale rental; preserve an event detail or checkout. */
+  closeRentalDetails: () => void;
   openCafeDetail: (detail: CafeVenueDetail, siblings?: CafeVenueDetail[]) => void;
   closeCafeDetail: () => void;
   openCafeBooking: (target: CafeVenueDetail) => void;
@@ -270,6 +274,10 @@ export function RentalUiProvider({ children }: { children: ReactNode }) {
 
   const closeVenueDetail = useCallback(() => {
     setVenueDetail(null);
+  }, []);
+
+  const closeRentalDetails = useCallback(() => {
+    setVenueDetail((previous) => previous?.kind === "rental" ? null : previous);
   }, []);
 
   const openCafeDetail = useCallback(
@@ -393,6 +401,7 @@ export function RentalUiProvider({ children }: { children: ReactNode }) {
       openVenueDetail,
       setEventVenueStep,
       closeVenueDetail,
+      closeRentalDetails,
       openCafeDetail,
       closeCafeDetail,
       openCafeBooking,
@@ -436,6 +445,7 @@ export function RentalUiProvider({ children }: { children: ReactNode }) {
       openVenueDetail,
       setEventVenueStep,
       closeVenueDetail,
+      closeRentalDetails,
       openCafeDetail,
       closeCafeDetail,
       openCafeBooking,
@@ -459,6 +469,11 @@ export function RentalUiProvider({ children }: { children: ReactNode }) {
   return (
     <RentalUiContext.Provider value={value}>{children}</RentalUiContext.Provider>
   );
+}
+
+/** For a surface that can render without the full rental workspace, such as A2UI. */
+export function useOptionalRentalUi(): RentalUiContextValue | null {
+  return useContext(RentalUiContext);
 }
 
 export function useRentalUi() {

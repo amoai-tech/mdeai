@@ -9,12 +9,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
-const merge = vi.hoisted(() => vi.fn());
+const mapState = vi.hoisted(() => ({
+  merge: vi.fn(),
+  pins: [] as Array<{ id: string; category: string }>,
+}));
 vi.mock("@/platform/maps/map-context", () => ({
-  useMapContext: () => ({ mergePinsByCategory: merge }),
+  useMapContext: () => ({ mergePinsByCategory: mapState.merge, pins: mapState.pins }),
 }));
 
 import { ToolPinsSync } from "@/components/copilot/tool-pins-sync";
+const merge = mapState.merge;
 
 type Category = "rental" | "event" | "restaurant" | "grounded";
 
@@ -42,6 +46,7 @@ const groundedRow = (id: string, latitude?: number, longitude?: number) => ({
 });
 
 beforeEach(() => {
+  mapState.pins = [];
   merge.mockReset();
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -156,5 +161,60 @@ describe("grounded results and the other categories", () => {
     expect(merge).toHaveBeenCalledWith("rental", []);
     expect(merge).toHaveBeenCalledWith("event", []);
     expect(merge).toHaveBeenLastCalledWith("grounded", [expect.objectContaining({ id: "grounded-g1" })]);
+  });
+});
+
+
+describe("SAN-1645 contextual nearby pin retention", () => {
+  const aroundRental = (id = "rental-A") => ({
+    source: "grounding",
+    metadata: { searchMode: "nearby", anchorPinId: id },
+    results: [groundedRow("coffee", 6.24, -75.58)],
+  });
+  it("keeps the existing rental anchor and event pins while adding real café results", () => {
+    mapState.pins = [{ id: "rental-A", category: "rental" }];
+    show("grounded", aroundRental());
+    expect(merge).not.toHaveBeenCalledWith("rental", []);
+    expect(merge).not.toHaveBeenCalledWith("event", []);
+    expect(merge).toHaveBeenLastCalledWith("grounded", [
+      expect.objectContaining({ id: "grounded-coffee" }),
+    ]);
+  });
+
+  it("replaces rental/event for a later independent search even with identical place coordinates", () => {
+    mapState.pins = [{ id: "rental-A", category: "rental" }];
+    show("grounded", aroundRental());
+    merge.mockClear();
+    show("grounded", { source: "grounding", results: [groundedRow("coffee", 6.24, -75.58)] });
+    expect(merge).toHaveBeenCalledWith("rental", []);
+    expect(merge).toHaveBeenCalledWith("event", []);
+  });
+
+  it("does not trust nearby metadata without an existing rental anchor", () => {
+    mapState.pins = [{ id: "rental-A", category: "rental" }];
+    show("grounded", aroundRental("rental-not-on-map"));
+    expect(merge).toHaveBeenCalledWith("rental", []);
+  });
+
+  it("a non-rental pin cannot authorize nearby preservation", () => {
+    mapState.pins = [{ id: "restaurant-X", category: "restaurant" }];
+    show("grounded", aroundRental("restaurant-X"));
+    expect(merge).toHaveBeenCalledWith("rental", []);
+  });
+
+  it("retains a rental anchor when the trusted Nearby result arrives as an AG-UI wrapper", () => {
+    mapState.pins = [{ id: "rental-A", category: "rental" }];
+    show("grounded", [{ type: "tool-result", result: JSON.stringify(aroundRental()) }]);
+    expect(merge).not.toHaveBeenCalledWith("rental", []);
+    expect(merge).toHaveBeenLastCalledWith("grounded", [
+      expect.objectContaining({ id: "grounded-coffee" }),
+    ]);
+  });
+
+  it("a finished zero-result nearby response only clears grounded pins", () => {
+    mapState.pins = [{ id: "rental-A", category: "rental" }];
+    show("grounded", { source: "grounding", metadata: { searchMode: "nearby", anchorPinId: "rental-A" }, results: [] });
+    expect(merge).toHaveBeenCalledTimes(1);
+    expect(merge).toHaveBeenCalledWith("grounded", []);
   });
 });

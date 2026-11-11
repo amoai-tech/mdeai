@@ -1,6 +1,22 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
+import React from "react";
 import { RestaurantCard } from "../restaurant-card";
+
+vi.mock("next/link", () => ({
+  default: ({
+    href,
+    children,
+    ...props
+  }: {
+    href: string;
+    children: React.ReactNode;
+  }) => (
+    <a href={href} {...props}>
+      {children}
+    </a>
+  ),
+}));
 
 describe("RestaurantCard", () => {
   it("renders photo, rating, and price badges for full payload", () => {
@@ -108,9 +124,53 @@ describe("RestaurantCard", () => {
       />,
     );
     expect(html).toContain('data-testid="event-venue-cta"');
-    expect(html).toContain("h-11");
-    expect(html).toContain("min-w-11");
+    // Shared discovery action height token (see --spacing-card-action).
+    expect(html).toContain("h-card-action");
+    expect(html).toContain("min-w-card-action");
     expect(html).toContain('data-testid="restaurant-hosts-events-badge"');
     expect(html).toContain("Hosts Events");
+  });
+
+  it("renders the browse footer contract: Directions, View on map, Ask, Details", () => {
+    const html = renderToStaticMarkup(
+      <RestaurantCard
+        title="Moshi"
+        neighborhood="Medellín"
+        cuisine="seafood"
+        priceTier="$$$$"
+        rating={4.6}
+        mapsUrl="https://maps.google.com/?cid=moshi"
+        pinId="restaurant-moshi"
+        testId="restaurant-card-moshi"
+        composition="nova"
+        onSelect={() => undefined}
+        onAskSelect={() => undefined}
+        detailsHref="/restaurants/moshi"
+        detailsTestId="restaurant-detail-link-moshi"
+      />,
+    );
+    expect(html).toContain('data-testid="restaurant-ask-select"');
+    expect(html).toContain('aria-pressed="false"');
+    expect(html).toContain("Ask about this");
+    expect(html).toContain('data-testid="restaurant-detail-link-moshi"');
+    expect(html).toContain('href="/restaurants/moshi"');
+    expect(html).toContain("Details");
+    expect(html).toMatch(
+      /restaurant-card-directions-link|restaurant-card-maps-link/,
+    );
+    // One footer, one card: no second Details control in browse mode.
+    expect(html).not.toContain('data-testid="restaurant-details-cta"');
+    expect(html.match(/data-testid="restaurant-ask-select"/g)).toHaveLength(1);
+    expect(
+      html.match(/data-testid="restaurant-detail-link-moshi"/g),
+    ).toHaveLength(1);
+  });
+
+  it("renders no browse actions when browse props are absent", () => {
+    const html = renderToStaticMarkup(
+      <RestaurantCard title="Chat Only" pinId="restaurant-chat" testId="restaurant-card" />,
+    );
+    expect(html).not.toContain('data-testid="restaurant-ask-select"');
+    expect(html).not.toMatch(/data-testid="restaurant-detail-link-/);
   });
 });

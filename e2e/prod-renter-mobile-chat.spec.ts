@@ -70,6 +70,25 @@ test.describe("SAN-1626 · signed-in renter concierge on a 390px phone", () => {
   test("asks, gets grounded cards, follows up and survives a reload", async ({ qaRolePage: page }) => {
     test.setTimeout(420_000);
 
+    const rentalApiStatuses: number[] = [];
+    // SAN-1074: distinguish transient rental API failure from an empty UI or
+    // a delayed AG-UI bubble. Only log the fixed path, status and the already
+    // sanitized error code; never request bodies, cookies or user data.
+    page.on("response", (response) => {
+      if (new URL(response.url()).pathname === "/api/rentals/search" &&
+          response.request().method() === "POST") {
+        rentalApiStatuses.push(response.status());
+        console.info("SAN-1074 rental API", JSON.stringify({
+          path: "/api/rentals/search", status: response.status(),
+        }));
+      }
+    });
+    page.on("console", (message) => {
+      if (message.text().startsWith("[rental-fast-path] /api/rentals/search")) {
+        console.info("SAN-1074 rental API error", message.text().slice(0, 220));
+      }
+    });
+
     await gotoConcierge(page);
     const region = page.getByTestId("copilot-chat-region");
     await expect(region).toBeVisible({ timeout: 30_000 });
@@ -83,7 +102,8 @@ test.describe("SAN-1626 · signed-in renter concierge on a 390px phone", () => {
     await sendConciergeMessage(page, RENTAL_QUESTION);
     const cards = page.getByTestId("rental-card");
     await expect(cards.first()).toBeVisible({ timeout: 120_000 });
-    expect(await cards.count()).toBeGreaterThan(0);
+    const groundedCardCount = await cards.count();
+    expect(groundedCardCount).toBeGreaterThan(0);
     const firstReply = await replyTextAfter(page, before);
 
     // 2 — a follow-up runs on the same conversation.
@@ -105,10 +125,36 @@ test.describe("SAN-1626 · signed-in renter concierge on a 390px phone", () => {
       )
       .toBe(expectedReplies.length);
 
+    // SAN-1639: the saved thread is more than answer text. A fresh tab must
+    // retrieve current sourced rentals from the saved search criteria using
+    // the existing authenticated rental API. This was 0 after 25s in production.
+    await expect(cards.first(), "saved rental cards return after a reload").toBeVisible({
+      timeout: 30_000,
+    });
+    const restoredCardCount = await cards.count();
+    expect(restoredCardCount).toBeGreaterThan(0);
+
     // 4 — an anonymous caller is still refused the runtime.
     const guest = await page.context().browser()!.newContext();
     const anon = await guest.request.get(`${new URL(page.url()).origin}/api/copilotkit/info`);
     expect(anon.status()).toBe(401);
     await guest.close();
+
+    // A single successful test is a SAMPLE of an actual signed-in journey,
+    // not the measured production success rate. Emit only non-sensitive
+    // counters so CI can retain a defensible observation per deployed SHA.
+    console.info("SAN-1074 grounded-journey", JSON.stringify({
+      outcome: "passed",
+      viewportWidth: 390,
+      rentalApiStatuses,
+      groundedCardCount,
+      // Snapshot when saved replies have returned; this is not a guarantee that
+      // card restoration will never finish later in the render lifecycle.
+      cardsRestoredAfterReload: restoredCardCount,
+      firstReplyNonempty: firstReply.length > 0,
+      followUpNonempty: secondReply.length > 0,
+      refreshPreservedBoth: true,
+      anonymousRuntimeDenied: true,
+    }));
   });
 });

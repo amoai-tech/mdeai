@@ -85,9 +85,11 @@ test.describe(`${SCREEN_ID} event card polish`, () => {
           page.locator(`[data-testid="map-pin"][data-pin-id="${pinId}"]`).first(),
         ).toBeVisible();
       }
+      // SAN-1638: browse Details opens the in-page panel and must not navigate.
+      const beforeDetails = new URL(page.url()).pathname;
       await card.locator('[data-testid="event-details-cta"]').click();
-      await expect(page.locator('[data-testid="venue-detail-sheet"]')).toBeVisible();
-      await expect(card).toHaveAttribute("data-selected", "true");
+      await expect(page.getByTestId("event-browse-details-panel")).toBeVisible();
+      await expect.poll(() => new URL(page.url()).pathname).toBe(beforeDetails);
 
       assertConsoleClean(errors);
     });

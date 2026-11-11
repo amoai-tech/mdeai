@@ -7,6 +7,8 @@
     "dev": "MDE_DATABASE_URL_GUARD_RUNNING=1 concurrently \"npm run dev:ui\" \"npm run dev:agent\" --names ui,agent --prefix-colors blue,green --kill-others",
     "predev:agent": "node scripts/warn-remote-database-url.mjs",
     "dev:agent": "PORT=4111 mastra dev",
+    "predev:agent:builder": "MASTRA_DEV_LIBSQL=1 node scripts/warn-remote-database-url.mjs",
+    "dev:agent:builder": "PORT=4112 MASTRA_DEV_LIBSQL=1 MDE_MASTRA_AGENT_BUILDER=1 mastra dev --dir src/mastra-studio",
     "predev:ui": "node scripts/warn-remote-database-url.mjs",
     "dev:ui": "next dev --webpack -p 3001",
     "predev:ui:worktree": "node scripts/warn-remote-database-url.mjs",
@@ -53,6 +55,7 @@
     "record:rental-certification-evidence": "node --env-file=.env.local scripts/record-rental-certification-evidence.mjs",
     "verify:inventory-quality": "node --env-file=.env.local scripts/verify-rental-inventory-quality.mjs",
     "check:mastra": "node scripts/check-mastra.mjs && node scripts/check-mastra-schema-contract.mjs --strict",
+    "check:builder:isolation": "node scripts/check-mastra-builder-isolation.mjs",
     "check:mastra:schema": "node scripts/check-mastra-schema-contract.mjs",
     "check:mastra:schema:strict": "node scripts/check-mastra-schema-contract.mjs --strict",
     "check:mastra:schema:init": "node scripts/verify-mastra-schema-init.mjs",
@@ -67,7 +70,7 @@
     "audit:copilotkit-v2": "npm run audit:copilotkit-v2:depcruise",
     "audit:copilotkit-v2:depcruise": "depcruise --config .dependency-cruiser.cjs src && node scripts/audit-copilotkit-v2-no-new-v1.mjs",
     "audit:copilotkit-v2:depcruise:proof": "node scripts/audit-copilotkit-v2-depcruise-proof.mjs",
-    "floor": "npm run audit:floor && npm run check:skills && npm run check:db-url-guard && npm run check:release-gates && npm run audit:copilotkit-v2 && npm run audit:copilotkit-v2:depcruise:proof && npm run lint && npm run typecheck && npm run check:env:ci && npm run build && npm test && npm run check:mastra",
+    "floor": "npm run audit:floor && npm run check:skills && npm run check:db-url-guard && npm run check:release-gates && npm run audit:copilotkit-v2 && npm run audit:copilotkit-v2:depcruise:proof && npm run lint && npm run typecheck && npm run check:env:ci && npm run build && npm run check:builder:isolation && npm test && npm run check:mastra",
     "graphify:update": "bash scripts/graphify-run.sh update . --no-cluster",
     "graphify:query": "bash scripts/graphify-run.sh query",
     "graphify:explain": "bash scripts/graphify-run.sh explain",
@@ -114,10 +117,10 @@
     "push:migration": "npm run preflight:migration && npm run migration:dry-run && node scripts/confirm-migration-push.mjs && npx supabase db push --db-url \"$SUPABASE_DB_URL\"",
     "push:migration:include-all": "npm run preflight:migration && npm run migration:dry-run:include-all && node scripts/confirm-migration-push.mjs && npx supabase db push --include-all --db-url \"$SUPABASE_DB_URL\"",
     "verify:migrations": "node scripts/verify-production-migrations.mjs",
-    "check:release-gates": "node --test scripts/__tests__/*.test.mjs",
+    "check:release-gates": "node --test scripts/__tests__/*.test.mjs scripts/__tests__/*.test.cjs",
     "check:pr-agent-pinned-loader": "node --test scripts/__tests__/pr-agent-pinned-loader.test.mjs",
     "check:docs": "node --test scripts/__tests__/check-docs-regressions.test.mjs && node scripts/check-docs.mjs",
-    "test:e2e:deterministic": "playwright test e2e/deterministic-critical.spec.ts e2e/chat-result-order.spec.ts e2e/chat-workspace-layout.spec.ts e2e/chat-thread-history.spec.ts e2e/maps-layout-mobile.spec.ts e2e/viewing-modal-keyboard.spec.ts e2e/mobile-header.spec.ts e2e/browse-map-close-touch.spec.ts e2e/chat-virtualization.spec.ts e2e/mobile-bottom-nav.spec.ts e2e/san-1524-contests.spec.ts --project=local-chromium --workers=1",
+    "test:e2e:deterministic": "playwright test e2e/deterministic-critical.spec.ts e2e/chat-result-order.spec.ts e2e/chat-workspace-layout.spec.ts e2e/chat-thread-history.spec.ts e2e/maps-layout-mobile.spec.ts e2e/viewing-modal-keyboard.spec.ts e2e/mobile-header.spec.ts e2e/browse-map-close-touch.spec.ts e2e/chat-virtualization.spec.ts e2e/mobile-bottom-nav.spec.ts e2e/san-1524-contests.spec.ts e2e/san-1140-discovery-card-actions.spec.ts --project=local-chromium --workers=1",
     "verify:mobile-nav": "node scripts/verify-mobile-nav.mjs",
     "test:e2e:mobile-composer": "playwright test e2e/screens/MOB-CK-001-mobile-composer.spec.ts --project=local-chromium --workers=1",
     "test:e2e:prod-candidate-certification": "PW_SKIP_WEBSERVER=1 playwright test e2e/prod-candidate-certification.spec.ts --project=prod-smoke --workers=1",
@@ -129,7 +132,10 @@
     "test:local:embedding": "node scripts/check-local-embedding-readiness.mjs",
     "test:local:embedding:journey": "node scripts/test-local-embedding-journey.mjs",
     "test:e2e:chromatic-pilot": "node scripts/run-chromatic-pilot.cjs",
-    "chromatic:pilot": "chromatic --playwright --no-interactive"
+    "chromatic:pilot": "chromatic --playwright --no-interactive",
+    "qa:auth:check": "node --import=tsx scripts/qa-auth-check.ts",
+    "qa:test:admin": "npm run qa:auth:check && MDE_SUPER_ADMIN_QA=1 playwright test e2e/qa-super-admin-fixture.spec.ts --project=chromium --workers=1 --retries=0",
+    "qa:browser": "node --import=tsx scripts/qa-browser.ts"
   },
   "dependencies": {
     "@ag-ui/client": "1.0.2",
@@ -148,6 +154,7 @@
     "@libsql/client": "^0.15.15",
     "@mastra/client-js": "1.58.0",
     "@mastra/core": "1.81.0",
+    "@mastra/editor": "0.17.0",
     "@mastra/libsql": "1.28.0",
     "@mastra/memory": "1.40.0",
     "@mastra/pg": "1.34.0",
@@ -184,11 +191,10 @@
     "zod": "^3.25.0"
   },
   "devDependencies": {
-    "@argos-ci/playwright": "^7.8.0",
     "@chromatic-com/playwright": "^1.0.0",
     "@eslint/eslintrc": "^3.3.5",
     "@next/env": "16.4.2",
-    "@playwright/test": "1.61.0",
+    "@playwright/test": "1.64.1",
     "@tailwindcss/postcss": "^4",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/react": "^16.3.3",
@@ -205,9 +211,10 @@
     "eslint-config-next": "16.4.3",
     "js-tiktoken": "1.0.21",
     "jsdom": "^29.1.1",
-    "playwright": "1.61.0",
+    "playwright": "1.64.1",
     "sharp": "^0.35.5",
     "tailwindcss": "^4",
+    "tsx": "^4.23.15",
     "typescript": "^5",
     "vitest": "^4.1.6",
     "yaml": "2.9.1"
@@ -222,7 +229,10 @@
     "dompurify": "3.4.17",
     "undici": "7.30.1",
     "@ai-sdk/provider-utils@>=4.0.0-beta.10 <4.0.33": "4.0.33",
-    "@ai-sdk/provider-utils@>=3.0.0 <3.0.28": "3.0.28"
+    "@ai-sdk/provider-utils@>=3.0.0 <3.0.28": "3.0.28",
+    "@copilotkit/runtime": {
+      "openai": "4.104.0"
+    }
   },
   "engines": {
     "node": "24.x"

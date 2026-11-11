@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { zodToJsonSchema } from "@mastra/schema-compat/zod-to-json";
 import { createThreadMemory } from "../../lib/agent-memory";
+import { MDEAI_ROUTE_PLAN_KEY } from "../../lib/route-tool-choice";
 import {
   conciergeAgent,
   conciergeMemoryInput,
@@ -11,6 +12,51 @@ import {
 describe("conciergeAgent", () => {
   it('has id "concierge-agent"', () => {
     expect(conciergeAgent.id).toBe("concierge-agent");
+  });
+
+  it("wires real route questions to the registered Google route tool", async () => {
+    const tools = await conciergeAgent.listTools();
+    expect(tools.computeRouteTool?.id).toBe("compute-route");
+    const configured = await conciergeAgent.listConfiguredInputProcessors();
+    const routeChoice = configured.find((processor) => processor.id === "san465-route-tool-choice") as
+      | { processInputStep: (input: {
+          stepNumber: number;
+          messages: unknown[];
+          steps: unknown[];
+          requestContext?: { get: (key: string) => unknown; set: (key: string, value: unknown) => void };
+        }) => unknown }
+      | undefined;
+    expect(routeChoice).toBeDefined();
+    const user = (text: string) => ({ role: "user", content: { parts: [{ type: "text", text }] } });
+    const store = new Map<string, unknown>();
+    const requestContext = {
+      get: (key: string) => store.get(key),
+      set: (key: string, value: unknown) => store.set(key, value),
+    };
+    expect(await routeChoice!.processInputStep({
+      stepNumber: 0,
+      messages: [user("Walk from Parque Lleras to Provenza")],
+      steps: [],
+      requestContext,
+    })).toEqual({ toolChoice: { type: "tool", toolName: "computeRouteTool" } });
+    expect(store.get(MDEAI_ROUTE_PLAN_KEY)).toEqual({
+      origin: "Parque Lleras",
+      destination: "Provenza",
+      travelMode: "WALK",
+    });
+    // Without a context the plan cannot reach the tool, so it must not force a
+    // call that would fall back to unverified model waypoints.
+    expect(await routeChoice!.processInputStep({
+      stepNumber: 0,
+      messages: [user("Walk from Parque Lleras to Provenza")],
+      steps: [],
+    })).toEqual({});
+    expect(await routeChoice!.processInputStep({
+      stepNumber: 0,
+      messages: [user("Find apartments within walking distance of the Metro")],
+      steps: [],
+      requestContext,
+    })).toEqual({});
   });
 
   it("registers all search tools including grounding and web events", async () => {
@@ -95,6 +141,8 @@ describe("conciergeAgent", () => {
     expect(instructions).toContain("For a new search, do NOT list cafés or venues by name");
     expect(instructions).toContain("name at most 2 places from lastGroundedResults");
     expect(instructions).toContain("Never invent amenities");
+    expect(instructions).toContain("distanceMeters");
+    expect(instructions).toContain("estimate metres");
     expect(instructions).toContain("View on Google Maps");
   });
 
@@ -108,10 +156,43 @@ describe("conciergeAgent", () => {
           area: "Laureles",
           summary: "Coworking café with reliable Wi-Fi.",
           rating: 4.7,
+          distanceMeters: 636,
+          distanceFromRentalId: "37a05b09-f560-4776-92fd-b8bb2b92e611",
         },
       ],
     });
     expect(parsed.lastGroundedResults?.[0]?.title).toBe("Semilla Café Coworking");
+    expect(parsed.lastGroundedResults?.[0]?.distanceMeters).toBe(636);
+    expect(parsed.lastGroundedResults?.[0]?.distanceFromRentalId).toBe(
+      "37a05b09-f560-4776-92fd-b8bb2b92e611",
+    );
+  });
+
+  it("does not discard supported, structured café amenities in working memory", () => {
+    const parsed = conciergeWorkingMemorySchema.parse({
+      lastGroundedResults: [{ id: "cafe-1", title: "Café One", wifi: false,
+        powerOutlets: true, seating: "several tables" }],
+    });
+    expect(parsed.lastGroundedResults?.[0]).toMatchObject({
+      wifi: false, powerOutlets: true, seating: "several tables",
+    });
+  });
+
+  it("every grounded follow-up rule allows distance only for the current anchor", async () => {
+    const raw = await conciergeAgent.getInstructions();
+    const instructions = Array.isArray(raw)
+      ? raw.join("\n")
+      : typeof raw === "string"
+        ? raw
+        : String((raw as { content?: unknown }).content ?? "");
+    const restricted = instructions
+      .split("\n")
+      .filter((line) => line.includes("summary/area/rating"));
+    expect(restricted.length).toBeGreaterThan(0);
+    for (const line of restricted) {
+      expect(line).toContain("distanceFromRentalId");
+      expect(line).toContain("selectedListingId");
+    }
   });
 
   it("instructions tell agent to pass search-grounded-places intent for nightlife and cafés", async () => {
@@ -249,6 +330,16 @@ describe("concierge updateWorkingMemory tolerates provider padding", () => {
     expect(out.error).toBeUndefined();
     expect(saved?.lastRentalQuery).toMatchObject({ neighborhood: "Laureles", minBedrooms: 2, budgetType: "monthly" });
     expect((saved?.lastRentalQuery as { maxPriceMonthly?: number }).maxPriceMonthly).toBeUndefined();
+  });
+
+  it("drops a model-stored monthly cap without currency but keeps other rental filters", async () => {
+    const { out, saved } = await update({
+      lastIntent: "rental_search",
+      lastRentalQuery: { neighborhood: "Laureles", minBedrooms: 2, budgetType: "monthly", maxPriceMonthly: 2_000 },
+    });
+    expect(out.error).toBeUndefined();
+    expect(saved?.lastRentalQuery).toMatchObject({ neighborhood: "Laureles", minBedrooms: 2 });
+    expect((saved?.lastRentalQuery as { maxPriceMonthly?: number })?.maxPriceMonthly).toBeUndefined();
   });
 
   it("keeps only source-identifiable grounded rows when the model omits a title", async () => {
@@ -489,5 +580,22 @@ describe("concierge updateWorkingMemory tolerates provider padding", () => {
 
   it("the strict canonical schema still rejects blanks (tolerance is at the tool boundary only)", () => {
     expect(conciergeWorkingMemorySchema.safeParse({ lastRentalQuery: { budgetType: "" } }).success).toBe(false);
+  });
+});
+
+describe("answers never narrate the work", () => {
+  it("forbids announcing tool use or describing the user", async () => {
+    // The live chat renders whatever the model writes as its answer, and Gemini emits a preamble
+    // as ordinary text — there is no protocol-level reasoning field to hide. A broker watching the
+    // answer therefore read "I need to check the broker's workspace…" above the real result, so the
+    // rule is enforced where the text is generated.
+    const instructions = String(await conciergeAgent.getInstructions());
+    expect(instructions).toContain("Never say what you are about to do");
+    expect(instructions).toContain("Call the tool silently and reply with the result only");
+    expect(instructions).toContain("Never describe the user or reason about who they are");
+    expect(instructions).toContain("A reply that needs a tool is the tool result");
+    // The ban must not silence the disclosures other rules require.
+    expect(instructions).toContain("still state the source, verification status, tool errors");
+    expect(instructions).toContain("subject to the clarification rules below");
   });
 });

@@ -8,13 +8,18 @@ import React, { useEffect } from "react";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
+const coagent = vi.hoisted(() => ({ state: {} as Record<string, unknown> }));
 vi.mock("@/components/chat/concierge-coagent-context", () => ({
-  useConciergeCoAgent: () => ({ agent: undefined, state: {}, setState: vi.fn() }),
+  useConciergeCoAgent: () => ({ agent: undefined, state: coagent.state, setState: vi.fn() }),
 }));
-const map = vi.hoisted(() => ({ merges: [] as Array<[string, unknown[]]> }));
+const map = vi.hoisted(() => ({ merges: [] as Array<[string, unknown[]]>, throwRentalMergeOnce: false }));
 vi.mock("@/platform/maps/map-context", () => ({
   useMapContext: () => ({
     mergePinsByCategory: (category: string, pins: unknown[]) => {
+      if (category === "rental" && map.throwRentalMergeOnce) {
+        map.throwRentalMergeOnce = false;
+        throw new Error("simulated results display failure");
+      }
       map.merges.push([category, pins]);
     },
     requestFitBounds: vi.fn(),
@@ -37,6 +42,11 @@ type Probe = {
   messages: () => Array<{ role: string; content: string }>;
   clarifyPending: () => boolean;
   hasResult: () => boolean;
+  failure: () => { code: string; retryable: boolean } | null;
+  previousQuery: () => string | undefined;
+  hasListing: (id: string) => boolean;
+  reset: () => void;
+  restoreSearch: (params: { neighborhood?: string; maxPriceMonthly?: number; budgetCurrency?: "COP" | "USD"; stayType?: "monthly" }) => void;
 };
 let probe: Probe;
 /** Messages the hook gave back to the sender (the real chat sends these to the concierge). */
@@ -60,6 +70,11 @@ function Harness() {
       messages: () => local.messages as Array<{ role: string; content: string }>,
       clarifyPending: () => local.clarifyPending,
       hasResult: () => rental.toolResult != null,
+      failure: () => rental.searchFailure,
+      previousQuery: () => rental.searchMeta?.userText,
+      hasListing: (id) => JSON.stringify(rental.toolResult).includes(id),
+      reset: () => rental.clearToolResults(),
+      restoreSearch: (params) => rental.setSearchMeta({ userText: "Saved rental search", params }),
     };
   });
   return null;
@@ -81,7 +96,9 @@ function respond(status: number, body: unknown) {
 }
 
 beforeEach(() => {
+  coagent.state = {};
   map.merges.length = 0;
+  map.throwRentalMergeOnce = false;
   unhandled.length = 0;
   handoffThrows = false;
   fetchMock.mockReset();
@@ -144,6 +161,81 @@ describe("SAN-407 · rental chat searches before it asks", () => {
     expect(assistantText()).not.toMatch(/what dates, budget/i);
   });
 
+  it("keeps a guest COP budget refinement on the real fast-path instead of handing it to sign-in", async () => {
+    respond(200, { results: [] });
+    expect(await send("Only show apartments under COP 3 million per month")).toBe(true);
+    expect(await send("Now only under COP 2.5 million per month")).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(unhandled).toEqual([]);
+    const next = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body));
+    expect(next.maxPriceMonthly).toBe(2_500_000);
+    expect(next.budgetCurrency).toBe("COP");
+    expect(next.maxPricePerNight).toBeUndefined();
+    // The second budget narrows the first search's actual candidate set,
+    // rather than rediscovering unrelated apartments through new query text.
+    expect(next.queryText).toBe("Only show apartments under COP 3 million per month");
+  });
+
+  it("never reuses stale visible Laureles query text after the signed-in AI moved to Envigado", async () => {
+    respond(200, { results: [] });
+    const previousText = "Show apartments in Laureles under COP 3 million per month";
+    expect(await send(previousText)).toBe(true);
+    // The AI can update its rental working memory without updating the older
+    // fast-path searchMeta. Keep that newer context instead of stale UI text.
+    coagent.state = { lastIntent: "rental_search", lastRentalQuery: {
+      neighborhood: "Envigado", maxPriceMonthly: 3_000_000,
+      budgetCurrency: "COP", budgetType: "monthly",
+    } };
+    await act(async () => {
+      root.render(
+        <EventLocalChatProvider><EventSearchResultsProvider><RentalFastPathProvider>
+          <EventFastPathProvider><GroundedFastPathProvider><RestaurantFastPathProvider>
+            <Harness />
+          </RestaurantFastPathProvider></GroundedFastPathProvider></EventFastPathProvider>
+        </RentalFastPathProvider></EventSearchResultsProvider></EventLocalChatProvider>,
+      );
+    });
+    expect(await send("Now only under COP 2.5 million per month")).toBe(true);
+    const next = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body));
+    expect(next.neighborhood).toBe("Envigado");
+    expect(next.maxPriceMonthly).toBe(2_500_000);
+    expect(next.budgetCurrency).toBe("COP");
+    expect(next.queryText).not.toBe(previousText);
+  });
+
+  it("a budget currency switch starts a new semantic search, never reuses COP query text", async () => {
+    respond(200, { results: [] });
+    expect(await send("Only show apartments under COP 3 million per month")).toBe(true);
+    expect(await send("Now only under USD 2000 per month")).toBe(true);
+    const next = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body));
+    expect(next.budgetCurrency).toBe("USD");
+    expect(next.maxPriceMonthly).toBe(2_000);
+    expect(next.queryText).not.toBe("Only show apartments under COP 3 million per month");
+  });
+
+  it("a new chat cannot reuse the previous guest rental budget", async () => {
+    respond(200, { results: [] });
+    expect(await send("Only show apartments under COP 3 million per month")).toBe(true);
+    await act(async () => { probe.reset(); });
+    expect(await send("Now only under COP 2.5 million per month")).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("a saved-chat switch uses the visible saved budget, not the old guest thread's filters", async () => {
+    respond(200, { results: [] });
+    expect(await send("Show apartments in Laureles under COP 3 million per month")).toBe(true);
+    await act(async () => {
+      probe.reset();
+      probe.restoreSearch({ neighborhood: "Envigado", maxPriceMonthly: 2_700_000, budgetCurrency: "COP", stayType: "monthly" });
+    });
+    expect(await send("Now only under COP 2.5 million per month")).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const next = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body));
+    expect(next.neighborhood).toBe("Envigado");
+    expect(next.maxPriceMonthly).toBe(2_500_000);
+    expect(next.budgetCurrency).toBe("COP");
+  });
+
   it("a true empty marketplace is an honest answer with zero pins", async () => {
     respond(200, { results: [] });
     await send("Show me apartments in Medellín");
@@ -163,6 +255,59 @@ describe("SAN-407 · rental chat searches before it asks", () => {
     expect(assistantText()).toMatch(/temporarily unavailable|try again/i);
     expect(assistantText()).not.toMatch(/no rentals (are available|match)/i);
     expect(probe.hasResult()).toBe(false);
+  });
+
+  it("a display error after HTTP 200 keeps prior real cards, metadata and memory", async () => {
+    const previous = {
+      id: "previous_card_101", title: "Earlier apartment", neighborhood: "Laureles",
+      nightly_price: 55, currency: "USD", bedrooms: 1,
+      latitude: 6.2515, longitude: -75.5922,
+    };
+    const replacement = { ...previous, id: "new_card_202", title: "Replacement apartment" };
+    respond(200, { results: [previous] });
+    const firstQuestion = "Search apartments Medellín";
+    expect(await send(firstQuestion)).toBe(true);
+    expect(probe.previousQuery()).toBe(firstQuestion);
+    expect(probe.hasListing(previous.id)).toBe(true);
+
+    respond(200, { results: [replacement] });
+    map.throwRentalMergeOnce = true;
+    expect(await send("Only apartments in Laureles")).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(probe.failure()).toEqual({ status: null, code: "result_processing_error", retryable: false });
+    expect(probe.previousQuery()).toBe(firstQuestion);
+    expect(probe.hasListing(previous.id)).toBe(true);
+    expect(probe.hasListing(replacement.id)).toBe(false);
+    expect(assistantText()).toMatch(/new rental results could not be displayed/i);
+    expect(assistantText()).not.toMatch(/rental search is temporarily unavailable/i);
+    expect(unhandled).toEqual([]);
+  });
+
+  it("keeps the previous chat exchange when the next rental search fails", async () => {
+    respond(200, { results: [{
+      id: "prior_rental_001", title: "Sourced Laureles apartment",
+      neighborhood: "Laureles", bedrooms: 2,
+      nightly_price: 75, currency: "USD", latitude: 6.251, longitude: -75.59,
+    }] });
+    const initialQuestion = "Search apartments Medellín";
+    expect(await send(initialQuestion)).toBe(true);
+    expect(probe.messages()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ role: "user", content: initialQuestion }),
+    ]));
+    expect(probe.hasListing("prior_rental_001")).toBe(true);
+    const firstAnswer = probe.messages().find((m) => m.role === "assistant")?.content;
+    expect(firstAnswer?.trim().length).toBeGreaterThan(0);
+
+    respond(503, { error: "rental_search_unavailable" });
+    expect(await send("Only apartments in Laureles")).toBe(true);
+    // The failure should not erase the preceding user question/assistant answer.
+    expect(probe.messages()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ role: "user", content: initialQuestion }),
+      expect.objectContaining({ role: "assistant", content: firstAnswer }),
+      expect.objectContaining({ role: "user", content: "Only apartments in Laureles" }),
+    ]));
+    expect(probe.messages().filter((m) => m.role === "assistant")).toHaveLength(2);
+    expect(probe.hasListing("prior_rental_001")).toBe(true);
   });
 
   it("a network failure is also 'unavailable', not a silent drop", async () => {

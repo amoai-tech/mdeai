@@ -29,7 +29,7 @@ const baseEvent: PublicEventDetail = {
   venue: null,
   tickets: [],
 };
-const tier = { id: "t-1", name: "General", priceCents: 4000000, currency: "COP", qtyTotal: 50, qtySold: 0, position: 1 };
+const tier = { id: "t-1", name: "General", priceCents: 4000000, currency: "COP", qtyTotal: 50, qtySold: 0, qtyPending: 0, minPerOrder: 1, maxPerOrder: 10, saleStartsAt: null, saleEndsAt: null, position: 1 };
 
 describe("EventDetailView ticket truth", () => {
   it("does not claim sold out when an event has no ticket tiers", () => {
@@ -44,5 +44,25 @@ describe("EventDetailView ticket truth", () => {
     const sold = renderToStaticMarkup(<EventDetailView event={{...baseEvent,tickets:[{...tier,qtySold:50}]}} />);
     expect(sold).toContain("Sold out");
     expect(sold).not.toContain("Price TBD");
+    const notOnSale = renderToStaticMarkup(<EventDetailView event={{...baseEvent,tickets:[{...tier,saleStartsAt:"2099-01-01T00:00:00Z"}]}} />);
+    expect(notOnSale).toContain("Not on sale");
+    expect(notOnSale).toContain("Not on sale yet");
+    expect(notOnSale).not.toContain("Price TBD");
+    expect(notOnSale).not.toContain("Sold out");
+    const unavailable = renderToStaticMarkup(<EventDetailView event={{...baseEvent,tickets:[{...tier,qtyTotal:1,minPerOrder:2}]}} />);
+    expect(unavailable).toContain("Unavailable");
+    expect(unavailable).not.toContain("Sold out");
+    const mixed = renderToStaticMarkup(<EventDetailView event={{...baseEvent,tickets:[
+      {...tier, id: "free", name: "RSVP", priceCents: 0},
+      {...tier, id: "paid", name: "GA", priceCents: 4_000_000},
+    ]}} />);
+    expect(mixed).toContain("Free entry · paid tiers from $40,000 COP");
+    expect(mixed).not.toBe("Free entry");
+  });
+
+  it("uses the exact header state and hides the mobile buy bar for a closed sale", () => {
+    const html = renderToStaticMarkup(<EventDetailView event={{...baseEvent,tickets:[{...tier,saleStartsAt:"2099-01-01T00:00:00Z"}]}} />);
+    expect(html).toMatch(/data-testid="event-ticket-headline"[^>]*>Not on sale<\/p>/);
+    expect(html).not.toContain('data-testid="event-detail-mobile-buy-bar"');
   });
 });

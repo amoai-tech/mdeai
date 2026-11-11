@@ -1,0 +1,20 @@
+
+Running 13 tests using 1 worker
+
+(node:2350812) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   1 [chromium] › e2e/san-1140-discovery-card-actions.spec.ts:117:9 › SAN-1140 /restaurants card actions › every card owns its Ask action and nothing sits below the card (3.4s)
+  ✓   2 [chromium] › e2e/san-1140-discovery-card-actions.spec.ts:127:9 › SAN-1140 /restaurants card actions › keeps actions inside the card at 320/390/768/1440 and at 200% zoom (7.7s)
+  ✓   3 [chromium] › e2e/san-1140-discovery-card-actions.spec.ts:151:9 › SAN-1140 /restaurants card actions › Ask toggles from a real click and never sends an AI turn (2.7s)
+  ✓   4 [chromium] › e2e/san-1140-discovery-card-actions.spec.ts:202:9 › SAN-1140 /restaurants card actions › Ask is reachable and operable from the keyboard with visible focus (2.5s)
+  ✓   5 [chromium] › e2e/san-1140-discovery-card-actions.spec.ts:243:11 › SAN-1140 /restaurants card actions › /restaurants View details is one real link inside the card and opens the record (4.2s)
+  ✓   6 [chromium] › e2e/san-1140-discovery-card-actions.spec.ts:117:9 › SAN-1140 /cafes card actions › every card owns its Ask action and nothing sits below the card (2.7s)
+  ✓   7 [chromium] › e2e/san-1140-discovery-card-actions.spec.ts:127:9 › SAN-1140 /cafes card actions › keeps actions inside the card at 320/390/768/1440 and at 200% zoom (6.7s)
+  ✓   8 [chromium] › e2e/san-1140-discovery-card-actions.spec.ts:151:9 › SAN-1140 /cafes card actions › Ask toggles from a real click and never sends an AI turn (2.5s)
+  ✓   9 [chromium] › e2e/san-1140-discovery-card-actions.spec.ts:202:9 › SAN-1140 /cafes card actions › Ask is reachable and operable from the keyboard with visible focus (2.3s)
+  ✓  10 [chromium] › e2e/san-1140-discovery-card-actions.spec.ts:117:9 › SAN-1140 /nightlife card actions › every card owns its Ask action and nothing sits below the card (2.0s)
+  ✓  11 [chromium] › e2e/san-1140-discovery-card-actions.spec.ts:127:9 › SAN-1140 /nightlife card actions › keeps actions inside the card at 320/390/768/1440 and at 200% zoom (7.3s)
+  ✓  12 [chromium] › e2e/san-1140-discovery-card-actions.spec.ts:151:9 › SAN-1140 /nightlife card actions › Ask toggles from a real click and never sends an AI turn (2.0s)
+  ✓  13 [chromium] › e2e/san-1140-discovery-card-actions.spec.ts:202:9 › SAN-1140 /nightlife card actions › Ask is reachable and operable from the keyboard with visible focus (2.3s)
+
+  13 passed (49.0s)

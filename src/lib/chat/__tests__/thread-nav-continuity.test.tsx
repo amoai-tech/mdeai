@@ -105,6 +105,28 @@ describe("SAN-1413 · per-tab thread ownership", () => {
     expect(saved().activeThreadId).toBeUndefined();
   });
 
+  it("selecting the chat that is already active records no extra history step (SAN-1639)", async () => {
+    await show();
+    const A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    await change(() => nav.setActiveThreadId(A));
+    const stateAfterFirst = window.history.state;
+    const lengthAfterFirst = window.history.length;
+    expect(nav.activeThreadId).toBe(A);
+
+    // A re-click on the open conversation is not a navigation. It must not add a
+    // Back/Forward step that appears to do nothing, and must not restart restore.
+    await change(() => nav.setActiveThreadId(A));
+    expect(window.history.state).toEqual(stateAfterFirst);
+    expect(window.history.length).toBe(lengthAfterFirst);
+    expect(nav.activeThreadId).toBe(A);
+
+    // A genuinely different conversation still records its own step.
+    const B = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+    await change(() => nav.setActiveThreadId(B));
+    expect(nav.activeThreadId).toBe(B);
+    expect(window.history.state).not.toEqual(stateAfterFirst);
+  });
+
   it("keeps saved selection after refresh, and Back/Forward restores A and B", async () => {
     await show();
     const A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";

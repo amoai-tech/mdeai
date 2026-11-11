@@ -1,4 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("@/app/trips/actions", () => ({
+  listTripOptions: vi.fn(async () => ({ ok: true, trips: [] })),
+  addTripItem: vi.fn(async () => ({ ok: false, error: "not configured in this test" })),
+}));
 import { renderToStaticMarkup } from "react-dom/server";
 import type { MapPin } from "@/platform/contracts";
 import { SelectedPlaceOverlayCard } from "../SelectedPlaceOverlayCard";
@@ -56,10 +61,10 @@ describe("SelectedPlaceOverlayCard", () => {
     }
   });
 
-  it("hides the unsupported Save and Add to trip buttons for events only", () => {
+  it("keeps Save as a placeholder but exposes Add to trip for supported pins", () => {
     const eventHtml = renderToStaticMarkup(<SelectedPlaceOverlayCard pin={{ ...groundedPin, id: "event-2", category: "event", meta: {} }} />);
     expect(eventHtml).not.toContain("selected-place-overlay-save");
-    expect(eventHtml).not.toContain("selected-place-overlay-add-trip");
+    expect(eventHtml).toContain("selected-place-overlay-add-trip");
     const groundedHtml = renderToStaticMarkup(<SelectedPlaceOverlayCard pin={groundedPin} />);
     expect(groundedHtml).toContain("selected-place-overlay-save");
     expect(groundedHtml).toContain("selected-place-overlay-add-trip");

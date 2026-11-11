@@ -1,93 +1,141 @@
 {
   "skill_name": "copilotkit",
-  "version": "1.1.0",
+  "version": "1.5.0",
   "evals": [
     {
-      "id": 1,
+      "id": 1, "should_trigger": true,
       "prompt": "The /api/copilotkit stream is returning 500 after a runtime change. Diagnose the CopilotKit side without rewriting Mastra tools.",
-      "expected_output": "Routes to CopilotKit plus systematic debugging; verifies installed v2/runtime wiring and current official sources before proposing a change.",
+      "expected_output": "Content review criteria: Uses CopilotKit for the browser/runtime boundary; Verifies installed/current source rather than answering volatile API details from memory; Does not rewrite Mastra tool business logic.",
       "files": [],
-      "expectations": [
-        "Uses CopilotKit for the browser/runtime boundary",
-        "Verifies installed/current source rather than answering volatile API details from memory",
-        "Does not rewrite Mastra tool business logic"
-      ]
+      "expectations": [{"id":"catalog","kind":"deterministic","check":"catalog_contains","value":"copilotkit"},{"id":"skill-called","kind":"deterministic","check":"skill_called","value":"copilotkit"},{"id":"instructions-loaded","kind":"deterministic","check":"skill_result_ok","value":"copilotkit"},{"id":"turn-completed","kind":"deterministic","check":"turn_completed"}]
     },
     {
-      "id": 2,
+      "id": 2, "should_trigger": true,
       "prompt": "A Mastra search tool executes successfully but the CopilotKit v2 card never renders. What should we verify?",
-      "expected_output": "Checks frontend action/tool registration against the Mastra tool-map key, AG-UI result flow, and rendered browser path.",
+      "expected_output": "Content review criteria: Checks the CopilotKit action/tool-name contract; Checks AG-UI/tool result handling; Requires browser-visible proof, not only a tool unit test.",
       "files": [],
-      "expectations": [
-        "Checks the CopilotKit action/tool-name contract",
-        "Checks AG-UI/tool result handling",
-        "Requires browser-visible proof, not only a tool unit test"
-      ]
+      "expectations": [{"id":"catalog","kind":"deterministic","check":"catalog_contains","value":"copilotkit"},{"id":"skill-called","kind":"deterministic","check":"skill_called","value":"copilotkit"},{"id":"instructions-loaded","kind":"deterministic","check":"skill_result_ok","value":"copilotkit"},{"id":"turn-completed","kind":"deterministic","check":"turn_completed"}]
     },
     {
-      "id": 3,
+      "id": 3, "should_trigger": false,
       "prompt": "The event host publishing rule needs to change from draft-only to draft-or-reviewed.",
-      "expected_output": "Does not select CopilotKit as the owner because this is a product-domain rule with no CopilotKit dependency.",
+      "expected_output": "Content review criteria: Does not treat CopilotKit as the primary owner; Routes to the relevant product/domain workflow instead.",
       "files": [],
-      "expectations": [
-        "Does not treat CopilotKit as the primary owner",
-        "Routes to the relevant product/domain workflow instead"
-      ]
+      "expectations": [{"id":"catalog","kind":"deterministic","check":"catalog_contains","value":"copilotkit"},{"id":"not-copilotkit","kind":"deterministic","check":"skill_not_called","value":"copilotkit"},{"id":"turn-completed","kind":"deterministic","check":"turn_completed"}]
     },
     {
-      "id": 4,
+      "id": 4, "should_trigger": true,
       "prompt": "Can we copy a CopilotKit main-branch example into our app? We are on the pinned @copilotkit/react-core.",
-      "expected_output": "Checks installed package/version and pinned/current official source first; preserves v2 import/runtime contract and refuses blind latest-main copying.",
+      "expected_output": "Content review criteria: Checks installed version before using examples; Does not blindly substitute latest-main API behavior; Preserves the v2 surface when applicable.",
       "files": [],
-      "expectations": [
-        "Checks installed version before using examples",
-        "Does not blindly substitute latest-main API behavior",
-        "Preserves the v2 surface when applicable"
-      ]
+      "expectations": [{"id":"catalog","kind":"deterministic","check":"catalog_contains","value":"copilotkit"},{"id":"skill-called","kind":"deterministic","check":"skill_called","value":"copilotkit"},{"id":"instructions-loaded","kind":"deterministic","check":"skill_result_ok","value":"copilotkit"},{"id":"turn-completed","kind":"deterministic","check":"turn_completed"}]
     },
     {
-      "id": 5,
+      "id": 5, "should_trigger": true,
       "prompt": "CopilotKit verify says MDE has no hosted project/API key. Diagnose our self-hosted /api/copilotkit runtime safely without signing into Intelligence or making an unrequested live model call.",
-      "expected_output": "Runs OSS wiring-only verify with --expect-runtime oss and --agent id; adds --runtime-url/auth headers if needed. Makes --round-trip an explicitly authorized QA step because it consumes model credits and creates a thread; no default production round-trip.",
+      "expected_output": "Content review criteria: Uses --expect-runtime oss with an explicit agent id for a wiring-only check; Uses --round-trip only as an opt-in live QA test and explains cost/thread persistence; Does not connect hosted Intelligence or claim wiring checks prove full user journeys.",
       "files": [],
-      "expectations": [
-        "Uses --expect-runtime oss with an explicit agent id for a wiring-only check",
-        "Uses --round-trip only as an opt-in live QA test and explains cost/thread persistence",
-        "Does not connect hosted Intelligence or claim wiring checks prove full user journeys"
-      ]
+      "expectations": [{"id":"catalog","kind":"deterministic","check":"catalog_contains","value":"copilotkit"},{"id":"skill-called","kind":"deterministic","check":"skill_called","value":"copilotkit"},{"id":"instructions-loaded","kind":"deterministic","check":"skill_result_ok","value":"copilotkit"},{"id":"turn-completed","kind":"deterministic","check":"turn_completed"}]
     },
     {
-      "id": 6,
+      "id": 6, "should_trigger": true,
       "prompt": "We may add an MDE Slack agent later. Where should CopilotKit guidance come from, and should we put the Channel host inside our Vercel Next.js route now?",
-      "expected_output": "Routes through the canonical MDE CopilotKit skill to the vendored Channels references, explains that vendoring guidance does not enable Channels, and rejects a serverless request route as the long-running Channel host.",
+      "expected_output": "Content review criteria: Keeps copilotkit as the single MDE skill owner; Uses the vendored Channels references; Does not enable or host managed Channels inside the existing serverless request route.",
       "files": [],
-      "expectations": [
-        "Keeps copilotkit as the single MDE skill owner",
-        "Uses the vendored Channels references",
-        "Does not enable or host managed Channels inside the existing serverless request route"
-      ]
+      "expectations": [{"id":"catalog","kind":"deterministic","check":"catalog_contains","value":"copilotkit"},{"id":"skill-called","kind":"deterministic","check":"skill_called","value":"copilotkit"},{"id":"instructions-loaded","kind":"deterministic","check":"skill_result_ok","value":"copilotkit"},{"id":"turn-completed","kind":"deterministic","check":"turn_completed"}]
     },
     {
-      "id": 7,
+      "id": 7, "should_trigger": true,
       "prompt": "During prelaunch development a renter requests a viewing for a test apartment that has no landlord verification or partner approval. Should we add a useHumanInTheLoop approval requirement before allowing the viewing?",
-      "expected_output": "No Phase A business-approval gate. HITL can support user confirmation on consequential actions, but it must not require property eligibility, landlord approval, verification, or paperwork; retain authenticated backend authority and durable writes.",
+      "expected_output": "Content review criteria: Rejects landlord/partner/eligibility paperwork as a Phase A prerequisite; Distinguishes user confirmation from business approval and from server authorization; Preserves auth, isolation and atomic/idempotent backend writes.",
       "files": [],
-      "expectations": [
-        "Rejects landlord/partner/eligibility paperwork as a Phase A prerequisite",
-        "Distinguishes user confirmation from business approval and from server authorization",
-        "Preserves auth, isolation and atomic/idempotent backend writes"
-      ]
+      "expectations": [{"id":"catalog","kind":"deterministic","check":"catalog_contains","value":"copilotkit"},{"id":"skill-called","kind":"deterministic","check":"skill_called","value":"copilotkit"},{"id":"instructions-loaded","kind":"deterministic","check":"skill_result_ok","value":"copilotkit"},{"id":"turn-completed","kind":"deterministic","check":"turn_completed"}]
     },
     {
-      "id": 8,
+      "id": 8, "should_trigger": true,
       "prompt": "I am checking our self-hosted CopilotKit runtime and want to run npx copilotkit verify on production as the first check. What exact flags are safe, and does --round-trip call the AI or save anything?",
-      "expected_output": "Uses --expect-runtime oss and an agent ID for wiring-only validation first; avoids --round-trip by default; explains that --round-trip sends a live model request, consumes credits and creates a thread, and should only run in an authorized QA environment with known runtime URL and credentials.",
+      "expected_output": "Content review criteria: Starts with a non-round-trip OSS wiring check using --expect-runtime oss and --agent; States --round-trip sends a real request that incurs model cost and creates a thread; Uses explicit authorized QA target and avoids default live production mutation.",
       "files": [],
-      "expectations": [
-        "Starts with a non-round-trip OSS wiring check using --expect-runtime oss and --agent",
-        "States --round-trip sends a real request that incurs model cost and creates a thread",
-        "Uses explicit authorized QA target and avoids default live production mutation"
-      ]
-    }
+      "expectations": [{"id":"catalog","kind":"deterministic","check":"catalog_contains","value":"copilotkit"},{"id":"skill-called","kind":"deterministic","check":"skill_called","value":"copilotkit"},{"id":"instructions-loaded","kind":"deterministic","check":"skill_result_ok","value":"copilotkit"},{"id":"turn-completed","kind":"deterministic","check":"turn_completed"}]
+    },
+    {
+      "id": 9, "should_trigger": true,
+      "prompt": "We upgraded MDE from CopilotKit 1.75 to 1.84.1. The SAN-1630 A2UI catalog does not show in /chat even though TypeScript compiles. How should we proceed?",
+      "expected_output": "Content review criteria: Treats v1.75.0 references as historical and uses the current installed package; Demands an actual render_ui round trip through Mastra before claiming native A2UI works; Keeps existing tool renderer, runtime and route-specific providers.; First verifies that the existing provider carries mdeUI and exposes render_ui in the actual run; only adds an inert QA component within that catalog if isolation requires it, never blaming Mastra based on a catalog-free run.",
+      "files": [],
+      "expectations": [{"id":"catalog","kind":"deterministic","check":"catalog_contains","value":"copilotkit"},{"id":"skill-called","kind":"deterministic","check":"skill_called","value":"copilotkit"},{"id":"instructions-loaded","kind":"deterministic","check":"skill_result_ok","value":"copilotkit"},{"id":"turn-completed","kind":"deterministic","check":"turn_completed"}]
+    },
+    {
+      "id": 10, "should_trigger": true,
+      "prompt": "Add interactive rental comparison and Events tickets with CopilotKit GenerativeUISurface. Can we copy the official generative-ui-shop, put model prices into cards and let the agent open Stripe Checkout itself?",
+      "expected_output": "Content review criteria: Does not copy TanStack/Prisma/shop stack or add a second provider; Rejects model-provided prices, made-up coordinates and direct AI payment; Requires real E2E browser/Stripe TEST proof with deterministic fallback.; Requires user-activated checkout with server-side price, quantity and availability revalidation and a signed Stripe TEST webhook.",
+      "files": [],
+      "expectations": [{"id":"catalog","kind":"deterministic","check":"catalog_contains","value":"copilotkit"},{"id":"skill-called","kind":"deterministic","check":"skill_called","value":"copilotkit"},{"id":"instructions-loaded","kind":"deterministic","check":"skill_result_ok","value":"copilotkit"},{"id":"turn-completed","kind":"deterministic","check":"turn_completed"}]
+    },
+    {
+      "id": 11, "should_trigger": true,
+      "prompt": "Use CopilotKit A2UI to build SAN-1630 for our existing Mastra app. The docs show a2ui: {} and an older A2A restaurant example. Should we add both of those plus the native render_ui catalog?",
+      "expected_output": "Content review criteria: Separates protocol A2UI middleware from native render_ui without a second runtime; Recognizes legacy A2A/v0.8 payloads are not compatible with current spec by assumption; Requires exact package verification and one live tool-call/UI trace.; Reads both native Components/Surfaces and protocol A2UI references when a task combines the two.",
+      "files": [],
+      "expectations": [{"id":"catalog","kind":"deterministic","check":"catalog_contains","value":"copilotkit"},{"id":"skill-called","kind":"deterministic","check":"skill_called","value":"copilotkit"},{"id":"instructions-loaded","kind":"deterministic","check":"skill_result_ok","value":"copilotkit"},{"id":"turn-completed","kind":"deterministic","check":"turn_completed"}]
+    },
+    {
+      "id": 12, "should_trigger": true,
+      "prompt": "For MDE rentals, use the 69 CopilotKit standardUI components including Map and Button, and extend standardUI so the model can only render RentalCard. Is this the smallest safe catalog?",
+      "expected_output": "Content review criteria: Explains 69-component standardUI and how extends expands visibility; Keeps MDE domain cards and existing map/pins authoritative; Never lets the agent invent prices/coordinates or trigger checkout.; Prefers a tiny ID-only MDE catalog rather than exposing every built-in component or installing MapLibre.",
+      "files": [],
+      "expectations": [{"id":"catalog","kind":"deterministic","check":"catalog_contains","value":"copilotkit"},{"id":"skill-called","kind":"deterministic","check":"skill_called","value":"copilotkit"},{"id":"instructions-loaded","kind":"deterministic","check":"skill_result_ok","value":"copilotkit"},{"id":"turn-completed","kind":"deterministic","check":"turn_completed"}]
+    },
+    {
+      "id": 13, "should_trigger": true,
+      "prompt": "An agent produced JSON with beginRendering/surfaceUpdate from the CopilotKit A2A starter, but our installed A2UI renderer expects createSurface/updateComponents/updateDataModel. Should we parse and run it anyway?",
+      "expected_output": "Content review criteria: Rejects silently mixing A2UI operation versions; Uses a2ui.org and installed CopilotKit docs/types as sources of truth; Tests malformed/unsupported operations and auth-safe fallback.",
+      "files": [],
+      "expectations": [{"id":"catalog","kind":"deterministic","check":"catalog_contains","value":"copilotkit"},{"id":"skill-called","kind":"deterministic","check":"skill_called","value":"copilotkit"},{"id":"instructions-loaded","kind":"deterministic","check":"skill_result_ok","value":"copilotkit"},{"id":"turn-completed","kind":"deterministic","check":"turn_completed"}]
+    },
+    {
+      "id": 14, "should_trigger": true,
+      "prompt": "Our Mastra rental search tool returns results, but the CopilotKit v2 card is empty. The renderer reads results from args instead of result and the tool-map key may be wrong. Give the minimal evidence-first diagnosis; do not run commands or edit files.",
+      "expected_output": "Content review criteria: Uses input args versus completed result correctly; Checks tool-map registration and call/run IDs before editing; Uses browser/stream evidence, preserves existing search and fallback.",
+      "files": [],
+      "expectations": [{"id":"catalog","kind":"deterministic","check":"catalog_contains","value":"copilotkit"},{"id":"skill-called","kind":"deterministic","check":"skill_called","value":"copilotkit"},{"id":"instructions-loaded","kind":"deterministic","check":"skill_result_ok","value":"copilotkit"},{"id":"turn-completed","kind":"deterministic","check":"turn_completed"}]
+    },
+    {
+      "id": 15, "should_trigger": true,
+      "prompt": "Renter search A is canceled; search B completes, then late AG-UI events from A overwrite B's pins. A partial TOOL_CALL_ARGS contains malformed JSON. Explain how to debug and protect the current result without a second chat state system; do not modify code.",
+      "expected_output": "Content review criteria: Does not act on partial tool-argument deltas; Preserves newest search, map pins and cancel/retry behavior; Reuses canonical AG-UI/thread state, adds focused race proof.",
+      "files": [],
+      "expectations": [{"id":"catalog","kind":"deterministic","check":"catalog_contains","value":"copilotkit"},{"id":"skill-called","kind":"deterministic","check":"skill_called","value":"copilotkit"},{"id":"instructions-loaded","kind":"deterministic","check":"skill_result_ok","value":"copilotkit"},{"id":"turn-completed","kind":"deterministic","check":"turn_completed"}]
+    },
+    {
+      "id": 16, "should_trigger": true,
+      "prompt": "Two authenticated MDE users can switch threads in /chat. One user tries a forged thread ID and a stale rental result ID. Explain how to verify isolation without imposing landlord approval or rental eligibility gates during Phase A; do not call live APIs.",
+      "expected_output": "Content review criteria: Rejects cross-user thread/data access at server; Validates stale/forged result IDs without inventing availability; Does not add launch-only business eligibility or paperwork gates.",
+      "files": [],
+      "expectations": [{"id":"catalog","kind":"deterministic","check":"catalog_contains","value":"copilotkit"},{"id":"skill-called","kind":"deterministic","check":"skill_called","value":"copilotkit"},{"id":"instructions-loaded","kind":"deterministic","check":"skill_result_ok","value":"copilotkit"},{"id":"turn-completed","kind":"deterministic","check":"turn_completed"}]
+    },
+    {
+      "id": 17, "should_trigger": true,
+      "prompt": "The agent says it sent render_ui, but GenerativeUISurface displays the fallback. How should we use official CopilotKit Inspector to decide whether the issue is provider, catalog, model tool exposure, rejected operation or Mastra transport? No code edits.",
+      "expected_output": "Content review criteria: Names relevant Inspector tabs and their signals; Checks whether render_ui reached model and browser; Does not install parallel A2UI middleware or replace fallback.; First checks that the existing route provider passes mdeUI and advertises render_ui in the debugging run; only adds a temporary inert QA component within that catalog if needed.",
+      "files": [],
+      "expectations": [{"id":"catalog","kind":"deterministic","check":"catalog_contains","value":"copilotkit"},{"id":"skill-called","kind":"deterministic","check":"skill_called","value":"copilotkit"},{"id":"instructions-loaded","kind":"deterministic","check":"skill_result_ok","value":"copilotkit"},{"id":"turn-completed","kind":"deterministic","check":"turn_completed"}]
+    },
+    {
+      "id": 18, "should_trigger": true,
+      "prompt": "We want to cut CopilotKit generated-UI token cost. Should Rentals and Events automatically extend all standardUI components or use a per-agent catalog setting copied from latest docs? Describe a version-verified experiment, not a production change.",
+      "expected_output": "Content review criteria: Does not assume unsupported per-agent catalog filtering API; Uses existing route-owner provider, avoids all-69 overexposure; Measures actual prompt/context and model usage, no fabricated savings.",
+      "files": [],
+      "expectations": [{"id":"catalog","kind":"deterministic","check":"catalog_contains","value":"copilotkit"},{"id":"skill-called","kind":"deterministic","check":"skill_called","value":"copilotkit"},{"id":"instructions-loaded","kind":"deterministic","check":"skill_result_ok","value":"copilotkit"},{"id":"turn-completed","kind":"deterministic","check":"turn_completed"}]
+    },
+    {"id":19,"should_trigger":true,"prompt":"CopilotKit Docs search_docs says Error: Search failed. Please try again later. What does the MDE coding agent do next?","expected_output":"Content review criteria: Stops repeated retries, uses explore_docs/explore_code or installed node_modules, distinguishes remote outage from MDE search, and reports remaining unverified facts.","files":[],"expectations":[{"id":"catalog","kind":"deterministic","check":"catalog_contains","value":"copilotkit"},{"id":"skill-called","kind":"deterministic","check":"skill_called","value":"copilotkit"},{"id":"instructions-loaded","kind":"deterministic","check":"skill_result_ok","value":"copilotkit"},{"id":"turn-completed","kind":"deterministic","check":"turn_completed"}]},
+    {"id":20,"should_trigger":true,"prompt":"Existing mde-ui-catalog.tsx already registers RentalCard and EventCard. Should I create a new provider to add a UI component?","expected_output":"Content review criteria: Loads references/component-catalogs.md directly; extends existing typed mdeUI, reuses authorized ID-backed cards and tests, requires actual run and browser proof; no duplicate provider.","files":[],"expectations":[{"id":"catalog","kind":"deterministic","check":"catalog_contains","value":"copilotkit"},{"id":"skill-called","kind":"deterministic","check":"skill_called","value":"copilotkit"},{"id":"instructions-loaded","kind":"deterministic","check":"skill_result_ok","value":"copilotkit"},{"id":"turn-completed","kind":"deterministic","check":"turn_completed"}]},
+    {"id":21,"should_trigger":true,"prompt":"I need selected standardUI components. Should extends: [standardUI] be used as a restrictive allowlist?","expected_output":"Content review criteria: Loads references/standard-catalog.md directly; explains selective standardUI.omit and typed overrides on installed version, validates Catalog tab, defaults to existing tiny MDE catalog; extends is not restrictive.","files":[],"expectations":[{"id":"catalog","kind":"deterministic","check":"catalog_contains","value":"copilotkit"},{"id":"skill-called","kind":"deterministic","check":"skill_called","value":"copilotkit"},{"id":"instructions-loaded","kind":"deterministic","check":"skill_result_ok","value":"copilotkit"},{"id":"turn-completed","kind":"deterministic","check":"turn_completed"}]},
+    {"id":22,"should_trigger":true,"prompt":"Add a CopilotKit GenerativeUISurface beside MDE Rentals search and map. What concrete props, fallback and race tests are needed?","expected_output":"Content review criteria: Loads references/surfaces.md directly; uses stable id, ui, description, small components allowlist and real fallback, measured autoScroll choice; Deleting latest B may reveal older same-target/thread surface A; native fallback returns once no applicable generated surface remains; no stale A/B results, 390px and refresh.","files":[],"expectations":[{"id":"catalog","kind":"deterministic","check":"catalog_contains","value":"copilotkit"},{"id":"skill-called","kind":"deterministic","check":"skill_called","value":"copilotkit"},{"id":"instructions-loaded","kind":"deterministic","check":"skill_result_ok","value":"copilotkit"},{"id":"turn-completed","kind":"deterministic","check":"turn_completed"}]},
+    {"id":23,"should_trigger":true,"prompt":"Build an EventTicket quantity input that preserves edits and opens purchase review after a user click.","expected_output":"Content review criteria: Typed state bind, useGenerativeUIState, writable and useGenerativeUIFunction with user intent; server verifies prices/quantity/idempotency, no AI-controlled checkout.","files":[],"expectations":[{"id":"catalog","kind":"deterministic","check":"catalog_contains","value":"copilotkit"},{"id":"skill-called","kind":"deterministic","check":"skill_called","value":"copilotkit"},{"id":"instructions-loaded","kind":"deterministic","check":"skill_result_ok","value":"copilotkit"},{"id":"turn-completed","kind":"deterministic","check":"turn_completed"}]},
+    {"id":24,"should_trigger":true,"prompt":"Mastra can only stream text. Should MDE switch from render_ui to Markdown transport globally?","expected_output":"Content review criteria: Tool transport remains default; Markdown is conditional, validates streamed a2ui fences, malformed partial output, mixed prose and fallback; no second runtime.","files":[],"expectations":[{"id":"catalog","kind":"deterministic","check":"catalog_contains","value":"copilotkit"},{"id":"skill-called","kind":"deterministic","check":"skill_called","value":"copilotkit"},{"id":"instructions-loaded","kind":"deterministic","check":"skill_result_ok","value":"copilotkit"},{"id":"turn-completed","kind":"deterministic","check":"turn_completed"}]},
+    {"id":25,"should_trigger":true,"prompt":"Someone wants dynamic A2UI and legacy v0.8 beginRendering alongside native render_ui in MDE.","expected_output":"Content review criteria: Native and existing useRenderTool default; fixed-schema preferred, verify protocol compatibility before dynamic schema, measure extra cost/latency and reject mixed versions.","files":[],"expectations":[{"id":"catalog","kind":"deterministic","check":"catalog_contains","value":"copilotkit"},{"id":"skill-called","kind":"deterministic","check":"skill_called","value":"copilotkit"},{"id":"instructions-loaded","kind":"deterministic","check":"skill_result_ok","value":"copilotkit"},{"id":"turn-completed","kind":"deterministic","check":"turn_completed"}]},
+    {"id":26,"should_trigger":true,"prompt":"AI generated cards look different from MDE premium UI. Should we add another design system and map?","expected_output":"Content review criteria: Reuse DESIGN.MD, MDE tokens/cards and map, typed GenerativeUITheme variables only for enabled built-ins, verify accessibility, dark/light and 390px.","files":[],"expectations":[{"id":"catalog","kind":"deterministic","check":"catalog_contains","value":"copilotkit"},{"id":"skill-called","kind":"deterministic","check":"skill_called","value":"copilotkit"},{"id":"instructions-loaded","kind":"deterministic","check":"skill_result_ok","value":"copilotkit"},{"id":"turn-completed","kind":"deterministic","check":"turn_completed"}]},
+    {"id":27,"should_trigger":true,"prompt":"Compare three rentals beside MDE's existing map using a custom generated React comparison component and a page Surface. Which references should the coding agent load, how should it reuse existing code, and how do we test overlapping runs and clearing the latest surface? Do not modify code.","expected_output":"Content review criteria: Loads references/component-catalogs.md AND references/surfaces.md directly; extends existing typed mdeUI and existing route-owner provider, uses current authorized rental IDs, stable bounded target, component allowlist and native fallback; warns deleting latest B can reveal older live A in same target/thread until all applicable generated surfaces are cleared; tests overlapping requests, thread isolation, unknown IDs and 390px; no duplicate map, search engine, provider or Phase A eligibility gates.","files":[],"expectations":[{"id":"catalog","kind":"deterministic","check":"catalog_contains","value":"copilotkit"},{"id":"skill-called","kind":"deterministic","check":"skill_called","value":"copilotkit"},{"id":"instructions-loaded","kind":"deterministic","check":"skill_result_ok","value":"copilotkit"},{"id":"turn-completed","kind":"deterministic","check":"turn_completed"}]}
   ]
 }

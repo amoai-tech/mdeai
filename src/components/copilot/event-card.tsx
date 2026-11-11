@@ -141,6 +141,7 @@ export function EventCard({
             <Button
               type="button"
               size="sm"
+              className="min-h-11"
               data-testid="event-buy-cta"
               onClick={(e) => {
                 e.stopPropagation();
@@ -154,7 +155,7 @@ export function EventCard({
             <Link
               href={ticketUrl}
               data-testid="event-buy-cta"
-              className={cn(buttonVariants({ size: "sm", variant: "default" }))}
+              className={cn(buttonVariants({ size: "sm", variant: "default" }), "min-h-11")}
               onClick={(e) => e.stopPropagation()}
             >
               <Ticket className="size-3.5" aria-hidden />
@@ -167,7 +168,7 @@ export function EventCard({
               target="_blank"
               rel="noopener noreferrer"
               data-testid="event-source-link"
-              className={cn(buttonVariants({ size: "sm", variant: "ghost" }))}
+              className={cn(buttonVariants({ size: "sm", variant: "ghost" }), "min-h-11")}
               onClick={(e) => e.stopPropagation()}
             >
               Source
@@ -177,7 +178,7 @@ export function EventCard({
             <Link
               href={detailsHref}
               data-testid="event-details-cta"
-              className={cn(buttonVariants({ size: "sm", variant: "outline" }))}
+              className={cn(buttonVariants({ size: "sm", variant: "outline" }), "min-h-11")}
               onClick={(e) => e.stopPropagation()}
             >
               Details
@@ -187,6 +188,7 @@ export function EventCard({
               type="button"
               size="sm"
               variant="outline"
+              className="min-h-11"
               data-testid="event-details-cta"
               onClick={(e) => {
                 e.stopPropagation();

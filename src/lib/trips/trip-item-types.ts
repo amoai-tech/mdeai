@@ -1,9 +1,20 @@
-export type TripItemType = "event" | "restaurant" | "rental" | "poi" | "other";
+export type TripItemType =
+  | "event"
+  | "restaurant"
+  | "venue"
+  | "rental"
+  | "poi"
+  | "showing"
+  | "booking"
+  | "custom_note"
+  | "other";
 
 export type TripItemRow = {
   id: string;
   item_type: TripItemType;
+  source_id: string;
   title: string;
+  created_at: string;
   description: string | null;
   start_at: string | null;
   end_at: string | null;
@@ -31,6 +42,7 @@ export type TripWorkspaceData = {
   status: string;
   budget: number | null;
   currency: string | null;
+  timezone: string;
   items: TripItemRow[];
   conflicts: TripConflictRow[];
 };

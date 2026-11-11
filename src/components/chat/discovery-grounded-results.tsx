@@ -6,6 +6,7 @@ import { useBrowseMapSync } from "@/hooks/use-browse-map-sync";
 import { mapPinSchema, type MapPin } from "@/platform/contracts/map-pin";
 import { useMapContext } from "@/platform/maps/map-context";
 import type { GroundedToolRow } from "@/lib/parse-grounded-tool-result";
+import { groundedPinSource } from "@/lib/grounded-place-source";
 
 /** The existing grounded-place card and canonical Maps pin converter share a stable ID. */
 export function groundedDiscoveryPins(rows: GroundedToolRow[]) {
@@ -20,7 +21,7 @@ export function groundedDiscoveryPins(rows: GroundedToolRow[]) {
       subtitle: r.formattedAddress,
       placeId: r.placeId,
       placeUri: r.mapsUrl,
-      source: r.groundingSource ? "grounding" : "places",
+      source: groundedPinSource(r.sourceMode),
     });
     return pin.success ? [pin.data] : [];
   });
@@ -36,19 +37,31 @@ export function hasVenueBrowseMapPins(
   return rows === null ? basePins.length > 0 : groundedDiscoveryPins(rows).length > 0;
 }
 
-export function DiscoveryGroundedResults({ rows, selectedId, onSelectRow }: {
+export function DiscoveryGroundedResults({ rows, selectedId, onSelectRow, label = "Ask MDE" }: {
   rows: GroundedToolRow[] | null;
   selectedId?: string | null;
   onSelectRow?: (id: string | null) => void;
+  /**
+   * How this result set is described. Three callers, three meanings: an agent answer, a catalogue
+   * search by name, and a catalogue search by preference (ranked, not verified).
+   */
+  label?: "Ask MDE" | "Search results" | "Suggestions";
 }) {
   const pins = useMemo(() => groundedDiscoveryPins(rows ?? []), [rows]);
   const { selectedPinId, panToPin } = useMapContext();
   useBrowseMapSync(pins, "grounded");
   if (rows === null) return null;
   return (
-    <section aria-label="Ask MDE places" data-testid="discovery-grounded-results" className="mt-3">
-      <p className="mb-3 text-sm text-muted-foreground">
-        Ask MDE — {rows.length} places. Map pins appear only for returned coordinates.
+    <section
+      aria-label={label === "Ask MDE" ? "Ask MDE places" : label}
+      data-testid="discovery-grounded-results"
+      className="mt-3"
+    >
+      <p className="mb-3 text-sm text-muted-foreground" data-testid="grounded-results-heading">
+        {rows.length === 0
+          ? // Nothing to count and nothing to suggest.
+            "No places matched."
+          : `${label} — ${rows.length} places. Map pins appear only for returned coordinates.`}
       </p>
       {rows.length === 0 ? <p>No matching places were returned. Try another area.</p> : (
         <div className="grid gap-3 sm:grid-cols-2">
@@ -72,6 +85,8 @@ export function DiscoveryGroundedResults({ rows, selectedId, onSelectRow }: {
                 formattedAddress={r.formattedAddress}
                 photoName={r.photoName}
                 photoAuthorAttributions={r.photoAuthorAttributions}
+                sourceMode={r.sourceMode}
+                groundingSource={r.groundingSource}
                 pinId={mapped ? pinId : undefined}
                 selected={selectedId === r.id || (mapped && selectedPinId === pinId)}
                 onSelect={mapped ? () => { panToPin(pinId); onSelectRow?.(r.id); } : undefined}

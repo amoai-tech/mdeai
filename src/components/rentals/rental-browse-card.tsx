@@ -256,7 +256,7 @@ export function RentalBrowseCard({
               variant="outline"
               data-testid={`rental-card-map-select-${rental.id}`}
               aria-label={`Show ${rental.title} on the map`}
-              className="min-h-11 lg:min-h-0"
+              className="min-h-card-action lg:min-h-0"
               onClick={() => onSelect?.()}
               onFocus={preview}
             >
@@ -264,6 +264,7 @@ export function RentalBrowseCard({
             </Button>
           ) : null}
           {onAskSelect ? <Button type="button" size="sm" variant={selectedForAsk ? "secondary" : "outline"}
+            className="min-h-card-action lg:min-h-0"
             aria-pressed={Boolean(selectedForAsk)} data-testid="rental-ask-select" onClick={onAskSelect}>
             {selectedForAsk ? "Clear selection" : "Ask about this"}
           </Button> : null}
@@ -272,7 +273,7 @@ export function RentalBrowseCard({
               type="button"
               size="sm"
               variant="secondary"
-              className="min-h-11 lg:min-h-0"
+              className="min-h-card-action lg:min-h-0"
               data-testid={`rental-details-cta-${rental.id}`}
               onClick={(event) => {
                 event.stopPropagation();
@@ -288,7 +289,7 @@ export function RentalBrowseCard({
               size="sm"
               variant="default"
               data-testid="rental-schedule-cta"
-              className={cn(buttonVariants({ size: "sm", variant: "default" }), "min-h-11 lg:min-h-0")}
+              className={cn(buttonVariants({ size: "sm", variant: "default" }), "min-h-card-action lg:min-h-0")}
               onClick={(e) => {
                 e.stopPropagation();
                 onSchedule?.();
@@ -312,7 +313,7 @@ export function RentalBrowseCard({
               target="_blank"
               rel="nofollow noopener noreferrer"
               data-testid={`rental-card-source-${rental.id}`}
-              className={cn(buttonVariants({ size: "sm", variant: "outline" }), "min-h-11 lg:min-h-0")}
+              className={cn(buttonVariants({ size: "sm", variant: "outline" }), "min-h-card-action lg:min-h-0")}
               onClick={(event) => event.stopPropagation()}
             >
               <ExternalLink data-icon="inline-start" aria-hidden />

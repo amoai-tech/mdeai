@@ -190,10 +190,15 @@ export function ThreadNavProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("popstate", onPopState);
   }, [owner, ready, tab?.activeThreadId]);
 
+  const currentActiveThreadId = tab?.activeThreadId;
   const setActiveThreadId = useCallback<Dispatch<SetStateAction<string | undefined>>>((value) => {
     // Only a pending restoration must block a selection. A fresh tab can record
     // one immediately; the pending->owner resolution keeps it.
     if (!ready && restoringSavedThread) return;
+    // SAN-1639: selecting the thread that is already active is not a navigation.
+    // Recording it would add a Back/Forward step that appears to do nothing and
+    // re-runs the restore path against an unchanged thread.
+    if (typeof value === "string" && value === currentActiveThreadId) return;
     const applies = (old: TabThread | null) =>
       Boolean(old && (old.owner === owner || old.owner === PENDING));
     if (typeof value === "function") {
@@ -207,7 +212,7 @@ export function ThreadNavProvider({ children }: { children: ReactNode }) {
     // + stopActiveRun), so both behaviours compose.
     recordSelection(owner, value ?? null, true);
     setTab((old) => (applies(old) ? { ...old, activeThreadId: value } : old));
-  }, [owner, ready, restoringSavedThread]);
+  }, [owner, ready, restoringSavedThread, currentActiveThreadId]);
 
   const selectSavedThread = useCallback((id: string) => {
     if (!UUID.test(id)) return;

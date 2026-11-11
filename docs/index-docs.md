@@ -1,6 +1,6 @@
 ---
 title: MDE AI documentation index
-updated: 2026-09-25
+updated: 2026-11-10
 status: canonical index
 source_of_truth: Linear for live work; merged main for shipped code; src/app for implemented routes
 ---
@@ -132,6 +132,7 @@ Use for local development, deployment, security operations, observability, runbo
 
 Current workflow plan:
 - [agent-workflow-plan.md](07-operations/agent-workflow-plan.md) — Linear, agent handoffs, GitHub, docs/GitBook, and changelog ownership.
+- [Intent → specification → plan](07-operations/intent-spec-plan/README.md) — optional per-task agent handoff templates and Gen UI example.
 - [production-rollback-runbook.md](07-operations/production-rollback-runbook.md) — confirm production is really broken, roll back to the previous release, prove it, keep auto-assign OFF.
 
 ### Strategy
@@ -141,7 +142,7 @@ Use for current business, market, revenue, and experiment strategy. Historical r
 
 ## Complete active documentation catalog
 
-This table lists **every active documentation file currently under `docs/`** on `main` (145 files). It includes Markdown, HTML wireframes, and JSON architecture snapshots. Obsidian workspace files, binary assets, and historical material under `_archive/` are intentionally excluded from the active-doc catalog. `npm run check:docs` enforces exact set equality between this catalog and the active filesystem, so adding, moving, or removing an active document requires the catalog to change in the same commit.
+This revision's catalog contains **163 active-document entries** plus **two `_archive/` reference links** (165 linked rows total). It includes Markdown, HTML wireframes, and JSON architecture snapshots. Obsidian workspace files, binary assets, and historical material under `_archive/` are intentionally excluded from the active-doc catalog. `npm run check:docs` enforces exact set equality between this catalog and the active filesystem, so adding, moving, or removing an active document requires the catalog to change in the same commit.
 
 | Area | Document | Type | Status |
 |---|---|---|---|
@@ -166,6 +167,12 @@ This table lists **every active documentation file currently under `docs/`** on 
 | Platform | [`03-platform/copilotkit-mastra/reference-adoption-plan-2026-09-20.md`](03-platform/copilotkit-mastra/reference-adoption-plan-2026-09-20.md) | Markdown | Current |
 | Platform | [`03-platform/copilotkit-mastra/reference-pack.md`](03-platform/copilotkit-mastra/reference-pack.md) | Markdown | Current |
 | Platform | [`03-platform/copilotkit-mastra/roadmap.md`](03-platform/copilotkit-mastra/roadmap.md) | Markdown | Current |
+| Platform | [`03-platform/copilotkit-mastra/san-1637-ai-execution-plan.md`](03-platform/copilotkit-mastra/san-1637-ai-execution-plan.md) | Markdown | Current |
+| Platform | [`03-platform/copilotkit-mastra/genui-plans/21-copilotkit-genui-plan.md`](03-platform/copilotkit-mastra/genui-plans/21-copilotkit-genui-plan.md) | Markdown | Current |
+| Platform | [`03-platform/copilotkit-mastra/genui-plans/21a-genui-task-tracker.md`](03-platform/copilotkit-mastra/genui-plans/21a-genui-task-tracker.md) | Markdown | Current |
+| Platform | [`03-platform/copilotkit-mastra/genui-plans/21b-genui-audit-defects.md`](03-platform/copilotkit-mastra/genui-plans/21b-genui-audit-defects.md) | Markdown | Current |
+| Platform | [`03-platform/copilotkit-mastra/reference-upstreams.json`](03-platform/copilotkit-mastra/reference-upstreams.json) | JSON reference | Current |
+| Platform | [`03-platform/copilotkit-mastra/reference-upstreams.md`](03-platform/copilotkit-mastra/reference-upstreams.md) | Markdown | Current |
 | Domains | [`04-domains/README.md`](04-domains/README.md) | Markdown | Current |
 | Domains | [`04-domains/cafes-nightlife/README.md`](04-domains/cafes-nightlife/README.md) | Markdown | Current |
 | Domains | [`04-domains/ecommerce/README.md`](04-domains/ecommerce/README.md) | Markdown | Current |
@@ -261,7 +268,10 @@ This table lists **every active documentation file currently under `docs/`** on 
 | Design | [`05-design/screens/product-wireframes/venue-owners/001-venue-dashboard.md`](05-design/screens/product-wireframes/venue-owners/001-venue-dashboard.md) | Markdown | Current |
 | Design | [`05-design/screens/product-wireframes/venues/001-venue-search.md`](05-design/screens/product-wireframes/venues/001-venue-search.md) | Markdown | Current |
 | Design | [`05-design/screens/product-wireframes/venues/002-venue-details.md`](05-design/screens/product-wireframes/venues/002-venue-details.md) | Markdown | Current |
+| Design | [`05-design/screens/product-wireframes/restaurants/002-restaurant-contest-ux.md`](05-design/screens/product-wireframes/restaurants/002-restaurant-contest-ux.md) | Markdown | Current |
+| Design | [`05-design/screens/product-wireframes/restaurants/contest-ux-preview.html`](05-design/screens/product-wireframes/restaurants/contest-ux-preview.html) | HTML wireframe | Current |
 | Testing | [`06-testing/README.md`](06-testing/README.md) | Markdown | Current |
+| Testing | [`06-testing/1password-qa-agent-guide.md`](06-testing/1password-qa-agent-guide.md) | Markdown | Current |
 | Testing | [`06-testing/localhost-qa-runbook.md`](06-testing/localhost-qa-runbook.md) | Markdown | Current |
 | Testing | [`06-testing/playwright/2026-09-20-san-1341-playwright-architecture-design.md`](06-testing/playwright/2026-09-20-san-1341-playwright-architecture-design.md) | Markdown | Current |
 | Testing | [`06-testing/playwright/2026-09-20-san-1341-playwright-architecture.md`](06-testing/playwright/2026-09-20-san-1341-playwright-architecture.md) | Markdown | Current |
@@ -270,13 +280,37 @@ This table lists **every active documentation file currently under `docs/`** on 
 | Testing | [`06-testing/pr-agent/san-1332-pr-agent-evidence-plan.md`](06-testing/pr-agent/san-1332-pr-agent-evidence-plan.md) | Markdown | Current |
 | Testing | [`06-testing/pr-review-guidelines.md`](06-testing/pr-review-guidelines.md) | Markdown | Current |
 | Testing | [`06-testing/ui-verification.md`](06-testing/ui-verification.md) | Markdown | Current |
+| Testing | [`06-testing/playwright/evidence/2026-10-30/README.md`](06-testing/playwright/evidence/2026-10-30/README.md) | Markdown | Snapshot / evidence |
+| Testing | [`06-testing/playwright/evidence/2026-10-31/san-481/README.md`](06-testing/playwright/evidence/2026-10-31/san-481/README.md) | Markdown | Snapshot / evidence |
+| Testing | [`06-testing/pr-agent-quality-snapshot-2026-11-04.md`](06-testing/pr-agent-quality-snapshot-2026-11-04.md) | Markdown | Snapshot / evidence |
+| Testing | [`06-testing/pr-agent/san-1332-execution-checkpoints.md`](06-testing/pr-agent/san-1332-execution-checkpoints.md) | Markdown | Current |
 | Operations | [`07-operations/README.md`](07-operations/README.md) | Markdown | Current |
 | Operations | [`07-operations/agent-workflow-plan.md`](07-operations/agent-workflow-plan.md) | Markdown | Current |
+| Operations | [`07-operations/intent-spec-plan/README.md`](07-operations/intent-spec-plan/README.md) | Markdown | Current |
+| Operations | [`07-operations/intent-spec-plan/templates/intent.md`](07-operations/intent-spec-plan/templates/intent.md) | Markdown | Template |
+| Operations | [`07-operations/intent-spec-plan/templates/spec.md`](07-operations/intent-spec-plan/templates/spec.md) | Markdown | Template |
+| Operations | [`07-operations/intent-spec-plan/templates/plan.md`](07-operations/intent-spec-plan/templates/plan.md) | Markdown | Template |
+| Operations | [`07-operations/intent-spec-plan/examples/SAN-1653/intent.md`](07-operations/intent-spec-plan/examples/SAN-1653/intent.md) | Markdown | Reference |
+| Operations | [`07-operations/intent-spec-plan/examples/SAN-1653/spec.md`](07-operations/intent-spec-plan/examples/SAN-1653/spec.md) | Markdown | Reference |
+| Operations | [`07-operations/intent-spec-plan/examples/SAN-1653/plan.md`](07-operations/intent-spec-plan/examples/SAN-1653/plan.md) | Markdown | Reference |
 | Operations | [`07-operations/graphify-reference.md`](07-operations/graphify-reference.md) | Markdown | Current |
 | Operations | [`07-operations/merge-approval-history.md`](07-operations/merge-approval-history.md) | Markdown | Current |
 | Operations | [`07-operations/production-rollback-runbook.md`](07-operations/production-rollback-runbook.md) | Markdown | Current |
 | Operations | [`07-operations/security/dist-leak-scan-maps-key-allowlist.md`](07-operations/security/dist-leak-scan-maps-key-allowlist.md) | Markdown | Current |
 | Operations | [`07-operations/security/supabase-advisor-disposition.md`](07-operations/security/supabase-advisor-disposition.md) | Markdown | Current |
+| Operations | [`07-operations/engineering/skill-behavior-evals.md`](07-operations/engineering/skill-behavior-evals.md) | Markdown | Current |
+| Operations | [`07-operations/external-rental-publication-recovery.md`](07-operations/external-rental-publication-recovery.md) | Markdown | Current |
+| Operations | [`07-operations/local-rental-preview.md`](07-operations/local-rental-preview.md) | Markdown | Current |
+| Operations | [`07-operations/new-projects-candidates.json`](07-operations/new-projects-candidates.json) | JSON reference | Current |
+| Operations | [`07-operations/new-projects-inventory-sources.md`](07-operations/new-projects-inventory-sources.md) | Markdown | Current |
+| Operations | [`07-operations/owner-checklist-san1523-rollout.md`](07-operations/owner-checklist-san1523-rollout.md) | Markdown | Current |
+| Operations | [`07-operations/production-release-verification.md`](07-operations/production-release-verification.md) | Markdown | Current |
+| Operations | [`07-operations/qa-fixture-cleanup.md`](07-operations/qa-fixture-cleanup.md) | Markdown | Current |
+| Operations | [`07-operations/rental-photo-rights-remediation.md`](07-operations/rental-photo-rights-remediation.md) | Markdown | Current |
+| Operations | [`07-operations/rentals/san-1503/README.md`](07-operations/rentals/san-1503/README.md) | Markdown | Current |
+| Operations | [`07-operations/san1523-embedding-worker-rollout-runbook.md`](07-operations/san1523-embedding-worker-rollout-runbook.md) | Markdown | Current |
+| Operations | [`07-operations/skill-maintenance-verification-2026-11-05.md`](07-operations/skill-maintenance-verification-2026-11-05.md) | Markdown | Current |
+| Operations | [`07-operations/skill-overlap-benchmark-2026-10-14.md`](07-operations/skill-overlap-benchmark-2026-10-14.md) | Markdown | Current |
 | Strategy | [`08-strategy/README.md`](08-strategy/README.md) | Markdown | Current |
 | Strategy | [`08-strategy/ai-services.md`](08-strategy/ai-services.md) | Markdown | Current |
 | Strategy | [`08-strategy/competitors/mindtrip/01-prompt.md`](08-strategy/competitors/mindtrip/01-prompt.md) | Markdown | Current |

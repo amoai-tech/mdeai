@@ -1,6 +1,7 @@
 /** VERCEL-CPU-001 — in-process IP rate limits for public API hot paths (Vercel Fluid CPU). */
 import { NextResponse } from "next/server";
 import { createPlacesRateLimiter } from "@/lib/places-rate-limiter";
+import { checkRateLimitDurable, clientIpFromRequest } from "@/lib/distributed-rate-limit";
 
 const searchFastPathLimiter = createPlacesRateLimiter(30);
 const groundingLimiter = createPlacesRateLimiter(15);
@@ -14,6 +15,52 @@ export function rateLimitedResponse(): NextResponse {
     { error: "rate_limited" },
     { status: 429, headers: { "Cache-Control": "no-store" } },
   );
+}
+
+/**
+ * Public search, limited by a shared Postgres store so the number means the same thing on every
+ * Vercel instance.
+ *
+ * Falls back to the in-process bucket when the store is unavailable: a rate limiter must not turn
+ * a database hiccup into a broken search box. `storeAvailable` is what distinguishes the two.
+ */
+/** How long the shared limiter may delay a public search before we fall back. */
+const SHARED_LIMIT_TIMEOUT_MS = 400;
+
+/**
+ * Rate-limits a public search request against a store every instance shares.
+ *
+ * @param req Incoming request; its client IP is the bucket key.
+ * @param bucket Logical limiter name, so one route cannot exhaust another's allowance.
+ * @param max Requests allowed per window.
+ * @param windowSeconds Window length in seconds.
+ * @returns A ready 429 response when the visitor is over the limit, otherwise null.
+ */
+export async function checkSearchFastPathSharedRateLimit(
+  req: Request,
+  bucket: string,
+  max = 30,
+  windowSeconds = 60,
+): Promise<NextResponse | null> {
+  const ip = clientIpFromRequest(req);
+  let result: Awaited<ReturnType<typeof checkRateLimitDurable>> | null = null;
+  try {
+    // A stalled RPC must not hold the request open: past the budget the in-process bucket applies.
+    // The installed supabase-js (v2, this pin) offers no abort option on `rpc()` — the published
+    // `.abortSignal()` guidance applies to a newer client — so this bounds the wait, not the query.
+    // The abandoned call finishes harmlessly and its result is discarded.
+    result = await Promise.race([
+      checkRateLimitDurable(`${bucket}:ip:${ip}`, max, windowSeconds),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), SHARED_LIMIT_TIMEOUT_MS)),
+    ]);
+  } catch {
+    result = null;
+  }
+  if (!result || !result.storeAvailable) {
+    // Shared limit unavailable — keep the fast in-process guard so the route is never unprotected.
+    return checkSearchFastPathRateLimit(req);
+  }
+  return result.allowed ? null : rateLimitedResponse();
 }
 
 /** Public POST fast paths: /api/events/search, /api/rentals/search, etc. */

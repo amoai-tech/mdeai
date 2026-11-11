@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import type { Restaurant } from "@/mastra/tools/search-restaurants";
 
+/** Read-only Details body shared by the desktop panel and the phone sheet. */
 function RestaurantDetails({
   restaurant,
   onClose,
@@ -13,7 +14,7 @@ function RestaurantDetails({
   onClose: () => void;
 }) {
   return (
-    <div className="space-y-4 bg-background p-5" data-testid="restaurant-details">
+    <div className="space-y-4 bg-background p-5 pb-8" data-testid="restaurant-details">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="font-serif text-xl font-semibold">{restaurant.name}</h2>
@@ -40,13 +41,15 @@ function RestaurantDetails({
   );
 }
 
+/** Desktop Details, shown over the map when the page has one. */
 export function RestaurantDetailsPanel(props: { restaurant: Restaurant; onClose: () => void }) {
   return (
-    <section data-testid="restaurant-details-panel" className="absolute inset-0 z-20 overflow-y-auto rounded-xl border bg-background shadow-xl">
+    <section data-details-panel data-testid="restaurant-details-panel" className="absolute inset-0 z-20 overflow-y-auto rounded-xl border bg-background shadow-xl">
       <RestaurantDetails {...props} />
     </section>
   );
 }
+/** Phone Details, using the shared Sheet for focus and Escape. */
 export function RestaurantDetailsSheet(props: { restaurant: Restaurant; onClose: () => void }) {
   return (
     <Sheet open onOpenChange={(open) => { if (!open) props.onClose(); }}>

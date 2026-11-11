@@ -138,13 +138,110 @@ export const payloadRows = (payload: RentalAskResults) =>
 /** Keep only turns that have text, so tool/state-only messages do not leave blank rows. */
 const TRANSCRIPT_LIMIT = 6;
 
-function plainTurns(messages: readonly AgentMessage[]): PlainTurn[] {
+/** What a tool-only assistant step did, in the user's words. */
+type ToolOutcomeRule = { matches: (name: string) => boolean; done: string; failed?: string };
+
+/** Plain substring checks: model/user-supplied tool names must never reach a regex. */
+const TOOL_OUTCOMES: ToolOutcomeRule[] = [
+  {
+    matches: (name) => name.includes("render_ui") || name.includes("render-ui"),
+    done: "Updated the recommendations.",
+    failed: "I couldn't display those cards. Try asking again.",
+  },
+  {
+    matches: (name) =>
+      name.includes("search-rentals") || name.includes("search_rentals") || name.includes("searchRentalsTool"),
+    done: "Searched the listings and updated the results.",
+    failed: "The rental search did not complete. Please try again.",
+  },
+  {
+    matches: (name) => name.includes("openRentalDetails"),
+    done: "Opened the details for that apartment.",
+    failed: "I couldn't open those apartment details.",
+  },
+];
+
+/** A render_ui result says how many operations the runtime accepted. */
+function renderUiOutcome(result: unknown): "applied" | "rejected" | null {
+  if (typeof result !== "string") return null;
+  try {
+    const parsed = JSON.parse(result) as { status?: string; applied?: number; rejected?: unknown[] };
+    if (typeof parsed?.applied === "number" && parsed.applied > 0) return "applied";
+    if (Array.isArray(parsed?.rejected) && parsed.rejected.length > 0) return "rejected";
+    return parsed?.applied === 0 ? "rejected" : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A turn that only calls tools has no assistant text, so the transcript used to
+ * go blank: the renter asked, the agent searched (or tried to render) and
+ * nothing appeared. This produces one honest line per tool-only step, including
+ * the failure case, so a turn always ends in something a person can read.
+ */
+function toolOutcomeTurn(
+  callName: string,
+  resultText: string,
+  id: string,
+): PlainTurn | null {
+  const rule = TOOL_OUTCOMES.find((entry) => entry.matches(callName));
+  if (!rule) return null;
+  if (callName.includes("render_ui") || callName.includes("render-ui")) {
+    const outcome = renderUiOutcome(resultText);
+    if (outcome === "rejected" && rule.failed) return { id, role: "assistant", text: rule.failed };
+    if (outcome === "applied") return { id, role: "assistant", text: rule.done };
+    return null;
+  }
+  // No result yet means no confirmed action; never invent success.
+  if (!resultText.trim()) return null;
+  if (callName.includes("openRentalDetails")) {
+    return { id, role: "assistant",
+      text: resultText.trim().startsWith("Opened details for") ? rule.done : rule.failed! };
+  }
+  if (callName.includes("search-rentals") || callName.includes("search_rentals") || callName.includes("searchRentalsTool")) {
+    let succeeded = false;
+    try {
+      const parsed: unknown = JSON.parse(resultText);
+      succeeded = !!parsed && typeof parsed === "object" &&
+        Array.isArray((parsed as { results?: unknown }).results) &&
+        !("error" in parsed && (parsed as { error?: unknown }).error);
+    } catch { /* No completed search envelope. */ }
+    return { id, role: "assistant", text: succeeded ? rule.done : rule.failed! };
+  }
+  return null;
+}
+
+export function plainTurns(messages: readonly AgentMessage[]): PlainTurn[] {
   const turns: PlainTurn[] = [];
   messages.forEach((message, index) => {
-    if (message.role !== "user" && message.role !== "assistant") return;
+    if (message.role === "assistant") {
+      const text = messageText(message).trim();
+      if (text) {
+        turns.push({ id: message.id ?? `assistant-${index}`, role: "assistant", text });
+        return;
+      }
+      // A tool-only step: name what it did, using the result that follows it.
+      const calls = Array.isArray(message.toolCalls) ? (message.toolCalls as ToolCallLike[]) : [];
+      for (const call of calls) {
+        const name = call?.function?.name;
+        if (!name) continue;
+        const result = messages.find(
+          (candidate) => candidate.role === "tool" && candidate.toolCallId === call.id,
+        );
+        const turn = toolOutcomeTurn(
+          name,
+          typeof result?.content === "string" ? result.content : "",
+          `tool-${call.id ?? `${index}-${name}`}`,
+        );
+        if (turn) turns.push(turn);
+      }
+      return;
+    }
+    if (message.role !== "user") return;
     const text = messageText(message).trim();
     if (!text) return;
-    turns.push({ id: message.id ?? `${message.role}-${index}`, role: message.role, text });
+    turns.push({ id: message.id ?? `user-${index}`, role: "user", text });
   });
   return turns.slice(-TRANSCRIPT_LIMIT);
 }

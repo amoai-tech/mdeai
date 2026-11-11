@@ -86,6 +86,19 @@ comment
 
 Do not resolve because code was merely edited. Resolve only after proof is recorded.
 
+## Merge approval and sole-collaborator exception
+
+`main` requires one approving review. **Sole-collaborator exception:** while the repository has exactly one collaborator and that account is also the PR author, GitHub cannot record the required approval because self-approval is forbidden. In that specific case an administrator merge is allowed only when all of the following are true:
+
+- the exact PR head has `floor` and `mastra-schema-init` green;
+- the canonical MDE review (`review / verify-review-result`) is green on that head, with no verified blocking finding;
+- every review thread is resolved (0 unresolved);
+- the PR body records the exception, the exact head SHA, and the checks that passed.
+
+Record each use in `docs/07-operations/merge-approval-history.md` and in the PR. The exception ends when a second collaborator with write access exists; the normal one-approval rule then applies with no bypass.
+
+Only use the exception when the actual collaborator count and approval restrictions are verified for the exact repository and PR. GitHub branch protection and task-specific risk gates still apply.
+
 ## Completion gate
 
 PR work is complete only when:

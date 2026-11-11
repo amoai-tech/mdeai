@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
 import { useEventLocalChat } from "@/components/chat/event-local-chat-context";
 import { useClearOtherFastPathResults } from "@/hooks/use-clear-other-fast-path-results";
@@ -13,10 +13,9 @@ import {
 } from "@/lib/cafe-search-fast-path";
 import { useMapContext } from "@/platform/maps/map-context";
 import { normalizeToolOutput } from "@/platform/maps/normalize-tool-output";
-import {
-  parseGroundedToolResult,
-  resolveGroundedTitle,
-} from "@/lib/parse-grounded-tool-result";
+import { parseGroundedToolResult } from "@/lib/parse-grounded-tool-result";
+import { groundedFastPathMemory } from "@/lib/grounded-fast-path-memory";
+import { isSelectedRentalCafeNearbyRequest, isStoredRentalUuid, nearbyCafeRadiusMeters } from "@/lib/cafe-search-fast-path";
 
 async function fetchGroundedSearch(
   params: CafeSearchApiParams,
@@ -32,19 +31,41 @@ async function fetchGroundedSearch(
   return res.json();
 }
 
+// All card actions and the composer share the same provider setter identity.
+// One concurrent search per visible conversation; no process-global user state.
+const groundedSearchesInFlight = new WeakSet<(result: unknown | null) => void>();
+
 export function useGroundedSearchFastPath() {
   const { setState } = useConciergeCoAgent();
   const { showExchange, clearLocalMessages } = useEventLocalChat();
   const clearOthers = useClearOtherFastPathResults();
   const { setToolResult } = useGroundedFastPath();
-  const { mergePinsByCategory, requestFitBounds } = useMapContext();
-  const busyRef = useRef(false);
+  const { mergePinsByCategory, requestFitBounds, pins: currentPins, selectedPinId } = useMapContext();
+  // The fetch can finish after a newer rental search replaced the map. Compare
+  // against the pins that exist when the response arrives, not the click-time snapshot.
+  const pinsRef = useRef(currentPins);
+  useEffect(() => {
+    pinsRef.current = currentPins;
+  }, [currentPins]);
 
   const applySearchResults = useCallback(
     (envelope: unknown) => {
       const { pins } = normalizeToolOutput("grounded", envelope);
-      // A grounded search with nothing to pin replaces the other result panels but keeps their pins.
-      clearOthers("grounded", { clearOtherPins: pins.length > 0 });
+      // Nearby results MUST keep the matching rental's card and marker.
+      // Independent grounded discovery continues replacing stale categories.
+      const metadata = envelope && typeof envelope === "object"
+        ? (envelope as { metadata?: { searchMode?: string; anchorPinId?: string } }).metadata
+        : undefined;
+      const preserveRental = metadata?.searchMode === "nearby" &&
+        pinsRef.current.some((pin) => pin.category === "rental" && pin.id === metadata.anchorPinId);
+      // A Nearby response whose anchor was replaced must not merge cafés or clear
+      // the newer rental pins. The caller reports this as a retryable change.
+      if (metadata?.searchMode === "nearby" && !preserveRental) {
+        return { count: 0, pinCount: 0, stale: true };
+      }
+      if (!preserveRental) {
+        clearOthers("grounded", { clearOtherPins: pins.length > 0 });
+      }
       setToolResult(envelope);
       mergePinsByCategory("grounded", pins);
       if (pins.length >= 2) requestFitBounds();
@@ -58,19 +79,24 @@ export function useGroundedSearchFastPath() {
       // unless we hand over a compact copy. Follow-ups such as "which of these would you
       // recommend?" must name a real row and must not invent amenities from nothing.
       const parsed = parseGroundedToolResult(envelope);
-      const lastGroundedResults = parsed.results.slice(0, 5).map((row, index) => ({
-        id: row.id,
-        title: resolveGroundedTitle(row, index, parsed.attribution, row.mapsUrl),
-        ...(row.formattedAddress ? { area: row.formattedAddress.slice(0, 140) } : {}),
-        ...(row.summary ? { summary: row.summary.slice(0, 240) } : {}),
-        ...(row.rating != null ? { rating: row.rating } : {}),
-      }));
+      // Nearby answers such as "which café is closest?" need a provider-true
+      // distance. Compute it from the anchored rental pin and the result
+      // coordinates; never let the model estimate.
+      const anchor = metadata?.searchMode === "nearby"
+        ? pinsRef.current.find(
+            (pin) => pin.category === "rental" && pin.id === metadata.anchorPinId,
+          )
+        : undefined;
       setState((prev) => ({
         ...(prev ?? {}),
-        lastIntent: "restaurant_discovery",
-        lastGroundedResults,
+        ...groundedFastPathMemory({
+          metadata,
+          results: parsed.results,
+          anchorPin: anchor,
+          attribution: parsed.attribution,
+        }),
       }));
-      return { count, pinCount: pins.length };
+      return { count, pinCount: pins.length, stale: false };
     },
     [mergePinsByCategory, requestFitBounds, setState, setToolResult, clearOthers],
   );
@@ -81,16 +107,30 @@ export function useGroundedSearchFastPath() {
       params: CafeSearchApiParams,
       submissionId?: string,
     ): Promise<boolean> => {
-      if (busyRef.current) return false;
-      busyRef.current = true;
+      if (groundedSearchesInFlight.has(setToolResult)) return false;
+      groundedSearchesInFlight.add(setToolResult);
       try {
         const envelope = await fetchGroundedSearch(params);
-        const { count, pinCount } = applySearchResults(envelope);
-        showExchange(
-          userText,
-          fastPathCafeSummary(count, pinCount, params.neighborhood, userText),
-          submissionId,
-        );
+        const { count, pinCount, stale } = applySearchResults(envelope);
+        if (stale) {
+          showExchange(
+            userText,
+            "The selected apartment changed while cafés were loading. Try again.",
+            submissionId,
+          );
+          return true;
+        }
+        const reason = envelope && typeof envelope === "object"
+          ? (envelope as { metadata?: { reason?: string } }).metadata?.reason
+          : undefined;
+        const summary = params.nearbyRentalId
+          ? reason
+            ? "Could not verify nearby cafés for this apartment right now. Try again or choose another apartment."
+            : count === 0
+              ? `No cafés found within ${params.nearbyRadiusMeters ?? 800} m of this apartment.`
+              : `Found ${count} café${count === 1 ? "" : "s"} within ${params.nearbyRadiusMeters ?? 800} m of this apartment.`
+          : fastPathCafeSummary(count, pinCount, params.neighborhood, userText);
+        showExchange(userText, summary, submissionId);
         return true;
       } catch (err) {
         console.error("[grounded-fast-path]", err);
@@ -99,7 +139,7 @@ export function useGroundedSearchFastPath() {
         // to the send pipeline so Try again replays the same search.
         throw err;
       } finally {
-        busyRef.current = false;
+        groundedSearchesInFlight.delete(setToolResult);
       }
     },
     [
@@ -113,17 +153,56 @@ export function useGroundedSearchFastPath() {
     async (text: string, submissionId?: string): Promise<boolean> => {
       const trimmed = text.trim();
       if (!trimmed) return false;
+      // The user selected a real mapped rental. Reuse the existing grounded
+      // route with server-only RLS coordinate lookup instead of re-running rentals.
+      if (isSelectedRentalCafeNearbyRequest(trimmed)) {
+        const rentalPin = currentPins.find(
+          (pin) => pin.category === "rental" && pin.id === selectedPinId,
+        );
+        if (!rentalPin) return false;
+        const rentalId = rentalPin.id.slice("rental-".length);
+        const radius = nearbyCafeRadiusMeters(trimmed);
+        if (!isStoredRentalUuid(rentalId) || radius === null) return false;
+        if (groundedSearchesInFlight.has(setToolResult)) return false;
+        clearLocalMessages();
+        return runSearch(trimmed, {
+          query: trimmed,
+          intent: "cafe",
+          limit: 5,
+          nearbyRentalId: rentalId,
+          nearbyRadiusMeters: radius,
+        }, submissionId);
+      }
       if (!canFastPathCafeSearch(trimmed)) return false;
 
       const params = buildCafeSearchParams(trimmed);
       if (!params) return false;
 
-      if (busyRef.current) return false;
+      if (groundedSearchesInFlight.has(setToolResult)) return false;
       clearLocalMessages();
       return runSearch(trimmed, params, submissionId);
     },
-    [clearLocalMessages, runSearch],
+    [clearLocalMessages, runSearch, currentPins, selectedPinId, setToolResult],
   );
 
-  return { handleUserMessage };
+  // A card action uses the SAME read-only Nearby fast path as a typed
+  // contextual query. Never send a second agent turn or guess a map origin.
+  const searchNearbyRental = useCallback(async (rentalId: string): Promise<boolean> => {
+    const pinId = `rental-${rentalId}`;
+    if (groundedSearchesInFlight.has(setToolResult) || !isStoredRentalUuid(rentalId) ||
+        !currentPins.some((pin) => pin.id === pinId && pin.category === "rental")) {
+      return false;
+    }
+    const text = "Show nearby cafés for this apartment";
+    clearLocalMessages();
+    return runSearch(text, {
+      query: text,
+      intent: "cafe",
+      limit: 5,
+      nearbyRentalId: rentalId,
+      nearbyRadiusMeters: 800,
+    });
+  }, [currentPins, clearLocalMessages, runSearch, setToolResult]);
+
+  return { handleUserMessage, searchNearbyRental };
 }

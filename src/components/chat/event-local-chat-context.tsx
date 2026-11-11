@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import { useConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
+import type { RentalSearchApiParams } from "@/lib/rental-query-parser";
 import { useOptionalThreadNav } from "@/lib/chat/thread-nav-context";
 
 export type EventLocalChatMessage = {
@@ -34,9 +35,9 @@ type EventLocalChatContextValue = {
     kind: LocalClarifyKind,
     submissionId?: string,
   ) => void;
-  showExchange: (userText: string, assistantText: string, submissionId?: string) => void;
+  showExchange: (userText: string, assistantText: string, submissionId?: string, rentalSearch?: RentalSearchApiParams) => void;
   /** An assistant-only line, for when the renter's own message is already in the transcript. */
-  showNotice: (assistantText: string) => void;
+  showNotice: (assistantText: string, rentalSearch?: RentalSearchApiParams) => void;
   /** SAN-1507: true after a signed-out visitor asked the AI; the transcript then offers sign-in. */
   signInPrompt: boolean;
   /** Keep the visitor's question in the transcript and offer sign-in. No agent run is started. */
@@ -144,7 +145,7 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
    * after a refresh. Persist the same exchange through the existing thread route (same tables, same
    * owner check) and stay silent on 401: a guest has no thread to save to.
    */
-  const save = useCallback((threadId: string, batch: EventLocalChatMessage[]) => {
+  const save = useCallback((threadId: string, batch: EventLocalChatMessage[], rentalSearch?: RentalSearchApiParams) => {
     // Only a real thread uuid may become a request path; anything else is not one of ours.
     if (!isThreadUuid(threadId)) {
       console.warn("[EventLocalChat] refusing to save to a non-uuid thread id");
@@ -152,7 +153,10 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
     }
     const messages = batch
       .filter((m) => m.role === "user" || m.role === "assistant")
-      .map(({ id, role, content }) => ({ id, role, content }));
+      .map(({ id, role, content }) => ({
+        id, role, content,
+        ...(role === "assistant" && rentalSearch ? { rentalSearch } : {}),
+      }));
     if (messages.length === 0) return;
     // The id passed isThreadUuid above, so it can only ever be one path segment of this
     // same-origin route: scheme, host and prefix are fixed here and cannot be influenced by it.
@@ -189,9 +193,9 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
   }, [save]);
 
   const persist = useCallback(
-    (batch: EventLocalChatMessage[]) => {
+    (batch: EventLocalChatMessage[], rentalSearch?: RentalSearchApiParams) => {
       const threadId = threadIdFor(agentRef.current, generatedThreadIdRef, selectedThreadId);
-      if (threadId) save(threadId, batch);
+      if (threadId) save(threadId, batch, rentalSearch);
     },
     [save, selectedThreadId],
   );
@@ -251,7 +255,7 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
   );
 
   const showExchange = useCallback(
-    (userText: string, assistantText: string, submissionId?: string) => {
+    (userText: string, assistantText: string, submissionId?: string, rentalSearch?: RentalSearchApiParams) => {
       const nextMessages: EventLocalChatMessage[] = [
         { id: exchangeMessageId(submissionId, "user"), role: "user", content: userText },
       ];
@@ -270,20 +274,20 @@ export function EventLocalChatProvider({ children }: { children: ReactNode }) {
         return [...prev, ...nextMessages.filter((m) => !seen.has(m.id))];
       });
       publishSafely(nextMessages);
-      persist(nextMessages);
+      persist(nextMessages, rentalSearch);
     },
     [persist, publishSafely],
   );
 
   const showNotice = useCallback(
-    (assistantText: string) => {
+    (assistantText: string, rentalSearch?: RentalSearchApiParams) => {
       const next: EventLocalChatMessage[] = [
         { id: nextId(), role: "assistant", content: assistantText },
       ];
       setSignInPrompt(false);
       setMessages((prev) => [...prev, ...next]);
       publishSafely(next);
-      persist(next);
+      persist(next, rentalSearch);
     },
     [persist, publishSafely],
   );
@@ -344,4 +348,13 @@ export function useEventLocalChat() {
     throw new Error("useEventLocalChat must be used within EventLocalChatProvider");
   }
   return ctx;
+}
+
+/**
+ * Some pages render shared catalog cards without the event-local chat stack
+ * (the Rentals page). A child that needs it must be able to detect that instead
+ * of throwing, which the renderer would turn into a blank card.
+ */
+export function useOptionalEventLocalChat() {
+  return useContext(EventLocalChatContext);
 }

@@ -1,7 +1,13 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
+vi.mock("../../lib/google-places-cafe-search", () => ({
+  searchGoogleCafes: vi.fn().mockResolvedValue({ results: [], attribution: [] }),
+  withMedellinScope: (query: string) => query,
+}));
+
 vi.mock("../../lib/adk-grounding-client", () => ({
   invokeAdkGrounding: vi.fn(),
+  isAdkGroundingConfigured: () => true,
 }));
 
 vi.mock("../../lib/grounding-quota", () => ({
@@ -36,11 +42,11 @@ vi.mock("../search-venue-anchors", () => ({
 import { invokeAdkGrounding } from "../../lib/adk-grounding-client";
 import { searchRestaurants } from "../search-restaurants";
 import { searchCafeVenueAnchors, venueAnchorToCoordinates } from "../search-venue-anchors";
-import { searchGroundedPlacesTool } from "../search-grounded-places";
+import { isCafeGroundingQuery, searchGroundedPlacesTool } from "../search-grounded-places";
 import { adkUnavailableMock } from "./grounded-places-test-helpers";
 
 type GroundedOut = {
-  results: { title?: string; placeId?: string; latitude?: number; longitude?: number }[];
+  results: { title?: string; placeId?: string; latitude?: number; longitude?: number; sourceMode?: string }[];
   source: string;
   metadata?: Record<string, unknown>;
 };
@@ -69,6 +75,10 @@ describe("searchGroundedPlacesTool café venue_anchors fallback (UX-T-013)", () 
     vi.mocked(searchCafeVenueAnchors).mockReset();
   });
 
+  it("recognizes Colombian Spanish cafeterías deterministically", () => {
+    expect(isCafeGroundingQuery("cafeterías tranquilas en Laureles")).toBe(true);
+  });
+
   it("returns venue_anchors rows when ADK unavailable and query is coffee", async () => {
     vi.mocked(invokeAdkGrounding).mockResolvedValue(
       adkUnavailableMock({ reason: "adk_unavailable", status: 403 }),
@@ -84,6 +94,7 @@ describe("searchGroundedPlacesTool café venue_anchors fallback (UX-T-013)", () 
     expect(out.results.length).toBeGreaterThan(0);
     expect(out.results[0]?.title).toBe("Pergamino Café Laureles");
     expect(out.results[0]?.placeId).toBe("ChIJtest");
+    expect(out.results[0]?.sourceMode).toBe("saved_catalog");
     expect(out.metadata?.fallback).toBe("curated");
   });
 

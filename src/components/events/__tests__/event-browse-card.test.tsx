@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { EventBrowseCard } from "@/components/events/event-browse-card";
@@ -38,15 +39,54 @@ describe("EventBrowseCard", () => {
     expect(html).toContain('data-testid="event-card"');
     expect(html).toContain('data-result-kind="event"');
     expect(html).toContain("aspect-[16/10]");
-    expect(html).toContain('data-testid="event-browse-card-photo-placeholder"');
+    // A photo-less event now shows its real date instead of the generic tile.
+    expect(html).toContain('data-testid="event-browse-card-date-badge"');
+    // 2026-06-13T03:00Z is still Jun 12 in Medellín (UTC-5): the badge must use local time.
+    expect(html).toContain("JUN");
+    expect(html).toContain(">12<");
     expect(html).toContain('data-testid="event-details-cta"');
     expect(html).toContain('data-testid="event-buy-cta"');
     expect(html).toContain("/events/salsa-night-laureles");
-    const heroIndex = html.indexOf(
-      'data-testid="event-browse-card-photo-placeholder"',
-    );
+    const heroIndex = html.indexOf('data-testid="event-browse-card-date-badge"');
     const headingIndex = html.indexOf("<h3");
     expect(heroIndex).toBeLessThan(headingIndex);
+  });
+
+  it("uses the shared discovery action height on Ask, Details and Buy tickets", () => {
+    // SAN-1122 follow-up: event actions were 28px while restaurant and venue cards were 44px.
+    // The shared --spacing-card-action token is the single source. Read each element's OWN
+    // class attribute: a forward slice of the markup can pick up the next element's classes
+    // (the Button primitive emits `class` before `data-testid`), which would pass even if the
+    // Ask button lost the token.
+    const classOf = (html: string, testId: string): string | null => {
+      const doc = new DOMParser().parseFromString(html, "text/html");
+      return doc.querySelector(`[data-testid="${testId}"]`)?.getAttribute("class") ?? null;
+    };
+
+    const withTickets = renderToStaticMarkup(
+      <EventBrowseCard event={event} onAskSelect={() => undefined} />,
+    );
+    for (const testId of [
+      "event-ask-select",
+      "event-details-cta",
+      "event-buy-cta",
+    ]) {
+      const className = classOf(withTickets, testId);
+      expect(className, `${testId} must render`).not.toBeNull();
+      expect(className, `${testId} must use the card action token`).toContain(
+        "h-card-action",
+      );
+    }
+
+    const withoutTickets = renderToStaticMarkup(
+      <EventBrowseCard
+        event={{ ...event, canBuyTickets: false, pricePerTicket: null }}
+        onAskSelect={() => undefined}
+      />,
+    );
+    expect(classOf(withoutTickets, "event-ask-select")).toContain("h-card-action");
+    expect(classOf(withoutTickets, "event-details-cta")).toContain("h-card-action");
+    expect(classOf(withoutTickets, "event-buy-cta")).toBeNull();
   });
 
   it("renders a compact inline media card while preserving real ticket actions", () => {
@@ -125,5 +165,24 @@ describe("EventBrowseCard", () => {
     const noBuy = renderToStaticMarkup(<EventBrowseCard event={{ ...event, pricePerTicket: null, canBuyTickets: false }} />);
     expect(noBuy).not.toContain('data-testid="event-buy-cta"');
     expect(detailsTag(noBuy)).not.toContain("border-border");
+  });
+});
+
+describe("photo-less event media fits its frame", () => {
+  it.each(["cover", "inline"] as const)("fits the %s layout", (mediaLayout) => {
+    const html = renderToStaticMarkup(
+      <EventBrowseCard event={event} mediaLayout={mediaLayout} />,
+    );
+    expect(html).toContain('data-testid="event-browse-card-date-badge"');
+    if (mediaLayout === "inline") {
+      // One compact line: the stacked month/day plus the label overflows a 96x60 frame.
+      expect(html).toContain("JUN 12");
+      expect(html).not.toContain("text-2xl");
+    } else {
+      // Full tile keeps the month over a large day.
+      expect(html).toContain("text-2xl");
+    }
+    // The category label survives in both layouts.
+    expect(html).toContain("Event");
   });
 });

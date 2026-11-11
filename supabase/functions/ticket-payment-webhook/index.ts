@@ -26,7 +26,7 @@
  *   - Buyers retrieve tickets via /me/tickets/<order_id>?token=<access>
  *     (task 008) regardless. The email is delight, not the source of truth.
  */
-import Stripe from "https://esm.sh/stripe@14.21.0?target=denonext";
+import Stripe from "npm:stripe@23.0.0";
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { errorBody, getCorsHeaders, jsonResponse } from "../_shared/http.ts";
 import { getServiceClient } from "../_shared/supabase-clients.ts";
@@ -58,7 +58,7 @@ function getStripe(mode: "live" | "sandbox"): Stripe | null {
     : "STRIPE_SECRET_KEY");
   if (!key || (mode === "sandbox" && !/^(rk|sk)_test_/.test(key))) return null;
   const client = new Stripe(key, {
-    apiVersion: "2026-04-22.dahlia",
+    apiVersion: "2026-09-30.endive",
     httpClient: Stripe.createFetchHttpClient(),
   });
   stripeClients.set(mode, client);

@@ -52,16 +52,18 @@ export function placesRetryDelayMs(attempt: number): number {
 
 export async function withPlacesRetry<T>(
   fn: () => Promise<T>,
+  maxAttempts: number = PLACES_RETRY.MAX_ATTEMPTS,
 ): Promise<T> {
   let lastErr: unknown;
+  const attempts = Math.max(1, Math.min(maxAttempts, PLACES_RETRY.MAX_ATTEMPTS));
 
-  for (let attempt = 0; attempt < PLACES_RETRY.MAX_ATTEMPTS; attempt++) {
+  for (let attempt = 0; attempt < attempts; attempt++) {
     try {
       return await fn();
     } catch (err) {
       lastErr = err;
       const canRetry =
-        attempt < PLACES_RETRY.MAX_ATTEMPTS - 1 &&
+        attempt < attempts - 1 &&
         isRetryablePlacesError(err);
       if (!canRetry) {
         throw err;

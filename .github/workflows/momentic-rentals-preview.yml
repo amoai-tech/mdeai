@@ -1,8 +1,8 @@
-# Advisory Momentic pilot. Keep Playwright as the required deterministic/security foundation.
+# Advisory Momentic public-journeys pilot. Keep Playwright as the required deterministic/security foundation.
 # workflow_run loads only the default-branch workflow, after existing Floor CI completes.
 # Never checkout or execute PR code in this privileged advisory workflow.
 # The preview is untrusted browser content: never give it reusable access credentials.
-name: Momentic Rentals Preview (pilot)
+name: Momentic Discovery Preview (pilot)
 on:
   workflow_run:
     workflows: [Floor]
@@ -14,13 +14,14 @@ permissions:
   checks: write
 
 concurrency:
-  group: momentic-rentals-${{ github.event.workflow_run.event }}-${{ github.event.workflow_run.head_sha }}
+  group: momentic-discovery-${{ github.event.workflow_run.event }}-${{ github.event.workflow_run.head_sha }}
   cancel-in-progress: true
 
 jobs:
-  rentals:
+  discovery:
     if: github.event.workflow_run.event == 'pull_request'
-    runs-on: ubuntu-latest
+    # Momentic 3.69.0 / Playwright 1.60 cannot install browsers on ubuntu26.04.
+    runs-on: ubuntu-24.04
     timeout-minutes: 12
     # PILOT: failures are visible in the job and summary but cannot block merging.
     continue-on-error: true
@@ -32,7 +33,7 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: "22"
-      - name: Only test an open PR affecting public Rentals
+      - name: Select trusted public discovery tests for exact open PR
         id: scope
         env:
           GH_TOKEN: ${{ github.token }}
@@ -49,15 +50,22 @@ jobs:
             echo "PR no longer points to the event commit; skip stale run."
             exit 0
           fi
-          paths=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$pr/files?per_page=100" --jq '.[].filename')
-          if ! grep -Eq '^(src/app/rentals/|src/app/app/rentals/|src/app/app/me/saved/|src/app/api/leads/schedule-viewing/|src/components/rentals/|src/components/modals/schedule-viewing-modal\.tsx$|src/lib/rentals/|src/mastra/tools/search-rentals\.ts$|src/mastra/lib/intelligence-rental-search\.ts$|momentic/rentals/|momentic\.config\.yaml$|scripts/momentic-rentals-preview-url\.mjs$|\.github/workflows/momentic-rentals-preview\.yml$)' <<< "$paths"; then
-            echo "PR #$pr does not affect Rentals; skip."
-            exit 0
-          fi
-          echo "selected=true" >> "$GITHUB_OUTPUT"
           echo "started=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
           echo "pr=$pr" >> "$GITHUB_OUTPUT"
           echo "sha=$DEPLOY_SHA" >> "$GITHUB_OUTPUT"
+          paths=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$pr/files?per_page=100" --jq '.[].filename')
+          # Script is trusted from main; PR filenames only select a static allowlist of read-only tests.
+          tests_json=$(printf '%s\n' "$paths" | node scripts/momentic-pilot-scope.mjs)
+          count=$(jq -er 'length' <<< "$tests_json")
+          # A completed selection is different from a failed GitHub API or selector command.
+          echo "selection_ok=true" >> "$GITHUB_OUTPUT"
+          if [[ "$count" -eq 0 ]]; then
+            echo "PR #$pr does not affect public Rentals, Events, Concierge or Maps; advisory skipped."
+            exit 0
+          fi
+          echo "selected=true" >> "$GITHUB_OUTPUT"
+          echo "tests=$tests_json" >> "$GITHUB_OUTPUT"
+          echo "count=$count" >> "$GITHUB_OUTPUT"
 
       - name: Find and verify READY Vercel preview for exact PR commit
         if: steps.scope.outputs.selected == 'true'
@@ -117,36 +125,42 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_DEPLOYMENT_ID: ${{ steps.preview.outputs.id }}
         run: node scripts/momentic-preview-link.mjs create
-      - name: Require trusted Momentic test from main
+      - name: Require trusted Momentic tests from main
         if: steps.share.outputs.available == 'true'
         id: installed
+        env:
+          TESTS_JSON: ${{ steps.scope.outputs.tests }}
         run: |
-          tests=(
-            exact-bedroom-filter
-            broker-guest-redirect
-            renter-saved-guest-redirect
-            search-to-details
-            viewing-form-no-submit
-          )
-          if [[ ! -f momentic.config.yaml || ! -f scripts/momentic-rentals-preview-url.mjs ]]; then
+          set -euo pipefail
+          if [[ ! -f momentic.config.yaml || ! -f scripts/momentic-rentals-preview-url.mjs || ! -f scripts/momentic-pilot-scope.mjs ]]; then
             echo 'Trusted Momentic setup not yet merged into main; pilot pending.'
             exit 0
           fi
-          for test_name in "${tests[@]}"; do
-            if [[ ! -f "momentic/rentals/${test_name}.test.yaml" ]]; then
-              echo "Trusted ${test_name} test not yet merged into main; pilot pending."
+          if [[ "$(jq -r 'length' <<< "$TESTS_JSON")" -eq 0 ]]; then
+            echo 'No trusted tests selected; pilot pending.'
+            exit 0
+          fi
+          while IFS= read -r path; do
+            case "$path" in
+              momentic/rentals/*.test.yaml|momentic/events/*.test.yaml|momentic/concierge/*.test.yaml|momentic/maps/*.test.yaml) ;;
+              *) echo "Unsafe test path refused"; exit 1 ;;
+            esac
+            if [[ ! -f "$path" ]]; then
+              echo "Trusted Momentic test unavailable on main: $path"
               exit 0
             fi
-          done
-          node --test scripts/__tests__/momentic-rentals-preview-url.test.mjs
+          done < <(jq -r '.[]' <<< "$TESTS_JSON")
+          node --test scripts/__tests__/momentic-rentals-preview-url.test.mjs scripts/__tests__/momentic-pilot-scope.test.mjs
           echo 'present=true' >> "$GITHUB_OUTPUT"
       - name: Install Momentic Chromium only
+        id: browser_install
         if: steps.installed.outputs.present == 'true'
-        run: npx --yes momentic@3.67.1 install-browsers chromium
-      - name: Run focused signed-out Rentals regression
+        run: npx --yes momentic@3.69.0 install-browsers chromium
+      - name: Run selected read-only public journeys
         if: steps.installed.outputs.present == 'true'
         id: momentic
         env:
+          TESTS_JSON: ${{ steps.scope.outputs.tests }}
           PREVIEW_URL: ${{ steps.preview.outputs.url }}
           MOMENTIC_API_KEY: ${{ secrets.MOMENTIC_API_KEY }}
           MOMENTIC_PREVIEW_SHARE_TOKEN: ${{ steps.share.outputs.token }}
@@ -157,68 +171,92 @@ jobs:
           # Use only committed, trusted tests from main. Each test has its own
           # original route/query; overwriting every start URL with preview root
           # would silently test the wrong page (login and Details routes).
-          tests=(
-            exact-bedroom-filter
-            broker-guest-redirect
-            renter-saved-guest-redirect
-            search-to-details
-            viewing-form-no-submit
-          )
-          npx --yes momentic@3.67.1 lint
-          for test_name in "${tests[@]}"; do
-            path="momentic/rentals/${test_name}.test.yaml"
+          npx --yes momentic@3.69.0 lint
+          while IFS= read -r path; do
             start_url=$(node scripts/momentic-rentals-preview-url.mjs "$PREVIEW_URL" "$path")
-            npx --yes momentic@3.67.1 run "$path" \
+            test_name=$(basename "$path" .test.yaml)
+            npx --yes momentic@3.69.0 run "$path" \
               --url-override "$start_url" \
               --reporter steps --reporter junit \
-              --reporter-dir "$RUNNER_TEMP/momentic-junit/${test_name}" \
-              --output-dir "$RUNNER_TEMP/momentic-rentals/${test_name}" \
+              --reporter-dir "$RUNNER_TEMP/momentic-junit/$test_name" \
+              --output-dir "$RUNNER_TEMP/momentic-public/$test_name" \
               --upload-results --retries 0 -y
-          done
-      - name: Publish neutral advisory PR check and summary
-        if: always() && steps.scope.outputs.selected == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          HEAD_SHA: ${{ steps.scope.outputs.sha }}
-          PR_NUMBER: ${{ steps.scope.outputs.pr }}
-          OUTCOME: ${{ steps.momentic.outcome }}
-          VERIFIED: ${{ steps.preview.outputs.verified }}
-          INSTALLED: ${{ steps.installed.outputs.present }}
-          SHARED: ${{ steps.share.outputs.available }}
-          STARTED_AT: ${{ steps.scope.outputs.started }}
-        run: |
-          set -euo pipefail
-          if [[ "$OUTCOME" == success ]]; then
-            result="PASS — 5/5 Rentals read-only journeys"
-          elif [[ "$VERIFIED" != true ]]; then
-            result="BLOCKED — no verified READY preview (0/5 executed)"
-          elif [[ "$SHARED" != true ]]; then
-            result="BLOCKED — temporary scoped preview access unavailable (0/5 executed)"
-          elif [[ "$INSTALLED" != true ]]; then
-            result="BLOCKED — trusted tests unavailable (0/5 executed)"
-          else
-            result="FAIL — Momentic regression; inspect individual JUnit cases"
-          fi
-          url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
-          {
-            echo "### Momentic Rentals preview — advisory pilot"
-            echo "PR #$PR_NUMBER · $HEAD_SHA · **$result**"
-            echo "Read-only: bedroom filter, guest auth redirects, search → Details, viewing/follow-up form"
-            echo "Advisory, not a required merge check. Skipped/protected previews are not test passes. [Run and evidence]($url)."
-          } >> "$GITHUB_STEP_SUMMARY"
-          gh api "repos/$GITHUB_REPOSITORY/check-runs" -X POST             -f name='Momentic Rentals Preview (pilot)' -f head_sha="$HEAD_SHA"             -f status=completed -f conclusion=neutral -f started_at="$STARTED_AT" -f completed_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)" -f details_url="$url"             -f "output[title]=$result (advisory)"             -f "output[summary]=Five read-only Rentals journeys: $result. See Actions summary and private Momentic recordings." >/dev/null
+          done < <(jq -r '.[]' <<< "$TESTS_JSON")
       - name: Revoke temporary preview access
         if: always() && steps.share.outputs.available == 'true'
+        id: revoke
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_DEPLOYMENT_ID: ${{ steps.preview.outputs.id }}
           MOMENTIC_PREVIEW_SHARE_TOKEN: ${{ steps.share.outputs.token }}
         run: node scripts/momentic-preview-link.mjs revoke
+      - name: Publish advisory PR check with honest status
+        if: always() && steps.scope.outputs.pr != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ steps.scope.outputs.sha }}
+          PR_NUMBER: ${{ steps.scope.outputs.pr }}
+          SELECTED: ${{ steps.scope.outputs.selected }}
+          SELECTION_OK: ${{ steps.scope.outputs.selection_ok }}
+          TEST_COUNT: ${{ steps.scope.outputs.count }}
+          TESTS_JSON: ${{ steps.scope.outputs.tests }}
+          OUTCOME: ${{ steps.momentic.outcome }}
+          BROWSER_INSTALL: ${{ steps.browser_install.outcome }}
+          VERIFIED: ${{ steps.preview.outputs.verified }}
+          INSTALLED: ${{ steps.installed.outputs.present }}
+          SHARED: ${{ steps.share.outputs.available }}
+          REVOKED: ${{ steps.revoke.outcome }}
+          STARTED_AT: ${{ steps.scope.outputs.started }}
+        run: |
+          set -euo pipefail
+          count="${TEST_COUNT:-0}"
+          conclusion=neutral
+          if [[ "$SELECTION_OK" != true ]]; then
+            result="ERROR — could not select trusted tests for this PR"
+            conclusion=failure
+          elif [[ "$SELECTED" != true ]]; then
+            result="SKIPPED — no public discovery tests affected (0 executed)"
+          elif [[ "$SHARED" == true && "$REVOKED" != success ]]; then
+            result="ERROR — temporary preview access revocation failed"
+            conclusion=failure
+          elif [[ "$BROWSER_INSTALL" == failure ]]; then
+            result="BLOCKED — Momentic Chromium installation failed (0/$count executed)"
+          elif [[ "$BROWSER_INSTALL" == cancelled ]]; then
+            result="BLOCKED — Momentic Chromium installation cancelled (0/$count executed)"
+          elif [[ "$OUTCOME" == cancelled ]]; then
+            result="BLOCKED — browser test run was cancelled; result unknown"
+          elif [[ "$OUTCOME" == success ]]; then
+            result="PASS — $count/$count selected read-only journeys"
+            conclusion=success
+          elif [[ "$VERIFIED" != true ]]; then
+            result="BLOCKED — no verified READY preview (0/$count executed)"
+          elif [[ "$SHARED" != true ]]; then
+            result="BLOCKED — temporary scoped preview access unavailable (0/$count executed)"
+          elif [[ "$INSTALLED" != true ]]; then
+            result="BLOCKED — trusted tests unavailable on main (0/$count executed)"
+          else
+            result="FAIL — selected Momentic test failed; inspect JUnit and run logs"
+            conclusion=failure
+          fi
+          url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          {
+            echo "### Momentic Discovery preview — advisory pilot"
+            echo "PR #$PR_NUMBER · $HEAD_SHA · **$result**"
+            echo "Selected read-only tests: $TESTS_JSON"
+            echo "Advisory, not a required merge check. Skipped or blocked means not tested. [Run and evidence]($url)."
+          } >> "$GITHUB_STEP_SUMMARY"
+          gh api "repos/$GITHUB_REPOSITORY/check-runs" -X POST \
+            -f name='Momentic Discovery Preview (pilot)' -f head_sha="$HEAD_SHA" \
+            -f status=completed -f conclusion="$conclusion" -f started_at="$STARTED_AT" \
+            -f completed_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)" -f details_url="$url" \
+            -f "output[title]=$result (advisory)" \
+            -f "output[summary]=Read-only public journeys: $result. See Actions and Momentic run evidence." >/dev/null
+
       - name: Upload JUnit evidence only (no protected-preview browser traces)
         if: always() && steps.scope.outputs.selected == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: momentic-rentals-junit-${{ github.run_id }}
+          name: momentic-discovery-junit-${{ github.run_id }}
           path: ${{ runner.temp }}/momentic-junit/
           if-no-files-found: ignore
           retention-days: 7

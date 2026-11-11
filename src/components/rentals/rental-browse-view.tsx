@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Building2 } from "lucide-react";
@@ -19,9 +19,18 @@ import {
   type RentalAskDetailsOutcome,
 } from "@/components/rentals/rental-ask-composer";
 import { LeadConfirmationBanner } from "@/components/chat/lead-confirmation-banner";
+import { RentalRecommendationsSurface } from "@/components/copilot/a2ui/rental-recommendations-surface";
+import { RentalA2UIContext } from "@/components/chat/rental-a2ui-context";
+import { RentalFilterDraftProvider } from "@/components/rentals/rental-filter-draft";
+import { RentalFilterPanelActions } from "@/components/rentals/rental-filter-panel-actions";
+import {
+  RentalFastPathProvider,
+  useRentalFastPath,
+} from "@/components/chat/rental-fast-path-context";
 import { RentalUiProvider, useRentalUi } from "@/components/chat/rental-ui-context";
 import { useOptionalConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
 import { RentalDetailsFrontendTool } from "@/components/rentals/rental-details-tool";
+import { RentalPageControlTool } from "@/components/browse/page-filter-tools";
 import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 import { resolveRentalForDetails } from "@/lib/rentals/details-target";
 import { bookingReviewHref } from "@/lib/rentals/booking-review-url";
@@ -188,11 +197,22 @@ function RentalBrowseViewInner({
         : `Long-stay rentals — ${formatCountSubtitle(total, results.length)}${stayLabel ? ` · open ${stayLabel}` : ""}`;
 
   return (
+    // The inner view is already keyed on the URL filters, so a native change
+    // remounts it and reseeds this draft. A key here would duplicate that reset.
+    <RentalFilterDraftProvider initialBeds={beds ?? null}>
     <>
+      <PageRentalResultsBridge results={shownResults} />
       {coAgent && !isDeterministicE2E() ? (
         <RentalDetailsFrontendTool results={shownResults} onOpen={openDetailsFor} />
       ) : null}
+      {/* SAN-1656 — the page's own authorized rows feed the fast-path context the
+          catalog already resolves cards from, and the existing A2UI context
+          publishes their IDs. No second query and no second data path. */}
+      {coAgent && !isDeterministicE2E() ? <RentalA2UIContext /> : null}
+      {/* SAN-1655 — live filters for the model + the one real Apply action. */}
+      {coAgent && !isDeterministicE2E() ? <RentalFilterPanelActions filters={filterState} /> : null}
       <DiscoveryPageContext page="rentals" filters={filterState} selectedId={selectedForAskId ?? detailsRental?.id ?? null} />
+      <RentalPageControlTool filters={filterState} />
       <DiscoveryWorkspace
         testId="rentals-browse"
         activeSlug="rentals"
@@ -249,6 +269,9 @@ function RentalBrowseViewInner({
         }
       >
         <section className="mt-4" aria-label="Rental listings">
+          {/* SAN-1656 — the named AI recommendations panel. It renders nothing
+              until Ask MDE targets it, so native results/map/Details are unchanged. */}
+          <RentalRecommendationsSurface />
           {/* A saved viewing request must be visible where it was made, not only in the chat. */}
           <LeadConfirmationBanner />
           {error ? (
@@ -368,7 +391,21 @@ function RentalBrowseViewInner({
         />
       ) : null}
     </>
+    </RentalFilterDraftProvider>
   );
+}
+
+/**
+ * SAN-1656 — hand the page's server-authorized rows to the fast-path context.
+ * `RentalCard` already resolves IDs from it, so the AI panel needs no second
+ * query, no duplicate search and no new data path.
+ */
+function PageRentalResultsBridge({ results }: { results: Rental[] }) {
+  const { setToolResult } = useRentalFastPath();
+  useEffect(() => {
+    setToolResult({ results });
+  }, [results, setToolResult]);
+  return null;
 }
 
 /** Supply the shared rental UI and map contexts for the browse workspace. */
@@ -377,13 +414,15 @@ export function RentalBrowseView(props: RentalBrowseViewProps) {
   const threadId = nav?.activeThreadId ?? nav?.sessionThreadId;
   return (
     <RentalUiProvider>
-      <BrowseMapContextShell>
-        <RentalBrowseViewInner
-          key={JSON.stringify([threadId, props.neighborhood, props.beds, props.from, props.through, props.previewMode, props.dateError])}
-          {...props}
-        />
-      </BrowseMapContextShell>
-      <ScheduleViewingModal />
+      <RentalFastPathProvider>
+        <BrowseMapContextShell>
+          <RentalBrowseViewInner
+            key={JSON.stringify([threadId, props.neighborhood, props.beds, props.from, props.through, props.previewMode, props.dateError])}
+            {...props}
+          />
+        </BrowseMapContextShell>
+        <ScheduleViewingModal />
+      </RentalFastPathProvider>
     </RentalUiProvider>
   );
 }

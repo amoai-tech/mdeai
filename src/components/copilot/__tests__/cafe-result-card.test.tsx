@@ -51,6 +51,25 @@ describe("CafeResultCard", () => {
     expect(html).toContain('data-testid="cafe-card-reviews-link"');
   });
 
+  it("labels saved catalog and demo rows without saying Google verified", () => {
+    for (const [sourceMode, label] of [
+      ["saved_catalog", "Saved MDE catalog"],
+      ["demo_fixture", "Demo example"],
+    ] as const) {
+      const html = renderToStaticMarkup(
+        <CafeResultCard
+          testId="grounded-card"
+          rank={1}
+          title="Example Café"
+          sourceMode={sourceMode}
+        />,
+      );
+      expect(html).toContain(label);
+      expect(html).not.toContain("Google-verified candidate");
+      expect(html).not.toContain('data-testid="grounding-attribution"');
+    }
+  });
+
   describe("SAN-878 · Google Maps source attribution", () => {
     afterEach(() => vi.unstubAllEnvs());
 

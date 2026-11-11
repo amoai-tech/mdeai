@@ -110,9 +110,9 @@ describe("chat-filter-chips", () => {
     // Existing Mastra/Supabase tool compares only stored same-currency monthly values.
     const predicate = rentalMonthlyBudgetPredicate(4_000_000, "COP");
     expect(predicate).toContain("currency.eq.COP,price_monthly.not.is.null,price_monthly.lte.4000000");
-    expect(predicate).toContain("currency.neq.COP");
+    expect(predicate).not.toContain("currency.neq.COP");
     expect(predicate).not.toContain("price_daily.lte");
-    expect(budgetNoteFor({ ...params })).toMatch(/other currencies/i);
+    expect(budgetNoteFor({ ...params })).toMatch(/other currencies are excluded/i);
   });
 
 });

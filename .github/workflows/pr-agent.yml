@@ -23,7 +23,7 @@ jobs:
       issues: write
       pull-requests: write
     # Shared infra merged #17/#18: 300s model timeout and 16K output budget.
-    uses: amoai-tech/pr-review-infra/.github/workflows/pr-agent.yml@ee25454f664417b3d10513ee4ec90664e050bc56
+    uses: amoai-tech/pr-review-infra/.github/workflows/pr-agent.yml@9c6e84f3ffbd3f90095d87a277c4aced8012edef
     with:
       evidence_title: MDE PR-Agent Evidence
     secrets:
@@ -39,7 +39,7 @@ jobs:
       github.event.sender.type != 'Bot' &&
       github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
-    timeout-minutes: 4
+    timeout-minutes: 12
     concurrency:
       group: mde-smart-coverage-${{ github.repository }}-${{ github.event.pull_request.number }}
       cancel-in-progress: true
@@ -74,8 +74,10 @@ jobs:
               return;
             }
             const { buildCoverageReport, validateGeneratedJson,
-              validateSnapshotReferences, COVERAGE_MARKER } = await import(pathToFileURL(source).href);
-            const { parseReviewEnvelope } = await import(pathToFileURL(
+              validateSnapshotReferences, COVERAGE_MARKER,
+              hasPublishedPartialReview, staleTargetedRecoveryComments,
+              TARGETED_RECOVERY_MARKER } = await import(pathToFileURL(source).href);
+            const { parseReviewEnvelope, isStandaloneReview } = await import(pathToFileURL(
               `${process.env.GITHUB_WORKSPACE}/scripts/pr-agent/review-policy.mjs`).href);
             const repo = { owner: context.repo.owner, repo: context.repo.repo };
             const pull_number = context.issue.number;
@@ -134,14 +136,73 @@ jobs:
               const envelope = parseReviewEnvelope(comment.body ?? "");
               return envelope.valid && envelope.baseSha === baseSha && envelope.headSha === headSha;
             }).sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at));
+            // The reusable review job includes strict certification. It can fail
+            // AFTER PR-Agent published an exact-head partial review. Preserve that
+            // review's evidence without treating all changed files as failed.
+            // Do not interpret a random/stale bot comment as review proof.
+            const canonicalReview = matching.find((comment) => {
+              const envelope = parseReviewEnvelope(comment.body ?? "");
+              return envelope.type === "canonical" && envelope.command === "/review" &&
+                envelope.body.includes("<!-- pr-agent:review:full -->");
+            });
+            // Match the canonical review or PR-Agent's verified standalone
+            // fallback, not whichever bot comment was edited most recently.
+            const standaloneReview = matching.find((comment) => {
+              const envelope = parseReviewEnvelope(comment.body ?? "");
+              return envelope.type === "standalone" && envelope.command === "/review" &&
+                isStandaloneReview(envelope.body);
+            });
+            // A failed reusable job may have published useful partial findings.
+            // Override its status ONLY for one valid persisted exact-head partial
+            // state. Missing/malformed/complete states cannot conceal a timeout
+            // or cancellation that happened after a comment was published.
+            // Trusted base may be older while this feature PR is under review.
+            // Never execute PR-head policy: wait for the trusted module to merge.
+            const publishPartial = typeof hasPublishedPartialReview === "function" &&
+              hasPublishedPartialReview({
+                body: canonicalReview?.body ?? "", baseSha, headSha,
+                reviewJobResult: process.env.REVIEW_JOB_RESULT,
+              });
             const report = buildCoverageReport({ repo: `${repo.owner}/${repo.repo}`, number: pull_number,
               baseSha, headSha, files, expectedCount: current.changed_files,
-              reviewBody: matching[0]?.body ?? "", reviewJobResult: process.env.REVIEW_JOB_RESULT,
+              reviewBody: process.env.REVIEW_JOB_RESULT === "success"
+                ? (canonicalReview ?? standaloneReview)?.body ?? "" : canonicalReview?.body ?? "",
+              reviewJobResult: publishPartial ? "success" : process.env.REVIEW_JOB_RESULT,
               validations });
+            if (process.env.REVIEW_JOB_RESULT !== "success") {
+              report.body += `\n**Reusable reviewer check:** ${process.env.REVIEW_JOB_RESULT}; ${publishPartial
+                ? "published partial findings retained, full-review verification not certified"
+                : "no independently established complete review"}.\n`;
+            }
             const { data: latest } = await github.rest.pulls.get({ ...repo, pull_number });
             if (latest.base.sha !== baseSha || latest.head.sha !== headSha) {
               core.notice("PR changed during analysis; suppressing stale coverage comment.");
               return;
+            }
+            // Keep the existing targeted review history truthful if an
+            // earlier revision was superseded. The model reviewer itself is
+            // owned only by the immutable shared workflow.
+            // Trusted PR base can predate this helper. Preserve current-head
+            // partial coverage and defer stale-comment cleanup until base merges.
+            const recoveryMarker = typeof TARGETED_RECOVERY_MARKER === "string"
+              ? TARGETED_RECOVERY_MARKER : "<!-- mde-pr-agent-targeted-recovery:v1 -->";
+            const staleTargets = typeof staleTargetedRecoveryComments === "function"
+              ? staleTargetedRecoveryComments(comments, baseSha, headSha, recoveryMarker) : [];
+            for (const stale of staleTargets) {
+              try {
+                await github.rest.issues.updateComment({
+                  ...repo, comment_id: stale.id,
+                  body: recoveryMarker +
+                    "\n## Targeted PR-Agent follow-up — OUTDATED\n\n" +
+                    "The PR base/head changed. Previous targeted findings do not apply " +
+                    "to this revision. The current review remains authoritative.\n",
+                });
+              } catch (error) {
+                // A cleanup write failure must not suppress the truthful
+                // current-head coverage report or alter the required gate.
+                core.warning("Unable to retire old targeted review: " +
+                  String(error.message).slice(0, 160));
+              }
             }
             const previous = comments.find((comment) =>
               comment.user?.login === "github-actions[bot]" && (comment.body ?? "").startsWith(COVERAGE_MARKER));

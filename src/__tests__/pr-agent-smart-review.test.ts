@@ -4,7 +4,8 @@ import { parseDocument } from "yaml";
 import { reviewEnvelope, excludedFilesFromReview, clippedPatchesFromReview } from "../../scripts/pr-agent/review-policy.mjs";
 import {
   buildCoverageReport, classifyFiles, planFollowupBatches,
-  reviewCoverageFromComment, parseReviewUsage, validateGeneratedJson, validateSnapshotReferences, COVERAGE_MARKER,
+  reviewCoverageFromComment, hasPublishedPartialReview, parseReviewUsage, validateGeneratedJson, validateSnapshotReferences,
+  COVERAGE_MARKER, TARGETED_RECOVERY_MARKER, staleTargetedRecoveryComments,
 } from "../../scripts/pr-agent/smart-review.mjs";
 
 const BASE = "a".repeat(40), HEAD = "b".repeat(40);
@@ -203,6 +204,50 @@ describe("SAN-1609 smart coverage", () => {
     expect(buildCoverageReport({ repo: "a/b", number: 1, baseSha: BASE, headSha: "c".repeat(40), files, expectedCount: 5, reviewBody: complete }).status).toBe("UNKNOWN");
   });
 
+  it("preserves published exact-head partial evidence when the reusable verifier fails", () => {
+    const excludedState = `${marker}\n<!-- pr-agent:review:full -->\n<!-- pr-agent-review-state:v1\n${JSON.stringify({
+      schema_version: 1, findings: [],
+      last_run: { head_sha: HEAD, complete: false, excluded_files: ["src/payments/checkout.ts"] },
+    })}\n-->`;
+    const report = buildCoverageReport({ repo: "amoai-tech/mdeai", number: 756,
+      baseSha: BASE, headSha: HEAD,
+      files: [
+        { filename: "src/payments/checkout.ts", patch: "+checkout" },
+        { filename: "src/components/Event.tsx", patch: "+component" },
+      ], expectedCount: 2, reviewBody: excludedState, reviewJobResult: "success" });
+    expect(report.status).toBe("PARTIAL");
+    expect(report.counts.uncovered).toBe(1);
+    expect(report.counts.failed).toBe(0);
+    expect(report.counts.unknown).toBe(1);
+    expect(report.details.find((f: { path: string }) => f.path === "src/payments/checkout.ts")?.coverage).toBe("unreviewed");
+    expect(report.body).toContain("**Follow-up:** 2 file(s) lack proven AI coverage");
+    // Actual reviewer failure with no trusted review evidence must still fail.
+    const noReview = buildCoverageReport({ repo: "amoai-tech/mdeai", number: 756,
+      baseSha: BASE, headSha: HEAD, files: [{ filename: "src/payments/checkout.ts", patch: "+x" }],
+      expectedCount: 1, reviewJobResult: "failure" });
+    expect(noReview.status).toBe("FAILED");
+  });
+
+  it("only accepts a typed exact-head partial state as advisory evidence after a failed job", () => {
+    const partial = `${marker}\n<!-- pr-agent:review:full -->\n<!-- pr-agent-review-state:v1\n${JSON.stringify({
+      schema_version: 1, findings: [], last_run: {
+        head_sha: HEAD, complete: false, excluded_files: ["src/payments/checkout.ts"],
+      },
+    })}\n-->`;
+    const accepts = (body: string, status = "failure") => hasPublishedPartialReview({
+      body, baseSha: BASE, headSha: HEAD, reviewJobResult: status,
+    });
+    expect(accepts(partial)).toBe(true);
+    expect(accepts(partial, "success")).toBe(false);
+    expect(accepts(partial.replace(HEAD, "c".repeat(40)))).toBe(false);
+    expect(accepts(partial.replace('"complete":false', '"complete":true'))).toBe(false);
+    expect(accepts(partial.replace('"excluded_files":["src/payments/checkout.ts"]', '"excluded_files":[]'))).toBe(false);
+    expect(accepts(partial.replace('"schema_version":1', '"schema_version":2'))).toBe(false);
+    expect(accepts(partial.replace('"findings":[]', '"findings":"bad"'))).toBe(false);
+    expect(accepts(partial.replace('<!-- pr-agent-review-state:v1', '<!-- old-state'))).toBe(false);
+    expect(accepts(partial.replace('<!-- pr-agent:review:full -->', 'other'))).toBe(false);
+  });
+
   it("reports partial missing high-risk files, unknown state and provider failure honestly", () => {
     const report = buildCoverageReport({ repo: "amoai-tech/mdeai", number: 485, baseSha: BASE, headSha: HEAD, files, expectedCount: 5, reviewBody: omitted,
       validations: { "docs/progress/data/pr-files.json": { status: "validated" } } });
@@ -239,6 +284,13 @@ describe("SAN-1609 smart coverage", () => {
     expect(job.permissions).toEqual({ actions: "read", contents: "read", "pull-requests": "write", issues: "write" });
     expect(job.steps[0].with.ref).toBe("${{ github.event.pull_request.base.sha }}");
     expect(source).toMatch(/^    uses: amoai-tech\/pr-review-infra\/\.github\/workflows\/pr-agent\.yml@[0-9a-f]{40}$/m);
+    expect(source).toContain('const canonicalReview = matching.find((comment) => {');
+    expect(source).toContain('reviewBody: process.env.REVIEW_JOB_RESULT === "success"');
+    expect(source).toContain("isStandaloneReview(envelope.body)");
+    expect(source).toContain("canonicalReview ?? standaloneReview");
+    expect(source).toContain('reviewJobResult: publishPartial ? "success" : process.env.REVIEW_JOB_RESULT');
+    expect(source).toContain('hasPublishedPartialReview({');
+    expect(source).toContain('**Reusable reviewer check:**');
   });
 });
 
@@ -481,5 +533,91 @@ describe("SAN-1609 quality, budget and provider run metrics", () => {
       files, expectedCount: 301 });
     expect(incomplete.status).toBe("UNKNOWN");
     expect(incomplete.body).toContain("Inventory UNKNOWN");
+  });
+});
+
+
+describe("SAN-1640 retire stale targeted model review", () => {
+  const oldBase = "c".repeat(40);
+  const previous = (base: string, head: string) =>
+    TARGETED_RECOVERY_MARKER + "\n## Verified bounded follow-up\n\n" +
+    "**File:** src/components/events/event-ticket-tiers.tsx\n" +
+    "**Base/head:** " + base + " / " + head + "\n" +
+    "**Diff SHA-256:** " + "d".repeat(64) + "\n" +
+    "## Model findings\n**Base/head:** " + BASE + " / " + HEAD + "\n";
+  const bot = (body: string, id=123) => ({
+    id, body, user: { login: "github-actions[bot]" },
+  });
+
+  it("marks only older same-bot targeted findings OUTDATED even if model prose spoofs current SHA", () => {
+    const stale = bot(previous(oldBase, HEAD));
+    const current = bot(previous(BASE, HEAD), 456);
+    const nonbot = { ...stale, id: 789, user: { login: "external-author" } };
+    const prior = bot(TARGETED_RECOVERY_MARKER +
+      "\n## Targeted PR-Agent follow-up — OUTDATED\n\n", 321);
+    expect(staleTargetedRecoveryComments(
+      [stale, current, nonbot, prior, bot("different", 1234)], BASE, HEAD, TARGETED_RECOVERY_MARKER))
+      .toEqual([stale]);
+  });
+
+  it("rejects missing/malformed headers and never takes a user comment as a bot review", () => {
+    const bad = bot(TARGETED_RECOVERY_MARKER + "\n## Follow-up\n\nmodel claims current sha");
+    expect(staleTargetedRecoveryComments([bad], BASE, HEAD, TARGETED_RECOVERY_MARKER)).toEqual([bad]);
+    expect(staleTargetedRecoveryComments([bad], "invalid", HEAD, TARGETED_RECOVERY_MARKER)).toEqual([]);
+    expect(staleTargetedRecoveryComments([], BASE, HEAD, TARGETED_RECOVERY_MARKER)).toEqual([]);
+    expect(staleTargetedRecoveryComments(null, BASE, HEAD, TARGETED_RECOVERY_MARKER)).toEqual([]);
+  });
+});
+
+describe("SAN-1640 structured recovery headers", () => {
+  const bot = (body: string) => ({ id: 23, body, user: { login: "github-actions[bot]" } });
+  const makeHeader = (base: string, head: string) =>
+    TARGETED_RECOVERY_MARKER + "\n## Verified bounded follow-up\n\n" +
+    "**File:** src/components/events/event-ticket-tiers.tsx\n" +
+    "Extra metadata: value\n".repeat(150) +
+    "**Base/head:** " + base + " / " + head + "\n" +
+    "**Diff SHA-256:** " + "d".repeat(64) + "\n" +
+    "## Findings\n**Base/head:** " + BASE + " / " + HEAD + "\n";
+
+  it("keeps a current bot review even when its header grows beyond 16 lines and 1800 chars", () => {
+    expect(staleTargetedRecoveryComments(
+      [bot(makeHeader(BASE, HEAD))], BASE, HEAD, TARGETED_RECOVERY_MARKER)).toEqual([]);
+  });
+
+  it("retires an old source revision regardless of model-text spoofing or header length", () => {
+    const stale = bot(makeHeader("c".repeat(40), HEAD));
+    expect(staleTargetedRecoveryComments(
+      [stale], BASE, HEAD, TARGETED_RECOVERY_MARKER)).toEqual([stale]);
+  });
+
+  it("rejects ambiguous header identity and missing proof without inspecting model prose", () => {
+    const dup = bot(makeHeader(BASE, HEAD).replace("**Diff SHA-256:**",
+      "**Base/head:** " + BASE + " / " + HEAD + "\n**Diff SHA-256:**"));
+    const missingDigest = bot(TARGETED_RECOVERY_MARKER +
+      "\n## Verified bounded follow-up\n\n## Findings\n**Base/head:** " +
+      BASE + " / " + HEAD + "\n");
+    expect(staleTargetedRecoveryComments(
+      [dup, missingDigest], BASE, HEAD, TARGETED_RECOVERY_MARKER)).toEqual([dup, missingDigest]);
+  });
+
+  it("requires an explicit recovery marker rather than depending on module scope", () => {
+    const stale = bot(makeHeader("c".repeat(40), HEAD));
+    expect(staleTargetedRecoveryComments([stale], BASE, HEAD)).toEqual([]);
+    expect(staleTargetedRecoveryComments([stale], BASE, HEAD, "")).toEqual([]);
+    expect(staleTargetedRecoveryComments(
+      [stale], BASE, HEAD, TARGETED_RECOVERY_MARKER)).toEqual([stale]);
+  });
+});
+
+describe("SAN-1640 trusted-base compatibility for stale targeted comments", () => {
+  it("guards new helper imports when the pull request base has not merged them", () => {
+    const workflow = readFileSync(".github/workflows/pr-agent.yml", "utf8");
+    const doc = parseDocument(workflow);
+    expect(doc.errors).toEqual([]);
+    expect(workflow).toContain('typeof staleTargetedRecoveryComments === "function"');
+    expect(workflow).toContain('typeof TARGETED_RECOVERY_MARKER === "string"');
+    expect(workflow).toContain("for (const stale of staleTargets)");
+    expect(workflow).not.toContain(
+      "for (const stale of staleTargetedRecoveryComments(comments, baseSha, headSha))");
   });
 });

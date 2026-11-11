@@ -5,6 +5,7 @@ url: https://www.mdeai.co/
 labels:
   - rentals
   - pr-pilot
+  - read-only
 retries: 0
 steps:
   - click: "Rentals in the public website navigation"

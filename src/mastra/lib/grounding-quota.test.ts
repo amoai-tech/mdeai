@@ -24,8 +24,8 @@ describe("incrementAndCheckGroundingQuota", () => {
     expect(r).toEqual({ allowed: false, reason: "disabled" });
   });
 
-  it("allows when Supabase not configured (dev)", async () => {
+  it("fails closed when Supabase quota storage is not configured", async () => {
     const r = await incrementAndCheckGroundingQuota();
-    expect(r).toEqual({ allowed: true });
+    expect(r).toEqual({ allowed: false, reason: "quota_unavailable" });
   });
 });

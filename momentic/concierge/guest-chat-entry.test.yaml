@@ -1,0 +1,13 @@
+fileType: momentic/test/v2
+id: mde-concierge-guest-chat-entry
+description: "Read-only guest journey: chat hydrates, explains available topics and shows sign-in before any agent run."
+url: https://www.mdeai.co/chat
+labels:
+  - concierge
+  - guest
+  - read-only
+retries: 0
+steps:
+  - assert: "The MDE chat is interactive and has finished session initialization: its greeting describes rentals and events, Sign in is visible, and Checking session is not stuck on screen."
+  - click: "Events topic filter chip in the chat area (not the Events navigation link); do not send a chat message"
+  - assert: "The Events topic filter is visibly selected or the chat input reflects the chosen Events scope; no AI answer or booking was requested."

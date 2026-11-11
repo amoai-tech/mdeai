@@ -3,6 +3,35 @@ import { createHash } from "node:crypto";
 import { parseReviewEnvelope, excludedFilesFromReview, clippedPatchesFromReview, coverageFailure } from "./review-policy.mjs";
 
 export const COVERAGE_MARKER = "<!-- mde-smart-review-coverage:v1 -->";
+export const TARGETED_RECOVERY_MARKER = "<!-- mde-pr-agent-targeted-recovery:v1 -->";
+
+/** Retire stale targeted results without making another provider call.
+ * A bot comment's fixed header carries the exact base/head. Never search
+ * free-form model findings for revision identity or trust a human comment.
+ */
+export function staleTargetedRecoveryComments(comments, baseSha, headSha, recoveryMarker) {
+  if (!Array.isArray(comments) ||
+      typeof recoveryMarker !== "string" || !recoveryMarker ||
+      !/^[a-f0-9]{40}$/.test(baseSha ?? "") ||
+      !/^[a-f0-9]{40}$/.test(headSha ?? "")) return [];
+  const expected = "**Base/head:** " + baseSha + " / " + headSha;
+  return comments.filter((comment) => {
+    if (comment?.user?.login !== "github-actions[bot]" ||
+        typeof comment.body !== "string" ||
+        !comment.body.startsWith(recoveryMarker + "\n") ||
+        comment.body.startsWith(recoveryMarker +
+          "\n## Targeted PR-Agent follow-up — OUTDATED")) return false;
+    // The source digest starts immediately after the bot-authored revision
+    // header. Never accept a model-written Base/head from the findings below.
+    // This follows the format boundary rather than a fixed line/byte cutoff.
+    const headerEnd = comment.body.indexOf("\n**Diff SHA-256:** ");
+    if (headerEnd < 0) return true; // Malformed bot output cannot claim a current head.
+    const revisionLines = comment.body.slice(0, headerEnd).split("\n")
+      .filter((line) => line.startsWith("**Base/head:** "));
+    return revisionLines.length !== 1 || revisionLines[0] !== expected;
+  });
+}
+
 export const POLICY_VERSION = "mde-smart-v1";
 const generated = new Set([
   "docs/progress/data/linear-data.json",
@@ -73,6 +102,31 @@ export function validateSnapshotReferences(prData, prFiles) {
     if (!Array.isArray(a) || a.length !== b.length || a.some((x) => !b.includes(x))) return { status: "failed", reason: "PR IDs disagree between snapshots" };
     return { status: "validated", reason: "exact-head PR numbers agree across snapshots" };
   } catch { return { status: "failed", reason: "invalid cross-file JSON" }; }
+}
+
+/**
+ * A failed reusable workflow can still have published a real partial review.
+ * This predicate only changes advisory reporting; the required strict check
+ * stays red. Reuse the canonical parser, not a second inline coverage engine.
+ */
+export function hasPublishedPartialReview({ body, baseSha, headSha, reviewJobResult }) {
+  if (reviewJobResult === "success") return false;
+  const env = parseReviewEnvelope(body ?? "");
+  if (!env.valid || env.baseSha !== baseSha?.toLowerCase() ||
+      env.headSha !== headSha?.toLowerCase() ||
+      env.type !== "canonical" || env.command !== "/review" ||
+      !env.body.includes("<!-- pr-agent:review:full -->")) return false;
+  const state = [...env.body.matchAll(/(?:^|\n)<!-- pr-agent-review-state:v1\n([\s\S]*?)\n-->/g)];
+  if (state.length !== 1) return false;
+  let saved;
+  try { saved = JSON.parse(state[0][1]); } catch { return false; }
+  if (saved?.schema_version !== 1 || !Array.isArray(saved.findings) ||
+      saved.last_run?.head_sha?.toLowerCase() !== headSha.toLowerCase() ||
+      saved.last_run?.complete !== false ||
+      !Array.isArray(saved.last_run?.excluded_files) ||
+      saved.last_run.excluded_files.length < 1) return false;
+  return coverageFailure(env.body, headSha)?.code === "INCOMPLETE_REVIEW" &&
+    reviewCoverageFromComment(body, baseSha, headSha).status === "partial";
 }
 
 export function reviewCoverageFromComment(body, baseSha, headSha) {

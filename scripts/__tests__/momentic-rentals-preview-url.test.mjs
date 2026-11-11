@@ -5,15 +5,17 @@ import { previewStartUrl } from '../momentic-rentals-preview-url.mjs';
 
 const preview = 'https://mdeai-git-example-amoai.vercel.app/';
 const expectedPaths = new Map([
-  ['exact-bedroom-filter.test.yaml', '/'],
-  ['search-to-details.test.yaml', '/rentals?neighborhood=Laureles&beds=2'],
-  ['viewing-form-no-submit.test.yaml', '/rentals?neighborhood=Laureles&beds=2'],
-  ['broker-guest-redirect.test.yaml', '/app/rentals'],
-  ['renter-saved-guest-redirect.test.yaml', '/app/me/saved'],
+  ['momentic/rentals/exact-bedroom-filter.test.yaml', '/'],
+  ['momentic/rentals/search-to-details.test.yaml', '/rentals?neighborhood=Laureles&beds=2'],
+  ['momentic/rentals/viewing-form-no-submit.test.yaml', '/rentals?neighborhood=Laureles&beds=2'],
+  ['momentic/rentals/broker-guest-redirect.test.yaml', '/app/rentals'],
+  ['momentic/rentals/renter-saved-guest-redirect.test.yaml', '/app/me/saved'],
+  ['momentic/events/public-event-details.test.yaml', '/events'],
+  ['momentic/concierge/guest-chat-entry.test.yaml', '/chat'],
+  ['momentic/maps/browse-map-selection.test.yaml', '/rentals'],
 ]);
-for (const [file, suffix] of expectedPaths) {
-  test(`preview override preserves exact route and query for ${file}`, () => {
-    const path = `momentic/rentals/${file}`;
+for (const [path, suffix] of expectedPaths) {
+  test(`preview override preserves exact route and query for ${path}`, () => {
     const yaml = readFileSync(path, 'utf8');
     assert.equal(previewStartUrl(preview, yaml, path), new URL(suffix, preview).href);
   });

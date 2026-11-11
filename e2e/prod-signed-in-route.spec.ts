@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { hasE2eEnv, signInAsOnOrigin, QA_HOST_EMAIL, QA_SUPER_ADMIN_EMAIL } from "./helpers/auth";
+import { hasE2eEnv, signInAsOnOrigin, QA_SUPER_ADMIN_EMAIL } from "./helpers/auth";
 
 // Authenticated pages and private threads must not generate failure screenshots/traces.
 // Playwright may still attach automatic error-context; keep test reports private.
@@ -51,10 +51,10 @@ test.describe("prod signed-in route proof", () => {
     expect(page.url()).toContain(encodeURIComponent("/saved"));
   });
 
-  test(`signed-in ${QA_HOST_EMAIL} reaches /saved with 200 and no login redirect`, async ({
+  test(`signed-in ${QA_SUPER_ADMIN_EMAIL} reaches /saved with 200 and no login redirect`, async ({
     page,
   }) => {
-    await signInAsOnOrigin(page, baseUrl);
+    await signInAsOnOrigin(page, baseUrl, QA_SUPER_ADMIN_EMAIL);
 
     const response = await page.goto(route("/saved"), {
       waitUntil: "domcontentloaded",
@@ -78,7 +78,7 @@ test.describe("prod signed-in route proof", () => {
   test("authenticated runtime boots with the pinned CopilotKit version and every agent", async ({
     page,
   }) => {
-    await signInAsOnOrigin(page, baseUrl);
+    await signInAsOnOrigin(page, baseUrl, QA_SUPER_ADMIN_EMAIL);
 
     // Why this lives here rather than in prod-synthetic-smoke.yml: the
     // unauthenticated runtime contract is now 401 (SAN-1358 / D20), and the gate

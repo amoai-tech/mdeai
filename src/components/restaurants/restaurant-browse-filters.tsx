@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { toggleVariants } from "@/components/ui/toggle";
 import { cn } from "@/lib/utils";
+import { ClearFiltersLink } from "@/components/browse/clear-filters-link";
 
 const NEIGHBORHOODS = ["Laureles", "El Poblado", "Envigado", "Sabaneta"] as const;
 
@@ -38,7 +39,7 @@ function toggleCuisine(current: string | null, value: string): string | null {
 
 const filterChipClass = cn(
   toggleVariants({ variant: "outline", size: "sm" }),
-  "min-h-9 rounded-full px-3",
+  "min-h-11 rounded-full px-3 lg:min-h-9",
 );
 
 type RestaurantBrowseFiltersProps = {
@@ -113,6 +114,9 @@ export function RestaurantBrowseFilters({
           })}
         </div>
       </div>
+      {neighborhood || cuisine ? (
+        <ClearFiltersLink href={buildFilterUrl({})} testId="restaurants-filter-clear" />
+      ) : null}
     </>
   );
 }

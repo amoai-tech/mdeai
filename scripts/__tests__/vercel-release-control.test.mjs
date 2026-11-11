@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
@@ -17,6 +18,9 @@ import {
   vercelGet,
   githubMainSha,
   checkCurrentMain,
+  floorRunStatus,
+  githubFloorStatus,
+  waitForFloorSuccess,
   reconcilePromotion,
   checkStablePromotion,
   verifyLiveMain,
@@ -459,15 +463,16 @@ test("late old-version alias takeover after a clean promotion is detected", asyn
   assert.equal(rounds, 3);
 });
 
-test("stable alias monitoring succeeds only when both aliases and current main remain exact", async () => {
+test("stable alias monitoring verifies the same deployed build even after main advances", async () => {
   let rounds = 0;
+  let mainReads = 0;
   await checkStablePromotion(snapshot({
-    attempts: 3, readAliases: async () => { rounds++; return aliasesOf(); },
+    attempts: 3,
+    readMain: async () => { mainReads++; return "c".repeat(40); },
+    readAliases: async () => { rounds++; return aliasesOf(); },
   }));
-  assert.equal(rounds, 3);
-  await assert.rejects(() => checkStablePromotion(snapshot({
-    attempts: 3, readMain: async () => "c".repeat(40),
-  })), /superseded/);
+  assert.equal(rounds, 3, "complete the bounded stability window");
+  assert.equal(mainReads, 0, "after promotion, a newer staged main SHA is not alias drift");
 });
 
 // Canary F01: a schedule event may be pinned to an older workflow SHA even when the
@@ -523,11 +528,205 @@ test("409 reconciliation refuses a stale success after main advances during alia
   assert.equal(reads, 2, "fresh main must be read after alias and READY identity verification");
 });
 
-test("stability monitoring fails if main advances after the deployment and aliases pass", async () => {
-  let reads = 0;
+test("stability monitoring fails if a newer build replaces one production alias", async () => {
+  await assert.rejects(() => checkStablePromotion(snapshot({
+    attempts: 2,
+    readMain: async () => "d".repeat(40),
+    readAliases: async () => aliasesOf(ID, {
+      "mdeai.co": domainAlias("mdeai.co", { deploymentId: OLD }),
+    }),
+  })), /does not point/);
+});
+
+test("stability monitoring rejects wrong SHA and unready deployments regardless of main", async () => {
   await assert.rejects(() => checkStablePromotion(snapshot({
     attempts: 1,
-    readMain: async () => ++reads === 1 ? SHA : "d".repeat(40),
-  })), /superseded/);
-  assert.equal(reads, 2);
+    readMain: async () => "d".repeat(40),
+    readDeployment: async () => promotedDeployment({
+      meta: { githubCommitSha: "b".repeat(40), githubCommitRef: "main" },
+    }),
+  })), /commit sha/);
+  await assert.rejects(() => checkStablePromotion(snapshot({
+    attempts: 1,
+    readDeployment: async () => promotedDeployment({ readyState: "BUILDING" }),
+  })), /not READY/);
+});
+
+// SAN-1362: a successful pull-request check or earlier push run must never bypass
+// the exact-SHA main-push Floor gate before production promotion.
+const floorRun = (over = {}) => ({
+  id: 421001,
+  name: "Floor",
+  event: "push",
+  head_branch: "main",
+  head_sha: SHA,
+  status: "completed",
+  conclusion: "success",
+  created_at: "2026-11-05T21:50:00Z",
+  run_attempt: 1,
+  ...over,
+});
+const floorResponse = (runs) => ({ total_count: runs.length, workflow_runs: runs });
+
+test("pre-promotion Floor: CLI usage and source header document wait-floor", () => {
+  const scriptPath = path.resolve("scripts/vercel-release-control.mjs");
+  const source = fs.readFileSync(scriptPath, "utf8");
+  const header = source.slice(0, source.indexOf("*/"));
+  assert.match(header, /wait-floor\s+require the exact main-push Floor workflow SUCCESS BEFORE promotion/);
+  assert.match(header, /GH_TOKEN \+ GITHUB_REPOSITORY for GitHub checks/);
+  assert.match(header, /VERCEL_DEPLOYMENT_SHA for candidate-specific checks/);
+
+  const cli = spawnSync(process.execPath, [scriptPath], { encoding: "utf8" });
+  assert.equal(cli.status, 1, "missing command must report usage, not succeed");
+  assert.match(cli.stderr, /usage: vercel-release-control\.mjs <[^\n]*wait-floor[^\n]*>/);
+  assert.doesNotMatch(cli.stderr, /Error \[/, "usage should be a controlled error");
+});
+
+test("pre-promotion Floor: malformed API responses and run identities fail closed", () => {
+  const malformed = [
+    null,
+    undefined,
+    {},
+    { total_count: 0 },
+    { total_count: 0, workflow_runs: null },
+    { total_count: 0, workflow_runs: {} },
+    { total_count: "1", workflow_runs: [floorRun()] },
+    { total_count: 1.5, workflow_runs: [floorRun()] },
+    { total_count: -1, workflow_runs: [] },
+    { total_count: 1, workflow_runs: [] },
+    { total_count: 0, workflow_runs: [floorRun()] },
+    floorResponse([floorRun({ head_sha: undefined })]),
+    floorResponse([floorRun({ head_sha: null })]),
+    floorResponse([floorRun({ head_sha: "unknown" })]),
+    floorResponse([floorRun({ status: "completed", conclusion: "unexpected" })]),
+  ];
+  for (const response of malformed) {
+    if (response?.workflow_runs?.[0]?.conclusion === "unexpected") {
+      assert.equal(floorRunStatus(response, SHA), "failed",
+        "unknown completed conclusion must never be treated as success");
+    } else {
+      assert.throws(() => floorRunStatus(response, SHA), /vercel-release/,
+        "invalid API data must never authorize a release");
+    }
+  }
+
+  for (const invalid of [
+    { id: undefined },
+    { id: "123" },
+    { run_attempt: 0 },
+    { run_attempt: undefined },
+    { created_at: "not-a-date" },
+  ]) {
+    assert.throws(() => floorRunStatus(floorResponse([floorRun(invalid)]), SHA), /vercel-release/);
+  }
+});
+
+test("pre-promotion Floor: API rejects malformed JSON and partial results", async () => {
+  for (const payload of [
+    { total_count: 1, workflow_runs: null },
+    { total_count: "1", workflow_runs: [floorRun()] },
+    { total_count: 2, workflow_runs: [floorRun()] },
+    floorResponse([floorRun({ head_sha: undefined })]),
+  ]) {
+    await assert.rejects(() => githubFloorStatus({
+      repository: "amoai-tech/mdeai", sha: SHA, token: "test-token",
+      fetchImpl: async () => ({ ok: true, json: async () => payload }),
+    }), /vercel-release/);
+  }
+  await assert.rejects(() => githubFloorStatus({
+    repository: "amoai-tech/mdeai", sha: SHA, token: "test-token",
+    fetchImpl: async () => ({ ok: true, json: async () => { throw new Error("malformed"); } }),
+  }), /vercel-release/);
+});
+
+test("pre-promotion Floor: exact main push is allowed only on completed success", () => {
+  assert.equal(floorRunStatus(floorResponse([floorRun()]), SHA), "success");
+  for (const status of ["queued", "in_progress", "waiting", "requested"]) {
+    assert.equal(floorRunStatus(floorResponse([floorRun({ status, conclusion: null })]), SHA), "pending");
+  }
+  for (const conclusion of ["failure", "cancelled", "timed_out", "skipped", "neutral", null]) {
+    assert.equal(floorRunStatus(floorResponse([floorRun({ conclusion })]), SHA), "failed");
+  }
+  assert.equal(floorRunStatus(floorResponse([]), SHA), "pending");
+});
+
+test("pre-promotion Floor: never substitute a PR run, other branch, or wrong SHA", () => {
+  for (const over of [
+    { event: "pull_request" },
+    { head_branch: "feature/release" },
+    { head_sha: "b".repeat(40) },
+    { name: "Fake Floor" },
+  ]) {
+    assert.throws(() => floorRunStatus(floorResponse([floorRun(over)]), SHA), /vercel-release/);
+  }
+  assert.throws(() => floorRunStatus({ total_count: 101, workflow_runs: [floorRun()] }, SHA), /vercel-release/);
+  assert.throws(() => floorRunStatus({ workflow_runs: [floorRun()] }, SHA), /vercel-release/);
+});
+
+test("pre-promotion Floor: latest same-SHA run wins over an earlier success", () => {
+  const oldSuccess = floorRun({ id: 9, created_at: "2026-11-05T21:00:00Z" });
+  const newRun = floorRun({ id: 10, created_at: "2026-11-05T21:01:00Z", status: "in_progress", conclusion: null });
+  assert.equal(floorRunStatus(floorResponse([oldSuccess, newRun]), SHA), "pending");
+  assert.equal(floorRunStatus(floorResponse([oldSuccess, { ...newRun, status: "completed", conclusion: "failure" }]), SHA), "failed");
+  assert.equal(floorRunStatus(floorResponse([oldSuccess, { ...newRun, status: "completed", conclusion: "success" }]), SHA), "success");
+});
+
+test("pre-promotion Floor: API query is scoped to the canonical workflow, SHA, main push and token", async () => {
+  let requests = 0;
+  const state = await githubFloorStatus({
+    sha: SHA,
+    repository: "amoai-tech/mdeai",
+    token: "test-token",
+    fetchImpl: async (url, init) => {
+      requests++;
+      assert.match(url, /\/repos\/amoai-tech\/mdeai\/actions\/workflows\/floor\.yml\/runs\?/);
+      assert.match(url, new RegExp("head_sha=" + SHA));
+      assert.match(url, /branch=main/);
+      assert.match(url, /event=push/);
+      assert.equal(init.headers.authorization, "Bearer test-token");
+      return { ok: true, json: async () => floorResponse([floorRun()]) };
+    },
+  });
+  assert.equal(state, "success");
+  assert.equal(requests, 1);
+  await assert.rejects(() => githubFloorStatus({
+    sha: SHA, repository: "amoai-tech/mdeai", token: "test-token",
+    fetchImpl: async () => ({ ok: false, status: 403 }),
+  }), /vercel-release/);
+  await assert.rejects(() => githubFloorStatus({
+    sha: SHA, repository: "amoai-tech/mdeai", token: "",
+    fetchImpl: async () => { throw new Error("must not fetch"); },
+  }), /vercel-release/);
+});
+
+test("pre-promotion Floor: pending waits without promotion; successful run proceeds", async () => {
+  const seen = ["pending", "pending", "success"];
+  let calls = 0;
+  let pauses = 0;
+  await waitForFloorSuccess({
+    readStatus: async () => { calls++; return seen.shift(); },
+    attempts: 4,
+    delayMs: 1,
+    pause: async () => { pauses++; },
+  });
+  assert.equal(calls, 3);
+  assert.equal(pauses, 2);
+});
+
+test("pre-promotion Floor: failures, unknown states and timeout fail closed", async () => {
+  for (const status of ["failed", "unknown"]) {
+    let reads = 0;
+    await assert.rejects(() => waitForFloorSuccess({
+      readStatus: async () => { reads++; return status; },
+      attempts: 3,
+      pause: async () => { throw new Error("should not wait"); },
+    }), /vercel-release/);
+    assert.equal(reads, 1);
+  }
+  await assert.rejects(() => waitForFloorSuccess({
+    readStatus: async () => "pending",
+    attempts: 2,
+    delayMs: 1,
+    pause: async () => {},
+  }), /vercel-release.*Floor/);
 });

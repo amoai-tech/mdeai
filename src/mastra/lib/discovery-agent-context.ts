@@ -41,7 +41,11 @@ function selectedDiscoveryContext(agui: unknown): z.infer<typeof selectedContext
   };
 }
 
-/** Mastra exposes useAgentContext values as JSON strings in requestContext['ag-ui'].context. */
+/** Read the active page as a routing hint, not a data authorization. */
+export function isActiveRentalsDiscoveryPage(agui: unknown): boolean {
+  return selectedDiscoveryContext(agui)?.route === "/rentals";
+}
+
 export function discoveryAgentSelectionHint(agui: unknown): string {
   const selectedContext = selectedDiscoveryContext(agui);
   if (!selectedContext) return "";

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import { useConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
 import type { EventCard } from "@/mastra/tools/search-events";
 import { useEventLocalChat } from "@/components/chat/event-local-chat-context";
@@ -17,6 +17,7 @@ import {
   eventSearchParamsFromChip,
   fastPathAssistantSummary,
   fastPathEventFallbackSummary,
+  isEventCardRenderRequest,
   shouldInstantEventClarify,
   type EventSearchApiParams,
 } from "@/lib/event-search-fast-path";
@@ -24,6 +25,8 @@ import type { ConciergeWorkingMemory } from "@/lib/types";
 import { useEventSearchResults } from "@/components/chat/event-search-results-context";
 import { useMapContext } from "@/platform/maps/map-context";
 import { normalizeToolOutput } from "@/platform/maps/normalize-tool-output";
+import { normalizeToolEnvelope } from "@/lib/normalize-tool-envelope";
+import { isEventA2UIId } from "@/lib/events/a2ui-id";
 import type { FilterChipDef } from "@/platform/copilot/chat-filter-chips";
 
 type EventSearchResponse = {
@@ -51,7 +54,7 @@ export function useEventSearchFastPath() {
   const { state, setState } = useConciergeCoAgent();
   const { clarifyPending, clarifyKind, showClarify, showExchange, clearLocalMessages } =
     useEventLocalChat();
-  const { setToolResult } = useEventFastPath();
+  const { toolResult, setToolResult } = useEventFastPath();
   const clearOthers = useClearOtherFastPathResults();
   const { setRows, setWebCitations } = useEventSearchResults();
   const { mergePinsByCategory, requestFitBounds } = useMapContext();
@@ -157,6 +160,7 @@ export function useEventSearchFastPath() {
     async (text: string, submissionId?: string): Promise<boolean> => {
       const trimmed = text.trim();
       if (!trimmed) return false;
+      if (isEventCardRenderRequest(trimmed)) return false;
       if (clarifyPending && clarifyKind === "restaurant") return false;
       if (clarifyPending && clarifyKind === "rental") return false;
 
@@ -237,5 +241,16 @@ export function useEventSearchFastPath() {
     [runSearch, state],
   );
 
-  return { handleUserMessage, handleEventChip };
+  const activeEventRows = useMemo(() => {
+    const rows = toolResult ? normalizeToolEnvelope(toolResult).results : undefined;
+    return (rows ?? []).flatMap((value) => {
+      const row = value as { id?: unknown; title?: unknown };
+      return isEventA2UIId(row.id) && typeof row.title === "string"
+        ? [{ id: row.id, title: row.title }]
+        : [];
+    });
+  }, [toolResult]);
+  const activeEventId = activeEventRows[0]?.id ?? null;
+
+  return { handleUserMessage, handleEventChip, activeEventId, activeEventRows };
 }

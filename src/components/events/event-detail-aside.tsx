@@ -7,7 +7,10 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { EventInterestButton } from "@/components/events/event-interest-button";
 import { EventTicketTiers } from "@/components/events/event-ticket-tiers";
 import type { BookingCheckoutTarget } from "@/components/modals/booking-checkout-modal";
-import { formatTicketPrice } from "@/lib/events/format-event";
+import {
+  formatTicketPrice,
+  ticketAvailability,
+} from "@/lib/events/format-event";
 import { eventDetailAction } from "@/lib/events/event-detail-action";
 import type { PublicEventDetail, PublicEventTicket } from "@/lib/events/types";
 
@@ -39,6 +42,13 @@ function focusInlineAsk() {
 export function EventDetailAside({
   event, city, venueLine, schedule, durationLabel, fromTier, tiersRef, notice, onCheckout, interest,
 }: EventDetailAsideProps) {
+  const states = event.tickets.map((ticket) => ticketAvailability(ticket));
+  const hasBelowMinimum = states.includes("below-minimum");
+  const hasClosedSale = states.includes("not-yet-on-sale") || states.includes("sale-ended");
+  const paidAvailable = event.tickets
+    .filter((ticket) => ticketAvailability(ticket) === "available" && ticket.priceCents > 0)
+    .sort((a, b) => a.priceCents - b.priceCents);
+  const cheapestPaid = paidAvailable[0] ?? null;
   return (
             <aside className="order-2 space-y-5">
               <div className="space-y-3">
@@ -67,12 +77,22 @@ export function EventDetailAside({
               </div>
               <div className="rounded-xl border border-border bg-card p-4 shadow-sm sm:p-5">
                 {fromTier ? (
-                  <p className="text-lg font-semibold">
-                    From {formatTicketPrice(fromTier.priceCents, fromTier.currency)}
+                  <p className="text-lg font-semibold" data-testid="event-ticket-headline">
+                    {fromTier.priceCents === 0
+                      ? cheapestPaid
+                        ? `Free entry · paid tiers from ${formatTicketPrice(cheapestPaid.priceCents, cheapestPaid.currency)}`
+                        : "Free entry"
+                      : `From ${formatTicketPrice(fromTier.priceCents, fromTier.currency)}`}
                   </p>
                 ) : (
-                  <p className="text-lg font-semibold">
-                    {eventDetailAction(event).kind === "sold-out" ? "Sold out" : "Price TBD"}
+                  <p className="text-lg font-semibold" data-testid="event-ticket-headline">
+                    {hasBelowMinimum
+                      ? "Unavailable"
+                      : hasClosedSale
+                        ? "Not on sale"
+                        : eventDetailAction(event).kind === "sold-out"
+                          ? "Sold out"
+                          : "Price TBD"}
                   </p>
                 )}
                 <div ref={tiersRef} tabIndex={-1} className="mt-4 scroll-mt-24 outline-none focus-visible:ring-2 focus-visible:ring-ring"

@@ -190,9 +190,16 @@ if (isLocal) {
 {
   const child = spawnSync(
     "npx",
-    ["playwright", "test", "e2e/mobile-bottom-nav.spec.ts", "--project=local-chromium", "--workers=1", "--reporter=line"],
+    ["playwright", "test", "e2e/mobile-bottom-nav.spec.ts", "--project=prod-smoke", "--workers=1", "--reporter=line"],
     {
-      env: { ...process.env, SMOKE_BASE_URL: base, PW_SKIP_WEBSERVER: "1" },
+      // Explicit read-only remote suite, never a generic local project with a remote URL.
+      env: {
+        ...process.env,
+        SMOKE_BASE_URL: base,
+        PROD_SMOKE_BASE_URL: base,
+        PW_SKIP_WEBSERVER: "1",
+        MDE_SAN1606_REMOTE_MOBILE_NAV: "1",
+      },
       encoding: "utf8",
       timeout: 15 * 60_000,
     },

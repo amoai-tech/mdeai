@@ -1,5 +1,5 @@
 {
-  "description": "SAN-1357 Step 8 · Every CopilotKit consumer in MDE, classified before the v2 migration so 'verify-only' is falsifiable instead of assumed. Vocabulary — migrate: must change in a named step; keep: already on the supported v2 surface, no change expected; test-only: a test, fixture or gate that intentionally names v1 or v2 symbols; compatibility-required: must retain a legacy boundary for a documented reason; remove: dead, delete it. Enforced by scripts/__tests__/copilotkit-consumer-inventory.test.mjs in both directions: every detected consumer must be listed, every listed entry must still be a detected consumer unless it declares `implicitContract: true` with a reason, no listed file may vanish, and no compatibility <CopilotKit> boundary may remain (SAN-1378 Stage D migrated the last four).",
+  "description": "SAN-1357 Step 8 \u00b7 Every CopilotKit consumer in MDE, classified before the v2 migration so 'verify-only' is falsifiable instead of assumed. Vocabulary \u2014 migrate: must change in a named step; keep: already on the supported v2 surface, no change expected; test-only: a test, fixture or gate that intentionally names v1 or v2 symbols; compatibility-required: must retain a legacy boundary for a documented reason; remove: dead, delete it. Enforced by scripts/__tests__/copilotkit-consumer-inventory.test.mjs in both directions: every detected consumer must be listed, every listed entry must still be a detected consumer unless it declares `implicitContract: true` with a reason, no listed file may vanish, and no compatibility <CopilotKit> boundary may remain (SAN-1378 Stage D migrated the last four).",
   "classifications": [
     "migrate",
     "keep",
@@ -9,11 +9,21 @@
   ],
   "consumers": [
     {
+      "file": "src/components/host/rentals/__tests__/broker-chat-view-submit.test.tsx",
+      "classification": "test-only",
+      "note": "Mocks the existing CopilotChat v2 view to prove broker composer submissions are marked as local sends without marking restored history."
+    },
+    {
+      "file": "src/components/chat/__tests__/broker-thread-saver.test.tsx",
+      "classification": "test-only",
+      "note": "Mocks useAgent/UseAgentUpdate to prove the broker chat persists finished turns; no runtime CopilotKit import."
+    },
+    {
       "file": "src/lib/copilotkit-client-props.ts",
       "classification": "migrate",
       "step": 9,
       "implicitContract": true,
-      "note": "Not a @copilotkit importer — it declares the shared props shape locally. SAN-1378 Stage D removed the v1 `agent` carrier and the unreachable `publicApiKey` variant once the last compatibility boundary was gone; `agentId` is the only identity."
+      "note": "Not a @copilotkit importer \u2014 it declares the shared props shape locally. SAN-1378 Stage D removed the v1 `agent` carrier and the unreachable `publicApiKey` variant once the last compatibility boundary was gone; `agentId` is the only identity."
     },
     {
       "file": "src/lib/__tests__/copilotkit-client-props.test.ts",
@@ -68,13 +78,11 @@
       "classification": "keep",
       "note": "SAN-709: v2 CopilotKitProvider + one CopilotChatConfigurationProvider around the existing signup wizard; the frontend tool only proposes fields for review and never writes partner data."
     },
-
     {
       "file": "src/components/onboarding/onboarding-copilot-bridge.tsx",
       "classification": "keep",
       "note": "SAN-709: publishes the current signup form via useAgentContext and exposes one review-only useFrontendTool (suggest_partner_profile). No persistence path."
     },
-
     {
       "file": "src/components/onboarding/__tests__/onboarding-copilot-bridge.test.tsx",
       "classification": "test-only",
@@ -198,7 +206,7 @@
     {
       "file": "src/components/copilot/__tests__/search-tool-renders-v2.test.tsx",
       "classification": "test-only",
-      "note": "Asserts a source file imports the /v2 subpath and does not mention the retired react-ui package. It names those specifiers inside regex literals with escaped slashes, which is why the original detector missed it entirely — found only after the detector was widened."
+      "note": "Asserts a source file imports the /v2 subpath and does not mention the retired react-ui package. It names those specifiers inside regex literals with escaped slashes, which is why the original detector missed it entirely \u2014 found only after the detector was widened."
     },
     {
       "file": "src/components/copilot/__tests__/discovery-provider-guest-401.test.tsx",
@@ -370,6 +378,56 @@
       "file": "src/components/host/rentals/__tests__/rentals-concierge-contract.test.ts",
       "classification": "test-only",
       "note": "SAN-1124: guards v2 CopilotChat and useRenderTool registration plus broker workspace contract."
+    },
+    {
+      "file": "src/components/copilot/a2ui/mde-ui-catalog.tsx",
+      "classification": "keep",
+      "note": "SAN-1630 + SAN-1654: one v2 createGenerativeUI catalog extending the official standardUI with RentalCard and EventCard; each card resolves only an authorized ID from the thread result history and mounts no provider or run."
+    },
+    {
+      "file": "src/components/copilot/a2ui/rental-recommendations-surface.tsx",
+      "classification": "keep",
+      "note": "SAN-1656: one v2 GenerativeUISurface named rental-recommendations, mounted on the Rentals page only; it registers a target plus component allowlist and fetches or stores nothing, so cards keep resolving through the existing catalog."
+    },
+    {
+      "file": "src/components/chat/rental-a2ui-context.tsx",
+      "classification": "keep",
+      "note": "SAN-1637 post-merge: v2 useAgentContext publishes only the current fast-path rental IDs so the model can call render_ui without inventing one; the catalog revalidates every ID against authorized results."
+    },
+    {
+      "file": "src/components/chat/event-a2ui-context.tsx",
+      "classification": "keep",
+      "note": "SAN-1630 EventCard: v2 useAgentContext publishes only the most recent authorized event UUIDs; the catalog revalidates every ID against authorized results and rejects forged/cross-thread IDs."
+    },
+    {
+      "file": "src/components/copilot/a2ui/__tests__/mde-ui-catalog.test.ts",
+      "classification": "test-only",
+      "note": "SAN-1654/1656: imports the installed standardUI to prove the exposed catalog vocabulary matches the documented guide and cannot drift from the pinned SDK."
+    },
+    {
+      "file": "src/components/copilot/a2ui/__tests__/nearby-guest-guard.test.tsx",
+      "classification": "test-only",
+      "note": "SAN-106: mocks the v2 agent hook to prove guests never see the billable Nearby CTA, while signed-in renters do."
+    },
+    {
+      "file": "src/components/browse/page-filter-tools.tsx",
+      "classification": "keep",
+      "note": "SAN-1631 uses the installed v2 `useFrontendTool` API to update existing Rentals/Events page filters; no provider or agent is added."
+    },
+    {
+      "file": "src/components/browse/__tests__/page-filter-tools.test.tsx",
+      "classification": "test-only",
+      "note": "SAN-1631 verifies the two page tool registrations and their existing URL builders."
+    },
+    {
+      "file": "scripts/check-mastra-builder-isolation.mjs",
+      "classification": "test-only",
+      "note": "SAN-1255 PR #842 deterministic release gate: scans built Next server code for absent Mastra Editor imports and asserts the CopilotKit runtime stays pinned to its original OpenAI 4.104.0 SDK. It does not import or invoke CopilotKit."
+    },
+    {
+      "file": "src/components/rentals/rental-filter-panel-actions.tsx",
+      "classification": "keep",
+      "note": "Uses the v2 generative-UI state/function hooks to publish the Rentals page filters and register the single apply action; no legacy boundary."
     }
   ]
 }

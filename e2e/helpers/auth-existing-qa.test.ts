@@ -70,15 +70,25 @@ describe("QA magic-link safety", () => {
     expect(generateLink).toHaveBeenCalledWith({ type: "magiclink", email: QA_SUPER_ADMIN_EMAIL });
   });
 
-  it("refuses to create a missing dedicated renter account", async () => {
-    listUsers.mockResolvedValue({
-      data: { users: [], nextPage: null },
-      error: null,
-    });
+  it.each(["qa-renter@mdeai.co", "qa-landlord@mdeai.co"])(
+    "refuses to auto-create an absent fixed QA account: %s",
+    async (email) => {
+      listUsers.mockResolvedValue({ data: { users: [], nextPage: null }, error: null });
+      await expect(getTestSession(email)).rejects.toThrow("refusing magic-link auto-creation");
+      expect(generateLink).not.toHaveBeenCalled();
+    },
+  );
 
-    await expect(getTestSession("qa-renter@mdeai.co", { requireExisting: true }))
-      .rejects.toThrow("refusing magic-link auto-creation");
-    expect(generateLink).not.toHaveBeenCalled();
+  it("normalizes whitespace and case for a fixed QA account before minting OTP", async () => {
+    const email = "qa-renter@mdeai.co";
+    listUsers.mockResolvedValue({ data: { users: [{ email }] }, error: null });
+    generateLink.mockResolvedValue({ data: { properties: { email_otp: "test-otp" } }, error: null });
+    verifyOtp.mockResolvedValue({ data: { session: { access_token: "renter-test-jwt" } }, error: null });
+
+    await expect(getTestSession("  QA-Renter@MDEAI.CO  "))
+      .resolves.toHaveProperty("access_token", "renter-test-jwt");
+    expect(generateLink).toHaveBeenCalledWith({ type: "magiclink", email });
+    expect(verifyOtp).toHaveBeenCalledWith({ type: "email", token: "test-otp", email });
   });
 
   it("accepts a separately configured existing broker QA account", async () => {

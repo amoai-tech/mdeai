@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import type { DiscoveryAgentResult } from "@/components/chat/discovery-tool-results";
 import Link from "next/link";
 import { ArrowUpRight, Trophy, UtensilsCrossed } from "lucide-react";
@@ -12,8 +12,10 @@ import { BrowseMapPanel } from "@/components/browse/BrowseMapPanel";
 import { BrowseMapSheet } from "@/components/browse/BrowseMapSheet";
 import { RestaurantCard } from "@/components/copilot/restaurant-card";
 import { RestaurantBrowseFilters } from "@/components/restaurants/restaurant-browse-filters";
+import { AddToTripButton } from "@/components/trips/add-to-trip-button";
 import { RestaurantDetailsPanel, RestaurantDetailsSheet } from "@/components/restaurants/restaurant-details-panel";
 import { useIsLgUp } from "@/hooks/use-is-lg-up";
+import { useEscapeToClose } from "@/hooks/use-escape-to-close";
 import { EmptyState } from "@/components/empty/empty-state";
 import { Button } from "@/components/ui/button";
 import { useMapContext, useMapPinSelect } from "@/platform/maps/map-context";
@@ -21,7 +23,9 @@ import { useBrowseMapSync } from "@/hooks/use-browse-map-sync";
 import { useBrowseCardScroll } from "@/hooks/use-browse-card-scroll";
 import { restaurantToMapPin } from "@/lib/browse/browse-pin-converters";
 import type { Restaurant } from "@/mastra/tools/search-restaurants";
+import { countWithNoun } from "@/lib/format/count-with-noun";
 
+/** Current filter URL for this page, or the bare path when no filter is set. */
 function buildFilterUrl(filters: {
   neighborhood?: string | null;
   cuisine?: string | null;
@@ -42,6 +46,7 @@ type RestaurantBrowseViewProps = {
   isSample?: boolean;
 };
 
+/** Results, map and right column for restaurants, driven by the shared map selection. */
 function RestaurantBrowseViewInner({
   results,
   error,
@@ -53,16 +58,56 @@ function RestaurantBrowseViewInner({
   const selectPin = useMapPinSelect();
   const desktop = useIsLgUp();
   const retryHref = buildFilterUrl({ neighborhood, cuisine });
-  const [searched, setSearched] = useState<{ scope: string; rows: Restaurant[] } | null>(null);
+  // `source` records who produced these rows: the concierge or the public catalog. The subtitle
+  // must not credit the concierge for a catalog search.
+  const [searched, setSearched] = useState<{
+    scope: string;
+    rows: Restaurant[];
+    source: "agent" | "catalog";
+  } | null>(null);
   const [selectedForAskId, setSelectedForAskId] = useState<string | null>(null);
+  // SAN-1638: the panel has its own id. Opening Details writes the Ask context; pressing Ask never
+  // opens the panel (on a phone that would cover the composer), and pressing Ask while another
+  // panel is open closes that panel so the two cannot describe different restaurants.
+  const [detailsId, setDetailsId] = useState<string | null>(null);
+  // SAN-1638: closing Details puts keyboard focus back on the control that opened it.
+  // The control that opened Details, remembered with its record: a map pin can take the panel
+  // over, and Close must not pull focus onto an older card's button.
+  const detailsTriggerRef = useRef<{ el: HTMLElement; forId: string } | null>(null);
   const shownResults = searched?.scope === retryHref ? searched.rows : results;
-  const selectedRestaurant = shownResults.find((r) => `restaurant-${r.id}` === selectedPinId) ?? null;
+  // A pin selection opened Details before this task; keep that. Details has its own id for the
+  // card action, but an explicit pin pick is the more deliberate choice, so it wins.
+  // The panel follows Details only. Selecting a pin highlights the map — it no longer swaps the
+  // panel — which is what cafés and nightlife already do, and it is what makes "View on map" mean
+  // the same thing on all three pages instead of opening Details over the map it just moved.
+  const openRestaurantId = detailsId;
+  const detailsRestaurant = shownResults.find((r) => r.id === openRestaurantId) ?? null;
+  // Forget an id whose record left the results, so it cannot reopen on a later search.
+  if (detailsId && !shownResults.some((r) => r.id === detailsId)) {
+    setDetailsId(null);
+  }
+  if (selectedForAskId && !shownResults.some((r) => r.id === selectedForAskId)) {
+    setSelectedForAskId(null);
+  }
   const selectedForAsk = shownResults.some((r) => r.id === selectedForAskId) ? selectedForAskId : null;
-  const closeDetails = useCallback(() => setSelectedPinId(null), [setSelectedPinId]);
+  // Close clears the whole selection — panel, map pin and Ask context — so nothing is left
+  // pointing at a restaurant the visitor has closed, and focus returns to the control that opened it.
+  const closeDetails = useCallback(() => {
+    setDetailsId(null);
+    setSelectedPinId(null);
+    setSelectedForAskId(null);
+    requestAnimationFrame(() => {
+      const trigger = detailsTriggerRef.current;
+      if (trigger && trigger.forId === openRestaurantId) trigger.el.focus();
+    });
+  }, [openRestaurantId, setSelectedPinId]);
+  // Escape closes the desktop panel (the phone Sheet already does).
+  useEscapeToClose(Boolean(detailsRestaurant && desktop), closeDetails);
+
   const onAgentResults = useCallback((result: DiscoveryAgentResult) => {
     if (result.page === "restaurants") {
       setSelectedForAskId(null);
-      setSearched({ scope: retryHref, rows: result.rows });
+      setSearched({ scope: retryHref, rows: result.rows, source: "agent" });
     }
   }, [retryHref]);
 
@@ -83,18 +128,30 @@ function RestaurantBrowseViewInner({
       <DiscoveryPageContext
         page="restaurants"
         filters={{ neighborhood, cuisine }}
-        selectedId={selectedForAsk ?? selectedRestaurant?.id ?? null}
+        selectedId={selectedForAsk}
       />
       <DiscoveryWorkspace
         activeSlug="restaurants"
-        askComposer={<DiscoveryAskComposer page="restaurants" onAgentResults={onAgentResults} hasSelectedItem={Boolean(selectedForAsk ?? selectedRestaurant)} onClearSelection={() => { setSelectedForAskId(null); setSelectedPinId(null); }} />}
-        rightPanel={<BrowseMapPanel fill overlay={selectedRestaurant && desktop ? <RestaurantDetailsPanel restaurant={selectedRestaurant} onClose={closeDetails} /> : undefined} />}
+        askComposer={<DiscoveryAskComposer page="restaurants" onAgentResults={onAgentResults} hasSelectedItem={Boolean(selectedForAsk)} onClearSelection={() => { setSelectedForAskId(null); setSelectedPinId(null); }} guestRestaurants={{
+          neighborhood,
+          cuisine,
+          // Guest search is catalog search: the public endpoint returns grounded rows and the
+          // existing cards and map render them. Nothing reaches the agent runtime.
+          onResults: (rows: Restaurant[]) => setSearched({ scope: retryHref, rows, source: "catalog" }),
+        }} />}
+        rightPanel={<BrowseMapPanel fill overlay={detailsRestaurant && desktop ? <RestaurantDetailsPanel restaurant={detailsRestaurant} onClose={closeDetails} /> : undefined} />}
         testId="restaurants-browse"
         title="Restaurants"
         subtitle={
           isSample
             ? "Sample listings — live restaurant data is unavailable; these are not contest nominees"
-            : searched?.scope === retryHref ? `Ask MDE — ${shownResults.length} restaurants` : "Food & dining in Medellín"
+            : searched?.scope === retryHref
+              ? searched.source === "catalog"
+                ? `Search results — ${shownResults.length} restaurants`
+                : `Ask MDE — ${shownResults.length} restaurants`
+              : error
+                ? "Food & dining in Medellín"
+                : `${countWithNoun(shownResults.length, "restaurant", "restaurants")} in Medellín`
         }
         mobileMapTrigger={<BrowseMapSheet inline />}
         filterBar={<RestaurantBrowseFilters neighborhood={neighborhood} cuisine={cuisine} />}
@@ -145,10 +202,19 @@ function RestaurantBrowseViewInner({
             >
               {shownResults.map((r) => {
                 const pinId = `restaurant-${r.id}`;
+                // Reuse the memoized pin list: one conversion per row. A missing
+                // coordinate removes the map action only; saving stays available.
+                const pin = pins.find((candidate) => candidate.id === pinId);
+                const hasPin = Boolean(pin);
+                const addTarget = {
+                  id: pinId,
+                  category: "restaurant" as const,
+                  title: r.name,
+                  placeId: r.placeId ?? undefined,
+                };
                 return (
                   <div key={r.id} className="flex flex-col gap-2">
                   <RestaurantCard
-                    key={r.id}
                     title={r.name}
                     neighborhood={r.neighborhood}
                     cuisine={r.cuisine}
@@ -159,23 +225,44 @@ function RestaurantBrowseViewInner({
                     aiSummary={r.aiSummary}
                     pinId={pinId}
                     selected={selectedPinId === pinId}
-                    onSelect={() => selectPin(pinId)}
+                    // Same rule as cafés and nightlife: the map action exists only when
+                    // `restaurantToMapPin` produced a pin for this row.
+                    onMapSelect={hasPin ? () => selectPin(pinId) : undefined}
+                    // Card body selects on the map, exactly like café and nightlife cards.
+                    // Omitted for rows the map cannot show, so the card never announces a
+                    // selection it cannot complete.
+                    onSelect={hasPin ? () => selectPin(pinId) : undefined}
+                    selectedForAsk={selectedForAsk === r.id}
+                    detailsOpen={openRestaurantId === r.id}
+                    // Ask selects context only: it clears the map/details preview and
+                    // toggles our own selection. Nothing is sent until the visitor submits.
+                    onAskSelect={() => {
+                      // Ask sets context only. It never opens Details (which would cover the
+                      // composer on a phone) and it closes any panel describing another record.
+                      setSelectedPinId(null);
+                      setDetailsId(null);
+                      setSelectedForAskId((current) =>
+                        current === r.id ? null : r.id,
+                      );
+                    }}
+                    onDetails={(trigger) => {
+                      detailsTriggerRef.current = { el: trigger, forId: r.id };
+                      // Details is the newer, explicit choice: release a pin that would otherwise
+                      // win the lookup and leave the panel showing a different restaurant.
+                      setSelectedPinId(null);
+                      setSelectedForAskId(r.id);
+                      setDetailsId(r.id);
+                    }}
+                    detailsTestId={`restaurant-details-open-${r.id}`}
                     testId={`restaurant-card-${r.id}`}
                     composition="nova"
                     mediaLayout="inline"
                   />
-                  <button type="button" data-testid="restaurant-ask-select" aria-pressed={selectedForAsk === r.id}
-                    className="inline-flex min-h-11 items-center justify-center rounded-md border px-3 text-sm font-medium"
-                    onClick={() => { setSelectedPinId(null); setSelectedForAskId((current) => current === r.id ? null : r.id); }}>
-                    {selectedForAsk === r.id ? "Clear selection" : "Ask about this"}
-                  </button>
-                  <Link
-                    className="inline-flex min-h-11 items-center justify-center rounded-md border px-3 text-sm font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
-                    data-testid={`restaurant-detail-link-${r.id}`}
-                    href={"/restaurants/" + r.id}
-                  >
-                    View details
-                  </Link>
+                  <AddToTripButton
+                    pin={addTarget}
+                    variant="card"
+                    testId={`restaurant-add-to-trip-${r.id}`}
+                  />
                   </div>
                 );
               })}
@@ -184,11 +271,12 @@ function RestaurantBrowseViewInner({
         </section>
       </DiscoveryWorkspace>
 
-      {selectedRestaurant && !desktop ? <RestaurantDetailsSheet restaurant={selectedRestaurant} onClose={closeDetails} /> : null}
+      {detailsRestaurant && !desktop ? <RestaurantDetailsSheet restaurant={detailsRestaurant} onClose={closeDetails} /> : null}
     </>
   );
 }
 
+/** Restaurant browse shell that provides the shared map state. */
 export function RestaurantBrowseView(props: RestaurantBrowseViewProps) {
   return (
     <BrowseMapContextShell>

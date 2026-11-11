@@ -2,7 +2,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { VenueCardShell } from "@/components/browse/venue-card-shell";
 import { GroundingAttribution } from "@/components/maps/GroundingAttribution";
-import type { GroundedPhotoAttribution, GroundingSource } from "@/lib/parse-grounded-tool-result";
+import type { GroundedPhotoAttribution, GroundingSource, GroundedPlaceSourceMode } from "@/lib/parse-grounded-tool-result";
+import { groundedSourceLabel } from "@/lib/grounded-place-source";
 import { mapsDeepLinksEnabled } from "@/lib/maps-deep-links";
 import { placesPhotoProxyUrl } from "@/lib/places-photo-proxy";
 import {
@@ -33,6 +34,7 @@ export type CafeResultCardProps = {
   fieldMaskVersion?: string;
   /** Google's source for this place. Without it the card says nothing about Google Maps (SAN-878). */
   groundingSource?: GroundingSource;
+  sourceMode?: GroundedPlaceSourceMode;
   testId?: string;
   detailsTestId?: string;
   bookingTestId?: string;
@@ -111,6 +113,7 @@ export function CafeResultCard({
   placeId,
   fieldMaskVersion,
   groundingSource,
+  sourceMode,
   testId = "cafe-result-card",
   detailsTestId = "cafe-details-cta",
   bookingTestId = "cafe-booking-cta",
@@ -296,6 +299,11 @@ export function CafeResultCard({
       ) : null}
 
       <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] text-muted-foreground">
+        {groundedSourceLabel(sourceMode, Boolean(groundingSource)) ? (
+          <span data-testid="grounded-source-label" className="rounded bg-muted px-1.5 py-0.5">
+            {groundedSourceLabel(sourceMode, Boolean(groundingSource))}
+          </span>
+        ) : null}
         {groundingSource ? (
           <span className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5">
             <Info className="size-3" aria-hidden />

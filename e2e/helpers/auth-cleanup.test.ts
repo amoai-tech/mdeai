@@ -14,7 +14,8 @@ type DbResult = { data: Row[] | null; error: { message: string } | null; count?:
 
 function simulatedAdmin({
   permanentFailure = false,
-}: { permanentFailure?: boolean } = {}) {
+  authLookupFailure = false,
+}: { permanentFailure?: boolean; authLookupFailure?: boolean } = {}) {
   const threads = new Set([threadId]);
   const messages = new Set(["message-1", "message-2"]);
   const profiles = new Set([identity.userId]);
@@ -59,8 +60,13 @@ function simulatedAdmin({
   const admin = {
     from,
     auth: { admin: {
-      deleteUser: async () => { authExists = false; return { error: null }; },
-      getUserById: async () => ({ data: { user: authExists ? { id: identity.userId } : null }, error: null }),
+      deleteUser: () => { authExists = false; return Promise.resolve({ error: null }); },
+      getUserById: () => Promise.resolve({
+        data: { user: authExists ? { id: identity.userId } : null },
+        error: authExists ? null : authLookupFailure
+          ? { status: 403, message: "auth user lookup forbidden" }
+          : { status: 404, message: "User not found" },
+      }),
     } },
   };
   return { admin, state: () => ({
@@ -86,6 +92,21 @@ describe("disposable QA cleanup", () => {
       threads: 0, messages: 0, profiles: 0, authExists: false,
       messageDeleteAttempts: 2, profileDeleteAttempts: 2,
     });
+  });
+
+  it("accepts Supabase's 404 User not found after deleting the QA identity", async () => {
+    const { admin, state } = simulatedAdmin();
+    vi.mocked(createClient).mockReturnValue(admin as unknown as ReturnType<typeof createClient>);
+    await expect(deleteThrowawayIdentity(identity)).resolves.toBeUndefined();
+    expect(state()).toMatchObject({ authExists: false, threads: 0, messages: 0, profiles: 0 });
+  });
+
+  it("fails verification when the auth lookup returns a non-404 error", async () => {
+    const { admin, state } = simulatedAdmin({ authLookupFailure: true });
+    vi.mocked(createClient).mockReturnValue(admin as unknown as ReturnType<typeof createClient>);
+    await expect(deleteThrowawayIdentity(identity))
+      .rejects.toThrow("verify identity deletion: auth user lookup forbidden");
+    expect(state().authExists).toBe(false);
   });
 
   it("does not hide a permission failure or endlessly retry it", async () => {

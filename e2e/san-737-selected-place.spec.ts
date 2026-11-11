@@ -15,6 +15,13 @@ import { confirmsNothingSelected } from "./helpers/selected-place-clear-response
  * Set SAN737_BASE_URL to a deployed/current local checkout to opt in.
  */
 const base = process.env.SAN737_BASE_URL?.trim() ?? "";
+/**
+ * A skipped Playwright test is not an executed test, and `playwright test` exits 0
+ * when every test skips. That made this suite report success while proving nothing,
+ * which is the most dangerous result a QA run can produce. Opt-in skipping stays for
+ * ordinary local work, but certification must fail loudly when the target is missing.
+ */
+const CERTIFICATION = process.env.MDE_PROD_CERTIFICATION === "1";
 const evidence = process.env.MDE_QA_EVIDENCE_DIR?.trim();
 const preview = base ? new URL(base).hostname.endsWith(".vercel.app") : false;
 
@@ -80,13 +87,21 @@ async function ask(page: Page, route: Route, question: string, count: number) {
 for (const size of [{ name: "desktop", width: 1440, height: 900 }, { name: "mobile-390", width: 390, height: 844 }]) {
   test.describe(`SAN-737 ${size.name}: selected A → B → Clear and saved thread`, () => {
     test.use({ viewport: { width: size.width, height: size.height } });
-    test.skip(!base, "Set SAN737_BASE_URL to explicitly exercise the real app");
+    test.skip(!base && !CERTIFICATION, "Set SAN737_BASE_URL to explicitly exercise the real app");
     // One throwaway identity per route/viewport. The CopilotKit per-user rate
     // limit is 120 requests; five routes × three turns + runtime polling from a
     // single identity exhausted it on Nightlife. Fresh identities keep each
     // route independent and cleanup exact.
     let identity: ThrowawayIdentity | undefined;
     test.beforeEach(async () => {
+      // Fail this SAN-737 scenario during test execution, not module import:
+      // other specs must remain collectible and runnable in combined suites.
+      if (CERTIFICATION && !base) {
+        throw new Error(
+          "MDE_PROD_CERTIFICATION=1 requires SAN737_BASE_URL (for example https://www.mdeai.co): " +
+            "refusing to report a green run made entirely of skips.",
+        );
+      }
       expect(hasE2eEnv()).toBe(true);
       identity = await createThrowawayIdentity("qa-san737-selected-context");
     });
@@ -161,9 +176,10 @@ for (const size of [{ name: "desktop", width: 1440, height: 900 }, { name: "mobi
         const a = (await cards.first().locator("h3").first().innerText()).trim();
         expect(a.length).toBeGreaterThan(2);
         const first = cardNamed(a);
-        const select = (card: Locator) => scenario.route === "restaurants"
-          ? card.locator("..").locator(scenario.select)
-          : card.locator(scenario.select);
+        // SAN-1140: every route keeps its Ask toggle inside the card that owns it, so the
+        // scope is the card itself. The old `card.locator("..")` workaround existed only
+        // because restaurants rendered the two controls as siblings below the card.
+        const select = (card: Locator) => card.locator(scenario.select);
         await select(first).click();
         await expect(select(first)).toHaveAttribute("aria-pressed", "true");
         const firstReply = await ask(page, scenario.route,

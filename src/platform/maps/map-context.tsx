@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useMemo,
+  useReducer,
   useState,
   type ReactNode,
 } from "react";
@@ -37,6 +38,57 @@ type MapContextValue = {
   requestFitBounds: () => void;
 };
 
+type PinSelectionState = {
+  pins: MapPin[];
+  selectedPinId: string | null;
+  focusPinId: string | null;
+};
+
+type PinSelectionAction =
+  | { type: "merge"; category: MapPinCategory; incoming: MapPin[] }
+  | { type: "select"; id: string | null }
+  | { type: "focus"; id: string }
+  | { type: "clearFocus" }
+  | { type: "clear"; seedMockPin: boolean };
+
+/** Keep pins, selection and camera focus consistent in the same React update. */
+function pinSelectionReducer(
+  state: PinSelectionState,
+  action: PinSelectionAction,
+): PinSelectionState {
+  switch (action.type) {
+    case "merge": {
+      const pins = mergePinsByCategory(state.pins, action.category, action.incoming);
+      const hasPin = (id: string | null) => id !== null && pins.some((p) => p.id === id);
+      return {
+        pins,
+        selectedPinId: hasPin(state.selectedPinId) ? state.selectedPinId : null,
+        focusPinId: hasPin(state.focusPinId) ? state.focusPinId : null,
+      };
+    }
+    case "select": {
+      const id =
+        action.id && state.pins.some((p) => p.id === action.id) ? action.id : null;
+      return {
+        ...state,
+        selectedPinId: id,
+        focusPinId: id === state.focusPinId ? state.focusPinId : null,
+      };
+    }
+    case "focus":
+      if (!state.pins.some((p) => p.id === action.id)) return state;
+      return { ...state, selectedPinId: action.id, focusPinId: action.id };
+    case "clearFocus":
+      return { ...state, focusPinId: null };
+    case "clear":
+      return {
+        pins: action.seedMockPin ? [MOCK_LAYOUT_PIN] : [],
+        selectedPinId: null,
+        focusPinId: null,
+      };
+  }
+}
+
 const MapContext = createContext<MapContextValue | null>(null);
 
 export function MapContextProvider({
@@ -46,11 +98,17 @@ export function MapContextProvider({
   children: ReactNode;
   seedMockPin?: boolean;
 }) {
-  const [pins, setPins] = useState<MapPin[]>(seedMockPin ? [MOCK_LAYOUT_PIN] : []);
+  const [selection, dispatchSelection] = useReducer(pinSelectionReducer, {
+    pins: seedMockPin ? [MOCK_LAYOUT_PIN] : [],
+    selectedPinId: null,
+    focusPinId: null,
+  });
+  const { pins, selectedPinId, focusPinId } = selection;
   const [activeMapCategory, setActiveMapCategory] =
     useState<MapPinCategory | null>(null);
-  const [selectedPinId, setSelectedPinId] = useState<string | null>(null);
-  const [focusPinId, setFocusPinId] = useState<string | null>(null);
+  const setSelectedPinId = useCallback((id: string | null) => {
+    dispatchSelection({ type: "select", id });
+  }, []);
   const [viewport, setViewportState] = useState<MapViewport | null>(null);
   const [fitBoundsToken, setFitBoundsToken] = useState(0);
 
@@ -73,12 +131,11 @@ export function MapContextProvider({
   }, []);
 
   const panToPin = useCallback((pinId: string) => {
-    setSelectedPinId(pinId);
-    setFocusPinId(pinId);
+    dispatchSelection({ type: "focus", id: pinId });
   }, []);
 
   const clearFocusPinRequest = useCallback(() => {
-    setFocusPinId(null);
+    dispatchSelection({ type: "clearFocus" });
   }, []);
 
   const mergePins = useCallback(
@@ -86,15 +143,14 @@ export function MapContextProvider({
       if (incoming.length > 0) {
         setActiveMapCategory(category);
       }
-      setPins((prev) => mergePinsByCategory(prev, category, incoming));
+      dispatchSelection({ type: "merge", category, incoming });
     },
     [],
   );
 
   const clearPins = useCallback(() => {
-    setPins(seedMockPin ? [MOCK_LAYOUT_PIN] : []);
+    dispatchSelection({ type: "clear", seedMockPin });
     setActiveMapCategory(null);
-    setSelectedPinId(null);
   }, [seedMockPin]);
 
   const value = useMemo(
@@ -119,6 +175,7 @@ export function MapContextProvider({
       setViewport,
       activeMapCategory,
       selectedPinId,
+      setSelectedPinId,
       focusPinId,
       panToPin,
       clearFocusPinRequest,
@@ -153,6 +210,11 @@ export function useMapPinSelect() {
     },
     [selectedPinId, setSelectedPinId, panToPin],
   );
+}
+
+/** For read-only cards that may render outside a mounted map. */
+export function useOptionalMapContext(): MapContextValue | null {
+  return useContext(MapContext);
 }
 
 export function useMapContext(): MapContextValue {

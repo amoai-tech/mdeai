@@ -9,19 +9,27 @@ import { searchEventsTool } from '../tools/search-events';
 import { searchRestaurantsTool } from '../tools/search-restaurants';
 import { searchAttractionsTool } from '../tools/search-attractions';
 import { searchGroundedPlacesTool } from '../tools/search-grounded-places';
+import { computeRouteTool } from '../tools/compute-route';
 import { lookupPublicDiscoveryItemTool, lookupPublicDiscoveryItemFromServer } from '../tools/lookup-public-discovery-item';
 import { searchWebGroundedEventsTool } from '../tools/search-web-grounded-events';
 import { requestVenueBookingTool } from '../tools/request-venue-booking';
+import { showRecommendationsTool } from '../tools/show-recommendations';
+import { showRentalFilterControlTool } from '../tools/show-rental-filter-control';
+import { shouldRenderRentalFilterControl, shouldRequestRecommendations } from '../lib/recommendation-intent';
 import { CONCIERGE_AGENT_MODEL } from "../lib/models";
 import { geminiMalformedFirstStepRetry } from "../lib/gemini-malformed-retry";
 import { getDefaultInputProcessors } from "../lib/agent-input-processors";
 import { currentSelectedNameOnly, verifiedDiscoverySelectionHint, withComparisonRecords, withVerifiedSelectionFacts } from "../lib/discovery-agent-context";
+import { buildGenerativeUiInstruction, readEventResultHints, readRentalResultHints } from "../lib/generative-ui-context";
 import { MapUiStateSchema } from "@/platform/contracts/map-ui-state";
 import { formatEventSourcePromptHint } from "@/lib/events/trusted-event-sources";
 import { RESTAURANT_CLARIFY_MESSAGE } from "@/lib/restaurant-clarify-copy";
 import { routerIntentSchema } from "@/lib/router-intent";
+import { monthlyBudgetHasCurrency } from "@/lib/rental-search-body-schema";
 import { buildConciergeChannels } from "./whatsapp-channels";
 import { shouldContinueVenueBookingAfterSearch } from "../lib/booking-continuation";
+import { MDEAI_ROUTE_PLAN_KEY, routePlanForTurn, shouldForceRouteTool } from "../lib/route-tool-choice";
+import { routeUnavailableOutputGuard } from "../lib/route-output-guard";
 
 export const conciergeWorkingMemorySchema = z.object({
   // One canonical enum for both deterministic routing and AI thread memory.
@@ -116,11 +124,19 @@ export const conciergeWorkingMemorySchema = z.object({
         area: z.string().optional(),
         summary: z.string().optional(),
         rating: z.number().optional(),
+        wifi: z.boolean().optional(),
+        hasWifi: z.boolean().optional(),
+        powerOutlets: z.boolean().optional(),
+        hasPowerOutlets: z.boolean().optional(),
+        seating: z.union([z.boolean(), z.string()]).optional(),
+        outdoorSeating: z.boolean().optional(),
+        distanceMeters: z.number().nonnegative().optional(),
+        distanceFromRentalId: z.string().optional(),
       }),
     )
     .optional()
     .describe(
-      'Cafés/places shown in the most recent grounded reply. Use these rows for "which of these" follow-ups; never invent amenities or places not listed here.',
+      'Cafés/places shown in the most recent grounded reply. Use these rows for "which of these" follow-ups; never invent amenities or places not listed here. distanceMeters is measured from distanceFromRentalId and must be used verbatim for closest/nearest questions only while that id equals selectedListingId.',
     ),
 });
 
@@ -198,13 +214,18 @@ function normalizeModelMemory(raw: unknown): unknown {
   const clean = omitPaddedMemoryFields(raw);
   if (!isPlainObject(clean)) return clean;
   const normalized = { ...clean };
-  // Gemini can output maxPriceMonthly: 0 to mean "monthly prices, no ceiling".
-  // Zero is NOT a valid budget; drop the placeholder rather than rejecting
-  // the entire working-memory update or inventing a zero-peso filter.
-  if (isPlainObject(clean.lastRentalQuery) && clean.lastRentalQuery.maxPriceMonthly === 0) {
+  // A model may emit a zero placeholder or a monthly amount with no currency.
+  // Neither is a meaningful ceiling; discard it instead of poisoning future follow-ups.
+  if (isPlainObject(clean.lastRentalQuery)) {
     const query = { ...clean.lastRentalQuery };
-    delete query.maxPriceMonthly;
-    normalized.lastRentalQuery = query;
+    const amount = query.maxPriceMonthly;
+    const currency = typeof query.budgetCurrency === 'string' && query.budgetCurrency.trim()
+      ? query.budgetCurrency : undefined;
+    if (amount === 0 || (typeof amount === 'number' &&
+        !monthlyBudgetHasCurrency({ maxPriceMonthly: amount, budgetCurrency: currency }))) {
+      delete query.maxPriceMonthly;
+      normalized.lastRentalQuery = query;
+    }
   }
   if (typeof clean.lastIntent === 'string' && GROUNDED_INTENT_ALIASES.has(clean.lastIntent)) {
     normalized.lastIntent = 'restaurant_discovery';
@@ -225,6 +246,16 @@ export const conciergeMemoryInput = z.preprocess(normalizeModelMemory, concierge
 
 const conciergeBaseInstructions = `You are the mdeAI Medellín concierge — a helpful local who knows the rental market and the events scene. You speak plain English, you remember what the user asked a moment ago, and you never restart the conversation.
 
+# Page control tools (only when the current page context route is /rentals or /events)
+- updateRentalBrowseFilters: use when the renter asks to change what is currently visible on the Rentals page (neighborhood, bedrooms, stay dates). This updates the existing URL and native cards/map; it does not invent listings or prices. Omit fields that stay unchanged; use null to clear one. Do not also call search-rentals for a request that only changes these native page filters.
+- updateEventBrowseFilters: use when the visitor asks to change what is currently visible on the Events page (category, neighborhood, date window, free/paid). Salsa is a search intent, not a category; for semantic intent use search-events, and only use the page tool for supported filters. Do not invent events, dates or prices. Omit fields that stay unchanged; use null to clear one.
+- When the current page is not /rentals or /events, do not call either page tool. Never claim a filter was applied unless the tool succeeded.
+
+# Answering style
+- Never say what you are about to do. No "I need to check…", "I should use the X tool…", "Let me call…", "The user is asking…", or any description of your plan or of the request itself. Call the tool silently and reply with the result only.
+- Never describe the user or reason about who they are in the reply. If you need one fact, ask one short question, subject to the clarification rules below (rental search still runs before any question).
+- A reply that needs a tool is the tool result, restated for the person: the numbers, names and next step. Do not explain how you obtained it — but still state the source, verification status, tool errors, and any caveat a tool supplies (live web search, route caution, straight-line distance, unverifiable facts, filters that were not applied).
+
 # Tools
 - read-broker-workspace: for a SIGNED-IN rental broker asking about MY listings, leads, viewing requests, or broker dashboard. ALWAYS call this read-only, authenticated tool before answering broker questions, including "Which viewing requests need my attention?". It reads only the caller's own RLS-scoped rows. Never use public rental search for private broker operations. If no broker profile or tool error, say so; do not invent data. Never claim it sent a reply, approved a booking, published a listing or changed a viewing. Direct the broker to the manual workspace actions for changes.
 - lookup-public-discovery-item: when the current turn includes a # Server-verified current selection block, the server-side public RLS lookup ALREADY completed. For questions about that selected item, answer only from the verified public fields in that block; do NOT call the lookup tool again for the same ID. If the selected-item block reports UNVERIFIABLE or LOOKUP FAILED, disclose that rather than guessing. For a DIFFERENT specifically identified public item, call this lookup with its page and ID BEFORE answering its facts. For an unrelated new discovery request, use the appropriate search tool normally. Client IDs never grant authorization. Never infer omitted attributes (e.g. balcony/Wi-Fi/availability/ticket prices).
@@ -233,10 +264,12 @@ const conciergeBaseInstructions = `You are the mdeAI Medellín concierge — a h
 - search-grounded-places: caf\u00e9s, bars, salsa venues, rooftop cocktails, clubs, and other map POIs via Google Maps grounding. For salsa bars, hidden bars, rooftop cocktails, nightlife locals recommend, coffee/coworking, or quiet caf\u00e9s (e.g. "salsa bars in Poblado", "rooftop cocktails Provenza", "cafe with strong Wi-Fi Laureles"), call search-grounded-places with the user's exact phrase — never search-restaurants for those.
 - A restaurant name or table-booking request must use search-restaurants or lookup-public-discovery-item for a canonical restaurant UUID. NEVER pass intent "restaurant" to search-grounded-places: that tool only accepts "cafe", "general", "nightlife". If the user asks to request a table, search the real restaurant first and only then propose booking for review.
 - search-grounded-places intent param (optional, pass only when confident): intent "nightlife" for clubs, discotecas, reggaeton, cocktail bars, salsa bars, rooftop bars, bar crawl, "venues tonight", "where to party" — including generic nightlife phrasing without bar keywords (e.g. "popular venues in Provenza tonight"); intent "cafe" for coffee, coworking, laptop-friendly caf\u00e9s; omit intent when ambiguous or mixed. Never intent "nightlife" for sit-down restaurant meals (use search-restaurants) or ticketed events (use search-events — event category "nightlife" is different).
+- compute-route: for travel distance and duration between a selected origin and a destination. Use only when both endpoints are known from the conversation or verified selection; pass travelMode (WALK default, DRIVE, BICYCLE, TRANSIT) and includePolyline only when a map line is needed. Never estimate travel times, steps or routes. If route is null, say the route is unavailable. When presenting WALK/BICYCLE route facts to a user, include the caution supplied by compute-route (Google routes may omit sidewalks or cycling paths). Do not use it to search for places.
 - search-restaurants: sit-down meals only — dinner, lunch, brunch, cuisine, steakhouse (e.g. "quiet rooftop dinner Provenza", "suggest restaurants medellin"). Do not use for salsa bars, clubs, or cocktail bars.
 - search-attractions: tours, viewpoints, parks, day trips, Comuna 13, Guatap\u00e9, museums.
 - search-web-grounded-events: live web search for time-sensitive or unverified event facts (this weekend, tonight, official lineup) — call ONLY after search-events returns few/zero rows OR user asks to verify online. Never use for caf\u00e9/map/rental/bar queries.
-- When mapUi.viewport is set and the user asks about places near what they see on the map, pass search-grounded-places locationBias: { latitude: mapUi.viewport.lat, longitude: mapUi.viewport.lng }.
+- When the user asks for cafés or coffee shops near a selected apartment, this is PLACE discovery, not a new rental search. Call search-grounded-places with the user query, intent: "cafe", nearbyRentalId: the verified UUID from selectedListingId or from mapUi.selectedPinId formatted rental-<UUID>, nearbyRadiusMeters: 800 unless the user supplied a different radius, and pageSize: 5. The server uses the authorized rental's stored coordinates and returns Google Places plus metadata.searchMode="nearby"/anchorPinId. Never use guessed coordinates, a made-up rental ID, or locationBias in place of nearbyRentalId. If the rental is not selected or not in known rental results, ask which apartment; if no places returned, say so truthfully. Do not call search-rentals for a café-only follow-up.
+- When mapUi.viewport is set and the user asks about places near what they see on the map (not near a selected apartment), pass search-grounded-places locationBias: { latitude: mapUi.viewport.lat, longitude: mapUi.viewport.lng }.
 
 # Working memory rules (very important)
 You have working memory with: lastIntent, lastRentalQuery, lastRentalResults, selectedListingId, lastEventQuery, lastEventResults, selectedEventId, lastGroundedResults (cafés/places shown in the latest grounded reply), mapUi (selectedPinId, pin counts, viewport lat/lng/zoom).
@@ -247,7 +280,8 @@ You have working memory with: lastIntent, lastRentalQuery, lastRentalResults, se
 - When the user references a specific listing/event (number, title, "the cheaper one", "that 2BR"), set selectedListingId / selectedEventId.
 - For follow-up rental questions like "when can I view", "show cheaper options", "any with parking?", "show more in the same area" — DO NOT ask rentals vs events. Reuse lastRentalQuery, refine it, and call search-rentals again. Never reset the flow. EXCEPTION: "show me the details" is the frontend action above; do not turn it into another search.
 - "Show cheaper options" / "más baratos": lower the saved budget in the SAME currency and pricing period. For a monthly budget, reduce maxPriceMonthly and preserve budgetCurrency; for a nightly budget, lower maxPricePerNight. Do not invent exchange rates or divide monthly prices by 30.
-- For a grounded café/place follow-up such as "which of these would you recommend for laptop work?", compare ONLY lastGroundedResults, name one or two rows, and use only the summary/area/rating stored there. Do not invent amenities (power outlets, Wi-Fi speed, seating) and do not call search-grounded-places again unless the user asks for new places.
+- For a grounded café/place follow-up such as "which of these would you recommend for laptop work?", compare ONLY lastGroundedResults, name one or two rows, and use only the summary/area/rating stored there (plus distanceMeters only when distanceFromRentalId matches selectedListingId). Do not invent amenities (power outlets, Wi-Fi speed, seating) and do not call search-grounded-places again unless the user asks for new places.
+- For "which café/place is closest/nearest/farthest?", compare ONLY distanceMeters in lastGroundedResults and name the row with the smallest/largest value, quoting that number as metres ("about N m"). Use it only when distanceFromRentalId equals selectedListingId; if the selected apartment changed, or a row has no distanceMeters, say you do not have its distance. These are straight-line distances, not walking routes or travel times. If any candidate is unmeasured, say the closest is only among measured cafés, not necessarily all results. Never estimate metres, minutes, or walking time from general knowledge.
 
 # Neighborhood intelligence (Medellín-native)
 Use these when explaining picks or suggesting alternatives:
@@ -330,7 +364,7 @@ After a NEW search-grounded-places call, the frontend renders photo cards (ratin
 
 Grounded listing rules (critical):
 - For a new search, do NOT list cafés or venues by name in your reply.
-- Exception — a recommendation or comparison follow-up ("which of these…", "which one…", "compare the first two"): name at most 2 places from lastGroundedResults and explain only with their stored summary/area/rating. Never invent amenities (power outlets, Wi-Fi speed, seating) that are not in those rows.
+- Exception — a recommendation or comparison follow-up ("which of these…", "which one…", "compare the first two"): name at most 2 places from lastGroundedResults and explain only with their stored summary/area/rating (plus distanceMeters only when distanceFromRentalId matches selectedListingId). Never invent amenities (power outlets, Wi-Fi speed, seating) that are not in those rows.
 - NEVER include "View on Google Maps", bullet lists, or numbered lists of places in text.
 - Reply in at most 2 short sentences: (1) how many matches and which area, or the recommendation, (2) one follow-up (e.g. "Want laptop-friendly spots or only Laureles?").
 - If the user adds a new filter ("quiet for work", "only Poblado"), call search-grounded-places again — do not answer from memory alone.
@@ -370,7 +404,7 @@ Restaurant listing rules (critical):
 - Reply in at most 2 short sentences: (1) how many matches and which area, (2) optional one short next-action (e.g. "Refine by cuisine", "Show more options") when results exist, or a recovery hint when empty.
 
 # Monthly rental search and WhatsApp channel replies
-- A renter giving a MONTHLY cap (e.g. "under COP 3.5M/month", "máximo 3 millones al mes") needs search-rentals maxPriceMonthly=3500000, budgetCurrency=COP, stayType=monthly; do not convert to nightly USD.
+- A renter giving a MONTHLY cap (e.g. "under COP 3.5M/month", "máximo 3 millones al mes") needs search-rentals maxPriceMonthly=3500000, budgetCurrency=COP, stayType=monthly; for "under USD 2,000/month", use budgetCurrency=USD. Never guess COP for an amount with no stated currency: ask which currency before applying maxPriceMonthly. Do not convert to nightly USD.
 - When search-rentals returns whatsapp_reply, **only on WhatsApp** send that tool-generated text rather than the web-card summary. It contains grounded apartment details and actual recorded prices/links. Do not invent, re-price, or reorder options; you may add one short follow-up question.
 - On the web, tool-rendered cards and pins remain the source of listing details; do not repeat their fields in prose.
 
@@ -465,9 +499,12 @@ Conversion boundary (do NOT cross):
 - Never claim to book or charge — only propose options.
 - can_schedule_viewing is the only source of truth for viewing requestability. If it is false, or schedule_viewing_url is null, never tell the user that rental can be scheduled and never print a "Schedule viewing" link for it.
 - Never answer "rentals or events?" if lastIntent=rental_search and the user is continuing.
-- For "which of these" or "which one" follow-ups about cafés/places, use lastGroundedResults and name only those rows. Never claim an amenity or feature that is not in the stored row.
+- For "which of these" or "which one" follow-ups about cafés/places, use lastGroundedResults and name only those rows. Never claim an amenity or feature that is not in the stored row. Distances are allowed only when distanceFromRentalId equals selectedListingId.
 - Max 5 cards per reply.
 - Reply concisely. Plain English. No emoji unless the user uses one first.
+
+# Highest-priority page actions
+When the current page context route is /rentals or /events and the user says "on this page", "set the filters", "show only ... on the page", or otherwise asks to change what is currently visible, call the matching page tool (updateRentalBrowseFilters or updateEventBrowseFilters) FIRST. Do not call search-rentals/search-events just to change a supported native filter. Supported event fields are category, neighborhood, dateWindow and price; salsa is a search intent, not a category. Never claim a filter was applied unless the page tool succeeded.
 
 ${formatEventSourcePromptHint()}`;
 
@@ -475,10 +512,21 @@ export const conciergeAgent = new Agent({
   id: 'concierge-agent',
   name: 'Concierge Agent',
   instructions: async ({ requestContext }) => {
+    const agUiContext = requestContext.get("ag-ui");
     const currentSelection = await verifiedDiscoverySelectionHint(
-      requestContext.get("ag-ui"), lookupPublicDiscoveryItemFromServer,
+      agUiContext, lookupPublicDiscoveryItemFromServer,
     );
-    return currentSelection ? `${currentSelection}\n${conciergeBaseInstructions}` : conciergeBaseInstructions;
+    // The A2UI transport gives the model a render_ui tool AND a guide with the
+    // component schemas and rules. The Mastra adapter keeps that guide in
+    // RunAgentInput.context, so this per-turn instruction is the official place
+    // that passes it to the model ("your agent must pass the run's context").
+    // Without it the model guesses the operation JSON.
+    const generativeGuide = buildGenerativeUiInstruction(agUiContext);
+    const rentalHints = readRentalResultHints(agUiContext);
+    const eventHints = readEventResultHints(agUiContext);
+    return [currentSelection, rentalHints, eventHints, generativeGuide, conciergeBaseInstructions]
+      .filter(Boolean)
+      .join("\n\n");
   },
   model: CONCIERGE_AGENT_MODEL,
   // SAN-1396: restore a failed FIRST model step only for Gemini's known malformed
@@ -501,9 +549,12 @@ export const conciergeAgent = new Agent({
     searchRestaurantsTool,
     searchAttractionsTool,
     searchGroundedPlacesTool,
+    computeRouteTool,
     lookupPublicDiscoveryItemTool,
     searchWebGroundedEventsTool,
     requestVenueBooking: requestVenueBookingTool,
+    showRecommendations: showRecommendationsTool,
+    showRentalFilterControl: showRentalFilterControlTool,
   },
   inputProcessors: [
     // SAN-737: the verified current selection, tool schemas and working memory must
@@ -514,10 +565,37 @@ export const conciergeAgent = new Agent({
     // proposal. Once the current run grounded the exact named venue and the
     // customer already supplied every mandatory field, require the *existing*
     // proposal-only HITL tool for the next Mastra step. No database writer here.
+    // SAN-1656 — explicit "show ... as cards" is a UI command, not a question.
+    // Pin the simple ID-list tool (never render_ui: forcing that produced empty
+    // operations); the tool validates IDs and the transport builds the surface.
+    { id: 'san1655-filter-control-intent', processInputStep: ({ stepNumber, messages, requestContext }) =>
+      shouldRenderRentalFilterControl({ stepNumber, messages, requestContext })
+        ? { toolChoice: { type: 'tool' as const, toolName: 'showRentalFilterControl' } }
+        : {} },
+    { id: 'san1656-recommendation-intent', processInputStep: ({ stepNumber, messages, requestContext }) =>
+      shouldRequestRecommendations({ stepNumber, messages, requestContext })
+        ? { toolChoice: { type: 'tool' as const, toolName: 'showRecommendations' } }
+        : {} },
     { id: 'san1149-booking-continuation', processInputStep: ({ stepNumber, messages, steps, requestContext }) =>
       shouldContinueVenueBookingAfterSearch({ stepNumber, messages, steps, requestContext })
         ? { toolChoice: { type: 'tool' as const, toolName: 'requestVenueBooking' } }
         : {} },
+    { id: 'san465-route-tool-choice', processInputStep: ({ stepNumber, messages, steps, requestContext }) => {
+      if (!shouldForceRouteTool({ stepNumber, messages, steps })) return {};
+      // Hand the user's own endpoints and travel mode to the tool. The model's
+      // generated place IDs are untrusted; Google must receive the named places.
+      const plan = routePlanForTurn(messages);
+      if (!plan) return {};
+      // Never force a call the tool cannot receive the plan for: it would fall
+      // back to unverified model waypoints.
+      if (!requestContext) return {};
+      try {
+        requestContext.set(MDEAI_ROUTE_PLAN_KEY, plan);
+      } catch {
+        return {};
+      }
+      return { toolChoice: { type: 'tool' as const, toolName: 'computeRouteTool' } };
+    } },
     { id: "san737-current-selected-name-history", processInput: ({ messages, requestContext }) =>
       currentSelectedNameOnly(messages, requestContext?.get("ag-ui")) },
     // SAN-1600 — an explicit comparison needs the previous item's record too, resolved
@@ -527,6 +605,9 @@ export const conciergeAgent = new Agent({
     { id: "san1600-verified-selection-facts", processInput: ({ messages, requestContext }) =>
       withVerifiedSelectionFacts(messages, requestContext?.get("ag-ui"), lookupPublicDiscoveryItemFromServer) },
   ],
+  // A failed Google route cannot become a model-estimated distance or ETA.
+  // This filters streaming text before CopilotKit renders it or memory saves it.
+  outputProcessors: [routeUnavailableOutputGuard],
   channels: buildConciergeChannels(),
   // PERF-002: 10-message window (was 20). Follow-up state lives in working memory
   // (lastRentalQuery/lastEventQuery/…), so a shorter raw-history replay cuts input

@@ -119,10 +119,13 @@ test("order: validate, staged, certify, re-confirm staged, promote, verify, stab
     "Verify Production defines the required variable names",
     "Confirm the candidate is staged",
     "Certify exact staged candidate",
+    "Wait for exact-SHA Floor success",
     "Re-confirm the candidate is still staged right before promotion",
+    "Require runtime health on the staged candidate",
     "Promote the exact certified deployment",
     "Verify www.mdeai.co serves the exact certified deployment",
     "Verify production aliases remain stable after promotion",
+    "Post-promotion production smoke",
     "Publish final release certification result",
   ].map((name) => stepIndex(job, name));
   assert.deepEqual([...order].sort((a, b) => a - b), order, "steps must run in the safe order");
@@ -154,6 +157,32 @@ test("certification runs on the exact candidate URL, before and never after prom
   );
 });
 
+test("candidate health blocks promotion and the live smoke is ordered before publishing", () => {
+  const job = certifyJob(workflow());
+  const health = stepBody(job, "Require runtime health on the staged candidate");
+  assert.match(health, /api\/health/);
+  assert.match(health, /placesKey/);
+  assert.match(health, /-w '%\{http_code\}'/);
+  assert.ok(
+    stepIndex(job, "Require runtime health on the staged candidate") <
+      stepIndex(job, "Promote the exact certified deployment"),
+    "an unhealthy candidate must never be promoted",
+  );
+
+  const smoke = stepBody(job, "Post-promotion production smoke");
+  assert.match(smoke, /live-health\.json/);
+  assert.match(smoke, /live_sha_after/);
+  assert.ok(
+    stepIndex(job, "Verify production aliases remain stable after promotion") <
+      stepIndex(job, "Post-promotion production smoke"),
+  );
+  assert.ok(
+    stepIndex(job, "Post-promotion production smoke") <
+      stepIndex(job, "Publish final release certification result"),
+    "the smoke must finish before the final status is published",
+  );
+});
+
 test("publishes success only after certification, staged recheck, promotion, domain and stability all passed", () => {
   const job = certifyJob(workflow());
   const result = stepBody(job, "Publish final release certification result");
@@ -161,9 +190,11 @@ test("publishes success only after certification, staged recheck, promotion, dom
   for (const [key, stepId] of [
     ["CERTIFY_OUTCOME", "certify"],
     ["STAGED_OUTCOME", "final_staged"],
+    ["CANDIDATE_HEALTH_OUTCOME", "candidate_health"],
     ["PROMOTE_OUTCOME", "promote"],
     ["VERIFIED_OUTCOME", "verify_promoted"],
     ["STABLE_OUTCOME", "verify_stable"],
+    ["SMOKE_OUTCOME", "prod_smoke"],
   ]) {
     assert.ok(result.includes(`${key}: \${{ steps.${stepId}.outcome }}`), `${key} must come from its exact step`);
     assert.ok(result.includes(`"$${key}" == success`), `${key} must gate success`);
@@ -342,6 +373,19 @@ test("release rechecks both aliases after a delayed second promotion, not only i
   assert.match(stepBody(job, "Verify production aliases remain stable after promotion"), /assert-stable/);
 });
 
+test("after promotion, live deployment identity is checked without demanding main stay frozen", () => {
+  const job = certifyJob(workflow());
+  assert.match(stepBody(job, "Promote the exact certified deployment"), /assert-current-main/,
+    "only a current candidate may start the promotion");
+  assert.match(stepBody(job, "Verify www.mdeai.co serves the exact certified deployment"), /assert-promoted/);
+  assert.match(stepBody(job, "Verify production aliases remain stable after promotion"), /assert-stable/);
+  const source = fs.readFileSync("scripts/vercel-release-control.mjs", "utf8");
+  const postPromotion = source.split('} else if (command === "assert-promoted") {')[1]?.split("} else {\n    fail(\"usage:")[0];
+  assert.ok(postPromotion, "CLI post-promotion step must exist");
+  assert.doesNotMatch(postPromotion, /githubMainSha|checkCurrentMain/,
+    "newer commits only wait for their own promotion; they cannot invalidate a proven live alias");
+});
+
 test("scheduled late-drift detector only reads aliases and never runs promotion", () => {
   const txt = workflow();
   assert.match(txt, /schedule:\s*\n\s*- cron:/);
@@ -362,4 +406,25 @@ test("scheduled monitor never passes event SHA as live-main expectation", () => 
   assert.doesNotMatch(job, /active-deployment/, "use one atomic read-only monitor command");
   assert.match(job, /assert-live-current/);
   assert.match(job, /GH_TOKEN:\s*\$\{\{\s*secrets\.GITHUB_TOKEN\s*\}\}/);
+});
+
+test("SAN-1362: exact-SHA Floor success is a fail-closed prerequisite to production promotion", () => {
+  const text = workflow();
+  const job = certifyJob(text);
+  const gate = stepBody(job, "Wait for exact-SHA Floor success");
+  const promote = stepBody(job, "Promote the exact certified deployment");
+  assert.match(text, /permissions:\s*\n\s*contents: read\s*\n\s*actions: read/);
+  assert.match(gate, /node \.trusted\/scripts\/vercel-release-control\.mjs wait-floor/);
+  assert.match(gate, /GH_TOKEN: \$\{\{ secrets\.GITHUB_TOKEN \}\}/);
+  assert.match(gate, /if: \$\{\{ success\(\) && steps\.certify\.outcome == 'success' \}\}/);
+  assert.ok(stepIndex(job, "Certify exact staged candidate") < stepIndex(job, "Wait for exact-SHA Floor success"));
+  assert.ok(stepIndex(job, "Wait for exact-SHA Floor success") <
+    stepIndex(job, "Re-confirm the candidate is still staged right before promotion"),
+    "the final Vercel staged check must run AFTER the bounded Floor wait");
+  assert.ok(stepIndex(job, "Wait for exact-SHA Floor success") < stepIndex(job, "Promote the exact certified deployment"));
+  assert.match(promote, /assert-current-main/);
+  const published = stepBody(job, "Publish final release certification result");
+  assert.match(published, /FLOOR_OUTCOME: \$\{\{ steps\.floor\.outcome \}\}/);
+  assert.match(published, /"\$FLOOR_OUTCOME" == success/);
+  assert.doesNotMatch(gate, /continue-on-error|always\(\)/);
 });

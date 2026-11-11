@@ -3,8 +3,8 @@ import { CalendarDays, Ticket } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { VenueCardShell } from "@/components/browse/venue-card-shell";
-import { VenueCardPlaceholder } from "@/components/browse/venue-card-placeholder";
-import { formatEventCardPrice, formatEventStartsAt } from "@/lib/events/format-event";
+import { VenueCardPlaceholder, venueCardMediaFrame } from "@/components/browse/venue-card-placeholder";
+import { formatEventBadgeDate, formatEventCardPrice, formatEventStartsAt } from "@/lib/events/format-event";
 import type { PublishedEventListItem } from "@/lib/events/list-published-events";
 import type { EventCategory } from "@/mastra/tools/search-events";
 import { cn } from "@/lib/utils";
@@ -15,6 +15,10 @@ type EventBrowseCardProps = {
   mediaLayout?: "inline" | "cover";
   selectedForAsk?: boolean;
   onAskSelect?: () => void;
+  /** SAN-1638: open Details in the page's right panel instead of navigating. */
+  onDetails?: (trigger: HTMLElement) => void;
+  /** SAN-1638: this card's Details panel is open (announced with aria-expanded). */
+  detailsOpen?: boolean;
   /** Present only when the event has a real map pin; the same ID the shared map uses. */
   pinId?: string;
 };
@@ -27,51 +31,78 @@ const CATEGORY_LABELS: Record<EventCategory, string> = {
   nightlife: "Nightlife",
 };
 
+/**
+ * Card media: the real event image, or a date badge when none is available.
+ *
+ * A photo-less event used to render the same generic tile as every other photo-less card, which
+ * made the events list read as unfinished. The date is the fact a visitor scans for anyway, and
+ * it is derived from the real record in Medellín local time. The badge is decorative — the
+ * readable schedule line stays the accessible source of truth.
+ */
 function EventBrowseCardMedia({
   imageUrl,
   imageAlt,
   mediaLayout,
+  startsAt,
 }: {
   imageUrl?: string;
   imageAlt: string;
   mediaLayout: "inline" | "cover";
+  startsAt: string;
 }) {
   if (imageUrl) {
-    const frameClass = cn(
-      "relative overflow-hidden rounded-xl bg-muted text-xs text-muted-foreground",
-      mediaLayout === "cover"
-        ? "aspect-[16/10] w-full"
-        : "aspect-[16/10] w-24 shrink-0 self-start",
-    );
-
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
         src={imageUrl}
         alt={imageAlt}
-        className={cn(frameClass, "object-cover")}
+        className={cn(venueCardMediaFrame(mediaLayout), "bg-muted text-xs text-muted-foreground object-cover")}
         loading="lazy"
         data-testid="event-browse-card-photo"
       />
     );
   }
 
+  const badge = formatEventBadgeDate(startsAt);
+
+  // One owner for the media frame: the shared placeholder decides radius, aspect, gradient and
+  // gap. This card only supplies what sits in the middle, so it can never drift from the family.
   return (
     <VenueCardPlaceholder
       label="Event"
       icon={<CalendarDays className="size-5" aria-hidden />}
       mediaLayout={mediaLayout}
-      testId="event-browse-card-photo-placeholder"
+      testId={badge ? "event-browse-card-date-badge" : "event-browse-card-photo-placeholder"}
+      content={
+        badge ? (
+          mediaLayout === "cover" ? (
+            // Full tile: month over a large day.
+            <>
+              <span className="text-[11px] font-semibold tracking-wide">{badge.month}</span>
+              <span className="text-2xl font-semibold leading-none">{badge.day}</span>
+            </>
+          ) : (
+            // 96x60 inline frame: two stacked lines plus the label and gaps exceed 60px and get
+            // clipped, so the inline layout keeps one compact line and still shows the label.
+            <span className="text-sm font-semibold tracking-wide">
+              {badge.month} {badge.day}
+            </span>
+          )
+        ) : undefined
+      }
     />
   );
 }
 
+/** One event result with its facts and the Ask and Details actions. */
 export function EventBrowseCard({
   event,
   composition = "nova",
   mediaLayout = "cover",
   selectedForAsk,
   onAskSelect,
+  onDetails,
+  detailsOpen = false,
   pinId,
 }: EventBrowseCardProps) {
   const detailsHref = `/events/${event.slug}`;
@@ -95,6 +126,7 @@ export function EventBrowseCard({
       media={
         <EventBrowseCardMedia
           imageUrl={event.imageUrl}
+          startsAt={event.startsAt}
           imageAlt={event.title}
           mediaLayout={mediaLayout}
         />
@@ -102,26 +134,50 @@ export function EventBrowseCard({
       footer={
         <div className="flex w-full flex-wrap items-center justify-between gap-x-2 gap-y-1">
           {/* One secondary toggle: selecting an event also highlights its marker and sets the Ask MDE context. */}
-          {onAskSelect ? <Button type="button" size="sm" variant="ghost" className="-ml-2 text-muted-foreground"
+          {onAskSelect ? <Button type="button" size="sm" variant="ghost"
+            className="-ml-2 h-card-action min-w-card-action text-muted-foreground"
             data-testid="event-ask-select" aria-pressed={Boolean(selectedForAsk)} onClick={onAskSelect}>
             {selectedForAsk ? "Clear selection" : "Ask about this"}
           </Button> : <span />}
           <div className="ml-auto flex items-center gap-2">
-            {/* Details is the primary action unless a real ticket offer exists; then Buy is. */}
+            {/* Details is the primary action unless a real ticket offer exists; then Buy is.
+                On a browse page it opens the in-page panel; elsewhere it is a real link. */}
+            {onDetails ? (
+              <Button
+                type="button"
+                size="sm"
+                variant={event.canBuyTickets ? "outline" : "default"}
+                className="h-card-action min-w-card-action px-3"
+                data-testid="event-details-cta"
+                data-details-action="open"
+                aria-expanded={detailsOpen}
+                onClick={(clickEvent) => onDetails(clickEvent.currentTarget)}
+              >
+                Details
+              </Button>
+            ) : (
             <Link
               href={detailsHref}
               data-testid="event-details-cta"
-              className={cn(buttonVariants({ size: "sm", variant: event.canBuyTickets ? "outline" : "default" }))}
+              data-details-action="link"
+              className={cn(
+                buttonVariants({ size: "sm", variant: event.canBuyTickets ? "outline" : "default" }),
+                "h-card-action min-w-card-action px-3",
+              )}
             >
               Details
             </Link>
+            )}
             {!event.canBuyTickets ? null : event.ticketUrl.startsWith("http") ? (
               <Link
                 href={event.ticketUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 data-testid="event-buy-cta"
-                className={cn(buttonVariants({ size: "sm", variant: "default" }))}
+                className={cn(
+                  buttonVariants({ size: "sm", variant: "default" }),
+                  "h-card-action min-w-card-action px-3",
+                )}
               >
                 <Ticket data-icon="inline-start" aria-hidden />
                 Buy tickets
@@ -130,6 +186,7 @@ export function EventBrowseCard({
               <Button
                 size="sm"
                 variant="default"
+                className="h-card-action min-w-card-action px-3"
                 nativeButton={false}
                 render={<Link href={detailsHref} data-testid="event-buy-cta" />}
               >

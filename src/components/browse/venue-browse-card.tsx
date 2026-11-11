@@ -67,12 +67,18 @@ type VenueBrowseCardProps = {
   mediaLayout?: "inline" | "cover";
   selectedForAsk?: boolean;
   onAskSelect?: () => void;
+  /** SAN-1638: this card's Details panel is open (announced with aria-expanded). */
+  detailsOpen?: boolean;
+  /** SAN-1638: open this venue's read-only Details in the page's existing right panel.
+   *  The triggering control is passed back so closing Details can restore focus to it. */
+  onDetails?: (trigger: HTMLElement) => void;
   /** Existing map selection. Only coordinate-backed venues receive a map action. */
   pinId?: string;
   selectedForMap?: boolean;
   onMapSelect?: () => void;
 };
 
+/** Venue tags are stored kebab-cased; show them as words. */
 function formatTagLabel(tag: string): string {
   return tag
     .split("-")
@@ -80,6 +86,7 @@ function formatTagLabel(tag: string): string {
     .join(" ");
 }
 
+/** Real Google Maps directions link, and nothing when the venue has no usable URL. */
 function DirectionsLink({
   mapsUrl,
   directionsTestId,
@@ -96,7 +103,7 @@ function DirectionsLink({
       <Button
         variant="outline"
         size="sm"
-        className="h-8 px-2 text-xs"
+        className="h-card-action px-3 text-xs"
         nativeButton={false}
         render={
           <a
@@ -118,7 +125,7 @@ function DirectionsLink({
     <Button
       variant="link"
       size="sm"
-      className="h-8 px-2 text-xs"
+      className="h-card-action px-3 text-xs"
       nativeButton={false}
       render={
         <Link
@@ -136,6 +143,21 @@ function DirectionsLink({
   );
 }
 
+/** First letters of the first two words, e.g. "Dulce Jesús Mío" → "DJ". */
+function venueInitials(name: string): string | undefined {
+  const words = name
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (words.length === 0) return undefined;
+  return words
+    .slice(0, 2)
+    .map((word) => word[0]?.toUpperCase() ?? "")
+    .join("");
+}
+
+/** One café or nightlife result: media, facts, and the Ask and Details actions. */
 export function VenueBrowseCard({
   kind,
   listing,
@@ -143,6 +165,8 @@ export function VenueBrowseCard({
   mediaLayout = "cover",
   selectedForAsk,
   onAskSelect,
+  onDetails,
+  detailsOpen = false,
   pinId,
   selectedForMap,
   onMapSelect,
@@ -164,21 +188,34 @@ export function VenueBrowseCard({
         <VenueCardPlaceholder
           label={config.label}
           icon={<Icon className="size-5" aria-hidden />}
+          initials={venueInitials(listing.name)}
           mediaLayout={mediaLayout}
           testId={config.placeholderTestId}
         />
       }
-      footer={<div className="flex flex-wrap items-center gap-2">
+      footer={<div className="flex w-full flex-wrap items-center gap-2">
+        {/* One action contract on every discovery card, in this order:
+            Directions · View on map · Ask about this · Details. All four read the
+            same 44px action height so they tap the same on a phone. */}
+        <DirectionsLink mapsUrl={listing.mapsUrl} directionsTestId={config.directionsTestId} mapsTestId={config.mapsTestId} />
         {pinId && onMapSelect ? <Button type="button" size="sm" variant={selectedForMap ? "secondary" : "outline"}
+          className="h-card-action min-w-card-action px-3"
           aria-pressed={Boolean(selectedForMap)} data-testid="venue-map-select" onClick={onMapSelect}>
           <MapPin className="size-3.5" aria-hidden />
           {selectedForMap ? "Selected on map" : "View on map"}
         </Button> : null}
         {onAskSelect ? <Button type="button" size="sm" variant={selectedForAsk ? "secondary" : "outline"}
+          className="h-card-action min-w-card-action px-3"
           aria-pressed={Boolean(selectedForAsk)} data-testid="venue-ask-select" onClick={onAskSelect}>
           {selectedForAsk ? "Clear selection" : "Ask about this"}
         </Button> : null}
-        <DirectionsLink mapsUrl={listing.mapsUrl} directionsTestId={config.directionsTestId} mapsTestId={config.mapsTestId} />
+        {onDetails ? <Button type="button" size="sm" variant="outline"
+          className="h-card-action min-w-card-action px-3"
+          data-testid="venue-details-open"
+          aria-expanded={detailsOpen}
+          onClick={(event) => onDetails(event.currentTarget)}>
+          Details
+        </Button> : null}
       </div>}
     >
       {listing.neighborhood ? (

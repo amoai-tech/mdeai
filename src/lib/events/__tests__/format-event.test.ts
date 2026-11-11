@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { isEventLookupUuid } from "@/lib/events/event-lookup";
 import {
+  formatEventBadgeDate,
   formatEventCardPrice,
   formatEventSchedule,
   formatTicketPrice,
+  ticketAvailability,
   ticketsRemaining,
 } from "@/lib/events/format-event";
 
@@ -20,6 +22,15 @@ describe("isEventLookupUuid", () => {
 describe("formatTicketPrice", () => {
   it("formats COP centavos", () => {
     expect(formatTicketPrice(4_000_000, "COP")).toBe("$40,000 COP");
+  });
+
+  it("normalizes lowercase and mixed-case COP instead of falling through", () => {
+    expect(formatTicketPrice(4_000_000, "cop")).toBe("$40,000 COP");
+    expect(formatTicketPrice(4_000_000, "Cop")).toBe("$40,000 COP");
+  });
+
+  it("shows a zero-price tier as Free, not a fabricated paid amount", () => {
+    expect(formatTicketPrice(0, "COP")).toBe("Free");
   });
 });
 
@@ -65,9 +76,54 @@ describe("formatEventSchedule", () => {
   });
 });
 
+describe("ticketAvailability", () => {
+  const base = {
+    qtyTotal: 10,
+    qtySold: 0,
+    qtyPending: 0,
+    minPerOrder: 1,
+    saleStartsAt: null,
+    saleEndsAt: null,
+  };
+
+  it("distinguishes every public sellability state", () => {
+    expect(ticketAvailability(base)).toBe("available");
+    expect(ticketAvailability({ ...base, qtyTotal: 3, qtySold: 3 })).toBe("sold-out");
+    expect(ticketAvailability({ ...base, saleStartsAt: "2099-01-01T00:00:00Z" })).toBe("not-yet-on-sale");
+    expect(ticketAvailability({ ...base, saleEndsAt: "2000-01-01T00:00:00Z" })).toBe("sale-ended");
+    expect(ticketAvailability({ ...base, qtyTotal: 1, minPerOrder: 2 })).toBe("below-minimum");
+  });
+
+  it("treats pending reservations exactly like sold seats for availability", () => {
+    expect(ticketAvailability({ ...base, qtyTotal: 3, qtyPending: 2 })).toBe("available");
+    expect(ticketAvailability({ ...base, qtyTotal: 3, qtyPending: 3 })).toBe("sold-out");
+  });
+});
+
 describe("ticketsRemaining", () => {
   it("never goes below zero", () => {
     expect(ticketsRemaining(10, 12)).toBe(0);
     expect(ticketsRemaining(100, 7)).toBe(93);
+  });
+
+  it("subtracts pending reservations as well as committed sales", () => {
+    expect(ticketsRemaining(10, 2, 3)).toBe(5);
+    expect(ticketsRemaining(10, 2, 9)).toBe(0);
+  });
+
+  it("returns 0 for corrupt inventory rather than a negative number", () => {
+    expect(ticketsRemaining(Number.NaN, 0, 0)).toBe(0);
+    expect(ticketsRemaining(10, 0, Number.NaN)).toBe(0);
+  });
+});
+
+describe("formatEventBadgeDate", () => {
+  it("derives the month and day from the real record in Medellín time", () => {
+    // 2026-02-24T02:00Z is still the 23rd in Bogotá (UTC-5): a badge must not show the UTC day.
+    expect(formatEventBadgeDate("2026-02-24T02:00:00.000Z")).toEqual({ month: "FEB", day: "23" });
+  });
+
+  it("returns null for an unusable timestamp so the card degrades instead of lying", () => {
+    expect(formatEventBadgeDate("not-a-date")).toBeNull();
   });
 });

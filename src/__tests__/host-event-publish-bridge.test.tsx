@@ -57,6 +57,8 @@ describe("HostEventCopilotBridge publish HITL", () => {
     expect(frontendTools.set_event_draft.description).toMatch(/whole COP/);
     expect(HOST_EVENT_INSTRUCTIONS).toContain("40000 means COP 40,000");
     expect(HOST_EVENT_INSTRUCTIONS).toContain("never cents");
+    expect(HOST_EVENT_INSTRUCTIONS).toContain('clear the "Min ticket price (COP)" field');
+    expect(HOST_EVENT_INSTRUCTIONS).toContain("There is no tier editor in this wizard");
   });
 
   it("applies every stated field in one draft call and returns the draft", async () => {
@@ -85,6 +87,184 @@ describe("HostEventCopilotBridge publish HITL", () => {
     expect(screen.getByTestId("host-event-field-venue")).toHaveProperty("value", "Son Havana");
     expect(screen.getByTestId("host-event-field-capacity")).toHaveProperty("value", "150");
     expect(screen.getByTestId("host-event-field-price")).toHaveProperty("value", "40000");
+  });
+
+  it("preserves locks when the host chooses Edit", async () => {
+    let bridgeSetDraft: ((patch: Partial<EventDraftState>) => void) | undefined;
+    render(
+      <HostEventCopilotBridge>
+        {({ draft, setDraft }) => {
+          bridgeSetDraft = setDraft;
+          return <HostEventForm draft={draft} onChange={setDraft} />;
+        }}
+      </HostEventCopilotBridge>,
+    );
+    fireEvent.change(screen.getByTestId("host-event-field-title"), { target: { value: "Host title" } });
+    act(() => bridgeSetDraft?.({ status: "draft" }));
+    await act(async () => {
+      await frontendTools.set_event_draft.handler!({ title: "Agent title" });
+    });
+    expect(screen.getByTestId("host-event-field-title")).toHaveProperty("value", "Host title");
+  });
+
+  it("does not report an unchanged locked value as a conflict", async () => {
+    render(
+      <HostEventCopilotBridge>
+        {({ draft, setDraft }) => <HostEventForm draft={draft} onChange={setDraft} />}
+      </HostEventCopilotBridge>,
+    );
+    fireEvent.change(screen.getByTestId("host-event-field-title"), { target: { value: "Host title" } });
+    let result: unknown;
+    await act(async () => {
+      result = await frontendTools.set_event_draft.handler!({ title: "Host title", capacity: 90 });
+    });
+    expect(result).toMatchObject({ ok: true, lockedFields: [] });
+    expect(screen.getByTestId("host-event-field-capacity")).toHaveProperty("value", "90");
+  });
+
+  it("allows clearing capacity and price to unlock them", async () => {
+    render(
+      <HostEventCopilotBridge>
+        {({ draft, setDraft }) => <HostEventForm draft={draft} onChange={setDraft} />}
+      </HostEventCopilotBridge>,
+    );
+    expect(screen.getByTestId("host-event-field-price")).toHaveProperty("value", "");
+    fireEvent.change(screen.getByTestId("host-event-field-capacity"), { target: { value: "80" } });
+    fireEvent.change(screen.getByTestId("host-event-field-price"), { target: { value: "0" } });
+    fireEvent.change(screen.getByTestId("host-event-field-capacity"), { target: { value: "" } });
+    fireEvent.change(screen.getByTestId("host-event-field-price"), { target: { value: "" } });
+    let result: unknown;
+    await act(async () => {
+      result = await frontendTools.set_event_draft.handler!({ capacity: 100, priceMinCop: 40000 });
+    });
+    expect(result).toMatchObject({ ok: true, lockedFields: [] });
+    expect(screen.getByTestId("host-event-field-capacity")).toHaveProperty("value", "100");
+    expect(screen.getByTestId("host-event-field-price")).toHaveProperty("value", "40000");
+  });
+
+  it("preserves limited ticket inventory and applies an explicit free price", async () => {
+    render(
+      <HostEventCopilotBridge>
+        {({ draft, setDraft }) => <HostEventForm draft={draft} onChange={setDraft} />}
+      </HostEventCopilotBridge>,
+    );
+    await act(async () => {
+      await frontendTools.set_event_draft.handler!({
+        title: "Free salsa",
+        capacity: 80,
+        priceMinCop: 40000,
+        ticketTiers: [{ name: "General", priceCop: 40000, quantity: 80 }],
+      });
+    });
+    fireEvent.change(screen.getByTestId("host-event-field-price"), { target: { value: "0" } });
+    fireEvent.change(screen.getByTestId("host-event-field-capacity"), { target: { value: "100" } });
+    const PublishPanel = registeredRender;
+    if (!PublishPanel) throw new Error("HITL renderer not registered");
+    render(<PublishPanel args={{}} status="executing" />);
+    const reviewed = JSON.parse(
+      screen.getByTestId("captured-publish-draft").textContent ?? "{}",
+    ) as EventDraftState;
+    expect(reviewed.ticketTiers?.[0]).toMatchObject({ name: "General", priceCop: 0, quantity: 80 });
+  });
+
+  it("preserves the host's paid tier price against stale AI tool and publish args", async () => {
+    render(
+      <HostEventCopilotBridge>
+        {({ draft, setDraft }) => <HostEventForm draft={draft} onChange={setDraft} />}
+      </HostEventCopilotBridge>,
+    );
+    const staleTiers = [{ name: "General", priceCop: 40000, quantity: 80 }];
+    await act(async () => {
+      await frontendTools.set_event_draft.handler!({
+        title: "Salsa Night", neighborhood: "Laureles", dateIso: "2026-12-15T20:00:00-05:00",
+        venue: "Son Havana", capacity: 100, priceMinCop: 40000, ticketTiers: staleTiers,
+      });
+    });
+    fireEvent.change(screen.getByTestId("host-event-field-price"), { target: { value: "50000" } });
+    let result: unknown;
+    await act(async () => {
+      result = await frontendTools.set_event_draft.handler!({ ticketTiers: staleTiers });
+    });
+    expect(result).toMatchObject({
+      ok: true, lockedFields: ["ticketTiers"],
+      draft: { priceMinCop: 50000, ticketTiers: [{ priceCop: 50000, quantity: 80 }] },
+    });
+    const PublishPanel = registeredRender;
+    if (!PublishPanel) throw new Error("HITL renderer not registered");
+    render(<PublishPanel args={{ draft: { priceMinCop: 40000, ticketTiers: staleTiers } }} status="executing" />);
+    const reviewed = JSON.parse(
+      screen.getByTestId("captured-publish-draft").textContent ?? "{}",
+    ) as EventDraftState;
+    expect(reviewed.priceMinCop).toBe(50000);
+    expect(reviewed.ticketTiers[0]).toMatchObject({ priceCop: 50000, quantity: 80 });
+  });
+
+  it("explains that a manual price lock also protects the hidden tier field", async () => {
+    render(
+      <HostEventCopilotBridge>
+        {({ draft, setDraft }) => <HostEventForm draft={draft} onChange={setDraft} />}
+      </HostEventCopilotBridge>,
+    );
+    fireEvent.change(screen.getByTestId("host-event-field-price"), { target: { value: "40000" } });
+    let result: unknown;
+    await act(async () => {
+      result = await frontendTools.set_event_draft.handler!({
+        ticketTiers: [{ name: "VIP", priceCop: 90000, quantity: 10 }],
+      });
+    });
+    expect(result).toMatchObject({
+      ok: true,
+      lockedFields: ["ticketTiers"],
+      lockedBy: { ticketTiers: "priceMinCop" },
+    });
+  });
+
+  it("keeps a manually entered zero price locked for a free event", async () => {
+    render(
+      <HostEventCopilotBridge>
+        {({ draft, setDraft }) => <HostEventForm draft={draft} onChange={setDraft} />}
+      </HostEventCopilotBridge>,
+    );
+    fireEvent.change(screen.getByTestId("host-event-field-price"), { target: { value: "1" } });
+    fireEvent.change(screen.getByTestId("host-event-field-price"), { target: { value: "0" } });
+    let result: unknown;
+    await act(async () => {
+      result = await frontendTools.set_event_draft.handler!({ priceMinCop: 40000 });
+    });
+    expect(result).toMatchObject({ ok: true, lockedFields: ["priceMinCop"] });
+    expect(screen.getByTestId("host-event-field-price")).toHaveProperty("value", "0");
+  });
+
+  it("reports a manually locked field instead of silently accepting an agent overwrite", async () => {
+    render(
+      <HostEventCopilotBridge>
+        {({ draft, setDraft }) => <HostEventForm draft={draft} onChange={setDraft} />}
+      </HostEventCopilotBridge>,
+    );
+    fireEvent.change(screen.getByTestId("host-event-field-title"), {
+      target: { value: "Host title" },
+    });
+    let result: unknown;
+    await act(async () => {
+      result = await frontendTools.set_event_draft.handler!({ title: "Agent title", capacity: 90 });
+    });
+    expect(result).toMatchObject({ ok: true, lockedFields: ["title"] });
+    expect(screen.getByTestId("host-event-field-title")).toHaveProperty("value", "Host title");
+    expect(screen.getByTestId("host-event-field-capacity")).toHaveProperty("value", "90");
+  });
+
+  it("unlocks a field when the host clears it", async () => {
+    render(
+      <HostEventCopilotBridge>
+        {({ draft, setDraft }) => <HostEventForm draft={draft} onChange={setDraft} />}
+      </HostEventCopilotBridge>,
+    );
+    fireEvent.change(screen.getByTestId("host-event-field-title"), { target: { value: "Host title" } });
+    fireEvent.change(screen.getByTestId("host-event-field-title"), { target: { value: "" } });
+    await act(async () => {
+      await frontendTools.set_event_draft.handler!({ title: "Agent title" });
+    });
+    expect(screen.getByTestId("host-event-field-title")).toHaveProperty("value", "Agent title");
   });
 
   it("does not let stale Mastra working memory replace a host's manual edits", () => {

@@ -149,3 +149,25 @@ test("accepts nonempty YAML block scalars with chomping indicators", () => {
   const result = run(root);
   assert.equal(result.status, 0, result.stderr || result.stdout);
 });
+
+test("QA evidence writers do not recreate retired docs/tasks/testing folders", () => {
+  // This test runs from the repository root, like the docs-checker fixtures above. Source paths are fixed literals.
+  const writers = [
+    ["e2e/ck-v2-015-events-chip.spec.ts", fs.readFileSync("e2e/ck-v2-015-events-chip.spec.ts", "utf8")],
+    ["e2e/san-896-ck-v2-evidence.spec.ts", fs.readFileSync("e2e/san-896-ck-v2-evidence.spec.ts", "utf8")],
+    ["e2e/san-1092-broker-onboarding.spec.ts", fs.readFileSync("e2e/san-1092-broker-onboarding.spec.ts", "utf8")],
+    ["scripts/san-869-duplicate-proposal-proof.mjs", fs.readFileSync("scripts/san-869-duplicate-proposal-proof.mjs", "utf8")],
+  ];
+  for (const [file, source] of writers) {
+    assert.doesNotMatch(
+      source,
+      /docs\/tasks\/testing\/evidence/,
+      file + " would recreate a forbidden docs tree during tests",
+    );
+    assert.match(
+      source,
+      /test-results\/mde-evidence/,
+      file + " must keep generated screenshots/proofs in the ignored test output directory",
+    );
+  }
+});

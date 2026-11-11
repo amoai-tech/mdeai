@@ -1,4 +1,4 @@
-import type { BaseEvent, RunAgentInput } from "@ag-ui/client";
+import { EventType, type BaseEvent, type RunAgentInput } from "@ag-ui/client";
 import {
   MastraAgent,
   type GetLocalAgentsOptions,
@@ -28,6 +28,8 @@ import {
   runWithTokenSink,
 } from "@/mastra/lib/token-usage-als";
 import { CONCIERGE_TURN_TIMEOUT_MS } from "@/mastra/lib/models";
+import { normalizeRenderUiToolArgs } from "@/mastra/lib/normalize-render-ui-args";
+import { emitRecommendationSurface } from "@/mastra/lib/recommendation-surface-bridge";
 /**
  * [SAN-905 · CK-V2-007d — Console clean on hostEventAgent stream](https://linear.app/sanjiovani/issue/SAN-905/ck-v2-007d-console-clean-on-hosteventagent-stream):
  * CopilotKit replays AG-UI messages without Gemini thought_signature on assistant
@@ -158,7 +160,54 @@ export class LoggingMastraAgent extends MastraAgent {
     const tokenSink = createTokenSink();
 
     const stream = super.run(runInput).pipe(
+      // SAN-1656 — the model omits the A2UI "version" envelope, so the runtime
+      // rejects every render_ui operation. Normalise that one constant before the
+      // generative-UI middleware validates the stream; other tools pass through.
+      normalizeRenderUiToolArgs(),
+      // SAN-1656 — a validated show_recommendations result becomes a render_ui
+      // call with server-built operations, so the runtime renders real cards.
+      emitRecommendationSurface(),
       tap({
+        next: (event) => {
+          // AG-UI RUN_ERROR is a terminal *agent* failure but the observable can
+          // complete normally (HTTP 200 SSE). Without inspecting the event this
+          // turn was incorrectly logged as a success in public.ai_runs.
+          if (event.type !== EventType.RUN_ERROR) return;
+          status = "error";
+          const code = typeof event.code === "string" ? event.code.toUpperCase() : "";
+          // Producer-defined codes are authoritative: a RATE_LIMIT event may
+          // mention "cancelled" or "timed out" in its free-text message, but it
+          // was not the user aborting the run. Fall back to the message only
+          // for unknown/untyped codes.
+          const codeToType: Record<string, AgentErrorType> = {
+            RATE_LIMIT: "rate_limit",
+            RESOURCE_EXHAUSTED: "rate_limit",
+            TIMEOUT: "timeout",
+            AUTH_ERROR: "auth",
+            UNAUTHORIZED: "auth",
+            PERMISSION_DENIED: "auth",
+            MODEL_FAILURE: "model_failure",
+            MODEL_ERROR: "model_failure",
+            MALFORMED_FUNCTION_CALL: "model_failure",
+            TOOL_ERROR: "tool_failure",
+            TOOL_FAILURE: "tool_failure",
+            VALIDATION_ERROR: "validation",
+            INVALID_ARGUMENT: "validation",
+            DATABASE_ERROR: "database",
+          };
+          errorType = codeToType[code] ??
+            classifyAgentError(`${code.replaceAll("_", " ")} ${event.message}`);
+          // Do not persist raw model/provider messages: they may include a
+          // user's question or sensitive upstream request details.
+          const safeCodes = new Set([
+            "RATE_LIMIT", "RESOURCE_EXHAUSTED", "TIMEOUT", "MODEL_FAILURE",
+            "MODEL_ERROR", "INVALID_ARGUMENT", "MALFORMED_FUNCTION_CALL",
+            "TOOL_ERROR", "TOOL_FAILURE", "AUTH_ERROR", "UNAUTHORIZED",
+            "PERMISSION_DENIED", "VALIDATION_ERROR", "DATABASE_ERROR",
+            "INTERNAL_ERROR", "RUN_ERROR",
+          ]);
+          errorMessage = `AG-UI RUN_ERROR (${safeCodes.has(code) ? code : "UNSPECIFIED"})`;
+        },
         complete: () => {
           completed = true;
         },

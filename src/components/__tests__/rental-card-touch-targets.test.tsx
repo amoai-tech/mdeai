@@ -10,7 +10,8 @@ import { rowToRental, type ApartmentRow } from "@/mastra/tools/search-rentals";
  *
  * jsdom has no layout engine, so this test cannot measure pixels. It guards the class that
  * produces them: the `sm` button size is only 28px high, so each card action also carries
- * `min-h-11` (44px), relaxed again on desktop with `lg:min-h-0`. The real rendered heights at
+ * the shared `min-h-card-action` token (44px, see --spacing-card-action), relaxed again on
+ * desktop with `lg:min-h-0`. The real rendered heights at
  * 390px are measured in e2e/maps-layout-mobile.spec.ts; this catches the regression in the
  * browse card, which the hermetic browser run cannot render because it needs the database.
  */
@@ -59,7 +60,11 @@ describe("rental card actions are phone tap size (SAN-1075)", () => {
     );
     expect(actions.length).toBe(3);
     for (const el of actions) {
-      expect(el.className, el.getAttribute("data-testid") ?? el.tagName).toContain("min-h-11");
+      // SAN-1075 phone tap size now comes from the shared --spacing-card-action token,
+      // so one token change resizes every discovery card footer.
+      expect(el.className, el.getAttribute("data-testid") ?? el.tagName).toContain(
+        "min-h-card-action",
+      );
       expect(el.className).toContain("lg:min-h-0");
     }
   });
@@ -87,7 +92,11 @@ describe("rental card actions are phone tap size (SAN-1075)", () => {
     );
     expect(actions.length).toBe(3);
     for (const el of actions) {
-      expect(el.className, el.getAttribute("data-testid") ?? el.tagName).toContain("min-h-11");
+      // SAN-1075 phone tap size now comes from the shared --spacing-card-action token,
+      // so one token change resizes every discovery card footer.
+      expect(el.className, el.getAttribute("data-testid") ?? el.tagName).toContain(
+        "min-h-card-action",
+      );
       expect(el.className).toContain("lg:min-h-0");
     }
   });

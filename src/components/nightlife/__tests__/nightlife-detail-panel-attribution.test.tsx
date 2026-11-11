@@ -52,6 +52,13 @@ describe("NightlifeDetailPanel Google Maps source (SAN-878)", () => {
     expect(block).toContain('translate="no"');
   });
 
+  it("labels a saved venue when live Google grounding is not available", () => {
+    const saved = { ...detail, sourceMode: "saved_catalog" as const };
+    const html = renderToStaticMarkup(<NightlifeDetailPanel detail={saved} siblings={[saved]} />);
+    expect(html).toContain("Saved MDE catalog");
+    expect(html).not.toContain('data-testid="grounding-attribution"');
+  });
+
   it("a curated fallback venue is not attributed to Google Maps", () => {
     const html = renderToStaticMarkup(<NightlifeDetailPanel detail={detail} siblings={[detail]} />);
     expect(html).not.toContain('data-testid="grounding-attribution"');
