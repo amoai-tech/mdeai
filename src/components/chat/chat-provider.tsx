@@ -16,7 +16,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { isFreshThreadHistory404, reconcileSavedHistory, type SavedThreadMessage } from "@/lib/chat/saved-thread-history";
+import { canTreatMissingThreadAsEmpty, isFreshThreadHistory404, reconcileSavedHistory, type SavedThreadMessage } from "@/lib/chat/saved-thread-history";
 import { useThreadNav } from "@/lib/chat/thread-nav-context";
 import { clearLiveUserMessage, isLiveUserMessage } from "@/lib/chat/live-user-message-ids";
 import { mdeUI } from "@/components/copilot/a2ui/mde-ui-catalog";
@@ -499,7 +499,7 @@ function LiveChatProvider({ children, persistThread = false }: { children: React
         hasExplicitThreadId={shouldReplay}
       >
         {threadId && shouldReplay && !isDeterministicE2E() ? (
-          <SavedThreadHistory threadId={threadId} allowMissingFreshThread={!activeThreadId && !restoredThread}>
+          <SavedThreadHistory threadId={threadId} allowMissingFreshThread={canTreatMissingThreadAsEmpty({ activeThreadId, restoredThread, hasPersistedThread })}>
             {persistThread && user ? <BrokerThreadSaverAfterReplay threadId={threadId} /> : null}
             {children}
           </SavedThreadHistory>

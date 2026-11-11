@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   SAVED_THREAD_HISTORY_LIMIT,
   isFreshThreadHistory404,
+  canTreatMissingThreadAsEmpty,
   latestSavedRentalSearch,
   mapSavedThreadHistory,
   reconcileSavedHistory,
@@ -596,5 +597,21 @@ describe("fresh thread missing history", () => {
     for (const status of [401, 403, 500, 503]) {
       expect(isFreshThreadHistory404(status, true)).toBe(false);
     }
+  });
+});
+
+
+describe("fresh history versus already persisted threads", () => {
+  it("allows a new never-saved thread to start without a Supabase history row", () => {
+    expect(canTreatMissingThreadAsEmpty({ activeThreadId: undefined, restoredThread: false, hasPersistedThread: false })).toBe(true);
+  });
+
+  it("does not hide missing history after markThreadSaved on provider remount", () => {
+    expect(canTreatMissingThreadAsEmpty({ activeThreadId: undefined, restoredThread: false, hasPersistedThread: true })).toBe(false);
+  });
+
+  it("does not hide missing selected or restored history", () => {
+    expect(canTreatMissingThreadAsEmpty({ activeThreadId: "previous-thread", restoredThread: false, hasPersistedThread: false })).toBe(false);
+    expect(canTreatMissingThreadAsEmpty({ activeThreadId: undefined, restoredThread: true, hasPersistedThread: false })).toBe(false);
   });
 });

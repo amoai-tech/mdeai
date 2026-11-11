@@ -30,6 +30,23 @@ export const SAVED_THREAD_HISTORY_LIMIT = 100;
  * or explicitly selected thread: missing saved history must remain visible.
  * Auth and backend errors are not empty history.
  */
+/**
+ * Client eligibility for ignoring a missing saved-history row. Persistence is
+ * a distinct state from selection/restoration: a successfully saved thread can
+ * be re-mounted with no active selection, but its missing row is a real error.
+ */
+export function canTreatMissingThreadAsEmpty({
+  activeThreadId,
+  restoredThread,
+  hasPersistedThread,
+}: {
+  activeThreadId: string | undefined;
+  restoredThread: boolean;
+  hasPersistedThread: boolean;
+}): boolean {
+  return !activeThreadId && !restoredThread && !hasPersistedThread;
+}
+
 export function isFreshThreadHistory404(status: number, freshUnselectedThread: boolean): boolean {
   return freshUnselectedThread && status === 404;
 }

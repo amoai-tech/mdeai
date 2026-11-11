@@ -8,6 +8,7 @@ import {
 } from "@copilotkit/react-core/v2";
 import { ConciergeCoAgentProvider } from "@/components/chat/concierge-coagent-context";
 import { SavedThreadReplay } from "@/components/chat/chat-provider";
+import { canTreatMissingThreadAsEmpty } from "@/lib/chat/saved-thread-history";
 import { mdeUI } from "@/components/copilot/a2ui/mde-ui-catalog";
 import { getCopilotKitClientProps } from "@/lib/copilotkit-client-props";
 import { isExpectedGuestStartup401, reportConciergeError } from "@/lib/concierge-error-store";
@@ -60,7 +61,7 @@ function DiscoveryConciergeProvider({ children }: { children: ReactNode }) {
           {shouldReplay && threadId ? (
             // Discovery routes already own the provider; they still need the saved messages,
             // otherwise a refresh keeps the thread id but loses the visible conversation.
-            <SavedThreadReplay threadId={threadId} allowMissingFreshThread={!activeThreadId && !restoredThread}>{children}</SavedThreadReplay>
+            <SavedThreadReplay threadId={threadId} allowMissingFreshThread={canTreatMissingThreadAsEmpty({ activeThreadId, restoredThread, hasPersistedThread })}>{children}</SavedThreadReplay>
           ) : (
             children
           )}
