@@ -1,1 +1,23 @@
-../../../.agents/skills/ponytail/upstream.yaml
+vendor: Ponytail
+repository: https://github.com/dietrichgebert/ponytail
+source_path: .agents/rules
+reviewed_commit: 7801d061243d7b753bad0e0b3c057cd250b11755
+upstream_release: v5.3.3
+reviewed_at: 2026-11-03
+policy:
+  active_skill: ponytail
+  upstream_files_are_read_only: true
+  auto_update: false
+  update_flow: detect-diff-review-evals-pin
+sources:
+  rule:
+    path: .agents/rules/ponytail.md
+    local: references/official/ponytail/ponytail.md
+    sha256: ca99e5958383063029b206c7c50a0eaad1c29914a362bedd46033ec16b537e1e
+hash_algorithm: sha256(sorted base-name/relative-path + NUL + file-bytes + NUL)
+
+local_integrity:
+  algorithm: "sha256(per file sorted by relative path: utf8(path) + NUL + bytes + NUL)"
+  verified_at: "2026-11-03"
+  trees:
+    references/official/ponytail/ponytail.md: 8f0b9b7967400bc146542dbfa18b53af976bfd38d349e4755f1c2e53223e65b3

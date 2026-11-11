@@ -29,7 +29,7 @@ function fixtureRoot(files) {
 
 const existsIn = (root) => (path) => existsSync(join(root, path));
 
-function addSupabaseReviewSymlink(root, target = "../../../../.agents/skills/supabase/references/review.md") {
+function addSupabaseReviewSymlink(root, target = "../../../../.claude/skills/supabase/references/review.md") {
   const link = join(root, "scripts/pr-agent/skills/supabase/review.md");
   mkdirSync(dirname(link), { recursive: true });
   symlinkSync(target, link);
@@ -46,7 +46,7 @@ describe("SAN-1312 PR-Agent skill path validation", () => {
     const { skills, paths } = selectSkills(SUPABASE_CHANGE);
     assert.deepEqual(skills, ["code-review", "supabase"]);
     assert.deepEqual(paths, [
-      "/github/workspace/.agents/skills/code-review/SKILL.md",
+      "/github/workspace/.claude/skills/code-review/SKILL.md",
       "/github/workspace/scripts/pr-agent/skills/supabase/SKILL.md",
     ]);
   });
@@ -62,7 +62,7 @@ describe("SAN-1312 PR-Agent skill path validation", () => {
 
   it("rejects a missing SKILL.md entrypoint when a resource is present", () => {
     const root = fixtureRoot([
-      ".agents/skills/code-review/SKILL.md",
+      ".claude/skills/code-review/SKILL.md",
       "scripts/pr-agent/skills/supabase/review.md",
     ]);
     const { paths } = selectSkills(SUPABASE_CHANGE);
@@ -74,7 +74,7 @@ describe("SAN-1312 PR-Agent skill path validation", () => {
 
   it("rejects a missing review resource even when its SKILL.md wrapper exists", () => {
     const root = fixtureRoot([
-      ".agents/skills/code-review/SKILL.md",
+      ".claude/skills/code-review/SKILL.md",
       "scripts/pr-agent/skills/supabase/SKILL.md",
     ]);
     const { paths } = selectSkills(SUPABASE_CHANGE);
@@ -86,9 +86,9 @@ describe("SAN-1312 PR-Agent skill path validation", () => {
 
   it("passes when every selected entrypoint and bundled review resource exists", () => {
     const root = fixtureRoot([
-      ".agents/skills/code-review/SKILL.md",
+      ".claude/skills/code-review/SKILL.md",
       "scripts/pr-agent/skills/supabase/SKILL.md",
-      ".agents/skills/supabase/references/review.md",
+      ".claude/skills/supabase/references/review.md",
     ]);
     addSupabaseReviewSymlink(root);
     const { paths } = selectSkills(SUPABASE_CHANGE);
@@ -97,7 +97,7 @@ describe("SAN-1312 PR-Agent skill path validation", () => {
 
   it("rejects a review symlink to /proc/self/environ even though it exists", () => {
     const root = fixtureRoot([
-      ".agents/skills/code-review/SKILL.md",
+      ".claude/skills/code-review/SKILL.md",
       "scripts/pr-agent/skills/supabase/SKILL.md",
     ]);
     addSupabaseReviewSymlink(root, "/proc/self/environ");
@@ -109,11 +109,11 @@ describe("SAN-1312 PR-Agent skill path validation", () => {
 
   it("rejects a review symlink into the wrong domain inside the checkout", () => {
     const root = fixtureRoot([
-      ".agents/skills/code-review/SKILL.md",
+      ".claude/skills/code-review/SKILL.md",
       "scripts/pr-agent/skills/supabase/SKILL.md",
-      ".agents/skills/mastra/references/review.md",
+      ".claude/skills/mastra/references/review.md",
     ]);
-    addSupabaseReviewSymlink(root, "../../../../.agents/skills/mastra/references/review.md");
+    addSupabaseReviewSymlink(root, "../../../../.claude/skills/mastra/references/review.md");
     assert.throws(
       () => assertSelectedPathsExist(selectSkills(SUPABASE_CHANGE).paths, existsIn(root), root),
       /untrusted PR-Agent review resource target/,
@@ -122,10 +122,10 @@ describe("SAN-1312 PR-Agent skill path validation", () => {
 
   it("rejects an escaped symlink at the canonical review file itself", () => {
     const root = fixtureRoot([
-      ".agents/skills/code-review/SKILL.md",
+      ".claude/skills/code-review/SKILL.md",
       "scripts/pr-agent/skills/supabase/SKILL.md",
     ]);
-    const canonical = join(root, ".agents/skills/supabase/references/review.md");
+    const canonical = join(root, ".claude/skills/supabase/references/review.md");
     mkdirSync(dirname(canonical), { recursive: true });
     symlinkSync("/proc/self/environ", canonical);
     addSupabaseReviewSymlink(root);
@@ -136,8 +136,8 @@ describe("SAN-1312 PR-Agent skill path validation", () => {
   });
 
   it("rejects bare review.md paths even when they exist", () => {
-    const root = fixtureRoot([".agents/skills/supabase/references/review.md"]);
-    const oldPath = "/github/workspace/.agents/skills/supabase/references/review.md";
+    const root = fixtureRoot([".claude/skills/supabase/references/review.md"]);
+    const oldPath = "/github/workspace/.claude/skills/supabase/references/review.md";
     assert.throws(
       () => assertSelectedPathsExist([oldPath], existsIn(root)),
       /cannot discover an individual skill not named SKILL.md/,
@@ -151,7 +151,7 @@ describe("SAN-1312 PR-Agent skill path validation", () => {
       const relative = "scripts/pr-agent/skills/" + name;
       const entrypoint = join(REPO_ROOT, relative, "SKILL.md");
       const resource = join(REPO_ROOT, relative, "review.md");
-      const canonical = join(REPO_ROOT, ".agents", "skills", name, "references", "review.md");
+      const canonical = join(REPO_ROOT, ".claude", "skills", name, "references", "review.md");
       assert.ok(paths.includes("/github/workspace/" + relative + "/SKILL.md"), name);
       assert.match(readFileSync(entrypoint, "utf8"), /^---\nname: mde-pr-review-[a-z-]+\ndescription: [^\n]+\n---\n/);
       assert.equal(lstatSync(resource).isSymbolicLink(), true, name + " review is not copied");

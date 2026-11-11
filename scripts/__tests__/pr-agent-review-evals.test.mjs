@@ -815,7 +815,7 @@ describe("SAN-1312 corpus wiring", () => {
     }
     const universal = selectSkills(["README.md"]);
     assert.ok(
-      universal.paths.includes("/github/workspace/.agents/skills/code-review/SKILL.md"),
+      universal.paths.includes("/github/workspace/.claude/skills/code-review/SKILL.md"),
       "the universal code-review skill must load on every review",
     );
   });

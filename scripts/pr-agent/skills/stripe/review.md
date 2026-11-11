@@ -1,1 +1,1 @@
-../../../../.agents/skills/stripe/references/review.md
+../../../../.claude/skills/stripe/references/review.md

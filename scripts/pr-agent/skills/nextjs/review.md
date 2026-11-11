@@ -1,1 +1,1 @@
-../../../../.agents/skills/nextjs/references/review.md
+../../../../.claude/skills/nextjs/references/review.md

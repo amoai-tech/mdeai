@@ -94,40 +94,6 @@ test("passes when the exposure mirror is complete", () => {
   assert.match(result.stdout, /SKILL_LAYOUT_PASS active=1/);
 });
 
-test("passes when .agents owns real skills and .claude mirrors them", () => {
-  const root = tmpRepo();
-  const canonical = path.join(root, ".agents/skills/alpha");
-  const mirror = path.join(root, ".claude/skills/alpha");
-  fs.mkdirSync(path.join(canonical, "references"), { recursive: true });
-  fs.mkdirSync(mirror, { recursive: true });
-  fs.writeFileSync(path.join(canonical, "SKILL.md"),
-    `${skillBody("alpha")}\nSee [one](references/one.md).\n`);
-  fs.writeFileSync(path.join(canonical, "references/one.md"), "# One\n");
-  for (const entry of ["SKILL.md", "references"]) {
-    fs.symlinkSync(path.relative(mirror, path.join(canonical, entry)),
-      path.join(mirror, entry));
-  }
-  const result = runChecker(root);
-  assert.equal(result.status, 0, result.stdout);
-  assert.match(result.stdout, /SKILL_LAYOUT_PASS active=1/);
-
-  fs.rmSync(path.join(mirror, "references"));
-  const failure = failing(root);
-  assert.match(failure, /exposure is missing entry/);
-});
-
-test("rejects a copied Claude mirror when .agents is canonical", () => {
-  const root = tmpRepo();
-  const canonical = path.join(root, ".agents/skills/alpha");
-  const mirror = path.join(root, ".claude/skills/alpha");
-  fs.mkdirSync(canonical, { recursive: true });
-  fs.mkdirSync(mirror, { recursive: true });
-  fs.writeFileSync(path.join(canonical, "SKILL.md"), skillBody("alpha"));
-  fs.writeFileSync(path.join(mirror, "SKILL.md"), skillBody("alpha"));
-  const output = failing(root);
-  assert.match(output, /exposure entry is not a symlink/);
-});
-
 test("finds broken links inside supporting reference documents", () => {
   const root = writeSkill(tmpRepo(), "alpha", {
     body: `${skillBody("alpha")}\nRead [TDD](references/tdd.md).\n`,
@@ -355,7 +321,7 @@ test("fails when a retired skill reappears", () => {
   }
 });
 
-test("the canonical Codacy skill and its Claude mirror remain usable", () => {
+test("the canonical Codacy skill and its Codex mirror remain usable", () => {
   // Literal repository paths avoid introducing another dynamic-path scanner
   // finding. The generic checker additionally validates every mirrored entry.
   const skill = fs.readFileSync(".claude/skills/codacy/SKILL.md", "utf8");
@@ -366,12 +332,12 @@ test("the canonical Codacy skill and its Claude mirror remain usable", () => {
   assert.match(operations, /^# Codacy on-demand operations$/m);
 
   assert.equal(
-    fs.readlinkSync(".claude/skills/codacy/SKILL.md"),
-    "../../../.agents/skills/codacy/SKILL.md",
+    fs.readlinkSync(".agents/skills/codacy/SKILL.md"),
+    "../../../.claude/skills/codacy/SKILL.md",
   );
   assert.equal(
-    fs.readlinkSync(".claude/skills/codacy/references"),
-    "../../../.agents/skills/codacy/references",
+    fs.readlinkSync(".agents/skills/codacy/references"),
+    "../../../.claude/skills/codacy/references",
   );
 });
 

@@ -1,1 +1,1 @@
-../../../../.agents/skills/mastra/references/review.md
+../../../../.claude/skills/mastra/references/review.md

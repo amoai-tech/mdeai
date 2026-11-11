@@ -28,13 +28,13 @@ const evidenceBuilder = read("scripts/pr-agent/build-evidence.mjs");
 const REVIEW_ENCODINGS = [getEncoding("cl100k_base"), getEncoding("o200k_base")];
 
 const skills = [
-  ".agents/skills/code-review/SKILL.md",
-  ".agents/skills/copilotkit/references/review.md",
-  ".agents/skills/mastra/references/review.md",
-  ".agents/skills/supabase/references/review.md",
-  ".agents/skills/maps/references/review.md",
-  ".agents/skills/stripe/references/review.md",
-  ".agents/skills/nextjs/references/review.md",
+  ".claude/skills/code-review/SKILL.md",
+  ".claude/skills/copilotkit/references/review.md",
+  ".claude/skills/mastra/references/review.md",
+  ".claude/skills/supabase/references/review.md",
+  ".claude/skills/maps/references/review.md",
+  ".claude/skills/stripe/references/review.md",
+  ".claude/skills/nextjs/references/review.md",
 ];
 
 describe("SAN-1312 PR-Agent review contract", () => {
