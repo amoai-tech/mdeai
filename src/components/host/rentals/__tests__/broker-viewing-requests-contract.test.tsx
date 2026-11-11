@@ -37,6 +37,10 @@ function dashboard(requests: BrokerViewingRequest[]): BrokerDashboardView {
   return {
     viewingRequests: requests,
     viewingRequestsTotal: requests.length,
+    // A real KPI so the overview test fails if the dashboard metrics stop rendering.
+    kpis: [
+      { id: "kpi-active", label: "Active listings", value: "3", provenance: "test", testId: "kpi-active-listings" },
+    ],
   } as unknown as BrokerDashboardView;
 }
 
@@ -77,6 +81,10 @@ describe("SAN-1204 broker viewing-request surface contract", () => {
 
     expect(html).toContain('data-testid="viewing-requests"');
     expect(html).toContain('data-apartment-id="apt-1"');
+    // The overview must render dashboard metrics, not just the requests list.
+    expect(html).toContain("Active listings");
+    expect(html).toContain("3");
+    expect(html).toContain('data-testid="kpi-active-listings"');
     expect(html).not.toContain("Data pending");
   });
 

@@ -107,7 +107,16 @@ async function rentCase(c) {
       );
       btn?.click();
     });
-    await page.waitForTimeout(2500);
+    await page.waitForFunction(
+      () => {
+        const panel =
+          document.querySelector('[data-testid="rental-details-panel"]') ??
+          document.querySelector('[data-testid="rental-details-sheet"]');
+        return Boolean(panel && panel.getAttribute("data-listing-id"));
+      },
+      undefined,
+      { timeout: 15000 },
+    ).catch(() => {});
     details = await page.evaluate(() => {
       const panel =
         document.querySelector('[data-testid="rental-details-panel"]') ??
@@ -116,7 +125,14 @@ async function rentCase(c) {
     });
   }
   const reply = cards.length ? "" : await chatText();
-  const unavailable = !cards.length && /only|five|5 |can.?t|cannot|not (in|among)|unavailable/i.test(reply);
+  // Only a requested result that does not exist in the published source may pass
+  // as honest-unavailable; a refusal for an available result is a failure.
+  const sourceCount = sourceTitles.length;
+  const requestedAbsent = Boolean(c.index) && sourceCount > 0 && c.index > sourceCount;
+  const unavailable =
+    !cards.length &&
+    requestedAbsent &&
+    /only|no (?:other|more|second|third|fourth)|can.?t|cannot|not (?:in|among)|unavailable|\d+ events? (?:were|was) returned/i.test(reply);
   const pass = Boolean(expected) && cards.includes(expected) && details === expected;
   record({
     id: c.id,
@@ -155,6 +171,15 @@ async function eventCase(c) {
     undefined,
     { timeout: 60000 },
   );
+  const sourceTitles = await page.evaluate(() =>
+    [...document.querySelectorAll('[data-testid="events-grid"] [data-testid="event-card"]')].map((card) =>
+      (card.querySelector("h3")?.textContent ?? card.textContent ?? "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 60),
+    ),
+  );
+  const expectedTitle = c.index ? sourceTitles[c.index - 1] ?? null : null;
   await resetConversation();
   await ask('[data-testid="discovery-ask-input"]', c.prompt);
   // Enter is ignored until the composer is ready; confirm the turn was accepted.
@@ -219,11 +244,19 @@ async function eventCase(c) {
   }
   const reply = cards.length ? "" : await chatText();
   const unavailable = !cards.length && /only|five|5 |can.?t|cannot|unavailable/i.test(reply);
-  const pass = detailsEventId
-    ? Boolean(cards.length) && detailsEventId === cards[0]
-    : Boolean(cards.length) && Boolean(detailsTitle) && detailsTitle.includes(cardTitle.slice(0, 40));
+  const titleMatchesRequested = expectedTitle
+    ? cardTitle.includes(expectedTitle.slice(0, 30))
+    : true;
+  const pass =
+    Boolean(cards.length) &&
+    titleMatchesRequested &&
+    (detailsEventId
+      ? detailsEventId === cards[0]
+      : Boolean(detailsTitle) && detailsTitle.includes(cardTitle.slice(0, 40)));
   record({
     id: c.id,
+    expectedSourceTitle: expectedTitle,
+    expectedSourceId: null,
     cards,
     detailsEventId,
     detailsTitle: detailsTitle?.slice(0, 120) ?? null,
@@ -235,9 +268,9 @@ async function eventCase(c) {
 }
 
 const EVENTS = [
-  { id: "event-first", prompt: "Show the first event as a card." },
-  { id: "event-second", prompt: "Show the second event as a card." },
-  { id: "event-fourth", prompt: "Show the fourth event as a card." },
+  { id: "event-first", prompt: "Show the first event as a card.", index: 1 },
+  { id: "event-second", prompt: "Show the second event as a card.", index: 2 },
+  { id: "event-fourth", prompt: "Show the fourth event as a card.", index: 4 },
 ];
 
 const ok = [];

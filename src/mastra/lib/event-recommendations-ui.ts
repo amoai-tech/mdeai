@@ -7,6 +7,8 @@
  * component trees, titles, prices or other event facts.
  */
 export const EVENT_RECOMMENDATIONS_TARGET = "event-recommendations";
+/** One stable surface id: a new search replaces the previous cards instead of stacking. */
+export const EVENT_RECOMMENDATIONS_SURFACE_ID = "event-recommendations";
 const A2UI_VERSION = "1.0";
 const MAX_CARDS = 4;
 
@@ -16,6 +18,7 @@ export type EventRecommendationOps = {
 };
 
 /** Bounded, unique, opaque IDs only. The card revalidates each against real results. */
+/** Keep only bounded, unique, opaque event ids, capped at four cards. */
 export function normalizeEventRecommendationIds(input: readonly unknown[]): string[] {
   const seen = new Set<string>();
   const ids: string[] = [];
@@ -31,9 +34,10 @@ export function normalizeEventRecommendationIds(input: readonly unknown[]): stri
   return ids;
 }
 
+/** Build the server-owned createSurface operation for the given authorized event ids. */
 export function buildEventRecommendationOps(
   ids: readonly string[],
-  surfaceId: string,
+  surfaceId: string = EVENT_RECOMMENDATIONS_SURFACE_ID,
 ): EventRecommendationOps | null {
   const safe = normalizeEventRecommendationIds(ids);
   if (safe.length === 0) return null;
@@ -56,5 +60,18 @@ export function buildEventRecommendationOps(
         },
       },
     ],
+  };
+}
+
+/**
+ * An empty event search clears the events surface, so a previous result set never
+ * stays on screen as if it answered the new question.
+ */
+export function buildEventClearOps(
+  surfaceId: string = EVENT_RECOMMENDATIONS_SURFACE_ID,
+): EventRecommendationOps {
+  return {
+    target: EVENT_RECOMMENDATIONS_TARGET,
+    operations: [{ version: A2UI_VERSION, deleteSurface: { surfaceId } }],
   };
 }

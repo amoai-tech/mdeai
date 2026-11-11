@@ -2,7 +2,11 @@ import { EventType, type BaseEvent } from "@ag-ui/client";
 import { Observable } from "rxjs";
 import { buildRentalRecommendationOps } from "./rental-recommendations-ui";
 import { buildRentalFilterControlOps } from "./rental-filter-control-ui";
-import { buildEventRecommendationOps } from "./event-recommendations-ui";
+import {
+  EVENT_RECOMMENDATIONS_SURFACE_ID,
+  buildEventClearOps,
+  buildEventRecommendationOps,
+} from "./event-recommendations-ui";
 
 /** The model-facing tool name is the Mastra map key; the id may also appear. */
 const RECOMMENDATION_TOOLS = new Set([
@@ -46,7 +50,7 @@ export function recommendationIdsFromResult(content: unknown): string[] {
   return [];
 }
 
-/** The event tool returns `{ results: [{ id, ... }] }`; only the ids cross the boundary. */
+/** Keep only the event ids from a `searchEvents` result; nothing else crosses the boundary. */
 export function eventIdsFromResult(content: unknown): string[] {
   let value: unknown = content;
   if (typeof value === "string") {
@@ -119,7 +123,11 @@ export function renderEventUiEventsFor(
   ids: readonly string[],
   toolCallId: string,
 ): BaseEvent[] | null {
-  const built = buildEventRecommendationOps(ids, `event-recs-${toolCallId}`);
+  // One stable surface id: a new search replaces the previous cards, and an empty
+  // search deletes them, so stale results never remain on screen.
+  const built = ids.length
+    ? buildEventRecommendationOps(ids, EVENT_RECOMMENDATIONS_SURFACE_ID)
+    : buildEventClearOps(EVENT_RECOMMENDATIONS_SURFACE_ID);
   if (!built) return null;
   const callId = `render-ui-event-${toolCallId}`;
   return [
