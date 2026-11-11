@@ -31,3 +31,21 @@ export function EventBrowseSelectionProvider({
 export function useOptionalEventBrowseSelection(): EventBrowseSelection | null {
   return useContext(EventBrowseSelectionContext);
 }
+
+/**
+ * SAN-1653 — a generated card can be re-mounted by the generative-UI activity
+ * boundary, which may not preserve this React context. A module-level opener is
+ * the same single action without depending on the render tree; the Events page
+ * registers it while mounted and clears it on unmount.
+ */
+let registeredOpener: ((id: string) => void) | null = null;
+
+export function registerEventDetailsOpener(opener: ((id: string) => void) | null): void {
+  registeredOpener = opener;
+}
+
+export function openEventDetailsFromCard(id: string): boolean {
+  if (!registeredOpener) return false;
+  registeredOpener(id);
+  return true;
+}
