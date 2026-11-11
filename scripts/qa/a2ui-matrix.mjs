@@ -122,13 +122,13 @@ async function rentCase(c) {
 }
 
 async function eventCase(c) {
-  await page.goto(`${BASE}/chat`, { waitUntil: "domcontentloaded" });
+  await page.goto(`${BASE}/events`, { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(9000);
   await resetConversation();
   const cardsBefore = await page.evaluate(
     () => document.querySelectorAll('[data-testid="a2ui-event-card"]').length,
   );
-  await ask('[data-testid="copilot-chat-textarea"], #rental-ask-input, textarea', c.prompt);
+  await ask('[data-testid="discovery-ask-input"]', `Show events. ${c.prompt}`);
   let cards = [];
   try {
     await page.waitForFunction(
