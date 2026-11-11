@@ -53,7 +53,7 @@ function EventBrowseViewInner({
   dateWindow,
   price,
   onSelectReady,
-}: EventBrowseViewProps & { onSelectReady?: (open: (id: string) => void) => void }) {
+}: EventBrowseViewProps & { onSelectReady?: (open: (id: string) => boolean) => void }) {
   const { selectedPinId, setSelectedPinId, panToPin } = useMapContext();
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const desktop = useIsLgUp();
@@ -138,15 +138,16 @@ function EventBrowseViewInner({
     else setSelectedPinId(null);
   }, [pinIds, panToPin, setSelectedPinId]);
 
-  // Publish the same action the native Details button performs: set the Ask
-  // context AND open the panel. Publishing only selectEvent left a generated card
-  // selected but with no panel, which is exactly what the matrix observed.
+  // Generated cards use this page's real Details owner, never an unrelated sheet.
+  // A stale event absent from the visible results cannot open the native panel.
   useEffect(() => {
-    onSelectReady?.((id: string) => {
+    onSelectReady?.((id: string): boolean => {
+      if (!shownEvents.some((event) => event.id === id)) return false;
       selectEvent(id);
       setDetailsId(id);
+      return true;
     });
-  }, [onSelectReady, selectEvent]);
+  }, [onSelectReady, selectEvent, shownEvents]);
 
   // A marker click (or closing its info card) arrives through the shared map context; mirror it into the
   // one selected event instead of keeping a second selection. This adjusts our own state while rendering
@@ -332,7 +333,7 @@ function EventBrowseViewInner({
 
 /** Event browse shell that provides the shared map state. */
 export function EventBrowseView(props: EventBrowseViewProps) {
-  const openEventDetail = useRef<(id: string) => void>(() => {});
+  const openEventDetail = useRef<(id: string) => boolean>(() => false);
   const selection = useMemo(
     () => ({ openEventDetail: (id: string) => openEventDetail.current(id) }),
     [],

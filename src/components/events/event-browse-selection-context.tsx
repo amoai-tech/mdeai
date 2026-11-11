@@ -9,7 +9,7 @@ import { createContext, useContext } from "react";
  * or a rental-specific context.
  */
 export type EventBrowseSelection = {
-  openEventDetail: (id: string) => void;
+  openEventDetail: (id: string) => boolean;
 };
 
 const EventBrowseSelectionContext = createContext<EventBrowseSelection | null>(null);

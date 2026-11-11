@@ -341,7 +341,8 @@ export function EventBrowseDetailsSheet(props: {
         if (!open) props.onClose();
       }}
     >
-      <SheetContent side="bottom" className="max-h-[85dvh] overflow-y-auto p-0" showCloseButton={false}>
+      <SheetContent side="bottom" className="max-h-[85dvh] overflow-y-auto p-0" showCloseButton={false}
+        data-testid="event-browse-details-sheet" data-event-id={props.event.id}>
         <SheetTitle className="sr-only">{props.event.title}</SheetTitle>
         <EventBrowseDetailsBody {...props} />
       </SheetContent>

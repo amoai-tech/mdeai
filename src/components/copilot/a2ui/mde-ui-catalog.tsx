@@ -378,7 +378,13 @@ function MdeEventCard({ eventId }: { eventId: string }) {
   const hasPin = map?.pins.some((pin) => pin.id === pinId) ?? false;
   const ticketUrl = row.ticketUrl ?? eventDetailHref(row.id);
   const openDetail = eventSelection
-    ? () => eventSelection.openEventDetail(row.id)
+    ? () => {
+        // The Events grid can show native Details only for its current rows.
+        // Older authorized results still have a canonical public Details page.
+        if (!eventSelection.openEventDetail(row.id)) {
+          window.open(eventDetailHref(row.id), "_blank", "noopener,noreferrer");
+        }
+      }
     : openVenueDetail ? () => {
     if (hasPin) panToPin?.(pinId);
     openVenueDetail({
