@@ -1,1 +1,1 @@
-../../../../.claude/skills/maps/references/review.md
+../../../../.agents/skills/maps/references/review.md

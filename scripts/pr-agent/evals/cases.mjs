@@ -167,7 +167,7 @@ export const REQUIRED_PROBE_ANCHORS = [
   },
   {
     probe: "boundary validation → malformed near-miss inputs for a new parser",
-    skill: ".claude/skills/code-review/SKILL.md",
+    skill: ".agents/skills/code-review/SKILL.md",
     matches: /malformed near-miss inputs/,
   },
 ];

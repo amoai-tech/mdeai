@@ -1,1 +1,1 @@
-../../../../.claude/skills/copilotkit/references/review.md
+../../../../.agents/skills/copilotkit/references/review.md

@@ -2,8 +2,8 @@
 
 ## What is proved
 
-The canonical skills live in .claude/skills and the equivalent agent entry
-points are relative symlinks under .agents/skills. The repository's existing
+The canonical skills live in .agents/skills and the Claude Code entry
+points are relative symlinks under .claude/skills. The repository's existing
 check-skill-layout.py already checks the mirror, including linked references.
 Do not duplicate that checker or bulk-copy unfinished local skills into main.
 
@@ -23,7 +23,7 @@ text as a pass condition.
 - **Tier 2 / on demand**: a real model conversation, saved v4 session,
   and per-expectation JSON grades. Model calls are NOT part of floor.
 
-The first migrated eval pack is .claude/skills/errors/evals/evals.json.
+The first migrated eval pack is .agents/skills/errors/evals/evals.json.
 Its should_trigger flags and structured expectations are MDE-only
 extensions to the upstream eval schema. Other packs are still legacy
 metadata and must not be reported as behaviorally certified.

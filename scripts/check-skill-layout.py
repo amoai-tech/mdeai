@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """Guard the canonical skill library and its agent exposure mirror.
 
-`.claude/skills/` is the single source of truth for project skills.
-`.agents/skills/<name>/` is a *real* directory whose entries are relative
-symlinks back into the canonical skill, so an agent that discovers
-`.agents/skills/<name>/SKILL.md` can still follow the skill's own
+`.agents/skills/` is the new single source of truth for project skills.
+`.claude/skills/<name>/` is a *real* directory whose entries are relative
+symlinks back into the canonical skill, so Claude Code can follow the skill's own
 `references/...` and `scripts/...` links.
 
 Checks:
@@ -326,21 +325,22 @@ def mirror_errors(skill_dir: Path, exposure_dir: Path) -> list[str]:
     """Every canonical entry must appear as a relative symlink, and nothing else."""
     errors: list[str] = []
     expected = sorted(p.name for p in skill_dir.iterdir())
+    label = 'Claude' if exposure_dir.parent.parent.name == '.claude' else 'Codex'
     for entry in expected:
         link = exposure_dir / entry
         if not path_present(link):
             errors.append(
-                f'Codex exposure is missing entry: {link}\n'
+                f'{label} exposure is missing entry: {link}\n'
                 f'    fix: ln -s {os.path.relpath(skill_dir / entry, exposure_dir)} {link}'
             )
             continue
         if not link.is_symlink():
-            errors.append(f'Codex exposure entry is not a symlink: {link}')
+            errors.append(f'{label} exposure entry is not a symlink: {link}')
             continue
         raw_target = os.readlink(link)
         if os.path.isabs(raw_target):
             errors.append(
-                f'Codex exposure symlink is absolute, expected relative: {link} -> {raw_target}'
+                f'{label} exposure symlink is absolute, expected relative: {link} -> {raw_target}'
             )
             continue
         resolved = (link.parent / raw_target).resolve()
@@ -351,7 +351,7 @@ def mirror_errors(skill_dir: Path, exposure_dir: Path) -> list[str]:
             )
     for entry in sorted(p.name for p in exposure_dir.iterdir()):
         if entry not in expected:
-            errors.append(f'unexpected Codex exposure entry: {exposure_dir / entry}')
+            errors.append(f'unexpected {label} exposure entry: {exposure_dir / entry}')
     return errors
 
 
@@ -359,12 +359,13 @@ def link_errors(skill_dir: Path, exposure_dir: Path, source: Path) -> list[str]:
     """Resolve links relative to their Markdown file from both discovery roots."""
     errors: list[str] = []
     exposed_source = exposure_dir / source.relative_to(skill_dir)
+    label = 'Claude' if exposure_dir.parent.parent.name == '.claude' else 'Codex'
     for target in dict.fromkeys(markdown_links(source.read_text(encoding='utf-8'))):
         if not (source.parent / target).exists():
             errors.append(f'broken relative link in {source}: {target}')
         if not (exposed_source.parent / target).exists():
             errors.append(
-                f'link does not resolve from Codex exposure: '
+                f'link does not resolve from {label} exposure: '
                 f'{exposed_source} -> {target}'
             )
     return errors
@@ -382,7 +383,8 @@ def skill_errors(canonical: Path, exposure: Path, name: str) -> list[str]:
     errors.extend(frontmatter_metadata_errors(source, name))
 
     if not exposure_dir.is_dir() or exposure_dir.is_symlink():
-        errors.append(f'Codex exposure directory is not a real directory: {exposure_dir}')
+        label = 'Claude' if exposure_dir.parent.parent.name == '.claude' else 'Codex'
+        errors.append(f'{label} exposure directory is not a real directory: {exposure_dir}')
         return errors
 
     checked_out_as_files = windows_checkout_entries(skill_dir, exposure_dir)
@@ -411,12 +413,38 @@ def stray_exposure_errors(exposure: Path, active: list[str]) -> list[str]:
         f'noncanonical .agents skill entry: {entry.name}'
         for entry in sorted(exposure.iterdir())
         if entry.name not in active
+        and not (entry.name == 'INDEX.md' and entry.is_symlink())
     ]
 
 
+def skill_roots(root: Path) -> tuple[Path, Path]:
+    """Discover which tree owns real skill files; a symlink mirror is not canonical.
+
+    Prefer the prior Claude orientation in mixed/copy fixtures so accidental
+    copies in .agents cannot masquerade as a successful migration.
+    """
+    claude = root / '.claude' / 'skills'
+    agents = root / '.agents' / 'skills'
+
+    def has_real_skill_files(directory: Path) -> bool:
+        return directory.is_dir() and any(
+            entry.is_dir()
+            and (entry / 'SKILL.md').is_file()
+            and not (entry / 'SKILL.md').is_symlink()
+            for entry in directory.iterdir()
+        )
+
+    if (agents / 'INDEX.md').is_file() and not (agents / 'INDEX.md').is_symlink():
+        return agents, claude
+    if has_real_skill_files(claude):
+        return claude, agents
+    if has_real_skill_files(agents):
+        return agents, claude
+    return claude, agents
+
+
 def check(root: Path) -> tuple[list[str], int]:
-    canonical = root / '.claude' / 'skills'
-    exposure = root / '.agents' / 'skills'
+    canonical, exposure = skill_roots(root)
 
     active = sorted(p.name for p in canonical.iterdir() if p.is_dir())
     errors = retired_errors(canonical, exposure)
@@ -441,7 +469,7 @@ def main() -> int:
         return 1
 
     print(f'SKILL_LAYOUT_PASS active={active}')
-    canonical = root / '.claude' / 'skills'
+    canonical, _ = skill_roots(root)
     print(eval_coverage(canonical, sorted(p.name for p in canonical.iterdir() if p.is_dir())))
     return 0
 

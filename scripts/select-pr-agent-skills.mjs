@@ -54,7 +54,7 @@ export function selectSkills(files) {
   }
 
   const skills = [UNIVERSAL, ...SPECIALISTS.filter((skill) => selected.has(skill))];
-  const paths = ["/github/workspace/.claude/skills/code-review/SKILL.md"];
+  const paths = ["/github/workspace/.agents/skills/code-review/SKILL.md"];
   for (const skill of skills.slice(1)) {
     paths.push(REVIEW_SKILLS_ROOT + "/" + skill + "/SKILL.md");
   }
@@ -113,7 +113,7 @@ export function assertSelectedPathsExist(paths, exists = existsSync, repositoryR
       if (!exists(reviewPath)) {
         throw new Error("required trusted PR-Agent review resource missing: " + reviewPath);
       }
-      const expectedCanonical = join(root, ".claude/skills", domain, "references/review.md");
+      const expectedCanonical = join(root, ".agents/skills", domain, "references/review.md");
       const actual = realpathSync(join(root, reviewPath));
       // Require the exact canonical file, not merely any path inside the checkout.
       // An escaped canonical symlink must fail too.

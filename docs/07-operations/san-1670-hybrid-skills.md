@@ -32,7 +32,7 @@ These are **targeted methodology additions**, not wholesale installations or cla
 
 DSH's official [skills subsystem](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/subsystems/skills.md) documents project `.dsh/skills` and `.agents/skills` sources, relative precedence and the model-facing `skill` tool. Use the existing DSH loader; do not build a second registry or Super Agent.
 
-The current `.claude`-canonical / `.agents`-symlink mirror is **one physical source**, not two duplicated collections. Moving canonical files to `.agents` has no intrinsic speed benefit; preserve the working orientation if real Claude/Codex compatibility proof is missing.
+The repository now stores real skill files under `.agents/skills` and exposes their top-level entries to Claude Code through relative symlinks in `.claude/skills`. This is **one physical source**, not two duplicated collections. The change is a portability preference, not a measured performance gain; if real Claude discovery regresses, revert the orientation while preserving the hybrid skill improvements.
 
 ## Comparative smoke prompts
 

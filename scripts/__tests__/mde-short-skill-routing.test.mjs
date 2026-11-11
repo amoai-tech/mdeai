@@ -32,12 +32,14 @@ test('new short skills and specialist fallbacks satisfy MDE routing contract', (
     'linear-task', 'linear-audit', 'praudit', 'errors', 'efficient', 'tests',
     'plan', 'architect', 'implement', 'progress', 'prod', 'merge', 'e2e',
   ]) {
-    const exposed = resolve(root, '.agents/skills', name, 'SKILL.md');
-    assert.ok(lstatSync(exposed).isSymbolicLink(), name + ': missing mirror symlink');
+    const canonical = resolve(root, '.agents/skills', name, 'SKILL.md');
+    const exposed = resolve(root, '.claude/skills', name, 'SKILL.md');
+    assert.ok(!lstatSync(canonical).isSymbolicLink(), name + ': canonical must be a real file');
+    assert.ok(lstatSync(exposed).isSymbolicLink(), name + ': missing Claude mirror symlink');
     assert.equal(
       readFileSync(exposed, 'utf8'),
-      readFileSync(resolve(root, '.claude/skills', name, 'SKILL.md'), 'utf8'),
-      name + ': mirror does not resolve to canonical skill',
+      readFileSync(canonical, 'utf8'),
+      name + ': Claude mirror does not resolve to canonical skill',
     );
   }
   assert.match(instructions, /S4 verification stays independent/);

@@ -1,1 +1,1 @@
-../../../../.claude/skills/supabase/references/review.md
+../../../../.agents/skills/supabase/references/review.md
