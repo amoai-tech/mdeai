@@ -34,6 +34,10 @@ DSH's official [skills subsystem](https://github.com/deepseek-ai/deepseek-harnes
 
 The current `.claude`-canonical / `.agents`-symlink mirror is **one physical source**, not two duplicated collections. Moving canonical files to `.agents` has no intrinsic speed benefit; preserve the working orientation if real Claude/Codex compatibility proof is missing.
 
+## Migration decision — preserve working agent paths
+
+The trial flip to physically canonical `.agents/skills` was **reverted** after the resulting 880-file GitHub PR exceeded CodeRabbit's 100-file review limit and the required PR-Agent scope guard failed closed on contradictory GitHub counts (880 file entries versus `changed_files=731`). Replacing that review guard with a permissive workaround would make completion claims weaker, not better. The existing **one-source** `.claude` canonical library with `.agents` relative-symlink exposure already loads in Claude Code, Codex and DeepSeek Harness and avoids duplicate physical copies. Do not attempt the high-churn path reversal as a prerequisite for improving or using skills. Reconsider only with a separately verified, safely reviewable migration mechanism and a real platform requirement.
+
 ## Comparative smoke prompts
 
 Run each on a clean worktree with the *same* prompts/model configuration before and after; record the exact Git SHA, scope, trace, outcome, model/tool calls, duration and permissions. A passing structural test is not evidence of correct live skill selection.
