@@ -57,3 +57,27 @@ test('waits until a rental answer is no longer running before another prompt', a
     ['#rental-ask-input', 'visible'],
   ]);
 });
+
+
+// Security regression: QA artifacts must never be written to an operator-supplied path.
+// If a caller attempts --out, fail *before* connecting to Chrome.
+import { spawnSync } from 'node:child_process';
+
+test('rejects caller-controlled artifact output paths before contacting Chrome', () => {
+  const result = spawnSync(process.execPath, [
+    'scripts/qa/a2ui-matrix.mjs', '--out', '../untrusted-dir',
+  ], { encoding: 'utf8', timeout: 8000 });
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /--out is not supported/i);
+  assert.doesNotMatch(result.stderr, /ECONNREFUSED|connectOverCDP/);
+});
+
+
+test('rejects --out=path form before contacting Chrome', () => {
+  const result = spawnSync(process.execPath, [
+    'scripts/qa/a2ui-matrix.mjs', '--out=/tmp/untrusted-dir',
+  ], { encoding: 'utf8', timeout: 8000 });
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /--out is not supported/i);
+  assert.doesNotMatch(result.stderr, /ECONNREFUSED|connectOverCDP/);
+});

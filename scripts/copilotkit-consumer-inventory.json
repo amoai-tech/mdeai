@@ -229,6 +229,11 @@
       "note": "Factory-mocks the v2 chat provider to prove a 401 during auth loading is deferred, suppressed for guests, and reported for signed-in users while true run failures remain visible."
     },
     {
+      "file": "src/components/chat/__tests__/saved-thread-history-404.test.tsx",
+      "classification": "test-only",
+      "note": "SAN-1653: mocks CopilotKit v2 useAgent to prove that a fresh local-only thread 404 is empty history while restored-thread 404 and authenticated 403 remain visible errors."
+    },
+    {
       "file": "src/components/chat/__tests__/concierge-coagent-readiness.test.tsx",
       "classification": "test-only",
       "note": "Factory-mocks @copilotkit/react-core/v2 hooks only, not the provider."

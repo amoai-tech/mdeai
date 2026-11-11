@@ -20,7 +20,6 @@
  */
 import { chromium } from "playwright";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { isMatchingEventDetails, selectMatrixCases, waitForIdleComposer } from "./a2ui-matrix-verdict.mjs";
 
@@ -43,22 +42,16 @@ if (onlyFlagIndex > -1 && (!ONLY || ONLY.startsWith("--"))) {
 }
 
 /**
- * `--out` and the case id both reach the filesystem, so confine writes to the
- * repository or the OS temp directory and refuse anything that resolves outside
- * them. Paths are normalized before the containment check, so `../` cannot escape.
+ * QA evidence stays in one fixed repository-local folder. Do not accept a
+ * caller-supplied filesystem path: this is a QA runner, not a general export
+ * utility, and no supported caller needs a custom output destination.
  */
-function safeOutputDir(input) {
-  const roots = [path.resolve(process.cwd()), path.resolve(os.tmpdir())];
-  const dir = path.resolve(input);
-  const inside = roots.some((root) => dir === root || dir.startsWith(root + path.sep));
-  if (!inside) {
-    throw new Error(`--out must resolve inside the repository or the temp directory: ${dir}`);
-  }
-  return dir;
+if (process.argv.some((value) => value === "--out" || value.startsWith("--out="))) {
+  console.error("--out is not supported; QA evidence is written to .a2ui-matrix");
+  process.exit(1);
 }
-
-const OUT = safeOutputDir(arg("out", path.join(process.cwd(), ".a2ui-matrix")));
-fs.mkdirSync(OUT, { recursive: true });
+const OUT = ".a2ui-matrix";
+fs.mkdirSync(".a2ui-matrix", { recursive: true });
 
 /**
  * Case ids are fixture constants. Only a short lowercase slug plus a known
@@ -336,7 +329,7 @@ const selected = selectMatrixCases({ suite: SUITE, only: ONLY, rentals: RENTALS,
 for (const c of selected.rentals) ok.push(await rentCase(c));
 for (const c of selected.events) ok.push(await eventCase(c));
 
-fs.writeFileSync(path.join(OUT, safeFileName("matrix.json")), JSON.stringify(lines, null, 2));
+fs.writeFileSync(".a2ui-matrix/matrix.json", JSON.stringify(lines, null, 2));
 const failed = lines.filter((r) => r.status === "fail").length;
 const unavailable = lines.filter((r) => r.status === "honest-unavailable").length;
 console.log(`SUMMARY ${lines.filter((r) => r.status === "pass").length} pass / ${unavailable} unavailable / ${failed} fail`);
