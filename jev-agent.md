@@ -71,34 +71,44 @@ The following are **reported installed on the owner's Ubuntu/DeepSeek machine**,
 
 ## Safe commands and examples
 
+**External-data boundary:** Quicksilver can transmit the content of matching source files to an external TypeSafe-backed service; Supercov patch analysis can transmit changed-code/diff content. Jev MCP and Jev Evals transmit the `state`/evidence supplied to them. Before calling any of these, inspect the **actual input**, confirm that external disclosure is permitted, and remove secrets, customer data, proprietary material not approved for disclosure, and authenticated artifacts. Never assume a path is safe merely because it is under `src/`. For confidential code, use local `rg`, tests and review instead. A tool's reported token savings or low cost is not authorization to upload source.
+
 ```bash
 # First: exact low-cost search
 rg -n 'render_ui|data-listing-id|detailsId|openVenueDetail' src/components src/mastra
 
-# Optional semantic search (only if grep is inconclusive)
-# Run according to the installed Quicksilver skill's current syntax.
-qs filter "Does this file render an A2UI card from a tool result?" src/components/copilot src/mastra
+# Optional semantic search: ONLY on explicitly reviewed, approved,
+# non-sensitive candidate files; read the installed skill's CLI syntax.
+# Do not feed whole src trees, unreviewed files, or customer data.
+qs filter "Does this file render an A2UI card from a tool result?" \
+  src/components/copilot/search-tool-result-cards.tsx \
+  src/mastra/lib/recommendation-surface-bridge.ts
 
-# After implementing a focused diff; check base and command availability.
-supercov quality patch --base origin/main
-supercov security patch
+# Optional external diff analysis: inspect the exact base diff first.
+# Run only when EVERY changed file is authorized for external processing.
+git diff --name-only origin/main...HEAD
+git diff origin/main...HEAD -- src/components/copilot/a2ui/mde-ui-catalog.tsx
+# If reviewed and approved for disclosure:
+# supercov quality patch --base origin/main
+# supercov security patch
 
 # Investigate assertion strength before optional API spending:
 supercov runs latest assertions assess --dry-run
 ```
 
-For all commands: check help/installed version, scope to relevant files, and do not run live write operations merely to obtain a quality score.
+For all commands: check help/installed version, review the file/diff contents **before** any externally backed call, and do not run live write operations merely to obtain a quality score. **Patch commands may inspect or send the entire branch diff**, not just the displayed `git diff -- <path>`; do not invoke them on a mixed or sensitive diff. The two-file Quicksilver example is illustrative; use it only after validating the exact installed CLI syntax and the specific files for disclosure.
 
 ## Real development scenarios
 
-### SAN-1653 — Generated card opens the correct listing
+### SAN-1653 — Generated card opens the correct listing (worked example)
 
-1. **Reuse the already completed Quicksilver discovery:** 385 files scanned → 43 shortlisted in 4.6 seconds, $0.0309, four key files identified. Do **not** pay for the same search again.
-2. Inspect `src/components/copilot/a2ui/mde-ui-catalog.tsx`, `src/components/copilot/search-tool-result-cards.tsx`, `src/mastra/lib/recommendation-surface-bridge.ts`, `src/mastra/lib/rental-recommendations-ui.ts` plus the existing native Details owner.
-3. Reuse the existing catalog/bridge; never add a second search engine, renderer, modal, or route.
-4. **Playwright** tests eight required Rental/Event source-row → newly generated `render_ui` card → native Details ID cases. Test first/second/named/invalid/stale, replay, and 390px according to the live Linear acceptance criteria.
-5. Actual source ID must equal rendered card ID and open native Details ID. Screenshots or Jev confidence **alone** do not prove this; capture DOM attributes and assertions.
-6. Optional Jev Gate challenges the **raw** case log and exact diff. Evidence from an existing native grid card does not count as proof of a newly generated A2UI card.
+**Historical discovery, not an instruction to rerun a scan or a claim of current status.** A reported Quicksilver run scanned 385 files → 43 matches in 4.6 seconds for $0.0309. Its four leading paths were `src/components/copilot/a2ui/mde-ui-catalog.tsx`, `src/components/copilot/search-tool-result-cards.tsx`, `src/mastra/lib/recommendation-surface-bridge.ts` and `src/mastra/lib/rental-recommendations-ui.ts`. These paths are recorded here so agents on another machine can inspect them locally with `rg` and `git show`, **not** assume that an unavailable tool result was persisted. Verify their current relevance against [live SAN-1653](https://linear.app/amo100/issue/SAN-1653) and the latest `main`; PR #859 merged an earlier fix but does not by itself prove all A2UI cases.
+
+1. Inspect the existing catalog/bridge and the native Details state owner. Diagnose any reproduced mismatch without creating a second renderer, modal, route or search engine.
+2. **Eight required positive cases:** Rental **first, second, named, sixth** and Event **first, second, named, sixth** result. An unavailable sixth result must receive an honest unavailable outcome, not a fabricated ID.
+3. In each positive case, distinguish a **new `render_ui` A2UI card** from native fallback cards and assert actual source-row ID = rendered card ID = opened native Details ID.
+4. **Additional negative/recovery cases, not substitutes for the eight:** invalid/out-of-range/stale IDs, wrong thread/user, refresh/replay, cancellation and 390px.
+5. Playwright and existing integration tests are definitive. Optional `jev_gate` may challenge an evidence summary, but it cannot certify ID equality or saved viewing transactions.
 
 ### SAN-1668 — Full pinned Standard Catalog
 
@@ -108,20 +118,22 @@ For all commands: check help/installed version, scope to relevant files, and do 
 4. Test malformed props, URLs/media, unavailable optional integrations, chat-wide exposure and 390px. **Catalog availability is not 69 working MDE workflows.**
 5. Supercov on the catalog diff; ordinary tests prove actual schemas and renders.
 
-### SAN-1658 — Editable viewing form
+### SAN-1658 — Reusable editable AI forms (workflow-specific examples)
 
-1. Inspect the existing Schedule Viewing modal, trusted listing lookup, date/time parser and atomic submission.
-2. If reuse options remain genuinely tied, ask `jev_decide` to compare *existing modal handoff* with alternatives. State priorities: smallest change, latest user edit wins, no duplicate booking path.
-3. Implement the official Form/field handoff in the existing catalog with pinned types. Confirm latest edited `@path` value is available; do **not** assume the Form's submit event contains all field values.
-4. Form Continue prefills **native review only**. No lead/showing exists before native confirmation. Test Medellín-local 15-minute choices, stale IDs, edit precedence.
-5. Playwright + Supabase readback proves **one** atomic lead/showing after confirmation, correct broker access, and retry without duplicates. Supercov can point out missing retry assertions.
+**The live [SAN-1658](https://linear.app/amo100/issue/SAN-1658) issue owns its form contract and first pilot.** Follow its current acceptance criteria and pinned SDK behavior; this reference only explains how to select Jev tools. It does **not** mandate a particular form implementation or add partner-profile work to SAN-1658.
 
-### SAN-1659 — Host Analytics insights
+1. For the **viewing-request pilot**, inspect the existing Schedule Viewing modal, trusted listing lookup, native date/time validation and atomic submission. Use `jev_decide` only if genuine reuse options remain ambiguous. Test that the latest renter-edited value reaches the native review path, **no DB write occurs before native confirmation**, and an authorized retry yields exactly one lead/showing with correct broker access. Confirm the current native API and input contract instead of assuming the AI Form event carries the draft.
+2. For **partner-profile reuse**, follow the separately owned [SAN-1663 — MDE Partner Dashboard — Review and Save AI-Suggested Business Profile Changes](https://linear.app/amo100/issue/SAN-1663) and its selected business/profile workflow, **not** Schedule Viewing. Reuse the existing partner profile form and authorized patch/save action. Verify AI draft → user edits/review → explicit save → readback for the **correct business**, plus cancel (no write), stale draft cleared on business switch, cross-business access denied, and retry/error behavior. Do **not** assert lead/showing creation for this workflow.
+3. In either workflow, deterministic tests establish authorization, persistence, exact fields, idempotency and no premature writes. Use Jev Evals for subjective suggestion accuracy; Supercov for relevant assertion gaps. Do not introduce duplicate form state, providers or services.
 
-1. Reuse the HostOps provider/agent and existing deterministic KPI loader.
-2. Generate a named Surface with host-authorized sales rows only; never hallucinate revenue or cross-tenant data.
-3. Verify numeric equality and RLS with deterministic checks. Use Jev Evals **only** for the explanation's faithfulness, not totals.
-4. Validate 1440/768/390 rendering, fallback/clear, thread isolation, and existing host chat.
+### SAN-1659 — Reusable read-only dashboard insights panel
+
+**[SAN-1659 — MDE AI — Add Reusable AI Insights Panels to Existing Dashboards](https://linear.app/amo100/issue/SAN-1659) owns the shared Surface/panel contract**, typed catalog components, authorization-safe integration, fallback and a first technical pilot on an existing host dashboard. It does **not** own or recalculate Host KPI metrics or a host-only analytics framework.
+
+1. Inspect and reuse the shared `mde/discovery@1` catalog, existing page/agent providers and named Surface patterns. Keep the panel read-only and reusable across later domain dashboards.
+2. Verify create/update/delete, allowlists, loading/empty/error fallback, role/thread isolation and 1440/768/390 responsive behavior with deterministic tests; use `jev_verify` only for ambiguous statements about supplied evidence.
+3. For the **initial host demonstration**, reuse already-authorized HostOps rows and existing data functions **without copying KPI calculation logic into the shared panel**. Numeric equality/tenant isolation require source-backed assertions and RLS checks; Jev Evals may assess the accompanying explanation only.
+4. **KPI and product ownership stays separate:** [SAN-761 — MDE Host Analytics — Show AI Results as Clear KPI Cards](https://linear.app/amo100/issue/SAN-761) owns existing host KPI cards, calculations and the KPI loader; [SAN-1661](https://linear.app/amo100/issue/SAN-1661) owns the Events product-facing interactive sales comparison. Do not treat shared-panel proof as completing either product task.
 
 ### SAN-1669 — Official Select / EntityCard feasibility
 
@@ -150,7 +162,7 @@ Use `jev_compare` (advisory) to evaluate the pinned official component against t
 
 ## Privacy, cost and fallback
 
-1. Before sending evidence externally, minimize to sanitized excerpts; remove secrets, cookies, bearer tokens, email/phone/address of customers, private attachments and service-role output.
+1. Quicksilver/externally backed code scans can upload selected source contents; Supercov patch commands can upload the complete scoped diff; Jev MCP/Evals can upload supplied evidence/state. **Inspect, narrow, and explicitly authorize every input before any upload**; remove secrets, cookies, bearer tokens, customer emails/phones/addresses, private attachments, sensitive code and service-role output. Prefer local tools when sanitizing would change the question or disclosure is not permitted.
 2. Prefer deterministic, local tests for IDs, numeric totals, authorization, retries and DB state.
 3. Cap ambiguous judgments to a small candidate list; avoid recursive Jev tool chains, redundant reranking and broad quality scans.
 4. If `qs`, `supercov` or any MCP tool is unavailable, continue with `rg`, existing code review, Vitest, Playwright and repo CI. No tool-installation prerequisite to feature development.
@@ -169,4 +181,4 @@ Use `jev_compare` (advisory) to evaluate the pinned official component against t
 - [CopilotKit Surfaces](https://docs.copilotkit.ai/generative-ui/components/surfaces)
 - [MDE interactive foundation Linear epic](https://linear.app/amo100/issue/SAN-1657/epic-mde-ai-copilotkit-interactive-foundation)
 
-**Maintenance:** Re-check GitHub URLs, pinned SDK APIs, installed tool names and benchmarks when they materially change. Keep current task statuses in Linear, not in this reference.
+**Maintenance:** The task examples above are illustrative (reviewed 11 Nov 2026), not execution instructions or completion reports. Re-check live Linear scope/status, current `main`, GitHub URLs, pinned SDK APIs, installed tool names and benchmarks before applying them. Never copy old acceptance counts or implementation decisions over live task criteria.
