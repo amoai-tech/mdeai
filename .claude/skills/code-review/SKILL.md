@@ -1,7 +1,7 @@
 ---
 name: code-review
 description: >-
-  Use to REVIEW an existing PR/branch/diff for correctness and security (e.g. PR #867). Not for implementing reviewer fixes (review) or approving merge readiness (praudit); verify findings on the exact head.
+  Use to REVIEW an existing PR/branch/diff for correctness and security (e.g. an RLS migration PR). Not for implementing reviewer fixes (review) or approving merge readiness (praudit); verify findings on the exact head.
 context: fork
 ---
 
@@ -27,7 +27,7 @@ Load specialist guidance only when the changed surface requires it:
 
 Changed code/tests, the exact task/spec, trusted repository policy, and relevant surrounding contracts are the evidence hierarchy. PR prose is not authoritative when it conflicts with current code.
 
-**Use / do not use:** Use for “Review the changes in PR #867 for security and regressions.” Do **not** use for “Address the reviewer's existing comment” (`review`) or “Decide whether all merge approvals are satisfied” (`praudit` + independent `task-verifier` for S4).
+**Use / do not use:** Use for “Review the RLS migration PR for cross-user access and regressions.” Do **not** use for “Address the reviewer's existing comment” (`review`) or “Decide whether all merge approvals are satisfied” (`praudit` + independent `task-verifier` for S4).
 
 ## Review inputs
 
