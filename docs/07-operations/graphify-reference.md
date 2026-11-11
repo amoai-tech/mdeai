@@ -18,8 +18,6 @@ Knowledge graph tool for codebase + docs analysis. Builds a queryable graph of e
 
 **Important:** a graph describes the checkout that generated it, **not** automatically current GitHub `main`. Rebuild on the branch/worktree you intend to inspect. Check the timestamp and confirm the exact symbol against current source before trusting dependency conclusions.
 
-**Cloud vs local (avoid duplicate indexing):** use the connected Graphify Cloud MCP for shared `main` code navigation, impact and related-test discovery when its indexed commit is current. Use this local CLI only for uncommitted work, exact PR branches, offline work, or a stale/missing Cloud index. The Cloud index and local `graphify-out/` are separate snapshots; neither synchronizes the other. Do not rebuild the local graph merely because you queried Cloud.
-
 
 ## Contents
 
