@@ -23,34 +23,6 @@ import type { RentalSearchApiParams } from "@/lib/rental-query-parser";
 /** The most messages one reopen replays (MVP cap; no older-message UI yet). */
 export const SAVED_THREAD_HISTORY_LIMIT = 100;
 
-/**
- * A just-created, non-explicit thread may have live local Mastra messages but no
- * Supabase history row yet (e.g. MASTRA_DEV_LIBSQL=1 in development). A 404
- * then means there is nothing saved to replay. Never apply this to a restored
- * or explicitly selected thread: missing saved history must remain visible.
- * Auth and backend errors are not empty history.
- */
-/**
- * Client eligibility for ignoring a missing saved-history row. Persistence is
- * a distinct state from selection/restoration: a successfully saved thread can
- * be re-mounted with no active selection, but its missing row is a real error.
- */
-export function canTreatMissingThreadAsEmpty({
-  activeThreadId,
-  restoredThread,
-  hasPersistedThread,
-}: {
-  activeThreadId: string | undefined;
-  restoredThread: boolean;
-  hasPersistedThread: boolean;
-}): boolean {
-  return !activeThreadId && !restoredThread && !hasPersistedThread;
-}
-
-export function isFreshThreadHistory404(status: number, freshUnselectedThread: boolean): boolean {
-  return freshUnselectedThread && status === 404;
-}
-
 export type SavedThreadMessageRow = {
   id: unknown;
   role: unknown;

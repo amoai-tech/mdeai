@@ -231,7 +231,7 @@
     {
       "file": "src/components/chat/__tests__/saved-thread-history-404.test.tsx",
       "classification": "test-only",
-      "note": "SAN-1653: mocks CopilotKit v2 useAgent to prove that a fresh local-only thread 404 is empty history while restored-thread 404 and authenticated 403 remain visible errors."
+      "note": "SAN-1653: mocks CopilotKit v2 useAgent to prove that selected/restored history 404 and authenticated 403 remain visible errors, while a successful history GET restores normally; fresh unpersisted threads do not mount replay."
     },
     {
       "file": "src/components/chat/__tests__/concierge-coagent-readiness.test.tsx",

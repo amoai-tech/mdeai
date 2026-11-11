@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   SAVED_THREAD_HISTORY_LIMIT,
-  isFreshThreadHistory404,
-  canTreatMissingThreadAsEmpty,
   latestSavedRentalSearch,
   mapSavedThreadHistory,
   reconcileSavedHistory,
@@ -583,35 +581,5 @@ describe("mapSavedThreadHistory — repeats already saved before the fix", () =>
     ]);
     expect(out.filter((m) => m.role === "tool")).toHaveLength(1);
     expect(out.map((m) => m.role)).toEqual(["user", "assistant", "tool", "user", "assistant"]);
-  });
-});
-
-
-describe("fresh thread missing history", () => {
-  it("treats 404 as empty history only for a fresh unselected thread", () => {
-    expect(isFreshThreadHistory404(404, true)).toBe(true);
-    expect(isFreshThreadHistory404(404, false)).toBe(false);
-  });
-
-  it("never swallows authorization or server failures", () => {
-    for (const status of [401, 403, 500, 503]) {
-      expect(isFreshThreadHistory404(status, true)).toBe(false);
-    }
-  });
-});
-
-
-describe("fresh history versus already persisted threads", () => {
-  it("allows a new never-saved thread to start without a Supabase history row", () => {
-    expect(canTreatMissingThreadAsEmpty({ activeThreadId: undefined, restoredThread: false, hasPersistedThread: false })).toBe(true);
-  });
-
-  it("does not hide missing history after markThreadSaved on provider remount", () => {
-    expect(canTreatMissingThreadAsEmpty({ activeThreadId: undefined, restoredThread: false, hasPersistedThread: true })).toBe(false);
-  });
-
-  it("does not hide missing selected or restored history", () => {
-    expect(canTreatMissingThreadAsEmpty({ activeThreadId: "previous-thread", restoredThread: false, hasPersistedThread: false })).toBe(false);
-    expect(canTreatMissingThreadAsEmpty({ activeThreadId: undefined, restoredThread: true, hasPersistedThread: false })).toBe(false);
   });
 });

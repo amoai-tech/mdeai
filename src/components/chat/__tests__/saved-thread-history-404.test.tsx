@@ -30,14 +30,14 @@ function Status() {
   return <span data-testid="history-status">{state.status}</span>;
 }
 
-async function renderHistory(status: number, allowMissingFreshThread: boolean) {
+async function renderHistory(status: number) {
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
     ok: status === 200,
     status,
     json: async () => ({ messages: [] }),
   }));
   await act(async () => {
-    root.render(<SavedThreadHistory threadId="fresh-thread" allowMissingFreshThread={allowMissingFreshThread}><Status /></SavedThreadHistory>);
+    root.render(<SavedThreadHistory threadId="fresh-thread"><Status /></SavedThreadHistory>);
   });
   await act(async () => { await vi.advanceTimersByTimeAsync(2600); });
   return container.querySelector('[data-testid="history-status"]')?.textContent;
@@ -58,15 +58,15 @@ afterEach(async () => {
 });
 
 describe("saved thread history missing-row safety", () => {
-  it("does not show false error for a fresh local-only thread", async () => {
-    expect(await renderHistory(404, true)).toBe("idle");
+  it("keeps missing saved history visible instead of silently erasing a conversation", async () => {
+    expect(await renderHistory(404)).toBe("error");
   });
 
-  it("preserves error for a missing explicitly restored thread", async () => {
-    expect(await renderHistory(404, false)).toBe("error");
+  it("preserves authorization failure when loading saved history", async () => {
+    expect(await renderHistory(403)).toBe("error");
   });
 
-  it("preserves authorization failure even for a fresh thread", async () => {
-    expect(await renderHistory(403, true)).toBe("error");
+  it("loads successfully when the owner-checked history API returns data", async () => {
+    expect(await renderHistory(200)).toBe("idle");
   });
 });

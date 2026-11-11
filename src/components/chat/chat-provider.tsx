@@ -16,7 +16,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { canTreatMissingThreadAsEmpty, isFreshThreadHistory404, reconcileSavedHistory, type SavedThreadMessage } from "@/lib/chat/saved-thread-history";
+import { reconcileSavedHistory, type SavedThreadMessage } from "@/lib/chat/saved-thread-history";
 import { useThreadNav } from "@/lib/chat/thread-nav-context";
 import { clearLiveUserMessage, isLiveUserMessage } from "@/lib/chat/live-user-message-ids";
 import { mdeUI } from "@/components/copilot/a2ui/mde-ui-catalog";
@@ -113,12 +113,10 @@ export function SavedThreadHistory({
   threadId,
   children,
   agentId = "conciergeAgent",
-  allowMissingFreshThread = false,
 }: {
   threadId: string;
   children: ReactNode;
   agentId?: "conciergeAgent" | "hostOpsAgent";
-  allowMissingFreshThread?: boolean;
 }) {
   const { agent, isReady } = useAgent({ agentId, updates: [UseAgentUpdate.OnRunStatusChanged, UseAgentUpdate.OnMessagesChanged] });
   const [attempt, setAttempt] = useState(0);
@@ -202,16 +200,14 @@ export function SavedThreadHistory({
           signal,
           cache: "no-store",
         });
-        // Only a fresh, non-explicit thread may lack a Supabase history row.
-        // A selected/restored thread 404, or any 401/403/5xx, remains retryable.
-        const missingFresh = isFreshThreadHistory404(res.status, allowMissingFreshThread);
-        if (!res.ok && !missingFresh) throw new Error(`history ${res.status}`);
-        const body = missingFresh
-          ? { messages: [] as SavedThreadMessage[], lastRentalSearch: null }
-          : (await res.json()) as {
-              messages?: SavedThreadMessage[];
-              lastRentalSearch?: RentalSearchApiParams | null;
-            };
+        // This component mounts only for a selected, restored, or known-saved
+        // thread. A missing row must remain a visible retryable error. Fresh
+        // unpersisted chats do not mount this component at all.
+        if (!res.ok) throw new Error(`history ${res.status}`);
+        const body = (await res.json()) as {
+          messages?: SavedThreadMessage[];
+          lastRentalSearch?: RentalSearchApiParams | null;
+        };
         savedMessages = body.messages ?? [];
         lastRentalSearch = body.lastRentalSearch ?? null;
         // First attempt: the watch started when the chat opened. A Retry cannot
@@ -276,12 +272,10 @@ export function SavedThreadHistory({
     })();
 
     return () => controller.abort();
-    // Keep this list fixed at five entries. Adding a dependency conditionally (or
-    // introducing one during a dev hot swap) makes React compare arrays of
-    // different sizes and throw "The final argument passed to useEffect changed
-    // size between renders". `allowMissingFreshThread` is a plain boolean with a
-    // default, so it is always safe to include here.
-  }, [agent, isReady, threadId, attempt, allowMissingFreshThread]);
+    // Keep this dependency list fixed at four entries. A dev hot reload that
+    // changes its length can trigger React's "changed size between renders"
+    // warning; a hard reload recreates the effect with its current shape.
+  }, [agent, isReady, threadId, attempt]);
 
   /**
    * The newest NON-EMPTY transcript seen for this thread on the current agent.
@@ -435,14 +429,12 @@ export function SavedThreadHistory({
 export function SavedThreadReplay({
   threadId,
   children,
-  allowMissingFreshThread = false,
 }: {
   threadId: string;
   children: ReactNode;
-  allowMissingFreshThread?: boolean;
 }) {
   if (isDeterministicE2E()) return <>{children}</>;
-  return <SavedThreadHistory threadId={threadId} allowMissingFreshThread={allowMissingFreshThread}>{children}</SavedThreadHistory>;
+  return <SavedThreadHistory threadId={threadId}>{children}</SavedThreadHistory>;
 }
 
 /**
@@ -499,7 +491,7 @@ function LiveChatProvider({ children, persistThread = false }: { children: React
         hasExplicitThreadId={shouldReplay}
       >
         {threadId && shouldReplay && !isDeterministicE2E() ? (
-          <SavedThreadHistory threadId={threadId} allowMissingFreshThread={canTreatMissingThreadAsEmpty({ activeThreadId, restoredThread, hasPersistedThread })}>
+          <SavedThreadHistory threadId={threadId}>
             {persistThread && user ? <BrokerThreadSaverAfterReplay threadId={threadId} /> : null}
             {children}
           </SavedThreadHistory>
