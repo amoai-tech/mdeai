@@ -2,13 +2,21 @@
 /**
  * A2UI card matrix (SAN-1653): proves source → card → Details identity for rentals and events.
  *
- * Usage (dev server on :3001, QA browser exposed on :9271):
- *   node scripts/qa/a2ui-matrix.mjs --suite rentals --cdp http://127.0.0.1:9271
- *   node scripts/qa/a2ui-matrix.mjs --suite events
+ * Usage (dev server on :3001, one authenticated QA browser on the fixed port :9280):
+ *   node scripts/qa/a2ui-matrix.mjs --suite rentals
+ *   node scripts/qa/a2ui-matrix.mjs --suite events --only event-second
  *   node scripts/qa/a2ui-matrix.mjs --suite all --base http://localhost:3001
  *
- * Exit 1 when any case fails. "honest-unavailable" (the agent says it cannot show more
- * results than the page publishes) is a pass, recorded separately.
+ * Exit codes are distinct on purpose:
+ *   0  every case passed
+ *   2  no failure, but at least one requested result was genuinely absent from the
+ *      published source and the assistant said so ("honest-unavailable"). The
+ *      `rental-sixth` and `event-fourth` cases are designed to produce this when a
+ *      page publishes fewer rows. Callers must accept 2 as green.
+ *   1  at least one real failure (wrong id, wrong Details, refusal for an available
+ *      result, render error).
+ *
+ * A non-zero exit is therefore not automatically a red build: only 1 is red.
  */
 import { chromium } from "playwright";
 import fs from "node:fs";
