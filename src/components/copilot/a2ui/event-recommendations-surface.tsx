@@ -25,8 +25,6 @@ export const EVENT_RECOMMENDATIONS_SURFACE_ID = "event-recommendations";
 export const EVENT_RECOMMENDATIONS_COMPONENTS = [
   "EventCard",
   "Column",
-  "Row",
-  "Divider",
   // One short heading at most; the chat already has its own voice.
   "Title",
 ] as const;

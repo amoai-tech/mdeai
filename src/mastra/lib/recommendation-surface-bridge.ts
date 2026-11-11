@@ -63,9 +63,7 @@ export function eventIdsFromResult(content: unknown): string[] {
       .map((row) => (row && typeof row === "object" ? (row as { id?: unknown }).id : null))
       .filter((id): id is string => typeof id === "string");
   }
-  if (payload.result && typeof payload.result === "object") {
-    return eventIdsFromResult(payload.result);
-  }
+  if (payload.result) return eventIdsFromResult(payload.result);
   return [];
 }
 
@@ -123,7 +121,7 @@ export function renderEventUiEventsFor(
 ): BaseEvent[] | null {
   const built = buildEventRecommendationOps(ids, `event-recs-${toolCallId}`);
   if (!built) return null;
-  const callId = `render-ui-${toolCallId}`;
+  const callId = `render-ui-event-${toolCallId}`;
   return [
     { type: EventType.TOOL_CALL_START, toolCallId: callId, toolCallName: "render_ui" },
     { type: EventType.TOOL_CALL_ARGS, toolCallId: callId, delta: JSON.stringify(built) },

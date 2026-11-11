@@ -1003,7 +1003,11 @@ export function EventResults({ result }: { result: unknown }) {
         />
       ) : null}
       <Dialog open={Boolean(selectedEvent)} onOpenChange={(open) => { if (!open) setSelectedEvent(null); }}>
-        <DialogContent className="max-w-md p-3" data-testid="event-card-modal">
+        <DialogContent
+          className="max-w-md p-3"
+          data-testid="event-card-modal"
+          data-event-id={selectedEvent?.id}
+        >
           <DialogHeader className="sr-only">
             <DialogTitle>{selectedEvent?.title ?? "Event card"}</DialogTitle>
           </DialogHeader>

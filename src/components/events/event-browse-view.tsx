@@ -9,6 +9,7 @@ import { BrowseMapPanel } from "@/components/browse/BrowseMapPanel";
 import { BrowseMapSheet } from "@/components/browse/BrowseMapSheet";
 import { DiscoveryWorkspace } from "@/components/browse/DiscoveryWorkspace";
 import { DiscoveryAskComposer } from "@/components/chat/discovery-ask-composer";
+import { EventRecommendationsSurface } from "@/components/copilot/a2ui/event-recommendations-surface";
 import { DiscoveryPageContext } from "@/components/chat/discovery-page-context";
 import { EventBrowseCard } from "@/components/events/event-browse-card";
 import {
@@ -319,5 +320,12 @@ function EventBrowseViewInner({
 
 /** Event browse shell that provides the shared map state. */
 export function EventBrowseView(props: EventBrowseViewProps) {
-  return <BrowseMapContextShell><EventBrowseViewInner {...props} /></BrowseMapContextShell>;
+  return (
+    <BrowseMapContextShell>
+      {/* SAN-1653: the Events page is the one screen where the concierge may render
+          event cards, so the named Surface must be mounted here as well as in chat. */}
+      <EventRecommendationsSurface />
+      <EventBrowseViewInner {...props} />
+    </BrowseMapContextShell>
+  );
 }

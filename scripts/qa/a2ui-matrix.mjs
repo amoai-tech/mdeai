@@ -123,11 +123,15 @@ async function rentCase(c) {
 
 async function eventCase(c) {
   await page.goto(`${BASE}/events`, { waitUntil: "domcontentloaded" });
-  await page.waitForTimeout(9000);
-  await resetConversation();
-  const cardsBefore = await page.evaluate(
-    () => document.querySelectorAll('[data-testid="a2ui-event-card"]').length,
+  await page.waitForFunction(
+    () => {
+      const el = document.querySelector('[data-testid="discovery-ask-input"]');
+      return Boolean(el) && !el.disabled;
+    },
+    undefined,
+    { timeout: 45000 },
   );
+  await resetConversation();
   await ask('[data-testid="discovery-ask-input"]', `Show events. ${c.prompt}`);
   let cards = [];
   try {
@@ -145,6 +149,7 @@ async function eventCase(c) {
   );
   const cardTitle = cards.length ? await textOf('[data-testid="a2ui-event-card"]') : "";
   let detailsTitle = null;
+  let detailsEventId = null;
   if (cards.length) {
     await page.evaluate(() => {
       const card = document.querySelector('[data-testid="a2ui-event-card"]');
@@ -164,21 +169,28 @@ async function eventCase(c) {
     } catch {}
     detailsTitle = await page.evaluate(() => {
       const panel =
-        document.querySelector('[data-testid="event-browse-details-panel"]') ??
         document.querySelector('[data-testid="event-card-modal"]') ??
+        document.querySelector('[data-testid="event-browse-details-panel"]') ??
         document.querySelector('[role="dialog"]');
       return panel ? panel.textContent ?? "" : null;
+    });
+    detailsEventId = await page.evaluate(() => {
+      const panel =
+        document.querySelector('[data-testid="event-card-modal"]') ??
+        document.querySelector('[data-testid="event-browse-details-panel"]') ??
+        document.querySelector('[role="dialog"]');
+      return panel ? panel.getAttribute("data-event-id") : null;
     });
   }
   const reply = cards.length ? "" : await chatText();
   const unavailable = !cards.length && /only|five|5 |can.?t|cannot|unavailable/i.test(reply);
-  const pass =
-    Boolean(cards.length) &&
-    Boolean(detailsTitle) &&
-    (detailsTitle.includes(cardTitle.slice(0, 40)) || cardTitle.includes((detailsTitle ?? "").slice(0, 40)));
+  const pass = detailsEventId
+    ? Boolean(cards.length) && detailsEventId === cards[0]
+    : Boolean(cards.length) && Boolean(detailsTitle) && detailsTitle.includes(cardTitle.slice(0, 40));
   record({
     id: c.id,
     cards,
+    detailsEventId,
     detailsTitle: detailsTitle?.slice(0, 120) ?? null,
     status: pass ? "pass" : unavailable ? "honest-unavailable" : "fail",
     reply: reply.slice(0, 300),

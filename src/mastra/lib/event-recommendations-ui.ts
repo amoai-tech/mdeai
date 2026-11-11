@@ -22,7 +22,7 @@ export function normalizeEventRecommendationIds(input: readonly unknown[]): stri
   for (const raw of input) {
     if (typeof raw !== "string") continue;
     const id = raw.trim();
-    if (!id || id.length > 128) continue;
+    if (!id || id.length > 128 || !/^[A-Za-z0-9_-]+$/.test(id)) continue;
     if (seen.has(id)) continue;
     seen.add(id);
     ids.push(id);

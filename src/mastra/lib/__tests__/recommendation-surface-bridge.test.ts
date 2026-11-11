@@ -168,12 +168,23 @@ describe("event recommendations (SAN-1653)", () => {
     const start = events.find(
       (e) => e.type === EventType.TOOL_CALL_START && (e as { toolCallName?: string }).toolCallName === "render_ui",
     ) as { toolCallId?: string } | undefined;
-    expect(start?.toolCallId).toBe("render-ui-e1");
+    expect(start?.toolCallId).toBe("render-ui-event-e1");
     const args = events.find(
-      (e) => e.type === EventType.TOOL_CALL_ARGS && (e as { toolCallId?: string }).toolCallId === "render-ui-e1",
+      (e) => e.type === EventType.TOOL_CALL_ARGS && (e as { toolCallId?: string }).toolCallId === "render-ui-event-e1",
     ) as { delta?: string } | undefined;
     expect(args?.delta).toContain("event-recommendations");
     expect(args?.delta).toContain(eventId(3));
     expect(renderEventUiEventsFor([], "e1")).toBeNull();
+    // Path traversal / script characters never reach the surface operation.
+    const built = buildEventRecommendationOps(
+      ["evt-1<script>alert(1)</script>", "../../etc/passwd", eventId(4)],
+      "surface-2",
+    );
+    const surface = (built?.operations[0] as {
+      createSurface: { components: Array<Record<string, unknown>> };
+    }).createSurface;
+    expect(surface.components.filter((c) => c.component === "EventCard")).toEqual([
+      { id: "card-1", component: "EventCard", eventId: eventId(4) },
+    ]);
   });
 });
