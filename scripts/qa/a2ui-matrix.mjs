@@ -131,6 +131,12 @@ async function eventCase(c) {
     undefined,
     { timeout: 45000 },
   );
+  // The composer can render before the browse results do; wait for real events.
+  await page.waitForFunction(
+    () => document.querySelectorAll('[data-testid="event-browse-card"]').length > 0,
+    undefined,
+    { timeout: 45000 },
+  );
   await resetConversation();
   await ask('[data-testid="discovery-ask-input"]', `Show events. ${c.prompt}`);
   let cards = [];
