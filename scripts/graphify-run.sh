@@ -7,8 +7,8 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 export GRAPHIFY_NO_AUTO_REFRESH="${GRAPHIFY_NO_AUTO_REFRESH:-1}"
-EXPECTED_VERSION="graphify 0.9.101"
-INSTALL_CMD="uv tool install --reinstall --force 'graphifyy[sql]==0.9.101'"
+EXPECTED_VERSION="graphify 0.9.106"
+INSTALL_CMD="uv tool install --reinstall --force 'graphifyy[sql]==0.9.106'"
 
 if [[ -n "${GRAPHIFY_BIN:-}" ]]; then
   GRAPHIFY="$GRAPHIFY_BIN"

@@ -18,7 +18,7 @@ function sandbox(t) {
   return temp;
 }
 
-function fakeGraphify(path, version = "graphify 0.9.101") {
+function fakeGraphify(path, version = "graphify 0.9.106") {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, `#!/bin/sh
 if [ "${"\$"}1" = "--version" ]; then
@@ -109,7 +109,7 @@ test("rejects a binary with an incompatible version", (t) => {
   const result = run(["query", "conciergeAgent"], { GRAPHIFY_BIN: exe }, root);
   assert.equal(result.status, 1);
   assert.match(result.stderr, /Incompatible Graphify/);
-  assert.match(result.stderr, /graphifyy\[sql\]==0\.9\.101/);
+  assert.match(result.stderr, /graphifyy\[sql\]==0\.9\.106/);
 });
 
 test("ignores skill-version warnings that Graphify prints on stderr", (t) => {
@@ -174,11 +174,13 @@ test("provides an actionable repair command for a unique missing executable", (t
   const result = run(["query", "conciergeAgent"], { GRAPHIFY_BIN: missing }, root);
   assert.equal(result.status, 1);
   assert.match(result.stderr, /Graphify executable not found/);
-  assert.match(result.stderr, /graphifyy\[sql\]==0\.9\.101/);
+  assert.match(result.stderr, /graphifyy\[sql\]==0\.9\.106/);
 });
 
 test("the active agent guidance routes Graphify through the safe wrapper", () => {
   const guide = readFileSync(join(root, "docs/07-operations/graphify-reference.md"), "utf8");
+  const graphConfig = readFileSync(join(root, ".graphifyrc"), "utf8");
+  assert.match(graphConfig, /^query_budget=4000$/m);
   const tasks = readFileSync(join(root, ".claude/skills/tasks/SKILL.md"), "utf8");
   const routing = readFileSync(join(root, ".claude/skills/tasks/references/domain-routing.md"), "utf8");
   assert.match(guide, /bash scripts\/graphify-run\.sh affected "conciergeAgent"/);
@@ -186,8 +188,22 @@ test("the active agent guidance routes Graphify through the safe wrapper", () =>
   assert.doesNotMatch(guide, /^graphify (?:query|explain|path|affected) /m);
   assert.match(guide, /Graph Stats \(verified example, not a shared current index\)\]\(#graph-stats-verified-example-not-a-shared-current-index\)/);
   assert.match(guide, /GRAPH_REPORT\.md.*historical/);
-  assert.match(guide, /Upstream source receipt \(v0\.9\.101\)/);
+  assert.match(guide, /Upstream source receipt \(v0\.9\.106\)/);
   assert.match(tasks, /npm run graphify:query --/);
   assert.doesNotMatch(tasks, /PATH="\$HOME\/\.local\/bin:\$PATH" graphify query/);
   assert.match(routing, /active PR\/feature checkout/);
+});
+
+// Optional integration check: run with MDE_GRAPHIFY_REAL_SMOKE=1 after building
+// graphify-out/ with the pinned CLI. Regular CI runs only deterministic fixtures.
+test("real Graphify query obeys the project's default budget", {
+  skip: process.env.MDE_GRAPHIFY_REAL_SMOKE !== "1",
+}, () => {
+  assert.ok(existsSync(join(root, "graphify-out", "graph.json")), "Run npm run graphify:update first");
+  const defaultQuery = run(["query", "rental map pins"], {}, root);
+  assert.equal(defaultQuery.status, 0, defaultQuery.stderr);
+  assert.match(defaultQuery.stdout, /~4000-token budget/, "Expected the real CLI to read .graphifyrc");
+  const overriddenQuery = run(["query", "rental map pins", "--budget=2000"], {}, root);
+  assert.equal(overriddenQuery.status, 0, overriddenQuery.stderr);
+  assert.match(overriddenQuery.stdout, /~2000-token budget/, "Expected the CLI flag to override .graphifyrc");
 });
