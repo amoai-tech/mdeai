@@ -44,6 +44,20 @@ const textOf = (selector) =>
     const el = document.querySelector(sel);
     return el ? el.textContent ?? "" : "";
   }, selector);
+/** Start a clean conversation so each case proves its own selection, not a reused surface. */
+const resetConversation = async () => {
+  const clicked = await page.evaluate(() => {
+    const control = [...document.querySelectorAll("button,a")].find((el) =>
+      /new chat|new conversation/i.test(el.textContent ?? ""),
+    );
+    if (!control) return false;
+    control.click();
+    return true;
+  });
+  if (clicked) await page.waitForTimeout(2500);
+  return clicked;
+};
+
 const chatText = () =>
   page.evaluate(() => (document.querySelector('[data-testid="center-chat-panel"]') ?? document.body).innerText.slice(-2500));
 
@@ -110,6 +124,7 @@ async function rentCase(c) {
 async function eventCase(c) {
   await page.goto(`${BASE}/chat`, { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(9000);
+  await resetConversation();
   const cardsBefore = await page.evaluate(
     () => document.querySelectorAll('[data-testid="a2ui-event-card"]').length,
   );
