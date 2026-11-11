@@ -14,6 +14,9 @@ import { mdeUI } from "@/components/copilot/a2ui/mde-ui-catalog";
  * accepts `EventCard`. This Surface gives event results the same transport the
  * rentals panel already uses, without a second search path, table or renderer.
  *
+ * Surfaces render in the live turn only: a page reload does not replay an earlier
+ * surface, so the cards disappear until the next event search.
+ *
  * Every value a card shows is resolved by the existing `EventCard` catalog
  * component from the current authorized tool results, so a forged or stale
  * `eventId` renders "not in the current authorized results" instead of inventing
