@@ -1,5 +1,5 @@
 {
-  "description": "SAN-1357 Step 8 \u00b7 Every CopilotKit consumer in MDE, classified before the v2 migration so 'verify-only' is falsifiable instead of assumed. Vocabulary \u2014 migrate: must change in a named step; keep: already on the supported v2 surface, no change expected; test-only: a test, fixture or gate that intentionally names v1 or v2 symbols; compatibility-required: must retain a legacy boundary for a documented reason; remove: dead, delete it. Enforced by scripts/__tests__/copilotkit-consumer-inventory.test.mjs in both directions: every detected consumer must be listed, every listed entry must still be a detected consumer unless it declares `implicitContract: true` with a reason, no listed file may vanish, and no compatibility <CopilotKit> boundary may remain (SAN-1378 Stage D migrated the last four).",
+  "description": "SAN-1357 Step 8 · Every CopilotKit consumer in MDE, classified before the v2 migration so 'verify-only' is falsifiable instead of assumed. Vocabulary — migrate: must change in a named step; keep: already on the supported v2 surface, no change expected; test-only: a test, fixture or gate that intentionally names v1 or v2 symbols; compatibility-required: must retain a legacy boundary for a documented reason; remove: dead, delete it. Enforced by scripts/__tests__/copilotkit-consumer-inventory.test.mjs in both directions: every detected consumer must be listed, every listed entry must still be a detected consumer unless it declares `implicitContract: true` with a reason, no listed file may vanish, and no compatibility <CopilotKit> boundary may remain (SAN-1378 Stage D migrated the last four).",
   "classifications": [
     "migrate",
     "keep",
@@ -23,7 +23,7 @@
       "classification": "migrate",
       "step": 9,
       "implicitContract": true,
-      "note": "Not a @copilotkit importer \u2014 it declares the shared props shape locally. SAN-1378 Stage D removed the v1 `agent` carrier and the unreachable `publicApiKey` variant once the last compatibility boundary was gone; `agentId` is the only identity."
+      "note": "Not a @copilotkit importer — it declares the shared props shape locally. SAN-1378 Stage D removed the v1 `agent` carrier and the unreachable `publicApiKey` variant once the last compatibility boundary was gone; `agentId` is the only identity."
     },
     {
       "file": "src/lib/__tests__/copilotkit-client-props.test.ts",
@@ -206,7 +206,7 @@
     {
       "file": "src/components/copilot/__tests__/search-tool-renders-v2.test.tsx",
       "classification": "test-only",
-      "note": "Asserts a source file imports the /v2 subpath and does not mention the retired react-ui package. It names those specifiers inside regex literals with escaped slashes, which is why the original detector missed it entirely \u2014 found only after the detector was widened."
+      "note": "Asserts a source file imports the /v2 subpath and does not mention the retired react-ui package. It names those specifiers inside regex literals with escaped slashes, which is why the original detector missed it entirely — found only after the detector was widened."
     },
     {
       "file": "src/components/copilot/__tests__/discovery-provider-guest-401.test.tsx",
@@ -227,6 +227,11 @@
       "file": "src/components/chat/__tests__/chat-provider-startup-race.test.tsx",
       "classification": "test-only",
       "note": "Factory-mocks the v2 chat provider to prove a 401 during auth loading is deferred, suppressed for guests, and reported for signed-in users while true run failures remain visible."
+    },
+    {
+      "file": "src/components/chat/__tests__/saved-thread-history-404.test.tsx",
+      "classification": "test-only",
+      "note": "SAN-1653: mocks CopilotKit v2 useAgent to prove that selected/restored history 404 and authenticated 403 remain visible errors, while a successful history GET restores normally; fresh unpersisted threads do not mount replay."
     },
     {
       "file": "src/components/chat/__tests__/concierge-coagent-readiness.test.tsx",
@@ -428,6 +433,16 @@
       "file": "src/components/rentals/rental-filter-panel-actions.tsx",
       "classification": "keep",
       "note": "Uses the v2 generative-UI state/function hooks to publish the Rentals page filters and register the single apply action; no legacy boundary."
+    },
+    {
+      "file": "src/components/copilot/a2ui/event-recommendations-surface.tsx",
+      "classification": "keep",
+      "note": "SAN-1653: the event counterpart of the rentals Surface. One v2 GenerativeUISurface named event-recommendations mounted in the concierge chat; it registers a target plus EventCard allowlist and fetches or stores nothing, so every card keeps resolving through the existing catalog's authorized results."
+    },
+    {
+      "file": "src/components/copilot/a2ui/__tests__/event-recommendations-surface.test.tsx",
+      "classification": "keep",
+      "note": "SAN-1653: test-only mock of the v2 generative-ui module proving the Events surface registers the target with a runtime and renders nothing without one; no provider or run is created."
     }
   ]
 }

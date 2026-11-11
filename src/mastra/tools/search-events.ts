@@ -411,7 +411,10 @@ export const searchEventsTool = createTool({
     dateWindow: z
       .enum(['tonight', 'this_weekend', 'this_week', 'next_week', 'any'])
       .optional(),
-    limit: z.number().int().min(1).max(20).default(5),
+    // The schema is the only place a limit is bounded. `.catch(20)` accepts the
+    // model's natural "give me 30" and resolves it to the real ceiling instead of
+    // failing input validation before any search runs.
+    limit: z.number().int().min(1).max(20).catch(20).default(5),
     queryText: z
       .string()
       .optional()

@@ -46,6 +46,11 @@ export function isActiveRentalsDiscoveryPage(agui: unknown): boolean {
   return selectedDiscoveryContext(agui)?.route === "/rentals";
 }
 
+/** SAN-1653 — the Events page is the only screen that renders event cards. */
+export function isActiveEventsDiscoveryPage(agui: unknown): boolean {
+  return selectedDiscoveryContext(agui)?.route === "/events";
+}
+
 export function discoveryAgentSelectionHint(agui: unknown): string {
   const selectedContext = selectedDiscoveryContext(agui);
   if (!selectedContext) return "";

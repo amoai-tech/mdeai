@@ -16,6 +16,7 @@ import { requestVenueBookingTool } from '../tools/request-venue-booking';
 import { showRecommendationsTool } from '../tools/show-recommendations';
 import { showRentalFilterControlTool } from '../tools/show-rental-filter-control';
 import { shouldRenderRentalFilterControl, shouldRequestRecommendations } from '../lib/recommendation-intent';
+import { shouldSearchEventsForCards } from '../lib/event-intent';
 import { CONCIERGE_AGENT_MODEL } from "../lib/models";
 import { geminiMalformedFirstStepRetry } from "../lib/gemini-malformed-retry";
 import { getDefaultInputProcessors } from "../lib/agent-input-processors";
@@ -575,6 +576,12 @@ export const conciergeAgent = new Agent({
     { id: 'san1656-recommendation-intent', processInputStep: ({ stepNumber, messages, requestContext }) =>
       shouldRequestRecommendations({ stepNumber, messages, requestContext })
         ? { toolChoice: { type: 'tool' as const, toolName: 'showRecommendations' } }
+        : {} },
+    // SAN-1653 — "show events as cards" pins the event search so the bridge always
+    // emits the render_ui call; relying on model choice produced prose-only turns.
+    { id: 'san1653-event-card-intent', processInputStep: ({ stepNumber, messages, requestContext }) =>
+      shouldSearchEventsForCards({ stepNumber, messages, requestContext })
+        ? { toolChoice: { type: 'tool' as const, toolName: 'searchEventsTool' } }
         : {} },
     { id: 'san1149-booking-continuation', processInputStep: ({ stepNumber, messages, steps, requestContext }) =>
       shouldContinueVenueBookingAfterSearch({ stepNumber, messages, steps, requestContext })
