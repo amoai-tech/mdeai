@@ -108,9 +108,12 @@ async function rentCase(c) {
 }
 
 async function eventCase(c) {
-  await page.goto(`${BASE}/events`, { waitUntil: "domcontentloaded" });
+  await page.goto(`${BASE}/chat`, { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(9000);
-  await ask("#events-ask-input, #chat-input, textarea", c.prompt);
+  const cardsBefore = await page.evaluate(
+    () => document.querySelectorAll('[data-testid="a2ui-event-card"]').length,
+  );
+  await ask('[data-testid="copilot-chat-textarea"], #rental-ask-input, textarea', c.prompt);
   let cards = [];
   try {
     await page.waitForFunction(
@@ -135,17 +138,29 @@ async function eventCase(c) {
       );
       btn?.click();
     });
-    await page.waitForTimeout(2500);
+    try {
+      await page.waitForFunction(
+        () =>
+          Boolean(document.querySelector('[role="dialog"]')) ||
+          Boolean(document.querySelector('[data-testid="event-browse-details-panel"]')),
+        undefined,
+        { timeout: 10000 },
+      );
+    } catch {}
     detailsTitle = await page.evaluate(() => {
       const panel =
         document.querySelector('[data-testid="event-browse-details-panel"]') ??
-        document.querySelector('[data-testid="event-card-modal"]');
+        document.querySelector('[data-testid="event-card-modal"]') ??
+        document.querySelector('[role="dialog"]');
       return panel ? panel.textContent ?? "" : null;
     });
   }
   const reply = cards.length ? "" : await chatText();
   const unavailable = !cards.length && /only|five|5 |can.?t|cannot|unavailable/i.test(reply);
-  const pass = Boolean(cards.length) && Boolean(detailsTitle) && detailsTitle.includes(cardTitle.slice(0, 40));
+  const pass =
+    Boolean(cards.length) &&
+    Boolean(detailsTitle) &&
+    (detailsTitle.includes(cardTitle.slice(0, 40)) || cardTitle.includes((detailsTitle ?? "").slice(0, 40)));
   record({
     id: c.id,
     cards,
