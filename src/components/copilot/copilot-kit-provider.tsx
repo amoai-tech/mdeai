@@ -60,7 +60,7 @@ function DiscoveryConciergeProvider({ children }: { children: ReactNode }) {
           {shouldReplay && threadId ? (
             // Discovery routes already own the provider; they still need the saved messages,
             // otherwise a refresh keeps the thread id but loses the visible conversation.
-            <SavedThreadReplay threadId={threadId}>{children}</SavedThreadReplay>
+            <SavedThreadReplay threadId={threadId} allowMissingFreshThread={!activeThreadId && !restoredThread}>{children}</SavedThreadReplay>
           ) : (
             children
           )}

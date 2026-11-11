@@ -34,3 +34,26 @@ test('fails instead of reporting success when an --only typo matches no case', (
 test('fails rather than reporting zero cases passed for an invalid --suite', () => {
   assert.throws(() => selectMatrixCases({ suite: 'event', only: '', rentals, events }), /Unknown QA suite/);
 });
+
+
+import { waitForIdleComposer } from '../qa/a2ui-matrix-verdict.mjs';
+
+test('waits for the Events composer to be ready and not busy before filling a prompt', async () => {
+  const selectors = [];
+  const page = { locator: (selector) => ({ waitFor: async (opts) => { selectors.push([selector, opts.state]); } }) };
+  await waitForIdleComposer(page, '[data-testid="discovery-ask-input"]');
+  assert.deepEqual(selectors, [
+    ['[data-testid="discovery-ask-events"][data-ready="true"][aria-busy="false"]', 'visible'],
+    ['[data-testid="discovery-ask-input"]', 'visible'],
+  ]);
+});
+
+test('waits until a rental answer is no longer running before another prompt', async () => {
+  const selectors = [];
+  const page = { locator: (selector) => ({ waitFor: async (opts) => { selectors.push([selector, opts.state]); } }) };
+  await waitForIdleComposer(page, '#rental-ask-input');
+  assert.deepEqual(selectors, [
+    ['[data-testid="rental-ask-send"]', 'visible'],
+    ['#rental-ask-input', 'visible'],
+  ]);
+});

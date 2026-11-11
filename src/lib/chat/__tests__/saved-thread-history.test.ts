@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   SAVED_THREAD_HISTORY_LIMIT,
+  isFreshThreadHistory404,
   latestSavedRentalSearch,
   mapSavedThreadHistory,
   reconcileSavedHistory,
@@ -581,5 +582,19 @@ describe("mapSavedThreadHistory — repeats already saved before the fix", () =>
     ]);
     expect(out.filter((m) => m.role === "tool")).toHaveLength(1);
     expect(out.map((m) => m.role)).toEqual(["user", "assistant", "tool", "user", "assistant"]);
+  });
+});
+
+
+describe("fresh thread missing history", () => {
+  it("treats 404 as empty history only for a fresh unselected thread", () => {
+    expect(isFreshThreadHistory404(404, true)).toBe(true);
+    expect(isFreshThreadHistory404(404, false)).toBe(false);
+  });
+
+  it("never swallows authorization or server failures", () => {
+    for (const status of [401, 403, 500, 503]) {
+      expect(isFreshThreadHistory404(status, true)).toBe(false);
+    }
   });
 });

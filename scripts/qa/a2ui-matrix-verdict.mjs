@@ -28,3 +28,13 @@ export function selectMatrixCases({ suite, only, rentals, events }) {
   }
   return selected;
 }
+
+
+/** Wait for the *actual* UI busy indicator before every prompt, including mobile. */
+export async function waitForIdleComposer(page, inputSelector) {
+  const idleControl = inputSelector === '[data-testid="discovery-ask-input"]'
+    ? '[data-testid="discovery-ask-events"][data-ready="true"][aria-busy="false"]'
+    : '[data-testid="rental-ask-send"]';
+  await page.locator(idleControl).waitFor({ state: 'visible', timeout: 90_000 });
+  await page.locator(inputSelector).waitFor({ state: 'visible', timeout: 90_000 });
+}

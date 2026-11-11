@@ -22,7 +22,7 @@ import { chromium } from "playwright";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { isMatchingEventDetails, selectMatrixCases } from "./a2ui-matrix-verdict.mjs";
+import { isMatchingEventDetails, selectMatrixCases, waitForIdleComposer } from "./a2ui-matrix-verdict.mjs";
 
 const arg = (name, fallback) => {
   const i = process.argv.indexOf(`--${name}`);
@@ -85,6 +85,7 @@ const page =
 page.setDefaultTimeout(90_000);
 
 const ask = async (inputSelector, prompt) => {
+  await waitForIdleComposer(page, inputSelector);
   await page.locator(inputSelector).fill(prompt);
   await page.locator(inputSelector).press("Enter");
 };
