@@ -31,8 +31,23 @@ fi
 
 # Explicit binary paths are operator-controlled; even these must match our
 # tested CLI contract. The version check itself also disables auto-refresh.
-if ! VERSION="$("$GRAPHIFY" --version 2>&1)" || [[ "$VERSION" != "$EXPECTED_VERSION" ]]; then
+# Compare stdout only: other tools' stale global skill copies make Graphify print
+# "skill is from graphify X" warnings on stderr, which must not read as a version.
+# Only complete, known Graphify skill-version warning lines are filtered (anchored at both
+# ends), so extra diagnostic text on the same line stays visible if the probe fails. An
+# unrecognised wording is merely shown in the failure message; it never changes pass/fail.
+SKILL_WARN_OLD="^[[:space:]]*warning: skill is from graphify [0-9]+(\.[0-9]+){2}, but the package is [0-9]+(\.[0-9]+){2} \(older\)\. Upgrade the package \(e\.g\. 'uv tool upgrade graphifyy' or 'pip install -U graphifyy'\); running 'graphify install' would downgrade the skill\.$"
+SKILL_WARN_NEW="^[[:space:]]*warning: skill at .+ is from graphify [0-9]+(\.[0-9]+){2}, package is [0-9]+(\.[0-9]+){2}\. Run 'graphify install --platform [a-z-]+' to update it \(a plain 'graphify install' refreshes only the detected platform\)\.$"
+VERSION_ERR_FILE="$(mktemp)"
+VERSION_STATUS=0
+VERSION="$("$GRAPHIFY" --version 2>"$VERSION_ERR_FILE")" || VERSION_STATUS=$?
+VERSION_DIAG="$(grep -Ev -e "$SKILL_WARN_OLD" -e "$SKILL_WARN_NEW" "$VERSION_ERR_FILE" || true)"
+rm -f "$VERSION_ERR_FILE"
+if [[ "$VERSION_STATUS" -ne 0 || "$VERSION" != "$EXPECTED_VERSION" ]]; then
   echo "Incompatible Graphify at $GRAPHIFY (expected $EXPECTED_VERSION; got ${VERSION:-none})." >&2
+  if [[ -n "$VERSION_DIAG" ]]; then
+    echo "$VERSION_DIAG" >&2
+  fi
   echo "Repair: $INSTALL_CMD" >&2
   exit 1
 fi

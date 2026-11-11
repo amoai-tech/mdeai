@@ -8,6 +8,9 @@ import test from "node:test";
 
 const root = fileURLToPath(new URL("../../", import.meta.url)).replace(/\/$/, "");
 const wrapper = join(root, "scripts", "graphify-run.sh");
+// The two skill-version warning lines Graphify prints on stderr (copied from real runs).
+const WARN_OLD = "  warning: skill is from graphify 0.9.105, but the package is 0.9.101 (older). Upgrade the package (e.g. 'uv tool upgrade graphifyy' or 'pip install -U graphifyy'); running 'graphify install' would downgrade the skill.";
+const WARN_NEW = "  warning: skill at /tmp/devin/skills/graphify is from graphify 0.9.105, package is 0.9.106. Run 'graphify install --platform devin' to update it (a plain 'graphify install' refreshes only the detected platform).";
 
 function sandbox(t) {
   const temp = mkdtempSync(join(tmpdir(), "mde-graphify-wrapper-"));
@@ -107,6 +110,50 @@ test("rejects a binary with an incompatible version", (t) => {
   assert.equal(result.status, 1);
   assert.match(result.stderr, /Incompatible Graphify/);
   assert.match(result.stderr, /graphifyy\[sql\]==0\.9\.101/);
+});
+
+test("ignores skill-version warnings that Graphify prints on stderr", (t) => {
+  const temp = sandbox(t);
+  const exe = join(temp, "graphify");
+  fakeGraphify(exe);
+  const real = readFileSync(exe, "utf8");
+  const patched = real.replace(
+    "if [ \"$1\" = \"--version\" ]; then",
+    `if [ "$1" = "--version" ]; then\n  cat >&2 <<'EOF'\n${WARN_OLD}\n${WARN_NEW}\nEOF`,
+  );
+  // String.replace is a no-op when the search text is missing; fail loudly instead of testing nothing.
+  assert.match(patched, /downgrade the skill\.\n/);
+  writeFileSync(exe, patched, { mode: 0o755 });
+  const result = run(["query", "conciergeAgent"], { GRAPHIFY_BIN: exe }, root);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /ARG=query\nARG=conciergeAgent\n/);
+});
+
+test("keeps real version-probe errors but drops skill-version warnings", (t) => {
+  const temp = sandbox(t);
+  const exe = join(temp, "graphify");
+  writeFileSync(exe, `#!/bin/sh
+cat >&2 <<'EOF'
+${WARN_OLD}
+${WARN_NEW}
+boom: cannot load config
+boom: text containing skill is from graphify must remain visible
+warning: skill is from graphify 0.9.105, cannot load config
+  warning: skill at /tmp/x/skills/graphify is from graphify 0.9.105, package is 0.9.106. Run 'graphify install --platform x' to update it (a plain 'graphify install' refreshes only the detected platform). Extra: bad plugin
+EOF
+exit 1
+`, { mode: 0o755 });
+  const result = run(["query", "conciergeAgent"], { GRAPHIFY_BIN: exe }, root);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /Incompatible Graphify/);
+  assert.match(result.stderr, /boom: cannot load config/);
+  assert.match(result.stderr, /boom: text containing skill is from graphify must remain visible/);
+  // A warning prefix followed by other diagnostic text on the same line is NOT a known warning.
+  assert.match(result.stderr, /warning: skill is from graphify 0\.9\.105, cannot load config/);
+  assert.match(result.stderr, /Extra: bad plugin/);
+  // The two complete known warning lines are dropped.
+  assert.doesNotMatch(result.stderr, /but the package is 0\.9\.101 \(older\)/);
+  assert.doesNotMatch(result.stderr, /warning: skill at \/tmp\/devin/);
 });
 
 test("checks the SQL extra before rebuilding a graph", (t) => {
