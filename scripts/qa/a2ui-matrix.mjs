@@ -69,7 +69,14 @@ const RENTALS = [
 
 async function rentCase(c) {
   await page.goto(`${BASE}/rentals?neighborhood=Laureles`, { waitUntil: "domcontentloaded" });
-  await page.waitForTimeout(9000);
+  // Wait for grounded results and the real Ask composer instead of using an
+  // arbitrary delay that is wasteful on fast loads and flaky on slow ones.
+  await page.locator("#rental-ask-input").waitFor({ state: "visible", timeout: 90_000 });
+  await page.waitForFunction(
+    () => document.querySelectorAll('[data-testid^="rental-details-cta-"]').length > 0,
+    undefined,
+    { timeout: 90_000 },
+  );
   const native = await page.evaluate(() =>
     [...document.querySelectorAll('[data-testid^="rental-details-cta-"]')].map((e) =>
       e.getAttribute("data-testid").replace("rental-details-cta-", ""),
