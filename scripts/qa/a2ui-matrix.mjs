@@ -134,14 +134,31 @@ async function eventCase(c) {
     undefined,
     { timeout: 45000 },
   );
-  // The composer can render before the browse results do; wait for real events.
+  // The Events composer gates sending on the agent connection (`data-ready`) and
+  // renders before the browse list, so wait for both before typing.
   await page.waitForFunction(
-    () => document.querySelectorAll('[data-testid="event-card"]').length > 0,
+    () => {
+      const form = document.querySelector('[data-testid="discovery-ask-events"]');
+      return (
+        Boolean(form) &&
+        form.getAttribute("data-ready") === "true" &&
+        document.querySelectorAll('[data-testid="events-grid"] [data-testid="event-card"]').length > 0
+      );
+    },
     undefined,
-    { timeout: 45000 },
+    { timeout: 60000 },
   );
   await resetConversation();
-  await ask('[data-testid="discovery-ask-input"]', `Show events. ${c.prompt}`);
+  await ask('[data-testid="discovery-ask-input"]', c.prompt);
+  // Enter is ignored until the composer is ready; confirm the turn was accepted.
+  await page.waitForFunction(
+    (prompt) => {
+      const history = document.querySelector('[data-testid="discovery-ask-history"]');
+      return Boolean(history) && (history.textContent ?? "").includes(prompt.slice(0, 24));
+    },
+    c.prompt,
+    { timeout: 30000 },
+  ).catch(() => {});
   let cards = [];
   try {
     await page.waitForFunction(

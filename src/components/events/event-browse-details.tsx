@@ -317,6 +317,7 @@ export function EventBrowseDetailsPanel(props: {
   return (
     <section data-details-panel
       data-testid="event-browse-details-panel"
+      data-event-id={props.event.id}
       aria-label={`${props.event.title} details`}
       className="absolute inset-0 z-20 overflow-y-auto rounded-xl border bg-background shadow-xl"
     >
