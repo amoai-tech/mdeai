@@ -31,7 +31,9 @@ fi
 
 # Explicit binary paths are operator-controlled; even these must match our
 # tested CLI contract. The version check itself also disables auto-refresh.
-if ! VERSION="$("$GRAPHIFY" --version 2>&1)" || [[ "$VERSION" != "$EXPECTED_VERSION" ]]; then
+# Compare stdout only: other tools' stale global skill copies make Graphify print
+# "skill is from graphify X" warnings on stderr, which must not read as a version.
+if ! VERSION="$("$GRAPHIFY" --version 2>/dev/null)" || [[ "$VERSION" != "$EXPECTED_VERSION" ]]; then
   echo "Incompatible Graphify at $GRAPHIFY (expected $EXPECTED_VERSION; got ${VERSION:-none})." >&2
   echo "Repair: $INSTALL_CMD" >&2
   exit 1

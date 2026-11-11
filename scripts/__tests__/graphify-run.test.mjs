@@ -109,6 +109,19 @@ test("rejects a binary with an incompatible version", (t) => {
   assert.match(result.stderr, /graphifyy\[sql\]==0\.9\.101/);
 });
 
+test("ignores skill-version warnings that Graphify prints on stderr", (t) => {
+  const temp = sandbox(t);
+  const exe = join(temp, "graphify");
+  fakeGraphify(exe);
+  const real = readFileSync(exe, "utf8");
+  writeFileSync(exe, real.replace(
+    "if [ \"$1\" = \"--version\" ]; then",
+    "if [ \"$1\" = \"--version\" ]; then\n  echo 'warning: skill is from graphify 0.9.105' >&2",
+  ), { mode: 0o755 });
+  const result = run(["query", "conciergeAgent"], { GRAPHIFY_BIN: exe }, root);
+  assert.equal(result.status, 0, result.stderr);
+});
+
 test("checks the SQL extra before rebuilding a graph", (t) => {
   const temp = sandbox(t);
   const bin = join(temp, "bin", "graphify");
