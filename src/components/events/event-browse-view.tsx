@@ -10,6 +10,7 @@ import { BrowseMapSheet } from "@/components/browse/BrowseMapSheet";
 import { DiscoveryWorkspace } from "@/components/browse/DiscoveryWorkspace";
 import { DiscoveryAskComposer } from "@/components/chat/discovery-ask-composer";
 import { EventRecommendationsSurface } from "@/components/copilot/a2ui/event-recommendations-surface";
+import { EventBrowseSelectionProvider } from "@/components/events/event-browse-selection-context";
 import { DiscoveryPageContext } from "@/components/chat/discovery-page-context";
 import { EventBrowseCard } from "@/components/events/event-browse-card";
 import {
@@ -51,7 +52,8 @@ function EventBrowseViewInner({
   neighborhood,
   dateWindow,
   price,
-}: EventBrowseViewProps) {
+  onSelectReady,
+}: EventBrowseViewProps & { onSelectReady?: (open: (id: string) => void) => void }) {
   const { selectedPinId, setSelectedPinId, panToPin } = useMapContext();
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const desktop = useIsLgUp();
@@ -135,6 +137,11 @@ function EventBrowseViewInner({
     if (id && pinIds.has(`event-${id}`)) panToPin(`event-${id}`);
     else setSelectedPinId(null);
   }, [pinIds, panToPin, setSelectedPinId]);
+
+  // Publish the selection so a generated EventCard can open the same Details panel.
+  useEffect(() => {
+    onSelectReady?.((id: string) => selectEvent(id));
+  }, [onSelectReady, selectEvent]);
 
   // A marker click (or closing its info card) arrives through the shared map context; mirror it into the
   // one selected event instead of keeping a second selection. This adjusts our own state while rendering
@@ -320,12 +327,26 @@ function EventBrowseViewInner({
 
 /** Event browse shell that provides the shared map state. */
 export function EventBrowseView(props: EventBrowseViewProps) {
+  const openEventDetail = useRef<(id: string) => void>(() => {});
+  const selection = useMemo(
+    () => ({ openEventDetail: (id: string) => openEventDetail.current(id) }),
+    [],
+  );
+
   return (
     <BrowseMapContextShell>
-      {/* SAN-1653: the Events page is the one screen where the concierge may render
-          event cards, so the named Surface must be mounted here as well as in chat. */}
-      <EventRecommendationsSurface />
-      <EventBrowseViewInner {...props} />
+      <EventBrowseSelectionProvider value={selection}>
+        {/* SAN-1653: the Events page is the one screen where the concierge may render
+            event cards, so the named Surface is mounted inside the provider that can
+            open the native Details panel. */}
+        <EventRecommendationsSurface />
+        <EventBrowseViewInner
+          {...props}
+          onSelectReady={(open) => {
+            openEventDetail.current = open;
+          }}
+        />
+      </EventBrowseSelectionProvider>
     </BrowseMapContextShell>
   );
 }
