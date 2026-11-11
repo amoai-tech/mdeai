@@ -16,7 +16,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { reconcileSavedHistory, type SavedThreadMessage } from "@/lib/chat/saved-thread-history";
+import { isFreshThreadHistory404, reconcileSavedHistory, type SavedThreadMessage } from "@/lib/chat/saved-thread-history";
 import { useThreadNav } from "@/lib/chat/thread-nav-context";
 import { clearLiveUserMessage, isLiveUserMessage } from "@/lib/chat/live-user-message-ids";
 import { mdeUI } from "@/components/copilot/a2ui/mde-ui-catalog";
@@ -113,10 +113,12 @@ export function SavedThreadHistory({
   threadId,
   children,
   agentId = "conciergeAgent",
+  allowMissingFreshThread = false,
 }: {
   threadId: string;
   children: ReactNode;
   agentId?: "conciergeAgent" | "hostOpsAgent";
+  allowMissingFreshThread?: boolean;
 }) {
   const { agent, isReady } = useAgent({ agentId, updates: [UseAgentUpdate.OnRunStatusChanged, UseAgentUpdate.OnMessagesChanged] });
   const [attempt, setAttempt] = useState(0);
@@ -200,11 +202,16 @@ export function SavedThreadHistory({
           signal,
           cache: "no-store",
         });
-        if (!res.ok) throw new Error(`history ${res.status}`);
-        const body = (await res.json()) as {
-          messages?: SavedThreadMessage[];
-          lastRentalSearch?: RentalSearchApiParams | null;
-        };
+        // Only a fresh, non-explicit thread may lack a Supabase history row.
+        // A selected/restored thread 404, or any 401/403/5xx, remains retryable.
+        const missingFresh = isFreshThreadHistory404(res.status, allowMissingFreshThread);
+        if (!res.ok && !missingFresh) throw new Error(`history ${res.status}`);
+        const body = missingFresh
+          ? { messages: [] as SavedThreadMessage[], lastRentalSearch: null }
+          : (await res.json()) as {
+              messages?: SavedThreadMessage[];
+              lastRentalSearch?: RentalSearchApiParams | null;
+            };
         savedMessages = body.messages ?? [];
         lastRentalSearch = body.lastRentalSearch ?? null;
         // First attempt: the watch started when the chat opened. A Retry cannot
@@ -269,7 +276,12 @@ export function SavedThreadHistory({
     })();
 
     return () => controller.abort();
-  }, [agent, isReady, threadId, attempt]);
+    // Keep this list fixed at five entries. Adding a dependency conditionally (or
+    // introducing one during a dev hot swap) makes React compare arrays of
+    // different sizes and throw "The final argument passed to useEffect changed
+    // size between renders". `allowMissingFreshThread` is a plain boolean with a
+    // default, so it is always safe to include here.
+  }, [agent, isReady, threadId, attempt, allowMissingFreshThread]);
 
   /**
    * The newest NON-EMPTY transcript seen for this thread on the current agent.
@@ -423,12 +435,14 @@ export function SavedThreadHistory({
 export function SavedThreadReplay({
   threadId,
   children,
+  allowMissingFreshThread = false,
 }: {
   threadId: string;
   children: ReactNode;
+  allowMissingFreshThread?: boolean;
 }) {
   if (isDeterministicE2E()) return <>{children}</>;
-  return <SavedThreadHistory threadId={threadId}>{children}</SavedThreadHistory>;
+  return <SavedThreadHistory threadId={threadId} allowMissingFreshThread={allowMissingFreshThread}>{children}</SavedThreadHistory>;
 }
 
 /**
@@ -485,7 +499,7 @@ function LiveChatProvider({ children, persistThread = false }: { children: React
         hasExplicitThreadId={shouldReplay}
       >
         {threadId && shouldReplay && !isDeterministicE2E() ? (
-          <SavedThreadHistory threadId={threadId}>
+          <SavedThreadHistory threadId={threadId} allowMissingFreshThread={!activeThreadId && !restoredThread}>
             {persistThread && user ? <BrokerThreadSaverAfterReplay threadId={threadId} /> : null}
             {children}
           </SavedThreadHistory>
