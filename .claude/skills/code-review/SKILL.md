@@ -1,7 +1,7 @@
 ---
 name: code-review
 description: >-
-  Use when reviewing an existing PR, branch, commit range, or work-in-progress diff for correctness, regressions, security, maintainability, or spec fit.
+  Use to REVIEW an existing PR/branch/diff for correctness and security (e.g. PR #867). Not for implementing reviewer fixes (review) or approving merge readiness (praudit); verify findings on the exact head.
 context: fork
 ---
 
@@ -26,6 +26,8 @@ Load specialist guidance only when the changed surface requires it:
 ## Source of truth
 
 Changed code/tests, the exact task/spec, trusted repository policy, and relevant surrounding contracts are the evidence hierarchy. PR prose is not authoritative when it conflicts with current code.
+
+**Use / do not use:** Use for “Review the changes in PR #867 for security and regressions.” Do **not** use for “Address the reviewer's existing comment” (`review`) or “Decide whether all merge approvals are satisfied” (`praudit` + independent `task-verifier` for S4).
 
 ## Review inputs
 
@@ -60,6 +62,13 @@ Before declaring a change safe, run an adversarial falsification pass: assume th
 ### Boundary validation for new parsers and gates
 
 A new or changed validator, parser, regex, version gate, identifier parser, permission gate, or custom implementation of a published standard is not proven by the author's own examples. Enumerate malformed near-miss inputs yourself and report the concrete inputs that pass when they should not: leading or trailing separators, empty identifiers, leading zeros, whitespace, malformed composite values, missing or duplicated components, and values immediately outside the accepted grammar. A suite that exercises only well-formed inputs is a test gap, not proof. Prefer an already-installed standards-compliant library over a hand-written pattern when it safely fits the requirement.
+
+**Classify evidence before writing findings:**
+- **VERIFIED DEFECT:** Reproduced or directly proven on the exact head; give the exact fix and regression check.
+- **RISK / TEST GAP:** A plausible unproven failure path; state what targeted probe would settle it, as advisory rather than a confirmed blocker.
+- **UNKNOWN / STALE CLAIM:** Missing evidence or a disproven old comment; say what is unknown or mark NOISE. Never upgrade a suspicion to a VERIFIED finding.
+
+**Stop when:** The changed behavior and material risk boundaries have been checked, real findings have precise fixes, and untested claims are explicitly labeled. Do not create extra rounds of duplicate speculative review.
 
 ## Two-axis review
 

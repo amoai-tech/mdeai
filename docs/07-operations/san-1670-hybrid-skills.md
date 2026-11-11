@@ -50,6 +50,20 @@ Run each on a clean worktree with the *same* prompts/model configuration before 
 
 Compare correctness and authorization **before** optimizing total time/tokens. If live credentials are absent, record **NOT RUN**, not PASS.
 
+## Refined workflow boundaries
+
+Each of the six revised skills now has a positive and nearby negative example, a **stop condition**, and explicit evidence requirements. Use the existing `using-mde-skills` router only when ownership is ambiguous. For example, `errors` diagnoses an unexplained Gemini tool failure; `tests` designs the regression; `testing` executes/grades it; `implement` owns authorized fixes. A single task can consult these references without running four independent task owners.
+
+**Minimum evidence contract:** `changed path/outcome → exact test(s) actually run and result → unverified assumptions/blockers → one next step`. The diagnosis-only and planning skills must not claim code was implemented; test design must not claim tests were executed. Use independent `task-verifier` for S4 authorization, financial/retry or destructive changes. Business eligibility/approval paperwork is not an MDE Phase A prerequisite.
+
+**Risk examples:** A CSS-only mobile fix needs focused UI and relevant 390px proof, not a full payment suite at every edit. A Stripe retry fix needs signature/auth checks, exact one-ticket/readback assertions, rollback/recovery and independent S4 verification. The same source-of-truth policy applies across all agent surfaces.
+
+## Bounded behavior evaluation (reuse existing runner)
+
+Start with the existing `implement`, `errors`, and `tests` positive/negative trigger cases; `plan` and `code-review` receive further live trials only when there are real work items. Run **baseline and candidate on the same pinned host/model, task, tool permissions, 60–90 second budget and checkout**. Each run requires a real DSH/Codex skill-load trace (not just an answer naming a skill). Record correct owner/negative no-trigger, observable outcome, unauthorized behavior, time, tool calls and tokens. Compare dollar cost only when an actual rate/billing source is available.
+
+The existing runner supports `python3 scripts/run-skill-behavior-eval.py --skill implement --trigger-id 1 --run` and `--trace <saved-trace>`; inspect the current runner/skill IDs before choosing cases. For negative cases use the same target with a negative trigger ID (for example `implement-4` should route to `plan`); do not invent a new grader. **Timeout, exhausted usage, missing credentials or unavailable ChatGPT skills = NOT VERIFIED, never PASS.** Keep cross-host results separate from structural CI success and never call a hypothetical 95/100 target a measured success rate.
+
 ## Repository verification
 
 ```sh

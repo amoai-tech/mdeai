@@ -1,12 +1,14 @@
 ---
 name: plan
-description: Use when work needs sequencing, scope, dependencies, architecture fit, risks, files, and verification before coding; creates the smallest correct implementation plan from verified current truth without implementing it.
+description: Use for explicit planning without code (e.g. event ticket receipt fix plan); sequence existing owners, risks, and proof. Not for implementing an already-specified task or answering a simple fact.
 ---
 
 **PLAN — Implementation Planning**
 
 **Goal**
 Create the smallest correct implementation plan. Do not implement unless explicitly asked.
+
+**Use / do not use:** Use for “Plan how to fix event ticket receipts without modifying code.” Do **not** use when asked to implement an already-specified Linear task (use `implement`) or for a one-line factual question.
 
 **1. Define the outcome**
 State:
@@ -41,6 +43,8 @@ Identify:
 - auth/RLS implications
 - write/idempotency/failure behavior
 
+**Default shape:** When scope and acceptance are already known, return **outcome → existing owner → smallest ordered changes → focused verification → blocker, if any**. Do not re-interview the owner, duplicate Linear issues, or produce a new PRD for an implementation-ready task.
+
 **5. Build one ordered plan**
 For each step state:
 - outcome
@@ -55,6 +59,8 @@ Use the smallest proof:
 
 **focused test → integration/RLS → typecheck/lint → build → browser/E2E → production**
 Map acceptance criteria to evidence.
+
+**Stop when:** The plan maps the requested outcome to existing owners, dependencies, a short executable order and observable proof; unknown material decisions are labeled, not guessed. Do not turn planning into coding unless asked.
 
 **Output**
 

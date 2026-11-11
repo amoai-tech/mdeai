@@ -1,12 +1,14 @@
 ---
 name: implement
-description: Use when the user explicitly asks to build, fix, complete, or implement known work rather than only analyze it; implements a verified task end to end with the smallest safe change and focused verification.
+description: Use for scoped build/fix requests with known outcomes (e.g. fix rental search); make the smallest verified change. Not for explanation-only requests, planning without code, or multi-PR task orchestration.
 ---
 
 **IMPLEMENT — Complete a Verified Task**
 
 **Goal**
 Implement the requested task completely using the smallest safe change and prove the real outcome.
+
+**Use / do not use:** Use for “Fix rental filtering and save one regression test.” Do **not** use for “Explain possible filtering designs without changing code” (use `plan` or answer directly); use `tasks` for a multi-PR delivery lifecycle.
 
 **1. Verify before changing**
 Confirm:
@@ -46,11 +48,15 @@ Use:
 **focused tests → integration/RLS → typecheck/lint → build → E2E → production when required**
 Fix failures caused by the change; do not expand into unrelated cleanup.
 
+**Risk-based proof:** A UI-only change needs a focused component test and relevant 390px browser check; auth/RLS or Stripe writes also need authorization, isolation, retry and atomicity tests, plus independent `task-verifier` for S4. Run broader repository gates at merge time, not after every edit.
+
 **6. Recheck changed path**
 Reread changed files and verify:
 - no stale/dead code
 - no accidental scope
 - tests prove the intended outcome
+
+**Stop when:** The requested change is in the existing canonical path, focused proof is recorded, affected failure/retry cases are covered as required, and the exact diff has been reread. If anything cannot be tested, report **partially proven** with the missing evidence; never label it Done.
 
 **Output**
 
