@@ -33,7 +33,14 @@ const BASE = arg("base", "http://localhost:3001");
 // instead of starting/killing one per run.
 const CDP = arg("cdp", "http://127.0.0.1:9280");
 const SUITE = arg("suite", "all");
-const ONLY = arg("only", "");
+// `--only` without a value must fail, not fall through to the full suite: an
+// empty filter would report a false green for a request that selected nothing.
+const onlyFlagIndex = process.argv.indexOf("--only");
+const ONLY = onlyFlagIndex > -1 ? process.argv[onlyFlagIndex + 1] ?? "" : "";
+if (onlyFlagIndex > -1 && (!ONLY || ONLY.startsWith("--"))) {
+  console.error("--only requires a case id, for example: --only event-second");
+  process.exit(1);
+}
 
 /**
  * `--out` and the case id both reach the filesystem, so confine writes to the

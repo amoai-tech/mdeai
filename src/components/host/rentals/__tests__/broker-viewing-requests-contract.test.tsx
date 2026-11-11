@@ -82,9 +82,13 @@ describe("SAN-1204 broker viewing-request surface contract", () => {
     expect(html).toContain('data-testid="viewing-requests"');
     expect(html).toContain('data-apartment-id="apt-1"');
     // The overview must render dashboard metrics, not just the requests list.
-    expect(html).toContain("Active listings");
-    expect(html).toContain("3");
-    expect(html).toContain('data-testid="kpi-active-listings"');
+    // Assert inside the KPI card itself, so an unrelated "3" (a gap class, a count)
+    // cannot satisfy the test.
+    const kpiIndex = html.indexOf('data-testid="kpi-active-listings"');
+    expect(kpiIndex).toBeGreaterThan(-1);
+    const kpiBlock = html.slice(kpiIndex, kpiIndex + 400);
+    expect(kpiBlock).toContain("Active listings");
+    expect(kpiBlock).toContain(">3<");
     expect(html).not.toContain("Data pending");
   });
 
