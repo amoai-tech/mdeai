@@ -138,9 +138,14 @@ function EventBrowseViewInner({
     else setSelectedPinId(null);
   }, [pinIds, panToPin, setSelectedPinId]);
 
-  // Publish the selection so a generated EventCard can open the same Details panel.
+  // Publish the same action the native Details button performs: set the Ask
+  // context AND open the panel. Publishing only selectEvent left a generated card
+  // selected but with no panel, which is exactly what the matrix observed.
   useEffect(() => {
-    onSelectReady?.((id: string) => selectEvent(id));
+    onSelectReady?.((id: string) => {
+      selectEvent(id);
+      setDetailsId(id);
+    });
   }, [onSelectReady, selectEvent]);
 
   // A marker click (or closing its info card) arrives through the shared map context; mirror it into the
