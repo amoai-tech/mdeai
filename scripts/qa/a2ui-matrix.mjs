@@ -21,6 +21,7 @@
 import { chromium } from "playwright";
 import fs from "node:fs";
 import path from "node:path";
+import { isMatchingEventDetails, selectMatrixCases } from "./a2ui-matrix-verdict.mjs";
 
 const arg = (name, fallback) => {
   const i = process.argv.indexOf(`--${name}`);
@@ -219,12 +220,6 @@ async function eventCase(c) {
   );
   // Assert the card for the *requested* event when the grid gave us its id.
   const targetId = expectedSourceId ?? cards[0] ?? null;
-  const cardTitle = targetId
-    ? await page.evaluate((id) => {
-        const card = document.querySelector(`[data-testid="a2ui-event-card"][data-event-id="${id}"]`);
-        return (card?.textContent ?? "").replace(/\s+/g, " ").trim();
-      }, targetId)
-    : "";
   let detailsTitle = null;
   let detailsEventId = null;
   if (cards.length) {
@@ -271,18 +266,13 @@ async function eventCase(c) {
     !cards.length &&
     requestedAbsent &&
     /only|no (?:other|more|second|third|fourth)|can.?t|cannot|not (?:in|among)|unavailable|\d+ events? (?:were|was) (?:returned|found)/i.test(reply);
-  const titleMatchesRequested = expectedTitle
-    ? cardTitle.includes(expectedTitle.slice(0, 30))
-    : true;
-  // Prefer exact ID equality against the requested source event; fall back to the
-  // title comparison only when the grid exposes no id (older cached markup).
-  const pass = expectedSourceId
-    ? Boolean(cards.length) && cards.includes(expectedSourceId) && detailsEventId === expectedSourceId
-    : Boolean(cards.length) &&
-      titleMatchesRequested &&
-      (detailsEventId
-        ? detailsEventId === cards[0]
-        : Boolean(detailsTitle) && detailsTitle.includes(cardTitle.slice(0, 40)));
+  // No text-only fallback: a wrong card can open its own matching Details.
+  // If the native grid has no ID, the identity claim cannot be certified.
+  const pass = isMatchingEventDetails({
+    requestedSourceId: expectedSourceId,
+    renderedCardIds: cards,
+    openedDetailsId: detailsEventId,
+  });
   record({
     id: c.id,
     expectedSourceTitle: expectedTitle,
@@ -304,9 +294,9 @@ const EVENTS = [
 ];
 
 const ok = [];
-const pick = (list) => (ONLY ? list.filter((c) => c.id === ONLY) : list);
-if (SUITE === "all" || SUITE === "rentals") for (const c of pick(RENTALS)) ok.push(await rentCase(c));
-if (SUITE === "all" || SUITE === "events") for (const c of pick(EVENTS)) ok.push(await eventCase(c));
+const selected = selectMatrixCases({ suite: SUITE, only: ONLY, rentals: RENTALS, events: EVENTS });
+for (const c of selected.rentals) ok.push(await rentCase(c));
+for (const c of selected.events) ok.push(await eventCase(c));
 
 fs.writeFileSync(path.join(OUT, "matrix.json"), JSON.stringify(lines, null, 2));
 const failed = lines.filter((r) => r.status === "fail").length;
