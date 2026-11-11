@@ -211,6 +211,7 @@ export function RentalBrowseCard({
   return (
     <VenueCardShell
       testId={testId ?? `rental-card-${rental.id}`}
+      extraData={{ "data-listing-id": rental.id }}
       resultKind="rental"
       pinId={pinId}
       composition="nova"

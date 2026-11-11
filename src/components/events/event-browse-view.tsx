@@ -11,6 +11,7 @@ import { DiscoveryWorkspace } from "@/components/browse/DiscoveryWorkspace";
 import { DiscoveryAskComposer } from "@/components/chat/discovery-ask-composer";
 import { EventRecommendationsSurface } from "@/components/copilot/a2ui/event-recommendations-surface";
 import { EventBrowseSelectionProvider } from "@/components/events/event-browse-selection-context";
+import { activateEventDetails } from "@/components/events/event-details-activation";
 import { DiscoveryPageContext } from "@/components/chat/discovery-page-context";
 import { EventBrowseCard } from "@/components/events/event-browse-card";
 import {
@@ -143,18 +144,18 @@ function EventBrowseViewInner({
   // always returns to the control the user actually pressed. A stale event absent
   // from the visible results cannot open the native panel.
   const openEventDetails = useCallback(
-    (id: string, trigger?: HTMLElement | null): boolean => {
-      if (!shownEvents.some((event) => event.id === id)) return false;
-      const active =
-        trigger ??
-        (typeof document !== "undefined" && document.activeElement instanceof HTMLElement
-          ? document.activeElement
-          : null);
-      if (active) detailsTriggerRef.current = active;
-      selectEvent(id);
-      setDetailsId(id);
-      return true;
-    },
+    (id: string, trigger?: HTMLElement | null): boolean =>
+      activateEventDetails({
+        id,
+        visibleIds: shownEvents.map((event) => event.id),
+        trigger,
+        activeElement: typeof document === "undefined" ? null : document.activeElement,
+        select: selectEvent,
+        open: (eventId) => setDetailsId(eventId),
+        rememberTrigger: (element) => {
+          detailsTriggerRef.current = element;
+        },
+      }),
     [selectEvent, shownEvents],
   );
 

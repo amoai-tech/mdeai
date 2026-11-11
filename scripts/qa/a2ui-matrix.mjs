@@ -19,7 +19,9 @@ const arg = (name, fallback) => {
   return i > -1 ? process.argv[i + 1] : fallback;
 };
 const BASE = arg("base", "http://localhost:3001");
-const CDP = arg("cdp", "http://127.0.0.1:9271");
+// Fixed QA browser port: reuse one authenticated browser for the whole session
+// instead of starting/killing one per run.
+const CDP = arg("cdp", "http://127.0.0.1:9280");
 const SUITE = arg("suite", "all");
 const ONLY = arg("only", "");
 const OUT = arg("out", path.join(process.cwd(), ".a2ui-matrix"));
@@ -299,5 +301,10 @@ if (SUITE === "all" || SUITE === "rentals") for (const c of pick(RENTALS)) ok.pu
 if (SUITE === "all" || SUITE === "events") for (const c of pick(EVENTS)) ok.push(await eventCase(c));
 
 fs.writeFileSync(path.join(OUT, "matrix.json"), JSON.stringify(lines, null, 2));
-console.log(`SUMMARY ${lines.filter((r) => r.status === "pass").length} pass / ${lines.filter((r) => r.status === "honest-unavailable").length} unavailable / ${lines.filter((r) => r.status === "fail").length} fail`);
-process.exit(ok.every(Boolean) ? 0 : 1);
+const failed = lines.filter((r) => r.status === "fail").length;
+const unavailable = lines.filter((r) => r.status === "honest-unavailable").length;
+console.log(`SUMMARY ${lines.filter((r) => r.status === "pass").length} pass / ${unavailable} unavailable / ${failed} fail`);
+// Exit codes are distinct so CI can allow honest-unavailable explicitly:
+// 0 = every case passed, 2 = no failures but some results were genuinely absent,
+// 1 = at least one failure.
+process.exit(failed > 0 ? 1 : unavailable > 0 ? 2 : 0);
