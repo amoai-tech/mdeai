@@ -139,6 +139,77 @@ For all commands: check help/installed version, review the file/diff contents **
 
 Use `jev_compare` (advisory) to evaluate the pinned official component against the already-working custom control; include writable values, draft ownership, Apply behavior, map/Details actions, maintainable lines of code and mobile parity. Decide **adopt** only after an actual SDK prototype and Playwright proof. Retaining the existing UI is a successful evidence-based result.
 
+## Better questions, fewer calls
+
+**Use Jev for semantic judgments, not deterministic facts.** Formulate one atomic question with a precisely defined answer space. Supply the smallest approved, sanitized state that contains the relevant claim and its evidence. Avoid broad questions such as "Is this feature correct?" when exact assertions are possible.
+
+- **Batch related questions when supported by the current MCP/CLI schema:** send the same sanitized state once with independent `noul` (yes/no), `choice` (one of named categories), or `score` (ordered rubric) questions. Check `jev spec` / `jev schema` or the connected MCP schema first; tool names and request formats vary by implementation.
+- **Choice + companion Noul:** a Choice always selects from its offered labels. Ask a separate Noul whether *any offered label actually fits*; otherwise return "unclassified" for review rather than pretending the highest-ranked choice is correct.
+- **Keep arithmetic outside Jev:** use code to check prices, IDs, dates, totals, authorization, SQL results and transaction counts. A semantic score cannot establish those truths.
+
+**Illustrative rental-response evaluation, not a real apartment or ready-to-send request:**
+
+```json
+{
+  "state": {
+    "request": "Find a 2-bedroom under COP 3 million",
+    "answer": "This apartment is available and has a balcony.",
+    "source": {
+      "bedrooms": 2,
+      "price_cop": 2500000,
+      "balcony": "unknown",
+      "availability": "unknown"
+    }
+  },
+  "questions": {
+    "unsupported_balcony": {
+      "type": "noul",
+      "instructions": "Does the answer assert a balcony not established by the source?"
+    },
+    "unsupported_availability": {
+      "type": "noul",
+      "instructions": "Does the answer assert availability not established by the source?"
+    },
+    "relevance": {
+      "type": "score",
+      "instructions": "How directly does the answer address the request?",
+      "criteria": ["Irrelevant", "Partially relevant", "Directly relevant"]
+    }
+  }
+}
+```
+
+Before running: confirm the installed client's exact `score` / `noul` contract and validate it offline where supported. An evaluation about unsupported prose does **not** substitute for the numeric filter or listing-ID assertion.
+
+## Calibrate uncertainty using labeled MDE fixtures
+
+**Start small; do not introduce a new database, runtime agent, or mandatory CI gate.** Propose a reviewed, synthetic or properly sanitized fixture set (for example, 20 grounded answers, 20 answers with deliberately unsupported claims, and 20 ambiguous answers). Store only authorized non-sensitive examples with labels and expected rationale; never copy customer conversations or raw production records into third-party eval inputs.
+
+1. Define an **independent ground-truth label** for each example before calling Jev. Keep the label separate from the evaluated answer.
+2. Compare model outcomes against those labels; measure false positives, false negatives, and abstentions per class, and inspect disagreements. Test on held-out examples, not only the calibration set.
+3. Choose a **task-specific confidence threshold and abstain range** from measured behavior. Near 0.5 (or any unclear outcome) is uncertainty, not proof of correctness; a nominal 0.8 threshold is **not** an 80% measured success rate.
+4. Pin a versioned model where repeatability matters, record question/rubric version, and re-evaluate when the model, prompts, data distribution, or evidence change.
+5. Route low-confidence or conflicting answers to **Supported / Uncertain / Contradicted** review outcomes. "Unknown" is an honest AI-answer state, **not** a Phase A listing eligibility, publication or booking block.
+
+**Five useful AI Concierge fixture categories:** factual grounding (parking/balcony claims), semantic relevance (neighborhood/intent), conversation context preservation (follow-up filters), uncertainty ("not specified" when missing), and action integrity (described action agrees with saved receipt). Use **Vitest/Playwright/DB tests** for exact filter values, persistent actions, RLS and retries; Jev Evals evaluates only the language/meaning.
+
+## Evidence-first evaluations
+
+Before optional `jev_verify` / `jev_gate` review, prepare a **bounded evidence receipt**: the exact claim, current commit/PR head, relevant sanitized code excerpt, real focused-test output, and known failures. Ask which parts are supported, contradicted or missing; explicitly note truncation or unavailable proof. A Jev PASS never changes GitHub branch-protection requirements, merges a PR, replaces independent `task-verifier`, or proves production deployment. For a claim like "8/8 A2UI cases pass", match all eight named case results with the exact current head; don't reuse a cached earlier-head result.
+
+## Spend, CLI and repeatability controls
+
+| Improvement | When it helps | Safeguard |
+| --- | --- | --- |
+| Validate request offline | Before any API evaluation | If using compatible Rust `jev` CLI, `jev validate` and `jev eval --dry-run` may detect malformed schema and estimate costs; check installed version |
+| Batch large sanitized datasets | Many repeated rubric judgments | Rust `jev batch run` supports resumable jobs; verify CLI availability, spending and provider terms first |
+| Inspect CLI contracts | Automation or changing tool versions | `jev spec` and `jev schema` describe actual supported inputs; don't assume the CLI is installed |
+| Limit API spend | Frequent agent evaluations | Apply supported per-call caps, bound candidate counts, and avoid multiple redundant Jev tools |
+| Cache an identical evaluation | Same sanitized evidence and questions | Key by **model version + rubric/question version + canonical state hash + evidence/head revision**; never reuse after the inputs or PR head change |
+| Measure time and error impact | Decide whether Jev is worth using | Compare elapsed discovery time, corrected defects, rework, billed usage and acceptance proof against a no-Jev workflow |
+
+Caching is an **optional local design recommendation**, not a built-in guarantee of the existing Jev MCP. Keep cached outputs private, short-lived where appropriate, and distinct across tenants. No vendor SDK, new MCP endpoint, provider or CI scoring gate is required for this documentation.
+
 ## What Jev does NOT prove
 
 - A model score cannot establish the correct listing ID, availability, price, tenant authorization, payment, or database persistence.
@@ -176,6 +247,11 @@ Use `jev_compare` (advisory) to evaluate the pinned official component against t
 - [Supercov](https://github.com/supercorp-ai/supercov)
 - [Jev skills](https://github.com/wuyoscar/jev-skill)
 - [Jev Evals](https://github.com/NicolasMontone/jev-evals)
+- [TypeSafe — official introduction](https://docs.typesafe.ai/introduction)
+- [TypeSafe — decision patterns](https://docs.typesafe.ai/patterns)
+- [TypeSafe — state inputs](https://docs.typesafe.ai/concepts/state)
+- [Rust Jev CLI — agent and MCP guide](https://github.com/shaharia-lab/jev-cli/blob/main/docs/user-guide/mcp.md)
+- [Independent Jev evaluation study](https://arxiv.org/abs/2609.37647)
 - [CopilotKit Standard Catalog](https://docs.copilotkit.ai/generative-ui/components/standard-catalog)
 - [CopilotKit State and Actions](https://docs.copilotkit.ai/generative-ui/components/state-and-actions)
 - [CopilotKit Surfaces](https://docs.copilotkit.ai/generative-ui/components/surfaces)
