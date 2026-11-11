@@ -26,6 +26,7 @@ Use this order when documents disagree:
 | CopilotKit + Mastra platform | [`03-platform/copilotkit-mastra/README.md`](03-platform/copilotkit-mastra/README.md) |
 | CopilotKit + Mastra official reference pack | [`03-platform/copilotkit-mastra/reference-pack.md`](03-platform/copilotkit-mastra/reference-pack.md) |
 | CopilotKit + Mastra technical roadmap | [`03-platform/copilotkit-mastra/roadmap.md`](03-platform/copilotkit-mastra/roadmap.md) |
+| Optional Jev agent tool selection and examples | [`jev-agent.md`](../jev-agent.md) |
 | Documentation migration/audit status | [`index-docs.md`](index-docs.md) |
 | Live execution status | [Linear — MDE AI](https://linear.app/amo100/project/mde-ai-bb25cababf6c/issues) |
 
