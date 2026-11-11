@@ -20,6 +20,7 @@
  */
 import { chromium } from "playwright";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { isMatchingEventDetails, selectMatrixCases } from "./a2ui-matrix-verdict.mjs";
 
@@ -33,8 +34,37 @@ const BASE = arg("base", "http://localhost:3001");
 const CDP = arg("cdp", "http://127.0.0.1:9280");
 const SUITE = arg("suite", "all");
 const ONLY = arg("only", "");
-const OUT = arg("out", path.join(process.cwd(), ".a2ui-matrix"));
+
+/**
+ * `--out` and the case id both reach the filesystem, so confine writes to the
+ * repository or the OS temp directory and refuse anything that resolves outside
+ * them. Paths are normalized before the containment check, so `../` cannot escape.
+ */
+function safeOutputDir(input) {
+  const roots = [path.resolve(process.cwd()), path.resolve(os.tmpdir())];
+  const dir = path.resolve(input);
+  const inside = roots.some((root) => dir === root || dir.startsWith(root + path.sep));
+  if (!inside) {
+    throw new Error(`--out must resolve inside the repository or the temp directory: ${dir}`);
+  }
+  return dir;
+}
+
+const OUT = safeOutputDir(arg("out", path.join(process.cwd(), ".a2ui-matrix")));
 fs.mkdirSync(OUT, { recursive: true });
+
+/**
+ * Case ids are fixture constants. Only a short lowercase slug plus a known
+ * extension may reach the filesystem, so no caller-supplied string can add path
+ * separators or traversal segments to the written file.
+ */
+function safeFileName(name) {
+  const value = String(name);
+  if (!/^[a-z0-9-]{1,60}\.(png|json)$/.test(value)) {
+    throw new Error(`unsafe output file name: ${value}`);
+  }
+  return value;
+}
 const lines = [];
 const record = (row) => {
   lines.push(row);
@@ -150,7 +180,7 @@ async function rentCase(c) {
     status: pass ? "pass" : unavailable ? "honest-unavailable" : "fail",
     reply: reply.slice(0, 300),
   });
-  await page.screenshot({ path: path.join(OUT, `${c.id}.png`) });
+  await page.screenshot({ path: path.join(OUT, safeFileName(`${c.id}.png`)) });
   return pass || unavailable;
 }
 
@@ -283,7 +313,7 @@ async function eventCase(c) {
     status: pass ? "pass" : unavailable ? "honest-unavailable" : "fail",
     reply: reply.slice(0, 300),
   });
-  await page.screenshot({ path: path.join(OUT, `${c.id}.png`) });
+  await page.screenshot({ path: path.join(OUT, safeFileName(`${c.id}.png`)) });
   return pass || unavailable;
 }
 
@@ -298,7 +328,7 @@ const selected = selectMatrixCases({ suite: SUITE, only: ONLY, rentals: RENTALS,
 for (const c of selected.rentals) ok.push(await rentCase(c));
 for (const c of selected.events) ok.push(await eventCase(c));
 
-fs.writeFileSync(path.join(OUT, "matrix.json"), JSON.stringify(lines, null, 2));
+fs.writeFileSync(path.join(OUT, safeFileName("matrix.json")), JSON.stringify(lines, null, 2));
 const failed = lines.filter((r) => r.status === "fail").length;
 const unavailable = lines.filter((r) => r.status === "honest-unavailable").length;
 console.log(`SUMMARY ${lines.filter((r) => r.status === "pass").length} pass / ${unavailable} unavailable / ${failed} fail`);
