@@ -5,7 +5,6 @@ import {
   useGenerativeUIRuntime,
 } from "@copilotkit/react-core/v2/generative-ui";
 import { mdeUI } from "@/components/copilot/a2ui/mde-ui-catalog";
-import { useOptionalConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
 
 /**
  * SAN-1653 — the event counterpart of the rentals Surface.
@@ -30,11 +29,12 @@ export const EVENT_RECOMMENDATIONS_COMPONENTS = [
 ] as const;
 
 export function EventRecommendationsSurface() {
-  // Same guard as the rentals panel: nothing to target without a concierge agent,
-  // and deterministic tests mount the app without CopilotKit at all.
+  // Only the runtime is required. The Events page has the concierge runtime and
+  // the Ask MDE composer, but no co-agent provider, so requiring one here left the
+  // target unregistered and every render_ui aimed at it rendered nothing.
+  // Deterministic tests mount the app without CopilotKit, where this is null.
   const runtime = useGenerativeUIRuntime();
-  const coAgent = useOptionalConciergeCoAgent();
-  if (!runtime || !coAgent) return null;
+  if (!runtime) return null;
 
   return (
     <GenerativeUISurface

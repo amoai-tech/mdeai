@@ -297,7 +297,7 @@ export type EventSearchResult = {
 export async function searchEvents(
   query: EventQuery,
 ): Promise<EventSearchResult> {
-  const limit = query.limit ?? 5;
+  const limit = Math.min(query.limit ?? 5, 20);
   // CK-V2-015: chip semantics must survive an unavailable intelligence module.
   const category = resolveEventCategoryForQuery(query.category, query.queryText);
   const slots = query.queryText?.trim() ? parseEventIntelligenceSlots(query.queryText) : {};
@@ -411,7 +411,7 @@ export const searchEventsTool = createTool({
     dateWindow: z
       .enum(['tonight', 'this_weekend', 'this_week', 'next_week', 'any'])
       .optional(),
-    limit: z.number().int().min(1).max(20).default(5),
+    limit: z.number().int().min(1).max(100).default(5),
     queryText: z
       .string()
       .optional()
@@ -444,7 +444,7 @@ export const searchEventsTool = createTool({
       neighborhood,
       maxPricePerTicket,
       dateWindow: dw,
-      limit = 5,
+      limit: rawLimit = 5,
       queryText,
     } = inputData;
     const { results, total, source, hybridUsed, rankExplanation } = await runAuditedSearch(
@@ -455,7 +455,7 @@ export const searchEventsTool = createTool({
         neighborhood,
         maxPricePerTicket,
         dateWindow: dw,
-        limit,
+        limit: Math.min(rawLimit, 20),
         queryText,
       },
       context,
