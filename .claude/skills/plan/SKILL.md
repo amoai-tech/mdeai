@@ -25,6 +25,8 @@ Inspect only relevant:
 - production/runtime when the plan depends on it
 Do not plan from stale task text when live truth exists.
 
+**Requirements clarity (Matt Pocock):** Check whether the user already supplied the decision, acceptance criteria or a verified Linear issue. Only ask a focused question when an unresolved product choice would change implementation; otherwise identify a grounded default and proceed. Record non-obvious decisions using existing MDE docs rather than producing a fresh document by default.
+
 **3. Find the fastest safe path**
 Prefer:
 

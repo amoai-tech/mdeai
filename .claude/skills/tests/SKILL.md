@@ -26,6 +26,8 @@ Test in this order:
 **critical journey → security/data integrity → regression → edge cases → polish**
 Do not chase coverage numbers for their own sake.
 
+**Public behavior first (Matt Pocock TDD):** Agree on the observable interface/seam from the existing task, then write a test that fails for the missing behavior. Avoid testing private helpers, snapshot-only success or mocking away the integration being proved. For implementation work prefer RED → GREEN → REFACTOR; do not require a new testing plan when existing acceptance criteria settle the seam.
+
 **4. Pick the cheapest valid layer**
 
 **unit → integration → RLS/security → API/provider → browser/E2E → production**

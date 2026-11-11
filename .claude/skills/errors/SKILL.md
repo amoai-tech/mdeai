@@ -23,6 +23,8 @@ Trace only relevant:
 **user action → UI → backend/service → auth/RLS → DB/provider → returned state**
 Check logs/tests/config only when they can explain the failure.
 
+**Hypothesis-driven investigation (P Stack + Matt Pocock):** State the observed failure and a falsifiable cause before changing code. Run the cheapest decisive probe to reject alternatives; distinguish a real reproduction from an inferred explanation. When possible, capture a failing regression test before the change, and verify it passes after the fix. Avoid simultaneous speculative fixes.
+
 **3. Diagnose**
 For each material finding state:
 

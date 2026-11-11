@@ -18,6 +18,8 @@ Complete the task with the least unnecessary work while preserving correctness, 
 - Do not over-engineer for hypothetical future needs.
 - Do not trade correctness or security for speed.
 
+**Subtract before adding (P Stack):** First ask whether existing configuration, a single canonical owner, or removal of redundant logic solves the problem. Compare the smaller alternative against the requested outcome; don't build a parallel abstraction or orchestrate multiple agents merely to appear thorough. Use additional reviewers only when risk or evidence justifies their cost.
+
 **Preferred order**
 
 **existing implementation → configuration → installed/vendor capability → official SDK/module → official example/template → minimal custom code**

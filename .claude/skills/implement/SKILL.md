@@ -23,6 +23,8 @@ Prefer:
 **reuse → configure → adapt → minimal change**
 Do not create duplicate services, schemas, state, workflows, or abstractions.
 
+**Vertical slices (Addy Osmani):** On multi-file changes, build one observable end-to-end behavior at a time (UI → existing API → persisted state where applicable). For each slice: implement → focused test → read back actual result → commit only when green. Prefer one small, recoverable slice to a broad unfinished refactor; don't require ceremonies for trivial edits.
+
 **3. Implement in dependency order**
 Change only what is required.
 For consequential writes prefer:

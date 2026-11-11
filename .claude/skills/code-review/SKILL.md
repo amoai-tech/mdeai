@@ -39,6 +39,8 @@ Resolve before reviewing:
 
 If the fixed point is ambiguous, use the PR merge-base when reviewing a PR; otherwise state the comparison chosen.
 
+**Review-efficiency rule (Addy Osmani + P Stack):** Prioritize demonstrable correctness, security and behavioral regressions before style. Try to falsify the smallest risky assumption against changed code and its immediate callers. Stop when the user outcome and risk-matched evidence are established; do not spawn parallel reviews for routine, low-risk changes.
+
 ## Review invariants
 
 Apply this universal order to every PR:
