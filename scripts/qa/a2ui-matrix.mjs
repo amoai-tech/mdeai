@@ -21,6 +21,7 @@ const arg = (name, fallback) => {
 const BASE = arg("base", "http://localhost:3001");
 const CDP = arg("cdp", "http://127.0.0.1:9271");
 const SUITE = arg("suite", "all");
+const ONLY = arg("only", "");
 const OUT = arg("out", path.join(process.cwd(), ".a2ui-matrix"));
 fs.mkdirSync(OUT, { recursive: true });
 const lines = [];
@@ -39,11 +40,6 @@ const ask = async (inputSelector, prompt) => {
   await page.locator(inputSelector).fill(prompt);
   await page.locator(inputSelector).press("Enter");
 };
-const textOf = (selector) =>
-  page.evaluate((sel) => {
-    const el = document.querySelector(sel);
-    return el ? el.textContent ?? "" : "";
-  }, selector);
 /** Start a clean conversation so each case proves its own selection, not a reused surface. */
 const resetConversation = async () => {
   const clicked = await page.evaluate(() => {
@@ -171,6 +167,11 @@ async function eventCase(c) {
     undefined,
     { timeout: 60000 },
   );
+  const sourceIds = await page.evaluate(() =>
+    [...document.querySelectorAll('[data-testid="events-grid"] [data-testid="event-card"]')].map((card) =>
+      card.getAttribute("data-event-id"),
+    ),
+  );
   const sourceTitles = await page.evaluate(() =>
     [...document.querySelectorAll('[data-testid="events-grid"] [data-testid="event-card"]')].map((card) =>
       (card.querySelector("h3")?.textContent ?? card.textContent ?? "")
@@ -180,6 +181,7 @@ async function eventCase(c) {
     ),
   );
   const expectedTitle = c.index ? sourceTitles[c.index - 1] ?? null : null;
+  const expectedSourceId = c.index ? sourceIds[c.index - 1] ?? null : null;
   await resetConversation();
   await ask('[data-testid="discovery-ask-input"]', c.prompt);
   // Enter is ignored until the composer is ready; confirm the turn was accepted.
@@ -205,17 +207,26 @@ async function eventCase(c) {
       e.getAttribute("data-event-id"),
     ),
   );
-  const cardTitle = cards.length ? await textOf('[data-testid="a2ui-event-card"]') : "";
+  // Assert the card for the *requested* event when the grid gave us its id.
+  const targetId = expectedSourceId ?? cards[0] ?? null;
+  const cardTitle = targetId
+    ? await page.evaluate((id) => {
+        const card = document.querySelector(`[data-testid="a2ui-event-card"][data-event-id="${id}"]`);
+        return (card?.textContent ?? "").replace(/\s+/g, " ").trim();
+      }, targetId)
+    : "";
   let detailsTitle = null;
   let detailsEventId = null;
   if (cards.length) {
-    await page.evaluate(() => {
-      const card = document.querySelector('[data-testid="a2ui-event-card"]');
+    await page.evaluate((id) => {
+      const card =
+        (id ? document.querySelector(`[data-testid="a2ui-event-card"][data-event-id="${id}"]`) : null) ??
+        document.querySelector('[data-testid="a2ui-event-card"]');
       const btn = [...(card?.querySelectorAll("button,a") ?? [])].find((x) =>
         /details/i.test(x.textContent ?? ""),
       );
       btn?.click();
-    });
+    }, targetId);
     try {
       await page.waitForFunction(
         () =>
@@ -247,16 +258,19 @@ async function eventCase(c) {
   const titleMatchesRequested = expectedTitle
     ? cardTitle.includes(expectedTitle.slice(0, 30))
     : true;
-  const pass =
-    Boolean(cards.length) &&
-    titleMatchesRequested &&
-    (detailsEventId
-      ? detailsEventId === cards[0]
-      : Boolean(detailsTitle) && detailsTitle.includes(cardTitle.slice(0, 40)));
+  // Prefer exact ID equality against the requested source event; fall back to the
+  // title comparison only when the grid exposes no id (older cached markup).
+  const pass = expectedSourceId
+    ? Boolean(cards.length) && cards.includes(expectedSourceId) && detailsEventId === expectedSourceId
+    : Boolean(cards.length) &&
+      titleMatchesRequested &&
+      (detailsEventId
+        ? detailsEventId === cards[0]
+        : Boolean(detailsTitle) && detailsTitle.includes(cardTitle.slice(0, 40)));
   record({
     id: c.id,
     expectedSourceTitle: expectedTitle,
-    expectedSourceId: null,
+    expectedSourceId,
     cards,
     detailsEventId,
     detailsTitle: detailsTitle?.slice(0, 120) ?? null,
@@ -274,8 +288,9 @@ const EVENTS = [
 ];
 
 const ok = [];
-if (SUITE === "all" || SUITE === "rentals") for (const c of RENTALS) ok.push(await rentCase(c));
-if (SUITE === "all" || SUITE === "events") for (const c of EVENTS) ok.push(await eventCase(c));
+const pick = (list) => (ONLY ? list.filter((c) => c.id === ONLY) : list);
+if (SUITE === "all" || SUITE === "rentals") for (const c of pick(RENTALS)) ok.push(await rentCase(c));
+if (SUITE === "all" || SUITE === "events") for (const c of pick(EVENTS)) ok.push(await eventCase(c));
 
 fs.writeFileSync(path.join(OUT, "matrix.json"), JSON.stringify(lines, null, 2));
 console.log(`SUMMARY ${lines.filter((r) => r.status === "pass").length} pass / ${lines.filter((r) => r.status === "honest-unavailable").length} unavailable / ${lines.filter((r) => r.status === "fail").length} fail`);

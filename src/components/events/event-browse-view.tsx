@@ -138,16 +138,30 @@ function EventBrowseViewInner({
     else setSelectedPinId(null);
   }, [pinIds, panToPin, setSelectedPinId]);
 
-  // Generated cards use this page's real Details owner, never an unrelated sheet.
-  // A stale event absent from the visible results cannot open the native panel.
-  useEffect(() => {
-    onSelectReady?.((id: string): boolean => {
+  // One entry point for every Details activation. The native card passes its own
+  // trigger; a generated card passes none and the active element is used, so focus
+  // always returns to the control the user actually pressed. A stale event absent
+  // from the visible results cannot open the native panel.
+  const openEventDetails = useCallback(
+    (id: string, trigger?: HTMLElement | null): boolean => {
       if (!shownEvents.some((event) => event.id === id)) return false;
+      const active =
+        trigger ??
+        (typeof document !== "undefined" && document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : null);
+      if (active) detailsTriggerRef.current = active;
       selectEvent(id);
       setDetailsId(id);
       return true;
-    });
-  }, [onSelectReady, selectEvent, shownEvents]);
+    },
+    [selectEvent, shownEvents],
+  );
+
+  // Generated cards use this page's real Details owner, never an unrelated sheet.
+  useEffect(() => {
+    onSelectReady?.(openEventDetails);
+  }, [onSelectReady, openEventDetails]);
 
   // A marker click (or closing its info card) arrives through the shared map context; mirror it into the
   // one selected event instead of keeping a second selection. This adjusts our own state while rendering
@@ -311,13 +325,7 @@ function EventBrowseViewInner({
                   setDetailsId(null);
                   selectEvent(selectedId === event.id ? null : event.id);
                 }}
-                onDetails={(trigger) => {
-                  detailsTriggerRef.current = trigger;
-                  // SAN-1638: the panel record is also the Ask MDE record, so the concierge answers
-                  // about the event on screen. Selecting context never sends a message.
-                  selectEvent(event.id);
-                  setDetailsId(event.id);
-                }} />
+                onDetails={(trigger) => openEventDetails(event.id, trigger)} />
               );
             })}
           </div>
