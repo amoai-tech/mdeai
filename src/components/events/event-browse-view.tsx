@@ -10,7 +10,7 @@ import { BrowseMapSheet } from "@/components/browse/BrowseMapSheet";
 import { DiscoveryWorkspace } from "@/components/browse/DiscoveryWorkspace";
 import { DiscoveryAskComposer } from "@/components/chat/discovery-ask-composer";
 import { EventRecommendationsSurface } from "@/components/copilot/a2ui/event-recommendations-surface";
-import { EventBrowseSelectionProvider, registerEventDetailsOpener } from "@/components/events/event-browse-selection-context";
+import { EventBrowseSelectionProvider } from "@/components/events/event-browse-selection-context";
 import { DiscoveryPageContext } from "@/components/chat/discovery-page-context";
 import { EventBrowseCard } from "@/components/events/event-browse-card";
 import {

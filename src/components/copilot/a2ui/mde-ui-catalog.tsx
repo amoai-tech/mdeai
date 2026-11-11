@@ -11,7 +11,7 @@ import { useOptionalEventLocalChat } from "@/components/chat/event-local-chat-co
 import { createGenerativeUI, standardUI } from "@copilotkit/react-core/v2/generative-ui";
 import { RentalCard as ExistingRentalCard } from "@/components/copilot/rental-card";
 import { EventCard as ExistingEventCard } from "@/components/copilot/event-card";
-import { openEventDetailsFromCard, useOptionalEventBrowseSelection } from "@/components/events/event-browse-selection-context";
+import { useOptionalEventBrowseSelection } from "@/components/events/event-browse-selection-context";
 import { useOptionalConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
 import { useOptionalRentalUi } from "@/components/chat/rental-ui-context";
 import { useOptionalMapContext } from "@/platform/maps/map-context";
