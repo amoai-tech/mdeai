@@ -45,9 +45,10 @@ describe("SAN-867 · VEB-MVP-001 — Router hijack fix — sendConciergeUserMess
   it("passes apartment comparisons near coffee shops to the agent, not café search", async () => {
     const prompt = "Compare the apartments near coffee shops in Laureles";
     const handlers = makeHandlers();
-    // An actual café fast-path match demonstrates why falling through is unsafe.
+    // Both layers protect this turn: venue classification rejects plural rentals,
+    // and the sender never tries a café handler even if it could accept the text.
     expect(looksLikeRentalAnalysis(prompt)).toBe(true);
-    expect(canFastPathCafeSearch(prompt)).toBe(true);
+    expect(canFastPathCafeSearch(prompt)).toBe(false);
     handlers.handleGroundedMessage.mockResolvedValueOnce(true);
 
     await sendConciergeUserMessage(prompt, handlers);
