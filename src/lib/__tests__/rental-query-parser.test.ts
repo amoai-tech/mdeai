@@ -68,6 +68,14 @@ describe("SAN-1502 postmerge — real COP monthly budget", () => {
     expect(budgetNotApplied(text, params!)).toBe(false);
   });
 
+  it("parses a monthly ceiling followed by a sentence period", () => {
+    const text = "Find 2-bedroom apartments in Laureles under COP 3,000,000.";
+    const params = buildRentalSearchParams(text, {});
+    expect(params?.maxPriceMonthly).toBe(3_000_000);
+    expect(params?.budgetCurrency).toBe("COP");
+    expect(budgetNotApplied(text, params!)).toBe(false);
+  });
+
   it("treats a nightly budget as applied", () => {
     const text = "1BR in Laureles under $80/night";
     const params = buildRentalSearchParams(text, {});
