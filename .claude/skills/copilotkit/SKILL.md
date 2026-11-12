@@ -1,7 +1,7 @@
 ---
 name: copilotkit
 description: >-
-  Use when MDE work touches CopilotKit v2 React hooks, /api/copilotkit runtime, Surfaces, render_ui, A2UI, AG-UI transport to Mastra, frontend actions/shared state, HITL or bridge failures. Mastra owns agent logic and domain skills own business behavior.
+  Use when implementing or debugging MDE CopilotKit v2 setup, integration and troubleshooting. Use for /api/copilotkit runtime, React hooks, native Components/Surfaces, render_ui, A2UI fixed/dynamic schemas, standardUI catalogs, AG-UI/Mastra transport, frontend tools/actions, shared state, CLI verification, HITL, and CopilotKit-specific errors. Keeps browser-facing bridge failures with the CopilotKit domain owner; Mastra and product skills own their respective business/agent logic.
 metadata:
   mde-version: "2.4.0"
   upstream-commit: "4f0e86deaebb9d6e6d4625cbed4087912aee6d0c"
