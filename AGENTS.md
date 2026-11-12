@@ -35,7 +35,7 @@ Portable rules for agents working from the **current checkout root**. Product-ow
 
 ## Optional Jev decision support
 
-[Jev agent guide](jev-agent.md) owns when and how to use existing Jev MCP tools and skills. Jev is a judge, not a source of truth; use it only when useful, and never instead of deterministic tests or independent verification. Do not add mandatory Jev gates or duplicate plugins, or send secrets, `.env` contents or private evidence to Jev.
+For optional Jev examples and tool selection, see the [Jev agent guide](jev-agent.md). **Skip Jev** when it is unavailable, unhelpful, or unsafe to share the required input; continue with existing repository tools and deterministic verification. Jev judgments are advisory, not evidence of correctness. Never add mandatory Jev gates or duplicate plugins, or send secrets, `.env` contents, or private evidence to Jev.
 
 ## Authenticated QA — existing 1Password and Playwright only
 
