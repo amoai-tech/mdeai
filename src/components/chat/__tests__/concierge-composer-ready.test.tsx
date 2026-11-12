@@ -47,7 +47,7 @@ describe("conciergeComposerInput", () => {
     expect(build({ textArea: { className: "x" } }, true).textArea).toMatchObject({ disabled: false, className: "x", enterKeyHint: "send" });
   });
 
-  it("names the real CopilotKit textarea without replacing the composer", () => {
+  it("passes the accessible identity through the CopilotKit composer slot", () => {
     const input = build(undefined, true);
     expect(input.textArea).toMatchObject({
       id: "concierge-chat-input",
