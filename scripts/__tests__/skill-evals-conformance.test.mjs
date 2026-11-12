@@ -297,7 +297,12 @@ test("three overlapping pairs keep explicit selection boundaries", () => {
   assert.match(descriptor("efficient"), /fastest safe reuse-first/);
   assert.match(descriptor("ponytail"), /source receipts or a thorough reuse-before-build audit/);
   for (const name of ["ponytail", "maps", "copilotkit", "nextjs", "supabase"]) {
-    assert.ok(descriptor(name).length < 700, name + ": metadata expanded too far");
+    const frontmatter = descriptor(name);
+    const match = frontmatter.match(/^description:\s*(?:>-\s*\n)?((?:  [^\n]*\n?)*)/m);
+    assert.ok(match, name + ": missing skill description");
+    const description = match[1].trim();
+    assert.ok(description.length > 0 && description.length <= 500,
+      name + ": description exceeds the MDE 500-character limit");
   }
 });
 
