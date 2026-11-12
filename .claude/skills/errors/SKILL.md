@@ -25,9 +25,7 @@ Trace only relevant:
 **user action → UI → backend/service → auth/RLS → DB/provider → returned state**
 Check logs/tests/config only when they can explain the failure.
 
-**Hypothesis-driven investigation (P Stack + Matt Pocock):** State the observed failure and a falsifiable cause before changing code. Run the cheapest decisive probe to reject alternatives; distinguish a real reproduction from an inferred explanation. When possible, capture a failing regression test before the change, and verify it passes after the fix. Avoid simultaneous speculative fixes.
-
-**Decision gate:** Before touching code, write **observed failure → one falsifiable hypothesis → cheapest discriminating check → result**. If the check rejects it, revise the hypothesis; do not stack speculative fixes. If reproduction is blocked, record the exact missing evidence rather than inventing a root cause.
+**Hypothesis-driven investigation (P Stack + Matt Pocock):** First build the tightest pass/fail signal you can for the failure (failing test, request replay, or a one-command repro); everything else consumes it. Then write **observed failure → one falsifiable hypothesis → cheapest discriminating check → result**. If the check rejects the hypothesis, revise it; do not stack speculative fixes. Distinguish a real reproduction from an inferred explanation. When possible capture a failing regression test before the change and verify it passes after. If reproduction is blocked, record the exact missing evidence rather than inventing a root cause. Redact secrets, tokens and auth headers from any command output you quote.
 
 **3. Diagnose**
 For each material finding state:

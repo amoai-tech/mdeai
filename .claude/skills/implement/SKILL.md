@@ -25,7 +25,7 @@ Prefer:
 **reuse → configure → adapt → minimal change**
 Do not create duplicate services, schemas, state, workflows, or abstractions.
 
-**Vertical slices (Addy Osmani):** On multi-file changes, build one observable end-to-end behavior at a time (UI → existing API → persisted state where applicable). For each slice: implement → focused test → read back actual result → commit only when green. Prefer one small, recoverable slice to a broad unfinished refactor; don't require ceremonies for trivial edits.
+**Vertical slices (Addy Osmani):** On multi-file changes, build one observable end-to-end behavior at a time (UI → existing API → persisted state where applicable). For each slice: implement → focused test → read back actual result → continue only when green. Do not commit per slice: committing is owned by `tasks` (pre-commit gate) or an explicit user request. Prefer one small, recoverable slice to a broad unfinished refactor; don't require ceremonies for trivial edits.
 
 **3. Implement in dependency order**
 Change only what is required.
@@ -48,7 +48,7 @@ Use:
 **focused tests → integration/RLS → typecheck/lint → build → E2E → production when required**
 Fix failures caused by the change; do not expand into unrelated cleanup.
 
-**Risk-based proof:** A UI-only change needs a focused component test and relevant 390px browser check; auth/RLS or Stripe writes also need authorization, isolation, retry and atomicity tests, plus independent `task-verifier` for S4. Run broader repository gates at merge time, not after every edit.
+**Risk-based proof:** A UI-only change needs a focused component test and relevant 390px browser check; auth/RLS or Stripe writes also need authorization, isolation, retry and atomicity tests, plus independent `task-verifier` for S4. Run `npm run floor` (AGENTS.md completion contract) before calling the work Done, not after every edit.
 
 **6. Recheck changed path**
 Reread changed files and verify:

@@ -28,7 +28,7 @@ Test in this order:
 **critical journey → security/data integrity → regression → edge cases → polish**
 Do not chase coverage numbers for their own sake.
 
-**Public behavior first (Matt Pocock TDD):** Agree on the observable interface/seam from the existing task, then write a test that fails for the missing behavior. Avoid testing private helpers, snapshot-only success or mocking away the integration being proved. For implementation work prefer RED → GREEN → REFACTOR; do not require a new testing plan when existing acceptance criteria settle the seam.
+**Public behavior first (Matt Pocock TDD):** Agree on the observable interface/seam from the existing task, then specify the test that must fail for the missing behavior. Avoid testing private helpers, snapshot-only success or mocking away the integration being proved. Test-first execution (RED → GREEN → REFACTOR) is owned by `testing` — see `testing/references/tdd.md`; do not require a new testing plan when existing acceptance criteria settle the seam.
 
 **4. Pick the cheapest valid layer**
 
