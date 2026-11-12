@@ -1,7 +1,7 @@
 ---
 name: maps
 description: >-
-  Use when MDE work touches Google Maps Platform, Places, Maps JavaScript, markers/pins, routes/ETA, geocoding, map grounding, keys, field masks, attribution or location-search failures. Do not use for generic GIS, Mapbox-only or unrelated mapping features.
+  Use when MDE work touches Google Maps Platform, Places, Maps JavaScript, markers/pins, routes/ETA, geocoding, map grounding, keys, field masks, attribution or location-search failures. Not for unrelated GIS or Mapbox-only features.
 title: maps — Google Maps Platform (comprehensive)
 impact: HIGH
 impactDescription: Places enrichment, Maps grounding, ChatMap, batch APIs, security, AI code assist
