@@ -1,7 +1,8 @@
 ---
 name: nextjs
 description: >-
-  Use when MDE work changes or diagnoses Next.js App Router pages, layouts, route handlers, Server/Client Component boundaries, reusable React composition or state ownership, Async Request APIs, caching/revalidation, metadata, proxy/middleware behavior, RSC/streaming, waterfalls, rerenders, bundle or Core Web Vitals performance, or Vercel preview/production deployment, environment, domain, rollback, or runtime configuration.
+  Use when MDE work touches Next.js App Router, route handlers, React Server/Client Components, layouts, caching/revalidation, async APIs, proxy/middleware, metadata, Vercel or Next.js-specific errors.
+
 ---
 
 # Next.js

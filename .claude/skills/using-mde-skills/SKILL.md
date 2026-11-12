@@ -14,7 +14,7 @@ The router chooses one owner and stops. **Specific requested outcome beats a bro
 - create/rewrite one Linear issue → `linear-task`; read-only task audit → `linear-audit`
 - PR merge-readiness audit → `praudit`; existing PR/diff code review → `code-review`
 - bug/root-cause diagnosis, unknown failure → `errors`; deep methodology → `systematic-debugging`
-- design regression coverage → `tests`; test strategy/TDD/execution → `testing`; browser E2E → `e2e`
+- **design only** test cases, coverage matrices, or grading criteria → `tests`; **run or interpret** Vitest/Playwright/CI results, or **write and execute** a test-first RED/GREEN regression → `testing`; verify a full browser → API → persisted-state user journey → `e2e`
 - request a faster reuse-first option → `efficient`; detailed reuse/source discipline → `ponytail`
 - design a plan without modifying code → `plan`; architectural fit → `architect`
 - implement scoped work → `implement`

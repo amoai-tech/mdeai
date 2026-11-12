@@ -238,7 +238,7 @@ required_rules = {
     "linear-task": "linear-task",
     "praudit": "praudit",
     "tests": "test",
-    "testing": "test strategy/TDD",
+    "testing": "**run or interpret**",
     "research": "research/evidence",
     "code-review": "existing PR/diff",
     "task-verifier": "independently prove Done/merge/production safety",

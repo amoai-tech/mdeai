@@ -20,6 +20,7 @@ import routerTriggers from "../../.claude/skills/using-mde-skills/evals/trigger-
 import reviewTriggers from "../../.claude/skills/review/evals/trigger-evals.json" with { type: "json" };
 import e2eTriggers from "../../.claude/skills/e2e/evals/trigger-evals.json" with { type: "json" };
 import testsTriggers from "../../.claude/skills/tests/evals/trigger-evals.json" with { type: "json" };
+import testingTriggers from "../../.claude/skills/testing/evals/trigger-evals.json" with { type: "json" };
 import mergeTriggers from "../../.claude/skills/merge/evals/trigger-evals.json" with { type: "json" };
 import rentalTriggers from "../../.claude/skills/real-estate/evals/trigger-evals.json" with { type: "json" };
 import eventsTriggers from "../../.claude/skills/events/evals/trigger-evals.json" with { type: "json" };
@@ -229,6 +230,7 @@ test("critical routing workflows and production domains have positive and near-m
     review: reviewTriggers,
     e2e: e2eTriggers,
     tests: testsTriggers,
+    testing: testingTriggers,
     merge: mergeTriggers,
     "real-estate": rentalTriggers,
     events: eventsTriggers,
@@ -240,6 +242,80 @@ test("critical routing workflows and production domains have positive and near-m
   }
 });
 
+
+// Explicit design-vs-execution ownership: a valid JSON pack by itself does
+// not protect against both skills claiming the same request.
+test("testing runs or writes+executes tests, while tests only designs coverage", () => {
+  assertTriggerCases("testing", testingTriggers);
+  const byId = (fixtures, id) => {
+    const result = fixtures.find((item) => item.id === id);
+    assert.ok(result, "missing trigger: " + id);
+    return result;
+  };
+  assert.equal(byId(testsTriggers, "tests-4").expected_owner, "testing");
+  assert.equal(byId(testingTriggers, "testing-1").expected_owner, "testing");
+  assert.equal(byId(testingTriggers, "testing-2").expected_owner, "testing");
+  assert.equal(byId(testingTriggers, "testing-4").expected_owner, "tests");
+  assert.equal(byId(testingTriggers, "testing-5").expected_owner, "tests");
+  assert.equal(byId(testingTriggers, "testing-6").expected_owner, "e2e");
+  const testing = fs.readFileSync(path.join(SKILLS, "testing", "SKILL.md"), "utf8");
+  const design = fs.readFileSync(path.join(SKILLS, "tests", "SKILL.md"), "utf8");
+  assert.match(testing, /Use when running or interpreting MDE Vitest/);
+  assert.match(testing, /For coverage design without execution use tests/);
+  assert.match(design, /Not for executing and interpreting/);
+
+  // Exercise the actual native runner case loader, not a second parser.
+  const program = [
+    "import importlib.util",
+    "p='scripts/run-skill-behavior-eval.py'",
+    "s=importlib.util.spec_from_file_location('runner',p)",
+    "r=importlib.util.module_from_spec(s); s.loader.exec_module(r)",
+    "for n in range(1,7): r.load_trigger_case('testing',n)",
+    "print('TESTING_TRIGGERS_VALID=6')",
+  ].join("\n");
+  const result = spawnSync("python3", ["-c", program], {
+    cwd: process.cwd(), encoding: "utf8", timeout: 10000,
+  });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.match(result.stdout, /TESTING_TRIGGERS_VALID=6/);
+});
+
+// Adjoining workflow owners share vocabulary but must describe distinct tasks.
+// Metadata checks guard loss of key nouns when descriptions are compacted;
+// they do NOT prove a model will choose the correct skill.
+test("three overlapping pairs keep explicit selection boundaries", () => {
+  const descriptor = (name) => {
+    const skill = fs.readFileSync(path.join(SKILLS, name, "SKILL.md"), "utf8");
+    const front = skill.split("---", 3)[1];
+    assert.ok(front);
+    return front;
+  };
+  assert.match(descriptor("tests"), /DESIGN regression coverage/);
+  assert.match(descriptor("testing"), /Use when running or interpreting MDE Vitest/);
+  assert.match(descriptor("errors"), /actual failing test/);
+  assert.match(descriptor("systematic-debugging"), /deep multi-step root-cause/);
+  assert.match(descriptor("efficient"), /fastest safe reuse-first/);
+  assert.match(descriptor("ponytail"), /source receipts or a thorough reuse-before-build audit/);
+  for (const name of ["ponytail", "maps", "copilotkit", "nextjs", "supabase"]) {
+    assert.ok(descriptor(name).length < 700, name + ": metadata expanded too far");
+  }
+});
+
+// Native Claude Code skill activation obeys frontmatter `paths` globs.
+// These three cross-file domain/execution skills must be available from a
+// natural-language task before the agent has opened a matching source file.
+test("project-wide testing, rental and maps skills have no file activation gate", () => {
+  for (const name of ["testing", "real-estate", "maps"]) {
+    const skillFile = path.join(SKILLS, name, "SKILL.md");
+    const skill = fs.readFileSync(skillFile, "utf8");
+    const frontmatter = skill.split("---", 3)[1];
+    assert.ok(frontmatter, name + ": missing frontmatter");
+    assert.doesNotMatch(frontmatter, /^paths:\s*(?:#.*)?$/m,
+      name + ": paths globs silently hide cross-file skills from the Claude session catalog");
+    assert.equal(fs.readFileSync(path.join(".agents/skills", name, "SKILL.md"), "utf8"),
+      skill, name + ": Codex/DSH mirror differs from canonical skill");
+  }
+});
 
 // SAN-1557: metadata checks only. Real agent model/tool behavior must be
 // independently executed and compared to a no-skill baseline.
