@@ -392,13 +392,25 @@ const RESULT_REFERENCE_RE =
 const WHY_RE = /\bwhy\s+(?:is|are|does|do)\b/i;
 /** Comparative words that imply the two things were already shown. */
 const COMPARATIVE_RE = /\b(?:better|cheaper|comparing|vs\.?|versus)\b/i;
+/** Area words are about new discovery, not a reference to prior apartment cards. */
+const NEW_AREA_REFERENCE_RE =
+  /\b(?:these|those)\s+(?:(?:two|three|\d+)\s+)?(?:neighbou?rhoods?|areas?|districts?|cities|locations?|regions?|zones?)\b/i;
 
 export function looksLikeRentalAnalysis(text: string): boolean {
   const bounded = text.length > MAX_RENTAL_TEXT_CHARS ? text.slice(0, MAX_RENTAL_TEXT_CHARS) : text;
+  const referencesShownResults = RESULT_REFERENCE_RE.test(bounded);
+  // "Compare apartments in these neighborhoods" discovers new rentals. The
+  // standalone "compare" must not override that fact unless shown cards are named.
+  if (
+    NEW_AREA_REFERENCE_RE.test(bounded) &&
+    RENTAL_INTENT_RE.test(bounded) &&
+    /\bcompar(?:e|ing|ison)\b/i.test(bounded) &&
+    !referencesShownResults
+  ) return false;
   if (RENTAL_ANALYSIS_RE.test(bounded)) return true;
   // "first" alone is not a result reference: "first-floor apartment … better wifi"
   // is a fresh search. Require "first apartment/one/two/…", "these", "those" or "them".
-  return RESULT_REFERENCE_RE.test(bounded) && (WHY_RE.test(bounded) || COMPARATIVE_RE.test(bounded));
+  return referencesShownResults && (WHY_RE.test(bounded) || COMPARATIVE_RE.test(bounded));
 }
 
 /** User message is clearly about rentals, not events or cafés. */

@@ -555,6 +555,7 @@ describe("RentalAskComposer (SAN-1421)", () => {
   it.each([
     "Show me a table comparing apartments in Laureles and El Poblado",
     "Show me a table comparing apartments in these neighborhoods: Laureles and El Poblado",
+    "Compare apartments in these neighborhoods: Laureles and El Poblado",
   ])("retains structured discovery for %j", async (prompt) => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ results: [rental("rnt_1")], total: 1 }), { status: 200 }),

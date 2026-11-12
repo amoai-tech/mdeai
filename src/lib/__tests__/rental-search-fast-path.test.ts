@@ -78,6 +78,7 @@ describe("rental-search-fast-path", () => {
     // same canned "Found 3 rentals" reply, so the agent never compared anything.
     for (const prompt of [
       "Compare the first two apartments and tell me which is better, then show them as cards.",
+      "Compare the first two apartments in these neighborhoods",
       "What is the difference between the first two?",
       "Which one is better, the Laureles or the Poblado apartment?",
       "Why is the second one cheaper?",
@@ -119,6 +120,7 @@ describe("rental-search-fast-path", () => {
       "Show me furnished apartments in Medellín",
       "Show me a table comparing apartments in Laureles and El Poblado",
       "Show me a table comparing apartments in these neighborhoods: Laureles and El Poblado",
+      "Compare apartments in these neighborhoods: Laureles and El Poblado",
       "Show me a table comparing apartments in those two neighborhoods: Laureles and El Poblado",
     ]) {
       expect(canFastPathRentalSearch(prompt, {}), prompt).toBe(true);
