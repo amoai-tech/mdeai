@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { describe, expect, it, vi } from "vitest";
-import { render, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { act, render, waitFor } from "@testing-library/react";
 import { MapUiSync } from "../map-ui-sync";
 
 const h = vi.hoisted(() => ({
@@ -24,6 +24,10 @@ function lastMapUi() {
   return typeof call === "function" ? call({}).mapUi : call?.mapUi;
 }
 
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 describe("MapUiSync", () => {
   it("publishes a new selection immediately, before the camera debounce", async () => {
     const { rerender } = render(<MapUiSync />);
@@ -41,5 +45,24 @@ describe("MapUiSync", () => {
     rerender(<MapUiSync />);
 
     expect(lastMapUi()?.selectedPinId).toBe("rental-B");
+  });
+
+  it("still debounces viewport-only updates by 300 ms", () => {
+    vi.useFakeTimers();
+    const { rerender } = render(<MapUiSync />);
+    act(() => vi.runOnlyPendingTimers());
+    h.setState.mockClear();
+
+    h.current = {
+      ...h.current,
+      viewport: { lat: 6.3, lng: -75.6, zoom: 14 },
+    };
+    rerender(<MapUiSync />);
+    expect(h.setState).not.toHaveBeenCalled();
+
+    act(() => vi.advanceTimersByTime(299));
+    expect(h.setState).not.toHaveBeenCalled();
+    act(() => vi.advanceTimersByTime(1));
+    expect(lastMapUi()?.viewport).toEqual({ lat: 6.3, lng: -75.6, zoom: 14 });
   });
 });
