@@ -255,6 +255,12 @@ describe("official generative-UI guide forwarding", () => {
     // The live /rentals turn receives the official guide plus MDE_GENERATIVE_UI_RULES,
     // not MDE_A2UI_GUIDE. Both paths must carry the rule.
     expect(MDE_GENERATIVE_UI_RULES).toContain("Do not restate or guess bedrooms");
+    const cardRulePrefix = "After showRecommendations, for a cards-only request";
+    const fallbackRule = MDE_A2UI_GUIDE.split("\n").find((line) => line.startsWith(cardRulePrefix));
+    const officialRule = MDE_GENERATIVE_UI_RULES.split("\n").find((line) => line.startsWith(cardRulePrefix));
+    expect(fallbackRule).toBeTruthy();
+    expect(officialRule).toBe(fallbackRule);
+    expect(officialRule).toContain("even when those facts also appear on the cards");
     expect(buildGenerativeUiInstruction(official)).toContain(
       "After showRecommendations, for a cards-only request reply with the tool's message only",
     );
