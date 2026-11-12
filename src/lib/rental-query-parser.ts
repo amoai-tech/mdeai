@@ -370,6 +370,21 @@ export function exactBedroomsFromQueryText(text: string): number | undefined {
   return parseBedrooms(text);
 }
 
+
+/**
+ * Comparison and analysis questions about the current results must reach the
+ * concierge. The rental fast path only answers a search; when it intercepts
+ * "compare the first two…" the renter gets the same canned "Found N rentals"
+ * reply again instead of an answer.
+ */
+const RENTAL_ANALYSIS_RE =
+  /\b(?:compare|comparison|difference(?:s)?\s+between|versus|vs\.?|pros?\s+(?:and|&)\s+cons?|which\s+(?:one|is|of\s+(?:these|the|them))|tell\s+me\s+which|is\s+(?:it|this|that)\s+better|which\s+is\s+better|why\s+(?:is|are|does|do))\b/i;
+
+export function looksLikeRentalAnalysis(text: string): boolean {
+  const bounded = text.length > MAX_RENTAL_TEXT_CHARS ? text.slice(0, MAX_RENTAL_TEXT_CHARS) : text;
+  return RENTAL_ANALYSIS_RE.test(bounded);
+}
+
 /** User message is clearly about rentals, not events or cafés. */
 export function looksLikeRentalSearch(text: string): boolean {
   const t = text.trim();
@@ -740,6 +755,8 @@ export function canFastPathRentalSearch(
   memory: ConciergeWorkingMemory,
 ): boolean {
   if (text.length > MAX_RENTAL_TEXT_CHARS) return false;
+  // A comparison or analysis of the results is the concierge's job, never a new search.
+  if (looksLikeRentalAnalysis(text)) return false;
   if (looksLikeNonRentalSearch(text)) return false;
   if (memory.lastRentalQuery?.genericAskPending) {
     return buildRentalSearchParams(text, memory) != null;
