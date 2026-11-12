@@ -1,7 +1,8 @@
 ---
 name: systematic-debugging
 description: >-
-  Use when a bug, failed test, regression, flaky behavior, integration failure, or unexpected runtime result needs root-cause diagnosis.
+  Use when a stubborn, flaky or cross-system MDE failure needs deep multi-step root-cause tracing; consult from errors when a focused reproduction and hypothesis do not isolate the cause.
+
 ---
 
 # Systematic Debugging

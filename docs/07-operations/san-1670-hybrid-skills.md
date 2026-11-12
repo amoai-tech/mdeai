@@ -60,9 +60,27 @@ Each of the six revised skills now has a positive and nearby negative example, a
 
 ## Bounded behavior evaluation (reuse existing runner)
 
-Start with the existing `implement`, `errors`, and `tests` positive/negative trigger cases; `plan` and `code-review` receive further live trials only when there are real work items. Run **baseline and candidate on the same pinned host/model, task, tool permissions, 60–90 second budget and checkout**. Each run requires a real skill-load trace (not just an answer naming a skill). The existing runner grades **DSH v4 session traces only**; for Claude Code, use `claude -p "<prompt>" --tools Skill --max-turns 1 --setting-sources project --output-format stream-json --verbose </dev/null` (close stdin, or leftover input leaks into the prompt) and read the `Skill` tool_use events. Codex traces have no parser yet. Record correct owner/negative no-trigger, observable outcome, unauthorized behavior, time, tool calls and tokens. Compare dollar cost only when an actual rate/billing source is available.
+Start with the existing `implement`, `errors`, and `tests` positive/negative trigger cases; `plan` and `code-review` receive further live trials only when there are real work items. Run **baseline and candidate in separate clean worktrees at pinned commits**, with the same model, task, permissions and reasonable execution limits. Record each environment independently. Each run requires a real skill-load trace (not just an answer naming a skill). The existing runner grades **DSH v4 session traces only**. **Selection-only probe:** for Claude Code, use `claude -p "<prompt>" --tools Skill --max-turns 1 --setting-sources project --output-format stream-json --verbose </dev/null` (close stdin, or leftover input leaks into the prompt), and record `Skill` tool_use events; this command **cannot prove task success** because tools other than Skill are unavailable. **Behavior runs require normal tool access**, sufficient turns and bounded spend. Execute real focused checks and record owner selection, positive/near-miss behavior, outcome, denied actions, time, tool calls and tokens. Codex traces have no parser yet. Compare dollar cost only when an actual rate/billing source is available.
 
 The existing runner supports `python3 scripts/run-skill-behavior-eval.py --skill implement --trigger-id 1 --run` and `--trace <saved-trace>`; inspect the current runner/skill IDs before choosing cases. For negative cases use the numeric fixture position: for fixture `implement-4`, run `--skill implement --trigger-id 4` (expected alternate owner: `plan`). Do not invent a new grader. **Timeout, exhausted usage, missing credentials or unavailable ChatGPT skills = NOT VERIFIED, never PASS.** Keep cross-host results separate from structural CI success and never call a hypothetical 95/100 target a measured success rate.
+
+## November 12 discovery, overlap and cost evidence
+
+**Do not consolidate skill folders based on shared vocabulary.** The top three overlapping pairs have distinct intended owners:
+
+| Paired skills | Positive example | Nearby negative example |
+| --- | --- | --- |
+| `tests` / `testing` | Design retry/authorization cases → `tests` | Actually run Vitest and explain failures → `testing` |
+| `errors` / `systematic-debugging` | Reproduce one concrete rental-price bug → `errors` | Deep intermittent cross-system race tracing → `systematic-debugging` methodology |
+| `efficient` / `ponytail` | Find simplest existing RPC extension → `efficient` | Require pinned source receipts and reuse audit → `ponytail` |
+
+**Root-cause fix:** A Claude Code session on the previous head exposed only **50 of 53** canonical skills; `testing`, `maps` and `real-estate` were absent because their `paths` activation globs required matching source-file context. Removing those globs made **53/53 appear in the observed session catalog**. The `tests`/ `testing` descriptions now distinguish coverage design from running tests/TDD. The shared router and its deterministic contract were updated; the symlink mirror remains unchanged.
+
+**Advisory six-prompt semantic check:** Jev 1.14.0, judging the old versus revised *skill descriptions only*, chose the intended owner for **5/6 versus 6/6** prompts. The meaningful difference was a routine bug routed to `systematic-debugging` before and `errors` after. This **does not prove** native Claude/Codex selection, code correctness, cost savings or statistical accuracy.
+
+**Live Claude Code paired benchmark: INCOMPLETE.** A read-only Sonnet baseline ran the design and test-execution prompts without invoking a skill; the quick-debug prompt did call `errors`, but terminated with a `max-budget` error after reporting about US$1.47 despite a US$0.60 requested cap. The remaining cases did not complete a usable turn. The candidate was not run after this failure to avoid further unexpected cost. No paired time/token or task-success improvement can be claimed. Re-run only with budget-controlled credentials, normal tool access and real executable tasks, preserving original traces for comparison.
+
+**Stop decision:** Retain all three pairs until a completed before/after benchmark demonstrates no correctness/security regression and meaningful runtime savings. Prefer tightening descriptions and loading long references only on demand; never weaken Phase A technical security to make a smaller prompt.
 
 ## Repository verification
 

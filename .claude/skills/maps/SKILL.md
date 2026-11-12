@@ -1,17 +1,11 @@
 ---
 name: maps
 description: >-
-  Use whenever MDE work implements, changes, reviews, or diagnoses Google Maps Platform: Maps JavaScript, Places, markers, routes/ETA, location search, geocoding, Maps grounding, Google Maps Agentic UI toolkit, A2UI map integration, CopilotKit Google Maps interoperability, map state, API keys, attribution, or Maps-related cost/security. Do not use for generic GIS, A2UI without Google Maps integration, or Mapbox/Leaflet/OpenStreetMap-only work with no Google Maps Platform dependency.
+  Use when MDE work touches Google Maps Platform, Places, Maps JavaScript, markers/pins, routes/ETA, geocoding, map grounding, keys, field masks, attribution or location-search failures. Do not use for generic GIS, Mapbox-only or unrelated mapping features.
 title: maps — Google Maps Platform (comprehensive)
 impact: HIGH
 impactDescription: Places enrichment, Maps grounding, ChatMap, batch APIs, security, AI code assist
 tags: google-maps, places-api, maps-links, gemini-grounding, mdeai, mastra, security, cli, mcp
-paths:
-  - "src/**/*Map*"
-  - "src/**/*map*"
-  - "src/mastra/tools/*place*"
-  - "supabase/functions/*maps*/**"
-  - "supabase/functions/*places*/**"
 metadata:
   verified-package: "@googlemaps/places 2.4.1 / @vis.gl/react-google-maps 1.8.3 / @googlemaps/markerclusterer 2.6.2"
   verified-at: "2026-09-28"
