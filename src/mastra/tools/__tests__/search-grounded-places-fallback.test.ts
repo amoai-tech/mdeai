@@ -1,9 +1,12 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
-vi.mock("../../lib/google-places-cafe-search", () => ({
-  searchGoogleCafes: vi.fn().mockResolvedValue({ results: [], attribution: [] }),
-  withMedellinScope: (query: string) => `${query} Medellín, Colombia`,
-}));
+vi.mock("../../lib/google-places-cafe-search", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../../lib/google-places-cafe-search")>();
+  return {
+    ...original,
+    searchGoogleCafes: vi.fn().mockResolvedValue({ results: [], attribution: [] }),
+  };
+});
 
 vi.mock("../../lib/adk-grounding-client", () => ({
   invokeAdkGrounding: vi.fn(),
@@ -12,10 +15,6 @@ vi.mock("../../lib/adk-grounding-client", () => ({
 
 vi.mock("../../lib/grounding-quota", () => ({
   incrementAndCheckGroundingQuota: vi.fn().mockResolvedValue({ allowed: true }),
-}));
-
-vi.mock("../../lib/grounding-location-bias", () => ({
-  resolveGroundingLocationBias: vi.fn(({ locationBias }) => locationBias),
 }));
 
 vi.mock("../search-restaurants", () => ({
@@ -91,6 +90,23 @@ describe("searchGroundedPlacesTool fallback", () => {
     vi.mocked(incrementAndCheckGroundingQuota).mockClear();
   });
 
+  it("SAN-877: real café tool uses thread-scoped map viewport even without explicit input", async () => {
+    vi.mocked(searchRestaurants).mockResolvedValue({ results: [], total: 0, source: "supabase" });
+    const getWorkingMemory = vi.fn(async () => ({
+      mapUi: { viewport: { lat: 6.27, lng: -75.60, zoom: 14 } },
+    }));
+    await searchGroundedPlacesTool.execute!(
+      { query: "cafés with wifi", intent: "cafe" },
+      { agent: { threadId: "thread-2", resourceId: "renter-1" }, memory: { getWorkingMemory } } as never,
+    );
+    expect(getWorkingMemory).toHaveBeenCalledWith({ threadId: "thread-2", resourceId: "renter-1" });
+    expect(searchGoogleCafes).toHaveBeenCalledWith(expect.objectContaining({
+      query: "cafés with wifi",
+      locationBias: { latitude: 6.27, longitude: -75.60 },
+    }));
+    expect(invokeAdkGrounding).not.toHaveBeenCalled();
+  });
+
   it("GM-P0-06 returns curated fallback when ADK unavailable (403)", async () => {
     vi.mocked(invokeAdkGrounding).mockResolvedValue(
       adkUnavailableMock({ reason: "adk_unavailable", status: 403 }),
@@ -148,7 +164,7 @@ describe("searchGroundedPlacesTool fallback", () => {
     expect(out.attribution).toHaveLength(1);
     expect(out.attribution[0]?.title).toBe("Rituales Compañía de Café");
     expect(searchGoogleCafes).toHaveBeenCalledWith(
-      expect.objectContaining({ query: expect.stringMatching(/quiet cafés in Laureles Medellín, Colombia/) }),
+      expect.objectContaining({ query: "quiet cafés in Laureles" }),
     );
     expect(vi.mocked(searchGoogleCafes).mock.calls[0]?.[0]?.query).not.toMatch(/Exclude bar|Prefer cafés/);
     expect(invokeAdkGrounding).not.toHaveBeenCalled();

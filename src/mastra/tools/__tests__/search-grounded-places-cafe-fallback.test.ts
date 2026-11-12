@@ -1,9 +1,9 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
-vi.mock("../../lib/google-places-cafe-search", () => ({
-  searchGoogleCafes: vi.fn().mockResolvedValue({ results: [], attribution: [] }),
-  withMedellinScope: (query: string) => query,
-}));
+vi.mock("../../lib/google-places-cafe-search", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../../lib/google-places-cafe-search")>();
+  return { ...original, searchGoogleCafes: vi.fn().mockResolvedValue({ results: [], attribution: [] }) };
+});
 
 vi.mock("../../lib/adk-grounding-client", () => ({
   invokeAdkGrounding: vi.fn(),
@@ -12,10 +12,6 @@ vi.mock("../../lib/adk-grounding-client", () => ({
 
 vi.mock("../../lib/grounding-quota", () => ({
   incrementAndCheckGroundingQuota: vi.fn().mockResolvedValue({ allowed: true }),
-}));
-
-vi.mock("../../lib/grounding-location-bias", () => ({
-  resolveGroundingLocationBias: vi.fn(({ locationBias }) => locationBias),
 }));
 
 vi.mock("../search-restaurants", () => ({
