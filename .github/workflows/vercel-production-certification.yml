@@ -97,10 +97,12 @@ jobs:
     name: production-certification
     runs-on: ubuntu-latest
     timeout-minutes: 40 # Floor may take up to 20m; allow bounded wait plus runtime and stability tests.
-    # One candidate at a time, so two builds can never race each other onto the production domain.
+    # One candidate at a time; preserve pending READY events (up to GitHub's 100-job queue)
+    # rather than dropping the latest when an older READY webhook arrives out of order.
     concurrency:
       group: vercel-production-certification
       cancel-in-progress: false
+      queue: max
     if: >-
       github.event_name == 'repository_dispatch' &&
       github.event.client_payload.environment == 'production' &&

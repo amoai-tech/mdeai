@@ -2,12 +2,29 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
+import { parse as parseYaml } from "yaml";
 
 const workflowPath = path.resolve(".github/workflows/vercel-production-certification.yml");
 const PIN = "30f760c6640485cd92f8c785ef361382555fb712";
 
 function workflow() {
   return fs.readFileSync(workflowPath, "utf8");
+}
+
+function releaseStepEnv(source, jobName, stepName) {
+  const parsed = parseYaml(source);
+  const steps = parsed.jobs?.[jobName]?.steps;
+  assert.ok(Array.isArray(steps), `missing workflow job ${jobName}`);
+  const step = steps.find((entry) => entry.name === stepName);
+  assert.ok(step, `missing workflow step ${stepName}`);
+  assert.ok(step.env && typeof step.env === "object", `missing env block for ${stepName}`);
+  return step.env;
+}
+
+function assertProjectVarMapping(source, jobName, stepName) {
+  const env = releaseStepEnv(source, jobName, stepName);
+  assert.equal(env.VERCEL_PROJECT_ID, "$" + "{{ vars.VERCEL_PROJECT_ID }}",
+    `${stepName} must map VERCEL_PROJECT_ID from the repository variable`);
 }
 
 function multilineRunBlocks(text) {
@@ -68,9 +85,26 @@ test("Vercel account migration keeps CI, release control and monitoring on the s
   assert.ok(validator.includes('const EXPECTED_PROJECT_ID = "' + newProject + '"'));
   assert.ok(verify.includes(newProject));
   assert.ok(verify.includes(newTeam));
-  for (const job of [monitor, preview]) {
-    assert.ok(job.includes("vars.VERCEL_PROJECT_ID"));
-    assert.ok(!job.includes("secrets.VERCEL_PROJECT_ID"));
+  assertProjectVarMapping(monitor, "freshness", "Require a READY production deployment for the exact commit");
+  assertProjectVarMapping(preview, "discovery", "Find and verify READY Vercel preview for exact PR commit");
+  const monitoringEnv = releaseStepEnv(monitor, "freshness", "Require a READY production deployment for the exact commit");
+  assert.equal(monitoringEnv.VERCEL_ORG_ID, "$" + "{{ vars.VERCEL_ORG_ID }}");
+  // Comments mentioning the variable must not hide a missing real step env mapping.
+  const removedMapping = monitor.replace(
+    "VERCEL_PROJECT_ID: $" + "{{ vars.VERCEL_PROJECT_ID }}",
+    "# vars.VERCEL_PROJECT_ID (comment only)",
+  );
+  assert.throws(
+    () => assertProjectVarMapping(removedMapping, "freshness", "Require a READY production deployment for the exact commit"),
+    /must map VERCEL_PROJECT_ID/,
+  );
+  for (const runbook of [
+    "docs/07-operations/production-release-verification.md",
+    "docs/07-operations/production-rollback-runbook.md",
+  ]) {
+    const body = fs.readFileSync(runbook, "utf8");
+    assert.match(body, /--scope amo-agency/);
+    assert.doesNotMatch(body, /amoco|prj_5eY5DdiVxn7hDbruTG7BrrQT1QAB/);
   }
   assert.ok(monitor.includes("vars.VERCEL_ORG_ID"));
   assert.ok(momentic.includes("searchParams.set('slug', 'amo-agency')"));
@@ -352,9 +386,16 @@ test("an older READY event cannot promote after main has moved", () => {
   );
 });
 
-test("candidates are certified one at a time", () => {
-  const job = certifyJob(workflow());
-  assert.match(job, /concurrency:\s*\n\s*group: vercel-production-certification\s*\n\s*cancel-in-progress: false/);
+test("candidates serialize without dropping newer pending READY events", () => {
+  const config = parseYaml(workflow()).jobs.certify.concurrency;
+  assert.deepEqual(config, {
+    group: "vercel-production-certification",
+    "cancel-in-progress": false,
+    queue: "max",
+  }, "GitHub must preserve pending jobs instead of replacing the newer candidate with an older event");
+  // Stale candidates still fail closed before any promotion; queueing does not weaken freshness.
+  assert.ok(stepIndex(certifyJob(workflow()), "Reject stale main candidate") <
+    stepIndex(certifyJob(workflow()), "Promote the exact certified deployment"));
 });
 
 test("no workflow still points at the stale Vercel team or project from PR #85", () => {
