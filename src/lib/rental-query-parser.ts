@@ -384,9 +384,11 @@ const RENTAL_ANALYSIS_RE =
  * the cheapest 2-bedroom in Laureles?" and "Laureles vs El Poblado under 3M"
  * are ordinary searches and must keep the fast path, so only an explicit
  * reference to the current results plus "why"/"better"/"cheaper"/"vs" counts.
+ * "These neighborhoods" (including "these two neighborhoods") is not a
+ * reference to previously shown apartment cards.
  */
 const RESULT_REFERENCE_RE =
-  /\b(?:first|second|third|fourth)\s+(?:apartment|listing|property|home|option|result|card|one|two|three|four|\d+)\b|\b(?:these|those|them)\b|\btop\s+(?:two|three|\d+)\b|\bof\s+them\b/i;
+  /\b(?:first|second|third|fourth)\s+(?:apartment|listing|property|home|option|result|card|one|two|three|four|\d+)\b|\b(?:these|those)\b(?!\s+(?:(?:two|three|\d+)\s+)?(?:neighbou?rhoods?|areas?|districts?|cities|locations?|regions?|zones?)\b)|\bthem\b|\btop\s+(?:two|three|\d+)\b|\bof\s+them\b/i;
 const WHY_RE = /\bwhy\s+(?:is|are|does|do)\b/i;
 /** Comparative words that imply the two things were already shown. */
 const COMPARATIVE_RE = /\b(?:better|cheaper|comparing|vs\.?|versus)\b/i;

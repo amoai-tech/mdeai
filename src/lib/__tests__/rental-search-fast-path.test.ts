@@ -100,6 +100,8 @@ describe("rental-search-fast-path", () => {
       "Is the first apartment cheaper than the second one?",
       "first apartment vs second apartment",
       "Which of these is cheaper?",
+      "Show a table comparing these apartments",
+      "Show a table comparing those two listings",
     ]) {
       expect(canFastPathRentalSearch(prompt, {}), prompt).toBe(false);
     }
@@ -116,6 +118,8 @@ describe("rental-search-fast-path", () => {
       "2 bedroom in Laureles under 3,000,000 COP",
       "Show me furnished apartments in Medellín",
       "Show me a table comparing apartments in Laureles and El Poblado",
+      "Show me a table comparing apartments in these neighborhoods: Laureles and El Poblado",
+      "Show me a table comparing apartments in those two neighborhoods: Laureles and El Poblado",
     ]) {
       expect(canFastPathRentalSearch(prompt, {}), prompt).toBe(true);
     }
