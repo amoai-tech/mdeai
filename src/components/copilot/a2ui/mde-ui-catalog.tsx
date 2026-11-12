@@ -499,25 +499,28 @@ function MdeApplyFilters({
  * presence flag, so a component the guide does not document is a component the
  * model would have to guess at. Two consequences:
  *
- * - **Controls are omitted until they are wired.** Button, Pressable and every
- *   input (Form, TextField, Select, CheckBox, Radio, Slider, DateTimeInput,
- *   SegmentedControl, ChoicePicker, Tabs) render a dead control when no
- *   catalog function is registered: a fake "Book viewing" next to real
- *   listings. RentalCard already owns grounded Details and viewing actions.
- *   SAN-1655/SAN-1658 add these back together with their functions.
+ * - **Controls that need an MDE action are omitted until they are wired.**
+ *   Booking, saving, filtering and submitting require a registered catalog
+ *   function; without one they would be a fake "Book viewing" next to real
+ *   listings. A Button or Pressable can still perform built-in browser
+ *   actions (href, copy) with no MDE function, but the catalog does not rely
+ *   on that yet. SAN-1655/SAN-1658 add the real controls with their functions.
  * - **Table is exposed for short, tool-grounded comparisons** using its
  *   columns/rows data form, documented in the server guide. TableSection,
  *   TableRow and TableCell stay omitted: the data form does not need them.
- *   Charts and maps need peer libraries MDE does not install, HtmlView/Svg
- *   would let the model author markup, and Image/Link/Citation would accept
- *   model-chosen URLs.
+ *   Chart works in React through CopilotKit's bundled recharts; Map needs
+ *   maplibre-gl for the map view and otherwise shows a place list, and MDE
+ *   already owns Google Maps. HtmlView/Svg would let the model author markup,
+ *   and Image/Link/Citation would accept model-chosen URLs.
  *
  * Every omitted name must still exist in the installed `standardUI`, and the
  * exposed set must equal exactly what the guide documents — both enforced by
  * `mde-ui-catalog.test.ts`, so an SDK upgrade cannot silently drift.
  */
 export const MDE_OMITTED_STANDARD_COMPONENTS = [
-  // Optional peer libraries MDE does not ship (chart.js, maplibre-gl, lucide).
+  // Map needs maplibre-gl for its map view; Chart uses bundled recharts and
+  // Icon uses the installed lucide-react, so those two are blocked by policy,
+  // not by a missing package.
   "Chart",
   "Icon",
   "Map",
