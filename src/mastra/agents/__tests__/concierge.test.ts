@@ -146,6 +146,11 @@ describe("conciergeAgent", () => {
     expect(instructions).toContain("do NOT call search-rentals");
     expect(instructions).toContain("lastRentalResults for those exact IDs");
     expect(instructions).toContain("analysis, comparison, amenities, or details");
+    expect(instructions).toContain("NEVER add a Nightly Price to a monthly listing");
+    expect(instructions).toContain("For all-monthly comparisons");
+    expect(instructions).toContain("For all-nightly comparisons");
+    expect(instructions).toContain("For mixed monthly/nightly comparisons");
+    expect(instructions).toContain("do not rank prices across incompatible periods");
   });
 
   it("instructions require refining rentals on show cheaper", async () => {

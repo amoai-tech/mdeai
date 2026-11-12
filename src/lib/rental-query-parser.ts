@@ -277,7 +277,10 @@ function parseExactMonthlyBudget(text: string): { amount: number; currency: "COP
   if (!match) return null;
   const currencyToken = (prefix ? prefix[1] : dollars ? "$" : suffix?.[3] ?? "").toLowerCase();
   const currency: "COP" | "USD" = /^(cop|peso)/.test(currencyToken) ? "COP" : "USD";
-  const rawAmount = prefix ? prefix[2] : dollars ? dollars[1] : suffix?.[1] ?? "";
+  // A sentence-ending period is not part of the number: "under COP 3,000,000."
+  // must parse exactly like "under COP 3,000,000".
+  const rawAmount = (prefix ? prefix[2] : dollars ? dollars[1] : suffix?.[1] ?? "")
+    .replace(/[.,;:!?]+$/, "");
   const magnitudeToken = (prefix ? prefix[3] : dollars ? dollars[2] : suffix?.[2] ?? "")?.toLowerCase() ?? "";
   const grouped = isThousandsGroupedInteger(rawAmount);
   const amount = Number(grouped ? rawAmount.replace(/[.,]/g, "") : rawAmount.replace(",", "."));
