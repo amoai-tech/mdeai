@@ -15,12 +15,16 @@ import { AddToTripButton } from "@/components/trips/add-to-trip-button";
 
 export type SelectedPlaceOverlayCardProps = {
   pin: MapPin;
+  onDismiss?: () => void;
 };
 
 /**
  * Mindtrip-style rich card — only shown in map InfoWindow overlay, never as map marker DOM.
  */
-export function SelectedPlaceOverlayCard({ pin }: SelectedPlaceOverlayCardProps) {
+export function SelectedPlaceOverlayCard({
+  pin,
+  onDismiss,
+}: SelectedPlaceOverlayCardProps) {
   const meta = parseMapPinPreviewMeta(pin.meta);
   const { glyph } = getCategoryMarkerGlyph(pin.category);
   const photoSrc = meta.photoName
@@ -74,6 +78,18 @@ export function SelectedPlaceOverlayCard({ pin }: SelectedPlaceOverlayCardProps)
           </div>
         )}
         <div className="absolute right-2 top-2 flex gap-1.5">
+          {onDismiss ? (
+            <button
+              type="button"
+              onClick={onDismiss}
+              title="Close selected place"
+              aria-label="Close selected place"
+              className="flex size-9 items-center justify-center rounded-full bg-black/55 text-lg text-white backdrop-blur-sm"
+              data-testid="selected-place-overlay-close"
+            >
+              ×
+            </button>
+          ) : null}
           {pin.category === "event" ? null : (
             <button
               type="button"
