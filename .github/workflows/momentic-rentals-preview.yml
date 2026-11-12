@@ -72,7 +72,7 @@ jobs:
         id: preview
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
           DEPLOY_SHA: ${{ steps.scope.outputs.sha }}
         run: |
           node --input-type=module <<'JS'
