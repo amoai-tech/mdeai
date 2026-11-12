@@ -35,6 +35,7 @@ import {
   buildRentalSearchParams,
   canFastPathRentalSearch,
   isWholeCityReply,
+  looksLikeRentalAnalysis,
   scoreRentalQuery,
   statesBudget,
   type RentalSearchApiParams,
@@ -548,6 +549,9 @@ function LiveComposer({
       if (
         onResults &&
         !toolResultSeen.current &&
+        // A comparison/analysis turn is answered by the agent, not by a fresh
+        // structured search that would replace the cards it was asked about.
+        !looksLikeRentalAnalysis(text) &&
         turn === turnId.current &&
         !cancelled.current &&
         (!hasAnswer.current || carriesFilter(text))

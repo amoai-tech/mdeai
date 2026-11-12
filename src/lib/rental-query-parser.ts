@@ -370,6 +370,49 @@ export function exactBedroomsFromQueryText(text: string): number | undefined {
   return parseBedrooms(text);
 }
 
+/**
+ * Comparison and analysis questions about the current results must reach the
+ * concierge. The rental fast path only answers a search; when it intercepts
+ * "compare the first two…" the renter gets the same canned "Found N rentals"
+ * reply again instead of an answer.
+ */
+const RENTAL_ANALYSIS_RE =
+  /\b(?:compar(?:e|ison)|pros?\s+(?:and|&)\s+cons?|difference(?:s)?\s+between|which\s+one\s+is\s+better|which\s+is\s+better|is\s+(?:it|this|that)\s+better)\b/i;
+
+/**
+ * A comparative or explanatory question about results already shown. "Which is
+ * the cheapest 2-bedroom in Laureles?" and "Laureles vs El Poblado under 3M"
+ * are ordinary searches and must keep the fast path, so only an explicit
+ * reference to the current results plus "why"/"better"/"cheaper"/"vs" counts.
+ * "These neighborhoods" (including "these two neighborhoods") is not a
+ * reference to previously shown apartment cards.
+ */
+const RESULT_REFERENCE_RE =
+  /\b(?:first|second|third|fourth)\s+(?:apartment|listing|property|home|option|result|card|one|two|three|four|\d+)\b|\b(?:these|those)\b(?!\s+(?:(?:two|three|\d+)\s+)?(?:neighbou?rhoods?|areas?|districts?|cities|locations?|regions?|zones?)\b)|\bthem\b|\btop\s+(?:two|three|\d+)\b|\bof\s+them\b/i;
+const WHY_RE = /\bwhy\s+(?:is|are|does|do)\b/i;
+/** Comparative words that imply the two things were already shown. */
+const COMPARATIVE_RE = /\b(?:better|cheaper|comparing|vs\.?|versus)\b/i;
+/** Area words are about new discovery, not a reference to prior apartment cards. */
+const NEW_AREA_REFERENCE_RE =
+  /\b(?:these|those)\s+(?:(?:two|three|\d+)\s+)?(?:neighbou?rhoods?|areas?|districts?|cities|locations?|regions?|zones?)\b/i;
+
+export function looksLikeRentalAnalysis(text: string): boolean {
+  const bounded = text.length > MAX_RENTAL_TEXT_CHARS ? text.slice(0, MAX_RENTAL_TEXT_CHARS) : text;
+  const referencesShownResults = RESULT_REFERENCE_RE.test(bounded);
+  // "Compare apartments in these neighborhoods" discovers new rentals. The
+  // standalone "compare" must not override that fact unless shown cards are named.
+  if (
+    NEW_AREA_REFERENCE_RE.test(bounded) &&
+    RENTAL_INTENT_RE.test(bounded) &&
+    /\bcompar(?:e|ing|ison)\b/i.test(bounded) &&
+    !referencesShownResults
+  ) return false;
+  if (RENTAL_ANALYSIS_RE.test(bounded)) return true;
+  // "first" alone is not a result reference: "first-floor apartment … better wifi"
+  // is a fresh search. Require "first apartment/one/two/…", "these", "those" or "them".
+  return referencesShownResults && (WHY_RE.test(bounded) || COMPARATIVE_RE.test(bounded));
+}
+
 /** User message is clearly about rentals, not events or cafés. */
 export function looksLikeRentalSearch(text: string): boolean {
   const t = text.trim();
@@ -740,6 +783,8 @@ export function canFastPathRentalSearch(
   memory: ConciergeWorkingMemory,
 ): boolean {
   if (text.length > MAX_RENTAL_TEXT_CHARS) return false;
+  // A comparison or analysis of the results is the concierge's job, never a new search.
+  if (looksLikeRentalAnalysis(text)) return false;
   if (looksLikeNonRentalSearch(text)) return false;
   if (memory.lastRentalQuery?.genericAskPending) {
     return buildRentalSearchParams(text, memory) != null;
