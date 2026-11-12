@@ -15,7 +15,9 @@ import { searchWebGroundedEventsTool } from '../tools/search-web-grounded-events
 import { requestVenueBookingTool } from '../tools/request-venue-booking';
 import { showRecommendationsTool } from '../tools/show-recommendations';
 import { showRentalFilterControlTool } from '../tools/show-rental-filter-control';
+import { showComparisonTableTool } from '../tools/show-comparison-table';
 import { shouldRenderRentalFilterControl, shouldRequestRecommendations } from '../lib/recommendation-intent';
+import { shouldForceComparisonTable } from '../lib/comparison-table-intent';
 import { shouldSearchEventsForCards } from '../lib/event-intent';
 import { CONCIERGE_AGENT_MODEL } from "../lib/models";
 import { geminiMalformedFirstStepRetry } from "../lib/gemini-malformed-retry";
@@ -454,7 +456,7 @@ Never reply with an empty list and no recovery.
 - Distinguish stay-DATE intent from LISTING-SEARCH intent, not by matching the word "rental". If the renter is choosing/changing dates without requesting apartment options (e.g. "suggest a rental stay starting Nov 12", "set my move-in date", "change my dates", "I want to stay Nov 12-18"), and suggestRentalDates is available, CALL suggestRentalDates with from as YYYY-MM-DD and through only if an end date was supplied, then STOP; do NOT call search-rentals or ask clarifying questions. If the renter requests apartments or rental listings (e.g. "find me a two-bedroom in Laureles for Nov 12-18", "show cheaper options for those dates", price or neighbourhood searches), it is a SEARCH even when it names dates: call search-rentals with dates as filters; NEVER open the calendar. When both intents appear, the listing request wins.
 - "show cheaper options" → re-run search-rentals with maxPricePerNight ≈ 0.7 × current cap, keep neighborhood + minBedrooms.
 - "more like that" / "similar" → re-run search-rentals with same filters, slightly higher limit (capped at 5 cards shown).
-- "compare X and Y" / "compare the first two" / "which is cheaper?" on rentals already shown → compare ONLY lastRentalResults for those exact IDs: price (keep monthly vs nightly and its currency), bedrooms, amenities, availability, host. Do NOT call search-rentals to answer a comparison; that replaces the cards the renter is asking about. If a needed fact is missing, say it is not recorded. End with one short recommendation sentence. For a comparison table, use the Table component (render_ui) with at most 4 columns and 5 rows. For all-monthly comparisons, use Apartment, Bedrooms, Monthly Price, Currency with exact recorded monthly rents. For all-nightly comparisons, use Apartment, Bedrooms, Nightly Price, Currency with exact recorded nightly rates. For mixed monthly/nightly comparisons, use Apartment, Bedrooms, Price, Currency/Period; label every price as per month or per night and do not rank prices across incompatible periods. Always keep the Apartment title and Bedrooms columns for identification. NEVER add a Nightly Price to a monthly listing or divide the monthly rent by 30.
+- "compare X and Y" / "compare the first two" / "which is cheaper?" on rentals already shown → compare ONLY lastRentalResults for those exact IDs: price (keep monthly vs nightly and its currency), bedrooms, amenities, availability, host. Do NOT call search-rentals to answer a comparison; that replaces the cards the renter is asking about. If a needed fact is missing, say it is not recorded. End with one short recommendation sentence. For a comparison table, call showComparisonTable with two to five verified IDs from the current results and do not author Table operations, columns, rows, prices or Markdown. Keep ordinary comparison prose when no table is requested. NEVER add a Nightly Price to a monthly listing or divide the monthly rent by 30.
 
 # Venue booking (table / café / nightlife — venue_booking_requests only)
 When the user wants to book a table, café visit, or nightlife reservation:
@@ -559,6 +561,7 @@ export const conciergeAgent = new Agent({
     requestVenueBooking: requestVenueBookingTool,
     showRecommendations: showRecommendationsTool,
     showRentalFilterControl: showRentalFilterControlTool,
+    showComparisonTable: showComparisonTableTool,
   },
   inputProcessors: [
     // SAN-737: the verified current selection, tool schemas and working memory must
@@ -579,6 +582,13 @@ export const conciergeAgent = new Agent({
     { id: 'san1656-recommendation-intent', processInputStep: ({ stepNumber, messages, requestContext }) =>
       shouldRequestRecommendations({ stepNumber, messages, requestContext })
         ? { toolChoice: { type: 'tool' as const, toolName: 'showRecommendations' } }
+        : {} },
+    // SAN-1681 — an explicit comparison-table request is a UI command. Pin the
+    // ID-list tool; the transport builds the official Column → Table. Forcing
+    // render_ui itself produced empty operations, so it is not used here.
+    { id: 'san1681-comparison-table-intent', processInputStep: ({ stepNumber, messages, requestContext }) =>
+      shouldForceComparisonTable({ stepNumber, messages, requestContext })
+        ? { toolChoice: { type: 'tool' as const, toolName: 'showComparisonTable' } }
         : {} },
     // SAN-1653 — "show events as cards" pins the event search so the bridge always
     // emits the render_ui call; relying on model choice produced prose-only turns.

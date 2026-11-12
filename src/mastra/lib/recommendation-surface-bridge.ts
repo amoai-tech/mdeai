@@ -2,6 +2,7 @@ import { EventType, type BaseEvent } from "@ag-ui/client";
 import { Observable } from "rxjs";
 import { buildRentalRecommendationOps } from "./rental-recommendations-ui";
 import { buildRentalFilterControlOps } from "./rental-filter-control-ui";
+import { buildComparisonTableOps, type ComparisonRow } from "./comparison-table-ui";
 import {
   EVENT_RECOMMENDATIONS_SURFACE_ID,
   buildEventClearOps,
@@ -27,6 +28,13 @@ const FILTER_CONTROL_TOOLS = new Set([
   "showRentalFilterControl",
   "showRentalFilterControlTool",
   "show-rental-filter-control",
+]);
+
+/** SAN-1681 — the comparison tool's rows become the official Column → Table. */
+const COMPARISON_TABLE_TOOLS = new Set([
+  "showComparisonTable",
+  "showComparisonTableTool",
+  "show-comparison-table",
 ]);
 
 /** The tool result may arrive as an object or as a JSON string, with or without an envelope. */
@@ -69,6 +77,47 @@ export function eventIdsFromResult(content: unknown): string[] {
   }
   if (payload.result) return eventIdsFromResult(payload.result);
   return [];
+}
+
+export function comparisonRowsFromResult(content: unknown): ComparisonRow[] {
+  let value: unknown = content;
+  if (typeof value === "string") {
+    try { value = JSON.parse(value); } catch { return []; }
+  }
+  if (!value || typeof value !== "object") return [];
+  const payload = value as { ok?: unknown; rows?: unknown; result?: unknown };
+  if (payload.ok === false) return [];
+  if (Array.isArray(payload.rows)) {
+    return payload.rows.flatMap((row) => {
+      if (!row || typeof row !== "object") return [];
+      const r = row as Record<string, unknown>;
+      if (typeof r.id !== "string" || typeof r.title !== "string") return [];
+      const period = r.period === "month" || r.period === "night" ? r.period : null;
+      return [{
+        id: r.id,
+        title: r.title,
+        bedrooms: typeof r.bedrooms === "number" ? r.bedrooms : null,
+        price: typeof r.price === "number" ? r.price : null,
+        currency: typeof r.currency === "string" ? r.currency : null,
+        period,
+      }];
+    });
+  }
+  if (payload.result && typeof payload.result === "object") {
+    return comparisonRowsFromResult(payload.result);
+  }
+  return [];
+}
+
+export function comparisonTableRenderEvents(rows: readonly ComparisonRow[], toolCallId: string): BaseEvent[] {
+  const built = buildComparisonTableOps(rows, undefined, { replace: true });
+  if (!built) return [];
+  const callId = `render-ui-comparison-${toolCallId}`;
+  return [
+    { type: EventType.TOOL_CALL_START, toolCallId: callId, toolCallName: "render_ui" },
+    { type: EventType.TOOL_CALL_ARGS, toolCallId: callId, delta: JSON.stringify(built) },
+    { type: EventType.TOOL_CALL_END, toolCallId: callId },
+  ] as BaseEvent[];
 }
 
 /**
@@ -186,6 +235,13 @@ export function emitRecommendationSurface<T extends BaseEvent>(): (source: Obser
             // then re-creates (delete is a no-op when absent); an empty one clears.
             const mode = eventIds.length ? "replace" : "clear";
             for (const synthetic of renderEventUiEventsFor(eventIds, e.toolCallId, mode) ?? []) {
+              subscriber.next(synthetic as unknown as T);
+            }
+            return;
+          }
+          if (COMPARISON_TABLE_TOOLS.has(name)) {
+            const rows = comparisonRowsFromResult(e.content);
+            for (const synthetic of comparisonTableRenderEvents(rows, e.toolCallId)) {
               subscriber.next(synthetic as unknown as T);
             }
             return;
