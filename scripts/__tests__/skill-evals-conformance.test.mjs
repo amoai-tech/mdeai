@@ -243,40 +243,10 @@ test("critical routing workflows and production domains have positive and near-m
 });
 
 
-// All these fixtures are fixed repository files, not paths derived from skill
-// names or external inputs. Literal reads make that constraint auditable and
-// avoid nonliteral-filename warnings without disabling filesystem security rules.
-const KNOWN_SKILL_TEXT = Object.freeze({
-  tests: fs.readFileSync(".claude/skills/tests/SKILL.md", "utf8"),
-  testing: fs.readFileSync(".claude/skills/testing/SKILL.md", "utf8"),
-  errors: fs.readFileSync(".claude/skills/errors/SKILL.md", "utf8"),
-  "systematic-debugging": fs.readFileSync(".claude/skills/systematic-debugging/SKILL.md", "utf8"),
-  efficient: fs.readFileSync(".claude/skills/efficient/SKILL.md", "utf8"),
-  ponytail: fs.readFileSync(".claude/skills/ponytail/SKILL.md", "utf8"),
-  maps: fs.readFileSync(".claude/skills/maps/SKILL.md", "utf8"),
-  copilotkit: fs.readFileSync(".claude/skills/copilotkit/SKILL.md", "utf8"),
-  nextjs: fs.readFileSync(".claude/skills/nextjs/SKILL.md", "utf8"),
-  supabase: fs.readFileSync(".claude/skills/supabase/SKILL.md", "utf8"),
-  "real-estate": fs.readFileSync(".claude/skills/real-estate/SKILL.md", "utf8"),
-});
-const KNOWN_MIRROR_TEXT = Object.freeze({
-  testing: fs.readFileSync(".agents/skills/testing/SKILL.md", "utf8"),
-  "real-estate": fs.readFileSync(".agents/skills/real-estate/SKILL.md", "utf8"),
-  maps: fs.readFileSync(".agents/skills/maps/SKILL.md", "utf8"),
-});
-
-// Deliberately test neighboring workflow boundaries: code-review surfaced
-// contradictions between the testing skill, the router, and the eval guide.
-test("testing routes diagnosis and whole journeys consistently and limits selection probes", () => {
-  const testing = KNOWN_SKILL_TEXT.testing;
-  assert.match(testing, /unknown failure[^\n]*`errors`/i);
-  assert.doesNotMatch(testing, /Use `systematic-debugging` when the failure source is unknown/);
-  assert.match(testing, /Stripe checkout end-to-end[^\n]*\| `e2e`[^\n]*`stripe`/);
-  assert.match(testing, /RLS \/ 403 debugging[^\n]*\| `supabase` for known RLS; `errors` if source unknown/);
-  const guide = fs.readFileSync("docs/07-operations/san-1670-hybrid-skills.md", "utf8");
-  assert.match(guide, /Selection-only probe:/);
-  assert.match(guide, /Behavior runs require normal tool access/);
-});
+// Keep test-runner integration in the conformance suite. The independent
+// overlap/mirror contracts live in the existing routing suite instead.
+const TESTS_SKILL_TEXT = fs.readFileSync(".claude/skills/tests/SKILL.md", "utf8");
+const TESTING_SKILL_TEXT = fs.readFileSync(".claude/skills/testing/SKILL.md", "utf8");
 
 // Explicit design-vs-execution ownership: a valid JSON pack by itself does
 // not protect against both skills claiming the same request.
@@ -293,11 +263,22 @@ test("testing runs or writes+executes tests, while tests only designs coverage",
   assert.equal(byId(testingTriggers, "testing-4").expected_owner, "tests");
   assert.equal(byId(testingTriggers, "testing-5").expected_owner, "tests");
   assert.equal(byId(testingTriggers, "testing-6").expected_owner, "e2e");
-  const testing = KNOWN_SKILL_TEXT.testing;
-  const design = KNOWN_SKILL_TEXT.tests;
+  const testing = TESTING_SKILL_TEXT;
+  const design = TESTS_SKILL_TEXT;
   assert.match(testing, /Use when running or interpreting MDE Vitest/);
   assert.match(testing, /For coverage design without execution use tests/);
   assert.match(design, /Not for executing and interpreting/);
+
+  // Verify the adjacent skill boundaries and that the one-tool CLI is labeled
+  // as a selection probe, not executable proof.
+  assert.match(testing, /unknown failure[^\n]*`errors`/i);
+  assert.doesNotMatch(testing, /Use `systematic-debugging` when the failure source is unknown/);
+  assert.match(testing, /Stripe checkout end-to-end[^\n]*\| `e2e`[^\n]*`stripe`/);
+  assert.match(testing, /RLS \/ 403 debugging[^\n]*\| `supabase` for known RLS; `errors` if source unknown/);
+  const guide = fs.readFileSync("docs/07-operations/san-1670-hybrid-skills.md", "utf8");
+  assert.match(guide, /Selection-only probe:/);
+  assert.match(guide, /Behavior runs require normal tool access/);
+
 
   // Exercise the actual native runner case loader, not a second parser.
   const program = [
@@ -313,49 +294,6 @@ test("testing runs or writes+executes tests, while tests only designs coverage",
   });
   assert.equal(result.status, 0, result.stderr || result.stdout);
   assert.match(result.stdout, /TESTING_TRIGGERS_VALID=6/);
-});
-
-// Adjoining workflow owners share vocabulary but must describe distinct tasks.
-// Metadata checks guard loss of key nouns when descriptions are compacted;
-// they do NOT prove a model will choose the correct skill.
-test("three overlapping pairs keep explicit selection boundaries", () => {
-  const descriptor = (name) => {
-    assert.ok(Object.hasOwn(KNOWN_SKILL_TEXT, name), name + ": unregistered test skill");
-    const skill = KNOWN_SKILL_TEXT[name];
-    const front = skill.split("---", 3)[1];
-    assert.ok(front);
-    return front;
-  };
-  assert.match(descriptor("tests"), /DESIGN regression coverage/);
-  assert.match(descriptor("testing"), /Use when running or interpreting MDE Vitest/);
-  assert.match(descriptor("errors"), /actual failing test/);
-  assert.match(descriptor("systematic-debugging"), /deep multi-step root-cause/);
-  assert.match(descriptor("efficient"), /fastest safe reuse-first/);
-  assert.match(descriptor("ponytail"), /source receipts or a thorough reuse-before-build audit/);
-  for (const name of ["ponytail", "maps", "copilotkit", "nextjs", "supabase"]) {
-    const frontmatter = descriptor(name);
-    const match = frontmatter.match(/^description:\s*(?:>-\s*\n)?((?:  [^\n]*\n?)*)/m);
-    assert.ok(match, name + ": missing skill description");
-    const description = match[1].trim();
-    assert.ok(description.length > 0 && description.length <= 500,
-      name + ": description exceeds the MDE 500-character limit");
-  }
-});
-
-// Native Claude Code skill activation obeys frontmatter `paths` globs.
-// These three cross-file domain/execution skills must be available from a
-// natural-language task before the agent has opened a matching source file.
-test("project-wide testing, rental and maps skills have no file activation gate", () => {
-  for (const name of ["testing", "real-estate", "maps"]) {
-    assert.ok(Object.hasOwn(KNOWN_MIRROR_TEXT, name), name + ": unregistered mirror skill");
-    const skill = KNOWN_SKILL_TEXT[name];
-    const frontmatter = skill.split("---", 3)[1];
-    assert.ok(frontmatter, name + ": missing frontmatter");
-    assert.doesNotMatch(frontmatter, /^paths\s*:/m,
-      name + ": paths globs silently hide cross-file skills from the Claude session catalog");
-    assert.equal(KNOWN_MIRROR_TEXT[name],
-      skill, name + ": Codex/DSH mirror differs from canonical skill");
-  }
 });
 
 // SAN-1557: metadata checks only. Real agent model/tool behavior must be
