@@ -70,6 +70,19 @@ describe("SelectedPlaceOverlayCard", () => {
     expect(groundedHtml).toContain("selected-place-overlay-add-trip");
   });
 
+  it("renders an accessible close action when dismissal is available", () => {
+    const html = renderToStaticMarkup(
+      <SelectedPlaceOverlayCard pin={groundedPin} onDismiss={() => {}} />,
+    );
+    expect(html).toContain('data-testid="selected-place-overlay-close"');
+    expect(html).toContain('aria-label="Close selected place"');
+  });
+
+  it("omits the close action when the card is not dismissible", () => {
+    const html = renderToStaticMarkup(<SelectedPlaceOverlayCard pin={groundedPin} />);
+    expect(html).not.toContain('data-testid="selected-place-overlay-close"');
+  });
+
   it("uses a short placeholder strip for events and the full one for other places", () => {
     const strip = (pin: MapPin) => renderToStaticMarkup(<SelectedPlaceOverlayCard pin={{ ...pin, meta: {} }} />);
     expect(strip({ ...groundedPin, id: "event-3", category: "event" })).toContain("h-14");
