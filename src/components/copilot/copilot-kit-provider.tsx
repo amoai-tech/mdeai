@@ -8,8 +8,7 @@ import {
 } from "@copilotkit/react-core/v2";
 import { ConciergeCoAgentProvider } from "@/components/chat/concierge-coagent-context";
 import { SavedThreadReplay } from "@/components/chat/chat-provider";
-import { mdeUI } from "@/components/copilot/a2ui/mde-ui-catalog";
-import { mdeTheme } from "@/components/copilot/a2ui/mde-theme";
+import { MDE_GENERATIVE_UI } from "@/components/copilot/a2ui/mde-generative-ui";
 import { getCopilotKitClientProps } from "@/lib/copilotkit-client-props";
 import { isExpectedGuestStartup401, reportConciergeError } from "@/lib/concierge-error-store";
 import { useSession } from "@/hooks/use-session";
@@ -37,7 +36,7 @@ function DiscoveryConciergeProvider({ children }: { children: ReactNode }) {
     <CopilotKitProvider
       key={user?.id ?? "guest"}
       {...getCopilotKitClientProps("conciergeAgent")}
-      generativeUI={{ ui: mdeUI, agentIds: ["conciergeAgent"], theme: mdeTheme }}
+      generativeUI={MDE_GENERATIVE_UI}
       // SAN-1592 — the same classification rule as /chat (chat-provider.tsx).
       // A guest's refused `/info` probe is the expected consequence of
       // fail-closed auth, not a concierge failure. Reporting it wrote a shared

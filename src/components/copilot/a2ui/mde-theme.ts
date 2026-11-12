@@ -21,6 +21,9 @@ export const mdeTheme: GenerativeUITheme = {
   "--a2ui-color-text-default": "var(--foreground)",
   "--a2ui-color-text-secondary": "var(--muted-foreground)",
   "--a2ui-color-text-tertiary": "var(--muted-foreground)",
+  // MDE exposes one border token today (`--border`); all four official border
+  // roles collapse onto it intentionally. Split this mapping when the design
+  // system adds distinct subtle/strong/control border tokens.
   "--a2ui-color-border-default": "var(--border)",
   "--a2ui-color-border-subtle": "var(--border)",
   "--a2ui-color-border-strong": "var(--border)",
