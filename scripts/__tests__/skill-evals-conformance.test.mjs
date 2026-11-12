@@ -20,6 +20,7 @@ import routerTriggers from "../../.claude/skills/using-mde-skills/evals/trigger-
 import reviewTriggers from "../../.claude/skills/review/evals/trigger-evals.json" with { type: "json" };
 import e2eTriggers from "../../.claude/skills/e2e/evals/trigger-evals.json" with { type: "json" };
 import testsTriggers from "../../.claude/skills/tests/evals/trigger-evals.json" with { type: "json" };
+import testingTriggers from "../../.claude/skills/testing/evals/trigger-evals.json" with { type: "json" };
 import mergeTriggers from "../../.claude/skills/merge/evals/trigger-evals.json" with { type: "json" };
 import rentalTriggers from "../../.claude/skills/real-estate/evals/trigger-evals.json" with { type: "json" };
 import eventsTriggers from "../../.claude/skills/events/evals/trigger-evals.json" with { type: "json" };
@@ -229,6 +230,7 @@ test("critical routing workflows and production domains have positive and near-m
     review: reviewTriggers,
     e2e: e2eTriggers,
     tests: testsTriggers,
+    testing: testingTriggers,
     merge: mergeTriggers,
     "real-estate": rentalTriggers,
     events: eventsTriggers,
@@ -240,6 +242,59 @@ test("critical routing workflows and production domains have positive and near-m
   }
 });
 
+
+// Keep test-runner integration in the conformance suite. The independent
+// overlap/mirror contracts live in the existing routing suite instead.
+const TESTS_SKILL_TEXT = fs.readFileSync(".claude/skills/tests/SKILL.md", "utf8");
+const TESTING_SKILL_TEXT = fs.readFileSync(".claude/skills/testing/SKILL.md", "utf8");
+
+// Explicit design-vs-execution ownership: a valid JSON pack by itself does
+// not protect against both skills claiming the same request.
+test("testing runs or writes+executes tests, while tests only designs coverage", () => {
+  assertTriggerCases("testing", testingTriggers);
+  const byId = (fixtures, id) => {
+    const result = fixtures.find((item) => item.id === id);
+    assert.ok(result, "missing trigger: " + id);
+    return result;
+  };
+  assert.equal(byId(testsTriggers, "tests-4").expected_owner, "testing");
+  assert.equal(byId(testingTriggers, "testing-1").expected_owner, "testing");
+  assert.equal(byId(testingTriggers, "testing-2").expected_owner, "testing");
+  assert.equal(byId(testingTriggers, "testing-4").expected_owner, "tests");
+  assert.equal(byId(testingTriggers, "testing-5").expected_owner, "tests");
+  assert.equal(byId(testingTriggers, "testing-6").expected_owner, "e2e");
+  const testing = TESTING_SKILL_TEXT;
+  const design = TESTS_SKILL_TEXT;
+  assert.match(testing, /Use when running or interpreting MDE Vitest/);
+  assert.match(testing, /For coverage design without execution use tests/);
+  assert.match(design, /Not for executing and interpreting/);
+
+  // Verify the adjacent skill boundaries and that the one-tool CLI is labeled
+  // as a selection probe, not executable proof.
+  assert.match(testing, /unknown failure[^\n]*`errors`/i);
+  assert.doesNotMatch(testing, /Use `systematic-debugging` when the failure source is unknown/);
+  assert.match(testing, /Stripe checkout end-to-end[^\n]*\| `e2e`[^\n]*`stripe`/);
+  assert.match(testing, /RLS \/ 403 debugging[^\n]*\| `supabase` for known RLS; `errors` if source unknown/);
+  const guide = fs.readFileSync("docs/07-operations/san-1670-hybrid-skills.md", "utf8");
+  assert.match(guide, /Selection-only probe:/);
+  assert.match(guide, /Behavior runs require normal tool access/);
+
+
+  // Exercise the actual native runner case loader, not a second parser.
+  const program = [
+    "import importlib.util",
+    "p='scripts/run-skill-behavior-eval.py'",
+    "s=importlib.util.spec_from_file_location('runner',p)",
+    "r=importlib.util.module_from_spec(s); s.loader.exec_module(r)",
+    "for n in range(1,7): r.load_trigger_case('testing',n)",
+    "print('TESTING_TRIGGERS_VALID=6')",
+  ].join("\n");
+  const result = spawnSync("python3", ["-c", program], {
+    cwd: process.cwd(), encoding: "utf8", timeout: 10000,
+  });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.match(result.stdout, /TESTING_TRIGGERS_VALID=6/);
+});
 
 // SAN-1557: metadata checks only. Real agent model/tool behavior must be
 // independently executed and compared to a no-skill baseline.

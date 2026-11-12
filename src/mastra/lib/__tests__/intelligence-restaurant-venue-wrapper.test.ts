@@ -98,6 +98,16 @@ describe("INT-021 — Restaurant & Venue Intelligence Wrapper", () => {
     });
   });
 
+  describe("does not hijack rental queries", () => {
+    it.each([
+      "Compare the apartments near coffee shops in Laureles",
+      "Find apartments near coffee shops in Laureles",
+      "Find apartment near coffee shops in Laureles",
+    ])("%j stays outside café discovery", (prompt) => {
+      expect(analyzeVenueIntelligenceQuery(prompt).route).toBe("unsupported");
+    });
+  });
+
   describe("does not hijack ticketed events", () => {
     it("salsa events this weekend stays unsupported", () => {
       const a = analyzeVenueIntelligenceQuery("salsa events this weekend");

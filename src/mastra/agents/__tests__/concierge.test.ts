@@ -99,6 +99,26 @@ describe("conciergeAgent", () => {
     expect(parsed.lastRentalQuery?.neighborhood).toBe("Laureles");
   });
 
+  it("working memory keeps the facts needed to compare shown rentals", () => {
+    const parsed = conciergeWorkingMemorySchema.parse({
+      lastIntent: "rental_search",
+      lastRentalResults: [
+        {
+          id: "r1",
+          title: "Calle 10 #42-15",
+          neighborhood: "Laureles",
+          price_monthly: 2400000,
+          currency: "COP",
+          bedrooms: 2,
+          amenities: ["Balcony"],
+        },
+      ],
+    });
+    expect(parsed.lastRentalResults?.[0]?.price_monthly).toBe(2400000);
+    expect(parsed.lastRentalResults?.[0]?.currency).toBe("COP");
+    expect(parsed.lastRentalResults?.[0]?.bedrooms).toBe(2);
+  });
+
   it("working memory supports follow-up refinement fields", () => {
     const parsed = conciergeWorkingMemorySchema.parse({
       lastIntent: "rental_search",
@@ -118,6 +138,14 @@ describe("conciergeAgent", () => {
       },
     });
     expect(parsed.lastRentalQuery?.genericAskPending).toBe(true);
+  });
+
+  it("instructions compare the shown rentals without searching again", async () => {
+    const instructions = await conciergeAgent.getInstructions();
+    expect(instructions).toContain("compare the first two");
+    expect(instructions).toContain("do NOT call search-rentals");
+    expect(instructions).toContain("lastRentalResults for those exact IDs");
+    expect(instructions).toContain("analysis, comparison, amenities, or details");
   });
 
   it("instructions require refining rentals on show cheaper", async () => {

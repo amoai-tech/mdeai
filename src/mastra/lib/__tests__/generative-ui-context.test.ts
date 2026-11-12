@@ -276,6 +276,22 @@ describe("official generative-UI guide forwarding", () => {
     expect(built).toContain("showRecommendations");
   });
 
+  it("teaches the Table contract with both the official and fallback guides", () => {
+    const officialGuide = buildGenerativeUiInstruction(official);
+    const fallbackGuide = buildGenerativeUiInstruction({
+      context: [{ description: "Generative UI guide: x", value: "   " }],
+    });
+    for (const guide of [officialGuide, fallbackGuide]) {
+      expect(guide).toContain("Table data form:");
+      expect(guide).toContain("At most 5 rows by 4 columns");
+      expect(guide).toContain("do not round or estimate prices");
+      expect(guide).toContain("Every cell value must come from a tool result in this run");
+      expect(guide).toContain("lastRentalResults");
+      expect(guide).toContain("do not run a new rental search");
+      expect(guide).toContain("Do not use TableSection, TableRow or TableCell");
+    }
+  });
+
   it("falls back to the static guide when the entry exists but carries no text", () => {
     const blank = buildGenerativeUiInstruction({
       context: [{ description: "Generative UI guide: x", value: "   " }],

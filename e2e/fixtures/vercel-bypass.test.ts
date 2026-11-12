@@ -7,17 +7,18 @@ import {
 
 describe("Vercel candidate origin validation", () => {
   it("accepts the exact MDE deployment host pattern", () => {
-    expect(validateVercelCandidateOrigin("https://mdeai-abc123-amoco.vercel.app").origin).toBe(
-      "https://mdeai-abc123-amoco.vercel.app",
+    expect(validateVercelCandidateOrigin("https://mdeai-abc123-amo-agency.vercel.app").origin).toBe(
+      "https://mdeai-abc123-amo-agency.vercel.app",
     );
   });
 
   for (const url of [
-    "http://mdeai-abc123-amoco.vercel.app",
-    "https://mdeai-abc123-amoco.vercel.app.attacker.example",
-    "https://other-abc123-amoco.vercel.app",
-    "https://user:pass@mdeai-abc123-amoco.vercel.app",
-    "https://mdeai-abc123-amoco.vercel.app:444",
+    "https://mdeai-abc123-amoco.vercel.app",
+    "http://mdeai-abc123-amo-agency.vercel.app",
+    "https://mdeai-abc123-amo-agency.vercel.app.attacker.example",
+    "https://other-abc123-amo-agency.vercel.app",
+    "https://user:pass@mdeai-abc123-amo-agency.vercel.app",
+    "https://mdeai-abc123-amo-agency.vercel.app:444",
   ]) {
     it(`rejects untrusted candidate ${url}`, () => {
       expect(() => validateVercelCandidateOrigin(url)).toThrow();
@@ -39,7 +40,7 @@ function fakePage(status: number, cookieAfterSetup: FakeCookie[] = []) {
   return { page, get, cookies };
 }
 
-const CANDIDATE = "https://mdeai-abc123-amoco.vercel.app";
+const CANDIDATE = "https://mdeai-abc123-amo-agency.vercel.app";
 const BYPASS_COOKIE = { name: "_vercel_jwt" };
 
 describe("establishVercelAutomationBypass", () => {

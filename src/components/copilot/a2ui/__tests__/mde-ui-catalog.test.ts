@@ -46,8 +46,26 @@ describe("MDE A2UI catalog", () => {
     expect([...mdeUI.components.keys()].sort()).toEqual([
       "ApplyFiltersButton", "Badge", "BedroomFilter", "Box", "Caption", "Card",
       "Column", "Divider", "EventCard", "FollowUp", "Grid", "GridItem",
-      "Label", "RentalCard", "Row", "Spacer", "Text", "Title",
+      "Label", "RentalCard", "Row", "Spacer", "Table", "Text", "Title",
     ]);
+  });
+
+  it("accepts the documented Table columns and rows shape", () => {
+    // The guide teaches { columns: string[], rows: (string | number)[][] }. If the installed
+    // Table schema drifts, every model-built table is rejected and the turn falls
+    // back to text, so pin the exact documented shape here.
+    const schema = mdeUI.components.get("Table")?.props as z.ZodTypeAny | undefined;
+    expect(schema).toBeDefined();
+    const parsed = schema?.safeParse({
+      columns: ["Apartment", "Price"],
+      rows: [["Laureles 2BR", "2.5M COP"], ["Poblado Studio", "3.2M COP"]],
+    });
+    expect(parsed?.success).toBe(true);
+    // The guide also allows numeric tool values (for example, an exact price).
+    expect(schema?.safeParse({
+      columns: ["Apartment", "Price"],
+      rows: [["Poblado Studio", 3_200_000]],
+    }).success).toBe(true);
   });
 
   it("omits every control until a catalog function is registered", () => {
@@ -64,7 +82,7 @@ describe("MDE A2UI catalog", () => {
 
   it("omits data structures and remote-content components the guide does not teach", () => {
     for (const name of [
-      "Table", "TableSection", "TableRow", "TableCell", "List", "ListItem",
+      "TableSection", "TableRow", "TableCell", "List", "ListItem",
       "Chart", "Map", "Icon", "Image", "ImageGrid", "Link", "LinkCard",
       "Citation", "HtmlView", "Svg",
     ]) {

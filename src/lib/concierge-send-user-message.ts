@@ -1,5 +1,6 @@
 import { clearConciergeError, reportConciergeError } from "@/lib/concierge-error-store";
 import { isSelectedRentalCafeNearbyRequest } from "@/lib/cafe-search-fast-path";
+import { looksLikeRentalAnalysis, looksLikeRentalSearch } from "@/lib/rental-query-parser";
 import {
   routerHandlerOrderFromClassification,
   type RouterRoutingTarget,
@@ -97,6 +98,15 @@ export async function sendConciergeUserMessage(
 
     // A shown-apartment Details request is a UI action, not another search/model run.
     if (await handlers.handleRentalDetailsMessage?.(trimmed, submissionId)) return true;
+
+    // A rental comparison declined by the rental fast path must not fall through
+    // to the café/event handlers merely because the question mentions an amenity.
+    // Leave ordinary rental discovery (including neighborhood comparisons) public.
+    if (looksLikeRentalSearch(trimmed) && looksLikeRentalAnalysis(trimmed)) {
+      setConciergePendingSend(true);
+      agentAttempted = true;
+      return await handlers.onAgentSend(trimmed, submissionId);
+    }
 
     const classification = await resolveRouterClassification(trimmed, {
       lastIntent: handlers.lastIntent,

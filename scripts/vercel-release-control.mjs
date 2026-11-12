@@ -27,9 +27,9 @@
  */
 import { pathToFileURL } from "node:url";
 
-export const PROJECT_ID = "prj_5eY5DdiVxn7hDbruTG7BrrQT1QAB";
+export const PROJECT_ID = "prj_iadSvJDW4MBqtQ5s3YPlBNc08it6";
 export const PROJECT_NAME = "mdeai";
-export const TEAM_ID = "team_OPBk3bdOXAg6fpYnL4vxnLZd";
+export const TEAM_ID = "team_PbKG2U0lCR67rN57C4fqcfaw";
 export const PRODUCTION_BRANCH = "main";
 export const PRODUCTION_DOMAINS = ["www.mdeai.co", "mdeai.co"];
 const PRIMARY_DOMAIN = "www.mdeai.co";

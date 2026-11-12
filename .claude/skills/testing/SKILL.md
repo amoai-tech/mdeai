@@ -1,31 +1,32 @@
 ---
 name: testing
 description: >-
-  Use when designing test-first changes, selecting test seams, running or interpreting MDE Vitest/Playwright/smoke/eval/production tests, or proving regressions with RED → GREEN → REFACTOR.
+  Use when running or interpreting MDE Vitest, Playwright, smoke and CI tests, or writing and executing test-first RED/GREEN regressions. For coverage design without execution use tests; for full user journeys use e2e.
 title: Testing — mdeai.co toolchain + Claude-assisted layers
 impact: HIGH
 impactDescription: Vitest/Playwright/MCP recipes + generic layers + evals
 tags: testing, vitest, playwright, evals, claude-code, e2e, mdeai
-paths:
-  - "src/**"
-  - "tests/**"
-  - "**/*.test.*"
-  - "**/*.spec.*"
-  - "playwright/**"
-  - "e2e/**"
-  - "vitest.config.*"
+
 ---
 
 # testing — mdeai.co + cross-stack test layers
 
 ## Ownership
 
-`testing` is the single owner for test strategy, test-first implementation, regression proof, running tests, and interpreting test results. Use `systematic-debugging` first when the failure source is unknown; return to `testing` once the behavior/seam is localized.
+`testing` owns **executing** existing tests, interpreting test output, and **writing and running** test-first regressions. `tests` owns **designing** cases, matrices, coverage or grading criteria when the user does not ask to run anything. If the request includes both design and execution, `testing` owns the job and can consult `tests` as a reference, not start another owner. For an unknown failure, start with `errors` to reproduce and localize the cause; consult `systematic-debugging` only for deeper tracing, then return to `testing` for regression proof.
 
-For test-first work, read [references/tdd.md](references/tdd.md). For broader strategy, read [references/testing-strategy.md](references/testing-strategy.md).
+**Select `testing`:** “Run the existing Vitest suite and diagnose failures” or “Write a failing test and run the RED/GREEN fix.”
+**Select `tests` instead:** “List the tests needed for webhook idempotency without running them.”
+**Select `e2e` instead:** “Verify checkout from the browser through a persisted ticket.”
+
+**Stop when:** Report the exact command, real pass/fail output, what was exercised, the remaining untested risk and the next action. If tests cannot run, report **NOT RUN** with the blocker; do not claim the suite passed.
+
+For test-first **RED → GREEN → REFACTOR** work, read [references/tdd.md](references/tdd.md). For broader strategy, read [references/testing-strategy.md](references/testing-strategy.md).
 
 ## When NOT to use
 
+- **Design-only coverage or test matrices** without executing anything — use `tests`.
+- **A complete multi-layer browser → API → persisted-state user journey** — use `e2e`.
 - **Load / soak testing** as the primary ask (no mdeai harness yet)—keep scope to shipped gates in CLAUDE.md
 
 Pick the topic that matches the work, then load it.
@@ -41,7 +42,7 @@ Pick the topic that matches the work, then load it.
 | Common bug patterns / triage taxonomy | [references/issue-taxonomy.md](references/issue-taxonomy.md) |
 | Map of layers (unit → E2E → visual → mobile → agentic → evals) | [references/testing-layers.md](references/testing-layers.md) |
 | Curated external links (subagents, marketplace, Anthropic eval docs) | [references/resource-hub.md](references/resource-hub.md) |
-| Browser/MCP tool itself failing to connect | `systematic-debugging` |
+| Browser/MCP tool itself failing to connect | `errors` for diagnosis; consult `systematic-debugging` for deeper tracing |
 
 ---
 
@@ -67,10 +68,10 @@ Resolve available browser tooling from the current environment; do not assume a 
 | Lighthouse audit on a Vercel preview URL | Chrome DevTools tooling (`lighthouse_audit --mode navigation --device mobile`) | `nextjs` |
 | Bundle / Core Web Vitals trace | current performance tooling | `testing` for proof; `nextjs` for implementation ownership |
 | Supabase email/OAuth sign-in regression | Playwright or configured authenticated browser | `testing` → [playwright.md](playwright.md) |
-| Stripe checkout end-to-end | authenticated browser/Playwright path | `testing` + `stripe` |
+| Stripe checkout end-to-end | authenticated browser/Playwright path | `e2e` owns the complete journey; consult `stripe` for payment rules |
 
 | UI four-state visual verify | Playwright | `testing` → [playwright.md](playwright.md) |
-| RLS / 403 debugging during a UI flow | Chrome DevTools tooling (`list_console_messages --types error` + `list_network_requests --resourceTypes Fetch`) | `supabase`, `systematic-debugging` |
+| RLS / 403 debugging during a UI flow | Chrome DevTools tooling (`list_console_messages --types error` + `list_network_requests --resourceTypes Fetch`) | `supabase` for known RLS; `errors` if source unknown |
 | Console-error sweep before commit | Playwright or current DevTools tooling | `testing` |
 
 ---

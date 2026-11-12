@@ -532,6 +532,53 @@ describe("RentalAskComposer (SAN-1421)", () => {
     vi.unstubAllGlobals();
   });
 
+  it.each([
+    "Compare the first two apartments and tell me which is better",
+    "Show a table comparing the first two apartments",
+  ])("does not replace current cards with a structured search for %j", async (prompt) => {
+    const onResults = vi.fn();
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<RentalAskComposer onResults={onResults} />);
+    type(prompt);
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+
+    await waitFor(() => expect(chat.appendMessage).toHaveBeenCalledWith(prompt));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    // Existing-result comparisons belong to the agent; a new search must not replace the cards.
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(onResults).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it.each([
+    "Show me a table comparing apartments in Laureles and El Poblado",
+    "Show me a table comparing apartments in these neighborhoods: Laureles and El Poblado",
+    "Compare apartments in these neighborhoods: Laureles and El Poblado",
+  ])("retains structured discovery for %j", async (prompt) => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ results: [rental("rnt_1")], total: 1 }), { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const onResults = vi.fn();
+
+    render(<RentalAskComposer onResults={onResults} />);
+    type(prompt);
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+
+    await waitFor(() => expect(chat.appendMessage).toHaveBeenCalledWith(prompt));
+    await waitFor(() => expect(onResults).toHaveBeenCalledTimes(1));
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/rentals/search",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(onResults).toHaveBeenCalledWith(
+      expect.objectContaining({ query: prompt, total: 1 }),
+    );
+    vi.unstubAllGlobals();
+  });
+
   it("lets a follow-up refine the previous rental question instead of starting over", async () => {
     // A Response body can only be read once, so each request gets its own.
     const fetchMock = vi.fn().mockImplementation(() =>

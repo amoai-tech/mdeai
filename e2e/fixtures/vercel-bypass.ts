@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 
-const MDE_VERCEL_HOST = /^mdeai-[a-z0-9-]+-amoco\.vercel\.app$/i;
+const MDE_VERCEL_HOST = /^mdeai-[a-z0-9-]+-amo-agency\.vercel\.app$/i;
 
 export function validateVercelCandidateOrigin(rawUrl: string): URL {
   const url = new URL(rawUrl);

@@ -13,9 +13,9 @@ function run(overrides = {}) {
       ...process.env,
       VERCEL_DEPLOYMENT_ID: "dpl_AhQPocB7UYbzTgRHioYxN6sZH7p3",
       VERCEL_DEPLOYMENT_REF: "main",
-      VERCEL_DEPLOYMENT_URL: "https://mdeai-test-amoco.vercel.app",
+      VERCEL_DEPLOYMENT_URL: "https://mdeai-test-amo-agency.vercel.app",
       VERCEL_DEPLOYMENT_SHA: head,
-      VERCEL_PROJECT_ID: "prj_5eY5DdiVxn7hDbruTG7BrrQT1QAB",
+      VERCEL_PROJECT_ID: "prj_iadSvJDW4MBqtQ5s3YPlBNc08it6",
       VERCEL_PROJECT_NAME: "mdeai",
       VERCEL_ENVIRONMENT: "production",
       ...overrides,
@@ -30,12 +30,14 @@ test("accepts the exact MDE production candidate and checked-out SHA", () => {
 });
 
 for (const [name, overrides] of [
-  ["rejects a non-HTTPS URL", { VERCEL_DEPLOYMENT_URL: "http://mdeai-test-amoco.vercel.app" }],
-  ["rejects an attacker domain", { VERCEL_DEPLOYMENT_URL: "https://mdeai-test-amoco.vercel.app.attacker.example" }],
-  ["rejects URL credentials", { VERCEL_DEPLOYMENT_URL: "https://user:pass@mdeai-test-amoco.vercel.app" }],
-  ["rejects unexpected ports", { VERCEL_DEPLOYMENT_URL: "https://mdeai-test-amoco.vercel.app:444" }],
-  ["rejects URL paths", { VERCEL_DEPLOYMENT_URL: "https://mdeai-test-amoco.vercel.app/evil" }],
-  ["rejects query strings", { VERCEL_DEPLOYMENT_URL: "https://mdeai-test-amoco.vercel.app/?next=https://evil.example" }],
+  ["rejects the old Vercel team deployment host", { VERCEL_DEPLOYMENT_URL: "https://mdeai-test-amoco.vercel.app" }],
+  ["rejects the old Vercel project id", { VERCEL_PROJECT_ID: "prj_5eY5DdiVxn7hDbruTG7BrrQT1QAB" }],
+  ["rejects a non-HTTPS URL", { VERCEL_DEPLOYMENT_URL: "http://mdeai-test-amo-agency.vercel.app" }],
+  ["rejects an attacker domain", { VERCEL_DEPLOYMENT_URL: "https://mdeai-test-amo-agency.vercel.app.attacker.example" }],
+  ["rejects URL credentials", { VERCEL_DEPLOYMENT_URL: "https://user:pass@mdeai-test-amo-agency.vercel.app" }],
+  ["rejects unexpected ports", { VERCEL_DEPLOYMENT_URL: "https://mdeai-test-amo-agency.vercel.app:444" }],
+  ["rejects URL paths", { VERCEL_DEPLOYMENT_URL: "https://mdeai-test-amo-agency.vercel.app/evil" }],
+  ["rejects query strings", { VERCEL_DEPLOYMENT_URL: "https://mdeai-test-amo-agency.vercel.app/?next=https://evil.example" }],
   ["rejects malformed SHA", { VERCEL_DEPLOYMENT_SHA: "$(touch /tmp/pwned)" }],
   ["rejects wrong project id", { VERCEL_PROJECT_ID: "prj_attacker" }],
   ["rejects wrong project name", { VERCEL_PROJECT_NAME: "other" }],
@@ -50,7 +52,7 @@ for (const [name, overrides] of [
   ["rejects a malformed deployment id", { VERCEL_DEPLOYMENT_ID: "not-a-deployment" }],
   ["rejects a deployment id with shell metacharacters", { VERCEL_DEPLOYMENT_ID: "dpl_abc; touch /tmp/pwned" }],
   ["rejects a too-short deployment id", { VERCEL_DEPLOYMENT_ID: "dpl_123" }],
-  ["rejects a project id that only looks similar", { VERCEL_PROJECT_ID: "prj_5eY5DdiVxn7hDbruTG7BrrQT1QAB-x" }],
+  ["rejects a project id that only looks similar", { VERCEL_PROJECT_ID: "prj_iadSvJDW4MBqtQ5s3YPlBNc08it6-x" }],
 ]) {
   test(name, () => {
     const result = run(overrides);
@@ -67,7 +69,7 @@ test("rejects a valid-looking SHA that is not the checked-out candidate", () => 
 });
 
 test("a missing deployment id is reported by name, never by silently passing", () => {
-  const env = { ...process.env, VERCEL_DEPLOYMENT_URL: "https://mdeai-test-amoco.vercel.app", VERCEL_DEPLOYMENT_SHA: head, VERCEL_PROJECT_ID: "prj_5eY5DdiVxn7hDbruTG7BrrQT1QAB", VERCEL_PROJECT_NAME: "mdeai", VERCEL_ENVIRONMENT: "production", VERCEL_DEPLOYMENT_REF: "main" };
+  const env = { ...process.env, VERCEL_DEPLOYMENT_URL: "https://mdeai-test-amo-agency.vercel.app", VERCEL_DEPLOYMENT_SHA: head, VERCEL_PROJECT_ID: "prj_iadSvJDW4MBqtQ5s3YPlBNc08it6", VERCEL_PROJECT_NAME: "mdeai", VERCEL_ENVIRONMENT: "production", VERCEL_DEPLOYMENT_REF: "main" };
   delete env.VERCEL_DEPLOYMENT_ID;
   const result = spawnSync(process.execPath, [validator], { encoding: "utf8", env });
   assert.notEqual(result.status, 0);

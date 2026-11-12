@@ -6,6 +6,7 @@ import type { Rental } from "@/mastra/tools/search-rentals";
 import type { RentalAskResults } from "@/components/rentals/rental-ask-composer";
 import { toDetailRental } from "@/lib/rentals/chat-rental-detail";
 import { unappliedRentalRequests } from "@/lib/rental-display";
+import { rentalsToPanelRows } from "@/lib/rental-search-fast-path";
 
 /**
  * Reading the agent's rental search out of the thread.
@@ -125,15 +126,11 @@ function latestRentalToolResult(
   return null;
 }
 
+// One mapping for both writers: the fast path and the Rentals ask box must
+// store the same comparison facts (monthly price, currency, bedrooms) and the
+// same placeholder omissions.
 export const payloadRows = (payload: RentalAskResults) =>
-  payload.results.map((r) => ({
-    id: r.id,
-    title: r.title,
-    neighborhood: r.neighborhood,
-    nightly_price: r.nightly_price,
-    // Verbatim from the listing; empty stays empty so the answer can say "not specified".
-    amenities: Array.isArray(r.amenities) ? r.amenities : undefined,
-  }));
+  rentalsToPanelRows(payload.results);
 
 /** Keep only turns that have text, so tool/state-only messages do not leave blank rows. */
 const TRANSCRIPT_LIMIT = 6;

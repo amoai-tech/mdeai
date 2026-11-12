@@ -34,7 +34,7 @@ import {
  */
 const SHA = "ef427a31f52837ccd9d8e73b5ca7720839ee16d9";
 const ID = "dpl_AhQPocB7UYbzTgRHioYxN6sZH7p3";
-const HOST = "mdeai-abc123-amoco.vercel.app";
+const HOST = "mdeai-abc123-amo-agency.vercel.app";
 const expected = { id: ID, sha: SHA, host: HOST };
 
 const stagedDeployment = (over = {}) => ({
@@ -49,7 +49,7 @@ const stagedDeployment = (over = {}) => ({
 });
 // Real shape (first promotion, SAN-1330): the deployment's own `alias` array omits the promoted custom
 // domains; the link lives in the domain's alias record (GET /v4/aliases/<domain>).
-const promotedDeployment = (over = {}) => stagedDeployment({ alias: ["mdeai-amoco.vercel.app"], ...over });
+const promotedDeployment = (over = {}) => stagedDeployment({ alias: ["mdeai-amo-agency.vercel.app"], ...over });
 const domainAlias = (domain, over = {}) => ({ alias: domain, projectId: PROJECT_ID, deploymentId: ID, ...over });
 // Both production domains served by `id` (default: the certified candidate).
 const aliasesOf = (id = ID, over = {}) => ({
@@ -78,6 +78,8 @@ test("credential: the token sees the current team and project", () => {
 });
 
 for (const [name, over] of [
+  ["the old Vercel project id", { id: "prj_5eY5DdiVxn7hDbruTG7BrrQT1QAB" }],
+  ["the old Vercel team", { accountId: "team_OPBk3bdOXAg6fpYnL4vxnLZd" }],
   ["a different project id", { id: "prj_old" }],
   ["a different project name", { name: "other" }],
   ["a different team (the stale PR #85 setup)", { accountId: "team_ZDZyovkHiBVULVkZLSQ7rEUU" }],
@@ -165,7 +167,7 @@ for (const domain of PRODUCTION_DOMAINS) {
 }
 
 test("staged: other (non-production) aliases are fine", () => {
-  assert.doesNotThrow(() => checkStaged(stagedDeployment({ alias: ["mdeai-amoco.vercel.app"] }), expected));
+  assert.doesNotThrow(() => checkStaged(stagedDeployment({ alias: ["mdeai-amo-agency.vercel.app"] }), expected));
 });
 
 for (const [name, over, pattern] of [
@@ -269,7 +271,7 @@ test("staged: the certified URL must belong to the deployment id that gets promo
   // The workflow tests the URL from the event but promotes the id. A forged event pairing a healthy
   // URL with another build's id would otherwise certify one build and release a different one.
   assert.throws(
-    () => checkStaged(stagedDeployment({ url: "mdeai-someone-else-amoco.vercel.app" }), expected),
+    () => checkStaged(stagedDeployment({ url: "mdeai-someone-else-amo-agency.vercel.app" }), expected),
     /url|host/i,
   );
 });
