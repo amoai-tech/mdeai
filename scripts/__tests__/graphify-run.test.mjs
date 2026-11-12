@@ -196,14 +196,31 @@ test("the active agent guidance routes Graphify through the safe wrapper", () =>
 
 // Optional integration check: run with MDE_GRAPHIFY_REAL_SMOKE=1 after building
 // graphify-out/ with the pinned CLI. Regular CI runs only deterministic fixtures.
-test("real Graphify query obeys the project's default budget", {
+// Graphify only prints a budget warning when results are truncated, so inspect
+// its opt-in query log instead. The log is isolated and removed after this test.
+test("real Graphify query reads the default budget and CLI override", {
   skip: process.env.MDE_GRAPHIFY_REAL_SMOKE !== "1",
-}, () => {
+}, (t) => {
   assert.ok(existsSync(join(root, "graphify-out", "graph.json")), "Run npm run graphify:update first");
-  const defaultQuery = run(["query", "rental map pins"], {}, root);
+  const temp = sandbox(t);
+  const logPath = join(temp, "graphify-query-log.jsonl");
+  const env = {
+    GRAPHIFY_QUERY_LOG: logPath,
+    GRAPHIFY_QUERY_LOG_DISABLE: "0",
+    GRAPHIFY_QUERY_LOG_RESPONSES: "0",
+  };
+  const defaultQuery = run(["query", "rental map pins"], env, root);
   assert.equal(defaultQuery.status, 0, defaultQuery.stderr);
-  assert.match(defaultQuery.stdout, /~4000-token budget/, "Expected the real CLI to read .graphifyrc");
-  const overriddenQuery = run(["query", "rental map pins", "--budget=2000"], {}, root);
+  const overriddenQuery = run(["query", "rental map pins", "--budget=2000"], env, root);
   assert.equal(overriddenQuery.status, 0, overriddenQuery.stderr);
-  assert.match(overriddenQuery.stdout, /~2000-token budget/, "Expected the CLI flag to override .graphifyrc");
+
+  const entries = readFileSync(logPath, "utf8").trim().split("\n").map((line) => JSON.parse(line));
+  assert.deepEqual(
+    entries.map(({ kind, question, token_budget }) => ({ kind, question, token_budget })),
+    [
+      { kind: "query", question: "rental map pins", token_budget: 4000 },
+      { kind: "query", question: "rental map pins", token_budget: 2000 },
+    ],
+    "Graphify should read .graphifyrc by default and let an explicit CLI flag override it",
+  );
 });
