@@ -2,7 +2,7 @@
 
 Canonical: [`.claude/skills/`](./) · Codex exposure: [`.agents/skills/`](../../.agents/skills/) · Ownership: [`AGENTS.md`](../../AGENTS.md).
 
-**Snapshot:** 2026-11-12 from the SAN-1670 PR skill tree, verified with `npm run check:skills` and the skill conformance tests. Counts are definitions and mechanical structure, **not** measured agent success rates. Recompute after changes to the skill catalog.
+**Snapshot:** 2026-11-05 from the current GitHub `main` skill tree, verified with `npm run check:skills` and the skill conformance tests. Counts are definitions and mechanical structure, **not** measured agent success rates. Recompute after changes to the skill catalog.
 
 ## Inventory
 
@@ -37,9 +37,9 @@ Each name below is an active canonical skill, exposed through a corresponding re
 | Canonical active skills | **53** | Exists as `SKILL.md` with metadata |
 | Mirrored symlink entries | **161** | File/directory exposures point back to canonical owners |
 | Skills with behavioral `evals.json` | **33/53** | JSON definitions, not executed behavior tests |
-| Skills with `trigger-evals.json` | **23/53** | Positive and near-miss case definitions, not routing pass rate |
-| Defined trigger probes | **176** | Parsed cases across trigger files |
-| Defined behavioral probes | **171** | Parsed cases across behavior files |
+| Skills with `trigger-evals.json` | **21/53** | Positive and near-miss case definitions, not routing pass rate |
+| Defined trigger probes | **165** | Parsed cases across trigger files |
+| Defined behavioral probes | **149** | Parsed cases across behavior files |
 | Router `routing-evals.json` cases | **110** | Separate historical router-case format, not counted as trigger files |
 
 The `npm run check:skills` command enforces skill/mirror layout, links inside `SKILL.md` and nested supporting `references/**/*.md` documents, and vendored upstream integrity. A link must resolve **from the Markdown file containing it**, both in the canonical tree and the agent exposure mirror. `node --test scripts/__tests__/skill-evals-conformance.test.mjs scripts/__tests__/skill-behavior-runner.test.mjs scripts/__tests__/check-skill-layout.test.mjs` validates case schemas, negative controls, fake-tool-call rejection, and link regressions.
