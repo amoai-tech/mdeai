@@ -82,6 +82,7 @@ describe("rental-search-fast-path", () => {
       "Which one is better, the Laureles or the Poblado apartment?",
       "Why is the second one cheaper?",
       "Give me the pros and cons of these two apartments.",
+      "Show a table comparing the first two apartments",
     ]) {
       expect(canFastPathRentalSearch(prompt, {}), prompt).toBe(false);
     }

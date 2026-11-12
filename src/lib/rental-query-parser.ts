@@ -377,7 +377,7 @@ export function exactBedroomsFromQueryText(text: string): number | undefined {
  * reply again instead of an answer.
  */
 const RENTAL_ANALYSIS_RE =
-  /\b(?:compare|comparison|pros?\s+(?:and|&)\s+cons?|difference(?:s)?\s+between|which\s+one\s+is\s+better|which\s+is\s+better|is\s+(?:it|this|that)\s+better)\b/i;
+  /\b(?:compar(?:e|ing|ison)|pros?\s+(?:and|&)\s+cons?|difference(?:s)?\s+between|which\s+one\s+is\s+better|which\s+is\s+better|is\s+(?:it|this|that)\s+better)\b/i;
 
 /**
  * A comparative or explanatory question about results already shown. "Which is
