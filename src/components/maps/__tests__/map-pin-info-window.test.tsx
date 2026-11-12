@@ -42,7 +42,7 @@ describe("MapPinInfoWindow dismissal", () => {
     actions.clearFocusPinRequest.mockClear();
     const { getByRole, unmount } = render(<MapPinInfoWindow pin={pin} />);
 
-    fireEvent.click(getByRole("button", { name: "Dismiss selected place" }));
+    fireEvent.click(getByRole("button", { name: "Close selected place" }));
     expect(actions.setSelectedPinId).toHaveBeenCalledExactlyOnceWith(null);
     expect(actions.clearFocusPinRequest).toHaveBeenCalledOnce();
     unmount();

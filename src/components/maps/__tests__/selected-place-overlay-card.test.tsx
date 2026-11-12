@@ -78,7 +78,7 @@ describe("SelectedPlaceOverlayCard", () => {
       <SelectedPlaceOverlayCard pin={groundedPin} onDismiss={() => {}} />,
     );
     expect(html).toContain('data-testid="selected-place-overlay-close"');
-    expect(html).toContain('aria-label="Dismiss selected place"');
+    expect(html).toContain('aria-label="Close selected place"');
   });
 
   it("calls onDismiss when the close action is clicked", () => {

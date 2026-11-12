@@ -82,8 +82,8 @@ export function SelectedPlaceOverlayCard({
             <button
               type="button"
               onClick={onDismiss}
-              title="Dismiss selected place"
-              aria-label="Dismiss selected place"
+              title="Close selected place"
+              aria-label="Close selected place"
               className="flex size-9 items-center justify-center rounded-full bg-black/55 text-lg text-white backdrop-blur-sm"
               data-testid="selected-place-overlay-close"
             >
