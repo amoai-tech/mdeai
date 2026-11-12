@@ -247,14 +247,16 @@ describe("official generative-UI guide forwarding", () => {
     // Measured live: the tool returned IDs only, and the model invented bedroom
     // counts (said 1 BR/2 BR; the cards were 3 BR/1 BR). The card facts belong
     // to the cards, never to the model's prose.
-    expect(MDE_A2UI_GUIDE).toContain("reply with the tool's message only");
+    expect(MDE_A2UI_GUIDE).toContain("for a cards-only request reply with the tool's message only");
+    expect(MDE_A2UI_GUIDE).toContain("When the user also requests a comparison or recommendation");
+    expect(MDE_A2UI_GUIDE).toContain("this ID-only card tool cannot establish the comparison");
     expect(MDE_A2UI_GUIDE).toContain("Do not restate or guess bedrooms");
     expect(MDE_A2UI_GUIDE).toContain("tool result deliberately contains no listing facts");
     // The live /rentals turn receives the official guide plus MDE_GENERATIVE_UI_RULES,
     // not MDE_A2UI_GUIDE. Both paths must carry the rule.
     expect(MDE_GENERATIVE_UI_RULES).toContain("Do not restate or guess bedrooms");
     expect(buildGenerativeUiInstruction(official)).toContain(
-      "After showRecommendations, reply with the tool's message only",
+      "After showRecommendations, for a cards-only request reply with the tool's message only",
     );
   });
 
