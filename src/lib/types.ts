@@ -24,7 +24,11 @@ export type ConciergeWorkingMemory = {
     id: string;
     title: string;
     neighborhood: string;
-    nightly_price: number;
+    nightly_price?: number;
+    /** Stored monthly price for monthly listings, in `currency`. */
+    price_monthly?: number;
+    currency?: string;
+    bedrooms?: number;
     /** Amenities exactly as the listing records them. Missing or empty means "not specified",
      *  never "does not have it". */
     amenities?: string[];
