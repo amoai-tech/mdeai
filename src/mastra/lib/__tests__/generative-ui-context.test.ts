@@ -264,7 +264,11 @@ describe("official generative-UI guide forwarding", () => {
       expect(guide).toContain("do not round or estimate prices");
       expect(guide).toContain("Every cell value must come from a tool result in this run");
       expect(guide).toContain("lastRentalResults");
-      expect(guide).toContain("NEVER add a Nightly Price");
+      expect(guide).toContain("NEVER add a Nightly Price to a monthly listing");
+      expect(guide).toContain("For all-monthly comparisons");
+      expect(guide).toContain("For all-nightly comparisons");
+      expect(guide).toContain("For mixed monthly/nightly comparisons");
+      expect(guide).toContain("do not rank prices across incompatible periods");
       expect(guide).toContain("keep the Apartment title and Bedrooms columns");
       expect(guide).toContain("not a markdown table");
       expect(guide).toContain("do not run a new rental search");
