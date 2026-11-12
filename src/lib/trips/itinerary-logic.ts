@@ -69,12 +69,13 @@ function itemSortValue(item: TripItemRow): number {
   return item.start_at ? new Date(item.start_at).getTime() : Number.POSITIVE_INFINITY;
 }
 
-/** Deterministic order: scheduled time, then creation time, then id. */
+/** Deterministic order: scheduled time, explicit position, creation time, then id. */
 export function compareTripItems(a: TripItemRow, b: TripItemRow): number {
   const timeDiff = itemSortValue(a) - itemSortValue(b);
   if (Number.isFinite(timeDiff) && timeDiff !== 0) return timeDiff;
   if (a.start_at === null && b.start_at !== null) return 1;
   if (a.start_at !== null && b.start_at === null) return -1;
+  if (a.position !== b.position) return a.position - b.position;
   const createdDiff = (a.created_at ?? "").localeCompare(b.created_at ?? "");
   if (createdDiff !== 0) return createdDiff;
   return a.id.localeCompare(b.id);
