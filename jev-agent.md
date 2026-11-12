@@ -12,7 +12,7 @@
 | Several credible failure causes | Logs + reproduction | `jev_rerank` on 2–5 falsifiable hypotheses | Decisive reproduction |
 | Ambiguous review findings | Thread IDs + exact-head diff | `jev_classify`, `jev_verify` | Current code + tested fix |
 | Possible false-pass test | Vitest / Playwright | `jev-eval`, Supercov assertion audit | Negative/mutation case must fail |
-| AI answer quality | Grounded labeled examples | Jev Evals / `jev_noul` | Exact facts checked in code |
+| AI answer quality | Grounded labeled examples | First pilot 3–5 fixed cases with the `jev-eval` skill (after an AI-facing task ships); expand only if useful | Exact facts checked in code |
 | Completion claim | Exact-head CI, UI/API/DB evidence | `jev_gate` advisory check | Independent receipt |
 | Browser exploration | Playwright / Chrome | Jev Browser, read-only exploration | Deterministic assertions |
 
@@ -51,7 +51,7 @@ Use only the relevant locally installed skill: `quicksilver` (semantic discovery
 4. **Review:** Deduplicate **only by identical thread ID** mechanically. Identical words are *candidate* duplicates only after comparing source location and root cause. Classify remaining ambiguous comments with `jev_classify`; verify every dismissal against exact-head evidence, especially security/correctness findings.
 5. **Done:** Supply `jev_gate` the **actual claims**, exact PR head and sanitized **raw** test/lint/schema output. Unsupported claims remain unsupported; a Jev PASS never replaces CI, required human review or independent `task-verifier`.
 
-**Don't target a quota of auto-dismissed review comments or rejected assertions.** Measure classification precision and known-bad mutations caught.
+**Don't target a quota of auto-dismissed review comments or rejected assertions.** Measure classification precision and known-bad mutations caught. **Stop rule:** Pilot on 3 tasks; record minutes saved, false findings rejected, and gate verdicts. Drop any tool that does not pay for itself.
 
 ## Concrete MDE examples (historical, not current task requirements)
 
@@ -85,7 +85,9 @@ When the PR head changes, previous proof is stale until rechecked. A model-produ
 
 ## Measure whether Jev helps
 
-Track minutes to confirmed code owner (vs `rg` alone), decisive hypothesis confirmation, intentionally broken cases detected, classification precision/false dismissals, supported Done claims, billed Jev usage, and time to verified fix. Confidence percentages are **not** observed success rates. Pilot anecdotes are **measured pilots, not controlled benchmarks**.
+Track minutes to confirmed code owner (vs `rg` alone), decisive hypothesis confirmation, intentionally broken cases detected, classification precision/false dismissals, supported Done claims, billed Jev usage, and time to verified fix. **Pilot each optional tool on 3 real tasks; record minutes saved, false findings rejected and `jev_gate` verdicts; drop tools without measurable benefit.** Confidence percentages are **not** observed success rates. Pilot anecdotes are **measured pilots, not controlled benchmarks**.
+
+**Jev Evals maturity:** The separate Jev Evals repository is an optional experimental path, not a top-priority dependency or production quality gate. Start only **after one AI-facing feature ships**, with 3–5 fixed, source-backed cases using the installed `jev-eval` skill. Confirm the test runner/provider credentials actually work before expanding; no `jev_eval` MCP tool is implied.
 
 ## References
 
