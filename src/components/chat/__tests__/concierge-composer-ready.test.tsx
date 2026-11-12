@@ -47,6 +47,29 @@ describe("conciergeComposerInput", () => {
     expect(build({ textArea: { className: "x" } }, true).textArea).toMatchObject({ disabled: false, className: "x", enterKeyHint: "send" });
   });
 
+  it("names the real CopilotKit textarea without replacing the composer", () => {
+    const input = build(undefined, true);
+    expect(input.textArea).toMatchObject({
+      id: "concierge-chat-input",
+      name: "message",
+      "aria-label": "Message the concierge",
+      enterKeyHint: "send",
+    });
+    const serverHtml = renderToString(<ConciergeChatView />);
+    expect(serverHtml).toContain('id="concierge-chat-input"');
+    expect(serverHtml).toContain('name="message"');
+    expect(serverHtml).toContain('aria-label="Message the concierge"');
+  });
+
+  it("preserves caller-defined textarea id, name and aria-label", () => {
+    const input = build({ textArea: {
+      id: "caller-chat", name: "question", "aria-label": "Ask MDE", className: "existing",
+    } }, true);
+    expect(input.textArea).toMatchObject({
+      id: "caller-chat", name: "question", "aria-label": "Ask MDE", className: "existing",
+    });
+  });
+
   it("keeps a composer the caller disabled for its own reasons disabled after hydration", () => {
     expect(build({ textArea: { disabled: true } }, true).textArea.disabled).toBe(true);
   });
