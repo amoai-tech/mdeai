@@ -46,7 +46,7 @@ describe("MDE A2UI catalog", () => {
     expect([...mdeUI.components.keys()].sort()).toEqual([
       "ApplyFiltersButton", "Badge", "BedroomFilter", "Box", "Caption", "Card",
       "Column", "Divider", "EventCard", "FollowUp", "Grid", "GridItem",
-      "Label", "RentalCard", "Row", "Spacer", "Text", "Title",
+      "Label", "RentalCard", "Row", "Spacer", "Table", "Text", "Title",
     ]);
   });
 
@@ -64,7 +64,7 @@ describe("MDE A2UI catalog", () => {
 
   it("omits data structures and remote-content components the guide does not teach", () => {
     for (const name of [
-      "Table", "TableSection", "TableRow", "TableCell", "List", "ListItem",
+      "TableSection", "TableRow", "TableCell", "List", "ListItem",
       "Chart", "Map", "Icon", "Image", "ImageGrid", "Link", "LinkCard",
       "Citation", "HtmlView", "Svg",
     ]) {

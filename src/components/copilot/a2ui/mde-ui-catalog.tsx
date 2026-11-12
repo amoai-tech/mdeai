@@ -505,11 +505,12 @@ function MdeApplyFilters({
  *   catalog function is registered: a fake "Book viewing" next to real
  *   listings. RentalCard already owns grounded Details and viewing actions.
  *   SAN-1655/SAN-1658 add these back together with their functions.
- * - **Complex data structures are omitted until documented.** Table* needs a
- *   nested shape the guide would have to teach; MDE already renders real
- *   comparison tables from tool results (SAN-1041). Charts and maps need peer
- *   libraries MDE does not install, HtmlView/Svg would let the model author
- *   markup, and Image/Link/Citation would accept model-chosen URLs.
+ * - **Table is exposed for short, tool-grounded comparisons** using its
+ *   columns/rows data form, documented in the server guide. TableSection,
+ *   TableRow and TableCell stay omitted: the data form does not need them.
+ *   Charts and maps need peer libraries MDE does not install, HtmlView/Svg
+ *   would let the model author markup, and Image/Link/Citation would accept
+ *   model-chosen URLs.
  *
  * Every omitted name must still exist in the installed `standardUI`, and the
  * exposed set must equal exactly what the guide documents — both enforced by
@@ -544,7 +545,6 @@ export const MDE_OMITTED_STANDARD_COMPONENTS = [
   "ChoicePicker",
   "Tabs",
   // Nested data structures the guide does not teach yet.
-  "Table",
   "TableSection",
   "TableRow",
   "TableCell",
