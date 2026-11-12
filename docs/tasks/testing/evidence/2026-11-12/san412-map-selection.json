@@ -1,0 +1,26 @@
+{
+  "capturedAt": "2026-11-12",
+  "journey": "/chat search -> select first map pin -> immediate Ask",
+  "outgoingAgentRun": {
+    "runId": "7c269149-3d24-42e6-9342-78bb765e1b45",
+    "message": "What is the exact name of the place I selected now?",
+    "mapUi": {
+      "selectedPinId": "rental-37a05b09-f560-4776-92fd-b8bb2b92e611",
+      "activeCategories": [
+        "rental"
+      ],
+      "pinCountByCategory": {
+        "rental": 2
+      },
+      "viewport": {
+        "lat": 6.2447,
+        "lng": -75.5916,
+        "zoom": 15
+      }
+    }
+  },
+  "pins": [
+    "rental-37a05b09-f560-4776-92fd-b8bb2b92e611",
+    "rental-e404023e-ad2f-4446-896d-e085ecdacaf1"
+  ]
+}
