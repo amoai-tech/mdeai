@@ -378,11 +378,22 @@ export function exactBedroomsFromQueryText(text: string): number | undefined {
  * reply again instead of an answer.
  */
 const RENTAL_ANALYSIS_RE =
-  /\b(?:compare|comparison|difference(?:s)?\s+between|versus|vs\.?|pros?\s+(?:and|&)\s+cons?|which\s+(?:one|is|of\s+(?:these|the|them))|tell\s+me\s+which|is\s+(?:it|this|that)\s+better|which\s+is\s+better|why\s+(?:is|are|does|do))\b/i;
+  /\b(?:compare|comparison|pros?\s+(?:and|&)\s+cons?|difference(?:s)?\s+between|which\s+one\s+is\s+better|which\s+is\s+better|is\s+(?:it|this|that)\s+better)\b/i;
+
+/**
+ * A comparative or explanatory question about results already shown. "Which is
+ * the cheapest 2-bedroom in Laureles?" and "Laureles vs El Poblado under 3M"
+ * are ordinary searches and must keep the fast path, so only a reference to
+ * the current results plus "why"/"better" counts here.
+ */
+const RESULT_REFERENCE_RE =
+  /\b(?:first|second|third|these|those|them|top\s+(?:two|three|\d+)|of\s+them)\b/i;
+const WHY_RE = /\bwhy\s+(?:is|are|does|do)\b/i;
 
 export function looksLikeRentalAnalysis(text: string): boolean {
   const bounded = text.length > MAX_RENTAL_TEXT_CHARS ? text.slice(0, MAX_RENTAL_TEXT_CHARS) : text;
-  return RENTAL_ANALYSIS_RE.test(bounded);
+  if (RENTAL_ANALYSIS_RE.test(bounded)) return true;
+  return RESULT_REFERENCE_RE.test(bounded) && (WHY_RE.test(bounded) || /\bbetter\b/i.test(bounded));
 }
 
 /** User message is clearly about rentals, not events or cafés. */
