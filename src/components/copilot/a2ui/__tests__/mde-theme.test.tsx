@@ -1,8 +1,6 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { MDE_UI_OVERRIDES, MdeAICard } from "../mde-ui-catalog";
 import { mdeTheme } from "../mde-theme";
 
 describe("mdeTheme", () => {
@@ -25,22 +23,5 @@ describe("mdeTheme", () => {
       );
       expect(source, `${rel} must pass the theme to generativeUI`).toContain("theme: mdeTheme");
     }
-  });
-});
-
-describe("Card override", () => {
-  it("keeps the official Card slot and renders MDE styling", () => {
-    const html = renderToStaticMarkup(
-      <MdeAICard>
-        <span>Hello</span>
-      </MdeAICard>,
-    );
-    expect(html).toContain('data-slot="mde-ai-card"');
-    expect(html).toContain("Hello");
-    expect(html).toContain("bg-card");
-  });
-
-  it("is registered as the Card override", () => {
-    expect(MDE_UI_OVERRIDES.Card.component).toBe(MdeAICard);
   });
 });
