@@ -107,14 +107,14 @@ describe("conciergeAgent", () => {
           id: "r1",
           title: "Calle 10 #42-15",
           neighborhood: "Laureles",
-          monthly_price: 2400000,
+          price_monthly: 2400000,
           currency: "COP",
           bedrooms: 2,
           amenities: ["Balcony"],
         },
       ],
     });
-    expect(parsed.lastRentalResults?.[0]?.monthly_price).toBe(2400000);
+    expect(parsed.lastRentalResults?.[0]?.price_monthly).toBe(2400000);
     expect(parsed.lastRentalResults?.[0]?.currency).toBe("COP");
     expect(parsed.lastRentalResults?.[0]?.bedrooms).toBe(2);
   });

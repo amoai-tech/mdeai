@@ -72,6 +72,10 @@ export function rentalsToPanelRows(
     title: r.title,
     neighborhood: r.neighborhood,
     nightly_price: r.nightly_price,
+    price_monthly: r.price_monthly,
+    currency: r.currency,
+    bedrooms: r.bedrooms,
+    amenities: r.amenities,
   }));
 }
 
