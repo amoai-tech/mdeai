@@ -1,7 +1,7 @@
 ---
 name: code-review
 description: >-
-  Use when reviewing an existing PR, branch, commit range, or work-in-progress diff for correctness, regressions, security, maintainability, or spec fit.
+  Use to review existing PRs, branches, diffs or standalone code snippets for correctness, security, maintainability and spec fit (e.g. an RLS migration or memory-leak snippet). Not for implementing reviewer feedback (review) or merge-readiness audits (praudit). Verify findings against current source.
 context: fork
 ---
 
@@ -27,6 +27,8 @@ Load specialist guidance only when the changed surface requires it:
 
 Changed code/tests, the exact task/spec, trusted repository policy, and relevant surrounding contracts are the evidence hierarchy. PR prose is not authoritative when it conflicts with current code.
 
+**Use / do not use:** Use for “Review the RLS migration PR for cross-user access and regressions.” Do **not** use for “Address the reviewer's existing comment” (`review`) or “Decide whether all merge approvals are satisfied” (`praudit` + independent `task-verifier` for S4).
+
 ## Review inputs
 
 Resolve before reviewing:
@@ -38,6 +40,8 @@ Resolve before reviewing:
 - current tests/CI for the same head.
 
 If the fixed point is ambiguous, use the PR merge-base when reviewing a PR; otherwise state the comparison chosen.
+
+**Review-efficiency rule (Addy Osmani + P Stack):** Prioritize demonstrable correctness, security and behavioral regressions before style. Try to falsify the smallest risky assumption against changed code and its immediate callers. Stop when the user outcome and risk-matched evidence are established; do not spawn parallel reviews for routine, low-risk changes.
 
 ## Review invariants
 
@@ -58,6 +62,13 @@ Before declaring a change safe, run an adversarial falsification pass: assume th
 ### Boundary validation for new parsers and gates
 
 A new or changed validator, parser, regex, version gate, identifier parser, permission gate, or custom implementation of a published standard is not proven by the author's own examples. Enumerate malformed near-miss inputs yourself and report the concrete inputs that pass when they should not: leading or trailing separators, empty identifiers, leading zeros, whitespace, malformed composite values, missing or duplicated components, and values immediately outside the accepted grammar. A suite that exercises only well-formed inputs is a test gap, not proof. Prefer an already-installed standards-compliant library over a hand-written pattern when it safely fits the requirement.
+
+**Classify evidence before writing findings:**
+- **VERIFIED DEFECT:** Reproduced or directly proven on the exact head; give the exact fix and regression check.
+- **RISK / TEST GAP:** A plausible unproven failure path; state what targeted probe would settle it, as advisory rather than a confirmed blocker.
+- **UNKNOWN / STALE CLAIM:** Missing evidence or a disproven old comment; say what is unknown or mark NOISE. Never upgrade a suspicion to a VERIFIED finding.
+
+**Stop when:** The changed behavior and material risk boundaries have been checked, real findings have precise fixes, and untested claims are explicitly labeled. Do not create extra rounds of duplicate speculative review.
 
 ## Two-axis review
 
