@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { clearConciergeError, getConciergeErrorSnapshot } from "@/lib/concierge-error-store";
 import { sendConciergeUserMessage } from "../concierge-send-user-message";
+import { canFastPathCafeSearch } from "../cafe-search-fast-path";
+import { looksLikeRentalAnalysis } from "../rental-query-parser";
 
 function makeHandlers() {
   return {
@@ -38,6 +40,31 @@ describe("SAN-867 · VEB-MVP-001 — Router hijack fix — sendConciergeUserMess
 
     expect(handlers.onAgentSend).toHaveBeenCalledOnce();
     expect(handlers.handleEventMessage).not.toHaveBeenCalled();
+  });
+
+  it("passes apartment comparisons near coffee shops to the agent, not café search", async () => {
+    const prompt = "Compare the apartments near coffee shops in Laureles";
+    const handlers = makeHandlers();
+    // An actual café fast-path match demonstrates why falling through is unsafe.
+    expect(looksLikeRentalAnalysis(prompt)).toBe(true);
+    expect(canFastPathCafeSearch(prompt)).toBe(true);
+    handlers.handleGroundedMessage.mockResolvedValueOnce(true);
+
+    await sendConciergeUserMessage(prompt, handlers);
+
+    expect(handlers.onAgentSend).toHaveBeenCalledWith(prompt, expect.any(String));
+    expect(handlers.handleGroundedMessage).not.toHaveBeenCalled();
+    expect(handlers.handleRestaurantMessage).not.toHaveBeenCalled();
+  });
+
+  it("keeps standalone café discovery on the grounded fast path", async () => {
+    const handlers = makeHandlers();
+    handlers.handleGroundedMessage.mockResolvedValueOnce(true);
+
+    await sendConciergeUserMessage("Find coffee shops in Laureles", handlers);
+
+    expect(handlers.handleGroundedMessage).toHaveBeenCalledOnce();
+    expect(handlers.onAgentSend).not.toHaveBeenCalled();
   });
 
   it("handled rental fast-path does not also run the agent", async () => {

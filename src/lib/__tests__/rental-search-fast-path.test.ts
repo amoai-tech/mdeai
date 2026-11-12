@@ -115,6 +115,9 @@ describe("rental-search-fast-path", () => {
     // sign-in prompt instead of rental cards.
     for (const prompt of [
       "Which is the cheapest 2-bedroom apartment in Laureles?",
+      "Find a 2BR apartment in Laureles which is pet friendly under $80/night",
+      "2BR apartments in Laureles vs Poblado under $1000/month",
+      "Show me apartments in which of the neighborhoods has a metro",
       "apartments in Laureles vs El Poblado under 3M",
       "2 bedroom in Laureles under 3,000,000 COP",
       "Show me furnished apartments in Medellín",
