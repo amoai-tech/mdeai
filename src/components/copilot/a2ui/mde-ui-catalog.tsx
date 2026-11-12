@@ -8,7 +8,7 @@ import { useSession } from "@/hooks/use-session";
 import { isStoredRentalUuid } from "@/lib/cafe-search-fast-path";
 import { useAgent, UseAgentUpdate } from "@copilotkit/react-core/v2";
 import { useOptionalEventLocalChat } from "@/components/chat/event-local-chat-context";
-import { createGenerativeUI, standardUI } from "@copilotkit/react-core/v2/generative-ui";
+import { createGenerativeUI, standardUI, type GenerativeUIComponentProps } from "@copilotkit/react-core/v2/generative-ui";
 import { RentalCard as ExistingRentalCard } from "@/components/copilot/rental-card";
 import { EventCard as ExistingEventCard } from "@/components/copilot/event-card";
 import { useOptionalEventBrowseSelection } from "@/components/events/event-browse-selection-context";
@@ -578,6 +578,26 @@ export const MDE_OMITTED_STANDARD_COMPONENTS = [
   "Video",
 ] as const;
 
+/**
+ * SAN-1675 — keep the official `Card` contract and render it with MDE's
+ * surface, border and radius tokens. No behavior change: the official props
+ * (padding, background, radius, children) still arrive resolved.
+ */
+export function MdeAICard({ children }: GenerativeUIComponentProps<typeof standardUI, "Card">) {
+  return (
+    <div
+      data-slot="mde-ai-card"
+      className="rounded-xl border border-border bg-card p-4 text-card-foreground shadow-sm"
+    >
+      {children}
+    </div>
+  );
+}
+
+export const MDE_UI_OVERRIDES = {
+  Card: { component: MdeAICard },
+};
+
 export const mdeUI = createGenerativeUI({
   id: "mde/discovery@1",
   extends: [standardUI.omit(MDE_OMITTED_STANDARD_COMPONENTS)],
@@ -622,4 +642,5 @@ export const mdeUI = createGenerativeUI({
       events: { onApplyRentalFilters: { parameters: z.object({}) } },
     },
   },
+  overrides: MDE_UI_OVERRIDES,
 });

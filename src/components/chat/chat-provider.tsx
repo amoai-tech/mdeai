@@ -20,6 +20,7 @@ import { reconcileSavedHistory, type SavedThreadMessage } from "@/lib/chat/saved
 import { useThreadNav } from "@/lib/chat/thread-nav-context";
 import { clearLiveUserMessage, isLiveUserMessage } from "@/lib/chat/live-user-message-ids";
 import { mdeUI } from "@/components/copilot/a2ui/mde-ui-catalog";
+import { mdeTheme } from "@/components/copilot/a2ui/mde-theme";
 import { getCopilotKitClientProps } from "@/lib/copilotkit-client-props";
 import { isExpectedGuestStartup401, reportConciergeError } from "@/lib/concierge-error-store";
 import {
@@ -476,7 +477,7 @@ function LiveChatProvider({ children, persistThread = false }: { children: React
     <CopilotKitProvider
       key={user?.id ?? "guest"}
       {...getCopilotKitClientProps("conciergeAgent")}
-      generativeUI={{ ui: mdeUI, agentIds: ["conciergeAgent"] }}
+      generativeUI={{ ui: mdeUI, agentIds: ["conciergeAgent"], theme: mdeTheme }}
       enableInspector={false}
       onError={(event) => {
         if (isExpectedGuestStartup401(event, Boolean(user), sessionLoading)) return;
