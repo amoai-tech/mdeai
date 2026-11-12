@@ -243,6 +243,28 @@ test("critical routing workflows and production domains have positive and near-m
 });
 
 
+// All these fixtures are fixed repository files, not paths derived from skill
+// names or external inputs. Literal reads make that constraint auditable and
+// avoid nonliteral-filename warnings without disabling filesystem security rules.
+const KNOWN_SKILL_TEXT = Object.freeze({
+  tests: fs.readFileSync(".claude/skills/tests/SKILL.md", "utf8"),
+  testing: fs.readFileSync(".claude/skills/testing/SKILL.md", "utf8"),
+  errors: fs.readFileSync(".claude/skills/errors/SKILL.md", "utf8"),
+  "systematic-debugging": fs.readFileSync(".claude/skills/systematic-debugging/SKILL.md", "utf8"),
+  efficient: fs.readFileSync(".claude/skills/efficient/SKILL.md", "utf8"),
+  ponytail: fs.readFileSync(".claude/skills/ponytail/SKILL.md", "utf8"),
+  maps: fs.readFileSync(".claude/skills/maps/SKILL.md", "utf8"),
+  copilotkit: fs.readFileSync(".claude/skills/copilotkit/SKILL.md", "utf8"),
+  nextjs: fs.readFileSync(".claude/skills/nextjs/SKILL.md", "utf8"),
+  supabase: fs.readFileSync(".claude/skills/supabase/SKILL.md", "utf8"),
+  "real-estate": fs.readFileSync(".claude/skills/real-estate/SKILL.md", "utf8"),
+});
+const KNOWN_MIRROR_TEXT = Object.freeze({
+  testing: fs.readFileSync(".agents/skills/testing/SKILL.md", "utf8"),
+  "real-estate": fs.readFileSync(".agents/skills/real-estate/SKILL.md", "utf8"),
+  maps: fs.readFileSync(".agents/skills/maps/SKILL.md", "utf8"),
+});
+
 // Explicit design-vs-execution ownership: a valid JSON pack by itself does
 // not protect against both skills claiming the same request.
 test("testing runs or writes+executes tests, while tests only designs coverage", () => {
@@ -258,8 +280,8 @@ test("testing runs or writes+executes tests, while tests only designs coverage",
   assert.equal(byId(testingTriggers, "testing-4").expected_owner, "tests");
   assert.equal(byId(testingTriggers, "testing-5").expected_owner, "tests");
   assert.equal(byId(testingTriggers, "testing-6").expected_owner, "e2e");
-  const testing = fs.readFileSync(path.join(SKILLS, "testing", "SKILL.md"), "utf8");
-  const design = fs.readFileSync(path.join(SKILLS, "tests", "SKILL.md"), "utf8");
+  const testing = KNOWN_SKILL_TEXT.testing;
+  const design = KNOWN_SKILL_TEXT.tests;
   assert.match(testing, /Use when running or interpreting MDE Vitest/);
   assert.match(testing, /For coverage design without execution use tests/);
   assert.match(design, /Not for executing and interpreting/);
@@ -285,7 +307,8 @@ test("testing runs or writes+executes tests, while tests only designs coverage",
 // they do NOT prove a model will choose the correct skill.
 test("three overlapping pairs keep explicit selection boundaries", () => {
   const descriptor = (name) => {
-    const skill = fs.readFileSync(path.join(SKILLS, name, "SKILL.md"), "utf8");
+    assert.ok(Object.hasOwn(KNOWN_SKILL_TEXT, name), name + ": unregistered test skill");
+    const skill = KNOWN_SKILL_TEXT[name];
     const front = skill.split("---", 3)[1];
     assert.ok(front);
     return front;
@@ -311,13 +334,13 @@ test("three overlapping pairs keep explicit selection boundaries", () => {
 // natural-language task before the agent has opened a matching source file.
 test("project-wide testing, rental and maps skills have no file activation gate", () => {
   for (const name of ["testing", "real-estate", "maps"]) {
-    const skillFile = path.join(SKILLS, name, "SKILL.md");
-    const skill = fs.readFileSync(skillFile, "utf8");
+    assert.ok(Object.hasOwn(KNOWN_MIRROR_TEXT, name), name + ": unregistered mirror skill");
+    const skill = KNOWN_SKILL_TEXT[name];
     const frontmatter = skill.split("---", 3)[1];
     assert.ok(frontmatter, name + ": missing frontmatter");
     assert.doesNotMatch(frontmatter, /^paths\s*:/m,
       name + ": paths globs silently hide cross-file skills from the Claude session catalog");
-    assert.equal(fs.readFileSync(path.join(".agents/skills", name, "SKILL.md"), "utf8"),
+    assert.equal(KNOWN_MIRROR_TEXT[name],
       skill, name + ": Codex/DSH mirror differs from canonical skill");
   }
 });
