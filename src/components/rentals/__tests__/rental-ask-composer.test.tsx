@@ -532,6 +532,23 @@ describe("RentalAskComposer (SAN-1421)", () => {
     vi.unstubAllGlobals();
   });
 
+  it("does not replace the cards with a structured search on a comparison turn", async () => {
+    const onResults = vi.fn();
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<RentalAskComposer onResults={onResults} />);
+    type("Compare the first two apartments and tell me which is better");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+
+    await waitFor(() => expect(chat.appendMessage).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    // The agent answers the comparison; a supplementary search must not replace the cards.
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(onResults).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
   it("lets a follow-up refine the previous rental question instead of starting over", async () => {
     // A Response body can only be read once, so each request gets its own.
     const fetchMock = vi.fn().mockImplementation(() =>

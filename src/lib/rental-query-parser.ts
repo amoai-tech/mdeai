@@ -387,13 +387,17 @@ const RENTAL_ANALYSIS_RE =
  * the current results plus "why"/"better" counts here.
  */
 const RESULT_REFERENCE_RE =
-  /\b(?:first|second|third|these|those|them|top\s+(?:two|three|\d+)|of\s+them)\b/i;
+  /\b(?:first|second|third|fourth)\s+(?:apartment|listing|property|home|option|result|card|one|two|three|four|\d+)\b|\b(?:these|those|them)\b|\btop\s+(?:two|three|\d+)\b|\bof\s+them\b/i;
 const WHY_RE = /\bwhy\s+(?:is|are|does|do)\b/i;
+/** Comparative words that imply the two things were already shown. */
+const COMPARATIVE_RE = /\b(?:better|cheaper|vs\.?|versus)\b/i;
 
 export function looksLikeRentalAnalysis(text: string): boolean {
   const bounded = text.length > MAX_RENTAL_TEXT_CHARS ? text.slice(0, MAX_RENTAL_TEXT_CHARS) : text;
   if (RENTAL_ANALYSIS_RE.test(bounded)) return true;
-  return RESULT_REFERENCE_RE.test(bounded) && (WHY_RE.test(bounded) || /\bbetter\b/i.test(bounded));
+  // "first" alone is not a result reference: "first-floor apartment … better wifi"
+  // is a fresh search. Require "first apartment/one/two/…", "these", "those" or "them".
+  return RESULT_REFERENCE_RE.test(bounded) && (WHY_RE.test(bounded) || COMPARATIVE_RE.test(bounded));
 }
 
 /** User message is clearly about rentals, not events or cafés. */

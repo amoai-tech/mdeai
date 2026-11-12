@@ -87,6 +87,25 @@ describe("rental-search-fast-path", () => {
     }
   });
 
+  it("does not treat an isolated ordinal as a result reference", () => {
+    // Review: "first" + "better" blocked a first-floor search.
+    expect(canFastPathRentalSearch("first-floor apartment in Laureles with better wifi", {})).toBe(true);
+    expect(canFastPathRentalSearch("first floor apartment in Laureles with better wifi", {})).toBe(true);
+  });
+
+  it("detects price comparisons and explicit first-vs-second wording", () => {
+    // Review: cheaper/vs comparisons must reach the concierge even without "better".
+    for (const prompt of [
+      "Is the first apartment cheaper than the second one?",
+      "first apartment vs second apartment",
+      "Which of these is cheaper?",
+    ]) {
+      expect(canFastPathRentalSearch(prompt, {}), prompt).toBe(false);
+    }
+    // Location-only discovery keeps the fast path.
+    expect(canFastPathRentalSearch("apartments in Laureles vs El Poblado under 3M", {})).toBe(true);
+  });
+
   it("keeps ordinary searches on the fast path", () => {
     // Review caught the first regex over-blocking these: a guest would get the
     // sign-in prompt instead of rental cards.
