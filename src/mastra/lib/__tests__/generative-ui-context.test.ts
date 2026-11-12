@@ -263,6 +263,8 @@ describe("official generative-UI guide forwarding", () => {
       expect(guide).toContain("At most 5 rows by 4 columns");
       expect(guide).toContain("do not round or estimate prices");
       expect(guide).toContain("Every cell value must come from a tool result in this run");
+      expect(guide).toContain("lastRentalResults");
+      expect(guide).toContain("do not run a new rental search");
       expect(guide).toContain("Do not use TableSection, TableRow or TableCell");
     }
   });
