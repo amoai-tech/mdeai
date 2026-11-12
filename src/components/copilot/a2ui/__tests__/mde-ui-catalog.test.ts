@@ -50,6 +50,19 @@ describe("MDE A2UI catalog", () => {
     ]);
   });
 
+  it("accepts the documented Table columns and rows shape", () => {
+    // The guide teaches { columns: string[], rows: string[][] }. If the installed
+    // Table schema drifts, every model-built table is rejected and the turn falls
+    // back to text, so pin the exact documented shape here.
+    const schema = mdeUI.components.get("Table")?.props as z.ZodTypeAny | undefined;
+    expect(schema).toBeDefined();
+    const parsed = schema?.safeParse({
+      columns: ["Apartment", "Price"],
+      rows: [["Laureles 2BR", "2.5M COP"], ["Poblado Studio", "3.2M COP"]],
+    });
+    expect(parsed?.success).toBe(true);
+  });
+
   it("omits every control until a catalog function is registered", () => {
     // A rendered Button or input with no bound action is a dead control next to
     // real listings. SAN-1655/SAN-1658 add these back with their functions.
