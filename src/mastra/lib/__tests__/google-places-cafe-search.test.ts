@@ -6,7 +6,7 @@ vi.mock("../google-places-client", async (importOriginal) => {
   return { ...actual, searchText: searchTextMock };
 });
 
-import { mapGoogleTextSearchToGrounded, searchGoogleCafes, withMedellinScope } from "../google-places-cafe-search";
+import { isMedellinPlaceScope, mapGoogleTextSearchToGrounded, searchGoogleCafes, withMedellinScope } from "../google-places-cafe-search";
 
 const response = {
   places: [
@@ -78,6 +78,44 @@ describe("mapGoogleTextSearchToGrounded", () => {
     expect(withMedellinScope("cafés in Laureles")).toBe("cafés in Laureles");
     expect(withMedellinScope("cafés in Bogotá")).toBe("cafés in Bogotá");
     expect(withMedellinScope("quiet cafés")).toContain("Medellín");
+  });
+
+  it("uses the supplied viewport for a map-area query without adding a city", async () => {
+    searchTextMock.mockResolvedValue({ places: [] });
+    await searchGoogleCafes({
+      query: "cafés around this map area",
+      locationBias: { latitude: 6.3, longitude: -75.6 },
+    });
+    expect(searchTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        textQuery: "cafés around this map area",
+        locationBias: {
+          circle: { center: { latitude: 6.3, longitude: -75.6 }, radius: 5000 },
+        },
+      }),
+    );
+  });
+
+  it("unscoped café query with real map bias does not force Medellín text", async () => {
+    searchTextMock.mockReset().mockResolvedValue({ places: [] });
+    await searchGoogleCafes({ query: "cafés with Wi-Fi", locationBias: { latitude: 6.27, longitude: -75.60 } });
+    expect(searchTextMock).toHaveBeenCalledWith(expect.objectContaining({
+      textQuery: "cafés with Wi-Fi",
+      locationBias: { circle: { center: { latitude: 6.27, longitude: -75.60 }, radius: 5000 } },
+    }));
+  });
+
+  it("omits location bias for a named city when the caller passes null", async () => {
+    searchTextMock.mockResolvedValue({ places: [] });
+    await searchGoogleCafes({ query: "cafés in Cali", locationBias: null });
+    const request = searchTextMock.mock.calls.at(-1)?.[0];
+    expect(request?.textQuery).toBe("cafés in Cali");
+    expect(request).not.toHaveProperty("locationBias");
+    expect(withMedellinScope("cafés around this map area")).toBe("cafés around this map area");
+    expect(isMedellinPlaceScope("cafés in Centro")).toBe(true);
+    expect(isMedellinPlaceScope("cafés in Laureles")).toBe(true);
+    expect(isMedellinPlaceScope("cafés in Bogotá")).toBe(false);
+    expect(isMedellinPlaceScope("cafés en el centro de Bogotá")).toBe(false);
   });
 
   it("omits out-of-range or partial coordinates", () => {
