@@ -43,7 +43,7 @@ for (const [name, overrides, selectedName] of [
     });
     assert.equal(result.status, 0, result.stderr || result.stdout);
     assert.match(result.stdout, new RegExp(`Places API key selected: ${selectedName} \\(configured\\)`));
-    assert.match(result.stdout, /Places API \\(New\\) searchText probe: HTTP 200/);
+    assert.match(result.stdout, /Places API \(New\) searchText probe: HTTP 200/);
     assert.doesNotMatch(result.stdout, /AIza-server-for-tests-only/);
   });
 }
