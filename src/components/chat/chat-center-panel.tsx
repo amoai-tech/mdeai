@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect } from "react";
+import { Suspense } from "react";
 import { CopilotChat } from "@copilotkit/react-core/v2";
 
 import { ChatFilterCopilotInstructions } from "@/components/chat/chat-filter-copilot-instructions";
@@ -16,7 +16,6 @@ import { useConciergeSession } from "@/components/chat/concierge-session-context
 import { WorkflowProgressStrip } from "@/components/chat/workflow-progress-strip";
 import { RENTAL_EXAMPLE_QUERY } from "@/lib/rental-failure-recovery";
 import { isDeterministicE2E } from "@/lib/deterministic-e2e";
-import { ensureConciergeChatInputAccessibility } from "@/components/chat/chat-input-a11y";
 
 export const CONCIERGE_LABELS = {
   modalHeaderTitle: "Medellín concierge",
@@ -43,19 +42,6 @@ export function ChatCenterPanel() {
   const { sessionKey } = useConciergeSession();
   const deterministic = isDeterministicE2E();
   const history = useSavedThreadHistory();
-
-  // CopilotKit owns the composer markup; give its textarea an id/name after it
-  // mounts (and if it remounts) so the chat has no anonymous form field.
-  useEffect(() => {
-    ensureConciergeChatInputAccessibility();
-    const observer = new MutationObserver(() => ensureConciergeChatInputAccessibility());
-    observer.observe(document.body, { childList: true, subtree: true });
-    const stop = window.setTimeout(() => observer.disconnect(), 5000);
-    return () => {
-      window.clearTimeout(stop);
-      observer.disconnect();
-    };
-  }, []);
 
   return (
     <RentalComparisonOwnerProvider key={sessionKey}>
