@@ -39,7 +39,10 @@ export function ChatMap({
   mapDomId?: string;
   onMapSettled?: () => void;
 }) {
-  const { pins, activeMapCategory, selectedPinId, panToPin, viewport } = useMapContext();
+  const {
+    pins, activeMapCategory, selectedPinId, setSelectedPinId,
+    clearFocusPinRequest, panToPin, viewport,
+  } = useMapContext();
   const mapsStatus = useMapsStatus();
   // Mock maps have no network tiles. Also settle when the existing Maps
   // unavailable notice renders, or a permanent spinner would hide that notice.
@@ -99,7 +102,13 @@ export function ChatMap({
         })}
         {selectedPin ? (
           <div className="absolute bottom-3 left-1/2 z-20 -translate-x-1/2">
-            <SelectedPlaceOverlayCard pin={selectedPin} />
+            <SelectedPlaceOverlayCard
+              pin={selectedPin}
+              onDismiss={() => {
+                setSelectedPinId(null);
+                clearFocusPinRequest();
+              }}
+            />
           </div>
         ) : null}
       </div>
