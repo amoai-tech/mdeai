@@ -193,7 +193,7 @@ describe("SAN-412 · selected pin can be dismissed in the E2E mock map", () => {
     const { getByRole, unmount } = render(
       <MapsShell><ChatMap mapDomId="chat-map" /></MapsShell>,
     );
-    fireEvent.click(getByRole("button", { name: "Close selected place" }));
+    fireEvent.click(getByRole("button", { name: "Dismiss selected place" }));
     expect(mocks.selection.setSelectedPinId).toHaveBeenCalledExactlyOnceWith(null);
     expect(mocks.selection.clearFocusPinRequest).toHaveBeenCalledOnce();
     unmount();
