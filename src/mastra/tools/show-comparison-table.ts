@@ -97,9 +97,10 @@ export const showComparisonTableTool = createTool({
       (data ?? []).map((row) => {
         const priceMonthly = row.price_monthly == null ? null : Number(row.price_monthly);
         const priceNightly = row.price_daily == null ? null : Number(row.price_daily);
-        const period = priceMonthly != null && priceMonthly > 0
-          ? "month" : priceNightly != null && priceNightly > 0 ? "night" : null;
-        const price = period === "month" ? priceMonthly : period === "night" ? priceNightly : null;
+        // Match the card/search period: when both exist, the nightly rate wins.
+        const period = priceNightly != null && priceNightly > 0
+          ? "night" : priceMonthly != null && priceMonthly > 0 ? "month" : null;
+        const price = period === "night" ? priceNightly : period === "month" ? priceMonthly : null;
         return [String(row.id), {
           id: String(row.id),
           title: typeof row.title === "string" ? row.title : "Listing",

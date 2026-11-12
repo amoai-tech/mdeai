@@ -24,7 +24,7 @@ const RENTAL_REFERENCE =
   /\b(apartments?|listings?|rentals?|these|those|them|first|second|third|fourth|fifth|two|three|four|five|\d+)\b/i;
 const COMPARISON_WORD = /\b(compare|comparison|versus|vs\.?|cheaper|better|difference)\b/i;
 const TABLE_COMMAND = /\b(put|show|display|render|make|create|build)\b/i;
-const NEW_SEARCH = /\b(find|search|discover|look(?:ing)? for|new search|another|under|budget|bedrooms?|beds?)\b/i;
+const NEW_SEARCH = /\b(find|search|discover|look(?:ing)? for|new search|another|different)\b|\b\d+\s*(?:br|bed|bedrooms?)\b|\bunder\s+(?:cop|usd|\$|\d)/i;
 const RESTAURANT_TABLE = /\b(book|reserve|reservation|restaurant|caf[eé]|nightlife|table for|party size)\b/i;
 
 /**

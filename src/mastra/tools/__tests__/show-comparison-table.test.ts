@@ -62,6 +62,15 @@ describe("showComparisonTableTool", () => {
     expect(result.rows).toEqual([]);
   });
 
+  it("follows the card period and prefers the nightly rate when both exist", async () => {
+    const result = await run(
+      { ids: [ids[0], ids[1]] },
+      context([dbRow(ids[0], "Both", 2_400_000, 80_000), dbRow(ids[1], "Monthly", 2_500_000)]),
+    );
+    expect(result.rows[0]).toMatchObject({ price: 80_000, period: "night" });
+    expect(result.rows[1]).toMatchObject({ price: 2_500_000, period: "month" });
+  });
+
   it("keeps missing prices unknown instead of inventing a rate", async () => {
     const result = await run(
       { ids: [ids[0], ids[1]] },

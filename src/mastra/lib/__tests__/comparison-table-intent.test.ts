@@ -20,6 +20,7 @@ describe("shouldForceComparisonTable", () => {
     expect(call("Put the first two apartments in a table.")).toBe(true);
     expect(call("Compare those two in a table.")).toBe(true);
     expect(call("Show the three apartments side by side.")).toBe(true);
+    expect(call("Put those two in a table with bedrooms and price.")).toBe(true);
   });
 
   it("does not force ordinary comparisons or new searches", () => {
