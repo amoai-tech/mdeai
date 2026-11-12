@@ -113,6 +113,14 @@ export function conciergeComposerInput(
     addMenuButton: labelledComposerSlot(inputProps.addMenuButton, "Add attachment"),
     textArea: {
       ...textAreaProps,
+      // Use the supported CopilotKit v2 composer slot, not post-render DOM mutation.
+      // Keep any meaningful identity/label the caller already provided.
+      id: typeof textAreaProps.id === "string" && textAreaProps.id.trim()
+        ? textAreaProps.id : "concierge-chat-input",
+      name: typeof textAreaProps.name === "string" && textAreaProps.name.trim()
+        ? textAreaProps.name : "message",
+      "aria-label": typeof textAreaProps["aria-label"] === "string" && textAreaProps["aria-label"].trim()
+        ? textAreaProps["aria-label"] : "Message the concierge",
       enterKeyHint: "send",
       inputMode: "text",
       // A caller that disables the composer for its own reasons keeps it disabled.
