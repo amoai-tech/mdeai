@@ -15,6 +15,7 @@ describe("rentalsToPanelRows comparison memory", () => {
         amenities: ["Balcony"],
       },
     ] as Parameters<typeof rentalsToPanelRows>[0]);
+    expect(rows?.[0]).not.toHaveProperty("nightly_price");
     expect(rows?.[0]).toMatchObject({
       id: "r1",
       price_monthly: 2_400_000,
@@ -22,5 +23,21 @@ describe("rentalsToPanelRows comparison memory", () => {
       bedrooms: 2,
       amenities: ["Balcony"],
     });
+  });
+
+  it("does not store unknown bedrooms or a zero nightly placeholder", () => {
+    const rows = rentalsToPanelRows([
+      {
+        id: "r2",
+        title: "External listing",
+        neighborhood: "Laureles",
+        nightly_price: 0,
+        bedrooms: 0,
+        bedrooms_unknown: true,
+        currency: "COP",
+      },
+    ] as Parameters<typeof rentalsToPanelRows>[0]);
+    expect(rows?.[0]).not.toHaveProperty("nightly_price");
+    expect(rows?.[0]).not.toHaveProperty("bedrooms");
   });
 });
