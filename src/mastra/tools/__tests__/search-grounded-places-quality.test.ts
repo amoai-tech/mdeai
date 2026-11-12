@@ -10,6 +10,7 @@ import {
   normalizeCafeGroundingQuery,
   resolveVenueGroundingKind,
   searchGroundedPlacesInputSchema,
+  shouldUseCuratedFallback,
   venueGroundingIntentSchema,
 } from "../search-grounded-places";
 import type { GroundedPlaceResult } from "../../lib/map-adk-grounding-pins";
@@ -26,6 +27,34 @@ describe("search-grounded-places café quality filter", () => {
     const normalized = normalizeCafeGroundingQuery("list cafes in medellin");
     expect(normalized).toContain("specialty coffee");
     expect(normalized).toContain("Exclude bar lounges");
+  });
+
+  it("does not append Medellín when the user names another city or the map area", () => {
+    expect(normalizeCafeGroundingQuery("cafés with wifi in Bogotá")).not.toContain("Medellín");
+    expect(normalizeCafeGroundingQuery("cafés around this map area", { hasViewportBias: true })).not.toContain("Medellín");
+    expect(normalizeCafeGroundingQuery("salsa bars in Cali")).not.toContain("Medellín");
+  });
+
+  it("does not override a valid viewport with Medellín for generic café queries", () => {
+    expect(normalizeCafeGroundingQuery("cafés with wifi", { hasViewportBias: true })).not.toContain("Medellín");
+  });
+
+  it("keeps Medellín scope for an unscoped café query or map-area query without a viewport", () => {
+    expect(normalizeCafeGroundingQuery("cafés with wifi")).toContain("Medellín");
+    expect(normalizeCafeGroundingQuery("cafés around this map area")).toContain("Medellín");
+  });
+
+  it("uses the curated catalog only for Medellín coverage", () => {
+    expect(shouldUseCuratedFallback({ hasNonMedellinCity: true })).toBe(false);
+    expect(shouldUseCuratedFallback({ hasNonMedellinCity: false })).toBe(true);
+    expect(shouldUseCuratedFallback({
+      hasNonMedellinCity: false,
+      locationBias: { latitude: 6.25, longitude: -75.58 },
+    })).toBe(true);
+    expect(shouldUseCuratedFallback({
+      hasNonMedellinCity: false,
+      locationBias: { latitude: 4.71, longitude: -74.07 },
+    })).toBe(false);
   });
 
   it("removes bar/lounge distractors from café results", () => {
