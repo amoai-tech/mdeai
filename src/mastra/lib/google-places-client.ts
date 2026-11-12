@@ -92,16 +92,20 @@ export const DEFAULT_NEARBY_SEARCH_MASK = [
 ] as const;
 
 export function requirePlacesApiKey(): string {
+  // Prefer the server key. GOOGLE_PLACES_API_KEY has historically been
+  // configured with browser referrer restrictions, which reject server calls
+  // that have no Referer. GOOGLE_MAPS_SERVER_API_KEY is IP-restricted and
+  // includes Places API (New).
   const key = [
-    process.env.GOOGLE_PLACES_API_KEY,
     process.env.GOOGLE_MAPS_SERVER_API_KEY,
+    process.env.GOOGLE_PLACES_API_KEY,
     process.env.GOOGLE_MAPS_API_KEY,
   ]
     .map((value) => value?.trim())
     .find((value): value is string => Boolean(value && value.length >= 8));
   if (!key || key.length < 8) {
     throw new PlacesConfigError(
-      "Missing GOOGLE_PLACES_API_KEY (or GOOGLE_MAPS_SERVER_API_KEY / GOOGLE_MAPS_API_KEY) for Places API (New)",
+      "Missing GOOGLE_MAPS_SERVER_API_KEY (or GOOGLE_PLACES_API_KEY / GOOGLE_MAPS_API_KEY) for Places API (New)",
     );
   }
   return key;
