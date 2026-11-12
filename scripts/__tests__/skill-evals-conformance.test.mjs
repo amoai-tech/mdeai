@@ -272,6 +272,7 @@ test("testing routes diagnosis and whole journeys consistently and limits select
   assert.match(testing, /unknown failure[^\n]*`errors`/i);
   assert.doesNotMatch(testing, /Use `systematic-debugging` when the failure source is unknown/);
   assert.match(testing, /Stripe checkout end-to-end[^\n]*\| `e2e`[^\n]*`stripe`/);
+  assert.match(testing, /RLS \/ 403 debugging[^\n]*\| `supabase` for known RLS; `errors` if source unknown/);
   const guide = fs.readFileSync("docs/07-operations/san-1670-hybrid-skills.md", "utf8");
   assert.match(guide, /Selection-only probe:/);
   assert.match(guide, /Behavior runs require normal tool access/);

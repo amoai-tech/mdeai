@@ -71,7 +71,7 @@ Resolve available browser tooling from the current environment; do not assume a 
 | Stripe checkout end-to-end | authenticated browser/Playwright path | `e2e` owns the complete journey; consult `stripe` for payment rules |
 
 | UI four-state visual verify | Playwright | `testing` → [playwright.md](playwright.md) |
-| RLS / 403 debugging during a UI flow | Chrome DevTools tooling (`list_console_messages --types error` + `list_network_requests --resourceTypes Fetch`) | `errors` for diagnosis; consult `supabase` for authorization rules |
+| RLS / 403 debugging during a UI flow | Chrome DevTools tooling (`list_console_messages --types error` + `list_network_requests --resourceTypes Fetch`) | `supabase` for known RLS; `errors` if source unknown |
 | Console-error sweep before commit | Playwright or current DevTools tooling | `testing` |
 
 ---
