@@ -250,6 +250,12 @@ describe("official generative-UI guide forwarding", () => {
     expect(MDE_A2UI_GUIDE).toContain("reply with the tool's message only");
     expect(MDE_A2UI_GUIDE).toContain("Do not restate or guess bedrooms");
     expect(MDE_A2UI_GUIDE).toContain("tool result deliberately contains no listing facts");
+    // The live /rentals turn receives the official guide plus MDE_GENERATIVE_UI_RULES,
+    // not MDE_A2UI_GUIDE. Both paths must carry the rule.
+    expect(MDE_GENERATIVE_UI_RULES).toContain("Do not restate or guess bedrooms");
+    expect(buildGenerativeUiInstruction(official)).toContain(
+      "After showRecommendations, reply with the tool's message only",
+    );
   });
 
   it("puts MDE rules after the official guide so they win", () => {
