@@ -9,6 +9,9 @@ const cli = "node_modules/playwright/cli.js";
 
 function discover(extraEnv = {}, args = []) {
   const env = { ...process.env };
+  // Hermetic: an inherited remote SMOKE_BASE_URL must never leak into a spawn.
+  // Each case decides the value it wants through extraEnv.
+  delete env.SMOKE_BASE_URL;
   delete env.PROD_SMOKE_BASE_URL;
   delete env.PW_SKIP_WEBSERVER;
   delete env.MDE_REMOTE_DISCOVERY_CARDS;
@@ -53,6 +56,9 @@ test("generic npm E2E is local-only and starts a fresh worktree server", () => {
 // PROD_SMOKE_BASE_URL must never make a generic local test browse production.
 function configuredProjects(extraEnv = {}) {
   const env = { ...process.env, NODE_NO_WARNINGS: "1" };
+  // Hermetic: an inherited remote SMOKE_BASE_URL must never leak into a spawn,
+  // or a caller's ambient environment makes the config guard throw here.
+  delete env.SMOKE_BASE_URL;
   delete env.PROD_SMOKE_BASE_URL;
   delete env.PW_SKIP_WEBSERVER;
   delete env.MDE_REMOTE_DISCOVERY_CARDS;

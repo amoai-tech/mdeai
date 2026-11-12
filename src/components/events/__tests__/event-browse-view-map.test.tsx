@@ -36,6 +36,26 @@ vi.mock("@/components/browse/BrowseMapPanel", async () => {
   };
 });
 
+// Simulate the real A2UI Surface requesting an event Details action through
+// the same page selection provider as the production EventCard.
+let lastA2uiOpenResult: boolean | undefined;
+vi.mock("@/components/copilot/a2ui/event-recommendations-surface", async () => {
+  const { useOptionalEventBrowseSelection } = await import("@/components/events/event-browse-selection-context");
+  return {
+    EventRecommendationsSurface: () => {
+      const selection = useOptionalEventBrowseSelection();
+      return (
+        <div>
+          <button type="button" data-testid="a2ui-open-event-b"
+            onClick={() => { lastA2uiOpenResult = selection?.openEventDetail("b"); }}>Generated B Details</button>
+          <button type="button" data-testid="a2ui-open-event-outside"
+            onClick={() => { lastA2uiOpenResult = selection?.openEventDetail("not-shown"); }}>Generated external Details</button>
+        </div>
+      );
+    },
+  };
+});
+
 type ResultHandler = (result: DiscoveryAgentResult) => void;
 let onAgentResults: ResultHandler | null = null;
 vi.mock("@/components/chat/discovery-ask-composer", () => ({
@@ -91,6 +111,7 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   onAgentResults = null;
+  lastA2uiOpenResult = undefined;
 });
 
 describe("EventBrowseView — one selected event", () => {
@@ -167,6 +188,29 @@ describe("EventBrowseView — one selected event", () => {
     expect(screen.queryByTestId("map")).toBeNull();
     rerender(<EventBrowseView {...props} results={[A]} error="Could not load events." />);
     expect(screen.queryByTestId("map")).toBeNull();
+  });
+});
+
+describe("EventBrowseView — generated A2UI EventCard Details", () => {
+  it("opens the native Details panel for the exact event selected by the generated card", async () => {
+    const user = userEvent.setup();
+    render(<EventBrowseView {...props} results={[A, B]} />);
+    await user.click(screen.getByTestId("a2ui-open-event-b"));
+    expect(lastA2uiOpenResult).toBe(true);
+    expect(ctx()).toBe("b");
+    const details = screen.queryByTestId("event-browse-details-panel")
+      ?? screen.getByTestId("event-browse-details-sheet");
+    expect(details.getAttribute("data-event-id")).toBe("b");
+  });
+
+  it("refuses a generated event that is absent from the current grid", async () => {
+    const user = userEvent.setup();
+    render(<EventBrowseView {...props} results={[A, B]} />);
+    await user.click(screen.getByTestId("a2ui-open-event-outside"));
+    expect(lastA2uiOpenResult).toBe(false);
+    expect(screen.queryByTestId("event-browse-details-panel")).toBeNull();
+    expect(screen.queryByTestId("event-browse-details-sheet")).toBeNull();
+    expect(ctx()).toBe("");
   });
 });
 

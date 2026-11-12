@@ -69,6 +69,8 @@ mastra-agent-memory.db
 mastra-agent-memory.db-*
 
 # Playwright / smoke artifacts
+# SAN-1653: generated A2UI QA cards, IDs, screenshots and matrix reports
+.a2ui-matrix/
 test-results/
 playwright-report/
 screenshots/

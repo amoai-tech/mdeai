@@ -8,6 +8,7 @@ type TripItemQueryRow = {
   source_id: string;
   title: string;
   created_at: string;
+  position: number;
   description: string | null;
   start_at: string | null;
   end_at: string | null;
@@ -38,10 +39,11 @@ export async function loadTripWorkspace(
   const { data: items, error: itemsError } = await supabase
     .from("trip_items")
     .select(
-      "id, item_type, source_id, title, created_at, description, start_at, end_at, location_name, latitude, longitude",
+      "id, item_type, source_id, title, created_at, position, description, start_at, end_at, location_name, latitude, longitude",
     )
     .eq("trip_id", tripId)
     .order("start_at", { ascending: true, nullsFirst: false })
+    .order("position", { ascending: true })
     .order("created_at", { ascending: true })
     .order("id", { ascending: true });
 
@@ -69,6 +71,7 @@ export async function loadTripWorkspace(
       source_id: row.source_id,
       title: row.title,
       created_at: row.created_at,
+      position: row.position,
       description: row.description,
       start_at: row.start_at,
       end_at: row.end_at,

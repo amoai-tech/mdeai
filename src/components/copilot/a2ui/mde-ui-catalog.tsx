@@ -11,6 +11,7 @@ import { useOptionalEventLocalChat } from "@/components/chat/event-local-chat-co
 import { createGenerativeUI, standardUI } from "@copilotkit/react-core/v2/generative-ui";
 import { RentalCard as ExistingRentalCard } from "@/components/copilot/rental-card";
 import { EventCard as ExistingEventCard } from "@/components/copilot/event-card";
+import { useOptionalEventBrowseSelection } from "@/components/events/event-browse-selection-context";
 import { useOptionalConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
 import { useOptionalRentalUi } from "@/components/chat/rental-ui-context";
 import { useOptionalMapContext } from "@/platform/maps/map-context";
@@ -361,6 +362,9 @@ function MdeEventCard({ eventId }: { eventId: string }) {
   const selectedPinId = map?.selectedPinId;
   const panToPin = map?.panToPin;
   const openVenueDetail = rentalUi?.openVenueDetail;
+  // The Events page publishes its own selection; the rental UI context does not
+  // exist there, so without this fallback the Details button would be a no-op.
+  const eventSelection = useOptionalEventBrowseSelection();
 
   if (!row) {
     return (
@@ -373,7 +377,15 @@ function MdeEventCard({ eventId }: { eventId: string }) {
   const pinId = `event-${row.id}`;
   const hasPin = map?.pins.some((pin) => pin.id === pinId) ?? false;
   const ticketUrl = row.ticketUrl ?? eventDetailHref(row.id);
-  const openDetail = openVenueDetail ? () => {
+  const openDetail = eventSelection
+    ? () => {
+        // The Events grid can show native Details only for its current rows.
+        // Older authorized results still have a canonical public Details page.
+        if (!eventSelection.openEventDetail(row.id)) {
+          window.open(eventDetailHref(row.id), "_blank", "noopener,noreferrer");
+        }
+      }
+    : openVenueDetail ? () => {
     if (hasPin) panToPin?.(pinId);
     openVenueDetail({
       kind: "event",

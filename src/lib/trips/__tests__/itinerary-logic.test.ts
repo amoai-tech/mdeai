@@ -14,6 +14,7 @@ const base = (over: Partial<TripItemRow>): TripItemRow => ({
   item_type: over.item_type ?? "event",
   source_id: over.source_id ?? "11111111-1111-4111-8111-111111111111",
   created_at: over.created_at ?? "2026-11-01T00:00:00.000Z",
+  position: over.position ?? 0,
   title: over.title ?? "Item",
   description: null,
   start_at: over.start_at ?? null,
@@ -79,6 +80,36 @@ describe("trip-local timezone", () => {
 });
 
 describe("deterministic ordering", () => {
+  it("prefers explicit position when start times are equal", () => {
+    const groups = groupTripItemsByDay([
+      base({
+        id: "later-position",
+        start_at: "2026-11-21T20:00:00.000Z",
+        position: 2,
+        created_at: "2026-11-01T00:00:00.000Z",
+      }),
+      base({
+        id: "earlier-position",
+        start_at: "2026-11-21T20:00:00.000Z",
+        position: 1,
+        created_at: "2026-11-01T00:00:02.000Z",
+      }),
+    ]);
+    expect(groups[0].items.map((item) => item.id)).toEqual([
+      "earlier-position",
+      "later-position",
+    ]);
+  });
+
+  it("orders unscheduled items by position, created_at, then id", () => {
+    const groups = groupTripItemsByDay([
+      base({ id: "later", position: 0, created_at: "2026-11-01T00:00:02.000Z" }),
+      base({ id: "earlier", position: 0, created_at: "2026-11-01T00:00:01.000Z" }),
+    ]);
+    expect(groups[0].dayKey).toBe("unscheduled");
+    expect(groups[0].items.map((item) => item.id)).toEqual(["earlier", "later"]);
+  });
+
   it("orders equal start times by created_at then id", () => {
     const groups = groupTripItemsByDay([
       base({

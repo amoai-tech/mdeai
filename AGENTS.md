@@ -33,6 +33,10 @@ Portable rules for agents working from the **current checkout root**. Product-ow
 - **S4 verification stays independent:** auth/RLS/tenant, payments, secrets, destructive production work and irreversible retries require independent [`task-verifier`](.claude/skills/task-verifier/SKILL.md) evidence. No self-certification. Read the exact applicable skill before executing; ChatGPT does not automatically acquire local repository skills.
 - Do not restate long specialist instructions here. Change the **owning** skill or reference and delete stale copies, keeping links from this file. `CLAUDE.md` imports this file through `@AGENTS.md`.
 
+## Optional Jev decision support
+
+For optional Jev examples and tool selection, see the [Jev agent guide](jev-agent.md). **Skip Jev** when it is unavailable, unhelpful, or unsafe to share the required input; continue with existing repository tools and deterministic verification. Jev judgments are advisory, not evidence of correctness. Never add mandatory Jev gates or duplicate plugins, or send secrets, `.env` contents, or private evidence to Jev.
+
 ## Authenticated QA — existing 1Password and Playwright only
 
 - Reuse existing passwordless QA users and [`e2e/fixtures.ts`](e2e/fixtures.ts) / [`e2e/helpers/auth.ts`](e2e/helpers/auth.ts). No duplicate login helpers, permanent test identities, auth bypass or browser service-role keys.
