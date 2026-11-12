@@ -33,9 +33,19 @@ Portable rules for agents working from the **current checkout root**. Product-ow
 - **S4 verification stays independent:** auth/RLS/tenant, payments, secrets, destructive production work and irreversible retries require independent [`task-verifier`](.claude/skills/task-verifier/SKILL.md) evidence. No self-certification. Read the exact applicable skill before executing; ChatGPT does not automatically acquire local repository skills.
 - Do not restate long specialist instructions here. Change the **owning** skill or reference and delete stale copies, keeping links from this file. `CLAUDE.md` imports this file through `@AGENTS.md`.
 
-## Optional Jev tool selection
+## Jev checkpoints (DSH — optional)
 
-[Jev agent reference](jev-agent.md) covers available MCP tools, Quicksilver, Supercov, Jev Evals, measured pilots (not benchmarks), privacy and MDE examples. Use `rg`/current Graphify and existing repository skills first; invoke Jev only when semantic discovery, bounded decisions, ambiguous classifications, subjective AI quality or advisory evidence review adds value. Deterministic Vitest/Playwright/DB assertions, CI and independent `task-verifier` remain authoritative. Do not install duplicate tools, require Jev availability, expose secrets/private user evidence, or introduce prelaunch business gates.
+[Jev agent reference](jev-agent.md) owns detailed tool guidance. Jev is a judge, not a source of truth; never replace tests, typecheck, `npm run floor`, or independent verification.
+
+| When useful | Existing tool | Required independent proof |
+| --- | --- | --- |
+| Files still unknown after `rg` / Graphify | `quicksilver` skill (if available) | Read shortlist and confirm owner |
+| 2+ plausible causes remain | `jev_rerank` with sanitized log evidence | Reproduce and falsify hypotheses |
+| A test may pass while broken | `supercov` + `jev-eval` | Negative/mutation case fails as expected |
+| PR findings ambiguous or duplicated | `jev_classify` | Check exact-head code, location and root cause |
+| Before substantial Done claim | `jev-gate` with sanitized raw output | Exact-head CI and UI/API/DB receipts |
+
+For multi-step work, use the existing Todo workflow when available; never invent tool names or create Todos solely to trigger Jev. Send raw relevant test/lint/schema lines (not summaries), but never secrets, `.env` contents, private user evidence or unapproved source. If Jev is unavailable or adds no value, proceed with deterministic tools. No duplicate plugins, mandatory Jev gates or prelaunch business restrictions.
 
 ## Authenticated QA — existing 1Password and Playwright only
 
