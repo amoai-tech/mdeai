@@ -35,7 +35,7 @@ Portable rules for agents working from the **current checkout root**. Product-ow
 
 ## Optional Jev tool selection
 
-[Jev agent reference](jev-agent.md) covers available MCP tools, Quicksilver, Supercov, Jev Evals, actual benchmarks, privacy and MDE examples. Use `rg`/current Graphify and existing repository skills first; invoke Jev only when semantic discovery, bounded decisions, ambiguous classifications, subjective AI quality or advisory evidence review adds value. Deterministic Vitest/Playwright/DB assertions, CI and independent `task-verifier` remain authoritative. Do not install duplicate tools, require Jev availability, expose secrets/private user evidence, or introduce prelaunch business gates.
+[Jev agent reference](jev-agent.md) covers available MCP tools, Quicksilver, Supercov, Jev Evals, measured pilots (not benchmarks), privacy and MDE examples. Use `rg`/current Graphify and existing repository skills first; invoke Jev only when semantic discovery, bounded decisions, ambiguous classifications, subjective AI quality or advisory evidence review adds value. Deterministic Vitest/Playwright/DB assertions, CI and independent `task-verifier` remain authoritative. Do not install duplicate tools, require Jev availability, expose secrets/private user evidence, or introduce prelaunch business gates.
 
 ## Authenticated QA — existing 1Password and Playwright only
 
