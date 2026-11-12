@@ -131,6 +131,10 @@ def _task_route(text: str) -> str | None:
 
 
 def _other_workflow_route(text: str) -> str | None:
+    # A standalone code snippet still needs correctness/spec-fit review;
+    # do not require an accompanying PR just to select the reviewer.
+    if re.match(r"^(?:review|inspect|check) (?:this |the |an? |my )?(?:code )?(?:snippet|function|method)\b", text):
+        return "code-review"
     if any(term in text for term in (
         "architecture fit", "architectural fit", "architecture review",
         "architecture decision",
