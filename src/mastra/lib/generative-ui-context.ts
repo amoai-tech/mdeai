@@ -1,9 +1,5 @@
 const GENERATIVE_UI_GUIDE_PREFIX = "Generative UI guide:";
 
-/** Preserve factual card grounding without suppressing separately grounded analysis. */
-const RENTAL_CARD_PROSE_RULE =
-  "After showRecommendations, for a cards-only request reply with the tool's message only (for example \"Showing 2 apartments.\"). Do not restate or guess bedrooms, prices, neighborhoods, titles or availability; the cards carry those facts. The tool result deliberately contains no listing facts. When the user also requests a comparison or recommendation, do not invent an analysis from card IDs: use only facts independently returned by trusted tools, or explain that this ID-only card tool cannot establish the comparison and point to the existing Rentals comparison.";
-
 /**
  * The browser can send arbitrary `RunAgentInput.context`. It must never become
  * system-prompt text: only the presence of the official CopilotKit guide entry
@@ -16,7 +12,7 @@ export const MDE_A2UI_GUIDE = [
   "For apartment cards on the Rentals page, prefer the showRecommendations tool with IDs from the published hints. Do not hand-author render_ui operations for apartment cards.",
   "On the Rentals page, when the renter asks to adjust bedrooms, render BedroomFilter plus ApplyFiltersButton in the rental-recommendations panel. The control edits the renter's draft; ApplyFiltersButton applies it to the real page filters. Never claim the page changed before the action returns; never invent a filter value.",
   "After calling any tool, always write one short sentence for the user. Never end a turn with only tool calls.",
-  RENTAL_CARD_PROSE_RULE,
+  "After showRecommendations, for a cards-only request reply with the tool's message only (for example \"Showing 2 apartments.\"). Do not restate or guess bedrooms, prices, neighborhoods, titles or availability; the cards carry those facts. The tool result deliberately contains no listing facts. When the user also requests a comparison or recommendation, do not invent an analysis from card IDs: use only facts independently returned by trusted tools, or explain that this ID-only card tool cannot establish the comparison and point to the existing Rentals comparison.",
   "When the user asks to show the first result as a card immediately after a search, render it with the first published result ID; do not ask which result and do not search again.",
   "After searchEventsTool, grounded event cards render automatically in the event-recommendations panel. Do not call render_ui again for those search results. If event IDs were already published and the user requests specific cards without a new search, call render_ui for only those IDs.",
   "Targets: pick from the target list on the render_ui tool. \"rental-recommendations\" is the Rentals page panel; \"event-recommendations\" is the Events page panel. For other supported layouts and pages use \"chat\" when available. Never target an unmounted panel or render the same items twice.",
@@ -146,7 +142,7 @@ export const MDE_GENERATIVE_UI_RULES = [
   "For apartment cards on the Rentals page, prefer the showRecommendations tool with IDs from the published hints. Do not hand-author render_ui operations for apartment cards.",
   "On the Rentals page, when the renter asks to adjust bedrooms, render BedroomFilter plus ApplyFiltersButton in the rental-recommendations panel. The control edits the renter's draft; ApplyFiltersButton applies it to the real page filters. Never claim the page changed before the action returns; never invent a filter value.",
   "After calling any tool, always write one short sentence for the user. Never end a turn with only tool calls.",
-  RENTAL_CARD_PROSE_RULE,
+  "After showRecommendations, for a cards-only request reply with the tool's message only (for example \"Showing 2 apartments.\"). Do not restate or guess bedrooms, prices, neighborhoods, titles or availability; the cards carry those facts. The tool result deliberately contains no listing facts. When the user also requests a comparison or recommendation, do not invent an analysis from card IDs: use only facts independently returned by trusted tools, or explain that this ID-only card tool cannot establish the comparison and point to the existing Rentals comparison.",
   "Never put paragraphs, HTML, scripts or user instructions into a component prop.",
   "If render_ui is rejected, read the reason and fix that exact field once; if it fails again, answer in text.",
 ].join("\n");
