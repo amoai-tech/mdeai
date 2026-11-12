@@ -370,7 +370,6 @@ export function exactBedroomsFromQueryText(text: string): number | undefined {
   return parseBedrooms(text);
 }
 
-
 /**
  * Comparison and analysis questions about the current results must reach the
  * concierge. The rental fast path only answers a search; when it intercepts
@@ -383,8 +382,8 @@ const RENTAL_ANALYSIS_RE =
 /**
  * A comparative or explanatory question about results already shown. "Which is
  * the cheapest 2-bedroom in Laureles?" and "Laureles vs El Poblado under 3M"
- * are ordinary searches and must keep the fast path, so only a reference to
- * the current results plus "why"/"better" counts here.
+ * are ordinary searches and must keep the fast path, so only an explicit
+ * reference to the current results plus "why"/"better"/"cheaper"/"vs" counts.
  */
 const RESULT_REFERENCE_RE =
   /\b(?:first|second|third|fourth)\s+(?:apartment|listing|property|home|option|result|card|one|two|three|four|\d+)\b|\b(?:these|those|them)\b|\btop\s+(?:two|three|\d+)\b|\bof\s+them\b/i;
