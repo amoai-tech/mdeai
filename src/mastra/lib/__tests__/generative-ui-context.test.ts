@@ -243,6 +243,15 @@ describe("official generative-UI guide forwarding", () => {
     expect(read).not.toContain("end");
   });
 
+  it("forbids restating card facts after showRecommendations", () => {
+    // Measured live: the tool returned IDs only, and the model invented bedroom
+    // counts (said 1 BR/2 BR; the cards were 3 BR/1 BR). The card facts belong
+    // to the cards, never to the model's prose.
+    expect(MDE_A2UI_GUIDE).toContain("reply with the tool's message only");
+    expect(MDE_A2UI_GUIDE).toContain("Do not restate or guess bedrooms");
+    expect(MDE_A2UI_GUIDE).toContain("tool result deliberately contains no listing facts");
+  });
+
   it("puts MDE rules after the official guide so they win", () => {
     const built = buildGenerativeUiInstruction(official);
     expect(built).toContain("RentalCard: props { listingId }");
