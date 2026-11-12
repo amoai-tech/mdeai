@@ -61,9 +61,9 @@ export function buildComparisonTableOps(
     priceLabel(row),
     allMonthly || allNightly
       ? row.currency ?? "Not recorded"
-      : row.price == null
-        ? "Not recorded"
-        : `${row.currency ?? ""} / ${periodLabel(row.period)}`.trim(),
+      : row.price == null || !row.currency
+        ? `Not recorded${periodLabel(row.period) ? ` / ${periodLabel(row.period)}` : ""}`
+        : `${row.currency} / ${periodLabel(row.period)}`.trim(),
   ]);
   return {
     target: COMPARISON_TABLE_TARGET,

@@ -29,6 +29,8 @@ describe("shouldForceComparisonTable", () => {
     expect(call("Show me apartments under COP 3M.")).toBe(false);
     expect(call("Show 2-bedroom apartments in a table.")).toBe(false);
     expect(call("Show two-bedroom apartments in a table.")).toBe(false);
+    expect(call("Show six-bedroom apartments in a table.")).toBe(false);
+    expect(call("Show ten-bedroom apartments in a table.")).toBe(false);
   });
 
   it("does not hijack restaurant table bookings", () => {

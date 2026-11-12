@@ -56,6 +56,15 @@ describe("buildComparisonTableOps", () => {
     expect(cells.rows[1]).toEqual(["Nightly stay", "Not recorded", "USD 80", "USD / night"]);
   });
 
+  it("does not produce a lone period label when currency is missing", () => {
+    const built = table([
+      row(),
+      row({ id: "b", title: "No currency", price: 80, currency: null, period: "night" }),
+    ]);
+    const cells = createOf(built).createSurface.components[1] as { rows: unknown[][] };
+    expect(cells.rows[1]?.[3]).toBe("Not recorded / night");
+  });
+
   it("caps at five rows and four columns", () => {
     const built = table(Array.from({ length: 7 }, (_, index) => row({ id: `id-${index}`, title: `A${index}` })));
     const cells = createOf(built).createSurface.components[1] as { columns: string[]; rows: unknown[][] };
