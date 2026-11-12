@@ -7,9 +7,10 @@ import {
 
 describe("Vercel candidate origin validation", () => {
   it("accepts the exact MDE deployment host pattern", () => {
-    expect(validateVercelCandidateOrigin("https://mdeai-abc123-amoco.vercel.app").origin).toBe(
-      "https://mdeai-abc123-amoco.vercel.app",
-    );
+    for (const team of ["amoco", "amo-agency"]) {
+      const url = `https://mdeai-abc123-${team}.vercel.app`;
+      expect(validateVercelCandidateOrigin(url).origin).toBe(url);
+    }
   });
 
   for (const url of [
