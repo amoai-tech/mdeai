@@ -265,6 +265,18 @@ const KNOWN_MIRROR_TEXT = Object.freeze({
   maps: fs.readFileSync(".agents/skills/maps/SKILL.md", "utf8"),
 });
 
+// Deliberately test neighboring workflow boundaries: code-review surfaced
+// contradictions between the testing skill, the router, and the eval guide.
+test("testing routes diagnosis and whole journeys consistently and limits selection probes", () => {
+  const testing = KNOWN_SKILL_TEXT.testing;
+  assert.match(testing, /unknown failure[^\n]*`errors`/i);
+  assert.doesNotMatch(testing, /Use `systematic-debugging` when the failure source is unknown/);
+  assert.match(testing, /Stripe checkout end-to-end[^\n]*\| `e2e`[^\n]*`stripe`/);
+  const guide = fs.readFileSync("docs/07-operations/san-1670-hybrid-skills.md", "utf8");
+  assert.match(guide, /Selection-only probe:/);
+  assert.match(guide, /Behavior runs require normal tool access/);
+});
+
 // Explicit design-vs-execution ownership: a valid JSON pack by itself does
 // not protect against both skills claiming the same request.
 test("testing runs or writes+executes tests, while tests only designs coverage", () => {

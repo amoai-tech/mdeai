@@ -13,7 +13,7 @@ tags: testing, vitest, playwright, evals, claude-code, e2e, mdeai
 
 ## Ownership
 
-`testing` owns **executing** existing tests, interpreting test output, and **writing and running** test-first regressions. `tests` owns **designing** cases, matrices, coverage or grading criteria when the user does not ask to run anything. If the request includes both design and execution, `testing` owns the job and can consult `tests` as a reference, not start another owner. Use `systematic-debugging` when the failure source is unknown; return to `testing` once the seam is localized.
+`testing` owns **executing** existing tests, interpreting test output, and **writing and running** test-first regressions. `tests` owns **designing** cases, matrices, coverage or grading criteria when the user does not ask to run anything. If the request includes both design and execution, `testing` owns the job and can consult `tests` as a reference, not start another owner. For an unknown failure, start with `errors` to reproduce and localize the cause; consult `systematic-debugging` only for deeper tracing, then return to `testing` for regression proof.
 
 **Select `testing`:** “Run the existing Vitest suite and diagnose failures” or “Write a failing test and run the RED/GREEN fix.”
 **Select `tests` instead:** “List the tests needed for webhook idempotency without running them.”
@@ -42,7 +42,7 @@ Pick the topic that matches the work, then load it.
 | Common bug patterns / triage taxonomy | [references/issue-taxonomy.md](references/issue-taxonomy.md) |
 | Map of layers (unit → E2E → visual → mobile → agentic → evals) | [references/testing-layers.md](references/testing-layers.md) |
 | Curated external links (subagents, marketplace, Anthropic eval docs) | [references/resource-hub.md](references/resource-hub.md) |
-| Browser/MCP tool itself failing to connect | `systematic-debugging` |
+| Browser/MCP tool itself failing to connect | `errors` for diagnosis; consult `systematic-debugging` for deeper tracing |
 
 ---
 
@@ -68,10 +68,10 @@ Resolve available browser tooling from the current environment; do not assume a 
 | Lighthouse audit on a Vercel preview URL | Chrome DevTools tooling (`lighthouse_audit --mode navigation --device mobile`) | `nextjs` |
 | Bundle / Core Web Vitals trace | current performance tooling | `testing` for proof; `nextjs` for implementation ownership |
 | Supabase email/OAuth sign-in regression | Playwright or configured authenticated browser | `testing` → [playwright.md](playwright.md) |
-| Stripe checkout end-to-end | authenticated browser/Playwright path | `testing` + `stripe` |
+| Stripe checkout end-to-end | authenticated browser/Playwright path | `e2e` owns the complete journey; consult `stripe` for payment rules |
 
 | UI four-state visual verify | Playwright | `testing` → [playwright.md](playwright.md) |
-| RLS / 403 debugging during a UI flow | Chrome DevTools tooling (`list_console_messages --types error` + `list_network_requests --resourceTypes Fetch`) | `supabase`, `systematic-debugging` |
+| RLS / 403 debugging during a UI flow | Chrome DevTools tooling (`list_console_messages --types error` + `list_network_requests --resourceTypes Fetch`) | `errors` for diagnosis; consult `supabase` for authorization rules |
 | Console-error sweep before commit | Playwright or current DevTools tooling | `testing` |
 
 ---
