@@ -5,6 +5,7 @@ vi.mock("@/app/trips/actions", () => ({
   addTripItem: vi.fn(async () => ({ ok: false, error: "not configured in this test" })),
 }));
 import { renderToStaticMarkup } from "react-dom/server";
+import { fireEvent, render } from "@testing-library/react";
 import type { MapPin } from "@/platform/contracts";
 import { SelectedPlaceOverlayCard } from "../SelectedPlaceOverlayCard";
 
@@ -76,6 +77,15 @@ describe("SelectedPlaceOverlayCard", () => {
     );
     expect(html).toContain('data-testid="selected-place-overlay-close"');
     expect(html).toContain('aria-label="Close selected place"');
+  });
+
+  it("calls onDismiss when the close action is clicked", () => {
+    const onDismiss = vi.fn();
+    const { getByTestId } = render(
+      <SelectedPlaceOverlayCard pin={groundedPin} onDismiss={onDismiss} />,
+    );
+    fireEvent.click(getByTestId("selected-place-overlay-close"));
+    expect(onDismiss).toHaveBeenCalledTimes(1);
   });
 
   it("omits the close action when the card is not dismissible", () => {
