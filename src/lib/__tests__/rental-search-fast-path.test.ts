@@ -115,6 +115,7 @@ describe("rental-search-fast-path", () => {
       "apartments in Laureles vs El Poblado under 3M",
       "2 bedroom in Laureles under 3,000,000 COP",
       "Show me furnished apartments in Medellín",
+      "Show me a table comparing apartments in Laureles and El Poblado",
     ]) {
       expect(canFastPathRentalSearch(prompt, {}), prompt).toBe(true);
     }

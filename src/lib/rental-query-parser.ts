@@ -377,7 +377,7 @@ export function exactBedroomsFromQueryText(text: string): number | undefined {
  * reply again instead of an answer.
  */
 const RENTAL_ANALYSIS_RE =
-  /\b(?:compar(?:e|ing|ison)|pros?\s+(?:and|&)\s+cons?|difference(?:s)?\s+between|which\s+one\s+is\s+better|which\s+is\s+better|is\s+(?:it|this|that)\s+better)\b/i;
+  /\b(?:compar(?:e|ison)|pros?\s+(?:and|&)\s+cons?|difference(?:s)?\s+between|which\s+one\s+is\s+better|which\s+is\s+better|is\s+(?:it|this|that)\s+better)\b/i;
 
 /**
  * A comparative or explanatory question about results already shown. "Which is
@@ -389,7 +389,7 @@ const RESULT_REFERENCE_RE =
   /\b(?:first|second|third|fourth)\s+(?:apartment|listing|property|home|option|result|card|one|two|three|four|\d+)\b|\b(?:these|those|them)\b|\btop\s+(?:two|three|\d+)\b|\bof\s+them\b/i;
 const WHY_RE = /\bwhy\s+(?:is|are|does|do)\b/i;
 /** Comparative words that imply the two things were already shown. */
-const COMPARATIVE_RE = /\b(?:better|cheaper|vs\.?|versus)\b/i;
+const COMPARATIVE_RE = /\b(?:better|cheaper|comparing|vs\.?|versus)\b/i;
 
 export function looksLikeRentalAnalysis(text: string): boolean {
   const bounded = text.length > MAX_RENTAL_TEXT_CHARS ? text.slice(0, MAX_RENTAL_TEXT_CHARS) : text;
