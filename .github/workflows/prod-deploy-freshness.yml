@@ -43,7 +43,7 @@ jobs:
       - name: Require a READY production deployment for the exact commit
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
           VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
           GITHUB_TOKEN: ${{ github.token }}
           TARGET_SHA: ${{ github.sha }}
@@ -55,7 +55,7 @@ jobs:
           missing=0
           for name in VERCEL_TOKEN VERCEL_PROJECT_ID VERCEL_ORG_ID GITHUB_TOKEN TARGET_SHA WINDOW_SECONDS; do
             if [ -z "$(printenv "$name" || true)" ]; then
-              echo "::error::$name is not set. VERCEL_ORG_ID is a repository variable; VERCEL_TOKEN and VERCEL_PROJECT_ID are repository secrets; TARGET_SHA is github.sha."
+              echo "::error::$name is not set. VERCEL_TOKEN is a repository secret; VERCEL_ORG_ID and VERCEL_PROJECT_ID are repository variables; TARGET_SHA is github.sha."
               missing=1
             fi
           done

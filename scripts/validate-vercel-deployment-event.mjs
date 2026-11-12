@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { execFileSync } from "node:child_process";
 
-const EXPECTED_PROJECT_ID = "prj_5eY5DdiVxn7hDbruTG7BrrQT1QAB";
+const EXPECTED_PROJECT_ID = "prj_iadSvJDW4MBqtQ5s3YPlBNc08it6";
 const EXPECTED_PROJECT_NAME = "mdeai";
 const EXPECTED_ENVIRONMENT = "production";
 // SAN-1330: only `main` may be certified and promoted. Vercel's dispatch payload sends the plain
@@ -10,7 +10,7 @@ const EXPECTED_REF = "main";
 // The deployment ID is the value `vercel promote` receives, so it must be a real Vercel ID and
 // nothing a shell could read as anything else.
 const DEPLOYMENT_ID = /^dpl_[A-Za-z0-9]{20,}$/;
-const EXPECTED_HOST = /^mdeai-[a-z0-9-]+-amoco\.vercel\.app$/i;
+const EXPECTED_HOST = /^mdeai-[a-z0-9-]+-amo-agency\.vercel\.app$/i;
 const SHA40 = /^[0-9a-f]{40}$/i;
 
 function required(name) {

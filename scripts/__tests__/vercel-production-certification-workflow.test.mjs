@@ -51,6 +51,34 @@ function stepBody(scope, name) {
   return scope.slice(from, next === -1 ? undefined : next);
 }
 
+test("Vercel account migration keeps CI, release control and monitoring on the same project", () => {
+  const text = workflow();
+  const control = fs.readFileSync("scripts/vercel-release-control.mjs", "utf8");
+  const validator = fs.readFileSync("scripts/validate-vercel-deployment-event.mjs", "utf8");
+  const monitor = fs.readFileSync(".github/workflows/prod-deploy-freshness.yml", "utf8");
+  const preview = fs.readFileSync(".github/workflows/momentic-rentals-preview.yml", "utf8");
+  const momentic = fs.readFileSync("scripts/momentic-preview-link.mjs", "utf8");
+  const verify = fs.readFileSync("scripts/verify-production-release.mjs", "utf8");
+  const newProject = "prj_iadSvJDW4MBqtQ5s3YPlBNc08it6";
+  const newTeam = "team_PbKG2U0lCR67rN57C4fqcfaw";
+  assert.match(text, /VERCEL_SCOPE: amo-agency/);
+  assert.ok(text.includes("github.event.client_payload.project.id == '" + newProject + "'"));
+  assert.ok(control.includes('export const PROJECT_ID = "' + newProject + '"'));
+  assert.ok(control.includes('export const TEAM_ID = "' + newTeam + '"'));
+  assert.ok(validator.includes('const EXPECTED_PROJECT_ID = "' + newProject + '"'));
+  assert.ok(verify.includes(newProject));
+  assert.ok(verify.includes(newTeam));
+  for (const job of [monitor, preview]) {
+    assert.ok(job.includes("vars.VERCEL_PROJECT_ID"));
+    assert.ok(!job.includes("secrets.VERCEL_PROJECT_ID"));
+  }
+  assert.ok(monitor.includes("vars.VERCEL_ORG_ID"));
+  assert.ok(momentic.includes("searchParams.set('slug', 'amo-agency')"));
+  for (const source of [text, control, validator, momentic, verify]) {
+    assert.doesNotMatch(source, /amoco|prj_5eY5DdiVxn7hDbruTG7BrrQT1QAB|team_OPBk3bdOXAg6fpYnL4vxnLZd/);
+  }
+});
+
 test("uses the Vercel ready event and one diagnostic status context", () => {
   const text = workflow();
   assert.match(text, /vercel\.deployment\.ready/);
