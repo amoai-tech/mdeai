@@ -51,7 +51,7 @@ Use only the relevant locally installed skill: `quicksilver` (semantic discovery
 4. **Review:** Deduplicate **only by identical thread ID** mechanically. Identical words are *candidate* duplicates only after comparing source location and root cause. Classify remaining ambiguous comments with `jev_classify`; verify every dismissal against exact-head evidence, especially security/correctness findings.
 5. **Done:** Supply `jev_gate` the **actual claims**, exact PR head and sanitized **raw** test/lint/schema output. Unsupported claims remain unsupported; a Jev PASS never replaces CI, required human review or independent `task-verifier`.
 
-**Don't target a quota of auto-dismissed review comments or rejected assertions.** Measure classification precision and known-bad mutations caught. **Stop rule:** Pilot on 3 tasks; record minutes saved, false findings rejected, and gate verdicts. Drop any tool that does not pay for itself.
+**Don't target a quota of auto-dismissed review comments or rejected assertions.** Measure classification precision and known-bad mutations caught.
 
 ## Concrete MDE examples (historical, not current task requirements)
 
@@ -85,7 +85,7 @@ When the PR head changes, previous proof is stale until rechecked. A model-produ
 
 ## Measure whether Jev helps
 
-Track minutes to confirmed code owner (vs `rg` alone), decisive hypothesis confirmation, intentionally broken cases detected, classification precision/false dismissals, supported Done claims, billed Jev usage, and time to verified fix. **Pilot each optional tool on 3 real tasks; record minutes saved, false findings rejected and `jev_gate` verdicts; drop tools without measurable benefit.** Confidence percentages are **not** observed success rates. Pilot anecdotes are **measured pilots, not controlled benchmarks**.
+Track minutes to confirmed code owner (vs `rg` alone), decisive hypothesis confirmation, intentionally broken cases detected, classification precision/false dismissals, supported Done claims, billed Jev usage, and time to verified fix. **Pilot the workflow on 3 real tasks total; record minutes saved, false findings rejected and `jev_gate` verdicts; drop tools without measurable benefit.** Confidence percentages are **not** observed success rates. Pilot anecdotes are **measured pilots, not controlled benchmarks**.
 
 **Jev Evals maturity:** The separate Jev Evals repository is an optional experimental path, not a top-priority dependency or production quality gate. Start only **after one AI-facing feature ships**, with 3–5 fixed, source-backed cases using the installed `jev-eval` skill. Confirm the test runner/provider credentials actually work before expanding; no `jev_eval` MCP tool is implied.
 
