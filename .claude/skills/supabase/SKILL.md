@@ -1,7 +1,7 @@
 ---
 name: supabase
 description: >-
-  Use when MDE work touches Supabase Postgres, Auth, RLS, RPCs, migrations, pgvector, Realtime, Storage, Edge Functions, DB concurrency or tenant isolation; preserve server authorization, atomicity, idempotency and Phase A rules.
+  Use for any MDE request clearly involving Supabase, including Database, Auth, RLS, migrations, RPC/functions, Realtime, Storage, pgvector, Edge Functions, logs, live database behavior, Postgres schema/SQL/indexes/locking/performance/tenant isolation, and Supabase-specific bugs/errors/failures. Known Supabase/RLS failures stay with this domain owner rather than generic systematic-debugging.
 metadata:
   mde-version: "2.0.1"
   verified-package: "@supabase/supabase-js ^2.106.1"

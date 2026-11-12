@@ -315,7 +315,7 @@ test("project-wide testing, rental and maps skills have no file activation gate"
     const skill = fs.readFileSync(skillFile, "utf8");
     const frontmatter = skill.split("---", 3)[1];
     assert.ok(frontmatter, name + ": missing frontmatter");
-    assert.doesNotMatch(frontmatter, /^paths:\s*(?:#.*)?$/m,
+    assert.doesNotMatch(frontmatter, /^paths\s*:/m,
       name + ": paths globs silently hide cross-file skills from the Claude session catalog");
     assert.equal(fs.readFileSync(path.join(".agents/skills", name, "SKILL.md"), "utf8"),
       skill, name + ": Codex/DSH mirror differs from canonical skill");
