@@ -768,5 +768,19 @@
     "expected_owner": "direct",
     "risk": "S1",
     "requires_independent_verifier": false
+  },
+  {
+    "name": "standalone-code-snippet-review",
+    "input": "Review this code snippet against its requirements",
+    "expected_owner": "code-review",
+    "risk": "S1",
+    "requires_independent_verifier": false
+  },
+  {
+    "name": "explain-code-snippet-direct",
+    "input": "Explain what this code snippet does",
+    "expected_owner": "direct",
+    "risk": "S0",
+    "requires_independent_verifier": false
   }
 ]

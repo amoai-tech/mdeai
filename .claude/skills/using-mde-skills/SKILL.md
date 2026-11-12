@@ -12,7 +12,7 @@ Use this skill only when ownership is ambiguous and the request is non-trivial. 
 The router chooses one owner and stops. **Specific requested outcome beats a broad domain or lifecycle label**; use the short skill for its scoped job, and read a deep/domain skill only for necessary rules.
 
 - create/rewrite one Linear issue → `linear-task`; read-only task audit → `linear-audit`
-- PR merge-readiness audit → `praudit`; existing PR/diff code review → `code-review`
+- PR merge-readiness audit → `praudit`; existing PR/diff or standalone code-snippet review → `code-review`
 - bug/root-cause diagnosis, unknown failure → `errors`; deep methodology → `systematic-debugging`
 - design regression coverage → `tests`; test strategy/TDD/execution → `testing`; browser E2E → `e2e`
 - request a faster reuse-first option → `efficient`; detailed reuse/source discipline → `ponytail`

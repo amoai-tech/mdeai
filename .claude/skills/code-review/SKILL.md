@@ -1,7 +1,7 @@
 ---
 name: code-review
 description: >-
-  Use to REVIEW an existing PR/branch/diff for correctness and security (e.g. an RLS migration PR). Not for implementing reviewer fixes (review) or approving merge readiness (praudit); verify findings on the exact head.
+  Use to review existing PRs, branches, diffs or standalone code snippets for correctness, security, maintainability and spec fit (e.g. an RLS migration or memory-leak snippet). Not for implementing reviewer feedback (review) or merge-readiness audits (praudit). Verify findings against current source.
 context: fork
 ---
 
