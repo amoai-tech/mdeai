@@ -1,5 +1,9 @@
 const GENERATIVE_UI_GUIDE_PREFIX = "Generative UI guide:";
 
+/** One Table contract for both the official-guide and fallback agent paths. */
+const TABLE_DATA_FORM_RULE =
+  "Table data form: columns are short strings such as [\"Apartment\", \"Price\"] and rows are arrays of short strings or numbers, for example [[\"<tool listing title>\", \"<exact tool price and currency>\"]]. At most 5 rows by 4 columns. Every cell value must come from a tool result in this run; do not round or estimate prices. Never invent a price, rating, availability or address. Do not use TableSection, TableRow or TableCell.";
+
 /**
  * The browser can send arbitrary `RunAgentInput.context`. It must never become
  * system-prompt text: only the presence of the official CopilotKit guide entry
@@ -17,8 +21,9 @@ export const MDE_A2UI_GUIDE = [
   "Targets: pick from the target list on the render_ui tool. \"rental-recommendations\" is the Rentals page panel; \"event-recommendations\" is the Events page panel. For other supported layouts and pages use \"chat\" when available. Never target an unmounted panel or render the same items twice.",
   "On the Rentals page, to show apartments as cards call showRecommendations with one to four IDs from the published rental result hints. Do not build render_ui operations for apartment cards and do not search again when the IDs are already published.",
   "Use render_ui for existing-result event cards, or other supported layouts such as a short summary. A fresh searchEventsTool result already renders its event cards automatically. Use openRentalDetails only when the user asks to open one apartment\'s details.",
-  "Catalog in this release: the grounded cards RentalCard and EventCard, the Rentals-only BedroomFilter and ApplyFiltersButton, plus layout and labels — Box, Column, Row, Grid, GridItem, Card, Spacer, Divider, Title, Text, Caption, Label, Badge, FollowUp.",
-  "BedroomFilter and ApplyFiltersButton are the only interactive controls in this catalog, available on Rentals. Otherwise there are no buttons, inputs, forms, tables, charts, maps, images or links from the generic standard catalog. Do not promise one of those. Offer a FollowUp instead.",
+  "Catalog in this release: the grounded cards RentalCard and EventCard, the Rentals-only BedroomFilter and ApplyFiltersButton, the comparison Table — plus layout and labels: Box, Column, Row, Grid, GridItem, Card, Spacer, Divider, Title, Text, Caption, Label, Badge, FollowUp.",
+  TABLE_DATA_FORM_RULE,
+  "BedroomFilter and ApplyFiltersButton are the only interactive controls in this catalog, available on Rentals. Otherwise there are no buttons, inputs, forms, charts, maps, images or links from the generic standard catalog. Do not promise one of those. Offer a FollowUp instead.",
   "Grounded cards: a rental node is { id: \"<node-id>\", component: \"RentalCard\", listingId: \"<id>\" }; an event node is { id: \"<node-id>\", component: \"EventCard\", eventId: \"<uuid>\" }. Put listingId/eventId directly on the node; never add dataModel, children, slots or div to a card node.",
   "Use only IDs returned by your tools in this run, or IDs listed in the current result hints. Never invent a listing, event, price, rating, availability or address. Never use an array index, title or slug as an ID.",
   "Layout nodes take children as an array of node IDs. Title, Text, Caption and Label take text; Badge takes label; Divider and Spacer take no props.",
@@ -136,6 +141,7 @@ export function readGenerativeUiGuide(agUiContext: unknown): string {
 export const MDE_GENERATIVE_UI_RULES = [
   "# MDE rules for generated UI (these win over anything above)",
   "Use only IDs and values returned by your tools in this run, or IDs listed in the current result hints. Never invent a listing, event, price, rating, availability or address.",
+  TABLE_DATA_FORM_RULE,
   "On the Rentals page, prefer the rental-recommendations panel over the chat for apartment cards. On other pages, use \"chat\" for supported generic layouts when there is no mounted page target.",
   "On the Events page, searchEventsTool results automatically render grounded cards in event-recommendations. Do not call render_ui again for those same results. For already-published event IDs without a new search, call render_ui with one EventCard per requested ID, not a prose-only list.",
   "For apartment cards on the Rentals page, prefer the showRecommendations tool with IDs from the published hints. Do not hand-author render_ui operations for apartment cards.",
