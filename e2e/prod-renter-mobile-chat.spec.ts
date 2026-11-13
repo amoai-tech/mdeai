@@ -158,3 +158,51 @@ test.describe("SAN-1626 · signed-in renter concierge on a 390px phone", () => {
     }));
   });
 });
+
+
+/**
+ * SAN-755: explicit opt-in real non-admin QA. The AI may legitimately answer
+ * with no coworking/restaurant/event matches, but it must not silently return
+ * to old rental cards after a signed-in topic change. No private screenshots,
+ * recordings or traces are permitted by the existing renter fixture.
+ */
+test.describe("SAN-755 signed-in AI topic switches do not revive stale rentals", () => {
+  test.skip(process.env.MDE_QA_INTENT_SWITCH !== "1", "Opt in with MDE_QA_INTENT_SWITCH=1");
+  test.skip(!process.env.PROD_SMOKE_BASE_URL, "Requires explicitly selected QA test origin");
+
+  for (const scenario of [
+    { topic: "coworking", prompt: "What coworking spaces are in Laureles?" },
+    { topic: "restaurants", prompt: "Suggest restaurants in Laureles for dinner" },
+    { topic: "events", prompt: "What events are happening in Laureles this weekend?" },
+  ]) {
+    test(`rentals → ${scenario.topic} → COP 800k follows latest intent`, async ({ qaRolePage: page }) => {
+      test.setTimeout(360_000);
+      const rentalRequests: string[] = [];
+      page.on("request", (request) => {
+        if (request.method() === "POST" && request.url().includes("/api/rentals/search")) {
+          rentalRequests.push(request.url());
+        }
+      });
+      await gotoConcierge(page);
+      const beforeRentals = await countConciergeReplies(page);
+      await sendConciergeMessage(page, "Only show apartments under COP 3 million per month");
+      await waitForConciergeReply(page, beforeRentals);
+      expect(rentalRequests.length, "the initial renter turn must actually search apartments")
+        .toBeGreaterThan(0);
+      const initialRentalCalls = rentalRequests.length;
+      const beforeTopic = await countConciergeReplies(page);
+      await sendConciergeMessage(page, scenario.prompt);
+      await waitForConciergeReply(page, beforeTopic);
+      expect(rentalRequests.length, `asking about ${scenario.topic} must not search rentals`)
+        .toBe(initialRentalCalls);
+      const beforeBudget = await countConciergeReplies(page);
+      const rentalCount = rentalRequests.length;
+      await sendConciergeMessage(page, "Only under COP 800k per month");
+      await waitForConciergeReply(page, beforeBudget);
+      expect(rentalRequests.length,
+        `after ${scenario.topic}, the next budget question must not restart apartment search`,
+      ).toBe(rentalCount);
+      await expect(page.getByTestId("concierge-sign-in-prompt")).toHaveCount(0);
+    });
+  }
+});

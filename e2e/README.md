@@ -336,3 +336,41 @@ Mastra Concierge `ai_runs` row; use the actual website-import server model trace
 (ADAPT installed `ai@6` Output.json in `src/lib/web/extract-website-json.ts`),
 [NVIDIA Lightning inference](https://docs.api.nvidia.com/nim/reference/nvidia-nemotron-3-5-lightning-30b-a3b-infer)
 (REFERENCE ONLY — existing MDE adapter performs the inference).
+
+## SAN-755 — rental budget and signed-in topic-switch Playwright checks
+
+The standard production-candidate workflow runs only the two **anonymous**
+regressions in `e2e/prod-guest-rental-budget.spec.ts` (390px and desktop) on
+its protected staged deployment, **before promotion**. It uses the existing
+Playwright `prod-smoke` project and Vercel automation bypass, sends no viewing
+or booking requests, and checks two real rental API calls, budget/currency,
+rendered cards, preserved search context, the mobile map count and absence of a
+sign-in prompt. The live catalog can change, so it never hardcodes today's
+three-to-two apartment counts. Guest traces are kept only on first retry and
+screenshots only on failure.
+
+Run the same focused guest check manually after the public release:
+
+```bash
+PROD_SMOKE_BASE_URL=https://www.mdeai.co PW_SKIP_WEBSERVER=1 \
+  npm run test:e2e:prod-guest-budget
+```
+
+Signed-in AI switching is deliberately a **separate opt-in** check on the real
+existing renter QA identity. It covers apartments → coworking/restaurants/events
+→ a monthly-budget follow-up and must not silently repeat rental search.
+This calls the real AI and may expose an intermittent, separately tracked
+routing issue. It does not gate every release or fall back to Super Admin.
+Configure `MDE_QA_RENTER_EMAIL` in your trusted process environment and the
+existing Supabase QA credentials in ignored `.env.local`; never commit or print
+these values. Never capture authenticated screenshots, traces or video:
+
+```bash
+MDE_QA_INTENT_SWITCH=1 PROD_SMOKE_BASE_URL=https://www.mdeai.co \
+  PW_SKIP_WEBSERVER=1 npx playwright test \
+  e2e/prod-renter-mobile-chat.spec.ts --project=prod-smoke \
+  --grep 'SAN-755 signed-in AI topic switches' --workers=1
+```
+
+A skipped signed-in test proves **nothing**. The normal guest gate remains
+independent of the QA account and the model's response timing.
