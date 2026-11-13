@@ -125,6 +125,42 @@ describe("SAN-874 coworking switches the conversation without hijacking rentals"
     expect(result.routingTarget).toBe("agent");
     expect(result.topicShift).toBe(true);
   });
+  it("exposes a typed coworking topic-switch signal independent of the diagnostic reason", async () => {
+    const result = await resolveRouterClassification("What coworking spaces are in Laureles?", {
+      lastIntent: "rental_search", inRentalSearch: true,
+    });
+    expect(result.explicitTopicShift).toBe("coworking");
+  });
+
+  it.each([
+    "Book a coworking space for my team",
+    "Reserve a coworking office for our group",
+    "I'd like to book a coworking desk",
+    "I’d like to book a coworking desk",
+    "We’d like to reserve a coworking office",
+    "I would like to reserve a coworking office",
+    "Hi, please book a coworking space",
+    "We need to rent a coworking desk",
+  ])("does not force a booking request %s into coworking discovery", async (question) => {
+    const result = await resolveRouterClassification(question, {
+      lastIntent: "rental_search", inRentalSearch: true,
+    });
+    expect(result.explicitTopicShift).toBeUndefined();
+    expect(result.reason).not.toBe("explicit coworking discovery topic change");
+  });
+
+  it.each([
+    "Which coworking spaces can I book by the day?",
+    "Find coworking spaces for rent in Laureles",
+  ])("treats %s as coworking discovery, not booking or apartments", async (question) => {
+    const result = await resolveRouterClassification(question, {
+      lastIntent: "rental_search", inRentalSearch: true,
+    });
+    expect(result.explicitTopicShift).toBe("coworking");
+    expect(result.intent).toBe("general_concierge");
+    expect(result.routingTarget).toBe("agent");
+  });
+
   it("keeps apartments near coworking spaces on the rental search", async () => {
     const result = await resolveRouterClassification("Find apartments near coworking spaces in Laureles", {
       lastIntent: "rental_search", inRentalSearch: true,
