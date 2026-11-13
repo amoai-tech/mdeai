@@ -14,9 +14,9 @@
 //
 // Usage: node .design-sync/tag-framework-vars.cjs <compiled.css>
 // CommonJS (.cjs) on purpose: DeepSource analyzes this repo with
-// module_system=commonjs, so an ESM .mjs trips a JS-0833 parse error. require()
-// parses cleanly there and runs identically under Node.
-const { readFileSync, writeFileSync } = require("node:fs");
+// module_system=commonjs, so an ESM .mjs trips a JS-0833 parse error.
+// Node 24 exposes built-in modules synchronously without a require() import.
+const { readFileSync, writeFileSync } = process.getBuiltinModule("node:fs");
 
 const file = process.argv[2];
 if (!file) {
