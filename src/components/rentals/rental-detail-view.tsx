@@ -9,6 +9,7 @@ import { LeadConfirmationBanner } from "@/components/chat/lead-confirmation-bann
 import { RentalUiProvider, useRentalUi } from "@/components/chat/rental-ui-context";
 import { ScheduleViewingModal } from "@/components/modals/schedule-viewing-modal";
 import { RentalAvailabilityCalendar } from "@/components/rentals/rental-availability-calendar";
+import { ContactHostDialog } from "@/components/rentals/contact-host-dialog";
 import {
   Carousel,
   CarouselContent,
@@ -382,6 +383,9 @@ function RentalDetailInner({
               Other options
             </h2>
             <div className="flex flex-wrap gap-2">
+              {!detail.isExternalSource ? (
+                <ContactHostDialog apartmentId={detail.id} title={detail.title} />
+              ) : null}
               {detail.status !== "development-preview" && !detail.isExternalSource ? (
                 <Link
                   href={bookingReviewHref ?? `/rentals/bookings/new?apartment=${encodeURIComponent(detail.id)}`}
