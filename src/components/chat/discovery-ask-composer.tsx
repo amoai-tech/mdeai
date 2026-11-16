@@ -244,6 +244,7 @@ function LiveComposer({ page, guestEvents, guestRestaurants, guestVenues, onAgen
     const unavailable = page === "events" && typeof visibleEventCount === "number"
       ? unavailableEventCardReply(message, visibleEventCount) : null;
     if (unavailable && localChat) {
+      setError(null);
       localChat.showExchange(message, unavailable);
       if (origin === "composer") setDraft("");
       setShowHistory(true);

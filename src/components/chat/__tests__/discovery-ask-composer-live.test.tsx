@@ -77,6 +77,21 @@ describe("SAN-1679 — out-of-range visible Events ordinal", () => {
     expect(input().value).toBe("");
   });
 
+  it("clears a prior failed-send error before displaying a grounded unavailable answer", async () => {
+    h.appendMessage.mockResolvedValue(false);
+    render(<DiscoveryAskComposer page="events" visibleEventCount={2} />);
+    ask("How many events have tickets?");
+    expect((await screen.findByRole("alert")).textContent).toContain("could not send your question");
+    ask("Show the fourth event as a card.");
+    expect(h.showExchange).toHaveBeenCalledWith(
+      "Show the fourth event as a card.",
+      expect.stringContaining("There is no fourth event"),
+    );
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByTestId("discovery-ask-retry")).toBeNull();
+    expect(h.appendMessage).toHaveBeenCalledTimes(1);
+  });
+
   it("does not intercept a real second event or an ordinal with new search filters", async () => {
     h.appendMessage.mockResolvedValue(true);
     render(<DiscoveryAskComposer page="events" visibleEventCount={2} />);
