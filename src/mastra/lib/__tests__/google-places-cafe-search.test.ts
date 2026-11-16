@@ -6,7 +6,7 @@ vi.mock("../google-places-client", async (importOriginal) => {
   return { ...actual, searchText: searchTextMock };
 });
 
-import { isMedellinPlaceScope, mapGoogleTextSearchToGrounded, searchGoogleCafes, withMedellinScope } from "../google-places-cafe-search";
+import { hasExplicitPlaceScope, isMedellinPlaceScope, mapGoogleTextSearchToGrounded, searchGoogleCafes, withMedellinScope } from "../google-places-cafe-search";
 
 const response = {
   places: [
@@ -75,9 +75,6 @@ describe("mapGoogleTextSearchToGrounded", () => {
         },
       }),
     );
-    expect(withMedellinScope("cafés in Laureles")).toBe("cafés in Laureles");
-    expect(withMedellinScope("cafés in Bogotá")).toBe("cafés in Bogotá");
-    expect(withMedellinScope("quiet cafés")).toContain("Medellín");
   });
 
   it("uses the supplied viewport for a map-area query without adding a city", async () => {
@@ -111,7 +108,34 @@ describe("mapGoogleTextSearchToGrounded", () => {
     const request = searchTextMock.mock.calls.at(-1)?.[0];
     expect(request?.textQuery).toBe("cafés in Cali");
     expect(request).not.toHaveProperty("locationBias");
+  });
+
+  it("does not apply Medellín bias when a different city was named", async () => {
+    searchTextMock.mockReset().mockResolvedValue({ places: [] });
+    await searchGoogleCafes({ query: "cafés in Bogotá" });
+    expect(searchTextMock.mock.calls.at(-1)?.[0]).toMatchObject({ textQuery: "cafés in Bogotá" });
+    expect(searchTextMock.mock.calls.at(-1)?.[0]).not.toHaveProperty("locationBias");
+  });
+
+  it("named city overrides a stale viewport bias", async () => {
+    searchTextMock.mockReset().mockResolvedValue({ places: [] });
+    await searchGoogleCafes({ query: "cafés in Cali", locationBias: {latitude: 6.24, longitude: -75.58} });
+    expect(searchTextMock.mock.calls.at(-1)?.[0]).not.toHaveProperty("locationBias");
+  });
+
+  it("preserves explicit and lowercase location phrases without appending Medellín", () => {
+    expect(withMedellinScope("cafés in Laureles")).toBe("cafés in Laureles");
+    expect(withMedellinScope("cafés in Bogotá")).toBe("cafés in Bogotá");
+    expect(withMedellinScope("cafés in quito")).toBe("cafés in quito");
+    expect(withMedellinScope("quiet cafés")).toContain("Medellín");
+    expect(hasExplicitPlaceScope("cafés near quito")).toBe(true);
+  });
+
+  it("preserves map-area queries without adding Medellín", () => {
     expect(withMedellinScope("cafés around this map area")).toBe("cafés around this map area");
+  });
+
+  it("recognizes Medellín neighborhoods but not explicit non-Medellín cities", () => {
     expect(isMedellinPlaceScope("cafés in Centro")).toBe(true);
     expect(isMedellinPlaceScope("cafés in Laureles")).toBe(true);
     expect(isMedellinPlaceScope("cafés in Bogotá")).toBe(false);

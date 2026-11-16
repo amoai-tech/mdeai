@@ -16,7 +16,7 @@ const MAP_AREA_CONTEXT =
   /\b(this map area|around this map|current map|map area|near here|around here)\b/i;
 const MEDELLIN_CONTEXT = /\b(medell[ií]n|laureles|poblado|envigado|sabaneta|bel[eé]n|provenza|estadio|centro)(?![\p{L}])/iu;
 const EXPLICIT_CITY = /\b(bogot[aá]|cali|cartagena|barranquilla|santa marta|pereira|manizales|armenia|bucaramanga|c[uú]cuta|villavicencio|monter[ií]a|ibagu[eé]|pasto|neiva|popay[aá]n|sincelejo|valledupar|tunja|riohacha|quibd[oó]|florencia|yopal|mocoa|leticia|san andr[eé]s)(?![\p{L}])/iu;
-const EXPLICIT_LOCATION_PHRASE = /\b(?:in|en|near|around|nearby)\s+[A-ZÁÉÍÓÚÑ][\p{L}'-]+/u;
+const EXPLICIT_LOCATION_PHRASE = /\b(?:in|en|near|around|nearby)\s+(?!(?:the|this|here|me)\b)[\p{L}][\p{L}'-]+/iu;
 const CAFE_TYPES = new Set(["cafe", "coffee_shop", "bakery", "brunch_restaurant"]);
 
 type GooglePlace = {
@@ -100,11 +100,12 @@ export function hasExplicitPlaceScope(query: string): boolean {
   );
 }
 
-/** Add Medellín context when the user did not name a city/neighborhood. */
+/** True when the query refers to the visible map instead of a named city. */
 export function isMapAreaQuery(query: string): boolean {
   return MAP_AREA_CONTEXT.test(query);
 }
 
+/** Add Medellín only when no explicit location or map viewport is provided. */
 export function withMedellinScope(query: string, hasMapBias = false): string {
   if (hasExplicitPlaceScope(query) || isMapAreaQuery(query) || hasMapBias) return query;
   return `${query} Medellín, Colombia`;
@@ -160,8 +161,10 @@ export async function searchGoogleCafes(params: {
   locationBias?: { latitude: number; longitude: number } | null;
 }): Promise<GoogleCafeSearchResult> {
   const pageSize = Math.min(Math.max(params.pageSize ?? 5, 1), 5);
-  const center =
-    params.locationBias === null
+  // Named outside-Medellín cities outrank an old map viewport or default bias.
+  const center = hasNonMedellinCity(params.query)
+    ? undefined
+    : params.locationBias === null
       ? undefined
       : params.locationBias ?? MEDELLIN_BIAS;
   const response = await searchText({
