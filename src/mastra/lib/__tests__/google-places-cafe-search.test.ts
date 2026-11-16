@@ -138,6 +138,10 @@ describe("mapGoogleTextSearchToGrounded", () => {
 
   it("preserves map-area queries without adding Medellín", () => {
     expect(withMedellinScope("cafés around this map area")).toBe("cafés around this map area");
+    expect(hasExplicitPlaceScope("cafés en esta zona")).toBe(false);
+    expect(withMedellinScope("cafés en esta zona", true)).toBe("cafés en esta zona");
+    expect(hasExplicitPlaceScope("cafés in Guatapé")).toBe(true);
+    expect(hasExplicitPlaceScope("cafés on Mars")).toBe(true);
   });
 
   it("recognizes Medellín neighborhoods but not explicit non-Medellín cities", () => {

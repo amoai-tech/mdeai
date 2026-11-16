@@ -107,6 +107,44 @@ describe("searchGroundedPlacesTool fallback", () => {
     expect(invokeAdkGrounding).not.toHaveBeenCalled();
   });
 
+  it("uses the actual Medellín thread viewport for Spanish 'en esta zona'", async () => {
+    const getWorkingMemory = vi.fn(async () => ({
+      mapUi: { viewport: { lat: 6.21, lng: -75.57, zoom: 15 } },
+    }));
+    vi.mocked(searchRestaurants).mockResolvedValue({ results: [], total: 0, source: "supabase" });
+    await searchGroundedPlacesTool.execute!(
+      { query: "cafés en esta zona", intent: "cafe" },
+      { agent: { threadId: "thread-2", resourceId: "renter-1" }, memory: { getWorkingMemory } } as never,
+    );
+    expect(getWorkingMemory).toHaveBeenCalledOnce();
+    expect(searchGoogleCafes).toHaveBeenCalledWith(expect.objectContaining({
+      query: "cafés en esta zona",
+      locationBias: { latitude: 6.21, longitude: -75.57 },
+    }));
+  });
+
+  it("does not substitute Medellín cafés for an explicitly unsupported place", async () => {
+    const out = await runGrounded("cafés in Guatapé", "cafe");
+    expect(out.results).toEqual([]);
+    expect(out.metadata?.reason).toBe("outside_catalog_coverage");
+    expect(searchGoogleCafes).not.toHaveBeenCalled();
+    expect(searchRestaurants).not.toHaveBeenCalled();
+    expect(incrementAndCheckGroundingQuota).not.toHaveBeenCalled();
+  });
+
+  it("does not use a Medellín fallback for an out-of-area map viewport", async () => {
+    const getWorkingMemory = vi.fn(async () => ({
+      mapUi: { viewport: { lat: 7.1, lng: -75.8, zoom: 14 } },
+    }));
+    const out = await searchGroundedPlacesTool.execute!(
+      { query: "cafés en esta zona", intent: "cafe" },
+      { agent: { threadId: "thread-3", resourceId: "renter-1" }, memory: { getWorkingMemory } } as never,
+    ) as GroundedOut;
+    expect(out.metadata?.reason).toBe("outside_catalog_coverage");
+    expect(searchGoogleCafes).not.toHaveBeenCalled();
+    expect(incrementAndCheckGroundingQuota).not.toHaveBeenCalled();
+  });
+
   it("GM-P0-06 returns curated fallback when ADK unavailable (403)", async () => {
     vi.mocked(invokeAdkGrounding).mockResolvedValue(
       adkUnavailableMock({ reason: "adk_unavailable", status: 403 }),

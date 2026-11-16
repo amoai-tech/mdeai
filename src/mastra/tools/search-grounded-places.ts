@@ -5,6 +5,7 @@ import { invokeAdkGrounding, isAdkGroundingConfigured } from "../lib/adk-groundi
 import {
   hasExplicitPlaceScope,
   hasNonMedellinCity,
+  isMedellinPlaceScope,
   MEDELLIN_BIAS,
   searchGoogleCafes,
 } from "../lib/google-places-cafe-search";
@@ -450,6 +451,19 @@ export const searchGroundedPlacesTool = createTool({
     }
     const hasExplicitPlace = hasExplicitPlaceScope(rawQuery);
     const hasNonMedellinCityMatch = hasNonMedellinCity(rawQuery);
+    // MDE café discovery currently supports Medellín only. An explicit
+    // uncovered destination must never trigger paid Places calls or silently
+    // substitute results from the saved Medellín catalog.
+    const hasUncoveredDestination =
+      hasExplicitPlace && !isMedellinPlaceScope(rawQuery);
+    if (hasUncoveredDestination && isCafeGroundingIntent(rawQuery, intent)) {
+      return withVenueKindMetadata(
+        { results: [], attribution: [], source: "grounding" as const,
+          metadata: { reason: "outside_catalog_coverage" } },
+        rawQuery,
+        intent,
+      );
+    }
     const memoryContext = hasExplicitPlace
       ? {}
       : await resolveGroundingMemory(context);
@@ -457,6 +471,23 @@ export const searchGroundedPlacesTool = createTool({
       { locationBias: inputBias },
       memoryContext,
     );
+    // A real viewport outside the supported Medellín area is not permission
+    // to return unrelated Medellín cafés. Preserve the user's map position.
+    if (
+      isCafeGroundingIntent(rawQuery, intent) &&
+      resolvedLocationBias &&
+      !shouldUseCuratedFallback({
+        hasNonMedellinCity: false,
+        locationBias: resolvedLocationBias,
+      })
+    ) {
+      return withVenueKindMetadata(
+        { results: [], attribution: [], source: "grounding" as const,
+          metadata: { reason: "outside_catalog_coverage" } },
+        rawQuery,
+        intent,
+      );
+    }
     const effectiveLocationBias =
       resolvedLocationBias ??
       (hasNonMedellinCityMatch ? undefined : MEDELLIN_BIAS);
