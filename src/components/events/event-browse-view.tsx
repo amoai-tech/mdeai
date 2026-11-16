@@ -222,7 +222,7 @@ function EventBrowseViewInner({
     <EventPageControlTool filters={{ category, neighborhood, dateWindow, price }} />
     <DiscoveryWorkspace
       activeSlug="events"
-      askComposer={<DiscoveryAskComposer page="events" onAgentResults={onAgentResults} hasSelectedItem={Boolean(selectedId)} onClearSelection={() => selectEvent(null)} guestEvents={{
+      askComposer={<DiscoveryAskComposer page="events" visibleEventCount={shownEvents.length} onAgentResults={onAgentResults} hasSelectedItem={Boolean(selectedId)} onClearSelection={() => selectEvent(null)} guestEvents={{
         category, neighborhood, dateWindow,
         onEventIds: (ids) => void resolveIds(ids),
       }} />}

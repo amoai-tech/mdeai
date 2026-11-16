@@ -5,6 +5,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 const h = vi.hoisted(() => ({
   user: { id: "u1" } as { id: string } | null,
   appendMessage: vi.fn(),
+  showExchange: vi.fn(),
   stopActiveRun: vi.fn(),
   retryLastTurn: vi.fn(),
   latestResult: vi.fn(),
@@ -36,6 +37,7 @@ vi.mock("@/lib/hooks/use-concierge-chat", () => ({
   }),
 }));
 vi.mock("../discovery-tool-results", () => ({ getLatestDiscoveryToolResult: h.latestResult }));
+vi.mock("../event-local-chat-context", () => ({ useOptionalEventLocalChat: () => ({ showExchange: h.showExchange }) }));
 
 import { DiscoveryAskComposer } from "../discovery-ask-composer";
 import { clearConciergeError, reportConciergeError } from "@/lib/concierge-error-store";
@@ -50,6 +52,7 @@ const ask = (text: string) => {
 beforeEach(() => {
   h.user = { id: "u1" };
   h.appendMessage.mockReset();
+  h.showExchange.mockReset();
   h.stopActiveRun.mockReset();
   h.retryLastTurn.mockReset();
   agent.messages = [];
@@ -61,6 +64,50 @@ beforeEach(() => {
   clearConciergeError();
 });
 afterEach(cleanup);
+
+describe("SAN-1679 — out-of-range visible Events ordinal", () => {
+  it("answers a missing fourth event from the actual page count without sending a model turn", async () => {
+    render(<DiscoveryAskComposer page="events" visibleEventCount={2} />);
+    ask("Show the fourth event as a card.");
+    expect(h.appendMessage).not.toHaveBeenCalled();
+    expect(h.showExchange).toHaveBeenCalledWith(
+      "Show the fourth event as a card.",
+      expect.stringMatching(/only 2 events?.*no fourth event/i),
+    );
+    expect(input().value).toBe("");
+  });
+
+  it("does not intercept a real second event or an ordinal with new search filters", async () => {
+    h.appendMessage.mockResolvedValue(true);
+    render(<DiscoveryAskComposer page="events" visibleEventCount={2} />);
+    ask("Show the second event as a card.");
+    await waitFor(() => expect(h.appendMessage).toHaveBeenCalledWith("Show the second event as a card."));
+    expect(h.showExchange).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["Show the fourth event as a card.", 2, true],
+    ["Show the 4th event as a card.", 2, true],
+    ["Show the first event as a card.", 2, false],
+    ["Show the second event as a card.", 2, false],
+    ["Show the third event as a card.", 0, true],
+    ["Show the fourth event in Laureles as a card.", 2, false],
+    ["Show the fourth event details.", 2, false],
+    ["Are there four events?", 2, false],
+    ["Show the fourth apartment as a card.", 2, false],
+  ])("recognizes only exact out-of-range event-card requests: %s", async (question, count, expected) => {
+    const { unavailableEventCardReply } = await import("../discovery-ask-composer");
+    expect(Boolean(unavailableEventCardReply(question, count))).toBe(expected);
+  });
+
+  it("does not claim the visible page count when not supplied", async () => {
+    h.appendMessage.mockResolvedValue(true);
+    render(<DiscoveryAskComposer page="events" />);
+    ask("Show the fourth event as a card.");
+    await waitFor(() => expect(h.appendMessage).toHaveBeenCalledWith("Show the fourth event as a card."));
+    expect(h.showExchange).not.toHaveBeenCalled();
+  });
+});
 
 describe("SAN-1145 shared Ask MDE composer — signed-in send outcomes", () => {
   it("publishes the answer's results exactly once after a successful reply", async () => {
