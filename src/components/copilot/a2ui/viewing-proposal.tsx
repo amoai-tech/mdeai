@@ -123,7 +123,9 @@ export function ViewingProposalView({
       <div className="flex justify-end">
         <Button
           type="button"
-          className="min-h-11"
+          // A phone has a sticky heading above and an Ask MDE composer below.
+          // Native scrollIntoView must clear both overlays before Continue can be tapped.
+          className="min-h-11 scroll-mt-32 scroll-mb-[calc(var(--mde-ask-composer-height,18rem)_+_6rem)]"
           data-testid="viewing-proposal-continue"
           disabled={!canRequest}
           onClick={handleContinue}

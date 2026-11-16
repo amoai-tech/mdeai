@@ -58,6 +58,13 @@ function type(input: HTMLInputElement, value: string) {
 const click = (el: Element) => act(() => el.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 
 describe("ViewingProposalView", () => {
+  it("reserves scroll room above the sticky mobile composer and header for Continue", () => {
+    render(base());
+    const action = q<HTMLButtonElement>("viewing-proposal-continue");
+    expect(action.className).toContain("scroll-mt-");
+    expect(action.className).toContain("scroll-mb-[calc(var(--mde-ask-composer-height");
+  });
+
   it("hands the renter's edited time (15:15 -> 16:00) to Continue and makes no network call", () => {
     const props = base();
     render(props);
