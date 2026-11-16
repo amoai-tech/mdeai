@@ -1,5 +1,4 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { vercelGet } from "../../scripts/vercel-release-control.mjs";
 import type { Page } from "@playwright/test";
 
 // Only immutable deployment URLs. A matching hostname is NOT proof of ownership.
@@ -7,6 +6,8 @@ const MDE_VERCEL_HOST = /^mdeai-[a-z0-9]{4,64}-amo-agency\.vercel\.app$/i;
 const PROJECT_ID = "prj_iadSvJDW4MBqtQ5s3YPlBNc08it6";
 const TEAM_ID = "team_PbKG2U0lCR67rN57C4fqcfaw";
 const DEPLOYMENT_ID = /^dpl_[A-Za-z0-9]{20,}$/;
+// Fixed API authority and scoped project; never use a candidate URL as a request destination.
+const VERCEL_DEPLOYMENTS_URL = `https://api.vercel.com/v7/deployments?projectId=${PROJECT_ID}&teamId=${TEAM_ID}&limit=100`;
 
 export function validateVercelCandidateOrigin(rawUrl: string): URL {
   const url = new URL(rawUrl);
@@ -47,18 +48,29 @@ async function requireVerifiedDeployment(candidate: URL, secret: string): Promis
   }
   let raw: unknown;
   try {
-    // Reuse the existing fixed-host, time-bounded Vercel API client. The
-    // candidate host is strictly validated and encoded as a path segment;
-    // it never becomes the HTTP request authority.
-    raw = await vercelGet(
-      "/v13/deployments/" + encodeURIComponent(candidate.hostname) + "?teamId=" + TEAM_ID,
-      { token, timeoutMs: 12_000 },
-    );
+    const response = await fetch(VERCEL_DEPLOYMENTS_URL, {
+      headers: { authorization: `Bearer ${token}` },
+      redirect: "error",
+      signal: AbortSignal.timeout(12_000),
+    });
+    if (!response.ok) throw new Error("Vercel API request failed");
+    raw = await response.json();
   } catch {
     throw new Error("CERTIFICATION_TARGET_INVALID: Vercel deployment identity lookup failed");
   }
-  const deployment = raw as { id?: unknown; projectId?: unknown; accountId?: unknown; url?: unknown; readyState?: unknown };
-  if (!deployment || typeof deployment.id !== "string" || !DEPLOYMENT_ID.test(deployment.id) ||
+  // List only the authenticated MDE project's recent deployments. Hostnames are
+  // compared as data, never interpolated into a network URL (SSRF-safe).
+  const list = raw as { deployments?: Array<{
+    uid?: unknown; projectId?: unknown; accountId?: unknown;
+    url?: unknown; readyState?: unknown;
+  }> } | null;
+  if (!Array.isArray(list?.deployments)) {
+    throw new Error("CERTIFICATION_TARGET_INVALID: invalid Vercel deployment identity response");
+  }
+  const deployment = list.deployments.find(
+    (entry) => typeof entry?.url === "string" && entry.url.toLowerCase() === candidate.hostname,
+  );
+  if (!deployment || typeof deployment.uid !== "string" || !DEPLOYMENT_ID.test(deployment.uid) ||
       deployment.projectId !== PROJECT_ID ||
       (deployment.accountId != null && deployment.accountId !== TEAM_ID) ||
       typeof deployment.url !== "string" || deployment.url.toLowerCase() !== candidate.hostname ||
