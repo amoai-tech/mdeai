@@ -10,6 +10,7 @@ import { useAgent, UseAgentUpdate } from "@copilotkit/react-core/v2";
 import { useOptionalEventLocalChat } from "@/components/chat/event-local-chat-context";
 import { createGenerativeUI, standardUI } from "@copilotkit/react-core/v2/generative-ui";
 import { RentalCard as ExistingRentalCard } from "@/components/copilot/rental-card";
+import { ViewingProposalView } from "@/components/copilot/a2ui/viewing-proposal";
 import { EventCard as ExistingEventCard } from "@/components/copilot/event-card";
 import { useOptionalEventBrowseSelection } from "@/components/events/event-browse-selection-context";
 import { useOptionalConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
@@ -346,6 +347,43 @@ function MdeRentalCard({ listingId }: { listingId: string }) {
   );
 }
 
+/**
+ * SAN-1658 — editable viewing proposal. The listing facts come from the current
+ * authorized result (never from props); date/time are only a proposal. Continue
+ * hands the renter's latest values to the existing ScheduleViewingModal, which
+ * owns review and the one real write.
+ */
+function MdeViewingProposal({ listingId, date, time }: { listingId: string; date?: string; time?: string }) {
+  const row = useRentalRow(listingId);
+  const rentalUi = useOptionalRentalUi();
+  if (!row) {
+    return (
+      <div className="rounded-lg border border-dashed border-border p-3 text-sm text-muted-foreground" data-testid="a2ui-viewing-unavailable">
+        That rental is not in the current authorized results.
+      </div>
+    );
+  }
+  const openScheduleViewing = rentalUi?.openScheduleViewing;
+  return (
+    <ViewingProposalView
+      key={row.id}
+      title={row.title}
+      neighborhood={row.neighborhood}
+      initialDate={date}
+      initialTime={time}
+      canRequest={Boolean(openScheduleViewing) && row.can_schedule_viewing === true}
+      onContinue={(preferredAt) =>
+        openScheduleViewing?.({
+          listingId: row.id,
+          title: row.title,
+          neighborhood: row.neighborhood,
+          preferredAt,
+        })
+      }
+    />
+  );
+}
+
 function useEventRow(eventId: string): EventToolRow | null {
   const messages = useRentalMessages();
   const fastPath = useOptionalEventFastPath();
@@ -607,6 +645,17 @@ export const mdeUI = createGenerativeUI({
       description:
         "Show one real event from the current authorized search by its eventId UUID. The component resolves venue, date, price, image and ticket link from the stored result; never pass or invent event facts.",
       props: z.object({ eventId: z.string().regex(EVENT_A2UI_ID_PATTERN) }),
+      slots: { children: "multiple" },
+    },
+    ViewingProposal: {
+      component: MdeViewingProposal,
+      description:
+        "An editable viewing request for one real rental, by its listingId from the current authorized results. Optional date (YYYY-MM-DD) and time (HH:mm 24-hour, Medellín) are only the renter's stated preference: set one only when the renter gave it explicitly, never guess a date. The renter can edit both; Continue opens the existing review form, and nothing is requested or confirmed until the renter submits that form.",
+      props: z.object({
+        listingId: z.string().min(1),
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        time: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+      }),
       slots: { children: "multiple" },
     },
     BedroomFilter: {
