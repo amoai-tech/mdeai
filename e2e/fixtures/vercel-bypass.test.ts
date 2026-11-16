@@ -176,7 +176,7 @@ describe("establishVercelAutomationBypass", () => {
     const { page, get } = fakePage(200, [BYPASS_COOKIE]);
     await expect(establishVercelAutomationBypass(page, CANDIDATE, SECRET)).resolves.toBeUndefined();
     expect(lookup).toHaveBeenCalledWith(
-      expect.stringContaining("https://api.vercel.com/v7/deployments?projectId=prj_iadSvJDW4MBqtQ5s3YPlBNc08it6"),
+      expect.stringContaining("https://api.vercel.com/v6/deployments?projectId=prj_iadSvJDW4MBqtQ5s3YPlBNc08it6"),
       expect.objectContaining({ redirect: "error", headers: { authorization: `Bearer ${LOCAL_API_TOKEN}` } }),
     );
     expect(get).toHaveBeenCalledTimes(1);
@@ -215,7 +215,7 @@ describe("establishVercelAutomationBypass", () => {
     await expect(establishVercelAutomationBypass(page, CANDIDATE, SECRET))
       .rejects.toThrow(/candidate deployment not found/);
     expect(lookup).toHaveBeenCalledWith(
-      expect.stringContaining("api.vercel.com/v7/deployments?projectId="),
+      expect.stringContaining("api.vercel.com/v6/deployments?projectId="),
       expect.any(Object),
     );
     expect(JSON.stringify(lookup.mock.calls)).not.toContain(CANDIDATE);
