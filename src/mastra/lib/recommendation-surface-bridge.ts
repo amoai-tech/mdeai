@@ -62,7 +62,9 @@ export function viewingProposalFromResult(content: unknown): ViewingProposalInpu
 }
 
 export function viewingProposalRenderEvents(input: ViewingProposalInput, toolCallId: string): BaseEvent[] {
-  const built = buildViewingProposalOps(input, `viewing-proposal-${toolCallId}`);
+  // Stable surface id with delete-then-create (as the event bridge does): the newest
+  // request replaces the older proposal on the panel.
+  const built = buildViewingProposalOps(input, undefined, { replace: true });
   const callId = `render-ui-viewing-${toolCallId}`;
   return [
     { type: EventType.TOOL_CALL_START, toolCallId: callId, toolCallName: "render_ui" },

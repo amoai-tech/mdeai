@@ -1,5 +1,5 @@
-import { readRentalResultHints } from "./generative-ui-context";
-import { isActiveRentalsDiscoveryPage } from "./discovery-agent-context";
+import { readRentalResultHints, readRentalResultIds } from "./generative-ui-context";
+import { isActiveRentalsDiscoveryPage, selectedDiscoveryEntityId } from "./discovery-agent-context";
 
 type MessageLike = { role?: string; content?: unknown };
 
@@ -130,8 +130,15 @@ export function shouldRequestRecommendations({
  */
 const SCHEDULE_VERB = /\b(schedule|request|book|arrange|set\s*up|pedir|agendar|programar)\b/i;
 const VIEWING_NOUN = /\b(viewing|viewings|visit|tour|showing|visita)\b/i;
-/** A viewing may also point at "this/that apartment" or an ordinal in Spanish. */
-const VIEWING_REFERENCE = /\b(this|that|primer[oa]?|segund[oa]|tercer[oa]?|[uú]ltim[oa])\b/i;
+/**
+ * The message must name WHICH apartment: an ordinal ("the second one", "apartment 3",
+ * "el primero"), a published ID, or, for "this/that/it", a listing the renter selected.
+ * Bare "here", "them" or "this" never force the tool, because the model would then have
+ * to guess an ID, which is the silent substitution this change exists to prevent.
+ */
+const VIEWING_ORDINAL =
+  /\b(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|last|\d+(?:st|nd|rd|th)|primer[oa]?|segund[oa]|tercer[oa]?|cuart[oa]|quint[oa]|sext[oa]|s[eé]ptim[oa]|octav[oa]|noven[oa]|d[eé]cim[oa]|[uú]ltim[oa])\b|\b(?:apartments?|listings?|number|no\.?|apartamento|#)\s*#?\d+\b/i;
+const VIEWING_DEICTIC = /\b(this|that|it|esta?|ese|esa)\b/i;
 const TIMING_QUESTION = /\b(when|what\s+time|cu[aá]ndo)\b/i;
 
 export function shouldRenderViewingProposal({
@@ -152,5 +159,7 @@ export function shouldRenderViewingProposal({
   if (!text) return false;
   if (!SCHEDULE_VERB.test(text) || !VIEWING_NOUN.test(text)) return false;
   if (TIMING_QUESTION.test(text)) return false;
-  return CURRENT_RESULTS_REFERENCE.test(text) || VIEWING_REFERENCE.test(text);
+  if (VIEWING_ORDINAL.test(text)) return true;
+  if (readRentalResultIds(agUiContext).some((id) => text.includes(id))) return true;
+  return VIEWING_DEICTIC.test(text) && Boolean(selectedDiscoveryEntityId(agUiContext));
 }

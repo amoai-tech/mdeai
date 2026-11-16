@@ -63,6 +63,22 @@ describe("viewing proposal surface", () => {
   });
 });
 
+describe("stable proposal surface", () => {
+  it("replaces the previous proposal instead of stacking a new one per request", () => {
+    const first = buildViewingProposalOps({ listingId: second }, undefined, { replace: true });
+    const again = buildViewingProposalOps({ listingId: second, time: "16:00" }, undefined, { replace: true });
+    const ids = (built: typeof first) =>
+      built.operations.map((op) => {
+        const o = op as { deleteSurface?: { surfaceId: string }; createSurface?: { surfaceId: string } };
+        return o.deleteSurface?.surfaceId ?? o.createSurface?.surfaceId;
+      });
+    expect(ids(first)).toEqual(["viewing-proposal", "viewing-proposal"]);
+    expect(ids(again)).toEqual(ids(first));
+    expect(Object.keys(first.operations[0])).toContain("deleteSurface");
+    expect(Object.keys(first.operations[1])).toContain("createSurface");
+  });
+});
+
 describe("bridge", () => {
   const start = (id: string, name: string) => ({ type: EventType.TOOL_CALL_START, toolCallId: id, toolCallName: name }) as BaseEvent;
   const result = (id: string, content: unknown) => ({ type: EventType.TOOL_CALL_RESULT, toolCallId: id, content }) as BaseEvent;
@@ -75,6 +91,8 @@ describe("bridge", () => {
       EventType.TOOL_CALL_START, EventType.TOOL_CALL_RESULT,
       EventType.TOOL_CALL_START, EventType.TOOL_CALL_ARGS, EventType.TOOL_CALL_END,
     ]);
+    const args = ok.find((e) => e.type === EventType.TOOL_CALL_ARGS) as unknown as { delta: string };
+    expect(JSON.parse(args.delta).operations[0]).toHaveProperty("deleteSurface");
     const rejected = await collect([start("c2", "showViewingProposal"), result("c2", JSON.stringify({ ok: false, message: "x" }))]);
     expect(rejected).toHaveLength(2);
   });

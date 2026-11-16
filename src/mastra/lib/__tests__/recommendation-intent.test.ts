@@ -149,10 +149,33 @@ describe("shouldRenderViewingProposal (SAN-1658)", () => {
   it.each([
     ["Request a viewing of the second apartment at 3:15 PM.", true],
     ["Schedule a viewing for the first one", true],
-    ["Can you book a tour of this apartment?", true],
+    ["Can you book a tour of apartment 3?", true],
     ["Agendar una visita del primer apartamento", true],
+    ["Schedule a viewing of 37a05b09-f560-4776-92fd-b8bb2b92e611", true],
   ])("%s -> %s", (text, expected) => {
     expect(run(text)).toBe(expected);
+  });
+
+  it("does not force the tool when no apartment is named (the model would have to guess an ID)", () => {
+    expect(run("Can I book a tour that fits my schedule?")).toBe(false);
+    expect(run("Schedule a visit here")).toBe(false);
+    expect(run("Request a viewing of them")).toBe(false);
+    expect(run("Can you book a tour of this apartment?")).toBe(false);
+  });
+
+  it("accepts this/that only when the renter has selected a listing", () => {
+    const selected = {
+      get: (key: string) =>
+        key === "ag-ui"
+          ? { context: [
+              { description: RENTAL_A2UI_CONTEXT_DESCRIPTION,
+                value: JSON.stringify(["37a05b09-f560-4776-92fd-b8bb2b92e611"]) },
+              { description: "Active MDE discovery page, filters, and explicitly selected visible public item.",
+                value: JSON.stringify({ route: "/rentals", selectedPublicEntityId: "37a05b09-f560-4776-92fd-b8bb2b92e611" }) },
+            ] }
+          : undefined,
+    };
+    expect(run("Can you book a tour of this apartment?", selected)).toBe(true);
   });
 
   it("leaves timing questions, unrelated requests and unreferenced requests to the model", () => {

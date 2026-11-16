@@ -9,6 +9,8 @@
  * nothing; the existing review form stays the only submit.
  */
 export const VIEWING_PROPOSAL_TARGET = "rental-recommendations";
+/** One stable surface id: a newer request replaces the older proposal instead of stacking. */
+export const VIEWING_PROPOSAL_SURFACE_ID = "viewing-proposal";
 const A2UI_VERSION = "1.0";
 
 export type ViewingProposalInput = {
@@ -19,10 +21,17 @@ export type ViewingProposalInput = {
   time?: string;
 };
 
-export function buildViewingProposalOps(input: ViewingProposalInput, surfaceId: string) {
+export function buildViewingProposalOps(
+  input: ViewingProposalInput,
+  surfaceId: string = VIEWING_PROPOSAL_SURFACE_ID,
+  options: { replace?: boolean } = {},
+) {
   return {
     target: VIEWING_PROPOSAL_TARGET,
     operations: [
+      // A2UI rejects createSurface for an id that already exists, so a newer request
+      // deletes the previous proposal first and re-creates it in the same call.
+      ...(options.replace ? [{ version: A2UI_VERSION, deleteSurface: { surfaceId } }] : []),
       {
         version: A2UI_VERSION,
         createSurface: {
