@@ -71,7 +71,7 @@ export function readRentalResultHints(agUiContext: unknown): string | null {
   const hints = readRentalResultIds(agUiContext);
   if (hints.length === 0) return null;
   return [
-    `Current browser-published rental result IDs, numbered in display order (1 is the top result). Only the first ${hints.length} result(s) can be addressed here, as cards or a viewing request. If the renter asks for a later position (for example the 12th), say you can only show cards for the first ${hints.length} results and that they can still open any apartment from the page; never show a different apartment in its place. The RentalCard resolver revalidates the real authorized row:`,
+    `Current browser-published rental result IDs, numbered in display order (1 is the top result). Only the first ${hints.length} result(s) can be addressed here as cards. If the renter asks for a later position (for example the 12th), say you can only show cards for the first ${hints.length} results and that they can still open any apartment from the page; never show a different apartment in its place. The RentalCard resolver revalidates the real authorized row:`,
     ...hints.map((id, index) => `${index + 1}. ${id}`),
   ].join("\n");
 }

@@ -48,6 +48,8 @@ describe("rental A2UI agent context", () => {
     });
     expect(hints).toContain("6. id-6");
     expect(hints).toContain("Only the first 6 result(s) can be addressed here");
+    // This PR has no viewing tool; the hint must not promise a viewing by position.
+    expect(hints).not.toMatch(/viewing/i);
     expect(hints).toMatch(/can still open any apartment from the page/i);
     expect(hints).toMatch(/never show a different apartment in its place/i);
     // It must not claim a later apartment is absent from the page.
