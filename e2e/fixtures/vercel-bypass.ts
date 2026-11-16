@@ -14,6 +14,17 @@ export function validateVercelCandidateOrigin(rawUrl: string): URL {
   return url;
 }
 
+/** Public previews do not issue a bypass cookie. Accept one only when its
+ * live app version matches the exact expected Git commit and preview environment.
+ * Protected previews must still use the existing cookie-verifying bypass path. */
+export function isExpectedPublicPreviewVersion(value: unknown, expectedSha: string): boolean {
+  if (!/^[a-f0-9]{40}$/i.test(expectedSha) || !value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const version = value as { sha?: unknown; environment?: unknown };
+  return version.environment === "preview" && version.sha === expectedSha;
+}
+
 export async function establishVercelAutomationBypass(
   page: Page,
   rawCandidateUrl: string,

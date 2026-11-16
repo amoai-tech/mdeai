@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { Page } from "@playwright/test";
 import {
   establishVercelAutomationBypass,
+  isExpectedPublicPreviewVersion,
   validateVercelCandidateOrigin,
 } from "./vercel-bypass";
 
@@ -24,6 +25,23 @@ describe("Vercel candidate origin validation", () => {
       expect(() => validateVercelCandidateOrigin(url)).toThrow();
     });
   }
+});
+
+describe("public preview version verification", () => {
+  const expected = "e3c0ffbcb3da6fbd22e49d0a8250b7fd9a2d0eb6";
+  it("accepts only a real MDE preview at the requested exact commit", () => {
+    expect(isExpectedPublicPreviewVersion({ sha: expected, environment: "preview" }, expected)).toBe(true);
+  });
+  it.each([
+    [{ sha: "0".repeat(40), environment: "preview" }, expected],
+    [{ sha: expected, environment: "production" }, expected],
+    [{ sha: expected }, expected],
+    [{ sha: expected, environment: "preview" }, "short"],
+    [null, expected],
+    ["Vercel sign in", expected],
+  ])("rejects wrong SHA, missing context or login HTML", (value, sha) => {
+    expect(isExpectedPublicPreviewVersion(value, sha)).toBe(false);
+  });
 });
 
 type FakeCookie = { name: string };
