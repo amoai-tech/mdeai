@@ -1032,6 +1032,38 @@ describe("RentalAskComposer (SAN-1421)", () => {
     vi.unstubAllGlobals();
   });
 
+  it("keeps an exact bedroom count in the real search payload after a budget-only follow-up", async () => {
+    const onResults = vi.fn();
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ results: [rental("rnt_1")], total: 1 }), { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    render(<RentalAskComposer onResults={onResults} />);
+
+    type("Show me furnished 2-bedroom apartments in Laureles under COP 3 million.");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+    const first = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(first).toMatchObject({
+      neighborhood: "Laureles", minBedrooms: 2, maxBedrooms: 2,
+      maxPriceMonthly: 3_000_000,
+    });
+    await waitFor(() => expect(onResults).toHaveBeenCalledTimes(1));
+
+    type("Only under COP 2.5 million per month");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    const second = JSON.parse(String((fetchMock.mock.calls[1][1] as RequestInit).body));
+    expect(second).toMatchObject({
+      neighborhood: "Laureles", minBedrooms: 2, maxBedrooms: 2,
+      maxPriceMonthly: 2_500_000,
+    });
+    // The request contract is the assertion here; another test owns tool-result
+    // publication and the carried furnishing notice when the agent completes.
+    vi.unstubAllGlobals();
+  });
+
   it("names a request the rental search cannot filter instead of implying it applied", async () => {
     const onResults = vi.fn();
     vi.stubGlobal(

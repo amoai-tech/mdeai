@@ -121,6 +121,7 @@ function memoryFromParams(params: RentalSearchApiParams): ConciergeWorkingMemory
     lastRentalQuery: {
       neighborhood: params.neighborhood,
       minBedrooms: params.minBedrooms,
+      maxBedrooms: params.maxBedrooms,
       maxPricePerNight: params.maxPricePerNight,
       maxPriceMonthly: params.maxPriceMonthly,
       budgetCurrency: params.budgetCurrency,

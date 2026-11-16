@@ -12,6 +12,7 @@ export type ConciergeWorkingMemory = {
   lastRentalQuery?: {
     neighborhood?: string;
     minBedrooms?: number;
+    maxBedrooms?: number;
     maxPricePerNight?: number;
     maxPriceMonthly?: number;
     budgetCurrency?: "COP" | "USD";
