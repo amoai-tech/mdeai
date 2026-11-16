@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { DiscoveryAgentResult } from "@/components/chat/discovery-tool-results";
 import { CalendarDays } from "lucide-react";
 import { BrowseMapContextShell } from "@/components/browse/BrowseMapContextShell";
@@ -9,6 +9,8 @@ import { BrowseMapPanel } from "@/components/browse/BrowseMapPanel";
 import { BrowseMapSheet } from "@/components/browse/BrowseMapSheet";
 import { DiscoveryWorkspace } from "@/components/browse/DiscoveryWorkspace";
 import { DiscoveryAskComposer } from "@/components/chat/discovery-ask-composer";
+import { useOptionalConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
+import { EventLocalChatProvider } from "@/components/chat/event-local-chat-context";
 import { EventRecommendationsSurface } from "@/components/copilot/a2ui/event-recommendations-surface";
 import { EventBrowseSelectionProvider } from "@/components/events/event-browse-selection-context";
 import { activateEventDetails } from "@/components/events/event-details-activation";
@@ -222,7 +224,7 @@ function EventBrowseViewInner({
     <EventPageControlTool filters={{ category, neighborhood, dateWindow, price }} />
     <DiscoveryWorkspace
       activeSlug="events"
-      askComposer={<DiscoveryAskComposer page="events" onAgentResults={onAgentResults} hasSelectedItem={Boolean(selectedId)} onClearSelection={() => selectEvent(null)} guestEvents={{
+      askComposer={<DiscoveryAskComposer page="events" visibleEventCount={error ? undefined : shownEvents.length} onAgentResults={onAgentResults} hasSelectedItem={Boolean(selectedId)} onClearSelection={() => selectEvent(null)} guestEvents={{
         category, neighborhood, dateWindow,
         onEventIds: (ids) => void resolveIds(ids),
       }} />}
@@ -340,6 +342,16 @@ function EventBrowseViewInner({
   );
 }
 
+/** The existing local-chat exchange lives in GeoChatShell on /chat, but /events has
+ * its own shared concierge mount. Reuse that provider here for saved, immediate
+ * out-of-range answers; deterministic/component tests without an agent remain inert. */
+function EventBrowseChatBoundary({ children }: { children: ReactNode }) {
+  const concierge = useOptionalConciergeCoAgent();
+  return concierge
+    ? <EventLocalChatProvider>{children}</EventLocalChatProvider>
+    : <>{children}</>;
+}
+
 /** Event browse shell that provides the shared map state. */
 export function EventBrowseView(props: EventBrowseViewProps) {
   const openEventDetail = useRef<(id: string) => boolean>(() => false);
@@ -349,6 +361,7 @@ export function EventBrowseView(props: EventBrowseViewProps) {
   );
 
   return (
+    <EventBrowseChatBoundary>
     <BrowseMapContextShell>
       <EventBrowseSelectionProvider value={selection}>
         {/* SAN-1653: the Events page is the one screen where the concierge may render
@@ -363,5 +376,6 @@ export function EventBrowseView(props: EventBrowseViewProps) {
         />
       </EventBrowseSelectionProvider>
     </BrowseMapContextShell>
+    </EventBrowseChatBoundary>
   );
 }
