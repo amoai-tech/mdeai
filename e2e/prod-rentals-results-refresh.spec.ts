@@ -181,7 +181,7 @@ test.describe("SAN-1421 — same-thread filtered cards survive production reload
     // The card also exposes a photo button with an accessible name beginning
     // "Details:"; use the precise CTA rather than an ambiguous role/name match.
     await page.getByTestId(`rental-details-cta-${firstResult.id}`).click();
-    const details = page.getByTestId("rental-details-panel");
+    const details = page.getByTestId(isMobile ? "rental-details-sheet" : "rental-details-panel");
     await expect(details).toBeVisible();
     // The source listing's canonical displayed price must not change in Details.
     const firstPrice = firstResult.price[0];
