@@ -8,3 +8,12 @@ browser:
   disableSecondaryCacheResolution: true
 ai:
   useMemory: true
+  agentConfig:
+    locator: v5
+    assertion: v5
+    visual-assertion: v5
+    text-extraction: v3.0
+    failure-recovery: v2.1
+    android-locator: v2
+    ios-locator: v2
+  failureRecovery: false
