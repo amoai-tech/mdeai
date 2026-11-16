@@ -123,6 +123,32 @@ describe("searchGroundedPlacesTool fallback", () => {
     }));
   });
 
+  it.each([
+    "cafés near Parque Lleras",
+    "cafés in Manila",
+    "cafés in Ciudad del Río",
+    "cafés in Itagüí",
+  ])("keeps actual Medellín landmarks searchable: %s", async (query) => {
+    vi.mocked(searchRestaurants).mockResolvedValue({ results: [], total: 0, source: "supabase" });
+    await runGrounded(query, "cafe");
+    expect(searchGoogleCafes).toHaveBeenCalledWith(expect.objectContaining({ query }));
+    expect(incrementAndCheckGroundingQuota).toHaveBeenCalledOnce();
+  });
+
+  it("preserves the existing viewport for Sunday opening-hours requests", async () => {
+    const getWorkingMemory = vi.fn(async () => ({ mapUi: { viewport: { lat: 6.21, lng: -75.57, zoom: 15 } } }));
+    vi.mocked(searchRestaurants).mockResolvedValue({ results: [], total: 0, source: "supabase" });
+    await searchGroundedPlacesTool.execute!(
+      { query: "cafés open on Sunday", intent: "cafe" },
+      { agent: { threadId: "thread-sunday", resourceId: "renter-1" }, memory: { getWorkingMemory } } as never,
+    );
+    expect(getWorkingMemory).toHaveBeenCalledWith({ threadId: "thread-sunday", resourceId: "renter-1" });
+    expect(searchGoogleCafes).toHaveBeenCalledWith(expect.objectContaining({
+      query: "cafés open on Sunday",
+      locationBias: { latitude: 6.21, longitude: -75.57 },
+    }));
+  });
+
   it("does not substitute Medellín cafés for an explicitly unsupported place", async () => {
     const out = await runGrounded("cafés in Guatapé", "cafe");
     expect(out.results).toEqual([]);

@@ -5,7 +5,7 @@ import { invokeAdkGrounding, isAdkGroundingConfigured } from "../lib/adk-groundi
 import {
   hasExplicitPlaceScope,
   hasNonMedellinCity,
-  isMedellinPlaceScope,
+  hasOutsideMedellinPlaceScope,
   MEDELLIN_BIAS,
   searchGoogleCafes,
 } from "../lib/google-places-cafe-search";
@@ -451,11 +451,10 @@ export const searchGroundedPlacesTool = createTool({
     }
     const hasExplicitPlace = hasExplicitPlaceScope(rawQuery);
     const hasNonMedellinCityMatch = hasNonMedellinCity(rawQuery);
-    // MDE café discovery currently supports Medellín only. An explicit
-    // uncovered destination must never trigger paid Places calls or silently
-    // substitute results from the saved Medellín catalog.
-    const hasUncoveredDestination =
-      hasExplicitPlace && !isMedellinPlaceScope(rawQuery);
+    // An unknown named place may be a valid Medellín barrio or landmark.
+    // Only positively identified outside destinations can suppress Places:
+    // otherwise 'Manila' and 'Parque Lleras' wrongly return no results.
+    const hasUncoveredDestination = hasOutsideMedellinPlaceScope(rawQuery);
     if (hasUncoveredDestination && isCafeGroundingIntent(rawQuery, intent)) {
       return withVenueKindMetadata(
         { results: [], attribution: [], source: "grounding" as const,

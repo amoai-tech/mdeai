@@ -16,7 +16,10 @@ const MAP_AREA_CONTEXT =
   /\b(this map area|around this map|current map|map area|near here|around here|en esta zona|en este mapa|por aqu[ií]|cerca de aqu[ií])\b/i;
 const MEDELLIN_CONTEXT = /\b(medell[ií]n|laureles|poblado|envigado|sabaneta|bel[eé]n|provenza|estadio|centro)(?![\p{L}])/iu;
 const EXPLICIT_CITY = /\b(bogot[aá]|cali|cartagena|barranquilla|santa marta|pereira|manizales|armenia|bucaramanga|c[uú]cuta|villavicencio|monter[ií]a|ibagu[eé]|pasto|neiva|popay[aá]n|sincelejo|valledupar|tunja|riohacha|quibd[oó]|florencia|yopal|mocoa|leticia|san andr[eé]s)(?![\p{L}])/iu;
-const EXPLICIT_LOCATION_PHRASE = /\b(?:in|en|near|around|on)\s+(?!(?:the|this|here|me|my|a|an|our|your|with|walking|which|esta|este|estas|estos|mi|mis|el|la|los|las|una|un|por|aqu[ií])\b)[\p{L}][\p{L}'-]+/iu;
+const EXPLICIT_LOCATION_PHRASE = /\b(?:in|en|near|around)\s+(?!(?:the|this|here|me|my|a|an|our|your|with|walking|which|esta|este|estas|estos|mi|mis|el|la|los|las|una|un|por|aqu[ií])\b)[\p{L}][\p{L}'-]+/iu;
+// Known unsupported destinations. Keep this narrow: an arbitrary place phrase
+// can be a valid Medellín barrio or landmark not named in MEDELLIN_CONTEXT.
+const UNSUPPORTED_PLACE_CONTEXT = /\b(guatap[eé]|mars)(?![\p{L}])/iu;
 const CAFE_TYPES = new Set(["cafe", "coffee_shop", "bakery", "brunch_restaurant"]);
 
 type GooglePlace = {
@@ -91,11 +94,17 @@ export function hasNonMedellinCity(query: string): boolean {
   return EXPLICIT_CITY.test(query);
 }
 
+/** Explicitly outside current discovery scope, never inferred from an unknown name. */
+export function hasOutsideMedellinPlaceScope(query: string): boolean {
+  return EXPLICIT_CITY.test(query) || UNSUPPORTED_PLACE_CONTEXT.test(query);
+}
+
 /** True when the user named a real city, neighborhood or location phrase. */
 export function hasExplicitPlaceScope(query: string): boolean {
   return (
     MEDELLIN_CONTEXT.test(query) ||
     EXPLICIT_CITY.test(query) ||
+    UNSUPPORTED_PLACE_CONTEXT.test(query) ||
     EXPLICIT_LOCATION_PHRASE.test(query)
   );
 }

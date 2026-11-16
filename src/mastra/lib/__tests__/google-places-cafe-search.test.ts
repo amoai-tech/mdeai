@@ -142,6 +142,12 @@ describe("mapGoogleTextSearchToGrounded", () => {
     expect(withMedellinScope("cafés en esta zona", true)).toBe("cafés en esta zona");
     expect(hasExplicitPlaceScope("cafés in Guatapé")).toBe(true);
     expect(hasExplicitPlaceScope("cafés on Mars")).toBe(true);
+    expect(hasExplicitPlaceScope("cafés open on Sunday")).toBe(false);
+    expect(hasExplicitPlaceScope("cafés open late on weekends")).toBe(false);
+    expect(hasExplicitPlaceScope("cafés near Parque Lleras")).toBe(true);
+    expect(hasExplicitPlaceScope("cafés in Manila")).toBe(true);
+    expect(hasExplicitPlaceScope("cafés in Ciudad del Río")).toBe(true);
+    expect(hasExplicitPlaceScope("cafés in Itagüí")).toBe(true);
   });
 
   it("recognizes Medellín neighborhoods but not explicit non-Medellín cities", () => {
