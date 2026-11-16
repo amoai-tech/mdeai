@@ -10,6 +10,7 @@ import { useAgent, UseAgentUpdate } from "@copilotkit/react-core/v2";
 import { useOptionalEventLocalChat } from "@/components/chat/event-local-chat-context";
 import { createGenerativeUI, standardUI } from "@copilotkit/react-core/v2/generative-ui";
 import { RentalCard as ExistingRentalCard } from "@/components/copilot/rental-card";
+import { ViewingProposalView } from "@/components/copilot/a2ui/viewing-proposal";
 import { EventCard as ExistingEventCard } from "@/components/copilot/event-card";
 import { useOptionalEventBrowseSelection } from "@/components/events/event-browse-selection-context";
 import { useOptionalConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
@@ -346,6 +347,43 @@ function MdeRentalCard({ listingId }: { listingId: string }) {
   );
 }
 
+/**
+ * SAN-1658 — editable viewing proposal. The listing facts come from the current
+ * authorized result (never from props); date/time are only a proposal. Continue
+ * hands the renter's latest values to the existing ScheduleViewingModal, which
+ * owns review and the one real write.
+ */
+function MdeViewingProposal({ listingId, date, time }: { listingId: string; date?: string; time?: string }) {
+  const row = useRentalRow(listingId);
+  const rentalUi = useOptionalRentalUi();
+  if (!row) {
+    return (
+      <div className="rounded-lg border border-dashed border-border p-3 text-sm text-muted-foreground" data-testid="a2ui-viewing-unavailable">
+        That rental is not in the current authorized results.
+      </div>
+    );
+  }
+  const openScheduleViewing = rentalUi?.openScheduleViewing;
+  return (
+    <ViewingProposalView
+      key={row.id}
+      title={row.title}
+      neighborhood={row.neighborhood}
+      initialDate={date}
+      initialTime={time}
+      canRequest={Boolean(openScheduleViewing) && row.can_schedule_viewing === true}
+      onContinue={(preferredAt) =>
+        openScheduleViewing?.({
+          listingId: row.id,
+          title: row.title,
+          neighborhood: row.neighborhood,
+          preferredAt,
+        })
+      }
+    />
+  );
+}
+
 function useEventRow(eventId: string): EventToolRow | null {
   const messages = useRentalMessages();
   const fastPath = useOptionalEventFastPath();
@@ -431,11 +469,11 @@ function MdeEventCard({ eventId }: { eventId: string }) {
 /**
  * SAN-1655 — the bedroom control the agent may render on the Rentals panel.
  *
- * The standard `Select` cannot carry a user edit: `writable` is a catalog
- * definition field and the installed standard definition does not declare it,
- * while `overrides` only replaces the renderer. This component therefore owns
- * the small wrapper around MDE's own markup. The value lives in the page's
- * draft, not in the model's payload, so a later AI turn cannot reset it.
+ * The installed standard `Select` does declare `writable: ["value"]`, so a
+ * model-authored `@path` binding could carry an edit. MDE keeps this small
+ * wrapper anyway: the value lives in the page's real filter draft (shared with
+ * the native filter and the Apply action), not in the model's data model, so a
+ * later AI turn cannot reset it and the model never has to author bindings.
  */
 function MdeBedroomFilter({ label }: { label?: string }) {
   const draft = useRentalFilterStore();
@@ -584,11 +622,9 @@ export const MDE_OMITTED_STANDARD_COMPONENTS = [
 export const mdeUI = createGenerativeUI({
   id: "mde/discovery@1",
   extends: [standardUI.omit(MDE_OMITTED_STANDARD_COMPONENTS)],
-  // Live page filters, published read-only for the model. The editable draft
-  // lives in the page provider so the agent can never overwrite a user's edit.
-  state: {
-    rentalFilters: z.object({ beds: z.string().nullable() }),
-  },
+  // The editable bedroom draft lives in the page provider so the agent can never
+  // overwrite a user's edit; the model learns the applied filters from the page
+  // context (DiscoveryPageContext), because it does not see catalog `state`.
   // Renderer-only action: the page decides what "apply" means.
   functions: {
     applyRentalFilters: { parameters: z.object({}) },
@@ -609,6 +645,17 @@ export const mdeUI = createGenerativeUI({
       description:
         "Show one real event from the current authorized search by its eventId UUID. The component resolves venue, date, price, image and ticket link from the stored result; never pass or invent event facts.",
       props: z.object({ eventId: z.string().regex(EVENT_A2UI_ID_PATTERN) }),
+      slots: { children: "multiple" },
+    },
+    ViewingProposal: {
+      component: MdeViewingProposal,
+      description:
+        "An editable viewing request for one real rental, by its listingId from the current authorized results. Optional date (YYYY-MM-DD) and time (HH:mm 24-hour, Medellín) are only the renter's stated preference: set one only when the renter gave it explicitly, never guess a date. The renter can edit both; Continue opens the existing review form, and nothing is requested or confirmed until the renter submits that form.",
+      props: z.object({
+        listingId: z.string().min(1),
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        time: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+      }),
       slots: { children: "multiple" },
     },
     BedroomFilter: {
