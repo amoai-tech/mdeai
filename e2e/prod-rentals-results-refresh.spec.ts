@@ -168,6 +168,14 @@ test.describe("SAN-1421 — same-thread filtered cards survive production reload
     await expect.poll(async () => (await lines.allInnerTexts())
       .filter((s) => s.startsWith("You") && s.includes(budgetQuery)).length,
     { timeout: 30_000 }).toBe(1);
+    // On a phone the expanded transcript deliberately uses the results' screen space.
+    // Close that user-opened panel before returning to the apartment cards, rather than
+    // force-clicking through the composer/nav overlay and measuring an impossible action.
+    if (isMobile) {
+      await transcriptToggle.click();
+      await expect(transcriptToggle).toHaveAttribute("aria-expanded", "false");
+      await expect(page.locator('[data-testid="rental-ask-transcript"]')).toHaveCount(0);
+    }
     // AI result → real Details: same selected listing, not another search or a fake link.
     const firstResult = before[0];
     // The card also exposes a photo button with an accessible name beginning
