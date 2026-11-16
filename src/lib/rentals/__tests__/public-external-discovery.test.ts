@@ -16,6 +16,7 @@ vi.mock("@/lib/supabase/service", () => ({
           rows = rows.filter((row) => row[column] === value);
           return query;
         },
+        overrideTypes: () => query,
         contains: (column: string, expected: Record<string, unknown>) => {
           rows = rows.filter((row) => {
             const field = row[column] as Record<string, unknown> | undefined;
@@ -71,6 +72,17 @@ describe("public external source cards", () => {
     });
     expect(rental?.tags).toContain("not-verified");
     expect(rental?.source_url).toContain("fincaraiz.com.co");
+  });
+
+  it("uses the stored row\u0027s phase-aware database requestability, without claiming source verification", () => {
+    const requestable = publicExternalRentalCard({ ...base, rental_can_request_viewing: true });
+    expect(requestable?.can_schedule_viewing).toBe(true);
+    expect(requestable?.schedule_viewing_url).toBe(`https://mdeai.co/rentals/${base.slug}`);
+    expect(requestable?.tags).toContain("not-verified");
+    expect(requestable?.source_url).toBe(base.source_url);
+    const blocked = publicExternalRentalCard({ ...base, rental_can_request_viewing: false });
+    expect(blocked?.can_schedule_viewing).toBe(false);
+    expect(blocked?.schedule_viewing_url).toBeNull();
   });
 
   it("refuses unapproved source ads, other domains, and other candidates", () => {
