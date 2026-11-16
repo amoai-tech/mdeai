@@ -22,6 +22,7 @@ const mockApartmentRows = [
     title: "Calle 10 #42-15, Laureles",
     neighborhood: "Laureles",
     bedrooms: 2,
+    furnished: true,
     price_daily: null,
     price_monthly: 2_400_000,
     currency: "COP",
@@ -47,6 +48,7 @@ const mockApartmentRows = [
     title: "Nightly-priced 1BR",
     neighborhood: "Laureles",
     bedrooms: 1,
+    furnished: false,
     price_daily: 78,
     price_monthly: null,
     currency: "USD",
@@ -224,7 +226,9 @@ function mockApartmentQueryStub(rows: Record<string, unknown>[]) {
     select: () => builder,
     // Only the currency split matters to these tests; the other columns stay pass-through.
     eq: (column: string, value: unknown) => {
-      if (column === "currency") filters.push((row) => String(row[column]) === String(value));
+      if (column === "currency" || column === "furnished") {
+        filters.push((row) => row[column] === value);
+      }
       return builder;
     },
     neq: (column: string, value: unknown) => {
@@ -286,6 +290,22 @@ async function search(query: Record<string, unknown> = {}) {
   orderCalls.length = 0;
   return searchRentals({ neighborhood: "Laureles", limit: 20, ...query });
 }
+
+describe("source-backed furnishing filter", () => {
+  it("includes true only, false only, and excludes unknown from both", async () => {
+    const furnished = await search({ furnished: true });
+    expect(furnished.results.map((r) => r.id)).toEqual(["apt-cop-monthly"]);
+    expect(furnished.results[0].furnished).toBe(true);
+
+    const unfurnished = await search({ furnished: false });
+    expect(unfurnished.results.map((r) => r.id)).toEqual(["apt-usd-nightly"]);
+    expect(unfurnished.results[0].furnished).toBe(false);
+
+    const any = await search({});
+    expect(any.results.length).toBeGreaterThan(furnished.results.length);
+    expect(any.results.some((r) => r.furnished == null)).toBe(true);
+  });
+});
 
 describe("nightlyPriceFrom — one derivation for both search paths", () => {
   it("prefers a stored nightly price", async () => {

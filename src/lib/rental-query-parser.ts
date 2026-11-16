@@ -9,6 +9,7 @@ export type RentalSearchApiParams = {
   minBedrooms?: number;
   /** Inclusive upper bound for exact bedroom searches. */
   maxBedrooms?: number;
+  furnished?: boolean;
   maxPricePerNight?: number;
   /** Exact monthly ceiling, never a guessed nightly conversion. */
   maxPriceMonthly?: number;
@@ -362,6 +363,14 @@ function parseBedrooms(text: string): number | undefined {
  * instead mean a minimum. Reuse the canonical bedroom parser; no second
  * frontend-only filter or natural-language ranking engine.
  */
+/** Explicit furnishing requests use the stored boolean only; null stays unknown. */
+export function furnishingFromQueryText(text: string): boolean | undefined {
+  if (text.length > MAX_RENTAL_TEXT_CHARS) return undefined;
+  if (/\b(?:unfurnished|sin amoblar)\b/i.test(text)) return false;
+  if (/\b(?:furnished|amoblado|amoblada)\b/i.test(text)) return true;
+  return undefined;
+}
+
 export function exactBedroomsFromQueryText(text: string): number | undefined {
   if (text.length > MAX_RENTAL_TEXT_CHARS) return undefined;
   const match = BEDROOM_RE.exec(text);
@@ -581,6 +590,13 @@ function bedroomFields(
   };
 }
 
+/** A budget-only follow-up keeps the last furnishing requirement. */
+function furnishingFields(text: string, previous?: ConciergeWorkingMemory["lastRentalQuery"]):
+  Pick<RentalSearchApiParams, "furnished"> {
+  const explicit = furnishingFromQueryText(text);
+  return { furnished: explicit === undefined ? previous?.furnished : explicit };
+}
+
 function stayTypeForRefinement(
   text: string,
   s: RentalQuerySignals,
@@ -650,6 +666,7 @@ export function buildRentalSearchParams(
   if (cityWide && lastQuery && !looksLikeRentalSearch(text)) {
     return {
       ...bedroomFields(text, s, lastQuery),
+      ...furnishingFields(text, lastQuery),
       // "Anywhere is fine" keeps the saved budget, but an explicit new budget in the same
       // message ("anywhere under €1500/month") replaces it instead of copying the stale one.
       ...mergedBudgetFields(text, lastQuery, s),
@@ -664,6 +681,7 @@ export function buildRentalSearchParams(
     const merged: RentalSearchApiParams = {
       neighborhood: s.neighborhood ?? q.neighborhood,
       ...bedroomFields(text, s, q),
+      ...furnishingFields(text, q),
       ...mergedBudgetFields(text, q, s),
       checkIn: s.checkIn ?? q.checkIn,
       checkOut: s.checkOut ?? q.checkOut,
@@ -688,6 +706,7 @@ export function buildRentalSearchParams(
       {
         neighborhood: s.neighborhood ?? q?.neighborhood,
         ...bedroomFields(text, s, q),
+      ...furnishingFields(text, q),
         ...mergedBudgetFields(text, q, s),
         checkIn: q?.checkIn,
         checkOut: q?.checkOut,
@@ -706,6 +725,7 @@ export function buildRentalSearchParams(
       {
         neighborhood: s.neighborhood,
         ...bedroomFields(text, s),
+        ...furnishingFields(text),
         maxPricePerNight: s.maxPricePerNight,
         limit,
       },
@@ -719,6 +739,7 @@ export function buildRentalSearchParams(
       {
         neighborhood: s.neighborhood,
         ...bedroomFields(text, s),
+        ...furnishingFields(text),
         maxPricePerNight: s.maxPricePerNight,
         limit,
       },
@@ -737,6 +758,7 @@ export function buildRentalSearchParams(
         neighborhood: q.neighborhood,
         minBedrooms: q.minBedrooms,
         maxBedrooms: q.maxBedrooms,
+        ...furnishingFields(text, q),
         maxPricePerNight: q.maxPricePerNight,
         maxPriceMonthly: q.maxPriceMonthly,
         budgetCurrency: q.budgetCurrency,
@@ -761,6 +783,7 @@ export function buildRentalSearchParams(
         limit,
         neighborhood: s.neighborhood,
         ...bedroomFields(text, s),
+        ...furnishingFields(text),
         maxPricePerNight: s.maxPricePerNight,
       },
       text,

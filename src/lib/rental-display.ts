@@ -180,8 +180,6 @@ export const RENTAL_SEARCH_UNAVAILABLE_SUMMARY =
  */
 const UNAPPLIED_REQUESTS: Array<{ label: string; re: RegExp }> = [
   { label: "pet-friendly", re: /\b(?:pet[- ]?friendly|pets?|dogs?|cats?)\b/i },
-  { label: "furnished", re: /\bfurnished\b/i },
-  { label: "unfurnished", re: /\bunfurnished\b/i },
   { label: "parking", re: /\bparking\b/i },
   { label: "pool", re: /\b(?:swimming )?pool\b/i },
   { label: "gym", re: /\bgym\b/i },

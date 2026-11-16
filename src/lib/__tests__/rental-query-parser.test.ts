@@ -99,6 +99,17 @@ describe("SAN-1502 postmerge — real COP monthly budget", () => {
     expect(budgetNotApplied("2BR in Laureles", {})).toBe(false);
   });
 
+  it("uses the stored furnished requirement across budget refinement and lets unfurnished replace it", () => {
+    const first = buildRentalSearchParams("Show furnished 2-bedroom apartments in Laureles under COP 3 million", {});
+    expect(first?.furnished).toBe(true);
+    const current = { lastRentalQuery: { neighborhood: "Laureles", minBedrooms: 2,
+      maxBedrooms: 2, furnished: true, maxPriceMonthly: 3_000_000,
+      budgetCurrency: "COP" as const, budgetType: "monthly" as const } };
+    expect(buildRentalSearchParams("Only under COP 2.5 million per month", current)?.furnished).toBe(true);
+    expect(buildRentalSearchParams("Actually unfurnished apartments", current)?.furnished).toBe(false);
+    expect(buildRentalSearchParams("Only under COP 2.5 million per month", {})?.furnished).toBeUndefined();
+  });
+
   it("keeps exactly two bedrooms through a monthly-budget refinement", () => {
     const first = buildRentalSearchParams(
       "Show me furnished 2-bedroom apartments in Laureles under COP 3 million.",

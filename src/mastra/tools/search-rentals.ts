@@ -19,7 +19,7 @@ import {
   isRentalSearchUnavailable,
 } from '../lib/rental-search-unavailable';
 import { unappliedRentalRequests } from '@/lib/rental-display';
-import { exactBedroomsFromQueryText } from '@/lib/rental-query-parser';
+import { exactBedroomsFromQueryText, furnishingFromQueryText } from '@/lib/rental-query-parser';
 import { MONTHLY_CURRENCY_REQUIRED, monthlyBudgetHasCurrency } from '@/lib/rental-search-body-schema';
 import { writeSearchLog, type EmbedStatus } from '../lib/search-logs';
 import type { EmbedFailureReason } from '../lib/query-embedding';
@@ -38,6 +38,8 @@ export const rentalSchema = z.object({
   bedrooms: z.number(),
   /** Dev-preview only: the source advert had no bedroom count, so `bedrooms` stays 0. */
   bedrooms_unknown: z.boolean().optional(),
+  /** Stored furnishing status: true, false, or null when unknown. */
+  furnished: z.boolean().nullable().optional(),
   wifi: z.boolean(),
   amenities: z.array(z.string()),
   image: z.string(),
@@ -96,6 +98,7 @@ export type RentalQuery = {
   minBedrooms?: number;
   /** Optional inclusive ceiling; browse chips 0/1/2 BR specify both bounds. */
   maxBedrooms?: number;
+  furnished?: boolean;
   maxPricePerNight?: number;
   /**
    * A monthly budget in the LISTING's own currency (e.g. COP 3,500,000 per month). Applied only
@@ -171,6 +174,7 @@ export interface ApartmentRow {
   title: string;
   neighborhood: string;
   bedrooms: number | null;
+  furnished?: boolean | null;
   /**
    * Genuinely nullable in the database. It was declared non-null here, which is what let
    * `Number(null) === 0` pass unnoticed and turn a monthly-only listing into "$0/night".
@@ -438,6 +442,7 @@ export function rowToRental(r: ApartmentRow): Rental {
     // Production keeps its existing contract (unknown -> 0). Only the dev preview
     // opts into null so it can say "Bedrooms unknown" instead of a false "Studio".
     bedrooms: r.bedrooms ?? 0,
+    furnished: r.furnished ?? null,
     wifi: (r.wifi_speed ?? 0) > 0,
     amenities: r.amenities ?? [],
     image: photos[0] ?? '',
@@ -536,7 +541,7 @@ async function searchRentalsFromSupabase(
   // MVP: count:'exact' for accurate browse subtitle (~180 active listings). Revisit
   // estimated/cached counts post-MVP if apartments table grows materially.
   const APARTMENT_SELECT =
-    'id, title, neighborhood, bedrooms, price_daily, price_monthly, currency, wifi_speed, amenities, images, host_name, source_url, metadata, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status, rental_can_request_viewing';
+    'id, title, neighborhood, bedrooms, furnished, price_daily, price_monthly, currency, wifi_speed, amenities, images, host_name, source_url, metadata, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status, rental_can_request_viewing';
 
   // `head` asks PostgREST for the exact count without shipping the rows, so the alternatives'
   // total is still reported when the confirmed group already filled the page.
@@ -555,6 +560,9 @@ async function searchRentalsFromSupabase(
     }
     if (typeof query.maxBedrooms === 'number') {
       b = b.lte('bedrooms', query.maxBedrooms);
+    }
+    if (typeof query.furnished === 'boolean') {
+      b = b.eq('furnished', query.furnished);
     }
     // SAN-486 / SAN-1349: one shared availability rule (known move-in date, full-stay coverage or
     // not expired), with "today" as the America/Bogota date the viewing RPC uses.
@@ -663,6 +671,8 @@ export async function searchRentals(
       query.minBedrooms > query.maxBedrooms) {
     throw new RangeError('maxBedrooms must be greater than or equal to minBedrooms');
   }
+  const detectedFurnishing = query.queryText ? furnishingFromQueryText(query.queryText) : undefined;
+  query = { ...query, furnished: query.furnished ?? detectedFurnishing };
   const limit = query.limit ?? 8;
   const client = options?.client ?? getSupabaseClient();
   // Development inventory is already returned by canonical RLS-backed search.
@@ -672,16 +682,20 @@ export async function searchRentals(
   // Optional source-linked advertisements are also subject to the SAME strict monthly cap.
   // Keep source attribution; never display an uncomparable amount as a budget match.
   const monthlyBudget = monthlyBudgetFromQuery(query);
-  const onlyComparableExternal = (rows: Rental[]): Rental[] =>
-    monthlyBudget
-      ? rows.filter((row) =>
+  const onlyComparableExternal = (rows: Rental[]): Rental[] => {
+    const matched = typeof query.furnished === 'boolean'
+      ? rows.filter((row) => row.furnished === query.furnished)
+      : rows;
+    return monthlyBudget
+      ? matched.filter((row) =>
           row.currency === monthlyBudget.currency &&
           typeof row.price_monthly === 'number' &&
           row.price_monthly <= monthlyBudget.amount)
-      : rows;
+      : matched;
+  };
 
   // Exact browse/API ceilings use canonical SQL counting, not a truncated semantic candidate window.
-  if (query.queryText?.trim() && query.maxBedrooms === undefined) {
+  if (query.queryText?.trim() && query.maxBedrooms === undefined && query.furnished === undefined) {
     try {
       const started = Date.now();
       // Load after tool initialization; intelligence search reuses our row-mapping helpers.
@@ -752,6 +766,7 @@ export const searchRentalsTool = createTool({
     neighborhood: z.string().optional().describe('e.g. Laureles, El Poblado, Envigado'),
     minBedrooms: z.number().int().min(0).optional().describe('Minimum bedrooms. For exactly 2 bedrooms, set minBedrooms=2 AND maxBedrooms=2.'),
     maxBedrooms: z.number().int().min(0).optional().describe('Maximum bedrooms, inclusive. For a specific bedroom count (e.g. two-bedroom), use the same value as minBedrooms; omit for 2+ or at least 2.'),
+    furnished: z.boolean().optional().describe('True for confirmed furnished, false for confirmed unfurnished. Omit for no preference.'),
     maxPricePerNight: z.number().positive().optional().describe('USD per night'),
     maxPriceMonthly: z
       .number()
@@ -808,6 +823,7 @@ export const searchRentalsTool = createTool({
       neighborhood,
       minBedrooms,
       maxBedrooms,
+      furnished,
       maxPricePerNight,
       maxPriceMonthly,
       stayType,
@@ -831,7 +847,7 @@ export const searchRentalsTool = createTool({
     const { results, source, budgetNote, hybridUsed, rankExplanation } = await runAuditedSearch(
       'search-rentals',
       (q: RentalQuery) => searchRentals(q, options),
-      { neighborhood, minBedrooms: requestedMinBedrooms, maxBedrooms: requestedMaxBedrooms, maxPricePerNight, maxPriceMonthly, stayType, budgetCurrency, limit, queryText },
+      { neighborhood, minBedrooms: requestedMinBedrooms, maxBedrooms: requestedMaxBedrooms, furnished, maxPricePerNight, maxPriceMonthly, stayType, budgetCurrency, limit, queryText },
       context,
     );
 
