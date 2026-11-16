@@ -176,7 +176,7 @@ describe("establishVercelAutomationBypass", () => {
     await expect(establishVercelAutomationBypass(page, CANDIDATE, SECRET)).resolves.toBeUndefined();
     expect(lookup).toHaveBeenCalledWith(
       expect.stringContaining("https://api.vercel.com/v13/deployments/mdeai-abc123-amo-agency.vercel.app"),
-      expect.objectContaining({ redirect: "error", headers: { authorization: "Bearer local-read-token" } }),
+      expect.objectContaining({ headers: { authorization: `Bearer ${LOCAL_API_TOKEN}` } }),
     );
     expect(get).toHaveBeenCalledTimes(1);
     expect(JSON.stringify(lookup.mock.calls)).not.toContain(SECRET);
