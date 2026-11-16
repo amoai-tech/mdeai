@@ -213,13 +213,37 @@ describe("establishVercelAutomationBypass", () => {
     vi.stubGlobal("fetch", lookup);
     const { page, get } = fakePage(200, [BYPASS_COOKIE]);
     await expect(establishVercelAutomationBypass(page, CANDIDATE, SECRET))
-      .rejects.toThrow(/does not belong to the approved MDE project/);
+      .rejects.toThrow(/candidate deployment not found/);
     expect(lookup).toHaveBeenCalledWith(
       expect.stringContaining("api.vercel.com/v7/deployments?projectId="),
       expect.any(Object),
     );
     expect(JSON.stringify(lookup.mock.calls)).not.toContain(CANDIDATE);
     expect(get).not.toHaveBeenCalled();
+  });
+
+  it("verifies an older candidate on the second Vercel project page", async () => {
+    vi.stubEnv("MDE_QA_VERCEL_PROOF", "");
+    vi.stubEnv("MDE_QA_VERCEL_DEPLOYMENT_ID", "");
+    vi.stubEnv("VERCEL_TOKEN", LOCAL_API_TOKEN);
+    const lookup = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({
+        deployments: [{ uid: DEPLOYMENT_ID, url: "mdeai-other123-amo-agency.vercel.app" }],
+        pagination: { next: 123456 },
+      }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({
+        deployments: [{ uid: DEPLOYMENT_ID, projectId: "prj_iadSvJDW4MBqtQ5s3YPlBNc08it6",
+          accountId: "team_PbKG2U0lCR67rN57C4fqcfaw",
+          url: "mdeai-abc123-amo-agency.vercel.app", readyState: "READY",
+        }],
+        pagination: { next: null },
+      }) });
+    vi.stubGlobal("fetch", lookup);
+    const { page, get } = fakePage(200, [BYPASS_COOKIE]);
+    await expect(establishVercelAutomationBypass(page, CANDIDATE, SECRET)).resolves.toBeUndefined();
+    expect(lookup).toHaveBeenCalledTimes(2);
+    expect(new URL(lookup.mock.calls[1][0]).searchParams.get("until")).toBe("123456");
+    expect(get).toHaveBeenCalledTimes(1);
   });
 
   it("fails closed when the Vercel API returns 403", async () => {
