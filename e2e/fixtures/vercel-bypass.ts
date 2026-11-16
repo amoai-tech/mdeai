@@ -34,21 +34,51 @@ export async function establishVercelAutomationBypass(
     throw new Error(`CERTIFICATION_TARGET_INVALID: bypass setup returned ${status}`);
   }
 
-  // The contract is NOT "the setup request returned < 400". A 302 to Vercel's
-  // deployment-authentication page satisfies that while establishing nothing, and
-  // every later request then 302s, follows, and is measured as a 200 application
-  // response. The contract is that this browser context now owns the bypass cookie
-  // for this exact origin.
+  // Protected deployments set _vercel_jwt. An unprotected Vercel deployment
+  // legitimately returns 200 without setting it. In that case, prove we can
+  // reach the exact MDE candidate WITHOUT bypass headers or redirects.
   const cookies = await page.context().cookies(candidate.origin);
   const bypass = cookies.find((cookie) => cookie.name === "_vercel_jwt");
+  if (bypass) return;
 
-  if (!bypass) {
+  const probe = await page.request.get(`${candidate.origin}/api/version`, {
+    failOnStatusCode: false,
+    maxRedirects: 0,
+  });
+  const probeStatus = probe.status();
+  let verifiedApp = false;
+  let failureReason = `HTTP ${probeStatus}`;
+  if (probeStatus === 200) {
+    const contentType = probe.headers()["content-type"] ?? "missing";
+    const mediaType = contentType.split(";")[0].trim().toLowerCase();
+    if (mediaType !== "application/json") {
+      failureReason = `unexpected content-type ${contentType}`;
+    } else {
+      try {
+        const data: unknown = await probe.json();
+        const sha = data && typeof data === "object" && "sha" in data
+          ? (data as { sha: unknown }).sha
+          : undefined;
+        const expectedSha = process.env.VERCEL_DEPLOYMENT_SHA?.trim();
+        if (typeof sha !== "string" || !/^[a-f0-9]{40}$/.test(sha)) {
+          failureReason = "invalid or missing app SHA";
+        } else if (expectedSha && sha !== expectedSha) {
+          failureReason = `SHA mismatch: observed ${sha}, expected ${expectedSha}`;
+        } else {
+          verifiedApp = true;
+        }
+      } catch {
+        failureReason = "invalid JSON response";
+      }
+    }
+  }
+  if (!verifiedApp) {
     throw new Error(
       `CERTIFICATION_TARGET_INVALID: Vercel bypass cookie was not established for ` +
         `${candidate.origin}. Setup returned ${status}; cookies present: ` +
         `${cookies.map((cookie) => cookie.name).join(", ") || "none"}. ` +
-        `Without it, requests hit the deployment protection page and certification ` +
-        `measures that instead of MDE.`,
+        `Unauthenticated app identity probe failed: ${failureReason} (HTTP ${probeStatus}); ` +
+        `the candidate cannot be certified without reaching MDE.`,
     );
   }
 }
