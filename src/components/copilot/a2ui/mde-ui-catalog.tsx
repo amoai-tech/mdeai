@@ -371,7 +371,9 @@ function MdeViewingProposal({ listingId, date, time }: { listingId: string; date
       neighborhood={row.neighborhood}
       initialDate={date}
       initialTime={time}
-      canRequest={Boolean(openScheduleViewing) && row.can_schedule_viewing === true}
+      // Phase A: a real listing and a mounted native review action are enough.
+      // Source-side viewing eligibility is not a business prerequisite in development.
+      canRequest={Boolean(openScheduleViewing)}
       onContinue={(preferredAt) =>
         openScheduleViewing?.({
           listingId: row.id,
