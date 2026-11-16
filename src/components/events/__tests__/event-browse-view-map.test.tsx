@@ -6,6 +6,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PublishedEventListItem } from "@/lib/events/list-published-events";
 import type { DiscoveryAgentResult } from "@/components/chat/discovery-tool-results";
 
+const chatBoundary = vi.hoisted(() => ({ hasConcierge: false }));
+vi.mock("@/components/chat/concierge-coagent-context", () => ({
+  useOptionalConciergeCoAgent: () => chatBoundary.hasConcierge ? { agent: undefined, isReady: true } : null,
+}));
+vi.mock("@/components/chat/event-local-chat-context", () => ({
+  EventLocalChatProvider: ({ children }: { children: React.ReactNode }) =>
+    <div data-testid="event-local-chat-provider">{children}</div>,
+}));
+
 // The workspace pulls in auth, nav and Ask MDE; the map context, pin sync and selection logic stay real.
 vi.mock("@/components/browse/DiscoveryWorkspace", () => ({
   DiscoveryWorkspace: (p: { rightPanel?: unknown; askComposer?: unknown; children: unknown }) => (
@@ -58,9 +67,11 @@ vi.mock("@/components/copilot/a2ui/event-recommendations-surface", async () => {
 
 type ResultHandler = (result: DiscoveryAgentResult) => void;
 let onAgentResults: ResultHandler | null = null;
+let lastVisibleEventCount: number | undefined;
 vi.mock("@/components/chat/discovery-ask-composer", () => ({
-  DiscoveryAskComposer: (p: { onAgentResults: ResultHandler }) => {
+  DiscoveryAskComposer: (p: { onAgentResults: ResultHandler; visibleEventCount?: number }) => {
     onAgentResults = p.onAgentResults;
+    lastVisibleEventCount = p.visibleEventCount;
     return null;
   },
 }));
@@ -112,6 +123,31 @@ afterEach(() => {
   vi.unstubAllGlobals();
   onAgentResults = null;
   lastA2uiOpenResult = undefined;
+  lastVisibleEventCount = undefined;
+  chatBoundary.hasConcierge = false;
+});
+
+describe("EventBrowseView — live event chat boundary", () => {
+  it("mounts the existing saved-chat provider on the Events page when the shared agent exists", () => {
+    chatBoundary.hasConcierge = true;
+    render(<EventBrowseView {...props} results={[A, B]} />);
+    expect(screen.getByTestId("event-local-chat-provider")).toBeTruthy();
+  });
+
+  it("does not mount a new agent/chat provider for inert component or deterministic tests", () => {
+    render(<EventBrowseView {...props} results={[A, B]} />);
+    expect(screen.queryByTestId("event-local-chat-provider")).toBeNull();
+  });
+});
+
+describe("EventBrowseView — visible event hints", () => {
+  it("never claims rows are visible when the error panel replaces the grid", () => {
+    const { rerender } = render(<EventBrowseView {...props} results={[A, B]} />);
+    expect(lastVisibleEventCount).toBe(2);
+    rerender(<EventBrowseView {...props} error="Could not load events" results={[A, B]} />);
+    expect(screen.queryByTestId("event-card")).toBeNull();
+    expect(lastVisibleEventCount).toBeUndefined();
+  });
 });
 
 describe("EventBrowseView — one selected event", () => {

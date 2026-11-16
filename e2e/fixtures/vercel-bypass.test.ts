@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Page } from "@playwright/test";
 import {
   establishVercelAutomationBypass,
@@ -51,8 +51,24 @@ type FakeCookie = { name: string };
  * setup request and the browser context's cookie jar. `cookieAfterSetup` is
  * what Vercel would have set in this context by the time the request returns.
  */
-function fakePage(status: number, cookieAfterSetup: FakeCookie[] = []) {
-  const get = vi.fn().mockResolvedValue({ status: () => status });
+function fakePage(
+  status: number,
+  cookieAfterSetup: FakeCookie[] = [],
+  probe: {
+    status: number;
+    sha?: string;
+    contentType?: string;
+    body?: () => Promise<unknown>;
+  } = { status: 302 },
+) {
+  const get = vi
+    .fn()
+    .mockResolvedValueOnce({ status: () => status })
+    .mockResolvedValueOnce({
+      status: () => probe.status,
+      headers: () => ({ "content-type": probe.contentType ?? "application/json" }),
+      json: probe.body ?? (async () => ({ sha: probe.sha })),
+    });
   const cookies = vi.fn().mockResolvedValue(cookieAfterSetup);
   const page = { request: { get }, context: () => ({ cookies }) } as unknown as Page;
   return { page, get, cookies };
@@ -62,6 +78,8 @@ const CANDIDATE = "https://mdeai-abc123-amo-agency.vercel.app";
 const BYPASS_COOKIE = { name: "_vercel_jwt" };
 
 describe("establishVercelAutomationBypass", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
   it("sends the secret only to candidate root with redirects disabled", async () => {
     const { page, get, cookies } = fakePage(200, [BYPASS_COOKIE]);
 
@@ -96,6 +114,88 @@ describe("establishVercelAutomationBypass", () => {
     );
     expect(get).not.toHaveBeenCalled();
   });
+
+  it("accepts an unprotected deployment after an unauthenticated exact-app version probe", async () => {
+    const sha = "a".repeat(40);
+    vi.stubEnv("VERCEL_DEPLOYMENT_SHA", `  ${sha}  `);
+    const { page, get } = fakePage(200, [], { status: 200, sha });
+    await expect(establishVercelAutomationBypass(page, CANDIDATE, "test-secret")).resolves.toBeUndefined();
+    expect(get).toHaveBeenCalledTimes(2);
+    expect(get).toHaveBeenNthCalledWith(2, `${CANDIDATE}/api/version`, {
+      failOnStatusCode: false,
+      maxRedirects: 0,
+    });
+  });
+
+  it("rejects a different deployed SHA with a diagnostic reason", async () => {
+    const expectedSha = "a".repeat(40);
+    const observedSha = "b".repeat(40);
+    vi.stubEnv("VERCEL_DEPLOYMENT_SHA", `  ${expectedSha}  `);
+    const { page } = fakePage(200, [], { status: 200, sha: observedSha });
+
+    await expect(establishVercelAutomationBypass(page, CANDIDATE, "test-secret"))
+      .rejects.toThrow(`SHA mismatch: observed ${observedSha}, expected ${expectedSha}`);
+  });
+
+  it("rejects a non-MDE 200 response without a bypass cookie", async () => {
+    const { page } = fakePage(200, [], { status: 200, sha: "not-a-commit" });
+    await expect(establishVercelAutomationBypass(page, CANDIDATE, "test-secret"))
+      .rejects.toThrow(/CERTIFICATION_TARGET_INVALID/);
+  });
+
+  it("rejects a JSON-impersonating protection page without a bypass cookie", async () => {
+    const { page } = fakePage(200, [], {
+      status: 200,
+      sha: "a".repeat(40),
+      contentType: "text/html",
+    });
+    await expect(establishVercelAutomationBypass(page, CANDIDATE, "test-secret"))
+      .rejects.toThrow(/CERTIFICATION_TARGET_INVALID/);
+  });
+
+  it("rejects a media-type parameter that merely mentions application/json", async () => {
+    const sha = "a".repeat(40);
+    vi.stubEnv("VERCEL_DEPLOYMENT_SHA", sha);
+    const { page } = fakePage(200, [], {
+      status: 200,
+      sha,
+      contentType: 'text/plain; note="application/json"',
+    });
+    await expect(establishVercelAutomationBypass(page, CANDIDATE, "test-secret"))
+      .rejects.toThrow(/unexpected content-type/);
+  });
+
+  it("accepts case-insensitive application/json with parameters", async () => {
+    const sha = "a".repeat(40);
+    vi.stubEnv("VERCEL_DEPLOYMENT_SHA", sha);
+    const { page } = fakePage(200, [], {
+      status: 200,
+      sha,
+      contentType: "Application/JSON; charset=utf-8",
+    });
+    await expect(establishVercelAutomationBypass(page, CANDIDATE, "test-secret"))
+      .resolves.toBeUndefined();
+  });
+
+  it("rejects malformed JSON from an unprotected candidate", async () => {
+    const { page } = fakePage(200, [], {
+      status: 200,
+      body: async () => { throw new SyntaxError("Invalid JSON"); },
+    });
+    await expect(establishVercelAutomationBypass(page, CANDIDATE, "test-secret"))
+      .rejects.toThrow(/invalid JSON response/);
+  });
+
+  for (const [name, body] of [
+    ["null response", null],
+    ["missing sha", {}],
+  ] as const) {
+    it(`rejects ${name} from an unprotected candidate`, async () => {
+      const { page } = fakePage(200, [], { status: 200, body: async () => body });
+      await expect(establishVercelAutomationBypass(page, CANDIDATE, "test-secret"))
+        .rejects.toThrow(/invalid or missing app SHA/);
+    });
+  }
 
   it("fails as an invalid target when the response is 200 but no bypass cookie was set", async () => {
     const { page } = fakePage(200, [{ name: "unrelated" }]);

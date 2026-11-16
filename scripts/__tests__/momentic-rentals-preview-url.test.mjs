@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { runInNewContext } from 'node:vm';
 import { previewStartUrl } from '../momentic-rentals-preview-url.mjs';
 
 const preview = 'https://mdeai-git-example-amoai.vercel.app/';
@@ -49,5 +50,32 @@ test('scoped access is appended without dropping the trusted test route or filte
   } finally {
     if (previous === undefined) delete process.env.MOMENTIC_PREVIEW_SHARE_TOKEN;
     else process.env.MOMENTIC_PREVIEW_SHARE_TOKEN = previous;
+  }
+});
+
+test('broker guest redirect accepts only the exact destination, with matching Vercel share when present', () => {
+  const yaml = readFileSync('momentic/rentals/broker-guest-redirect.test.yaml', 'utf8');
+  const codeBlock = /^  - javascript:\n      code: \|\n((?:        [^\n]*\n)+)      environment: BROWSER/m.exec(yaml);
+  assert.ok(codeBlock, 'broker redirect test must keep a deterministic browser-side URL assertion');
+  const code = codeBlock[1].split('\n').map((line) => line.startsWith('        ') ? line.slice(8) : line).join('\n');
+  const share = 'a'.repeat(32);
+  const nested = encodeURIComponent('/app/rentals?_vercel_share=' + share);
+  const base = 'https://mdeai-example-amo-agency.vercel.app';
+  for (const path of [
+    '/login?next=%2Fapp%2Frentals',
+    '/login?_vercel_share=' + share + '&next=' + nested,
+    '/login?next=' + nested + '&_vercel_share=' + share,
+  ]) {
+    assert.doesNotThrow(() => runInNewContext(code, { URL, window: { location: { href: base + path } } }), path);
+  }
+  for (const path of [
+    '/login?notnext=%2Fapp%2Frentals',
+    '/login?next=%2Fapp%2Fme%2Fsaved',
+    '/login?next=' + encodeURIComponent('https://evil.example/app/rentals'),
+    '/login?next=' + encodeURIComponent('/app/rentals?role=admin'),
+    '/login?_vercel_share=' + share + '&next=' + encodeURIComponent('/app/rentals?_vercel_share=b'),
+    '/login-nope?next=%2Fapp%2Frentals',
+  ]) {
+    assert.throws(() => runInNewContext(code, { URL, window: { location: { href: base + path } } }), path);
   }
 });
