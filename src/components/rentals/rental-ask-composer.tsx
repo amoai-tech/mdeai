@@ -426,7 +426,13 @@ function LiveComposer({
     }
 
     // Only the full AI path needs a ready CopilotKit/Mastra connection.
-    if (!isReady) return;
+    // The textarea still accepts Enter while connecting. Preserve the draft and
+    // say why it was not sent instead of silently discarding that action.
+    if (!isReady) {
+      setError("MDE is still connecting. Your question is here — send it once the connection is ready.");
+      setRetryable(false);
+      return;
+    }
     sendInFlight.current = true;
     acceptToolResults.current = true;
     cancelled.current = false;

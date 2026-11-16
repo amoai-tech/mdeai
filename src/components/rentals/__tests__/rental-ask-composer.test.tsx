@@ -488,14 +488,21 @@ describe("RentalAskComposer (SAN-1421)", () => {
     expect(screen.queryByTestId("rental-ask-error")).toBeNull();
   });
 
-  it("blocks sending until the shared agent connection is ready", () => {
+  it("never silently drops Enter while connecting; keeps the draft for one send when ready", async () => {
     coagent.isReady = false;
-    render(<RentalAskComposer />);
+    const view = render(<RentalAskComposer />);
     type("furnished flats");
     expect((screen.getByTestId("rental-ask-send") as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByRole("status").textContent).toContain("Connecting to MDE");
     fireEvent.keyDown(screen.getByLabelText("Ask MDE about rentals"), { key: "Enter" });
     expect(chat.appendMessage).not.toHaveBeenCalled();
+    expect(draftValue()).toBe("furnished flats");
+    expect(screen.getByRole("alert").textContent).toMatch(/still connecting/i);
+    coagent.isReady = true;
+    view.rerender(<RentalAskComposer />);
+    fireEvent.keyDown(screen.getByLabelText("Ask MDE about rentals"), { key: "Enter" });
+    await waitFor(() => expect(chat.appendMessage).toHaveBeenCalledTimes(1));
+    expect(chat.appendMessage).toHaveBeenCalledWith("furnished flats");
   });
 
   it("updates the page's cards from the same structured search the chat fast path uses", async () => {

@@ -85,15 +85,18 @@ if (viewport) await page.setViewportSize({ width: Number(viewport[1]), height: N
 const ask = async (inputSelector, prompt) => {
   await waitForIdleComposer(page, inputSelector);
   await page.locator(inputSelector).fill(prompt);
-  // The composer drops Enter until its agent connection is ready and leaves the text in the
-  // box (observed live on /rentals). A sent turn clears the box, so retry Enter until it does.
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    await page.locator(inputSelector).press("Enter");
-    const cleared = await page
-      .waitForFunction((sel) => (document.querySelector(sel)?.value ?? "") === "", inputSelector, { timeout: 4000 })
-      .then(() => true, () => false);
-    if (cleared) return;
-  }
+  // Wait for the real composer to become ready. One Enter must dispatch the turn;
+  // retries here would hide a user-facing dropped-submission bug.
+  const sendTestId = inputSelector === "#rental-ask-input" ? "rental-ask-send" : "discovery-ask-send";
+  await page.locator(`[data-testid="${sendTestId}"]:not([disabled])`).waitFor({
+    state: "visible", timeout: 30_000,
+  });
+  await page.locator(inputSelector).press("Enter");
+  await page.waitForFunction(
+    (sel) => (document.querySelector(sel)?.value ?? "") === "",
+    inputSelector,
+    { timeout: 6_000 },
+  );
 };
 /** Start a clean conversation so each case proves its own selection, not a reused surface. */
 const resetConversation = async () => {
