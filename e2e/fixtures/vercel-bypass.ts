@@ -7,7 +7,7 @@ const PROJECT_ID = "prj_iadSvJDW4MBqtQ5s3YPlBNc08it6";
 const TEAM_ID = "team_PbKG2U0lCR67rN57C4fqcfaw";
 const DEPLOYMENT_ID = /^dpl_[A-Za-z0-9]{20,}$/;
 // Fixed API authority and scoped project; never use a candidate URL as a request destination.
-const VERCEL_DEPLOYMENTS_URL = `https://api.vercel.com/v7/deployments?projectId=${PROJECT_ID}&teamId=${TEAM_ID}&limit=100`;
+const VERCEL_DEPLOYMENTS_URL = `https://api.vercel.com/v6/deployments?projectId=${PROJECT_ID}&teamId=${TEAM_ID}&limit=100`;
 
 export function validateVercelCandidateOrigin(rawUrl: string): URL {
   const url = new URL(rawUrl);
