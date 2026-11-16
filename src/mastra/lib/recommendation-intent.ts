@@ -162,8 +162,10 @@ function publishedViewingPosition(text: string, publishedCount: number): boolean
   } else {
     const english = ["first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth"];
     const spanish = ["primer", "segund", "tercer", "cuart", "quint", "sext", "septim", "octav", "noven", "decim"];
-    const index = english.findIndex((word) => new RegExp(`\\b${word}\\b`).test(reference));
-    position = index >= 0 ? index + 1 : spanish.findIndex((stem) => reference.includes(stem)) + 1;
+    // Literal token splitting is sufficient; avoid constructing regexes even from fixed words.
+    const tokens: string[] = reference.match(/[a-z]+/g) ?? [];
+    const index = english.findIndex((word) => tokens.includes(word));
+    position = index >= 0 ? index + 1 : spanish.findIndex((stem) => tokens.some((word) => word.startsWith(stem))) + 1;
   }
   return Number.isSafeInteger(position) && position > 0 && position <= publishedCount;
 }

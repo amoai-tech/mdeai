@@ -153,6 +153,9 @@ describe("shouldRenderViewingProposal (SAN-1658)", () => {
     ["Agendar una visita del primer apartamento", true],
     ["Quiero agendar una visita para el primero", true],
     ["Request a viewing of the third place", true],
+    ["Request a viewing of the last apartment", true],
+    ["Schedule a viewing of apartment 6", true],
+    ["Agendar una visita del sexto apartamento", true],
     ["Schedule a viewing of 37a05b09-f560-4776-92fd-b8bb2b92e611", true],
   ])("%s -> %s", (text, expected) => {
     expect(run(text)).toBe(expected);
