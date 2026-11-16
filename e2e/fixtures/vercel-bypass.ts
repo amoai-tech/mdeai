@@ -50,7 +50,8 @@ export async function establishVercelAutomationBypass(
   let failureReason = `HTTP ${probeStatus}`;
   if (probeStatus === 200) {
     const contentType = probe.headers()["content-type"] ?? "missing";
-    if (!contentType.includes("application/json")) {
+    const mediaType = contentType.split(";")[0].trim().toLowerCase();
+    if (mediaType !== "application/json") {
       failureReason = `unexpected content-type ${contentType}`;
     } else {
       try {

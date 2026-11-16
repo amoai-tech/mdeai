@@ -36,7 +36,12 @@ type FakeCookie = { name: string };
 function fakePage(
   status: number,
   cookieAfterSetup: FakeCookie[] = [],
-  probe: { status: number; sha?: string; contentType?: string } = { status: 302 },
+  probe: {
+    status: number;
+    sha?: string;
+    contentType?: string;
+    body?: () => Promise<unknown>;
+  } = { status: 302 },
 ) {
   const get = vi
     .fn()
@@ -44,7 +49,7 @@ function fakePage(
     .mockResolvedValueOnce({
       status: () => probe.status,
       headers: () => ({ "content-type": probe.contentType ?? "application/json" }),
-      json: async () => ({ sha: probe.sha }),
+      json: probe.body ?? (async () => ({ sha: probe.sha })),
     });
   const cookies = vi.fn().mockResolvedValue(cookieAfterSetup);
   const page = { request: { get }, context: () => ({ cookies }) } as unknown as Page;
@@ -129,6 +134,50 @@ describe("establishVercelAutomationBypass", () => {
     await expect(establishVercelAutomationBypass(page, CANDIDATE, "test-secret"))
       .rejects.toThrow(/CERTIFICATION_TARGET_INVALID/);
   });
+
+  it("rejects a media-type parameter that merely mentions application/json", async () => {
+    const sha = "a".repeat(40);
+    vi.stubEnv("VERCEL_DEPLOYMENT_SHA", sha);
+    const { page } = fakePage(200, [], {
+      status: 200,
+      sha,
+      contentType: 'text/plain; note="application/json"',
+    });
+    await expect(establishVercelAutomationBypass(page, CANDIDATE, "test-secret"))
+      .rejects.toThrow(/unexpected content-type/);
+  });
+
+  it("accepts case-insensitive application/json with parameters", async () => {
+    const sha = "a".repeat(40);
+    vi.stubEnv("VERCEL_DEPLOYMENT_SHA", sha);
+    const { page } = fakePage(200, [], {
+      status: 200,
+      sha,
+      contentType: "Application/JSON; charset=utf-8",
+    });
+    await expect(establishVercelAutomationBypass(page, CANDIDATE, "test-secret"))
+      .resolves.toBeUndefined();
+  });
+
+  it("rejects malformed JSON from an unprotected candidate", async () => {
+    const { page } = fakePage(200, [], {
+      status: 200,
+      body: async () => { throw new SyntaxError("Invalid JSON"); },
+    });
+    await expect(establishVercelAutomationBypass(page, CANDIDATE, "test-secret"))
+      .rejects.toThrow(/invalid JSON response/);
+  });
+
+  for (const [name, body] of [
+    ["null response", null],
+    ["missing sha", {}],
+  ] as const) {
+    it(`rejects ${name} from an unprotected candidate`, async () => {
+      const { page } = fakePage(200, [], { status: 200, body: async () => body });
+      await expect(establishVercelAutomationBypass(page, CANDIDATE, "test-secret"))
+        .rejects.toThrow(/invalid or missing app SHA/);
+    });
+  }
 
   it("fails as an invalid target when the response is 200 but no bypass cookie was set", async () => {
     const { page } = fakePage(200, [{ name: "unrelated" }]);
