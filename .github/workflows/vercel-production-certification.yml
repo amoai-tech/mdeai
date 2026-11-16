@@ -180,7 +180,7 @@ jobs:
         run: npx playwright install chromium --with-deps
 
       # Main-branch release-control has already proved project ID + deployment URL via Vercel API.
-      # Sign that exact candidate rather than exposing VERCEL_TOKEN to candidate test code.
+      # Sign that exact candidate without passing a Vercel API credential to browser tests.
       - name: Sign verified Vercel QA candidate
         id: qa_identity
         env:
