@@ -2,6 +2,7 @@ import { EventType, type BaseEvent } from "@ag-ui/client";
 import { Observable } from "rxjs";
 import { buildRentalRecommendationOps } from "./rental-recommendations-ui";
 import { buildRentalFilterControlOps } from "./rental-filter-control-ui";
+import { buildViewingProposalOps, type ViewingProposalInput } from "./viewing-proposal-ui";
 import {
   EVENT_RECOMMENDATIONS_SURFACE_ID,
   buildEventClearOps,
@@ -28,6 +29,47 @@ const FILTER_CONTROL_TOOLS = new Set([
   "showRentalFilterControlTool",
   "show-rental-filter-control",
 ]);
+
+/** SAN-1658 — the editable viewing request is its own tool, with the same transport. */
+const VIEWING_PROPOSAL_TOOLS = new Set([
+  "showViewingProposal",
+  "showViewingProposalTool",
+  "show-viewing-proposal",
+]);
+
+/** A rejected proposal must not render; only the validated fields cross the boundary. */
+export function viewingProposalFromResult(content: unknown): ViewingProposalInput | null {
+  let value: unknown = content;
+  if (typeof value === "string") {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      return null;
+    }
+  }
+  if (!value || typeof value !== "object") return null;
+  const payload = value as { ok?: unknown; listingId?: unknown; date?: unknown; time?: unknown; result?: unknown };
+  if (payload.ok === false) return null;
+  if (payload.ok === true && typeof payload.listingId === "string" && payload.listingId) {
+    return {
+      listingId: payload.listingId,
+      ...(typeof payload.date === "string" ? { date: payload.date } : {}),
+      ...(typeof payload.time === "string" ? { time: payload.time } : {}),
+    };
+  }
+  if (payload.result && typeof payload.result === "object") return viewingProposalFromResult(payload.result);
+  return null;
+}
+
+export function viewingProposalRenderEvents(input: ViewingProposalInput, toolCallId: string): BaseEvent[] {
+  const built = buildViewingProposalOps(input, `viewing-proposal-${toolCallId}`);
+  const callId = `render-ui-viewing-${toolCallId}`;
+  return [
+    { type: EventType.TOOL_CALL_START, toolCallId: callId, toolCallName: "render_ui" },
+    { type: EventType.TOOL_CALL_ARGS, toolCallId: callId, delta: JSON.stringify(built) },
+    { type: EventType.TOOL_CALL_END, toolCallId: callId },
+  ] as BaseEvent[];
+}
 
 /** The tool result may arrive as an object or as a JSON string, with or without an envelope. */
 export function recommendationIdsFromResult(content: unknown): string[] {
@@ -175,6 +217,14 @@ export function emitRecommendationSurface<T extends BaseEvent>(): (source: Obser
           if (FILTER_CONTROL_TOOLS.has(name)) {
             if (!filterControlOk(e.content)) return;
             for (const synthetic of filterControlRenderEvents(e.toolCallId)) {
+              subscriber.next(synthetic as unknown as T);
+            }
+            return;
+          }
+          if (VIEWING_PROPOSAL_TOOLS.has(name)) {
+            const proposal = viewingProposalFromResult(e.content);
+            if (!proposal) return;
+            for (const synthetic of viewingProposalRenderEvents(proposal, e.toolCallId)) {
               subscriber.next(synthetic as unknown as T);
             }
             return;

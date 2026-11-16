@@ -120,3 +120,37 @@ export function shouldRequestRecommendations({
   if (!CURRENT_RESULTS_REFERENCE.test(text) || NEW_SEARCH_CRITERIA.test(requestWithoutCurrentPointer)) return false;
   return !ASKS_FOR_DETAILS.test(text);
 }
+
+/**
+ * SAN-1658 — an explicit "request/schedule a viewing of <a listed apartment>" is a
+ * UI command. Left to the model it sometimes answered "a request is ready" in
+ * text without rendering anything (measured at 390px), so the first step is pinned
+ * to the one tool that renders the proposal. A timing question ("when can I view")
+ * and a request with no reference to a current result are left to the model.
+ */
+const SCHEDULE_VERB = /\b(schedule|request|book|arrange|set\s*up|pedir|agendar|programar)\b/i;
+const VIEWING_NOUN = /\b(viewing|viewings|visit|tour|showing|visita)\b/i;
+/** A viewing may also point at "this/that apartment" or an ordinal in Spanish. */
+const VIEWING_REFERENCE = /\b(this|that|primer[oa]?|segund[oa]|tercer[oa]?|[uú]ltim[oa])\b/i;
+const TIMING_QUESTION = /\b(when|what\s+time|cu[aá]ndo)\b/i;
+
+export function shouldRenderViewingProposal({
+  stepNumber,
+  messages,
+  requestContext,
+}: {
+  stepNumber: number;
+  messages: readonly MessageLike[];
+  requestContext?: { get?: (key: string) => unknown };
+}): boolean {
+  if (stepNumber !== 0) return false;
+  const agUiContext = requestContext?.get?.("ag-ui");
+  if (!isActiveRentalsDiscoveryPage(agUiContext)) return false;
+  if (!readRentalResultHints(agUiContext)) return false;
+  const lastUser = [...messages].reverse().find((message) => message?.role === "user");
+  const text = messageText(lastUser).trim();
+  if (!text) return false;
+  if (!SCHEDULE_VERB.test(text) || !VIEWING_NOUN.test(text)) return false;
+  if (TIMING_QUESTION.test(text)) return false;
+  return CURRENT_RESULTS_REFERENCE.test(text) || VIEWING_REFERENCE.test(text);
+}
