@@ -443,6 +443,11 @@
       "file": "src/components/copilot/a2ui/__tests__/event-recommendations-surface.test.tsx",
       "classification": "keep",
       "note": "SAN-1653: test-only mock of the v2 generative-ui module proving the Events surface registers the target with a runtime and renders nothing without one; no provider or run is created."
+    },
+    {
+      "file": "src/components/rentals/__tests__/rental-filter-panel-actions-recovery.test.tsx",
+      "classification": "test-only",
+      "note": "F5: mocks the v2 generative-ui function hook to capture the Apply handler and proves the in-flight guard is released after a navigation that never changed the URL filters; no provider or run is created."
     }
   ]
 }

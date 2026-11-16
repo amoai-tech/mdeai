@@ -431,11 +431,11 @@ function MdeEventCard({ eventId }: { eventId: string }) {
 /**
  * SAN-1655 — the bedroom control the agent may render on the Rentals panel.
  *
- * The standard `Select` cannot carry a user edit: `writable` is a catalog
- * definition field and the installed standard definition does not declare it,
- * while `overrides` only replaces the renderer. This component therefore owns
- * the small wrapper around MDE's own markup. The value lives in the page's
- * draft, not in the model's payload, so a later AI turn cannot reset it.
+ * The installed standard `Select` does declare `writable: ["value"]`, so a
+ * model-authored `@path` binding could carry an edit. MDE keeps this small
+ * wrapper anyway: the value lives in the page's real filter draft (shared with
+ * the native filter and the Apply action), not in the model's data model, so a
+ * later AI turn cannot reset it and the model never has to author bindings.
  */
 function MdeBedroomFilter({ label }: { label?: string }) {
   const draft = useRentalFilterStore();
@@ -584,11 +584,9 @@ export const MDE_OMITTED_STANDARD_COMPONENTS = [
 export const mdeUI = createGenerativeUI({
   id: "mde/discovery@1",
   extends: [standardUI.omit(MDE_OMITTED_STANDARD_COMPONENTS)],
-  // Live page filters, published read-only for the model. The editable draft
-  // lives in the page provider so the agent can never overwrite a user's edit.
-  state: {
-    rentalFilters: z.object({ beds: z.string().nullable() }),
-  },
+  // The editable bedroom draft lives in the page provider so the agent can never
+  // overwrite a user's edit; the model learns the applied filters from the page
+  // context (DiscoveryPageContext), because it does not see catalog `state`.
   // Renderer-only action: the page decides what "apply" means.
   functions: {
     applyRentalFilters: { parameters: z.object({}) },

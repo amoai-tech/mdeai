@@ -14,6 +14,7 @@ import { RentalBrowseFilters } from "@/components/rentals/rental-browse-filters"
 import { RentalDateSuggestionTool } from "@/components/rentals/rental-date-suggestion-tool";
 import type { SuggestedStay } from "@/components/rentals/rental-date-selector";
 import { RentalDetailsPanel, RentalDetailsSheet } from "@/components/rentals/rental-details-panel";
+import { RentalVenueDetailBridge } from "@/components/rentals/rental-venue-detail-bridge";
 import {
   RentalAskComposer,
   type RentalAskDetailsOutcome,
@@ -202,6 +203,8 @@ function RentalBrowseViewInner({
     <RentalFilterDraftProvider initialBeds={beds ?? null}>
     <>
       <PageRentalResultsBridge results={shownResults} />
+      {/* F8 — Details on an AI-shown card opens this page's own Details panel. */}
+      <RentalVenueDetailBridge results={shownResults} openDetailsFor={openDetailsFor} />
       {coAgent && !isDeterministicE2E() ? (
         <RentalDetailsFrontendTool results={shownResults} onOpen={openDetailsFor} />
       ) : null}
@@ -209,7 +212,7 @@ function RentalBrowseViewInner({
           catalog already resolves cards from, and the existing A2UI context
           publishes their IDs. No second query and no second data path. */}
       {coAgent && !isDeterministicE2E() ? <RentalA2UIContext /> : null}
-      {/* SAN-1655 — live filters for the model + the one real Apply action. */}
+      {/* SAN-1655 — the one real Apply action. */}
       {coAgent && !isDeterministicE2E() ? <RentalFilterPanelActions filters={filterState} /> : null}
       <DiscoveryPageContext page="rentals" filters={filterState} selectedId={selectedForAskId ?? detailsRental?.id ?? null} />
       <RentalPageControlTool filters={filterState} />

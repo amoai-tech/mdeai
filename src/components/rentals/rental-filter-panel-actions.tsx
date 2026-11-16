@@ -1,11 +1,8 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import {
-  useGenerativeUIFunction,
-  useGenerativeUIState,
-} from "@copilotkit/react-core/v2/generative-ui";
+import { useGenerativeUIFunction } from "@copilotkit/react-core/v2/generative-ui";
 import { mdeUI } from "@/components/copilot/a2ui/mde-ui-catalog";
 import {
   getRentalFilterDraftSnapshot,
@@ -17,8 +14,8 @@ import { resolveRentalPageControl } from "@/lib/rentals/browse-page-control";
 import type { RentalBrowseFilterState } from "@/lib/rentals/browse-filters";
 
 /**
- * SAN-1655 — publishes the live filters for the model and registers the one
- * action the Apply button may call.
+ * SAN-1655 — registers the one action the Apply button may call. The model
+ * reads the applied filters from `DiscoveryPageContext`, not from here.
  *
  * The handler reads the latest draft and the latest URL filters from refs, so a
  * delayed event can never push a stale combination. It reuses the same resolver
@@ -50,15 +47,18 @@ export function RentalFilterPanelActions({ filters }: { filters: RentalBrowseFil
   const { neighborhood, beds: appliedBeds, from, through } = filters;
   const filtersRef = useRef(filters);
   const inFlightRef = useRef(false);
+  const [isPending, startTransition] = useTransition();
+  // SAN-1655 follow-up (F5): a navigation that ends without changing the URL
+  // filters (failed or interrupted) must not leave Apply stuck on "in progress".
+  useEffect(() => {
+    if (!isPending) inFlightRef.current = false;
+  }, [isPending]);
   // Depend on the primitive values: `filters` is a new object each render, so
   // using it would clear the in-flight guard mid-navigation and allow a second push.
   useEffect(() => {
     filtersRef.current = { neighborhood, beds: appliedBeds, from, through };
     inFlightRef.current = false;
   }, [neighborhood, appliedBeds, from, through]);
-
-  // AI must see applied URL filters; an unapplied selection remains private draft state.
-  useGenerativeUIState(mdeUI, "rentalFilters", { beds: filters.beds });
 
   useGenerativeUIFunction(mdeUI, "applyRentalFilters", () => {
     // Read the store, not the mirrored ref: the ref lags a commit behind and a
@@ -85,7 +85,9 @@ export function RentalFilterPanelActions({ filters }: { filters: RentalBrowseFil
     }
     setApplyError(null);
     inFlightRef.current = true;
-    router.push(result.url);
+    // The push runs in a transition so the guard is released when React reports
+    // the navigation finished or interrupted, not only when the filters change.
+    startTransition(() => router.push(result.url));
     return { ok: true, status: "navigation_requested", url: result.url };
   });
 
