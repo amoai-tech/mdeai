@@ -103,6 +103,8 @@ describe("SAN-1679 — out-of-range visible Events ordinal", () => {
   it.each([
     ["Show the fourth event as a card.", 2, true],
     ["Show the 4th event as a card.", 2, true],
+    ["Show 4 events as cards.", 2, false],
+    ["Show 4th event as a card.", 2, true],
     ["Show the first event as a card.", 2, false],
     ["Show the second event as a card.", 2, false],
     ["Show the third event as a card.", 0, true],

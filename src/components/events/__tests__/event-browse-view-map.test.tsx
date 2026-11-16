@@ -67,9 +67,11 @@ vi.mock("@/components/copilot/a2ui/event-recommendations-surface", async () => {
 
 type ResultHandler = (result: DiscoveryAgentResult) => void;
 let onAgentResults: ResultHandler | null = null;
+let lastVisibleEventCount: number | undefined;
 vi.mock("@/components/chat/discovery-ask-composer", () => ({
-  DiscoveryAskComposer: (p: { onAgentResults: ResultHandler }) => {
+  DiscoveryAskComposer: (p: { onAgentResults: ResultHandler; visibleEventCount?: number }) => {
     onAgentResults = p.onAgentResults;
+    lastVisibleEventCount = p.visibleEventCount;
     return null;
   },
 }));
@@ -121,6 +123,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
   onAgentResults = null;
   lastA2uiOpenResult = undefined;
+  lastVisibleEventCount = undefined;
   chatBoundary.hasConcierge = false;
 });
 
@@ -134,6 +137,16 @@ describe("EventBrowseView — live event chat boundary", () => {
   it("does not mount a new agent/chat provider for inert component or deterministic tests", () => {
     render(<EventBrowseView {...props} results={[A, B]} />);
     expect(screen.queryByTestId("event-local-chat-provider")).toBeNull();
+  });
+});
+
+describe("EventBrowseView — visible event hints", () => {
+  it("never claims rows are visible when the error panel replaces the grid", () => {
+    const { rerender } = render(<EventBrowseView {...props} results={[A, B]} />);
+    expect(lastVisibleEventCount).toBe(2);
+    rerender(<EventBrowseView {...props} error="Could not load events" results={[A, B]} />);
+    expect(screen.queryByTestId("event-card")).toBeNull();
+    expect(lastVisibleEventCount).toBeUndefined();
   });
 });
 

@@ -21,7 +21,7 @@ import { useOptionalEventLocalChat } from "./event-local-chat-context";
  * Only intercept an exact ordinal-card command with no new search criteria. */
 export function unavailableEventCardReply(prompt: string, visibleCount: number): string | null {
   if (!Number.isSafeInteger(visibleCount) || visibleCount < 0) return null;
-  const match = /^\s*(?:show|display|render)\s+(?:me\s+)?(?:the\s+)?(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|[1-9][0-9]?(?:st|nd|rd|th)?)\s+events?\s+as\s+(?:a\s+)?cards?[.!?]?\s*$/i.exec(prompt);
+  const match = /^\s*(?:show|display|render)\s+(?:me\s+)?(?:the\s+)?(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|[1-9][0-9]?(?:st|nd|rd|th))\s+events?\s+as\s+(?:a\s+)?cards?[.!?]?\s*$/i.exec(prompt);
   if (!match) return null;
   const words = ["first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth"];
   const word = match[1].toLowerCase();
