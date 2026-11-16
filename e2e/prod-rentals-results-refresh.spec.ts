@@ -125,11 +125,10 @@ test.describe("SAN-1421 — same-thread filtered cards survive production reload
       expect(row!.neighborhood.toLowerCase()).toBe("laureles");
       // An explicit 2-bedroom query means exactly two, not "two or more".
       expect(row!.bedrooms).toBe(2);
-      if (row!.currency === "COP") {
-        expect(row!.price_monthly, "a COP monthly match needs a stored monthly price")
-          .not.toBeNull();
-        expect(Number(row!.price_monthly)).toBeLessThanOrEqual(3_000_000);
-      }
+      expect(row!.currency, "a COP monthly-budget result must be priced in COP").toBe("COP");
+      expect(row!.price_monthly, "a monthly-budget match needs a stored monthly price")
+        .not.toBeNull();
+      expect(Number(row!.price_monthly)).toBeLessThanOrEqual(3_000_000);
       // A false/null furnished value is never an asserted match. The UI must disclose
       // that furnishing was not filtered, including after a follow-up and refresh.
       if (row!.furnished !== true) {
