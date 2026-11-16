@@ -34,7 +34,15 @@ type RentalToolRow = RentalResultRow & {
   can_schedule_viewing?: boolean;
 };
 
-/** Technical target check only, not publication/owner/approval eligibility. */
+/**
+ * Technical target check only, not publication/owner/approval eligibility.
+ *
+ * Phase A: the database function is the source of truth and already applies its
+ * source-linked and ownership blocks only when `rental_development_active()` is false.
+ * PHASE B: when launch certification starts, restore the row-level
+ * `can_schedule_viewing === true` gate here and in the proposal, so a renter is told
+ * "not taking requests" before filling a form the database would reject.
+ */
 export function canOpenNativeViewingReview(row: { tags?: string[] }, hasNativeAction: boolean): boolean {
   return hasNativeAction && !row.tags?.includes("dev-preview");
 }

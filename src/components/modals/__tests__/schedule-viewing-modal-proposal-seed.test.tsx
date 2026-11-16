@@ -87,6 +87,32 @@ describe("ScheduleViewingModal proposal seed", () => {
     expect(time().value).toBe("17:45");
   });
 
+  it("seeds when the modal goes from no target to a target", async () => {
+    await render(null);
+    await render({ ...base, preferredAt: `${future}T16:00` });
+    expect(time().value).toBe("16:00");
+    expect(selected()).toContain(future);
+  });
+
+  it("re-seeds from the new proposal when a different apartment is opened", async () => {
+    await render({ ...base, preferredAt: `${future}T16:00` });
+    await render({ listingId: "apt-2", title: "Studio Poblado", neighborhood: "El Poblado", preferredAt: `${future}T17:30` });
+    expect(time().value).toBe("17:30");
+  });
+
+  it("starts from the proposal again after closing, not from an edit made before the close", async () => {
+    await render({ ...base, preferredAt: `${future}T16:00` });
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+    await act(async () => {
+      setter.call(time(), "17:45");
+      time().dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(time().value).toBe("17:45");
+    await render(null);
+    await render({ ...base, preferredAt: `${future}T16:00` });
+    expect(time().value).toBe("16:00");
+  });
+
   it("Cancel closes the modal and writes nothing", async () => {
     await render({ ...base, preferredAt: `${future}T16:00` });
     const cancel = [...container.querySelectorAll("button")].find((b) => b.textContent === "Cancel")!;
