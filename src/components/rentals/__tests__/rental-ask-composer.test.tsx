@@ -500,6 +500,8 @@ describe("RentalAskComposer (SAN-1421)", () => {
     expect(screen.getByRole("alert").textContent).toMatch(/still connecting/i);
     coagent.isReady = true;
     view.rerender(<RentalAskComposer />);
+    // The notice must not outlive the connecting state.
+    await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
     fireEvent.keyDown(screen.getByLabelText("Ask MDE about rentals"), { key: "Enter" });
     await waitFor(() => expect(chat.appendMessage).toHaveBeenCalledTimes(1));
     expect(chat.appendMessage).toHaveBeenCalledWith("furnished flats");

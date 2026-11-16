@@ -61,6 +61,8 @@ import type { ConciergeWorkingMemory } from "@/lib/types";
  * thread, instead of growing a second card renderer inside the browse column.
  */
 
+/** Shown when Enter arrives before the agent is ready; cleared as soon as it is. */
+const CONNECTING_COPY = "MDE is still connecting. Your question is here — send it once the connection is ready.";
 const ERROR_COPY = "MDE could not answer that. Your question is still here — try again.";
 const ERROR_COPY_RUN =
   "MDE could not answer that. Your question is in the conversation — open the full chat to continue.";
@@ -285,6 +287,8 @@ function LiveComposer({
   const [sending, setSending] = useState(false);
   // The agent run status updates asynchronously, so React state alone cannot prevent two rapid sends.
   const sendInFlight = useRef(false);
+  // The connecting notice is stale the moment the connection is ready: derive, don't store.
+  const shownError = isReady && error === CONNECTING_COPY ? null : error;
   const cancelled = useRef(false);
   // The supplementary structured search is cancelled on Stop, a new question, or unmount.
   const abortRef = useRef<AbortController | null>(null);
@@ -429,7 +433,7 @@ function LiveComposer({
     // The textarea still accepts Enter while connecting. Preserve the draft and
     // say why it was not sent instead of silently discarding that action.
     if (!isReady) {
-      setError("MDE is still connecting. Your question is here — send it once the connection is ready.");
+      setError(CONNECTING_COPY);
       setRetryable(false);
       return;
     }
@@ -661,7 +665,7 @@ function LiveComposer({
       ) : (
         <ComposerInput
           draft={draft}
-          error={error}
+          error={shownError}
           busy={busy}
           canSend={canSend}
           onDraft={setDraft}
@@ -676,8 +680,8 @@ function LiveComposer({
           Connecting to MDE — you can send when the connection is ready.
         </p>
       ) : null}
-      {error ? (
-        <ComposerError error={error} canRetry={canSend} retryable={retryable} onRetry={() => { document.getElementById("rental-ask-input")?.focus(); void send(); }} />
+      {shownError ? (
+        <ComposerError error={shownError} canRetry={canSend} retryable={retryable} onRetry={() => { document.getElementById("rental-ask-input")?.focus(); void send(); }} />
       ) : null}
     </div>
   );
