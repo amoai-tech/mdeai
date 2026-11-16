@@ -305,7 +305,7 @@ function MdeRentalCard({ listingId }: { listingId: string }) {
       amenities: row.amenities,
       availability: row.availability,
       hostName: row.host_name,
-      canScheduleViewing: row.can_schedule_viewing === true,
+      canScheduleViewing: Boolean(openScheduleViewing),
     });
   } : () => {
     // Broker chat and the Ask MDE sheet have no rental detail provider. Reuse
@@ -336,7 +336,7 @@ function MdeRentalCard({ listingId }: { listingId: string }) {
         onSelect={hasPin ? () => panToPin?.(pinId) : undefined}
         onOpenDetails={row.tags?.includes("external-source") && !detailRental ? undefined : openDetail}
         nearbyAction={hasPin && concierge && canRenderNearby && isStoredRentalUuid(row.id) ? <NearbyRentalAction listingId={row.id} pinId={pinId} onSelect={panToPin} /> : undefined}
-        canScheduleViewing={row.can_schedule_viewing === true}
+        canScheduleViewing={Boolean(openScheduleViewing)}
         onSchedule={openScheduleViewing ? () => openScheduleViewing({
           listingId: row.id,
           title: row.title,
