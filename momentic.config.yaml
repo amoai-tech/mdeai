@@ -16,4 +16,4 @@ ai:
     failure-recovery: v2.1
     android-locator: v2
     ios-locator: v2
-  failureRecovery: true
+  failureRecovery: false

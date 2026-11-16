@@ -33,7 +33,7 @@ test('all five Rentals tests remain selected together, and every new public test
 test('selected test count, real execution, and success must agree before PASS', () => {
   assert.match(workflow, /tests_json=\$\(printf/);
   assert.match(workflow, /count=\$\(jq -er 'length'/);
-  assert.match(workflow, /while IFS= read -r path; do[\s\S]*?momentic@3\.69\.0 run "\$path"/);
+  assert.match(workflow, /while IFS= read -r path; do[\s\S]*?momentic@3\.73\.1 run "\$path"/);
   assert.match(workflow, /--retries 0/);
   assert.match(workflow, /elif \[\[ "\$OUTCOME" == success \]\]; then\s+result="PASS — \$count\/\$count/);
   assert.doesNotMatch(workflow, /result="PASS — 5\/5/);
