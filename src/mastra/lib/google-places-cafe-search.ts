@@ -16,7 +16,7 @@ const MAP_AREA_CONTEXT =
   /\b(this map area|around this map|current map|map area|near here|around here)\b/i;
 const MEDELLIN_CONTEXT = /\b(medell[ií]n|laureles|poblado|envigado|sabaneta|bel[eé]n|provenza|estadio|centro)(?![\p{L}])/iu;
 const EXPLICIT_CITY = /\b(bogot[aá]|cali|cartagena|barranquilla|santa marta|pereira|manizales|armenia|bucaramanga|c[uú]cuta|villavicencio|monter[ií]a|ibagu[eé]|pasto|neiva|popay[aá]n|sincelejo|valledupar|tunja|riohacha|quibd[oó]|florencia|yopal|mocoa|leticia|san andr[eé]s)(?![\p{L}])/iu;
-const EXPLICIT_LOCATION_PHRASE = /\b(?:in|en|near|around|nearby)\s+(?!(?:the|this|here|me)\b)[\p{L}][\p{L}'-]+/iu;
+const EXPLICIT_LOCATION_PHRASE = /\b(?:in|en|near|around)\s+(?!(?:the|this|here|me|my|a|an|our|your|with|walking|which)\b)[\p{L}][\p{L}'-]+/iu;
 const CAFE_TYPES = new Set(["cafe", "coffee_shop", "bakery", "brunch_restaurant"]);
 
 type GooglePlace = {

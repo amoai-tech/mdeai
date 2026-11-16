@@ -129,6 +129,11 @@ describe("mapGoogleTextSearchToGrounded", () => {
     expect(withMedellinScope("cafés in quito")).toBe("cafés in quito");
     expect(withMedellinScope("quiet cafés")).toContain("Medellín");
     expect(hasExplicitPlaceScope("cafés near quito")).toBe(true);
+    expect(hasExplicitPlaceScope("cafés near my apartment")).toBe(false);
+    expect(hasExplicitPlaceScope("cafés in a quiet area")).toBe(false);
+    expect(hasExplicitPlaceScope("cafés nearby with Wi-Fi")).toBe(false);
+    expect(withMedellinScope("cafés near my apartment")).toContain("Medellín");
+
   });
 
   it("preserves map-area queries without adding Medellín", () => {
