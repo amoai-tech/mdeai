@@ -24,7 +24,7 @@ export const MDE_A2UI_GUIDE = [
   "Use render_ui for existing-result event cards, or other supported layouts such as a short summary. A fresh searchEventsTool result already renders its event cards automatically. Use openRentalDetails only when the user asks to open one apartment\'s details.",
   "Catalog in this release: the grounded cards RentalCard and EventCard, the Rentals-only BedroomFilter and ApplyFiltersButton, the comparison Table — plus layout and labels: Box, Column, Row, Grid, GridItem, Card, Spacer, Divider, Title, Text, Caption, Label, Badge, FollowUp.",
   TABLE_DATA_FORM_RULE,
-  "BedroomFilter and ApplyFiltersButton are the only interactive controls in this catalog, available on Rentals. Otherwise there are no buttons, inputs, forms, charts, maps, images or links from the generic standard catalog. Do not promise one of those. Offer a FollowUp instead.",
+  "BedroomFilter and ApplyFiltersButton are the only interactive controls in this catalog. Otherwise there are no buttons, inputs, forms, charts, maps, images or links from the generic standard catalog. Do not promise one of those. Offer a FollowUp instead.",
   "Grounded cards: a rental node is { id: \"<node-id>\", component: \"RentalCard\", listingId: \"<id>\" }; an event node is { id: \"<node-id>\", component: \"EventCard\", eventId: \"<uuid>\" }. Put listingId/eventId directly on the node; never add dataModel, children, slots or div to a card node.",
   "Use only IDs returned by your tools in this run, or IDs listed in the current result hints. Never invent a listing, event, price, rating, availability or address. Never use an array index, title or slug as an ID.",
   "Layout nodes take children as an array of node IDs. Title, Text, Caption and Label take text; Badge takes label; Divider and Spacer take no props.",
@@ -38,13 +38,11 @@ export const MDE_A2UI_GUIDE = [
 ].join("\n");
 
 import { isRentalA2UIId } from "@/lib/rentals/a2ui-id";
-import { RENTAL_A2UI_CONTEXT_DESCRIPTION } from "@/lib/rentals/a2ui-context";
+import { RENTAL_A2UI_CONTEXT_DESCRIPTION, RENTAL_HINT_MAX } from "@/lib/rentals/a2ui-context";
 import { isEventA2UIId } from "@/lib/events/a2ui-id";
 import { EVENT_A2UI_CONTEXT_DESCRIPTION } from "@/lib/events/a2ui-context";
 
 const RENTAL_HINT_PREFIX = RENTAL_A2UI_CONTEXT_DESCRIPTION;
-const RENTAL_HINT_MAX = 5;
-
 /**
  * The fast-path result rows live in client state, which the model does not
  * reliably receive as working memory. Accept only a tiny, typed hint list:
@@ -73,8 +71,8 @@ export function readRentalResultHints(agUiContext: unknown): string | null {
   const hints = readRentalResultIds(agUiContext);
   if (hints.length === 0) return null;
   return [
-    "Current browser-published rental result IDs, in display order (first is the top result). The RentalCard resolver revalidates the real authorized row:",
-    ...hints.map((id) => "- " + id),
+    `Current browser-published rental result IDs, numbered in display order (1 is the top result). Exactly ${hints.length} position(s) can be shown as cards. If the renter asks for a position that is not numbered here (for example the 12th), say that apartment is not in the current results; never show a different apartment in its place. The RentalCard resolver revalidates the real authorized row:`,
+    ...hints.map((id, index) => `${index + 1}. ${id}`),
   ].join("\n");
 }
 

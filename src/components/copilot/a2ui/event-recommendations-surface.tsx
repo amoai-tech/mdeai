@@ -24,6 +24,10 @@ import { mdeUI } from "@/components/copilot/a2ui/mde-ui-catalog";
  */
 export const EVENT_RECOMMENDATIONS_SURFACE_ID = "event-recommendations";
 
+/** Mounted on /events and in the concierge chat, so the wording names neither. */
+export const EVENT_RECOMMENDATIONS_DESCRIPTION =
+  "Grounded event recommendations from the current event search. Use this when someone asks which events match a date, neighborhood or category. One EventCard per real event from the current authorized search results; put the cards in a Column whose children are the card node ids, optionally one Title of 8 words or fewer. No commentary. Never state or invent a title, venue, date or price.";
+
 export const EVENT_RECOMMENDATIONS_COMPONENTS = [
   "EventCard",
   "Column",
@@ -44,7 +48,7 @@ export function EventRecommendationsSurface() {
       id={EVENT_RECOMMENDATIONS_SURFACE_ID}
       ui={mdeUI}
       components={[...EVENT_RECOMMENDATIONS_COMPONENTS]}
-      description="Grounded event recommendations for the concierge chat. Use this when someone asks which events match a date, neighborhood or category. One EventCard per real event from the current authorized search results; put the cards in a Column whose children are the card node ids, optionally one Title of 8 words or fewer. No commentary. Never state or invent a title, venue, date or price."
+      description={EVENT_RECOMMENDATIONS_DESCRIPTION}
       className="mx-2 mb-2 rounded-xl border border-border bg-card px-4 py-3 shadow-sm"
       fallback={null}
       autoScroll={false}

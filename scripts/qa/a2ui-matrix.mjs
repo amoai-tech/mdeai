@@ -76,11 +76,24 @@ const context = browser.contexts()[0];
 const page =
   context.pages().find((p) => p.url().includes("localhost")) ?? context.pages()[0];
 page.setDefaultTimeout(90_000);
+// The QA browser opens with a small default window, which selects the phone layout. The Details
+// checks below read the desktop panel, so pick the layout explicitly: --viewport 1440x900 (desktop)
+// or --viewport 390x844 (phone, where Details is a sheet and these checks are not applicable).
+const viewport = /^(\d{3,4})x(\d{3,4})$/.exec(arg("viewport", "1440x900"));
+if (viewport) await page.setViewportSize({ width: Number(viewport[1]), height: Number(viewport[2]) });
 
 const ask = async (inputSelector, prompt) => {
   await waitForIdleComposer(page, inputSelector);
   await page.locator(inputSelector).fill(prompt);
-  await page.locator(inputSelector).press("Enter");
+  // The composer drops Enter until its agent connection is ready and leaves the text in the
+  // box (observed live on /rentals). A sent turn clears the box, so retry Enter until it does.
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    await page.locator(inputSelector).press("Enter");
+    const cleared = await page
+      .waitForFunction((sel) => (document.querySelector(sel)?.value ?? "") === "", inputSelector, { timeout: 4000 })
+      .then(() => true, () => false);
+    if (cleared) return;
+  }
 };
 /** Start a clean conversation so each case proves its own selection, not a reused surface. */
 const resetConversation = async () => {
@@ -289,12 +302,16 @@ async function eventCase(c) {
       return panel ? panel.getAttribute("data-event-id") : null;
     });
   }
-  const reply = cards.length ? "" : await chatText();
   // Events: the requested result must be genuinely absent from the published grid,
   // and the reply must name that limitation; a refusal for an available event fails.
   const requestedAbsent = Boolean(c.index) && sourceIds.length > 0 && c.index > sourceIds.length;
+  // The Events page also renders the real search results as cards, so cards may be present when
+  // the assistant correctly says the requested position does not exist. That is still honest as
+  // long as every card is a real published event (no invented or foreign card).
+  const onlyRealCards = cards.every((id) => sourceIds.includes(id));
+  const reply = cards.length && !requestedAbsent ? "" : await chatText();
   const unavailable =
-    !cards.length &&
+    onlyRealCards &&
     requestedAbsent &&
     /only|no (?:other|more|second|third|fourth)|can.?t|cannot|not (?:in|among)|unavailable|\d+ events? (?:were|was) (?:returned|found)/i.test(reply);
   // No text-only fallback: a wrong card can open its own matching Details.

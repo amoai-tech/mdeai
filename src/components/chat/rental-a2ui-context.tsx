@@ -4,7 +4,7 @@ import { useAgentContext } from "@copilotkit/react-core/v2";
 import { useRentalFastPath } from "@/components/chat/rental-fast-path-context";
 import { normalizeToolEnvelope } from "@/lib/normalize-tool-envelope";
 import { isRentalA2UIId } from "@/lib/rentals/a2ui-id";
-import { RENTAL_A2UI_CONTEXT_DESCRIPTION } from "@/lib/rentals/a2ui-context";
+import { RENTAL_A2UI_CONTEXT_DESCRIPTION, RENTAL_HINT_MAX } from "@/lib/rentals/a2ui-context";
 import type { ConciergeWorkingMemory } from "@/lib/types";
 
 type RentalRow = NonNullable<ConciergeWorkingMemory["lastRentalResults"]>[number];
@@ -12,7 +12,7 @@ type RentalRow = NonNullable<ConciergeWorkingMemory["lastRentalResults"]>[number
 /** IDs only: no untrusted titles, prices or instructions enter the prompt. */
 export function rentalA2UIContextValue(rows: readonly RentalRow[] | undefined): string {
   return JSON.stringify(
-    (rows ?? []).slice(0, 5).map((row) => row.id).filter(isRentalA2UIId),
+    (rows ?? []).slice(0, RENTAL_HINT_MAX).map((row) => row.id).filter(isRentalA2UIId),
   );
 }
 
