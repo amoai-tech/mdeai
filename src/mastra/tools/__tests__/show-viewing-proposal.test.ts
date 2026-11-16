@@ -45,6 +45,12 @@ describe("showViewingProposal tool", () => {
   it("drops an impossible time instead of passing it on", async () => {
     expect(await run({ listingId: second, time: "25:99" })).not.toHaveProperty("time");
   });
+
+  it("keeps a real future date even when the time is invalid", async () => {
+    const result = await run({ listingId: second, date: future, time: "25:99" });
+    expect(result).toMatchObject({ ok: true, date: future });
+    expect(result).not.toHaveProperty("time");
+  });
 });
 
 describe("viewing proposal surface", () => {

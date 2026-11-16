@@ -38,14 +38,15 @@ export const showViewingProposalTool = createTool({
     if (!safeId || !published.has(safeId)) {
       return { ok: false, message: "That apartment is not in the current page results." };
     }
+    // Validate the time first, so a bad time never discards a date the renter really stated.
+    const safeTime = time && resolvePreferredAtInstant(`2099-01-01T${time}`) ? time : undefined;
     // A date that is already past (or not a real calendar day) is a model guess,
     // not a preference: drop it and let the renter pick.
     let safeDate = date;
     if (safeDate) {
-      const instant = resolvePreferredAtInstant(`${safeDate}T${time ?? "23:59"}`);
+      const instant = resolvePreferredAtInstant(`${safeDate}T${safeTime ?? "23:59"}`);
       if (!instant || !isFutureInstant(instant)) safeDate = undefined;
     }
-    const safeTime = time && resolvePreferredAtInstant(`2099-01-01T${time}`) ? time : undefined;
     return {
       ok: true,
       listingId: safeId,

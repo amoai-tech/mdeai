@@ -136,8 +136,18 @@ const VIEWING_NOUN = /\b(viewing|viewings|visit|tour|showing|visita)\b/i;
  * Bare "here", "them" or "this" never force the tool, because the model would then have
  * to guess an ID, which is the silent substitution this change exists to prevent.
  */
-const VIEWING_ORDINAL =
-  /\b(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|last|\d+(?:st|nd|rd|th)|primer[oa]?|segund[oa]|tercer[oa]?|cuart[oa]|quint[oa]|sext[oa]|s[eé]ptim[oa]|octav[oa]|noven[oa]|d[eé]cim[oa]|[uú]ltim[oa])\b|\b(?:apartments?|listings?|number|no\.?|apartamento|#)\s*#?\d+\b/i;
+const ORDINAL_EN = "(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|last|\\d+(?:st|nd|rd|th))";
+const APARTMENT_WORD_EN = "(?:apartments?|listings?|ones?|places?|units?|options?|results?|homes?|flats?|rentals?)";
+const ORDINAL_ES = "(?:primer[oa]?|segund[oa]|tercer[oa]?|cuart[oa]|quint[oa]|sext[oa]|s[eé]ptim[oa]|octav[oa]|noven[oa]|d[eé]cim[oa]|[uú]ltim[oa])";
+/**
+ * An ordinal counts only next to an apartment word ("the second apartment", "the first
+ * one", "el primero"), or as "apartment 3" / "#3". A bare "on the 15th" or "the last
+ * week of November" is a calendar phrase, not a listing.
+ */
+const VIEWING_ORDINAL = new RegExp(
+  `\\b${ORDINAL_EN}\\s+${APARTMENT_WORD_EN}\\b|\\b(?:el|la)\\s+${ORDINAL_ES}\\b|\\b${ORDINAL_ES}\\s+(?:apartamento|anuncio|opci[oó]n|resultado|lugar)\\b|\\b(?:apartments?|listings?|number|no\\.?|apartamento|#)\\s*#?\\d+\\b`,
+  "i",
+);
 const VIEWING_DEICTIC = /\b(this|that|it|esta?|ese|esa)\b/i;
 const TIMING_QUESTION = /\b(when|what\s+time|cu[aá]ndo)\b/i;
 

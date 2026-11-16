@@ -151,6 +151,8 @@ describe("shouldRenderViewingProposal (SAN-1658)", () => {
     ["Schedule a viewing for the first one", true],
     ["Can you book a tour of apartment 3?", true],
     ["Agendar una visita del primer apartamento", true],
+    ["Quiero agendar una visita para el primero", true],
+    ["Request a viewing of the third place", true],
     ["Schedule a viewing of 37a05b09-f560-4776-92fd-b8bb2b92e611", true],
   ])("%s -> %s", (text, expected) => {
     expect(run(text)).toBe(expected);
@@ -160,6 +162,10 @@ describe("shouldRenderViewingProposal (SAN-1658)", () => {
     expect(run("Can I book a tour that fits my schedule?")).toBe(false);
     expect(run("Schedule a visit here")).toBe(false);
     expect(run("Request a viewing of them")).toBe(false);
+    // Calendar phrases are not listings.
+    expect(run("Schedule a viewing on the 15th")).toBe(false);
+    expect(run("Book a tour for the last week of November")).toBe(false);
+    expect(run("Schedule a visit for the first available time")).toBe(false);
     expect(run("Can you book a tour of this apartment?")).toBe(false);
   });
 
