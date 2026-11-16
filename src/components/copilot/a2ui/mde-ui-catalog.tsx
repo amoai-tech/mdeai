@@ -34,6 +34,11 @@ type RentalToolRow = RentalResultRow & {
   can_schedule_viewing?: boolean;
 };
 
+/** Technical target check only, not publication/owner/approval eligibility. */
+export function canOpenNativeViewingReview(row: { tags?: string[] }, hasNativeAction: boolean): boolean {
+  return hasNativeAction && !row.tags?.includes("dev-preview");
+}
+
 const rentalToolNames = new Set<string>([
   MASTRA_COPILOT_TOOL_ACTIONS.rentals,
   MASTRA_TOOL_IDS.rentals,
@@ -288,6 +293,9 @@ function MdeRentalCard({ listingId }: { listingId: string }) {
   }
 
   const pinId = `rental-${row.id}`;
+  // Source-only local previews have no apartments row to receive an atomic viewing.
+  // A stored external candidate is different: in Phase A the DB can accept its slug.
+  const canOpenViewing = canOpenNativeViewingReview(row, Boolean(openScheduleViewing));
   const detailRental = toDetailRental(row);
   const openDetail = openVenueDetail ? () => {
     if (hasPin) panToPin?.(pinId);
@@ -305,7 +313,7 @@ function MdeRentalCard({ listingId }: { listingId: string }) {
       amenities: row.amenities,
       availability: row.availability,
       hostName: row.host_name,
-      canScheduleViewing: Boolean(openScheduleViewing),
+      canScheduleViewing: canOpenViewing,
     });
   } : () => {
     // Broker chat and the Ask MDE sheet have no rental detail provider. Reuse
@@ -336,7 +344,7 @@ function MdeRentalCard({ listingId }: { listingId: string }) {
         onSelect={hasPin ? () => panToPin?.(pinId) : undefined}
         onOpenDetails={row.tags?.includes("external-source") && !detailRental ? undefined : openDetail}
         nearbyAction={hasPin && concierge && canRenderNearby && isStoredRentalUuid(row.id) ? <NearbyRentalAction listingId={row.id} pinId={pinId} onSelect={panToPin} /> : undefined}
-        canScheduleViewing={Boolean(openScheduleViewing)}
+        canScheduleViewing={canOpenViewing}
         onSchedule={openScheduleViewing ? () => openScheduleViewing({
           listingId: row.id,
           title: row.title,
@@ -371,9 +379,8 @@ function MdeViewingProposal({ listingId, date, time }: { listingId: string; date
       neighborhood={row.neighborhood}
       initialDate={date}
       initialTime={time}
-      // Phase A: a real listing and a mounted native review action are enough.
-      // Source-side viewing eligibility is not a business prerequisite in development.
-      canRequest={Boolean(openScheduleViewing)}
+      // Phase A has no business approval gate; source-only previews still have no persisted target.
+      canRequest={canOpenNativeViewingReview(row, Boolean(openScheduleViewing))}
       onContinue={(preferredAt) =>
         openScheduleViewing?.({
           listingId: row.id,

@@ -5,6 +5,7 @@ import type { z } from "zod";
 import { standardUI } from "@copilotkit/react-core/v2/generative-ui";
 import {
   MDE_OMITTED_STANDARD_COMPONENTS,
+  canOpenNativeViewingReview,
   collectEventResults,
   collectRentalResults,
   eventDetailHref,
@@ -33,6 +34,13 @@ const poblado = {
 };
 
 describe("MDE A2UI catalog", () => {
+  it("keeps Phase-A viewing open for stored listings, but never promises a write for source-only previews", () => {
+    expect(canOpenNativeViewingReview({ tags: [] }, true)).toBe(true);
+    expect(canOpenNativeViewingReview({ tags: ["external-source", "not-verified"] }, true)).toBe(true);
+    expect(canOpenNativeViewingReview({ tags: ["dev-preview"] }, true)).toBe(false);
+    expect(canOpenNativeViewingReview({ tags: [] }, false)).toBe(false);
+  });
+
   it("keeps a small, versioned grounded core with RentalCard and EventCard", () => {
     expect(mdeUI.id).toBe("mde/discovery@1");
     expect(mdeUI.components.has("RentalCard")).toBe(true);

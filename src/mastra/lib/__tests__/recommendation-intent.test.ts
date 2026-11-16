@@ -166,6 +166,9 @@ describe("shouldRenderViewingProposal (SAN-1658)", () => {
     expect(run("Schedule a viewing on the 15th")).toBe(false);
     expect(run("Book a tour for the last week of November")).toBe(false);
     expect(run("Schedule a visit for the first available time")).toBe(false);
+    expect(run("Do not schedule a viewing of the second apartment. Show its details instead.")).toBe(false);
+    expect(run("Don\u0027t book a tour of apartment 3.")).toBe(false);
+    expect(run("I do not want to schedule a viewing of the first apartment.")).toBe(false);
     expect(run("Can you book a tour of this apartment?")).toBe(false);
   });
 

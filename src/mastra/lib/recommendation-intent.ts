@@ -150,6 +150,8 @@ const VIEWING_ORDINAL = new RegExp(
 );
 const VIEWING_DEICTIC = /\b(this|that|it|esta?|ese|esa)\b/i;
 const TIMING_QUESTION = /\b(when|what\s+time|cu[aá]ndo)\b/i;
+/** A refusal to schedule is not a command, even when the renter names a listing. */
+const NEGATED_VIEWING_REQUEST = /\b(?:do\s+not|don[\u2019\u0027]?t|never|please\s+don[\u2019\u0027]?t|no\s+quiero)\s+(?:(?:want\s+to|try\s+to|please)\s+)?(?:schedule|request|book|arrange|set\s+up|pedir|agendar|programar)\b/i;
 
 export function shouldRenderViewingProposal({
   stepNumber,
@@ -168,6 +170,7 @@ export function shouldRenderViewingProposal({
   const text = messageText(lastUser).trim();
   if (!text) return false;
   if (!SCHEDULE_VERB.test(text) || !VIEWING_NOUN.test(text)) return false;
+  if (NEGATED_VIEWING_REQUEST.test(text)) return false;
   if (TIMING_QUESTION.test(text)) return false;
   if (VIEWING_ORDINAL.test(text)) return true;
   if (readRentalResultIds(agUiContext).some((id) => text.includes(id))) return true;
