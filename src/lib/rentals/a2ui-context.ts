@@ -3,5 +3,13 @@
  * The browser publishes this string with useAgentContext; the Mastra
  * instructions look for the same string. Keep them from drifting apart.
  */
+/**
+ * How many result IDs the browser publishes and the server accepts. The Rentals
+ * page shows up to ten apartments and a renter may ask for any of them ("show the
+ * sixth"); a smaller cap made every later position unreachable, so the model
+ * silently showed the last apartment it knew instead of the one requested.
+ */
+export const RENTAL_HINT_MAX = 10;
+
 export const RENTAL_A2UI_CONTEXT_DESCRIPTION =
   "Most recent successful rental result IDs, in display order; the first id is the top result. These may be historical after a newer failed search. When the user asks to render a rental card, use one exact id with render_ui. The card revalidates the id against authorized history and rejects anything else.";

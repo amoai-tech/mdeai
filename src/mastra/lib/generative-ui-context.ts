@@ -6,7 +6,7 @@ const TABLE_DATA_FORM_RULE =
 
 /** SAN-1658 — one rule for both the official-guide and fallback paths. */
 const VIEWING_PROPOSAL_RULE =
-  "Viewing requests: when the renter asks to schedule or request a viewing of an apartment that is already in the current results, render one ViewingProposal node { id, component: \"ViewingProposal\", listingId: \"<id>\" } with an ID from the published hints or your tool results (never an ordinal such as \"apartment 2\" as the ID). Add date (YYYY-MM-DD) and/or time (HH:mm, 24-hour, Medellín) only when the renter stated them explicitly; never guess a calendar date from a weekday. Render it on the rental-recommendations panel when it exists, otherwise on \"chat\". The renter edits the time and presses Continue, which opens the existing review form; nothing is requested until they submit that form. Never say a viewing is booked, requested or confirmed; say you prepared a request they can review.";
+  "Viewing requests: when the renter asks to schedule or request a viewing of an apartment that is already in the current results, render one ViewingProposal node { id, component: \"ViewingProposal\", listingId: \"<id>\" } with an ID from the numbered published hints (\"the second apartment\" is hint 2) or your tool results; never put an ordinal or title in listingId. Add date (YYYY-MM-DD) and/or time (HH:mm, 24-hour, Medellín) only when the renter stated them explicitly; never guess a calendar date from a weekday. Render it on the rental-recommendations panel when it exists, otherwise on \"chat\". The renter edits the time and presses Continue, which opens the existing review form; nothing is requested until they submit that form. Never say a viewing is booked, requested or confirmed; say you prepared a request they can review.";
 
 /**
  * The browser can send arbitrary `RunAgentInput.context`. It must never become
@@ -43,13 +43,11 @@ export const MDE_A2UI_GUIDE = [
 ].join("\n");
 
 import { isRentalA2UIId } from "@/lib/rentals/a2ui-id";
-import { RENTAL_A2UI_CONTEXT_DESCRIPTION } from "@/lib/rentals/a2ui-context";
+import { RENTAL_A2UI_CONTEXT_DESCRIPTION, RENTAL_HINT_MAX } from "@/lib/rentals/a2ui-context";
 import { isEventA2UIId } from "@/lib/events/a2ui-id";
 import { EVENT_A2UI_CONTEXT_DESCRIPTION } from "@/lib/events/a2ui-context";
 
 const RENTAL_HINT_PREFIX = RENTAL_A2UI_CONTEXT_DESCRIPTION;
-const RENTAL_HINT_MAX = 5;
-
 /**
  * The fast-path result rows live in client state, which the model does not
  * reliably receive as working memory. Accept only a tiny, typed hint list:
@@ -78,8 +76,8 @@ export function readRentalResultHints(agUiContext: unknown): string | null {
   const hints = readRentalResultIds(agUiContext);
   if (hints.length === 0) return null;
   return [
-    "Current browser-published rental result IDs, in display order (first is the top result). The RentalCard resolver revalidates the real authorized row:",
-    ...hints.map((id) => "- " + id),
+    `Current browser-published rental result IDs, numbered in display order (1 is the top result). Exactly ${hints.length} position(s) can be shown as cards. If the renter asks for a position that is not numbered here (for example the 12th), say that apartment is not in the current results; never show a different apartment in its place. The RentalCard resolver revalidates the real authorized row:`,
+    ...hints.map((id, index) => `${index + 1}. ${id}`),
   ].join("\n");
 }
 
