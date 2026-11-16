@@ -148,6 +148,26 @@ const VIEWING_ORDINAL = new RegExp(
   `\\b${ORDINAL_EN}\\s+${APARTMENT_WORD_EN}\\b|\\b(?:el|la)\\s+${ORDINAL_ES}\\b|\\b${ORDINAL_ES}\\s+(?:apartamento|anuncio|opci[oó]n|resultado|lugar)\\b|\\b(?:apartments?|listings?|number|no\\.?|apartamento|#)\\s*#?\\d+\\b`,
   "i",
 );
+/** Resolve only a published list position; never force the agent to substitute a different rental. */
+function publishedViewingPosition(text: string, publishedCount: number): boolean {
+  const match = VIEWING_ORDINAL.exec(text);
+  if (!match) return false;
+  const reference = match[0].toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const numeric = reference.match(/\d+/);
+  let position: number;
+  if (numeric) {
+    position = Number(numeric[0]);
+  } else if (/\b(last|ultim[oa]?)\b/.test(reference)) {
+    position = publishedCount;
+  } else {
+    const english = ["first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth"];
+    const spanish = ["primer", "segund", "tercer", "cuart", "quint", "sext", "septim", "octav", "noven", "decim"];
+    const index = english.findIndex((word) => new RegExp(`\\b${word}\\b`).test(reference));
+    position = index >= 0 ? index + 1 : spanish.findIndex((stem) => reference.includes(stem)) + 1;
+  }
+  return Number.isSafeInteger(position) && position > 0 && position <= publishedCount;
+}
+
 const VIEWING_DEICTIC = /\b(this|that|it|esta?|ese|esa)\b/i;
 const TIMING_QUESTION = /\b(when|what\s+time|cu[aá]ndo)\b/i;
 /** A refusal to schedule is not a command, even when the renter names a listing. */
@@ -172,7 +192,8 @@ export function shouldRenderViewingProposal({
   if (!SCHEDULE_VERB.test(text) || !VIEWING_NOUN.test(text)) return false;
   if (NEGATED_VIEWING_REQUEST.test(text)) return false;
   if (TIMING_QUESTION.test(text)) return false;
-  if (VIEWING_ORDINAL.test(text)) return true;
-  if (readRentalResultIds(agUiContext).some((id) => text.includes(id))) return true;
+  const publishedIds = readRentalResultIds(agUiContext);
+  if (VIEWING_ORDINAL.test(text)) return publishedViewingPosition(text, publishedIds.length);
+  if (publishedIds.some((id) => text.includes(id))) return true;
   return VIEWING_DEICTIC.test(text) && Boolean(selectedDiscoveryEntityId(agUiContext));
 }

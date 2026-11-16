@@ -7,7 +7,7 @@ const page = (route: string) => ({
     key === "ag-ui"
       ? { context: [
           { description: RENTAL_A2UI_CONTEXT_DESCRIPTION,
-            value: JSON.stringify(["37a05b09-f560-4776-92fd-b8bb2b92e611"]) },
+            value: JSON.stringify(["37a05b09-f560-4776-92fd-b8bb2b92e611", "37a05b09-f560-4776-92fd-b8bb2b92e612", "37a05b09-f560-4776-92fd-b8bb2b92e613", "37a05b09-f560-4776-92fd-b8bb2b92e614", "37a05b09-f560-4776-92fd-b8bb2b92e615", "37a05b09-f560-4776-92fd-b8bb2b92e616"]) },
           { description: "Active MDE discovery page, filters, and explicitly selected visible public item.",
             value: JSON.stringify({ route, selectedPublicEntityId: null }) },
         ] }
@@ -158,6 +158,16 @@ describe("shouldRenderViewingProposal (SAN-1658)", () => {
     expect(run(text)).toBe(expected);
   });
 
+  it.each([
+    "Schedule a viewing of the 12th apartment",
+    "Book a tour of apartment 12",
+    "Request a viewing for the seventh apartment",
+    "Agendar una visita del séptimo apartamento",
+    "Schedule a viewing of apartment 0",
+  ])("does not force the tool for an out-of-range listing: %s", (text) => {
+    expect(run(text)).toBe(false);
+  });
+
   it("does not force the tool when no apartment is named (the model would have to guess an ID)", () => {
     expect(run("Can I book a tour that fits my schedule?")).toBe(false);
     expect(run("Schedule a visit here")).toBe(false);
@@ -178,7 +188,7 @@ describe("shouldRenderViewingProposal (SAN-1658)", () => {
         key === "ag-ui"
           ? { context: [
               { description: RENTAL_A2UI_CONTEXT_DESCRIPTION,
-                value: JSON.stringify(["37a05b09-f560-4776-92fd-b8bb2b92e611"]) },
+                value: JSON.stringify(["37a05b09-f560-4776-92fd-b8bb2b92e611", "37a05b09-f560-4776-92fd-b8bb2b92e612", "37a05b09-f560-4776-92fd-b8bb2b92e613", "37a05b09-f560-4776-92fd-b8bb2b92e614", "37a05b09-f560-4776-92fd-b8bb2b92e615", "37a05b09-f560-4776-92fd-b8bb2b92e616"]) },
               { description: "Active MDE discovery page, filters, and explicitly selected visible public item.",
                 value: JSON.stringify({ route: "/rentals", selectedPublicEntityId: "37a05b09-f560-4776-92fd-b8bb2b92e611" }) },
             ] }
