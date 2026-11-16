@@ -1,19 +1,20 @@
 import { describe, expect, it } from "vitest";
 import { shouldRenderRentalFilterControl, shouldRenderViewingProposal, shouldRequestRecommendations } from "../recommendation-intent";
-import { RENTAL_A2UI_CONTEXT_DESCRIPTION } from "@/lib/rentals/a2ui-context";
+import { RENTAL_A2UI_CONTEXT_DESCRIPTION, RENTAL_RESULT_COUNT_CONTEXT_DESCRIPTION } from "@/lib/rentals/a2ui-context";
 
-const page = (route: string) => ({
+const page = (route: string, renderedCount?: number) => ({
   get: (key: string) =>
     key === "ag-ui"
       ? { context: [
           { description: RENTAL_A2UI_CONTEXT_DESCRIPTION,
             value: JSON.stringify(["37a05b09-f560-4776-92fd-b8bb2b92e611", "37a05b09-f560-4776-92fd-b8bb2b92e612", "37a05b09-f560-4776-92fd-b8bb2b92e613", "37a05b09-f560-4776-92fd-b8bb2b92e614", "37a05b09-f560-4776-92fd-b8bb2b92e615", "37a05b09-f560-4776-92fd-b8bb2b92e616"]) },
+          ...(renderedCount === undefined ? [] : [{ description: RENTAL_RESULT_COUNT_CONTEXT_DESCRIPTION, value: JSON.stringify(renderedCount) }]),
           { description: "Active MDE discovery page, filters, and explicitly selected visible public item.",
             value: JSON.stringify({ route, selectedPublicEntityId: null }) },
         ] }
       : undefined,
 });
-const hints = page("/rentals");
+const hints = page("/rentals", 6);
 const noHints = { get: () => ({ context: [] }) };
 const ask = (text: string) => [{ role: "user", content: text }];
 
@@ -183,6 +184,14 @@ describe("shouldRenderViewingProposal (SAN-1658)", () => {
     expect(run("Don\u0027t book a tour of apartment 3.")).toBe(false);
     expect(run("I do not want to schedule a viewing of the first apartment.")).toBe(false);
     expect(run("Can you book a tour of this apartment?")).toBe(false);
+    expect(run("Quiero agendar una visita la primera semana de diciembre")).toBe(false);
+    expect(run("Quiero agendar una visita el primer día de diciembre")).toBe(false);
+  });
+
+  it("never treats the last published hint as the last apartment when the page has more results", () => {
+    expect(run("Schedule a viewing of the last apartment", page("/rentals", 17))).toBe(false);
+    expect(run("Schedule a viewing of the last apartment", page("/rentals"))).toBe(false);
+    expect(run("Schedule a viewing of the last apartment", hints)).toBe(true);
   });
 
   it("accepts this/that only when the renter has selected a listing", () => {

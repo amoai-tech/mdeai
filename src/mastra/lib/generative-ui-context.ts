@@ -6,7 +6,7 @@ const TABLE_DATA_FORM_RULE =
 
 /** SAN-1658 — one rule for both the official-guide and fallback paths. */
 const VIEWING_PROPOSAL_RULE =
-  "Viewing requests: when the renter asks to schedule or request a viewing of an apartment that is already in the current results, call the showViewingProposal tool with the exact ID from the numbered published hints (\"the second apartment\" is hint 2) or your tool results; never put an ordinal or title in listingId and never author render_ui operations for it. Pass date (YYYY-MM-DD) and/or time (HH:mm, 24-hour, Medellín) only when the renter stated them explicitly; never guess a calendar date from a weekday. The renter edits the time and presses Continue, which opens the existing review form; nothing is requested until they submit that form. Never say a viewing is booked, requested or confirmed; say you prepared a request they can review.";
+  "Viewing requests: when the renter asks to schedule or request a viewing of an apartment that is already in the current results, call the showViewingProposal tool with the exact ID from the numbered published hints (\"the second apartment\" is hint 2), not IDs from a same-turn search; never treat the last published hint as the last apartment when there are more or unknown results; ask for an explicit listing instead. Never put an ordinal or title in listingId and never author render_ui operations for it. Pass date (YYYY-MM-DD) and/or time (HH:mm, 24-hour, Medellín) only when the renter stated them explicitly; never guess a calendar date from a weekday. The renter edits the time and presses Continue, which opens the existing review form; nothing is requested until they submit that form. Never say a viewing is booked, requested or confirmed; say you prepared a request they can review.";
 
 /**
  * The browser can send arbitrary `RunAgentInput.context`. It must never become
@@ -43,7 +43,7 @@ export const MDE_A2UI_GUIDE = [
 ].join("\n");
 
 import { isRentalA2UIId } from "@/lib/rentals/a2ui-id";
-import { RENTAL_A2UI_CONTEXT_DESCRIPTION, RENTAL_HINT_MAX } from "@/lib/rentals/a2ui-context";
+import { RENTAL_A2UI_CONTEXT_DESCRIPTION, RENTAL_HINT_MAX, RENTAL_RESULT_COUNT_CONTEXT_DESCRIPTION } from "@/lib/rentals/a2ui-context";
 import { isEventA2UIId } from "@/lib/events/a2ui-id";
 import { EVENT_A2UI_CONTEXT_DESCRIPTION } from "@/lib/events/a2ui-context";
 
@@ -71,11 +71,32 @@ export function readRentalResultIds(agUiContext: unknown): string[] {
   return rows.slice(0, RENTAL_HINT_MAX).flatMap((row) => isRentalA2UIId(row) ? [row] : []);
 }
 
+/** The count is an untrusted browser hint, never an apartment ID or authority.
+ * If absent/malformed, "last" is ambiguous and must not select a rental. */
+export function readRentalRenderedCount(agUiContext: unknown): number | null {
+  if (!agUiContext || typeof agUiContext !== "object") return null;
+  const entries = (agUiContext as { context?: unknown }).context;
+  if (!Array.isArray(entries)) return null;
+  const entry = entries.slice(0, 20).find((value) =>
+    value && typeof value === "object" &&
+    (value as { description?: unknown }).description === RENTAL_RESULT_COUNT_CONTEXT_DESCRIPTION
+  ) as { value?: unknown } | undefined;
+  if (typeof entry?.value !== "string" || entry.value.length > 8) return null;
+  let count: unknown;
+  try { count = JSON.parse(entry.value); } catch { return null; }
+  return typeof count === "number" && Number.isSafeInteger(count) && count >= 0 && count <= 10000 ? count : null;
+}
+
 /** Plain-text prompt hint, never arbitrary browser instructions. */
 export function readRentalResultHints(agUiContext: unknown): string | null {
   const hints = readRentalResultIds(agUiContext);
   if (hints.length === 0) return null;
+  const total = readRentalRenderedCount(agUiContext);
+  const lastHint = total !== null && total === hints.length
+    ? "All results are published, so the last apartment is the final numbered ID."
+    : "Do not interpret the last apartment as the final published hint: the full page may have more results. Ask for an exact numbered apartment or selection instead.";
   return [
+    lastHint,
     `Current browser-published rental result IDs, numbered in display order (1 is the top result). Only the first ${hints.length} result(s) can be addressed here, as cards or a viewing request. If the renter asks for a later position (for example the 12th), say you can only show cards for the first ${hints.length} results and that they can still open any apartment from the page; never show a different apartment in its place. The RentalCard resolver revalidates the real authorized row:`,
     ...hints.map((id, index) => `${index + 1}. ${id}`),
   ].join("\n");

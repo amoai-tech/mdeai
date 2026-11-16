@@ -1,4 +1,4 @@
-import { readRentalResultHints, readRentalResultIds } from "./generative-ui-context";
+import { readRentalResultHints, readRentalResultIds, readRentalRenderedCount } from "./generative-ui-context";
 import { isActiveRentalsDiscoveryPage, selectedDiscoveryEntityId } from "./discovery-agent-context";
 
 type MessageLike = { role?: string; content?: unknown };
@@ -145,11 +145,11 @@ const ORDINAL_ES = "(?:primer[oa]?|segund[oa]|tercer[oa]?|cuart[oa]|quint[oa]|se
  * week of November" is a calendar phrase, not a listing.
  */
 const VIEWING_ORDINAL = new RegExp(
-  `\\b${ORDINAL_EN}\\s+${APARTMENT_WORD_EN}\\b|\\b(?:el|la)\\s+${ORDINAL_ES}\\b|\\b${ORDINAL_ES}\\s+(?:apartamento|anuncio|opci[oó]n|resultado|lugar)\\b|\\b(?:apartments?|listings?|number|no\\.?|apartamento|#)\\s*#?\\d+\\b`,
+  `\\b${ORDINAL_EN}\\s+${APARTMENT_WORD_EN}\\b|\\b(?:el|la)\\s+${ORDINAL_ES}(?!\\s+(?:semana|d[ií]a|mes|a[nñ]o)\\b)\\b|\\b${ORDINAL_ES}\\s+(?:apartamento|anuncio|opci[oó]n|resultado|lugar)\\b|\\b(?:apartments?|listings?|number|no\\.?|apartamento|#)\\s*#?\\d+\\b`,
   "i",
 );
 /** Resolve only a published list position; never force the agent to substitute a different rental. */
-function publishedViewingPosition(text: string, publishedCount: number): boolean {
+function publishedViewingPosition(text: string, publishedCount: number, fullResultCount: number | null): boolean {
   const match = VIEWING_ORDINAL.exec(text);
   if (!match) return false;
   const reference = match[0].toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -158,6 +158,9 @@ function publishedViewingPosition(text: string, publishedCount: number): boolean
   if (numeric) {
     position = Number(numeric[0]);
   } else if (/\b(last|ultim[oa]?)\b/.test(reference)) {
+    // The Rentals page can contain far more rows than the published first-ten hints.
+    // Never silently substitute hint ten for the actual last apartment.
+    if (fullResultCount !== publishedCount) return false;
     position = publishedCount;
   } else {
     const english = ["first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth"];
@@ -195,7 +198,7 @@ export function shouldRenderViewingProposal({
   if (NEGATED_VIEWING_REQUEST.test(text)) return false;
   if (TIMING_QUESTION.test(text)) return false;
   const publishedIds = readRentalResultIds(agUiContext);
-  if (VIEWING_ORDINAL.test(text)) return publishedViewingPosition(text, publishedIds.length);
+  if (VIEWING_ORDINAL.test(text)) return publishedViewingPosition(text, publishedIds.length, readRentalRenderedCount(agUiContext));
   if (publishedIds.some((id) => text.includes(id))) return true;
   return VIEWING_DEICTIC.test(text) && Boolean(selectedDiscoveryEntityId(agUiContext));
 }
