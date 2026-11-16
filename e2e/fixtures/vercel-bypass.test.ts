@@ -4,9 +4,21 @@ import type { Page } from "@playwright/test";
 import {
   establishVercelAutomationBypass,
   validateVercelCandidateOrigin,
+  isVercelCandidateOrigin,
 } from "./vercel-bypass";
 
 describe("Vercel candidate origin validation", () => {
+  it("never silently treats a rejected Vercel branch alias as production", () => {
+    expect(isVercelCandidateOrigin("https://www.mdeai.co")).toBe(false);
+    expect(isVercelCandidateOrigin("https://mdeai-abc123-amo-agency.vercel.app")).toBe(true);
+    expect(() => isVercelCandidateOrigin(
+      "https://mdeai-git-fix-qa-vercel-amo-agency-host-amo-agency.vercel.app",
+    )).toThrow(/not trusted/);
+    expect(() => isVercelCandidateOrigin(
+      "https://mdeai-git-x-amo-agency.vercel.app",
+    )).toThrow(/not trusted/);
+  });
+
   it("accepts the exact MDE deployment host pattern", () => {
     expect(validateVercelCandidateOrigin("https://mdeai-abc123-amo-agency.vercel.app").origin).toBe(
       "https://mdeai-abc123-amo-agency.vercel.app",

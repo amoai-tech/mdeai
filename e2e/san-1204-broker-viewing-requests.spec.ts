@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
-import { establishVercelAutomationBypass, validateVercelCandidateOrigin } from "./fixtures/vercel-bypass";
+import { establishVercelAutomationBypass, isVercelCandidateOrigin } from "./fixtures/vercel-bypass";
 import {
   createThrowawayIdentity,
   deleteThrowawayIdentity,
@@ -70,17 +70,6 @@ function resolveBypassSecret(): string | undefined {
 
 const BYPASS_SECRET = resolveBypassSecret();
 
-/** Only a real MDE Vercel candidate needs the automation bypass; production does not. */
-// skipcq: JS-0067 - module-local helper
-function isVercelCandidate(origin: string): boolean {
-  try {
-    validateVercelCandidateOrigin(origin);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 /**
  * Hand the bypass secret to the candidate handshake only, then let the `_vercel_jwt` cookie set by
  * that response carry the session. Attaching the secret as context-wide `extraHTTPHeaders` would
@@ -88,7 +77,7 @@ function isVercelCandidate(origin: string): boolean {
  */
 // skipcq: JS-0067 - module-local helper
 async function openCandidate(page: Page, origin: string): Promise<void> {
-  if (!isVercelCandidate(origin)) return; // production is not protected
+  if (!isVercelCandidateOrigin(origin)) return; // only the public production domain is unprotected
   if (!BYPASS_SECRET) {
     // Fail loudly. Silently skipping would surface later as a Vercel login page, which reads
     // like a product defect rather than a missing secret.

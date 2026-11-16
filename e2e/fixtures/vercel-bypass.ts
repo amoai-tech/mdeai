@@ -72,6 +72,14 @@ async function requireVerifiedDeployment(candidate: URL, secret: string): Promis
   }
 }
 
+/** Unsupported Vercel aliases must FAIL, not silently run against the login page. */
+export function isVercelCandidateOrigin(rawUrl: string): boolean {
+  const url = new URL(rawUrl);
+  if (!url.hostname.toLowerCase().endsWith(".vercel.app")) return false;
+  validateVercelCandidateOrigin(rawUrl);
+  return true;
+}
+
 export async function establishVercelAutomationBypass(
   page: Page,
   rawCandidateUrl: string,
