@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { shouldRenderRentalFilterControl, shouldRequestRecommendations } from "../recommendation-intent";
+import { shouldRenderRentalFilterControl, shouldRenderViewingProposal, shouldRequestRecommendations } from "../recommendation-intent";
 import { RENTAL_A2UI_CONTEXT_DESCRIPTION } from "@/lib/rentals/a2ui-context";
 
 const page = (route: string) => ({
@@ -139,5 +139,31 @@ describe("SAN-1655 bedroom control intent", () => {
         requestContext: { get: () => undefined },
       }),
     ).toBe(false);
+  });
+});
+
+describe("shouldRenderViewingProposal (SAN-1658)", () => {
+  const run = (text: string, requestContext: unknown = hints, stepNumber = 0) =>
+    shouldRenderViewingProposal({ stepNumber, messages: ask(text), requestContext: requestContext as never });
+
+  it.each([
+    ["Request a viewing of the second apartment at 3:15 PM.", true],
+    ["Schedule a viewing for the first one", true],
+    ["Can you book a tour of this apartment?", true],
+    ["Agendar una visita del primer apartamento", true],
+  ])("%s -> %s", (text, expected) => {
+    expect(run(text)).toBe(expected);
+  });
+
+  it("leaves timing questions, unrelated requests and unreferenced requests to the model", () => {
+    expect(run("When can I view the second apartment?")).toBe(false);
+    expect(run("Show the second apartment as a card")).toBe(false);
+    expect(run("Schedule a viewing")).toBe(false);
+  });
+
+  it("fires only on the first step, on the Rentals page, with published results", () => {
+    expect(run("Request a viewing of the second apartment", hints, 1)).toBe(false);
+    expect(run("Request a viewing of the second apartment", page("/chat"))).toBe(false);
+    expect(run("Request a viewing of the second apartment", noHints)).toBe(false);
   });
 });

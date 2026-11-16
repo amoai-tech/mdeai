@@ -15,7 +15,8 @@ import { searchWebGroundedEventsTool } from '../tools/search-web-grounded-events
 import { requestVenueBookingTool } from '../tools/request-venue-booking';
 import { showRecommendationsTool } from '../tools/show-recommendations';
 import { showRentalFilterControlTool } from '../tools/show-rental-filter-control';
-import { shouldRenderRentalFilterControl, shouldRequestRecommendations } from '../lib/recommendation-intent';
+import { showViewingProposalTool } from '../tools/show-viewing-proposal';
+import { shouldRenderRentalFilterControl, shouldRenderViewingProposal, shouldRequestRecommendations } from '../lib/recommendation-intent';
 import { shouldSearchEventsForCards } from '../lib/event-intent';
 import { CONCIERGE_AGENT_MODEL } from "../lib/models";
 import { geminiMalformedFirstStepRetry } from "../lib/gemini-malformed-retry";
@@ -449,7 +450,7 @@ If the search returns zero results:
 Never reply with an empty list and no recovery.
 
 # Follow-up behavior
-- "request a viewing" / "schedule a viewing of <listing>" (an explicit request to schedule that names or selects one apartment, not a question about when) → when Generative UI is available and the apartment is identified by an exact ID (a numbered published result ID, so "the second apartment" is published ID 2, or a tool result in this run): follow the "Viewing requests" rule in the Generative UI guide and render one ViewingProposal with that exact id; do not search again. Reply with one short sentence saying a request is ready for the renter to review; never say it was booked, requested or confirmed, and do not state that the apartment can be scheduled. The proposal itself shows when an apartment cannot take a request. If the apartment is not among the published IDs or tool results, say so plainly and do not render the proposal.
+- "request a viewing" / "schedule a viewing of <listing>" (an explicit request to schedule that names or selects one apartment, not a question about when) → call showViewingProposal with that apartment's exact ID from the numbered published result IDs ("the second apartment" is published ID 2) and STOP; do not search again and never author render_ui for it. Pass date and time only when the renter stated them. Reply with one short sentence saying a request is ready for the renter to review; never say it was booked, requested or confirmed, and do not state that the apartment can be scheduled. The proposal itself shows when an apartment cannot take a request. If the tool says the apartment is not in the current results, say so plainly.
 - "when can I view" (a question about timing; an explicit request to schedule goes to the ViewingProposal rule above, which wins) → only when the listing's can_schedule_viewing is true: quote its availability window for selectedListingId (or top pick) + schedule_viewing_url. No tool call. The availability window is the MOVE-IN window, not the tour date: say that a tour can be requested now, before move-in, and never answer "when can I view" with the move-in date alone. When can_schedule_viewing is false or schedule_viewing_url is null, say plainly that no viewing can be requested for that rental yet and offer the next requestable listing.
 - "show me the details" / "open details" / "details for the first/second one" on rentals → this is a FRONTEND ACTION, not a search. When openRentalDetails is available, call it with the listingId (or the 1-based index) and STOP. Do NOT call search-rentals for a details request, and do not answer with a description instead of calling the tool. Use the first result when no listing is named. If the apartment or position is not in the current results, say so; never open a different listing.
 - Distinguish stay-DATE intent from LISTING-SEARCH intent, not by matching the word "rental". If the renter is choosing/changing dates without requesting apartment options (e.g. "suggest a rental stay starting Nov 12", "set my move-in date", "change my dates", "I want to stay Nov 12-18"), and suggestRentalDates is available, CALL suggestRentalDates with from as YYYY-MM-DD and through only if an end date was supplied, then STOP; do NOT call search-rentals or ask clarifying questions. If the renter requests apartments or rental listings (e.g. "find me a two-bedroom in Laureles for Nov 12-18", "show cheaper options for those dates", price or neighbourhood searches), it is a SEARCH even when it names dates: call search-rentals with dates as filters; NEVER open the calendar. When both intents appear, the listing request wins.
@@ -560,6 +561,7 @@ export const conciergeAgent = new Agent({
     requestVenueBooking: requestVenueBookingTool,
     showRecommendations: showRecommendationsTool,
     showRentalFilterControl: showRentalFilterControlTool,
+    showViewingProposal: showViewingProposalTool,
   },
   inputProcessors: [
     // SAN-737: the verified current selection, tool schemas and working memory must
@@ -576,6 +578,10 @@ export const conciergeAgent = new Agent({
     { id: 'san1655-filter-control-intent', processInputStep: ({ stepNumber, messages, requestContext }) =>
       shouldRenderRentalFilterControl({ stepNumber, messages, requestContext })
         ? { toolChoice: { type: 'tool' as const, toolName: 'showRentalFilterControl' } }
+        : {} },
+    { id: 'san1658-viewing-proposal-intent', processInputStep: ({ stepNumber, messages, requestContext }) =>
+      shouldRenderViewingProposal({ stepNumber, messages, requestContext })
+        ? { toolChoice: { type: 'tool' as const, toolName: 'showViewingProposal' } }
         : {} },
     { id: 'san1656-recommendation-intent', processInputStep: ({ stepNumber, messages, requestContext }) =>
       shouldRequestRecommendations({ stepNumber, messages, requestContext })
