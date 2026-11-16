@@ -25,6 +25,7 @@ import {
   DEFAULT_TEXT_SEARCH_MASK,
   PLACE_DETAILS_MVP_MASK,
   PlacesConfigError,
+  requirePlacesApiKey,
   buildPlaceDetailsMask,
   extractPlaceUri,
   getPlace,
@@ -58,6 +59,12 @@ describe("google-places-client field masks (MAP-004)", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
     resetPlacesClientForTests();
+  });
+
+  it("prefers the server-restricted key over a browser-places key", () => {
+    vi.stubEnv("GOOGLE_MAPS_SERVER_API_KEY", "server-key-1234567890");
+    vi.stubEnv("GOOGLE_PLACES_API_KEY", "browser-key-1234567890");
+    expect(requirePlacesApiKey()).toBe("server-key-1234567890");
   });
 
   it("searchText sends X-Goog-FieldMask with default mask", async () => {
