@@ -82,21 +82,32 @@ page.setDefaultTimeout(90_000);
 const viewport = /^(\d{3,4})x(\d{3,4})$/.exec(arg("viewport", "1440x900"));
 if (viewport) await page.setViewportSize({ width: Number(viewport[1]), height: Number(viewport[2]) });
 
+/**
+ * Send one prompt with exactly one Enter. Returns false when the composer never became
+ * ready or did not take the turn, so the caller records a failed case and the run
+ * continues: a user-facing dropped submission must be visible, but it must not erase
+ * the evidence for every remaining case.
+ */
 const ask = async (inputSelector, prompt) => {
   await waitForIdleComposer(page, inputSelector);
   await page.locator(inputSelector).fill(prompt);
   // Wait for the real composer to become ready. One Enter must dispatch the turn;
   // retries here would hide a user-facing dropped-submission bug.
   const sendTestId = inputSelector === "#rental-ask-input" ? "rental-ask-send" : "discovery-ask-send";
-  await page.locator(`[data-testid="${sendTestId}"]:not([disabled])`).waitFor({
-    state: "visible", timeout: 30_000,
-  });
-  await page.locator(inputSelector).press("Enter");
-  await page.waitForFunction(
-    (sel) => (document.querySelector(sel)?.value ?? "") === "",
-    inputSelector,
-    { timeout: 6_000 },
-  );
+  try {
+    await page.locator(`[data-testid="${sendTestId}"]:not([disabled])`).waitFor({
+      state: "visible", timeout: 30_000,
+    });
+    await page.locator(inputSelector).press("Enter");
+    await page.waitForFunction(
+      (sel) => (document.querySelector(sel)?.value ?? "") === "",
+      inputSelector,
+      { timeout: 6_000 },
+    );
+    return true;
+  } catch {
+    return false;
+  }
 };
 /** Start a clean conversation so each case proves its own selection, not a reused surface. */
 const resetConversation = async () => {
@@ -137,7 +148,11 @@ async function rentCase(c) {
     ),
   );
   const expected = native[c.index - 1] ?? null;
-  await ask("#rental-ask-input", c.prompt);
+  if (!(await ask("#rental-ask-input", c.prompt))) {
+    record({ id: c.id, nativeCount: native.length, expected, cards: [], details: null, status: "fail", reply: "composer did not take the turn after one Enter" });
+    await page.screenshot({ path: path.join(OUT, safeFileName(`${c.id}.png`)) });
+    return false;
+  }
   let cards = [];
   try {
     await page.waitForFunction(
@@ -241,7 +256,11 @@ async function eventCase(c) {
   const expectedTitle = c.index ? sourceTitles[c.index - 1] ?? null : null;
   const expectedSourceId = c.index ? sourceIds[c.index - 1] ?? null : null;
   await resetConversation();
-  await ask('[data-testid="discovery-ask-input"]', c.prompt);
+  if (!(await ask('[data-testid="discovery-ask-input"]', c.prompt))) {
+    record({ id: c.id, expectedSourceTitle: expectedTitle, expectedSourceId, cards: [], detailsEventId: null, detailsTitle: null, status: "fail", reply: "composer did not take the turn after one Enter" });
+    await page.screenshot({ path: path.join(OUT, safeFileName(`${c.id}.png`)) });
+    return false;
+  }
   // Enter is ignored until the composer is ready; confirm the turn was accepted.
   await page.waitForFunction(
     (prompt) => {

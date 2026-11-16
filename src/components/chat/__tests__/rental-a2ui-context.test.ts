@@ -31,7 +31,7 @@ describe("rental A2UI agent context", () => {
       neighborhood: "Laureles",
       nightly_price: 1,
     }));
-    // The page shows up to ten apartments, so "show the sixth" must be reachable.
+    // "Show the sixth" must be reachable; later positions are bounded, not denied.
     expect(JSON.parse(rentalA2UIContextValue(many))).toHaveLength(RENTAL_HINT_MAX);
     expect(RENTAL_HINT_MAX).toBeGreaterThanOrEqual(10);
     expect(JSON.parse(rentalA2UIContextValue(undefined))).toEqual([]);
@@ -47,7 +47,10 @@ describe("rental A2UI agent context", () => {
       context: [{ description: RENTAL_A2UI_CONTEXT_DESCRIPTION, value: JSON.stringify(ids) }],
     });
     expect(hints).toContain("6. id-6");
-    expect(hints).toContain("Exactly 6 position(s)");
+    expect(hints).toContain("Only the first 6 result(s) can be addressed here");
+    expect(hints).toMatch(/can still open any apartment from the page/i);
     expect(hints).toMatch(/never show a different apartment in its place/i);
+    // It must not claim a later apartment is absent from the page.
+    expect(hints).not.toMatch(/not in the current results/i);
   });
 });

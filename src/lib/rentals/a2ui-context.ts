@@ -4,10 +4,11 @@
  * instructions look for the same string. Keep them from drifting apart.
  */
 /**
- * How many result IDs the browser publishes and the server accepts. The Rentals
- * page shows up to ten apartments and a renter may ask for any of them ("show the
- * sixth"); a smaller cap made every later position unreachable, so the model
- * silently showed the last apartment it knew instead of the one requested.
+ * How many result IDs the browser publishes and the server accepts. The Rentals page can
+ * render up to 100 apartments, but a renter asks for the early ones ("show the sixth"); a
+ * cap of 5 made even those unreachable, so the model silently showed the last apartment
+ * it knew. Later positions are not published: the hint text says so instead of claiming
+ * the apartment is absent.
  */
 export const RENTAL_HINT_MAX = 10;
 
