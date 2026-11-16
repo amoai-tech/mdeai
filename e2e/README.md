@@ -221,6 +221,20 @@ SAN1205_JOURNEY_E2E=1 SAN1205_ALLOW_PRODUCTION_WRITES=1 \
   PROD_SMOKE_BASE_URL=https://www.mdeai.co npm run test:e2e:rental-viewing
 ```
 
+**Protected Vercel candidate QA (local):** `PROD_SMOKE_BASE_URL` must be the exact
+immutable `mdeai-<deployment-hash>-amo-agency.vercel.app` URL, not a branch
+alias. In addition to the existing Supabase QA variables, provide
+`VERCEL_AUTOMATION_BYPASS_SECRET` and `VERCEL_TOKEN` in your ignored local
+environment; the Vercel token is used **only for a read-only identity lookup**
+that confirms the project, team and exact deployment URL before the bypass
+secret is sent. **Both** `npm run test:e2e:rental-viewing` and
+`npm run test:e2e:prod-candidate-certification` require those credentials
+when targeting a protected candidate. Production URLs do not need this bypass.
+GitHub's release-certification workflow instead supplies a trusted exact-deployment
+proof, so its Playwright step does not receive `VERCEL_TOKEN`. Never commit or
+print these values. If validation fails, stop rather than retry against a
+branch alias or disabling deployment protection.
+
 **Do not use the write command as a routine production smoke.** Check the
 current worktree, environment and persisted cleanup preconditions first; keep
 normal production checks read-only. A green local result is never a deployment

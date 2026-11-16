@@ -47,6 +47,11 @@ test.describe("SAN-1330 staged production candidate certification", () => {
   test("proves public pages, auth, CopilotKit runtime, one durable turn, and cleanup", async ({ page }) => {
     test.setTimeout(300_000);
     expect(bypassSecret, "VERCEL_AUTOMATION_BYPASS_SECRET is required").not.toBe("");
+    expect(
+      Boolean(process.env.VERCEL_TOKEN?.trim()) ||
+        Boolean(process.env.MDE_QA_VERCEL_PROOF?.trim() && process.env.MDE_QA_VERCEL_DEPLOYMENT_ID?.trim()),
+      "Protected candidate QA requires VERCEL_TOKEN locally; CI supplies an exact-deployment proof",
+    ).toBe(true);
     expect(hasE2eEnv(), "Supabase QA credentials are required for candidate certification").toBe(true);
 
     await establishVercelAutomationBypass(page, baseUrl, bypassSecret);

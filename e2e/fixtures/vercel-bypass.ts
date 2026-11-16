@@ -1,6 +1,13 @@
+import { createHmac, timingSafeEqual } from "node:crypto";
 import type { Page } from "@playwright/test";
 
-const MDE_VERCEL_HOST = /^mdeai-[a-z0-9-]+-amo-agency\.vercel\.app$/i;
+// Only immutable deployment URLs. A matching hostname is NOT proof of ownership.
+const MDE_VERCEL_HOST = /^mdeai-[a-z0-9]{4,64}-amo-agency\.vercel\.app$/i;
+const PROJECT_ID = "prj_iadSvJDW4MBqtQ5s3YPlBNc08it6";
+const TEAM_ID = "team_PbKG2U0lCR67rN57C4fqcfaw";
+const DEPLOYMENT_ID = /^dpl_[A-Za-z0-9]{20,}$/;
+// Fixed API authority and scoped project; never use a candidate URL as a request destination.
+const VERCEL_DEPLOYMENTS_URL = `https://api.vercel.com/v6/deployments?projectId=${PROJECT_ID}&teamId=${TEAM_ID}&limit=100`;
 
 export function validateVercelCandidateOrigin(rawUrl: string): URL {
   const url = new URL(rawUrl);
@@ -14,6 +21,101 @@ export function validateVercelCandidateOrigin(rawUrl: string): URL {
   return url;
 }
 
+// No bypass secret leaves this process until Vercel confirms the exact deployment.
+async function requireVerifiedDeployment(candidate: URL, secret: string): Promise<void> {
+  // CI: the separate trusted main checkout verifies the Vercel project and URL,
+  // then signs the exact candidate. The test receives a signature, not VERCEL_TOKEN.
+  const proof = process.env.MDE_QA_VERCEL_PROOF?.trim() ?? "";
+  const deploymentId = process.env.MDE_QA_VERCEL_DEPLOYMENT_ID?.trim() ?? "";
+  if (proof || deploymentId) {
+    if (!DEPLOYMENT_ID.test(deploymentId) || !/^[0-9a-f]{64}$/i.test(proof)) {
+      throw new Error("CERTIFICATION_TARGET_INVALID: incomplete Vercel deployment proof");
+    }
+    const payload = ["mdeai-vercel-bypass-v1", PROJECT_ID, TEAM_ID, deploymentId, candidate.origin].join("\n");
+    const expected = createHmac("sha256", secret).update(payload).digest();
+    const supplied = Buffer.from(proof, "hex");
+    if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) {
+      throw new Error("CERTIFICATION_TARGET_INVALID: Vercel deployment proof does not match candidate");
+    }
+    return;
+  }
+
+  // Local developer QA: use the read-only Vercel API lookup instead. Never send
+  // the Vercel bearer token to the preview; only to api.vercel.com.
+  const token = process.env.VERCEL_TOKEN?.trim();
+  if (!token) {
+    throw new Error("CERTIFICATION_TARGET_INVALID: Vercel deployment identity not verified (proof or VERCEL_TOKEN required)");
+  }
+  type Deployment = {
+    uid?: unknown; projectId?: unknown; accountId?: unknown;
+    url?: unknown; readyState?: unknown;
+  };
+  let deployment: Deployment | undefined;
+  let until: number | undefined;
+  let reachedEnd = false;
+  // Vercel's list API pages by creation timestamp; do not confuse a valid
+  // older deployment with an untrusted one just because it is past page 1.
+  // The URL's scheme/host/path and project/team are fixed in source.
+  for (let page = 0; page < 50; page += 1) {
+    const url = new URL(VERCEL_DEPLOYMENTS_URL);
+    if (until !== undefined) url.searchParams.set("until", String(until));
+    let raw: unknown;
+    try {
+      const response = await fetch(url, {
+        headers: { authorization: `Bearer ${token}` },
+        redirect: "error",
+        signal: AbortSignal.timeout(12_000),
+      });
+      if (!response.ok) throw new Error("Vercel API request failed");
+      raw = await response.json();
+    } catch {
+      throw new Error("CERTIFICATION_TARGET_INVALID: Vercel deployment identity lookup failed");
+    }
+    const list = raw as {
+      deployments?: Deployment[];
+      pagination?: { next?: unknown };
+    } | null;
+    if (!Array.isArray(list?.deployments)) {
+      throw new Error("CERTIFICATION_TARGET_INVALID: invalid Vercel deployment identity response");
+    }
+    deployment = list.deployments.find(
+      (entry) => typeof entry?.url === "string" && entry.url.toLowerCase() === candidate.hostname,
+    );
+    if (deployment) break;
+
+    const next = list.pagination?.next;
+    if (next == null) {
+      reachedEnd = true;
+      break;
+    }
+    if (typeof next !== "number" || !Number.isSafeInteger(next) || next <= 0 ||
+        (until !== undefined && next >= until)) {
+      throw new Error("CERTIFICATION_TARGET_INVALID: invalid Vercel deployment pagination");
+    }
+    until = next;
+  }
+  if (!deployment) {
+    throw new Error(reachedEnd
+      ? "CERTIFICATION_TARGET_INVALID: candidate deployment not found in the MDE Vercel project"
+      : "CERTIFICATION_TARGET_INVALID: Vercel deployment identity lookup exceeded safe page limit");
+  }
+  if (!deployment || typeof deployment.uid !== "string" || !DEPLOYMENT_ID.test(deployment.uid) ||
+      deployment.projectId !== PROJECT_ID ||
+      (deployment.accountId != null && deployment.accountId !== TEAM_ID) ||
+      typeof deployment.url !== "string" || deployment.url.toLowerCase() !== candidate.hostname ||
+      deployment.readyState !== "READY") {
+    throw new Error("CERTIFICATION_TARGET_INVALID: Vercel deployment does not belong to the approved MDE project");
+  }
+}
+
+/** Unsupported Vercel aliases must FAIL, not silently run against the login page. */
+export function isVercelCandidateOrigin(rawUrl: string): boolean {
+  const url = new URL(rawUrl);
+  if (!url.hostname.toLowerCase().endsWith(".vercel.app")) return false;
+  validateVercelCandidateOrigin(rawUrl);
+  return true;
+}
+
 export async function establishVercelAutomationBypass(
   page: Page,
   rawCandidateUrl: string,
@@ -21,6 +123,7 @@ export async function establishVercelAutomationBypass(
 ): Promise<void> {
   if (!secret.trim()) throw new Error("Vercel automation bypass secret is required");
   const candidate = validateVercelCandidateOrigin(rawCandidateUrl);
+  await requireVerifiedDeployment(candidate, secret);
   const response = await page.request.get(`${candidate.origin}/`, {
     failOnStatusCode: false,
     maxRedirects: 0,

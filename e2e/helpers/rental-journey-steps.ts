@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { chooseViewingDateTime, advanceViewingReview } from "./viewing-date-picker";
 import { expect, type Browser, type Locator, type Page } from "@playwright/test";
-import { establishVercelAutomationBypass, validateVercelCandidateOrigin } from "../fixtures/vercel-bypass";
+import { establishVercelAutomationBypass, isVercelCandidateOrigin } from "../fixtures/vercel-bypass";
 import { getTestSession, signInAsOnOrigin } from "./auth";
 import {
   asUser,
@@ -36,11 +36,7 @@ export function futureLocalSlot(daysAhead: number): string {
 
 /** Only a real MDE Vercel preview needs the automation bypass; production does not. */
 export async function openCandidate(page: Page): Promise<void> {
-  try {
-    validateVercelCandidateOrigin(ORIGIN);
-  } catch {
-    return;
-  }
+  if (!isVercelCandidateOrigin(ORIGIN)) return;
   const secret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim();
   if (!secret) {
     throw new Error("VERCEL_AUTOMATION_BYPASS_SECRET is required to reach a Vercel preview");
