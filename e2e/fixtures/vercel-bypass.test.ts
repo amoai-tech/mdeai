@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Page } from "@playwright/test";
 import {
   establishVercelAutomationBypass,
@@ -55,6 +55,8 @@ const CANDIDATE = "https://mdeai-abc123-amo-agency.vercel.app";
 const BYPASS_COOKIE = { name: "_vercel_jwt" };
 
 describe("establishVercelAutomationBypass", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
   it("sends the secret only to candidate root with redirects disabled", async () => {
     const { page, get, cookies } = fakePage(200, [BYPASS_COOKIE]);
 
@@ -91,7 +93,8 @@ describe("establishVercelAutomationBypass", () => {
   });
 
   it("accepts an unprotected deployment after an unauthenticated exact-app version probe", async () => {
-    const sha = process.env.VERCEL_DEPLOYMENT_SHA || "a".repeat(40);
+    const sha = "a".repeat(40);
+    vi.stubEnv("VERCEL_DEPLOYMENT_SHA", `  ${sha}  `);
     const { page, get } = fakePage(200, [], { status: 200, sha });
     await expect(establishVercelAutomationBypass(page, CANDIDATE, "test-secret")).resolves.toBeUndefined();
     expect(get).toHaveBeenCalledTimes(2);
@@ -99,6 +102,16 @@ describe("establishVercelAutomationBypass", () => {
       failOnStatusCode: false,
       maxRedirects: 0,
     });
+  });
+
+  it("rejects a different deployed SHA with a diagnostic reason", async () => {
+    const expectedSha = "a".repeat(40);
+    const observedSha = "b".repeat(40);
+    vi.stubEnv("VERCEL_DEPLOYMENT_SHA", `  ${expectedSha}  `);
+    const { page } = fakePage(200, [], { status: 200, sha: observedSha });
+
+    await expect(establishVercelAutomationBypass(page, CANDIDATE, "test-secret"))
+      .rejects.toThrow(`SHA mismatch: observed ${observedSha}, expected ${expectedSha}`);
   });
 
   it("rejects a non-MDE 200 response without a bypass cookie", async () => {

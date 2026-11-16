@@ -47,19 +47,28 @@ export async function establishVercelAutomationBypass(
   });
   const probeStatus = probe.status();
   let verifiedApp = false;
-  if (probeStatus === 200 && probe.headers()["content-type"]?.includes("application/json")) {
-    try {
-      const data: unknown = await probe.json();
-      if (data && typeof data === "object" && "sha" in data) {
-        const sha = (data as { sha: unknown }).sha;
+  let failureReason = `HTTP ${probeStatus}`;
+  if (probeStatus === 200) {
+    const contentType = probe.headers()["content-type"] ?? "missing";
+    if (!contentType.includes("application/json")) {
+      failureReason = `unexpected content-type ${contentType}`;
+    } else {
+      try {
+        const data: unknown = await probe.json();
+        const sha = data && typeof data === "object" && "sha" in data
+          ? (data as { sha: unknown }).sha
+          : undefined;
         const expectedSha = process.env.VERCEL_DEPLOYMENT_SHA?.trim();
-        verifiedApp =
-          typeof sha === "string" &&
-          /^[a-f0-9]{40}$/.test(sha) &&
-          (!expectedSha || sha === expectedSha);
+        if (typeof sha !== "string" || !/^[a-f0-9]{40}$/.test(sha)) {
+          failureReason = "invalid or missing app SHA";
+        } else if (expectedSha && sha !== expectedSha) {
+          failureReason = `SHA mismatch: observed ${sha}, expected ${expectedSha}`;
+        } else {
+          verifiedApp = true;
+        }
+      } catch {
+        failureReason = "invalid JSON response";
       }
-    } catch {
-      // An HTML protection page (or malformed response) is never application proof.
     }
   }
   if (!verifiedApp) {
@@ -67,7 +76,7 @@ export async function establishVercelAutomationBypass(
       `CERTIFICATION_TARGET_INVALID: Vercel bypass cookie was not established for ` +
         `${candidate.origin}. Setup returned ${status}; cookies present: ` +
         `${cookies.map((cookie) => cookie.name).join(", ") || "none"}. ` +
-        `Unauthenticated app identity probe returned ${probeStatus}; ` +
+        `Unauthenticated app identity probe failed: ${failureReason} (HTTP ${probeStatus}); ` +
         `the candidate cannot be certified without reaching MDE.`,
     );
   }
