@@ -179,6 +179,24 @@ jobs:
       - name: Install Playwright Chromium
         run: npx playwright install chromium --with-deps
 
+      # Main-branch release-control has already proved project ID + deployment URL via Vercel API.
+      # Sign that exact candidate rather than exposing VERCEL_TOKEN to candidate test code.
+      - name: Sign verified Vercel QA candidate
+        id: qa_identity
+        env:
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: |
+          node --input-type=module -e '
+            import { createHmac } from "node:crypto";
+            import { appendFileSync } from "node:fs";
+            import { PROJECT_ID, TEAM_ID } from "./.trusted/scripts/vercel-release-control.mjs";
+            const url = new URL(process.env.VERCEL_DEPLOYMENT_URL);
+            const id = process.env.VERCEL_DEPLOYMENT_ID;
+            if (!/^dpl_[A-Za-z0-9]{20,}$/.test(id ?? "")) throw new Error("invalid QA deployment id");
+            const payload = ["mdeai-vercel-bypass-v1", PROJECT_ID, TEAM_ID, id, url.origin].join("\n");
+            const proof = createHmac("sha256", process.env.VERCEL_AUTOMATION_BYPASS_SECRET).update(payload).digest("hex");
+            appendFileSync(process.env.GITHUB_OUTPUT, "proof=" + proof + "\n");
+          '
       - name: Certify exact staged candidate
         id: certify
         env:
@@ -186,6 +204,8 @@ jobs:
           SMOKE_BASE_URL: ${{ env.VERCEL_DEPLOYMENT_URL }}
           PW_SKIP_WEBSERVER: "1"
           VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+          MDE_QA_VERCEL_DEPLOYMENT_ID: ${{ env.VERCEL_DEPLOYMENT_ID }}
+          MDE_QA_VERCEL_PROOF: ${{ steps.qa_identity.outputs.proof }}
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}

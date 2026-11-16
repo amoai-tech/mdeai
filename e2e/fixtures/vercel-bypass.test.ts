@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createHmac } from "node:crypto";
 import type { Page } from "@playwright/test";
 import {
   establishVercelAutomationBypass,
@@ -14,6 +15,10 @@ describe("Vercel candidate origin validation", () => {
 
   for (const url of [
     "https://mdeai-abc123-amoco.vercel.app",
+    "https://mdeai-git-x-amo-agency.vercel.app",
+    "https://mdeai-abc123-extra-amo-agency.vercel.app",
+    "https://mdeai-abc123-agency.vercel.app",
+    "https://mdeai-git-feature-amo-agency.vercel.app",
     "http://mdeai-abc123-amo-agency.vercel.app",
     "https://mdeai-abc123-amo-agency.vercel.app.attacker.example",
     "https://other-abc123-amo-agency.vercel.app",
@@ -42,6 +47,25 @@ function fakePage(status: number, cookieAfterSetup: FakeCookie[] = []) {
 
 const CANDIDATE = "https://mdeai-abc123-amo-agency.vercel.app";
 const BYPASS_COOKIE = { name: "_vercel_jwt" };
+
+const DEPLOYMENT_ID = "dpl_1234567890123456789012";
+const SECRET = "test-secret";
+const signedProof = (origin = CANDIDATE) => createHmac("sha256", SECRET).update([
+  "mdeai-vercel-bypass-v1",
+  "prj_iadSvJDW4MBqtQ5s3YPlBNc08it6",
+  "team_PbKG2U0lCR67rN57C4fqcfaw",
+  DEPLOYMENT_ID,
+  origin,
+].join("\n")).digest("hex");
+
+beforeEach(() => {
+  vi.stubEnv("MDE_QA_VERCEL_PROOF", signedProof());
+  vi.stubEnv("MDE_QA_VERCEL_DEPLOYMENT_ID", DEPLOYMENT_ID);
+});
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
+});
 
 describe("establishVercelAutomationBypass", () => {
   it("sends the secret only to candidate root with redirects disabled", async () => {
@@ -101,6 +125,74 @@ describe("establishVercelAutomationBypass", () => {
     await expect(
       establishVercelAutomationBypass(page, CANDIDATE, "test-secret"),
     ).rejects.toThrow(/CERTIFICATION_TARGET_INVALID[\s\S]*returned 403/);
+  });
+
+
+  it("does not send the secret to an attacker origin with an MDE-looking suffix", async () => {
+    const { page, get } = fakePage(200, [BYPASS_COOKIE]);
+    await expect(establishVercelAutomationBypass(
+      page, "https://mdeai-attacker7-amo-agency.vercel.app", SECRET,
+    )).rejects.toThrow(/proof does not match candidate/);
+    expect(get).not.toHaveBeenCalled();
+  });
+
+  it("fails closed for a forged or missing deployment proof", async () => {
+    const { page, get } = fakePage(200, [BYPASS_COOKIE]);
+    vi.stubEnv("MDE_QA_VERCEL_PROOF", "a".repeat(64));
+    await expect(establishVercelAutomationBypass(page, CANDIDATE, SECRET))
+      .rejects.toThrow(/proof does not match candidate/);
+    vi.stubEnv("MDE_QA_VERCEL_PROOF", "");
+    vi.stubEnv("MDE_QA_VERCEL_DEPLOYMENT_ID", "");
+    vi.stubEnv("VERCEL_TOKEN", "");
+    await expect(establishVercelAutomationBypass(page, CANDIDATE, SECRET))
+      .rejects.toThrow(/identity not verified/);
+    expect(get).not.toHaveBeenCalled();
+  });
+
+  it("verifies the Vercel project and URL through the API for local QA", async () => {
+    vi.stubEnv("MDE_QA_VERCEL_PROOF", "");
+    vi.stubEnv("MDE_QA_VERCEL_DEPLOYMENT_ID", "");
+    vi.stubEnv("VERCEL_TOKEN", "local-read-token");
+    const lookup = vi.fn().mockResolvedValue({ ok: true, json: async () => ({
+      id: DEPLOYMENT_ID, projectId: "prj_iadSvJDW4MBqtQ5s3YPlBNc08it6",
+      accountId: "team_PbKG2U0lCR67rN57C4fqcfaw",
+      url: "mdeai-abc123-amo-agency.vercel.app", readyState: "READY",
+    }) });
+    vi.stubGlobal("fetch", lookup);
+    const { page, get } = fakePage(200, [BYPASS_COOKIE]);
+    await expect(establishVercelAutomationBypass(page, CANDIDATE, SECRET)).resolves.toBeUndefined();
+    expect(lookup).toHaveBeenCalledWith(
+      expect.stringContaining("https://api.vercel.com/v13/deployments/mdeai-abc123-amo-agency.vercel.app"),
+      expect.objectContaining({ redirect: "error", headers: { authorization: "Bearer local-read-token" } }),
+    );
+    expect(get).toHaveBeenCalledTimes(1);
+  });
+
+  it("denies a wrong Vercel project before browser requests or secret disclosure", async () => {
+    vi.stubEnv("MDE_QA_VERCEL_PROOF", "");
+    vi.stubEnv("MDE_QA_VERCEL_DEPLOYMENT_ID", "");
+    vi.stubEnv("VERCEL_TOKEN", "local-read-token");
+    const lookup = vi.fn().mockResolvedValue({ ok: true, json: async () => ({
+      id: DEPLOYMENT_ID, projectId: "prj_attacker", accountId: "team_attacker",
+      url: "mdeai-abc123-amo-agency.vercel.app", readyState: "READY",
+    }) });
+    vi.stubGlobal("fetch", lookup);
+    const { page, get } = fakePage(200, [BYPASS_COOKIE]);
+    await expect(establishVercelAutomationBypass(page, CANDIDATE, SECRET))
+      .rejects.toThrow(/does not belong to the approved MDE project/);
+    expect(get).not.toHaveBeenCalled();
+    expect(JSON.stringify(lookup.mock.calls)).not.toContain(SECRET);
+  });
+
+  it("fails closed when the Vercel API returns 403", async () => {
+    vi.stubEnv("MDE_QA_VERCEL_PROOF", "");
+    vi.stubEnv("MDE_QA_VERCEL_DEPLOYMENT_ID", "");
+    vi.stubEnv("VERCEL_TOKEN", "local-read-token");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 403 }));
+    const { page, get } = fakePage(200, [BYPASS_COOKIE]);
+    await expect(establishVercelAutomationBypass(page, CANDIDATE, SECRET))
+      .rejects.toThrow(/lookup returned 403/);
+    expect(get).not.toHaveBeenCalled();
   });
 
   it("fails on a server error before inspecting cookies", async () => {
