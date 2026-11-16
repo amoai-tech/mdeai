@@ -33,8 +33,19 @@ type FakeCookie = { name: string };
  * setup request and the browser context's cookie jar. `cookieAfterSetup` is
  * what Vercel would have set in this context by the time the request returns.
  */
-function fakePage(status: number, cookieAfterSetup: FakeCookie[] = []) {
-  const get = vi.fn().mockResolvedValue({ status: () => status });
+function fakePage(
+  status: number,
+  cookieAfterSetup: FakeCookie[] = [],
+  probe: { status: number; sha?: string; contentType?: string } = { status: 302 },
+) {
+  const get = vi
+    .fn()
+    .mockResolvedValueOnce({ status: () => status })
+    .mockResolvedValueOnce({
+      status: () => probe.status,
+      headers: () => ({ "content-type": probe.contentType ?? "application/json" }),
+      json: async () => ({ sha: probe.sha }),
+    });
   const cookies = vi.fn().mockResolvedValue(cookieAfterSetup);
   const page = { request: { get }, context: () => ({ cookies }) } as unknown as Page;
   return { page, get, cookies };
@@ -77,6 +88,33 @@ describe("establishVercelAutomationBypass", () => {
       /bypass secret is required/i,
     );
     expect(get).not.toHaveBeenCalled();
+  });
+
+  it("accepts an unprotected deployment after an unauthenticated exact-app version probe", async () => {
+    const sha = process.env.VERCEL_DEPLOYMENT_SHA || "a".repeat(40);
+    const { page, get } = fakePage(200, [], { status: 200, sha });
+    await expect(establishVercelAutomationBypass(page, CANDIDATE, "test-secret")).resolves.toBeUndefined();
+    expect(get).toHaveBeenCalledTimes(2);
+    expect(get).toHaveBeenNthCalledWith(2, `${CANDIDATE}/api/version`, {
+      failOnStatusCode: false,
+      maxRedirects: 0,
+    });
+  });
+
+  it("rejects a non-MDE 200 response without a bypass cookie", async () => {
+    const { page } = fakePage(200, [], { status: 200, sha: "not-a-commit" });
+    await expect(establishVercelAutomationBypass(page, CANDIDATE, "test-secret"))
+      .rejects.toThrow(/CERTIFICATION_TARGET_INVALID/);
+  });
+
+  it("rejects a JSON-impersonating protection page without a bypass cookie", async () => {
+    const { page } = fakePage(200, [], {
+      status: 200,
+      sha: "a".repeat(40),
+      contentType: "text/html",
+    });
+    await expect(establishVercelAutomationBypass(page, CANDIDATE, "test-secret"))
+      .rejects.toThrow(/CERTIFICATION_TARGET_INVALID/);
   });
 
   it("fails as an invalid target when the response is 200 but no bypass cookie was set", async () => {
