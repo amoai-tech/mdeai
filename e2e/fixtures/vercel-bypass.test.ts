@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createHmac } from "node:crypto";
+import { createHmac, randomBytes } from "node:crypto";
 import type { Page } from "@playwright/test";
 import {
   establishVercelAutomationBypass,
@@ -61,7 +61,8 @@ const CANDIDATE = "https://mdeai-abc123-amo-agency.vercel.app";
 const BYPASS_COOKIE = { name: "_vercel_jwt" };
 
 const DEPLOYMENT_ID = "dpl_1234567890123456789012";
-const SECRET = "test-secret";
+const SECRET = randomBytes(32).toString("hex");
+const LOCAL_API_TOKEN = randomBytes(24).toString("hex");
 const signedProof = (origin = CANDIDATE) => createHmac("sha256", SECRET).update([
   "mdeai-vercel-bypass-v1",
   "prj_iadSvJDW4MBqtQ5s3YPlBNc08it6",
@@ -83,14 +84,14 @@ describe("establishVercelAutomationBypass", () => {
   it("sends the secret only to candidate root with redirects disabled", async () => {
     const { page, get, cookies } = fakePage(200, [BYPASS_COOKIE]);
 
-    await establishVercelAutomationBypass(page, CANDIDATE, "test-secret");
+    await establishVercelAutomationBypass(page, CANDIDATE, SECRET);
 
     expect(get).toHaveBeenCalledTimes(1);
     expect(get).toHaveBeenCalledWith(`${CANDIDATE}/`, {
       failOnStatusCode: false,
       maxRedirects: 0,
       headers: {
-        "x-vercel-protection-bypass": "test-secret",
+        "x-vercel-protection-bypass": SECRET,
         "x-vercel-set-bypass-cookie": "true",
       },
     });
@@ -103,7 +104,7 @@ describe("establishVercelAutomationBypass", () => {
     // so a 3xx with the cookie present is success, not failure.
     const { page } = fakePage(307, [BYPASS_COOKIE]);
     await expect(
-      establishVercelAutomationBypass(page, CANDIDATE, "test-secret"),
+      establishVercelAutomationBypass(page, CANDIDATE, SECRET),
     ).resolves.toBeUndefined();
   });
 
@@ -118,7 +119,7 @@ describe("establishVercelAutomationBypass", () => {
   it("fails as an invalid target when the response is 200 but no bypass cookie was set", async () => {
     const { page } = fakePage(200, [{ name: "unrelated" }]);
     await expect(
-      establishVercelAutomationBypass(page, CANDIDATE, "test-secret"),
+      establishVercelAutomationBypass(page, CANDIDATE, SECRET),
     ).rejects.toThrow(/CERTIFICATION_TARGET_INVALID: Vercel bypass cookie was not established/);
   });
 
@@ -128,14 +129,14 @@ describe("establishVercelAutomationBypass", () => {
     // Vercel's login page.
     const { page } = fakePage(302);
     await expect(
-      establishVercelAutomationBypass(page, CANDIDATE, "test-secret"),
+      establishVercelAutomationBypass(page, CANDIDATE, SECRET),
     ).rejects.toThrow(/CERTIFICATION_TARGET_INVALID[\s\S]*returned 302/);
   });
 
   it("fails loudly when Vercel refuses bypass setup with 403", async () => {
     const { page } = fakePage(403);
     await expect(
-      establishVercelAutomationBypass(page, CANDIDATE, "test-secret"),
+      establishVercelAutomationBypass(page, CANDIDATE, SECRET),
     ).rejects.toThrow(/CERTIFICATION_TARGET_INVALID[\s\S]*returned 403/);
   });
 
@@ -164,7 +165,7 @@ describe("establishVercelAutomationBypass", () => {
   it("verifies the Vercel project and URL through the API for local QA", async () => {
     vi.stubEnv("MDE_QA_VERCEL_PROOF", "");
     vi.stubEnv("MDE_QA_VERCEL_DEPLOYMENT_ID", "");
-    vi.stubEnv("VERCEL_TOKEN", "local-read-token");
+    vi.stubEnv("VERCEL_TOKEN", LOCAL_API_TOKEN);
     const lookup = vi.fn().mockResolvedValue({ ok: true, json: async () => ({
       id: DEPLOYMENT_ID, projectId: "prj_iadSvJDW4MBqtQ5s3YPlBNc08it6",
       accountId: "team_PbKG2U0lCR67rN57C4fqcfaw",
@@ -178,12 +179,13 @@ describe("establishVercelAutomationBypass", () => {
       expect.objectContaining({ redirect: "error", headers: { authorization: "Bearer local-read-token" } }),
     );
     expect(get).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(lookup.mock.calls)).not.toContain(SECRET);
   });
 
   it("denies a wrong Vercel project before browser requests or secret disclosure", async () => {
     vi.stubEnv("MDE_QA_VERCEL_PROOF", "");
     vi.stubEnv("MDE_QA_VERCEL_DEPLOYMENT_ID", "");
-    vi.stubEnv("VERCEL_TOKEN", "local-read-token");
+    vi.stubEnv("VERCEL_TOKEN", LOCAL_API_TOKEN);
     const lookup = vi.fn().mockResolvedValue({ ok: true, json: async () => ({
       id: DEPLOYMENT_ID, projectId: "prj_attacker", accountId: "team_attacker",
       url: "mdeai-abc123-amo-agency.vercel.app", readyState: "READY",
@@ -199,18 +201,18 @@ describe("establishVercelAutomationBypass", () => {
   it("fails closed when the Vercel API returns 403", async () => {
     vi.stubEnv("MDE_QA_VERCEL_PROOF", "");
     vi.stubEnv("MDE_QA_VERCEL_DEPLOYMENT_ID", "");
-    vi.stubEnv("VERCEL_TOKEN", "local-read-token");
+    vi.stubEnv("VERCEL_TOKEN", LOCAL_API_TOKEN);
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 403 }));
     const { page, get } = fakePage(200, [BYPASS_COOKIE]);
     await expect(establishVercelAutomationBypass(page, CANDIDATE, SECRET))
-      .rejects.toThrow(/lookup returned 403/);
+      .rejects.toThrow(/deployment identity lookup failed/);
     expect(get).not.toHaveBeenCalled();
   });
 
   it("fails on a server error before inspecting cookies", async () => {
     const { page, cookies } = fakePage(503, [BYPASS_COOKIE]);
     await expect(
-      establishVercelAutomationBypass(page, CANDIDATE, "test-secret"),
+      establishVercelAutomationBypass(page, CANDIDATE, SECRET),
     ).rejects.toThrow(/CERTIFICATION_TARGET_INVALID: bypass setup returned 503/);
     expect(cookies).not.toHaveBeenCalled();
   });

@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { vercelGet } from "../../scripts/vercel-release-control.mjs";
 import type { Page } from "@playwright/test";
 
 // Only immutable deployment URLs. A matching hostname is NOT proof of ownership.
@@ -44,23 +45,17 @@ async function requireVerifiedDeployment(candidate: URL, secret: string): Promis
   if (!token) {
     throw new Error("CERTIFICATION_TARGET_INVALID: Vercel deployment identity not verified (proof or VERCEL_TOKEN required)");
   }
-  let response: Response;
+  let raw: unknown;
   try {
-    response = await fetch(
-      "https://api.vercel.com/v13/deployments/" + encodeURIComponent(candidate.hostname) + "?teamId=" + TEAM_ID,
-      { headers: { authorization: "Bearer " + token }, redirect: "error", signal: AbortSignal.timeout(12000) },
+    // Reuse the existing fixed-host, time-bounded Vercel API client. The
+    // candidate host is strictly validated and encoded as a path segment;
+    // it never becomes the HTTP request authority.
+    raw = await vercelGet(
+      "/v13/deployments/" + encodeURIComponent(candidate.hostname) + "?teamId=" + TEAM_ID,
+      { token, timeoutMs: 12_000 },
     );
   } catch {
     throw new Error("CERTIFICATION_TARGET_INVALID: Vercel deployment identity lookup failed");
-  }
-  if (!response.ok) {
-    throw new Error("CERTIFICATION_TARGET_INVALID: Vercel deployment lookup returned " + response.status);
-  }
-  let raw: unknown;
-  try {
-    raw = await response.json();
-  } catch {
-    throw new Error("CERTIFICATION_TARGET_INVALID: invalid Vercel deployment identity response");
   }
   const deployment = raw as { id?: unknown; projectId?: unknown; accountId?: unknown; url?: unknown; readyState?: unknown };
   if (!deployment || typeof deployment.id !== "string" || !DEPLOYMENT_ID.test(deployment.id) ||
