@@ -373,8 +373,10 @@ function clearsFurnishingPreference(text: string): boolean {
   // furnishing preference: "any furnished apartments" still means furnished.
   const both = /\b(?:furnished|unfurnished)\s+(?:or|and)\s+(?:furnished|unfurnished)\b/i;
   const either = /\beither\s+(?:furnished|unfurnished)\b/i;
-  const noPreference = /\b(?:no preference|don'?t care|do not care|doesn'?t matter|indifferent|whatever)\b.{0,40}\b(?:furnished|unfurnished|furnishing|amoblad[oa]|amueblad[oa])\b/i;
-  const reverse = /\b(?:furnished|unfurnished|furnishing|amoblad[oa]|amueblad[oa])\b.{0,30}\b(?:no preference|don'?t care|doesn'?t matter)\b/i;
+  // The indifference must grammatically name furnishing, not another field
+  // in the same sentence (e.g. "price doesn't matter, must be furnished").
+  const noPreference = /\b(?:no preference|don'?t care|do not care|doesn'?t matter|indifferent|whatever)\s+(?:(?:if|whether|about|for)\s+)?(?:it'?s\s+)?(?:furnished|unfurnished|furnishing|amoblad[oa]|amueblad[oa])\b/i;
+  const reverse = /\b(?:furnished|unfurnished|furnishing|amoblad[oa]|amueblad[oa])\s+(?:doesn'?t matter|no preference|is fine either way)\b/i;
   const anyFurnishing = /\bany\s+furnishing\b/i;
   const spanishEither = /\b(?:amoblad[oa]|amueblad[oa])\s+o\s+sin\s+(?:amoblar|amueblar)\b/i;
   return both.test(text) || either.test(text) || noPreference.test(text) ||
