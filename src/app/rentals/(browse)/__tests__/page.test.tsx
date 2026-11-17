@@ -33,6 +33,7 @@ type ViewProps = {
   through?: string | null;
   dateError?: string | null;
   freshStart?: boolean;
+  browseAll?: boolean;
   maxPrice?: unknown;
 };
 
@@ -65,7 +66,7 @@ describe("/rentals page", () => {
     searchRentals.mockResolvedValue({ results: [{ id: "real-apartment" }], total: 1, source: "supabase" });
     const props = await render({ browse: "all" });
     expect(searchRentals).toHaveBeenCalledTimes(1);
-    expect(props).toMatchObject({ results: [{ id: "real-apartment" }], total: 1, freshStart: false });
+    expect(props).toMatchObject({ results: [{ id: "real-apartment" }], total: 1, freshStart: false, browseAll: true });
   });
 
   it("ignores unknown browse flags rather than loading every apartment", async () => {
