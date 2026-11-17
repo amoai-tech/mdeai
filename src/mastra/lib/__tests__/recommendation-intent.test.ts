@@ -181,6 +181,9 @@ describe("shouldRenderViewingProposal (SAN-1658)", () => {
     "Agendar una visita del primer apartamento o del segundo apartamento",
     "Book a viewing for apartment 2 and apartment 3",
     "Schedule a viewing for the first or second apartment",
+    "Schedule a viewing for the first or the second apartment",
+    "Schedule a viewing of the first one or the listing second",
+    "Agendar una visita del primer apartamento o el segundo",
     "Book a viewing for apartment 1 or 2",
   ])("does not choose between multiple listing positions: %s", (text) => {
     expect(run(text)).toBe(false);

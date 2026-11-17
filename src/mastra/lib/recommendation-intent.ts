@@ -175,7 +175,7 @@ function publishedViewingPosition(matchedReference: string, publishedCount: numb
  * "apartment 1 or 2"; only the second choice may be next to a listing noun. */
 // A bare number after "and/or" often means time or people, not a second rental.
 // Match numeric alternatives only when immediately tied to a numbered listing.
-const VIEWING_ALTERNATIVE_WORD = /\b(?:or|and|o|u|y)\s+(?:(?:the|el|la|del|de|apartments?|listings?|ones?)\s+)*(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|last|primer[oa]?|segund[oa]|tercer[oa]?|cuart[oa]|quint[oa]|sext[oa]|s[eé]ptim[oa]|octav[oa]|noven[oa]|d[eé]cim[oa]|[uú]ltim[oa])\b/i;
+const VIEWING_ALTERNATIVE_WORD = /\b(?:or|and|o|u|y)\s+(?:(?:the|el|la|del|de)\s+)?(?:(?:apartments?|listings?|ones?)\s+)?(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|last|primer[oa]?|segund[oa]|tercer[oa]?|cuart[oa]|quint[oa]|sext[oa]|s[eé]ptim[oa]|octav[oa]|noven[oa]|d[eé]cim[oa]|[uú]ltim[oa])\b/i;
 const VIEWING_ALTERNATIVE_NUMBER = /\b(?:apartments?|listings?|places?|units?|options?|results?|homes?|rentals?|apartamentos?|anuncios?|opciones?|resultados?)\s*#?\d+\s+(?:or|and|o|u|y)\s+#?\d+\b(?!\s+(?:friends?|people|guests?|personas?|amigos?|roommates?|pm|am|h)\b)/i;
 const VIEWING_DEICTIC = /\b(this|that|it|esta?|ese|esa)\b/i;
 const TIMING_QUESTION = /\b(when|what\s+time|cu[aá]ndo)\b/i;
