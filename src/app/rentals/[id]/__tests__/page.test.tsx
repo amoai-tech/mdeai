@@ -97,6 +97,17 @@ describe("/rentals/[id]", () => {
       expect(page.props.backHref).toBe("/rentals?neighborhood=Laureles");
     });
 
+    it("preserves a deliberate Browse all selection after opening full Details", async () => {
+      getRentalDetail.mockResolvedValue(detail);
+      expect((await render("abc", { browse: "all" })).props.backHref).toBe("/rentals?browse=all");
+    });
+
+    it("does not let Browse all override a real neighborhood filter", async () => {
+      getRentalDetail.mockResolvedValue(detail);
+      expect((await render("abc", { browse: "all", neighborhood: "Laureles" })).props.backHref)
+        .toBe("/rentals?neighborhood=Laureles");
+    });
+
     it("is plain /rentals when the renter arrived without filters", async () => {
       getRentalDetail.mockResolvedValue(detail);
       expect((await render("abc")).props.backHref).toBe("/rentals");
