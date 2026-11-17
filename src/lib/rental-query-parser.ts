@@ -378,7 +378,7 @@ function clearsFurnishingPreference(text: string): boolean {
 /** Only explicit positive/negative source-backed furnishing requests become a hard filter. */
 export function furnishingFromQueryText(text: string): boolean | undefined {
   if (text.length > MAX_RENTAL_TEXT_CHARS || clearsFurnishingPreference(text)) return undefined;
-  if (/\b(?:unfurnished|sin amoblar|sin amueblar|not furnished|no amoblad[oa]|no amueblad[oa])\b/i.test(text)) return false;
+  if (/\b(?:unfurnished|sin[- ]+amoblar|sin[- ]+amueblar|not[- ]+furnished|no[- ]+amoblad[oa]|no[- ]+amueblad[oa])\b/i.test(text)) return false;
   if (/\b(?:furnished|amoblad[oa]|amueblad[oa])\b/i.test(text)) return true;
   return undefined;
 }

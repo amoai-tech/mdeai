@@ -105,6 +105,7 @@ describe("SAN-1502 postmerge — real COP monthly budget", () => {
     ["amueblado apartamento", true],
     ["unfurnished apartments", false],
     ["not furnished apartments", false],
+    ["not-furnished 2BR apartments", false],
     ["no amoblado", false],
     ["sin amueblar", false],
     ["furnished or unfurnished, either is fine", undefined],
