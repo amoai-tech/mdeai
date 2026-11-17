@@ -69,6 +69,31 @@ describe("/rentals page", () => {
     expect(props).toMatchObject({ results: [{ id: "real-apartment" }], total: 1, freshStart: false, browseAll: true });
   });
 
+  it.each([
+    ["neighborhood", { browse: "all", neighborhood: "Laureles" }, { neighborhood: "Laureles" }],
+    ["bedrooms", { browse: "all", beds: "2" }, { minBedrooms: 2, maxBedrooms: 2 }],
+    ["stay dates", { browse: "all", from: "2026-11-20", through: "2026-11-30" }, { checkIn: "2026-11-20", checkOut: "2026-11-30" }],
+    ["combined", { browse: "all", neighborhood: "Laureles", beds: "2" }, { neighborhood: "Laureles", minBedrooms: 2, maxBedrooms: 2 }],
+  ])("real %s filters override the Browse all intent on Details and Retry", async (_label, params, expected) => {
+    searchRentals.mockResolvedValue({ results: [], total: 0, source: "supabase" });
+    const props = await render(params);
+    expect(props.browseAll).toBe(false);
+    expect(props.freshStart).toBe(false);
+    expect(searchRentals).toHaveBeenCalledTimes(1);
+    expect(searchRentals).toHaveBeenCalledWith(
+      expect.objectContaining(expected),
+      expect.objectContaining({ client: expect.anything() }),
+    );
+  });
+
+  it("an outage on a filtered Browse all URL retains the real filter for Retry", async () => {
+    searchRentals.mockRejectedValue(new RentalSearchUnavailableError("client_unavailable"));
+    const props = await render({ browse: "all", neighborhood: "Laureles" });
+    expect(props.error).toMatch(/temporarily unavailable/);
+    expect(props.browseAll).toBe(false);
+    expect(props.neighborhood).toBe("Laureles");
+  });
+
   it("ignores unknown browse flags rather than loading every apartment", async () => {
     const props = await render({ browse: "unknown" });
     expect(searchRentals).not.toHaveBeenCalled();
