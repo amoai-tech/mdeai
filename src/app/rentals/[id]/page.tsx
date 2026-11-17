@@ -58,7 +58,7 @@ export async function generateMetadata({ params }: Props) {
 export default async function RentalDetailPage({ params, searchParams }: Props) {
   const { id } = await params;
   // Only recognised, validated filters are carried back; anything else in the URL is ignored.
-  const browseParams = (await searchParams) ?? {};
+  const browseParams: RentalBrowseSearchParams & { browse?: string } = (await searchParams) ?? {};
   const { filters } = parseBrowseFilters(browseParams);
   // A deliberate Browse all visit must return to that catalogue, not the fresh start.
   const unfiltered = !filters.neighborhood && !filters.beds && !filters.from && !filters.through;
