@@ -553,6 +553,19 @@ describe("ordering must not truncate the matches a monthly budget asks for (SAN-
   });
 });
 
+describe("Mastra tool furnishing input contract", () => {
+  it("does not change omitted furnishing into false, and accepts both booleans explicitly", async () => {
+    const { searchRentalsTool } = await import("../search-rentals");
+    const schema = searchRentalsTool.inputSchema as unknown as ZodType;
+    const omitted = schema.parse({});
+    expect(omitted).not.toHaveProperty("furnished");
+    expect(JSON.parse(JSON.stringify(omitted))).not.toHaveProperty("furnished");
+    expect(schema.parse({ furnished: true }).furnished).toBe(true);
+    expect(schema.parse({ furnished: false }).furnished).toBe(false);
+    expect(schema.safeParse({ furnished: null }).success).toBe(false);
+  });
+});
+
 describe("Mastra tool keeps the source furnishing fact in its chat result", () => {
   it("does not strip furnished=true when serializing a matching apartment", async () => {
     const { searchRentalsTool } = await import("../search-rentals");
