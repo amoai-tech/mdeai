@@ -97,6 +97,9 @@ export function fastPathCafeSummary(
   reason?: string,
 ): string {
   if (count === 0) {
+    if (reason === "google_places_unavailable") {
+      return "Café search is temporarily unavailable. Please try again.";
+    }
     if (reason === "missing_map_context") {
       return "Move the map to a Medellín neighborhood, or ask for cafés in Laureles or El Poblado.";
     }
