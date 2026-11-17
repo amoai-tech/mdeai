@@ -152,6 +152,18 @@ describe("chat fast-path failures reach operation-specific Retry", () => {
     expect(body.query).toBe("cafés around this map");
   });
 
+  it("recognizes accented Spanish map-relative queries", async () => {
+    mocks.viewport = { lat: 6.2088, lng: -75.5671, zoom: 15 };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true, json: async () => ({ results: [], attribution: [], source: "grounding" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const hook = renderHook(useGroundedSearchFastPath);
+    await act(async () => expect(await hook.handleUserMessage("cafés por aquí")).toBe(true));
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).locationBias)
+      .toEqual({ latitude: 6.2088, longitude: -75.5671 });
+  });
+
   it("does not let a stale map viewport override an explicit neighborhood", async () => {
     mocks.viewport = { lat: 7.1, lng: -75.8, zoom: 14 }; // outside Medellín
     const fetchMock = vi.fn().mockResolvedValue({

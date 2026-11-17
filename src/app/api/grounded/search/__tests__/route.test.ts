@@ -78,6 +78,20 @@ describe("POST /api/grounded/search", () => {
     );
   });
 
+  it("does not let a direct API caller override Laureles with an arbitrary camera", async () => {
+    vi.mocked(searchGroundedPlacesTool.execute!).mockResolvedValue({ results: [], attribution: [], source: "grounding" });
+    const res = await POST(new Request("http://localhost/api/grounded/search", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        query: "cafés in Laureles", intent: "cafe",
+        locationBias: { latitude: 7.1, longitude: -75.8 },
+      }),
+    }));
+    expect(res.status).toBe(200);
+    expect(searchGroundedPlacesTool.execute).toHaveBeenCalledOnce();
+    expect(vi.mocked(searchGroundedPlacesTool.execute!).mock.calls[0][0]).not.toHaveProperty("locationBias");
+  });
+
   it("does not invent a map center or pay for a missing map camera", async () => {
     const res = await POST(new Request("http://localhost/api/grounded/search", {
       method: "POST", headers: { "Content-Type": "application/json" },

@@ -101,7 +101,7 @@ export async function POST(req: Request) {
         query: searchQuery,
         pageSize: limit,
         ...(intent ? { intent } : {}),
-        ...(locationBias && !nearbyRentalId ? { locationBias } : {}),
+        ...(isMapAreaQuery(searchQuery) && locationBias && !nearbyRentalId ? { locationBias } : {}),
         ...(nearbyRentalId ? { nearbyRentalId, nearbyRadiusMeters: nearbyRadiusMeters ?? 800 } : {}),
       },
       context as never,
