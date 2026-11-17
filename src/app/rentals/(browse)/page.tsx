@@ -84,6 +84,7 @@ export default async function RentalsPage({ searchParams }: Props) {
       through={filters.through}
       dateError={dateError}
       freshStart={freshStart}
+      browseAll={params.browse === "all"}
     />
   );
 }
