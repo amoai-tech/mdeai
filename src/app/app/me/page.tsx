@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { AccountLoadError } from "@/components/app/load-error";
 import { getServerUser } from "@/lib/auth/session";
 import { loadUserCollections } from "@/lib/saved/load-user-collections";
+import { loadUserViewings } from "@/lib/rentals/load-user-viewings";
 import { listBuyerOrders } from "@/lib/tickets/get-wallet-order";
 
 export const metadata = {
@@ -12,7 +13,7 @@ export const metadata = {
 type DestinationCardProps = {
   label: string;
   description: string;
-  count: number;
+  count: number | string;
   href: string;
   testId: string;
 };
@@ -49,20 +50,21 @@ function DestinationCard({
 
 /**
  * SAN-1576 — Personal overview. Counts exist only after a successful query;
- * Viewings and Votes are deliberately absent until SAN-1426 / SAN-1525.
+ * Votes remain absent until SAN-1525 has a real read path.
  */
 // skipcq: JS-0067 - Next.js App Router page export
 export default async function MyAccountPage() {
   const { user } = await getServerUser();
   if (!user) redirect("/login?next=/app/me");
 
-  const [saved, tickets] = await Promise.all([
+  const [saved, tickets, viewings] = await Promise.all([
     loadUserCollections(user.id),
     listBuyerOrders(user.id),
+    loadUserViewings(user.id),
   ]);
 
   const failure =
-    saved.status === "error" ? saved : tickets.status === "error" ? tickets : null;
+    saved.status === "error" ? saved : tickets.status === "error" ? tickets : viewings.status === "error" ? viewings : null;
 
   return (
     <div className="space-y-6">
@@ -74,7 +76,7 @@ export default async function MyAccountPage() {
           My Account
         </h1>
         <p className="max-w-2xl text-sm text-muted-foreground">
-          Your paid tickets and saved collections, in one place.
+          Your viewing requests, paid tickets, and saved collections, in one place.
         </p>
       </header>
 
@@ -84,7 +86,7 @@ export default async function MyAccountPage() {
           retryHref="/app/me"
           title="Your account is temporarily unavailable"
         />
-      ) : saved.status === "ok" && tickets.status === "ok" ? (
+      ) : saved.status === "ok" && tickets.status === "ok" && viewings.status === "ok" ? (
         <ul className="grid gap-4 sm:grid-cols-2">
           <DestinationCard
             label="Tickets"
@@ -92,6 +94,13 @@ export default async function MyAccountPage() {
             count={tickets.value.length}
             href="/app/me/tickets"
             testId="me-card-tickets"
+          />
+          <DestinationCard
+            label="Viewings"
+            description="Saved viewing requests and the latest broker status."
+            count={viewings.value.length === 50 ? "50+" : viewings.value.length}
+            href="/app/me/viewings"
+            testId="me-card-viewings"
           />
           <DestinationCard
             label="Saved"
