@@ -441,6 +441,11 @@ export function looksLikeRentalAnalysis(text: string): boolean {
     !referencesShownResults
   ) return false;
   if (RENTAL_ANALYSIS_RE.test(bounded)) return true;
+  // "Like these in Envigado" is a new discovery request, not an analysis
+  // of already shown cards. Explicit area + search phrasing wins.
+  if (scoreRentalQuery(bounded).hasNeighborhood &&
+      /\b(?:show|find|search|(?:do|can) you have|looking for)\b/i.test(bounded) &&
+      /\b(?:apartments?|rentals?|listings?|homes?)\b/i.test(bounded)) return false;
   // "first" alone is not a result reference: "first-floor apartment … better wifi"
   // is a fresh search. Require "first apartment/one/two/…", "these", "those" or "them".
   return referencesShownResults && (

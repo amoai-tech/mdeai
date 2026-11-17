@@ -145,6 +145,9 @@ describe("SAN-1502 postmerge — real COP monthly budget", () => {
     expect(looksLikeRentalAnalysis("Which of these is furnished?")).toBe(true);
     expect(looksLikeRentalAnalysis("Are these furnished?")).toBe(true);
     expect(looksLikeRentalAnalysis("Which of these neighborhoods has furnished apartments?")).toBe(false);
+    expect(looksLikeRentalAnalysis(
+      "Do you have 2BR apartments like these in Envigado under COP 3 million?",
+    )).toBe(false);
   });
 
   it("clears a previous furnishing requirement when either is fine", () => {
