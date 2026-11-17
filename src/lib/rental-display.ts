@@ -174,8 +174,8 @@ export const RENTAL_SEARCH_UNAVAILABLE_SUMMARY =
   "Rental search is temporarily unavailable. Please try again in a moment.";
 
 /**
- * Things a renter may ask for that the rental search cannot filter on yet. The search only
- * understands neighborhood, bedrooms, budget and dates, so anything here is dropped silently
+ * Things a renter may ask for that the rental search cannot filter on yet. It already
+ * supports exact bedrooms, monthly budget, dates and stored furnishing; other amenities need a notice
  * unless the answer says so.
  */
 const UNAPPLIED_REQUESTS: Array<{ label: string; re: RegExp }> = [
@@ -200,7 +200,7 @@ function unappliedClause(labels: string[]): string {
 
 /**
  * The one sentence a rental answer uses to admit a request it cannot apply. The fast path and
- * the `search-rentals` tool both call this, so a renter who asks for pets or furnishing hears
+ * the `search-rentals` tool both call this, so a renter who asks for pets or parking hears
  * the same thing whichever chat path answers instead of having the request dropped silently.
  */
 export function unappliedRentalNotice(labels: string[]): string | undefined {
@@ -213,7 +213,7 @@ export function emptyRentalNotice(labels: string[]): string {
 }
 
 export type FastPathRentalSummaryOptions = {
-  /** Requests the search cannot filter on (pets, furnished, parking…) — name them, never drop them silently. */
+  /** Requests the search cannot filter on (pets, parking, pool…) — name them, never drop them silently. */
   unappliedRequests?: string[];
   /** The renter gave no neighborhood, size or budget — offer one optional refinement. */
   generic?: boolean;

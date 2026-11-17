@@ -99,6 +99,29 @@ describe("SAN-1502 postmerge — real COP monthly budget", () => {
     expect(budgetNotApplied("2BR in Laureles", {})).toBe(false);
   });
 
+  it.each([
+    ["furnished apartments", true],
+    ["amoblado en Laureles", true],
+    ["amueblado apartamento", true],
+    ["unfurnished apartments", false],
+    ["not furnished apartments", false],
+    ["no amoblado", false],
+    ["sin amueblar", false],
+    ["furnished or unfurnished, either is fine", undefined],
+    ["I don't care if it's furnished", undefined],
+    ["either furnished or not", undefined],
+  ])("understands explicit furnishing and preference changes: %s", (query, expected) => {
+    expect(buildRentalSearchParams(`Show apartments in Laureles ${query}`, {})?.furnished)
+      .toBe(expected);
+  });
+
+  it("clears a previous furnishing requirement when either is fine", () => {
+    const memory = { lastRentalQuery: { neighborhood: "Laureles", furnished: true } };
+    expect(buildRentalSearchParams("Either furnished or unfurnished is fine", memory)?.furnished).toBeUndefined();
+    expect(buildRentalSearchParams("I don't care if it's furnished", memory)?.furnished).toBeUndefined();
+    expect(buildRentalSearchParams("Only under COP 2 million", memory)?.furnished).toBe(true);
+  });
+
   it("uses the stored furnished requirement across budget refinement and lets unfurnished replace it", () => {
     const first = buildRentalSearchParams("Show furnished 2-bedroom apartments in Laureles under COP 3 million", {});
     expect(first?.furnished).toBe(true);

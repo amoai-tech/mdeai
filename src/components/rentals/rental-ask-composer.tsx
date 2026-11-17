@@ -134,9 +134,9 @@ function memoryFromParams(params: RentalSearchApiParams): ConciergeWorkingMemory
 }
 
 /**
- * A refinement is still the same search: if the renter asked for furnished in the first
- * question, telling them only about the new budget cap would imply the furnishing was applied.
- * Keep the unsupported request visible for the rest of this page's conversation.
+ * A refinement is still the same search: if the renter asked for pet-friendly in the first
+ * question, telling them only about the new budget cap would imply pets were filtered.
+ * Keep unsupported amenity requests visible across the conversation.
  */
 function withCarriedNotice(payload: RentalAskResults, labels: readonly string[]): RentalAskResults {
   // Merge labels, never the rendered sentence: a refinement can name its own unsupported request
@@ -448,7 +448,7 @@ function LiveComposer({
     // Clear on dispatch: the sent question is already on its way, and the box must be free for
     // the next question while this one streams (appending to it would send both together).
     setDraft("");
-    // Remember every request this search cannot filter, so a later refinement keeps disclosing it.
+    // Preserve non-filterable amenity requests across later refinements.
     unappliedRef.current = [
       ...new Set([...unappliedRef.current, ...unappliedRentalRequests(text)]),
     ];

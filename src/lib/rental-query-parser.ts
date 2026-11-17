@@ -363,11 +363,23 @@ function parseBedrooms(text: string): number | undefined {
  * instead mean a minimum. Reuse the canonical bedroom parser; no second
  * frontend-only filter or natural-language ranking engine.
  */
-/** Explicit furnishing requests use the stored boolean only; null stays unknown. */
+/**
+ * Explicit 'either furnished or unfurnished' clears a previously applied filter.
+ * Bound regex windows prevent large-input backtracking; unknown values remain unknown.
+ */
+function clearsFurnishingPreference(text: string): boolean {
+  if (text.length > MAX_RENTAL_TEXT_CHARS) return false;
+  const anyStatus = /\b(?:furnished|unfurnished|furnishing|amoblad[oa]|amueblad[oa]|amoblar|amueblar)\b/i;
+  if (!anyStatus.test(text)) return false;
+  return /\b(?:either|any|no preference|don'?t care|doesn'?t matter|do not care|indifferent|whatever)\b.{0,50}\b(?:furnished|unfurnished|furnishing|amoblad[oa]|amueblad[oa]|amoblar|amueblar)\b/i.test(text) ||
+    /\b(?:furnished|unfurnished|furnishing|amoblad[oa]|amueblad[oa])\b.{0,35}\b(?:or|either|doesn'?t matter|don'?t care|no preference)\b/i.test(text);
+}
+
+/** Only explicit positive/negative source-backed furnishing requests become a hard filter. */
 export function furnishingFromQueryText(text: string): boolean | undefined {
-  if (text.length > MAX_RENTAL_TEXT_CHARS) return undefined;
-  if (/\b(?:unfurnished|sin amoblar)\b/i.test(text)) return false;
-  if (/\b(?:furnished|amoblado|amoblada)\b/i.test(text)) return true;
+  if (text.length > MAX_RENTAL_TEXT_CHARS || clearsFurnishingPreference(text)) return undefined;
+  if (/\b(?:unfurnished|sin amoblar|sin amueblar|not furnished|no amoblad[oa]|no amueblad[oa])\b/i.test(text)) return false;
+  if (/\b(?:furnished|amoblad[oa]|amueblad[oa])\b/i.test(text)) return true;
   return undefined;
 }
 
@@ -593,6 +605,7 @@ function bedroomFields(
 /** A budget-only follow-up keeps the last furnishing requirement. */
 function furnishingFields(text: string, previous?: ConciergeWorkingMemory["lastRentalQuery"]):
   Pick<RentalSearchApiParams, "furnished"> {
+  if (clearsFurnishingPreference(text)) return { furnished: undefined };
   const explicit = furnishingFromQueryText(text);
   return { furnished: explicit === undefined ? previous?.furnished : explicit };
 }

@@ -386,7 +386,7 @@ export function budgetNoteFor(query: RentalQuery): string | undefined {
 }
 
 /**
- * Requests this search cannot filter (pets, furnished, parking…), read from the renter's own
+ * Requests this search cannot filter (pets, parking, pool…), read from the renter's own
  * words in `queryText`. The card renderer turns them into the same sentence the fast path uses,
  * so no chat path can imply the filter was applied or drop the request silently.
  */
@@ -804,7 +804,7 @@ export const searchRentalsTool = createTool({
     budgetNote: z.string().optional(),
     /** Exact rental search results rendered as WhatsApp text; omitted on web. */
     whatsapp_reply: z.string().optional(),
-    /** Requests this search cannot filter (pets, furnished…); the cards must disclose them. */
+    /** Requests this search cannot filter (pets, parking…); the cards must disclose them. */
     unappliedRequests: z.array(z.string()).optional(),
     hybridUsed: z.boolean().optional(),
     rankExplanation: z
