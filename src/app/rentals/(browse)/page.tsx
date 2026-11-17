@@ -84,7 +84,7 @@ export default async function RentalsPage({ searchParams }: Props) {
       through={filters.through}
       dateError={dateError}
       freshStart={freshStart}
-      browseAll={params.browse === "all"}
+      browseAll={params.browse === "all" && !filters.neighborhood && !filters.beds && !filters.from && !filters.through}
     />
   );
 }
