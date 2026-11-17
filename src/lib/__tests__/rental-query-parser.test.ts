@@ -111,6 +111,7 @@ describe("SAN-1502 postmerge — real COP monthly budget", () => {
     ["no furnished apartments", false],
     ["sin amueblar", false],
     ["furnished or unfurnished, either is fine", undefined],
+    ["either is fine, furnished or unfurnished", undefined],
     ["I don't care if it's furnished", undefined],
     ["I don’t care if it’s furnished", undefined],
     ["Furnishing doesn’t matter", undefined],
@@ -157,6 +158,7 @@ describe("SAN-1502 postmerge — real COP monthly budget", () => {
     const memory = { lastRentalQuery: { neighborhood: "Laureles", furnished: true } };
     expect(buildRentalSearchParams("Either furnished or unfurnished is fine", memory)?.furnished).toBeUndefined();
     expect(buildRentalSearchParams("I don't care if it's furnished", memory)?.furnished).toBeUndefined();
+    expect(buildRentalSearchParams("either is fine, furnished or unfurnished", memory)?.furnished).toBeUndefined();
     expect(buildRentalSearchParams("Only under COP 2 million", memory)?.furnished).toBe(true);
   });
 

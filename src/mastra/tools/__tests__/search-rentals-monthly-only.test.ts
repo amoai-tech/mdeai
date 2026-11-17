@@ -320,7 +320,7 @@ describe("text-derived neighborhood with a furnishing predicate", () => {
 describe("explicit furnishing preference clear wins over stale tool args", () => {
   it("does not impose a stale furnished=true when text says either state is fine", async () => {
     const found = await search({
-      queryText: "Either furnished or unfurnished is fine",
+      queryText: "Either is fine, furnished or unfurnished",
       furnished: true,
     });
     expect(found.results.some((r) => r.furnished === true)).toBe(true);
