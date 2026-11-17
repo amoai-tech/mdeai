@@ -7,6 +7,12 @@ import {
 } from "../cafe-search-fast-path";
 
 describe("cafe-search-fast-path", () => {
+  it("explains Medellín-only scope without showing outside-place results", () => {
+    expect(fastPathCafeSummary(0, 0, undefined, "cafés in Guatapé", "outside_catalog_coverage")).toContain("Medellín only");
+    expect(fastPathCafeSummary(0, 0, undefined, "cafés on Mars", "outside_catalog_coverage")).toContain("Medellín only");
+    expect(fastPathCafeSummary(0, 0, undefined, "cafés en esta zona")).toContain("No cafés matched");
+  });
+
   it("matches specialty coffee queries", () => {
     expect(canFastPathCafeSearch("good specialty coffee in Laureles")).toBe(true);
     const params = buildCafeSearchParams("good specialty coffee in Laureles");
