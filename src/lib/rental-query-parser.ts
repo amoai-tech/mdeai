@@ -445,7 +445,8 @@ export function looksLikeRentalAnalysis(text: string): boolean {
   // of already shown cards. Explicit area + search phrasing wins.
   if (scoreRentalQuery(bounded).hasNeighborhood &&
       /\b(?:show|find|search|(?:do|can) you have|looking for)\b/i.test(bounded) &&
-      /\b(?:apartments?|rentals?|listings?|homes?)\b/i.test(bounded)) return false;
+      /\b(?:apartments?|rentals?|listings?|homes?)\b/i.test(bounded) &&
+      /\b(?:like|similar to)\s+(?:these|those)\b/i.test(bounded)) return false;
   // "first" alone is not a result reference: "first-floor apartment … better wifi"
   // is a fresh search. Require "first apartment/one/two/…", "these", "those" or "them".
   return referencesShownResults && (

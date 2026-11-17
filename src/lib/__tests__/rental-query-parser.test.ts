@@ -148,6 +148,9 @@ describe("SAN-1502 postmerge — real COP monthly budget", () => {
     expect(looksLikeRentalAnalysis(
       "Do you have 2BR apartments like these in Envigado under COP 3 million?",
     )).toBe(false);
+    expect(looksLikeRentalAnalysis(
+      "Show me apartments in Laureles cheaper than these",
+    )).toBe(true);
   });
 
   it("clears a previous furnishing requirement when either is fine", () => {
