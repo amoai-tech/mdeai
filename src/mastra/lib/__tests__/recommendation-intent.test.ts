@@ -149,6 +149,9 @@ describe("shouldRenderViewingProposal (SAN-1658)", () => {
 
   it.each([
     ["Request a viewing of the second apartment at 3:15 PM.", true],
+    ["Request a viewing of the second apartment between 3 and 5 PM", true],
+    ["Book a viewing of apartment 2 for me and 2 friends", true],
+    ["Agendar una visita del primer apartamento a las 3 o 4", true],
     ["Schedule a viewing for the first one", true],
     ["Can you book a tour of apartment 3?", true],
     ["Agendar una visita del primer apartamento", true],

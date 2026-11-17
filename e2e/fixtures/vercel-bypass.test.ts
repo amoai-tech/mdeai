@@ -57,6 +57,7 @@ function fakePage(
   probe: {
     status: number;
     sha?: string;
+    environment?: string;
     contentType?: string;
     body?: () => Promise<unknown>;
   } = { status: 302 },
@@ -67,7 +68,7 @@ function fakePage(
     .mockResolvedValueOnce({
       status: () => probe.status,
       headers: () => ({ "content-type": probe.contentType ?? "application/json" }),
-      json: probe.body ?? (async () => ({ sha: probe.sha })),
+      json: probe.body ?? (async () => ({ sha: probe.sha, environment: probe.environment })),
     });
   const cookies = vi.fn().mockResolvedValue(cookieAfterSetup);
   const page = { request: { get }, context: () => ({ cookies }) } as unknown as Page;
@@ -118,13 +119,28 @@ describe("establishVercelAutomationBypass", () => {
   it("accepts an unprotected deployment after an unauthenticated exact-app version probe", async () => {
     const sha = "a".repeat(40);
     vi.stubEnv("VERCEL_DEPLOYMENT_SHA", `  ${sha}  `);
-    const { page, get } = fakePage(200, [], { status: 200, sha });
+    const { page, get } = fakePage(200, [], { status: 200, sha, environment: "preview" });
     await expect(establishVercelAutomationBypass(page, CANDIDATE, "test-secret")).resolves.toBeUndefined();
     expect(get).toHaveBeenCalledTimes(2);
     expect(get).toHaveBeenNthCalledWith(2, `${CANDIDATE}/api/version`, {
       failOnStatusCode: false,
       maxRedirects: 0,
     });
+  });
+
+  it("rejects an unprotected production identity even at the expected SHA", async () => {
+    const sha = "a".repeat(40);
+    vi.stubEnv("VERCEL_DEPLOYMENT_SHA", sha);
+    const { page } = fakePage(200, [], { status: 200, sha, environment: "production" });
+    await expect(establishVercelAutomationBypass(page, CANDIDATE, "test-secret"))
+      .rejects.toThrow(/preview environment/);
+  });
+
+  it("rejects a public candidate without an explicitly expected deployment SHA", async () => {
+    vi.stubEnv("VERCEL_DEPLOYMENT_SHA", "");
+    const { page } = fakePage(200, [], { status: 200, sha: "a".repeat(40), environment: "preview" });
+    await expect(establishVercelAutomationBypass(page, CANDIDATE, "test-secret"))
+      .rejects.toThrow(/expected deployment SHA/);
   });
 
   it("rejects a different deployed SHA with a diagnostic reason", async () => {
@@ -171,6 +187,7 @@ describe("establishVercelAutomationBypass", () => {
     const { page } = fakePage(200, [], {
       status: 200,
       sha,
+      environment: "preview",
       contentType: "Application/JSON; charset=utf-8",
     });
     await expect(establishVercelAutomationBypass(page, CANDIDATE, "test-secret"))

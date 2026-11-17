@@ -70,11 +70,15 @@ export async function establishVercelAutomationBypass(
         const sha = data && typeof data === "object" && "sha" in data
           ? (data as { sha: unknown }).sha
           : undefined;
-        const expectedSha = process.env.VERCEL_DEPLOYMENT_SHA?.trim();
+        const expectedSha = process.env.VERCEL_DEPLOYMENT_SHA?.trim() ?? "";
         if (typeof sha !== "string" || !/^[a-f0-9]{40}$/.test(sha)) {
           failureReason = "invalid or missing app SHA";
-        } else if (expectedSha && sha !== expectedSha) {
+        } else if (!/^[a-f0-9]{40}$/i.test(expectedSha)) {
+          failureReason = "missing or invalid expected deployment SHA";
+        } else if (sha !== expectedSha) {
           failureReason = `SHA mismatch: observed ${sha}, expected ${expectedSha}`;
+        } else if (!isExpectedPublicPreviewVersion(data, expectedSha)) {
+          failureReason = "candidate is not in preview environment";
         } else {
           verifiedApp = true;
         }

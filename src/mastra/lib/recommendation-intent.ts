@@ -173,7 +173,10 @@ function publishedViewingPosition(matchedReference: string, publishedCount: numb
 
 /** Also reject abbreviated choices such as "first or second apartment" and
  * "apartment 1 or 2"; only the second choice may be next to a listing noun. */
-const VIEWING_ALTERNATIVE = /\b(?:or|and|o|u|y)\s+(?:(?:the|el|la|del|de|apartments?|listings?|ones?)\s+)*(?:\d+|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|last|primer[oa]?|segund[oa]|tercer[oa]?|cuart[oa]|quint[oa]|sext[oa]|s[eé]ptim[oa]|octav[oa]|noven[oa]|d[eé]cim[oa]|[uú]ltim[oa])\b/i;
+// A bare number after "and/or" often means time or people, not a second rental.
+// Match numeric alternatives only when immediately tied to a numbered listing.
+const VIEWING_ALTERNATIVE_WORD = /\b(?:or|and|o|u|y)\s+(?:(?:the|el|la|del|de|apartments?|listings?|ones?)\s+)*(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|last|primer[oa]?|segund[oa]|tercer[oa]?|cuart[oa]|quint[oa]|sext[oa]|s[eé]ptim[oa]|octav[oa]|noven[oa]|d[eé]cim[oa]|[uú]ltim[oa])\b/i;
+const VIEWING_ALTERNATIVE_NUMBER = /\b(?:apartments?|listings?|places?|units?|options?|results?|homes?|rentals?|apartamentos?|anuncios?|opciones?|resultados?)\s*#?\d+\s+(?:or|and|o|u|y)\s+#?\d+\b(?!\s+(?:friends?|people|guests?|personas?|amigos?|roommates?|pm|am|h)\b)/i;
 const VIEWING_DEICTIC = /\b(this|that|it|esta?|ese|esa)\b/i;
 const TIMING_QUESTION = /\b(when|what\s+time|cu[aá]ndo)\b/i;
 /** A refusal to schedule is not a command, even when the renter names a listing. */
@@ -201,7 +204,7 @@ export function shouldRenderViewingProposal({
   const publishedIds = readRentalResultIds(agUiContext);
   // Multiple apartment references are ambiguous: never force the model to pick one.
   const ordinalReferences = [...text.matchAll(VIEWING_ORDINAL)];
-  if (ordinalReferences.length > 1 || (ordinalReferences.length === 1 && VIEWING_ALTERNATIVE.test(text))) return false;
+  if (ordinalReferences.length > 1 || (ordinalReferences.length === 1 && (VIEWING_ALTERNATIVE_WORD.test(text) || VIEWING_ALTERNATIVE_NUMBER.test(text)))) return false;
   if (ordinalReferences.length === 1) {
     return publishedViewingPosition(ordinalReferences[0][0], publishedIds.length, readRentalRenderedCount(agUiContext));
   }
