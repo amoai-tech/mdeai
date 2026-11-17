@@ -9,6 +9,8 @@ interface Props {
     RentalBrowseSearchParams & {
       /** Retired by SAN-1089: old bookmarks may still carry it; it is read and ignored. */
       maxPrice?: string;
+      /** Explicit visitor choice to see every apartment. */
+      browse?: string;
     }
   >;
 }
@@ -27,7 +29,14 @@ const BROWSE_RESULT_LIMIT = 100;
 /** REAL-011 / SAN-478 — /rentals browse page. */
 export default async function RentalsPage({ searchParams }: Props) {
   // One parser for the whole browse state (neighborhood, bedrooms, From/Through dates).
-  const { filters, dateError } = parseBrowseFilters(await searchParams);
+  const params = await searchParams;
+  const { filters, dateError } = parseBrowseFilters(params);
+  // Opening /rentals directly is a fresh search. Search only after a deliberate
+  // filter or Browse all action; Ask MDE can still render its own results.
+  const hasSearchIntent = params.browse === "all" || Boolean(
+    filters.neighborhood || filters.beds || filters.from || filters.through,
+  );
+  const freshStart = !dateError && !hasSearchIntent;
 
   let error: string | null = null;
   let results: Rental[] = [];
@@ -35,7 +44,7 @@ export default async function RentalsPage({ searchParams }: Props) {
 
   // Bad dates fail closed: show the message and run NO search, instead of silently ignoring the
   // dates and listing apartments that may not be free for the stay.
-  if (!dateError) {
+  if (!dateError && hasSearchIntent) {
     try {
       const minBedrooms = filters.beds != null ? parseInt(filters.beds, 10) : undefined;
 
@@ -74,6 +83,8 @@ export default async function RentalsPage({ searchParams }: Props) {
       from={filters.from}
       through={filters.through}
       dateError={dateError}
+      freshStart={freshStart}
+      browseAll={params.browse === "all" && !filters.neighborhood && !filters.beds && !filters.from && !filters.through}
     />
   );
 }

@@ -73,6 +73,10 @@ export type RentalBrowseViewProps = {
   through?: string | null;
   /** Why the dates were refused; when set no search ran and no results are shown. */
   dateError?: string | null;
+  /** A direct visit with no search or filters has no catalogue results yet. */
+  freshStart?: boolean;
+  /** Preserve a deliberate Browse all visit through Details and Retry. */
+  browseAll?: boolean;
   /** Only for local previews, never changes actual rental eligibility. */
   previewMode?: boolean;
 };
@@ -87,6 +91,8 @@ function RentalBrowseViewInner({
   from = null,
   through = null,
   dateError = null,
+  freshStart = false,
+  browseAll = false,
   previewMode = false,
 }: RentalBrowseViewProps) {
   const router = useRouter();
@@ -117,9 +123,10 @@ function RentalBrowseViewInner({
   }, [activeAsk, neighborhood, beds]);
   const filterState = { neighborhood, beds, from, through };
   // A preview fixture failure must retry the preview, not send the user to the public browse.
-  const retryHref = previewMode ? buildRetryHref({ neighborhood, beds }, true) : buildRentalsUrl(filterState);
+  const retryHref = previewMode ? buildRetryHref({ neighborhood, beds }, true)
+    : browseAll ? "/rentals?browse=all" : buildRentalsUrl(filterState);
   // Cards link to their detail page with the current filters, so "Back to results" returns to them.
-  const detailSearch = rentalsQueryString(filterState);
+  const detailSearch = browseAll ? "?browse=all" : rentalsQueryString(filterState);
   const stayLabel =
     !dateError && (from || through)
       ? from && through
@@ -195,6 +202,8 @@ function RentalBrowseViewInner({
       ? "Long-stay apartments in Medellín"
       : dateError
         ? "Long-stay rentals in Medellín"
+        : freshStart && !activeAsk
+          ? "Choose filters or ask MDE to find apartments"
         : `Long-stay rentals — ${formatCountSubtitle(total, results.length)}${stayLabel ? ` · open ${stayLabel}` : ""}`;
 
   return (
@@ -337,7 +346,26 @@ function RentalBrowseViewInner({
             </div>
           ) : null}
 
-          {!error && !dateError && shownResults.length === 0 ? (
+          {!error && !dateError && freshStart && !activeAsk ? (
+            <div data-testid="rentals-fresh-start">
+              <EmptyState
+                title="Find your next apartment in Medellín"
+                description="Choose a neighborhood, bedrooms, or stay dates above, or ask MDE what you are looking for."
+                icon={<Building2 className="size-8" aria-hidden />}
+              />
+              <div className="mt-4 flex justify-center">
+                <Link
+                  href="/rentals?browse=all"
+                  data-testid="rentals-browse-all"
+                  className={buttonVariants({ variant: "outline", size: "default" })}
+                >
+                  Browse all apartments
+                </Link>
+              </div>
+            </div>
+          ) : null}
+
+          {!error && !dateError && shownResults.length === 0 && (!freshStart || Boolean(activeAsk)) ? (
             <EmptyState
               testId="rentals-empty"
               title="No rentals currently match these filters"
@@ -420,7 +448,7 @@ export function RentalBrowseView(props: RentalBrowseViewProps) {
       <RentalFastPathProvider>
         <BrowseMapContextShell>
           <RentalBrowseViewInner
-            key={JSON.stringify([threadId, props.neighborhood, props.beds, props.from, props.through, props.previewMode, props.dateError])}
+            key={JSON.stringify([threadId, props.neighborhood, props.beds, props.from, props.through, props.previewMode, props.dateError, props.browseAll, props.freshStart])}
             {...props}
           />
         </BrowseMapContextShell>
