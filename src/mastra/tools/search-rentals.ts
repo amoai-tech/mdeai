@@ -19,7 +19,7 @@ import {
   isRentalSearchUnavailable,
 } from '../lib/rental-search-unavailable';
 import { unappliedRentalRequests } from '@/lib/rental-display';
-import { exactBedroomsFromQueryText, furnishingFromQueryText, scoreRentalQuery } from '@/lib/rental-query-parser';
+import { clearsFurnishingPreference, exactBedroomsFromQueryText, furnishingFromQueryText, scoreRentalQuery } from '@/lib/rental-query-parser';
 import { MONTHLY_CURRENCY_REQUIRED, monthlyBudgetHasCurrency } from '@/lib/rental-search-body-schema';
 import { writeSearchLog, type EmbedStatus } from '../lib/search-logs';
 import type { EmbedFailureReason } from '../lib/query-embedding';
@@ -678,7 +678,10 @@ export async function searchRentals(
   query = {
     ...query,
     neighborhood: query.neighborhood ?? textSignals?.neighborhood,
-    furnished: query.furnished ?? detectedFurnishing,
+    // The user's explicit no-preference wording wins over a stale model-supplied
+    // boolean. Never turn "either furnished or unfurnished" into a hard filter.
+    furnished: query.queryText && clearsFurnishingPreference(query.queryText)
+      ? undefined : query.furnished ?? detectedFurnishing,
   };
   const limit = query.limit ?? 8;
   const client = options?.client ?? getSupabaseClient();

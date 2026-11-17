@@ -317,6 +317,18 @@ describe("text-derived neighborhood with a furnishing predicate", () => {
   });
 });
 
+describe("explicit furnishing preference clear wins over stale tool args", () => {
+  it("does not impose a stale furnished=true when text says either state is fine", async () => {
+    const found = await search({
+      queryText: "Either furnished or unfurnished is fine",
+      furnished: true,
+    });
+    expect(found.results.some((r) => r.furnished === true)).toBe(true);
+    expect(found.results.some((r) => r.furnished === false)).toBe(true);
+    expect(found.results.some((r) => r.furnished == null)).toBe(true);
+  });
+});
+
 describe("source-backed furnishing filter", () => {
   it("includes true only, false only, and excludes unknown from both", async () => {
     const furnished = await search({ furnished: true });
