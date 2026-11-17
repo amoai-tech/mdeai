@@ -40,7 +40,7 @@ describe("plainTurns — tool-only steps always leave something readable", () =>
     ];
     const turns = plainTurns(messages);
     expect(turns).toHaveLength(1);
-    expect(turns[0].text).toBe("I couldn't display those cards. Try asking again.");
+    expect(turns[0].text).toBe("I couldn't update the AI cards. Any apartment results already shown are unchanged.");
   });
 
   it("names a search and an opened detail", () => {
@@ -93,7 +93,7 @@ describe("plainTurns — tool-only steps always leave something readable", () =>
       { id: "t1", role: "tool", toolCallId: "r1",
         content: JSON.stringify({ status: "rendered", applied: 0, rejected: [] }) },
     ];
-    expect(plainTurns(messages)[0].text).toBe("I couldn't display those cards. Try asking again.");
+    expect(plainTurns(messages)[0].text).toBe("I couldn't update the AI cards. Any apartment results already shown are unchanged.");
   });
 
   it("keeps a normal written answer and does not add a synthetic line", () => {

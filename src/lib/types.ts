@@ -13,6 +13,7 @@ export type ConciergeWorkingMemory = {
     neighborhood?: string;
     minBedrooms?: number;
     maxBedrooms?: number;
+    furnished?: boolean;
     maxPricePerNight?: number;
     maxPriceMonthly?: number;
     budgetCurrency?: "COP" | "USD";

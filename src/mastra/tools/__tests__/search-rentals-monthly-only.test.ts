@@ -22,6 +22,7 @@ const mockApartmentRows = [
     title: "Calle 10 #42-15, Laureles",
     neighborhood: "Laureles",
     bedrooms: 2,
+    furnished: true,
     price_daily: null,
     price_monthly: 2_400_000,
     currency: "COP",
@@ -47,6 +48,7 @@ const mockApartmentRows = [
     title: "Nightly-priced 1BR",
     neighborhood: "Laureles",
     bedrooms: 1,
+    furnished: false,
     price_daily: 78,
     price_monthly: null,
     currency: "USD",
@@ -224,7 +226,9 @@ function mockApartmentQueryStub(rows: Record<string, unknown>[]) {
     select: () => builder,
     // Only the currency split matters to these tests; the other columns stay pass-through.
     eq: (column: string, value: unknown) => {
-      if (column === "currency") filters.push((row) => String(row[column]) === String(value));
+      if (column === "currency" || column === "furnished") {
+        filters.push((row) => row[column] === value);
+      }
       return builder;
     },
     neq: (column: string, value: unknown) => {
@@ -238,7 +242,11 @@ function mockApartmentQueryStub(rows: Record<string, unknown>[]) {
       orderCalls.push({ column, nullsFirst: opts?.nullsFirst ?? false });
       return builder;
     },
-    ilike: () => builder,
+    ilike: (column: string, value: string) => {
+      const needle = value.replaceAll("%", "").toLowerCase();
+      filters.push((row) => String(row[column] ?? "").toLowerCase().includes(needle));
+      return builder;
+    },
     or: (clause: string) => {
       mockEmittedOrClauses.push(clause);
       if (clause.includes("price_")) {
@@ -286,6 +294,56 @@ async function search(query: Record<string, unknown> = {}) {
   orderCalls.length = 0;
   return searchRentals({ neighborhood: "Laureles", limit: 20, ...query });
 }
+
+describe("text-derived neighborhood with a furnishing predicate", () => {
+  it("matches Laureles but never Envigado when the caller only supplies queryText", async () => {
+    const { searchRentals } = await import("../search-rentals");
+    const otherArea = {
+      ...mockApartmentRows[0], id: "apt-envigado-furnished",
+      neighborhood: "Envigado", title: "Furnished apartment in Envigado",
+    };
+    mockApartmentRows.push(otherArea);
+    try {
+      const found = await searchRentals({
+        queryText: "furnished apartments in Laureles",
+        furnished: true, limit: 20,
+      });
+      expect(found.results.map((r) => r.id)).toContain("apt-cop-monthly");
+      expect(found.results.map((r) => r.id)).not.toContain("apt-envigado-furnished");
+      expect(found.results.every((r) => r.neighborhood === "Laureles")).toBe(true);
+    } finally {
+      mockApartmentRows.pop();
+    }
+  });
+});
+
+describe("explicit furnishing preference clear wins over stale tool args", () => {
+  it("does not impose a stale furnished=true when text says either state is fine", async () => {
+    const found = await search({
+      queryText: "Either is fine, furnished or unfurnished",
+      furnished: true,
+    });
+    expect(found.results.some((r) => r.furnished === true)).toBe(true);
+    expect(found.results.some((r) => r.furnished === false)).toBe(true);
+    expect(found.results.some((r) => r.furnished == null)).toBe(true);
+  });
+});
+
+describe("source-backed furnishing filter", () => {
+  it("includes true only, false only, and excludes unknown from both", async () => {
+    const furnished = await search({ furnished: true });
+    expect(furnished.results.map((r) => r.id)).toEqual(["apt-cop-monthly"]);
+    expect(furnished.results[0].furnished).toBe(true);
+
+    const unfurnished = await search({ furnished: false });
+    expect(unfurnished.results.map((r) => r.id)).toEqual(["apt-usd-nightly"]);
+    expect(unfurnished.results[0].furnished).toBe(false);
+
+    const any = await search({});
+    expect(any.results.length).toBeGreaterThan(furnished.results.length);
+    expect(any.results.some((r) => r.furnished == null)).toBe(true);
+  });
+});
 
 describe("nightlyPriceFrom — one derivation for both search paths", () => {
   it("prefers a stored nightly price", async () => {
@@ -530,6 +588,31 @@ describe("ordering must not truncate the matches a monthly budget asks for (SAN-
   it("keeps the stored nightly order when no monthly budget is applied", async () => {
     await search({});
     expect(orderCalls.map((o) => o.column)).toEqual(["price_daily", "id"]);
+  });
+});
+
+describe("Mastra tool furnishing input contract", () => {
+  it("does not change omitted furnishing into false, and accepts both booleans explicitly", async () => {
+    const { searchRentalsTool } = await import("../search-rentals");
+    const schema = searchRentalsTool.inputSchema as unknown as ZodType;
+    const omitted = schema.parse({});
+    expect(omitted).not.toHaveProperty("furnished");
+    expect(JSON.parse(JSON.stringify(omitted))).not.toHaveProperty("furnished");
+    expect(schema.parse({ furnished: true }).furnished).toBe(true);
+    expect(schema.parse({ furnished: false }).furnished).toBe(false);
+    expect(schema.safeParse({ furnished: null }).success).toBe(false);
+  });
+});
+
+describe("Mastra tool keeps the source furnishing fact in its chat result", () => {
+  it("does not strip furnished=true when serializing a matching apartment", async () => {
+    const { searchRentalsTool } = await import("../search-rentals");
+    const result = await searchRentalsTool.execute!({
+      neighborhood: "Laureles", minBedrooms: 2, maxBedrooms: 2, furnished: true,
+      maxPriceMonthly: 3_000_000, budgetCurrency: "COP", limit: 8,
+    }, {} as never) as { results: Array<{ id: string; furnished?: boolean | null }> };
+    expect(result.results).toHaveLength(1);
+    expect(result.results[0]).toMatchObject({ id: "apt-cop-monthly", furnished: true });
   });
 });
 

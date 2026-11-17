@@ -9,6 +9,7 @@ export type RentalSearchApiParams = {
   minBedrooms?: number;
   /** Inclusive upper bound for exact bedroom searches. */
   maxBedrooms?: number;
+  furnished?: boolean;
   maxPricePerNight?: number;
   /** Exact monthly ceiling, never a guessed nightly conversion. */
   maxPriceMonthly?: number;
@@ -362,6 +363,35 @@ function parseBedrooms(text: string): number | undefined {
  * instead mean a minimum. Reuse the canonical bedroom parser; no second
  * frontend-only filter or natural-language ranking engine.
  */
+/**
+ * Explicit 'either furnished or unfurnished' clears a previously applied filter.
+ * Bound regex windows prevent large-input backtracking; unknown values remain unknown.
+ */
+export function clearsFurnishingPreference(text: string): boolean {
+  if (text.length > MAX_RENTAL_TEXT_CHARS) return false;
+  const normalized = text.replaceAll("’", "'");
+  // The words "any" and "or" in a general apartment question are NOT a
+  // furnishing preference: "any furnished apartments" still means furnished.
+  const both = /\b(?:furnished|unfurnished)\s+(?:or|and)\s+(?:furnished|unfurnished)\b/i;
+  const either = /\beither\s+(?:furnished|unfurnished)\s+or\s+(?:furnished|unfurnished|not(?:\s+furnished)?)\b/i;
+  // The indifference must grammatically name furnishing, not another field
+  // in the same sentence (e.g. "price doesn't matter, must be furnished").
+  const noPreference = /\b(?:no preference|don'?t care|do not care|doesn'?t matter|indifferent|whatever)\s+(?:(?:if|whether|about|for)\s+)?(?:it(?:'?s|\s+is)\s+)?(?:furnished|unfurnished|furnishing|amoblad[oa]|amueblad[oa])\b/i;
+  const reverse = /\b(?:furnished|unfurnished|furnishing|amoblad[oa]|amueblad[oa])\s+(?:doesn'?t matter|no preference|is fine either way)\b/i;
+  const anyFurnishing = /\bany\s+furnishing\b/i;
+  const spanishEither = /\b(?:amoblad[oa]|amueblad[oa])\s+o\s+sin\s+(?:amoblar|amueblar)\b/i;
+  return both.test(normalized) || either.test(normalized) || noPreference.test(normalized) ||
+    reverse.test(normalized) || anyFurnishing.test(normalized) || spanishEither.test(normalized);
+}
+
+/** Only explicit positive/negative source-backed furnishing requests become a hard filter. */
+export function furnishingFromQueryText(text: string): boolean | undefined {
+  if (text.length > MAX_RENTAL_TEXT_CHARS || clearsFurnishingPreference(text)) return undefined;
+  if (/\b(?:unfurnished|sin[- ]+amoblar|sin[- ]+amueblar|not[- ]+furnished|no[- ]+furnished|no[- ]+amoblad[oa]|no[- ]+amueblad[oa])\b/i.test(text)) return false;
+  if (/\b(?:furnished|amoblad[oa]|amueblad[oa])\b/i.test(text)) return true;
+  return undefined;
+}
+
 export function exactBedroomsFromQueryText(text: string): number | undefined {
   if (text.length > MAX_RENTAL_TEXT_CHARS) return undefined;
   const match = BEDROOM_RE.exec(text);
@@ -411,9 +441,18 @@ export function looksLikeRentalAnalysis(text: string): boolean {
     !referencesShownResults
   ) return false;
   if (RENTAL_ANALYSIS_RE.test(bounded)) return true;
+  // "Like these in Envigado" is a new discovery request, not an analysis
+  // of already shown cards. Explicit area + search phrasing wins.
+  if (scoreRentalQuery(bounded).hasNeighborhood &&
+      /\b(?:show|find|search|(?:do|can) you have|looking for)\b/i.test(bounded) &&
+      /\b(?:apartments?|rentals?|listings?|homes?)\b/i.test(bounded) &&
+      /\b(?:like|similar to)\s+(?:these|those)\b/i.test(bounded)) return false;
   // "first" alone is not a result reference: "first-floor apartment … better wifi"
   // is a fresh search. Require "first apartment/one/two/…", "these", "those" or "them".
-  return referencesShownResults && (WHY_RE.test(bounded) || COMPARATIVE_RE.test(bounded));
+  return referencesShownResults && (
+    WHY_RE.test(bounded) || COMPARATIVE_RE.test(bounded) ||
+    /\b(?:which|are|is|do|does)\b.{0,60}\b(?:these|those|them)\b/i.test(bounded)
+  );
 }
 
 /** User message is clearly about rentals, not events or cafés. */
@@ -581,6 +620,14 @@ function bedroomFields(
   };
 }
 
+/** A budget-only follow-up keeps the last furnishing requirement. */
+function furnishingFields(text: string, previous?: ConciergeWorkingMemory["lastRentalQuery"]):
+  Pick<RentalSearchApiParams, "furnished"> {
+  if (clearsFurnishingPreference(text)) return { furnished: undefined };
+  const explicit = furnishingFromQueryText(text);
+  return { furnished: explicit === undefined ? previous?.furnished : explicit };
+}
+
 function stayTypeForRefinement(
   text: string,
   s: RentalQuerySignals,
@@ -650,6 +697,7 @@ export function buildRentalSearchParams(
   if (cityWide && lastQuery && !looksLikeRentalSearch(text)) {
     return {
       ...bedroomFields(text, s, lastQuery),
+      ...furnishingFields(text, lastQuery),
       // "Anywhere is fine" keeps the saved budget, but an explicit new budget in the same
       // message ("anywhere under €1500/month") replaces it instead of copying the stale one.
       ...mergedBudgetFields(text, lastQuery, s),
@@ -664,6 +712,7 @@ export function buildRentalSearchParams(
     const merged: RentalSearchApiParams = {
       neighborhood: s.neighborhood ?? q.neighborhood,
       ...bedroomFields(text, s, q),
+      ...furnishingFields(text, q),
       ...mergedBudgetFields(text, q, s),
       checkIn: s.checkIn ?? q.checkIn,
       checkOut: s.checkOut ?? q.checkOut,
@@ -688,6 +737,7 @@ export function buildRentalSearchParams(
       {
         neighborhood: s.neighborhood ?? q?.neighborhood,
         ...bedroomFields(text, s, q),
+      ...furnishingFields(text, q),
         ...mergedBudgetFields(text, q, s),
         checkIn: q?.checkIn,
         checkOut: q?.checkOut,
@@ -706,6 +756,7 @@ export function buildRentalSearchParams(
       {
         neighborhood: s.neighborhood,
         ...bedroomFields(text, s),
+        ...furnishingFields(text),
         maxPricePerNight: s.maxPricePerNight,
         limit,
       },
@@ -719,6 +770,7 @@ export function buildRentalSearchParams(
       {
         neighborhood: s.neighborhood,
         ...bedroomFields(text, s),
+        ...furnishingFields(text),
         maxPricePerNight: s.maxPricePerNight,
         limit,
       },
@@ -737,6 +789,7 @@ export function buildRentalSearchParams(
         neighborhood: q.neighborhood,
         minBedrooms: q.minBedrooms,
         maxBedrooms: q.maxBedrooms,
+        ...furnishingFields(text, q),
         maxPricePerNight: q.maxPricePerNight,
         maxPriceMonthly: q.maxPriceMonthly,
         budgetCurrency: q.budgetCurrency,
@@ -761,6 +814,7 @@ export function buildRentalSearchParams(
         limit,
         neighborhood: s.neighborhood,
         ...bedroomFields(text, s),
+        ...furnishingFields(text),
         maxPricePerNight: s.maxPricePerNight,
       },
       text,

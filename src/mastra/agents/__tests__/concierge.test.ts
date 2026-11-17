@@ -553,6 +553,27 @@ describe("concierge updateWorkingMemory tolerates provider padding", () => {
     expect(saved?.lastRestaurantQuery).toMatchObject({ priceTier: "$$$" });
   });
 
+  it("explicitly clears a stored furnishing preference without dropping padded fields", async () => {
+    const stored = { ...existing, lastRentalQuery: {
+      neighborhood: "Laureles", furnished: true, minBedrooms: 2, maxPriceMonthly: 3_000_000,
+      budgetCurrency: "COP",
+    } };
+    const { out, saved } = await update({
+      lastRentalQuery: { clearFurnishing: true, neighborhood: "", maxPriceMonthly: null },
+    }, stored);
+    expect(out.error).toBeUndefined();
+    expect(saved?.lastRentalQuery).toMatchObject({
+      neighborhood: "Laureles", minBedrooms: 2,
+      maxPriceMonthly: 3_000_000, budgetCurrency: "COP",
+    });
+    expect(saved?.lastRentalQuery).not.toHaveProperty("furnished");
+    expect(saved?.lastRentalQuery).not.toHaveProperty("clearFurnishing");
+
+    const blank = await update({ lastRentalQuery: { furnished: null, neighborhood: "" } }, stored);
+    expect(blank.out.error).toBeUndefined();
+    expect(blank.saved?.lastRentalQuery).toHaveProperty("furnished", true);
+  });
+
   it("empty arrays keep Mastra's replace semantics", async () => {
     const { out, saved } = await update({ lastRentalResults: [], lastEventResults: [] }, { ...existing, lastRentalResults: [{ id: "r", title: "t", neighborhood: "n", nightly_price: 1 }] });
     expect(out.error).toBeUndefined();
@@ -568,6 +589,7 @@ describe("concierge updateWorkingMemory tolerates provider padding", () => {
   it("the model-facing schema is unchanged: real enums only, no blank accepted", () => {
     const json = JSON.stringify(zodToJsonSchema(updateTool().inputSchema));
     expect(json).toContain('"nightly","monthly","total_trip"');
+    expect(json).toContain('"clearFurnishing"');
     expect(json).not.toContain('""');
   });
 

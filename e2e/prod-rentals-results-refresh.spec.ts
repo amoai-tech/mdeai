@@ -96,8 +96,8 @@ test.describe("SAN-1421 — same-thread filtered cards survive production reload
 
     await ask(firstQuery);
     await expect.poll(() => cards.count(), { timeout: 40_000 }).toBeGreaterThan(0);
-    // Furnishing isn't an enforced search predicate: never certify these cards as furnished.
-    await expect(banner).toContainText("can't filter by furnished");
+    // A requested furnishing filter must reject false/null stored values, not just label them.
+    await expect(banner).not.toContainText("can't filter by furnished");
     await ask(budgetQuery);
     await expect.poll(() => cards.count(), { timeout: 40_000 }).toBeGreaterThan(0);
     const before = await visible();
@@ -107,7 +107,7 @@ test.describe("SAN-1421 — same-thread filtered cards survive production reload
     expect(threadBefore).toMatch(/^[0-9a-f-]{36}$/i);
     expect(before.length).toBeGreaterThan(0);
     expect(new Set(before.map((r) => r.id)).size).toBe(before.length);
-    await expect(banner).toContainText("can't filter by furnished");
+    await expect(banner).not.toContainText("can't filter by furnished");
 
     // Independent grounding: verify canonical IDs against the real apartment rows, rather
     // than trusting what the AI or a result card says. These are read-only queries.
@@ -129,11 +129,10 @@ test.describe("SAN-1421 — same-thread filtered cards survive production reload
       expect(row!.price_monthly, "a monthly-budget match needs a stored monthly price")
         .not.toBeNull();
       expect(Number(row!.price_monthly)).toBeLessThanOrEqual(3_000_000);
-      // A false/null furnished value is never an asserted match. The UI must disclose
-      // that furnishing was not filtered, including after a follow-up and refresh.
-      if (row!.furnished !== true) {
-        expect(bannerBefore).toContain("can't filter by furnished");
-      }
+      // Only explicitly confirmed furnished listings may match this request.
+      expect(row!.furnished).toBe(true);
+      await expect(page.getByTestId(`rental-furnishing-${card.id}`))
+        .toContainText("Furnished listed");
     }
     expect(bannerBefore).toContain("Other currencies are excluded because no exchange rate is available.");
 
@@ -145,7 +144,7 @@ test.describe("SAN-1421 — same-thread filtered cards survive production reload
 
     await page.reload({ waitUntil: "domcontentloaded" });
     await expect(banner).toContainText(budgetQuery, { timeout: 50_000 });
-    await expect(banner).toContainText("can't filter by furnished");
+    await expect(banner).not.toContainText("can't filter by furnished");
     await expect.poll(visible, { timeout: 50_000 }).toEqual(before);
     await expect.poll(markerIds, { timeout: 30_000 }).toEqual(pinsBefore);
     expect(await banner.innerText()).toBe(bannerBefore);
@@ -168,13 +167,12 @@ test.describe("SAN-1421 — same-thread filtered cards survive production reload
     await expect.poll(async () => (await lines.allInnerTexts())
       .filter((s) => s.startsWith("You") && s.includes(budgetQuery)).length,
     { timeout: 30_000 }).toBe(1);
-    // On a phone the expanded transcript deliberately uses the results' screen space.
-    // Close that user-opened panel before returning to the apartment cards, rather than
-    // force-clicking through the composer/nav overlay and measuring an impossible action.
+    // Regression: the conversation remains EXPANDED while the renter clicks Details.
+    // No forced click or hidden control is acceptable at 390px.
     if (isMobile) {
-      await transcriptToggle.click();
-      await expect(transcriptToggle).toHaveAttribute("aria-expanded", "false");
-      await expect(page.locator('[data-testid="rental-ask-transcript"]')).toHaveCount(0);
+      await expect.poll(() => page.getByTestId("workspace-ask-composer").evaluate(
+        (el) => getComputedStyle(el).position,
+      )).toBe("static");
     }
     // AI result → real Details: same selected listing, not another search or a fake link.
     const firstResult = before[0];

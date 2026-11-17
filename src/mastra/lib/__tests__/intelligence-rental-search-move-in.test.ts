@@ -7,12 +7,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { rowToRental, type ApartmentRow } from "../../tools/search-rentals";
 
 const mocks = vi.hoisted(() => {
-  const state = { aptRows: [] as Array<Record<string, unknown>>, hybridIds: [] as string[], filters: [] as string[] };
+  const state = { aptRows: [] as Array<Record<string, unknown>>, hybridIds: [] as string[],
+    filters: [] as string[], projections: [] as string[] };
   const makeThenable = (dataFactory: () => unknown[]) => {
     const chain: Record<string, unknown> = {};
     const pass = vi.fn(() => chain);
     Object.assign(chain, {
-      select: pass, in: pass, eq: pass, order: pass, ilike: pass, limit: pass,
+      select: vi.fn((columns: string) => { state.projections.push(columns); return chain; }),
+      in: pass, eq: pass, order: pass, ilike: pass, limit: pass,
       or: vi.fn((f: string) => { state.filters.push(`or(${f})`); return chain; }),
       not: vi.fn((c: string, o: string, v: unknown) => { state.filters.push(`not(${c},${o},${String(v)})`); return chain; }),
       maybeSingle: vi.fn(async () => ({ data: null, error: null })),
@@ -84,6 +86,28 @@ describe("searchRentalsIntelligent — future move-in (SAN-486)", () => {
     mocks.state.aptRows = [];
     mocks.state.hybridIds = [];
     mocks.state.filters = [];
+    mocks.state.projections = [];
+  });
+
+  it("preserves source-backed furnishing for hybrid and keyword recommendations", async () => {
+    const row = baseRow({ available_from: "2099-11-01", furnished: true });
+    mocks.state.aptRows = [row];
+    const { searchRentalsIntelligent } = await import("../intelligence-rental-search");
+
+    for (const hybridIds of [[row.id as string], []]) {
+      mocks.state.hybridIds = hybridIds;
+      mocks.state.projections = [];
+      const { results } = await searchRentalsIntelligent({
+        queryText: "quiet apartments in Laureles", limit: 5,
+      });
+      expect(results).toHaveLength(1);
+      expect(results[0].furnished).toBe(true);
+      // The mock returns complete rows even for incomplete selects: assert
+      // the actual requested PostgREST projection includes the source field.
+      const apartmentSelects = mocks.state.projections.filter((v) => v.includes("price_monthly, currency"));
+      expect(apartmentSelects.length).toBeGreaterThan(0);
+      for (const projection of apartmentSelects) expect(projection).toContain("bedrooms, furnished");
+    }
   });
 
   it("does not claim an inactive development apartment is available for rent", () => {

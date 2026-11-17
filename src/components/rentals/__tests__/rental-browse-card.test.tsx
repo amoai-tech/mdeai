@@ -72,6 +72,14 @@ function renderCard(
   );
 }
 
+describe("RentalBrowseCard — source-backed furnishing truth", () => {
+  it("shows true, false and unknown as three different facts", () => {
+    expect(renderCard({ furnished: true })).toContain("Furnished listed");
+    expect(renderCard({ furnished: false })).toContain("Unfurnished listed");
+    expect(renderCard({ furnished: null })).toContain("Furnishing not specified");
+  });
+});
+
 describe("RentalBrowseCard — SAN-1349 viewing CTA truthfulness", () => {
   it("offers map selection in its own button instead of nesting links inside a role=button", () => {
     const html = renderToStaticMarkup(

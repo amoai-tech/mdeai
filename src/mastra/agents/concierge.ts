@@ -42,6 +42,8 @@ export const conciergeWorkingMemorySchema = z.object({
       neighborhood: z.string().optional(),
       minBedrooms: z.number().optional(),
       maxBedrooms: z.number().optional(),
+      furnished: z.boolean().nullable().optional(),
+      clearFurnishing: z.boolean().optional().describe('Set true only when the renter explicitly accepts both furnished and unfurnished. Omit otherwise; blanks do not clear saved preferences.'),
       maxPricePerNight: z.number().optional(),
       maxPriceMonthly: z.number().positive().optional(),
       budgetCurrency: z.enum(['COP', 'USD']).optional(),
@@ -160,6 +162,7 @@ const PADDED_FIELDS = {
     'neighborhood',
     'minBedrooms',
     'maxBedrooms',
+    'furnished',
     'maxPricePerNight',
     'maxPriceMonthly',
     'budgetCurrency',
@@ -225,6 +228,11 @@ function normalizeModelMemory(raw: unknown): unknown {
   // Neither is a meaningful ceiling; discard it instead of poisoning future follow-ups.
   if (isPlainObject(clean.lastRentalQuery)) {
     const query = { ...clean.lastRentalQuery };
+    // Separate model padding (null/empty = no update) from a deliberate clear.
+    // Mastra's deep-merge deletes a stored property for an explicit null patch.
+    if (query.clearFurnishing === true) query.furnished = null;
+    delete query.clearFurnishing;
+    normalized.lastRentalQuery = query;
     const amount = query.maxPriceMonthly;
     const currency = typeof query.budgetCurrency === 'string' && query.budgetCurrency.trim()
       ? query.budgetCurrency : undefined;
@@ -266,7 +274,7 @@ const conciergeBaseInstructions = `You are the mdeAI Medellín concierge — a h
 # Tools
 - read-broker-workspace: for a SIGNED-IN rental broker asking about MY listings, leads, viewing requests, or broker dashboard. ALWAYS call this read-only, authenticated tool before answering broker questions, including "Which viewing requests need my attention?". It reads only the caller's own RLS-scoped rows. Never use public rental search for private broker operations. If no broker profile or tool error, say so; do not invent data. Never claim it sent a reply, approved a booking, published a listing or changed a viewing. Direct the broker to the manual workspace actions for changes.
 - lookup-public-discovery-item: when the current turn includes a # Server-verified current selection block, the server-side public RLS lookup ALREADY completed. For questions about that selected item, answer only from the verified public fields in that block; do NOT call the lookup tool again for the same ID. If the selected-item block reports UNVERIFIABLE or LOOKUP FAILED, disclose that rather than guessing. For a DIFFERENT specifically identified public item, call this lookup with its page and ID BEFORE answering its facts. For an unrelated new discovery request, use the appropriate search tool normally. Client IDs never grant authorization. Never infer omitted attributes (e.g. balcony/Wi-Fi/availability/ticket prices).
-- search-rentals: apartments, stays, lodging. For natural-language rental discovery (e.g. "digital nomad rental in Laureles near cafes"), call search-rentals with queryText set to the user's exact phrase plus structured filters when known. Keep requests this search cannot filter (pets, furnished, parking, pool, gym) inside queryText — the cards disclose them from that text. Never say or imply such a filter was applied.
+- search-rentals: apartments, stays, lodging. For natural-language rental discovery (e.g. "digital nomad rental in Laureles near cafes"), call search-rentals with queryText set to the user's exact phrase plus structured filters when known. Set furnished=true only when the renter explicitly requests furnished, furnished=false only for unfurnished, and omit the field for no preference; the canonical search uses the stored apartment boolean and treats unknown as nonmatching. For a follow-up that accepts either state, use clearFurnishing=true in lastRentalQuery working memory, and omit furnished in the new search. Keep unsupported requests (pets, parking, pool, gym) inside queryText so cards disclose them. Never say or imply an unsupported filter was applied.
 - search-events: ticketed events, concerts, festivals. For intent-rich queries (e.g. "salsa this weekend", "live music in Poblado"), call search-events with queryText set to the user's phrase plus category/dateWindow when obvious — not for bar/club venue discovery.
 - search-grounded-places: caf\u00e9s, bars, salsa venues, rooftop cocktails, clubs, and other map POIs via Google Maps grounding. For salsa bars, hidden bars, rooftop cocktails, nightlife locals recommend, coffee/coworking, or quiet caf\u00e9s (e.g. "salsa bars in Poblado", "rooftop cocktails Provenza", "cafe with strong Wi-Fi Laureles"), call search-grounded-places with the user's exact phrase — never search-restaurants for those.
 - A restaurant name or table-booking request must use search-restaurants or lookup-public-discovery-item for a canonical restaurant UUID. NEVER pass intent "restaurant" to search-grounded-places: that tool only accepts "cafe", "general", "nightlife". If the user asks to request a table, search the real restaurant first and only then propose booking for review.
