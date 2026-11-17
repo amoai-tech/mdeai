@@ -9,6 +9,7 @@ import { BROKER_ONBOARDING_NEIGHBORHOODS } from "@/lib/rentals/broker-onboarding
 import type { BrokerOnboardingFormInput } from "@/lib/rentals/broker-onboarding-validate";
 import { submitBrokerOnboarding } from "@/lib/rentals/submit-broker-onboarding";
 import { BrokerAddressSearch } from "@/components/host/rentals/broker-address-search";
+import { RentalsListingLivePreview } from "@/components/host/rentals/rentals-listing-live-preview";
 import type { PlaceSearchResult } from "@/lib/place-search";
 import { cn } from "@/lib/utils";
 
@@ -185,83 +186,86 @@ export function RentalsOnboardingWizard({ destination = "host" }: { destination?
       ) : null}
 
       {step === 2 ? (
-        <section
-          data-testid="ro-step-listing"
-          className="space-y-4 rounded-xl border border-border bg-card p-6"
-        >
-          <div className="space-y-2">
-            <Label htmlFor="ro-address">Street address</Label>
-            <BrokerAddressSearch
-              value={form.address}
-              onTextChange={(value) => patch("address", value)}
-              onSelect={(result) => patchPlace(result)}
-              onClearSelection={() => patchPlace(null)}
-            />
-            {form.placeId ? (
-              <p data-testid="ro-address-verified" className="text-xs text-emerald-600">
-                Address selected. We confirm it with Google when you save.
-              </p>
-            ) : (
+        <div className="grid min-w-0 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,0.75fr)]">
+          <section
+            data-testid="ro-step-listing"
+            className="min-w-0 space-y-4 rounded-xl border border-border bg-card p-4 sm:p-6"
+          >
+            <div className="space-y-2">
+              <Label htmlFor="ro-address">Street address</Label>
+              <BrokerAddressSearch
+                value={form.address}
+                onTextChange={(value) => patch("address", value)}
+                onSelect={(result) => patchPlace(result)}
+                onClearSelection={() => patchPlace(null)}
+              />
+              {form.placeId ? (
+                <p data-testid="ro-address-verified" className="text-xs text-emerald-600">
+                  Address selected. We confirm it with Google when you save.
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Pick the matching address to save trusted coordinates. You can still save a draft without them.
+                </p>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="ro-bedrooms">Bedrooms</Label>
+                <Input
+                  id="ro-bedrooms"
+                  type="number"
+                  min={0}
+                  value={form.bedrooms}
+                  onChange={(e) => patch("bedrooms", Number(e.target.value))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="ro-bathrooms">Bathrooms</Label>
+                <Input
+                  id="ro-bathrooms"
+                  type="number"
+                  min={0}
+                  step={0.5}
+                  value={form.bathrooms}
+                  onChange={(e) => patch("bathrooms", Number(e.target.value))}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="ro-rent">Monthly rent (COP)</Label>
+              <Input
+                id="ro-rent"
+                type="number"
+                min={1}
+                value={form.monthlyRentCop || ""}
+                onChange={(e) => patch("monthlyRentCop", Number(e.target.value))}
+                placeholder="2400000"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="ro-photo">Photo URL (optional)</Label>
+              <Input
+                id="ro-photo"
+                value={form.photoUrl}
+                onChange={(e) => patch("photoUrl", e.target.value)}
+                placeholder="https://… (storage upload follow-up)"
+              />
               <p className="text-xs text-muted-foreground">
-                Pick the matching address to save trusted coordinates. You can still save a draft without them.
+                Paste an image URL for Class U proof — Supabase Storage upload ships later.
               </p>
-            )}
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="ro-bedrooms">Bedrooms</Label>
-              <Input
-                id="ro-bedrooms"
-                type="number"
-                min={0}
-                value={form.bedrooms}
-                onChange={(e) => patch("bedrooms", Number(e.target.value))}
-              />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="ro-bathrooms">Bathrooms</Label>
-              <Input
-                id="ro-bathrooms"
-                type="number"
-                min={0}
-                step={0.5}
-                value={form.bathrooms}
-                onChange={(e) => patch("bathrooms", Number(e.target.value))}
-              />
+            <div className="flex justify-between gap-2">
+              <Button type="button" variant="outline" onClick={() => setStep(1)}>
+                ← Back
+              </Button>
+              <Button type="button" disabled={!canContinueStep2} onClick={() => setStep(3)}>
+                Continue →
+              </Button>
             </div>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="ro-rent">Monthly rent (COP)</Label>
-            <Input
-              id="ro-rent"
-              type="number"
-              min={1}
-              value={form.monthlyRentCop || ""}
-              onChange={(e) => patch("monthlyRentCop", Number(e.target.value))}
-              placeholder="2400000"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="ro-photo">Photo URL (optional)</Label>
-            <Input
-              id="ro-photo"
-              value={form.photoUrl}
-              onChange={(e) => patch("photoUrl", e.target.value)}
-              placeholder="https://… (storage upload follow-up)"
-            />
-            <p className="text-xs text-muted-foreground">
-              Paste an image URL for Class U proof — Supabase Storage upload ships later.
-            </p>
-          </div>
-          <div className="flex justify-between gap-2">
-            <Button type="button" variant="outline" onClick={() => setStep(1)}>
-              ← Back
-            </Button>
-            <Button type="button" disabled={!canContinueStep2} onClick={() => setStep(3)}>
-              Continue →
-            </Button>
-          </div>
-        </section>
+          </section>
+          <RentalsListingLivePreview listing={form} className="lg:sticky lg:top-4" />
+        </div>
       ) : null}
 
       {step === 3 ? (
