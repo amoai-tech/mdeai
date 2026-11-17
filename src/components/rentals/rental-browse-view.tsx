@@ -75,6 +75,8 @@ export type RentalBrowseViewProps = {
   dateError?: string | null;
   /** A direct visit with no search or filters has no catalogue results yet. */
   freshStart?: boolean;
+  /** Preserve a deliberate Browse all visit through Details and Retry. */
+  browseAll?: boolean;
   /** Only for local previews, never changes actual rental eligibility. */
   previewMode?: boolean;
 };
@@ -90,6 +92,7 @@ function RentalBrowseViewInner({
   through = null,
   dateError = null,
   freshStart = false,
+  browseAll = false,
   previewMode = false,
 }: RentalBrowseViewProps) {
   const router = useRouter();
@@ -120,9 +123,10 @@ function RentalBrowseViewInner({
   }, [activeAsk, neighborhood, beds]);
   const filterState = { neighborhood, beds, from, through };
   // A preview fixture failure must retry the preview, not send the user to the public browse.
-  const retryHref = previewMode ? buildRetryHref({ neighborhood, beds }, true) : buildRentalsUrl(filterState);
+  const retryHref = previewMode ? buildRetryHref({ neighborhood, beds }, true)
+    : browseAll ? "/rentals?browse=all" : buildRentalsUrl(filterState);
   // Cards link to their detail page with the current filters, so "Back to results" returns to them.
-  const detailSearch = rentalsQueryString(filterState);
+  const detailSearch = browseAll ? "?browse=all" : rentalsQueryString(filterState);
   const stayLabel =
     !dateError && (from || through)
       ? from && through
@@ -444,7 +448,7 @@ export function RentalBrowseView(props: RentalBrowseViewProps) {
       <RentalFastPathProvider>
         <BrowseMapContextShell>
           <RentalBrowseViewInner
-            key={JSON.stringify([threadId, props.neighborhood, props.beds, props.from, props.through, props.previewMode, props.dateError])}
+            key={JSON.stringify([threadId, props.neighborhood, props.beds, props.from, props.through, props.previewMode, props.dateError, props.browseAll, props.freshStart])}
             {...props}
           />
         </BrowseMapContextShell>
