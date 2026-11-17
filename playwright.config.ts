@@ -49,6 +49,10 @@ const REMOTE_QA_SPECS = [
     ? ["**/qa-role-selection.spec.ts"] : []),
   ...(process.env.MDE_SUPER_ADMIN_QA === "1"
     ? ["**/qa-super-admin-fixture.spec.ts"] : []),
+  // SAN-1426 uses the existing real SAN-1205 fixture, so it stays opt-in
+  // and runs only under the remote QA project, never ordinary smoke tests.
+  ...(process.env.SAN1426_VIEWINGS_E2E === "1"
+    ? ["**/prod-san1426-renter-viewings.spec.ts"] : []),
   ...(process.env.MDE_PARTNER_LIVE_SOURCE_E2E === "1"
     ? ["**/app/partner-ai-signup-live-source.spec.ts"] : []),
 ];
