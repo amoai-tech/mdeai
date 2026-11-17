@@ -19,7 +19,7 @@ import {
   isRentalSearchUnavailable,
 } from '../lib/rental-search-unavailable';
 import { unappliedRentalRequests } from '@/lib/rental-display';
-import { exactBedroomsFromQueryText, furnishingFromQueryText } from '@/lib/rental-query-parser';
+import { exactBedroomsFromQueryText, furnishingFromQueryText, scoreRentalQuery } from '@/lib/rental-query-parser';
 import { MONTHLY_CURRENCY_REQUIRED, monthlyBudgetHasCurrency } from '@/lib/rental-search-body-schema';
 import { writeSearchLog, type EmbedStatus } from '../lib/search-logs';
 import type { EmbedFailureReason } from '../lib/query-embedding';
@@ -671,8 +671,15 @@ export async function searchRentals(
       query.minBedrooms > query.maxBedrooms) {
     throw new RangeError('maxBedrooms must be greater than or equal to minBedrooms');
   }
+  const textSignals = query.queryText ? scoreRentalQuery(query.queryText) : undefined;
   const detectedFurnishing = query.queryText ? furnishingFromQueryText(query.queryText) : undefined;
-  query = { ...query, furnished: query.furnished ?? detectedFurnishing };
+  // Furnishing bypasses semantic search, so carry the same text-derived location
+  // into the canonical SQL path instead of accidentally querying every area.
+  query = {
+    ...query,
+    neighborhood: query.neighborhood ?? textSignals?.neighborhood,
+    furnished: query.furnished ?? detectedFurnishing,
+  };
   const limit = query.limit ?? 8;
   const client = options?.client ?? getSupabaseClient();
   // Development inventory is already returned by canonical RLS-backed search.

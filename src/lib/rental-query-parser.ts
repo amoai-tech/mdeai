@@ -367,13 +367,13 @@ function parseBedrooms(text: string): number | undefined {
  * Explicit 'either furnished or unfurnished' clears a previously applied filter.
  * Bound regex windows prevent large-input backtracking; unknown values remain unknown.
  */
-function clearsFurnishingPreference(text: string): boolean {
+export function clearsFurnishingPreference(text: string): boolean {
   if (text.length > MAX_RENTAL_TEXT_CHARS) return false;
   const normalized = text.replaceAll("’", "'");
   // The words "any" and "or" in a general apartment question are NOT a
   // furnishing preference: "any furnished apartments" still means furnished.
   const both = /\b(?:furnished|unfurnished)\s+(?:or|and)\s+(?:furnished|unfurnished)\b/i;
-  const either = /\beither\s+(?:furnished|unfurnished)\b/i;
+  const either = /\beither\s+(?:furnished|unfurnished)\s+or\s+(?:furnished|unfurnished|not(?:\s+furnished)?)\b/i;
   // The indifference must grammatically name furnishing, not another field
   // in the same sentence (e.g. "price doesn't matter, must be furnished").
   const noPreference = /\b(?:no preference|don'?t care|do not care|doesn'?t matter|indifferent|whatever)\s+(?:(?:if|whether|about|for)\s+)?(?:it(?:'?s|\s+is)\s+)?(?:furnished|unfurnished|furnishing|amoblad[oa]|amueblad[oa])\b/i;
@@ -387,7 +387,7 @@ function clearsFurnishingPreference(text: string): boolean {
 /** Only explicit positive/negative source-backed furnishing requests become a hard filter. */
 export function furnishingFromQueryText(text: string): boolean | undefined {
   if (text.length > MAX_RENTAL_TEXT_CHARS || clearsFurnishingPreference(text)) return undefined;
-  if (/\b(?:unfurnished|sin[- ]+amoblar|sin[- ]+amueblar|not[- ]+furnished|no[- ]+amoblad[oa]|no[- ]+amueblad[oa])\b/i.test(text)) return false;
+  if (/\b(?:unfurnished|sin[- ]+amoblar|sin[- ]+amueblar|not[- ]+furnished|no[- ]+furnished|no[- ]+amoblad[oa]|no[- ]+amueblad[oa])\b/i.test(text)) return false;
   if (/\b(?:furnished|amoblad[oa]|amueblad[oa])\b/i.test(text)) return true;
   return undefined;
 }
@@ -443,7 +443,10 @@ export function looksLikeRentalAnalysis(text: string): boolean {
   if (RENTAL_ANALYSIS_RE.test(bounded)) return true;
   // "first" alone is not a result reference: "first-floor apartment … better wifi"
   // is a fresh search. Require "first apartment/one/two/…", "these", "those" or "them".
-  return referencesShownResults && (WHY_RE.test(bounded) || COMPARATIVE_RE.test(bounded));
+  return referencesShownResults && (
+    WHY_RE.test(bounded) || COMPARATIVE_RE.test(bounded) ||
+    /\b(?:which|are|is|do|does)\b.{0,60}\b(?:these|those|them)\b/i.test(bounded)
+  );
 }
 
 /** User message is clearly about rentals, not events or cafés. */

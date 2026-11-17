@@ -126,6 +126,11 @@ function latestRentalToolResult(
   return null;
 }
 
+/** Take the current thread result as a send boundary, never as a new answer. */
+export function latestRentalToolSignature(messages: readonly AgentMessage[]): string {
+  return latestRentalToolResult(messages)?.signature ?? "";
+}
+
 // One mapping for both writers: the fast path and the Rentals ask box must
 // store the same comparison facts (monthly price, currency, bedrooms) and the
 // same placeholder omissions.

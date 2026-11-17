@@ -397,6 +397,34 @@ describe("RentalAskComposer (SAN-1421)", () => {
     expect(chat.appendMessage).toHaveBeenLastCalledWith("does this one have a balcony?");
   });
 
+  it("does not publish the old rental result when a new run rejects render_ui", async () => {
+    const onResults = vi.fn();
+    agent.messages.push(
+      { id: "old-user", role: "user", content: "2BR in Laureles" },
+      { id: "old-call", role: "assistant", toolCalls: [{ id: "search-old", function: { name: "searchRentals" } }] },
+      { id: "old-result", role: "tool", toolCallId: "search-old", content: JSON.stringify({ results: [rental("old-1")] }) },
+    );
+    render(<RentalAskComposer onResults={onResults} />);
+    type("Only under COP 2 million");
+    chat.appendMessage.mockImplementationOnce(async () => {
+      for (const notify of agent.listeners) notify();
+      agent.messages.push(
+        { id: "new-user", role: "user", content: "Only under COP 2 million" },
+        { id: "rejected-call", role: "assistant", toolCalls: [{ id: "render-new", function: { name: "render_ui" } }] },
+        { id: "rejected-result", role: "tool", toolCallId: "render-new",
+          content: JSON.stringify({ applied: 0, rejected: [{ reason: "unsupported operation" }] }) },
+      );
+      for (const notify of agent.listeners) notify();
+      return true;
+    });
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+    await waitFor(() => expect(chat.appendMessage).toHaveBeenCalled());
+    // An old tool call may be present, but it is not evidence of the new run.
+    expect(onResults).not.toHaveBeenCalledWith(expect.objectContaining({
+      results: expect.arrayContaining([expect.objectContaining({ id: "old-1" })]),
+    }));
+  });
+
   it("preserves prior cards on a failed follow-up and retries without duplicate actions", async () => {
     const onResults = vi.fn();
     const fetchMock = vi.fn()
@@ -823,6 +851,45 @@ describe("RentalAskComposer (SAN-1421)", () => {
 
     expect(onResults).toHaveBeenCalledTimes(1);
     expect(fetchMock).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it("treats furnishing changes and explicit clearing as fallback filters, but not analysis", async () => {
+    const fetchMock = vi.fn().mockImplementation(async () =>
+      new Response(JSON.stringify({ results: [rental("rnt_1")], total: 1 }), { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const onResults = vi.fn();
+    render(<RentalAskComposer onResults={onResults} />);
+
+    type("Furnished 2BR apartments in Laureles");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(onResults).toHaveBeenCalledTimes(1));
+
+    type("Actually unfurnished");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(JSON.parse(String((fetchMock.mock.calls[1][1] as RequestInit).body)).furnished).toBe(false);
+    await waitFor(() => expect(onResults).toHaveBeenCalledTimes(2));
+
+    const priorSetStateCount = coagent.setState.mock.calls.length;
+    type("Either furnished or unfurnished is fine");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    const last = JSON.parse(String((fetchMock.mock.calls[2][1] as RequestInit).body));
+    expect(last.furnished).toBeUndefined();
+
+    const statePatch = coagent.setState.mock.calls[priorSetStateCount]?.[0];
+    const prior = { lastRentalQuery: { neighborhood: "Laureles", furnished: false, minBedrooms: 2 } };
+    const next = typeof statePatch === "function" ? statePatch(prior) : { ...prior, ...statePatch };
+    expect(next.lastRentalQuery).not.toHaveProperty("furnished");
+    await waitFor(() => expect(onResults).toHaveBeenCalledTimes(3));
+
+    type("Which of these is furnished?");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+    await waitFor(() => expect(chat.appendMessage).toHaveBeenCalledTimes(4));
+    expect(fetchMock).toHaveBeenCalledTimes(3);
     vi.unstubAllGlobals();
   });
 

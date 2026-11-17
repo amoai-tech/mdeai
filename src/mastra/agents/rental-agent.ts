@@ -38,7 +38,7 @@ export const rentalAgent = new Agent({
 
 # Tool
 - search-rentals: search the rental catalog by neighborhood, minBedrooms, maxPricePerNight.
-- Always put the renter's own words in queryText, including requests this search cannot filter (pets, furnished, parking, pool, gym). The cards disclose those requests from that text; never say or imply one was applied, and never drop it silently.
+- Always put the renter's own words in queryText. Set furnished=true only for explicitly furnished, furnished=false only for explicitly unfurnished; omit for no preference. Stored unknown furnishing never qualifies as confirmed. Keep unsupported requests (pets, parking, pool, gym) in queryText so cards disclose them; never say or imply an unsupported filter was applied.
 
 # Working memory rules
 You have working memory with: lastQuery, lastResults, selectedListingId.

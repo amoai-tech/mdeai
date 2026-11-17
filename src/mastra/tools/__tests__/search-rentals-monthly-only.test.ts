@@ -242,7 +242,11 @@ function mockApartmentQueryStub(rows: Record<string, unknown>[]) {
       orderCalls.push({ column, nullsFirst: opts?.nullsFirst ?? false });
       return builder;
     },
-    ilike: () => builder,
+    ilike: (column: string, value: string) => {
+      const needle = value.replaceAll("%", "").toLowerCase();
+      filters.push((row) => String(row[column] ?? "").toLowerCase().includes(needle));
+      return builder;
+    },
     or: (clause: string) => {
       mockEmittedOrClauses.push(clause);
       if (clause.includes("price_")) {
@@ -290,6 +294,28 @@ async function search(query: Record<string, unknown> = {}) {
   orderCalls.length = 0;
   return searchRentals({ neighborhood: "Laureles", limit: 20, ...query });
 }
+
+describe("text-derived neighborhood with a furnishing predicate", () => {
+  it("matches Laureles but never Envigado when the caller only supplies queryText", async () => {
+    const { searchRentals } = await import("../search-rentals");
+    const otherArea = {
+      ...mockApartmentRows[0], id: "apt-envigado-furnished",
+      neighborhood: "Envigado", title: "Furnished apartment in Envigado",
+    };
+    mockApartmentRows.push(otherArea);
+    try {
+      const found = await searchRentals({
+        queryText: "furnished apartments in Laureles",
+        furnished: true, limit: 20,
+      });
+      expect(found.results.map((r) => r.id)).toContain("apt-cop-monthly");
+      expect(found.results.map((r) => r.id)).not.toContain("apt-envigado-furnished");
+      expect(found.results.every((r) => r.neighborhood === "Laureles")).toBe(true);
+    } finally {
+      mockApartmentRows.pop();
+    }
+  });
+});
 
 describe("source-backed furnishing filter", () => {
   it("includes true only, false only, and excludes unknown from both", async () => {

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   budgetNotApplied,
   buildRentalSearchParams,
+  looksLikeRentalAnalysis,
   scoreRentalQuery,
 } from "@/lib/rental-query-parser";
 
@@ -107,6 +108,7 @@ describe("SAN-1502 postmerge — real COP monthly budget", () => {
     ["not furnished apartments", false],
     ["not-furnished 2BR apartments", false],
     ["no amoblado", false],
+    ["no furnished apartments", false],
     ["sin amueblar", false],
     ["furnished or unfurnished, either is fine", undefined],
     ["I don't care if it's furnished", undefined],
@@ -130,6 +132,19 @@ describe("SAN-1502 postmerge — real COP monthly budget", () => {
   ])("does not mistake unrelated any/or for furnishing indifference: %s", (text, expected) => {
     const memory = { lastRentalQuery: { neighborhood: "Laureles", furnished: true } };
     expect(buildRentalSearchParams(text, memory)?.furnished).toBe(expected);
+  });
+
+  it("keeps furnishing when either apartment choice is furnished", () => {
+    const memory = { lastRentalQuery: { neighborhood: "Laureles", furnished: true } };
+    expect(buildRentalSearchParams("Either furnished 1BR or furnished 2BR apartments in Laureles", memory)?.furnished).toBe(true);
+    expect(buildRentalSearchParams("Either furnished or not is fine", memory)?.furnished).toBeUndefined();
+    expect(buildRentalSearchParams("Show apartments in Laureles, no furnished apartments", {})?.furnished).toBe(false);
+  });
+
+  it("does not treat an analysis of displayed furnished cards as a fresh search", () => {
+    expect(looksLikeRentalAnalysis("Which of these is furnished?")).toBe(true);
+    expect(looksLikeRentalAnalysis("Are these furnished?")).toBe(true);
+    expect(looksLikeRentalAnalysis("Which of these neighborhoods has furnished apartments?")).toBe(false);
   });
 
   it("clears a previous furnishing requirement when either is fine", () => {

@@ -20,6 +20,7 @@ import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 import {
   payloadRows,
   useRentalToolResults,
+  latestRentalToolSignature,
   useTurns,
 } from "@/components/rentals/rental-ask-tool-results";
 import {
@@ -36,6 +37,8 @@ import {
   canFastPathRentalSearch,
   isWholeCityReply,
   looksLikeRentalAnalysis,
+  clearsFurnishingPreference,
+  furnishingFromQueryText,
   scoreRentalQuery,
   statesBudget,
   type RentalSearchApiParams,
@@ -321,7 +324,9 @@ function LiveComposer({
     // a conversational question look like a new search after an earlier fallback.
     const signals = scoreRentalQuery(text);
     return signals.hasBudget || statesBudget(text) || signals.hasBedrooms ||
-      signals.hasNeighborhood || signals.hasDateRange || isWholeCityReply(text);
+      signals.hasNeighborhood || signals.hasDateRange || isWholeCityReply(text) ||
+      (!looksLikeRentalAnalysis(text) &&
+        (clearsFurnishingPreference(text) || furnishingFromQueryText(text) !== undefined));
   };
   const appliedSignature = useRef("");
   const turnId = useRef(0);
@@ -440,6 +445,11 @@ function LiveComposer({
       return;
     }
     sendInFlight.current = true;
+    // A rejected render_ui can trigger another message notification without
+    // producing rental rows. The previous tool result must not become this turn.
+    appliedSignature.current = agent
+      ? latestRentalToolSignature(agent.messages as unknown as Parameters<typeof latestRentalToolSignature>[0])
+      : "";
     acceptToolResults.current = true;
     cancelled.current = false;
     setSending(true);
@@ -474,6 +484,9 @@ function LiveComposer({
           ...questionFilters,
         },
       };
+      // An explicit 'either is fine' must clear the old CoAgent filter as well
+      // as the local parser memory; spreading undefined cannot remove the key.
+      if (clearsFurnishingPreference(text)) delete next.lastRentalQuery.furnished;
       // An explicitly cleared Details selection must not leave the previous
       // apartment in the next agent turn's working memory (SAN-737).
       if (context && "selectedListingId" in context) {
