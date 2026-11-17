@@ -110,6 +110,9 @@ describe("SAN-1502 postmerge — real COP monthly budget", () => {
     ["sin amueblar", false],
     ["furnished or unfurnished, either is fine", undefined],
     ["I don't care if it's furnished", undefined],
+    ["I don’t care if it’s furnished", undefined],
+    ["Furnishing doesn’t matter", undefined],
+    ["doesn't matter if it is furnished", undefined],
     ["either furnished or not", undefined],
   ])("understands explicit furnishing and preference changes: %s", (query, expected) => {
     expect(buildRentalSearchParams(`Show apartments in Laureles ${query}`, {})?.furnished)
