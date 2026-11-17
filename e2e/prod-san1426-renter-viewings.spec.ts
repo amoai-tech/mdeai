@@ -6,12 +6,41 @@ import {
 } from "./helpers/auth";
 import {
   assertWriteTargetAllowed, cleanupFixture, findResidue, provisionFixture,
+  type Fixture, type Admin,
 } from "./helpers/rental-journey-fixture";
 import {
   CANDIDATE_SHA, ORIGIN, futureLocalSlot, openCandidate, requestViewingThroughForm,
 } from "./helpers/rental-journey-steps";
 
 /** SAN-1426: reuse the actual Schedule Viewing writer and SAN-1205 cleanup. */
+test.use({ trace: "off", screenshot: "off", video: "off" });
+// Real DB-writing QA must never retry blindly; always tear down first.
+test.describe.configure({ retries: 0 });
+let cleanupState: {
+  admin: Admin;
+  fixture: Fixture;
+  renterA?: ThrowawayIdentity;
+  renterB?: ThrowawayIdentity;
+} | undefined;
+
+test.afterEach(async () => {
+  const state = cleanupState;
+  cleanupState = undefined;
+  if (!state) return;
+  const failures: string[] = [];
+  try {
+    failures.push(...await cleanupFixture(state.admin, state.fixture));
+    failures.push(...await findResidue(state.admin, state.fixture));
+  } catch (error) {
+    failures.push("fixture cleanup: " + String(error));
+  }
+  for (const person of [state.renterA, state.renterB]) {
+    if (!person) continue;
+    try { await deleteThrowawayIdentity(person); }
+    catch (error) { failures.push("QA user cleanup: " + String(error)); }
+  }
+  expect(failures, "no test viewing/user records may remain").toEqual([]);
+});
 test.use({ trace: "off", screenshot: "off", video: "off" });
 test.skip(
   process.env.SAN1426_VIEWINGS_E2E !== "1" || !ORIGIN || !hasE2eEnv(),
@@ -24,12 +53,12 @@ test("signed-in renter sees own saved viewing while another renter and guest can
   const run = randomUUID().slice(0, 8);
   console.log("SAN-1426 QA fixture:", run, CANDIDATE_SHA.slice(0, 12));
   const fixture = await provisionFixture(admin, run);
-  let renterA: ThrowawayIdentity | undefined;
-  let renterB: ThrowawayIdentity | undefined;
-  let thrown: unknown;
-  try {
-    renterA = await createThrowawayIdentity("san1426-" + run + "-a");
-    renterB = await createThrowawayIdentity("san1426-" + run + "-b");
+  cleanupState = { admin, fixture };
+  cleanupState.renterA = await createThrowawayIdentity("san1426-" + run + "-a");
+  cleanupState.renterB = await createThrowawayIdentity("san1426-" + run + "-b");
+  const renterA = cleanupState.renterA;
+  const renterB = cleanupState.renterB;
+  {
     const aContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
     const a = await aContext.newPage();
     await signInAsOnOrigin(a, ORIGIN, renterA.email);
@@ -68,12 +97,5 @@ test("signed-in renter sees own saved viewing while another renter and guest can
     await guest.goto(new URL("/app/me/viewings", ORIGIN).href, { waitUntil: "domcontentloaded" });
     await expect(guest).toHaveURL(/\/login\?next=(%2F|\/)app(%2F|\/)me(%2F|\/)viewings/);
     await guest.close();
-  } catch (error) { thrown = error; }
-  const failures = await cleanupFixture(admin, fixture);
-  const residue = await findResidue(admin, fixture);
-  if (renterA) await deleteThrowawayIdentity(renterA);
-  if (renterB) await deleteThrowawayIdentity(renterB);
-  expect(failures, "fixture cleanup failures").toEqual([]);
-  expect(residue, "no QA lead/showing residues").toEqual([]);
-  if (thrown) throw thrown;
+  }
 });
