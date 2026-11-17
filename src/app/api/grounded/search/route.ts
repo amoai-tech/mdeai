@@ -4,6 +4,7 @@ import { z } from "zod";
 import { checkSearchFastPathRateLimit } from "@/lib/api-ip-rate-limit";
 import { searchGroundedPlacesTool } from "@/mastra/tools/search-grounded-places";
 import { isMapAreaQuery } from "@/lib/map-area-query";
+import { hasExplicitPlaceScope } from "@/mastra/lib/google-places-cafe-search";
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
 import { RENTAL_SUPABASE_KEY } from "@/mastra/tools/search-rentals";
 import { MDEAI_USER_ID_KEY } from "@/mastra/lib/tool-audit-context";
@@ -101,7 +102,7 @@ export async function POST(req: Request) {
         query: searchQuery,
         pageSize: limit,
         ...(intent ? { intent } : {}),
-        ...(isMapAreaQuery(searchQuery) && locationBias && !nearbyRentalId ? { locationBias } : {}),
+        ...(isMapAreaQuery(searchQuery) && !neighborhood && !hasExplicitPlaceScope(query) && locationBias && !nearbyRentalId ? { locationBias } : {}),
         ...(nearbyRentalId ? { nearbyRentalId, nearbyRadiusMeters: nearbyRadiusMeters ?? 800 } : {}),
       },
       context as never,

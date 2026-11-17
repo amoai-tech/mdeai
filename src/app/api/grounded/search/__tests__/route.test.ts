@@ -92,6 +92,20 @@ describe("POST /api/grounded/search", () => {
     expect(vi.mocked(searchGroundedPlacesTool.execute!).mock.calls[0][0]).not.toHaveProperty("locationBias");
   });
 
+  it("keeps Laureles priority when a map phrase and neighborhood appear together", async () => {
+    vi.mocked(searchGroundedPlacesTool.execute!).mockResolvedValue({ results: [], attribution: [], source: "grounding" });
+    const res = await POST(new Request("http://localhost/api/grounded/search", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        query: "coffee around here in Laureles", neighborhood: "Laureles", intent: "cafe",
+        locationBias: { latitude: 7.1, longitude: -75.8 },
+      }),
+    }));
+    expect(res.status).toBe(200);
+    expect(searchGroundedPlacesTool.execute).toHaveBeenCalledOnce();
+    expect(vi.mocked(searchGroundedPlacesTool.execute!).mock.calls[0][0]).not.toHaveProperty("locationBias");
+  });
+
   it("does not invent a map center or pay for a missing map camera", async () => {
     const res = await POST(new Request("http://localhost/api/grounded/search", {
       method: "POST", headers: { "Content-Type": "application/json" },

@@ -177,6 +177,19 @@ describe("chat fast-path failures reach operation-specific Retry", () => {
     expect(body.query).toMatch(/Laureles/i);
   });
 
+  it("keeps explicit Laureles context over a mixed 'around here' phrase", async () => {
+    mocks.viewport = { lat: 7.1, lng: -75.8, zoom: 14 };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true, json: async () => ({ results: [], attribution: [], source: "grounding" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const hook = renderHook(useGroundedSearchFastPath);
+    await act(async () => expect(await hook.handleUserMessage("coffee around here in Laureles")).toBe(true));
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body).not.toHaveProperty("locationBias");
+    expect(body.query).toMatch(/Laureles/i);
+  });
+
   it("never forwards invalid map coordinates to paid search", async () => {
     mocks.viewport = { lat: 500, lng: -75.5671, zoom: 15 };
     const fetchMock = vi.fn().mockResolvedValue({

@@ -186,7 +186,7 @@ export function useGroundedSearchFastPath() {
         Number.isFinite(viewport.zoom) && viewport.zoom >= 0 && viewport.zoom <= 22;
       // A named neighborhood always wins over whatever map the user
       // previously browsed. Only map-relative questions use this camera.
-      if (validViewport && isMapAreaQuery(trimmed)) {
+      if (validViewport && isMapAreaQuery(trimmed) && !params.neighborhood) {
         params.locationBias = { latitude: viewport.lat, longitude: viewport.lng };
       }
 
