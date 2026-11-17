@@ -54,7 +54,7 @@ export async function POST(req: Request) {
 
   // A map-relative request without a map center must not silently search
   // around a fixed point. No Places quota is used for this response.
-  if (isMapAreaQuery(searchQuery) && !locationBias && !nearbyRentalId) {
+  if (isMapAreaQuery(searchQuery) && !neighborhood && !hasExplicitPlaceScope(query) && !locationBias && !nearbyRentalId) {
     return NextResponse.json({
       results: [], attribution: [], source: "grounding",
       metadata: { reason: "missing_map_context" },

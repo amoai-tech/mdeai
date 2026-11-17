@@ -106,6 +106,26 @@ describe("POST /api/grounded/search", () => {
     expect(vi.mocked(searchGroundedPlacesTool.execute!).mock.calls[0][0]).not.toHaveProperty("locationBias");
   });
 
+  it.each([
+    { query: "coffee around here in Laureles" },
+    { query: "coffee around here in Laureles", neighborhood: "Laureles" },
+  ])("searches a named neighborhood without requiring a map center: %j", async ({ query, neighborhood }) => {
+    vi.mocked(searchGroundedPlacesTool.execute!).mockResolvedValue({
+      results: [], attribution: [], source: "grounding",
+    });
+    const res = await POST(new Request("http://localhost/api/grounded/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query, ...(neighborhood ? { neighborhood } : {}), intent: "cafe" }),
+    }));
+    expect(res.status).toBe(200);
+    expect(searchGroundedPlacesTool.execute).toHaveBeenCalledOnce();
+    expect(vi.mocked(searchGroundedPlacesTool.execute!).mock.calls[0][0])
+      .toMatchObject({ query: expect.stringContaining("Laureles"), intent: "cafe" });
+    expect(vi.mocked(searchGroundedPlacesTool.execute!).mock.calls[0][0])
+      .not.toHaveProperty("locationBias");
+  });
+
   it("does not invent a map center or pay for a missing map camera", async () => {
     const res = await POST(new Request("http://localhost/api/grounded/search", {
       method: "POST", headers: { "Content-Type": "application/json" },
