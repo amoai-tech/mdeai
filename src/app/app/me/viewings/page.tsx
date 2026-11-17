@@ -25,12 +25,12 @@ function ViewingCard({ viewing }: { viewing: RenterViewing }) {
   return (
     <li data-testid={`renter-viewing-${viewing.id}`} className="rounded-xl border border-border bg-card p-5 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="font-semibold text-foreground">{viewing.apartmentTitle}</h2>
+        <h2 className="font-semibold text-foreground">{viewing.apartmentTitle ?? "Apartment details unavailable"}</h2>
         <span data-testid="renter-viewing-status" className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground">
           {label}
         </span>
       </div>
-      <p className="mt-1 text-sm text-muted-foreground">{viewing.neighborhood}</p>
+      {viewing.neighborhood ? <p className="mt-1 text-sm text-muted-foreground">{viewing.neighborhood}</p> : null}
       <p className="mt-3 text-sm">
         <span className="font-medium">Requested viewing:</span>{" "}
         <time dateTime={viewing.scheduledAt}>{time} (Medellín time)</time>
@@ -38,9 +38,13 @@ function ViewingCard({ viewing }: { viewing: RenterViewing }) {
       {viewing.status === "scheduled" ? (
         <p className="mt-2 text-sm text-muted-foreground">Waiting for the broker to confirm your requested time.</p>
       ) : null}
-      <Link href={`/rentals/${viewing.apartmentId}`} className="mt-4 inline-flex min-h-11 items-center text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
-        View apartment details
-      </Link>
+      {viewing.apartmentTitle ? (
+        <Link href={`/rentals/${viewing.apartmentId}`} className="mt-4 inline-flex min-h-11 items-center text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+          View apartment details
+        </Link>
+      ) : (
+        <p className="mt-3 text-sm text-muted-foreground">This apartment is not currently visible, but your viewing request is still saved.</p>
+      )}
     </li>
   );
 }

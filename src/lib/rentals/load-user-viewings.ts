@@ -4,8 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 export type RenterViewing = {
   id: string;
   apartmentId: string;
-  apartmentTitle: string;
-  neighborhood: string;
+  apartmentTitle: string | null;
+  neighborhood: string | null;
   scheduledAt: string;
   status: string;
 };
@@ -23,9 +23,9 @@ export async function loadUserViewings(userId: string): Promise<Result<RenterVie
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("showings")
-    .select("id, status, scheduled_at, lead:leads!inner(user_id), apartment:apartments(id,title,neighborhood)")
+    .select("id, apartment_id, status, scheduled_at, created_at, lead:leads!inner(user_id), apartment:apartments(id,title,neighborhood)")
     .eq("lead.user_id", userId)
-    .order("scheduled_at", { ascending: false })
+    .order("created_at", { ascending: false })
     .limit(50);
 
   if (error) {
@@ -40,12 +40,14 @@ export async function loadUserViewings(userId: string): Promise<Result<RenterVie
     const apartment = (
       Array.isArray(row.apartment) ? row.apartment[0] : row.apartment
     ) as { id: string; title: string; neighborhood: string } | null | undefined;
-    if (!apartment) continue;
+    // An apartment can become private or unlisted after the request was saved.
+    // Its RLS-protected embed is then null, but the renter still owns this
+    // showing and must be able to see the persisted status and requested time.
     viewings.push({
       id: row.id,
-      apartmentId: apartment.id,
-      apartmentTitle: apartment.title,
-      neighborhood: apartment.neighborhood,
+      apartmentId: row.apartment_id,
+      apartmentTitle: apartment?.title ?? null,
+      neighborhood: apartment?.neighborhood ?? null,
       scheduledAt: row.scheduled_at,
       status: row.status,
     });

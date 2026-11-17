@@ -48,6 +48,18 @@ describe("SAN-1426 personal viewings page", () => {
     expect(html).not.toContain("Confirmed by broker");
   });
 
+  it("shows the persisted viewing status even when apartment details are hidden", async () => {
+    loadUserViewings.mockResolvedValue({ status: "ok", value: [{
+      id: "showing-private", apartmentId: "apt-private", apartmentTitle: null,
+      neighborhood: null, scheduledAt: "2026-11-19T20:00:00Z", status: "confirmed",
+    }] });
+    const html = renderToStaticMarkup(await MyViewingsPage());
+    expect(html).toContain("Confirmed");
+    expect(html).toContain("Apartment details unavailable");
+    expect(html).toContain("request is still saved");
+    expect(html).not.toContain("View apartment details");
+  });
+
   it("renders a retryable error, never an empty-history false claim", async () => {
     loadUserViewings.mockResolvedValue({ status: "error", message: "Could not load" });
     const html = renderToStaticMarkup(await MyViewingsPage());
