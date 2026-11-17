@@ -857,6 +857,9 @@ export const searchRentalsTool = createTool({
         title: r.title,
         neighborhood: r.neighborhood,
         bedrooms: r.bedrooms,
+        // The Mastra chat tool manually projects rows: keep the canonical stored
+        // furnishing fact, or mobile cards silently turn true/false into unknown.
+        furnished: r.furnished ?? null,
         nightly_price: r.nightly_price,
         price_monthly: r.price_monthly,
         currency: r.currency,

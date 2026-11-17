@@ -553,6 +553,18 @@ describe("ordering must not truncate the matches a monthly budget asks for (SAN-
   });
 });
 
+describe("Mastra tool keeps the source furnishing fact in its chat result", () => {
+  it("does not strip furnished=true when serializing a matching apartment", async () => {
+    const { searchRentalsTool } = await import("../search-rentals");
+    const result = await searchRentalsTool.execute!({
+      neighborhood: "Laureles", minBedrooms: 2, maxBedrooms: 2, furnished: true,
+      maxPriceMonthly: 3_000_000, budgetCurrency: "COP", limit: 8,
+    }, {} as never) as { results: Array<{ id: string; furnished?: boolean | null }> };
+    expect(result.results).toHaveLength(1);
+    expect(result.results[0]).toMatchObject({ id: "apt-cop-monthly", furnished: true });
+  });
+});
+
 describe("search-rentals tool forwards the stay period", () => {
   it("accepts stayType in the Mastra input schema and passes it to the query", async () => {
     const { searchRentalsTool } = await import("../search-rentals");

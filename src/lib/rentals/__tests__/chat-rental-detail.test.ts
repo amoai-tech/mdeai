@@ -23,6 +23,7 @@ const row = {
   latitude: 6.24,
   longitude: -75.58,
   price_monthly: 2_400_000,
+  furnished: true,
 };
 
 describe("toDetailRental (SAN-1504)", () => {
@@ -30,6 +31,7 @@ describe("toDetailRental (SAN-1504)", () => {
     const rental = toDetailRental(row);
     expect(rental).toMatchObject({
       price_monthly: 2_400_000,
+      furnished: true,
       currency: "COP",
       images: row.images,
       source_url: row.source_url,
