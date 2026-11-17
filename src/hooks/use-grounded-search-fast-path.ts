@@ -12,6 +12,7 @@ import {
   type CafeSearchApiParams,
 } from "@/lib/cafe-search-fast-path";
 import { useMapContext } from "@/platform/maps/map-context";
+import { isMapAreaQuery } from "@/lib/map-area-query";
 import { normalizeToolOutput } from "@/platform/maps/normalize-tool-output";
 import { parseGroundedToolResult } from "@/lib/parse-grounded-tool-result";
 import { groundedFastPathMemory } from "@/lib/grounded-fast-path-memory";
@@ -183,7 +184,9 @@ export function useGroundedSearchFastPath() {
         Number.isFinite(viewport.lat) && viewport.lat >= -90 && viewport.lat <= 90 &&
         Number.isFinite(viewport.lng) && viewport.lng >= -180 && viewport.lng <= 180 &&
         Number.isFinite(viewport.zoom) && viewport.zoom >= 0 && viewport.zoom <= 22;
-      if (validViewport) {
+      // A named neighborhood always wins over whatever map the user
+      // previously browsed. Only map-relative questions use this camera.
+      if (validViewport && isMapAreaQuery(trimmed)) {
         params.locationBias = { latitude: viewport.lat, longitude: viewport.lng };
       }
 

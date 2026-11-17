@@ -3,6 +3,8 @@ import {
   searchText,
 } from "./google-places-client";
 import type { GroundedPlaceResult } from "./map-adk-grounding-pins";
+import { isMapAreaQuery } from "@/lib/map-area-query";
+export { isMapAreaQuery } from "@/lib/map-area-query";
 
 /** Text Search fields needed for cards + pins; no ratings/hours are invented. */
 const CAFE_TEXT_SEARCH_MASK = [
@@ -12,8 +14,6 @@ const CAFE_TEXT_SEARCH_MASK = [
 ] as const;
 
 export const MEDELLIN_BIAS = { latitude: 6.2442, longitude: -75.5812 };
-const MAP_AREA_CONTEXT =
-  /\b(this map area|around this map|current map|map area|near here|around here|en esta zona|en este mapa|por aqu[ií]|cerca de aqu[ií])\b/i;
 const MEDELLIN_CONTEXT = /\b(medell[ií]n|laureles|poblado|envigado|sabaneta|bel[eé]n|provenza|estadio|centro)(?![\p{L}])/iu;
 const EXPLICIT_CITY = /\b(bogot[aá]|cali|cartagena|barranquilla|santa marta|pereira|manizales|armenia|bucaramanga|c[uú]cuta|villavicencio|monter[ií]a|ibagu[eé]|pasto|neiva|popay[aá]n|sincelejo|valledupar|tunja|riohacha|quibd[oó]|florencia|yopal|mocoa|leticia|san andr[eé]s)(?![\p{L}])/iu;
 const EXPLICIT_LOCATION_PHRASE = /\b(?:in|en|near|around)\s+(?!(?:the|this|here|me|my|a|an|our|your|with|walking|which|esta|este|estas|estos|mi|mis|el|la|los|las|una|un|por|aqu[ií])\b)[\p{L}][\p{L}'-]+/iu;
@@ -107,11 +107,6 @@ export function hasExplicitPlaceScope(query: string): boolean {
     UNSUPPORTED_PLACE_CONTEXT.test(query) ||
     EXPLICIT_LOCATION_PHRASE.test(query)
   );
-}
-
-/** True when the query refers to the visible map instead of a named city. */
-export function isMapAreaQuery(query: string): boolean {
-  return MAP_AREA_CONTEXT.test(query);
 }
 
 /** Add Medellín only when no explicit location or map viewport is provided. */

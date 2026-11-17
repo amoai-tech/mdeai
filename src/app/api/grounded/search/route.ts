@@ -3,7 +3,7 @@ import { RequestContext } from "@mastra/core/request-context";
 import { z } from "zod";
 import { checkSearchFastPathRateLimit } from "@/lib/api-ip-rate-limit";
 import { searchGroundedPlacesTool } from "@/mastra/tools/search-grounded-places";
-import { isMapAreaQuery } from "@/mastra/lib/google-places-cafe-search";
+import { isMapAreaQuery } from "@/lib/map-area-query";
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
 import { RENTAL_SUPABASE_KEY } from "@/mastra/tools/search-rentals";
 import { MDEAI_USER_ID_KEY } from "@/mastra/lib/tool-audit-context";
