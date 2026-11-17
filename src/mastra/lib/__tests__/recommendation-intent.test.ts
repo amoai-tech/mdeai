@@ -172,6 +172,17 @@ describe("shouldRenderViewingProposal (SAN-1658)", () => {
     expect(run(text)).toBe(false);
   });
 
+  it.each([
+    "Schedule a viewing of apartment 1 or apartment 2",
+    "Request a tour for the first apartment or the third apartment",
+    "Agendar una visita del primer apartamento o del segundo apartamento",
+    "Book a viewing for apartment 2 and apartment 3",
+    "Schedule a viewing for the first or second apartment",
+    "Book a viewing for apartment 1 or 2",
+  ])("does not choose between multiple listing positions: %s", (text) => {
+    expect(run(text)).toBe(false);
+  });
+
   it("does not force the tool when no apartment is named (the model would have to guess an ID)", () => {
     expect(run("Can I book a tour that fits my schedule?")).toBe(false);
     expect(run("Schedule a visit here")).toBe(false);

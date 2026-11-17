@@ -146,13 +146,11 @@ const ORDINAL_ES = "(?:primer[oa]?|segund[oa]|tercer[oa]?|cuart[oa]|quint[oa]|se
  */
 const VIEWING_ORDINAL = new RegExp(
   `\\b${ORDINAL_EN}\\s+${APARTMENT_WORD_EN}\\b|\\b(?:el|la)\\s+${ORDINAL_ES}(?!\\s+(?:semana|d[ií]a|mes|a[nñ]o)\\b)\\b|\\b${ORDINAL_ES}\\s+(?:apartamento|anuncio|opci[oó]n|resultado|lugar)\\b|\\b(?:apartments?|listings?|number|no\\.?|apartamento|#)\\s*#?\\d+\\b`,
-  "i",
+  "gi",
 );
 /** Resolve only a published list position; never force the agent to substitute a different rental. */
-function publishedViewingPosition(text: string, publishedCount: number, fullResultCount: number | null): boolean {
-  const match = VIEWING_ORDINAL.exec(text);
-  if (!match) return false;
-  const reference = match[0].toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+function publishedViewingPosition(matchedReference: string, publishedCount: number, fullResultCount: number | null): boolean {
+  const reference = matchedReference.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   const numeric = reference.match(/\d+/);
   let position: number;
   if (numeric) {
@@ -173,6 +171,9 @@ function publishedViewingPosition(text: string, publishedCount: number, fullResu
   return Number.isSafeInteger(position) && position > 0 && position <= publishedCount;
 }
 
+/** Also reject abbreviated choices such as "first or second apartment" and
+ * "apartment 1 or 2"; only the second choice may be next to a listing noun. */
+const VIEWING_ALTERNATIVE = /\b(?:or|and|o|u|y)\s+(?:(?:the|el|la|del|de|apartments?|listings?|ones?)\s+)*(?:\d+|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|last|primer[oa]?|segund[oa]|tercer[oa]?|cuart[oa]|quint[oa]|sext[oa]|s[eé]ptim[oa]|octav[oa]|noven[oa]|d[eé]cim[oa]|[uú]ltim[oa])\b/i;
 const VIEWING_DEICTIC = /\b(this|that|it|esta?|ese|esa)\b/i;
 const TIMING_QUESTION = /\b(when|what\s+time|cu[aá]ndo)\b/i;
 /** A refusal to schedule is not a command, even when the renter names a listing. */
@@ -198,7 +199,12 @@ export function shouldRenderViewingProposal({
   if (NEGATED_VIEWING_REQUEST.test(text)) return false;
   if (TIMING_QUESTION.test(text)) return false;
   const publishedIds = readRentalResultIds(agUiContext);
-  if (VIEWING_ORDINAL.test(text)) return publishedViewingPosition(text, publishedIds.length, readRentalRenderedCount(agUiContext));
+  // Multiple apartment references are ambiguous: never force the model to pick one.
+  const ordinalReferences = [...text.matchAll(VIEWING_ORDINAL)];
+  if (ordinalReferences.length > 1 || (ordinalReferences.length === 1 && VIEWING_ALTERNATIVE.test(text))) return false;
+  if (ordinalReferences.length === 1) {
+    return publishedViewingPosition(ordinalReferences[0][0], publishedIds.length, readRentalRenderedCount(agUiContext));
+  }
   if (publishedIds.some((id) => text.includes(id))) return true;
   return VIEWING_DEICTIC.test(text) && Boolean(selectedDiscoveryEntityId(agUiContext));
 }
