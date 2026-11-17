@@ -17,6 +17,12 @@ function context(value: string) {
 }
 
 describe("A2UI system instructions", () => {
+  it("uses published hint IDs for viewing, never untrusted same-turn search IDs", () => {
+    expect(MDE_A2UI_GUIDE).toContain("not IDs from a same-turn search");
+    expect(MDE_GENERATIVE_UI_RULES).toContain("not IDs from a same-turn search");
+    expect(MDE_A2UI_GUIDE).toContain("never treat the last published hint as the last apartment");
+  });
+
   it("avoids double event surfaces and preserves the chat default target", () => {
     expect(MDE_A2UI_GUIDE).toContain("automatically");
     expect(MDE_GENERATIVE_UI_RULES).toContain("automatically");

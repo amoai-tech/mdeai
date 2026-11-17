@@ -14,10 +14,22 @@ export function validateVercelCandidateOrigin(rawUrl: string): URL {
   return url;
 }
 
+/** Public previews do not issue a bypass cookie. Accept one only when its
+ * live app version matches the exact expected Git commit and preview environment.
+ * Protected previews must still use the existing cookie-verifying bypass path. */
+export function isExpectedPublicPreviewVersion(value: unknown, expectedSha: string): boolean {
+  if (!/^[a-f0-9]{40}$/i.test(expectedSha) || !value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const version = value as { sha?: unknown; environment?: unknown };
+  return version.environment === "preview" && version.sha === expectedSha;
+}
+
 export async function establishVercelAutomationBypass(
   page: Page,
   rawCandidateUrl: string,
   secret: string,
+  expectedEnvironment: "preview" | "production" = "preview",
 ): Promise<void> {
   if (!secret.trim()) throw new Error("Vercel automation bypass secret is required");
   const candidate = validateVercelCandidateOrigin(rawCandidateUrl);
@@ -59,11 +71,17 @@ export async function establishVercelAutomationBypass(
         const sha = data && typeof data === "object" && "sha" in data
           ? (data as { sha: unknown }).sha
           : undefined;
-        const expectedSha = process.env.VERCEL_DEPLOYMENT_SHA?.trim();
+        const expectedSha = process.env.VERCEL_DEPLOYMENT_SHA?.trim() ?? "";
         if (typeof sha !== "string" || !/^[a-f0-9]{40}$/.test(sha)) {
           failureReason = "invalid or missing app SHA";
-        } else if (expectedSha && sha !== expectedSha) {
+        } else if (!/^[a-f0-9]{40}$/i.test(expectedSha)) {
+          failureReason = "missing or invalid expected deployment SHA";
+        } else if (sha !== expectedSha) {
           failureReason = `SHA mismatch: observed ${sha}, expected ${expectedSha}`;
+        } else if (expectedEnvironment === "preview"
+          ? !isExpectedPublicPreviewVersion(data, expectedSha)
+          : (data as { environment?: unknown }).environment !== "production") {
+          failureReason = `candidate is not in ${expectedEnvironment} environment`;
         } else {
           verifiedApp = true;
         }

@@ -49,7 +49,7 @@ test.describe("SAN-1330 staged production candidate certification", () => {
     expect(bypassSecret, "VERCEL_AUTOMATION_BYPASS_SECRET is required").not.toBe("");
     expect(hasE2eEnv(), "Supabase QA credentials are required for candidate certification").toBe(true);
 
-    await establishVercelAutomationBypass(page, baseUrl, bypassSecret);
+    await establishVercelAutomationBypass(page, baseUrl, bypassSecret, "production");
 
     for (const path of ["/", "/events"]) {
       const response = await page.goto(route(path), { waitUntil: "domcontentloaded" });
@@ -104,7 +104,7 @@ test.describe("SAN-1330 staged production candidate certification", () => {
       await signInAsOnOrigin(page, baseUrl, identity.email);
       // Supabase session injection clears cookies, so re-establish only the same-origin
       // Vercel bypass cookie afterwards. The secret itself is never globally attached.
-      await establishVercelAutomationBypass(page, baseUrl, bypassSecret);
+      await establishVercelAutomationBypass(page, baseUrl, bypassSecret, "production");
 
       const saved = await page.goto(route("/saved"), { waitUntil: "domcontentloaded" });
       expect(saved?.status()).toBe(200);

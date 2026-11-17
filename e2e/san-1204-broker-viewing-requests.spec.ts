@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
-import { establishVercelAutomationBypass, validateVercelCandidateOrigin } from "./fixtures/vercel-bypass";
+import { establishVercelAutomationBypass, isExpectedPublicPreviewVersion, validateVercelCandidateOrigin } from "./fixtures/vercel-bypass";
 import {
   createThrowawayIdentity,
   deleteThrowawayIdentity,
@@ -24,7 +24,8 @@ import { E2E_FIXTURE_METADATA } from "./helpers/rental-fixture-marker";
  * Opt-in, exactly like the other production specs: it needs live Supabase credentials and it
  * creates real rows, so it must never run unattended in CI.
  *
- *   SAN1204_BROKER_E2E=1 PROD_SMOKE_BASE_URL=<preview-or-prod-url> \
+ *   SAN1204_BROKER_E2E=1 PW_SKIP_WEBSERVER=1 PROD_SMOKE_BASE_URL=<preview-or-prod-url> \
+ *     MDE_QA_EXPECTED_PREVIEW_SHA=<exact-40-character-SHA-if-public-preview> \
  *     npx playwright test e2e/san-1204-broker-viewing-requests.spec.ts \
  *       --project=prod-smoke --retries=0
  *
@@ -89,10 +90,22 @@ function isVercelCandidate(origin: string): boolean {
 // skipcq: JS-0067 - module-local helper
 async function openCandidate(page: Page, origin: string): Promise<void> {
   if (!isVercelCandidate(origin)) return; // production is not protected
+  const expectedSha = process.env.MDE_QA_EXPECTED_PREVIEW_SHA?.trim();
+  if (expectedSha) {
+    // A public preview returns the real MDE version without a Vercel bypass cookie.
+    // Verify the exact commit rather than treating any HTTP 200 or login page as success.
+    const response = await page.request.get(`${origin}/api/version`, {
+      failOnStatusCode: false, maxRedirects: 0,
+    });
+    if (response.status() === 200 && response.headers()["content-type"]?.includes("application/json")) {
+      const version: unknown = await response.json().catch(() => null);
+      if (isExpectedPublicPreviewVersion(version, expectedSha)) return;
+      throw new Error("CERTIFICATION_TARGET_INVALID: public preview does not match the expected commit");
+    }
+  }
   if (!BYPASS_SECRET) {
-    // Fail loudly. Silently skipping would surface later as a Vercel login page, which reads
-    // like a product defect rather than a missing secret.
-    throw new Error("VERCEL_AUTOMATION_BYPASS_SECRET is required to reach a Vercel candidate");
+    // A protected candidate still requires the normal cookie-verified bypass.
+    throw new Error("VERCEL_AUTOMATION_BYPASS_SECRET is required to reach a protected Vercel candidate");
   }
   await establishVercelAutomationBypass(page, origin, BYPASS_SECRET);
 }

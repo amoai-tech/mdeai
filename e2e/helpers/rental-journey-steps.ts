@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { chooseViewingDateTime, advanceViewingReview } from "./viewing-date-picker";
 import { expect, type Browser, type Locator, type Page } from "@playwright/test";
-import { establishVercelAutomationBypass, validateVercelCandidateOrigin } from "../fixtures/vercel-bypass";
+import { establishVercelAutomationBypass, isExpectedPublicPreviewVersion, validateVercelCandidateOrigin } from "../fixtures/vercel-bypass";
 import { getTestSession, signInAsOnOrigin } from "./auth";
 import {
   asUser,
@@ -41,9 +41,24 @@ export async function openCandidate(page: Page): Promise<void> {
   } catch {
     return;
   }
+  if (CANDIDATE_SHA) {
+    // Public previews have no Vercel bypass cookie. A real MDE /api/version
+    // response must prove the exact requested candidate; never accept an
+    // arbitrary 200/login page as app proof.
+    const response = await page.request.get(route("/api/version"), {
+      failOnStatusCode: false, maxRedirects: 0,
+    });
+    if (response.status() === 200 && response.headers()["content-type"]?.includes("application/json")) {
+      const version: unknown = await response.json().catch(() => null);
+      if (!isExpectedPublicPreviewVersion(version, CANDIDATE_SHA)) {
+        throw new Error("CERTIFICATION_TARGET_INVALID: public preview SHA or environment differs");
+      }
+      return;
+    }
+  }
   const secret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim();
   if (!secret) {
-    throw new Error("VERCEL_AUTOMATION_BYPASS_SECRET is required to reach a Vercel preview");
+    throw new Error("VERCEL_AUTOMATION_BYPASS_SECRET is required to reach a protected Vercel preview");
   }
   await establishVercelAutomationBypass(page, ORIGIN, secret);
 }

@@ -92,8 +92,12 @@ export function fastPathCafeSummary(
   pinCount: number,
   neighborhood?: string,
   query?: string,
+  reason?: string,
 ): string {
   if (count === 0) {
+    if (reason === "outside_catalog_coverage") {
+      return "Café discovery currently covers Medellín only. Try Laureles, El Poblado, Envigado or Belén.";
+    }
     if (query && analyzeVenueIntelligenceQuery(query).route === "nightlife_anchor") {
       return "No nightlife venues matched — try salsa bars, rooftops, or another neighborhood.";
     }

@@ -16,6 +16,12 @@ export type ScheduleViewingTarget = {
   listingId: string;
   title: string;
   neighborhood: string;
+  /**
+   * SAN-1658 — optional listing-local wall clock (`YYYY-MM-DDTHH:mm`, America/Bogota) to
+   * prefill the review form, for example from an AI viewing proposal the renter edited. It
+   * seeds the form once per open; it is never submitted from here.
+   */
+  preferredAt?: string;
 };
 
 export type LeadConfirmation = {

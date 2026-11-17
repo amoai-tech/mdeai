@@ -129,7 +129,7 @@ export function useGroundedSearchFastPath() {
             : count === 0
               ? `No cafés found within ${params.nearbyRadiusMeters ?? 800} m of this apartment.`
               : `Found ${count} café${count === 1 ? "" : "s"} within ${params.nearbyRadiusMeters ?? 800} m of this apartment.`
-          : fastPathCafeSummary(count, pinCount, params.neighborhood, userText);
+          : fastPathCafeSummary(count, pinCount, params.neighborhood, userText, reason);
         showExchange(userText, summary, submissionId);
         return true;
       } catch (err) {
