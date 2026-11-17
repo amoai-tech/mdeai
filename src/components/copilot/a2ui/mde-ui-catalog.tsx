@@ -10,6 +10,7 @@ import { useAgent, UseAgentUpdate } from "@copilotkit/react-core/v2";
 import { useOptionalEventLocalChat } from "@/components/chat/event-local-chat-context";
 import { createGenerativeUI, standardUI } from "@copilotkit/react-core/v2/generative-ui";
 import { RentalCard as ExistingRentalCard } from "@/components/copilot/rental-card";
+import { ViewingProposalView } from "@/components/copilot/a2ui/viewing-proposal";
 import { EventCard as ExistingEventCard } from "@/components/copilot/event-card";
 import { useOptionalEventBrowseSelection } from "@/components/events/event-browse-selection-context";
 import { useOptionalConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
@@ -32,6 +33,19 @@ type RentalToolRow = RentalResultRow & {
   image_url?: string;
   can_schedule_viewing?: boolean;
 };
+
+/**
+ * Technical target check only, not publication/owner/approval eligibility.
+ *
+ * Phase A: the database function is the source of truth and already applies its
+ * source-linked and ownership blocks only when `rental_development_active()` is false.
+ * PHASE B: when launch certification starts, restore the row-level
+ * `can_schedule_viewing === true` gate here and in the proposal, so a renter is told
+ * "not taking requests" before filling a form the database would reject.
+ */
+export function canOpenNativeViewingReview(row: { tags?: string[] }, hasNativeAction: boolean): boolean {
+  return hasNativeAction && !row.tags?.includes("dev-preview");
+}
 
 const rentalToolNames = new Set<string>([
   MASTRA_COPILOT_TOOL_ACTIONS.rentals,
@@ -287,6 +301,9 @@ function MdeRentalCard({ listingId }: { listingId: string }) {
   }
 
   const pinId = `rental-${row.id}`;
+  // Source-only local previews have no apartments row to receive an atomic viewing.
+  // A stored external candidate is different: in Phase A the DB can accept its slug.
+  const canOpenViewing = canOpenNativeViewingReview(row, Boolean(openScheduleViewing));
   const detailRental = toDetailRental(row);
   const openDetail = openVenueDetail ? () => {
     if (hasPin) panToPin?.(pinId);
@@ -304,7 +321,7 @@ function MdeRentalCard({ listingId }: { listingId: string }) {
       amenities: row.amenities,
       availability: row.availability,
       hostName: row.host_name,
-      canScheduleViewing: row.can_schedule_viewing === true,
+      canScheduleViewing: canOpenViewing,
     });
   } : () => {
     // Broker chat and the Ask MDE sheet have no rental detail provider. Reuse
@@ -335,7 +352,7 @@ function MdeRentalCard({ listingId }: { listingId: string }) {
         onSelect={hasPin ? () => panToPin?.(pinId) : undefined}
         onOpenDetails={row.tags?.includes("external-source") && !detailRental ? undefined : openDetail}
         nearbyAction={hasPin && concierge && canRenderNearby && isStoredRentalUuid(row.id) ? <NearbyRentalAction listingId={row.id} pinId={pinId} onSelect={panToPin} /> : undefined}
-        canScheduleViewing={row.can_schedule_viewing === true}
+        canScheduleViewing={canOpenViewing}
         onSchedule={openScheduleViewing ? () => openScheduleViewing({
           listingId: row.id,
           title: row.title,
@@ -343,6 +360,44 @@ function MdeRentalCard({ listingId }: { listingId: string }) {
         }) : undefined}
       />
     </div>
+  );
+}
+
+/**
+ * SAN-1658 — editable viewing proposal. The listing facts come from the current
+ * authorized result (never from props); date/time are only a proposal. Continue
+ * hands the renter's latest values to the existing ScheduleViewingModal, which
+ * owns review and the one real write.
+ */
+function MdeViewingProposal({ listingId, date, time }: { listingId: string; date?: string; time?: string }) {
+  const row = useRentalRow(listingId);
+  const rentalUi = useOptionalRentalUi();
+  if (!row) {
+    return (
+      <div className="rounded-lg border border-dashed border-border p-3 text-sm text-muted-foreground" data-testid="a2ui-viewing-unavailable">
+        That rental is not in the current authorized results.
+      </div>
+    );
+  }
+  const openScheduleViewing = rentalUi?.openScheduleViewing;
+  return (
+    <ViewingProposalView
+      key={row.id}
+      title={row.title}
+      neighborhood={row.neighborhood}
+      initialDate={date}
+      initialTime={time}
+      // Phase A has no business approval gate; source-only previews still have no persisted target.
+      canRequest={canOpenNativeViewingReview(row, Boolean(openScheduleViewing))}
+      onContinue={(preferredAt) =>
+        openScheduleViewing?.({
+          listingId: row.id,
+          title: row.title,
+          neighborhood: row.neighborhood,
+          preferredAt,
+        })
+      }
+    />
   );
 }
 
@@ -607,6 +662,17 @@ export const mdeUI = createGenerativeUI({
       description:
         "Show one real event from the current authorized search by its eventId UUID. The component resolves venue, date, price, image and ticket link from the stored result; never pass or invent event facts.",
       props: z.object({ eventId: z.string().regex(EVENT_A2UI_ID_PATTERN) }),
+      slots: { children: "multiple" },
+    },
+    ViewingProposal: {
+      component: MdeViewingProposal,
+      description:
+        "An editable viewing request for one real rental, by its listingId from the current authorized results. Optional date (YYYY-MM-DD) and time (HH:mm 24-hour, Medellín) are only the renter's stated preference: set one only when the renter gave it explicitly, never guess a date. The renter can edit both; Continue opens the existing review form, and nothing is requested or confirmed until the renter submits that form.",
+      props: z.object({
+        listingId: z.string().min(1),
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        time: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+      }),
       slots: { children: "multiple" },
     },
     BedroomFilter: {

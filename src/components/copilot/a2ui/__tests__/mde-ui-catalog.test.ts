@@ -5,6 +5,7 @@ import type { z } from "zod";
 import { standardUI } from "@copilotkit/react-core/v2/generative-ui";
 import {
   MDE_OMITTED_STANDARD_COMPONENTS,
+  canOpenNativeViewingReview,
   collectEventResults,
   collectRentalResults,
   eventDetailHref,
@@ -33,6 +34,13 @@ const poblado = {
 };
 
 describe("MDE A2UI catalog", () => {
+  it("keeps Phase-A viewing open for stored listings, but never promises a write for source-only previews", () => {
+    expect(canOpenNativeViewingReview({ tags: [] }, true)).toBe(true);
+    expect(canOpenNativeViewingReview({ tags: ["external-source", "not-verified"] }, true)).toBe(true);
+    expect(canOpenNativeViewingReview({ tags: ["dev-preview"] }, true)).toBe(false);
+    expect(canOpenNativeViewingReview({ tags: [] }, false)).toBe(false);
+  });
+
   it("keeps a small, versioned grounded core with RentalCard and EventCard", () => {
     expect(mdeUI.id).toBe("mde/discovery@1");
     expect(mdeUI.components.has("RentalCard")).toBe(true);
@@ -46,7 +54,7 @@ describe("MDE A2UI catalog", () => {
     expect([...mdeUI.components.keys()].sort()).toEqual([
       "ApplyFiltersButton", "Badge", "BedroomFilter", "Box", "Caption", "Card",
       "Column", "Divider", "EventCard", "FollowUp", "Grid", "GridItem",
-      "Label", "RentalCard", "Row", "Spacer", "Table", "Text", "Title",
+      "Label", "RentalCard", "Row", "Spacer", "Table", "Text", "Title", "ViewingProposal",
     ]);
   });
 
@@ -116,7 +124,7 @@ describe("MDE A2UI catalog", () => {
     // and not a place for dead controls.
     expect([...RENTAL_RECOMMENDATIONS_COMPONENTS]).toEqual([
       "RentalCard", "Column", "Row", "Divider", "Title",
-      "BedroomFilter", "ApplyFiltersButton",
+      "BedroomFilter", "ApplyFiltersButton", "ViewingProposal",
     ]);
     for (const name of RENTAL_RECOMMENDATIONS_COMPONENTS) {
       expect(mdeUI.components.has(name), `${name} is allowed on the panel but missing from mdeUI`).toBe(true);
