@@ -92,13 +92,15 @@ export default async function RentalDetailPage({ params, searchParams }: Props) 
             : "Something went wrong on our side. Please try again."}
         </p>
         {unavailable ? (
-          <Link
+          // A full navigation must fetch the server route again; a same-URL
+          // Next.js Link can reuse cached error-state RSC output.
+          <a
             href={retryHref}
             className="text-sm font-medium text-primary hover:underline"
             data-testid="rental-detail-error-retry"
           >
             Retry
-          </Link>
+          </a>
         ) : null}
         <Link
           href={backHref}

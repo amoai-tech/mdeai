@@ -81,6 +81,7 @@ describe("/rentals/[id]", () => {
     const children = page.props.children as Array<ReactElement<Record<string, unknown>> | null>;
     const retry = children.find((child) => child?.props?.["data-testid"] === "rental-detail-error-retry");
     expect(retry?.props.href).toBe(expected);
+    expect(retry?.type).toBe("a"); // Native navigation must refetch after a server outage.
   });
 
   it("shows the generic error for any other failure", async () => {
