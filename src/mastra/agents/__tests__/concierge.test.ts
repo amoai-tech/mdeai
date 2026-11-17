@@ -589,6 +589,7 @@ describe("concierge updateWorkingMemory tolerates provider padding", () => {
   it("the model-facing schema is unchanged: real enums only, no blank accepted", () => {
     const json = JSON.stringify(zodToJsonSchema(updateTool().inputSchema));
     expect(json).toContain('"nightly","monthly","total_trip"');
+    expect(json).toContain('"clearFurnishing"');
     expect(json).not.toContain('""');
   });
 
