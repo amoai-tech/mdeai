@@ -99,6 +99,37 @@ describe("SAN-1502 postmerge — real COP monthly budget", () => {
     expect(budgetNotApplied("2BR in Laureles", {})).toBe(false);
   });
 
+  it("keeps exactly two bedrooms through a monthly-budget refinement", () => {
+    const first = buildRentalSearchParams(
+      "Show me furnished 2-bedroom apartments in Laureles under COP 3 million.",
+      {},
+    );
+    expect(first).toMatchObject({
+      neighborhood: "Laureles", minBedrooms: 2, maxBedrooms: 2,
+      maxPriceMonthly: 3_000_000, budgetCurrency: "COP",
+    });
+    const followup = buildRentalSearchParams("Only under COP 2.5 million per month", {
+      lastRentalQuery: {
+        neighborhood: first!.neighborhood, minBedrooms: first!.minBedrooms,
+        maxBedrooms: first!.maxBedrooms, maxPriceMonthly: first!.maxPriceMonthly,
+        budgetCurrency: first!.budgetCurrency, budgetType: first!.stayType,
+      },
+    });
+    expect(followup).toMatchObject({
+      neighborhood: "Laureles", minBedrooms: 2, maxBedrooms: 2,
+      maxPriceMonthly: 2_500_000,
+    });
+  });
+
+  it("replaces an exact bedroom size with a new explicit size", () => {
+    const memory = { lastRentalQuery: { neighborhood: "Laureles", minBedrooms: 2, maxBedrooms: 2 } };
+    expect(buildRentalSearchParams("Actually 1-bedroom apartments", memory))
+      .toMatchObject({ minBedrooms: 1, maxBedrooms: 1 });
+    expect(buildRentalSearchParams("At least 3 bedrooms", memory))
+      .toMatchObject({ minBedrooms: 3 });
+    expect(buildRentalSearchParams("At least 3 bedrooms", memory)?.maxBedrooms).toBeUndefined();
+  });
+
   it("retains budget across neighborhood refinements", () => {
     const first = buildRentalSearchParams("2BR apartments in Laureles under COP 3.5 million per month", {});
     expect(first?.maxPriceMonthly).toBe(3_500_000);

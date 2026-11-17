@@ -96,10 +96,11 @@ export function DiscoveryWorkspace(props: DiscoveryWorkspaceProps) {
             sticky composer + floating tab bar instead of being covered. */}
         <div className={cn(
           "px-4 sm:px-6 lg:pb-6",
-          // The composer publishes its real rendered height. Reserve that height plus
-          // the floating tab bar so the last card's controls can scroll above both.
+          // The composer publishes its measured height, but hydration/refresh can briefly
+          // publish 0px. Keep a REAL minimum scroll reserve so a card's Details button
+          // can clear both the sticky composer and mobile tab bar after a reload.
           hasMobileNav && askComposer
-            ? "pb-[calc(var(--mde-ask-composer-height,18rem)_+_5rem)] lg:pb-6"
+            ? "pb-[calc(max(var(--mde-ask-composer-height,0px),18rem)_+_5rem)] lg:pb-6"
             : "pb-24",
         )}>{children}</div>
 

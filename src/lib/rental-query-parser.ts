@@ -569,6 +569,18 @@ function isBudgetReplacement(text: string, s: RentalQuerySignals): boolean {
   return parsed || statesBudget(text);
 }
 
+/** Keep exact bedrooms across budget-only replies; an explicit "at least" clears the upper bound. */
+function bedroomFields(
+  text: string,
+  signals: RentalQuerySignals,
+  previous?: ConciergeWorkingMemory["lastRentalQuery"],
+): Pick<RentalSearchApiParams, "minBedrooms" | "maxBedrooms"> {
+  return {
+    minBedrooms: signals.minBedrooms ?? previous?.minBedrooms,
+    maxBedrooms: signals.hasBedrooms ? exactBedroomsFromQueryText(text) : previous?.maxBedrooms,
+  };
+}
+
 function stayTypeForRefinement(
   text: string,
   s: RentalQuerySignals,
@@ -637,7 +649,7 @@ export function buildRentalSearchParams(
   const lastQuery = memory.lastRentalQuery;
   if (cityWide && lastQuery && !looksLikeRentalSearch(text)) {
     return {
-      minBedrooms: s.minBedrooms ?? lastQuery.minBedrooms,
+      ...bedroomFields(text, s, lastQuery),
       // "Anywhere is fine" keeps the saved budget, but an explicit new budget in the same
       // message ("anywhere under €1500/month") replaces it instead of copying the stale one.
       ...mergedBudgetFields(text, lastQuery, s),
@@ -651,7 +663,7 @@ export function buildRentalSearchParams(
   if (q?.genericAskPending) {
     const merged: RentalSearchApiParams = {
       neighborhood: s.neighborhood ?? q.neighborhood,
-      minBedrooms: s.minBedrooms ?? q.minBedrooms,
+      ...bedroomFields(text, s, q),
       ...mergedBudgetFields(text, q, s),
       checkIn: s.checkIn ?? q.checkIn,
       checkOut: s.checkOut ?? q.checkOut,
@@ -675,7 +687,7 @@ export function buildRentalSearchParams(
     return attachQueryText(
       {
         neighborhood: s.neighborhood ?? q?.neighborhood,
-        minBedrooms: s.minBedrooms ?? q?.minBedrooms,
+        ...bedroomFields(text, s, q),
         ...mergedBudgetFields(text, q, s),
         checkIn: q?.checkIn,
         checkOut: q?.checkOut,
@@ -693,7 +705,7 @@ export function buildRentalSearchParams(
     return attachQueryText(
       {
         neighborhood: s.neighborhood,
-        minBedrooms: s.minBedrooms,
+        ...bedroomFields(text, s),
         maxPricePerNight: s.maxPricePerNight,
         limit,
       },
@@ -706,7 +718,7 @@ export function buildRentalSearchParams(
     return attachQueryText(
       {
         neighborhood: s.neighborhood,
-        minBedrooms: s.minBedrooms,
+        ...bedroomFields(text, s),
         maxPricePerNight: s.maxPricePerNight,
         limit,
       },
@@ -724,6 +736,7 @@ export function buildRentalSearchParams(
       {
         neighborhood: q.neighborhood,
         minBedrooms: q.minBedrooms,
+        maxBedrooms: q.maxBedrooms,
         maxPricePerNight: q.maxPricePerNight,
         maxPriceMonthly: q.maxPriceMonthly,
         budgetCurrency: q.budgetCurrency,
@@ -747,7 +760,7 @@ export function buildRentalSearchParams(
       {
         limit,
         neighborhood: s.neighborhood,
-        minBedrooms: s.minBedrooms,
+        ...bedroomFields(text, s),
         maxPricePerNight: s.maxPricePerNight,
       },
       text,

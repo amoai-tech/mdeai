@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { establishVercelAutomationBypass } from "./fixtures/vercel-bypass";
 import {
   createThrowawayIdentity,
+  getSupabaseAdmin,
   deleteThrowawayIdentity,
   hasE2eEnv,
   signInAsOnOrigin,
@@ -25,10 +26,15 @@ const base = process.env.PROD_SMOKE_BASE_URL?.trim() ?? "";
 const evidenceDir = process.env.MDE_QA_EVIDENCE_DIR?.trim();
 const candidatePreview = base ? new URL(base).hostname.endsWith(".vercel.app") : false;
 const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim() ?? "";
-const firstQuery = "Show furnished 2-bedroom apartments in Laureles.";
+const firstQuery = "Show me furnished 2-bedroom apartments in Laureles under COP 3 million.";
 const budgetQuery = "Only under COP 3 million per month.";
 
-test.use({ channel: "chrome", viewport: { width: 1440, height: 900 }, trace: "off", screenshot: "off", video: "off" });
+const isMobile = process.env.MDE_QA_RENTALS_MOBILE === "1";
+test.use({
+  channel: "chrome",
+  viewport: isMobile ? { width: 390, height: 844 } : { width: 1440, height: 900 },
+  trace: "off", screenshot: "off", video: "off",
+});
 
 test.describe("SAN-1421 — same-thread filtered cards survive production reload", () => {
   test.skip(!base, "Explicit PROD_SMOKE_BASE_URL is required; never silently use localhost.");
@@ -90,6 +96,8 @@ test.describe("SAN-1421 — same-thread filtered cards survive production reload
 
     await ask(firstQuery);
     await expect.poll(() => cards.count(), { timeout: 40_000 }).toBeGreaterThan(0);
+    // Furnishing isn't an enforced search predicate: never certify these cards as furnished.
+    await expect(banner).toContainText("can't filter by furnished");
     await ask(budgetQuery);
     await expect.poll(() => cards.count(), { timeout: 40_000 }).toBeGreaterThan(0);
     const before = await visible();
@@ -99,6 +107,35 @@ test.describe("SAN-1421 — same-thread filtered cards survive production reload
     expect(threadBefore).toMatch(/^[0-9a-f-]{36}$/i);
     expect(before.length).toBeGreaterThan(0);
     expect(new Set(before.map((r) => r.id)).size).toBe(before.length);
+    await expect(banner).toContainText("can't filter by furnished");
+
+    // Independent grounding: verify canonical IDs against the real apartment rows, rather
+    // than trusting what the AI or a result card says. These are read-only queries.
+    const admin = await getSupabaseAdmin();
+    const { data: stored, error: readError } = await admin
+      .from("apartments")
+      .select("id,neighborhood,bedrooms,furnished,price_monthly,currency")
+      .in("id", before.map((row) => row.id));
+    expect(readError).toBeNull();
+    const canonical = new Map((stored ?? []).map((row) => [row.id, row]));
+    expect(canonical.size, "every card must resolve to an apartment in Supabase").toBe(before.length);
+    for (const card of before) {
+      const row = canonical.get(card.id);
+      expect(row, `missing source row for ${card.id}`).toBeDefined();
+      expect(row!.neighborhood.toLowerCase()).toBe("laureles");
+      // An explicit 2-bedroom query means exactly two, not "two or more".
+      expect(row!.bedrooms).toBe(2);
+      expect(row!.currency, "a COP monthly-budget result must be priced in COP").toBe("COP");
+      expect(row!.price_monthly, "a monthly-budget match needs a stored monthly price")
+        .not.toBeNull();
+      expect(Number(row!.price_monthly)).toBeLessThanOrEqual(3_000_000);
+      // A false/null furnished value is never an asserted match. The UI must disclose
+      // that furnishing was not filtered, including after a follow-up and refresh.
+      if (row!.furnished !== true) {
+        expect(bannerBefore).toContain("can't filter by furnished");
+      }
+    }
+    expect(bannerBefore).toContain("Other currencies are excluded because no exchange rate is available.");
 
     // Production regression for the real user action: refresh as soon as the
     // completed-results banner is visible. The page must not publish that
@@ -108,6 +145,7 @@ test.describe("SAN-1421 — same-thread filtered cards survive production reload
 
     await page.reload({ waitUntil: "domcontentloaded" });
     await expect(banner).toContainText(budgetQuery, { timeout: 50_000 });
+    await expect(banner).toContainText("can't filter by furnished");
     await expect.poll(visible, { timeout: 50_000 }).toEqual(before);
     await expect.poll(markerIds, { timeout: 30_000 }).toEqual(pinsBefore);
     expect(await banner.innerText()).toBe(bannerBefore);
@@ -130,12 +168,20 @@ test.describe("SAN-1421 — same-thread filtered cards survive production reload
     await expect.poll(async () => (await lines.allInnerTexts())
       .filter((s) => s.startsWith("You") && s.includes(budgetQuery)).length,
     { timeout: 30_000 }).toBe(1);
+    // On a phone the expanded transcript deliberately uses the results' screen space.
+    // Close that user-opened panel before returning to the apartment cards, rather than
+    // force-clicking through the composer/nav overlay and measuring an impossible action.
+    if (isMobile) {
+      await transcriptToggle.click();
+      await expect(transcriptToggle).toHaveAttribute("aria-expanded", "false");
+      await expect(page.locator('[data-testid="rental-ask-transcript"]')).toHaveCount(0);
+    }
     // AI result → real Details: same selected listing, not another search or a fake link.
     const firstResult = before[0];
     // The card also exposes a photo button with an accessible name beginning
     // "Details:"; use the precise CTA rather than an ambiguous role/name match.
     await page.getByTestId(`rental-details-cta-${firstResult.id}`).click();
-    const details = page.getByTestId("rental-details-panel");
+    const details = page.getByTestId(isMobile ? "rental-details-sheet" : "rental-details-panel");
     await expect(details).toBeVisible();
     // The source listing's canonical displayed price must not change in Details.
     const firstPrice = firstResult.price[0];
@@ -149,6 +195,17 @@ test.describe("SAN-1421 — same-thread filtered cards survive production reload
     }
     await page.getByTestId("rental-details-close").click();
     await expect(details).toHaveCount(0);
+    if (isMobile) {
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+      const mapButton = page.getByTestId("browse-map-fab");
+      await expect(mapButton).toBeVisible();
+      await mapButton.click();
+      const mapDialog = page.getByRole("dialog", { name: "Map view" });
+      await expect(mapDialog).toBeVisible();
+      await expect(mapDialog.getByTestId("chat-map")).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(mapDialog).toHaveCount(0);
+    }
     await capture("02-restored");
 
     // A different URL scope cannot inherit old saved cards or their answer banner.

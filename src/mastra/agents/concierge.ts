@@ -40,6 +40,7 @@ export const conciergeWorkingMemorySchema = z.object({
     .object({
       neighborhood: z.string().optional(),
       minBedrooms: z.number().optional(),
+      maxBedrooms: z.number().optional(),
       maxPricePerNight: z.number().optional(),
       maxPriceMonthly: z.number().positive().optional(),
       budgetCurrency: z.enum(['COP', 'USD']).optional(),
@@ -157,6 +158,7 @@ const PADDED_FIELDS = {
   lastRentalQuery: [
     'neighborhood',
     'minBedrooms',
+    'maxBedrooms',
     'maxPricePerNight',
     'maxPriceMonthly',
     'budgetCurrency',
