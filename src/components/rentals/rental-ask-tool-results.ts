@@ -143,7 +143,7 @@ const TOOL_OUTCOMES: ToolOutcomeRule[] = [
   {
     matches: (name) => name.includes("render_ui") || name.includes("render-ui"),
     done: "Updated the recommendations.",
-    failed: "I couldn't display those cards. Try asking again.",
+    failed: "I couldn't update the AI cards. Any apartment results already shown are unchanged.",
   },
   {
     matches: (name) =>
