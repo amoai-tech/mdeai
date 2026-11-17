@@ -40,7 +40,7 @@ export function useGroundedSearchFastPath() {
   const { showExchange, clearLocalMessages } = useEventLocalChat();
   const clearOthers = useClearOtherFastPathResults();
   const { setToolResult } = useGroundedFastPath();
-  const { mergePinsByCategory, requestFitBounds, pins: currentPins, selectedPinId } = useMapContext();
+  const { mergePinsByCategory, requestFitBounds, pins: currentPins, selectedPinId, viewport } = useMapContext();
   // The fetch can finish after a newer rental search replaced the map. Compare
   // against the pins that exist when the response arrives, not the click-time snapshot.
   const pinsRef = useRef(currentPins);
@@ -177,12 +177,21 @@ export function useGroundedSearchFastPath() {
 
       const params = buildCafeSearchParams(trimmed);
       if (!params) return false;
+      // The public fast path has no Mastra thread memory. Forward the real
+      // current map camera rather than silently using the Medellín default.
+      const validViewport = viewport &&
+        Number.isFinite(viewport.lat) && viewport.lat >= -90 && viewport.lat <= 90 &&
+        Number.isFinite(viewport.lng) && viewport.lng >= -180 && viewport.lng <= 180 &&
+        Number.isFinite(viewport.zoom) && viewport.zoom >= 0 && viewport.zoom <= 22;
+      if (validViewport) {
+        params.locationBias = { latitude: viewport.lat, longitude: viewport.lng };
+      }
 
       if (groundedSearchesInFlight.has(setToolResult)) return false;
       clearLocalMessages();
       return runSearch(trimmed, params, submissionId);
     },
-    [clearLocalMessages, runSearch, currentPins, selectedPinId, setToolResult],
+    [clearLocalMessages, runSearch, currentPins, selectedPinId, setToolResult, viewport],
   );
 
   // A card action uses the SAME read-only Nearby fast path as a typed

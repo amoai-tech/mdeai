@@ -8,6 +8,8 @@ export type CafeSearchApiParams = {
   intent?: "cafe" | "nightlife";
   nearbyRentalId?: string;
   nearbyRadiusMeters?: number;
+  /** Latest visible map camera; never a fabricated geolocation. */
+  locationBias?: { latitude: number; longitude: number };
 };
 
 const FAST_PATH_LIMIT = 5;
@@ -95,6 +97,9 @@ export function fastPathCafeSummary(
   reason?: string,
 ): string {
   if (count === 0) {
+    if (reason === "missing_map_context") {
+      return "Move the map to a Medellín neighborhood, or ask for cafés in Laureles or El Poblado.";
+    }
     if (reason === "outside_catalog_coverage") {
       return "Café discovery currently covers Medellín only. Try Laureles, El Poblado, Envigado or Belén.";
     }
