@@ -116,6 +116,16 @@ describe("SAN-1502 postmerge — real COP monthly budget", () => {
       .toBe(expected);
   });
 
+  it.each([
+    ["Do you have any furnished apartments in Laureles?", true],
+    ["Show furnished apartments in Laureles or Envigado", true],
+    ["furnished 2BR or 3BR", true],
+    ["not-furnished 2BR or 3BR", false],
+  ])("does not mistake unrelated any/or for furnishing indifference: %s", (text, expected) => {
+    const memory = { lastRentalQuery: { neighborhood: "Laureles", furnished: true } };
+    expect(buildRentalSearchParams(text, memory)?.furnished).toBe(expected);
+  });
+
   it("clears a previous furnishing requirement when either is fine", () => {
     const memory = { lastRentalQuery: { neighborhood: "Laureles", furnished: true } };
     expect(buildRentalSearchParams("Either furnished or unfurnished is fine", memory)?.furnished).toBeUndefined();

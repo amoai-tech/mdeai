@@ -369,10 +369,16 @@ function parseBedrooms(text: string): number | undefined {
  */
 function clearsFurnishingPreference(text: string): boolean {
   if (text.length > MAX_RENTAL_TEXT_CHARS) return false;
-  const anyStatus = /\b(?:furnished|unfurnished|furnishing|amoblad[oa]|amueblad[oa]|amoblar|amueblar)\b/i;
-  if (!anyStatus.test(text)) return false;
-  return /\b(?:either|any|no preference|don'?t care|doesn'?t matter|do not care|indifferent|whatever)\b.{0,50}\b(?:furnished|unfurnished|furnishing|amoblad[oa]|amueblad[oa]|amoblar|amueblar)\b/i.test(text) ||
-    /\b(?:furnished|unfurnished|furnishing|amoblad[oa]|amueblad[oa])\b.{0,35}\b(?:or|either|doesn'?t matter|don'?t care|no preference)\b/i.test(text);
+  // The words "any" and "or" in a general apartment question are NOT a
+  // furnishing preference: "any furnished apartments" still means furnished.
+  const both = /\b(?:furnished|unfurnished)\s+(?:or|and)\s+(?:furnished|unfurnished)\b/i;
+  const either = /\beither\s+(?:furnished|unfurnished)\b/i;
+  const noPreference = /\b(?:no preference|don'?t care|do not care|doesn'?t matter|indifferent|whatever)\b.{0,40}\b(?:furnished|unfurnished|furnishing|amoblad[oa]|amueblad[oa])\b/i;
+  const reverse = /\b(?:furnished|unfurnished|furnishing|amoblad[oa]|amueblad[oa])\b.{0,30}\b(?:no preference|don'?t care|doesn'?t matter)\b/i;
+  const anyFurnishing = /\bany\s+furnishing\b/i;
+  const spanishEither = /\b(?:amoblad[oa]|amueblad[oa])\s+o\s+sin\s+(?:amoblar|amueblar)\b/i;
+  return both.test(text) || either.test(text) || noPreference.test(text) ||
+    reverse.test(text) || anyFurnishing.test(text) || spanishEither.test(text);
 }
 
 /** Only explicit positive/negative source-backed furnishing requests become a hard filter. */
