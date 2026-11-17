@@ -42,6 +42,7 @@ import { invokeAdkGrounding, isAdkGroundingConfigured } from "../../lib/adk-grou
 import { incrementAndCheckGroundingQuota } from "../../lib/grounding-quota";
 import { searchGoogleCafes } from "../../lib/google-places-cafe-search";
 import { searchRestaurants } from "../search-restaurants";
+import { searchCafeVenueAnchors } from "../search-venue-anchors";
 import { searchGroundedPlacesTool } from "../search-grounded-places";
 import { adkUnavailableMock } from "./grounded-places-test-helpers";
 
@@ -147,6 +148,29 @@ describe("searchGroundedPlacesTool fallback", () => {
       query: "cafés open on Sunday",
       locationBias: { latitude: 6.21, longitude: -75.57 },
     }));
+  });
+
+  it("does not fabricate nearby map results from citywide saved catalog when Google is empty", async () => {
+    vi.mocked(searchCafeVenueAnchors).mockClear();
+    const getWorkingMemory = vi.fn(async () => ({ mapUi: { viewport: { lat: 6.2088, lng: -75.5671, zoom: 16 } } }));
+    const out = await searchGroundedPlacesTool.execute!(
+      { query: "cafés around this map", intent: "cafe" },
+      { agent: { threadId: "map-empty", resourceId: "renter-1" }, memory: { getWorkingMemory } } as never,
+    ) as GroundedOut;
+    expect(out.results).toEqual([]);
+    expect(out.metadata?.reason).toBe("google_places_empty");
+    expect(searchCafeVenueAnchors).not.toHaveBeenCalled();
+    expect(searchRestaurants).not.toHaveBeenCalled();
+  });
+
+  it("does not use paid Google or saved catalog for a map query without a camera", async () => {
+    vi.mocked(searchCafeVenueAnchors).mockClear();
+    const out = await runGrounded("cafés around this map", "cafe");
+    expect(out.results).toEqual([]);
+    expect(out.metadata?.reason).toBe("missing_map_context");
+    expect(searchGoogleCafes).not.toHaveBeenCalled();
+    expect(searchCafeVenueAnchors).not.toHaveBeenCalled();
+    expect(incrementAndCheckGroundingQuota).not.toHaveBeenCalled();
   });
 
   it("does not substitute Medellín cafés for an explicitly unsupported place", async () => {

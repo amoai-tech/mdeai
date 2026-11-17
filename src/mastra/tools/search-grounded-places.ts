@@ -1,3 +1,4 @@
+import { isMapAreaQuery } from "@/lib/map-area-query";
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { enrichedGroundedPlaceFieldsSchema } from "../lib/adk-grounding-types";
@@ -487,10 +488,23 @@ export const searchGroundedPlacesTool = createTool({
         intent,
       );
     }
+    const mapRelativeSearch = isMapAreaQuery(rawQuery) && !hasExplicitPlace;
+    // A map-relative question without a real camera must never be silently
+    // geolocated to the default city or charged to Google Places.
+    if (mapRelativeSearch && !resolvedLocationBias) {
+      return withVenueKindMetadata(
+        { results: [], attribution: [], source: "grounding" as const,
+          metadata: { reason: "missing_map_context" } },
+        rawQuery,
+        intent,
+      );
+    }
     const effectiveLocationBias =
       resolvedLocationBias ??
       (hasNonMedellinCityMatch ? undefined : MEDELLIN_BIAS);
-    const curatedAllowed = shouldUseCuratedFallback({
+    // A citywide saved catalog is not evidence that a cafe is near a moved
+    // map. Do not substitute unfiltered saved results for viewport queries.
+    const curatedAllowed = !mapRelativeSearch && shouldUseCuratedFallback({
       hasNonMedellinCity: hasNonMedellinCityMatch,
       locationBias: effectiveLocationBias,
     });
@@ -626,8 +640,10 @@ export const searchGroundedPlacesTool = createTool({
             source: "grounding" as const,
             metadata: {
               provider: "google_places",
-              fallback: "curated",
-              reason: "outside_catalog_coverage",
+              ...(mapRelativeSearch ? {} : { fallback: "curated" }),
+              reason: mapRelativeSearch
+                ? (directCafeError ? "google_places_unavailable" : "google_places_empty")
+                : "outside_catalog_coverage",
             },
           },
           rawQuery,

@@ -3,7 +3,7 @@ import {
   searchText,
 } from "./google-places-client";
 import type { GroundedPlaceResult } from "./map-adk-grounding-pins";
-import { isMapAreaQuery } from "@/lib/map-area-query";
+import { isMapAreaQuery, mapAreaProviderQuery } from "@/lib/map-area-query";
 export { isMapAreaQuery } from "@/lib/map-area-query";
 
 /** Text Search fields needed for cards + pins; no ratings/hours are invented. */
@@ -172,7 +172,12 @@ export async function searchGoogleCafes(params: {
       ? undefined
       : params.locationBias ?? MEDELLIN_BIAS;
   const response = await searchText({
-    textQuery: withMedellinScope(params.query, Boolean(params.locationBias)),
+    textQuery: withMedellinScope(
+      params.locationBias && isMapAreaQuery(params.query) && !hasExplicitPlaceScope(params.query)
+        ? mapAreaProviderQuery(params.query)
+        : params.query,
+      Boolean(params.locationBias),
+    ),
     pageSize,
     fieldMask: [...CAFE_TEXT_SEARCH_MASK],
     maxAttempts: 1,

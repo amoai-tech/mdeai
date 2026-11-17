@@ -85,12 +85,27 @@ describe("mapGoogleTextSearchToGrounded", () => {
     });
     expect(searchTextMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        textQuery: "cafés around this map area",
+        textQuery: "cafés",
         locationBias: {
           circle: { center: { latitude: 6.3, longitude: -75.6 }, radius: 5000 },
         },
       }),
     );
+  });
+
+  it.each([
+    ["cafés around this map", "cafés"],
+    ["cafés por aquí", "cafés"],
+    ["cafés cerca de aquí", "cafés"],
+    ["cafés en esta zona", "cafés"],
+    ["coffee near here with Wi-Fi", "coffee with Wi-Fi"],
+  ])("strips map wording before Google Text Search: %s", async (query, expected) => {
+    searchTextMock.mockReset().mockResolvedValue({ places: [] });
+    await searchGoogleCafes({ query, locationBias: { latitude: 6.2088, longitude: -75.5671 } });
+    expect(searchTextMock.mock.calls[0][0]).toMatchObject({
+      textQuery: expected,
+      locationBias: { circle: { center: { latitude: 6.2088, longitude: -75.5671 }, radius: 5000 } },
+    });
   });
 
   it("unscoped café query with real map bias does not force Medellín text", async () => {
