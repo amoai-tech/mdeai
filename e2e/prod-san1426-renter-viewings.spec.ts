@@ -59,7 +59,9 @@ test("signed-in renter sees own saved viewing while another renter and guest can
   const renterA = cleanupState.renterA;
   const renterB = cleanupState.renterB;
   {
-    const aContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    // Reuse the existing SAN-1205 desktop booking helper (it targets the
+    // desktop CTA). Switch to real 390px only for the new My Viewings journey.
+    const aContext = await browser.newContext({ viewport: { width: 1440, height: 900 } });
     const a = await aContext.newPage();
     await signInAsOnOrigin(a, ORIGIN, renterA.email);
     await openCandidate(a);
@@ -73,6 +75,7 @@ test("signed-in renter sees own saved viewing while another renter and guest can
     expect(leadError).toBeNull();
     expect(lead?.user_id, "the real writer must link the signed-in user").toBe(renterA.userId);
 
+    await a.setViewportSize({ width: 390, height: 844 });
     await a.goto(new URL("/app/me/viewings", ORIGIN).href, { waitUntil: "domcontentloaded" });
     const own = a.getByTestId("renter-viewing-" + committed.showingId);
     await expect(own).toBeVisible({ timeout: 40_000 });
