@@ -136,6 +136,22 @@ describe("establishVercelAutomationBypass", () => {
       .rejects.toThrow(/preview environment/);
   });
 
+  it("accepts an exact-SHA unprotected staged production candidate only when explicitly requested", async () => {
+    const sha = "a".repeat(40);
+    vi.stubEnv("VERCEL_DEPLOYMENT_SHA", sha);
+    const { page } = fakePage(200, [], { status: 200, sha, environment: "production" });
+    await expect(establishVercelAutomationBypass(page, CANDIDATE, "test-secret", "production"))
+      .resolves.toBeUndefined();
+  });
+
+  it("rejects a preview response when staged production is requested", async () => {
+    const sha = "a".repeat(40);
+    vi.stubEnv("VERCEL_DEPLOYMENT_SHA", sha);
+    const { page } = fakePage(200, [], { status: 200, sha, environment: "preview" });
+    await expect(establishVercelAutomationBypass(page, CANDIDATE, "test-secret", "production"))
+      .rejects.toThrow(/production environment/);
+  });
+
   it("rejects a public candidate without an explicitly expected deployment SHA", async () => {
     vi.stubEnv("VERCEL_DEPLOYMENT_SHA", "");
     const { page } = fakePage(200, [], { status: 200, sha: "a".repeat(40), environment: "preview" });

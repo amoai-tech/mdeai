@@ -29,6 +29,7 @@ export async function establishVercelAutomationBypass(
   page: Page,
   rawCandidateUrl: string,
   secret: string,
+  expectedEnvironment: "preview" | "production" = "preview",
 ): Promise<void> {
   if (!secret.trim()) throw new Error("Vercel automation bypass secret is required");
   const candidate = validateVercelCandidateOrigin(rawCandidateUrl);
@@ -77,8 +78,10 @@ export async function establishVercelAutomationBypass(
           failureReason = "missing or invalid expected deployment SHA";
         } else if (sha !== expectedSha) {
           failureReason = `SHA mismatch: observed ${sha}, expected ${expectedSha}`;
-        } else if (!isExpectedPublicPreviewVersion(data, expectedSha)) {
-          failureReason = "candidate is not in preview environment";
+        } else if (expectedEnvironment === "preview"
+          ? !isExpectedPublicPreviewVersion(data, expectedSha)
+          : (data as { environment?: unknown }).environment !== "production") {
+          failureReason = `candidate is not in ${expectedEnvironment} environment`;
         } else {
           verifiedApp = true;
         }
