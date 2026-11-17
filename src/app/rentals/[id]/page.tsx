@@ -64,6 +64,8 @@ export default async function RentalDetailPage({ params, searchParams }: Props) 
   const unfiltered = !filters.neighborhood && !filters.beds && !filters.from && !filters.through;
   const backHref = browseParams.browse === "all" && unfiltered
     ? "/rentals?browse=all" : buildRentalsUrl(filters);
+  // Use the same validated return state for an unavailable detail Retry.
+  const retryHref = `/rentals/${encodeURIComponent(id)}${backHref.slice("/rentals".length)}`;
   const preview = (await isLocalPreviewPage()) && id.startsWith("candidate-fincaraiz-");
 
   let detail;
@@ -91,7 +93,7 @@ export default async function RentalDetailPage({ params, searchParams }: Props) 
         </p>
         {unavailable ? (
           <Link
-            href={`/rentals/${encodeURIComponent(id)}`}
+            href={retryHref}
             className="text-sm font-medium text-primary hover:underline"
             data-testid="rental-detail-error-retry"
           >
