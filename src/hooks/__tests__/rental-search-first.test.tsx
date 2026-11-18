@@ -365,6 +365,11 @@ describe("SAN-407 · rental chat searches before it asks", () => {
     expect(cleared).toMatchObject({ furnished: null, furnishingCleared: true });
     await act(async () => { releasePending(); await pending; });
     expect(probe.hasListing("stale-furnished")).toBe(false);
+    expect(probe.messages().some((message) =>
+      message.role === "user" &&
+      message.content === "Find furnished 2-bedroom apartments in Laureles under COP 3 million",
+    )).toBe(true);
+    expect(assistantText()).toMatch(/set aside those results because you changed your furnishing preference/i);
     expect((coagent.state.lastRentalQuery as { furnishingCleared?: boolean }).furnishingCleared).toBe(true);
 
     respond(200, { results: [] });

@@ -164,6 +164,7 @@ const PADDED_FIELDS = {
     'minBedrooms',
     'maxBedrooms',
     'furnished',
+    'furnishingCleared',
     'maxPricePerNight',
     'maxPriceMonthly',
     'budgetCurrency',

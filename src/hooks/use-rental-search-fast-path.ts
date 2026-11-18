@@ -237,8 +237,8 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
     ): Promise<boolean> => {
       const epochAtStart = getSessionEpoch();
       const furnishingRevisionAtStart = furnishingRevisionRef.current;
-      const isCurrent = () => mountedRef.current &&
-        getSessionEpoch() === epochAtStart &&
+      const sameConversation = () => mountedRef.current && getSessionEpoch() === epochAtStart;
+      const isCurrent = () => sameConversation() &&
         furnishingRevisionRef.current === furnishingRevisionAtStart;
       if (busyRef.current && busyEpochRef.current === epochAtStart) return true;
       busyRef.current = true;
@@ -250,12 +250,19 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
         if (retry) showNotice(message, savedSearch);
         else showExchange(userText, message, submissionId, savedSearch);
       };
+      const reportSuperseded = () => {
+        // A same-chat preference change invalidates the old results, but must not drop
+        // the renter's original question from the transcript or persisted history.
+        if (sameConversation() && furnishingRevisionRef.current !== furnishingRevisionAtStart) {
+          answer("I set aside those results because you changed your furnishing preference before the search finished.");
+        }
+      };
       try {
         let response: RentalSearchResponse;
         try {
           response = await fetchRentalSearch(params);
         } catch (err) {
-          if (!isCurrent()) return true;
+          if (!isCurrent()) { reportSuperseded(); return true; }
           const { status, code } = sanitizedRentalError(err);
           console.error("[rental-fast-path] /api/rentals/search", { status, code });
           // Authentication failures are not outages: give specific guidance
@@ -282,7 +289,7 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
         }
         // The renter may have switched conversations while this request was in flight;
         // publishing now would put old filters and cards into the new conversation.
-        if (!isCurrent()) return true;
+        if (!isCurrent()) { reportSuperseded(); return true; }
         const { results: cards, total, hybridUsed, rankExplanation, budgetNote } = response;
         const query: ConciergeWorkingMemory["lastRentalQuery"] = {
           neighborhood: params.neighborhood,
@@ -338,7 +345,7 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
         );
         return true;
       } catch (err) {
-        if (!isCurrent()) return true;
+        if (!isCurrent()) { reportSuperseded(); return true; }
         console.error("[rental-fast-path] unexpected search/render failure", sanitizedRentalError(err));
         // The search API may have returned 200; a transformation/display bug
         // is NOT a network outage. Do not retry the same deterministic bug or

@@ -579,6 +579,23 @@ describe("concierge updateWorkingMemory tolerates provider padding", () => {
     expect(blank.saved?.lastRentalQuery).toHaveProperty("furnished", true);
   });
 
+  it("ignores a padded null furnishingCleared instead of rejecting the budget update", async () => {
+    const stored = { ...existing, lastRentalQuery: {
+      neighborhood: "Laureles", furnished: true, maxPriceMonthly: 3_000_000,
+      budgetCurrency: "COP",
+    } };
+    const { out, saved } = await update({
+      lastRentalQuery: {
+        furnishingCleared: null, maxPriceMonthly: 2_500_000, budgetCurrency: "COP",
+      },
+    }, stored);
+    expect(out.error).toBeUndefined();
+    expect(saved?.lastRentalQuery).toMatchObject({
+      furnished: true, maxPriceMonthly: 2_500_000, budgetCurrency: "COP",
+    });
+    expect(saved?.lastRentalQuery).not.toHaveProperty("furnishingCleared");
+  });
+
   it("empty arrays keep Mastra's replace semantics", async () => {
     const { out, saved } = await update({ lastRentalResults: [], lastEventResults: [] }, { ...existing, lastRentalResults: [{ id: "r", title: "t", neighborhood: "n", nightly_price: 1 }] });
     expect(out.error).toBeUndefined();
