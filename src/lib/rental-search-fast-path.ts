@@ -3,6 +3,7 @@ import type { Rental } from "@/mastra/tools/search-rentals";
 import {
   buildRentalSearchParams,
   canFastPathRentalSearch,
+  clearsFurnishingPreference,
   type RentalSearchApiParams,
 } from "@/lib/rental-query-parser";
 
@@ -85,5 +86,33 @@ export {
   fastPathRentalNarrative,
   fastPathRentalSummary,
 } from "@/lib/rental-display";
+
+
+/**
+ * A follow-up that only tightens one constraint must not silently drop the
+ * others. Filters are re-derived from the latest words, so a requirement the
+ * renter does not repeat comes back `undefined` — and an undefined filter
+ * *widens* the result set. Carry the still-visible constraints forward from the
+ * params that produced the cards the renter is actually looking at.
+ *
+ * An explicit clear still wins: "either furnished or unfurnished" must not have
+ * the previous requirement copied back in.
+ */
+export function carryForwardVisibleFilters(
+  params: RentalSearchApiParams,
+  shown: RentalSearchApiParams | undefined,
+  text: string,
+): RentalSearchApiParams {
+  if (!shown) return params;
+  const next: RentalSearchApiParams = { ...params };
+  if (next.neighborhood == null && shown.neighborhood) next.neighborhood = shown.neighborhood;
+  if (next.minBedrooms == null && shown.minBedrooms != null) next.minBedrooms = shown.minBedrooms;
+  if (next.maxBedrooms == null && shown.maxBedrooms != null) next.maxBedrooms = shown.maxBedrooms;
+  // `undefined` means "not restated here"; an explicit clear is handled by the guard below.
+  if (next.furnished === undefined && shown.furnished != null && !clearsFurnishingPreference(text)) {
+    next.furnished = shown.furnished;
+  }
+  return next;
+}
 
 export type { RentalSearchApiParams };

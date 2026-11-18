@@ -9,6 +9,7 @@ import { useClearOtherFastPathResults } from "@/hooks/use-clear-other-fast-path-
 import {
   buildRentalSearchParams,
   canFastPathRentalSearch,
+  carryForwardVisibleFilters,
   fastPathRentalSummary,
   rentalsToPanelRows,
   rentalsToToolEnvelope,
@@ -354,10 +355,13 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
         previous.checkOut === shown.checkOut;
       if (isExactMonthlyBudgetOnlyRefinement(trimmed) &&
           params.maxPriceMonthly != null &&
-          sameVisibleSearch &&
-          params.budgetCurrency === shown.budgetCurrency &&
-          shown.queryText) {
-        params.queryText = shown.queryText;
+          sameVisibleSearch) {
+        // A budget-only refinement must not widen the search: the parser cannot see
+        // constraints the renter did not repeat, so carry them from the results on screen.
+        Object.assign(params, carryForwardVisibleFilters(params, shown, trimmed));
+        if (params.budgetCurrency === shown.budgetCurrency && shown.queryText) {
+          params.queryText = shown.queryText;
+        }
       }
 
       if (busyRef.current) {
