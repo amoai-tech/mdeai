@@ -212,6 +212,17 @@ describe("SAN-407 · rental chat searches before it asks", () => {
     });
   });
 
+  it("keeps an explicit unfurnished preference through a budget refinement", async () => {
+    respond(200, { results: [] });
+    expect(await send("Find furnished 2-bedroom apartments in Laureles under COP 3 million")).toBe(true);
+    expect(await send("Actually unfurnished apartments")).toBe(true);
+    expect(await send("Only under COP 2.5 million")).toBe(true);
+    const refined = JSON.parse(String(fetchMock.mock.calls[fetchMock.mock.calls.length - 1]?.[1]?.body));
+    expect(refined.neighborhood).toBe("Laureles");
+    expect(refined.furnished).toBe(false);
+    expect(refined.maxPriceMonthly).toBe(2_500_000);
+  });
+
   it("does not borrow furnishing from older visible metadata for another neighborhood", async () => {
     respond(200, { results: [] });
     Object.assign(coagent.state, { lastIntent: "rental_search", lastRentalQuery: {
