@@ -120,6 +120,22 @@ async function fetchRentalSearch(
   return body;
 }
 
+/** Same real visible search, ignoring only the furnishing flag for legacy saved threads. */
+function matchesVisibleRentalSearch(
+  previous: ConciergeWorkingMemory["lastRentalQuery"],
+  visible: RentalSearchApiParams | undefined,
+): boolean {
+  return Boolean(previous && visible &&
+    previous.neighborhood === visible.neighborhood &&
+    previous.minBedrooms === visible.minBedrooms &&
+    previous.maxPricePerNight === visible.maxPricePerNight &&
+    previous.maxPriceMonthly === visible.maxPriceMonthly &&
+    previous.budgetCurrency === visible.budgetCurrency &&
+    previous.budgetType === visible.stayType &&
+    previous.checkIn === visible.checkIn &&
+    previous.checkOut === visible.checkOut);
+}
+
 /** How many messages may wait behind a running search before extra ones go to the concierge. */
 const MAX_WAITING_MESSAGES = 10;
 
@@ -335,6 +351,18 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
         };
       }
 
+      // Pre-upgrade saved threads may have a lastRentalQuery without furnishing,
+      // while their currently visible search metadata still knows it. Restore
+      // that missing field only for the SAME search; never override an explicit
+      // false or borrow a preference from stale cards in another conversation.
+      const remembered = memory.lastRentalQuery;
+      const visible = searchMeta?.params;
+      if (remembered && remembered.furnished === undefined && visible?.furnished !== undefined &&
+          remembered.maxBedrooms === visible.maxBedrooms &&
+          matchesVisibleRentalSearch(remembered, visible)) {
+        memory.lastRentalQuery = { ...remembered, furnished: visible.furnished };
+      }
+
       if (!canFastPathRentalSearch(trimmed, memory)) return false;
 
       const params = buildRentalSearchParams(trimmed, memory);
@@ -345,17 +373,9 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
       // older fast-path cards visible: never carry that stale query text forward.
       const shown = searchMeta?.params;
       const previous = memory.lastRentalQuery;
-      const sameVisibleSearch = shown && previous &&
-        previous.neighborhood === shown.neighborhood &&
-        previous.minBedrooms === shown.minBedrooms &&
-        previous.furnished === shown.furnished &&
-        previous.maxPricePerNight === shown.maxPricePerNight &&
-        previous.maxPriceMonthly === shown.maxPriceMonthly &&
-        previous.budgetCurrency === shown.budgetCurrency &&
-        previous.budgetType === shown.stayType &&
-        previous.checkIn === shown.checkIn &&
-        previous.checkOut === shown.checkOut;
-      if (isExactMonthlyBudgetOnlyRefinement(trimmed) &&
+      const sameVisibleSearch = matchesVisibleRentalSearch(previous, shown) &&
+        previous?.furnished === shown?.furnished;
+      if (shown && isExactMonthlyBudgetOnlyRefinement(trimmed) &&
           params.maxPriceMonthly != null &&
           sameVisibleSearch &&
           params.budgetCurrency === shown.budgetCurrency &&

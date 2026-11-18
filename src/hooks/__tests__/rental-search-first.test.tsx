@@ -46,7 +46,7 @@ type Probe = {
   previousQuery: () => string | undefined;
   hasListing: (id: string) => boolean;
   reset: () => void;
-  restoreSearch: (params: { neighborhood?: string; maxPriceMonthly?: number; budgetCurrency?: "COP" | "USD"; stayType?: "monthly" }) => void;
+  restoreSearch: (params: { neighborhood?: string; minBedrooms?: number; furnished?: boolean; maxPriceMonthly?: number; budgetCurrency?: "COP" | "USD"; stayType?: "monthly" }) => void;
 };
 let probe: Probe;
 /** Messages the hook gave back to the sender (the real chat sends these to the concierge). */
@@ -191,6 +191,42 @@ describe("SAN-407 · rental chat searches before it asks", () => {
       neighborhood: "Laureles", minBedrooms: 2, furnished: true,
       maxPriceMonthly: 2_500_000, budgetCurrency: "COP",
     });
+  });
+
+  it("restores furnishing from matching visible metadata for a legacy saved thread", async () => {
+    respond(200, { results: [] });
+    Object.assign(coagent.state, { lastIntent: "rental_search", lastRentalQuery: {
+      neighborhood: "Laureles", minBedrooms: 2, maxPriceMonthly: 3_000_000,
+      budgetCurrency: "COP", budgetType: "monthly",
+      // A legacy saved thread did not persist the furnished field.
+    } });
+    await act(async () => probe.restoreSearch({
+      neighborhood: "Laureles", minBedrooms: 2, furnished: true,
+      maxPriceMonthly: 3_000_000, budgetCurrency: "COP", stayType: "monthly",
+    }));
+    expect(await send("Only under COP 2.5 million")).toBe(true);
+    const next = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(next).toMatchObject({
+      neighborhood: "Laureles", minBedrooms: 2, furnished: true,
+      maxPriceMonthly: 2_500_000, budgetCurrency: "COP",
+    });
+  });
+
+  it("does not borrow furnishing from older visible metadata for another neighborhood", async () => {
+    respond(200, { results: [] });
+    Object.assign(coagent.state, { lastIntent: "rental_search", lastRentalQuery: {
+      neighborhood: "Envigado", minBedrooms: 2, maxPriceMonthly: 3_000_000,
+      budgetCurrency: "COP", budgetType: "monthly",
+    } });
+    await act(async () => probe.restoreSearch({
+      neighborhood: "Laureles", minBedrooms: 2, furnished: true,
+      maxPriceMonthly: 3_000_000, budgetCurrency: "COP", stayType: "monthly",
+    }));
+    expect(await send("Only under COP 2.5 million")).toBe(true);
+    const next = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(next.neighborhood).toBe("Envigado");
+    expect(next.furnished).toBeUndefined();
+    expect(next.maxPriceMonthly).toBe(2_500_000);
   });
 
   it("never reuses stale visible Laureles query text after the signed-in AI moved to Envigado", async () => {
