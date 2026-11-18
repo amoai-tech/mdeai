@@ -128,6 +128,7 @@ function matchesVisibleRentalSearch(
   return Boolean(previous && visible &&
     previous.neighborhood === visible.neighborhood &&
     previous.minBedrooms === visible.minBedrooms &&
+    (previous.maxBedrooms === undefined || previous.maxBedrooms === visible.maxBedrooms) &&
     previous.maxPricePerNight === visible.maxPricePerNight &&
     previous.maxPriceMonthly === visible.maxPriceMonthly &&
     previous.budgetCurrency === visible.budgetCurrency &&
@@ -253,6 +254,7 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
         const query: ConciergeWorkingMemory["lastRentalQuery"] = {
           neighborhood: params.neighborhood,
           minBedrooms: params.minBedrooms,
+          maxBedrooms: params.maxBedrooms,
           furnished: params.furnished,
           maxPricePerNight: params.maxPricePerNight,
           maxPriceMonthly: params.maxPriceMonthly,
@@ -341,6 +343,7 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
         memory.lastRentalQuery = {
           neighborhood: params.neighborhood,
           minBedrooms: params.minBedrooms,
+          maxBedrooms: params.maxBedrooms,
           furnished: params.furnished,
           maxPricePerNight: params.maxPricePerNight,
           maxPriceMonthly: params.maxPriceMonthly,
@@ -357,10 +360,14 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
       // false or borrow a preference from stale cards in another conversation.
       const remembered = memory.lastRentalQuery;
       const visible = searchMeta?.params;
-      if (remembered && remembered.furnished === undefined && visible?.furnished !== undefined &&
-          remembered.maxBedrooms === visible.maxBedrooms &&
-          matchesVisibleRentalSearch(remembered, visible)) {
-        memory.lastRentalQuery = { ...remembered, furnished: visible.furnished };
+      if (remembered && visible && matchesVisibleRentalSearch(remembered, visible)) {
+        // Restore only fields missing from older saved memory, never overwrite
+        // explicit newer preferences or import filters from a different search.
+        const furnished = remembered.furnished === undefined ? visible.furnished : remembered.furnished;
+        const maxBedrooms = remembered.maxBedrooms === undefined ? visible.maxBedrooms : remembered.maxBedrooms;
+        if (furnished !== remembered.furnished || maxBedrooms !== remembered.maxBedrooms) {
+          memory.lastRentalQuery = { ...remembered, furnished, maxBedrooms };
+        }
       }
 
       if (!canFastPathRentalSearch(trimmed, memory)) return false;
