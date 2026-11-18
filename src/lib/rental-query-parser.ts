@@ -625,7 +625,8 @@ function furnishingFields(text: string, previous?: ConciergeWorkingMemory["lastR
   Pick<RentalSearchApiParams, "furnished"> {
   if (clearsFurnishingPreference(text)) return { furnished: undefined };
   const explicit = furnishingFromQueryText(text);
-  return { furnished: explicit === undefined ? previous?.furnished : explicit };
+  // Memory stores `null` for an explicit clear; API params use `undefined` (absent).
+  return { furnished: explicit === undefined ? (previous?.furnished ?? undefined) : explicit };
 }
 
 function stayTypeForRefinement(

@@ -15,7 +15,7 @@ import {
   type RentalSearchApiParams,
 } from "@/lib/rental-search-fast-path";
 import { logRoutingDecision } from "@/lib/intelligence-telemetry";
-import { budgetNotApplied, isExactMonthlyBudgetOnlyRefinement, scoreRentalQuery } from "@/lib/rental-query-parser";
+import { budgetNotApplied, clearsFurnishingPreference, isExactMonthlyBudgetOnlyRefinement, scoreRentalQuery } from "@/lib/rental-query-parser";
 import {
   RENTAL_HANDOFF_FAILED_SUMMARY,
   RENTAL_SEARCH_UNAVAILABLE_SUMMARY,
@@ -153,7 +153,8 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
   const { state, setState } = useConciergeCoAgent();
   const { clarifyPending, clarifyKind, showExchange, showNotice } =
     useEventLocalChat();
-  const { searchMeta, setToolResult, setSearchMeta, reportSearchFailure } = useRentalFastPath();
+  const { searchMeta, setToolResult, setSearchMeta, reportSearchFailure, sessionEpoch } =
+    useRentalFastPath();
   const clearOthers = useClearOtherFastPathResults();
   const { mergePinsByCategory, requestFitBounds } = useMapContext();
   const busyRef = useRef(false);
@@ -167,8 +168,19 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
   // search ends, so `state` is still the pre-search value at that moment; the replay of a queued
   // message starts from this instead, so a refinement keeps the first search's filters.
   const latestMemoryRef = useRef<ConciergeWorkingMemory | null>(null);
+  // Which conversation `latestMemoryRef` belongs to. Replay must never hand the previous
+  // conversation's filters to the current one.
+  const latestMemoryEpochRef = useRef(-1);
+  const epochRef = useRef(sessionEpoch);
+  epochRef.current = sessionEpoch;
   // Bumped when a search ends with a message waiting; the replay effect runs after the next render.
   const [replayTick, setReplayTick] = useState(0);
+  // A conversation change invalidates the previous conversation's queue and committed memory.
+  useEffect(() => {
+    pendingRef.current = [];
+    latestMemoryRef.current = null;
+    latestMemoryEpochRef.current = -1;
+  }, [sessionEpoch]);
 
   const applySearchResults = useCallback(
     (
@@ -198,6 +210,7 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
       if (pins.length >= 2) requestFitBounds();
       setState(nextMemory);
       latestMemoryRef.current = nextMemory;
+      latestMemoryEpochRef.current = epochRef.current;
       // Commit the visible cards last; searchMeta is set only after this returns.
       setToolResult(envelope);
       return pins.length;
@@ -215,6 +228,7 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
     ): Promise<boolean> => {
       if (busyRef.current) return true;
       busyRef.current = true;
+      const epochAtStart = epochRef.current;
       reportSearchFailure(null);
       // Retry is an assistant-only follow-up to the SAME question. It must not
       // publish/persist a duplicate user bubble with a new submission identity.
@@ -250,12 +264,15 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
           answer(RENTAL_SEARCH_UNAVAILABLE_SUMMARY);
           return true;
         }
+        // The renter may have switched conversations while this request was in flight;
+        // publishing now would put old filters and cards into the new conversation.
+        if (epochRef.current !== epochAtStart) return true;
         const { results: cards, total, hybridUsed, rankExplanation, budgetNote } = response;
         const query: ConciergeWorkingMemory["lastRentalQuery"] = {
           neighborhood: params.neighborhood,
           minBedrooms: params.minBedrooms,
           maxBedrooms: params.maxBedrooms,
-          furnished: params.furnished,
+          furnished: clearsFurnishingPreference(userText) ? null : params.furnished,
           maxPricePerNight: params.maxPricePerNight,
           maxPriceMonthly: params.maxPriceMonthly,
           budgetCurrency: params.budgetCurrency,
@@ -370,10 +387,29 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
         }
       }
 
+      // "Either furnished or unfurnished is fine" starts no search, but it must change this
+      // conversation's memory, or the next budget refinement reuses the withdrawn requirement.
+      // `null` is the persisted contract's explicit clear, so it survives the agent-memory
+      // round trip and is never mistaken for a legacy thread that never stored the field.
+      if (clearsFurnishingPreference(trimmed)) {
+        const cleared: NonNullable<ConciergeWorkingMemory["lastRentalQuery"]> = {
+          ...(memory.lastRentalQuery ?? {}),
+          furnished: null,
+        };
+        memory.lastRentalQuery = cleared;
+        // Replay reads latestMemoryRef, so it must see the clear too.
+        if (latestMemoryEpochRef.current === epochRef.current) {
+          latestMemoryRef.current = { ...(latestMemoryRef.current ?? memory), lastRentalQuery: cleared };
+        }
+        setState({ ...memory });
+      }
+
       if (!canFastPathRentalSearch(trimmed, memory)) return false;
 
       const params = buildRentalSearchParams(trimmed, memory);
       if (!params) return false;
+      // `null` is memory's explicit-clear marker, never a filter value.
+      if (params.furnished === null) delete (params as { furnished?: boolean | null }).furnished;
 
       // Narrow the same visible rental search without broadening semantic results.
       // An authenticated AI turn may have replaced working memory while leaving
@@ -430,7 +466,12 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
       try {
         let handled = false;
         try {
-          handled = await dispatchMessage(next.text, next.submissionId, latestMemoryRef.current);
+          handled = await dispatchMessage(
+            next.text,
+            next.submissionId,
+            // Queued work belongs to the conversation that queued it.
+            latestMemoryEpochRef.current === epochRef.current ? latestMemoryRef.current : null,
+          );
         } catch (err) {
           console.error("[rental-fast-path] replay failed", err);
         }

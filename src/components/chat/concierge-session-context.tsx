@@ -38,7 +38,7 @@ export function ConciergeSessionProvider({ children }: { children: ReactNode }) 
   const { reset, stopActiveRun } = useConciergeChat();
   const { setState } = useConciergeCoAgent();
   const { clearPins, setSelectedPinId, clearFocusPinRequest } = useMapContext();
-  const { clearToolResults: clearRentalFp } = useRentalFastPath();
+  const { clearToolResults: clearRentalFp, bumpSessionEpoch } = useRentalFastPath();
   const { clearToolResults: clearEventFp } = useEventFastPath();
   const { setToolResult: setRestaurantFp } = useRestaurantFastPath();
   const { setToolResult: setGroundedFp } = useGroundedFastPath();
@@ -62,6 +62,8 @@ export function ConciergeSessionProvider({ children }: { children: ReactNode }) 
     setSelectedPinId(null);
     clearFocusPinRequest();
     clearRentalFp();
+    // Scope rental memory to the new conversation: discard the previous session's memory.
+    bumpSessionEpoch();
     clearEventFp();
     setRestaurantFp(null);
     setGroundedFp(null);

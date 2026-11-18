@@ -13,7 +13,8 @@ export type ConciergeWorkingMemory = {
     neighborhood?: string;
     minBedrooms?: number;
     maxBedrooms?: number;
-    furnished?: boolean;
+    /** `null` is an explicit clear (the persisted contract); `undefined` is unknown/legacy. */
+    furnished?: boolean | null;
     maxPricePerNight?: number;
     maxPriceMonthly?: number;
     budgetCurrency?: "COP" | "USD";

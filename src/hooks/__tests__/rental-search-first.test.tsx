@@ -10,7 +10,13 @@ import { createRoot, type Root } from "react-dom/client";
 
 const coagent = vi.hoisted(() => ({ state: {} as Record<string, unknown> }));
 vi.mock("@/components/chat/concierge-coagent-context", () => ({
-  useConciergeCoAgent: () => ({ agent: undefined, state: coagent.state, setState: vi.fn() }),
+  // The real provider persists what the hook commits; a no-op stub hid every cross-turn
+  // memory behaviour (clears, cross-conversation isolation) from this suite.
+  useConciergeCoAgent: () => ({
+    agent: undefined,
+    state: coagent.state,
+    setState: (next: Record<string, unknown>) => { coagent.state = next; },
+  }),
 }));
 const map = vi.hoisted(() => ({ merges: [] as Array<[string, unknown[]]>, throwRentalMergeOnce: false }));
 vi.mock("@/platform/maps/map-context", () => ({
@@ -73,7 +79,14 @@ function Harness() {
       failure: () => rental.searchFailure,
       previousQuery: () => rental.searchMeta?.userText,
       hasListing: (id) => JSON.stringify(rental.toolResult).includes(id),
-      reset: () => rental.clearToolResults(),
+      // New Chat does both: clear the cards AND scope memory to the new conversation.
+      // Mirrors ConciergeSessionProvider.startNewChat: reset chat memory, clear cards,
+      // and scope the new conversation so nothing from the old one survives.
+      reset: () => {
+        coagent.state = {};
+        rental.clearToolResults();
+        rental.bumpSessionEpoch();
+      },
       restoreSearch: (params) => rental.setSearchMeta({ userText: "Saved rental search", params }),
     };
   });
