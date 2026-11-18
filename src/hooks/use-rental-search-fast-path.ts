@@ -153,11 +153,15 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
   const { state, setState } = useConciergeCoAgent();
   const { clarifyPending, clarifyKind, showExchange, showNotice } =
     useEventLocalChat();
-  const { searchMeta, setToolResult, setSearchMeta, reportSearchFailure, sessionEpoch } =
+  const { searchMeta, setToolResult, setSearchMeta, reportSearchFailure, sessionEpoch, getSessionEpoch } =
     useRentalFastPath();
   const clearOthers = useClearOtherFastPathResults();
   const { mergePinsByCategory, requestFitBounds } = useMapContext();
   const busyRef = useRef(false);
+  const busyEpochRef = useRef(-1);
+  // A user preference-only turn can supersede a pending search *within* the same chat.
+  const furnishingRevisionRef = useRef(0);
+  const mountedRef = useRef(false);
   const runSearchRef = useRef<(
     (userText: string, params: RentalSearchApiParams, memory: ConciergeWorkingMemory, retry: boolean) => Promise<boolean>
   ) | undefined>(undefined);
@@ -171,15 +175,20 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
   // Which conversation `latestMemoryRef` belongs to. Replay must never hand the previous
   // conversation's filters to the current one.
   const latestMemoryEpochRef = useRef(-1);
-  const epochRef = useRef(sessionEpoch);
-  epochRef.current = sessionEpoch;
   // Bumped when a search ends with a message waiting; the replay effect runs after the next render.
   const [replayTick, setReplayTick] = useState(0);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
   // A conversation change invalidates the previous conversation's queue and committed memory.
   useEffect(() => {
     pendingRef.current = [];
     latestMemoryRef.current = null;
     latestMemoryEpochRef.current = -1;
+    furnishingRevisionRef.current = 0;
+    if (busyEpochRef.current !== sessionEpoch) busyRef.current = false;
   }, [sessionEpoch]);
 
   const applySearchResults = useCallback(
@@ -210,12 +219,12 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
       if (pins.length >= 2) requestFitBounds();
       setState(nextMemory);
       latestMemoryRef.current = nextMemory;
-      latestMemoryEpochRef.current = epochRef.current;
+      latestMemoryEpochRef.current = getSessionEpoch();
       // Commit the visible cards last; searchMeta is set only after this returns.
       setToolResult(envelope);
       return pins.length;
     },
-    [mergePinsByCategory, requestFitBounds, setState, setToolResult, clearOthers],
+    [mergePinsByCategory, requestFitBounds, setState, setToolResult, clearOthers, getSessionEpoch],
   );
 
   const runSearch = useCallback(
@@ -226,9 +235,14 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
       submissionId?: string,
       retry = false,
     ): Promise<boolean> => {
-      if (busyRef.current) return true;
+      const epochAtStart = getSessionEpoch();
+      const furnishingRevisionAtStart = furnishingRevisionRef.current;
+      const isCurrent = () => mountedRef.current &&
+        getSessionEpoch() === epochAtStart &&
+        furnishingRevisionRef.current === furnishingRevisionAtStart;
+      if (busyRef.current && busyEpochRef.current === epochAtStart) return true;
       busyRef.current = true;
-      const epochAtStart = epochRef.current;
+      busyEpochRef.current = epochAtStart;
       reportSearchFailure(null);
       // Retry is an assistant-only follow-up to the SAME question. It must not
       // publish/persist a duplicate user bubble with a new submission identity.
@@ -241,6 +255,7 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
         try {
           response = await fetchRentalSearch(params);
         } catch (err) {
+          if (!isCurrent()) return true;
           const { status, code } = sanitizedRentalError(err);
           console.error("[rental-fast-path] /api/rentals/search", { status, code });
           // Authentication failures are not outages: give specific guidance
@@ -258,6 +273,7 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
           // Keep the last successful result and pins. A retry is a fresh read of
           // the same query, not a synthetic cached search or an invented response.
           reportSearchFailure({ status, code, retryable: true }, () => {
+            if (!isCurrent()) return;
             void runSearchRef.current?.(userText, params, memory, true);
           });
           // No model fallback for a real outage: it might invent a result.
@@ -266,13 +282,17 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
         }
         // The renter may have switched conversations while this request was in flight;
         // publishing now would put old filters and cards into the new conversation.
-        if (epochRef.current !== epochAtStart) return true;
+        if (!isCurrent()) return true;
         const { results: cards, total, hybridUsed, rankExplanation, budgetNote } = response;
         const query: ConciergeWorkingMemory["lastRentalQuery"] = {
           neighborhood: params.neighborhood,
           minBedrooms: params.minBedrooms,
           maxBedrooms: params.maxBedrooms,
-          furnished: clearsFurnishingPreference(userText) ? null : params.furnished,
+          // A budget-only refinement does not undo an earlier explicit no-preference decision.
+          furnished: clearsFurnishingPreference(userText) || (params.furnished === undefined && memory.lastRentalQuery?.furnishingCleared === true)
+            ? null : params.furnished,
+          furnishingCleared: clearsFurnishingPreference(userText) ? true
+            : typeof params.furnished === "boolean" ? false : memory.lastRentalQuery?.furnishingCleared,
           maxPricePerNight: params.maxPricePerNight,
           maxPriceMonthly: params.maxPriceMonthly,
           budgetCurrency: params.budgetCurrency,
@@ -318,6 +338,7 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
         );
         return true;
       } catch (err) {
+        if (!isCurrent()) return true;
         console.error("[rental-fast-path] unexpected search/render failure", sanitizedRentalError(err));
         // The search API may have returned 200; a transformation/display bug
         // is NOT a network outage. Do not retry the same deterministic bug or
@@ -326,13 +347,16 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
         answer("The new rental results could not be displayed. Your earlier results may still be available.");
         return true;
       } finally {
-        busyRef.current = false;
-        // Replay a queued message only after React has re-rendered (see the effect below), never
-        // synchronously here: the handler in scope still holds the pre-search state.
-        if (pendingRef.current.length > 0) setReplayTick((tick) => tick + 1);
+        // An old request cannot release a new conversation's active request.
+        if (busyEpochRef.current === epochAtStart) {
+          busyRef.current = false;
+          if (getSessionEpoch() === epochAtStart && pendingRef.current.length > 0) {
+            setReplayTick((tick) => tick + 1);
+          }
+        }
       }
     },
-    [applySearchResults, showExchange, showNotice, setSearchMeta, reportSearchFailure],
+    [applySearchResults, showExchange, showNotice, setSearchMeta, reportSearchFailure, getSessionEpoch],
   );
 
   useEffect(() => {
@@ -380,7 +404,8 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
       if (remembered && visible && matchesVisibleRentalSearch(remembered, visible)) {
         // Restore only fields missing from older saved memory, never overwrite
         // explicit newer preferences or import filters from a different search.
-        const furnished = remembered.furnished === undefined ? visible.furnished : remembered.furnished;
+        const furnished = remembered.furnished === undefined && remembered.furnishingCleared !== true
+          ? visible.furnished : remembered.furnished;
         const maxBedrooms = remembered.maxBedrooms === undefined ? visible.maxBedrooms : remembered.maxBedrooms;
         if (furnished !== remembered.furnished || maxBedrooms !== remembered.maxBedrooms) {
           memory.lastRentalQuery = { ...remembered, furnished, maxBedrooms };
@@ -392,13 +417,17 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
       // `null` is the persisted contract's explicit clear, so it survives the agent-memory
       // round trip and is never mistaken for a legacy thread that never stored the field.
       if (clearsFurnishingPreference(trimmed)) {
+        // Invalidate a pending furnished search in THIS conversation: it must not overwrite
+        // the newer clear when the original request resolves.
+        furnishingRevisionRef.current += 1;
         const cleared: NonNullable<ConciergeWorkingMemory["lastRentalQuery"]> = {
           ...(memory.lastRentalQuery ?? {}),
           furnished: null,
+          furnishingCleared: true,
         };
         memory.lastRentalQuery = cleared;
         // Replay reads latestMemoryRef, so it must see the clear too.
-        if (latestMemoryEpochRef.current === epochRef.current) {
+        if (latestMemoryEpochRef.current === getSessionEpoch()) {
           latestMemoryRef.current = { ...(latestMemoryRef.current ?? memory), lastRentalQuery: cleared };
         }
         setState({ ...memory });
@@ -426,7 +455,7 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
         params.queryText = shown.queryText;
       }
 
-      if (busyRef.current) {
+      if (busyRef.current && busyEpochRef.current === getSessionEpoch()) {
         // A full queue declines the message (false), so the sender routes it to the concierge
         // rather than it being lost.
         if (pendingRef.current.length >= MAX_WAITING_MESSAGES) return false;
@@ -445,6 +474,8 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
       runSearch,
       searchMeta,
       state,
+      setState,
+      getSessionEpoch,
     ],
   );
 
@@ -470,7 +501,7 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
             next.text,
             next.submissionId,
             // Queued work belongs to the conversation that queued it.
-            latestMemoryEpochRef.current === epochRef.current ? latestMemoryRef.current : null,
+            latestMemoryEpochRef.current === getSessionEpoch() ? latestMemoryRef.current : null,
           );
         } catch (err) {
           console.error("[rental-fast-path] replay failed", err);
@@ -488,7 +519,7 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
         if (pendingRef.current.length > 0 && !busyRef.current) setReplayTick((tick) => tick + 1);
       }
     })();
-  }, [replayTick, dispatchMessage, onUnhandled, showExchange]);
+  }, [replayTick, dispatchMessage, onUnhandled, showExchange, getSessionEpoch]);
 
   return { handleUserMessage };
 }

@@ -35,6 +35,7 @@ type RentalFastPathContextValue = {
   clearToolResults: () => void;
   /** Bumped by the session owner on New Chat / thread switch; scopes memory to one conversation. */
   sessionEpoch: number;
+  getSessionEpoch: () => number;
   bumpSessionEpoch: () => void;
   searchMeta: RentalSearchMeta | null;
   setSearchMeta: (meta: RentalSearchMeta | null) => void;
@@ -102,8 +103,14 @@ export function RentalFastPathProvider({ children }: { children: ReactNode }) {
   }, [reportSearchFailure]);
 
   const [sessionEpoch, setSessionEpoch] = useState(0);
-  // Deliberately NOT bumped from clearToolResults: cross-vertical result clearing uses it too.
-  const bumpSessionEpoch = useCallback(() => setSessionEpoch((n) => n + 1), []);
+  const sessionEpochRef = useRef(0);
+  const getSessionEpoch = useCallback(() => sessionEpochRef.current, []);
+  // Invalidate *synchronously*, before any in-flight request can settle.
+  // Deliberately NOT bumped from clearToolResults: cross-vertical clearing also uses it.
+  const bumpSessionEpoch = useCallback(() => {
+    sessionEpochRef.current += 1;
+    setSessionEpoch(sessionEpochRef.current);
+  }, []);
 
   const clearToolResults = useCallback(() => {
     currentResultRef.current = null;
@@ -121,11 +128,11 @@ export function RentalFastPathProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       toolResult, toolResults, setToolResult, restoreToolResult, reportRestoreFailure,
-      clearToolResults, sessionEpoch, bumpSessionEpoch, searchMeta, setSearchMeta,
+      clearToolResults, sessionEpoch, getSessionEpoch, bumpSessionEpoch, searchMeta, setSearchMeta,
       searchFailure, reportSearchFailure, retryFailedSearch,
     }),
     [toolResult, toolResults, setToolResult, restoreToolResult, reportRestoreFailure,
-      clearToolResults, sessionEpoch, bumpSessionEpoch, searchMeta, setSearchMeta,
+      clearToolResults, sessionEpoch, getSessionEpoch, bumpSessionEpoch, searchMeta, setSearchMeta,
       searchFailure, reportSearchFailure, retryFailedSearch],
   );
 

@@ -43,6 +43,7 @@ export const conciergeWorkingMemorySchema = z.object({
       minBedrooms: z.number().optional(),
       maxBedrooms: z.number().optional(),
       furnished: z.boolean().nullable().optional(),
+      furnishingCleared: z.boolean().optional().describe('True after an explicit no-preference furnishing request; reset to false when a boolean furnishing preference is stated.'),
       clearFurnishing: z.boolean().optional().describe('Set true only when the renter explicitly accepts both furnished and unfurnished. Omit otherwise; blanks do not clear saved preferences.'),
       maxPricePerNight: z.number().optional(),
       maxPriceMonthly: z.number().positive().optional(),
@@ -230,7 +231,13 @@ function normalizeModelMemory(raw: unknown): unknown {
     const query = { ...clean.lastRentalQuery };
     // Separate model padding (null/empty = no update) from a deliberate clear.
     // Mastra's deep-merge deletes a stored property for an explicit null patch.
-    if (query.clearFurnishing === true) query.furnished = null;
+    if (query.clearFurnishing === true) {
+      // Mastra deep-merges null as a deletion; retain explicit-clear intent separately.
+      query.furnished = null;
+      query.furnishingCleared = true;
+    } else if (typeof query.furnished === 'boolean') {
+      query.furnishingCleared = false;
+    }
     delete query.clearFurnishing;
     normalized.lastRentalQuery = query;
     const amount = query.maxPriceMonthly;

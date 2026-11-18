@@ -568,6 +568,11 @@ describe("concierge updateWorkingMemory tolerates provider padding", () => {
     });
     expect(saved?.lastRentalQuery).not.toHaveProperty("furnished");
     expect(saved?.lastRentalQuery).not.toHaveProperty("clearFurnishing");
+    expect(saved?.lastRentalQuery).toHaveProperty("furnishingCleared", true);
+    // This survives a schema round-trip even though Mastra deletes null values.
+    expect(conciergeWorkingMemorySchema.parse(saved).lastRentalQuery?.furnishingCleared).toBe(true);
+    const reset = await update({ lastRentalQuery: { furnished: false } }, saved);
+    expect(reset.saved?.lastRentalQuery).toMatchObject({ furnished: false, furnishingCleared: false });
 
     const blank = await update({ lastRentalQuery: { furnished: null, neighborhood: "" } }, stored);
     expect(blank.out.error).toBeUndefined();

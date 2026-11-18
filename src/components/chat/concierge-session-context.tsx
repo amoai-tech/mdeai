@@ -87,6 +87,7 @@ export function ConciergeSessionProvider({ children }: { children: ReactNode }) 
     setSelectedPinId,
     clearFocusPinRequest,
     clearRentalFp,
+    bumpSessionEpoch,
     clearEventFp,
     setRestaurantFp,
     setGroundedFp,
