@@ -10,6 +10,7 @@ import {
   buildRentalSearchParams,
   canFastPathRentalSearch,
   fastPathRentalSummary,
+  reconcileFurnishingFromVisible,
   rentalsToPanelRows,
   rentalsToToolEnvelope,
   type RentalSearchApiParams,
@@ -334,6 +335,13 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
           checkOut: params.checkOut,
         };
       }
+
+      // A saved thread written before `furnished` was stored restores memory without it;
+      // adopt the preference of the search actually on screen rather than widening.
+      memory.lastRentalQuery = reconcileFurnishingFromVisible(
+        memory.lastRentalQuery,
+        searchMeta?.params,
+      );
 
       if (!canFastPathRentalSearch(trimmed, memory)) return false;
 

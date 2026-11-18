@@ -86,4 +86,22 @@ export {
   fastPathRentalSummary,
 } from "@/lib/rental-display";
 
+
+/**
+ * A saved conversation written before the fast path stored `furnished` restores a
+ * `lastRentalQuery` without that field. An absent preference is unknown, not
+ * "unfurnished": adopt the furnishing requirement from the search that is actually
+ * on screen so a budget refinement cannot widen back to unfurnished apartments.
+ *
+ * An explicit value already in memory always wins, and a visible search with no
+ * preference never invents one.
+ */
+export function reconcileFurnishingFromVisible<
+  T extends { furnished?: boolean | null },
+>(previous: T | undefined, shown: { furnished?: boolean | null } | undefined): T | undefined {
+  if (!previous || previous.furnished != null) return previous;
+  if (shown?.furnished == null) return previous;
+  return { ...previous, furnished: shown.furnished };
+}
+
 export type { RentalSearchApiParams };
