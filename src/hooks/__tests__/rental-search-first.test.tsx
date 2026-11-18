@@ -176,6 +176,31 @@ describe("SAN-407 · rental chat searches before it asks", () => {
     expect(next.queryText).toBe("Only show apartments under COP 3 million per month");
   });
 
+  it("keeps furnishing, size and location when lowering a COP monthly budget", async () => {
+    respond(200, { results: [] });
+    const firstText = "Find furnished 2-bedroom apartments in Laureles under COP 3 million";
+    expect(await send(firstText)).toBe(true);
+    const first = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(first).toMatchObject({
+      neighborhood: "Laureles",
+      minBedrooms: 2,
+      furnished: true,
+      maxPriceMonthly: 3_000_000,
+      budgetCurrency: "COP",
+    });
+
+    expect(await send("Only under COP 2.5 million")).toBe(true);
+    const refined = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body));
+    expect(refined).toMatchObject({
+      neighborhood: "Laureles",
+      minBedrooms: 2,
+      furnished: true,
+      maxPriceMonthly: 2_500_000,
+      budgetCurrency: "COP",
+    });
+    expect(refined.queryText).toBe(firstText);
+  });
+
   it("never reuses stale visible Laureles query text after the signed-in AI moved to Envigado", async () => {
     respond(200, { results: [] });
     const previousText = "Show apartments in Laureles under COP 3 million per month";
