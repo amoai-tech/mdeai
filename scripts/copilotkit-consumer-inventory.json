@@ -30,7 +30,7 @@
       "classification": "migrate",
       "step": 9,
       "implicitContract": true,
-      "note": "Asserts the shared props shape, including `showDevConsole: false` and the absence of the v1 `agent` carrier. Must fail if a legacy prop reappears."
+      "note": "Asserts the shared v2 props shape, including `enableInspector: false`, no obsolete `showDevConsole`, and no v1 `agent` carrier. Must fail if a legacy prop reappears."
     },
     {
       "file": "src/app/api/copilotkit/[[...path]]/route.ts",

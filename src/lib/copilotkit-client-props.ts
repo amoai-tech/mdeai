@@ -74,8 +74,8 @@ type CopilotKitClientProps = {
 export function getCopilotKitClientProps(agent: CopilotAgentName): CopilotKitClientProps {
   // enableInspector=false — CopilotKit defaults to loading the web inspector on localhost,
   // and after dev restarts a stale .next chunk causes ChunkLoadError for that bundle.
-  // CopilotKit 1.84.1's v2 provider only reads `enableInspector`; the old `showDevConsole`
-  // prop is honoured by the v1-deprecated provider alone, so it silently stopped working.
+  // CopilotKit v2 controls the Inspector through `enableInspector`. The legacy
+  // `showDevConsole` option does not control Inspector visibility in v2.
   const inspectorOff = { enableInspector: false as const };
   // Direct `process.env.NEXT_PUBLIC_*` access so Next inlines it into the client bundle.
   const publicLicenseKey = process.env.NEXT_PUBLIC_COPILOTKIT_LICENSE_KEY?.trim();
