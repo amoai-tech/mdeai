@@ -178,11 +178,11 @@ test("mixed A2UI route is consistent with model eval 11", () => {
 test("active Standard Catalog references and v2 inspector inventory follow installed CopilotKit", () => {
   const pkg = JSON.parse(readFileSync(join(process.cwd(), "package.json"), "utf8"));
   const pinnedVersion = pkg.dependencies?.["@copilotkit/react-core"];
-  assert.match(pinnedVersion, /^\\d+\\.\\d+\\.\\d+$/, "expected an exact SDK pin");
+  assert.match(pinnedVersion, /^\d+\.\d+\.\d+$/, "expected an exact SDK pin");
 
   const guide = readFileSync(join(base, "references/standard-catalog.md"), "utf8");
   const references = [...guide.matchAll(
-    /github\\.com\\/CopilotKit\\/CopilotKit\\/blob\\/v(\\d+\\.\\d+\\.\\d+)\\/packages\\/react-core\\/src\\/v2\\/generative-ui\\/(?:index|catalog)\\.ts/g,
+    /github\.com\/CopilotKit\/CopilotKit\/blob\/v(\d+\.\d+\.\d+)\/packages\/react-core\/src\/v2\/generative-ui\/(?:index|catalog)\.ts/g,
   )];
   assert.ok(references.length >= 2, "expected version-qualified official API references");
   for (const ref of references) {
