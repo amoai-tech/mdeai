@@ -237,6 +237,7 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
         const query: ConciergeWorkingMemory["lastRentalQuery"] = {
           neighborhood: params.neighborhood,
           minBedrooms: params.minBedrooms,
+          furnished: params.furnished,
           maxPricePerNight: params.maxPricePerNight,
           maxPriceMonthly: params.maxPriceMonthly,
           budgetCurrency: params.budgetCurrency,
@@ -324,6 +325,7 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
         memory.lastRentalQuery = {
           neighborhood: params.neighborhood,
           minBedrooms: params.minBedrooms,
+          furnished: params.furnished,
           maxPricePerNight: params.maxPricePerNight,
           maxPriceMonthly: params.maxPriceMonthly,
           budgetCurrency: params.budgetCurrency,
@@ -346,6 +348,7 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
       const sameVisibleSearch = shown && previous &&
         previous.neighborhood === shown.neighborhood &&
         previous.minBedrooms === shown.minBedrooms &&
+        previous.furnished === shown.furnished &&
         previous.maxPricePerNight === shown.maxPricePerNight &&
         previous.maxPriceMonthly === shown.maxPriceMonthly &&
         previous.budgetCurrency === shown.budgetCurrency &&
