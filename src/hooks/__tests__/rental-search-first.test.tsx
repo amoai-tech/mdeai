@@ -533,6 +533,86 @@ describe("SAN-407 · rental chat searches before it asks", () => {
     expect(refinedUnfurnished.maxPriceMonthly).toBe(2_200_000);
   });
 
+  it("exports an accepted same-thread clear before the pending refinement API completes", async () => {
+    respond(200, { results: [] });
+    expect(await send("Find furnished 2-bedroom apartments in Laureles under COP 3 million")).toBe(true);
+    expect(await send("Either furnished or unfurnished is fine")).toBe(false);
+    await act(async () => {
+      coagent.state = { ...coagent.state, lastRentalQuery: {
+        ...(coagent.state.lastRentalQuery as Record<string, unknown>),
+        furnished: true, furnishingCleared: false,
+      } };
+      for (const listener of coagent.listeners) listener();
+    });
+    let finish: () => void = () => undefined;
+    fetchMock.mockImplementationOnce(() => new Promise<Response>((resolve) => {
+      finish = () => resolve(new Response(JSON.stringify({ results: [] }), { status: 200 }));
+    }));
+    let pending: Promise<boolean> = Promise.resolve(false);
+    await act(async () => { pending = probe.send("Only under COP 2.5 million"); });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    // Must publish before the async search returns: otherwise a concierge fallback
+    // may pick up furnished=true while the corrected request is still pending.
+    expect(coagent.state.lastRentalQuery).toMatchObject({
+      furnished: null, furnishingCleared: true, neighborhood: "Laureles",
+      minBedrooms: 2, maxBedrooms: 2, maxPriceMonthly: 3_000_000,
+    });
+    await act(async () => { finish(); await pending; });
+    const params = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body));
+    expect(params.furnished).toBeUndefined();
+  });
+
+  it.each([
+    ["I prefer unfurnished; can you explain the balcony?", false],
+    ["I prefer furnished; can you explain the balcony?", true],
+  ] as const)("newer concierge-chosen %s outranks the older same-thread clear", async (request, furnished) => {
+    respond(200, { results: [] });
+    expect(await send("Find furnished 2-bedroom apartments in Laureles under COP 3 million")).toBe(true);
+    expect(await send("Either furnished or unfurnished is fine")).toBe(false);
+    // A direct user request can go to the concierge rather than the fast-path.
+    // The agent's next state then reflects this newer explicit preference.
+    expect(await send(request)).toBe(false);
+    await act(async () => {
+      coagent.state = { ...coagent.state, lastRentalQuery: {
+        ...(coagent.state.lastRentalQuery as Record<string, unknown>),
+        furnished, furnishingCleared: false,
+      } };
+      for (const listener of coagent.listeners) listener();
+    });
+    expect(await send("Only under COP 2.5 million")).toBe(true);
+    const params = JSON.parse(String(fetchMock.mock.calls.at(-1)?.[1]?.body));
+    expect(params).toMatchObject({
+      neighborhood: "Laureles", minBedrooms: 2, maxBedrooms: 2,
+      maxPriceMonthly: 2_500_000, furnished,
+    });
+  });
+
+  it("explicit unfurnished wins directly after restoring older unfiltered saved search", async () => {
+    respond(200, { results: [] });
+    await act(async () => {
+      probe.reset();
+      coagent.state = { lastIntent: "rental_search", lastRentalQuery: {
+        neighborhood: "Laureles", minBedrooms: 2, maxBedrooms: 2,
+        furnished: true, furnishingCleared: false,
+        maxPriceMonthly: 2_400_000, budgetCurrency: "COP", budgetType: "monthly",
+      } };
+      for (const listener of coagent.listeners) listener();
+      probe.restoreSearch({
+        neighborhood: "Laureles", minBedrooms: 2, maxBedrooms: 2,
+        maxPriceMonthly: 2_400_000, budgetCurrency: "COP", stayType: "monthly",
+      });
+    });
+    expect(await send("Actually show unfurnished apartments")).toBe(true);
+    const first = JSON.parse(String(fetchMock.mock.calls.at(-1)?.[1]?.body));
+    expect(first.furnished).toBe(false);
+    expect(await send("Only under COP 2.3 million")).toBe(true);
+    const refined = JSON.parse(String(fetchMock.mock.calls.at(-1)?.[1]?.body));
+    expect(refined).toMatchObject({
+      neighborhood: "Laureles", minBedrooms: 2, maxBedrooms: 2,
+      maxPriceMonthly: 2_300_000, furnished: false,
+    });
+  });
+
   it("keeps an explicit unfurnished preference through a budget refinement", async () => {
     respond(200, { results: [] });
     expect(await send("Find furnished 2-bedroom apartments in Laureles under COP 3 million")).toBe(true);
