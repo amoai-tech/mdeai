@@ -54,13 +54,47 @@ describe("buildBrokerOnboardingApartmentPatch", () => {
     ];
     expect(forbidden.filter((name) => name in allFields)).toEqual([]);
   });
-  it("omits coordinates and metadata for a free-text address", () => {
+  it("clears coordinates and metadata for a free-text address", () => {
     const patch = buildBrokerOnboardingApartmentPatch(base);
     expect(patch.address).toBe("72 10th Street, Laureles");
-    expect(patch.latitude).toBeUndefined();
-    expect(patch.longitude).toBeUndefined();
-    expect(patch.metadata).toBeUndefined();
+    // Explicit nulls: the onboarding RPC reuses the newest draft, so an omitted
+    // column would keep a location the broker has since replaced.
+    expect(patch.latitude).toBeNull();
+    expect(patch.longitude).toBeNull();
+    expect(patch.metadata).toBeNull();
     expect(patch.currency).toBe("COP");
+  });
+
+  it("does not keep a previous place's coordinates when the broker types a new address", () => {
+    // The same draft row, saved again: the second submit has no selected place.
+    const patch = buildBrokerOnboardingApartmentPatch({
+      ...base,
+      address: "Carrera 70 #44-12",
+      placeId: "",
+      formattedAddress: "",
+      latitude: null,
+      longitude: null,
+    });
+    expect(patch.latitude).toBeNull();
+    expect(patch.longitude).toBeNull();
+    expect(patch.metadata).toBeNull();
+  });
+
+  it("keeps the place identity but no coordinates when Google returns none", () => {
+    const patch = buildBrokerOnboardingApartmentPatch({
+      ...base,
+      placeId: "ChIJabc12345",
+      formattedAddress: "Calle 10 #42-15, Laureles, Medellín",
+      latitude: null,
+      longitude: null,
+    });
+    expect(patch.latitude).toBeNull();
+    expect(patch.longitude).toBeNull();
+    expect(patch.metadata).toEqual({
+      place_id: "ChIJabc12345",
+      formatted_address: "Calle 10 #42-15, Laureles, Medellín",
+      address_source: "places_search",
+    });
   });
 
   it("persists trusted provider facts when a place was selected", () => {

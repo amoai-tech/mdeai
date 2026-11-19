@@ -109,14 +109,21 @@ export function RentalsOnboardingWizard({ destination = "host" }: { destination?
   }
 
   function patchPlace(result: PlaceSearchResult | null) {
+    // A provider result without a normalized address cannot be saved: the server
+    // verifier re-checks the place and the validator requires its canonical form.
+    // Keep the typed address and treat the location as unconfirmed instead of
+    // leaving the broker on Review with a draft that can never be saved.
+    const formattedAddress = result?.formattedAddress?.trim() ?? "";
+    const placeId = result?.placeId.trim() ?? "";
+    const selected = Boolean(placeId && formattedAddress);
     setForm((prev) =>
-      result
+      selected
         ? {
             ...prev,
-            placeId: result.placeId,
-            formattedAddress: result.formattedAddress ?? "",
-            latitude: result.latitude,
-            longitude: result.longitude,
+            placeId,
+            formattedAddress,
+            latitude: result?.latitude ?? null,
+            longitude: result?.longitude ?? null,
           }
         : { ...prev, placeId: "", formattedAddress: "", latitude: null, longitude: null },
     );

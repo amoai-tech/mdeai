@@ -9,15 +9,39 @@ vi.mock("@/components/host/rentals/broker-address-search", () => ({
   BrokerAddressSearch: ({
     value,
     onTextChange,
+    onSelect,
   }: {
     value: string;
     onTextChange: (value: string) => void;
+    onSelect: (result: {
+      placeId: string;
+      displayName: string | null;
+      formattedAddress: string | null;
+      latitude: number | null;
+      longitude: number | null;
+    }) => void;
   }) => (
-    <input
-      aria-label="Street address"
-      value={value}
-      onChange={(event) => onTextChange(event.target.value)}
-    />
+    <div>
+      <input
+        aria-label="Street address"
+        value={value}
+        onChange={(event) => onTextChange(event.target.value)}
+      />
+      <button
+        type="button"
+        onClick={() =>
+          onSelect({
+            placeId: "ChIJwithoutAddress",
+            displayName: "Result without a normalized address",
+            formattedAddress: null,
+            latitude: null,
+            longitude: null,
+          })
+        }
+      >
+        Select place without address
+      </button>
+    </div>
   ),
 }));
 
@@ -83,5 +107,23 @@ describe("RentalsOnboardingWizard numeric contract", () => {
     // The preview follows the broker to Review, exactly once.
     expect(screen.getAllByTestId("ro-live-preview")).toHaveLength(1);
     expect(screen.getByTestId("ro-live-preview-bathrooms").textContent).toBe("2");
+  });
+
+  it("keeps the draft saveable when a provider result has no normalized address", () => {
+    reachListingStep();
+    fillListingStep();
+    fireEvent.click(screen.getByRole("button", { name: "Select place without address" }));
+
+    // The unconfirmed location must not masquerade as a selected place, and the
+    // submit validator must not reject a place id it can never verify.
+    expect(screen.queryByTestId("ro-address-verified")).toBeNull();
+    expect(screen.getByTestId("ro-live-preview-place-status").textContent).toContain(
+      "Location not confirmed",
+    );
+
+    const continueButton = screen.getByRole("button", { name: /Continue/ }) as HTMLButtonElement;
+    expect(continueButton.disabled).toBe(false);
+    fireEvent.click(continueButton);
+    expect(screen.getByTestId("ro-step-review")).toBeTruthy();
   });
 });
