@@ -28,6 +28,7 @@
     "verify:supabase": "node --env-file=.env.local scripts/verify-supabase-env.mjs",
     "verify:maps": "node --env-file=.env.local scripts/verify-maps-env.mjs",
     "verify:rental-pins": "npx tsx --env-file=.env.local scripts/verify-rental-map-pins.mjs",
+    "verify:rental-memory": "vitest run src/hooks/__tests__/rental-search-first.test.tsx src/lib/__tests__/rental-query-parser.test.ts src/mastra/agents/__tests__/concierge.test.ts src/hooks/__tests__/fast-path-stale-results.test.tsx src/components/chat/__tests__/rental-fast-path-context.test.tsx",
     "verify:rental-intelligence-matrix": "npx tsx --env-file=.env.local scripts/rental-intelligence-matrix.ts",
     "smoke:rental-chat-v2": "node --env-file=.env.local scripts/smoke-rental-chat-v2.mjs",
     "smoke:map-pins": "node --env-file=.env.local scripts/smoke-map-chat-pins.mjs",
