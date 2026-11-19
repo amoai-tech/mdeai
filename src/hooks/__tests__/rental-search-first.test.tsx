@@ -587,6 +587,24 @@ describe("SAN-407 · rental chat searches before it asks", () => {
     });
   });
 
+  it("a question about furnishing does not undo the renter's more recent clear", async () => {
+    respond(200, { results: [] });
+    expect(await send("Find furnished 2-bedroom apartments in Laureles under COP 3 million")).toBe(true);
+    expect(await send("Either furnished or unfurnished is fine")).toBe(false);
+    expect(await send("Are furnished places more expensive?")).toBe(false);
+    // A stale backend snapshot arrives while the concierge answers the question.
+    await act(async () => {
+      coagent.state = { ...coagent.state, lastRentalQuery: {
+        ...(coagent.state.lastRentalQuery as Record<string, unknown>),
+        furnished: true, furnishingCleared: false,
+      } };
+      for (const listener of coagent.listeners) listener();
+    });
+    expect(await send("Only under COP 2.5 million")).toBe(true);
+    const params = JSON.parse(String(fetchMock.mock.calls.at(-1)?.[1]?.body));
+    expect(params.furnished).toBeUndefined();
+  });
+
   it("explicit unfurnished wins directly after restoring older unfiltered saved search", async () => {
     respond(200, { results: [] });
     await act(async () => {
@@ -886,6 +904,22 @@ describe("SAN-407 · rental chat searches before it asks", () => {
     expect(secondBody.neighborhood).toBe("Laureles");
     expect(secondBody.queryText).toBe("Actually only apartments in Laureles");
     expect(unhandled).toEqual([]);
+  });
+
+  it("a furnishing price question while searching does not cancel the current result", async () => {
+    const card = { id: "still-valid-rental", title: "Furnished Laureles", neighborhood: "Laureles",
+      bedrooms: 2, furnished: true, price_monthly: 2_800_000, currency: "COP",
+      latitude: 6.25, longitude: -75.59 };
+    const search = await startSlowFirstSearch(
+      "Find furnished 2-bedroom apartments in Laureles under COP 3 million", { results: [card] },
+    );
+    await act(async () => {
+      // A non-search question correctly falls through to the concierge.
+      expect(await probe.send("Are furnished places more expensive?")).toBe(false);
+    });
+    await search.finish();
+    expect(probe.hasListing("still-valid-rental")).toBe(true);
+    expect(assistantText()).not.toMatch(/set aside those results because you changed/i);
   });
 
   it("the replay builds on the first search's filters, not on stale pre-search state", async () => {

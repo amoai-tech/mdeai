@@ -137,6 +137,13 @@ function matchesVisibleRentalSearch(
     previous.checkOut === visible.checkOut);
 }
 
+/** Mentioning furnishing in a question is not a new furnishing decision. */
+function choosesFurnishing(text: string): boolean {
+  if (typeof furnishingFromQueryText(text) !== "boolean") return false;
+  return /\b(?:prefer|want|need|find|show|only|actually|instead|switch|rather)\b/i.test(text) ||
+    /^\s*(?:furnished|unfurnished)[.!]?\s*$/i.test(text);
+}
+
 /** How many messages may wait behind a running search before extra ones go to the concierge. */
 const MAX_WAITING_MESSAGES = 10;
 
@@ -161,6 +168,9 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
   const busyEpochRef = useRef(-1);
   // A user preference-only turn can supersede a pending search *within* the same chat.
   const furnishingRevisionRef = useRef(0);
+  // Separate from the in-flight request invalidation token above: merely asking
+  // about furnishing must not cancel a valid pending rental search.
+  const furnishingDecisionRevisionRef = useRef(0);
   // Tracks which user-authored furnishing decision won. A newer explicit
   // furnished/unfurnished request must not be undone by an older clear replay.
   const acceptedClearRevisionRef = useRef<number | null>(null);
@@ -191,6 +201,7 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
     latestMemoryRef.current = null;
     latestMemoryEpochRef.current = -1;
     furnishingRevisionRef.current = 0;
+    furnishingDecisionRevisionRef.current = 0;
     acceptedClearRevisionRef.current = null;
     if (busyEpochRef.current !== sessionEpoch) busyRef.current = false;
   }, [sessionEpoch]);
@@ -386,9 +397,8 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
       // Every direct user message is observed here, including messages routed
       // to the concierge instead of rental search. Advance decision recency
       // before consulting an earlier accepted clear from this conversation.
-      if (!clearsFurnishingPreference(trimmed) &&
-          typeof furnishingFromQueryText(trimmed) === "boolean") {
-        furnishingRevisionRef.current += 1;
+      if (!clearsFurnishingPreference(trimmed) && choosesFurnishing(trimmed)) {
+        furnishingDecisionRevisionRef.current += 1;
         acceptedClearRevisionRef.current = null;
       }
 
@@ -400,7 +410,7 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
       // furnished/unfurnished request or a different rental/thread.
       const clearedQuery = latestMemoryEpochRef.current === getSessionEpoch() &&
           acceptedClearRevisionRef.current !== null &&
-          acceptedClearRevisionRef.current === furnishingRevisionRef.current
+          acceptedClearRevisionRef.current === furnishingDecisionRevisionRef.current
         ? latestMemoryRef.current?.lastRentalQuery : undefined;
       if (clearedQuery?.furnishingCleared === true &&
           searchMeta?.params &&
@@ -495,7 +505,8 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
         // Invalidate a pending furnished search in THIS conversation: it must not overwrite
         // the newer clear when the original request resolves.
         furnishingRevisionRef.current += 1;
-        acceptedClearRevisionRef.current = furnishingRevisionRef.current;
+        furnishingDecisionRevisionRef.current += 1;
+        acceptedClearRevisionRef.current = furnishingDecisionRevisionRef.current;
         const cleared: NonNullable<ConciergeWorkingMemory["lastRentalQuery"]> = {
           ...(memory.lastRentalQuery ?? {}),
           furnished: null,
