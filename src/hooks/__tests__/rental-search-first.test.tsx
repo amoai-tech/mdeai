@@ -302,6 +302,36 @@ describe("SAN-407 · rental chat searches before it asks", () => {
     expect(refined.maxBedrooms).toBe(2);
   });
 
+  it("uses the last saved unfiltered result rather than a stale furnished CoAgent snapshot", async () => {
+    respond(200, { results: [] });
+    await act(async () => {
+      probe.reset();
+      // A persisted agent checkpoint can predate a newer saved result, whose
+      // actual search omitted furnished after the renter cleared that preference.
+      coagent.state = { lastIntent: "rental_search", lastRentalQuery: {
+        neighborhood: "Laureles", minBedrooms: 2, maxBedrooms: 2,
+        furnished: true, furnishingCleared: false,
+        maxPriceMonthly: 2_400_000, budgetCurrency: "COP", budgetType: "monthly",
+      } };
+      for (const listener of coagent.listeners) listener();
+      probe.restoreSearch({
+        neighborhood: "Laureles", minBedrooms: 2, maxBedrooms: 2,
+        maxPriceMonthly: 2_400_000, budgetCurrency: "COP", stayType: "monthly",
+      });
+    });
+    expect(await send("Only under COP 2.3 million")).toBe(true);
+    const params = JSON.parse(String(fetchMock.mock.calls.at(-1)?.[1]?.body));
+    expect(params).toMatchObject({
+      neighborhood: "Laureles", minBedrooms: 2, maxBedrooms: 2,
+      maxPriceMonthly: 2_300_000, budgetCurrency: "COP",
+    });
+    expect(params.furnished).toBeUndefined();
+    // An explicit new choice still outranks the saved unfiltered result.
+    expect(await send("Actually furnished apartments")).toBe(true);
+    const explicit = JSON.parse(String(fetchMock.mock.calls.at(-1)?.[1]?.body));
+    expect(explicit.furnished).toBe(true);
+  });
+
   it("a later explicit unfurnished preference overrides a deliberate clear", async () => {
     respond(200, { results: [] });
     expect(await send("Find furnished 2-bedroom apartments in Laureles under COP 3 million")).toBe(true);
@@ -409,6 +439,42 @@ describe("SAN-407 · rental chat searches before it asks", () => {
     await act(async () => { releasePending(); await pending; });
     expect(probe.hasListing("old-mounted-request")).toBe(false);
     expect(probe.hasResult()).toBe(false);
+  });
+
+  it("keeps explicit clear after a prior budget search even if CopilotKit replays older furnishing", async () => {
+    respond(200, { results: [] });
+    expect(await send("Find furnished 2-bedroom apartments in Laureles under COP 3 million")).toBe(true);
+    expect(await send("Only under COP 2.5 million")).toBe(true);
+    expect(await send("Either furnished or unfurnished is fine")).toBe(false);
+    expect(coagent.state.lastRentalQuery).toMatchObject({
+      furnished: null, furnishingCleared: true,
+      neighborhood: "Laureles", minBedrooms: 2, maxBedrooms: 2, maxPriceMonthly: 2_500_000,
+    });
+    // Model/AG-UI replay of the previous server state must not erase a more recent
+    // user-authored no-preference command in the *same* conversation.
+    await act(async () => {
+      const prior = coagent.state.lastRentalQuery as Record<string, unknown>;
+      coagent.state = { ...coagent.state, lastRentalQuery: {
+        ...prior, furnished: true, furnishingCleared: false,
+      } };
+      for (const listener of coagent.listeners) listener();
+    });
+    expect(await send("Only under COP 2.4 million")).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    const last = JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body));
+    expect(last).toMatchObject({
+      neighborhood: "Laureles", minBedrooms: 2, maxBedrooms: 2,
+      maxPriceMonthly: 2_400_000, budgetCurrency: "COP",
+    });
+    expect(last.furnished).toBeUndefined();
+    // A NEW user choice must beat the previously cleared preference.
+    expect(await send("Actually show unfurnished apartments")).toBe(true);
+    const unfurnished = JSON.parse(String(fetchMock.mock.calls.at(-1)?.[1]?.body));
+    expect(unfurnished.furnished).toBe(false);
+    expect(await send("Only under COP 2.2 million")).toBe(true);
+    const refinedUnfurnished = JSON.parse(String(fetchMock.mock.calls.at(-1)?.[1]?.body));
+    expect(refinedUnfurnished.furnished).toBe(false);
+    expect(refinedUnfurnished.maxPriceMonthly).toBe(2_200_000);
   });
 
   it("keeps an explicit unfurnished preference through a budget refinement", async () => {

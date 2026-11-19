@@ -15,7 +15,7 @@ import {
   type RentalSearchApiParams,
 } from "@/lib/rental-search-fast-path";
 import { logRoutingDecision } from "@/lib/intelligence-telemetry";
-import { budgetNotApplied, clearsFurnishingPreference, isExactMonthlyBudgetOnlyRefinement, scoreRentalQuery } from "@/lib/rental-query-parser";
+import { budgetNotApplied, clearsFurnishingPreference, furnishingFromQueryText, isExactMonthlyBudgetOnlyRefinement, scoreRentalQuery } from "@/lib/rental-query-parser";
 import {
   RENTAL_HANDOFF_FAILED_SUMMARY,
   RENTAL_SEARCH_UNAVAILABLE_SUMMARY,
@@ -380,6 +380,24 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
       if (clarifyPending && clarifyKind === "restaurant") return false;
 
       const memory: ConciergeWorkingMemory = { ...(baseMemory ?? state ?? {}) };
+      // A completed concierge run can replay an older backend furnishing preference
+      // after the renter explicitly cleared it on the client. The thread-local
+      // accepted clear is newer than that replay, but ONLY while it still matches
+      // the visible search and this session's epoch. Never override a new explicit
+      // furnished/unfurnished request or a different rental/thread.
+      const clearedQuery = latestMemoryEpochRef.current === getSessionEpoch()
+        ? latestMemoryRef.current?.lastRentalQuery : undefined;
+      if (clearedQuery?.furnishingCleared === true &&
+          searchMeta?.params &&
+          matchesVisibleRentalSearch(clearedQuery, searchMeta.params) &&
+          (!memory.lastRentalQuery || matchesVisibleRentalSearch(memory.lastRentalQuery, searchMeta.params)) &&
+          furnishingFromQueryText(trimmed) === undefined) {
+        memory.lastRentalQuery = {
+          ...(memory.lastRentalQuery ?? clearedQuery),
+          furnished: null,
+          furnishingCleared: true,
+        };
+      }
       // Guest fast-path searches can succeed when the authenticated CoAgent state
       // is unavailable. Reuse the last *visible, thread-local* rental query only
       // while its searchMeta still exists; New Chat and cross-vertical searches
@@ -399,6 +417,22 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
           budgetType: params.stayType,
           checkIn: params.checkIn,
           checkOut: params.checkOut,
+        };
+      }
+
+      // After a saved-thread reload, the last *real displayed* rental query may
+      // be newer than an agent checkpoint. If that exact visible search was
+      // unrestricted, do not resurrect the older checkpoint's boolean. Only
+      // reconcile a matching search, and let a new explicit user preference win.
+      if (memory.lastRentalQuery && searchMeta?.params &&
+          searchMeta.params.furnished === undefined &&
+          typeof memory.lastRentalQuery.furnished === "boolean" &&
+          matchesVisibleRentalSearch(memory.lastRentalQuery, searchMeta.params) &&
+          furnishingFromQueryText(trimmed) === undefined) {
+        memory.lastRentalQuery = {
+          ...memory.lastRentalQuery,
+          furnished: null,
+          furnishingCleared: true,
         };
       }
 
