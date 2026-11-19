@@ -40,6 +40,26 @@ export function brokerNeighborhoodProfileFields(neighborhoods: string[]): {
   };
 }
 
+/**
+ * `public.apartments.bedrooms` and `public.apartments.bathrooms` are Postgres
+ * `integer` columns, so 1.5 bathrooms can never be stored. The form and the
+ * server action share this predicate: that is what keeps a half bathroom from
+ * either failing at the database or being silently rounded into a different
+ * property fact.
+ */
+export function roomCountError(label: string, value: number): string | null {
+  if (!Number.isFinite(value)) {
+    return `${label} must be a whole number.`;
+  }
+  if (value < 0) {
+    return `${label} cannot be negative.`;
+  }
+  if (!Number.isInteger(value)) {
+    return `${label} must be a whole number, not ${value}.`;
+  }
+  return null;
+}
+
 /** Validates onboarding payload before RPC (unit-testable). */
 // skipcq: JS-0067 - JS-R1005 field validation branches
 // skipcq: JS-R1005
@@ -55,11 +75,13 @@ export function validateBrokerOnboardingInput(
   if (!trimOrEmpty(input.address)) {
     return { ok: false, message: "Street address is required." };
   }
-  if (!Number.isFinite(input.bedrooms) || input.bedrooms < 0) {
-    return { ok: false, message: "Bedrooms must be a valid number." };
+  const bedroomError = roomCountError("Bedrooms", input.bedrooms);
+  if (bedroomError) {
+    return { ok: false, message: bedroomError };
   }
-  if (!Number.isFinite(input.bathrooms) || input.bathrooms < 0) {
-    return { ok: false, message: "Bathrooms must be a valid number." };
+  const bathroomError = roomCountError("Bathrooms", input.bathrooms);
+  if (bathroomError) {
+    return { ok: false, message: bathroomError };
   }
   if (!Number.isFinite(input.monthlyRentCop) || input.monthlyRentCop <= 0) {
     return { ok: false, message: "Monthly rent must be greater than zero." };
@@ -101,8 +123,11 @@ export function validateBrokerOnboardingInput(
   if (photo) {
     try {
       const url = new URL(photo);
-      if (!["http:", "https:"].includes(url.protocol)) {
-        return { ok: false, message: "Photo URL must use http or https." };
+      // MDE is served over HTTPS. An `http:` photo is blocked as mixed content by the
+      // browser, so it would persist as a listing photo that can never be displayed.
+      // Rejecting it here keeps the stored fact equal to the visible fact.
+      if (url.protocol !== "https:") {
+        return { ok: false, message: "Photo URL must use https." };
       }
     } catch {
       return { ok: false, message: "Photo URL is not valid." };
