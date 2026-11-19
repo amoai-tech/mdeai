@@ -102,7 +102,7 @@ function Harness() {
         rental.clearToolResults();
         rental.bumpSessionEpoch();
       },
-      restoreSearch: (params) => rental.setSearchMeta({ userText: "Saved rental search", params }),
+      restoreSearch: (params) => rental.setSearchMeta({ userText: "Saved rental search", params, source: "saved" }),
     };
   });
   return null;
@@ -300,6 +300,22 @@ describe("SAN-407 · rental chat searches before it asks", () => {
     expect(refined.furnished).toBeUndefined();
     expect(refined.minBedrooms).toBe(2);
     expect(refined.maxBedrooms).toBe(2);
+  });
+
+  it("does not erase a newer concierge-authored furnished preference on a live unfiltered result", async () => {
+    respond(200, { results: [] });
+    expect(await send("Find 2-bedroom apartments in Laureles under COP 3 million")).toBe(true);
+    // This was a real live unfiltered search, NOT a saved-thread hydration.
+    await act(async () => {
+      const prior = coagent.state.lastRentalQuery as Record<string, unknown>;
+      coagent.state = { ...coagent.state, lastRentalQuery: {
+        ...prior, furnished: true, furnishingCleared: false,
+      } };
+      for (const listener of coagent.listeners) listener();
+    });
+    expect(await send("Only under COP 2.5 million")).toBe(true);
+    const next = JSON.parse(String(fetchMock.mock.calls.at(-1)?.[1]?.body));
+    expect(next).toMatchObject({ neighborhood: "Laureles", furnished: true, maxPriceMonthly: 2_500_000 });
   });
 
   it("uses the last saved unfiltered result rather than a stale furnished CoAgent snapshot", async () => {

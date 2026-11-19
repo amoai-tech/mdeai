@@ -424,7 +424,7 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
       // be newer than an agent checkpoint. If that exact visible search was
       // unrestricted, do not resurrect the older checkpoint's boolean. Only
       // reconcile a matching search, and let a new explicit user preference win.
-      if (memory.lastRentalQuery && searchMeta?.params &&
+      if (memory.lastRentalQuery && searchMeta?.source === "saved" &&
           searchMeta.params.furnished === undefined &&
           typeof memory.lastRentalQuery.furnished === "boolean" &&
           matchesVisibleRentalSearch(memory.lastRentalQuery, searchMeta.params) &&
