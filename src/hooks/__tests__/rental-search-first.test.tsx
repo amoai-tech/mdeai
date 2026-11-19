@@ -318,6 +318,39 @@ describe("SAN-407 · rental chat searches before it asks", () => {
     expect(next).toMatchObject({ neighborhood: "Laureles", furnished: true, maxPriceMonthly: 2_500_000 });
   });
 
+  it("does not keep trusting saved cards after a later concierge-authored furnishing change", async () => {
+    respond(200, { results: [] });
+    await act(async () => {
+      probe.reset();
+      coagent.state = { lastIntent: "rental_search", lastRentalQuery: {
+        neighborhood: "Laureles", minBedrooms: 2, maxBedrooms: 2,
+        furnished: true, furnishingCleared: false,
+        maxPriceMonthly: 2_400_000, budgetCurrency: "COP", budgetType: "monthly",
+      } };
+      for (const listener of coagent.listeners) listener();
+      probe.restoreSearch({
+        neighborhood: "Laureles", minBedrooms: 2, maxBedrooms: 2,
+        maxPriceMonthly: 2_400_000, budgetCurrency: "COP", stayType: "monthly",
+      });
+    });
+    // This follow-up goes to the concierge, not the rental fast path.
+    expect(await send("What about the balcony?")).toBe(false);
+    // The concierge now writes a NEW explicit preference after saved hydration.
+    await act(async () => {
+      coagent.state = { ...coagent.state, lastRentalQuery: {
+        ...(coagent.state.lastRentalQuery as Record<string, unknown>),
+        furnished: true, furnishingCleared: false,
+      } };
+      for (const listener of coagent.listeners) listener();
+    });
+    expect(await send("Only under COP 2.3 million")).toBe(true);
+    const refined = JSON.parse(String(fetchMock.mock.calls.at(-1)?.[1]?.body));
+    expect(refined).toMatchObject({
+      neighborhood: "Laureles", minBedrooms: 2, maxBedrooms: 2,
+      maxPriceMonthly: 2_300_000, furnished: true,
+    });
+  });
+
   it("uses the last saved unfiltered result rather than a stale furnished CoAgent snapshot", async () => {
     respond(200, { results: [] });
     await act(async () => {

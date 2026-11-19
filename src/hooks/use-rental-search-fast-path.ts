@@ -434,6 +434,15 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
           furnished: null,
           furnishingCleared: true,
         };
+        // Export the corrected checkpoint before a concierge fallback sees the
+        // first post-hydration turn. A later agent-authored choice must then win.
+        setState({ ...memory });
+      }
+      if (searchMeta?.source === "saved") {
+        // Saved metadata is only trusted for ONE user turn after hydration.
+        // Otherwise a future concierge update to furnished would be erased on
+        // the next budget refinement by permanently "saved" metadata.
+        setSearchMeta({ ...searchMeta, source: undefined });
       }
 
       // Pre-upgrade saved threads may have a lastRentalQuery without furnishing,
@@ -514,6 +523,7 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
       clarifyPending,
       runSearch,
       searchMeta,
+      setSearchMeta,
       state,
       setState,
       getSessionEpoch,
