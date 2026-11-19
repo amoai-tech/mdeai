@@ -565,6 +565,9 @@ describe("SAN-407 · rental chat searches before it asks", () => {
   it.each([
     ["I prefer unfurnished; can you explain the balcony?", false],
     ["I prefer furnished; can you explain the balcony?", true],
+    ["Prefiero amoblado, ¿me explicas el balcón?", true],
+    ["Prefiero sin amoblar, ¿me explicas el balcón?", false],
+    ["Make it furnished, and what about the balcony?", true],
   ] as const)("newer concierge-chosen %s outranks the older same-thread clear", async (request, furnished) => {
     respond(200, { results: [] });
     expect(await send("Find furnished 2-bedroom apartments in Laureles under COP 3 million")).toBe(true);

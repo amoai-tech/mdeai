@@ -140,7 +140,9 @@ function matchesVisibleRentalSearch(
 /** Mentioning furnishing in a question is not a new furnishing decision. */
 function choosesFurnishing(text: string): boolean {
   if (typeof furnishingFromQueryText(text) !== "boolean") return false;
-  return /\b(?:prefer|want|need|find|show|only|actually|instead|switch|rather)\b/i.test(text) ||
+  // The rental parser already recognizes English/Spanish furnishing values.
+  // Here detect a *choice*, not a question about furnished apartment prices.
+  return /\b(?:prefer|prefiero|quiero|quisiera|necesito|busco|muestra|muéstrame|mostrar|hazlo|ponlo|make|want|need|find|show|only|actually|instead|switch|rather)\b/i.test(text) ||
     /^\s*(?:furnished|unfurnished)[.!]?\s*$/i.test(text);
 }
 
