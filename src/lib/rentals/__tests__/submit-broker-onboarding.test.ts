@@ -1,22 +1,35 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PlacesConfigError, PlacesRequestError } from "@/mastra/lib/google-places-client";
 
-const { verifyPlaceId, createClient, redirect, supabaseClient } = vi.hoisted(() => {
+const { verifyPlaceId, createClient, redirect, supabaseClient, updates, draftRead } = vi.hoisted(() => {
+  const updates: Record<string, unknown[]> = { landlord_profiles: [], apartments: [] };
+  const draftRead: {
+    data: { metadata: unknown } | null;
+    error: { message: string } | null;
+  } = { data: null, error: null };
   const supabaseClient = {
     auth: { getUser: vi.fn(async () => ({ data: { user: { id: "user-1" } } })) },
     rpc: vi.fn(async () => ({
       data: { apartment_id: "apt-1", landlord_profile_id: "lp-1" },
       error: null,
     })),
-    from: vi.fn(() => ({
-      update: vi.fn(() => ({ eq: vi.fn(async () => ({ error: null })) })),
-    })),
+    from: vi.fn((table: string) => {
+      const update = vi.fn((payload: unknown) => {
+        (updates[table] ??= []).push(payload);
+        return { eq: vi.fn(async () => ({ error: null })) };
+      });
+      const maybeSingle = vi.fn(async () => draftRead);
+      const select = vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle })) }));
+      return { update, select };
+    }),
   };
   return {
     verifyPlaceId: vi.fn(),
     createClient: vi.fn(),
     redirect: vi.fn(),
     supabaseClient,
+    updates,
+    draftRead,
   };
 });
 
@@ -45,6 +58,10 @@ const input = {
 describe("submitBrokerOnboarding place verification branches", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    updates.landlord_profiles.length = 0;
+    updates.apartments.length = 0;
+    draftRead.data = null;
+    draftRead.error = null;
     createClient.mockResolvedValue(supabaseClient);
   });
 
@@ -97,4 +114,53 @@ describe("submitBrokerOnboarding place verification branches", () => {
     expect(redirect).toHaveBeenCalledWith("/host/rentals/listings");
   });
 
+
+  const freeText = {
+    ...input,
+    address: "Carrera 70 #44-12",
+    placeId: "",
+    formattedAddress: "",
+    latitude: null,
+    longitude: null,
+  };
+
+  it("removes only the place keys from a reused draft's metadata", async () => {
+    draftRead.data = {
+      metadata: {
+        place_id: "ChIJold",
+        formatted_address: "Old address",
+        address_source: "places_search",
+        inventory_kind: "test_fixture",
+        is_test_fixture: true,
+        review_required_reason: "material edit after publication",
+      },
+    };
+    await submitBrokerOnboarding(freeText);
+
+    expect(redirect).toHaveBeenCalledWith("/host/rentals/listings");
+    const patch = updates.apartments.at(-1) as Record<string, unknown>;
+    expect(patch.latitude).toBeNull();
+    expect(patch.longitude).toBeNull();
+    expect(patch.metadata).toEqual({
+      inventory_kind: "test_fixture",
+      is_test_fixture: true,
+      review_required_reason: "material edit after publication",
+    });
+  });
+
+  it("leaves provenance metadata untouched when the draft has no place keys", async () => {
+    draftRead.data = { metadata: { inventory_kind: "test_fixture" } };
+    await submitBrokerOnboarding(freeText);
+
+    const patch = updates.apartments.at(-1) as Record<string, unknown>;
+    expect("metadata" in patch).toBe(false);
+  });
+
+  it("fails closed when the reused draft cannot be read", async () => {
+    draftRead.error = { message: "permission denied" };
+    const result = await submitBrokerOnboarding(freeText);
+
+    expect(result).toEqual({ ok: false, message: "permission denied" });
+    expect(updates.apartments).toHaveLength(0);
+  });
 });

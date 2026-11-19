@@ -11,6 +11,7 @@ import { BROKER_LISTINGS_PATH } from "@/lib/rentals/broker-route-gate";
 import {
   buildBrokerOnboardingApartmentPatch,
   resolveBrokerOnboardingAddress,
+  stripBrokerPlaceMetadata,
   withVerifiedPlace,
   withoutUnverifiedCoordinates,
 } from "@/lib/rentals/broker-onboarding-apartment-patch";
@@ -139,6 +140,28 @@ export async function submitBrokerOnboarding(
   }
 
   const apartmentPatch = buildBrokerOnboardingApartmentPatch(effectiveInput);
+
+  if (!effectiveInput.placeId.trim()) {
+    // The onboarding RPC reuses the broker's newest draft, which may carry provenance
+    // this flow does not own (`inventory_kind`, `is_test_fixture`, `review_required_*`).
+    // Remove only our three place keys; writing `metadata = null` would erase that
+    // record and `protect_apartment_provenance` rejects removing a classification.
+    const { data: existingDraft, error: draftReadError } = await supabase
+      .from("apartments")
+      .select("metadata")
+      .eq("id", apartmentId)
+      .maybeSingle();
+
+    if (draftReadError) {
+      return { ok: false, message: draftReadError.message };
+    }
+    if (!existingDraft) {
+      return { ok: false, message: "We could not read the onboarding draft. Try again." };
+    }
+
+    const stripped = stripBrokerPlaceMetadata(existingDraft.metadata);
+    if (stripped.changed) apartmentPatch.metadata = stripped.metadata;
+  }
 
   const { error: apartmentError } = await supabase
     .from("apartments")

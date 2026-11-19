@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildBrokerOnboardingApartmentPatch,
   resolveBrokerOnboardingAddress,
+  stripBrokerPlaceMetadata,
   withVerifiedPlace,
   withoutUnverifiedCoordinates,
 } from "@/lib/rentals/broker-onboarding-apartment-patch";
@@ -54,14 +55,15 @@ describe("buildBrokerOnboardingApartmentPatch", () => {
     ];
     expect(forbidden.filter((name) => name in allFields)).toEqual([]);
   });
-  it("clears coordinates and metadata for a free-text address", () => {
+  it("clears coordinates but never rewrites the whole metadata column", () => {
     const patch = buildBrokerOnboardingApartmentPatch(base);
     expect(patch.address).toBe("72 10th Street, Laureles");
     // Explicit nulls: the onboarding RPC reuses the newest draft, so an omitted
     // column would keep a location the broker has since replaced.
     expect(patch.latitude).toBeNull();
     expect(patch.longitude).toBeNull();
-    expect(patch.metadata).toBeNull();
+    // metadata is provenance-owned; the action strips only the place keys.
+    expect("metadata" in patch).toBe(false);
     expect(patch.currency).toBe("COP");
   });
 
@@ -77,7 +79,7 @@ describe("buildBrokerOnboardingApartmentPatch", () => {
     });
     expect(patch.latitude).toBeNull();
     expect(patch.longitude).toBeNull();
-    expect(patch.metadata).toBeNull();
+    expect("metadata" in patch).toBe(false);
   });
 
   it("keeps the place identity but no coordinates when Google returns none", () => {
@@ -144,5 +146,46 @@ describe("buildBrokerOnboardingApartmentPatch", () => {
       resolveBrokerOnboardingAddress({ ...base, formattedAddress: "Normalized address" }),
     ).toBe("Normalized address");
     expect(resolveBrokerOnboardingAddress(base)).toBe("72 10th Street, Laureles");
+  });
+});
+
+describe("stripBrokerPlaceMetadata", () => {
+  it("removes only this flow's place keys and preserves provenance", () => {
+    const existing = {
+      place_id: "ChIJold",
+      formatted_address: "Old address",
+      address_source: "places_search",
+      inventory_kind: "test_fixture",
+      is_test_fixture: true,
+      review_required_reason: "material edit after publication",
+      review_required_at: "2026-11-01T00:00:00Z",
+      mde_managed_development: true,
+    };
+    const result = stripBrokerPlaceMetadata(existing);
+    expect(result.changed).toBe(true);
+    expect(result.metadata).toEqual({
+      inventory_kind: "test_fixture",
+      is_test_fixture: true,
+      review_required_reason: "material edit after publication",
+      review_required_at: "2026-11-01T00:00:00Z",
+      mde_managed_development: true,
+    });
+    // The caller's object is never mutated.
+    expect(existing.place_id).toBe("ChIJold");
+  });
+
+  it("reports no change when there is no place metadata to remove", () => {
+    const result = stripBrokerPlaceMetadata({ inventory_kind: "test_fixture" });
+    expect(result.changed).toBe(false);
+    expect(result.metadata).toEqual({ inventory_kind: "test_fixture" });
+  });
+
+  it("handles a null, array or scalar column without inventing a change", () => {
+    expect(stripBrokerPlaceMetadata(null)).toEqual({ metadata: {}, changed: false });
+    expect(stripBrokerPlaceMetadata(undefined)).toEqual({ metadata: {}, changed: false });
+    const array = stripBrokerPlaceMetadata(["keep"]);
+    expect(array.changed).toBe(false);
+    expect(array.metadata).toEqual(["keep"]);
+    expect(stripBrokerPlaceMetadata("scalar")).toEqual({ metadata: "scalar", changed: false });
   });
 });
