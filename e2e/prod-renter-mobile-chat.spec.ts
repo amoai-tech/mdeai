@@ -5,6 +5,7 @@ import {
   sendConciergeMessage,
   waitForConciergeReply,
 } from "./helpers/maps-layout";
+import { establishVercelAutomationBypass } from "./fixtures/vercel-bypass";
 
 /**
  * SAN-1626 checkpoint 9.8 — signed-in renter concierge at 390 × 844.
@@ -136,9 +137,23 @@ test.describe("SAN-1626 · signed-in renter concierge on a 390px phone", () => {
 
     // 4 — an anonymous caller is still refused the runtime.
     const guest = await page.context().browser()!.newContext();
-    const anon = await guest.request.get(`${new URL(page.url()).origin}/api/copilotkit/info`);
-    expect(anon.status()).toBe(401);
-    await guest.close();
+    try {
+      const origin = new URL(page.url());
+      if (origin.hostname.endsWith(".vercel.app")) {
+        // A new anonymous context has no QA renter session AND no Vercel
+        // bypass cookie. Keep the former absent, establish only the latter.
+        const guestPage = await guest.newPage();
+        await establishVercelAutomationBypass(
+          guestPage,
+          origin.origin,
+          process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim() ?? "",
+        );
+      }
+      const anon = await guest.request.get(`${origin.origin}/api/copilotkit/info`);
+      expect(anon.status()).toBe(401);
+    } finally {
+      await guest.close();
+    }
 
     // A single successful test is a SAMPLE of an actual signed-in journey,
     // not the measured production success rate. Emit only non-sensitive

@@ -33,6 +33,10 @@ type RentalFastPathContextValue = {
   reportRestoreFailure: (failure: RentalSearchFailure, retry: () => void) => void;
   /** New chat / thread switch: remove every result, not only the current one. */
   clearToolResults: () => void;
+  /** Bumped by the session owner on New Chat / thread switch; scopes memory to one conversation. */
+  sessionEpoch: number;
+  getSessionEpoch: () => number;
+  bumpSessionEpoch: () => void;
   searchMeta: RentalSearchMeta | null;
   setSearchMeta: (meta: RentalSearchMeta | null) => void;
   searchFailure: RentalSearchFailure | null;
@@ -98,6 +102,16 @@ export function RentalFastPathProvider({ children }: { children: ReactNode }) {
     if (currentResultRef.current == null) reportSearchFailure(failure, retry);
   }, [reportSearchFailure]);
 
+  const [sessionEpoch, setSessionEpoch] = useState(0);
+  const sessionEpochRef = useRef(0);
+  const getSessionEpoch = useCallback(() => sessionEpochRef.current, []);
+  // Invalidate *synchronously*, before any in-flight request can settle.
+  // Deliberately NOT bumped from clearToolResults: cross-vertical clearing also uses it.
+  const bumpSessionEpoch = useCallback(() => {
+    sessionEpochRef.current += 1;
+    setSessionEpoch(sessionEpochRef.current);
+  }, []);
+
   const clearToolResults = useCallback(() => {
     currentResultRef.current = null;
     retryRef.current = null;
@@ -114,11 +128,11 @@ export function RentalFastPathProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       toolResult, toolResults, setToolResult, restoreToolResult, reportRestoreFailure,
-      clearToolResults, searchMeta, setSearchMeta,
+      clearToolResults, sessionEpoch, getSessionEpoch, bumpSessionEpoch, searchMeta, setSearchMeta,
       searchFailure, reportSearchFailure, retryFailedSearch,
     }),
     [toolResult, toolResults, setToolResult, restoreToolResult, reportRestoreFailure,
-      clearToolResults, searchMeta, setSearchMeta,
+      clearToolResults, sessionEpoch, getSessionEpoch, bumpSessionEpoch, searchMeta, setSearchMeta,
       searchFailure, reportSearchFailure, retryFailedSearch],
   );
 

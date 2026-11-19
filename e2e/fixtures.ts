@@ -12,6 +12,7 @@ import {
   QA_SUPER_ADMIN_EMAIL,
   signInAsOnOrigin,
 } from "./helpers/auth";
+import { establishVercelAutomationBypass } from "./fixtures/vercel-bypass";
 
 type AuthStorageState = Awaited<ReturnType<BrowserContext["storageState"]>>;
 
@@ -104,6 +105,17 @@ export const test = base.extend<SharedFixtures, SharedWorkerFixtures>({
         if (session.user.email?.toLowerCase() !== email.toLowerCase()) {
           throw new Error("QA role session identity mismatch");
         }
+      }
+      // This context starts without shared cookies. Set the trusted Vercel
+      // bypass AFTER Supabase session injection so protected previews reach MDE.
+      // The existing helper also validates an exact public-preview SHA.
+      const target = new URL(baseURL);
+      if (target.hostname.endsWith(".vercel.app")) {
+        await establishVercelAutomationBypass(
+          page,
+          target.origin,
+          process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim() ?? "",
+        );
       }
       await runFixture(page);
     } finally {
