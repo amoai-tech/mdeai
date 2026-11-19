@@ -240,15 +240,22 @@ describe("SAN-407 · rental chat searches before it asks", () => {
     });
   });
 
-  it("does not reapply furnished when a renter says either is fine, then lowers the budget", async () => {
+  it("clear-only furnishing retains Laureles and exact 2BR for the next budget-only request", async () => {
     respond(200, { results: [] });
     expect(await send("Find furnished 2-bedroom apartments in Laureles under COP 3 million")).toBe(true);
-    // Clear-only turns are forwarded to the concierge, but must change the working-memory state.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    // The clear is memory-only, not a new search that could overwrite location/bedrooms.
     expect(await send("either furnished or unfurnished is fine")).toBe(false);
-    expect((coagent.state.lastRentalQuery as { furnished?: boolean | null }).furnished).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(coagent.state.lastRentalQuery).toMatchObject({
+      neighborhood: "Laureles", minBedrooms: 2, maxBedrooms: 2,
+      furnished: null, furnishingCleared: true, maxPriceMonthly: 3_000_000,
+    });
     expect(await send("Only under COP 2.5 million")).toBe(true);
-    const refined = JSON.parse(String(fetchMock.mock.calls.at(-1)?.[1]?.body));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const refined = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body));
     expect(refined.furnished).toBeUndefined();
+    expect(refined.neighborhood).toBe("Laureles");
     expect(refined.maxPriceMonthly).toBe(2_500_000);
     expect(refined.minBedrooms).toBe(2);
     expect(refined.maxBedrooms).toBe(2);
