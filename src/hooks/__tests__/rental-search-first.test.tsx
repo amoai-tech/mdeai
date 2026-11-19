@@ -590,11 +590,14 @@ describe("SAN-407 · rental chat searches before it asks", () => {
     });
   });
 
-  it("a question about furnishing does not undo the renter's more recent clear", async () => {
+  it.each([
+    "Are furnished places more expensive?",
+    "Does the price make furnished units worth it?",
+  ])("furnishing price question %s does not undo the renter's clear", async (question) => {
     respond(200, { results: [] });
     expect(await send("Find furnished 2-bedroom apartments in Laureles under COP 3 million")).toBe(true);
     expect(await send("Either furnished or unfurnished is fine")).toBe(false);
-    expect(await send("Are furnished places more expensive?")).toBe(false);
+    expect(await send(question)).toBe(false);
     // A stale backend snapshot arrives while the concierge answers the question.
     await act(async () => {
       coagent.state = { ...coagent.state, lastRentalQuery: {

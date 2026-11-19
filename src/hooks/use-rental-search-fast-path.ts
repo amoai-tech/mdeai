@@ -142,7 +142,8 @@ function choosesFurnishing(text: string): boolean {
   if (typeof furnishingFromQueryText(text) !== "boolean") return false;
   // The rental parser already recognizes English/Spanish furnishing values.
   // Here detect a *choice*, not a question about furnished apartment prices.
-  return /\b(?:prefer|prefiero|quiero|quisiera|necesito|busco|muestra|muéstrame|mostrar|hazlo|ponlo|make|want|need|find|show|only|actually|instead|switch|rather)\b/i.test(text) ||
+  return /\b(?:prefer|prefiero|quiero|quisiera|necesito|busco|muestra|muéstrame|mostrar|hazlo|ponlo|want|need|find|show|only|actually|instead|switch|rather)\b/i.test(text) ||
+    /\bmake\s+(?:it|them|that)\s+(?:un)?furnished\b/i.test(text) ||
     /^\s*(?:furnished|unfurnished)[.!]?\s*$/i.test(text);
 }
 
