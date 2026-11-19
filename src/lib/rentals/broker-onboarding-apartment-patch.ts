@@ -35,7 +35,7 @@ export type BrokerOnboardingApartmentPatch = {
    */
   latitude: number | null;
   longitude: number | null;
-  /** Present only when a place was selected, or when place keys must be removed. */
+  /** Populated by the server action after reading and preserving existing provenance. */
   metadata?: BrokerOnboardingApartmentMetadata | Json | null;
 };
 
@@ -97,8 +97,8 @@ export function withoutUnverifiedCoordinates(
 /**
  * Maps the validated onboarding form to the apartments update payload.
  * Coordinates are always explicit so a reused draft cannot keep a location that
- * no longer matches; metadata is written only for a verified place, or by
- * `submitBrokerOnboarding` after it strips the existing place keys.
+ * no longer matches; only the server action may merge place metadata into
+ * the existing provenance-preserving metadata object.
  */
 export function buildBrokerOnboardingApartmentPatch(
   input: BrokerOnboardingFormInput,
@@ -115,10 +115,6 @@ export function buildBrokerOnboardingApartmentPatch(
     latitude: placeId && hasPlaceCoordinates ? input.latitude : null,
     longitude: placeId && hasPlaceCoordinates ? input.longitude : null,
   };
-
-  if (placeId) {
-    patch.metadata = { place_id: placeId, formatted_address: address, address_source: "places_search" };
-  }
 
   const photo = input.photoUrl.trim();
   if (photo) patch.images = [photo];

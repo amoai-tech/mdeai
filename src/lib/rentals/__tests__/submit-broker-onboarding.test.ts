@@ -60,7 +60,7 @@ describe("submitBrokerOnboarding place verification branches", () => {
     vi.clearAllMocks();
     updates.landlord_profiles.length = 0;
     updates.apartments.length = 0;
-    draftRead.data = null;
+    draftRead.data = { metadata: {} };
     draftRead.error = null;
     createClient.mockResolvedValue(supabaseClient);
   });
@@ -123,6 +123,54 @@ describe("submitBrokerOnboarding place verification branches", () => {
     latitude: null,
     longitude: null,
   };
+
+  it("merges a selected Google place without destroying existing provenance or review markers", async () => {
+    verifyPlaceId.mockResolvedValue({
+      formattedAddress: "Calle 10 #42-15, Laureles",
+      latitude: 6.2447,
+      longitude: -75.5916,
+    });
+    draftRead.data = {
+      metadata: {
+        place_id: "ChIJold",
+        formatted_address: "Previous address",
+        address_source: "places_search",
+        inventory_kind: "test_fixture",
+        is_test_fixture: true,
+        mde_managed_development: true,
+        review_required_reason: "material edit after publication",
+        review_required_at: "2026-11-19T00:00:00.000Z",
+        custom_key: "keep",
+      },
+    };
+    await submitBrokerOnboarding(input);
+    expect(redirect).toHaveBeenCalledWith("/host/rentals/listings");
+    const patch = updates.apartments.at(-1) as Record<string, unknown>;
+    expect(patch.metadata).toEqual({
+      inventory_kind: "test_fixture",
+      is_test_fixture: true,
+      mde_managed_development: true,
+      review_required_reason: "material edit after publication",
+      review_required_at: "2026-11-19T00:00:00.000Z",
+      custom_key: "keep",
+      place_id: "ChIJabc12345",
+      formatted_address: "Calle 10 #42-15, Laureles",
+      address_source: "places_search",
+    });
+  });
+
+  it("fails closed on a selected Google place if the reused draft cannot be read", async () => {
+    verifyPlaceId.mockResolvedValue({
+      formattedAddress: "Calle 10 #42-15, Laureles",
+      latitude: 6.2447,
+      longitude: -75.5916,
+    });
+    draftRead.error = { message: "permission denied" };
+    expect(await submitBrokerOnboarding(input)).toEqual({
+      ok: false, message: "permission denied",
+    });
+    expect(updates.apartments).toHaveLength(0);
+  });
 
   it("removes only the place keys from a reused draft's metadata", async () => {
     draftRead.data = {

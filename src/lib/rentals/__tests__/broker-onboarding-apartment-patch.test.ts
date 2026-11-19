@@ -45,7 +45,6 @@ describe("buildBrokerOnboardingApartmentPatch", () => {
       "images",
       "latitude",
       "longitude",
-      "metadata",
       "price_monthly",
     ]);
     const forbidden = [
@@ -92,11 +91,7 @@ describe("buildBrokerOnboardingApartmentPatch", () => {
     });
     expect(patch.latitude).toBeNull();
     expect(patch.longitude).toBeNull();
-    expect(patch.metadata).toEqual({
-      place_id: "ChIJabc12345",
-      formatted_address: "Calle 10 #42-15, Laureles, Medellín",
-      address_source: "places_search",
-    });
+    expect("metadata" in patch).toBe(false);
   });
 
   it("persists trusted provider facts when a place was selected", () => {
@@ -110,11 +105,7 @@ describe("buildBrokerOnboardingApartmentPatch", () => {
     expect(patch.address).toBe("Calle 10 #42-15, Laureles, Medellín");
     expect(patch.latitude).toBe(6.2447);
     expect(patch.longitude).toBe(-75.5916);
-    expect(patch.metadata).toEqual({
-      place_id: "ChIJabc12345",
-      formatted_address: "Calle 10 #42-15, Laureles, Medellín",
-      address_source: "places_search",
-    });
+    expect("metadata" in patch).toBe(false);
   });
 
   it("still stores an authorized photo when provided", () => {

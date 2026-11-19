@@ -141,26 +141,37 @@ export async function submitBrokerOnboarding(
 
   const apartmentPatch = buildBrokerOnboardingApartmentPatch(effectiveInput);
 
-  if (!effectiveInput.placeId.trim()) {
-    // The onboarding RPC reuses the broker's newest draft, which may carry provenance
-    // this flow does not own (`inventory_kind`, `is_test_fixture`, `review_required_*`).
-    // Remove only our three place keys; writing `metadata = null` would erase that
-    // record and `protect_apartment_provenance` rejects removing a classification.
-    const { data: existingDraft, error: draftReadError } = await supabase
-      .from("apartments")
-      .select("metadata")
-      .eq("id", apartmentId)
-      .maybeSingle();
+  // Both Google-selected and free-text address changes must preserve metadata
+  // owned by provenance and material-review triggers. The draft RPC can reuse an
+  // existing apartment; never replace its entire metadata with only place keys.
+  // The read-then-write race is reserved for SAN-1107's atomic RPC.
+  const { data: existingDraft, error: draftReadError } = await supabase
+    .from("apartments")
+    .select("metadata")
+    .eq("id", apartmentId)
+    .maybeSingle();
 
-    if (draftReadError) {
-      return { ok: false, message: draftReadError.message };
-    }
-    if (!existingDraft) {
-      return { ok: false, message: "We could not read the onboarding draft. Try again." };
-    }
+  if (draftReadError) {
+    return { ok: false, message: draftReadError.message };
+  }
+  if (!existingDraft) {
+    return { ok: false, message: "We could not read the onboarding draft. Try again." };
+  }
 
-    const stripped = stripBrokerPlaceMetadata(existingDraft.metadata);
-    if (stripped.changed) apartmentPatch.metadata = stripped.metadata;
+  const stripped = stripBrokerPlaceMetadata(existingDraft.metadata);
+  const selectedPlaceId = effectiveInput.placeId.trim();
+  if (selectedPlaceId) {
+    if (typeof stripped.metadata !== "object" || Array.isArray(stripped.metadata)) {
+      return { ok: false, message: "We could not update the listing's address. Try again." };
+    }
+    apartmentPatch.metadata = {
+      ...stripped.metadata,
+      place_id: selectedPlaceId,
+      formatted_address: resolveBrokerOnboardingAddress(effectiveInput),
+      address_source: "places_search",
+    };
+  } else if (stripped.changed) {
+    apartmentPatch.metadata = stripped.metadata;
   }
 
   const { error: apartmentError } = await supabase
