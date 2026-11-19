@@ -389,7 +389,7 @@ function RentalBrowseViewInner({
                 return (
                   <RentalBrowseCard
                     key={r.id}
-                    mediaLayout="inline"
+                    mediaLayout="cover"
                     rental={r}
                     matchParams={matchParams}
                     detailSearch={detailSearch}

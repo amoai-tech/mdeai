@@ -1,11 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Bed, Building2, Calendar, ExternalLink, Wifi } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { VenueCardShell } from "@/components/browse/venue-card-shell";
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+  type CarouselApi,
+} from "@/components/ui/carousel";
 import { VenueCardPlaceholder } from "@/components/browse/venue-card-placeholder";
 import { buildMatchReason, formatRentalPrices } from "@/lib/rental-display";
 import type { RentalSearchApiParams } from "@/lib/rental-query-parser";
@@ -164,6 +172,89 @@ function RentalBrowseCardMedia({
   );
 }
 
+/**
+ * SAN-1695 — photos come only from the authorized rental search result.
+ * The primary cover remains first, and the limited search gallery never
+ * pretends to contain all photos when Details has more.
+ */
+function rentalBrowsePhotos(rental: Rental): string[] {
+  return [...new Set([rental.image, ...(rental.images ?? [])].filter((url) => url?.trim()))].slice(0, 12);
+}
+
+function RentalBrowseCardGallery({
+  rental,
+  onDetails,
+}: {
+  rental: Rental;
+  onDetails?: () => void;
+}) {
+  const photos = rentalBrowsePhotos(rental);
+  const [api, setApi] = useState<CarouselApi>();
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [failed, setFailed] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!api) return;
+    const update = () => setCurrentIndex(api.selectedScrollSnap());
+    update();
+    api.on("select", update);
+    api.on("reInit", update);
+    return () => {
+      api.off("select", update);
+      api.off("reInit", update);
+    };
+  }, [api]);
+
+  return (
+    <Carousel setApi={setApi} className="w-full" aria-label={`Photos of ${rental.title}`}>
+      <CarouselContent className="ml-0">
+        {photos.map((url, index) => (
+          <CarouselItem key={url} className="pl-0">
+            {failed.includes(url) ? (
+              <VenueCardPlaceholder
+                label="Apartment"
+                icon={<Building2 className="size-5" aria-hidden />}
+                mediaLayout="cover"
+                testId="rental-browse-card-photo-placeholder"
+              />
+            ) : (
+              <div className="aspect-[16/10] overflow-hidden rounded-xl bg-muted">
+                {onDetails ? (
+                  <button
+                    type="button"
+                    onClick={(event) => { event.stopPropagation(); onDetails(); }}
+                    data-testid={index === 0
+                      ? `rental-card-photo-details-${rental.id}`
+                      : `rental-card-photo-details-${rental.id}-${index}`}
+                    aria-label={`Details: ${rental.title} (photo ${index + 1})`}
+                    className="block size-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={url} alt={`${rental.title}, photo ${index + 1} in ${rental.neighborhood}`}
+                      loading="lazy" className="size-full object-cover" data-testid="rental-browse-card-photo"
+                      onError={() => setFailed((previous) => previous.includes(url) ? previous : [...previous, url])} />
+                  </button>
+                ) : (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img src={url} alt={`${rental.title}, photo ${index + 1} in ${rental.neighborhood}`}
+                    loading="lazy" className="size-full object-cover" data-testid="rental-browse-card-photo"
+                    onError={() => setFailed((previous) => previous.includes(url) ? previous : [...previous, url])} />
+                )}
+              </div>
+            )}
+          </CarouselItem>
+        ))}
+      </CarouselContent>
+      <CarouselPrevious className="left-2 size-11 bg-background/90" aria-label={`Previous photo of ${rental.title}`} />
+      <CarouselNext className="right-2 size-11 bg-background/90" aria-label={`Next photo of ${rental.title}`} />
+      <span className="pointer-events-none absolute bottom-2 left-2 rounded-full bg-background/90 px-2.5 py-1 text-xs font-medium text-foreground"
+        data-testid={`rental-photo-counter-${rental.id}`}>
+        {currentIndex + 1} of {photos.length} photos{(rental.photo_count ?? 0) > photos.length ? " shown" : ""}
+      </span>
+    </Carousel>
+  );
+}
+
 // skipcq: JS-0067 - React component (ES module); not browser global scope
 /** Show a real rental card; map controls require coordinates and viewing requires authorization. */
 export function RentalBrowseCard({
@@ -193,6 +284,7 @@ export function RentalBrowseCard({
     rental.currency,
   );
   const chips = topAmenities(rental.amenities);
+  const showPhotoGallery = mediaLayout === "cover" && rentalBrowsePhotos(rental).length > 1;
   const matchReason = buildMatchReason(rental, matchParams);
   const hasWifi = rental.wifi || rental.amenities?.some((a) => a.toLowerCase().includes("wifi"));
   const pinId = rentalToMapPin(rental)?.id;
@@ -220,7 +312,9 @@ export function RentalBrowseCard({
       ariaLabel={`Rental: ${rental.title}, ${rental.neighborhood}`}
       onPreview={interactive ? preview : undefined}
       media={
-        onDetails ? (
+        showPhotoGallery ? (
+          <RentalBrowseCardGallery rental={rental} onDetails={onDetails} />
+        ) : onDetails ? (
           <button
             type="button"
             onClick={onDetails}
@@ -420,7 +514,7 @@ export function RentalBrowseCard({
         </div>
       ) : monthlyLabel ? (
         <div className="mt-1.5 flex flex-wrap items-center gap-2">
-          <p className="text-xs text-muted-foreground">{monthlyLabel}</p>
+          <p className={cn(mediaLayout === "cover" ? "text-base font-semibold text-foreground" : "text-xs text-muted-foreground")}>{monthlyLabel}</p>
           {rental.currency?.toUpperCase() === "USD" ? (
             <Badge variant="outline" className="font-normal text-[10px]" data-testid="rental-card-currency">
               USD

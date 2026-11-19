@@ -72,6 +72,49 @@ function renderCard(
   );
 }
 
+describe("SAN-1695 — real photos in the V3 browse card", () => {
+  it("uses the source gallery for cover-layout carousel, preserving the existing details action", () => {
+    const html = renderToStaticMarkup(
+      <RentalBrowseCard
+        rental={rowToRental(apartmentRow({
+          images: ["https://images.example/room-one.jpg", "https://images.example/room-two.jpg"],
+          price_daily: null,
+          price_monthly: 2_800_000,
+          currency: "COP",
+        }))}
+        mediaLayout="cover"
+        onDetails={vi.fn()}
+      />,
+    );
+    expect(html).toContain('data-slot="carousel"');
+    expect(html).toContain("https://images.example/room-one.jpg");
+    expect(html).toContain("https://images.example/room-two.jpg");
+    expect(html).toContain('data-testid="rental-photo-counter-rnt_lau_001"');
+    expect(html).toContain("1 of 2 photos");
+    expect(html).toContain('data-slot="carousel-next"');
+    expect(html).toContain('data-testid="rental-card-photo-details-rnt_lau_001"');
+    expect(html).toContain("COP 2,800,000");
+    expect(html).not.toContain("Unsplash");
+  });
+
+  it("does not add carousel controls for a single original listing photo", () => {
+    const html = renderToStaticMarkup(
+      <RentalBrowseCard rental={rowToRental(apartmentRow())} mediaLayout="cover" />,
+    );
+    expect(html).toContain('data-testid="rental-browse-card-photo"');
+    expect(html).not.toContain('data-slot="carousel"');
+    expect(html).not.toContain('data-slot="carousel-next"');
+  });
+
+  it("shows a real placeholder rather than invented photos when no source photo exists", () => {
+    const html = renderToStaticMarkup(
+      <RentalBrowseCard rental={rowToRental(apartmentRow({ images: [] }))} mediaLayout="cover" />,
+    );
+    expect(html).toContain('data-testid="rental-browse-card-photo-placeholder"');
+    expect(html).not.toContain('data-slot="carousel"');
+  });
+});
+
 describe("RentalBrowseCard — source-backed furnishing truth", () => {
   it("shows true, false and unknown as three different facts", () => {
     expect(renderCard({ furnished: true })).toContain("Furnished listed");
