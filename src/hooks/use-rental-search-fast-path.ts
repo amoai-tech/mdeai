@@ -438,13 +438,6 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
         // first post-hydration turn. A later agent-authored choice must then win.
         setState({ ...memory });
       }
-      if (searchMeta?.source === "saved") {
-        // Saved metadata is only trusted for ONE user turn after hydration.
-        // Otherwise a future concierge update to furnished would be erased on
-        // the next budget refinement by permanently "saved" metadata.
-        setSearchMeta({ ...searchMeta, source: undefined });
-      }
-
       // Pre-upgrade saved threads may have a lastRentalQuery without furnishing,
       // while their currently visible search metadata still knows it. Restore
       // that missing field only for the SAME search; never override an explicit
@@ -460,6 +453,17 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
         if (furnished !== remembered.furnished || maxBedrooms !== remembered.maxBedrooms) {
           memory.lastRentalQuery = { ...remembered, furnished, maxBedrooms };
         }
+      }
+
+      // Finish all one-turn saved-history reconciliation using the original
+      // metadata snapshot before expiring its provenance for subsequent turns.
+      // The updated context takes effect on React's next render, not midway
+      // through this callback.
+      if (searchMeta?.source === "saved") {
+        // Saved metadata is only trusted for ONE user turn after hydration.
+        // Otherwise a future concierge update to furnished would be erased on
+        // the next budget refinement by permanently "saved" metadata.
+        setSearchMeta({ ...searchMeta, source: undefined });
       }
 
       // "Either furnished or unfurnished is fine" starts no search, but it must change this

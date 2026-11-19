@@ -333,8 +333,15 @@ describe("SAN-407 · rental chat searches before it asks", () => {
         maxPriceMonthly: 2_400_000, budgetCurrency: "COP", stayType: "monthly",
       });
     });
-    // This follow-up goes to the concierge, not the rental fast path.
+    // This follow-up falls through to the concierge. The corrected checkpoint
+    // MUST already be exported by setState before the caller invokes the agent,
+    // not merely be fixed when a later rental search constructs its API body.
     expect(await send("What about the balcony?")).toBe(false);
+    expect(coagent.state.lastRentalQuery).toMatchObject({
+      neighborhood: "Laureles", minBedrooms: 2, maxBedrooms: 2,
+      maxPriceMonthly: 2_400_000, furnished: null, furnishingCleared: true,
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
     // The concierge now writes a NEW explicit preference after saved hydration.
     await act(async () => {
       coagent.state = { ...coagent.state, lastRentalQuery: {
