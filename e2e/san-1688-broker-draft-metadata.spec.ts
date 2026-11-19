@@ -15,8 +15,6 @@
  * It writes real QA rows and therefore removes them and re-queries to prove zero.
  */
 import { test, expect } from "@playwright/test";
-import fs from "node:fs";
-import path from "node:path";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   createThrowawayIdentity,
@@ -28,16 +26,14 @@ import {
   type ThrowawayIdentity,
 } from "./helpers/auth";
 
-const EVIDENCE_DIR = path.join(process.cwd(), "test-results/mde-evidence/san-1688");
 
 // Authenticated journey: never persist browser artifacts (worker-scoped options).
 test.use({ screenshot: "off", trace: "off", video: "off" });
 
 test.describe("SAN-1688 · reused onboarding draft keeps provenance", () => {
-  test("saving a free-text address removes only the place keys", async ({ page }) => {
+  test("saving a free-text address removes only the place keys", async ({ page }, testInfo) => {
     test.skip(!hasE2eEnv(), "E2E Supabase env missing");
     test.setTimeout(240_000);
-    fs.mkdirSync(EVIDENCE_DIR, { recursive: true });
 
     const identity: ThrowawayIdentity = await createThrowawayIdentity("san1688-metadata");
     const admin: SupabaseClient = await getSupabaseAdmin();
@@ -117,7 +113,7 @@ test.describe("SAN-1688 · reused onboarding draft keeps provenance", () => {
       expect(metadata.address_source).toBeUndefined();
 
       await page.screenshot({
-        path: path.join(EVIDENCE_DIR, "san-1688-draft-metadata-preserved.png"),
+        path: testInfo.outputPath("san-1688-draft-metadata-preserved.png"),
         fullPage: true,
       });
     } finally {

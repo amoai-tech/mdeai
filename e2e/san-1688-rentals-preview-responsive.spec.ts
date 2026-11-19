@@ -17,9 +17,7 @@
  * external CDN timing out must not turn this regression test red. The optimiser
  * request URL is asserted, so the media configuration is still exercised.
  */
-import { test, expect, type BrowserContext, type Page } from "@playwright/test";
-import fs from "node:fs";
-import path from "node:path";
+import { test, expect, type BrowserContext, type Page, type TestInfo } from "@playwright/test";
 import {
   createThrowawayIdentity,
   deleteThrowawayIdentity,
@@ -29,11 +27,10 @@ import {
   type ThrowawayIdentity,
 } from "./helpers/auth";
 
-const EVIDENCE_DIR = path.join(process.cwd(), "test-results/mde-evidence/san-1688");
 const REAL_PHOTO = "https://picsum.photos/seed/san1688-preview/800/600";
 const BROKEN_PHOTO = "https://example.com/mde-san-1688-missing-photo.jpg";
 /** A real 320x200 PNG committed with the spec: deterministic and visibly a photo. */
-const PHOTO_FIXTURE = path.join(process.cwd(), "e2e/fixtures/san-1688-photo.png");
+const PHOTO_FIXTURE = "e2e/fixtures/san-1688-photo.png";
 
 type ViewportCase = { name: string; width: number; height: number; touch: boolean };
 
@@ -50,10 +47,9 @@ test.use({ screenshot: "off", trace: "off", video: "off" });
 test.describe("SAN-1688 · rental listing preview across viewports", () => {
   test("broker completes the listing step with a truthful preview at 1440/768/390/320", async ({
     browser,
-  }) => {
+  }, testInfo) => {
     test.skip(!hasE2eEnv(), "E2E Supabase env missing");
     test.setTimeout(300_000);
-    fs.mkdirSync(EVIDENCE_DIR, { recursive: true });
 
     const identity: ThrowawayIdentity = await createThrowawayIdentity("san1688-preview");
     try {
@@ -84,125 +80,14 @@ test.describe("SAN-1688 · rental listing preview across viewports", () => {
             await route.fulfill({
               status: 200,
               contentType: "image/png",
-              body: fs.readFileSync(PHOTO_FIXTURE),
+              path: PHOTO_FIXTURE,
             });
           });
           await page.route("https://example.com/**", (route) => route.abort("failed"));
 
-          await openListingStep(page);
-          await expectNoHorizontalOverflow(page, `${viewport.name} empty listing`);
-
-          // Missing data is labelled, never invented.
-          await expect(page.getByTestId("ro-live-preview-price")).toHaveText("Add monthly rent");
-          await expect(page.getByTestId("ro-live-preview-location")).toHaveText(
-            "Add street address",
-          );
-          await expect(page.getByTestId("ro-live-preview-place-status")).toContainText(
-            "Location not confirmed",
-          );
-
-          await fillListing(page, { photo: REAL_PHOTO });
-          await expect(page.getByTestId("ro-live-preview-price")).toContainText("COP 2,400,000");
-          await expect(page.getByTestId("ro-live-preview-bathrooms")).toHaveText("1");
-          await expectNoHorizontalOverflow(page, `${viewport.name} filled listing`);
-          await expectButtonUncovered(page, viewport.name);
-
-          // The allowlisted host goes through the Next.js optimiser, and the image decodes.
-          await expect
-            .poll(() => optimizerRequestsForViewport.length, { timeout: 15_000 })
-            .toBeGreaterThan(0);
-          expect(optimizerRequestsForViewport[0]).toContain(
-            encodeURIComponent("https://picsum.photos/seed/san1688-preview/800/600"),
-          );
-          const photo = page.getByTestId("ro-live-preview-photo");
-          await expect(photo).toBeVisible({ timeout: 15_000 });
-          await expect
-            .poll(
-              async () =>
-                photo.evaluate((element) =>
-                  element instanceof HTMLImageElement
-                    ? element.complete && element.naturalWidth > 0 && element.naturalHeight > 0
-                    : false,
-                ),
-              { timeout: 15_000 },
-            )
-            .toBe(true);
-          await expect(page.getByTestId("ro-live-preview-photo-loading")).toHaveCount(0);
-
-          await page.screenshot({
-            path: path.join(EVIDENCE_DIR, `san-1688-${viewport.name}-listing-with-photo.png`),
-            fullPage: true,
-          });
-
-          // A broken image degrades to a labelled placeholder with an explicit retry.
-          await page.locator("#ro-photo").fill(BROKEN_PHOTO);
-          await expect(page.getByTestId("ro-live-preview-photo-status")).toContainText(
-            "Photo unavailable",
-            { timeout: 15_000 },
-          );
-          await expect(page.getByTestId("ro-live-preview-photo-retry")).toBeVisible();
-          await expect(page.getByTestId("ro-live-preview-photo-status")).not.toContainText(
-            "verified",
-          );
-
-          // Half a bathroom is rejected by the form; apartments.bathrooms is an integer.
-          await page.locator("#ro-bathrooms").fill("1.5");
-          await expect(page.getByTestId("ro-bathrooms-error")).toContainText("whole number");
-          await expect(continueButton(page)).toBeDisabled();
-          await expect(page.getByTestId("ro-live-preview-bathrooms")).toHaveText("Not specified");
-          await expectNoHorizontalOverflow(page, `${viewport.name} invalid bathrooms`);
-
-          await page.screenshot({
-            path: path.join(EVIDENCE_DIR, `san-1688-${viewport.name}-invalid-bathrooms.png`),
-            fullPage: true,
-          });
-
-          await page.locator("#ro-bathrooms").fill("2");
-          // Restore a usable photo so the Review evidence shows the happy path.
-          await page.locator("#ro-photo").fill(REAL_PHOTO);
-          await expect(continueButton(page)).toBeEnabled();
-
-          // Keyboard order: every listing field is reachable without a pointer.
-          await page.locator("#ro-address").focus();
-          const order: string[] = [];
-          for (let index = 0; index < 4; index += 1) {
-            await page.keyboard.press("Tab");
-            order.push(
-              await page.evaluate(() => {
-                const active = document.activeElement;
-                return active instanceof HTMLElement
-                  ? active.id || active.textContent?.trim() || "?"
-                  : "?";
-              }),
-            );
-          }
-          expect(order).toEqual(["ro-bedrooms", "ro-bathrooms", "ro-rent", "ro-photo"]);
-
-          // Click/tap both reach Review, where the preview follows the broker.
-          await continueButton(page).click({ timeout: 15_000 });
-          await expect(page.locator('[data-testid="ro-step-review"]')).toBeVisible();
-          await expect(page.locator('[data-testid="ro-live-preview"]')).toHaveCount(1);
-          await expectNoHorizontalOverflow(page, `${viewport.name} review`);
-          await expect(page.getByTestId("ro-submit")).toBeVisible();
-          // The preview remounts on Review; wait for the photo to decode before the
-          // evidence screenshot so it shows the real state, not a loading frame.
-          const reviewPhoto = page.getByTestId("ro-live-preview-photo");
-          await expect
-            .poll(
-              async () =>
-                reviewPhoto.evaluate((element) =>
-                  element instanceof HTMLImageElement
-                    ? element.complete && element.naturalWidth > 0
-                    : false,
-                ),
-              { timeout: 15_000 },
-            )
-            .toBe(true);
-
-          await page.screenshot({
-            path: path.join(EVIDENCE_DIR, `san-1688-${viewport.name}-review.png`),
-            fullPage: true,
-          });
+          await verifyPreviewAndPhoto(page, viewport, optimizerRequestsForViewport, testInfo);
+          await verifyInvalidPhotoAndBathrooms(page, viewport, testInfo);
+          await verifyReviewAndKeyboard(page, viewport, testInfo);
           optimiserRequests.push(...optimizerRequestsForViewport);
         } finally {
           await context.close();
@@ -216,6 +101,142 @@ test.describe("SAN-1688 · rental listing preview across viewports", () => {
     }
   });
 });
+
+async function verifyPreviewAndPhoto(
+  page: Page,
+  viewport: ViewportCase,
+  optimizerRequestsForViewport: string[],
+  testInfo: TestInfo,
+) {
+  await openListingStep(page);
+  await expectNoHorizontalOverflow(page, `${viewport.name} empty listing`);
+
+  // Missing data is labelled, never invented.
+  await expect(page.getByTestId("ro-live-preview-price")).toHaveText("Add monthly rent");
+  await expect(page.getByTestId("ro-live-preview-location")).toHaveText(
+    "Add street address",
+  );
+  await expect(page.getByTestId("ro-live-preview-place-status")).toContainText(
+    "Location not confirmed",
+  );
+
+  await fillListing(page, { photo: REAL_PHOTO });
+  await expect(page.getByTestId("ro-live-preview-price")).toContainText("COP 2,400,000");
+  await expect(page.getByTestId("ro-live-preview-bathrooms")).toHaveText("1");
+  await expectNoHorizontalOverflow(page, `${viewport.name} filled listing`);
+  await expectButtonUncovered(page, viewport.name);
+
+  // The allowlisted host goes through the Next.js optimiser, and the image decodes.
+  await expect
+    .poll(() => optimizerRequestsForViewport.length, { timeout: 15_000 })
+    .toBeGreaterThan(0);
+  expect(optimizerRequestsForViewport[0]).toContain(
+    encodeURIComponent("https://picsum.photos/seed/san1688-preview/800/600"),
+  );
+  const photo = page.getByTestId("ro-live-preview-photo");
+  await expect(photo).toBeVisible({ timeout: 15_000 });
+  await expect
+    .poll(
+      async () =>
+        photo.evaluate((element) =>
+          element instanceof HTMLImageElement
+            ? element.complete && element.naturalWidth > 0 && element.naturalHeight > 0
+            : false,
+        ),
+      { timeout: 15_000 },
+    )
+    .toBe(true);
+  await expect(page.getByTestId("ro-live-preview-photo-loading")).toHaveCount(0);
+
+  await page.screenshot({
+    path: testInfo.outputPath(`san-1688-${viewport.name}-listing-with-photo.png`),
+    fullPage: true,
+  });
+
+}
+
+async function verifyInvalidPhotoAndBathrooms(
+  page: Page,
+  viewport: ViewportCase,
+  testInfo: TestInfo,
+) {
+  // A broken image degrades to a labelled placeholder with an explicit retry.
+  await page.locator("#ro-photo").fill(BROKEN_PHOTO);
+  await expect(page.getByTestId("ro-live-preview-photo-status")).toContainText(
+    "Photo unavailable",
+    { timeout: 15_000 },
+  );
+  await expect(page.getByTestId("ro-live-preview-photo-retry")).toBeVisible();
+  await expect(page.getByTestId("ro-live-preview-photo-status")).not.toContainText(
+    "verified",
+  );
+
+  // Half a bathroom is rejected by the form; apartments.bathrooms is an integer.
+  await page.locator("#ro-bathrooms").fill("1.5");
+  await expect(page.getByTestId("ro-bathrooms-error")).toContainText("whole number");
+  await expect(continueButton(page)).toBeDisabled();
+  await expect(page.getByTestId("ro-live-preview-bathrooms")).toHaveText("Not specified");
+  await expectNoHorizontalOverflow(page, `${viewport.name} invalid bathrooms`);
+
+  await page.screenshot({
+    path: testInfo.outputPath(`san-1688-${viewport.name}-invalid-bathrooms.png`),
+    fullPage: true,
+  });
+
+  await page.locator("#ro-bathrooms").fill("2");
+  // Restore a usable photo so the Review evidence shows the happy path.
+  await page.locator("#ro-photo").fill(REAL_PHOTO);
+  await expect(continueButton(page)).toBeEnabled();
+
+}
+
+async function verifyReviewAndKeyboard(
+  page: Page,
+  viewport: ViewportCase,
+  testInfo: TestInfo,
+) {
+  // Keyboard order: every listing field is reachable without a pointer.
+  await page.locator("#ro-address").focus();
+  const order: string[] = [];
+  for (let index = 0; index < 4; index += 1) {
+    await page.keyboard.press("Tab");
+    order.push(
+      await page.evaluate(() => {
+        const active = document.activeElement;
+        return active instanceof HTMLElement
+          ? active.id || active.textContent?.trim() || "?"
+          : "?";
+      }),
+    );
+  }
+  expect(order).toEqual(["ro-bedrooms", "ro-bathrooms", "ro-rent", "ro-photo"]);
+
+  // Click/tap both reach Review, where the preview follows the broker.
+  await continueButton(page).click({ timeout: 15_000 });
+  await expect(page.locator('[data-testid="ro-step-review"]')).toBeVisible();
+  await expect(page.locator('[data-testid="ro-live-preview"]')).toHaveCount(1);
+  await expectNoHorizontalOverflow(page, `${viewport.name} review`);
+  await expect(page.getByTestId("ro-submit")).toBeVisible();
+  // The preview remounts on Review; wait for the photo to decode before the
+  // evidence screenshot so it shows the real state, not a loading frame.
+  const reviewPhoto = page.getByTestId("ro-live-preview-photo");
+  await expect
+    .poll(
+      async () =>
+        reviewPhoto.evaluate((element) =>
+          element instanceof HTMLImageElement
+            ? element.complete && element.naturalWidth > 0
+            : false,
+        ),
+      { timeout: 15_000 },
+    )
+    .toBe(true);
+
+  await page.screenshot({
+    path: testInfo.outputPath(`san-1688-${viewport.name}-review.png`),
+    fullPage: true,
+  });
+}
 
 async function openListingStep(page: Page) {
   await page.goto("/host/rentals/onboarding", { waitUntil: "domcontentloaded" });
