@@ -183,15 +183,19 @@ function rentalBrowsePhotos(rental: Rental): string[] {
 
 function RentalBrowseCardGallery({
   rental,
+  photos,
   onDetails,
+  nightlyLabel,
+  onPhotoError,
 }: {
   rental: Rental;
+  photos: string[];
   onDetails?: () => void;
+  nightlyLabel: string | null;
+  onPhotoError: (url: string) => void;
 }) {
-  const photos = rentalBrowsePhotos(rental);
   const [api, setApi] = useState<CarouselApi>();
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [failed, setFailed] = useState<string[]>([]);
 
   useEffect(() => {
     if (!api) return;
@@ -203,22 +207,14 @@ function RentalBrowseCardGallery({
       api.off("select", update);
       api.off("reInit", update);
     };
-  }, [api]);
+  }, [api, photos.length]);
 
   return (
     <Carousel setApi={setApi} className="w-full" aria-label={`Photos of ${rental.title}`}>
       <CarouselContent className="ml-0">
         {photos.map((url, index) => (
           <CarouselItem key={url} className="pl-0">
-            {failed.includes(url) ? (
-              <VenueCardPlaceholder
-                label="Apartment"
-                icon={<Building2 className="size-5" aria-hidden />}
-                mediaLayout="cover"
-                testId="rental-browse-card-photo-placeholder"
-              />
-            ) : (
-              <div className="aspect-[16/10] overflow-hidden rounded-xl bg-muted">
+            <div className="aspect-[16/10] overflow-hidden rounded-xl bg-muted">
                 {onDetails ? (
                   <button
                     type="button"
@@ -232,16 +228,15 @@ function RentalBrowseCardGallery({
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={url} alt={`${rental.title}, photo ${index + 1} in ${rental.neighborhood}`}
                       loading="lazy" className="size-full object-cover" data-testid="rental-browse-card-photo"
-                      onError={() => setFailed((previous) => previous.includes(url) ? previous : [...previous, url])} />
+                      onError={() => onPhotoError(url)} />
                   </button>
                 ) : (
                   /* eslint-disable-next-line @next/next/no-img-element */
                   <img src={url} alt={`${rental.title}, photo ${index + 1} in ${rental.neighborhood}`}
                     loading="lazy" className="size-full object-cover" data-testid="rental-browse-card-photo"
-                    onError={() => setFailed((previous) => previous.includes(url) ? previous : [...previous, url])} />
+                    onError={() => onPhotoError(url)} />
                 )}
-              </div>
-            )}
+            </div>
           </CarouselItem>
         ))}
       </CarouselContent>
@@ -249,8 +244,18 @@ function RentalBrowseCardGallery({
       <CarouselNext className="right-2 size-11 bg-background/90" aria-label={`Next photo of ${rental.title}`} />
       <span className="pointer-events-none absolute bottom-2 left-2 rounded-full bg-background/90 px-2.5 py-1 text-xs font-medium text-foreground"
         data-testid={`rental-photo-counter-${rental.id}`}>
-        {currentIndex + 1} of {photos.length} photos{(rental.photo_count ?? 0) > photos.length ? " shown" : ""}
+        {Math.min(currentIndex + 1, photos.length)} of {photos.length} photos{(rental.photo_count ?? 0) > photos.length ? " shown" : ""}
       </span>
+      {nightlyLabel ? (
+        <span className="pointer-events-none absolute bottom-2 right-2 flex items-center gap-1 rounded-full bg-background/90 px-2.5 py-0.5 font-mono text-xs font-semibold text-foreground backdrop-blur-sm">
+          {nightlyLabel}
+          {rental.currency?.toUpperCase() === "USD" ? (
+            <span className="rounded bg-foreground/10 px-1 text-[10px] font-normal" data-testid="rental-card-nightly-currency">
+              USD
+            </span>
+          ) : null}
+        </span>
+      ) : null}
     </Carousel>
   );
 }
@@ -284,7 +289,12 @@ export function RentalBrowseCard({
     rental.currency,
   );
   const chips = topAmenities(rental.amenities);
-  const showPhotoGallery = mediaLayout === "cover" && rentalBrowsePhotos(rental).length > 1;
+  // Broken URLs must not count as available photos or occupy empty slides.
+  const [failedPhotoUrls, setFailedPhotoUrls] = useState<string[]>([]);
+  const photos = rentalBrowsePhotos(rental).filter((url) => !failedPhotoUrls.includes(url));
+  const showPhotoGallery = mediaLayout === "cover" && photos.length > 1;
+  const handlePhotoError = (url: string) =>
+    setFailedPhotoUrls((previous) => previous.includes(url) ? previous : [...previous, url]);
   const matchReason = buildMatchReason(rental, matchParams);
   const hasWifi = rental.wifi || rental.amenities?.some((a) => a.toLowerCase().includes("wifi"));
   const pinId = rentalToMapPin(rental)?.id;
@@ -313,7 +323,13 @@ export function RentalBrowseCard({
       onPreview={interactive ? preview : undefined}
       media={
         showPhotoGallery ? (
-          <RentalBrowseCardGallery rental={rental} onDetails={onDetails} />
+          <RentalBrowseCardGallery
+            rental={rental}
+            photos={photos}
+            onDetails={onDetails}
+            nightlyLabel={nightlyLabel}
+            onPhotoError={handlePhotoError}
+          />
         ) : onDetails ? (
           <button
             type="button"
@@ -323,7 +339,7 @@ export function RentalBrowseCard({
             className={cn("block rounded-xl text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring", mediaLayout === "inline" ? "w-24 shrink-0 self-start" : "w-full")}
           >
             <RentalBrowseCardMedia
-              imageUrl={rental.image || undefined}
+              imageUrl={photos[0]}
               title={rental.title}
               neighborhood={rental.neighborhood}
               nightlyLabel={nightlyLabel}
@@ -333,7 +349,7 @@ export function RentalBrowseCard({
           </button>
         ) : (
           <RentalBrowseCardMedia
-            imageUrl={rental.image || undefined}
+            imageUrl={photos[0]}
             title={rental.title}
             neighborhood={rental.neighborhood}
             nightlyLabel={nightlyLabel}

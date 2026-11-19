@@ -97,6 +97,36 @@ describe("SAN-1695 — real photos in the V3 browse card", () => {
     expect(html).not.toContain("Unsplash");
   });
 
+  it("preserves the stored nightly USD quote on multi-photo gallery cards", () => {
+    const html = renderToStaticMarkup(
+      <RentalBrowseCard rental={rowToRental(apartmentRow({
+        images: ["https://images.example/room-one.jpg", "https://images.example/room-two.jpg"],
+        price_monthly: null,
+        price_daily: 78,
+        currency: "USD",
+      }))} mediaLayout="cover" />,
+    );
+    expect(html).toContain('data-slot="carousel"');
+    expect(html).toContain("$78/night");
+    expect(html).toContain('data-testid="rental-card-nightly-currency"');
+    // The stored nightly price must not be replaced by its derived monthly estimate.
+    expect(html.indexOf("$78/night")).toBeGreaterThan(0);
+  });
+
+  it("shows only the stored monthly price when both nightly and monthly rates exist", () => {
+    const html = renderToStaticMarkup(
+      <RentalBrowseCard rental={rowToRental(apartmentRow({
+        images: ["https://images.example/room-one.jpg", "https://images.example/room-two.jpg"],
+        price_daily: 78,
+        price_monthly: 2_800_000,
+        currency: "COP",
+      }))} mediaLayout="cover" />,
+    );
+    expect(html).toContain("COP 2,800,000/mo");
+    expect(html).not.toContain("/night");
+    expect(html).not.toContain("~");
+  });
+
   it("does not add carousel controls for a single original listing photo", () => {
     const html = renderToStaticMarkup(
       <RentalBrowseCard rental={rowToRental(apartmentRow())} mediaLayout="cover" />,
@@ -112,6 +142,81 @@ describe("SAN-1695 — real photos in the V3 browse card", () => {
     );
     expect(html).toContain('data-testid="rental-browse-card-photo-placeholder"');
     expect(html).not.toContain('data-slot="carousel"');
+  });
+});
+
+describe("SAN-1695 — failed gallery images never occupy a slide", () => {
+  // JSDOM has no layout observers or media queries. Embla uses these when
+  // mounting; the real swipe/next behavior is covered in browser tests.
+  beforeEach(() => {
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      media: query,
+      matches: false,
+      addListener() {},
+      removeListener() {},
+      addEventListener() {},
+      removeEventListener() {},
+      dispatchEvent: () => false,
+    }));
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    vi.stubGlobal("IntersectionObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+  });
+
+  let container: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+
+  afterEach(() => {
+    act(() => { root.unmount(); });
+    container.remove();
+    vi.unstubAllGlobals();
+  });
+
+  it("drops a broken photo from the count, then falls back to one photo, then a placeholder", () => {
+    const urls = [
+      "https://images.example/broken.jpg",
+      "https://images.example/also-broken.jpg",
+      "https://images.example/working.jpg",
+    ];
+    act(() => {
+      root.render(
+        <RentalBrowseCard
+          rental={rowToRental(apartmentRow({ images: urls }))}
+          mediaLayout="cover"
+          onDetails={vi.fn()}
+        />,
+      );
+    });
+
+    const photo = () => container.querySelector<HTMLImageElement>('[data-testid="rental-browse-card-photo"]');
+    expect(container.querySelectorAll('[data-slot="carousel-item"]').length).toBe(3);
+    expect(container.querySelector('[data-testid^="rental-photo-counter-"]')?.textContent).toContain("1 of 3 photos");
+
+    act(() => { photo()?.dispatchEvent(new Event("error")); });
+    expect(container.querySelectorAll('[data-slot="carousel-item"]').length).toBe(2);
+    expect(container.querySelector('[data-testid^="rental-photo-counter-"]')?.textContent).toContain("1 of 2 photos");
+    expect(container.querySelector('img[src="https://images.example/broken.jpg"]')).toBeNull();
+
+    act(() => { photo()?.dispatchEvent(new Event("error")); });
+    expect(container.querySelector('[data-slot="carousel"]')).toBeNull();
+    expect(photo()?.src).toBe(urls[2]);
+
+    act(() => { photo()?.dispatchEvent(new Event("error")); });
+    expect(container.querySelector('[data-testid="rental-browse-card-photo-placeholder"]')).not.toBeNull();
+    expect(container.querySelector('[data-slot="carousel"]')).toBeNull();
   });
 });
 
