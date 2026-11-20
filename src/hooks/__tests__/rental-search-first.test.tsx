@@ -554,6 +554,50 @@ describe("SAN-407 · rental chat searches before it asks", () => {
     expect(refined.furnished).toBeUndefined();
   });
 
+  it.each([
+    ["Either furnished or unfurnished is fine. Show cafés within 800 meters of this apartment.", "cafe"],
+    ["Either furnished or unfurnished is fine. Show me the details of the first apartment.", "details"],
+    ["Either furnished or unfurnished is fine. Does this apartment have a balcony?", "question"],
+  ] as const)(
+    "SAN-1445 records a clear without hijacking the non-rental action: %s",
+    async (prompt, action) => {
+      respond(200, { results: [] });
+      expect(await send("Find furnished 2-bedroom apartments in Laureles under COP 3 million")).toBe(true);
+      const grounded = vi.fn(async () => true);
+      // A real Details handler declines unrelated amenity questions.
+      const details = vi.fn(async (text: string) => /show me the details/i.test(text));
+      const agent = vi.fn(async () => true);
+      const handlers = {
+        inRentalSearch: true,
+        lastIntent: "rental_search" as const,
+        handleRentalMessage: (text: string) => probe.send(text),
+        handleEventMessage: async () => false,
+        handleGroundedMessage: grounded,
+        handleRestaurantMessage: async () => false,
+        handleRentalDetailsMessage: details,
+        onAgentSend: agent,
+      };
+      await act(async () => {
+        expect(await sendConciergeUserMessage(prompt, handlers)).toBe(true);
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(coagent.state.lastRentalQuery).toMatchObject({
+        neighborhood: "Laureles", furnished: null, furnishingCleared: true,
+      });
+      if (action === "cafe") {
+        expect(grounded).toHaveBeenCalledOnce();
+        expect(details).not.toHaveBeenCalled();
+      } else if (action === "details") {
+        expect(details).toHaveBeenCalledOnce();
+        expect(grounded).not.toHaveBeenCalled();
+      } else {
+        // The normal classifier may select grounded Q&A or the Concierge;
+        // either is correct, but must not start another rental search.
+        expect(grounded.mock.calls.length + agent.mock.calls.length).toBeGreaterThan(0);
+      }
+    },
+  );
+
   it.each(["event", "restaurant"] as const)(
     "SAN-1445 saves a furnishing clear even during %s clarification",
     async (kind) => {

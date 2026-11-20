@@ -6,6 +6,7 @@ import type { Rental } from "@/mastra/tools/search-rentals";
 import { useEventLocalChat } from "@/components/chat/event-local-chat-context";
 import { useRentalFastPath } from "@/components/chat/rental-fast-path-context";
 import { useClearOtherFastPathResults } from "@/hooks/use-clear-other-fast-path-results";
+import { isSelectedRentalCafeNearbyRequest } from "@/lib/cafe-search-fast-path";
 import {
   buildRentalSearchParams,
   canFastPathRentalSearch,
@@ -536,6 +537,16 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
         // the rental preference update must nevertheless already be committed.
         if (anotherVerticalClarifying) return false;
       }
+
+      // The clear is a memory update, not permission to hijack an unrelated
+      // Café/Details/amenity follow-up as another rental search merely because
+      // the sentence also mentions "this apartment". The outer router still
+      // handles those actions after this hook declines.
+      if (isClear && (
+        isSelectedRentalCafeNearbyRequest(trimmed) ||
+        /\b(?:show|open|view|see)\s+(?:me\s+)?(?:the\s+)?(?:details?|quick view)\b/i.test(trimmed) ||
+        /\b(?:does|do|is|are)\s+(?:this|that|the)\s+(?:apartment|rental|listing)\b[^.!?]*\?/i.test(trimmed)
+      )) return false;
 
       if (!canFastPathRentalSearch(trimmed, memory)) return false;
 
