@@ -41,6 +41,42 @@ create table if not exists public."mastra_workflow_run_entries" (
     primary key ("workflow_name", "run_id", "seq")
 );
 
+-- CREATE TABLE IF NOT EXISTS cannot repair a table that already exists, and the
+-- runtime writes these journals with ON CONFLICT, so a journal table missing its
+-- vendor composite primary key would fail on every save/resume instead of here.
+-- Fail the migration explicitly rather than leaving a silently unusable table.
+do $$
+declare
+  expected record;
+  actual_cols text[];
+begin
+  for expected in
+    select * from (values
+      ('mastra_workflow_runs', array['workflow_name', 'run_id']),
+      ('mastra_workflow_run_entries', array['workflow_name', 'run_id', 'seq'])
+    ) as t(tbl, cols)
+  loop
+    select array_agg(a.attname order by u.ord)
+      into actual_cols
+    from pg_constraint k
+    join pg_class c on c.oid = k.conrelid
+    join pg_namespace n on n.oid = c.relnamespace
+    join unnest(k.conkey) with ordinality as u(attnum, ord) on true
+    join pg_attribute a on a.attrelid = c.oid and a.attnum = u.attnum
+    where n.nspname = 'public'
+      and c.relname = expected.tbl
+      and k.contype = 'p';
+
+    if actual_cols is distinct from expected.cols then
+      raise exception
+        'SAN-1698: public.% primary key is % but the 1.84 vendor contract requires (%)',
+        expected.tbl,
+        coalesce(actual_cols::text, 'missing'),
+        array_to_string(expected.cols, ', ');
+    end if;
+  end loop;
+end $$;
+
 -- Preserve vendor query performance (these are the five journal indexes
 -- emitted by WorkflowsPG.getExportDDL on the exact target package).
 create index if not exists mastra_workflow_runs_name_createdat_idx
