@@ -1,52 +1,42 @@
-import { expect, test } from "@playwright/test";
-import {
-  createThrowawayIdentity,
-  deleteThrowawayIdentity,
-  hasE2eEnv,
-  signInAsOnOrigin,
-  type ThrowawayIdentity,
-} from "./helpers/auth";
+import { expect, test } from "./fixtures";
+import { loadEnvLocalForE2E } from "./helpers/auth";
 import {
   gotoConcierge,
   sendConciergeMessage,
   waitForCopilotIdle,
 } from "./helpers/maps-layout";
-import { establishVercelAutomationBypass } from "./fixtures/vercel-bypass";
+import { validateMdeAuthenticatedQaOrigin } from "./fixtures/vercel-bypass";
 
 /**
  * SAN-1445: real /chat send pipeline, not a direct hook test.
  *
- * Opt-in against an explicit production or candidate URL. Requires real disposable
- * Supabase QA credentials. No secrets, screenshots or auth-state artifacts are saved.
+ * Opt-in against verified MDE production/candidate URL with the existing dedicated
+ * passwordless renter QA account. No account creation and no auth artifacts.
  * Run with PROD_SMOKE_BASE_URL=https://www.mdeai.co PW_SKIP_WEBSERVER=1.
  */
-const base = process.env.PROD_SMOKE_BASE_URL?.trim() ?? "";
-const isPreview = base ? new URL(base).hostname.endsWith(".vercel.app") : false;
+// Same ignored QA configuration loader as other existing renter journeys.
+loadEnvLocalForE2E();
+const rawBase = process.env.PROD_SMOKE_BASE_URL?.trim() ?? "";
+// Fail before the QA role fixture creates a session or injects its cookie.
+const base = rawBase ? validateMdeAuthenticatedQaOrigin(rawBase).origin : "";
 
-test.use({ channel: "chrome", viewport: { width: 390, height: 844 }, trace: "off", screenshot: "off", video: "off" });
+test.use({ qaRole: "renter", channel: "chrome", viewport: { width: 390, height: 844 }, trace: "off", screenshot: "off", video: "off" });
 
 test.describe("SAN-1445 — explicit furnishing clear survives Concierge and saved chats", () => {
   test.skip(!base, "Set an explicit PROD_SMOKE_BASE_URL for signed-in regression.");
 
-  let identity: ThrowawayIdentity | undefined;
-
-  test.beforeAll(async () => {
-    expect(hasE2eEnv(), "Real Supabase QA credentials required").toBe(true);
-    identity = await createThrowawayIdentity("qa-san1445-clear");
-  });
-
-  test.afterAll(async () => {
-    if (identity) await deleteThrowawayIdentity(identity);
-  });
-
-  test("honors latest furnishing decisions through budget edits, agent reply and reload", async ({ page }) => {
+  test("honors latest furnishing decisions through budget edits, agent reply and reload", async ({ qaRolePage: page }) => {
     test.setTimeout(360_000);
-    await signInAsOnOrigin(page, base, identity!.email);
-    if (isPreview) {
-      await establishVercelAutomationBypass(page, base, process.env.VERCEL_AUTOMATION_BYPASS_SECRET ?? "");
-    }
+    // qaRolePage signs in as EXISTING renter with requireExisting=true.
+    // This spec validates its target before fixture initialization.
 
     const searches: Array<{ status: number; body: Record<string, unknown> }> = [];
+    let searchRequests = 0;
+    page.on("request", (request) => {
+      if (new URL(request.url()).pathname === "/api/rentals/search" && request.method() === "POST") {
+        searchRequests += 1;
+      }
+    });
     page.on("response", (response) => {
       if (new URL(response.url()).pathname !== "/api/rentals/search") return;
       const request = response.request();
@@ -84,9 +74,12 @@ test.describe("SAN-1445 — explicit furnishing clear survives Concierge and sav
 
     await search("Find furnished 2-bedroom apartments in Laureles under COP 3 million", 3_000_000, true);
     await search("Only under COP 2.5 million", 2_500_000, true);
-    const countBeforeClear = searches.length;
+    const countBeforeClear = searchRequests;
     await ask("Either furnished or unfurnished is fine");
-    expect(searches.length, "clearing without new criteria should not run a second search").toBe(countBeforeClear);
+    // Count REQUEST events, not only completed responses; an in-flight extra
+    // search must not pass this assertion by responding after the check.
+    await page.waitForTimeout(1_200);
+    expect(searchRequests, "clearing without new criteria must not issue a hidden search").toBe(countBeforeClear);
     await search("Only under COP 2.4 million", 2_400_000, undefined);
 
     await page.reload({ waitUntil: "domcontentloaded" });

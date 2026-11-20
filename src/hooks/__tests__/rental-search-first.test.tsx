@@ -63,6 +63,8 @@ type Probe = {
   send: (text: string) => Promise<boolean>;
   messages: () => Array<{ role: string; content: string }>;
   clarifyPending: () => boolean;
+  showClarify: (kind: "event" | "restaurant") => void;
+  isSearchPending: () => boolean;
   hasResult: () => boolean;
   failure: () => { code: string; retryable: boolean } | null;
   previousQuery: () => string | undefined;
@@ -77,7 +79,7 @@ const unhandled: string[] = [];
 let handoffThrows = false;
 
 function Harness() {
-  const { handleUserMessage } = useRentalSearchFastPath({
+  const { handleUserMessage, hasPendingSearch } = useRentalSearchFastPath({
     onUnhandled: (text) => {
       unhandled.push(text);
       if (handoffThrows) throw new Error("concierge unreachable");
@@ -91,6 +93,8 @@ function Harness() {
       send: handleUserMessage,
       messages: () => local.messages as Array<{ role: string; content: string }>,
       clarifyPending: () => local.clarifyPending,
+      showClarify: (kind) => local.showClarify("Clarify", "Which date?", kind),
+      isSearchPending: hasPendingSearch,
       hasResult: () => rental.toolResult != null,
       failure: () => rental.searchFailure,
       previousQuery: () => rental.searchMeta?.userText,
@@ -500,7 +504,21 @@ describe("SAN-407 · rental chat searches before it asks", () => {
 
   it("SAN-1445 full router → rental memory → agent fallback → stale checkpoint → cheaper search", async () => {
     respond(200, { results: [] });
-    const agentSend = vi.fn(async () => true);
+    const agentSend = vi.fn(async () => {
+      // Real agent sees the synchronized explicit clear BEFORE starting.
+      expect(coagent.state.lastRentalQuery).toMatchObject({
+        furnished: null, furnishingCleared: true,
+      });
+      // Simulate older server checkpoint arriving as part of the agent run.
+      await act(async () => {
+        coagent.state = { ...coagent.state, lastRentalQuery: {
+          ...(coagent.state.lastRentalQuery as Record<string, unknown>),
+          furnished: true, furnishingCleared: false,
+        } };
+        for (const listener of coagent.listeners) listener();
+      });
+      return true;
+    });
     const handlers = {
       inRentalSearch: true,
       lastIntent: "rental_search" as const,
@@ -519,19 +537,13 @@ describe("SAN-407 · rental chat searches before it asks", () => {
     expect(await throughRouter("Only under COP 2.5 million")).toBe(true);
     expect(await throughRouter("Either furnished or unfurnished is fine")).toBe(true);
     expect(agentSend).toHaveBeenCalledOnce();
+    // The agent asserted it received the clear, then replayed its stale checkpoint.
     expect(coagent.state.lastRentalQuery).toMatchObject({
-      furnished: null, furnishingCleared: true, neighborhood: "Laureles",
+      furnished: true, furnishingCleared: false, neighborhood: "Laureles",
       minBedrooms: 2, maxBedrooms: 2, maxPriceMonthly: 2_500_000,
     });
-    // The real CopilotKit model can echo the old checkpoint after answering
-    // this ordinary-language turn. The latest user clear must still win.
-    await act(async () => {
-      coagent.state = { ...coagent.state, lastRentalQuery: {
-        ...(coagent.state.lastRentalQuery as Record<string, unknown>),
-        furnished: true, furnishingCleared: false,
-      } };
-      for (const listener of coagent.listeners) listener();
-    });
+    // Agent mock replayed stale state *during* the agent turn; next refinement
+    // must recover the user's newer clear, never trust the stale checkpoint.
     expect(await throughRouter("Only under COP 2.4 million")).toBe(true);
     expect(fetchMock).toHaveBeenCalledTimes(3);
     const refined = JSON.parse(String(fetchMock.mock.calls.at(-1)?.[1]?.body));
@@ -540,6 +552,59 @@ describe("SAN-407 · rental chat searches before it asks", () => {
       maxPriceMonthly: 2_400_000, budgetCurrency: "COP",
     });
     expect(refined.furnished).toBeUndefined();
+  });
+
+  it.each(["event", "restaurant"] as const)(
+    "SAN-1445 saves a furnishing clear even during %s clarification",
+    async (kind) => {
+      respond(200, { results: [] });
+      expect(await send("Find furnished 2-bedroom apartments in Laureles under COP 3 million")).toBe(true);
+      await act(async () => { probe.showClarify(kind); });
+      expect(probe.clarifyPending()).toBe(true);
+      expect(await send("Either furnished or unfurnished is fine")).toBe(false);
+      expect(coagent.state.lastRentalQuery).toMatchObject({
+        neighborhood: "Laureles", minBedrooms: 2, furnished: null, furnishingCleared: true,
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it("SAN-1445 clears a pending first search before cards or CoAgent memory exist", async () => {
+    let finish: () => void = () => undefined;
+    fetchMock.mockImplementationOnce(() => new Promise<Response>((resolve) => {
+      finish = () => resolve(new Response(JSON.stringify({ results: [] }), { status: 200 }));
+    }));
+    let initial: Promise<boolean> = Promise.resolve(false);
+    await act(async () => { initial = probe.send("Find furnished 2-bedroom apartments in Laureles under COP 3 million"); });
+    expect(probe.isSearchPending()).toBe(true);
+    expect(coagent.state.lastRentalQuery).toBeUndefined();
+
+    const agentSend = vi.fn(async () => true);
+    const handlers = {
+      inRentalSearch: false,
+      hasPendingRentalSearch: probe.isSearchPending,
+      handleRentalMessage: (text: string) => probe.send(text),
+      handleEventMessage: async () => false,
+      handleGroundedMessage: async () => false,
+      handleRestaurantMessage: async () => false,
+      onAgentSend: agentSend,
+    };
+    await act(async () => {
+      expect(await sendConciergeUserMessage("Either furnished or unfurnished is fine", handlers)).toBe(true);
+    });
+    expect(agentSend).toHaveBeenCalledOnce();
+    expect(coagent.state.lastRentalQuery).toMatchObject({
+      neighborhood: "Laureles", minBedrooms: 2, maxBedrooms: 2,
+      maxPriceMonthly: 3_000_000, furnished: null, furnishingCleared: true,
+    });
+    await act(async () => { finish(); await initial; });
+    expect(probe.hasResult()).toBe(false);
+    respond(200, { results: [] });
+    expect(await send("Only under COP 2.4 million")).toBe(true);
+    const refined = JSON.parse(String(fetchMock.mock.calls.at(-1)?.[1]?.body));
+    expect(refined.furnished).toBeUndefined();
+    expect(refined.neighborhood).toBe("Laureles");
+    expect(refined.maxPriceMonthly).toBe(2_400_000);
   });
 
   it("keeps explicit clear after a prior budget search even if CopilotKit replays older furnishing", async () => {

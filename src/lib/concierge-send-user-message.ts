@@ -38,6 +38,8 @@ export type ConciergeSendHandlers = {
   lastIntent?: FlashRouteClassification["intent"];
   /** True while the conversation is in a rental search (current or saved legacy intent). */
   inRentalSearch?: boolean;
+  /** An initial rental search can be in flight before results/memory are visible. */
+  hasPendingRentalSearch?: () => boolean;
 };
 
 /** Dispatch a classified router target to its fast-path handler; false → try next or agent. */
@@ -78,6 +80,15 @@ export async function sendConciergeUserMessage(
   let agentAttempted = false;
 
   try {
+    // Record a renter's explicit preference clear BEFORE any café/amenity/Details
+    // early return or model dispatch. An initial rental request can still be in
+    // flight before cards/CoAgent working memory are visible.
+    const rentalClearDispatched = Boolean(
+      clearsFurnishingPreference(trimmed) &&
+      (handlers.inRentalSearch || handlers.hasPendingRentalSearch?.()),
+    );
+    if (rentalClearDispatched && await handlers.handleRentalMessage(trimmed, submissionId)) return true;
+
     // Contextual cafés beside the selected rental are NOT a new rental search.
     // If no genuine selected rental exists the handler declines safely.
     if (isSelectedRentalCafeNearbyRequest(trimmed)) {
@@ -98,15 +109,6 @@ export async function sendConciergeUserMessage(
 
     // A shown-apartment Details request is a UI action, not another search/model run.
     if (await handlers.handleRentalDetailsMessage?.(trimmed, submissionId)) return true;
-
-    // A preference-only reply is often classified as general conversation,
-    // skipping rental memory. Record this clear BEFORE any agent/classifier
-    // fallback, but still let the normal router handle combined event/café
-    // requests. Never call the rental handler twice for the same user decision.
-    const rentalClearDispatched = Boolean(handlers.inRentalSearch && clearsFurnishingPreference(trimmed));
-    if (rentalClearDispatched && await handlers.handleRentalMessage(trimmed, submissionId)) {
-      return true;
-    }
 
     // A rental comparison declined by the rental fast path must not fall through
     // to the café/event handlers merely because the question mentions an amenity.

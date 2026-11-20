@@ -40,6 +40,37 @@ describe("latestSavedRentalSearch", () => {
     expect(JSON.stringify(result)).not.toContain("Search complete");
   });
 
+  it("reopens an older furnished search as unrestricted after a newer saved user clear", () => {
+    const saved = row("search", "assistant", { format: 2, parts: [
+      { type: "data-mde-rental-search", data: {
+        neighborhood: "Laureles", minBedrooms: 2, maxBedrooms: 2, furnished: true,
+        maxPriceMonthly: 2_500_000, budgetCurrency: "COP",
+      } },
+    ] }, "2026-11-20T10:00:00Z");
+    const cleared = row("clear", "user", text("Either furnished or unfurnished is fine"), "2026-11-20T10:01:00Z");
+    const assistant = row("reply", "assistant", text("Both are fine."), "2026-11-20T10:02:00Z");
+    const restored = latestSavedRentalSearch([saved, assistant, cleared]);
+    expect(restored).toMatchObject({
+      neighborhood: "Laureles", minBedrooms: 2, maxBedrooms: 2,
+      maxPriceMonthly: 2_500_000, budgetCurrency: "COP",
+    });
+    expect(restored?.furnished).toBeUndefined();
+  });
+
+  it("keeps a later explicit furnishing choice above an earlier no-preference message", () => {
+    const initial = row("search", "assistant", { format: 2, parts: [
+      { type: "data-mde-rental-search", data: {
+        neighborhood: "Laureles", furnished: true,
+      } },
+    ] }, "2026-11-20T10:00:00Z");
+    const clear = row("clear", "user", text("Either furnished or unfurnished is fine"), "2026-11-20T10:01:00Z");
+    const choose = row("choose", "user", text("Actually show unfurnished apartments"), "2026-11-20T10:02:00Z");
+    expect(latestSavedRentalSearch([choose, initial, clear])?.furnished).toBe(false);
+    const question = row("question", "user", text("Are furnished apartments more expensive?"), "2026-11-20T10:03:00Z");
+    expect(latestSavedRentalSearch([question, initial, clear])?.furnished).toBeUndefined();
+    expect(latestSavedRentalSearch([initial])?.furnished).toBe(true);
+  });
+
   it("skips historical monthly budgets missing currency and keeps the latest valid search", () => {
     const valid = { neighborhood: "Laureles", minBedrooms: 2 };
     const rows = [
