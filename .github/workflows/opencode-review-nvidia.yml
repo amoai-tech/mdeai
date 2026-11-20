@@ -2,6 +2,7 @@ name: OpenCodeReview (NVIDIA advisory)
 
 # Pinned upstream action reviews PR diffs without executing PR-head code.
 # Restrict to trusted same-repository PRs to protect the API secret and quota.
+# Avoid obsolete events cancelling newer reviews; recheck the live head before work.
 on:
   pull_request_target:
     branches: [main]
@@ -13,7 +14,7 @@ permissions:
 
 concurrency:
   group: ocr-nvidia-${{ github.repository }}-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   review:
@@ -24,9 +25,26 @@ jobs:
       github.actor != 'dependabot[bot]' &&
       !github.event.pull_request.draft
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 45
     steps:
+      - name: Skip stale pull request events
+        id: freshness
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const expectedHead = context.payload.pull_request.head.sha;
+            const { data: current } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+            });
+            const fresh = current.state === 'open' && !current.draft &&
+              current.head.sha === expectedHead;
+            core.setOutput('current', String(fresh));
+            if (!fresh) core.notice('Skipping a stale PR event; no NVIDIA review requested.');
+
       - name: Review pull request with NVIDIA Nemotron
+        if: steps.freshness.outputs.current == 'true'
         uses: alibaba/open-code-review@5a6f77ccd1540ed4e80c06490a696543e507d3e4
         with:
           llm_url: https://integrate.api.nvidia.com/v1
@@ -36,8 +54,8 @@ jobs:
           llm_use_anthropic: 'false'
           ocr_version: '1.13.13'
           effort: low
-          review_concurrency: '2'
-          review_task_timeout: '18'
+          review_concurrency: '1'
+          review_task_timeout: '8'
           max_tokens_budget: '160000'
           sticky_summary: 'true'
           incremental: 'true'
