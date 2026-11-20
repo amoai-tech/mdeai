@@ -15,7 +15,7 @@ import {
   type RentalSearchApiParams,
 } from "@/lib/rental-search-fast-path";
 import { logRoutingDecision } from "@/lib/intelligence-telemetry";
-import { budgetNotApplied, clearsFurnishingPreference, isExactMonthlyBudgetOnlyRefinement, scoreRentalQuery } from "@/lib/rental-query-parser";
+import { budgetNotApplied, clearsFurnishingPreference, furnishingFromQueryText, isExactMonthlyBudgetOnlyRefinement, scoreRentalQuery } from "@/lib/rental-query-parser";
 import {
   RENTAL_HANDOFF_FAILED_SUMMARY,
   RENTAL_SEARCH_UNAVAILABLE_SUMMARY,
@@ -137,6 +137,16 @@ function matchesVisibleRentalSearch(
     previous.checkOut === visible.checkOut);
 }
 
+/** Mentioning furnishing in a question is not a new furnishing decision. */
+function choosesFurnishing(text: string): boolean {
+  if (typeof furnishingFromQueryText(text) !== "boolean") return false;
+  // The rental parser already recognizes English/Spanish furnishing values.
+  // Here detect a *choice*, not a question about furnished apartment prices.
+  return /\b(?:prefer|prefiero|quiero|quisiera|necesito|busco|muestra|muéstrame|mostrar|hazlo|ponlo|want|need|find|show|only|actually|instead|switch|rather)\b/i.test(text) ||
+    /\bmake\s+(?:it|them|that)\s+(?:un)?furnished\b/i.test(text) ||
+    /^\s*(?:furnished|unfurnished)[.!]?\s*$/i.test(text);
+}
+
 /** How many messages may wait behind a running search before extra ones go to the concierge. */
 const MAX_WAITING_MESSAGES = 10;
 
@@ -161,6 +171,12 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
   const busyEpochRef = useRef(-1);
   // A user preference-only turn can supersede a pending search *within* the same chat.
   const furnishingRevisionRef = useRef(0);
+  // Separate from the in-flight request invalidation token above: merely asking
+  // about furnishing must not cancel a valid pending rental search.
+  const furnishingDecisionRevisionRef = useRef(0);
+  // Tracks which user-authored furnishing decision won. A newer explicit
+  // furnished/unfurnished request must not be undone by an older clear replay.
+  const acceptedClearRevisionRef = useRef<number | null>(null);
   const mountedRef = useRef(false);
   const runSearchRef = useRef<(
     (userText: string, params: RentalSearchApiParams, memory: ConciergeWorkingMemory, retry: boolean) => Promise<boolean>
@@ -188,6 +204,8 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
     latestMemoryRef.current = null;
     latestMemoryEpochRef.current = -1;
     furnishingRevisionRef.current = 0;
+    furnishingDecisionRevisionRef.current = 0;
+    acceptedClearRevisionRef.current = null;
     if (busyEpochRef.current !== sessionEpoch) busyRef.current = false;
   }, [sessionEpoch]);
 
@@ -379,7 +397,41 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
       if (clarifyPending && clarifyKind === "event") return false;
       if (clarifyPending && clarifyKind === "restaurant") return false;
 
+      // Every direct user message is observed here, including messages routed
+      // to the concierge instead of rental search. Advance decision recency
+      // before consulting an earlier accepted clear from this conversation.
+      if (!clearsFurnishingPreference(trimmed) && choosesFurnishing(trimmed)) {
+        furnishingDecisionRevisionRef.current += 1;
+        acceptedClearRevisionRef.current = null;
+      }
+
       const memory: ConciergeWorkingMemory = { ...(baseMemory ?? state ?? {}) };
+      // A completed concierge run can replay an older backend furnishing preference
+      // after the renter explicitly cleared it on the client. The thread-local
+      // accepted clear is newer than that replay, but ONLY while it still matches
+      // the visible search and this session's epoch. Never override a new explicit
+      // furnished/unfurnished request or a different rental/thread.
+      const clearedQuery = latestMemoryEpochRef.current === getSessionEpoch() &&
+          acceptedClearRevisionRef.current !== null &&
+          acceptedClearRevisionRef.current === furnishingDecisionRevisionRef.current
+        ? latestMemoryRef.current?.lastRentalQuery : undefined;
+      if (clearedQuery?.furnishingCleared === true &&
+          searchMeta?.params &&
+          matchesVisibleRentalSearch(clearedQuery, searchMeta.params) &&
+          (!memory.lastRentalQuery || matchesVisibleRentalSearch(memory.lastRentalQuery, searchMeta.params)) &&
+          furnishingFromQueryText(trimmed) === undefined) {
+        // Reconcile the shared checkpoint immediately, not just the outgoing
+        // API params. A concierge handoff must see the same accepted clear.
+        if (memory.lastRentalQuery?.furnished !== null ||
+            memory.lastRentalQuery?.furnishingCleared !== true) {
+          memory.lastRentalQuery = {
+            ...(memory.lastRentalQuery ?? clearedQuery),
+            furnished: null,
+            furnishingCleared: true,
+          };
+          setState({ ...memory });
+        }
+      }
       // Guest fast-path searches can succeed when the authenticated CoAgent state
       // is unavailable. Reuse the last *visible, thread-local* rental query only
       // while its searchMeta still exists; New Chat and cross-vertical searches
@@ -402,6 +454,24 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
         };
       }
 
+      // After a saved-thread reload, the last *real displayed* rental query may
+      // be newer than an agent checkpoint. If that exact visible search was
+      // unrestricted, do not resurrect the older checkpoint's boolean. Only
+      // reconcile a matching search, and let a new explicit user preference win.
+      if (memory.lastRentalQuery && searchMeta?.source === "saved" &&
+          searchMeta.params.furnished === undefined &&
+          typeof memory.lastRentalQuery.furnished === "boolean" &&
+          matchesVisibleRentalSearch(memory.lastRentalQuery, searchMeta.params) &&
+          furnishingFromQueryText(trimmed) === undefined) {
+        memory.lastRentalQuery = {
+          ...memory.lastRentalQuery,
+          furnished: null,
+          furnishingCleared: true,
+        };
+        // Export the corrected checkpoint before a concierge fallback sees the
+        // first post-hydration turn. A later agent-authored choice must then win.
+        setState({ ...memory });
+      }
       // Pre-upgrade saved threads may have a lastRentalQuery without furnishing,
       // while their currently visible search metadata still knows it. Restore
       // that missing field only for the SAME search; never override an explicit
@@ -419,6 +489,17 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
         }
       }
 
+      // Finish all one-turn saved-history reconciliation using the original
+      // metadata snapshot before expiring its provenance for subsequent turns.
+      // The updated context takes effect on React's next render, not midway
+      // through this callback.
+      if (searchMeta?.source === "saved") {
+        // Saved metadata is only trusted for ONE user turn after hydration.
+        // Otherwise a future concierge update to furnished would be erased on
+        // the next budget refinement by permanently "saved" metadata.
+        setSearchMeta({ ...searchMeta, source: undefined });
+      }
+
       // "Either furnished or unfurnished is fine" starts no search, but it must change this
       // conversation's memory, or the next budget refinement reuses the withdrawn requirement.
       // `null` is the persisted contract's explicit clear, so it survives the agent-memory
@@ -427,6 +508,8 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
         // Invalidate a pending furnished search in THIS conversation: it must not overwrite
         // the newer clear when the original request resolves.
         furnishingRevisionRef.current += 1;
+        furnishingDecisionRevisionRef.current += 1;
+        acceptedClearRevisionRef.current = furnishingDecisionRevisionRef.current;
         const cleared: NonNullable<ConciergeWorkingMemory["lastRentalQuery"]> = {
           ...(memory.lastRentalQuery ?? {}),
           furnished: null,
@@ -480,6 +563,7 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
       clarifyPending,
       runSearch,
       searchMeta,
+      setSearchMeta,
       state,
       setState,
       getSessionEpoch,
