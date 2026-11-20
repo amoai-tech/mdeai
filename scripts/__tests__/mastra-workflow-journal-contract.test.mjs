@@ -22,7 +22,7 @@ function tableDefinition(sql, name) {
 }
 
 function columns(definition) {
-  return [...definition.matchAll(/^\s*"([^"]+)"\s+(text|integer|boolean|jsonb|timestamp|timestamptz)(\s+not null)?(\s+default\s+now\(\))?/gim)]
+  return [...definition.matchAll(/^\s*"([^"]+)"\s+(timestamptz|timestamp|text|integer|boolean|jsonb)\b(\s+not null)?(\s+default\s+now\(\))?/gim)]
     .map((match) => ({
       name: match[1],
       type: match[2].toLowerCase(),
@@ -59,6 +59,28 @@ test("Mastra 1.84 journal migration matches the exact installed vendor DDL", () 
     .map((match) => match[1]);
   assert.deepEqual(vendorTables.filter((name) => !classified.has(name)), []);
   assert.deepEqual(contract.expectedTables.filter((name) => !vendorTables.includes(name)), []);
+});
+
+test("timezone-aware journal columns and defaults cannot silently drift", () => {
+  const expected = {
+    type: "timestamptz",
+    nullable: true,
+    defaultNow: true,
+  };
+  for (const ddl of [vendor, migration]) {
+    const runs = columns(tableDefinition(ddl, "mastra_workflow_runs"));
+    for (const name of ["createdAtZ", "updatedAtZ"]) {
+      const found = runs.find((c) => c.name === name);
+      assert.deepEqual(found, { name, ...expected }, name + " must preserve timezone/default");
+    }
+  }
+  const original = tableDefinition(vendor, "mastra_workflow_runs");
+  const wrongType = original.replace(/("createdAtZ"\s+)TIMESTAMPTZ/i, "$1TIMESTAMP");
+  const wrongDefault = original.replace(/("updatedAtZ"\s+TIMESTAMPTZ)\s+DEFAULT NOW\(\)/i, "$1");
+  assert.notEqual(wrongType, original, "type mutation fixture must match vendor DDL");
+  assert.notEqual(wrongDefault, original, "default mutation fixture must match vendor DDL");
+  assert.notDeepEqual(columns(wrongType), columns(original), "timestamp vs timestamptz must be detected");
+  assert.notDeepEqual(columns(wrongDefault), columns(original), "missing default must be detected");
 });
 
 test("new journal tables keep FORCE RLS and deny untrusted client roles", () => {
