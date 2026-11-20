@@ -68,6 +68,33 @@ describe("SAN-867 · VEB-MVP-001 — Router hijack fix — sendConciergeUserMess
     expect(handlers.onAgentSend).not.toHaveBeenCalled();
   });
 
+  it("SAN-1445 sends a furnishing clear through rental memory before the concierge", async () => {
+    const handlers = { ...makeHandlers(), inRentalSearch: true, lastIntent: "rental_search" as const };
+    const text = "Either furnished or unfurnished is fine";
+    // The clear is not a search. The existing rental hook records it, then
+    // the Concierge may respond conversationally. Never skip the memory update.
+    expect(await sendConciergeUserMessage(text, handlers)).toBe(true);
+    expect(handlers.handleRentalMessage).toHaveBeenCalledOnce();
+    expect(handlers.handleRentalMessage).toHaveBeenCalledWith(text, expect.any(String));
+    expect(handlers.onAgentSend).toHaveBeenCalledOnce();
+  });
+
+  it("SAN-1445 lets a furnishing-clear plus a budget search stay on the rental fast path", async () => {
+    const handlers = { ...makeHandlers(), inRentalSearch: true, lastIntent: "rental_search" as const };
+    const text = "Either furnished or unfurnished is fine, only under COP 2.4 million";
+    handlers.handleRentalMessage.mockResolvedValueOnce(true);
+    expect(await sendConciergeUserMessage(text, handlers)).toBe(true);
+    expect(handlers.handleRentalMessage).toHaveBeenCalledOnce();
+    expect(handlers.onAgentSend).not.toHaveBeenCalled();
+  });
+
+  it("SAN-1445 does not mutate rental memory for an unrelated initial chat", async () => {
+    const handlers = makeHandlers();
+    expect(await sendConciergeUserMessage("Either furnished or unfurnished is fine", handlers)).toBe(true);
+    expect(handlers.handleRentalMessage).not.toHaveBeenCalled();
+    expect(handlers.onAgentSend).toHaveBeenCalledOnce();
+  });
+
   it("handled rental fast-path does not also run the agent", async () => {
     const handlers = makeHandlers();
     handlers.handleRentalMessage.mockResolvedValueOnce(true);

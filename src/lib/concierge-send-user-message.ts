@@ -1,6 +1,6 @@
 import { clearConciergeError, reportConciergeError } from "@/lib/concierge-error-store";
 import { isSelectedRentalCafeNearbyRequest } from "@/lib/cafe-search-fast-path";
-import { looksLikeRentalAnalysis, looksLikeRentalSearch } from "@/lib/rental-query-parser";
+import { clearsFurnishingPreference, looksLikeRentalAnalysis, looksLikeRentalSearch } from "@/lib/rental-query-parser";
 import {
   routerHandlerOrderFromClassification,
   type RouterRoutingTarget,
@@ -98,6 +98,19 @@ export async function sendConciergeUserMessage(
 
     // A shown-apartment Details request is a UI action, not another search/model run.
     if (await handlers.handleRentalDetailsMessage?.(trimmed, submissionId)) return true;
+
+    // A no-preference furnishing reply is often classified as ordinary conversation,
+    // which skips the rental handler entirely. The handler owns the authoritative
+    // memory clear; record it BEFORE the Concierge run (whose saved checkpoint may
+    // still contain furnished:true). Search refinements are handled there too.
+    // This branch must call the handler exactly once — the classifier must not
+    // dispatch the same preference again and increment its decision revision.
+    if (handlers.inRentalSearch && clearsFurnishingPreference(trimmed)) {
+      if (await handlers.handleRentalMessage(trimmed, submissionId)) return true;
+      setConciergePendingSend(true);
+      agentAttempted = true;
+      return await handlers.onAgentSend(trimmed, submissionId);
+    }
 
     // A rental comparison declined by the rental fast path must not fall through
     // to the café/event handlers merely because the question mentions an amenity.

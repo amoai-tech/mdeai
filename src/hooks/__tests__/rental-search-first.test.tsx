@@ -57,6 +57,7 @@ import { GroundedFastPathProvider } from "@/components/chat/grounded-fast-path-c
 import { RentalFastPathProvider, useRentalFastPath } from "@/components/chat/rental-fast-path-context";
 import { RestaurantFastPathProvider } from "@/components/chat/restaurant-fast-path-context";
 import { useRentalSearchFastPath } from "@/hooks/use-rental-search-fast-path";
+import { sendConciergeUserMessage } from "@/lib/concierge-send-user-message";
 
 type Probe = {
   send: (text: string) => Promise<boolean>;
@@ -495,6 +496,50 @@ describe("SAN-407 · rental chat searches before it asks", () => {
     await act(async () => { releasePending(); await pending; });
     expect(probe.hasListing("old-mounted-request")).toBe(false);
     expect(probe.hasResult()).toBe(false);
+  });
+
+  it("SAN-1445 full router → rental memory → agent fallback → stale checkpoint → cheaper search", async () => {
+    respond(200, { results: [] });
+    const agentSend = vi.fn(async () => true);
+    const handlers = {
+      inRentalSearch: true,
+      lastIntent: "rental_search" as const,
+      handleRentalMessage: (text: string) => probe.send(text),
+      handleEventMessage: async () => false,
+      handleGroundedMessage: async () => false,
+      handleRestaurantMessage: async () => false,
+      onAgentSend: agentSend,
+    };
+    const throughRouter = async (text: string) => {
+      let handled = false;
+      await act(async () => { handled = await sendConciergeUserMessage(text, handlers); });
+      return handled;
+    };
+    expect(await throughRouter("Find furnished 2-bedroom apartments in Laureles under COP 3 million")).toBe(true);
+    expect(await throughRouter("Only under COP 2.5 million")).toBe(true);
+    expect(await throughRouter("Either furnished or unfurnished is fine")).toBe(true);
+    expect(agentSend).toHaveBeenCalledOnce();
+    expect(coagent.state.lastRentalQuery).toMatchObject({
+      furnished: null, furnishingCleared: true, neighborhood: "Laureles",
+      minBedrooms: 2, maxBedrooms: 2, maxPriceMonthly: 2_500_000,
+    });
+    // The real CopilotKit model can echo the old checkpoint after answering
+    // this ordinary-language turn. The latest user clear must still win.
+    await act(async () => {
+      coagent.state = { ...coagent.state, lastRentalQuery: {
+        ...(coagent.state.lastRentalQuery as Record<string, unknown>),
+        furnished: true, furnishingCleared: false,
+      } };
+      for (const listener of coagent.listeners) listener();
+    });
+    expect(await throughRouter("Only under COP 2.4 million")).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    const refined = JSON.parse(String(fetchMock.mock.calls.at(-1)?.[1]?.body));
+    expect(refined).toMatchObject({
+      neighborhood: "Laureles", minBedrooms: 2, maxBedrooms: 2,
+      maxPriceMonthly: 2_400_000, budgetCurrency: "COP",
+    });
+    expect(refined.furnished).toBeUndefined();
   });
 
   it("keeps explicit clear after a prior budget search even if CopilotKit replays older furnishing", async () => {
