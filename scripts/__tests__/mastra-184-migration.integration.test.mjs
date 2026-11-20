@@ -20,7 +20,7 @@ import { Client } from "pg";
 // private copy (the seeding and rehearsal scripts guard with the same file).
 const LOOPBACK_HOSTS = new Set(
   JSON.parse(fs.readFileSync(
-    new URL("../../src/mastra/lib/integration-loopback-hosts.json", import.meta.url),
+    "src/mastra/lib/integration-loopback-hosts.json",
     "utf8",
   )),
 );
