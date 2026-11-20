@@ -33,19 +33,37 @@ class GMapsTests(unittest.TestCase):
             gmaps.cmd_static_map(args)
         self.assertEqual(call.call_args.args[1]["center"], "Medellin")
 
+    def test_only_approved_google_api_hosts_allowed(self):
+        for url in (
+            "https://evil.example/steal?key=secret",
+            "http://maps.googleapis.com/maps/api/geocode/json",
+            "https://maps.googleapis.com.evil.example/steal",
+            "https://evil.example@maps.googleapis.com:8443/path",
+        ):
+            with self.subTest(url=url), self.assertRaises(ValueError):
+                gmaps._request(url)
+
+    def test_valid_google_api_request_uses_no_redirect_handler(self):
+        class FakeResponse:
+            headers = {"Content-Type": "application/json"}
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def read(self): return b'{"ok":true}'
+        with patch.object(gmaps.urllib.request, "build_opener") as builder:
+            builder.return_value.open.return_value = FakeResponse()
+            result = gmaps._request("https://maps.googleapis.com/maps/api/geocode/json")
+        self.assertEqual(result, {"ok": True})
+        self.assertTrue(any(isinstance(h, gmaps._NoRedirect) for h in builder.call_args.args))
+        self.assertEqual(builder.return_value.open.call_count, 1)
+
     def test_http_error_parse_failure_is_reported(self):
-        class BadHTTPError(Exception):
-            code = 400
-            def read(self):
-                return b"not-json"
-        request = types.SimpleNamespace()
         stderr = io.StringIO()
-        with patch.object(gmaps.urllib.request, "Request", return_value=request), patch.object(gmaps.urllib.request, "urlopen", side_effect=gmaps.urllib.error.HTTPError("u", 400, "bad", {}, None)):
-            err = gmaps.urllib.error.HTTPError("u", 400, "bad", {}, None)
-            err.read = lambda: b"not-json"
-            with patch.object(gmaps.urllib.request, "urlopen", side_effect=err), redirect_stderr(stderr):
-                with self.assertRaises(SystemExit):
-                    gmaps._request("https://example.invalid")
+        err = gmaps.urllib.error.HTTPError("u", 400, "bad", {}, None)
+        err.read = lambda: b"not-json"
+        with patch.object(gmaps.urllib.request, "build_opener") as builder, redirect_stderr(stderr):
+            builder.return_value.open.side_effect = err
+            with self.assertRaises(SystemExit):
+                gmaps._request("https://maps.googleapis.com/maps/api/geocode/json")
         self.assertIn("failed to parse HTTP error response body", stderr.getvalue())
 
 

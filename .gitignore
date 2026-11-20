@@ -135,3 +135,7 @@ deno.lock
 # Generated Chromatic Playwright archive build log and isolated Next dev cache
 /build-archive.log
 /.next-chromatic/
+
+# Never ship generated Python bytecode in agent skills
+.claude/skills/**/__pycache__/
+.claude/skills/**/*.py[cod]
