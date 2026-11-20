@@ -67,6 +67,7 @@ const PROD_SPECS = [
   "**/prod-signed-in-route.spec.ts",
   "**/prod-ticket-wallet-authed.spec.ts",
   "**/prod-rentals-results-refresh.spec.ts",
+  "**/prod-rental-furnishing-clear.spec.ts",
   "**/prod-rentals-mobile-form-map.spec.ts",
   "**/prod-discovery-inline-ask.spec.ts",
   "**/prod-discovery-nightlife-mobile.spec.ts",
