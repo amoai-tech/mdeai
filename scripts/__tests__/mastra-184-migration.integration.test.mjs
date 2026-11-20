@@ -5,13 +5,9 @@
  */
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import { Client } from "pg";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const MIGRATION = path.join(ROOT, "supabase/migrations/20261120180824_mastra_184_workflow_journal.sql");
 const enabled = process.env.MASTRA_184_MIGRATION_INTEGRATION === "1";
 
 test("Mastra 1.84 journal migration is additive, secure and repeatable", { skip: !enabled }, async () => {
@@ -61,7 +57,12 @@ test("Mastra 1.84 journal migration is additive, secure and repeatable", { skip:
     await assert.rejects(client.query(legacyUnion), (error) => error.code === "42P01");
     await client.query("ROLLBACK TO SAVEPOINT missing_journal");
 
-    const migrationSql = fs.readFileSync(MIGRATION, "utf8");
+    // CI/npm run from the repository root. Keep the checked-in SQL filename
+    // literal so static analysis can verify that no user path is accepted.
+    const migrationSql = fs.readFileSync(
+      "supabase/migrations/20261120180824_mastra_184_workflow_journal.sql",
+      "utf8",
+    );
     await client.query(migrationSql);
     await client.query(migrationSql); // replay must never fail or duplicate structures
     const restored = (await client.query(legacyUnion)).rows;
