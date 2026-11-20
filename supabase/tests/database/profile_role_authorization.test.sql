@@ -2,7 +2,7 @@
 -- All fixtures are rolled back; no persistent test users or approvals.
 begin;
 
-select plan(13);
+select plan(19);
 
 select is(
   has_column_privilege('authenticated','public.profiles','role','UPDATE'),
@@ -28,6 +28,29 @@ select is(
 insert into auth.users (id, email, email_confirmed_at) values
  ('9a621000-0000-4000-8000-000000000001', 'mde-profile-security-one@example.invalid', now()),
  ('9a621000-0000-4000-8000-000000000002', 'mde-profile-security-two@example.invalid', now());
+
+-- Vote-admin policies need a real private row that ordinary non-owners cannot see.
+-- The unrelated public contestant/org/approved policies must not make it visible.
+insert into vote.contests
+  (id,slug,kind,title,org_id,starts_at,ends_at,status)
+values
+  ('9a621000-0000-4000-8000-000000000070',
+   'profile-role-regression-private','restaurant','Private authorization test',
+   '9a621000-0000-4000-8000-000000000002',
+   now()-interval '1 day',now()+interval '1 day','draft');
+
+insert into vote.entities (id,contest_id,slug,display_name,approved)
+values
+  ('9a621000-0000-4000-8000-000000000071',
+   '9a621000-0000-4000-8000-000000000070',
+   'profile-role-regression-entity','Original Private Entry',false);
+
+-- Production intentionally has no direct authenticated table-wide SELECT/UPDATE
+-- grant on vote.entities. Temporarily grant them inside this rolled-back test
+-- transaction so the test exercises RLS policy logic, not just the outer ACL.
+-- Without this fixture, both negative and positive cases could appear to pass
+-- merely because table privileges are absent.
+grant select, update on vote.entities to authenticated;
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub','9a621000-0000-4000-8000-000000000001',true);
@@ -77,7 +100,38 @@ select throws_ok(
   'P0001', 'FORBIDDEN: admin role required',
   'sponsor approval rejects a profile-only admin'
 );
+
+-- Fake admin display role, NO trusted user_roles row: admin-only SELECT and
+-- UPDATE must both deny access to a draft entity owned by another user.
+select is(
+  (select count(*)::int from vote.entities
+   where id='9a621000-0000-4000-8000-000000000071'),
+  0,
+  'profile-only admin cannot SELECT another users private voting entity'
+);
+with changed as (
+  update vote.entities set display_name='Unauthorized Edit'
+   where id='9a621000-0000-4000-8000-000000000071'
+   returning id
+)
+select is(
+  (select count(*)::int from changed),
+  0,
+  'profile-only admin cannot UPDATE another users private voting entity'
+);
 reset role;
+
+select is(
+  (select display_name from vote.entities
+   where id='9a621000-0000-4000-8000-000000000071'),
+  'Original Private Entry',
+  'denied vote UPDATE left the private entity unchanged'
+);
+
+-- Prove the opposite direction, too: genuine Super Admin must work even if
+-- their ordinary profile display role is 'user'.
+update public.profiles set role='user'
+ where id='9a621000-0000-4000-8000-000000000001';
 
 -- Real trusted role must work, regardless of profiles.role.
 insert into public.user_roles (user_id,role)
@@ -91,7 +145,31 @@ select throws_ok(
   'P0001', 'APPLICATION_NOT_FOUND',
   'trusted super admin passes authorization (then sees missing fixture)'
 );
+
+select is(
+  (select count(*)::int from vote.entities
+   where id='9a621000-0000-4000-8000-000000000071'),
+  1,
+  'trusted user_roles super admin can SELECT private voting entity'
+);
+with changed as (
+  update vote.entities set display_name='Trusted Super Admin Edit'
+   where id='9a621000-0000-4000-8000-000000000071'
+   returning id
+)
+select is(
+  (select count(*)::int from changed),
+  1,
+  'trusted user_roles super admin can UPDATE private voting entity'
+);
 reset role;
+
+select is(
+  (select display_name from vote.entities
+   where id='9a621000-0000-4000-8000-000000000071'),
+  'Trusted Super Admin Edit',
+  'authorized vote UPDATE persisted inside test transaction'
+);
 
 select * from finish();
 rollback;
