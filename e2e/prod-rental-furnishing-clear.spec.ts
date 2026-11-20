@@ -1,8 +1,10 @@
 import { expect, test } from "./fixtures";
 import { loadEnvLocalForE2E } from "./helpers/auth";
 import {
+  countConciergeReplies,
   gotoConcierge,
   sendConciergeMessage,
+  waitForConciergeReply,
   waitForCopilotIdle,
 } from "./helpers/maps-layout";
 import { validateMdeAuthenticatedQaOrigin } from "./fixtures/vercel-bypass";
@@ -80,10 +82,12 @@ test.describe("SAN-1445 — explicit furnishing clear survives Concierge and sav
     await search("Find furnished 2-bedroom apartments in Laureles under COP 3 million", 3_000_000, true);
     await search("Only under COP 2.5 million", 2_500_000, true);
     const countBeforeClear = searchRequests;
-    await ask("Either furnished or unfurnished is fine");
-    // Count REQUEST events, not only completed responses; an in-flight extra
-    // search must not pass this assertion by responding after the check.
-    await page.waitForTimeout(1_200);
+    const repliesBeforeClear = await countConciergeReplies(page);
+    await sendConciergeMessage(page, "Either furnished or unfurnished is fine");
+    // Wait for this turn's real request to settle AND a new nonempty assistant
+    // reply to render. Any hidden rental request started by the clear is then
+    // recorded by the request listener, even if its response is still pending.
+    await waitForConciergeReply(page, repliesBeforeClear);
     expect(searchRequests, "clearing without new criteria must not issue a hidden search").toBe(countBeforeClear);
     await search("Only under COP 2.4 million", 2_400_000, undefined);
 
