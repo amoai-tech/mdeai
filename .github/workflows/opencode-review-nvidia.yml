@@ -1,0 +1,54 @@
+name: OpenCodeReview (NVIDIA advisory)
+
+# Pinned upstream action reviews PR diffs without executing PR-head code.
+# Restrict to trusted same-repository PRs to protect the API secret and quota.
+on:
+  pull_request_target:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: ocr-nvidia-${{ github.repository }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    name: NVIDIA AI review (advisory)
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.sender.type != 'Bot' &&
+      github.actor != 'dependabot[bot]' &&
+      !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Review pull request with NVIDIA Nemotron
+        uses: alibaba/open-code-review@5a6f77ccd1540ed4e80c06490a696543e507d3e4
+        with:
+          llm_url: https://integrate.api.nvidia.com/v1
+          llm_auth_token: ${{ secrets.NVIDIA_API_KEY }}
+          llm_model: nvidia/nemotron-3.5-super-vl-120b-a12b
+          llm_protocol: openai
+          llm_use_anthropic: 'false'
+          ocr_version: '1.13.13'
+          effort: low
+          review_concurrency: '2'
+          review_task_timeout: '18'
+          max_tokens_budget: '160000'
+          sticky_summary: 'true'
+          incremental: 'true'
+          checkpoint_range: 'true'
+          route_severity_below: low
+          stream_progress: 'true'
+          upload_artifacts: 'true'
+          background: >-
+            MDE AI is in Phase A prelaunch development. Review only actionable,
+            reproducible defects affecting application correctness, tenant
+            isolation, RLS, transactions, retry/idempotency, Mastra/CopilotKit
+            state, payment integrity, or truthful rental/event data. Do not
+            recommend business-eligibility, ownership-verification, or approval
+            prerequisites during development. Prioritize real defects over style.
