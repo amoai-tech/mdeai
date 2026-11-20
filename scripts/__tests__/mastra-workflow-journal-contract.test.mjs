@@ -100,10 +100,33 @@ function withoutColumnDefault(definition, columnName) {
   return lines.join("\n");
 }
 
-function journalIndexes(sql) {
-  return [...sql.matchAll(/create index if not exists\s+"?(mastra_workflow_(?:runs|run_entries)_[a-z_]+)"?/gi)]
-    .map((match) => match[1])
-    .sort();
+/** Strip `--` line comments so a leading comment cannot glue onto a statement. */
+function withoutComments(sql) {
+  return sql
+    .split("\n")
+    .map((line) => line.replace(/--.*$/, ""))
+    .join("\n");
+}
+
+function normalizeStatement(statement) {
+  return statement.replace(/"/g, "").replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+/**
+ * Full CREATE INDEX definitions keyed by name. Comparing the DEFINITION — indexed
+ * columns, their order, and the partial predicate — is what catches an index that
+ * keeps its expected name while indexing the wrong thing; a name-only check does
+ * not.
+ */
+function journalIndexDefinitions(sql) {
+  const definitions = new Map();
+  for (const statement of withoutComments(sql).split(";")) {
+    const match = statement.match(
+      /create index if not exists\s+"?(mastra_workflow_(?:runs|run_entries)_[a-z_]+)"?/i,
+    );
+    if (match) definitions.set(match[1], normalizeStatement(statement));
+  }
+  return definitions;
 }
 
 test("Mastra 1.84 journal migration matches the exact installed vendor DDL", () => {
@@ -115,7 +138,15 @@ test("Mastra 1.84 journal migration matches the exact installed vendor DDL", () 
     assert.equal(primaryKey(local), primaryKey(upstream), name + ": key drift from @mastra/pg");
     assert.ok(contract.expectedTables.includes(name), name + " must be a required table");
   }
-  assert.deepEqual(journalIndexes(migration), journalIndexes(vendor));
+  const vendorIndexes = journalIndexDefinitions(vendor);
+  const migrationIndexes = journalIndexDefinitions(migration);
+  assert.deepEqual([...migrationIndexes.keys()].sort(), [...vendorIndexes.keys()].sort(),
+    "journal index names must match @mastra/pg");
+  assert.ok(vendorIndexes.size > 0, "vendor DDL must declare journal indexes");
+  for (const [name, definition] of vendorIndexes) {
+    assert.equal(migrationIndexes.get(name), definition,
+      name + ": index columns, order and predicate must match @mastra/pg");
+  }
 
   // Any future vendor table must be explicitly classified, not silently accepted.
   const classified = new Set([...contract.expectedTables, ...contract.adapterInitExtraTables]);
