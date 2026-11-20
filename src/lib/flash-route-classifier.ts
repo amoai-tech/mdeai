@@ -56,6 +56,8 @@ export type FlashRouteResult = z.infer<typeof flashRouteResultSchema>;
 
 export type FlashRouteClassification = RouterIntentClassification & {
   topicShift?: boolean;
+  /** Deterministic discovery switch; free-text reason is for diagnostics only. */
+  explicitTopicShift?: "coworking";
   flashSlots?: FlashRouteSlots;
   source?: "regex" | "flash" | "merged";
 };
@@ -211,10 +213,31 @@ export async function resolveRouterClassification(
   // Agent working memory may not update lastIntent during that answer. Mark
   // the switch at dispatch instead, without a separate intent engine.
   // "Apartments near coworking" is still a rental request.
-  if (regex.routingTarget === "agent" &&
-      /\b(?:co[-\s]?working|coworking|shared\s+(?:workspaces?|offices?))\b/i.test(text) &&
-      !looksLikeRentalSearch(text)) {
-    return { ...regex, reason: "explicit coworking discovery topic change", topicShift: true, source: "regex" };
+  // Only an actual booking INSTRUCTION ("Book a coworking space") skips the
+  // discovery topic shift. "Which spaces can I book?" is still discovery.
+  // Let booking actions use the existing router/Flash/agent; never invent a booking.
+  const coworkingBookingRequest =
+    /^\s*(?:(?:hi|hello|hey)\s*,?\s*)?(?:(?:(?:can|could|would)\s+you|(?:i|we)\s+(?:want|need)\s+to|(?:i|we)(?:['’]d| would)\s+like\s+to|help\s+me)\s+)?(?:please\s+)?(?:book|reserve|rent|hire)\b/i.test(text);
+  const coworkingSubject =
+    /\b(?:co[-\s]?working|coworking|shared\s+(?:workspaces?|offices?))\b/i.test(text);
+  // "Coworking spaces for rent" refers to workplaces, not apartment listings.
+  // The generic rental regex detects "for rent", so recognize the coworking
+  // subject explicitly without hijacking "apartments near coworking" queries.
+  const coworkingForRent =
+    /\b(?:co[-\s]?working|coworking|shared\s+(?:workspaces?|offices?))\s+(?:spaces?|desks?|offices?)?\s*for\s+rent\b/i.test(text) &&
+    !/\b(?:apartments?|rentals?|flats?|condos?|homes?|houses?|airbnbs?|lodging|stays?)\b/i.test(text);
+  if (coworkingSubject && !coworkingBookingRequest &&
+      (coworkingForRent || (regex.routingTarget === "agent" && !looksLikeRentalSearch(text)))) {
+    return {
+      ...regex,
+      intent: "general_concierge",
+      action: "agent",
+      routingTarget: "agent",
+      reason: "explicit coworking discovery topic change",
+      explicitTopicShift: "coworking",
+      topicShift: true,
+      source: "regex",
+    };
   }
 
   // "Anywhere is fine" says nothing about rentals on its own, so the regex hands it to the
