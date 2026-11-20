@@ -250,7 +250,7 @@ describe("verify-mastra-schema-init — contract path safety", () => {
 });
 
 describe("check-mastra-schema-contract — committed contract", () => {
-  it("keeps every production table and the tables SAN-1626 proved the runtime now needs", () => {
+  it("keeps every legacy production table plus Mastra 1.81 run fencing and 1.84 workflow journals", () => {
     // Every table observed live on 2026-09-18 must still be required. Dropping or
     // renaming one fails here, exactly as before.
     const required = new Set(committedContract.expectedTables);
@@ -261,15 +261,19 @@ describe("check-mastra-schema-contract — committed contract", () => {
     // Both are added by supabase/migrations/20261104031855_mastra_181_run_ownership.sql.
     expect(required.has("mastra_workflow_run_owners")).toBe(true);
     expect(required.has("mastra_memory_run_fences")).toBe(true);
+    // SAN-1698: Mastra 1.84's read/list path unions v1 snapshots with the
+    // journal-backed v2 runs; both tables are required even before v2 opt-in.
+    expect(required.has("mastra_workflow_runs")).toBe(true);
+    expect(required.has("mastra_workflow_run_entries")).toBe(true);
     expect(committedContract.expectedTables).toHaveLength(
-      PRODUCTION_MASTRA_TABLES.length + 2,
+      PRODUCTION_MASTRA_TABLES.length + 4,
     );
     expect(new Set(committedContract.expectedTables).size).toBe(
       committedContract.expectedTables.length,
     );
-    // The certified pairing (SAN-1626): @mastra/pg@1.34.0 with @mastra/core@1.81.0.
-    expect(committedContract.adapterVersion).toBe("1.34.0");
-    expect(committedContract.coreVersion).toBe("1.81.0");
+    // The certified pairing (SAN-1698): @mastra/pg@1.37.0 with @mastra/core@1.84.0.
+    expect(committedContract.adapterVersion).toBe("1.37.0");
+    expect(committedContract.coreVersion).toBe("1.84.0");
   });
 
   it("documents the adapter's extra tables without treating them as required", () => {

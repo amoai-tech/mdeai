@@ -107,6 +107,15 @@ jobs:
           MASTRA_181_MIGRATION_INTEGRATION: "1"
         run: node --test scripts/__tests__/mastra-181-migration.integration.test.mjs
 
+      # SAN-1698 — prove the v1→v2 journal migration with real PostgreSQL,
+      # including replay, old-row/policy preservation, PKs, indexes and RLS.
+      # This test runs in one rolled-back transaction, before vendor init.
+      - name: Verify Mastra 1.84 workflow journal migration
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+          MASTRA_184_MIGRATION_INTEGRATION: "1"
+        run: node --test scripts/__tests__/mastra-184-migration.integration.test.mjs
+
       # Disposable database: exercise the real package entry point from empty.
       - name: Provision the Mastra schema through mastra:init
         env:
