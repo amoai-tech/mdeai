@@ -2,7 +2,7 @@
 -- All fixtures are rolled back; no persistent test users or approvals.
 begin;
 
-select plan(29);
+select plan(35);
 
 select is(
   has_column_privilege('authenticated','public.profiles','role','UPDATE'),
@@ -250,6 +250,79 @@ select is(
   (select count(*)::int from sponsor.placements
    where application_id='9a621000-0000-4000-8000-000000000081'),
   2, 'retry has not duplicated sponsor placements'
+);
+
+-- Test the hosted schema's owner-resolution semantics on the same local
+-- rollback-only connection. Fresh applications have an owner_user_id but the
+-- hosted application may not: simulate NULL to exercise the fallback.
+-- The fresh organization also has owner_user_id while hosted uses
+-- primary_contact_user_id; these two values deliberately differ here.
+alter table sponsor.organizations
+  add column if not exists primary_contact_user_id uuid;
+alter table sponsor.organizations alter column owner_user_id drop not null;
+alter table sponsor.applications alter column owner_user_id drop not null;
+alter table sponsor.placements alter column owner_user_id drop not null;
+
+update sponsor.organizations
+   set owner_user_id='9a621000-0000-4000-8000-000000000001',
+       primary_contact_user_id='9a621000-0000-4000-8000-000000000002'
+ where id='9a621000-0000-4000-8000-000000000080';
+update sponsor.applications
+   set owner_user_id=null, status='submitted', approved_by=null, approved_at=null
+ where id='9a621000-0000-4000-8000-000000000081';
+delete from sponsor.placements
+ where application_id='9a621000-0000-4000-8000-000000000081';
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub','9a621000-0000-4000-8000-000000000001',true);
+select lives_ok(
+  $$select public.approve_sponsor_application(
+    '9a621000-0000-4000-8000-000000000081', null)$$,
+  'hosted-style application without owner column can be approved using contact'
+);
+reset role;
+select is(
+  (select count(*)::int from sponsor.placements
+   where application_id='9a621000-0000-4000-8000-000000000081'
+     and owner_user_id='9a621000-0000-4000-8000-000000000002'),
+  2, 'hosted owner fallback assigns both placements to primary contact'
+);
+select is(
+  (select count(*)::int from sponsor.placements
+   where application_id='9a621000-0000-4000-8000-000000000081'
+     and owner_user_id='9a621000-0000-4000-8000-000000000001'),
+  0, 'owner fallback never uses unrelated org field or authenticated admin'
+);
+
+-- Anonymous draft can have no known owner; do not invent the approver as owner.
+update sponsor.organizations
+   set owner_user_id=null, primary_contact_user_id=null
+ where id='9a621000-0000-4000-8000-000000000080';
+update sponsor.applications
+   set status='submitted', approved_by=null, approved_at=null
+ where id='9a621000-0000-4000-8000-000000000081';
+delete from sponsor.placements
+ where application_id='9a621000-0000-4000-8000-000000000081';
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub','9a621000-0000-4000-8000-000000000001',true);
+select lives_ok(
+  $$select public.approve_sponsor_application(
+    '9a621000-0000-4000-8000-000000000081', null)$$,
+  'unknown owner does not create an artificial sponsor identity'
+);
+reset role;
+select is(
+  (select count(*)::int from sponsor.placements
+   where application_id='9a621000-0000-4000-8000-000000000081'
+     and owner_user_id is null),
+  2, 'unknown sponsor owner is stored truthfully as NULL'
+);
+select is(
+  (select count(*)::int from sponsor.placements
+   where application_id='9a621000-0000-4000-8000-000000000081'
+     and owner_user_id='9a621000-0000-4000-8000-000000000001'),
+  0, 'unknown owner never silently becomes the approver'
 );
 
 select * from finish();
