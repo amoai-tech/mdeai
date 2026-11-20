@@ -21,56 +21,21 @@ grant update (
   onboarding_completed, last_active_at, created_at, updated_at, deleted_at
 ) on table public.profiles to authenticated;
 
--- Reconcile the minimal sponsor columns needed by this existing RPC. The
--- recovered hosted sponsor schema already has approval state and a destination;
--- fresh migrations define a smaller application/placement contract instead.
--- Keep this additive and ahead of the function replacement in this migration.
+-- Reconcile only the missing sponsor columns consumed by the existing RPC.
+-- The hosted application schema intentionally supports ownerless draft inserts
+-- from sponsor-application-create; do not add a required owner or an FK that
+-- would cascade-delete business history when a contact user is removed.
 alter table sponsor.applications
   add column if not exists status text not null default 'draft',
   add column if not exists approved_at timestamptz,
-  add column if not exists approved_by uuid references auth.users (id),
-  add column if not exists owner_user_id uuid references auth.users (id) on delete cascade;
+  add column if not exists approved_by uuid references auth.users (id);
 
--- A hosted application belongs to its sponsor organization; the hosted
--- organization uses primary_contact_user_id where the fresh schema already has
--- applications.owner_user_id. Recover that authoritative owner once, not from
--- the caller or from the untrusted p_approved_by RPC argument.
-do $backfill_sponsor_owner$
-begin
-  if exists (
-    select 1 from information_schema.columns
-    where table_schema = 'sponsor' and table_name = 'organizations'
-      and column_name = 'primary_contact_user_id'
-  ) then
-    execute '
-      update sponsor.applications a
-         set owner_user_id = o.primary_contact_user_id
-        from sponsor.organizations o
-       where o.id = a.organization_id
-         and a.owner_user_id is null
-         and o.primary_contact_user_id is not null';
-  end if;
-end;
-$backfill_sponsor_owner$;
-
--- Fail safely rather than silently assigning an application to an approver.
-alter table sponsor.applications alter column owner_user_id set not null;
-
+-- Fresh migrations already have owner_user_id on placements but no destination;
+-- hosted has a required destination but no owner column. Do not add NOT NULL
+-- constraints to existing records whose ownership or destination is unknown.
 alter table sponsor.placements
-  add column if not exists owner_user_id uuid references auth.users (id) on delete cascade,
+  add column if not exists owner_user_id uuid references auth.users (id) on delete set null,
   add column if not exists utm_destination text;
-
--- Preserve any existing placements when upgrading the hosted schema.
-update sponsor.placements p
-   set owner_user_id = a.owner_user_id
-  from sponsor.applications a
- where p.application_id = a.id and p.owner_user_id is null;
-
--- Existing destinations must be preserved; if one is missing, reject the
--- migration instead of inventing a sponsor's landing page.
-alter table sponsor.placements
-  alter column owner_user_id set not null,
-  alter column utm_destination set not null;
 
 -- Only the trusted user_roles-based check is allowed to approve sponsors.
 -- Reuse the original sponsor approval transaction, without trusting
@@ -86,6 +51,7 @@ as $function$
 declare
   v_caller_id uuid;
   v_app sponsor.applications%rowtype;
+  v_owner_user_id uuid;
   v_surfaces text[];
 begin
   v_caller_id := (select auth.uid());
@@ -108,6 +74,18 @@ begin
     raise exception 'APPLICATION_NOT_APPROVABLE: %', v_app.status;
   end if;
 
+  -- Fresh sponsor applications store the real owner directly; the hosted
+  -- application refers to its organization, whose authenticated contact owns
+  -- the sponsorship. No caller-supplied identity is used for either path.
+  -- A missing owner remains NULL, not a fabricated admin/sponsor identity.
+  select coalesce(
+    (to_jsonb(v_app)->>'owner_user_id')::uuid,
+    (to_jsonb(o)->>'primary_contact_user_id')::uuid,
+    (to_jsonb(o)->>'owner_user_id')::uuid
+  ) into v_owner_user_id
+  from sponsor.organizations o
+  where o.id = v_app.organization_id;
+
   v_surfaces := case v_app.activation_type
     when 'digital' then array['contest_header', 'leaderboard_footer']
     when 'title_naming' then array['contest_header', 'digital_banner']
@@ -127,7 +105,7 @@ begin
     (application_id, owner_user_id, surface, utm_destination, start_at, end_at, weight)
   select
     p_application_id,
-    v_app.owner_user_id,
+    v_owner_user_id,
     unnest(v_surfaces),
     'https://mdeai.co/sponsor/' || p_application_id,
     now(),
