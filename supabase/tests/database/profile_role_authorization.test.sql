@@ -2,7 +2,7 @@
 -- All fixtures are rolled back; no persistent test users or approvals.
 begin;
 
-select plan(19);
+select plan(29);
 
 select is(
   has_column_privilege('authenticated','public.profiles','role','UPDATE'),
@@ -64,10 +64,19 @@ select is(
   'user',
   'new ordinary profile receives safe role default'
 );
-select lives_ok(
-  $$update public.profiles set full_name='Safe Update'
-    where id='9a621000-0000-4000-8000-000000000001'$$,
-  'ordinary profile editing still works'
+with changed as (
+  update public.profiles set full_name='Safe Update'
+  where id='9a621000-0000-4000-8000-000000000001'
+  returning id
+)
+select is(
+  (select count(*)::int from changed),
+  1, 'ordinary profile update actually modifies one own row'
+);
+select is(
+  (select full_name from public.profiles
+   where id='9a621000-0000-4000-8000-000000000001'),
+  'Safe Update', 'ordinary profile edit persists the new name'
 );
 select throws_ok(
   $$update public.profiles set role='admin'
@@ -169,6 +178,78 @@ select is(
    where id='9a621000-0000-4000-8000-000000000071'),
   'Trusted Super Admin Edit',
   'authorized vote UPDATE persisted inside test transaction'
+);
+
+-- A real approval must succeed on the fresh migration-defined sponsor schema.
+-- The sponsor owner and trusted approver are deliberately different people.
+insert into sponsor.organizations (id, owner_user_id, name) values
+  ('9a621000-0000-4000-8000-000000000080',
+   '9a621000-0000-4000-8000-000000000002', 'Sponsor Fixture');
+insert into sponsor.applications
+  (id, organization_id, owner_user_id, tier, activation_type, status)
+values
+  ('9a621000-0000-4000-8000-000000000081',
+   '9a621000-0000-4000-8000-000000000080',
+   '9a621000-0000-4000-8000-000000000002',
+   'gold', 'digital', 'submitted');
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub','9a621000-0000-4000-8000-000000000001',true);
+select lives_ok(
+  $$select public.approve_sponsor_application(
+    '9a621000-0000-4000-8000-000000000081',
+    '9a621000-0000-4000-8000-000000000002')$$,
+  'trusted admin can approve a real submitted sponsor application'
+);
+reset role;
+
+select is(
+  (select status from sponsor.applications
+   where id='9a621000-0000-4000-8000-000000000081'),
+  'approved', 'application status becomes approved'
+);
+select is(
+  (select approved_by from sponsor.applications
+   where id='9a621000-0000-4000-8000-000000000081'),
+  '9a621000-0000-4000-8000-000000000001'::uuid,
+  'approved_by is the authenticated admin, not the supplied owner'
+);
+select ok(
+  (select approved_at is not null from sponsor.applications
+   where id='9a621000-0000-4000-8000-000000000081'),
+  'approval timestamp is recorded'
+);
+select is(
+  (select count(*)::int from sponsor.placements
+   where application_id='9a621000-0000-4000-8000-000000000081'),
+  2, 'digital sponsor creates two real placements'
+);
+select is(
+  (select count(*)::int from sponsor.placements
+   where application_id='9a621000-0000-4000-8000-000000000081'
+     and owner_user_id='9a621000-0000-4000-8000-000000000002'),
+  2, 'placements inherit sponsor application owner, not approver'
+);
+select is(
+  (select count(*)::int from sponsor.placements
+   where application_id='9a621000-0000-4000-8000-000000000081'
+     and utm_destination is not null),
+  2, 'both placements have required destination'
+);
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub','9a621000-0000-4000-8000-000000000001',true);
+select throws_ok(
+  $$select public.approve_sponsor_application(
+    '9a621000-0000-4000-8000-000000000081', null)$$,
+  'P0001', 'APPLICATION_NOT_APPROVABLE: approved',
+  'retrying approval rejects duplicate placement creation'
+);
+reset role;
+select is(
+  (select count(*)::int from sponsor.placements
+   where application_id='9a621000-0000-4000-8000-000000000081'),
+  2, 'retry has not duplicated sponsor placements'
 );
 
 select * from finish();

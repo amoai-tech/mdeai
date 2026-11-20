@@ -21,6 +21,57 @@ grant update (
   onboarding_completed, last_active_at, created_at, updated_at, deleted_at
 ) on table public.profiles to authenticated;
 
+-- Reconcile the minimal sponsor columns needed by this existing RPC. The
+-- recovered hosted sponsor schema already has approval state and a destination;
+-- fresh migrations define a smaller application/placement contract instead.
+-- Keep this additive and ahead of the function replacement in this migration.
+alter table sponsor.applications
+  add column if not exists status text not null default 'draft',
+  add column if not exists approved_at timestamptz,
+  add column if not exists approved_by uuid references auth.users (id),
+  add column if not exists owner_user_id uuid references auth.users (id) on delete cascade;
+
+-- A hosted application belongs to its sponsor organization; the hosted
+-- organization uses primary_contact_user_id where the fresh schema already has
+-- applications.owner_user_id. Recover that authoritative owner once, not from
+-- the caller or from the untrusted p_approved_by RPC argument.
+do $backfill_sponsor_owner$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'sponsor' and table_name = 'organizations'
+      and column_name = 'primary_contact_user_id'
+  ) then
+    execute '
+      update sponsor.applications a
+         set owner_user_id = o.primary_contact_user_id
+        from sponsor.organizations o
+       where o.id = a.organization_id
+         and a.owner_user_id is null
+         and o.primary_contact_user_id is not null';
+  end if;
+end;
+$backfill_sponsor_owner$;
+
+-- Fail safely rather than silently assigning an application to an approver.
+alter table sponsor.applications alter column owner_user_id set not null;
+
+alter table sponsor.placements
+  add column if not exists owner_user_id uuid references auth.users (id) on delete cascade,
+  add column if not exists utm_destination text;
+
+-- Preserve any existing placements when upgrading the hosted schema.
+update sponsor.placements p
+   set owner_user_id = a.owner_user_id
+  from sponsor.applications a
+ where p.application_id = a.id and p.owner_user_id is null;
+
+-- Existing destinations must be preserved; if one is missing, reject the
+-- migration instead of inventing a sponsor's landing page.
+alter table sponsor.placements
+  alter column owner_user_id set not null,
+  alter column utm_destination set not null;
+
 -- Only the trusted user_roles-based check is allowed to approve sponsors.
 -- Reuse the original sponsor approval transaction, without trusting
 -- the user-editable profiles.role display field.
@@ -73,9 +124,10 @@ begin
    where id = p_application_id;
 
   insert into sponsor.placements
-    (application_id, surface, utm_destination, start_at, end_at, weight)
+    (application_id, owner_user_id, surface, utm_destination, start_at, end_at, weight)
   select
     p_application_id,
+    v_app.owner_user_id,
     unnest(v_surfaces),
     'https://mdeai.co/sponsor/' || p_application_id,
     now(),
