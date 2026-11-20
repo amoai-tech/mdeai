@@ -52,6 +52,7 @@ declare
   v_caller_id uuid;
   v_app sponsor.applications%rowtype;
   v_owner_user_id uuid;
+  v_utm_destination text;
   v_surfaces text[];
 begin
   v_caller_id := (select auth.uid());
@@ -78,11 +79,23 @@ begin
   -- application refers to its organization, whose authenticated contact owns
   -- the sponsorship. No caller-supplied identity is used for either path.
   -- A missing owner remains NULL, not a fabricated admin/sponsor identity.
-  select coalesce(
-    (to_jsonb(v_app)->>'owner_user_id')::uuid,
-    (to_jsonb(o)->>'primary_contact_user_id')::uuid,
-    (to_jsonb(o)->>'owner_user_id')::uuid
-  ) into v_owner_user_id
+  -- Use the sponsor's supplied HTTP(S) website when it is a usable URL.
+  -- A generic, existing /sponsors page is the development fallback; never
+  -- build a non-existent /sponsor/<application-id> destination.
+  -- to_jsonb keeps compatibility with the fresh schema, which lacks website.
+  select
+    coalesce(
+      (to_jsonb(v_app)->>'owner_user_id')::uuid,
+      (to_jsonb(o)->>'primary_contact_user_id')::uuid,
+      (to_jsonb(o)->>'owner_user_id')::uuid
+    ),
+    case
+      when btrim(coalesce(to_jsonb(o)->>'website', ''))
+           ~* '^https?://[^/[:space:]]+(/[^[:space:]]*)?$'
+      then btrim(to_jsonb(o)->>'website')
+      else 'https://mdeai.co/sponsors'
+    end
+  into v_owner_user_id, v_utm_destination
   from sponsor.organizations o
   where o.id = v_app.organization_id;
 
@@ -107,7 +120,7 @@ begin
     p_application_id,
     v_owner_user_id,
     unnest(v_surfaces),
-    'https://mdeai.co/sponsor/' || p_application_id,
+    v_utm_destination,
     now(),
     now() + interval '90 days',
     case v_app.tier

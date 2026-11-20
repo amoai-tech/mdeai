@@ -2,7 +2,7 @@
 -- All fixtures are rolled back; no persistent test users or approvals.
 begin;
 
-select plan(35);
+select plan(37);
 
 select is(
   has_column_privilege('authenticated','public.profiles','role','UPDATE'),
@@ -185,6 +185,12 @@ select is(
 insert into sponsor.organizations (id, owner_user_id, name) values
   ('9a621000-0000-4000-8000-000000000080',
    '9a621000-0000-4000-8000-000000000002', 'Sponsor Fixture');
+-- This optional website exists in the hosted sponsor organization contract,
+-- not in the minimal fresh-schema fixture. Add it only for this rollback test.
+alter table sponsor.organizations add column if not exists website text;
+update sponsor.organizations
+   set website='https://sponsor.example.invalid/promo?ref=mde'
+ where id='9a621000-0000-4000-8000-000000000080';
 insert into sponsor.applications
   (id, organization_id, owner_user_id, tier, activation_type, status)
 values
@@ -235,6 +241,12 @@ select is(
    where application_id='9a621000-0000-4000-8000-000000000081'
      and utm_destination is not null),
   2, 'both placements have required destination'
+);
+select is(
+  (select count(*)::int from sponsor.placements
+   where application_id='9a621000-0000-4000-8000-000000000081'
+     and utm_destination='https://sponsor.example.invalid/promo?ref=mde'),
+  2, 'placements link to the sponsor-provided website, not a fabricated route'
 );
 
 set local role authenticated;
@@ -296,7 +308,8 @@ select is(
 
 -- Anonymous draft can have no known owner; do not invent the approver as owner.
 update sponsor.organizations
-   set owner_user_id=null, primary_contact_user_id=null
+   set owner_user_id=null, primary_contact_user_id=null,
+       website='javascript:alert(1)'
  where id='9a621000-0000-4000-8000-000000000080';
 update sponsor.applications
    set status='submitted', approved_by=null, approved_at=null
@@ -323,6 +336,12 @@ select is(
    where application_id='9a621000-0000-4000-8000-000000000081'
      and owner_user_id='9a621000-0000-4000-8000-000000000001'),
   0, 'unknown owner never silently becomes the approver'
+);
+select is(
+  (select count(*)::int from sponsor.placements
+   where application_id='9a621000-0000-4000-8000-000000000081'
+     and utm_destination='https://mdeai.co/sponsors'),
+  2, 'unsafe sponsor website falls back to an existing MDE sponsor landing'
 );
 
 select * from finish();
