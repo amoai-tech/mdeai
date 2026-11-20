@@ -6,6 +6,7 @@ import type { Rental } from "@/mastra/tools/search-rentals";
 import { useEventLocalChat } from "@/components/chat/event-local-chat-context";
 import { useRentalFastPath } from "@/components/chat/rental-fast-path-context";
 import { useClearOtherFastPathResults } from "@/hooks/use-clear-other-fast-path-results";
+import { isSelectedRentalCafeNearbyRequest } from "@/lib/cafe-search-fast-path";
 import {
   buildRentalSearchParams,
   canFastPathRentalSearch,
@@ -15,7 +16,7 @@ import {
   type RentalSearchApiParams,
 } from "@/lib/rental-search-fast-path";
 import { logRoutingDecision } from "@/lib/intelligence-telemetry";
-import { budgetNotApplied, clearsFurnishingPreference, furnishingFromQueryText, isExactMonthlyBudgetOnlyRefinement, scoreRentalQuery } from "@/lib/rental-query-parser";
+import { budgetNotApplied, choosesFurnishingPreference, clearsFurnishingPreference, furnishingFromQueryText, isExactMonthlyBudgetOnlyRefinement, scoreRentalQuery } from "@/lib/rental-query-parser";
 import {
   RENTAL_HANDOFF_FAILED_SUMMARY,
   RENTAL_SEARCH_UNAVAILABLE_SUMMARY,
@@ -137,16 +138,6 @@ function matchesVisibleRentalSearch(
     previous.checkOut === visible.checkOut);
 }
 
-/** Mentioning furnishing in a question is not a new furnishing decision. */
-function choosesFurnishing(text: string): boolean {
-  if (typeof furnishingFromQueryText(text) !== "boolean") return false;
-  // The rental parser already recognizes English/Spanish furnishing values.
-  // Here detect a *choice*, not a question about furnished apartment prices.
-  return /\b(?:prefer|prefiero|quiero|quisiera|necesito|busco|muestra|muéstrame|mostrar|hazlo|ponlo|want|need|find|show|only|actually|instead|switch|rather)\b/i.test(text) ||
-    /\bmake\s+(?:it|them|that)\s+(?:un)?furnished\b/i.test(text) ||
-    /^\s*(?:furnished|unfurnished)[.!]?\s*$/i.test(text);
-}
-
 /** How many messages may wait behind a running search before extra ones go to the concierge. */
 const MAX_WAITING_MESSAGES = 10;
 
@@ -169,6 +160,8 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
   const { mergePinsByCategory, requestFitBounds } = useMapContext();
   const busyRef = useRef(false);
   const busyEpochRef = useRef(-1);
+  // Only the active thread's request may seed a clear while its search is pending.
+  const pendingSearchRef = useRef<{ epoch: number; params: RentalSearchApiParams } | null>(null);
   // A user preference-only turn can supersede a pending search *within* the same chat.
   const furnishingRevisionRef = useRef(0);
   // Separate from the in-flight request invalidation token above: merely asking
@@ -201,6 +194,7 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
   // A conversation change invalidates the previous conversation's queue and committed memory.
   useEffect(() => {
     pendingRef.current = [];
+    pendingSearchRef.current = null;
     latestMemoryRef.current = null;
     latestMemoryEpochRef.current = -1;
     furnishingRevisionRef.current = 0;
@@ -261,6 +255,7 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
       if (busyRef.current && busyEpochRef.current === epochAtStart) return true;
       busyRef.current = true;
       busyEpochRef.current = epochAtStart;
+      pendingSearchRef.current = { epoch: epochAtStart, params };
       reportSearchFailure(null);
       // Retry is an assistant-only follow-up to the SAME question. It must not
       // publish/persist a duplicate user bubble with a new submission identity.
@@ -375,6 +370,7 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
         // An old request cannot release a new conversation's active request.
         if (busyEpochRef.current === epochAtStart) {
           busyRef.current = false;
+          pendingSearchRef.current = null;
           if (getSessionEpoch() === epochAtStart && pendingRef.current.length > 0) {
             setReplayTick((tick) => tick + 1);
           }
@@ -394,13 +390,15 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
       const trimmed = text.trim();
       if (!trimmed) return false;
 
-      if (clarifyPending && clarifyKind === "event") return false;
-      if (clarifyPending && clarifyKind === "restaurant") return false;
+      const isClear = clearsFurnishingPreference(trimmed);
+      const anotherVerticalClarifying = clarifyPending &&
+        (clarifyKind === "event" || clarifyKind === "restaurant");
+      if (anotherVerticalClarifying && !isClear) return false;
 
       // Every direct user message is observed here, including messages routed
       // to the concierge instead of rental search. Advance decision recency
       // before consulting an earlier accepted clear from this conversation.
-      if (!clearsFurnishingPreference(trimmed) && choosesFurnishing(trimmed)) {
+      if (!clearsFurnishingPreference(trimmed) && choosesFurnishingPreference(trimmed)) {
         furnishingDecisionRevisionRef.current += 1;
         acceptedClearRevisionRef.current = null;
       }
@@ -504,14 +502,28 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
       // conversation's memory, or the next budget refinement reuses the withdrawn requirement.
       // `null` is the persisted contract's explicit clear, so it survives the agent-memory
       // round trip and is never mistaken for a legacy thread that never stored the field.
-      if (clearsFurnishingPreference(trimmed)) {
+      if (isClear) {
         // Invalidate a pending furnished search in THIS conversation: it must not overwrite
         // the newer clear when the original request resolves.
         furnishingRevisionRef.current += 1;
         furnishingDecisionRevisionRef.current += 1;
         acceptedClearRevisionRef.current = furnishingDecisionRevisionRef.current;
+        const pending = pendingSearchRef.current?.epoch === getSessionEpoch()
+          ? pendingSearchRef.current.params : undefined;
+        const pendingQuery: NonNullable<ConciergeWorkingMemory["lastRentalQuery"]> | undefined =
+          pending ? {
+            neighborhood: pending.neighborhood,
+            minBedrooms: pending.minBedrooms,
+            maxBedrooms: pending.maxBedrooms,
+            maxPricePerNight: pending.maxPricePerNight,
+            maxPriceMonthly: pending.maxPriceMonthly,
+            budgetCurrency: pending.budgetCurrency,
+            budgetType: pending.stayType,
+            checkIn: pending.checkIn,
+            checkOut: pending.checkOut,
+          } : undefined;
         const cleared: NonNullable<ConciergeWorkingMemory["lastRentalQuery"]> = {
-          ...(memory.lastRentalQuery ?? {}),
+          ...(memory.lastRentalQuery ?? pendingQuery ?? {}),
           furnished: null,
           furnishingCleared: true,
         };
@@ -521,7 +533,20 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
           latestMemoryRef.current = { ...(latestMemoryRef.current ?? memory), lastRentalQuery: cleared };
         }
         setState({ ...memory });
+        // The event/restaurant clarification remains the owner of the answer;
+        // the rental preference update must nevertheless already be committed.
+        if (anotherVerticalClarifying) return false;
       }
+
+      // The clear is a memory update, not permission to hijack an unrelated
+      // Café/Details/amenity follow-up as another rental search merely because
+      // the sentence also mentions "this apartment". The outer router still
+      // handles those actions after this hook declines.
+      if (isClear && (
+        isSelectedRentalCafeNearbyRequest(trimmed) ||
+        /\b(?:show|open|view|see)\s+(?:me\s+)?(?:the\s+)?(?:details?|quick view)\b/i.test(trimmed) ||
+        /\b(?:does|do|is|are)\s+(?:this|that|the)\s+(?:apartment|rental|listing)\b[^.!?]*\?/i.test(trimmed)
+      )) return false;
 
       if (!canFastPathRentalSearch(trimmed, memory)) return false;
 
@@ -574,6 +599,10 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
     (text: string, submissionId?: string): Promise<boolean> => dispatchMessage(text, submissionId),
     [dispatchMessage],
   );
+  const hasPendingSearch = useCallback(
+    () => busyRef.current && busyEpochRef.current === getSessionEpoch(),
+    [getSessionEpoch],
+  );
 
   // Replay the messages that arrived while a search was running, one per search, in order. Each
   // replay runs after the render that follows the previous search, starting from the memory that
@@ -612,5 +641,5 @@ export function useRentalSearchFastPath({ onUnhandled }: RentalSearchFastPathOpt
     })();
   }, [replayTick, dispatchMessage, onUnhandled, showExchange, getSessionEpoch]);
 
-  return { handleUserMessage };
+  return { handleUserMessage, hasPendingSearch };
 }

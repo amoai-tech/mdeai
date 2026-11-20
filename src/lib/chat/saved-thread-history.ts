@@ -1,4 +1,5 @@
 import { rentalSearchBodySchema } from "@/lib/rental-search-body-schema";
+import { choosesFurnishingPreference, clearsFurnishingPreference, furnishingFromQueryText } from "@/lib/rental-query-parser";
 import type { RentalSearchApiParams } from "@/lib/rental-query-parser";
 /**
  * Saved-thread history (SAN-1389): persisted Mastra v2 messages → the
@@ -83,15 +84,36 @@ export function latestSavedRentalSearch(
   const newest = [...rows].sort(
     (a, b) => String(b.createdAt ?? "").localeCompare(String(a.createdAt ?? "")),
   );
+  // A preference-only turn normally runs through Concierge without another
+  // rental search. It is still a durable user message. On reload, that newer
+  // choice must override an older assistant search's furnished-only metadata.
+  // Query the owner-checked transcript; never trust browser-local storage or
+  // a stale CoAgent checkpoint. Newest explicit user decision wins.
+  let furnishingOverride: boolean | null | undefined;
   for (const row of newest) {
-    if (row.role !== "assistant") continue;
     const content = parseContent(row.content);
     if (!content || !Array.isArray(content.parts)) continue;
+    if (row.role === "user" && furnishingOverride === undefined) {
+      const text = content.parts.map((raw) => asRecord(raw))
+        .filter((part) => part?.type === "text" && typeof part.text === "string")
+        .map((part) => part!.text as string).join("");
+      if (clearsFurnishingPreference(text)) furnishingOverride = null;
+      else if (choosesFurnishingPreference(text)) {
+        furnishingOverride = furnishingFromQueryText(text);
+      }
+    }
+    if (row.role !== "assistant") continue;
     for (const rawPart of content.parts) {
       const part = asRecord(rawPart);
       if (part?.type !== "data-mde-rental-search") continue;
       const validated = rentalSearchBodySchema.safeParse(part.data);
-      if (validated.success) return validated.data;
+      if (validated.success) {
+        if (furnishingOverride === undefined) return validated.data;
+        const restored = { ...validated.data };
+        if (furnishingOverride === null) delete restored.furnished;
+        else restored.furnished = furnishingOverride;
+        return restored;
+      }
     }
   }
   return null;

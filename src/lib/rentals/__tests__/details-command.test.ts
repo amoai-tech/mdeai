@@ -16,6 +16,15 @@ describe("parseDetailsCommand", () => {
     expect(parseDetailsCommand(text)).toEqual({ index });
   });
 
+  it("preserves a combined furnishing clear and exact rental Details command", () => {
+    expect(parseDetailsCommand(
+      "Either furnished or unfurnished is fine. Show me the details for the second apartment.",
+    )).toEqual({ index: 2 });
+    expect(parseDetailsCommand(
+      "Either furnished or unfurnished is fine. Show me the details of the second event.",
+    )).toBeNull();
+  });
+
   it.each([
     "Show me the details of the second restaurant",
     "Show me the details of the second event",

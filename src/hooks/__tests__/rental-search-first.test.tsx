@@ -57,11 +57,14 @@ import { GroundedFastPathProvider } from "@/components/chat/grounded-fast-path-c
 import { RentalFastPathProvider, useRentalFastPath } from "@/components/chat/rental-fast-path-context";
 import { RestaurantFastPathProvider } from "@/components/chat/restaurant-fast-path-context";
 import { useRentalSearchFastPath } from "@/hooks/use-rental-search-fast-path";
+import { sendConciergeUserMessage } from "@/lib/concierge-send-user-message";
 
 type Probe = {
   send: (text: string) => Promise<boolean>;
   messages: () => Array<{ role: string; content: string }>;
   clarifyPending: () => boolean;
+  showClarify: (kind: "event" | "restaurant") => void;
+  isSearchPending: () => boolean;
   hasResult: () => boolean;
   failure: () => { code: string; retryable: boolean } | null;
   previousQuery: () => string | undefined;
@@ -76,7 +79,7 @@ const unhandled: string[] = [];
 let handoffThrows = false;
 
 function Harness() {
-  const { handleUserMessage } = useRentalSearchFastPath({
+  const { handleUserMessage, hasPendingSearch } = useRentalSearchFastPath({
     onUnhandled: (text) => {
       unhandled.push(text);
       if (handoffThrows) throw new Error("concierge unreachable");
@@ -90,6 +93,8 @@ function Harness() {
       send: handleUserMessage,
       messages: () => local.messages as Array<{ role: string; content: string }>,
       clarifyPending: () => local.clarifyPending,
+      showClarify: (kind) => local.showClarify("Clarify", "Which date?", kind),
+      isSearchPending: hasPendingSearch,
       hasResult: () => rental.toolResult != null,
       failure: () => rental.searchFailure,
       previousQuery: () => rental.searchMeta?.userText,
@@ -495,6 +500,155 @@ describe("SAN-407 · rental chat searches before it asks", () => {
     await act(async () => { releasePending(); await pending; });
     expect(probe.hasListing("old-mounted-request")).toBe(false);
     expect(probe.hasResult()).toBe(false);
+  });
+
+  it("SAN-1445 full router → rental memory → agent fallback → stale checkpoint → cheaper search", async () => {
+    respond(200, { results: [] });
+    const agentSend = vi.fn(async () => {
+      // Real agent sees the synchronized explicit clear BEFORE starting.
+      expect(coagent.state.lastRentalQuery).toMatchObject({
+        furnished: null, furnishingCleared: true,
+      });
+      // Simulate older server checkpoint arriving as part of the agent run.
+      await act(async () => {
+        coagent.state = { ...coagent.state, lastRentalQuery: {
+          ...(coagent.state.lastRentalQuery as Record<string, unknown>),
+          furnished: true, furnishingCleared: false,
+        } };
+        for (const listener of coagent.listeners) listener();
+      });
+      return true;
+    });
+    const handlers = {
+      inRentalSearch: true,
+      lastIntent: "rental_search" as const,
+      handleRentalMessage: (text: string) => probe.send(text),
+      handleEventMessage: async () => false,
+      handleGroundedMessage: async () => false,
+      handleRestaurantMessage: async () => false,
+      onAgentSend: agentSend,
+    };
+    const throughRouter = async (text: string) => {
+      let handled = false;
+      await act(async () => { handled = await sendConciergeUserMessage(text, handlers); });
+      return handled;
+    };
+    expect(await throughRouter("Find furnished 2-bedroom apartments in Laureles under COP 3 million")).toBe(true);
+    expect(await throughRouter("Only under COP 2.5 million")).toBe(true);
+    expect(await throughRouter("Either furnished or unfurnished is fine")).toBe(true);
+    expect(agentSend).toHaveBeenCalledOnce();
+    // The agent asserted it received the clear, then replayed its stale checkpoint.
+    expect(coagent.state.lastRentalQuery).toMatchObject({
+      furnished: true, furnishingCleared: false, neighborhood: "Laureles",
+      minBedrooms: 2, maxBedrooms: 2, maxPriceMonthly: 2_500_000,
+    });
+    // Agent mock replayed stale state *during* the agent turn; next refinement
+    // must recover the user's newer clear, never trust the stale checkpoint.
+    expect(await throughRouter("Only under COP 2.4 million")).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    const refined = JSON.parse(String(fetchMock.mock.calls.at(-1)?.[1]?.body));
+    expect(refined).toMatchObject({
+      neighborhood: "Laureles", minBedrooms: 2, maxBedrooms: 2,
+      maxPriceMonthly: 2_400_000, budgetCurrency: "COP",
+    });
+    expect(refined.furnished).toBeUndefined();
+  });
+
+  it.each([
+    ["Either furnished or unfurnished is fine. Show cafés within 800 meters of this apartment.", "cafe"],
+    ["Either furnished or unfurnished is fine. Show me the details of the first apartment.", "details"],
+    ["Either furnished or unfurnished is fine. Does this apartment have a balcony?", "question"],
+  ] as const)(
+    "SAN-1445 records a clear without hijacking the non-rental action: %s",
+    async (prompt, action) => {
+      respond(200, { results: [] });
+      expect(await send("Find furnished 2-bedroom apartments in Laureles under COP 3 million")).toBe(true);
+      const grounded = vi.fn(async () => true);
+      // A real Details handler declines unrelated amenity questions.
+      const details = vi.fn(async (text: string) => /show me the details/i.test(text));
+      const agent = vi.fn(async () => true);
+      const handlers = {
+        inRentalSearch: true,
+        lastIntent: "rental_search" as const,
+        handleRentalMessage: (text: string) => probe.send(text),
+        handleEventMessage: async () => false,
+        handleGroundedMessage: grounded,
+        handleRestaurantMessage: async () => false,
+        handleRentalDetailsMessage: details,
+        onAgentSend: agent,
+      };
+      await act(async () => {
+        expect(await sendConciergeUserMessage(prompt, handlers)).toBe(true);
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(coagent.state.lastRentalQuery).toMatchObject({
+        neighborhood: "Laureles", furnished: null, furnishingCleared: true,
+      });
+      if (action === "cafe") {
+        expect(grounded).toHaveBeenCalledOnce();
+        expect(details).not.toHaveBeenCalled();
+      } else if (action === "details") {
+        expect(details).toHaveBeenCalledOnce();
+        expect(grounded).not.toHaveBeenCalled();
+      } else {
+        // The normal classifier may select grounded Q&A or the Concierge;
+        // either is correct, but must not start another rental search.
+        expect(grounded.mock.calls.length + agent.mock.calls.length).toBeGreaterThan(0);
+      }
+    },
+  );
+
+  it.each(["event", "restaurant"] as const)(
+    "SAN-1445 saves a furnishing clear even during %s clarification",
+    async (kind) => {
+      respond(200, { results: [] });
+      expect(await send("Find furnished 2-bedroom apartments in Laureles under COP 3 million")).toBe(true);
+      await act(async () => { probe.showClarify(kind); });
+      expect(probe.clarifyPending()).toBe(true);
+      expect(await send("Either furnished or unfurnished is fine")).toBe(false);
+      expect(coagent.state.lastRentalQuery).toMatchObject({
+        neighborhood: "Laureles", minBedrooms: 2, furnished: null, furnishingCleared: true,
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it("SAN-1445 clears a pending first search before cards or CoAgent memory exist", async () => {
+    let finish: () => void = () => undefined;
+    fetchMock.mockImplementationOnce(() => new Promise<Response>((resolve) => {
+      finish = () => resolve(new Response(JSON.stringify({ results: [] }), { status: 200 }));
+    }));
+    let initial: Promise<boolean> = Promise.resolve(false);
+    await act(async () => { initial = probe.send("Find furnished 2-bedroom apartments in Laureles under COP 3 million"); });
+    expect(probe.isSearchPending()).toBe(true);
+    expect(coagent.state.lastRentalQuery).toBeUndefined();
+
+    const agentSend = vi.fn(async () => true);
+    const handlers = {
+      inRentalSearch: false,
+      hasPendingRentalSearch: probe.isSearchPending,
+      handleRentalMessage: (text: string) => probe.send(text),
+      handleEventMessage: async () => false,
+      handleGroundedMessage: async () => false,
+      handleRestaurantMessage: async () => false,
+      onAgentSend: agentSend,
+    };
+    await act(async () => {
+      expect(await sendConciergeUserMessage("Either furnished or unfurnished is fine", handlers)).toBe(true);
+    });
+    expect(agentSend).toHaveBeenCalledOnce();
+    expect(coagent.state.lastRentalQuery).toMatchObject({
+      neighborhood: "Laureles", minBedrooms: 2, maxBedrooms: 2,
+      maxPriceMonthly: 3_000_000, furnished: null, furnishingCleared: true,
+    });
+    await act(async () => { finish(); await initial; });
+    expect(probe.hasResult()).toBe(false);
+    respond(200, { results: [] });
+    expect(await send("Only under COP 2.4 million")).toBe(true);
+    const refined = JSON.parse(String(fetchMock.mock.calls.at(-1)?.[1]?.body));
+    expect(refined.furnished).toBeUndefined();
+    expect(refined.neighborhood).toBe("Laureles");
+    expect(refined.maxPriceMonthly).toBe(2_400_000);
   });
 
   it("keeps explicit clear after a prior budget search even if CopilotKit replays older furnishing", async () => {
