@@ -113,8 +113,12 @@ begin
     execute format('revoke all on public.%I from public', t);
 
     if has_service_role then
-      -- Supabase can supply service_role default ALL grants. Keep only the four
-      -- runtime permissions this journal requires (never TRUNCATE).
+      -- Supabase grants service_role ALL PRIVILEGES on new tables by default.
+      -- Revoke and re-grant only the four runtime operations (never TRUNCATE).
+      -- This narrows the role's DIRECT grants; service_role is NOINHERIT in
+      -- Supabase, so it does not pick these privileges back up through another
+      -- role. If someone ever grants service_role to a role WITH INHERIT, that
+      -- grant becomes a second path and must be reviewed.
       execute format('revoke all on public.%I from service_role', t);
       execute format('grant select, insert, update, delete on public.%I to service_role', t);
       execute format('drop policy if exists service_role_manage on public.%I', t);

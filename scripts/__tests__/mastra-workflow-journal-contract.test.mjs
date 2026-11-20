@@ -21,20 +21,83 @@ function tableDefinition(sql, name) {
   return statement.slice(statement.indexOf("(") + 1);
 }
 
-function columns(definition) {
-  return [...definition.matchAll(/^\s*"([^"]+)"\s+(timestamptz|timestamp|text|integer|boolean|jsonb)\b(\s+not null)?(\s+default\s+now\(\))?/gim)]
-    .map((match) => ({
-      name: match[1],
-      type: match[2].toLowerCase(),
-      nullable: !match[3],
-      defaultNow: Boolean(match[4]),
-    }));
+/**
+ * Types this contract models. A declaration using anything else is a FAILURE, not
+ * something to skip: the previous type allowlist silently dropped every column it
+ * did not recognise, so an added `uuid` column compared equal to the vendor DDL
+ * and the drift went unnoticed.
+ */
+const KNOWN_COLUMN_TYPES = new Set([
+  "timestamptz",
+  "timestamp",
+  "text",
+  "integer",
+  "boolean",
+  "jsonb",
+]);
+
+function columns(definition, label = "ddl") {
+  const parsed = [];
+  for (const line of definition.split("\n")) {
+    // Column declarations start with a quoted identifier; PRIMARY KEY (...) and
+    // CONSTRAINT ... lines do not, so they are skipped rather than mis-parsed.
+    const declaration = line.match(/^\s*"([^"]+)"\s+(\S+)/);
+    if (!declaration) continue;
+    const [, name, rawType] = declaration;
+    // The vendor formatter sometimes omits the space before a column's trailing
+    // comma, so strip the separator before classifying the type.
+    const type = rawType.replace(/,$/, "").toLowerCase();
+    assert.ok(
+      KNOWN_COLUMN_TYPES.has(type),
+      `${label}: column "${name}" uses unrecognised type "${type}" — extend ` +
+        "KNOWN_COLUMN_TYPES deliberately instead of letting it pass",
+    );
+    parsed.push({
+      name,
+      type,
+      nullable: !/\bnot null\b/i.test(line),
+      defaultNow: /\bdefault\s+now\(\)/i.test(line),
+    });
+  }
+  assert.ok(parsed.length > 0, label + ": no column declarations parsed");
+  return parsed;
 }
 
 function primaryKey(definition) {
   const key = definition.match(/primary key\s*\(([^)]+)\)/i);
   assert.ok(key, "composite primary key is required");
   return key[1].replace(/["\s]/g, "").toLowerCase();
+}
+
+function columnLineIndex(definition, columnName) {
+  const lines = definition.split("\n");
+  const index = lines.findIndex((line) =>
+    new RegExp('^\\s*"' + columnName + '"\\s').test(line),
+  );
+  assert.ok(index >= 0, 'mutation fixture cannot find column "' + columnName + '" in vendor DDL');
+  return { lines, index };
+}
+
+/**
+ * Replace only the type token that follows the quoted name. Anchoring on the
+ * identifier instead of exact spacing/casing means a vendor formatter change
+ * cannot make the regex miss — and the change is asserted, so a mutation that did
+ * nothing can never masquerade as a passing negative test.
+ */
+function withColumnType(definition, columnName, replacementType) {
+  const { lines, index } = columnLineIndex(definition, columnName);
+  const before = lines[index];
+  lines[index] = before.replace(/^(\s*"[^"]+"\s+)\S+/, (_, prefix) => prefix + replacementType);
+  assert.notEqual(lines[index], before, 'type mutation for "' + columnName + '" did not apply');
+  return lines.join("\n");
+}
+
+function withoutColumnDefault(definition, columnName) {
+  const { lines, index } = columnLineIndex(definition, columnName);
+  const before = lines[index];
+  lines[index] = before.replace(/\s+default\s+now\(\)/i, "");
+  assert.notEqual(lines[index], before, 'default mutation for "' + columnName + '" did not apply');
+  return lines.join("\n");
 }
 
 function journalIndexes(sql) {
@@ -47,7 +110,8 @@ test("Mastra 1.84 journal migration matches the exact installed vendor DDL", () 
   for (const name of journalTables) {
     const upstream = tableDefinition(vendor, name);
     const local = tableDefinition(migration, name);
-    assert.deepEqual(columns(local), columns(upstream), name + ": column drift from @mastra/pg");
+    assert.deepEqual(columns(local, name + " (migration)"), columns(upstream, name + " (vendor)"),
+      name + ": column drift from @mastra/pg");
     assert.equal(primaryKey(local), primaryKey(upstream), name + ": key drift from @mastra/pg");
     assert.ok(contract.expectedTables.includes(name), name + " must be a required table");
   }
@@ -68,19 +132,27 @@ test("timezone-aware journal columns and defaults cannot silently drift", () => 
     defaultNow: true,
   };
   for (const ddl of [vendor, migration]) {
-    const runs = columns(tableDefinition(ddl, "mastra_workflow_runs"));
+    const runs = columns(tableDefinition(ddl, "mastra_workflow_runs"), "mastra_workflow_runs");
     for (const name of ["createdAtZ", "updatedAtZ"]) {
       const found = runs.find((c) => c.name === name);
       assert.deepEqual(found, { name, ...expected }, name + " must preserve timezone/default");
     }
   }
   const original = tableDefinition(vendor, "mastra_workflow_runs");
-  const wrongType = original.replace(/("createdAtZ"\s+)TIMESTAMPTZ/i, "$1TIMESTAMP");
-  const wrongDefault = original.replace(/("updatedAtZ"\s+TIMESTAMPTZ)\s+DEFAULT NOW\(\)/i, "$1");
-  assert.notEqual(wrongType, original, "type mutation fixture must match vendor DDL");
-  assert.notEqual(wrongDefault, original, "default mutation fixture must match vendor DDL");
-  assert.notDeepEqual(columns(wrongType), columns(original), "timestamp vs timestamptz must be detected");
-  assert.notDeepEqual(columns(wrongDefault), columns(original), "missing default must be detected");
+  const wrongType = withColumnType(original, "createdAtZ", "TIMESTAMP");
+  const wrongDefault = withoutColumnDefault(original, "updatedAtZ");
+  assert.notDeepEqual(columns(wrongType, "mutated-type"), columns(original, "vendor"),
+    "timestamp vs timestamptz must be detected");
+  assert.notDeepEqual(columns(wrongDefault, "mutated-default"), columns(original, "vendor"),
+    "a removed default must be detected");
+
+  // Regression for the allowlist hole: a column of an unmodelled type used to be
+  // dropped from both sides, so it compared equal. It must now fail loudly.
+  assert.throws(
+    () => columns('  "workflow_name" text not null,\n  "extraTag" uuid,\n', "injected"),
+    /unrecognised type "uuid"/i,
+    "an unknown column type must fail the contract instead of being skipped",
+  );
 });
 
 test("new journal tables keep FORCE RLS and deny untrusted client roles", () => {

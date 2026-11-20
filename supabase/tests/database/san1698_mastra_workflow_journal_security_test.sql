@@ -89,11 +89,16 @@ select has_index('public','mastra_workflow_run_entries',
   'mastra_workflow_run_entries_step_idx', 'workflow step journal index exists');
 select has_index('public','mastra_workflow_run_entries',
   'mastra_workflow_run_entries_state_base_idx', 'state-base journal index exists');
-select ok((select pg_get_expr(i.indpred, i.indrelid) ilike '%state-base%'
-  from pg_index i join pg_class ix on ix.oid=i.indexrelid
-  where ix.relname='mastra_workflow_run_entries_state_base_idx'
-    and i.indrelid='public.mastra_workflow_run_entries'::regclass),
-  'state-base index keeps the selective WHERE predicate');
+-- The predicate must stay partial and selective on the journal kind, not merely
+-- mention the literal: a non-partial or unrelated predicate that happened to
+-- contain 'state-base' would satisfy a substring-only assertion.
+select ok((select pg_get_expr(i.indpred, i.indrelid) is not null
+  and pg_get_expr(i.indpred, i.indrelid) ilike '%kind%'
+  and pg_get_expr(i.indpred, i.indrelid) ilike '%state-base%'
+  from pg_index i join pg_class ix on ix.oid = i.indexrelid
+  where ix.relname = 'mastra_workflow_run_entries_state_base_idx'
+    and i.indrelid = 'public.mastra_workflow_run_entries'::regclass),
+  'state-base index is partial and filters on kind');
 
 select * from finish();
 rollback;
