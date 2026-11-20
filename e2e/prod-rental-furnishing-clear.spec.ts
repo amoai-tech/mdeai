@@ -17,13 +17,18 @@ import { validateMdeAuthenticatedQaOrigin } from "./fixtures/vercel-bypass";
 // Same ignored QA configuration loader as other existing renter journeys.
 loadEnvLocalForE2E();
 const rawBase = process.env.PROD_SMOKE_BASE_URL?.trim() ?? "";
-// Fail before the QA role fixture creates a session or injects its cookie.
-const base = rawBase ? validateMdeAuthenticatedQaOrigin(rawBase).origin : "";
+// Playwright test discovery must remain side-effect free even when other
+// suites pass synthetic remote URLs. beforeAll runs before the test-scoped
+// qaRolePage fixture can inject an authenticated user session.
+const base = rawBase;
 
 test.use({ qaRole: "renter", channel: "chrome", viewport: { width: 390, height: 844 }, trace: "off", screenshot: "off", video: "off" });
 
 test.describe("SAN-1445 — explicit furnishing clear survives Concierge and saved chats", () => {
   test.skip(!base, "Set an explicit PROD_SMOKE_BASE_URL for signed-in regression.");
+  test.beforeAll(() => {
+    validateMdeAuthenticatedQaOrigin(base);
+  });
 
   test("honors latest furnishing decisions through budget edits, agent reply and reload", async ({ qaRolePage: page }) => {
     test.setTimeout(360_000);
