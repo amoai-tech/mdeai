@@ -88,6 +88,17 @@ describe("SAN-867 · VEB-MVP-001 — Router hijack fix — sendConciergeUserMess
     expect(handlers.onAgentSend).not.toHaveBeenCalled();
   });
 
+  it("SAN-1445 clears rental memory then routes a same-message event switch normally", async () => {
+    const handlers = { ...makeHandlers(), inRentalSearch: true, lastIntent: "rental_search" as const };
+    const text = "Either furnished or unfurnished is fine. Find salsa events this weekend in Medellín.";
+    handlers.handleEventMessage.mockResolvedValueOnce(true);
+    expect(await sendConciergeUserMessage(text, handlers)).toBe(true);
+    expect(handlers.handleRentalMessage).toHaveBeenCalledOnce();
+    expect(handlers.handleEventMessage).toHaveBeenCalledOnce();
+    expect(handlers.closeRentalDetails).toHaveBeenCalledOnce();
+    expect(handlers.onAgentSend).not.toHaveBeenCalled();
+  });
+
   it("SAN-1445 does not mutate rental memory for an unrelated initial chat", async () => {
     const handlers = makeHandlers();
     expect(await sendConciergeUserMessage("Either furnished or unfurnished is fine", handlers)).toBe(true);

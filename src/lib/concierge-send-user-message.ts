@@ -99,17 +99,13 @@ export async function sendConciergeUserMessage(
     // A shown-apartment Details request is a UI action, not another search/model run.
     if (await handlers.handleRentalDetailsMessage?.(trimmed, submissionId)) return true;
 
-    // A no-preference furnishing reply is often classified as ordinary conversation,
-    // which skips the rental handler entirely. The handler owns the authoritative
-    // memory clear; record it BEFORE the Concierge run (whose saved checkpoint may
-    // still contain furnished:true). Search refinements are handled there too.
-    // This branch must call the handler exactly once — the classifier must not
-    // dispatch the same preference again and increment its decision revision.
-    if (handlers.inRentalSearch && clearsFurnishingPreference(trimmed)) {
-      if (await handlers.handleRentalMessage(trimmed, submissionId)) return true;
-      setConciergePendingSend(true);
-      agentAttempted = true;
-      return await handlers.onAgentSend(trimmed, submissionId);
+    // A preference-only reply is often classified as general conversation,
+    // skipping rental memory. Record this clear BEFORE any agent/classifier
+    // fallback, but still let the normal router handle combined event/café
+    // requests. Never call the rental handler twice for the same user decision.
+    const rentalClearDispatched = Boolean(handlers.inRentalSearch && clearsFurnishingPreference(trimmed));
+    if (rentalClearDispatched && await handlers.handleRentalMessage(trimmed, submissionId)) {
+      return true;
     }
 
     // A rental comparison declined by the rental fast path must not fall through
@@ -153,6 +149,8 @@ export async function sendConciergeUserMessage(
     }
 
     for (const target of routerHandlerOrderFromClassification(classification)) {
+      // The initial clear already reached the canonical rental memory owner.
+      if (target === "rental" && rentalClearDispatched) continue;
       if (await invokeConciergeHandler(target, trimmed, handlers, submissionId)) return true;
     }
 
