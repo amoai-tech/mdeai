@@ -77,6 +77,9 @@ begin
     execute format('revoke all on public.%I from public', t);
 
     if has_service_role then
+      -- Supabase can supply service_role default ALL grants. Keep only the four
+      -- runtime permissions this journal requires (never TRUNCATE).
+      execute format('revoke all on public.%I from service_role', t);
       execute format('grant select, insert, update, delete on public.%I to service_role', t);
       execute format('drop policy if exists service_role_manage on public.%I', t);
       execute format(

@@ -78,6 +78,7 @@ test("Mastra 1.84 journal migration is additive, secure and repeatable", { skip:
       "  has_table_privilege('anon',c.oid,'SELECT') AS anon_select,",
       "  has_table_privilege('authenticated',c.oid,'SELECT') AS auth_select,",
       "  has_table_privilege('service_role',c.oid,'INSERT') AS service_insert,",
+      "  has_table_privilege('service_role',c.oid,'TRUNCATE') AS service_truncate,",
       "  EXISTS(SELECT 1 FROM pg_policies p WHERE p.schemaname='public'",
       "    AND p.tablename=c.relname AND p.policyname='service_role_manage') AS service_policy",
       "FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace",
@@ -91,6 +92,7 @@ test("Mastra 1.84 journal migration is additive, secure and repeatable", { skip:
       assert.equal(row.anon_select, false, row.relname + " anonymous grant");
       assert.equal(row.auth_select, false, row.relname + " signed-in grant");
       assert.equal(row.service_insert, true, row.relname + " service insert permission");
+      assert.equal(row.service_truncate, false, row.relname + " must not grant service TRUNCATE");
       assert.equal(row.service_policy, true, row.relname + " missing service policy");
       assert.ok(row.pk, row.relname + " missing composite PK");
     }
