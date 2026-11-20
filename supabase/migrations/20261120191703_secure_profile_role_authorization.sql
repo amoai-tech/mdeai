@@ -79,7 +79,9 @@ begin
   -- application refers to its organization, whose authenticated contact owns
   -- the sponsorship. No caller-supplied identity is used for either path.
   -- A missing owner remains NULL, not a fabricated admin/sponsor identity.
-  -- Use the sponsor's supplied HTTP(S) website when it is a usable URL.
+  -- Use the sponsor's supplied HTTP(S) website with a plausible DNS host
+  -- and numeric port when present. Reject malformed authorities/ports instead
+  -- of persisting a broken URL; not a business approval/ownership gate.
   -- A generic, existing /sponsors page is the development fallback; never
   -- build a non-existent /sponsor/<application-id> destination.
   -- to_jsonb keeps compatibility with the fresh schema, which lacks website.
@@ -91,7 +93,7 @@ begin
     ),
     case
       when btrim(coalesce(to_jsonb(o)->>'website', ''))
-           ~* '^https?://[^/[:space:]]+(/[^[:space:]]*)?$'
+           ~* '^https?://[a-z0-9]([a-z0-9-]*[a-z0-9])?([.][a-z0-9]([a-z0-9-]*[a-z0-9])?)*(:[0-9]{1,5})?([/?#][^[:space:]]*)?$'
       then btrim(to_jsonb(o)->>'website')
       else 'https://mdeai.co/sponsors'
     end

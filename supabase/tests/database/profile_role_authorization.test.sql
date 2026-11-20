@@ -2,7 +2,7 @@
 -- All fixtures are rolled back; no persistent test users or approvals.
 begin;
 
-select plan(37);
+select plan(41);
 
 select is(
   has_column_privilege('authenticated','public.profiles','role','UPDATE'),
@@ -342,6 +342,50 @@ select is(
    where application_id='9a621000-0000-4000-8000-000000000081'
      and utm_destination='https://mdeai.co/sponsors'),
   2, 'unsafe sponsor website falls back to an existing MDE sponsor landing'
+);
+
+-- Malformed HTTPS authorities must not be treated as sponsor destinations.
+-- They previously passed the broad HTTP(S) prefix check despite invalid hosts.
+update sponsor.organizations set website='https://?bad'
+ where id='9a621000-0000-4000-8000-000000000080';
+update sponsor.applications set status='submitted', approved_by=null, approved_at=null
+ where id='9a621000-0000-4000-8000-000000000081';
+delete from sponsor.placements
+ where application_id='9a621000-0000-4000-8000-000000000081';
+set local role authenticated;
+select set_config('request.jwt.claim.sub','9a621000-0000-4000-8000-000000000001',true);
+select lives_ok(
+  $$select public.approve_sponsor_application(
+    '9a621000-0000-4000-8000-000000000081', null)$$,
+  'malformed HTTPS authority does not block prelaunch sponsor approval'
+);
+reset role;
+select is(
+  (select count(*)::int from sponsor.placements
+   where application_id='9a621000-0000-4000-8000-000000000081'
+     and utm_destination='https://mdeai.co/sponsors'),
+  2, 'malformed HTTPS authority falls back to existing sponsor landing'
+);
+
+update sponsor.organizations set website='https://example.com:badport'
+ where id='9a621000-0000-4000-8000-000000000080';
+update sponsor.applications set status='submitted', approved_by=null, approved_at=null
+ where id='9a621000-0000-4000-8000-000000000081';
+delete from sponsor.placements
+ where application_id='9a621000-0000-4000-8000-000000000081';
+set local role authenticated;
+select set_config('request.jwt.claim.sub','9a621000-0000-4000-8000-000000000001',true);
+select lives_ok(
+  $$select public.approve_sponsor_application(
+    '9a621000-0000-4000-8000-000000000081', null)$$,
+  'malformed HTTPS port does not block prelaunch sponsor approval'
+);
+reset role;
+select is(
+  (select count(*)::int from sponsor.placements
+   where application_id='9a621000-0000-4000-8000-000000000081'
+     and utm_destination='https://mdeai.co/sponsors'),
+  2, 'malformed HTTPS port falls back to existing sponsor landing'
 );
 
 select * from finish();
