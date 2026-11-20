@@ -71,9 +71,14 @@ function primaryKey(definition) {
 
 function columnLineIndex(definition, columnName) {
   const lines = definition.split("\n");
-  const index = lines.findIndex((line) =>
-    new RegExp('^\\s*"' + columnName + '"\\s').test(line),
-  );
+  // Match with string primitives instead of building a RegExp from a variable:
+  // the column name is an internal constant, but a dynamic RegExp is both flagged
+  // by static analysis and harder to read than a prefix check.
+  const quoted = '"' + columnName + '"';
+  const index = lines.findIndex((line) => {
+    const trimmed = line.trimStart();
+    return trimmed.startsWith(quoted) && /\s/.test(trimmed.charAt(quoted.length));
+  });
   assert.ok(index >= 0, 'mutation fixture cannot find column "' + columnName + '" in vendor DDL');
   return { lines, index };
 }
@@ -109,7 +114,19 @@ function withoutComments(sql) {
 }
 
 function normalizeStatement(statement) {
-  return statement.replace(/"/g, "").replace(/\s+/g, " ").trim().toLowerCase();
+  // SQL keywords and unquoted identifiers are case-insensitive, but quoted
+  // identifiers and JSON string keys are not. Keep their original spelling.
+  return (statement.match(/'(?:''|[^'])*'|"(?:""|[^"])*"|[^'"]+/g) ?? [])
+    .map((part) => {
+      if (part.startsWith("'")) return part;
+      if (part.startsWith('"')) {
+        const identifier = part.slice(1, -1).replace(/""/g, '"');
+        return /^[a-z_][a-z0-9_]*$/.test(identifier) ? identifier : part;
+      }
+      return part.replace(/\s+/g, " ").toLowerCase();
+    })
+    .join("")
+    .trim();
 }
 
 /**
@@ -154,6 +171,23 @@ test("Mastra 1.84 journal migration matches the exact installed vendor DDL", () 
     .map((match) => match[1]);
   assert.deepEqual(vendorTables.filter((name) => !classified.has(name)), []);
   assert.deepEqual(contract.expectedTables.filter((name) => !vendorTables.includes(name)), []);
+});
+
+test("index drift detection preserves case-sensitive JSON keys and quoted identifiers", () => {
+  const original = journalIndexDefinitions(migration);
+
+  // PostgreSQL JSON object keys are case-sensitive. The earlier whole-SQL
+  // .toLowerCase() normalized these two different expression indexes as equal.
+  const wrongJsonKey = migration.replace("payload ->> 'workflowName'", "payload ->> 'workflowname'");
+  assert.notEqual(wrongJsonKey, migration, "JSON-key mutation must apply");
+  assert.notDeepEqual(journalIndexDefinitions(wrongJsonKey), original,
+    "index drift must detect a changed JSON key");
+
+  // Quoted mixed-case column names are also case-sensitive in PostgreSQL.
+  const wrongColumn = migration.replace('("threadId")', '("threadid")');
+  assert.notEqual(wrongColumn, migration, "quoted-identifier mutation must apply");
+  assert.notDeepEqual(journalIndexDefinitions(wrongColumn), original,
+    "index drift must detect a changed quoted column");
 });
 
 test("timezone-aware journal columns and defaults cannot silently drift", () => {
