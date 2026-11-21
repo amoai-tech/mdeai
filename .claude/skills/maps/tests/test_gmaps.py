@@ -43,6 +43,16 @@ class GMapsTests(unittest.TestCase):
             with self.subTest(url=url), self.assertRaises(ValueError):
                 gmaps._request(url)
 
+    def test_redirect_handler_rejects_untrusted_destination(self):
+        request = gmaps.urllib.request.Request(
+            "https://maps.googleapis.com/maps/api/geocode/json?key=test"
+        )
+        self.assertIsNone(
+            gmaps._NoRedirect().redirect_request(
+                request, None, 302, "Found", {}, "https://evil.example/"
+            )
+        )
+
     def test_valid_google_api_request_uses_no_redirect_handler(self):
         class FakeResponse:
             headers = {"Content-Type": "application/json"}
