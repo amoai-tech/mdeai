@@ -385,6 +385,11 @@
       "note": "SAN-1124: guards v2 CopilotChat and useRenderTool registration plus broker workspace contract."
     },
     {
+      "file": "src/components/copilot/a2ui/mde-theme.ts",
+      "classification": "keep",
+      "note": "SAN-1675: reusable, typed CopilotKit v2 GenerativeUITheme maps official --a2ui-* tokens onto existing MDE design tokens; imported by the current chat and discovery providers, no new runtime/provider."
+    },
+    {
       "file": "src/components/copilot/a2ui/mde-ui-catalog.tsx",
       "classification": "keep",
       "note": "SAN-1630 + SAN-1654: one v2 createGenerativeUI catalog extending the official standardUI with RentalCard and EventCard; each card resolves only an authorized ID from the thread result history and mounts no provider or run."
