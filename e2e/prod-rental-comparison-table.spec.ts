@@ -1,4 +1,7 @@
 import { test, expect } from "./fixtures";
+import { getTestSession } from "./helpers/auth";
+import { resolveQaRoleEmail } from "./helpers/qa-roles";
+import { asUser } from "./helpers/rental-journey-fixture";
 
 /**
  * SAN-1681 — exact-preview, signed-in proof. Read-only comparison, using the
@@ -31,6 +34,9 @@ test.describe("SAN-1681 · official rental comparison A2UI Table", () => {
           await expect(send).toBeEnabled({ timeout: 45_000 });
           await send.click();
           await expect(input).toBeEmpty({ timeout: 20_000 });
+          // A cleared composer is not a completed AI turn: the Send button
+          // returns only after the real run/stream has finished.
+          await expect(send).toBeVisible({ timeout: 120_000 });
         };
 
         await ask("Show apartments in Laureles.");
@@ -46,6 +52,20 @@ test.describe("SAN-1681 · official rental comparison A2UI Table", () => {
         );
         expect(cardIds).toHaveLength(3);
         expect(cardIds.every(Boolean)).toBe(true);
+
+        // Use the existing renter QA identity, not a service-role data reader.
+        // Supabase RLS is applied to this client exactly as for a renter.
+        const renterEmail = resolveQaRoleEmail("renter");
+        expect(renterEmail, "dedicated renter QA identity is configured").toBeTruthy();
+        const renter = asUser(await getTestSession(renterEmail!, { requireExisting: true }));
+        const { data: authorized, error: readError } = await renter.from("apartments")
+          .select("id,title,neighborhood,bedrooms,furnished,price_monthly,price_daily,currency,wifi_speed")
+          .in("id", cardIds);
+        expect(readError, "renter-scoped Supabase readback").toBeNull();
+        expect(authorized).toHaveLength(3);
+        const byId = new Map((authorized ?? []).map((record) => [String(record.id), record]));
+        const records = cardIds.map((id) => byId.get(id));
+        expect(records.every(Boolean)).toBe(true);
         const comparisonIds = () => page.getByTestId("rental-comparison-actions")
           .locator("[data-listing-id]")
           .evaluateAll((elements) => elements.map((element) => element.getAttribute("data-listing-id")));
@@ -70,6 +90,34 @@ test.describe("SAN-1681 · official rental comparison A2UI Table", () => {
         await expect(page.locator(".a2ui-std-table-wrap")).toBeVisible();
         await expect(page.getByTestId("rental-comparison-actions")).toBeVisible();
         await expect.poll(comparisonIds, { timeout: 40_000 }).toEqual(cardIds.slice(0, 2));
+        // Compare identities and recorded facts with renter-visible database rows.
+        const featureCell = (label: string, index: number) =>
+          table.locator("tbody tr").filter({ hasText: label }).first().locator("td").nth(index + 1);
+        for (const index of [0, 1]) {
+          const record = records[index]!;
+          await expect(table.locator("thead th").nth(index + 1)).toHaveText(record.title);
+          await expect(featureCell("Neighborhood", index)).toHaveText(record.neighborhood || "Not recorded");
+          await expect(featureCell("Bedrooms", index)).toHaveText(
+            record.bedrooms == null ? "Not recorded" : String(record.bedrooms));
+          await expect(featureCell("Furnished", index)).toHaveText(
+            record.furnished == null ? "Not recorded" : record.furnished ? "Yes" : "No");
+          for (const [label, amount] of [
+            ["Monthly rent", record.price_monthly], ["Nightly rent", record.price_daily],
+          ] as const) {
+            const displayed = (await featureCell(label, index).innerText()).trim();
+            if (amount == null) expect(displayed).toBe("Not recorded");
+            else {
+              expect(Number(displayed.replace(/[^\d.]/g, ""))).toBe(Number(amount));
+              if (record.currency) expect(displayed).toContain(record.currency);
+            }
+          }
+        }
+        const missing = records.flatMap((record, index) => [
+          { label: "Wi-Fi speed", value: record!.wifi_speed, index },
+          { label: "Neighborhood", value: record!.neighborhood, index },
+          { label: "Furnished", value: record!.furnished, index },
+        ]).find(({ value }) => value == null);
+        if (missing) await expect(featureCell(missing.label, missing.index)).toHaveText("Not recorded");
         await expect(page.locator("[data-streamdown] table")).toHaveCount(0);
         expect(queryCounts, "comparison reuses current results rather than searching").toEqual([]);
         expect(await cards.count()).toBe(initialCount);
@@ -101,6 +149,8 @@ test.describe("SAN-1681 · official rental comparison A2UI Table", () => {
         await expect(table).toBeVisible({ timeout: 120_000 });
         await expect(table.locator("thead th")).toHaveCount(3);
         await expect.poll(comparisonIds, { timeout: 120000 }).toEqual(cardIds.slice(1, 3));
+        await expect(table.locator("thead th").nth(1)).toHaveText(records[1]!.title);
+        await expect(table.locator("thead th").nth(2)).toHaveText(records[2]!.title);
         await expect(table).toHaveCount(1);
         expect(queryCounts).toEqual([]);
         expect(await cards.count()).toBe(initialCount);

@@ -51,8 +51,9 @@ describe("comparisonTableRenderEvents", () => {
     };
     expect(args.target).toBe("rental-comparison");
     const create = args.operations.find((operation) => operation.createSurface) as {
-      createSurface: { components: Array<Record<string, unknown>> };
+      createSurface: { surfaceId: string; components: Array<Record<string, unknown>> };
     };
+    expect(create.createSurface.surfaceId).toBe("comparison-table-call-1");
     expect(create.createSurface.components[0]).toMatchObject({ component: "Column" });
     const item = (id: string) => create.createSurface.components.find((part) => part.id === id);
     expect(item("comparison-title")).toMatchObject({ component: "Title", text: "Compare 2 apartments" });
@@ -60,6 +61,19 @@ describe("comparisonTableRenderEvents", () => {
     expect(item("comparison")).toMatchObject({ component: "Table", columns: ["Feature", "Calle 10 #42-15", "Zitios"] });
     expect(item("comparison-note")).toMatchObject({ component: "Caption" });
     expect(item("comparison-actions")).toMatchObject({ component: "RentalComparisonActions", listingIds: ["a", "b"] });
+  });
+
+  it("uses a new activity surface for each comparison instead of deleting a live earlier surface", () => {
+    const first = comparisonTableRenderEvents(rows as never, "first", "rental-comparison");
+    const second = comparisonTableRenderEvents(rows as never, "second", "rental-comparison");
+    const payload = (events: typeof first) => JSON.parse((events[1] as unknown as { delta: string }).delta) as {
+      operations: Array<{ createSurface?: { surfaceId: string }; deleteSurface?: unknown }>;
+    };
+    expect(payload(first).operations).toHaveLength(1);
+    expect(payload(second).operations).toHaveLength(1);
+    expect(payload(first).operations[0].createSurface?.surfaceId).toBe("comparison-table-first");
+    expect(payload(second).operations[0].createSurface?.surfaceId).toBe("comparison-table-second");
+    expect(payload(second).operations.every((op) => !op.deleteSurface)).toBe(true);
   });
 
   it("emits nothing for an invalid row set", () => {

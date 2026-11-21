@@ -73,11 +73,14 @@ export const showComparisonTableTool = createTool({
       return { ok: false, rows: [], rejected: [], message: "Search for apartments first; there are fewer than two current results." };
     }
     const unresolved: string[] = [];
-    const requested = input.ids?.length ? input.ids : (input.positions ?? []).flatMap((position) => {
+    // Numbered comparison requests must use the current displayed order.
+    // The model can include both arrays and supply stale/mismatched IDs.
+    // The validated positions take precedence; IDs are only a fallback.
+    const requested = input.positions?.length ? input.positions.flatMap((position) => {
       const id = available[position - 1];
       if (!id) { unresolved.push(`Result ${position} is not in the current hints`); return []; }
       return [id];
-    });
+    }) : (input.ids ?? []);
     const seen = new Set<string>();
     const ids = requested.filter((id) => {
       if (!available.includes(id) || seen.has(id)) return false;

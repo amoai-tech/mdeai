@@ -178,7 +178,10 @@ export function comparisonTargetFromResult(content: unknown): ComparisonTarget {
 }
 
 export function comparisonTableRenderEvents(rows: readonly ComparisonRow[], toolCallId: string, target: ComparisonTarget = "chat"): BaseEvent[] {
-  const built = buildComparisonTableOps(rows, undefined, { replace: true, target });
+  // Each run is a new immutable A2UI activity. Deleting and recreating the
+  // same native surface ID across activities can leave the named target blank.
+  // A unique tool-call surface lets CopilotKit show the newest comparison.
+  const built = buildComparisonTableOps(rows, `comparison-table-${toolCallId}`, { target });
   if (!built) return [];
   const callId = `render-ui-comparison-${toolCallId}`;
   return [

@@ -51,6 +51,19 @@ describe("showComparisonTableTool", () => {
     });
   });
 
+  it("prefers numbered positions over conflicting model-supplied IDs", async () => {
+    const result = await run(
+      { positions: [2, 3], ids: [ids[2], ids[3]] },
+      context([
+        dbRow(ids[1], "Second", 2_400_000),
+        dbRow(ids[2], "Third", 2_500_000),
+        dbRow(ids[3], "Wrong fourth", 2_600_000),
+      ]),
+    );
+    expect(result.ok).toBe(true);
+    expect(result.rows.map((row) => row.id)).toEqual([ids[1], ids[2]]);
+  });
+
   it("reads both recorded prices without conversion", async () => {
     const result = await run({ ids: [ids[0], ids[1]] }, context([
       dbRow(ids[0], "Both rates", 2_400_000, 80_000),
