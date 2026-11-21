@@ -64,6 +64,7 @@ const EVENT_TYPE_MAP: Record<string, EventCategory> = {
   food: 'food', Food: 'food', dining: 'food',
   culture: 'culture', Culture: 'culture', art: 'culture', Art: 'culture',
   festival: 'culture', Festival: 'culture', parade: 'culture', Parade: 'culture',
+  pageant: 'culture', Pageant: 'culture',
   comedy: 'nightlife', Comedy: 'nightlife',
   conference: 'culture', Conference: 'culture',
 };
