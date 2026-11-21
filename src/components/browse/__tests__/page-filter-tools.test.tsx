@@ -31,6 +31,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ push: state.push }) }));
 
 import { EventPageControlTool, RentalPageControlTool } from "@/components/browse/page-filter-tools";
 import { EventBrowseFilters } from "@/components/events/event-browse-filters";
+import type { EventBrowseFilterState } from "@/lib/events/browse-url";
 
 afterEach(() => { cleanup(); state.tool = null; state.subscriber = null; state.push.mockClear(); state.agent.subscribe.mockClear(); });
 
@@ -103,7 +104,7 @@ describe("page filter tools", () => {
 
   const musicFilters = { category: "music" as const, neighborhood: null, dateWindow: "this_weekend" as const, price: null };
 
-  function eventFixture(filters: typeof musicFilters | { category: "nightlife"; neighborhood: null; dateWindow: "this_weekend"; price: null }) {
+  function eventFixture(filters: EventBrowseFilterState) {
     return (
       <>
         <EventPageControlTool filters={filters} />
@@ -164,6 +165,45 @@ describe("page filter tools", () => {
       ok: true, status: "navigation_requested",
     });
     expect(state.push).toHaveBeenCalledWith("/events?category=food&dateWindow=this_weekend");
+  });
+
+  it("does not lock Ask MDE when an active Any date chip navigates to the same URL", async () => {
+    const previous = window.location.href;
+    window.history.replaceState(null, "", "/events");
+    try {
+      const emptyFilters: EventBrowseFilterState = {
+        category: null, neighborhood: null, dateWindow: null, price: null,
+      };
+      const mounted = render(eventFixture(emptyFilters));
+      const any = mounted.getByTestId("events-filter-date-any");
+      expect(any.getAttribute("href")).toBe("/events");
+      any.addEventListener("click", (event) => event.preventDefault());
+      fireEvent.click(any);
+      act(() => { state.subscriber?.onRunInitialized?.(); });
+      expect(await tool().handler({ category: "music" })).toMatchObject({
+        ok: true, status: "navigation_requested",
+      });
+      expect(state.push).toHaveBeenCalledWith("/events?category=music");
+    } finally {
+      window.history.replaceState(null, "", previous);
+    }
+  });
+
+  it("recovers when native filter navigation did not complete", async () => {
+    const clock = vi.spyOn(Date, "now").mockReturnValue(1000);
+    try {
+      const { chip } = renderRealEventFilterMarkup();
+      fireEvent.click(chip);
+      // A failed/cancelled navigation must not block all future Ask turns.
+      clock.mockReturnValue(7001);
+      act(() => { state.subscriber?.onRunInitialized?.(); });
+      expect(await tool().handler({ category: "food" })).toMatchObject({
+        ok: true, status: "navigation_requested",
+      });
+      expect(state.push).toHaveBeenCalledWith("/events?category=food&dateWindow=this_weekend");
+    } finally {
+      clock.mockRestore();
+    }
   });
 
   it("keeps a user's cleared Events filters when an older tool tries to restore them", async () => {
