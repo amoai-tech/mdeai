@@ -199,6 +199,8 @@ jobs:
         if: ${{ success() && steps.certify.outcome == 'success' }}
         env:
           PROD_SMOKE_BASE_URL: ${{ env.VERCEL_DEPLOYMENT_URL }}
+          # This release candidate is staged as production, not PR preview.
+          MDE_VERCEL_EXPECTED_ENVIRONMENT: production
           VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: npm run test:e2e:prod-guest-budget
 

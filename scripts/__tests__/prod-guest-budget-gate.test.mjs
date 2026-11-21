@@ -38,6 +38,8 @@ function assertGuestGateBeforePromotion(workflow) {
   assert.equal(gate.run, "npm run test:e2e:prod-guest-budget");
   assert.equal(gate.env?.PROD_SMOKE_BASE_URL, actionExpr("env.VERCEL_DEPLOYMENT_URL"),
     "guest checks must use the exact staged deployment");
+  assert.equal(gate.env?.MDE_VERCEL_EXPECTED_ENVIRONMENT, "production",
+    "release gate must verify the staged production environment, not a PR preview");
   assert.equal(gate.env?.VERCEL_AUTOMATION_BYPASS_SECRET,
     actionExpr("secrets.VERCEL_AUTOMATION_BYPASS_SECRET"));
   assert.equal(promote.if, actionExpr("success() && steps.certify.outcome == 'success'"),
@@ -70,6 +72,11 @@ test("SAN-755 gate contract rejects reordered or bypassable steps", () => {
   const bypass = structuredClone(workflow);
   bypass.jobs.certify.steps.find((step) => step.name === gateName)["continue-on-error"] = true;
   assert.throws(() => assertGuestGateBeforePromotion(bypass), /must block promotion/);
+
+  const wrongEnvironment = structuredClone(workflow);
+  wrongEnvironment.jobs.certify.steps.find((step) => step.name === gateName)
+    .env.MDE_VERCEL_EXPECTED_ENVIRONMENT = "preview";
+  assert.throws(() => assertGuestGateBeforePromotion(wrongEnvironment), /staged production environment/);
 
   const wrongTarget = structuredClone(workflow);
   wrongTarget.jobs.certify.steps.find((step) => step.name === gateName)

@@ -76,10 +76,15 @@ test.describe("SAN-755 guest budget refinement on public rental search", () => {
       await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
       if (isProtectedPreview) {
         const secret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim() ?? "";
-        // Reuse main's canonical Vercel access helper: protected candidates
-        // require a bypass cookie; public previews require exact SHA + environment
-        // proof from /api/version. Never accept a protection login as app success.
-        await establishVercelAutomationBypass(page, guestTarget, secret);
+        // Release workflow stages a production candidate, manual PR previews
+        // default to preview. Main's helper verifies SHA + environment for
+        // public candidates and requires a bypass cookie for protected ones.
+        const expectedEnvironment = process.env.MDE_VERCEL_EXPECTED_ENVIRONMENT?.trim() || "preview";
+        expect(expectedEnvironment, "candidate environment must be preview or production")
+          .toMatch(/^(preview|production)$/);
+        await establishVercelAutomationBypass(
+          page, guestTarget, secret, expectedEnvironment as "preview" | "production",
+        );
       }
       const errors: string[] = [];
       let searches = 0;

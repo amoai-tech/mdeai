@@ -444,3 +444,12 @@ it requires a successful unauthenticated app identity check: the
 Only the authorized MDE team/project hostname is allowed. This PR reuses
 the latest main implementation, not a second preview access helper.
 To manually certify a PR preview, provide its actual exact commit SHA.
+
+### Production-staged candidate versus PR preview
+
+For manual PR previews, the guest smoke defaults to the `preview`
+environment. The production-release workflow stages a real production build
+(with `--prod --skip-domain`) and passes the explicit environment
+`MDE_VERCEL_EXPECTED_ENVIRONMENT=production`. Main's canonical helper
+requires the correct environment and exact SHA for public candidates, while
+protected candidates still need their bypass cookie.

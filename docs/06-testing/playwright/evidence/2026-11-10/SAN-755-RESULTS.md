@@ -70,3 +70,15 @@ The historical 10 Nov evidence above must not be mistaken for fresh proof.
 - The merged final head needs fresh full-floor, GitHub checks and the
   exact deployed preview SHA check. Do not count earlier source or
   preview evidence as proof of the merged SHA.
+
+## 21 Nov 2026: production environment review fix
+
+A later review caught that the guest test defaulted to
+`expectedEnvironment=preview` while the release workflow stages a
+production deployment. A public staged production candidate could have been
+incorrectly rejected despite a matching SHA. The workflow now explicitly sets
+`MDE_VERCEL_EXPECTED_ENVIRONMENT=production`. Manual PR previews default
+to preview, and a negative YAML contract checks this release requirement.
+The bypass secret remains scoped to the one release-check step; passing it
+through process.env instead of the workflow env would not change which
+processes can read it.
