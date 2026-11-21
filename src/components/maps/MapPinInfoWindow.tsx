@@ -23,7 +23,7 @@ export function MapPinInfoWindow({ pin }: { pin: MapPin }) {
       onCloseClick={dismiss}
       headerDisabled
     >
-      <SelectedPlaceOverlayCard pin={pin} />
+      <SelectedPlaceOverlayCard pin={pin} onDismiss={dismiss} />
     </InfoWindow>
   );
 }

@@ -165,7 +165,7 @@ export async function searchRentalsIntelligent(
     let q = client
       .from("apartments")
       .select(
-        "id, title, neighborhood, bedrooms, price_daily, price_monthly, currency, wifi_speed, amenities, images, host_name, source_url, metadata, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status, rental_can_request_viewing",
+        "id, title, neighborhood, bedrooms, furnished, price_daily, price_monthly, currency, wifi_speed, amenities, images, host_name, source_url, metadata, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status, rental_can_request_viewing",
       )
       .order("price_daily", { ascending: true, nullsFirst: false })
       .limit(RENTAL_KEYWORD_OVERSCAN_LIMIT);
@@ -205,7 +205,7 @@ export async function searchRentalsIntelligent(
       images: r.images as string[] | null,
       amenities: r.amenities as string[] | null,
       pet_friendly: null,
-      furnished: null,
+      furnished: typeof r.furnished === "boolean" ? r.furnished : null,
       status: (r.status as string | null) ?? null,
       similarity: 0,
     }));
@@ -279,7 +279,7 @@ export async function searchRentalsIntelligent(
     let aptQ = client
       .from("apartments")
       .select(
-        "id, title, neighborhood, bedrooms, price_daily, price_monthly, currency, wifi_speed, amenities, images, host_name, source_url, metadata, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status, rental_can_request_viewing",
+        "id, title, neighborhood, bedrooms, furnished, price_daily, price_monthly, currency, wifi_speed, amenities, images, host_name, source_url, metadata, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status, rental_can_request_viewing",
       )
       .in("id", ids)
       // RLS applies customer eligibility and authorized development visibility.

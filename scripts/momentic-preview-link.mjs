@@ -15,7 +15,7 @@ if (!['create', 'revoke'].includes(mode) || !deploymentId || !apiKey) {
 const endpoint = new URL(
   'https://api.vercel.com/aliases/' + encodeURIComponent(deploymentId) + '/protection-bypass',
 );
-endpoint.searchParams.set('slug', 'amoco');
+endpoint.searchParams.set('slug', 'amo-agency');
 
 const payload = mode === 'create'
   ? { ttl: 1800 }

@@ -12,6 +12,11 @@ export type ConciergeWorkingMemory = {
   lastRentalQuery?: {
     neighborhood?: string;
     minBedrooms?: number;
+    maxBedrooms?: number;
+    /** `null` is an explicit clear (the persisted contract); `undefined` is unknown/legacy. */
+    furnished?: boolean | null;
+    /** Durable marker: Mastra deep-merge deletes a null furnished key. */
+    furnishingCleared?: boolean;
     maxPricePerNight?: number;
     maxPriceMonthly?: number;
     budgetCurrency?: "COP" | "USD";
@@ -24,7 +29,11 @@ export type ConciergeWorkingMemory = {
     id: string;
     title: string;
     neighborhood: string;
-    nightly_price: number;
+    nightly_price?: number;
+    /** Stored monthly price for monthly listings, in `currency`. */
+    price_monthly?: number;
+    currency?: string;
+    bedrooms?: number;
     /** Amenities exactly as the listing records them. Missing or empty means "not specified",
      *  never "does not have it". */
     amenities?: string[];

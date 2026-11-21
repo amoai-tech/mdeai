@@ -99,6 +99,26 @@ describe("conciergeAgent", () => {
     expect(parsed.lastRentalQuery?.neighborhood).toBe("Laureles");
   });
 
+  it("working memory keeps the facts needed to compare shown rentals", () => {
+    const parsed = conciergeWorkingMemorySchema.parse({
+      lastIntent: "rental_search",
+      lastRentalResults: [
+        {
+          id: "r1",
+          title: "Calle 10 #42-15",
+          neighborhood: "Laureles",
+          price_monthly: 2400000,
+          currency: "COP",
+          bedrooms: 2,
+          amenities: ["Balcony"],
+        },
+      ],
+    });
+    expect(parsed.lastRentalResults?.[0]?.price_monthly).toBe(2400000);
+    expect(parsed.lastRentalResults?.[0]?.currency).toBe("COP");
+    expect(parsed.lastRentalResults?.[0]?.bedrooms).toBe(2);
+  });
+
   it("working memory supports follow-up refinement fields", () => {
     const parsed = conciergeWorkingMemorySchema.parse({
       lastIntent: "rental_search",
@@ -118,6 +138,19 @@ describe("conciergeAgent", () => {
       },
     });
     expect(parsed.lastRentalQuery?.genericAskPending).toBe(true);
+  });
+
+  it("instructions compare the shown rentals without searching again", async () => {
+    const instructions = await conciergeAgent.getInstructions();
+    expect(instructions).toContain("compare the first two");
+    expect(instructions).toContain("do NOT call search-rentals");
+    expect(instructions).toContain("lastRentalResults for those exact IDs");
+    expect(instructions).toContain("analysis, comparison, amenities, or details");
+    expect(instructions).toContain("NEVER add a Nightly Price to a monthly listing");
+    expect(instructions).toContain("For all-monthly comparisons");
+    expect(instructions).toContain("For all-nightly comparisons");
+    expect(instructions).toContain("For mixed monthly/nightly comparisons");
+    expect(instructions).toContain("do not rank prices across incompatible periods");
   });
 
   it("instructions require refining rentals on show cheaper", async () => {
@@ -520,6 +553,49 @@ describe("concierge updateWorkingMemory tolerates provider padding", () => {
     expect(saved?.lastRestaurantQuery).toMatchObject({ priceTier: "$$$" });
   });
 
+  it("explicitly clears a stored furnishing preference without dropping padded fields", async () => {
+    const stored = { ...existing, lastRentalQuery: {
+      neighborhood: "Laureles", furnished: true, minBedrooms: 2, maxPriceMonthly: 3_000_000,
+      budgetCurrency: "COP",
+    } };
+    const { out, saved } = await update({
+      lastRentalQuery: { clearFurnishing: true, neighborhood: "", maxPriceMonthly: null },
+    }, stored);
+    expect(out.error).toBeUndefined();
+    expect(saved?.lastRentalQuery).toMatchObject({
+      neighborhood: "Laureles", minBedrooms: 2,
+      maxPriceMonthly: 3_000_000, budgetCurrency: "COP",
+    });
+    expect(saved?.lastRentalQuery).not.toHaveProperty("furnished");
+    expect(saved?.lastRentalQuery).not.toHaveProperty("clearFurnishing");
+    expect(saved?.lastRentalQuery).toHaveProperty("furnishingCleared", true);
+    // This survives a schema round-trip even though Mastra deletes null values.
+    expect(conciergeWorkingMemorySchema.parse(saved).lastRentalQuery?.furnishingCleared).toBe(true);
+    const reset = await update({ lastRentalQuery: { furnished: false } }, saved);
+    expect(reset.saved?.lastRentalQuery).toMatchObject({ furnished: false, furnishingCleared: false });
+
+    const blank = await update({ lastRentalQuery: { furnished: null, neighborhood: "" } }, stored);
+    expect(blank.out.error).toBeUndefined();
+    expect(blank.saved?.lastRentalQuery).toHaveProperty("furnished", true);
+  });
+
+  it("ignores a padded null furnishingCleared instead of rejecting the budget update", async () => {
+    const stored = { ...existing, lastRentalQuery: {
+      neighborhood: "Laureles", furnished: true, maxPriceMonthly: 3_000_000,
+      budgetCurrency: "COP",
+    } };
+    const { out, saved } = await update({
+      lastRentalQuery: {
+        furnishingCleared: null, maxPriceMonthly: 2_500_000, budgetCurrency: "COP",
+      },
+    }, stored);
+    expect(out.error).toBeUndefined();
+    expect(saved?.lastRentalQuery).toMatchObject({
+      furnished: true, maxPriceMonthly: 2_500_000, budgetCurrency: "COP",
+    });
+    expect(saved?.lastRentalQuery).not.toHaveProperty("furnishingCleared");
+  });
+
   it("empty arrays keep Mastra's replace semantics", async () => {
     const { out, saved } = await update({ lastRentalResults: [], lastEventResults: [] }, { ...existing, lastRentalResults: [{ id: "r", title: "t", neighborhood: "n", nightly_price: 1 }] });
     expect(out.error).toBeUndefined();
@@ -535,6 +611,7 @@ describe("concierge updateWorkingMemory tolerates provider padding", () => {
   it("the model-facing schema is unchanged: real enums only, no blank accepted", () => {
     const json = JSON.stringify(zodToJsonSchema(updateTool().inputSchema));
     expect(json).toContain('"nightly","monthly","total_trip"');
+    expect(json).toContain('"clearFurnishing"');
     expect(json).not.toContain('""');
   });
 

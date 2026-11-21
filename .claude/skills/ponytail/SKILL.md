@@ -1,11 +1,8 @@
 ---
 name: ponytail
 description: >-
-  Use before writing code on any MDE task, to decide whether the code should exist at all. Owns the
-  reuse-before-build ladder, the source receipt that every consulted external reference must produce,
-  the root-cause (single shared fix) rule, the `ponytail:` ceiling-comment convention, and the
-  one-runnable-check rule. Trigger on "is there a faster/cheaper way", "build", "add a feature",
-  "write a script", "integrate X", "automate Y", or any request that would otherwise open with new code.
+  Use when implementation needs source receipts or a thorough reuse-before-build audit of existing code, installed packages and pinned official APIs. For a quick simpler-path recommendation use efficient.
+
 ---
 
 # Ponytail — reuse before build

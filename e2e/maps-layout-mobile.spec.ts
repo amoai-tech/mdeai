@@ -398,7 +398,7 @@ test.describe("SAN-524 mobile map interaction — 390×844 touch", () => {
     const { sheet } = await openRentalMap(page);
 
     await expectMinimumTouchTarget(
-      sheet.getByRole("button", { name: "Close" }),
+      sheet.getByRole("button", { name: "Close", exact: true }),
       "map Close control",
     );
     await expectMinimumTouchTarget(
@@ -429,7 +429,7 @@ test.describe("SAN-524 mobile map interaction — 390×844 touch", () => {
       pinId!,
     );
 
-    await sheet.getByRole("button", { name: "Close" }).tap();
+    await sheet.getByRole("button", { name: "Close", exact: true }).tap();
     await expect(sheet).toBeHidden();
     await expect(page.getByTestId("copilot-chat-textarea")).toBeVisible();
 
@@ -466,7 +466,7 @@ test.describe("SAN-524 mobile map interaction — 390×844 touch", () => {
     );
     await expect(selectedCard).toHaveAttribute("data-selected", "true");
 
-    await sheet.getByRole("button", { name: "Close" }).tap();
+    await sheet.getByRole("button", { name: "Close", exact: true }).tap();
     await expect(sheet).toBeHidden();
     await expect(trigger).toBeFocused();
 
@@ -549,7 +549,7 @@ test.describe("SAN-524 mobile map interaction — 360×800 touch", () => {
     await expect(sheet.getByTestId("selected-place-overlay")).toBeVisible();
     await expectNoHorizontalOverflow(page);
 
-    await sheet.getByRole("button", { name: "Close" }).tap();
+    await sheet.getByRole("button", { name: "Close", exact: true }).tap();
     await expect(sheet).toBeHidden();
     await expect(page.getByTestId("copilot-chat-textarea")).toBeVisible();
   });

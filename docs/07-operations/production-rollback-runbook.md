@@ -10,7 +10,7 @@ source_of_truth: scripts/vercel-release-control.mjs, .github/workflows/vercel-pr
 
 Use this when a release has gone live on `www.mdeai.co` and customers are hurt: for example the map shows no pins, or chat fails. Releases are certified before they go live (SAN-1330), so this is the rare case where a certified release is still bad in a way the tests could not see.
 
-Run the commands from the linked checkout (the repo root with `.vercel/project.json`), logged in to the `amoco` team. Print no tokens, cookies or environment values.
+Run the commands from the linked checkout (the repo root with `.vercel/project.json`), logged in to the `amo-agency` team. Print no tokens, cookies or environment values.
 
 ## 0. Is production really broken? Decide before touching anything
 
@@ -18,8 +18,8 @@ Run the commands from the linked checkout (the repo root with `.vercel/project.j
 
 ```bash
 # Print only the deployment id. Errors (for example an expired login) stay visible, and a missing id exits non-zero:
-vercel api /v4/aliases/www.mdeai.co --raw --scope amoco | jq -er '.deploymentId // empty'   # what customers get now
-vercel api /v4/aliases/mdeai.co --raw --scope amoco | jq -er '.deploymentId // empty'       # must be the same id
+vercel api /v4/aliases/www.mdeai.co --raw --scope amo-agency | jq -er '.deploymentId // empty'   # what customers get now
+vercel api /v4/aliases/mdeai.co --raw --scope amo-agency | jq -er '.deploymentId // empty'       # must be the same id
 ```
 
 Print only the id. The full response carries unrelated account detail that does not belong in an incident channel or a CI log.
@@ -43,7 +43,7 @@ Use, in this order:
 3. Then verify the id before using it: it must exist, be READY, and be the commit you expect.
 
 ```bash
-vercel inspect <candidate-id> --scope amoco     # state must be Ready; check the commit and that it is a production deployment
+vercel inspect <candidate-id> --scope amo-agency     # state must be Ready; check the commit and that it is a production deployment
 ```
 
 Only deployments that previously held the production domains can be rolled back to; if Vercel refuses, you picked one that never served customers.
@@ -51,8 +51,8 @@ Only deployments that previously held the production domains can be rolled back 
 ## 2. Put it back: Instant Rollback
 
 ```bash
-vercel rollback <exact-previous-deployment-id> --yes --scope amoco
-vercel rollback status --scope amoco
+vercel rollback <exact-previous-deployment-id> --yes --scope amo-agency
+vercel rollback status --scope amo-agency
 ```
 
 `rollback` is the recovery path. `vercel promote` is for staged candidates becoming current, and is **not** how an old live version is restored.
@@ -60,8 +60,8 @@ vercel rollback status --scope amoco
 ## 3. Prove it worked
 
 ```bash
-vercel api /v4/aliases/www.mdeai.co --raw --scope amoco | jq -er '.deploymentId // empty'   # must equal the id you rolled back to
-vercel api /v4/aliases/mdeai.co --raw --scope amoco | jq -er '.deploymentId // empty'       # same id
+vercel api /v4/aliases/www.mdeai.co --raw --scope amo-agency | jq -er '.deploymentId // empty'   # must equal the id you rolled back to
+vercel api /v4/aliases/mdeai.co --raw --scope amo-agency | jq -er '.deploymentId // empty'       # same id
 ```
 
 Run Production Runtime Smoke again and confirm it passes. Record in Linear: the bad deployment id, the id restored, the time, and why.
@@ -71,7 +71,7 @@ Run Production Runtime Smoke again and confirm it passes. Record in Linear: the 
 **Auto-assign must stay OFF.** After a rollback Vercel turns automatic production-domain assignment off. If you later undo the rollback with `vercel promote`, Vercel turns it back **on**, which would let the next untested build reach customers. MDE needs it off. After any recovery or roll-forward, check it before the next release:
 
 ```bash
-vercel api /v9/projects/prj_5eY5DdiVxn7hDbruTG7BrrQT1QAB --raw --scope amoco | jq '.autoAssignCustomDomains'   # must print false
+vercel api /v9/projects/prj_iadSvJDW4MBqtQ5s3YPlBNc08it6 --raw --scope amo-agency | jq '.autoAssignCustomDomains'   # must print false
 ```
 
 If it prints `true`, switch off "Auto-assign Custom Production Domains" (Vercel project, Settings, Environments, Production, Branch Tracking). The release pipeline also refuses to certify while it is on.

@@ -1,0 +1,4 @@
+# Graphify project settings (https://github.com/Graphify-Labs/graphify/blob/v0.9.106/README.md#project-configuration)
+# The default query budget (2000 tokens) cut a "rental map pins" query to about 60 of 500 matched nodes.
+# Read by `graphify query` from 0.9.102 on; the wrapper pins a version that supports it.
+query_budget=4000

@@ -9,6 +9,7 @@ export type RentalSearchApiParams = {
   minBedrooms?: number;
   /** Inclusive upper bound for exact bedroom searches. */
   maxBedrooms?: number;
+  furnished?: boolean;
   maxPricePerNight?: number;
   /** Exact monthly ceiling, never a guessed nightly conversion. */
   maxPriceMonthly?: number;
@@ -277,7 +278,10 @@ function parseExactMonthlyBudget(text: string): { amount: number; currency: "COP
   if (!match) return null;
   const currencyToken = (prefix ? prefix[1] : dollars ? "$" : suffix?.[3] ?? "").toLowerCase();
   const currency: "COP" | "USD" = /^(cop|peso)/.test(currencyToken) ? "COP" : "USD";
-  const rawAmount = prefix ? prefix[2] : dollars ? dollars[1] : suffix?.[1] ?? "";
+  // A sentence-ending period is not part of the number: "under COP 3,000,000."
+  // must parse exactly like "under COP 3,000,000".
+  const rawAmount = (prefix ? prefix[2] : dollars ? dollars[1] : suffix?.[1] ?? "")
+    .replace(/[.,;:!?]+$/, "");
   const magnitudeToken = (prefix ? prefix[3] : dollars ? dollars[2] : suffix?.[2] ?? "")?.toLowerCase() ?? "";
   const grouped = isThousandsGroupedInteger(rawAmount);
   const amount = Number(grouped ? rawAmount.replace(/[.,]/g, "") : rawAmount.replace(",", "."));
@@ -359,6 +363,45 @@ function parseBedrooms(text: string): number | undefined {
  * instead mean a minimum. Reuse the canonical bedroom parser; no second
  * frontend-only filter or natural-language ranking engine.
  */
+/**
+ * Explicit 'either furnished or unfurnished' clears a previously applied filter.
+ * Bound regex windows prevent large-input backtracking; unknown values remain unknown.
+ */
+export function clearsFurnishingPreference(text: string): boolean {
+  if (text.length > MAX_RENTAL_TEXT_CHARS) return false;
+  const normalized = text.replaceAll("’", "'");
+  // The words "any" and "or" in a general apartment question are NOT a
+  // furnishing preference: "any furnished apartments" still means furnished.
+  const both = /\b(?:furnished|unfurnished)\s+(?:or|and)\s+(?:furnished|unfurnished)\b/i;
+  const either = /\beither\s+(?:furnished|unfurnished)\s+or\s+(?:furnished|unfurnished|not(?:\s+furnished)?)\b/i;
+  // The indifference must grammatically name furnishing, not another field
+  // in the same sentence (e.g. "price doesn't matter, must be furnished").
+  const noPreference = /\b(?:no preference|don'?t care|do not care|doesn'?t matter|indifferent|whatever)\s+(?:(?:if|whether|about|for)\s+)?(?:it(?:'?s|\s+is)\s+)?(?:furnished|unfurnished|furnishing|amoblad[oa]|amueblad[oa])\b/i;
+  const reverse = /\b(?:furnished|unfurnished|furnishing|amoblad[oa]|amueblad[oa])\s+(?:doesn'?t matter|no preference|is fine either way)\b/i;
+  const anyFurnishing = /\bany\s+furnishing\b/i;
+  const spanishEither = /\b(?:amoblad[oa]|amueblad[oa])\s+o\s+sin\s+(?:amoblar|amueblar)\b/i;
+  return both.test(normalized) || either.test(normalized) || noPreference.test(normalized) ||
+    reverse.test(normalized) || anyFurnishing.test(normalized) || spanishEither.test(normalized);
+}
+
+/** Only explicit positive/negative source-backed furnishing requests become a hard filter. */
+export function furnishingFromQueryText(text: string): boolean | undefined {
+  if (text.length > MAX_RENTAL_TEXT_CHARS || clearsFurnishingPreference(text)) return undefined;
+  if (/\b(?:unfurnished|sin[- ]+amoblar|sin[- ]+amueblar|not[- ]+furnished|no[- ]+furnished|no[- ]+amoblad[oa]|no[- ]+amueblad[oa])\b/i.test(text)) return false;
+  if (/\b(?:furnished|amoblad[oa]|amueblad[oa])\b/i.test(text)) return true;
+  return undefined;
+}
+
+/** An explicit user preference is different from an explanatory question.
+ * Reused by live memory and saved-chat hydration to avoid parser drift.
+ */
+export function choosesFurnishingPreference(text: string): boolean {
+  if (typeof furnishingFromQueryText(text) !== "boolean") return false;
+  return /\b(?:prefer|prefiero|quiero|quisiera|necesito|busco|muestra|muéstrame|mostrar|hazlo|ponlo|want|need|find|show|only|actually|instead|switch|rather)\b/i.test(text) ||
+    /\bmake\s+(?:it|them|that)\s+(?:un)?furnished\b/i.test(text) ||
+    /^\s*(?:furnished|unfurnished)[.!]?\s*$/i.test(text);
+}
+
 export function exactBedroomsFromQueryText(text: string): number | undefined {
   if (text.length > MAX_RENTAL_TEXT_CHARS) return undefined;
   const match = BEDROOM_RE.exec(text);
@@ -368,6 +411,58 @@ export function exactBedroomsFromQueryText(text: string): number | undefined {
   if (/\b(?:at least|minimum of|minimum|min\.?|more than|over)\s*$/i.test(before)) return undefined;
   if (/^\s*(?:\+|or more\b|or larger\b|and up\b|and above\b)/i.test(after)) return undefined;
   return parseBedrooms(text);
+}
+
+/**
+ * Comparison and analysis questions about the current results must reach the
+ * concierge. The rental fast path only answers a search; when it intercepts
+ * "compare the first two…" the renter gets the same canned "Found N rentals"
+ * reply again instead of an answer.
+ */
+const RENTAL_ANALYSIS_RE =
+  /\b(?:compar(?:e|ison)|pros?\s+(?:and|&)\s+cons?|difference(?:s)?\s+between|which\s+one\s+is\s+better|which\s+is\s+better|is\s+(?:it|this|that)\s+better)\b/i;
+
+/**
+ * A comparative or explanatory question about results already shown. "Which is
+ * the cheapest 2-bedroom in Laureles?" and "Laureles vs El Poblado under 3M"
+ * are ordinary searches and must keep the fast path, so only an explicit
+ * reference to the current results plus "why"/"better"/"cheaper"/"vs" counts.
+ * "These neighborhoods" (including "these two neighborhoods") is not a
+ * reference to previously shown apartment cards.
+ */
+const RESULT_REFERENCE_RE =
+  /\b(?:first|second|third|fourth)\s+(?:apartment|listing|property|home|option|result|card|one|two|three|four|\d+)\b|\b(?:these|those)\b(?!\s+(?:(?:two|three|\d+)\s+)?(?:neighbou?rhoods?|areas?|districts?|cities|locations?|regions?|zones?)\b)|\bthem\b|\btop\s+(?:two|three|\d+)\b|\bof\s+them\b/i;
+const WHY_RE = /\bwhy\s+(?:is|are|does|do)\b/i;
+/** Comparative words that imply the two things were already shown. */
+const COMPARATIVE_RE = /\b(?:better|cheaper|comparing|vs\.?|versus)\b/i;
+/** Area words are about new discovery, not a reference to prior apartment cards. */
+const NEW_AREA_REFERENCE_RE =
+  /\b(?:these|those)\s+(?:(?:two|three|\d+)\s+)?(?:neighbou?rhoods?|areas?|districts?|cities|locations?|regions?|zones?)\b/i;
+
+export function looksLikeRentalAnalysis(text: string): boolean {
+  const bounded = text.length > MAX_RENTAL_TEXT_CHARS ? text.slice(0, MAX_RENTAL_TEXT_CHARS) : text;
+  const referencesShownResults = RESULT_REFERENCE_RE.test(bounded);
+  // "Compare apartments in these neighborhoods" discovers new rentals. The
+  // standalone "compare" must not override that fact unless shown cards are named.
+  if (
+    NEW_AREA_REFERENCE_RE.test(bounded) &&
+    RENTAL_INTENT_RE.test(bounded) &&
+    /\bcompar(?:e|ing|ison)\b/i.test(bounded) &&
+    !referencesShownResults
+  ) return false;
+  if (RENTAL_ANALYSIS_RE.test(bounded)) return true;
+  // "Like these in Envigado" is a new discovery request, not an analysis
+  // of already shown cards. Explicit area + search phrasing wins.
+  if (scoreRentalQuery(bounded).hasNeighborhood &&
+      /\b(?:show|find|search|(?:do|can) you have|looking for)\b/i.test(bounded) &&
+      /\b(?:apartments?|rentals?|listings?|homes?)\b/i.test(bounded) &&
+      /\b(?:like|similar to)\s+(?:these|those)\b/i.test(bounded)) return false;
+  // "first" alone is not a result reference: "first-floor apartment … better wifi"
+  // is a fresh search. Require "first apartment/one/two/…", "these", "those" or "them".
+  return referencesShownResults && (
+    WHY_RE.test(bounded) || COMPARATIVE_RE.test(bounded) ||
+    /\b(?:which|are|is|do|does)\b.{0,60}\b(?:these|those|them)\b/i.test(bounded)
+  );
 }
 
 /** User message is clearly about rentals, not events or cafés. */
@@ -523,6 +618,27 @@ function isBudgetReplacement(text: string, s: RentalQuerySignals): boolean {
   return parsed || statesBudget(text);
 }
 
+/** Keep exact bedrooms across budget-only replies; an explicit "at least" clears the upper bound. */
+function bedroomFields(
+  text: string,
+  signals: RentalQuerySignals,
+  previous?: ConciergeWorkingMemory["lastRentalQuery"],
+): Pick<RentalSearchApiParams, "minBedrooms" | "maxBedrooms"> {
+  return {
+    minBedrooms: signals.minBedrooms ?? previous?.minBedrooms,
+    maxBedrooms: signals.hasBedrooms ? exactBedroomsFromQueryText(text) : previous?.maxBedrooms,
+  };
+}
+
+/** A budget-only follow-up keeps the last furnishing requirement. */
+function furnishingFields(text: string, previous?: ConciergeWorkingMemory["lastRentalQuery"]):
+  Pick<RentalSearchApiParams, "furnished"> {
+  if (clearsFurnishingPreference(text)) return { furnished: undefined };
+  const explicit = furnishingFromQueryText(text);
+  // Memory stores `null` for an explicit clear; API params use `undefined` (absent).
+  return { furnished: explicit === undefined ? (previous?.furnished ?? undefined) : explicit };
+}
+
 function stayTypeForRefinement(
   text: string,
   s: RentalQuerySignals,
@@ -591,7 +707,8 @@ export function buildRentalSearchParams(
   const lastQuery = memory.lastRentalQuery;
   if (cityWide && lastQuery && !looksLikeRentalSearch(text)) {
     return {
-      minBedrooms: s.minBedrooms ?? lastQuery.minBedrooms,
+      ...bedroomFields(text, s, lastQuery),
+      ...furnishingFields(text, lastQuery),
       // "Anywhere is fine" keeps the saved budget, but an explicit new budget in the same
       // message ("anywhere under €1500/month") replaces it instead of copying the stale one.
       ...mergedBudgetFields(text, lastQuery, s),
@@ -605,7 +722,8 @@ export function buildRentalSearchParams(
   if (q?.genericAskPending) {
     const merged: RentalSearchApiParams = {
       neighborhood: s.neighborhood ?? q.neighborhood,
-      minBedrooms: s.minBedrooms ?? q.minBedrooms,
+      ...bedroomFields(text, s, q),
+      ...furnishingFields(text, q),
       ...mergedBudgetFields(text, q, s),
       checkIn: s.checkIn ?? q.checkIn,
       checkOut: s.checkOut ?? q.checkOut,
@@ -629,7 +747,8 @@ export function buildRentalSearchParams(
     return attachQueryText(
       {
         neighborhood: s.neighborhood ?? q?.neighborhood,
-        minBedrooms: s.minBedrooms ?? q?.minBedrooms,
+        ...bedroomFields(text, s, q),
+      ...furnishingFields(text, q),
         ...mergedBudgetFields(text, q, s),
         checkIn: q?.checkIn,
         checkOut: q?.checkOut,
@@ -647,7 +766,8 @@ export function buildRentalSearchParams(
     return attachQueryText(
       {
         neighborhood: s.neighborhood,
-        minBedrooms: s.minBedrooms,
+        ...bedroomFields(text, s),
+        ...furnishingFields(text),
         maxPricePerNight: s.maxPricePerNight,
         limit,
       },
@@ -660,7 +780,8 @@ export function buildRentalSearchParams(
     return attachQueryText(
       {
         neighborhood: s.neighborhood,
-        minBedrooms: s.minBedrooms,
+        ...bedroomFields(text, s),
+        ...furnishingFields(text),
         maxPricePerNight: s.maxPricePerNight,
         limit,
       },
@@ -678,6 +799,8 @@ export function buildRentalSearchParams(
       {
         neighborhood: q.neighborhood,
         minBedrooms: q.minBedrooms,
+        maxBedrooms: q.maxBedrooms,
+        ...furnishingFields(text, q),
         maxPricePerNight: q.maxPricePerNight,
         maxPriceMonthly: q.maxPriceMonthly,
         budgetCurrency: q.budgetCurrency,
@@ -701,7 +824,8 @@ export function buildRentalSearchParams(
       {
         limit,
         neighborhood: s.neighborhood,
-        minBedrooms: s.minBedrooms,
+        ...bedroomFields(text, s),
+        ...furnishingFields(text),
         maxPricePerNight: s.maxPricePerNight,
       },
       text,
@@ -740,6 +864,8 @@ export function canFastPathRentalSearch(
   memory: ConciergeWorkingMemory,
 ): boolean {
   if (text.length > MAX_RENTAL_TEXT_CHARS) return false;
+  // A comparison or analysis of the results is the concierge's job, never a new search.
+  if (looksLikeRentalAnalysis(text)) return false;
   if (looksLikeNonRentalSearch(text)) return false;
   if (memory.lastRentalQuery?.genericAskPending) {
     return buildRentalSearchParams(text, memory) != null;

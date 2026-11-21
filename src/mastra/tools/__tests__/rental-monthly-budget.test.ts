@@ -15,6 +15,17 @@ import {
   rentalMonthlyBudgetPredicate,
 } from "../search-rentals";
 
+describe("rental search API furnishing contract", () => {
+  it("omits an absent furnishing field rather than defaulting to false", () => {
+    const omitted = rentalSearchBodySchema.parse({});
+    expect(omitted).not.toHaveProperty("furnished");
+    expect(JSON.parse(JSON.stringify(omitted))).not.toHaveProperty("furnished");
+    expect(rentalSearchBodySchema.parse({ furnished: true }).furnished).toBe(true);
+    expect(rentalSearchBodySchema.parse({ furnished: false }).furnished).toBe(false);
+    expect(rentalSearchBodySchema.safeParse({ furnished: null }).success).toBe(false);
+  });
+});
+
 describe("rentalMonthlyBudgetPredicate", () => {
   it("compares same-currency monthly prices to the monthly budget", () => {
     const clause = rentalMonthlyBudgetPredicate(3_500_000, "COP");

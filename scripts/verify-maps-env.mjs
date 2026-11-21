@@ -8,8 +8,18 @@ const warnings = [];
 
 const mapsKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 const mapId = process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID;
-const placesKey =
-  process.env.GOOGLE_PLACES_API_KEY ?? process.env.GOOGLE_MAPS_API_KEY;
+// Mirror requirePlacesApiKey() in the server Places client. Keep this probe on
+// the exact credential used by production rather than a legacy browser key.
+const placesKeyOptions = [
+  ["GOOGLE_MAPS_SERVER_API_KEY", process.env.GOOGLE_MAPS_SERVER_API_KEY],
+  ["GOOGLE_PLACES_API_KEY", process.env.GOOGLE_PLACES_API_KEY],
+  ["GOOGLE_MAPS_API_KEY", process.env.GOOGLE_MAPS_API_KEY],
+];
+const selectedPlacesKey = placesKeyOptions.find(
+  ([, value]) => typeof value === "string" && value.trim().length >= 8,
+);
+const placesKey = selectedPlacesKey?.[1]?.trim();
+const placesKeyName = selectedPlacesKey?.[0] ?? "GOOGLE_MAPS_SERVER_API_KEY";
 const geminiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
 
 function mask(v) {
@@ -60,7 +70,7 @@ if (!process.env.ADK_GROUNDING_URL) {
 
 if (!placesKey) {
   warnings.push(
-    "missing GOOGLE_PLACES_API_KEY — OK for MAP-001/F48/F49; required for MAP-004+",
+    "missing GOOGLE_MAPS_SERVER_API_KEY / GOOGLE_PLACES_API_KEY / GOOGLE_MAPS_API_KEY — required for Places API (New) calls",
   );
 }
 
@@ -116,7 +126,7 @@ async function probePlacesKey() {
       /referer/i.test(text)
     ) {
       warnings.push(
-        "GOOGLE_PLACES_API_KEY has HTTP referrer restriction — server/edge calls need IP restriction or unrestricted server key (separate from browser key)",
+        `${placesKeyName} has HTTP referrer restriction — use a correctly restricted server-side key for Places API (New)`,
       );
       return;
     }
@@ -138,7 +148,7 @@ async function main() {
   console.log("NEXT_PUBLIC_GOOGLE_MAPS_API_KEY:", mask(mapsKey));
   console.log("NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID:", mapId ?? "(missing)");
   console.log("GOOGLE_GENERATIVE_AI_API_KEY:", mask(geminiKey));
-  console.log("GOOGLE_PLACES_API_KEY:", placesKey ? mask(placesKey) : "(missing)");
+  console.log("Places API key selected:", placesKeyName, placesKey ? "(configured)" : "(missing)");
 
   await probeGeocode();
   await probePlacesKey();

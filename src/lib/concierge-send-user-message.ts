@@ -1,5 +1,6 @@
 import { clearConciergeError, reportConciergeError } from "@/lib/concierge-error-store";
 import { isSelectedRentalCafeNearbyRequest } from "@/lib/cafe-search-fast-path";
+import { clearsFurnishingPreference, looksLikeRentalAnalysis, looksLikeRentalSearch } from "@/lib/rental-query-parser";
 import {
   routerHandlerOrderFromClassification,
   type RouterRoutingTarget,
@@ -20,6 +21,8 @@ export type ConciergeSendHandlers = {
   retryLastTurn?: () => Promise<boolean>;
   /** Clear old apartment Details on a confirmed cross-category topic switch. */
   closeRentalDetails?: () => void;
+  /** Publish a confirmed new topic and clear prior vertical display state. */
+  onTopicShift?: (intent: FlashRouteClassification["intent"], stage: "accepted" | "completed" | "failed") => void;
   /** Open a shown rental by its current position; never launch another search for Details. */
   handleRentalDetailsMessage?: (text: string, submissionId?: string) => Promise<boolean>;
   handleRentalMessage: (text: string, submissionId?: string) => Promise<boolean>;
@@ -30,11 +33,13 @@ export type ConciergeSendHandlers = {
   /** Optional current-results-only guard, checked before an agent route. */
   handleGroundedAmenityFollowUp?: (text: string, submissionId?: string) => Promise<boolean>;
   handleRestaurantMessage: (text: string, submissionId?: string) => Promise<boolean>;
-  onAgentSend: (text: string, submissionId?: string) => Promise<boolean>;
+  onAgentSend: (text: string, submissionId?: string, onAccepted?: () => void, onCompleted?: () => void, onFailed?: () => void) => Promise<boolean>;
   /** Working-memory lastIntent — enables Flash topicShift (SAN-873). */
   lastIntent?: FlashRouteClassification["intent"];
   /** True while the conversation is in a rental search (current or saved legacy intent). */
   inRentalSearch?: boolean;
+  /** An initial rental search can be in flight before results/memory are visible. */
+  hasPendingRentalSearch?: () => boolean;
 };
 
 /** Dispatch a classified router target to its fast-path handler; false → try next or agent. */
@@ -75,6 +80,15 @@ export async function sendConciergeUserMessage(
   let agentAttempted = false;
 
   try {
+    // Record a renter's explicit preference clear BEFORE any café/amenity/Details
+    // early return or model dispatch. An initial rental request can still be in
+    // flight before cards/CoAgent working memory are visible.
+    const rentalClearDispatched = Boolean(
+      clearsFurnishingPreference(trimmed) &&
+      (handlers.inRentalSearch || handlers.hasPendingRentalSearch?.()),
+    );
+    if (rentalClearDispatched && await handlers.handleRentalMessage(trimmed, submissionId)) return true;
+
     // Contextual cafés beside the selected rental are NOT a new rental search.
     // If no genuine selected rental exists the handler declines safely.
     if (isSelectedRentalCafeNearbyRequest(trimmed)) {
@@ -96,23 +110,49 @@ export async function sendConciergeUserMessage(
     // A shown-apartment Details request is a UI action, not another search/model run.
     if (await handlers.handleRentalDetailsMessage?.(trimmed, submissionId)) return true;
 
+    // A rental comparison declined by the rental fast path must not fall through
+    // to the café/event handlers merely because the question mentions an amenity.
+    // Leave ordinary rental discovery (including neighborhood comparisons) public.
+    if (looksLikeRentalSearch(trimmed) && looksLikeRentalAnalysis(trimmed)) {
+      setConciergePendingSend(true);
+      agentAttempted = true;
+      return await handlers.onAgentSend(trimmed, submissionId);
+    }
+
     const classification = await resolveRouterClassification(trimmed, {
       lastIntent: handlers.lastIntent,
       inRentalSearch: handlers.inRentalSearch,
     });
 
-    // The user switched from apartments to a separate discovery vertical.
-    // Reuse RentalUiProvider's existing close operation; keep the old Details
-    // visible for rental refinements, contextual nearby cafés, and small talk.
-    if (
-      classification.intent === "restaurant_discovery" ||
-      classification.intent === "event_discovery" ||
-      classification.intent === "venue_booking"
-    ) {
+    // Only the deterministic explicit coworking route changes the active
+    // rental context here. Flash topicShift hints and restaurant/event fast
+    // paths already have their own result/pin policy (including empty results).
+    // The agent calls onAccepted only after an authenticated message was
+    // actually appended, so guests and failed runtime starts keep rental cards.
+    const coworkingShift = classification.reason === "explicit coworking discovery topic change" &&
+      classification.intent === "general_concierge" && handlers.inRentalSearch;
+    if (coworkingShift) {
+      setConciergePendingSend(true);
+      agentAttempted = true;
+      return await handlers.onAgentSend(
+        trimmed, submissionId,
+        () => handlers.onTopicShift?.(classification.intent, "accepted"),
+        () => {
+          handlers.closeRentalDetails?.();
+          handlers.onTopicShift?.(classification.intent, "completed");
+        },
+        () => handlers.onTopicShift?.(classification.intent, "failed"),
+      );
+    }
+    if (classification.intent === "restaurant_discovery" ||
+        classification.intent === "event_discovery" ||
+        classification.intent === "venue_booking") {
       handlers.closeRentalDetails?.();
     }
 
     for (const target of routerHandlerOrderFromClassification(classification)) {
+      // The initial clear already reached the canonical rental memory owner.
+      if (target === "rental" && rentalClearDispatched) continue;
       if (await invokeConciergeHandler(target, trimmed, handlers, submissionId)) return true;
     }
 

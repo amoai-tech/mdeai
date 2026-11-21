@@ -58,3 +58,68 @@ test('DeepSeek routing probes exercise short skills without echoing their answer
     assert.equal(evaluateCase(probe, 1, `owner=${probe.owner} verifier=${probe.verifier}`).ok, false);
   }
 });
+
+// Skill discovery and metadata checks belong beside the routing contract,
+// rather than enlarging the general behavior-eval parser's reviewed patch.
+// Paths are literal and checked into the repo: no user-derived filesystem paths.
+const KNOWN_SKILL_TEXT = Object.freeze({
+  tests: readFileSync('.claude/skills/tests/SKILL.md', 'utf8'),
+  testing: readFileSync('.claude/skills/testing/SKILL.md', 'utf8'),
+  errors: readFileSync('.claude/skills/errors/SKILL.md', 'utf8'),
+  'systematic-debugging': readFileSync('.claude/skills/systematic-debugging/SKILL.md', 'utf8'),
+  efficient: readFileSync('.claude/skills/efficient/SKILL.md', 'utf8'),
+  ponytail: readFileSync('.claude/skills/ponytail/SKILL.md', 'utf8'),
+  maps: readFileSync('.claude/skills/maps/SKILL.md', 'utf8'),
+  copilotkit: readFileSync('.claude/skills/copilotkit/SKILL.md', 'utf8'),
+  nextjs: readFileSync('.claude/skills/nextjs/SKILL.md', 'utf8'),
+  supabase: readFileSync('.claude/skills/supabase/SKILL.md', 'utf8'),
+  'real-estate': readFileSync('.claude/skills/real-estate/SKILL.md', 'utf8'),
+});
+const KNOWN_MIRROR_TEXT = Object.freeze({
+  testing: readFileSync('.agents/skills/testing/SKILL.md', 'utf8'),
+  'real-estate': readFileSync('.agents/skills/real-estate/SKILL.md', 'utf8'),
+  maps: readFileSync('.agents/skills/maps/SKILL.md', 'utf8'),
+});
+
+// Adjoining workflow owners share vocabulary but must describe distinct tasks.
+// Metadata checks guard loss of key nouns when descriptions are compacted;
+// they do NOT prove a model will choose the correct skill.
+test("three overlapping pairs keep explicit selection boundaries", () => {
+  const descriptor = (name) => {
+    assert.ok(Object.hasOwn(KNOWN_SKILL_TEXT, name), name + ": unregistered test skill");
+    const skill = KNOWN_SKILL_TEXT[name];
+    const front = skill.split("---", 3)[1];
+    assert.ok(front);
+    return front;
+  };
+  assert.match(descriptor("tests"), /DESIGN regression coverage/);
+  assert.match(descriptor("testing"), /Use when running or interpreting MDE Vitest/);
+  assert.match(descriptor("errors"), /actual failing test/);
+  assert.match(descriptor("systematic-debugging"), /deep multi-step root-cause/);
+  assert.match(descriptor("efficient"), /fastest safe reuse-first/);
+  assert.match(descriptor("ponytail"), /source receipts or a thorough reuse-before-build audit/);
+  for (const name of ["ponytail", "maps", "copilotkit", "nextjs", "supabase"]) {
+    const frontmatter = descriptor(name);
+    const match = frontmatter.match(/^description:\s*(?:>-\s*\n)?((?:  [^\n]*\n?)*)/m);
+    assert.ok(match, name + ": missing skill description");
+    const description = match[1].trim();
+    assert.ok(description.length > 0 && description.length <= 500,
+      name + ": description exceeds the MDE 500-character limit");
+  }
+});
+
+// Native Claude Code skill activation obeys frontmatter `paths` globs.
+// These three cross-file domain/execution skills must be available from a
+// natural-language task before the agent has opened a matching source file.
+test("project-wide testing, rental and maps skills have no file activation gate", () => {
+  for (const name of ["testing", "real-estate", "maps"]) {
+    assert.ok(Object.hasOwn(KNOWN_MIRROR_TEXT, name), name + ": unregistered mirror skill");
+    const skill = KNOWN_SKILL_TEXT[name];
+    const frontmatter = skill.split("---", 3)[1];
+    assert.ok(frontmatter, name + ": missing frontmatter");
+    assert.doesNotMatch(frontmatter, /^paths\s*:/m,
+      name + ": paths globs silently hide cross-file skills from the Claude session catalog");
+    assert.equal(KNOWN_MIRROR_TEXT[name],
+      skill, name + ": Codex/DSH mirror differs from canonical skill");
+  }
+});

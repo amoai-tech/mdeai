@@ -41,9 +41,19 @@ function selectedDiscoveryContext(agui: unknown): z.infer<typeof selectedContext
   };
 }
 
+/** The visible item the renter explicitly selected on this page, or null. A hint, never authority. */
+export function selectedDiscoveryEntityId(agui: unknown): string | null {
+  return selectedDiscoveryContext(agui)?.selectedPublicEntityId ?? null;
+}
+
 /** Read the active page as a routing hint, not a data authorization. */
 export function isActiveRentalsDiscoveryPage(agui: unknown): boolean {
   return selectedDiscoveryContext(agui)?.route === "/rentals";
+}
+
+/** SAN-1653 — the Events page is the only screen that renders event cards. */
+export function isActiveEventsDiscoveryPage(agui: unknown): boolean {
+  return selectedDiscoveryContext(agui)?.route === "/events";
 }
 
 export function discoveryAgentSelectionHint(agui: unknown): string {

@@ -117,6 +117,7 @@ export function EventBrowseCard({
   return (
     <VenueCardShell
       testId="event-card"
+      extraData={{ "data-event-id": event.id }}
       resultKind="event"
       pinId={pinId}
       selected={selectedForAsk}

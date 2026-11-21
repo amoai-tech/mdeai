@@ -4,7 +4,61 @@ import { Observable } from "rxjs";
 /** The only catalog protocol this runtime accepts. */
 const A2UI_VERSION = "1.0";
 
+/** Product cap for generated comparison tables: 5 rows by 4 columns. */
+export const MAX_TABLE_ROWS = 5;
+export const MAX_TABLE_COLUMNS = 4;
+
 type Operation = Record<string, unknown>;
+
+/**
+ * The server guide asks for at most 5 rows by 4 columns, but the prompt is not
+ * a limit: a model that ignores it would render an arbitrarily large table in
+ * chat. Clamp the documented Table data form here, before the runtime
+ * validates the operation, so the cap holds without failing the whole turn.
+ */
+function clampTableNode(node: unknown): { value: unknown; changed: boolean } {
+  if (!node || typeof node !== "object" || Array.isArray(node)) return { value: node, changed: false };
+  const record = node as Record<string, unknown>;
+  if (record.component !== "Table") return { value: node, changed: false };
+
+  let changed = false;
+  const next: Record<string, unknown> = { ...record };
+
+  if (Array.isArray(next.columns) && next.columns.length > MAX_TABLE_COLUMNS) {
+    next.columns = next.columns.slice(0, MAX_TABLE_COLUMNS);
+    changed = true;
+  }
+  if (Array.isArray(next.rows)) {
+    const rows = next.rows.length > MAX_TABLE_ROWS ? next.rows.slice(0, MAX_TABLE_ROWS) : next.rows;
+    const clamped = rows.map((row) =>
+      Array.isArray(row) && row.length > MAX_TABLE_COLUMNS ? row.slice(0, MAX_TABLE_COLUMNS) : row,
+    );
+    const widthChanged = clamped.some((row, index) => row !== rows[index]);
+    if (rows.length !== next.rows.length || widthChanged) {
+      next.rows = clamped;
+      changed = true;
+    }
+  }
+  return { value: next, changed };
+}
+
+/** Clamp Table nodes inside the two operations that carry components. */
+function clampOperation(operation: Operation): { operation: Operation; changed: boolean } {
+  let changed = false;
+  const next: Operation = { ...operation };
+  for (const key of ["createSurface", "updateComponents"]) {
+    const body = next[key];
+    if (!body || typeof body !== "object" || Array.isArray(body)) continue;
+    const components = (body as { components?: unknown }).components;
+    if (!Array.isArray(components)) continue;
+    const clamped = components.map((component) => clampTableNode(component));
+    if (clamped.some((entry) => entry.changed)) {
+      next[key] = { ...(body as object), components: clamped.map((entry) => entry.value) };
+      changed = true;
+    }
+  }
+  return { operation: next, changed };
+}
 
 /**
  * The model reliably emits A2UI operation bodies (`{createSurface:{…}}`) but
@@ -33,7 +87,9 @@ export function normalizeRenderUiArgs(argsJson: string): string | null {
   let changed = false;
   const operations = payload.operations.map((raw) => {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw;
-    const operation = raw as Operation;
+    const clamped = clampOperation(raw as Operation);
+    const operation = clamped.operation;
+    if (clamped.changed) changed = true;
     if (typeof operation.version === "string" && operation.version.trim()) return operation;
     // Only an operation body this runtime knows how to version is rewritten.
     const hasKnownBody = ["createSurface", "updateComponents", "updateDataModel", "deleteSurface"]

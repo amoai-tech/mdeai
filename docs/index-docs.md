@@ -286,6 +286,7 @@ This revision's catalog contains **163 active-document entries** plus **two `_ar
 | Testing | [`06-testing/pr-agent/san-1332-execution-checkpoints.md`](06-testing/pr-agent/san-1332-execution-checkpoints.md) | Markdown | Current |
 | Operations | [`07-operations/README.md`](07-operations/README.md) | Markdown | Current |
 | Operations | [`07-operations/agent-workflow-plan.md`](07-operations/agent-workflow-plan.md) | Markdown | Current |
+| Operations | [`07-operations/san-1670-hybrid-skills.md`](07-operations/san-1670-hybrid-skills.md) | Markdown | Current |
 | Operations | [`07-operations/intent-spec-plan/README.md`](07-operations/intent-spec-plan/README.md) | Markdown | Current |
 | Operations | [`07-operations/intent-spec-plan/templates/intent.md`](07-operations/intent-spec-plan/templates/intent.md) | Markdown | Template |
 | Operations | [`07-operations/intent-spec-plan/templates/spec.md`](07-operations/intent-spec-plan/templates/spec.md) | Markdown | Template |

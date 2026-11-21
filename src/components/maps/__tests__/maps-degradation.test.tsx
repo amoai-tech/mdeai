@@ -4,6 +4,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
+import { fireEvent, render } from "@testing-library/react";
 
 /**
  * SAN-1349 — a broken Google Map must degrade ONLY the map.
@@ -27,6 +28,12 @@ const mocks = vi.hoisted(() => ({
   apiKey: { value: "test-key" as string | undefined },
   e2eMock: { value: false },
   scriptLoadError: { value: false },
+  selection: {
+    pins: [] as Array<{ id: string; category: "grounded"; lat: number; lng: number; title: string; source: "grounding" }>,
+    selectedPinId: null as string | null,
+    setSelectedPinId: vi.fn(),
+    clearFocusPinRequest: vi.fn(),
+  },
 }));
 
 vi.mock("@/platform/maps/map-config", () => ({
@@ -55,10 +62,12 @@ vi.mock("@vis.gl/react-google-maps", () => ({
 
 vi.mock("@/platform/maps/map-context", () => ({
   useMapContext: () => ({
-    pins: [],
+    pins: mocks.selection.pins,
     activeMapCategory: null,
-    selectedPinId: null,
+    selectedPinId: mocks.selection.selectedPinId,
     panToPin: () => {},
+    setSelectedPinId: mocks.selection.setSelectedPinId,
+    clearFocusPinRequest: mocks.selection.clearFocusPinRequest,
   }),
 }));
 
@@ -78,6 +87,10 @@ beforeEach(() => {
   mocks.apiKey.value = "test-key";
   mocks.e2eMock.value = false;
   mocks.scriptLoadError.value = false;
+  mocks.selection.pins = [];
+  mocks.selection.selectedPinId = null;
+  mocks.selection.setSelectedPinId.mockReset();
+  mocks.selection.clearFocusPinRequest.mockReset();
   delete (window as unknown as { __mdeMapsAuthFailed?: boolean }).__mdeMapsAuthFailed;
 });
 
@@ -165,6 +178,25 @@ describe("SAN-1349 · a broken map falls back locally", () => {
 
     expect(html).toContain('data-testid="map-env-error"');
     expect(html).not.toContain('data-testid="google-map"');
+  });
+});
+
+describe("SAN-412 · selected pin can be dismissed in the E2E mock map", () => {
+  it("shows a close button that clears both selection and pending map focus", () => {
+    mocks.e2eMock.value = true;
+    mocks.selection.pins = [{
+      id: "grounded-cafe-A", category: "grounded",
+      lat: 6.25, lng: -75.58, title: "Café A", source: "grounding",
+    }];
+    mocks.selection.selectedPinId = "grounded-cafe-A";
+
+    const { getByRole, unmount } = render(
+      <MapsShell><ChatMap mapDomId="chat-map" /></MapsShell>,
+    );
+    fireEvent.click(getByRole("button", { name: "Close selected place" }));
+    expect(mocks.selection.setSelectedPinId).toHaveBeenCalledExactlyOnceWith(null);
+    expect(mocks.selection.clearFocusPinRequest).toHaveBeenCalledOnce();
+    unmount();
   });
 });
 

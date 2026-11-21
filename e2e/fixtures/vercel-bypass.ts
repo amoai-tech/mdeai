@@ -1,9 +1,6 @@
 import type { Page } from "@playwright/test";
 
-// Allow only MDE project previews in the two confirmed Vercel team slugs.
-// Keep the restrictive app prefix and suffix: the bypass token must never
-// be sent to arbitrary *.vercel.app deployments.
-const MDE_VERCEL_HOST = /^mdeai-[a-z0-9-]+-(?:amoco|amo-agency)\.vercel\.app$/i;
+const MDE_VERCEL_HOST = /^mdeai-[a-z0-9-]+-amo-agency\.vercel\.app$/i;
 
 export function validateVercelCandidateOrigin(rawUrl: string): URL {
   const url = new URL(rawUrl);
@@ -17,10 +14,36 @@ export function validateVercelCandidateOrigin(rawUrl: string): URL {
   return url;
 }
 
+/** Never inject an authenticated MDE QA session into an arbitrary origin.
+ * Accept only MDE's two canonical production domains or its exact named
+ * Vercel deployment host (already checked by the existing candidate validator).
+ */
+export function validateMdeAuthenticatedQaOrigin(rawUrl: string): URL {
+  const url = new URL(rawUrl);
+  if (url.protocol !== "https:" || url.username || url.password || url.port ||
+      url.pathname !== "/" || url.search || url.hash) {
+    throw new Error("MDE authenticated QA target must be an HTTPS origin without credentials or URL extras");
+  }
+  if (url.hostname === "www.mdeai.co" || url.hostname === "mdeai.co") return url;
+  return validateVercelCandidateOrigin(rawUrl);
+}
+
+/** Public previews do not issue a bypass cookie. Accept one only when its
+ * live app version matches the exact expected Git commit and preview environment.
+ * Protected previews must still use the existing cookie-verifying bypass path. */
+export function isExpectedPublicPreviewVersion(value: unknown, expectedSha: string): boolean {
+  if (!/^[a-f0-9]{40}$/i.test(expectedSha) || !value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const version = value as { sha?: unknown; environment?: unknown };
+  return version.environment === "preview" && version.sha === expectedSha;
+}
+
 export async function establishVercelAutomationBypass(
   page: Page,
   rawCandidateUrl: string,
   secret: string,
+  expectedEnvironment: "preview" | "production" = "preview",
 ): Promise<void> {
   if (!secret.trim()) throw new Error("Vercel automation bypass secret is required");
   const candidate = validateVercelCandidateOrigin(rawCandidateUrl);
@@ -37,54 +60,57 @@ export async function establishVercelAutomationBypass(
     throw new Error(`CERTIFICATION_TARGET_INVALID: bypass setup returned ${status}`);
   }
 
-  // The contract is NOT "the setup request returned < 400". A 302 to Vercel's
-  // deployment-authentication page satisfies that while establishing nothing, and
-  // every later request then 302s, follows, and is measured as a 200 application
-  // response. The contract is that this browser context now owns the bypass cookie
-  // for this exact origin.
+  // Protected deployments set _vercel_jwt. An unprotected Vercel deployment
+  // legitimately returns 200 without setting it. In that case, prove we can
+  // reach the exact MDE candidate WITHOUT bypass headers or redirects.
   const cookies = await page.context().cookies(candidate.origin);
   const bypass = cookies.find((cookie) => cookie.name === "_vercel_jwt");
+  if (bypass) return;
 
-  if (!bypass) {
+  const probe = await page.request.get(`${candidate.origin}/api/version`, {
+    failOnStatusCode: false,
+    maxRedirects: 0,
+  });
+  const probeStatus = probe.status();
+  let verifiedApp = false;
+  let failureReason = `HTTP ${probeStatus}`;
+  if (probeStatus === 200) {
+    const contentType = probe.headers()["content-type"] ?? "missing";
+    const mediaType = contentType.split(";")[0].trim().toLowerCase();
+    if (mediaType !== "application/json") {
+      failureReason = `unexpected content-type ${contentType}`;
+    } else {
+      try {
+        const data: unknown = await probe.json();
+        const sha = data && typeof data === "object" && "sha" in data
+          ? (data as { sha: unknown }).sha
+          : undefined;
+        const expectedSha = process.env.VERCEL_DEPLOYMENT_SHA?.trim() ?? "";
+        if (typeof sha !== "string" || !/^[a-f0-9]{40}$/.test(sha)) {
+          failureReason = "invalid or missing app SHA";
+        } else if (!/^[a-f0-9]{40}$/i.test(expectedSha)) {
+          failureReason = "missing or invalid expected deployment SHA";
+        } else if (sha !== expectedSha) {
+          failureReason = `SHA mismatch: observed ${sha}, expected ${expectedSha}`;
+        } else if (expectedEnvironment === "preview"
+          ? !isExpectedPublicPreviewVersion(data, expectedSha)
+          : (data as { environment?: unknown }).environment !== "production") {
+          failureReason = `candidate is not in ${expectedEnvironment} environment`;
+        } else {
+          verifiedApp = true;
+        }
+      } catch {
+        failureReason = "invalid JSON response";
+      }
+    }
+  }
+  if (!verifiedApp) {
     throw new Error(
       `CERTIFICATION_TARGET_INVALID: Vercel bypass cookie was not established for ` +
         `${candidate.origin}. Setup returned ${status}; cookies present: ` +
         `${cookies.map((cookie) => cookie.name).join(", ") || "none"}. ` +
-        `Without it, requests hit the deployment protection page and certification ` +
-        `measures that instead of MDE.`,
+        `Unauthenticated app identity probe failed: ${failureReason} (HTTP ${probeStatus}); ` +
+        `the candidate cannot be certified without reaching MDE.`,
     );
   }
-}
-
-
-/**
- * Public previews don't need a bypass cookie, but must prove the exact commit.
- * Protected previews still require the existing cookie-only bypass validation.
- */
-export async function establishVercelCandidateAccess(
-  page: Page,
-  rawCandidateUrl: string,
-  secret: string,
-  expectedSha?: string,
-): Promise<void> {
-  const candidate = validateVercelCandidateOrigin(rawCandidateUrl);
-  if (expectedSha) {
-    if (!/^[0-9a-f]{40}$/i.test(expectedSha)) {
-      throw new Error("Expected Vercel commit SHA must be 40 hexadecimal characters");
-    }
-    const version = await page.request.get(candidate.origin + "/api/version", {
-      failOnStatusCode: false,
-      maxRedirects: 0,
-    });
-    if (version.status() === 200 && /application\/json/i.test(version.headers()["content-type"] ?? "")) {
-      const body: unknown = await version.json().catch(() => null);
-      const actualSha = body && typeof body === "object" && "sha" in body ? body.sha : undefined;
-      if (actualSha !== expectedSha) {
-        throw new Error("CERTIFICATION_TARGET_INVALID: public preview commit differs from expected SHA");
-      }
-      // Exact application commit answered publicly, without sending a secret.
-      return;
-    }
-  }
-  await establishVercelAutomationBypass(page, candidate.origin, secret);
 }

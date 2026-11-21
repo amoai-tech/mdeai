@@ -32,7 +32,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const { neighborhood, minBedrooms, maxBedrooms, maxPricePerNight, maxPriceMonthly, budgetCurrency, limit, queryText, checkIn, checkOut, stayType } = parsed.data;
+  const { neighborhood, minBedrooms, maxBedrooms, furnished, maxPricePerNight, maxPriceMonthly, budgetCurrency, limit, queryText, checkIn, checkOut, stayType } = parsed.data;
   try {
     // SAN-1502 PR2: the caller's own RLS-governed client, so an authorized test
     // actor's results include published development fixtures and no one else's do.
@@ -51,6 +51,7 @@ export async function POST(req: Request) {
       neighborhood,
       minBedrooms,
       maxBedrooms,
+      furnished,
       maxPricePerNight,
       maxPriceMonthly,
       budgetCurrency,

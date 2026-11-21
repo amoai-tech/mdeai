@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { CopilotChat } from "@copilotkit/react-core/v2";
 
 import { ChatFilterCopilotInstructions } from "@/components/chat/chat-filter-copilot-instructions";
+import { EventRecommendationsSurface } from "@/components/copilot/a2ui/event-recommendations-surface";
 import { ChatQueryBar } from "@/components/chat/chat-query-bar";
 import { ConciergeChatView } from "@/components/chat/concierge-copilot-chat-view";
 import { RentalComparisonOwnerProvider } from "@/components/chat/rental-comparison-owner-context";
@@ -55,6 +56,7 @@ export function ChatCenterPanel() {
         key={sessionKey}
         className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
       >
+        <EventRecommendationsSurface />
         <ChatQueryBar />
         {deterministic ? null : <ChatFilterCopilotInstructions />}
         <WorkflowProgressStrip />

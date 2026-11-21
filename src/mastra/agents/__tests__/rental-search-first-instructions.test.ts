@@ -43,7 +43,9 @@ describe.each([
     const text = await instructionsOf(agent as unknown as { getInstructions: () => unknown });
     // The card renderer reads the requests from queryText; words the model drops are
     // never disclosed to the renter.
-    expect(text).toMatch(/pets, furnished, parking/i);
+    expect(text).toMatch(/pets, parking, pool/i);
+    expect(text).toMatch(/furnished=true/);
+    if (_name === "concierge") expect(text).toMatch(/clearFurnishing=true/);
     expect(text).toMatch(/queryText/i);
     expect(text).toMatch(/never say or imply/i);
   });

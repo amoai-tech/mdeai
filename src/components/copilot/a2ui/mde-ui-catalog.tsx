@@ -10,12 +10,15 @@ import { useAgent, UseAgentUpdate } from "@copilotkit/react-core/v2";
 import { useOptionalEventLocalChat } from "@/components/chat/event-local-chat-context";
 import { createGenerativeUI, standardUI } from "@copilotkit/react-core/v2/generative-ui";
 import { RentalCard as ExistingRentalCard } from "@/components/copilot/rental-card";
+import { ViewingProposalView } from "@/components/copilot/a2ui/viewing-proposal";
 import { EventCard as ExistingEventCard } from "@/components/copilot/event-card";
+import { useOptionalEventBrowseSelection } from "@/components/events/event-browse-selection-context";
 import { useOptionalConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
 import { useOptionalRentalUi } from "@/components/chat/rental-ui-context";
 import { useOptionalMapContext } from "@/platform/maps/map-context";
 import { useOptionalRentalFastPath } from "@/components/chat/rental-fast-path-context";
 import { useOptionalEventFastPath } from "@/components/chat/event-fast-path-context";
+import { RENTAL_BED_OPTIONS, normalizeBedSelection, useRentalFilterStore } from "@/components/rentals/rental-filter-draft";
 import { EVENT_A2UI_ID_PATTERN } from "@/lib/events/a2ui-id";
 import { isFinishedToolPayload, normalizeToolEnvelope } from "@/lib/normalize-tool-envelope";
 import { toDetailRental } from "@/lib/rentals/chat-rental-detail";
@@ -30,6 +33,19 @@ type RentalToolRow = RentalResultRow & {
   image_url?: string;
   can_schedule_viewing?: boolean;
 };
+
+/**
+ * Technical target check only, not publication/owner/approval eligibility.
+ *
+ * Phase A: the database function is the source of truth and already applies its
+ * source-linked and ownership blocks only when `rental_development_active()` is false.
+ * PHASE B: when launch certification starts, restore the row-level
+ * `can_schedule_viewing === true` gate here and in the proposal, so a renter is told
+ * "not taking requests" before filling a form the database would reject.
+ */
+export function canOpenNativeViewingReview(row: { tags?: string[] }, hasNativeAction: boolean): boolean {
+  return hasNativeAction && !row.tags?.includes("dev-preview");
+}
 
 const rentalToolNames = new Set<string>([
   MASTRA_COPILOT_TOOL_ACTIONS.rentals,
@@ -285,6 +301,9 @@ function MdeRentalCard({ listingId }: { listingId: string }) {
   }
 
   const pinId = `rental-${row.id}`;
+  // Source-only local previews have no apartments row to receive an atomic viewing.
+  // A stored external candidate is different: in Phase A the DB can accept its slug.
+  const canOpenViewing = canOpenNativeViewingReview(row, Boolean(openScheduleViewing));
   const detailRental = toDetailRental(row);
   const openDetail = openVenueDetail ? () => {
     if (hasPin) panToPin?.(pinId);
@@ -302,7 +321,7 @@ function MdeRentalCard({ listingId }: { listingId: string }) {
       amenities: row.amenities,
       availability: row.availability,
       hostName: row.host_name,
-      canScheduleViewing: row.can_schedule_viewing === true,
+      canScheduleViewing: canOpenViewing,
     });
   } : () => {
     // Broker chat and the Ask MDE sheet have no rental detail provider. Reuse
@@ -333,7 +352,7 @@ function MdeRentalCard({ listingId }: { listingId: string }) {
         onSelect={hasPin ? () => panToPin?.(pinId) : undefined}
         onOpenDetails={row.tags?.includes("external-source") && !detailRental ? undefined : openDetail}
         nearbyAction={hasPin && concierge && canRenderNearby && isStoredRentalUuid(row.id) ? <NearbyRentalAction listingId={row.id} pinId={pinId} onSelect={panToPin} /> : undefined}
-        canScheduleViewing={row.can_schedule_viewing === true}
+        canScheduleViewing={canOpenViewing}
         onSchedule={openScheduleViewing ? () => openScheduleViewing({
           listingId: row.id,
           title: row.title,
@@ -341,6 +360,44 @@ function MdeRentalCard({ listingId }: { listingId: string }) {
         }) : undefined}
       />
     </div>
+  );
+}
+
+/**
+ * SAN-1658 — editable viewing proposal. The listing facts come from the current
+ * authorized result (never from props); date/time are only a proposal. Continue
+ * hands the renter's latest values to the existing ScheduleViewingModal, which
+ * owns review and the one real write.
+ */
+function MdeViewingProposal({ listingId, date, time }: { listingId: string; date?: string; time?: string }) {
+  const row = useRentalRow(listingId);
+  const rentalUi = useOptionalRentalUi();
+  if (!row) {
+    return (
+      <div className="rounded-lg border border-dashed border-border p-3 text-sm text-muted-foreground" data-testid="a2ui-viewing-unavailable">
+        That rental is not in the current authorized results.
+      </div>
+    );
+  }
+  const openScheduleViewing = rentalUi?.openScheduleViewing;
+  return (
+    <ViewingProposalView
+      key={row.id}
+      title={row.title}
+      neighborhood={row.neighborhood}
+      initialDate={date}
+      initialTime={time}
+      // Phase A has no business approval gate; source-only previews still have no persisted target.
+      canRequest={canOpenNativeViewingReview(row, Boolean(openScheduleViewing))}
+      onContinue={(preferredAt) =>
+        openScheduleViewing?.({
+          listingId: row.id,
+          title: row.title,
+          neighborhood: row.neighborhood,
+          preferredAt,
+        })
+      }
+    />
   );
 }
 
@@ -360,6 +417,9 @@ function MdeEventCard({ eventId }: { eventId: string }) {
   const selectedPinId = map?.selectedPinId;
   const panToPin = map?.panToPin;
   const openVenueDetail = rentalUi?.openVenueDetail;
+  // The Events page publishes its own selection; the rental UI context does not
+  // exist there, so without this fallback the Details button would be a no-op.
+  const eventSelection = useOptionalEventBrowseSelection();
 
   if (!row) {
     return (
@@ -372,7 +432,15 @@ function MdeEventCard({ eventId }: { eventId: string }) {
   const pinId = `event-${row.id}`;
   const hasPin = map?.pins.some((pin) => pin.id === pinId) ?? false;
   const ticketUrl = row.ticketUrl ?? eventDetailHref(row.id);
-  const openDetail = openVenueDetail ? () => {
+  const openDetail = eventSelection
+    ? () => {
+        // The Events grid can show native Details only for its current rows.
+        // Older authorized results still have a canonical public Details page.
+        if (!eventSelection.openEventDetail(row.id)) {
+          window.open(eventDetailHref(row.id), "_blank", "noopener,noreferrer");
+        }
+      }
+    : openVenueDetail ? () => {
     if (hasPin) panToPin?.(pinId);
     openVenueDetail({
       kind: "event",
@@ -416,6 +484,67 @@ function MdeEventCard({ eventId }: { eventId: string }) {
 }
 
 /**
+ * SAN-1655 — the bedroom control the agent may render on the Rentals panel.
+ *
+ * The installed standard `Select` does declare `writable: ["value"]`, so a
+ * model-authored `@path` binding could carry an edit. MDE keeps this small
+ * wrapper anyway: the value lives in the page's real filter draft (shared with
+ * the native filter and the Apply action), not in the model's data model, so a
+ * later AI turn cannot reset it and the model never has to author bindings.
+ */
+function MdeBedroomFilter({ label }: { label?: string }) {
+  const draft = useRentalFilterStore();
+  // The catalog also renders outside the Rentals page; there the value could
+  // never be applied, so do not offer it.
+  if (!draft.connected) return null;
+  return (
+    <label className="flex w-full flex-col gap-1 text-sm">
+      <span className="font-medium text-foreground">{label ?? "Bedrooms"}</span>
+      <select
+        aria-label={label ?? "Bedrooms"}
+        className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground"
+        value={draft.draft.beds ?? ""}
+        onChange={(event) => draft.setBeds(normalizeBedSelection(event.target.value))}
+      >
+        {RENTAL_BED_OPTIONS.map((option) => (
+          <option key={option.label} value={option.value ?? ""}>{option.label}</option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+/** SAN-1655 — Apply goes through the page's real filter action, never a new service. */
+function MdeApplyFilters({
+  label,
+  onApplyRentalFilters,
+}: {
+  label?: string;
+  onApplyRentalFilters?: () => void;
+}) {
+  const draft = useRentalFilterStore();
+  // No page draft and no registered action means nothing could be applied: show
+  // the control disabled with the reason instead of a dead click.
+  const ready = Boolean(draft.connected && onApplyRentalFilters);
+  return (
+    <div className="flex flex-col gap-1">
+      <Button
+        type="button"
+        size="sm"
+        disabled={!ready}
+        title={ready ? undefined : "Filters are not connected on this page."}
+        onClick={() => onApplyRentalFilters?.()}
+      >
+        {label ?? "Apply filters"}
+      </Button>
+      {draft?.applyError ? (
+        <p role="alert" className="text-xs text-destructive">{draft.applyError}</p>
+      ) : null}
+    </div>
+  );
+}
+
+/**
  * SAN-1654 — the official Standard Catalog is the base of MDE's one catalog, so
  * the agent can arrange and label real cards instead of only ever rendering one.
  *
@@ -425,24 +554,28 @@ function MdeEventCard({ eventId }: { eventId: string }) {
  * presence flag, so a component the guide does not document is a component the
  * model would have to guess at. Two consequences:
  *
- * - **Controls are omitted until they are wired.** Button, Pressable and every
- *   input (Form, TextField, Select, CheckBox, Radio, Slider, DateTimeInput,
- *   SegmentedControl, ChoicePicker, Tabs) render a dead control when no
- *   catalog function is registered: a fake "Book viewing" next to real
- *   listings. RentalCard already owns grounded Details and viewing actions.
- *   SAN-1655/SAN-1658 add these back together with their functions.
- * - **Complex data structures are omitted until documented.** Table* needs a
- *   nested shape the guide would have to teach; MDE already renders real
- *   comparison tables from tool results (SAN-1041). Charts and maps need peer
- *   libraries MDE does not install, HtmlView/Svg would let the model author
- *   markup, and Image/Link/Citation would accept model-chosen URLs.
+ * - **Controls that need an MDE action are omitted until they are wired.**
+ *   Booking, saving, filtering and submitting require a registered catalog
+ *   function; without one they would be a fake "Book viewing" next to real
+ *   listings. A Button or Pressable can still perform built-in browser
+ *   actions (href, copy) with no MDE function, but the catalog does not rely
+ *   on that yet. SAN-1655/SAN-1658 add the real controls with their functions.
+ * - **Table is exposed for short, tool-grounded comparisons** using its
+ *   columns/rows data form, documented in the server guide. TableSection,
+ *   TableRow and TableCell stay omitted: the data form does not need them.
+ *   Chart works in React through CopilotKit's bundled recharts; Map needs
+ *   maplibre-gl for the map view and otherwise shows a place list, and MDE
+ *   already owns Google Maps. HtmlView/Svg would let the model author markup,
+ *   and Image/Link/Citation would accept model-chosen URLs.
  *
  * Every omitted name must still exist in the installed `standardUI`, and the
  * exposed set must equal exactly what the guide documents — both enforced by
  * `mde-ui-catalog.test.ts`, so an SDK upgrade cannot silently drift.
  */
 export const MDE_OMITTED_STANDARD_COMPONENTS = [
-  // Optional peer libraries MDE does not ship (chart.js, maplibre-gl, lucide).
+  // Map needs maplibre-gl for its map view; Chart uses bundled recharts and
+  // Icon uses the installed lucide-react, so those two are blocked by policy,
+  // not by a missing package.
   "Chart",
   "Icon",
   "Map",
@@ -470,7 +603,6 @@ export const MDE_OMITTED_STANDARD_COMPONENTS = [
   "ChoicePicker",
   "Tabs",
   // Nested data structures the guide does not teach yet.
-  "Table",
   "TableSection",
   "TableRow",
   "TableCell",
@@ -507,6 +639,13 @@ export const MDE_OMITTED_STANDARD_COMPONENTS = [
 export const mdeUI = createGenerativeUI({
   id: "mde/discovery@1",
   extends: [standardUI.omit(MDE_OMITTED_STANDARD_COMPONENTS)],
+  // The editable bedroom draft lives in the page provider so the agent can never
+  // overwrite a user's edit; the model learns the applied filters from the page
+  // context (DiscoveryPageContext), because it does not see catalog `state`.
+  // Renderer-only action: the page decides what "apply" means.
+  functions: {
+    applyRentalFilters: { parameters: z.object({}) },
+  },
   components: {
     RentalCard: {
       component: MdeRentalCard,
@@ -524,6 +663,30 @@ export const mdeUI = createGenerativeUI({
         "Show one real event from the current authorized search by its eventId UUID. The component resolves venue, date, price, image and ticket link from the stored result; never pass or invent event facts.",
       props: z.object({ eventId: z.string().regex(EVENT_A2UI_ID_PATTERN) }),
       slots: { children: "multiple" },
+    },
+    ViewingProposal: {
+      component: MdeViewingProposal,
+      description:
+        "An editable viewing request for one real rental, by its listingId from the current authorized results. Optional date (YYYY-MM-DD) and time (HH:mm 24-hour, Medellín) are only the renter's stated preference: set one only when the renter gave it explicitly, never guess a date. The renter can edit both; Continue opens the existing review form, and nothing is requested or confirmed until the renter submits that form.",
+      props: z.object({
+        listingId: z.string().min(1),
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        time: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+      }),
+      slots: { children: "multiple" },
+    },
+    BedroomFilter: {
+      component: MdeBedroomFilter,
+      description:
+        "A bedroom-count selector for the Rentals page. Render it when the renter asks to adjust or choose bedrooms. The value is the renter's draft (Any, Studio, 1 BR, 2 BR, 3 BR+); it changes the page only when Apply filters is pressed.",
+      props: z.object({ label: z.string().optional() }),
+    },
+    ApplyFiltersButton: {
+      component: MdeApplyFilters,
+      description:
+        "Applies the bedroom selection shown beside it to the real Rentals page filters. Only render it together with BedroomFilter.",
+      props: z.object({ label: z.string().optional() }),
+      events: { onApplyRentalFilters: { parameters: z.object({}) } },
     },
   },
 });

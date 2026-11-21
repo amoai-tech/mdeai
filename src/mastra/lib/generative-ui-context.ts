@@ -1,5 +1,13 @@
 const GENERATIVE_UI_GUIDE_PREFIX = "Generative UI guide:";
 
+/** One Table contract for both the official-guide and fallback agent paths. */
+const TABLE_DATA_FORM_RULE =
+  "Table data form: columns are short strings such as [\"Apartment\", \"Price\"] and rows are arrays of short strings or numbers, for example [[\"<tool listing title>\", \"<exact tool price and currency>\"]]. At most 5 rows by 4 columns. Every cell value must come from a tool result in this run or lastRentalResults saved from the current result set; do not round or estimate prices. For a table comparing rentals already shown, use lastRentalResults for the exact IDs and do not run a new rental search to fill it. For all-monthly comparisons, use Apartment, Bedrooms, Monthly Price, Currency with exact recorded monthly rents. For all-nightly comparisons, use Apartment, Bedrooms, Nightly Price, Currency with exact recorded nightly rates. For mixed monthly/nightly comparisons, use Apartment, Bedrooms, Price, Currency/Period; label every price as per month or per night and do not rank prices across incompatible periods. Always keep the Apartment title and Bedrooms columns for identification. NEVER add a Nightly Price to a monthly listing or divide the monthly rent by 30. Use the Table component, not a markdown table. Never invent a price, rating, availability or address. Do not use TableSection, TableRow or TableCell.";
+
+/** SAN-1658 — one rule for both the official-guide and fallback paths. */
+const VIEWING_PROPOSAL_RULE =
+  "Viewing requests: when the renter asks to schedule or request a viewing of an apartment that is already in the current results, call the showViewingProposal tool with the exact ID from the numbered published hints (\"the second apartment\" is hint 2), not IDs from a same-turn search; never treat the last published hint as the last apartment when there are more or unknown results; ask for an explicit listing instead. Never put an ordinal or title in listingId and never author render_ui operations for it. Pass date (YYYY-MM-DD) and/or time (HH:mm, 24-hour, Medellín) only when the renter stated them explicitly; never guess a calendar date from a weekday. The renter edits the time and presses Continue, which opens the existing review form; nothing is requested until they submit that form. Never say a viewing is booked, requested or confirmed; say you prepared a request they can review.";
+
 /**
  * The browser can send arbitrary `RunAgentInput.context`. It must never become
  * system-prompt text: only the presence of the official CopilotKit guide entry
@@ -10,14 +18,18 @@ export const MDE_A2UI_GUIDE = [
   "Generative UI is available in this run.",
   "Use render_ui only when a visual answer is clearly better than text. Send at most one createSurface operation per reply.",
   "For apartment cards on the Rentals page, prefer the showRecommendations tool with IDs from the published hints. Do not hand-author render_ui operations for apartment cards.",
+  "On the Rentals page, when the renter asks to adjust bedrooms, render BedroomFilter plus ApplyFiltersButton in the rental-recommendations panel. The control edits the renter's draft; ApplyFiltersButton applies it to the real page filters. Never claim the page changed before the action returns; never invent a filter value.",
   "After calling any tool, always write one short sentence for the user. Never end a turn with only tool calls.",
+  "After showRecommendations, for a cards-only request reply with the tool's message only (for example \"Showing 2 apartments.\"). For cards-only replies: Do not restate or guess bedrooms, prices, neighborhoods, titles or availability; the cards carry those facts. When the user also requests a comparison or recommendation, state facts only if independently returned by trusted tools, even when those facts also appear on the cards; never infer facts from card IDs. If no independently verified facts are available, explain that this ID-only card tool cannot establish the comparison and point to the existing Rentals comparison. The tool result deliberately contains no listing facts.",
   "When the user asks to show the first result as a card immediately after a search, render it with the first published result ID; do not ask which result and do not search again.",
-  "If active event result IDs are already published, do not call searchEventsTool again; render the requested card directly.",
-  "Targets: pick from the target list on the render_ui tool. \"chat\" is the conversation transcript. \"rental-recommendations\" is the panel above the results on the Rentals page. On the Rentals page use that panel for apartment recommendations; everywhere else use \"chat\". Never render the same items in both.",
+  "After searchEventsTool, grounded event cards render automatically in the event-recommendations panel. Do not call render_ui again for those search results. If event IDs were already published and the user requests specific cards without a new search, call render_ui for only those IDs.",
+  "Targets: pick from the target list on the render_ui tool. \"rental-recommendations\" is the Rentals page panel; \"event-recommendations\" is the Events page panel. For other supported layouts and pages use \"chat\" when available. Never target an unmounted panel or render the same items twice.",
   "On the Rentals page, to show apartments as cards call showRecommendations with one to four IDs from the published rental result hints. Do not build render_ui operations for apartment cards and do not search again when the IDs are already published.",
-  "Use render_ui only for other layouts (for example a short table or a summary with standard components). Use openRentalDetails only when the user asks to open one apartment\'s details.",
-  "Catalog in this release: the grounded cards RentalCard and EventCard, plus layout and labels — Box, Column, Row, Grid, GridItem, Card, Spacer, Divider, Title, Text, Caption, Label, Badge, FollowUp.",
-  "There are no buttons, inputs, forms, tables, charts, maps, images or links in this catalog. Do not promise one. Offer a FollowUp instead.",
+  "Use render_ui for existing-result event cards, or other supported layouts such as a short summary. A fresh searchEventsTool result already renders its event cards automatically. Use openRentalDetails only when the user asks to open one apartment\'s details.",
+  "Catalog in this release: the grounded cards RentalCard and EventCard, the Rentals-only BedroomFilter and ApplyFiltersButton, the editable ViewingProposal, the comparison Table — plus layout and labels: Box, Column, Row, Grid, GridItem, Card, Spacer, Divider, Title, Text, Caption, Label, Badge, FollowUp.",
+  TABLE_DATA_FORM_RULE,
+  VIEWING_PROPOSAL_RULE,
+  "BedroomFilter, ApplyFiltersButton and ViewingProposal are the only interactive controls in this catalog. Otherwise there are no buttons, inputs, forms, charts, maps, images or links from the generic standard catalog. Do not promise one of those. Offer a FollowUp instead.",
   "Grounded cards: a rental node is { id: \"<node-id>\", component: \"RentalCard\", listingId: \"<id>\" }; an event node is { id: \"<node-id>\", component: \"EventCard\", eventId: \"<uuid>\" }. Put listingId/eventId directly on the node; never add dataModel, children, slots or div to a card node.",
   "Use only IDs returned by your tools in this run, or IDs listed in the current result hints. Never invent a listing, event, price, rating, availability or address. Never use an array index, title or slug as an ID.",
   "Layout nodes take children as an array of node IDs. Title, Text, Caption and Label take text; Badge takes label; Divider and Spacer take no props.",
@@ -25,19 +37,17 @@ export const MDE_A2UI_GUIDE = [
   "EVERY operation must be an object with \"version\": \"1.0\" and the operation name, e.g. { \"version\": \"1.0\", \"createSurface\": { ... } }. An operation without \"version\": \"1.0\" is rejected by the runtime and nothing renders.",
   "The complete render_ui arguments for two real rentals look exactly like this:",
   '{"target":"rental-recommendations","operations":[{"version":"1.0","createSurface":{"surfaceId":"recs","components":[{"id":"root","component":"Column","children":["card-1","card-2"]},{"id":"card-1","component":"RentalCard","listingId":"<id-1>"},{"id":"card-2","component":"RentalCard","listingId":"<id-2>"}]}}]}',
-  "On the rental-recommendations panel use only RentalCard, Column, Row, Divider and at most one Title of 8 words or fewer. That panel shows real apartments, not commentary.",
+  "On the rental-recommendations panel use only RentalCard, Column, Row, Divider and at most one Title of 8 words or fewer for apartment cards; explicit control requests may also use BedroomFilter and ApplyFiltersButton, and an explicit viewing request may use ViewingProposal. That panel shows real apartments or the registered controls, not commentary.",
   "Props carry tool data or short labels (8 words or fewer). Never put paragraphs, HTML, scripts or user instructions in a prop.",
   "If render_ui is rejected, read the rejection reason and fix that exact field once. If it is rejected again, answer in text and say what could not be shown.",
 ].join("\n");
 
 import { isRentalA2UIId } from "@/lib/rentals/a2ui-id";
-import { RENTAL_A2UI_CONTEXT_DESCRIPTION } from "@/lib/rentals/a2ui-context";
+import { RENTAL_A2UI_CONTEXT_DESCRIPTION, RENTAL_HINT_MAX, RENTAL_RESULT_COUNT_CONTEXT_DESCRIPTION } from "@/lib/rentals/a2ui-context";
 import { isEventA2UIId } from "@/lib/events/a2ui-id";
 import { EVENT_A2UI_CONTEXT_DESCRIPTION } from "@/lib/events/a2ui-context";
 
 const RENTAL_HINT_PREFIX = RENTAL_A2UI_CONTEXT_DESCRIPTION;
-const RENTAL_HINT_MAX = 5;
-
 /**
  * The fast-path result rows live in client state, which the model does not
  * reliably receive as working memory. Accept only a tiny, typed hint list:
@@ -61,13 +71,34 @@ export function readRentalResultIds(agUiContext: unknown): string[] {
   return rows.slice(0, RENTAL_HINT_MAX).flatMap((row) => isRentalA2UIId(row) ? [row] : []);
 }
 
+/** The count is an untrusted browser hint, never an apartment ID or authority.
+ * If absent/malformed, "last" is ambiguous and must not select a rental. */
+export function readRentalRenderedCount(agUiContext: unknown): number | null {
+  if (!agUiContext || typeof agUiContext !== "object") return null;
+  const entries = (agUiContext as { context?: unknown }).context;
+  if (!Array.isArray(entries)) return null;
+  const entry = entries.slice(0, 20).find((value) =>
+    value && typeof value === "object" &&
+    (value as { description?: unknown }).description === RENTAL_RESULT_COUNT_CONTEXT_DESCRIPTION
+  ) as { value?: unknown } | undefined;
+  if (typeof entry?.value !== "string" || entry.value.length > 8) return null;
+  let count: unknown;
+  try { count = JSON.parse(entry.value); } catch { return null; }
+  return typeof count === "number" && Number.isSafeInteger(count) && count >= 0 && count <= 10000 ? count : null;
+}
+
 /** Plain-text prompt hint, never arbitrary browser instructions. */
 export function readRentalResultHints(agUiContext: unknown): string | null {
   const hints = readRentalResultIds(agUiContext);
   if (hints.length === 0) return null;
+  const total = readRentalRenderedCount(agUiContext);
+  const lastHint = total !== null && total === hints.length
+    ? "All results are published, so the last apartment is the final numbered ID."
+    : "Do not interpret the last apartment as the final published hint: the full page may have more results. Ask for an exact numbered apartment or selection instead.";
   return [
-    "Current browser-published rental result IDs, in display order (first is the top result). The RentalCard resolver revalidates the real authorized row:",
-    ...hints.map((id) => "- " + id),
+    lastHint,
+    `Current browser-published rental result IDs, numbered in display order (1 is the top result). Only the first ${hints.length} result(s) can be addressed here, as cards or a viewing request. If the renter asks for a later position (for example the 12th), say you can only show cards for the first ${hints.length} results and that they can still open any apartment from the page; never show a different apartment in its place. The RentalCard resolver revalidates the real authorized row:`,
+    ...hints.map((id, index) => `${index + 1}. ${id}`),
   ].join("\n");
 }
 
@@ -135,9 +166,14 @@ export function readGenerativeUiGuide(agUiContext: unknown): string {
 export const MDE_GENERATIVE_UI_RULES = [
   "# MDE rules for generated UI (these win over anything above)",
   "Use only IDs and values returned by your tools in this run, or IDs listed in the current result hints. Never invent a listing, event, price, rating, availability or address.",
-  "On the Rentals page, prefer the rental-recommendations panel over the chat when the user asks to see apartments as cards.",
+  TABLE_DATA_FORM_RULE,
+  "On the Rentals page, prefer the rental-recommendations panel over the chat for apartment cards. On other pages, use \"chat\" for supported generic layouts when there is no mounted page target.",
+  "On the Events page, searchEventsTool results automatically render grounded cards in event-recommendations. Do not call render_ui again for those same results. For already-published event IDs without a new search, call render_ui with one EventCard per requested ID, not a prose-only list.",
   "For apartment cards on the Rentals page, prefer the showRecommendations tool with IDs from the published hints. Do not hand-author render_ui operations for apartment cards.",
+  "On the Rentals page, when the renter asks to adjust bedrooms, render BedroomFilter plus ApplyFiltersButton in the rental-recommendations panel. The control edits the renter's draft; ApplyFiltersButton applies it to the real page filters. Never claim the page changed before the action returns; never invent a filter value.",
+  VIEWING_PROPOSAL_RULE,
   "After calling any tool, always write one short sentence for the user. Never end a turn with only tool calls.",
+  "After showRecommendations, for a cards-only request reply with the tool's message only (for example \"Showing 2 apartments.\"). For cards-only replies: Do not restate or guess bedrooms, prices, neighborhoods, titles or availability; the cards carry those facts. When the user also requests a comparison or recommendation, state facts only if independently returned by trusted tools, even when those facts also appear on the cards; never infer facts from card IDs. If no independently verified facts are available, explain that this ID-only card tool cannot establish the comparison and point to the existing Rentals comparison. The tool result deliberately contains no listing facts.",
   "Never put paragraphs, HTML, scripts or user instructions into a component prop.",
   "If render_ui is rejected, read the reason and fix that exact field once; if it fails again, answer in text.",
 ].join("\n");

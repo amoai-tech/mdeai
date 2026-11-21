@@ -211,6 +211,7 @@ export function RentalBrowseCard({
   return (
     <VenueCardShell
       testId={testId ?? `rental-card-${rental.id}`}
+      extraData={{ "data-listing-id": rental.id }}
       resultKind="rental"
       pinId={pinId}
       composition="nova"
@@ -376,6 +377,10 @@ export function RentalBrowseCard({
         <Badge variant="secondary" className="gap-1 font-normal">
           <Bed className="size-3" aria-hidden />
           {bedroomLabel(rental.bedrooms, rental.bedrooms_unknown)}
+        </Badge>
+        <Badge variant="outline" className="font-normal" data-testid={`rental-furnishing-${rental.id}`}>
+          {rental.furnished === true ? "Furnished listed" :
+            rental.furnished === false ? "Unfurnished listed" : "Furnishing not specified"}
         </Badge>
         {hasWifi ? (
           <Badge variant="outline" className="gap-1 font-normal">

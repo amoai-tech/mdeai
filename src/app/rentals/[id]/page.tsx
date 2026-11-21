@@ -26,7 +26,7 @@ async function isLocalPreviewPage(): Promise<boolean> {
 interface Props {
   params: Promise<{ id: string }>;
   /** The browse filters the renter arrived with; used only to build "Back to results". */
-  searchParams?: Promise<RentalBrowseSearchParams>;
+  searchParams?: Promise<RentalBrowseSearchParams & { browse?: string }>;
 }
 
 // skipcq: JS-0067 - Next.js App Router metadata export; not browser global scope
@@ -58,8 +58,14 @@ export async function generateMetadata({ params }: Props) {
 export default async function RentalDetailPage({ params, searchParams }: Props) {
   const { id } = await params;
   // Only recognised, validated filters are carried back; anything else in the URL is ignored.
-  const { filters } = parseBrowseFilters((await searchParams) ?? {});
-  const backHref = buildRentalsUrl(filters);
+  const browseParams: RentalBrowseSearchParams & { browse?: string } = (await searchParams) ?? {};
+  const { filters } = parseBrowseFilters(browseParams);
+  // A deliberate Browse all visit must return to that catalogue, not the fresh start.
+  const unfiltered = !filters.neighborhood && !filters.beds && !filters.from && !filters.through;
+  const backHref = browseParams.browse === "all" && unfiltered
+    ? "/rentals?browse=all" : buildRentalsUrl(filters);
+  // Use the same validated return state for an unavailable detail Retry.
+  const retryHref = `/rentals/${encodeURIComponent(id)}${backHref.slice("/rentals".length)}`;
   const preview = (await isLocalPreviewPage()) && id.startsWith("candidate-fincaraiz-");
 
   let detail;
@@ -86,13 +92,15 @@ export default async function RentalDetailPage({ params, searchParams }: Props) 
             : "Something went wrong on our side. Please try again."}
         </p>
         {unavailable ? (
-          <Link
-            href={`/rentals/${encodeURIComponent(id)}`}
+          // A full navigation must fetch the server route again; a same-URL
+          // Next.js Link can reuse cached error-state RSC output.
+          <a
+            href={retryHref}
             className="text-sm font-medium text-primary hover:underline"
             data-testid="rental-detail-error-retry"
           >
             Retry
-          </Link>
+          </a>
         ) : null}
         <Link
           href={backHref}

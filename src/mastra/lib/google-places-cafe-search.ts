@@ -11,10 +11,15 @@ const CAFE_TEXT_SEARCH_MASK = [
   "places.types",
 ] as const;
 
-const MEDELLIN_BIAS = { latitude: 6.2442, longitude: -75.5812 };
-const MEDELLIN_CONTEXT = /\b(medell[ií]n|laureles|poblado|envigado|sabaneta|bel[eé]n|provenza|estadio|centro)\b/i;
-const EXPLICIT_CITY = /\b(bogot[aá]|cali|cartagena|barranquilla|santa marta|pereira|manizales|armenia|bucaramanga|c[uú]cuta|villavicencio|monter[ií]a|ibagu[eé]|pasto|neiva|popay[aá]n|sincelejo|valledupar|tunja|riohacha|quibd[oó]|florencia|yopal|mocoa|leticia|san andr[eé]s)\b/i;
-const EXPLICIT_LOCATION_PHRASE = /\b(?:in|en|near|around|nearby)\s+[A-ZÁÉÍÓÚÑ][\p{L}'-]+/u;
+export const MEDELLIN_BIAS = { latitude: 6.2442, longitude: -75.5812 };
+const MAP_AREA_CONTEXT =
+  /\b(this map area|around this map|current map|map area|near here|around here|en esta zona|en este mapa|por aqu[ií]|cerca de aqu[ií])\b/i;
+const MEDELLIN_CONTEXT = /\b(medell[ií]n|laureles|poblado|envigado|sabaneta|bel[eé]n|provenza|estadio|centro)(?![\p{L}])/iu;
+const EXPLICIT_CITY = /\b(bogot[aá]|cali|cartagena|barranquilla|santa marta|pereira|manizales|armenia|bucaramanga|c[uú]cuta|villavicencio|monter[ií]a|ibagu[eé]|pasto|neiva|popay[aá]n|sincelejo|valledupar|tunja|riohacha|quibd[oó]|florencia|yopal|mocoa|leticia|san andr[eé]s)(?![\p{L}])/iu;
+const EXPLICIT_LOCATION_PHRASE = /\b(?:in|en|near|around)\s+(?!(?:the|this|here|me|my|a|an|our|your|with|walking|which|esta|este|estas|estos|mi|mis|el|la|los|las|una|un|por|aqu[ií])\b)[\p{L}][\p{L}'-]+/iu;
+// Known unsupported destinations. Keep this narrow: an arbitrary place phrase
+// can be a valid Medellín barrio or landmark not named in MEDELLIN_CONTEXT.
+const UNSUPPORTED_PLACE_CONTEXT = /\b(guatap[eé]|mars)(?![\p{L}])/iu;
 const CAFE_TYPES = new Set(["cafe", "coffee_shop", "bakery", "brunch_restaurant"]);
 
 type GooglePlace = {
@@ -78,11 +83,40 @@ function isCafe(place: GooglePlace): boolean {
   return placeTypes(place).some((t) => CAFE_TYPES.has(t));
 }
 
-/** Add Medellín context when the user did not name a city/neighborhood. */
-export function withMedellinScope(query: string): string {
-  if (MEDELLIN_CONTEXT.test(query) || EXPLICIT_CITY.test(query) || EXPLICIT_LOCATION_PHRASE.test(query)) {
-    return query;
-  }
+/** True when the query names a Medellín city/neighborhood rather than another city. */
+export function isMedellinPlaceScope(query: string): boolean {
+  // "centro de Bogotá" contains "centro", but the explicit city wins.
+  return !EXPLICIT_CITY.test(query) && MEDELLIN_CONTEXT.test(query);
+}
+
+/** True only for an explicit city outside Medellín. */
+export function hasNonMedellinCity(query: string): boolean {
+  return EXPLICIT_CITY.test(query);
+}
+
+/** Explicitly outside current discovery scope, never inferred from an unknown name. */
+export function hasOutsideMedellinPlaceScope(query: string): boolean {
+  return EXPLICIT_CITY.test(query) || UNSUPPORTED_PLACE_CONTEXT.test(query);
+}
+
+/** True when the user named a real city, neighborhood or location phrase. */
+export function hasExplicitPlaceScope(query: string): boolean {
+  return (
+    MEDELLIN_CONTEXT.test(query) ||
+    EXPLICIT_CITY.test(query) ||
+    UNSUPPORTED_PLACE_CONTEXT.test(query) ||
+    EXPLICIT_LOCATION_PHRASE.test(query)
+  );
+}
+
+/** True when the query refers to the visible map instead of a named city. */
+export function isMapAreaQuery(query: string): boolean {
+  return MAP_AREA_CONTEXT.test(query);
+}
+
+/** Add Medellín only when no explicit location or map viewport is provided. */
+export function withMedellinScope(query: string, hasMapBias = false): string {
+  if (hasExplicitPlaceScope(query) || isMapAreaQuery(query) || hasMapBias) return query;
   return `${query} Medellín, Colombia`;
 }
 
@@ -133,18 +167,21 @@ export function mapGoogleTextSearchToGrounded(response: unknown): GoogleCafeSear
 export async function searchGoogleCafes(params: {
   query: string;
   pageSize?: number;
-  locationBias?: { latitude: number; longitude: number };
+  locationBias?: { latitude: number; longitude: number } | null;
 }): Promise<GoogleCafeSearchResult> {
   const pageSize = Math.min(Math.max(params.pageSize ?? 5, 1), 5);
-  const center = params.locationBias ?? MEDELLIN_BIAS;
+  // Named outside-Medellín cities outrank an old map viewport or default bias.
+  const center = hasNonMedellinCity(params.query)
+    ? undefined
+    : params.locationBias === null
+      ? undefined
+      : params.locationBias ?? MEDELLIN_BIAS;
   const response = await searchText({
-    textQuery: withMedellinScope(params.query),
+    textQuery: withMedellinScope(params.query, Boolean(params.locationBias)),
     pageSize,
     fieldMask: [...CAFE_TEXT_SEARCH_MASK],
     maxAttempts: 1,
-    locationBias: {
-      circle: { center, radius: 5000 },
-    },
+    ...(center ? { locationBias: { circle: { center, radius: 5000 } } } : {}),
   });
   return mapGoogleTextSearchToGrounded(response);
 }

@@ -21,11 +21,18 @@ import { useOptionalConciergeCoAgent } from "@/components/chat/concierge-coagent
  *
  * `RentalCard` plus layout and one short heading only: the panel exists to
  * place real apartments next to the native results, not to become a second
- * free-form canvas. No control is allowed because no catalog function is
- * registered for this Surface yet (SAN-1655), so an authored button would be a
- * dead control beside real listings.
+ * free-form canvas. The only controls allowed are `BedroomFilter` and
+ * `ApplyFiltersButton` (SAN-1655), only when the renter asks to change bedrooms
+ * (wired to the page's real filter action), and `ViewingProposal` (SAN-1658),
+ * only when the renter asks to schedule a viewing (it opens the existing review
+ * form and writes nothing itself). The wording below
+ * must agree with the allowlist and with `MDE_GENERATIVE_UI_RULES`; a test
+ * enforces that so the model is never told two different things.
  */
 export const RENTAL_RECOMMENDATIONS_SURFACE_ID = "rental-recommendations";
+
+export const RENTAL_RECOMMENDATIONS_DESCRIPTION =
+  "Grounded apartment recommendations for this Rentals page. Use this instead of the chat when someone asks which apartments match the page or its filters. One RentalCard per real listing from the current authorized results or the published rental-result IDs; do not run a new search just to fill this panel. Put the cards in a Column whose children are the card node ids; optionally one Title of 8 words or fewer. No commentary. The only controls allowed are BedroomFilter with ApplyFiltersButton, and only when the renter explicitly asks to change bedrooms, and ViewingProposal, and only when the renter explicitly asks to schedule a viewing of a listed apartment. Never state or invent a price, rating, availability or address.";
 
 export const RENTAL_RECOMMENDATIONS_COMPONENTS = [
   "RentalCard",
@@ -35,6 +42,11 @@ export const RENTAL_RECOMMENDATIONS_COMPONENTS = [
   // One short heading at most. No Text/Caption/Badge: the panel is for real
   // apartments, not model commentary, and the page already has its own heading.
   "Title",
+  // SAN-1655 — the one interactive control, wired to the page's real filter action.
+  "BedroomFilter",
+  "ApplyFiltersButton",
+  // SAN-1658 — an editable viewing request; Continue opens the existing review form.
+  "ViewingProposal",
 ] as const;
 
 export function RentalRecommendationsSurface() {
@@ -55,7 +67,7 @@ export function RentalRecommendationsSurface() {
       id={RENTAL_RECOMMENDATIONS_SURFACE_ID}
       ui={mdeUI}
       components={[...RENTAL_RECOMMENDATIONS_COMPONENTS]}
-      description="Grounded apartment recommendations for this Rentals page. Use this instead of the chat when someone asks which apartments match the page or its filters. One RentalCard per real listing from the current authorized results or the published rental-result IDs; do not run a new search just to fill this panel. Put the cards in a Column whose children are the card node ids; optionally one Title of 8 words or fewer. No commentary, no controls. Never state or invent a price, rating, availability or address."
+      description={RENTAL_RECOMMENDATIONS_DESCRIPTION}
       className="mb-4 rounded-xl border border-border bg-card px-4 py-3 shadow-sm"
       fallback={null}
       autoScroll={false}

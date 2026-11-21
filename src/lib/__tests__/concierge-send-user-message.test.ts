@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { clearConciergeError, getConciergeErrorSnapshot } from "@/lib/concierge-error-store";
 import { sendConciergeUserMessage } from "../concierge-send-user-message";
+import { canFastPathCafeSearch } from "../cafe-search-fast-path";
+import { looksLikeRentalAnalysis } from "../rental-query-parser";
 
 function makeHandlers() {
   return {
@@ -38,6 +40,107 @@ describe("SAN-867 · VEB-MVP-001 — Router hijack fix — sendConciergeUserMess
 
     expect(handlers.onAgentSend).toHaveBeenCalledOnce();
     expect(handlers.handleEventMessage).not.toHaveBeenCalled();
+  });
+
+  it("passes apartment comparisons near coffee shops to the agent, not café search", async () => {
+    const prompt = "Compare the apartments near coffee shops in Laureles";
+    const handlers = makeHandlers();
+    // Both layers protect this turn: venue classification rejects plural rentals,
+    // and the sender never tries a café handler even if it could accept the text.
+    expect(looksLikeRentalAnalysis(prompt)).toBe(true);
+    expect(canFastPathCafeSearch(prompt)).toBe(false);
+    handlers.handleGroundedMessage.mockResolvedValueOnce(true);
+
+    await sendConciergeUserMessage(prompt, handlers);
+
+    expect(handlers.onAgentSend).toHaveBeenCalledWith(prompt, expect.any(String));
+    expect(handlers.handleGroundedMessage).not.toHaveBeenCalled();
+    expect(handlers.handleRestaurantMessage).not.toHaveBeenCalled();
+  });
+
+  it("keeps standalone café discovery on the grounded fast path", async () => {
+    const handlers = makeHandlers();
+    handlers.handleGroundedMessage.mockResolvedValueOnce(true);
+
+    await sendConciergeUserMessage("Find coffee shops in Laureles", handlers);
+
+    expect(handlers.handleGroundedMessage).toHaveBeenCalledOnce();
+    expect(handlers.onAgentSend).not.toHaveBeenCalled();
+  });
+
+  it("SAN-1445 sends a furnishing clear through rental memory before the concierge", async () => {
+    const handlers = { ...makeHandlers(), inRentalSearch: true, lastIntent: "rental_search" as const };
+    const text = "Either furnished or unfurnished is fine";
+    // The clear is not a search. The existing rental hook records it, then
+    // the Concierge may respond conversationally. Never skip the memory update.
+    const order: string[] = [];
+    handlers.handleRentalMessage.mockImplementation(async () => { order.push("memory"); return false; });
+    handlers.onAgentSend.mockImplementation(async () => { order.push("agent"); return true; });
+    expect(await sendConciergeUserMessage(text, handlers)).toBe(true);
+    expect(order).toEqual(["memory", "agent"]);
+    expect(handlers.handleRentalMessage).toHaveBeenCalledOnce();
+    expect(handlers.handleRentalMessage).toHaveBeenCalledWith(text, expect.any(String));
+    expect(handlers.onAgentSend).toHaveBeenCalledOnce();
+  });
+
+  it("SAN-1445 lets a furnishing-clear plus a budget search stay on the rental fast path", async () => {
+    const handlers = { ...makeHandlers(), inRentalSearch: true, lastIntent: "rental_search" as const };
+    const text = "Either furnished or unfurnished is fine, only under COP 2.4 million";
+    handlers.handleRentalMessage.mockResolvedValueOnce(true);
+    expect(await sendConciergeUserMessage(text, handlers)).toBe(true);
+    expect(handlers.handleRentalMessage).toHaveBeenCalledOnce();
+    expect(handlers.onAgentSend).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    "Either furnished or unfurnished is fine. Find salsa events this weekend in Medellín.",
+    "Either furnished or unfurnished is fine. What events are on this weekend?",
+  ])("SAN-1445 clears rental memory then routes mixed-topic event request: %s", async (text) => {
+    const handlers = { ...makeHandlers(), inRentalSearch: true, lastIntent: "rental_search" as const };
+    handlers.handleEventMessage.mockResolvedValueOnce(true);
+    expect(await sendConciergeUserMessage(text, handlers)).toBe(true);
+    expect(handlers.handleRentalMessage).toHaveBeenCalledOnce();
+    expect(handlers.handleEventMessage).toHaveBeenCalledOnce();
+    expect(handlers.closeRentalDetails).toHaveBeenCalledOnce();
+    expect(handlers.onAgentSend).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["selected rental café", "Either furnished or unfurnished is fine. Show cafés within 800 meters of this apartment."],
+    ["grounded amenity question", "Either furnished or unfurnished is fine. Does this apartment have a balcony?"],
+  ])("SAN-1445 records clear before early %s handler returns", async (_label, text) => {
+    const order: string[] = [];
+    const handlers = {
+      ...makeHandlers(),
+      inRentalSearch: true,
+      lastIntent: "rental_search" as const,
+      handleGroundedAmenityFollowUp: vi.fn(async () => { order.push("amenity"); return true; }),
+    };
+    handlers.handleRentalMessage.mockImplementation(async () => { order.push("clear"); return false; });
+    handlers.handleGroundedMessage.mockImplementation(async () => { order.push("cafe"); return true; });
+    expect(await sendConciergeUserMessage(text, handlers)).toBe(true);
+    expect(order[0]).toBe("clear");
+    expect(handlers.handleRentalMessage).toHaveBeenCalledOnce();
+    expect(handlers.onAgentSend).not.toHaveBeenCalled();
+  });
+
+  it("SAN-1445 routes a clear while the first rental search is pending", async () => {
+    const order: string[] = [];
+    const handlers = { ...makeHandlers(), inRentalSearch: false,
+      hasPendingRentalSearch: () => true,
+    };
+    handlers.handleRentalMessage.mockImplementation(async () => { order.push("clear"); return false; });
+    handlers.onAgentSend.mockImplementation(async () => { order.push("agent"); return true; });
+    expect(await sendConciergeUserMessage("Either furnished or unfurnished is fine", handlers)).toBe(true);
+    expect(order).toEqual(["clear", "agent"]);
+    expect(handlers.handleRentalMessage).toHaveBeenCalledOnce();
+  });
+
+  it("SAN-1445 does not mutate rental memory for an unrelated initial chat", async () => {
+    const handlers = makeHandlers();
+    expect(await sendConciergeUserMessage("Either furnished or unfurnished is fine", handlers)).toBe(true);
+    expect(handlers.handleRentalMessage).not.toHaveBeenCalled();
+    expect(handlers.onAgentSend).toHaveBeenCalledOnce();
   });
 
   it("handled rental fast-path does not also run the agent", async () => {
@@ -144,6 +247,64 @@ describe("SAN-867 · VEB-MVP-001 — Router hijack fix — sendConciergeUserMess
 
     expect(handlers.handleEventMessage).toHaveBeenCalledOnce();
     expect(handlers.onAgentSend).not.toHaveBeenCalled();
+  });
+
+  it("SAN-874 marks a signed-in coworking question as a topic switch before the next budget", async () => {
+    const handlers = {
+      ...makeHandlers(), inRentalSearch: true,
+      onTopicShift: vi.fn<(intent: import("@/lib/router-intent").RouterIntent) => void>(),
+      onAgentSend: vi.fn<(text: string, id?: string, onAccepted?: () => void, onCompleted?: () => void, onFailed?: () => void) => Promise<boolean>>(
+        async (_text, _id, onAccepted, onCompleted) => {
+          onAccepted?.();
+          onCompleted?.();
+          return true;
+        },
+      ),
+    };
+    await sendConciergeUserMessage("What coworking spaces are in Laureles?", handlers);
+    expect(handlers.onTopicShift).toHaveBeenCalledTimes(2);
+    expect(handlers.onTopicShift).toHaveBeenNthCalledWith(1, "general_concierge", "accepted");
+    expect(handlers.onTopicShift).toHaveBeenNthCalledWith(2, "general_concierge", "completed");
+    expect(handlers.onAgentSend).toHaveBeenCalledWith(
+      "What coworking spaces are in Laureles?", expect.any(String), expect.any(Function), expect.any(Function), expect.any(Function),
+    );
+    expect(handlers.handleRentalMessage).not.toHaveBeenCalled();
+  });
+
+  it("SAN-874 rolls back topic intent when a coworking stream fails", async () => {
+    const handlers = {
+      ...makeHandlers(), inRentalSearch: true,
+      onTopicShift: vi.fn(),
+      onAgentSend: vi.fn(async (_text: string, _id?: string, onAccepted?: () => void,
+        _onCompleted?: () => void, onFailed?: () => void) => {
+        onAccepted?.();
+        onFailed?.();
+        return true;
+      }),
+    };
+    await sendConciergeUserMessage("What coworking spaces are in Laureles?", handlers);
+    expect(handlers.onTopicShift).toHaveBeenNthCalledWith(1, "general_concierge", "accepted");
+    expect(handlers.onTopicShift).toHaveBeenNthCalledWith(2, "general_concierge", "failed");
+  });
+
+  it("SAN-874 keeps rental cards when a coworking agent turn did not start", async () => {
+    const handlers = {
+      ...makeHandlers(), inRentalSearch: true,
+      onTopicShift: vi.fn(),
+    };
+    await sendConciergeUserMessage("What coworking spaces are in Laureles?", handlers);
+    // A mock that never reports acceptance must not clear the old results.
+    expect(handlers.onTopicShift).not.toHaveBeenCalled();
+    expect(handlers.handleRentalMessage).not.toHaveBeenCalled();
+  });
+
+  it("SAN-874 does not clear rental state for a general question or Flash hint", async () => {
+    const handlers = {
+      ...makeHandlers(), inRentalSearch: true,
+      onTopicShift: vi.fn(),
+    };
+    await sendConciergeUserMessage("Is Laureles safe at night?", handlers);
+    expect(handlers.onTopicShift).not.toHaveBeenCalled();
   });
 
   describe("SAN-407 · INT-004 — a whole-city follow-up reaches the rental search", () => {

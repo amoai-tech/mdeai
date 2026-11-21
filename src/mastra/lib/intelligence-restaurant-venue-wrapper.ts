@@ -57,7 +57,7 @@ const LOCAL_RESTAURANT_RE =
   /\b(local|authentic|hidden gem|not touristy|avoid tourist|non-touristy)\b/i;
 
 const RENTAL_RE =
-  /\b(1\s?br|2\s?br|bedroom|apartment|rental|rentals|airbnb|under\s+\$?\d+\s*(?:\/night|per night)|monthly)\b/i;
+  /\b(1\s?br|2\s?br|bedroom|apartments?|rental|rentals|airbnb|under\s+\$?\d+\s*(?:\/night|per night)|monthly)\b/i;
 
 function hasClearVerticalSignal(text: string): boolean {
   const slots = parseIntelligenceSlots(text);

@@ -60,6 +60,30 @@ describe("/rentals/[id]", () => {
     expect(textOf(page)).toMatch(/retry/i);
   });
 
+  it.each([
+    ["no filters", "abc", {}, "/rentals/abc"],
+    ["Browse all", "abc", { browse: "all" }, "/rentals/abc?browse=all"],
+    [
+      "validated filters take priority over browse=all and the ID stays encoded",
+      "a/b ?",
+      { browse: "all", neighborhood: "Laureles", beds: "2", from: "2026-11-01", through: "2026-11-30", evil: "ignore" },
+      "/rentals/a%2Fb%20%3F?neighborhood=Laureles&beds=2&from=2026-11-01&through=2026-11-30",
+    ],
+    [
+      "invalid dates and unknown parameters are excluded",
+      "abc",
+      { browse: "invalid", neighborhood: "Laureles", from: "2026-02-31", evil: "ignore" },
+      "/rentals/abc?neighborhood=Laureles",
+    ],
+  ])("the detail error Retry preserves only %s", async (_case, id, params, expected) => {
+    getRentalDetail.mockRejectedValue(new RentalSearchUnavailableError("client_unavailable"));
+    const page = await render(id, params);
+    const children = page.props.children as Array<ReactElement<Record<string, unknown>> | null>;
+    const retry = children.find((child) => child?.props?.["data-testid"] === "rental-detail-error-retry");
+    expect(retry?.props.href).toBe(expected);
+    expect(retry?.type).toBe("a"); // Native navigation must refetch after a server outage.
+  });
+
   it("shows the generic error for any other failure", async () => {
     getRentalDetail.mockRejectedValue(new Error("boom"));
     const page = await render("abc");
@@ -95,6 +119,17 @@ describe("/rentals/[id]", () => {
       getRentalDetail.mockResolvedValue(detail);
       const page = await render("abc", { from: "2026-02-31", neighborhood: "Laureles" });
       expect(page.props.backHref).toBe("/rentals?neighborhood=Laureles");
+    });
+
+    it("preserves a deliberate Browse all selection after opening full Details", async () => {
+      getRentalDetail.mockResolvedValue(detail);
+      expect((await render("abc", { browse: "all" })).props.backHref).toBe("/rentals?browse=all");
+    });
+
+    it("does not let Browse all override a real neighborhood filter", async () => {
+      getRentalDetail.mockResolvedValue(detail);
+      expect((await render("abc", { browse: "all", neighborhood: "Laureles" })).props.backHref)
+        .toBe("/rentals?neighborhood=Laureles");
     });
 
     it("is plain /rentals when the renter arrived without filters", async () => {

@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/app/trips/actions", () => ({
@@ -5,6 +7,7 @@ vi.mock("@/app/trips/actions", () => ({
   addTripItem: vi.fn(async () => ({ ok: false, error: "not configured in this test" })),
 }));
 import { renderToStaticMarkup } from "react-dom/server";
+import { fireEvent, render } from "@testing-library/react";
 import type { MapPin } from "@/platform/contracts";
 import { SelectedPlaceOverlayCard } from "../SelectedPlaceOverlayCard";
 
@@ -68,6 +71,28 @@ describe("SelectedPlaceOverlayCard", () => {
     const groundedHtml = renderToStaticMarkup(<SelectedPlaceOverlayCard pin={groundedPin} />);
     expect(groundedHtml).toContain("selected-place-overlay-save");
     expect(groundedHtml).toContain("selected-place-overlay-add-trip");
+  });
+
+  it("renders an accessible close action when dismissal is available", () => {
+    const html = renderToStaticMarkup(
+      <SelectedPlaceOverlayCard pin={groundedPin} onDismiss={() => {}} />,
+    );
+    expect(html).toContain('data-testid="selected-place-overlay-close"');
+    expect(html).toContain('aria-label="Close selected place"');
+  });
+
+  it("calls onDismiss when the close action is clicked", () => {
+    const onDismiss = vi.fn();
+    const { getByTestId } = render(
+      <SelectedPlaceOverlayCard pin={groundedPin} onDismiss={onDismiss} />,
+    );
+    fireEvent.click(getByTestId("selected-place-overlay-close"));
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it("omits the close action when the card is not dismissible", () => {
+    const html = renderToStaticMarkup(<SelectedPlaceOverlayCard pin={groundedPin} />);
+    expect(html).not.toContain('data-testid="selected-place-overlay-close"');
   });
 
   it("uses a short placeholder strip for events and the full one for other places", () => {

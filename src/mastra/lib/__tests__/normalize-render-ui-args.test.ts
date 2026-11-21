@@ -26,6 +26,34 @@ describe("normalizeRenderUiArgs", () => {
     expect(normalizeRenderUiArgs(JSON.stringify({ operations: [{ nonsense: true }] }))).toBeNull();
   });
 
+  it("clamps an oversized Table to 5 rows by 4 columns", () => {
+    const table = {
+      id: "t",
+      component: "Table",
+      columns: ["A", "B", "C", "D", "E"],
+      rows: Array.from({ length: 7 }, () => ["a", "b", "c", "d", "e"]),
+    };
+    const args = JSON.stringify({
+      target: "chat",
+      operations: [{ version: "1.0", createSurface: { surfaceId: "s1", components: [table] } }],
+    });
+    const out = normalizeRenderUiArgs(args);
+    expect(out).not.toBeNull();
+    const node = JSON.parse(out as string).operations[0].createSurface.components[0];
+    expect(node.columns).toHaveLength(4);
+    expect(node.rows).toHaveLength(5);
+    expect(node.rows[0]).toHaveLength(4);
+  });
+
+  it("leaves a Table within the cap untouched", () => {
+    const table = { id: "t", component: "Table", columns: ["A", "B"], rows: [["a", "b"]] };
+    const args = JSON.stringify({
+      target: "chat",
+      operations: [{ version: "1.0", createSurface: { surfaceId: "s1", components: [table] } }],
+    });
+    expect(normalizeRenderUiArgs(args)).toBeNull();
+  });
+
   it("passes malformed or non-render arguments through", () => {
     expect(normalizeRenderUiArgs("not json")).toBeNull();
     expect(normalizeRenderUiArgs("")).toBeNull();

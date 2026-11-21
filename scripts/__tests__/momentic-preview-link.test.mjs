@@ -13,6 +13,9 @@ const preload = join(directory, 'fake-vercel.mjs');
 writeFileSync(preload, [
   "const token = 'A'.repeat(32);",
   "globalThis.fetch = async (_url, options) => {",
+  "  const url = new URL(_url);",
+  "  if (url.searchParams.get('slug') !== 'amo-agency') throw new Error('Wrong Vercel team scope');",
+
   "  const body = JSON.parse(options.body);",
   "  if (body.ttl === 1800) {",
   "    process.stderr.write('CREATED\\n');",

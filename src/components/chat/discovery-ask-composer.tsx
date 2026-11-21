@@ -15,6 +15,21 @@ import { ArrowUp, Square } from "lucide-react";
 import type { DiscoveryPage } from "@/components/chat/discovery-page-context";
 import { getLatestDiscoveryToolResult, type DiscoveryAgentResult } from "./discovery-tool-results";
 import { SelectedItemClearAction } from "./selected-item-clear-action";
+import { useOptionalEventLocalChat } from "./event-local-chat-context";
+
+/** Current visible page rows are a count hint, never authority to create a card or booking.
+ * Only intercept an exact ordinal-card command with no new search criteria. */
+export function unavailableEventCardReply(prompt: string, visibleCount: number): string | null {
+  if (!Number.isSafeInteger(visibleCount) || visibleCount < 0) return null;
+  const match = /^\s*(?:show|display|render)\s+(?:me\s+)?(?:the\s+)?(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|[1-9][0-9]?(?:st|nd|rd|th))\s+events?\s+as\s+(?:a\s+)?cards?[.!?]?\s*$/i.exec(prompt);
+  if (!match) return null;
+  const words = ["first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth"];
+  const word = match[1].toLowerCase();
+  const requested = words.indexOf(word) + 1 || Number.parseInt(word, 10);
+  if (!Number.isSafeInteger(requested) || requested <= visibleCount) return null;
+  const displayed = visibleCount === 0 ? "No events are" : `Only ${visibleCount} event${visibleCount === 1 ? "" : "s"} are`;
+  return `${displayed} shown on this page. There is no ${word} event in these results. Try changing the event filters or choose an event that is shown.`;
+}
 
 type EventGuestOptions = {
   category?: "music" | "food" | "culture" | "sport" | "nightlife" | null;
@@ -149,9 +164,11 @@ const ignoreRejection = () => undefined;
 
 /** One composer on every non-rental browse page; Rentals retains its richer search adapter. */
 // skipcq: JS-0067 - module-local React component; not browser global scope
-function LiveComposer({ page, guestEvents, guestRestaurants, guestVenues, onAgentResults, hideHeading = false, suggestions, historyNote, hasSelectedItem, onClearSelection }: {
+function LiveComposer({ page, guestEvents, guestRestaurants, guestVenues, onAgentResults, hideHeading = false, suggestions, historyNote, hasSelectedItem, onClearSelection, visibleEventCount }: {
   page: Exclude<DiscoveryPage, "rentals">;
   guestEvents?: EventGuestOptions;
+  /** The number of actual Events cards on this page, not an AI search estimate. */
+  visibleEventCount?: number;
   /** Restaurants only: catalog search for signed-out visitors, using the public endpoint. */
   guestRestaurants?: RestaurantGuestOptions;
   /** Cafés and nightlife: venue-anchor search for signed-out visitors. */
@@ -171,6 +188,7 @@ function LiveComposer({ page, guestEvents, guestRestaurants, guestVenues, onAgen
   const { agent, isReady } = useConciergeCoAgent();
   const { appendMessage, stopActiveRun, retryLastTurn, isLoading, isRuntimeUnavailable } = useConciergeChat();
   const turns = useTurns(agent);
+  const localChat = useOptionalEventLocalChat();
   const path = usePathname();
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
@@ -220,6 +238,18 @@ function LiveComposer({ page, guestEvents, guestRestaurants, guestVenues, onAgen
   const runTurn = useCallback(async (raw: string, origin: "composer" | "suggestion") => {
     const message = raw.trim();
     if (!message || inFlight.current || busy || !isReady || signedOut || isRuntimeUnavailable()) return;
+    // The current page already proves when the requested position does not exist.
+    // Reuse the canonical local chat exchange (and thread save), not a model
+    // search that could re-filter the grid or invent another event.
+    const unavailable = page === "events" && typeof visibleEventCount === "number"
+      ? unavailableEventCardReply(message, visibleEventCount) : null;
+    if (unavailable && localChat) {
+      setError(null);
+      localChat.showExchange(message, unavailable);
+      if (origin === "composer") setDraft("");
+      setShowHistory(true);
+      return;
+    }
     inFlight.current = true;
     cancelled.current = false;
     setSending(true);
@@ -260,7 +290,7 @@ function LiveComposer({ page, guestEvents, guestRestaurants, guestVenues, onAgen
       inFlight.current = false;
       setSending(false);
     }
-  }, [agent, appendMessage, busy, isReady, isRuntimeUnavailable, onAgentResults, page, signedOut]);
+  }, [agent, appendMessage, busy, isReady, isRuntimeUnavailable, localChat, onAgentResults, page, signedOut, visibleEventCount]);
   // Sending a starter question and typing a question use the same guarded turn path.
   const send = useCallback(() => { runTurn(draft, "composer").catch(ignoreRejection); }, [draft, runTurn]);
   // PR #695: retry the existing user turn rather than appending it a second time.
@@ -348,9 +378,11 @@ function LiveComposer({ page, guestEvents, guestRestaurants, guestVenues, onAgen
 }
 
 // skipcq: JS-0067 - module-local React component; not browser global scope
-export function DiscoveryAskComposer({ page, guestEvents, guestRestaurants, guestVenues, onAgentResults, hideHeading, suggestions, historyNote, hasSelectedItem, onClearSelection }: {
+export function DiscoveryAskComposer({ page, guestEvents, guestRestaurants, guestVenues, onAgentResults, hideHeading, suggestions, historyNote, hasSelectedItem, onClearSelection, visibleEventCount }: {
   page: Exclude<DiscoveryPage, "rentals">;
   guestEvents?: EventGuestOptions;
+  /** The number of actual Events cards on this page, not an AI search estimate. */
+  visibleEventCount?: number;
   /** Restaurants only: catalog search for signed-out visitors, using the public endpoint. */
   guestRestaurants?: RestaurantGuestOptions;
   /** Cafés and nightlife: venue-anchor search for signed-out visitors. */
@@ -366,5 +398,5 @@ export function DiscoveryAskComposer({ page, guestEvents, guestRestaurants, gues
   if (isDeterministicE2E() || !coAgent) {
     return <div data-testid={`discovery-ask-${page}`} className="border-t p-4 text-sm text-muted-foreground">Ask MDE about {page} in the live application.</div>;
   }
-  return <LiveComposer page={page} guestEvents={guestEvents} guestRestaurants={guestRestaurants} guestVenues={guestVenues} onAgentResults={onAgentResults} hideHeading={hideHeading} suggestions={suggestions} historyNote={historyNote} hasSelectedItem={hasSelectedItem} onClearSelection={onClearSelection} />;
+  return <LiveComposer page={page} guestEvents={guestEvents} guestRestaurants={guestRestaurants} guestVenues={guestVenues} onAgentResults={onAgentResults} hideHeading={hideHeading} suggestions={suggestions} historyNote={historyNote} hasSelectedItem={hasSelectedItem} onClearSelection={onClearSelection} visibleEventCount={visibleEventCount} />;
 }

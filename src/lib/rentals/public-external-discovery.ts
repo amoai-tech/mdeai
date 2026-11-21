@@ -33,6 +33,7 @@ type ExternalListing = {
   amenities: string[] | null; latitude: number | null; longitude: number | null;
   available_from: string | null; available_to: string | null;
   images: string[] | null;
+  rental_can_request_viewing?: boolean | null;
   metadata: Record<string, unknown> | null;
 };
 
@@ -108,13 +109,18 @@ export function publicExternalRentalCard(row: ExternalListing): Rental | null {
     && Number(row.latitude) >= -90 && Number(row.latitude) <= 90
     && Number(row.longitude) >= -180 && Number(row.longitude) <= 180;
   const images = publicRentalPhotos(row);
+  // This is a persisted apartments row: use the same phase-aware DB computed
+  // field as normal rentals. Source attribution remains unverified; this is a
+  // request to MDE, never provider-confirmed appointment availability.
+  const canRequestViewing = row.rental_can_request_viewing === true;
   return {
     id: row.slug, title: row.title, neighborhood: row.neighborhood ?? "",
     nightly_price: 0, price_monthly: Number(row.price_monthly), currency: "COP",
     bedrooms: row.bedrooms ?? 0, bedrooms_unknown: row.bedrooms == null,
     wifi: false, amenities: row.amenities ?? [], image: images[0] ?? "", images,
-    source_url: row.source_url, can_schedule_viewing: false,
-    schedule_viewing_url: null, host_name: "External advertisement",
+    source_url: row.source_url, can_schedule_viewing: canRequestViewing,
+    schedule_viewing_url: canRequestViewing ? `https://mdeai.co/rentals/${row.slug}` : null,
+    host_name: "External advertisement",
     availability: row.available_from
       ? "Available from " + row.available_from + " (reported; unverified)"
       : "Availability not verified",
@@ -132,13 +138,16 @@ export async function searchPublicExternalRentals(query: RentalQuery): Promise<R
   const client = createServiceRoleClient();
   if (!client) return [];
   const { data, error } = await client.from("apartments")
-    .select("landlord_id,verified,status,listing_workflow_status,moderation_status,slug,title,neighborhood,source_url,price_monthly,currency,bedrooms,amenities,images,latitude,longitude,available_from,available_to,metadata")
+    .select("landlord_id,verified,status,listing_workflow_status,moderation_status,slug,title,neighborhood,source_url,price_monthly,currency,bedrooms,amenities,images,latitude,longitude,available_from,available_to,metadata,rental_can_request_viewing")
     .in("slug", [...PUBLIC_SOURCE_SLUGS])
     .eq("landlord_id", AUTHORIZED_LANDLORD_PROFILE)
     .contains("metadata", {
       external_discovery_publication: "user_authorized_2026-10-14",
       public_photo_republication_permission: "user_attested_2026-10-14",
-    });
+    })
+    // PostgREST supports computed fields; generated table types omit them.
+    // Read the existing DB-owned Phase-A/Phase-B decision, not a UI-derived rule.
+    .overrideTypes<ExternalListing[], { merge: false }>();
   if (error) throw new Error("Public external discovery temporarily unavailable");
 
   return (data ?? [])

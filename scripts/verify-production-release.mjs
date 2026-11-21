@@ -13,8 +13,8 @@ try {
   console.error("  Fetch origin/main or pass the SHA explicitly: npm run verify:production -- <sha>");
   process.exit(1);
 }
-const project = process.env.MDE_VERCEL_PROJECT_ID ?? "prj_5eY5DdiVxn7hDbruTG7BrrQT1QAB";
-const org = process.env.MDE_VERCEL_ORG_ID ?? "team_OPBk3bdOXAg6fpYnL4vxnLZd";
+const project = process.env.MDE_VERCEL_PROJECT_ID ?? "prj_iadSvJDW4MBqtQ5s3YPlBNc08it6";
+const org = process.env.MDE_VERCEL_ORG_ID ?? "team_PbKG2U0lCR67rN57C4fqcfaw";
 const env = { ...process.env, VERCEL_PROJECT_ID: project, VERCEL_ORG_ID: org };
 delete env.VERCEL_TEAM_ID;
 delete env.VERCEL_SCOPE;

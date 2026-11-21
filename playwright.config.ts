@@ -67,6 +67,7 @@ const PROD_SPECS = [
   "**/prod-signed-in-route.spec.ts",
   "**/prod-ticket-wallet-authed.spec.ts",
   "**/prod-rentals-results-refresh.spec.ts",
+  "**/prod-rental-furnishing-clear.spec.ts",
   "**/prod-rentals-mobile-form-map.spec.ts",
   "**/prod-discovery-inline-ask.spec.ts",
   "**/prod-discovery-nightlife-mobile.spec.ts",
@@ -82,6 +83,8 @@ const PROD_SPECS = [
   "**/prod-journey-j05-j20.spec.ts",
   "**/rental-ai-security.spec.ts",
   "**/san-1204-broker-viewing-requests.spec.ts",
+  ...(process.env.MDE_SAN1658_VIEWING_E2E === "1"
+    ? ["**/prod-san1658-viewing-proposal.spec.ts"] : []),
   "**/rental-conversion-journey.spec.ts",
   "**/maps-mobile-lifecycle.spec.ts",
 ];

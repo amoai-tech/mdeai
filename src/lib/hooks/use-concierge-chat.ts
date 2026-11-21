@@ -141,7 +141,7 @@ function useLiveConciergeChat() {
   }, [agent, copilotkit, markThreadSaved]);
 
   const appendMessage = useCallback(
-    async (content: string) => {
+    async (content: string, onMessageAdded?: () => void) => {
       // A saved-thread switch or unmount during readiness must never
       // run a queued question against the newly selected conversation.
       if (!mountedRef.current || currentSelectedThreadRef.current !== selectedThreadId) return false;
@@ -165,6 +165,10 @@ function useLiveConciergeChat() {
         markLiveUserMessage(currentAgent, currentAgent.threadId, messageId);
       }
       currentAgent.addMessage({ id: messageId, role: "user", content });
+      // The message is accepted into the real thread BEFORE the agent stream.
+      // Publish the latest topic now so a second send during the stream cannot
+      // route a bare budget to an older rental result.
+      onMessageAdded?.();
       await currentCopilotkitRef.current.runAgent({ agent: currentAgent });
       // Only completed turns are recorded as saved, never a freshly minted UUID.
       markThreadSaved?.(currentAgent.threadId);
@@ -186,8 +190,9 @@ const deterministicChat = {
   reset: () => {},
   stopActiveRun: () => {},
   retryLastTurn: async () => false,
-  appendMessage: async (content: string) => {
+  appendMessage: async (content: string, onMessageAdded?: () => void) => {
     void content;
+    void onMessageAdded;
     return false;
   },
   isRuntimeUnavailable: () => true,

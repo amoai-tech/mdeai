@@ -1,12 +1,14 @@
 ---
 name: tests
-description: Use when defining test plans, regression coverage, edge cases, E2E proof, or AI evaluation criteria; designs focused tests and evaluations that prove real requirements with the cheapest reliable layer and grader.
+description: Use to DESIGN regression coverage, edge cases, or AI eval criteria (e.g. duplicate lead retry checks). Not for executing and interpreting an existing test suite (testing) or running a browser journey (e2e).
 ---
 
 **TESTS — Design High-Value Tests**
 
 **Goal**
 Prove the real requirement works with the smallest reliable test set.
+
+**Use / do not use:** Use for “Which regression tests should prevent a duplicate rental lead?” Do **not** use for “Execute the existing test suite and interpret failures” (use `testing`); use `e2e` for an actual browser user journey.
 
 **1. Define success first**
 State measurable outcomes: behavior, security, persistence, consistency, latency/cost when relevant.
@@ -26,10 +28,17 @@ Test in this order:
 **critical journey → security/data integrity → regression → edge cases → polish**
 Do not chase coverage numbers for their own sake.
 
+**Public behavior first (Matt Pocock TDD):** Agree on the observable interface/seam from the existing task, then specify the test that must fail for the missing behavior. Avoid testing private helpers, snapshot-only success or mocking away the integration being proved. Test-first execution (RED → GREEN → REFACTOR) is owned by `testing` — see `testing/references/tdd.md`; do not require a new testing plan when existing acceptance criteria settle the seam.
+
 **4. Pick the cheapest valid layer**
 
 **unit → integration → RLS/security → API/provider → browser/E2E → production**
 Use E2E only when the risk crosses system boundaries.
+
+**Risk-to-test rule (choose the cheapest layer that can catch the failure):**
+- **UI-only:** focused component assertion; add 390px Playwright only when responsive layout/interaction is the risk.
+- **Auth/RLS or cross-user data:** integration/RLS negative test, unauthorized denial, permitted-user readback.
+- **Stripe, bookings, tickets, leads:** real transactional boundary in safe test mode; verify retries create exactly one result, signature/auth checks, atomic rollback and recovery. Require independent S4 verification before completion.
 
 **5. Prefer deterministic assertions**
 Use exact values, row counts, statuses, relationships, auth results, schema invariants, and idempotency checks.
@@ -64,5 +73,7 @@ For every test ask:
 - Is there a cheaper proof?
 Delete tests that do not earn maintenance cost.
 
+
+**Stop when:** Each material acceptance criterion maps to a deterministic assertion and the minimum sufficient test layer; identify untested or manual evidence explicitly. This skill designs coverage; it does not pretend the tests ran.
 
 For remaining steps, checks, and examples, see [full prompt](references/full-prompt.md).

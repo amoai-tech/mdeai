@@ -38,6 +38,7 @@ const REQUIRED: Record<string, (value: unknown) => boolean> = {
 /** Optional in `rentalSchema`: absent is fine, present must have the right type. */
 const OPTIONAL: Record<string, (value: unknown) => boolean> = {
   bedrooms_unknown: isBoolean,
+  furnished: (value) => value === null || isBoolean(value),
   images: isStringArray,
   photo_count: isNumber,
   source_provider: isString,

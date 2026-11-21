@@ -10,6 +10,24 @@ labels:
 retries: 0
 steps:
   - waitForUrl:
-      substring: /login?next=%2Fapp%2Frentals
+      substring: /login?
       timeout: 12000
+  - javascript:
+      code: |
+        const url = new URL(window.location.href);
+        const next = url.searchParams.get("next");
+        const target = next ? new URL(next, url.origin) : null;
+        const share = url.searchParams.get("_vercel_share");
+        // Vercel may carry its scoped preview token into the return URL.
+        // Accept only that matching token; never relax the broker workspace path.
+        const safeQuery = target && (
+          target.searchParams.size === 0 ||
+          (target.searchParams.size === 1 && Boolean(share) &&
+            target.searchParams.get("_vercel_share") === share)
+        );
+        if (url.pathname !== "/login" || url.searchParams.getAll("next").length !== 1 ||
+            target?.origin !== url.origin || target?.pathname !== "/app/rentals" || !safeQuery) {
+          throw new Error("Expected login redirect to /app/rentals with only the matching preview share");
+        }
+      environment: BROWSER
   - assert: "The login screen is visible and does not disclose any private broker listings, viewing requests, renter details, or management controls. Do not sign in or submit anything."

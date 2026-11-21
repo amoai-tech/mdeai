@@ -20,7 +20,7 @@ concurrency:
 jobs:
   discovery:
     if: github.event.workflow_run.event == 'pull_request'
-    # Momentic 3.69.0 / Playwright 1.60 cannot install browsers on ubuntu26.04.
+    # Momentic / Playwright cannot install browsers on ubuntu26.04.
     runs-on: ubuntu-24.04
     timeout-minutes: 12
     # PILOT: failures are visible in the job and summary but cannot block merging.
@@ -32,7 +32,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: "22"
+          node-version: "24"
       - name: Select trusted public discovery tests for exact open PR
         id: scope
         env:
@@ -72,7 +72,7 @@ jobs:
         id: preview
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
           DEPLOY_SHA: ${{ steps.scope.outputs.sha }}
         run: |
           node --input-type=module <<'JS'
@@ -155,7 +155,7 @@ jobs:
       - name: Install Momentic Chromium only
         id: browser_install
         if: steps.installed.outputs.present == 'true'
-        run: npx --yes momentic@3.69.0 install-browsers chromium
+        run: npx --yes momentic@3.73.1 install-browsers chromium
       - name: Run selected read-only public journeys
         if: steps.installed.outputs.present == 'true'
         id: momentic
@@ -171,11 +171,11 @@ jobs:
           # Use only committed, trusted tests from main. Each test has its own
           # original route/query; overwriting every start URL with preview root
           # would silently test the wrong page (login and Details routes).
-          npx --yes momentic@3.69.0 lint
+          npx --yes momentic@3.73.1 lint
           while IFS= read -r path; do
             start_url=$(node scripts/momentic-rentals-preview-url.mjs "$PREVIEW_URL" "$path")
             test_name=$(basename "$path" .test.yaml)
-            npx --yes momentic@3.69.0 run "$path" \
+            npx --yes momentic@3.73.1 run "$path" \
               --url-override "$start_url" \
               --reporter steps --reporter junit \
               --reporter-dir "$RUNNER_TEMP/momentic-junit/$test_name" \

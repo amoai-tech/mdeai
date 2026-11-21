@@ -21,7 +21,7 @@ vi.mock("@/lib/supabase/server", () => ({
   })),
 }));
 
-import { addTripItem } from "../actions";
+import { addTripItem, updateTripTimezone } from "../actions";
 
 describe("addTripItem unknown place", () => {
   beforeEach(() => {
@@ -49,6 +49,15 @@ describe("addTripItem unknown place", () => {
       p_item_type: "restaurant",
       p_source_id: "44444444-4444-4444-8444-444444444444",
     });
+  });
+
+  it("rejects a non-IANA timezone before touching the database", async () => {
+    const result = await updateTripTimezone({
+      tripId: "22222222-2222-4222-8222-222222222222",
+      timezone: "Bogota",
+    });
+    expect(result).toEqual({ ok: false, error: "Choose a valid IANA timezone." });
+    expect(rpc).not.toHaveBeenCalled();
   });
 
   it("rejects an uncatalogued Place ID without calling the trip RPC", async () => {

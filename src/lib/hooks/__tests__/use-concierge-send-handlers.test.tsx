@@ -4,13 +4,13 @@
  * agent, `appendMessage` returns false, and the renter used to see nothing: no bubble, no error.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import React, { useEffect } from "react";
+import React, { useEffect, useLayoutEffect } from "react";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
 const chat = vi.hoisted(() => ({ appendMessage: vi.fn(), runtimeUnavailable: false, waitForRuntimeReady: vi.fn() }));
 const coagent = vi.hoisted(() => ({ state: {} as Record<string, unknown> }));
-const mapState = vi.hoisted(() => ({ selectedPinId: null as string | null, pins: [] as Array<{ id: string; category: string }> }));
+const mapState = vi.hoisted(() => ({ selectedPinId: null as string | null, pins: [] as Array<{ id: string; category: string }>, mergePinsByCategory: vi.fn() }));
 const groundedCtx = vi.hoisted(() => ({ toolResult: null as unknown }));
 const rentalDetails = vi.hoisted(() => ({ toolResult: null as unknown, openVenueDetail: vi.fn(), closeRentalDetails: vi.fn() }));
 // Reuse the real rental context (including searchMeta updates); override only
@@ -45,7 +45,12 @@ vi.mock("@/lib/hooks/use-concierge-chat", () => ({
   useConciergeChat: () => ({ appendMessage: chat.appendMessage, isRuntimeUnavailable: () => chat.runtimeUnavailable, waitForRuntimeReady: chat.waitForRuntimeReady }),
 }));
 vi.mock("@/components/chat/concierge-coagent-context", () => ({
-  useConciergeCoAgent: () => ({ agent: undefined, state: coagent.state, setState: () => {} }),
+  useConciergeCoAgent: () => ({
+    agent: undefined, state: coagent.state,
+    setState: (patch: Record<string, unknown> | ((prev: Record<string, unknown>) => Record<string, unknown>)) => {
+      coagent.state = typeof patch === "function" ? patch(coagent.state) : { ...coagent.state, ...patch };
+    },
+  }),
 }));
 // The fast-path searches are not under test here.
 const noMatch = vi.hoisted(() => ({ handleUserMessage: async () => false }));
@@ -76,11 +81,20 @@ let handlers: ConciergeSendHandlers;
 let shown: Array<{ role: string; content: string }>;
 let promptShown = false;
 let restoreRentalSearch: ReturnType<typeof useRentalFastPath>["setSearchMeta"];
+let finishCoworkingAtRentalCommit: "completed" | "failed" | null = null;
 
 function Harness() {
   const h = useConciergeSendHandlers();
   const { messages, signInPrompt } = useEventLocalChat();
-  const { setSearchMeta } = useRentalFastPath();
+  const { setSearchMeta, searchMeta } = useRentalFastPath();
+  // Emulate a late agent callback during the new rental search's layout phase:
+  // its identity must already be current, before passive effects execute.
+  useLayoutEffect(() => {
+    if (!finishCoworkingAtRentalCommit || !searchMeta?.userText?.startsWith("New Envigado")) return;
+    const stage = finishCoworkingAtRentalCommit;
+    finishCoworkingAtRentalCommit = null;
+    h.onTopicShift?.("general_concierge", stage);
+  }, [h, searchMeta]);
   useEffect(() => {
     handlers = h;
     shown = messages;
@@ -94,6 +108,7 @@ let root: Root;
 let container: HTMLElement;
 beforeEach(() => {
   vi.clearAllMocks();
+  finishCoworkingAtRentalCommit = null;
   chat.runtimeUnavailable = false;
   chat.waitForRuntimeReady.mockImplementation(async () => !chat.runtimeUnavailable);
   coagent.state = {};
@@ -140,6 +155,151 @@ describe("guest context from visible rental search", () => {
     expect(handlers.inRentalSearch).toBe(true);
     await act(async () => { restoreRentalSearch(null); });
     expect(handlers.inRentalSearch).toBe(false);
+  });
+});
+
+describe("SAN-874 latest-topic context", () => {
+  it("keeps a guest's apartment cards when coworking requires sign-in", async () => {
+    session.user = null;
+    await act(async () => {
+      restoreRentalSearch({ userText: "Apartments under COP 3M", params: {
+        maxPriceMonthly: 3_000_000, budgetCurrency: "COP", stayType: "monthly",
+      } });
+    });
+    expect(handlers.inRentalSearch).toBe(true);
+    await act(async () => {
+      await sendConciergeUserMessage("What coworking spaces are in Laureles?", handlers);
+    });
+    expect(handlers.inRentalSearch).toBe(true);
+    expect(coagent.state.lastIntent).toBeUndefined();
+  });
+
+  it("restores a failed coworking turn's rental memory without clearing its cards", async () => {
+    coagent.state = { lastIntent: "rental_search", lastRentalQuery: {
+      maxPriceMonthly: 3_000_000, budgetCurrency: "COP",
+    } };
+    await act(async () => {
+      restoreRentalSearch({ userText: "Apartments under COP 3M", params: {
+        maxPriceMonthly: 3_000_000, budgetCurrency: "COP", stayType: "monthly",
+      } });
+    });
+    await act(async () => {
+      handlers.onTopicShift?.("general_concierge", "accepted");
+    });
+    expect(coagent.state.lastIntent).toBe("general_concierge");
+    expect(coagent.state.lastRentalQuery).toBeUndefined();
+    await act(async () => {
+      handlers.onTopicShift?.("general_concierge", "failed");
+    });
+    expect(coagent.state.lastIntent).toBe("rental_search");
+    expect(coagent.state.lastRentalQuery).toMatchObject({ maxPriceMonthly: 3_000_000 });
+    expect(mapState.mergePinsByCategory).not.toHaveBeenCalled();
+  });
+
+  it.each(["completed", "failed"] as const)(
+    "does not erase newer rental results after a coworking stream %s",
+    async (stage) => {
+      coagent.state = { lastIntent: "rental_search", lastRentalQuery: {
+        maxPriceMonthly: 3_000_000, budgetCurrency: "COP",
+      } };
+      await act(async () => {
+        restoreRentalSearch({ userText: "Older Laureles apartments under COP 3M", params: {
+          neighborhood: "Laureles", maxPriceMonthly: 3_000_000,
+          budgetCurrency: "COP", stayType: "monthly",
+        } });
+      });
+      expect(handlers.inRentalSearch).toBe(true);
+      await act(async () => {
+        handlers.onTopicShift?.("general_concierge", "accepted");
+      });
+      expect(coagent.state.lastIntent).toBe("general_concierge");
+      // Another legitimate rental search completes while the coworking agent
+      // is still streaming. Its searchMeta identity supersedes the older view.
+      coagent.state = { lastIntent: "rental_search", lastRentalQuery: {
+        neighborhood: "Envigado", maxPriceMonthly: 2_500_000, budgetCurrency: "COP",
+      } };
+      await act(async () => {
+        restoreRentalSearch({ userText: "New Envigado apartments under COP 2.5M", params: {
+          neighborhood: "Envigado", maxPriceMonthly: 2_500_000,
+          budgetCurrency: "COP", stayType: "monthly",
+        } });
+      });
+      expect(handlers.inRentalSearch).toBe(true);
+      await act(async () => {
+        handlers.onTopicShift?.("general_concierge", stage);
+      });
+      // Neither a late successful stream nor a failed stream can replace a
+      // newer rental request with the stale Laureles memory or clear its pins.
+      expect(coagent.state.lastIntent).toBe("rental_search");
+      expect(coagent.state.lastRentalQuery).toMatchObject({
+        neighborhood: "Envigado", maxPriceMonthly: 2_500_000,
+      });
+      expect(handlers.inRentalSearch).toBe(true);
+      expect(mapState.mergePinsByCategory).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(["completed", "failed"] as const)(
+    "protects new rental results when a coworking stream %s in the next commit layout phase",
+    async (stage) => {
+      coagent.state = { lastIntent: "rental_search", lastRentalQuery: {
+        neighborhood: "Laureles", maxPriceMonthly: 3_000_000,
+      } };
+      await act(async () => {
+        restoreRentalSearch({ userText: "Old Laureles apartments", params: {
+          neighborhood: "Laureles", maxPriceMonthly: 3_000_000,
+          budgetCurrency: "COP", stayType: "monthly",
+        } });
+      });
+      await act(async () => { handlers.onTopicShift?.("general_concierge", "accepted"); });
+      coagent.state = { lastIntent: "rental_search", lastRentalQuery: {
+        neighborhood: "Envigado", maxPriceMonthly: 2_500_000,
+      } };
+      finishCoworkingAtRentalCommit = stage;
+      await act(async () => {
+        restoreRentalSearch({ userText: "New Envigado apartments", params: {
+          neighborhood: "Envigado", maxPriceMonthly: 2_500_000,
+          budgetCurrency: "COP", stayType: "monthly",
+        } });
+      });
+      expect(finishCoworkingAtRentalCommit).toBeNull();
+      expect(mapState.mergePinsByCategory).not.toHaveBeenCalled();
+      expect(coagent.state.lastIntent).toBe("rental_search");
+      expect(coagent.state.lastRentalQuery).toMatchObject({
+        neighborhood: "Envigado", maxPriceMonthly: 2_500_000,
+      });
+    },
+  );
+
+  it("clears stale rental criteria after coworking even if Mastra has not updated lastIntent", async () => {
+    await act(async () => {
+      restoreRentalSearch({ userText: "Apartments under COP 3M", params: {
+        maxPriceMonthly: 3_000_000, budgetCurrency: "COP", stayType: "monthly",
+      } });
+    });
+    expect(handlers.inRentalSearch).toBe(true);
+    const agent = vi.fn(async (_text: string, _id?: string, onAccepted?: () => void, onCompleted?: () => void) => {
+      onAccepted?.();
+      onCompleted?.();
+      return true;
+    });
+    await act(async () => {
+      await sendConciergeUserMessage("What coworking spaces are in Laureles?", {
+        ...handlers, onAgentSend: agent,
+      });
+    });
+    expect(agent).toHaveBeenCalledOnce();
+    expect(coagent.state.lastIntent).toBe("general_concierge");
+    expect(coagent.state.lastRentalQuery).toBeUndefined();
+    expect(mapState.mergePinsByCategory).toHaveBeenCalledWith("rental", []);
+    expect(handlers.inRentalSearch).toBe(false);
+    const rental = vi.fn(async () => true);
+    await act(async () => {
+      await sendConciergeUserMessage("Only under COP 800k per month", {
+        ...handlers, handleRentalMessage: rental, onAgentSend: agent,
+      });
+    });
+    expect(rental).not.toHaveBeenCalled();
   });
 });
 

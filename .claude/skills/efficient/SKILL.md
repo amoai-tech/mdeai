@@ -1,6 +1,6 @@
 ---
 name: efficient
-description: Use when the user wants a faster, simpler, or cheaper way to deliver an MDE outcome; finds the smallest safe approach that reuses existing capabilities.
+description: Use to identify the fastest safe reuse-first approach (e.g. extend existing Supabase RPC instead of a new service). Not for a deep source-receipt audit (ponytail) or skipping necessary security tests.
 ---
 
 **EFFICIENT — Smallest Safe Path**
@@ -17,6 +17,12 @@ Complete the task with the least unnecessary work while preserving correctness, 
 - Do not inspect, research, test, or modify unrelated areas.
 - Do not over-engineer for hypothetical future needs.
 - Do not trade correctness or security for speed.
+
+**Subtract before adding (P Stack):** First ask whether existing configuration, a single canonical owner, or removal of redundant logic solves the problem. Compare the smaller alternative against the requested outcome; don't build a parallel abstraction or orchestrate multiple agents merely to appear thorough. Use additional reviewers only when risk or evidence justifies their cost.
+
+**Use / do not use:** Use for “Find a faster way to deliver this MDE fix using existing services.” Do **not** use for “Trace exact library/source receipts” (`ponytail`) or as a reason to omit technical authorization or necessary tests.
+
+**Canonical-owner check:** Before proposing any new module, search only the relevant route/RPC/component/agent and its callers; name the existing owner and why it cannot be reused if custom code is unavoidable. Do not explore unrelated directories or create a second engine.
 
 **Preferred order**
 
@@ -52,6 +58,8 @@ Use the cheapest reliable proof first:
 
 Stop when the required outcome is proven.
 Do not run broad expensive checks without a reason.
+
+**Stop when:** The smallest existing implementation or supported extension is identified and its risk-matched proof is known. Execute the authorized change or hand the concrete plan to `implement`; do not repeat an architecture audit after the decision is supported.
 
 **Decision**
 Before finishing, state:

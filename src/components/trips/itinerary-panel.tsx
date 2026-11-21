@@ -1,8 +1,12 @@
+import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, MapPin } from "lucide-react";
 import type { TripItemRow } from "@/lib/trips/trip-item-types";
 import {
+  DEFAULT_TRIP_TIMEZONE,
   detectScheduleOverlaps,
   formatItemTimeRange,
+  formatTripDateTime,
+  getUpNextItem,
   groupTripItemsByDay,
   itemTypeLabel,
 } from "@/lib/trips/itinerary-logic";
@@ -11,6 +15,8 @@ import { hasValidCoordinates } from "@/lib/trips/coordinates";
 
 type ItineraryPanelProps = {
   items: TripItemRow[];
+  timeZone?: string;
+  nowIso?: string;
   selectedItemId?: string | null;
   onShowOnMap?: (id: string) => void;
 };
@@ -18,14 +24,68 @@ type ItineraryPanelProps = {
 /** SCREEN-013 — day-grouped timeline from trip_items. */
 export function ItineraryPanel({
   items,
+  timeZone = DEFAULT_TRIP_TIMEZONE,
+  nowIso,
   selectedItemId = null,
   onShowOnMap,
 }: ItineraryPanelProps) {
-  const dayGroups = groupTripItemsByDay(items);
-  const overlaps = detectScheduleOverlaps(items);
+  const dayGroups = groupTripItemsByDay(items, timeZone);
+  const overlaps = detectScheduleOverlaps(items, timeZone);
+  // Server time is the hydration-safe base. After mount, advance it using the
+  // monotonic clock elapsed since mount, not the client's wall clock, so a
+  // skewed device clock cannot flip Up Next.
+  const [nowMs, setNowMs] = useState<number | null>(() => {
+    const parsed = nowIso ? Date.parse(nowIso) : Number.NaN;
+    return Number.isFinite(parsed) ? parsed : null;
+  });
+  const mountedAtRef = useRef<number | null>(null);
+  useEffect(() => {
+    const parsed = nowIso ? Date.parse(nowIso) : Number.NaN;
+    const valid = Number.isFinite(parsed);
+    const reset = window.setTimeout(() => {
+      setNowMs(valid ? parsed : null);
+    }, 0);
+
+    if (!valid) {
+      mountedAtRef.current = null;
+      return () => window.clearTimeout(reset);
+    }
+
+    mountedAtRef.current = performance.now();
+    const sync = () => {
+      if (mountedAtRef.current == null) return;
+      setNowMs(parsed + (performance.now() - mountedAtRef.current));
+    };
+    const id = window.setInterval(sync, 60_000);
+    const onVisibility = () => {
+      if (!document.hidden) sync();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.clearTimeout(reset);
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [nowIso]);
+  const upNext = nowMs == null ? null : getUpNextItem(items, new Date(nowMs));
 
   return (
     <section data-testid="itinerary-panel" className="space-y-4">
+      {upNext?.start_at ? (
+        <div
+          data-testid="itinerary-up-next"
+          className="rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 text-sm"
+        >
+          <p className="text-xs font-medium uppercase tracking-wide text-primary">
+            Up Next
+          </p>
+          <p className="mt-1 font-medium text-foreground">{upNext.title}</p>
+          <p className="text-xs text-muted-foreground">
+            {formatTripDateTime(upNext.start_at, timeZone)}
+          </p>
+        </div>
+      ) : null}
+
       {overlaps.length > 0 ? (
         <div
           data-testid="itinerary-conflict"
@@ -92,7 +152,7 @@ export function ItineraryPanel({
                       )}
                     >
                       <div className="w-24 shrink-0 text-xs text-muted-foreground">
-                        {formatItemTimeRange(item)}
+                        {formatItemTimeRange(item, timeZone)}
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="font-medium text-foreground">{item.title}</p>

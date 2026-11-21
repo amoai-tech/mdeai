@@ -50,7 +50,7 @@ export default async function TripDetailPage({ params }: TripDetailPageProps) {
         </Link>
       </div>
       <MapsShell>
-        <TripWorkspaceView trip={trip} />
+        <TripWorkspaceView trip={trip} nowIso={new Date().toISOString()} />
       </MapsShell>
     </main>
   );

@@ -71,7 +71,13 @@ export function rentalsToPanelRows(
     id: r.id,
     title: r.title,
     neighborhood: r.neighborhood,
-    nightly_price: r.nightly_price,
+    // Omit placeholders: 0 means "no nightly price", and bedrooms_unknown
+    // means the feed did not record a bedroom count.
+    ...(r.nightly_price > 0 ? { nightly_price: r.nightly_price } : {}),
+    price_monthly: r.price_monthly,
+    currency: r.currency,
+    ...(r.bedrooms_unknown ? {} : { bedrooms: r.bedrooms }),
+    amenities: r.amenities,
   }));
 }
 

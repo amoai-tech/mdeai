@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { DiscoveryAgentResult } from "@/components/chat/discovery-tool-results";
 import { CalendarDays } from "lucide-react";
 import { BrowseMapContextShell } from "@/components/browse/BrowseMapContextShell";
@@ -9,6 +9,11 @@ import { BrowseMapPanel } from "@/components/browse/BrowseMapPanel";
 import { BrowseMapSheet } from "@/components/browse/BrowseMapSheet";
 import { DiscoveryWorkspace } from "@/components/browse/DiscoveryWorkspace";
 import { DiscoveryAskComposer } from "@/components/chat/discovery-ask-composer";
+import { useOptionalConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
+import { EventLocalChatProvider } from "@/components/chat/event-local-chat-context";
+import { EventRecommendationsSurface } from "@/components/copilot/a2ui/event-recommendations-surface";
+import { EventBrowseSelectionProvider } from "@/components/events/event-browse-selection-context";
+import { activateEventDetails } from "@/components/events/event-details-activation";
 import { DiscoveryPageContext } from "@/components/chat/discovery-page-context";
 import { EventBrowseCard } from "@/components/events/event-browse-card";
 import {
@@ -50,7 +55,8 @@ function EventBrowseViewInner({
   neighborhood,
   dateWindow,
   price,
-}: EventBrowseViewProps) {
+  onSelectReady,
+}: EventBrowseViewProps & { onSelectReady?: (open: (id: string) => boolean) => void }) {
   const { selectedPinId, setSelectedPinId, panToPin } = useMapContext();
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const desktop = useIsLgUp();
@@ -135,6 +141,31 @@ function EventBrowseViewInner({
     else setSelectedPinId(null);
   }, [pinIds, panToPin, setSelectedPinId]);
 
+  // One entry point for every Details activation. The native card passes its own
+  // trigger; a generated card passes none and the active element is used, so focus
+  // always returns to the control the user actually pressed. A stale event absent
+  // from the visible results cannot open the native panel.
+  const openEventDetails = useCallback(
+    (id: string, trigger?: HTMLElement | null): boolean =>
+      activateEventDetails({
+        id,
+        visibleIds: shownEvents.map((event) => event.id),
+        trigger,
+        activeElement: typeof document === "undefined" ? null : document.activeElement,
+        select: selectEvent,
+        open: (eventId) => setDetailsId(eventId),
+        rememberTrigger: (element) => {
+          detailsTriggerRef.current = element;
+        },
+      }),
+    [selectEvent, shownEvents],
+  );
+
+  // Generated cards use this page's real Details owner, never an unrelated sheet.
+  useEffect(() => {
+    onSelectReady?.(openEventDetails);
+  }, [onSelectReady, openEventDetails]);
+
   // A marker click (or closing its info card) arrives through the shared map context; mirror it into the
   // one selected event instead of keeping a second selection. This adjusts our own state while rendering
   // (the documented pattern for state derived from other state), so there is no effect and no extra render pass.
@@ -193,7 +224,7 @@ function EventBrowseViewInner({
     <EventPageControlTool filters={{ category, neighborhood, dateWindow, price }} />
     <DiscoveryWorkspace
       activeSlug="events"
-      askComposer={<DiscoveryAskComposer page="events" onAgentResults={onAgentResults} hasSelectedItem={Boolean(selectedId)} onClearSelection={() => selectEvent(null)} guestEvents={{
+      askComposer={<DiscoveryAskComposer page="events" visibleEventCount={error ? undefined : shownEvents.length} onAgentResults={onAgentResults} hasSelectedItem={Boolean(selectedId)} onClearSelection={() => selectEvent(null)} guestEvents={{
         category, neighborhood, dateWindow,
         onEventIds: (ids) => void resolveIds(ids),
       }} />}
@@ -297,13 +328,7 @@ function EventBrowseViewInner({
                   setDetailsId(null);
                   selectEvent(selectedId === event.id ? null : event.id);
                 }}
-                onDetails={(trigger) => {
-                  detailsTriggerRef.current = trigger;
-                  // SAN-1638: the panel record is also the Ask MDE record, so the concierge answers
-                  // about the event on screen. Selecting context never sends a message.
-                  selectEvent(event.id);
-                  setDetailsId(event.id);
-                }} />
+                onDetails={(trigger) => openEventDetails(event.id, trigger)} />
               );
             })}
           </div>
@@ -317,7 +342,40 @@ function EventBrowseViewInner({
   );
 }
 
+/** The existing local-chat exchange lives in GeoChatShell on /chat, but /events has
+ * its own shared concierge mount. Reuse that provider here for saved, immediate
+ * out-of-range answers; deterministic/component tests without an agent remain inert. */
+function EventBrowseChatBoundary({ children }: { children: ReactNode }) {
+  const concierge = useOptionalConciergeCoAgent();
+  return concierge
+    ? <EventLocalChatProvider>{children}</EventLocalChatProvider>
+    : <>{children}</>;
+}
+
 /** Event browse shell that provides the shared map state. */
 export function EventBrowseView(props: EventBrowseViewProps) {
-  return <BrowseMapContextShell><EventBrowseViewInner {...props} /></BrowseMapContextShell>;
+  const openEventDetail = useRef<(id: string) => boolean>(() => false);
+  const selection = useMemo(
+    () => ({ openEventDetail: (id: string) => openEventDetail.current(id) }),
+    [],
+  );
+
+  return (
+    <EventBrowseChatBoundary>
+    <BrowseMapContextShell>
+      <EventBrowseSelectionProvider value={selection}>
+        {/* SAN-1653: the Events page is the one screen where the concierge may render
+            event cards, so the named Surface is mounted inside the provider that can
+            open the native Details panel. */}
+        <EventRecommendationsSurface />
+        <EventBrowseViewInner
+          {...props}
+          onSelectReady={(open) => {
+            openEventDetail.current = open;
+          }}
+        />
+      </EventBrowseSelectionProvider>
+    </BrowseMapContextShell>
+    </EventBrowseChatBoundary>
+  );
 }

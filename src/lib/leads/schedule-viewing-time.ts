@@ -110,6 +110,17 @@ export function resolvePreferredAtInstant(raw: string): string | null {
   return new Date(instant).toISOString();
 }
 
+/**
+ * Split a valid listing-local wall clock into the viewing form's date and time
+ * fields, or `null` when it is not a real wall clock. The AI proposal and the
+ * native modal share this so neither can seed a value the other would reject.
+ */
+export function splitPreferredAt(raw: string): { date: string; time: string } | null {
+  if (resolvePreferredAtInstant(raw) === null) return null;
+  const [date, time] = raw.trim().split("T");
+  return { date, time: time.slice(0, 5) };
+}
+
 /** Strictly-future check against a canonical instant. */
 export function isFutureInstant(instantIso: string, now: Date = new Date()): boolean {
   const instant = new Date(instantIso);

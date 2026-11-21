@@ -34,6 +34,8 @@ export type VenueCardShellProps = {
   media: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
+  /** Extra data attributes on the card root (e.g. the entity id for tests). */
+  extraData?: Record<string, string>;
 };
 
 function VenueCardBody({
@@ -91,6 +93,7 @@ export function VenueCardShell({
   media,
   children,
   footer,
+  extraData,
 }: VenueCardShellProps) {
   const bodyProps =
     bodyRole || bodyTabIndex != null || onBodyClick || onBodyKeyDown
@@ -120,6 +123,7 @@ export function VenueCardShell({
     : undefined;
 
   const sharedDataProps = {
+    ...extraData,
     "data-testid": testId,
     "data-result-kind": resultKind,
     "data-pin-id": pinId,

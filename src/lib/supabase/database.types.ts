@@ -6974,6 +6974,7 @@ export type Database = {
           location_name: string | null
           longitude: number | null
           metadata: Json | null
+          position: number
           source_id: string
           start_at: string | null
           title: string
@@ -6992,6 +6993,7 @@ export type Database = {
           location_name?: string | null
           longitude?: number | null
           metadata?: Json | null
+          position?: number
           source_id: string
           start_at?: string | null
           title: string
@@ -7010,6 +7012,7 @@ export type Database = {
           location_name?: string | null
           longitude?: number | null
           metadata?: Json | null
+          position?: number
           source_id?: string
           start_at?: string | null
           title?: string
@@ -7038,6 +7041,7 @@ export type Database = {
           id: string
           start_date: string
           status: string
+          timezone: string
           title: string
           updated_at: string
           user_id: string
@@ -7053,6 +7057,7 @@ export type Database = {
           id?: string
           start_date: string
           status?: string
+          timezone?: string
           title: string
           updated_at?: string
           user_id: string
@@ -7068,6 +7073,7 @@ export type Database = {
           id?: string
           start_date?: string
           status?: string
+          timezone?: string
           title?: string
           updated_at?: string
           user_id?: string

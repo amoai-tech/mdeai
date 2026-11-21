@@ -200,6 +200,9 @@ export function SavedThreadHistory({
           signal,
           cache: "no-store",
         });
+        // This component mounts only for a selected, restored, or known-saved
+        // thread. A missing row must remain a visible retryable error. Fresh
+        // unpersisted chats do not mount this component at all.
         if (!res.ok) throw new Error(`history ${res.status}`);
         const body = (await res.json()) as {
           messages?: SavedThreadMessage[];
@@ -269,6 +272,9 @@ export function SavedThreadHistory({
     })();
 
     return () => controller.abort();
+    // Keep this dependency list fixed at four entries. A dev hot reload that
+    // changes its length can trigger React's "changed size between renders"
+    // warning; a hard reload recreates the effect with its current shape.
   }, [agent, isReady, threadId, attempt]);
 
   /**

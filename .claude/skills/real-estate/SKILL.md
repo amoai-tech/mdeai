@@ -2,12 +2,6 @@
 name: real-estate
 description: >-
   Use when MDE work touches Medellín rentals, apartments, listings, renter discovery, rental eligibility or ranking, cards/maps, viewing requests, broker/landlord ownership, publishing, leads/showings, neighborhood/property content, or MLS/IDX/RESO/AVM topics.
-paths:
-  - "src/**/*apartment*"
-  - "src/**/*listing*"
-  - "src/**/*property*"
-  - "supabase/migrations/**apartment*"
-  - "supabase/migrations/**listing*"
 ---
 
 # MDE real estate

@@ -6,6 +6,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PublishedEventListItem } from "@/lib/events/list-published-events";
 import type { DiscoveryAgentResult } from "@/components/chat/discovery-tool-results";
 
+const chatBoundary = vi.hoisted(() => ({ hasConcierge: false }));
+vi.mock("@/components/chat/concierge-coagent-context", () => ({
+  useOptionalConciergeCoAgent: () => chatBoundary.hasConcierge ? { agent: undefined, isReady: true } : null,
+}));
+vi.mock("@/components/chat/event-local-chat-context", () => ({
+  EventLocalChatProvider: ({ children }: { children: React.ReactNode }) =>
+    <div data-testid="event-local-chat-provider">{children}</div>,
+}));
+
 // The workspace pulls in auth, nav and Ask MDE; the map context, pin sync and selection logic stay real.
 vi.mock("@/components/browse/DiscoveryWorkspace", () => ({
   DiscoveryWorkspace: (p: { rightPanel?: unknown; askComposer?: unknown; children: unknown }) => (
@@ -36,11 +45,33 @@ vi.mock("@/components/browse/BrowseMapPanel", async () => {
   };
 });
 
+// Simulate the real A2UI Surface requesting an event Details action through
+// the same page selection provider as the production EventCard.
+let lastA2uiOpenResult: boolean | undefined;
+vi.mock("@/components/copilot/a2ui/event-recommendations-surface", async () => {
+  const { useOptionalEventBrowseSelection } = await import("@/components/events/event-browse-selection-context");
+  return {
+    EventRecommendationsSurface: () => {
+      const selection = useOptionalEventBrowseSelection();
+      return (
+        <div>
+          <button type="button" data-testid="a2ui-open-event-b"
+            onClick={() => { lastA2uiOpenResult = selection?.openEventDetail("b"); }}>Generated B Details</button>
+          <button type="button" data-testid="a2ui-open-event-outside"
+            onClick={() => { lastA2uiOpenResult = selection?.openEventDetail("not-shown"); }}>Generated external Details</button>
+        </div>
+      );
+    },
+  };
+});
+
 type ResultHandler = (result: DiscoveryAgentResult) => void;
 let onAgentResults: ResultHandler | null = null;
+let lastVisibleEventCount: number | undefined;
 vi.mock("@/components/chat/discovery-ask-composer", () => ({
-  DiscoveryAskComposer: (p: { onAgentResults: ResultHandler }) => {
+  DiscoveryAskComposer: (p: { onAgentResults: ResultHandler; visibleEventCount?: number }) => {
     onAgentResults = p.onAgentResults;
+    lastVisibleEventCount = p.visibleEventCount;
     return null;
   },
 }));
@@ -91,6 +122,32 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   onAgentResults = null;
+  lastA2uiOpenResult = undefined;
+  lastVisibleEventCount = undefined;
+  chatBoundary.hasConcierge = false;
+});
+
+describe("EventBrowseView — live event chat boundary", () => {
+  it("mounts the existing saved-chat provider on the Events page when the shared agent exists", () => {
+    chatBoundary.hasConcierge = true;
+    render(<EventBrowseView {...props} results={[A, B]} />);
+    expect(screen.getByTestId("event-local-chat-provider")).toBeTruthy();
+  });
+
+  it("does not mount a new agent/chat provider for inert component or deterministic tests", () => {
+    render(<EventBrowseView {...props} results={[A, B]} />);
+    expect(screen.queryByTestId("event-local-chat-provider")).toBeNull();
+  });
+});
+
+describe("EventBrowseView — visible event hints", () => {
+  it("never claims rows are visible when the error panel replaces the grid", () => {
+    const { rerender } = render(<EventBrowseView {...props} results={[A, B]} />);
+    expect(lastVisibleEventCount).toBe(2);
+    rerender(<EventBrowseView {...props} error="Could not load events" results={[A, B]} />);
+    expect(screen.queryByTestId("event-card")).toBeNull();
+    expect(lastVisibleEventCount).toBeUndefined();
+  });
 });
 
 describe("EventBrowseView — one selected event", () => {
@@ -167,6 +224,29 @@ describe("EventBrowseView — one selected event", () => {
     expect(screen.queryByTestId("map")).toBeNull();
     rerender(<EventBrowseView {...props} results={[A]} error="Could not load events." />);
     expect(screen.queryByTestId("map")).toBeNull();
+  });
+});
+
+describe("EventBrowseView — generated A2UI EventCard Details", () => {
+  it("opens the native Details panel for the exact event selected by the generated card", async () => {
+    const user = userEvent.setup();
+    render(<EventBrowseView {...props} results={[A, B]} />);
+    await user.click(screen.getByTestId("a2ui-open-event-b"));
+    expect(lastA2uiOpenResult).toBe(true);
+    expect(ctx()).toBe("b");
+    const details = screen.queryByTestId("event-browse-details-panel")
+      ?? screen.getByTestId("event-browse-details-sheet");
+    expect(details.getAttribute("data-event-id")).toBe("b");
+  });
+
+  it("refuses a generated event that is absent from the current grid", async () => {
+    const user = userEvent.setup();
+    render(<EventBrowseView {...props} results={[A, B]} />);
+    await user.click(screen.getByTestId("a2ui-open-event-outside"));
+    expect(lastA2uiOpenResult).toBe(false);
+    expect(screen.queryByTestId("event-browse-details-panel")).toBeNull();
+    expect(screen.queryByTestId("event-browse-details-sheet")).toBeNull();
+    expect(ctx()).toBe("");
   });
 });
 

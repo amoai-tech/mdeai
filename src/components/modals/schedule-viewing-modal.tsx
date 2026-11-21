@@ -3,7 +3,7 @@
 import { useEffect, useReducer, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
-import { isFutureInstant, resolvePreferredAtInstant, LISTING_TIME_ZONE } from "@/lib/leads/schedule-viewing-time";
+import { isFutureInstant, resolvePreferredAtInstant, splitPreferredAt, LISTING_TIME_ZONE } from "@/lib/leads/schedule-viewing-time";
 import { useRentalUi } from "@/components/chat/rental-ui-context";
 import { submitScheduleViewing } from "@/lib/leads/submit-schedule-viewing";
 import { buildSchedulePrefill, type SchedulePrefill } from "@/lib/leads/schedule-prefill";
@@ -70,8 +70,10 @@ export const ScheduleViewingModal = () => {
   // requests before the button disables. This ref is the synchronous lock.
   const submitLockRef = useRef(false);
   const [contact, dispatchContact] = useReducer(contactReducer, INITIAL_CONTACT);
-  const [viewingDate, setViewingDate] = useState("");
-  const [viewingTime, setViewingTime] = useState("");
+  // SAN-1658 — a proposal's time seeds the draft; also when the modal mounts with a target already set.
+  const mountSeed = scheduleTarget?.preferredAt ? splitPreferredAt(scheduleTarget.preferredAt) : null;
+  const [viewingDate, setViewingDate] = useState(mountSeed?.date ?? "");
+  const [viewingTime, setViewingTime] = useState(mountSeed?.time ?? "");
   const [stage, setStage] = useState<"details" | "review">("details");
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [dateError, setDateError] = useState<string | null>(null);
@@ -92,8 +94,11 @@ export const ScheduleViewingModal = () => {
   // Derive from changed listing identity during render (no cascading effect).
   if (scheduleTarget?.listingId !== draftOwner) {
     setDraftOwner(scheduleTarget?.listingId);
-    setViewingDate("");
-    setViewingTime("");
+    // SAN-1658 — seed from a proposal's time once per open; a later render never re-seeds, so
+    // the renter's own edits win. An invalid value seeds nothing rather than a broken draft.
+    const seed = scheduleTarget?.preferredAt ? splitPreferredAt(scheduleTarget.preferredAt) : null;
+    setViewingDate(seed?.date ?? "");
+    setViewingTime(seed?.time ?? "");
     setStage("details");
     setCalendarOpen(false);
     setDateError(null);
