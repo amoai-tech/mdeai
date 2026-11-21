@@ -18,19 +18,37 @@ import { eventPageControlSchema, resolveEventPageControl } from "@/lib/events/br
 function usePageFilterRunSnapshot<T extends object>(filters: T, agent: AbstractAgent) {
   const filtersRef = useRef(filters);
   const manualEditCountRef = useRef(0);
+  // A filter Link navigates asynchronously. A delayed RUN_STARTED must not
+  // turn that pending human navigation into the snapshot of an "old" run.
+  const pendingNavigationFromRef = useRef<string | null>(null);
   // A page mounted mid-run must not accept a late tool from the previous page.
   const startedWithRef = useRef<{ filters: string; manualEdits: number } | null>(
     agent.isRunning ? { filters: "", manualEdits: -1 } : null,
   );
-  useEffect(() => { filtersRef.current = filters; }, [filters]);
+  useEffect(() => {
+    filtersRef.current = filters;
+    // Only the canonical URL-backed props confirm that navigation completed.
+    if (pendingNavigationFromRef.current !== null &&
+        pendingNavigationFromRef.current !== JSON.stringify(filters)) {
+      pendingNavigationFromRef.current = null;
+    }
+  }, [filters]);
   useEffect(() => {
     // A native Link click starts navigation before new server props arrive.
     // Record the user's intent synchronously so an AI tool cannot race that click.
     const onManualFilterClick = (event: MouseEvent) => {
       if (!(event.target instanceof Element)) return;
-      if (event.target.closest(
-        '[data-testid="workspace-filters"] a[href], [data-testid="events-filters"] a[href], [data-testid="rentals-dates-apply"], [data-testid="rentals-dates-clear"]',
-      )) manualEditCountRef.current += 1;
+      const linkOrAction = event.target.closest(
+        '[data-testid="workspace-filters"] a[href], [data-testid="rentals-dates-apply"], [data-testid="rentals-dates-clear"]',
+      );
+      if (!linkOrAction) return;
+      if (linkOrAction.matches('a[href]')) {
+        // Opening a filter link in another tab must not invalidate this page.
+        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey ||
+            event.altKey || linkOrAction.getAttribute("target") === "_blank") return;
+        pendingNavigationFromRef.current = JSON.stringify(filtersRef.current);
+      }
+      manualEditCountRef.current += 1;
     };
     document.addEventListener("click", onManualFilterClick, true);
     return () => document.removeEventListener("click", onManualFilterClick, true);
@@ -38,10 +56,12 @@ function usePageFilterRunSnapshot<T extends object>(filters: T, agent: AbstractA
   useEffect(() => {
     const subscription = agent.subscribe({
       onRunInitialized: () => {
-        startedWithRef.current = {
-          filters: JSON.stringify(filtersRef.current),
-          manualEdits: manualEditCountRef.current,
-        };
+        startedWithRef.current = pendingNavigationFromRef.current !== null
+          ? { filters: "", manualEdits: -1 }
+          : {
+              filters: JSON.stringify(filtersRef.current),
+              manualEdits: manualEditCountRef.current,
+            };
       },
     });
     return () => {
