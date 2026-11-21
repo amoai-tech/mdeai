@@ -372,9 +372,20 @@ function MdeComparisonAction({ listingId }: { listingId: string }) {
   const row = useRentalRow(listingId);
   const map = useOptionalMapContext();
   const rentalUi = useOptionalRentalUi();
-  if (!row) return null;
+  if (!row) {
+    // A saved comparison may outlive the authorized search row. Show an honest
+    // non-actionable state rather than silently losing an apartment or exposing
+    // any stale button. Never trust a rendered listing ID as permission.
+    return (
+      <p role="status" data-testid="rental-comparison-unavailable" className="text-sm text-muted-foreground">
+        This apartment is no longer in the current authorized results.
+      </p>
+    );
+  }
 
   const detailRental = toDetailRental(row);
+  const safeNeighborhood = row.neighborhood?.trim() || "Not recorded";
+  const safeTitle = row.title?.trim() || "Listing";
   const pinId = `rental-${listingId}`;
   const hasPin = map?.pins.some((pin) => pin.id === pinId) ?? false;
   const canOpenDetail = !(row.tags?.includes("external-source") && !detailRental);
@@ -389,14 +400,14 @@ function MdeComparisonAction({ listingId }: { listingId: string }) {
         pinId,
         pinned: hasPin,
         rental: detailRental ?? undefined,
-        title: row.title,
-        neighborhood: row.neighborhood,
-        nightlyPrice: row.nightly_price,
-        bedrooms: row.bedrooms,
+        title: safeTitle,
+        neighborhood: safeNeighborhood,
+        nightlyPrice: row.nightly_price ?? undefined,
+        bedrooms: row.bedrooms ?? undefined,
         photoUrl: row.photo_url ?? row.image_url,
-        amenities: row.amenities,
-        availability: row.availability,
-        hostName: row.host_name,
+        amenities: row.amenities ?? [],
+        availability: row.availability ?? undefined,
+        hostName: row.host_name ?? undefined,
         canScheduleViewing: canRequest,
       });
     } else {
@@ -406,14 +417,14 @@ function MdeComparisonAction({ listingId }: { listingId: string }) {
 
   return (
     <div data-listing-id={listingId} className="flex min-w-0 flex-wrap items-center gap-2 py-1 text-sm">
-      <span className="min-w-0 max-w-48 truncate font-medium" title={row.title}>{row.title}</span>
+      <span className="min-w-0 max-w-48 truncate font-medium" title={safeTitle}>{safeTitle}</span>
       {canOpenDetail ? (
         <Button type="button" size="sm" variant="outline" className="min-h-11"
           onClick={openDetails}>Details</Button>
       ) : null}
       {canRequest ? (
         <Button type="button" size="sm" variant="outline" className="min-h-11"
-          onClick={() => rentalUi?.openScheduleViewing?.({ listingId, title: row.title, neighborhood: row.neighborhood })}>
+          onClick={() => rentalUi?.openScheduleViewing?.({ listingId, title: safeTitle, neighborhood: safeNeighborhood })}>
           Schedule viewing
         </Button>
       ) : null}
