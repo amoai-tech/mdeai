@@ -217,6 +217,28 @@ describe("SAN-1695 — failed gallery images never occupy a slide", () => {
     expect(onDetails).toHaveBeenCalledTimes(1);
   });
 
+  it("does not preview or select a map pin while focusing and using gallery arrows", () => {
+    const onPreview = vi.fn();
+    const onSelect = vi.fn();
+    const onDetails = vi.fn();
+    act(() => { root.render(<RentalBrowseCard
+      rental={rowToRental(apartmentRow({
+        latitude: 6.245, longitude: -75.579,
+        images: ["https://images.unsplash.com/front.jpg", "https://images.unsplash.com/kitchen.jpg"],
+      }))}
+      mediaLayout="cover" onPreview={onPreview} onSelect={onSelect} onDetails={onDetails}
+    />); });
+    const next = container.querySelector<HTMLButtonElement>('[data-slot="carousel-next"]');
+    expect(next).not.toBeNull();
+    act(() => { next?.focus(); });
+    // Focusing a photo navigation control must not select its apartment on the map.
+    expect(onPreview).not.toHaveBeenCalled();
+    act(() => { next?.click(); });
+    expect(onPreview).not.toHaveBeenCalled();
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(onDetails).not.toHaveBeenCalled();
+  });
+
   it("retains failures on unrelated rerenders, then retries on a refreshed result set", () => {
     const urls = ["https://images.unsplash.com/front.jpg", "https://images.unsplash.com/kitchen.jpg"];
     const show = () => rowToRental(apartmentRow({ images: urls }));
