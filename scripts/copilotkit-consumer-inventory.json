@@ -400,6 +400,11 @@
       "note": "SAN-1656: one v2 GenerativeUISurface named rental-recommendations, mounted on the Rentals page only; it registers a target plus component allowlist and fetches or stores nothing, so cards keep resolving through the existing catalog."
     },
     {
+      "file": "src/components/chat/__tests__/rental-a2ui-context-component.test.tsx",
+      "classification": "test-only",
+      "note": "SAN-1681: mocks v2 useAgentContext to verify the mounted Rentals context publishes visible apartment IDs in card order, falls back to the existing fast-path results, and ignores malformed listing IDs."
+    },
+    {
       "file": "src/components/chat/rental-a2ui-context.tsx",
       "classification": "keep",
       "note": "SAN-1637 post-merge: v2 useAgentContext publishes only the current fast-path rental IDs so the model can call render_ui without inventing one; the catalog revalidates every ID against authorized results."
