@@ -43,8 +43,16 @@ import { incrementAndCheckGroundingQuota } from "../../lib/grounding-quota";
 import { searchGoogleCafes } from "../../lib/google-places-cafe-search";
 import { searchRestaurants } from "../search-restaurants";
 import { searchCafeVenueAnchors } from "../search-venue-anchors";
-import { searchGroundedPlacesTool } from "../search-grounded-places";
+import { searchGroundedPlacesTool, isCafeGroundingQuery, resolveVenueGroundingKind } from "../search-grounded-places";
 import { adkUnavailableMock } from "./grounded-places-test-helpers";
+
+it.each(["café", "cafés", "cafe", "cafes", "cafetería", "coffee shop"])(
+  "recognizes café discovery intent: %s",
+  (query) => {
+    expect(isCafeGroundingQuery(query)).toBe(true);
+    expect(resolveVenueGroundingKind(query)).toBe("cafe");
+  },
+);
 
 type GroundedOut = {
   results: { title?: string; placeId?: string; latitude?: number; longitude?: number; sourceMode?: string }[];
@@ -88,7 +96,49 @@ describe("searchGroundedPlacesTool fallback", () => {
     vi.mocked(searchRestaurants).mockReset();
     vi.mocked(searchGoogleCafes).mockReset().mockResolvedValue({ results: [], attribution: [] });
     vi.mocked(isAdkGroundingConfigured).mockReturnValue(true);
-    vi.mocked(incrementAndCheckGroundingQuota).mockClear();
+    vi.mocked(incrementAndCheckGroundingQuota).mockReset().mockResolvedValue({ allowed: true });
+  });
+
+  it.each(["adk_missing", "quota", "adk_unavailable"] as const)(
+    "does not claim catalog fallback or outside coverage for a map-relative %s failure",
+    async (failure) => {
+      const locationBias = { latitude: 6.23, longitude: -75.57 };
+      if (failure === "adk_missing") {
+        vi.mocked(isAdkGroundingConfigured).mockReturnValue(false);
+      } else if (failure === "quota") {
+        vi.mocked(incrementAndCheckGroundingQuota).mockResolvedValue({
+          allowed: false,
+          reason: "quota",
+        });
+      } else {
+        vi.mocked(invokeAdkGrounding).mockResolvedValue(
+          adkUnavailableMock({ reason: "adk_unavailable", status: 503 }),
+        );
+      }
+      const out = await searchGroundedPlacesTool.execute!(
+        { query: "rooftop bars around here", intent: "nightlife", locationBias },
+        {} as never,
+      ) as GroundedOut;
+      expect(out.results).toEqual([]);
+      expect(out.metadata?.reason).toBe(
+        failure === "adk_missing"
+          ? "adk_not_configured"
+          : failure === "quota"
+            ? "quota"
+            : "adk_unavailable",
+      );
+      expect(out.metadata).not.toHaveProperty("fallback");
+      expect(out.metadata).not.toHaveProperty("outsideCatalogCoverage");
+      expect(searchRestaurants).not.toHaveBeenCalled();
+    },
+  );
+
+  it("routes singular accented café queries to the café provider", async () => {
+    vi.mocked(searchRestaurants).mockResolvedValue({ results: [], total: 0, source: "supabase" });
+    const out = await runGrounded("café in Laureles");
+    expect(out.metadata?.venueKind).toBe("cafe");
+    expect(searchGoogleCafes).toHaveBeenCalledOnce();
+    expect(invokeAdkGrounding).not.toHaveBeenCalled();
   });
 
   it("SAN-877: real café tool uses thread-scoped map viewport even without explicit input", async () => {

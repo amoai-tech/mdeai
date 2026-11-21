@@ -261,7 +261,9 @@ export const searchGroundedPlacesTool = createTool({
             results: [],
             attribution: [],
             source: "grounding" as const,
-            metadata: { fallback: "curated", reason: "outside_catalog_coverage" },
+            metadata: mapRelativeSearch
+              ? { reason: "adk_not_configured" }
+              : { fallback: "curated", reason: "outside_catalog_coverage" },
           },
           rawQuery,
           intent,
@@ -302,7 +304,9 @@ export const searchGroundedPlacesTool = createTool({
             results: [],
             attribution: [],
             source: "grounding" as const,
-            metadata: { reason: quota.reason, fallback: "curated", outsideCatalogCoverage: true },
+            metadata: mapRelativeSearch
+              ? { reason: quota.reason }
+              : { reason: quota.reason, fallback: "curated", outsideCatalogCoverage: true },
           },
           rawQuery,
           intent,
@@ -439,7 +443,9 @@ export const searchGroundedPlacesTool = createTool({
             results: [],
             attribution: [],
             source: "grounding" as const,
-            metadata: { ...adk.metadata, fallback: "curated", outsideCatalogCoverage: true },
+            metadata: mapRelativeSearch
+              ? adk.metadata
+              : { ...adk.metadata, fallback: "curated", outsideCatalogCoverage: true },
           },
           rawQuery,
           intent,

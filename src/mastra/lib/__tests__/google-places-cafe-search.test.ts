@@ -7,6 +7,14 @@ vi.mock("../google-places-client", async (importOriginal) => {
 });
 
 import { hasExplicitPlaceScope, isMedellinPlaceScope, mapGoogleTextSearchToGrounded, searchGoogleCafes, withMedellinScope } from "../google-places-cafe-search";
+import { isMapAreaQuery, mapAreaProviderQuery } from "@/lib/map-area-query";
+
+it("removes all repeated map-area phrases without changing repeated intent detection", () => {
+  const query = "cafés around this map and near here por aquí";
+  expect(mapAreaProviderQuery(query)).toBe("cafés and");
+  expect(isMapAreaQuery(query)).toBe(true);
+  expect(isMapAreaQuery(query)).toBe(true);
+});
 
 const response = {
   places: [

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { hasExplicitPlaceScope } from "./google-places-cafe-search";
 
 const CAFE_QUERY =
-  /\b(caf[eé]s?|cafeter[ií]as?|coffee shops?|quiet caf[eé]s?|top cafes?|list cafes?|coworking|wifi|wi-fi|laptop[- ]friendly)\b/i;
+  /\b(caf[eé]s?|cafeter[ií]as?|coffee shops?|quiet caf[eé]s?|top cafes?|list cafes?|coworking|wifi|wi-fi|laptop[- ]friendly)(?![\p{L}\p{N}_])/iu;
 
 const NIGHTLIFE_QUERY =
   /\b(nightlife|salsa bars?|hidden bars?|rooftop cocktails?|rooftop bars?|live music bars?|locals go to)\b/i;
