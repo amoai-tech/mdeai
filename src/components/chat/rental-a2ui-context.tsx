@@ -42,7 +42,11 @@ export function RentalA2UIContext({ visibleRows }: { visibleRows?: readonly Rent
   // references. The fast-path envelope can be older/differently ordered during
   // streaming or hydration, making "first two" resolve to cards 2 and 3.
   // Other consumers continue using the existing fast-path fallback.
-  const rows = visibleRows ?? (Array.isArray(envelopeRows) ? envelopeRows as RentalIdRow[] : undefined);
+  const rows = visibleRows ?? (Array.isArray(envelopeRows)
+    ? envelopeRows.filter((row): row is RentalIdRow =>
+        row !== null && typeof row === "object" && !Array.isArray(row) &&
+        "id" in row && typeof row.id === "string" && isRentalA2UIId(row.id))
+    : undefined);
   useAgentContext({
     description: RENTAL_A2UI_CONTEXT_DESCRIPTION,
     value: rentalA2UIContextValue(rows),
