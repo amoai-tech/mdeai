@@ -57,7 +57,10 @@ test("SAN-755 guest rental refinement blocks promotion when staged browser tests
   assert.match(script, /e2e\/prod-guest-rental-budget\.spec\.ts --project=prod-smoke/);
   assert.match(script, /PW_SKIP_WEBSERVER=1/);
   assert.match(config, /prod-guest-rental-budget\.spec\.ts/);
-  assert.match(guest, /trace: "on-first-retry", screenshot: "only-on-failure"/);
+  // Vercel's protected preview sets an auth cookie; Playwright network traces
+  // capture browser Cookie headers and must never become uploadable artifacts.
+  assert.match(guest, /trace: "off", screenshot: "only-on-failure"/,
+    "guest release smoke must disable tracing to protect the Vercel bypass cookie");
   assert.match(guest, /budget COP 3M to COP 2\.5M/);
 });
 

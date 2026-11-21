@@ -3,8 +3,10 @@ import { establishVercelAutomationBypass } from "./fixtures/vercel-bypass";
 import type { Page } from "@playwright/test";
 import { sendConciergeMessage } from "./helpers/maps-layout";
 
-// CI release certification keeps full failure evidence only for anonymous users.
-test.use({ qaRole: "anonymous", trace: "on-first-retry", screenshot: "only-on-failure", video: "off" });
+// A protected Vercel deployment uses a browser bypass cookie. Playwright network
+// traces include request Cookie headers, so never retain a trace from this
+// release test. Anonymous failure screenshots remain available for diagnosis.
+test.use({ qaRole: "anonymous", trace: "off", screenshot: "only-on-failure", video: "off" });
 
 /** SAN-755: two real guest searches on the same thread, not a mocked route. */
 const guestTarget = process.env.PROD_SMOKE_BASE_URL?.trim() ?? "";

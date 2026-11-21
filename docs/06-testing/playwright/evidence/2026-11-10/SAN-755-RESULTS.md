@@ -82,3 +82,20 @@ to preview, and a negative YAML contract checks this release requirement.
 The bypass secret remains scoped to the one release-check step; passing it
 through process.env instead of the workflow env would not change which
 processes can read it.
+
+
+## 21 November 2026 — protected Vercel cookie trace regression
+
+- **Cause:** This guest spec overrode the `prod-smoke` project's secure
+  `trace: off` setting with `on-first-retry`.
+- **Safe reproduction:** A local-only Playwright trace experiment used a
+  **dummy** `_vercel_jwt` cookie. Its value appeared in `trace.network`.
+  No real Vercel bypass token or user cookie was inspected or displayed.
+- **Minimal fix:** Explicitly keep `trace: off` and `video: off`
+  in the anonymous guest test. Keep `screenshot: only-on-failure`.
+  The existing staged-candidate test already inherits `prod-smoke`'s
+  `trace: off` setting; no second bypass/certification path is needed.
+- **Regression:** The Node release contract now requires tracing disabled.
+  It was run RED against the old setting before changing the spec.
+- **Reference:** https://playwright.dev/docs/trace-viewer (Network tab can show
+  request headers) and https://vercel.com/docs/deployment-protection/methods-to-bypass-deployment-protection/protection-bypass-automation.

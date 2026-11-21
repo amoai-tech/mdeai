@@ -453,3 +453,13 @@ environment. The production-release workflow stages a real production build
 `MDE_VERCEL_EXPECTED_ENVIRONMENT=production`. Main's canonical helper
 requires the correct environment and exact SHA for public candidates, while
 protected candidates still need their bypass cookie.
+
+
+### Guest release check: protect Vercel bypass cookies
+
+The SAN-755 guest budget release smoke runs with `trace: "off"`,
+`video: "off"` and `screenshot: "only-on-failure"`.
+When a protected Vercel candidate establishes `_vercel_jwt`, Playwright
+network traces can contain the cookie in request headers; no trace ZIP should
+be created or uploaded by this smoke. The release gate continues to fail
+closed and retains anonymous-only screenshots for diagnostics.
