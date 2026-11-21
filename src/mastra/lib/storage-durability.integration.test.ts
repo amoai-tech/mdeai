@@ -205,9 +205,17 @@ describe.runIf(runIntegration)("VEB-MVP-010 Postgres cold-start durability", () 
       const rejected = outcomes.filter((result) => result.status === "rejected");
       expect(successes).toHaveLength(1);
       expect(rejected).toHaveLength(1);
-      expect(String((rejected[0] as PromiseRejectedResult).reason)).toMatch(
-        /WORKFLOW_RESUME_ALREADY_CLAIMED|already claimed/i,
+      const refused = String((rejected[0] as PromiseRejectedResult).reason);
+      // The losing caller may see the atomic claim, or arrive after the
+      // winning call has already committed the successful run state.
+      expect(refused).toMatch(
+        /WORKFLOW_RESUME_ALREADY_CLAIMED|WORKFLOW_RUN_NOT_SUSPENDED/,
       );
+      if (refused.includes("WORKFLOW_RUN_NOT_SUSPENDED")) {
+        expect(refused).toContain('"status":"success"');
+      }
+      // This workflow's completed snapshot may be pruned by Mastra, so a
+      // post-completion snapshot lookup is not a valid persistence assertion.
       expect(applyEventBookingAdminDecision).toHaveBeenCalledTimes(1);
     },
     120_000,
