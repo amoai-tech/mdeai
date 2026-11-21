@@ -37,6 +37,9 @@ class GMapsTests(unittest.TestCase):
         for url in (
             "https://evil.example/steal?key=secret",
             "http://maps.googleapis.com/maps/api/geocode/json",
+            "https://maps.googleapis.com:8080/maps/api/geocode/json",
+            "https://user:pass@maps.googleapis.com/maps/api/geocode/json",
+            "https://maps.googleapis.com@evil.example/steal",
             "https://maps.googleapis.com.evil.example/steal",
             "https://evil.example@maps.googleapis.com:8443/path",
         ):
@@ -55,7 +58,8 @@ class GMapsTests(unittest.TestCase):
 
     def test_valid_google_api_request_uses_no_redirect_handler(self):
         class FakeResponse:
-            headers = {"Content-Type": "application/json"}
+            def __init__(self):
+                self.headers = {"Content-Type": "application/json"}
             def __enter__(self): return self
             def __exit__(self, *args): return False
             def read(self): return b'{"ok":true}'
