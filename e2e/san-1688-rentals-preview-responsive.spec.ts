@@ -17,7 +17,7 @@
  * external CDN timing out must not turn this regression test red. The optimiser
  * request URL is asserted, so the media configuration is still exercised.
  */
-import { test, expect, type BrowserContext, type Page, type TestInfo } from "@playwright/test";
+import { test, expect, type BrowserContext, type Page } from "@playwright/test";
 import {
   createThrowawayIdentity,
   deleteThrowawayIdentity,
@@ -47,7 +47,7 @@ test.use({ screenshot: "off", trace: "off", video: "off" });
 test.describe("SAN-1688 · rental listing preview across viewports", () => {
   test("broker completes the listing step with a truthful preview at 1440/768/390/320", async ({
     browser,
-  }, testInfo) => {
+  }) => {
     test.skip(!hasE2eEnv(), "E2E Supabase env missing");
     test.setTimeout(300_000);
 
@@ -85,9 +85,9 @@ test.describe("SAN-1688 · rental listing preview across viewports", () => {
           });
           await page.route("https://example.com/**", (route) => route.abort("failed"));
 
-          await verifyPreviewAndPhoto(page, viewport, optimizerRequestsForViewport, testInfo);
-          await verifyInvalidPhotoAndBathrooms(page, viewport, testInfo);
-          await verifyReviewAndKeyboard(page, viewport, testInfo);
+          await verifyPreviewAndPhoto(page, viewport, optimizerRequestsForViewport);
+          await verifyInvalidPhotoAndBathrooms(page, viewport);
+          await verifyReviewAndKeyboard(page, viewport);
           optimiserRequests.push(...optimizerRequestsForViewport);
         } finally {
           await context.close();
@@ -106,7 +106,6 @@ async function verifyPreviewAndPhoto(
   page: Page,
   viewport: ViewportCase,
   optimizerRequestsForViewport: string[],
-  testInfo: TestInfo,
 ) {
   await openListingStep(page);
   await expectNoHorizontalOverflow(page, `${viewport.name} empty listing`);
@@ -147,18 +146,11 @@ async function verifyPreviewAndPhoto(
     )
     .toBe(true);
   await expect(page.getByTestId("ro-live-preview-photo-loading")).toHaveCount(0);
-
-  await page.screenshot({
-    path: testInfo.outputPath(`san-1688-${viewport.name}-listing-with-photo.png`),
-    fullPage: true,
-  });
-
 }
 
 async function verifyInvalidPhotoAndBathrooms(
   page: Page,
   viewport: ViewportCase,
-  testInfo: TestInfo,
 ) {
   // A broken image degrades to a labelled placeholder with an explicit retry.
   await page.locator("#ro-photo").fill(BROKEN_PHOTO);
@@ -178,11 +170,6 @@ async function verifyInvalidPhotoAndBathrooms(
   await expect(page.getByTestId("ro-live-preview-bathrooms")).toHaveText("Not specified");
   await expectNoHorizontalOverflow(page, `${viewport.name} invalid bathrooms`);
 
-  await page.screenshot({
-    path: testInfo.outputPath(`san-1688-${viewport.name}-invalid-bathrooms.png`),
-    fullPage: true,
-  });
-
   await page.locator("#ro-bathrooms").fill("2");
   // Restore a usable photo so the Review evidence shows the happy path.
   await page.locator("#ro-photo").fill(REAL_PHOTO);
@@ -193,7 +180,6 @@ async function verifyInvalidPhotoAndBathrooms(
 async function verifyReviewAndKeyboard(
   page: Page,
   viewport: ViewportCase,
-  testInfo: TestInfo,
 ) {
   // Keyboard order: every listing field is reachable without a pointer.
   await page.locator("#ro-address").focus();
@@ -217,8 +203,7 @@ async function verifyReviewAndKeyboard(
   await expect(page.locator('[data-testid="ro-live-preview"]')).toHaveCount(1);
   await expectNoHorizontalOverflow(page, `${viewport.name} review`);
   await expect(page.getByTestId("ro-submit")).toBeVisible();
-  // The preview remounts on Review; wait for the photo to decode before the
-  // evidence screenshot so it shows the real state, not a loading frame.
+  // The preview remounts on Review; assert that its photo decodes successfully.
   const reviewPhoto = page.getByTestId("ro-live-preview-photo");
   await expect
     .poll(
@@ -231,11 +216,6 @@ async function verifyReviewAndKeyboard(
       { timeout: 15_000 },
     )
     .toBe(true);
-
-  await page.screenshot({
-    path: testInfo.outputPath(`san-1688-${viewport.name}-review.png`),
-    fullPage: true,
-  });
 }
 
 async function openListingStep(page: Page) {

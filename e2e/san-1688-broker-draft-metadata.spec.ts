@@ -17,6 +17,7 @@
  */
 import { test, expect } from "@playwright/test";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { PlaceSearchResult } from "@/lib/place-search";
 import {
   createThrowawayIdentity,
   deleteThrowawayIdentity,
@@ -32,7 +33,7 @@ import {
 test.use({ screenshot: "off", trace: "off", video: "off" });
 
 test.describe("SAN-1688 · reused onboarding draft keeps provenance", () => {
-  test("saving free-text and Google-selected addresses preserves draft provenance", async ({ page }, testInfo) => {
+  test("saving free-text and Google-selected addresses preserves draft provenance", async ({ page }) => {
     test.skip(!hasE2eEnv(), "E2E Supabase env missing");
     test.setTimeout(240_000);
 
@@ -117,17 +118,17 @@ test.describe("SAN-1688 · reused onboarding draft keeps provenance", () => {
       // reused draft must preserve all non-place metadata through the live DB
       // provenance trigger while replacing only the address-owned keys.
       await page.goto("/app/rentals/onboarding", { waitUntil: "domcontentloaded" });
-      const selectedPlaceId = await saveOnboarding(
+      const selectedPlace = await saveOnboarding(
         page,
         "Calle 44 Laureles Medellín, Antioquia, Colombia",
         true,
       );
-      expect(selectedPlaceId).toBeTruthy();
+      expect(selectedPlace).not.toBeNull();
       await page.waitForURL(/\/app\/rentals\/listings/, { timeout: 60_000 });
 
       const { data: selected, error: selectedError } = await admin
         .from("apartments")
-        .select("id, metadata")
+        .select("id, address, latitude, longitude, metadata")
         .eq("id", apartmentId)
         .single();
       if (selectedError || !selected) throw new Error(`selected-place readback failed: ${selectedError?.message}`);
@@ -137,14 +138,32 @@ test.describe("SAN-1688 · reused onboarding draft keeps provenance", () => {
       expect(selectedMetadata.is_test_fixture).toBe(true);
       expect(selectedMetadata.review_required_reason).toBe("material edit after publication");
       expect(selectedMetadata.review_required_at).toBe("2026-11-19T00:00:00.000Z");
-      expect(selectedMetadata.place_id).toBe(selectedPlaceId);
+      expect(selectedMetadata.place_id).toBe(selectedPlace?.placeId);
+      // The canonical address comes from a second, server-side Google lookup.
+      // It must be stored on the apartment itself, not just in metadata.
+      expect(selected.address).toBe(selectedMetadata.formatted_address);
+      expect(selected.address).toBeTruthy();
+      // Google can omit coordinates for some results. When search provided a
+      // location, the independently verified save must persist that location.
+      if (selectedPlace?.latitude != null && selectedPlace.longitude != null) {
+        expect(selected.latitude).not.toBeNull();
+        expect(selected.longitude).not.toBeNull();
+        expect(selected.latitude).toBeCloseTo(selectedPlace.latitude, 4);
+        expect(selected.longitude).toBeCloseTo(selectedPlace.longitude, 4);
+      } else {
+        // Never fabricate a pin if Google did not provide a usable location.
+        expect(selected.latitude === null).toBe(selected.longitude === null);
+        if (selected.latitude !== null && selected.longitude !== null) {
+          expect(Number.isFinite(selected.latitude)).toBe(true);
+          expect(selected.latitude).toBeGreaterThanOrEqual(-90);
+          expect(selected.latitude).toBeLessThanOrEqual(90);
+          expect(Number.isFinite(selected.longitude)).toBe(true);
+          expect(selected.longitude).toBeGreaterThanOrEqual(-180);
+          expect(selected.longitude).toBeLessThanOrEqual(180);
+        }
+      }
       expect(typeof selectedMetadata.formatted_address).toBe("string");
       expect(selectedMetadata.address_source).toBe("places_search");
-
-      await page.screenshot({
-        path: testInfo.outputPath("san-1688-draft-metadata-preserved.png"),
-        fullPage: true,
-      });
     } finally {
       await cleanup(admin, identity, landlordProfileId, apartmentId);
     }
@@ -155,7 +174,7 @@ async function saveOnboarding(
   page: import("@playwright/test").Page,
   address: string,
   selectGooglePlace = false,
-): Promise<string | null> {
+): Promise<PlaceSearchResult | null> {
   await expect(page.locator('[data-testid="rentals-onboarding"]')).toBeVisible();
   await page.addStyleTag({ content: "#cpk-web-inspector { display: none !important; }" });
 
@@ -180,7 +199,7 @@ async function saveOnboarding(
   await profileContinue.click({ timeout: 15_000 });
 
   await expect(page.locator('[data-testid="ro-step-listing"]')).toBeVisible();
-  let selectedPlaceId: string | null = null;
+  let selectedPlace: PlaceSearchResult | null = null;
   if (selectGooglePlace) {
     // Use actual authenticated Places results; do not fake a place ID or
     // shortcut the server's verification step.
@@ -190,10 +209,10 @@ async function saveOnboarding(
     );
     await page.locator("#ro-address").fill(address);
     const response = await responsePromise;
-    const payload = (await response.json()) as { results?: Array<{ placeId: string }> };
+    const payload = (await response.json()) as { results?: PlaceSearchResult[] };
     expect(payload.results?.length).toBeGreaterThan(0);
-    selectedPlaceId = payload.results?.[0]?.placeId ?? null;
-    expect(selectedPlaceId).toBeTruthy();
+    selectedPlace = payload.results?.[0] ?? null;
+    expect(selectedPlace?.placeId).toBeTruthy();
     await expect(page.getByTestId("ro-address-option").first()).toBeVisible();
     await page.getByTestId("ro-address-option").first().click();
   } else {
@@ -209,7 +228,7 @@ async function saveOnboarding(
 
   await expect(page.locator('[data-testid="ro-step-review"]')).toBeVisible();
   await page.getByTestId("ro-submit").click({ timeout: 15_000 });
-  return selectedPlaceId;
+  return selectedPlace;
 }
 
 async function readNewestDraft(admin: SupabaseClient, landlordProfileId: string) {
