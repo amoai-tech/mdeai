@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { expect, test as base } from "@playwright/test";
+import { expect, test as base, type Browser } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
 import {
   createThrowawayIdentity, deleteThrowawayIdentity, getSupabaseAdmin,
@@ -68,6 +68,30 @@ test.skip(
   "Opt-in requires SAN1426_VIEWINGS_E2E=1, QA environment and target URL",
 );
 
+async function verifyAnonymousPrivacy(browser: Browser, showingId: string): Promise<void> {
+  const guest = await browser.newPage();
+  try {
+    await openCandidate(guest);
+    await guest.goto(new URL("/app/me/viewings", ORIGIN).href, { waitUntil: "domcontentloaded" });
+    await expect(guest).toHaveURL(/\/login\?next=(%2F|\/)app(%2F|\/)me(%2F|\/)viewings/);
+
+    // Real anonymous Supabase Data API cannot reveal an owned showing by copied ID.
+    const publicKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+      ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!publicKey || !process.env.NEXT_PUBLIC_SUPABASE_URL) {
+      throw new Error("Missing public Supabase QA connection");
+    }
+    const anonymous = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, publicKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const { data: anonymousRows } = await anonymous
+      .from("showings").select("id").eq("id", showingId);
+    expect(anonymousRows ?? []).toEqual([]);
+  } finally {
+    await guest.close();
+  }
+}
+
 test("signed-in renter sees own saved viewing while another renter and guest cannot", async ({ browser, qa }) => {
   test.setTimeout(360_000);
   const { admin, fixture, run, renterA, renterB } = qa;
@@ -134,6 +158,24 @@ test("signed-in renter sees own saved viewing while another renter and guest can
       .toHaveAttribute("href", "/rentals/" + fixture.apartmentId);
     await a.reload({ waitUntil: "domcontentloaded" });
     await expect(a.getByTestId("renter-viewing-" + showingId)).toBeVisible();
+
+    // Hide ONLY this disposable QA listing. The showing remains owned by renter A.
+    const { data: hidden, error: hideError } = await admin.from("apartments")
+      .update({ metadata: { visibility: "private" } })
+      .eq("id", fixture.apartmentId).select("id").single();
+    expect(hideError).toBeNull();
+    expect(hidden?.id).toBe(fixture.apartmentId);
+    const { data: hiddenEmbed, error: hiddenReadError } = await asUser(renterASession)
+      .from("apartments").select("id").eq("id", fixture.apartmentId);
+    expect(hiddenReadError).toBeNull();
+    expect(hiddenEmbed).toEqual([]);
+    await a.reload({ waitUntil: "domcontentloaded" });
+    const stillOwned = a.getByTestId("renter-viewing-" + showingId);
+    await expect(stillOwned).toContainText("Apartment details unavailable");
+    await expect(stillOwned.getByTestId("renter-viewing-status")).toHaveText("Requested");
+    await expect(stillOwned.getByText(/3:00 PM \(Medellín time\)/)).toBeVisible();
+    await expect(stillOwned.getByRole("link", { name: "View apartment details" })).toHaveCount(0);
+
     const overflow = await a.evaluate(() =>
       document.documentElement.scrollWidth > document.documentElement.clientWidth);
     expect(overflow, "no horizontal overflow at 390px").toBe(false);
@@ -164,24 +206,5 @@ test("signed-in renter sees own saved viewing while another renter and guest can
     await bContext.close();
   }
 
-  const guest = await browser.newPage();
-  try {
-    await openCandidate(guest);
-    await guest.goto(new URL("/app/me/viewings", ORIGIN).href, { waitUntil: "domcontentloaded" });
-    await expect(guest).toHaveURL(/\/login\?next=(%2F|\/)app(%2F|\/)me(%2F|\/)viewings/);
-    // The anonymous Supabase Data API must not return private saved showings.
-    const publicKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
-      ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    if (!publicKey || !process.env.NEXT_PUBLIC_SUPABASE_URL) {
-      throw new Error("Missing public Supabase QA connection");
-    }
-    const anonymous = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, publicKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-    const { data: anonymousRows } = await anonymous
-      .from("showings").select("id").eq("id", showingId);
-    expect(anonymousRows ?? []).toEqual([]);
-  } finally {
-    await guest.close();
-  }
+  await verifyAnonymousPrivacy(browser, showingId);
 });
