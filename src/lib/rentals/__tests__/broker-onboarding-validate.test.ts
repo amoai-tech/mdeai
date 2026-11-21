@@ -57,6 +57,47 @@ describe("validateBrokerOnboardingInput", () => {
     expect(result.ok).toBe(false);
   });
 
+  it("rejects an http photo URL that the HTTPS app could never display", () => {
+    expect(validateBrokerOnboardingInput({ ...valid, photoUrl: "http://example.com/a.jpg" })).toEqual({
+      ok: false,
+      message: "Photo URL must use https.",
+    });
+  });
+
+  it("accepts whole-number room counts", () => {
+    expect(validateBrokerOnboardingInput({ ...valid, bedrooms: 0, bathrooms: 0 })).toEqual({
+      ok: true,
+    });
+    expect(validateBrokerOnboardingInput({ ...valid, bedrooms: 4, bathrooms: 3 })).toEqual({
+      ok: true,
+    });
+  });
+
+  it("rejects half bathrooms because apartments.bathrooms is an integer", () => {
+    expect(validateBrokerOnboardingInput({ ...valid, bathrooms: 1.5 })).toEqual({
+      ok: false,
+      message: "Bathrooms must be a whole number, not 1.5.",
+    });
+  });
+
+  it("rejects half bedrooms instead of rounding them", () => {
+    expect(validateBrokerOnboardingInput({ ...valid, bedrooms: 2.5 })).toEqual({
+      ok: false,
+      message: "Bedrooms must be a whole number, not 2.5.",
+    });
+  });
+
+  it("rejects NaN and negative room counts", () => {
+    expect(validateBrokerOnboardingInput({ ...valid, bathrooms: Number.NaN })).toEqual({
+      ok: false,
+      message: "Bathrooms must be a whole number.",
+    });
+    expect(validateBrokerOnboardingInput({ ...valid, bedrooms: -1 })).toEqual({
+      ok: false,
+      message: "Bedrooms cannot be negative.",
+    });
+  });
+
   it("accepts a provider-selected place with trusted coordinates", () => {
     expect(
       validateBrokerOnboardingInput({

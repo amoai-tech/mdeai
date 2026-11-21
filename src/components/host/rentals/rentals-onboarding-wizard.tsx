@@ -7,8 +7,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { BROKER_ONBOARDING_NEIGHBORHOODS } from "@/lib/rentals/broker-onboarding-constants";
 import type { BrokerOnboardingFormInput } from "@/lib/rentals/broker-onboarding-validate";
+import { roomCountError } from "@/lib/rentals/broker-onboarding-validate";
 import { submitBrokerOnboarding } from "@/lib/rentals/submit-broker-onboarding";
 import { BrokerAddressSearch } from "@/components/host/rentals/broker-address-search";
+import { RentalsListingLivePreview } from "@/components/host/rentals/rentals-listing-live-preview";
 import type { PlaceSearchResult } from "@/lib/place-search";
 import { cn } from "@/lib/utils";
 
@@ -70,6 +72,16 @@ function toggleNeighborhood(current: string[], value: string): string[] {
     : [...current, value];
 }
 
+/**
+ * A numeric field keeps an empty/invalid entry as `NaN` instead of collapsing it
+ * to 0, so the shared validator rejects it instead of saving a fact the broker
+ * never typed.
+ */
+function parseNumberField(raw: string): number {
+  const trimmed = raw.trim();
+  return trimmed === "" ? Number.NaN : Number(trimmed);
+}
+
 // skipcq: JS-0067 - JS-R1005 wizard step UI
 // skipcq: JS-R1005
 export function RentalsOnboardingWizard({ destination = "host" }: { destination?: "host" | "app" }) {
@@ -79,13 +91,15 @@ export function RentalsOnboardingWizard({ destination = "host" }: { destination?
 
   const canContinueStep1 =
     form.displayName.trim().length > 0 && form.neighborhoods.length > 0;
+  // Same predicate as the server action: the apartments columns are integers, so a
+  // half bathroom can neither be saved nor silently rounded into a whole one.
+  const bedroomError = roomCountError("Bedrooms", form.bedrooms);
+  const bathroomError = roomCountError("Bathrooms", form.bathrooms);
   const canContinueStep2 =
     form.address.trim().length > 0 &&
     form.monthlyRentCop > 0 &&
-    Number.isFinite(form.bedrooms) &&
-    form.bedrooms >= 0 &&
-    Number.isFinite(form.bathrooms) &&
-    form.bathrooms >= 0;
+    bedroomError === null &&
+    bathroomError === null;
 
   function patch<K extends keyof BrokerOnboardingFormInput>(
     key: K,
@@ -95,14 +109,21 @@ export function RentalsOnboardingWizard({ destination = "host" }: { destination?
   }
 
   function patchPlace(result: PlaceSearchResult | null) {
+    // A provider result without a normalized address cannot be saved: the server
+    // verifier re-checks the place and the validator requires its canonical form.
+    // Keep the typed address and treat the location as unconfirmed instead of
+    // leaving the broker on Review with a draft that can never be saved.
+    const formattedAddress = result?.formattedAddress?.trim() ?? "";
+    const placeId = result?.placeId.trim() ?? "";
+    const selected = Boolean(placeId && formattedAddress);
     setForm((prev) =>
-      result
+      selected
         ? {
             ...prev,
-            placeId: result.placeId,
-            formattedAddress: result.formattedAddress ?? "",
-            latitude: result.latitude,
-            longitude: result.longitude,
+            placeId,
+            formattedAddress,
+            latitude: result?.latitude ?? null,
+            longitude: result?.longitude ?? null,
           }
         : { ...prev, placeId: "", formattedAddress: "", latitude: null, longitude: null },
     );
@@ -185,127 +206,162 @@ export function RentalsOnboardingWizard({ destination = "host" }: { destination?
       ) : null}
 
       {step === 2 ? (
-        <section
-          data-testid="ro-step-listing"
-          className="space-y-4 rounded-xl border border-border bg-card p-6"
-        >
-          <div className="space-y-2">
-            <Label htmlFor="ro-address">Street address</Label>
-            <BrokerAddressSearch
-              value={form.address}
-              onTextChange={(value) => patch("address", value)}
-              onSelect={(result) => patchPlace(result)}
-              onClearSelection={() => patchPlace(null)}
-            />
-            {form.placeId ? (
-              <p data-testid="ro-address-verified" className="text-xs text-emerald-600">
-                Address selected. We confirm it with Google when you save.
-              </p>
-            ) : (
-              <p className="text-xs text-muted-foreground">
-                Pick the matching address to save trusted coordinates. You can still save a draft without them.
-              </p>
-            )}
-          </div>
-          <div className="grid grid-cols-2 gap-4">
+        <div className="grid min-w-0 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,0.75fr)]">
+          <section
+            data-testid="ro-step-listing"
+            className="min-w-0 space-y-4 rounded-xl border border-border bg-card p-4 sm:p-6"
+          >
             <div className="space-y-2">
-              <Label htmlFor="ro-bedrooms">Bedrooms</Label>
+              <Label htmlFor="ro-address">Street address</Label>
+              <BrokerAddressSearch
+                value={form.address}
+                onTextChange={(value) => patch("address", value)}
+                onSelect={(result) => patchPlace(result)}
+                onClearSelection={() => patchPlace(null)}
+              />
+              {form.placeId ? (
+                <p data-testid="ro-address-verified" className="text-xs text-emerald-600">
+                  Address selected. We confirm it with Google when you save.
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Pick the matching address to save trusted coordinates. You can still save a draft without them.
+                </p>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="ro-bedrooms">Bedrooms</Label>
+                <Input
+                  id="ro-bedrooms"
+                  type="number"
+                  min={0}
+                  step={1}
+                  inputMode="numeric"
+                  value={Number.isFinite(form.bedrooms) ? form.bedrooms : ""}
+                  onChange={(e) => patch("bedrooms", parseNumberField(e.target.value))}
+                  aria-invalid={bedroomError !== null}
+                  aria-describedby={bedroomError ? "ro-bedrooms-error" : undefined}
+                />
+                {bedroomError ? (
+                  <p id="ro-bedrooms-error" data-testid="ro-bedrooms-error" className="text-xs text-destructive">
+                    {bedroomError}
+                  </p>
+                ) : null}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="ro-bathrooms">Bathrooms</Label>
+                <Input
+                  id="ro-bathrooms"
+                  type="number"
+                  min={0}
+                  step={1}
+                  inputMode="numeric"
+                  value={Number.isFinite(form.bathrooms) ? form.bathrooms : ""}
+                  onChange={(e) => patch("bathrooms", parseNumberField(e.target.value))}
+                  aria-invalid={bathroomError !== null}
+                  aria-describedby={bathroomError ? "ro-bathrooms-error" : "ro-bathrooms-hint"}
+                />
+                {bathroomError ? (
+                  <p id="ro-bathrooms-error" data-testid="ro-bathrooms-error" className="text-xs text-destructive">
+                    {bathroomError}
+                  </p>
+                ) : (
+                  <p id="ro-bathrooms-hint" className="text-xs text-muted-foreground">
+                    Whole bathrooms only (the listing stores an integer).
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="ro-rent">Monthly rent (COP)</Label>
               <Input
-                id="ro-bedrooms"
+                id="ro-rent"
                 type="number"
-                min={0}
-                value={form.bedrooms}
-                onChange={(e) => patch("bedrooms", Number(e.target.value))}
+                min={1}
+                inputMode="numeric"
+                value={Number.isFinite(form.monthlyRentCop) && form.monthlyRentCop > 0 ? form.monthlyRentCop : ""}
+                onChange={(e) => patch("monthlyRentCop", parseNumberField(e.target.value))}
+                placeholder="2400000"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="ro-bathrooms">Bathrooms</Label>
+              <Label htmlFor="ro-photo">Photo URL (optional)</Label>
               <Input
-                id="ro-bathrooms"
-                type="number"
-                min={0}
-                step={0.5}
-                value={form.bathrooms}
-                onChange={(e) => patch("bathrooms", Number(e.target.value))}
+                id="ro-photo"
+                type="url"
+                inputMode="url"
+                value={form.photoUrl}
+                onChange={(e) => patch("photoUrl", e.target.value)}
+                placeholder="https://…"
+                aria-describedby="ro-photo-hint"
               />
+              <p id="ro-photo-hint" className="text-xs text-muted-foreground">
+                Paste a direct https image link. Uploading photos is not available yet.
+              </p>
             </div>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="ro-rent">Monthly rent (COP)</Label>
-            <Input
-              id="ro-rent"
-              type="number"
-              min={1}
-              value={form.monthlyRentCop || ""}
-              onChange={(e) => patch("monthlyRentCop", Number(e.target.value))}
-              placeholder="2400000"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="ro-photo">Photo URL (optional)</Label>
-            <Input
-              id="ro-photo"
-              value={form.photoUrl}
-              onChange={(e) => patch("photoUrl", e.target.value)}
-              placeholder="https://… (storage upload follow-up)"
-            />
-            <p className="text-xs text-muted-foreground">
-              Paste an image URL for Class U proof — Supabase Storage upload ships later.
-            </p>
-          </div>
-          <div className="flex justify-between gap-2">
-            <Button type="button" variant="outline" onClick={() => setStep(1)}>
-              ← Back
-            </Button>
-            <Button type="button" disabled={!canContinueStep2} onClick={() => setStep(3)}>
-              Continue →
-            </Button>
-          </div>
-        </section>
+            <div className="flex justify-between gap-2">
+              <Button type="button" variant="outline" onClick={() => setStep(1)}>
+                ← Back
+              </Button>
+              <Button type="button" disabled={!canContinueStep2} onClick={() => setStep(3)}>
+                Continue →
+              </Button>
+            </div>
+          </section>
+          <RentalsListingLivePreview listing={form} className="lg:sticky lg:top-4" />
+        </div>
       ) : null}
 
       {step === 3 ? (
-        <section
-          data-testid="ro-step-review"
-          className="space-y-4 rounded-xl border border-border bg-card p-6"
-        >
-          <div className="space-y-2 rounded-lg bg-muted/40 p-4 text-sm">
-            <p>
-              <span className="font-medium">Profile:</span> {form.displayName}
-              {form.whatsapp ? ` · ${form.whatsapp}` : ""}
-            </p>
-            <p>
-              <span className="font-medium">Neighborhoods:</span> {form.neighborhoods.join(", ")}
-            </p>
-            <p>
-              <span className="font-medium">Listing:</span> {form.address} · {form.bedrooms}BR ·{" "}
-              {form.bathrooms}BA · COP {form.monthlyRentCop.toLocaleString("en-US")}
-            </p>
-            {form.placeId ? (
+        <div className="grid min-w-0 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,0.75fr)]">
+          <section
+            data-testid="ro-step-review"
+            className="min-w-0 space-y-4 rounded-xl border border-border bg-card p-4 sm:p-6"
+          >
+            <div className="space-y-2 rounded-lg bg-muted/40 p-4 text-sm">
               <p>
-                <span className="font-medium">Location:</span> {form.formattedAddress || form.address} · selected (confirmed on save)
+                <span className="font-medium">Profile:</span> {form.displayName}
+                {form.whatsapp ? ` · ${form.whatsapp}` : ""}
               </p>
-            ) : null}
-            {form.photoUrl ? (
               <p>
-                <span className="font-medium">Photo:</span> {form.photoUrl}
+                <span className="font-medium">Neighborhoods:</span> {form.neighborhoods.join(", ")}
               </p>
-            ) : null}
-          </div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:justify-between">
-            <Button type="button" variant="outline" onClick={() => setStep(2)}>
-              ← Back
-            </Button>
-            <Button
-              data-testid="ro-submit"
-              type="button"
-              disabled={pending}
-              onClick={handleSubmit}
-            >
-              {pending ? "Saving…" : "Save draft & go to listings"}
-            </Button>
-          </div>
-        </section>
+              <p>
+                <span className="font-medium">Listing:</span> {form.address} ·{" "}
+                {bedroomError === null ? `${form.bedrooms} BR` : "bedrooms not set"} ·{" "}
+                {bathroomError === null ? `${form.bathrooms} BA` : "bathrooms not set"} · COP{" "}
+                {Number.isFinite(form.monthlyRentCop)
+                  ? form.monthlyRentCop.toLocaleString("en-US")
+                  : "—"}
+              </p>
+              {form.placeId ? (
+                <p>
+                  <span className="font-medium">Location:</span> {form.formattedAddress || form.address} · selected (re-checked with Google on save)
+                </p>
+              ) : null}
+              {form.photoUrl ? (
+                <p className="break-words">
+                  <span className="font-medium">Photo:</span> {form.photoUrl}
+                </p>
+              ) : null}
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:justify-between">
+              <Button type="button" variant="outline" onClick={() => setStep(2)}>
+                ← Back
+              </Button>
+              <Button
+                data-testid="ro-submit"
+                type="button"
+                disabled={pending}
+                onClick={handleSubmit}
+              >
+                {pending ? "Saving…" : "Save draft & go to listings"}
+              </Button>
+            </div>
+          </section>
+          <RentalsListingLivePreview listing={form} className="lg:sticky lg:top-4" />
+        </div>
       ) : null}
     </div>
   );
