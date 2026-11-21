@@ -221,7 +221,7 @@ function RentalBrowseViewInner({
       {/* SAN-1656 — the page's own authorized rows feed the fast-path context the
           catalog already resolves cards from, and the existing A2UI context
           publishes their IDs. No second query and no second data path. */}
-      {coAgent && !isDeterministicE2E() ? <RentalA2UIContext /> : null}
+      {coAgent && !isDeterministicE2E() ? <RentalA2UIContext visibleRows={shownResults} /> : null}
       {/* SAN-1655 — the one real Apply action. */}
       {coAgent && !isDeterministicE2E() ? <RentalFilterPanelActions filters={filterState} /> : null}
       <DiscoveryPageContext page="rentals" filters={filterState} selectedId={selectedForAskId ?? detailsRental?.id ?? null} />

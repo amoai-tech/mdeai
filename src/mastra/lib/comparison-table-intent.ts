@@ -28,6 +28,8 @@ const COMPARISON_WORD = /\b(compare|comparison|versus|vs\.?|cheaper|better|diffe
 const TABLE_COMMAND = /\b(put|show|display|render|make|create|build)\b/i;
 const NEW_SEARCH = /\b(find|search|discover|look(?:ing)? for|new search|another|different)\b|\b(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten)[\s-]*(?:br|bed|bedrooms?)\b|\bunder\s+(?:cop|usd|\$|\d)/i;
 const RESTAURANT_TABLE = /\b(book|reserve|reservation|restaurant|caf[eé]|nightlife|table for|party size)\b/i;
+// Explicit other verticals override ordinal pronouns, even when rental hints exist.
+const OTHER_COMPARISON_DOMAIN = /\b(?:new\s+projects?|projects?|startups?|companies|events?|tickets?|trips?|hotels?)\b/i;
 
 /**
  * An explicit "put those apartments in a table" is a UI command. The model
@@ -54,7 +56,7 @@ export function shouldForceComparisonTable({
   const references = text.match(ORDINAL) ?? [];
   const ordinalPair = references.length >= 2 && EXPLICIT_RESULT_PAIR.test(text);
   if (!TABLE_REQUEST.test(text) && !ordinalPair) return false;
-  if (RESTAURANT_TABLE.test(text)) return false;
+  if (RESTAURANT_TABLE.test(text) || OTHER_COMPARISON_DOMAIN.test(text)) return false;
   if (!RENTAL_REFERENCE.test(text)) return false;
   if (!COMPARISON_WORD.test(text) && !TABLE_COMMAND.test(text)) return false;
   return !NEW_SEARCH.test(text);

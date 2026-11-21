@@ -81,6 +81,18 @@ describe("buildComparisonTableOps", () => {
     expect(JSON.stringify(table.rows)).not.toContain("80,000");
   });
 
+  it("preserves recorded USD cents while keeping integer COP prices readable", () => {
+    const first = row({ currency: "USD", priceMonthly: null, priceNightly: 99.5 });
+    const secondUsd = row({
+      id: "b", title: "Second", currency: "USD", priceMonthly: null, priceNightly: 99.6,
+    });
+    const table = surface([first, secondUsd]).component("comparison") as { rows: string[][] };
+    expect(table.rows).toContainEqual(["Nightly rent", "USD 99.50", "USD 99.60"]);
+    expect(comparablePriceSummary([first, secondUsd])).toContain("USD 99.50");
+    expect((surface([row(), second()]).component("comparison") as { rows: string[][] }).rows)
+      .toContainEqual(["Monthly rent", "COP 2,400,000", "COP 2,500,000"]);
+  });
+
   it("renders missing facts truthfully, including absent currencies and Wi-Fi", () => {
     const { component } = surface([
       row({ neighborhood: null, bedrooms: null, furnished: null, bathrooms: null, sizeSqm: null, wifiSpeedMbps: null, amenities: [], priceMonthly: null, currency: null }),

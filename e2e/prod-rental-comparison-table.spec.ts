@@ -36,6 +36,19 @@ test.describe("SAN-1681 · official rental comparison A2UI Table", () => {
         await ask("Show apartments in Laureles.");
         await expect.poll(() => cards.count(), { timeout: 120_000 }).toBeGreaterThanOrEqual(3);
         const initialCount = await cards.count();
+        // Card identities come from the real authorized rental search.
+        // Use them to prove that the next comparison selects *different*
+        // apartments rather than merely keeping the old Table visible.
+        const cardIds = await cards.evaluateAll((elements) =>
+          elements.slice(0, 3).map((element) =>
+            (element.getAttribute("data-testid") ?? "").replace(/^rental-card-/, "")
+          )
+        );
+        expect(cardIds).toHaveLength(3);
+        expect(cardIds.every(Boolean)).toBe(true);
+        const comparisonIds = () => page.getByTestId("rental-comparison-actions")
+          .locator("[data-listing-id]")
+          .evaluateAll((elements) => elements.map((element) => element.getAttribute("data-listing-id")));
         const table = page.getByRole("table", { name: /side-by-side apartment comparison/i });
         const queryCounts: number[] = [];
         page.on("response", (r) => {
@@ -52,10 +65,11 @@ test.describe("SAN-1681 · official rental comparison A2UI Table", () => {
         await expect(table.locator("thead th")).toHaveCount(3);
         await expect(table.getByRole("row").filter({ hasText: "Monthly rent" })).toBeVisible();
         await expect(table.getByRole("row").filter({ hasText: "Nightly rent" })).toBeVisible();
-        await expect(table.getByRole("row").filter({ hasText: "Furnished" })).toBeVisible();
+        await expect(table.getByRole("cell", { name: "Furnished", exact: true })).toBeVisible();
         await expect(table.getByRole("row").filter({ hasText: "Wi-Fi speed" })).toBeVisible();
         await expect(page.locator(".a2ui-std-table-wrap")).toBeVisible();
         await expect(page.getByTestId("rental-comparison-actions")).toBeVisible();
+        await expect.poll(comparisonIds, { timeout: 40_000 }).toEqual(cardIds.slice(0, 2));
         await expect(page.locator("[data-streamdown] table")).toHaveCount(0);
         expect(queryCounts, "comparison reuses current results rather than searching").toEqual([]);
         expect(await cards.count()).toBe(initialCount);
@@ -86,6 +100,7 @@ test.describe("SAN-1681 · official rental comparison A2UI Table", () => {
         await ask("Compare the second and third apartments side by side.");
         await expect(table).toBeVisible({ timeout: 120_000 });
         await expect(table.locator("thead th")).toHaveCount(3);
+        await expect.poll(comparisonIds, { timeout: 120000 }).toEqual(cardIds.slice(1, 3));
         await expect(table).toHaveCount(1);
         expect(queryCounts).toEqual([]);
         expect(await cards.count()).toBe(initialCount);

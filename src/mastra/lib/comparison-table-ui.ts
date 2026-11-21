@@ -30,11 +30,19 @@ function money(value: number | null, currency: string | null): string {
   if (value == null || !Number.isFinite(value) || value <= 0) return "Not recorded";
   if (!currency) return `${value.toLocaleString("en-US")} (currency not recorded)`;
   try {
+    // Preserve a recorded fractional rate. A blanket zero-digit formatter
+    // made USD 99.50 and USD 99.60 both look like USD 100, even though the
+    // sourced amounts (and price ranking) differ. Integer COP stays integer.
+    const currencyDigits = new Intl.NumberFormat("en-US", { style: "currency", currency })
+      .resolvedOptions().maximumFractionDigits ?? 2;
+    const recordedDigits = String(value).split(".")[1]?.length ?? 0;
+    const precision = Number.isInteger(value) ? 0 : Math.min(20, Math.max(currencyDigits, recordedDigits));
     return new Intl.NumberFormat("en-US", {
       style: "currency",
       currency,
       currencyDisplay: "code",
-      maximumFractionDigits: 0,
+      minimumFractionDigits: precision,
+      maximumFractionDigits: precision,
     }).format(value).replace(/\u00a0/g, " ");
   } catch {
     return `${currency} ${value.toLocaleString("en-US")}`;

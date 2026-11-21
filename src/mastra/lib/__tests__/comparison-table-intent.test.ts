@@ -37,6 +37,13 @@ describe("shouldForceComparisonTable", () => {
     expect(call("Show ten-bedroom apartments in a table.")).toBe(false);
   });
 
+  it("does not hijack new project or other non-rental comparisons from the concierge", () => {
+    expect(call("Compare the first two new projects side by side.")).toBe(false);
+    expect(call("Compare those two startups in a table.")).toBe(false);
+    expect(call("Put the first two events in a table.")).toBe(false);
+    expect(call("Compare apartments six and seven.")).toBe(true);
+  });
+
   it("does not hijack restaurant table bookings", () => {
     expect(call("Book a table for two at a restaurant.")).toBe(false);
   });

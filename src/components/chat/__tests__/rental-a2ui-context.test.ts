@@ -16,6 +16,23 @@ describe("rental A2UI agent context", () => {
     expect(JSON.stringify(value)).not.toContain("amenities");
   });
 
+  it("retains the actual visible card order even if a tool envelope has a different order", () => {
+    const displayed = [
+      { id: "top-card" },
+      { id: "second-card" },
+      { id: "third-card" },
+    ];
+    const staleSearchOrder = [
+      { id: "second-card" },
+      { id: "third-card" },
+      { id: "top-card" },
+    ];
+    expect(JSON.parse(rentalA2UIContextValue(displayed))).toEqual(["top-card", "second-card", "third-card"]);
+    expect(JSON.parse(rentalA2UIContextValue(displayed))).not.toEqual(
+      JSON.parse(rentalA2UIContextValue(staleSearchOrder)),
+    );
+  });
+
   it("uses the latest successful result and never resurrects state on failure", () => {
     const latest = { results: [{ id: "latest" }] };
     const history = [latest, { results: [{ id: "older" }] }];
