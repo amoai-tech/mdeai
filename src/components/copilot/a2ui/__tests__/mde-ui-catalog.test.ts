@@ -21,6 +21,8 @@ import {
   RENTAL_RECOMMENDATIONS_COMPONENTS,
   RENTAL_RECOMMENDATIONS_SURFACE_ID,
 } from "../rental-recommendations-surface";
+import { RENTAL_COMPARISON_COMPONENTS } from "../rental-comparison-surface";
+import { buildComparisonTableOps } from "@/mastra/lib/comparison-table-ui";
 
 const laureles = {
   results: [
@@ -74,6 +76,42 @@ describe("MDE A2UI catalog", () => {
       columns: ["Apartment", "Price"],
       rows: [["Poblado Studio", 3_200_000]],
     }).success).toBe(true);
+  });
+
+  it("accepts official Title, Badge and Caption used by the rental comparison surface", () => {
+    const components = [
+      ["Row", {}],
+      ["Title", { text: "Compare 2 apartments", size: "lg" }],
+      ["Badge", { label: "Recorded details" }],
+      ["Caption", { text: 'Monthly and nightly rates are different; "Not recorded" means missing.' }],
+    ] as const;
+    for (const [name, props] of components) {
+      const schema = mdeUI.components.get(name)?.props as z.ZodTypeAny | undefined;
+      expect(schema, `${name} is missing from the official MDE catalog`).toBeDefined();
+      expect(schema!.safeParse(props).success, `${name} props rejected`).toBe(true);
+    }
+  });
+
+  it("allows each actual generated comparison component on the Rentals panel", () => {
+    const result = buildComparisonTableOps([
+      {
+        id: "a", title: "A", neighborhood: null, bedrooms: null, bathrooms: null,
+        sizeSqm: null, wifiSpeedMbps: null, amenities: [], priceMonthly: null, priceNightly: null, currency: null,
+      },
+      {
+        id: "b", title: "B", neighborhood: null, bedrooms: null, bathrooms: null,
+        sizeSqm: null, wifiSpeedMbps: null, amenities: [], priceMonthly: null, priceNightly: null, currency: null,
+      },
+    ], undefined, { target: "rental-comparison" });
+    expect(result).not.toBeNull();
+    const create = result!.operations.find((op) => "createSurface" in op) as {
+      createSurface: { components: Array<{ component: string }> };
+    };
+    const allow = new Set<string>(RENTAL_COMPARISON_COMPONENTS);
+    for (const { component } of create.createSurface.components) {
+      expect(allow.has(component), `${component} not allowed on comparison surface`).toBe(true);
+      expect(mdeUI.components.has(component), `${component} is not registered`).toBe(true);
+    }
   });
 
   it("omits every control until a catalog function is registered", () => {

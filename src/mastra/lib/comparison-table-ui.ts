@@ -111,7 +111,13 @@ export function buildComparisonTableOps(
         createSurface: {
           surfaceId,
           components: [
-            { id: "root", component: "Column", children: ["comparison", "comparison-summary", "comparison-actions"] },
+            {
+              id: "root", component: "Column",
+              children: ["comparison-heading", "comparison", "comparison-summary", "comparison-note", "comparison-actions"],
+            },
+            { id: "comparison-heading", component: "Row", children: ["comparison-title", "comparison-badge"] },
+            { id: "comparison-title", component: "Title", text: `Compare ${safe.length} apartments`, size: "lg" },
+            { id: "comparison-badge", component: "Badge", label: "Recorded details" },
             {
               id: "comparison",
               component: "Table",
@@ -120,6 +126,10 @@ export function buildComparisonTableOps(
               rows: tableRows,
             },
             { id: "comparison-summary", component: "Text", text: comparablePriceSummary(safe) },
+            {
+              id: "comparison-note", component: "Caption",
+              text: 'Prices are listing rates, not confirmed availability. Monthly and nightly rates are different; "Not recorded" means the listing does not provide that detail.',
+            },
             { id: "comparison-actions", component: "RentalComparisonActions", listingIds: safe.map((row) => row.id) },
           ],
         },

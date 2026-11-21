@@ -8,7 +8,7 @@ import { useOptionalConciergeCoAgent } from "@/components/chat/concierge-coagent
  * same official Table a real page target; the full /chat keeps target="chat".
  * No new data or rendering library is introduced. */
 export const RENTAL_COMPARISON_TARGET = "rental-comparison";
-export const RENTAL_COMPARISON_COMPONENTS = ["Column", "Table", "Text", "RentalComparisonActions"] as const;
+export const RENTAL_COMPARISON_COMPONENTS = ["Column", "Row", "Title", "Badge", "Table", "Text", "Caption", "RentalComparisonActions"] as const;
 
 export function RentalComparisonSurface() {
   const runtime = useGenerativeUIRuntime();

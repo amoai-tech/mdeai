@@ -52,8 +52,12 @@ describe("comparisonTableRenderEvents", () => {
       createSurface: { components: Array<Record<string, unknown>> };
     };
     expect(create.createSurface.components[0]).toMatchObject({ component: "Column" });
-    expect(create.createSurface.components[1]).toMatchObject({ component: "Table", columns: ["Feature", "Calle 10 #42-15", "Zitios"] });
-    expect(create.createSurface.components[3]).toMatchObject({ component: "RentalComparisonActions", listingIds: ["a", "b"] });
+    const item = (id: string) => create.createSurface.components.find((part) => part.id === id);
+    expect(item("comparison-title")).toMatchObject({ component: "Title", text: "Compare 2 apartments" });
+    expect(item("comparison-badge")).toMatchObject({ component: "Badge", label: "Recorded details" });
+    expect(item("comparison")).toMatchObject({ component: "Table", columns: ["Feature", "Calle 10 #42-15", "Zitios"] });
+    expect(item("comparison-note")).toMatchObject({ component: "Caption" });
+    expect(item("comparison-actions")).toMatchObject({ component: "RentalComparisonActions", listingIds: ["a", "b"] });
   });
 
   it("emits nothing for an invalid row set", () => {

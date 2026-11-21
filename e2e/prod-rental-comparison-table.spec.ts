@@ -46,6 +46,9 @@ test.describe("SAN-1681 · official rental comparison A2UI Table", () => {
 
         await ask("Put the first two apartments in a table.");
         await expect(table).toBeVisible({ timeout: 120_000 });
+        await expect(page.getByText("Compare 2 apartments", { exact: true })).toBeVisible();
+        await expect(page.getByText("Recorded details", { exact: true })).toBeVisible();
+        await expect(page.getByText(/Prices are listing rates, not confirmed availability/)).toBeVisible();
         await expect(table.locator("thead th")).toHaveCount(3);
         await expect(table.getByRole("row").filter({ hasText: "Monthly rent" })).toBeVisible();
         await expect(table.getByRole("row").filter({ hasText: "Nightly rent" })).toBeVisible();
@@ -87,6 +90,21 @@ test.describe("SAN-1681 · official rental comparison A2UI Table", () => {
         expect(await cards.count()).toBe(initialCount);
 
         if (width === 390) {
+          // Read-only DOM stress test on the genuine rendered CopilotKit table.
+          // Does NOT insert fake listings or change Supabase or the model output.
+          const stress = await table.evaluate((element) => {
+            const header = element.querySelectorAll("thead th")[1];
+            const amountRow = Array.from(element.querySelectorAll("tbody tr"))
+              .find((row) => row.textContent?.includes("Monthly rent"));
+            const amountCell = amountRow?.querySelectorAll("td")[1];
+            if (!header || !amountCell) return false;
+            header.textContent =
+              "Very long furnished apartment title with balcony and dedicated remote-work office near transit";
+            amountCell.textContent = "COP 9,876,543,210,123 (listed monthly)";
+            return true;
+          });
+          expect(stress, "real Table has header and monthly amount cells to stress").toBe(true);
+          await expect(table.getByText("Very long furnished apartment title with balcony and dedicated remote-work office near transit")).toBeAttached();
           const layout = await page.evaluate(() => {
             const wrapper = document.querySelector(".a2ui-std-table-wrap");
             return {
@@ -99,6 +117,12 @@ test.describe("SAN-1681 · official rental comparison A2UI Table", () => {
           expect(layout.screenWidth).toBeLessThanOrEqual(layout.windowWidth + 2);
           expect(layout.tableScrollerWidth).toBeLessThanOrEqual(390);
           expect(layout.overflowingTable, "comparison scrolls inside its container").toBe(true);
+          const scroll = await page.locator(".a2ui-std-table-wrap").evaluate((element) => {
+            element.scrollLeft = element.scrollWidth;
+            return { left: element.scrollLeft, full: element.scrollWidth, viewport: element.clientWidth };
+          });
+          expect(scroll.full).toBeGreaterThan(scroll.viewport);
+          expect(scroll.left, "long apartment name and amount are reachable by horizontal scroll").toBeGreaterThan(0);
         }
       });
   }

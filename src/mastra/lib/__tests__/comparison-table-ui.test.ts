@@ -24,19 +24,30 @@ function surface(rows: ComparisonRow[], replace = false) {
   const op = result.operations.find((operation) => "createSurface" in operation) as {
     createSurface: { components: Array<Record<string, unknown>> };
   };
-  return { result, components: op.createSurface.components };
+  const components = op.createSurface.components;
+  const component = (id: string) => {
+    const found = components.find((item) => item.id === id);
+    expect(found, `Missing component ${id}`).toBeDefined();
+    return found!;
+  };
+  return { result, components, component };
 }
 
 describe("buildComparisonTableOps", () => {
   it("creates a real A2UI Column → Table, apartments as columns and facts as rows", () => {
-    const { result, components } = surface([row(), second()]);
+    const { result, components, component } = surface([row(), second()]);
     expect(result.target).toBe("chat");
     expect(result.operations[0].version).toBe("1.0");
     expect(components[0]).toMatchObject({
       id: "root", component: "Column",
-      children: ["comparison", "comparison-summary", "comparison-actions"],
+      children: ["comparison-heading", "comparison", "comparison-summary", "comparison-note", "comparison-actions"],
     });
-    expect(components[1]).toMatchObject({
+    expect(component("comparison-heading")).toMatchObject({
+      component: "Row", children: ["comparison-title", "comparison-badge"],
+    });
+    expect(component("comparison-title")).toMatchObject({ component: "Title", text: "Compare 2 apartments" });
+    expect(component("comparison-badge")).toMatchObject({ component: "Badge", label: "Recorded details" });
+    expect(component("comparison")).toMatchObject({
       component: "Table",
       columns: ["Feature", "Laureles One", "El Poblado Two"],
       rows: expect.arrayContaining([
@@ -48,8 +59,11 @@ describe("buildComparisonTableOps", () => {
         ["Nightly rent", "Not recorded", "Not recorded"],
       ]),
     });
-    expect(components[2]).toMatchObject({ component: "Text" });
-    expect(components[3]).toMatchObject({
+    expect(component("comparison-summary")).toMatchObject({ component: "Text" });
+    expect(component("comparison-note")).toMatchObject({
+      component: "Caption", text: expect.stringContaining("Monthly and nightly"),
+    });
+    expect(component("comparison-actions")).toMatchObject({
       component: "RentalComparisonActions",
       listingIds: [row().id, second().id],
     });
@@ -58,23 +72,23 @@ describe("buildComparisonTableOps", () => {
 
   it("preserves BOTH actual rent periods and never divides monthly values by 30", () => {
     const both = row({ priceNightly: 85_000 });
-    const { components } = surface([both, second()]);
-    const table = components[1] as { rows: string[][] };
+    const { component } = surface([both, second()]);
+    const table = component("comparison") as { rows: string[][] };
     expect(table.rows).toContainEqual(["Monthly rent", "COP 2,400,000", "COP 2,500,000"]);
     expect(table.rows).toContainEqual(["Nightly rent", "COP 85,000", "Not recorded"]);
     expect(JSON.stringify(table.rows)).not.toContain("80,000");
   });
 
   it("renders missing facts truthfully, including absent currencies and Wi-Fi", () => {
-    const { components } = surface([
+    const { component } = surface([
       row({ neighborhood: null, bedrooms: null, bathrooms: null, sizeSqm: null, wifiSpeedMbps: null, amenities: [], priceMonthly: null, currency: null }),
       second(),
     ]);
-    const table = components[1] as { rows: string[][] };
+    const table = component("comparison") as { rows: string[][] };
     expect(table.rows).toContainEqual(["Wi-Fi speed", "Not recorded", "100 Mbps (listed)"]);
     expect(table.rows).toContainEqual(["Amenities", "Not recorded", "Balcony, Elevator"]);
     expect(table.rows).toContainEqual(["Monthly rent", "Not recorded", "COP 2,500,000"]);
-    const unknownCurrency = surface([row({ currency: null }), second()]).components[1] as { rows: string[][] };
+    const unknownCurrency = surface([row({ currency: null }), second()]).component("comparison") as { rows: string[][] };
     expect(unknownCurrency.rows).toContainEqual(["Monthly rent", "2,400,000 (currency not recorded)", "COP 2,500,000"]);
   });
 
@@ -82,12 +96,25 @@ describe("buildComparisonTableOps", () => {
     const many = Array.from({ length: 7 }, (_, i) => row({
       id: String(i), title: `Listing ${i}`, amenities: ["WiFi", "Gym", "Sauna", "Pool", "Balcony"],
     }));
-    const { components } = surface(many);
-    const table = components[1] as { columns: string[]; rows: string[][] };
+    const { component } = surface(many);
+    const table = component("comparison") as { columns: string[]; rows: string[][] };
     expect(table.columns).toHaveLength(6);
     expect(table.rows).toHaveLength(8);
     expect(table.rows.find((r) => r[0] === "Amenities")?.[1]).toBe("WiFi, Gym, Sauna, Pool (+1 more)");
-    expect((components[3] as { listingIds: string[] }).listingIds).toHaveLength(5);
+    expect(component("comparison-actions").listingIds).toHaveLength(5);
+    expect(component("comparison-title").text).toBe("Compare 5 apartments");
+  });
+
+  it("keeps long apartment names and large listed prices intact for horizontal mobile scrolling", () => {
+    const longName = "Bright furnished two-bedroom apartment near transit with a balcony and dedicated workspace";
+    const { component } = surface([
+      row({ title: longName, priceMonthly: 9_876_543_210 }),
+      second(),
+    ]);
+    const table = component("comparison") as { columns: string[]; rows: string[][] };
+    expect(table.columns[1]).toBe(longName);
+    expect(table.rows).toContainEqual(["Monthly rent", "COP 9,876,543,210", "COP 2,500,000"]);
+    expect(component("comparison-note").text).toContain("not confirmed availability");
   });
 
   it("routes a Rentals-page comparison to its mounted named surface", () => {
