@@ -145,6 +145,7 @@ export function comparisonRowsFromResult(content: unknown): ComparisonRow[] {
         title: r.title,
         neighborhood: typeof r.neighborhood === "string" ? r.neighborhood : null,
         bedrooms: safeNumber(r.bedrooms),
+        furnished: typeof r.furnished === "boolean" ? r.furnished : null,
         bathrooms: safeNumber(r.bathrooms),
         sizeSqm: safeNumber(r.sizeSqm),
         wifiSpeedMbps: safeNumber(r.wifiSpeedMbps),

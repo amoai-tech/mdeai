@@ -95,11 +95,11 @@ describe("MDE A2UI catalog", () => {
   it("allows each actual generated comparison component on the Rentals panel", () => {
     const result = buildComparisonTableOps([
       {
-        id: "a", title: "A", neighborhood: null, bedrooms: null, bathrooms: null,
+        id: "a", title: "A", neighborhood: null, bedrooms: null, furnished: null, bathrooms: null,
         sizeSqm: null, wifiSpeedMbps: null, amenities: [], priceMonthly: null, priceNightly: null, currency: null,
       },
       {
-        id: "b", title: "B", neighborhood: null, bedrooms: null, bathrooms: null,
+        id: "b", title: "B", neighborhood: null, bedrooms: null, furnished: null, bathrooms: null,
         sizeSqm: null, wifiSpeedMbps: null, amenities: [], priceMonthly: null, priceNightly: null, currency: null,
       },
     ], undefined, { target: "rental-comparison" });

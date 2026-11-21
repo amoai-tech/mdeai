@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { RENTAL_A2UI_CONTEXT_DESCRIPTION } from "@/lib/rentals/a2ui-context";
-import { showComparisonTableTool } from "../show-comparison-table";
+import { comparisonInputSchema, showComparisonTableTool } from "../show-comparison-table";
 import { RENTAL_SUPABASE_KEY } from "../search-rentals";
 
 const ids = Array.from({ length: 10 }, (_, i) =>
@@ -24,12 +24,12 @@ function context(rows: Array<Record<string, unknown>> = [], { withClient = true 
   };
 }
 const dbRow = (id: string, title: string, monthly: number | null, daily: number | null = null) => ({
-  id, title, bedrooms: 2, bathrooms: 1, neighborhood: "Laureles", size_sqm: 68,
+  id, title, bedrooms: 2, furnished: true, bathrooms: 1, neighborhood: "Laureles", size_sqm: 68,
   wifi_speed: 80, amenities: ["Balcony"], price_monthly: monthly, price_daily: daily, currency: "COP",
 });
 type Result = {
   ok: boolean;
-  rows: Array<{ id: string; title: string; bedrooms: number | null; bathrooms: number | null;
+  rows: Array<{ id: string; title: string; bedrooms: number | null; furnished: boolean | null; bathrooms: number | null;
     priceMonthly: number | null; priceNightly: number | null; currency: string | null;
     wifiSpeedMbps: number | null; neighborhood: string | null; sizeSqm: number | null; amenities: string[] }>;
   rejected: string[];
@@ -47,7 +47,7 @@ describe("showComparisonTableTool", () => {
     expect(result.rows.map((row) => row.title)).toEqual(["Sixth", "Seventh"]);
     expect(result.rows[0]).toMatchObject({
       priceMonthly: 2_400_000, currency: "COP", bedrooms: 2, bathrooms: 1,
-      neighborhood: "Laureles", sizeSqm: 68, wifiSpeedMbps: 80, amenities: ["Balcony"],
+      neighborhood: "Laureles", sizeSqm: 68, wifiSpeedMbps: 80, amenities: ["Balcony"], furnished: true,
     });
   });
 
@@ -58,6 +58,7 @@ describe("showComparisonTableTool", () => {
     ]));
     expect(result.rows[0]).toMatchObject({ priceMonthly: 2_400_000, priceNightly: 80_000 });
     expect(result.rows[1]).toMatchObject({ priceMonthly: 2_500_000, priceNightly: null });
+    expect(result.rows.map((r) => r.furnished)).toEqual([true, true]);
   });
 
   it("rejects a forged ID outside the current result set", async () => {
@@ -75,14 +76,32 @@ describe("showComparisonTableTool", () => {
   });
 
   it("does not invent unknown prices, size, or Wi-Fi speed", async () => {
-    const incomplete = { ...dbRow(ids[1], "Unknown", null), size_sqm: null, wifi_speed: null, amenities: null };
+    const incomplete = { ...dbRow(ids[1], "Unknown", null), furnished: null, size_sqm: null, wifi_speed: null, amenities: null };
     const result = await run({ ids: [ids[0], ids[1]] }, context([
       dbRow(ids[0], "First", 2_400_000), incomplete,
     ]));
     expect(result.ok).toBe(true);
     expect(result.rows[1]).toMatchObject({
-      priceMonthly: null, priceNightly: null, wifiSpeedMbps: null, sizeSqm: null, amenities: [],
+      priceMonthly: null, priceNightly: null, furnished: null, wifiSpeedMbps: null, sizeSqm: null, amenities: [],
     });
+  });
+
+  it("preserves true, false and unknown furnishing statuses from the authorized records", async () => {
+    const rows = [
+      { ...dbRow(ids[0], "Furnished", 2_400_000), furnished: true },
+      { ...dbRow(ids[1], "Unfurnished", 2_500_000), furnished: false },
+      { ...dbRow(ids[2], "Status missing", 2_300_000), furnished: null },
+    ];
+    const result = await run({ positions: [1, 2, 3] }, context(rows));
+    expect(result.ok).toBe(true);
+    expect(result.rows.map((r) => r.furnished)).toEqual([true, false, null]);
+  });
+
+  it("rejects a singleton comparison at input validation, before execution", () => {
+    const schema = comparisonInputSchema;
+    expect(schema.safeParse({ ids: [ids[0]] }).success).toBe(false);
+    expect(schema.safeParse({ positions: [1] }).success).toBe(false);
+    expect(schema.safeParse({ positions: [6, 7] }).success).toBe(true);
   });
 
   it("refuses inaccessible second row even when listed in browser hints", async () => {

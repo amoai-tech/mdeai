@@ -52,6 +52,7 @@ test.describe("SAN-1681 · official rental comparison A2UI Table", () => {
         await expect(table.locator("thead th")).toHaveCount(3);
         await expect(table.getByRole("row").filter({ hasText: "Monthly rent" })).toBeVisible();
         await expect(table.getByRole("row").filter({ hasText: "Nightly rent" })).toBeVisible();
+        await expect(table.getByRole("row").filter({ hasText: "Furnished" })).toBeVisible();
         await expect(table.getByRole("row").filter({ hasText: "Wi-Fi speed" })).toBeVisible();
         await expect(page.locator(".a2ui-std-table-wrap")).toBeVisible();
         await expect(page.getByTestId("rental-comparison-actions")).toBeVisible();

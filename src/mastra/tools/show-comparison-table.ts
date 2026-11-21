@@ -9,7 +9,7 @@ import { COMPARISON_TABLE_TARGET, RENTAL_COMPARISON_TARGET, type ComparisonTarge
 
 const MAX_APARTMENTS = 5;
 
-const inputSchema = z.object({
+export const comparisonInputSchema = z.object({
   ids: z.array(z.string().min(1).max(128)).min(2).max(MAX_APARTMENTS).optional()
     .describe("Two to five listing IDs from the current result hints, in display order."),
   positions: z.array(z.number().int().min(1).max(RENTAL_HINT_MAX)).min(2).max(MAX_APARTMENTS).optional()
@@ -23,6 +23,7 @@ const rowSchema = z.object({
   title: z.string(),
   neighborhood: z.string().nullable(),
   bedrooms: z.number().nullable(),
+  furnished: z.boolean().nullable(),
   bathrooms: z.number().nullable(),
   sizeSqm: z.number().nullable(),
   wifiSpeedMbps: z.number().nullable(),
@@ -56,7 +57,7 @@ export const showComparisonTableTool = createTool({
   id: "show-comparison-table",
   description:
     "Compare two to five previously shown apartments in a CopilotKit side-by-side table. Pass their exact IDs or 1-based positions (first ten hints, e.g. positions [6,7]), never prices or UI operations. Do not run a new rental search.",
-  inputSchema,
+  inputSchema: comparisonInputSchema,
   outputSchema: z.object({
     ok: z.boolean(),
     target: z.enum([COMPARISON_TABLE_TARGET, RENTAL_COMPARISON_TARGET]).optional(),
@@ -92,7 +93,7 @@ export const showComparisonTableTool = createTool({
       return { ok: false, rows: [], rejected, message: "Rental details are unavailable for this session." };
     }
     const { data, error } = await client.from("apartments")
-      .select("id,title,neighborhood,bedrooms,bathrooms,size_sqm,wifi_speed,amenities,price_daily,price_monthly,currency")
+      .select("id,title,neighborhood,bedrooms,bathrooms,furnished,size_sqm,wifi_speed,amenities,price_daily,price_monthly,currency")
       .in("id", ids);
     if (error) {
       return { ok: false, rows: [], rejected, message: "Rental details could not be read." };
@@ -102,6 +103,7 @@ export const showComparisonTableTool = createTool({
       title: typeof row.title === "string" && row.title.trim() ? row.title : "Listing",
       neighborhood: typeof row.neighborhood === "string" ? row.neighborhood : null,
       bedrooms: knownNonnegative(row.bedrooms),
+      furnished: typeof row.furnished === "boolean" ? row.furnished : null,
       bathrooms: knownNonnegative(row.bathrooms),
       sizeSqm: knownPositive(row.size_sqm),
       wifiSpeedMbps: knownPositive(row.wifi_speed),

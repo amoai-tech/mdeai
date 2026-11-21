@@ -6,6 +6,7 @@ const row = (overrides: Partial<ComparisonRow> = {}): ComparisonRow => ({
   title: "Laureles One",
   neighborhood: "Laureles",
   bedrooms: 2,
+  furnished: true,
   bathrooms: 2,
   sizeSqm: 70,
   wifiSpeedMbps: 100,
@@ -17,7 +18,7 @@ const row = (overrides: Partial<ComparisonRow> = {}): ComparisonRow => ({
 });
 const second = () => row({
   id: "37a05b09-f560-4776-92fd-b8bb2b92e602",
-  title: "El Poblado Two", neighborhood: "El Poblado", priceMonthly: 2_500_000,
+  title: "El Poblado Two", neighborhood: "El Poblado", furnished: false, priceMonthly: 2_500_000,
 });
 function surface(rows: ComparisonRow[], replace = false) {
   const result = buildComparisonTableOps(rows, undefined, { replace })!;
@@ -53,6 +54,7 @@ describe("buildComparisonTableOps", () => {
       rows: expect.arrayContaining([
         ["Neighborhood", "Laureles", "El Poblado"],
         ["Bedrooms", "2", "2"],
+        ["Furnished", "Yes", "No"],
         ["Bathrooms", "2", "2"],
         ["Area", "70 m²", "70 m²"],
         ["Monthly rent", "COP 2,400,000", "COP 2,500,000"],
@@ -81,10 +83,11 @@ describe("buildComparisonTableOps", () => {
 
   it("renders missing facts truthfully, including absent currencies and Wi-Fi", () => {
     const { component } = surface([
-      row({ neighborhood: null, bedrooms: null, bathrooms: null, sizeSqm: null, wifiSpeedMbps: null, amenities: [], priceMonthly: null, currency: null }),
+      row({ neighborhood: null, bedrooms: null, furnished: null, bathrooms: null, sizeSqm: null, wifiSpeedMbps: null, amenities: [], priceMonthly: null, currency: null }),
       second(),
     ]);
     const table = component("comparison") as { rows: string[][] };
+    expect(table.rows).toContainEqual(["Furnished", "Not recorded", "No"]);
     expect(table.rows).toContainEqual(["Wi-Fi speed", "Not recorded", "100 Mbps (listed)"]);
     expect(table.rows).toContainEqual(["Amenities", "Not recorded", "Balcony, Elevator"]);
     expect(table.rows).toContainEqual(["Monthly rent", "Not recorded", "COP 2,500,000"]);
@@ -99,7 +102,7 @@ describe("buildComparisonTableOps", () => {
     const { component } = surface(many);
     const table = component("comparison") as { columns: string[]; rows: string[][] };
     expect(table.columns).toHaveLength(6);
-    expect(table.rows).toHaveLength(8);
+    expect(table.rows).toHaveLength(9);
     expect(table.rows.find((r) => r[0] === "Amenities")?.[1]).toBe("WiFi, Gym, Sauna, Pool (+1 more)");
     expect(component("comparison-actions").listingIds).toHaveLength(5);
     expect(component("comparison-title").text).toBe("Compare 5 apartments");

@@ -9,8 +9,8 @@ import {
 } from "../recommendation-surface-bridge";
 
 const rows = [
-  { id: "a", title: "Calle 10 #42-15", bedrooms: 2, priceMonthly: 2_400_000, priceNightly: 80_000, currency: "COP", neighborhood: "Laureles", bathrooms: 2, sizeSqm: 72, wifiSpeedMbps: 100, amenities: ["Balcony"] },
-  { id: "b", title: "Zitios", bedrooms: 2, priceMonthly: 2_500_000, priceNightly: null, currency: "COP", neighborhood: "El Poblado", bathrooms: 1, sizeSqm: 65, wifiSpeedMbps: null, amenities: [] },
+  { id: "a", title: "Calle 10 #42-15", bedrooms: 2, furnished: true, priceMonthly: 2_400_000, priceNightly: 80_000, currency: "COP", neighborhood: "Laureles", bathrooms: 2, sizeSqm: 72, wifiSpeedMbps: 100, amenities: ["Balcony"] },
+  { id: "b", title: "Zitios", bedrooms: 2, furnished: false, priceMonthly: 2_500_000, priceNightly: null, currency: "COP", neighborhood: "El Poblado", bathrooms: 1, sizeSqm: 65, wifiSpeedMbps: null, amenities: [] },
 ];
 
 describe("comparisonRowsFromResult", () => {
@@ -18,11 +18,13 @@ describe("comparisonRowsFromResult", () => {
     expect(comparisonRowsFromResult({ ok: true, rows })).toHaveLength(2);
     expect(comparisonRowsFromResult(JSON.stringify({ ok: true, rows }))).toHaveLength(2);
     expect(comparisonRowsFromResult({ result: { ok: true, rows } })).toHaveLength(2);
+    expect(comparisonRowsFromResult({ ok: true, rows }).map((r) => r.furnished)).toEqual([true, false]);
   });
 
   it("returns nothing for a failed or malformed result", () => {
     expect(comparisonRowsFromResult({ ok: false, rows })).toEqual([]);
     expect(comparisonRowsFromResult("not json")).toEqual([]);
+    expect(comparisonRowsFromResult({ ok: true, rows: [{ ...rows[0], furnished: null }, { ...rows[1], furnished: "yes" }] }).map((r) => r.furnished)).toEqual([null, null]);
   });
 });
 

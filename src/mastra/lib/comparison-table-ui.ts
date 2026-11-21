@@ -11,6 +11,7 @@ export type ComparisonRow = {
   title: string;
   neighborhood: string | null;
   bedrooms: number | null;
+  furnished: boolean | null;
   bathrooms: number | null;
   sizeSqm: number | null;
   wifiSpeedMbps: number | null;
@@ -94,6 +95,7 @@ export function buildComparisonTableOps(
   const metricRows: Array<[string, (row: ComparisonRow) => string | number]> = [
     ["Neighborhood", (row) => row.neighborhood?.trim() || "Not recorded"],
     ["Bedrooms", (row) => numberLabel(row.bedrooms)],
+    ["Furnished", (row) => row.furnished === true ? "Yes" : row.furnished === false ? "No" : "Not recorded"],
     ["Bathrooms", (row) => numberLabel(row.bathrooms)],
     ["Area", (row) => sizeLabel(row.sizeSqm)],
     ["Monthly rent", (row) => money(row.priceMonthly, row.currency)],
