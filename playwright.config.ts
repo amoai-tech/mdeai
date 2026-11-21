@@ -78,6 +78,7 @@ const PROD_SPECS = [
     ? ["**/prod-san1631-*.spec.ts"] : []),
   "**/prod-renter-mobile-chat.spec.ts",
   ...(process.env.MDE_COMPARE_TABLE_QA === "1" ? ["**/prod-rental-comparison-table.spec.ts"] : []),
+  "**/prod-guest-rental-budget.spec.ts",
   "**/prod-release-health.spec.ts",
   "**/san-1413-saved-chat-continuity.spec.ts",
   "**/prod-journey-j05-j20.spec.ts",

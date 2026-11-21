@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RentalBrowseCard } from "@/components/rentals/rental-browse-card";
 import { rowToRental, type ApartmentRow } from "@/mastra/tools/search-rentals";
 import { rentalToMapPin } from "@/lib/browse/browse-pin-converters";
+import { resetRentalPhotoTelemetryForTests } from "@/lib/rentals/rental-photo-telemetry";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -32,7 +33,7 @@ function apartmentRow(overrides: Partial<ApartmentRow> = {}): ApartmentRow {
     currency: "USD",
     wifi_speed: 100,
     amenities: ["wifi", "workspace"],
-    images: ["https://images.example/photo.jpg"],
+    images: ["https://images.unsplash.com/photo.jpg"],
     host_name: "Andrés Restrepo",
     source_url: "https://mdeai.co/rentals/rnt_lau_001",
     available_from: "2000-01-01", // a known move-in date, as the viewing RPC requires (SAN-486)
@@ -71,6 +72,233 @@ function renderCard(
     />,
   );
 }
+
+describe("SAN-1695 — real photos in the V3 browse card", () => {
+  it("uses the source gallery for cover-layout carousel, preserving the existing details action", () => {
+    const html = renderToStaticMarkup(
+      <RentalBrowseCard
+        rental={rowToRental(apartmentRow({
+          images: ["https://images.unsplash.com/room-one.jpg", "https://images.unsplash.com/room-two.jpg"],
+          price_daily: null,
+          price_monthly: 2_800_000,
+          currency: "COP",
+        }))}
+        mediaLayout="cover"
+        onDetails={vi.fn()}
+      />,
+    );
+    expect(html).toContain('data-slot="carousel"');
+    expect(html).toContain("https://images.unsplash.com/room-one.jpg");
+    expect(html).toContain("https://images.unsplash.com/room-two.jpg");
+    expect(html).toContain('data-testid="rental-photo-counter-rnt_lau_001"');
+    expect(html).toContain("1 of 2 photos");
+    expect(html).toContain('data-slot="carousel-next"');
+    expect(html).toContain('data-testid="rental-card-photo-details-rnt_lau_001"');
+    expect(html).toContain("COP 2,800,000");
+    expect(html).not.toContain("Unsplash");
+  });
+
+  it("preserves the stored nightly USD quote on multi-photo gallery cards", () => {
+    const html = renderToStaticMarkup(
+      <RentalBrowseCard rental={rowToRental(apartmentRow({
+        images: ["https://images.unsplash.com/room-one.jpg", "https://images.unsplash.com/room-two.jpg"],
+        price_monthly: null,
+        price_daily: 78,
+        currency: "USD",
+      }))} mediaLayout="cover" />,
+    );
+    expect(html).toContain('data-slot="carousel"');
+    expect(html).toContain("$78/night");
+    // Assert the visible badge text without injecting the rendered HTML into the DOM.
+    expect(html).toMatch(/<span\b[^>]*data-testid="rental-card-nightly-currency"[^>]*>\s*USD\s*<\/span>/);
+    // The stored nightly price must not be replaced by its derived monthly estimate.
+    expect(html.indexOf("$78/night")).toBeGreaterThan(0);
+  });
+
+  it("shows only the stored monthly price when both nightly and monthly rates exist", () => {
+    const html = renderToStaticMarkup(
+      <RentalBrowseCard rental={rowToRental(apartmentRow({
+        images: ["https://images.unsplash.com/room-one.jpg", "https://images.unsplash.com/room-two.jpg"],
+        price_daily: 78,
+        price_monthly: 2_800_000,
+        currency: "COP",
+      }))} mediaLayout="cover" />,
+    );
+    expect(html).toContain("COP 2,800,000/mo");
+    expect(html).not.toContain("/night");
+    expect(html).not.toContain("~");
+  });
+
+  it("does not add carousel controls for a single original listing photo", () => {
+    const html = renderToStaticMarkup(
+      <RentalBrowseCard rental={rowToRental(apartmentRow())} mediaLayout="cover" />,
+    );
+    expect(html).toContain('data-testid="rental-browse-card-photo"');
+    expect(html).not.toContain('data-slot="carousel"');
+    expect(html).not.toContain('data-slot="carousel-next"');
+  });
+
+  it("shows a real placeholder rather than invented photos when no source photo exists", () => {
+    const html = renderToStaticMarkup(
+      <RentalBrowseCard rental={rowToRental(apartmentRow({ images: [] }))} mediaLayout="cover" />,
+    );
+    expect(html).toContain('data-testid="rental-browse-card-photo-placeholder"');
+    expect(html).not.toContain('data-slot="carousel"');
+  });
+});
+
+describe("SAN-1695 — failed gallery images never occupy a slide", () => {
+  // JSDOM has no layout observers or media queries. Embla uses these when
+  // mounting; the real swipe/next behavior is covered in browser tests.
+  beforeEach(() => {
+    resetRentalPhotoTelemetryForTests();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 204 })));
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      media: query,
+      matches: false,
+      addListener() {},
+      removeListener() {},
+      addEventListener() {},
+      removeEventListener() {},
+      dispatchEvent: () => false,
+    }));
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    vi.stubGlobal("IntersectionObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+  });
+
+  let container: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+
+  afterEach(() => {
+    act(() => { root.unmount(); });
+    container.remove();
+    vi.unstubAllGlobals();
+  });
+
+  it("only renders allowlisted public photos, never internal or attacker-chosen image URLs", () => {
+    const html = renderToStaticMarkup(<RentalBrowseCard
+      rental={rowToRental(apartmentRow({ images: [
+        "http://127.0.0.1:8080/admin", "https://evil.example/private.jpg",
+        "https://images.unsplash.com/safe.jpg",
+      ] }))}
+      mediaLayout="cover"
+    />);
+    expect(html).not.toContain("127.0.0.1:8080");
+    expect(html).not.toContain("evil.example/private.jpg");
+    expect(html).toContain("https://images.unsplash.com/safe.jpg");
+    expect(html).not.toContain('data-slot="carousel"');
+  });
+
+  it("opens the right apartment Details when the user clicks a gallery photo", () => {
+    const onDetails = vi.fn();
+    act(() => { root.render(<RentalBrowseCard
+      rental={rowToRental(apartmentRow({ images: [
+        "https://images.unsplash.com/front.jpg", "https://images.unsplash.com/kitchen.jpg",
+      ] }))}
+      mediaLayout="cover" onDetails={onDetails}
+    />); });
+    const button = container.querySelector<HTMLButtonElement>('[data-testid="rental-card-photo-details-rnt_lau_001"]');
+    expect(button).not.toBeNull();
+    act(() => { button?.click(); });
+    expect(onDetails).toHaveBeenCalledTimes(1);
+  });
+
+  it("retains failures on unrelated rerenders, then retries on a refreshed result set", () => {
+    const urls = ["https://images.unsplash.com/front.jpg", "https://images.unsplash.com/kitchen.jpg"];
+    const show = () => rowToRental(apartmentRow({ images: urls }));
+    const resultSet = [show()];
+    act(() => { root.render(<RentalBrowseCard rental={resultSet[0]!} resultSet={resultSet} mediaLayout="cover" />); });
+    expect(container.querySelectorAll('[data-slot="carousel-item"]')).toHaveLength(2);
+    act(() => { container.querySelector<HTMLImageElement>('[data-testid="rental-browse-card-photo"]')?.dispatchEvent(new Event("error")); });
+    expect(container.querySelector('[data-slot="carousel"]')).toBeNull();
+    // Unrelated rerender reconstructs a Rental object but keeps the same search result array.
+    act(() => { root.render(<RentalBrowseCard rental={show()} resultSet={resultSet} mediaLayout="cover" />); });
+    expect(container.querySelector('[data-slot="carousel"]')).toBeNull();
+    // A refreshed search has a new result array even if it contains the same ID and URLs.
+    const refreshed = [show()];
+    act(() => { root.render(<RentalBrowseCard rental={refreshed[0]!} resultSet={refreshed} mediaLayout="cover" />); });
+    expect(container.querySelectorAll('[data-slot="carousel-item"]')).toHaveLength(2);
+  });
+
+  it("updates title and omitted-photo text without reinstalling carousel listeners", () => {
+    const rental = rowToRental(apartmentRow({ images: [
+      "https://images.unsplash.com/front.jpg", "https://images.unsplash.com/kitchen.jpg",
+    ] }));
+    const resultSet = [rental];
+    act(() => { root.render(<RentalBrowseCard rental={rental} resultSet={resultSet} mediaLayout="cover" />); });
+    expect(container.querySelector('[data-testid^="rental-photo-counter-"]')?.textContent).toContain("1 of 2 photos");
+    const updated = { ...rental, title: "Updated apartment title", photo_count: 9 };
+    act(() => { root.render(<RentalBrowseCard rental={updated} resultSet={resultSet} mediaLayout="cover" />); });
+    expect(container.querySelector('[data-testid^="rental-photo-counter-"]')?.textContent).toContain("1 of 2 photos shown");
+    expect(container.querySelector('[aria-label="Photos of Updated apartment title"]')).not.toBeNull();
+  });
+
+  it("offers remaining photos in Details after all 12 preview photos fail", () => {
+    const urls = Array.from({ length: 14 }, (_, index) => `https://images.unsplash.com/photo-${index}.jpg`);
+    const rental = rowToRental(apartmentRow({ images: urls }));
+    expect(rental.images).toHaveLength(12);
+    expect(rental.photo_count).toBe(14);
+    act(() => { root.render(<RentalBrowseCard rental={rental} mediaLayout="cover" />); });
+    for (let index = 0; index < 12; index += 1) {
+      act(() => { container.querySelector<HTMLImageElement>('[data-testid="rental-browse-card-photo"]')?.dispatchEvent(new Event("error")); });
+    }
+    expect(container.querySelector('[data-testid="rental-card-more-photos"]')?.textContent).toContain("Details");
+    expect(container.querySelector('[data-testid="rental-browse-card-photo-placeholder"]')).toBeNull();
+    // Twelve failures on one host produce one telemetry request, not twelve.
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(fetch)).toHaveBeenCalledWith("/api/rentals/photo-failures", expect.objectContaining({
+      method: "POST", body: JSON.stringify({ host: "images.unsplash.com" }),
+    }));
+  });
+
+  it("drops a broken photo from the count, then falls back to one photo, then a placeholder", () => {
+    const urls = [
+      "https://images.unsplash.com/broken.jpg",
+      "https://images.unsplash.com/also-broken.jpg",
+      "https://images.unsplash.com/working.jpg",
+    ];
+    act(() => {
+      root.render(
+        <RentalBrowseCard
+          rental={rowToRental(apartmentRow({ images: urls }))}
+          mediaLayout="cover"
+          onDetails={vi.fn()}
+        />,
+      );
+    });
+
+    const photo = () => container.querySelector<HTMLImageElement>('[data-testid="rental-browse-card-photo"]');
+    expect(container.querySelectorAll('[data-slot="carousel-item"]').length).toBe(3);
+    expect(container.querySelector('[data-testid^="rental-photo-counter-"]')?.textContent).toContain("1 of 3 photos");
+
+    act(() => { photo()?.dispatchEvent(new Event("error")); });
+    expect(container.querySelectorAll('[data-slot="carousel-item"]').length).toBe(2);
+    expect(container.querySelector('[data-testid^="rental-photo-counter-"]')?.textContent).toContain("1 of 2 photos");
+    expect(container.querySelector('img[src="https://images.unsplash.com/broken.jpg"]')).toBeNull();
+
+    act(() => { photo()?.dispatchEvent(new Event("error")); });
+    expect(container.querySelector('[data-slot="carousel"]')).toBeNull();
+    expect(photo()?.src).toBe(urls[2]);
+
+    act(() => { photo()?.dispatchEvent(new Event("error")); });
+    expect(container.querySelector('[data-testid="rental-browse-card-photo-placeholder"]')).not.toBeNull();
+    expect(container.querySelector('[data-slot="carousel"]')).toBeNull();
+  });
+});
 
 describe("RentalBrowseCard — source-backed furnishing truth", () => {
   it("shows true, false and unknown as three different facts", () => {

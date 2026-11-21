@@ -827,6 +827,21 @@ export const searchRentalsTool = createTool({
       )
       .optional(),
   }),
+  // The UI gets complete source-backed galleries, but Gemini only needs one
+  // cover URL per apartment; never spend tokens on 12 photo URLs per result.
+  // Installed Mastra 1.81 supports this native app-vs-model projection.
+  toModelOutput: (output) => ({
+    type: 'json',
+    value: {
+      ...output,
+      results: output.results.map((r) => {
+        const modelRental = { ...r };
+        delete modelRental.images;
+        delete modelRental.photo_count;
+        return modelRental;
+      }),
+    },
+  }),
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   execute: async (inputData: RentalQuery, context?: any) => {
     const {
@@ -879,6 +894,8 @@ export const searchRentalsTool = createTool({
         tags: r.tags,
         availability: r.availability,
         image: r.image,
+        images: r.images,
+        photo_count: r.photo_count,
         source_url: r.source_url,
         can_schedule_viewing: r.can_schedule_viewing,
         schedule_viewing_url: r.schedule_viewing_url,

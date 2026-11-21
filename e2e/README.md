@@ -389,3 +389,77 @@ Mastra Concierge `ai_runs` row; use the actual website-import server model trace
 (ADAPT installed `ai@6` Output.json in `src/lib/web/extract-website-json.ts`),
 [NVIDIA Lightning inference](https://docs.api.nvidia.com/nim/reference/nvidia-nemotron-3-5-lightning-30b-a3b-infer)
 (REFERENCE ONLY — existing MDE adapter performs the inference).
+
+## SAN-755 — rental budget and signed-in topic-switch Playwright checks
+
+The standard production-candidate workflow runs only the two **anonymous**
+regressions in `e2e/prod-guest-rental-budget.spec.ts` (390px and desktop) on
+its protected staged deployment, **before promotion**. It uses the existing
+Playwright `prod-smoke` project and Vercel automation bypass, sends no viewing
+or booking requests, and checks two real rental API calls, budget/currency,
+rendered cards, preserved search context, the mobile map count and absence of a
+sign-in prompt. The live catalog can change, so it never hardcodes today's
+three-to-two apartment counts. Guest tracing and video are disabled to avoid
+recording Vercel bypass cookies; screenshots are kept only on failure.
+
+Run the same focused guest check manually after the public release:
+
+```bash
+PROD_SMOKE_BASE_URL=https://www.mdeai.co PW_SKIP_WEBSERVER=1 \
+  npm run test:e2e:prod-guest-budget
+```
+
+Signed-in AI switching is deliberately a **separate opt-in** check on the real
+existing renter QA identity. It covers apartments → coworking/restaurants/events
+→ a monthly-budget follow-up and must not silently repeat rental search.
+This calls the real AI and may expose an intermittent, separately tracked
+routing issue. It does not gate every release or fall back to Super Admin.
+Configure `MDE_QA_RENTER_EMAIL` in your trusted process environment and the
+existing Supabase QA credentials in ignored `.env.local`; never commit or print
+these values. Never capture authenticated screenshots, traces or video:
+
+```bash
+MDE_QA_INTENT_SWITCH=1 PROD_SMOKE_BASE_URL=https://www.mdeai.co \
+  PW_SKIP_WEBSERVER=1 npx playwright test \
+  e2e/prod-renter-mobile-chat.spec.ts --project=prod-smoke \
+  --grep 'SAN-755 signed-in AI topic switches' --workers=1
+```
+
+The known-intermittent coworking case (SAN-874/SAN-876) is quarantined in
+normal opt-in QA; restaurants and events still run. To investigate coworking
+explicitly, add `MDE_QA_COWORKING_DIAGNOSTIC=1` to the signed-in command.
+A passing diagnostic retry is **not** proof that the defect is fixed.
+
+A skipped signed-in test proves **nothing**. The normal guest gate remains
+independent of the QA account and the model's response timing.
+
+### Exact-SHA Vercel preview proof
+
+The existing, canonical Vercel access fixture verifies protected deployments
+through the Vercel bypass cookie. For public previews without that cookie,
+it requires a successful unauthenticated app identity check: the
+`/api/version` response must contain the exact
+`VERCEL_DEPLOYMENT_SHA` and report the preview environment.
+
+Only the authorized MDE team/project hostname is allowed. This PR reuses
+the latest main implementation, not a second preview access helper.
+To manually certify a PR preview, provide its actual exact commit SHA.
+
+### Production-staged candidate versus PR preview
+
+For manual PR previews, the guest smoke defaults to the `preview`
+environment. The production-release workflow stages a real production build
+(with `--prod --skip-domain`) and passes the explicit environment
+`MDE_VERCEL_EXPECTED_ENVIRONMENT=production`. Main's canonical helper
+requires the correct environment and exact SHA for public candidates, while
+protected candidates still need their bypass cookie.
+
+
+### Guest release check: protect Vercel bypass cookies
+
+The SAN-755 guest budget release smoke runs with `trace: "off"`,
+`video: "off"` and `screenshot: "only-on-failure"`.
+When a protected Vercel candidate establishes `_vercel_jwt`, Playwright
+network traces can contain the cookie in request headers; no trace ZIP should
+be created or uploaded by this smoke. The release gate continues to fail
+closed and retains anonymous-only screenshots for diagnostics.
