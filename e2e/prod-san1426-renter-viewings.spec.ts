@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { expect, test as base } from "@playwright/test";
+import { createClient } from "@supabase/supabase-js";
 import {
   createThrowawayIdentity, deleteThrowawayIdentity, getSupabaseAdmin,
   hasE2eEnv, signInAsOnOrigin, type ThrowawayIdentity,
 } from "./helpers/auth";
 import {
-  assertWriteTargetAllowed, cleanupFixture, findResidue, provisionFixture,
+  asUser, assertWriteTargetAllowed, cleanupFixture, findResidue, provisionFixture,
   type Fixture, type Admin,
 } from "./helpers/rental-journey-fixture";
 import {
@@ -75,23 +76,56 @@ test("signed-in renter sees own saved viewing while another renter and guest can
   // The new My Viewings screen is checked at a real 390px mobile viewport.
   const aContext = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   let showingId: string;
+  let committedLeadId: string;
   try {
     const a = await aContext.newPage();
-    await signInAsOnOrigin(a, ORIGIN, renterA.email);
+    const renterASession = await signInAsOnOrigin(a, ORIGIN, renterA.email);
     await openCandidate(a);
     const requestedSlot = futureLocalSlot(3).replace(/T10:00$/, "T15:00");
     const renter = { name: "QA renter " + run, email: renterA.email, phone: "+57 3000000000" };
     const journey = { browser, admin, fixture, run };
     const committed = await requestViewingThroughForm(journey, a, renter, requestedSlot);
     showingId = committed.showingId;
+    committedLeadId = committed.leadId;
     await expectOneLeadOneShowing(journey, renter, committed);
     const { data: lead, error: leadError } = await admin
       .from("leads").select("id,user_id").eq("id", committed.leadId).single();
     expect(leadError).toBeNull();
     expect(lead?.user_id, "the real writer must link the signed-in user").toBe(renterA.userId);
 
+    // Directly query PostgREST under renter A's JWT, not the privileged QA client.
+    const { data: ownRows, error: ownError } = await asUser(renterASession)
+      .from("showings").select("id").eq("id", showingId);
+    expect(ownError).toBeNull();
+    expect(ownRows?.map((row) => row.id)).toEqual([showingId]);
+
+    // Visit account overview and use the actual Viewings card link.
+    await a.goto(new URL("/app/me", ORIGIN).href, { waitUntil: "domcontentloaded" });
+    const accountViewings = a.getByTestId("me-card-viewings");
+    await expect(accountViewings).toBeVisible();
+    await accountViewings.getByRole("link", { name: /Open/ }).click();
+    await expect(a).toHaveURL(/\/app\/me\/viewings(?:\?|$)/);
+    await expect(a.getByTestId("me-nav-viewings")).toHaveAttribute("aria-current", "page");
+
+    // Desktop keyboard: a real Enter key must activate the account nav.
+    await a.goto(new URL("/app/me", ORIGIN).href, { waitUntil: "domcontentloaded" });
+    const desktopNav = a.getByTestId("me-nav-viewings");
+    await desktopNav.focus();
+    await expect(desktopNav).toBeFocused();
+    await a.keyboard.press("Enter");
+    await expect(a).toHaveURL(/\/app\/me\/viewings(?:\?|$)/);
+
     await a.setViewportSize({ width: 390, height: 844 });
-    await a.goto(new URL("/app/me/viewings", ORIGIN).href, { waitUntil: "domcontentloaded" });
+    // Normal tap/click and keyboard Enter must both work at 390px.
+    await a.goto(new URL("/app/me", ORIGIN).href, { waitUntil: "domcontentloaded" });
+    await a.getByTestId("me-nav-viewings").click();
+    await expect(a).toHaveURL(/\/app\/me\/viewings(?:\?|$)/);
+    await a.goto(new URL("/app/me", ORIGIN).href, { waitUntil: "domcontentloaded" });
+    const viewingsNav = a.getByTestId("me-nav-viewings");
+    await viewingsNav.focus();
+    await expect(viewingsNav).toBeFocused();
+    await a.keyboard.press("Enter");
+    await expect(a).toHaveURL(/\/app\/me\/viewings(?:\?|$)/);
     const own = a.getByTestId("renter-viewing-" + showingId);
     await expect(own).toBeVisible({ timeout: 40_000 });
     await expect(own.getByTestId("renter-viewing-status")).toHaveText("Requested");
@@ -110,11 +144,22 @@ test("signed-in renter sees own saved viewing while another renter and guest can
   const bContext = await browser.newContext();
   try {
     const b = await bContext.newPage();
-    await signInAsOnOrigin(b, ORIGIN, renterB.email);
+    const renterBSession = await signInAsOnOrigin(b, ORIGIN, renterB.email);
     await openCandidate(b);
     await b.goto(new URL("/app/me/viewings", ORIGIN).href, { waitUntil: "domcontentloaded" });
     await expect(b.getByTestId("renter-viewings-empty")).toBeVisible();
     await expect(b.getByTestId("renter-viewing-" + showingId)).toHaveCount(0);
+
+    // Copied exact showing/lead IDs must not bypass Postgres RLS.
+    const clientB = asUser(renterBSession);
+    const { data: otherRows, error: otherError } = await clientB
+      .from("showings").select("id").eq("id", showingId);
+    expect(otherError).toBeNull();
+    expect(otherRows).toEqual([]);
+    const { data: otherLead, error: otherLeadError } = await clientB
+      .from("leads").select("id").eq("id", committedLeadId);
+    expect(otherLeadError).toBeNull();
+    expect(otherLead).toEqual([]);
   } finally {
     await bContext.close();
   }
@@ -124,6 +169,18 @@ test("signed-in renter sees own saved viewing while another renter and guest can
     await openCandidate(guest);
     await guest.goto(new URL("/app/me/viewings", ORIGIN).href, { waitUntil: "domcontentloaded" });
     await expect(guest).toHaveURL(/\/login\?next=(%2F|\/)app(%2F|\/)me(%2F|\/)viewings/);
+    // The anonymous Supabase Data API must not return private saved showings.
+    const publicKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+      ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!publicKey || !process.env.NEXT_PUBLIC_SUPABASE_URL) {
+      throw new Error("Missing public Supabase QA connection");
+    }
+    const anonymous = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, publicKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const { data: anonymousRows } = await anonymous
+      .from("showings").select("id").eq("id", showingId);
+    expect(anonymousRows ?? []).toEqual([]);
   } finally {
     await guest.close();
   }
