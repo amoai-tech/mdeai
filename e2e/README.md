@@ -399,8 +399,8 @@ Playwright `prod-smoke` project and Vercel automation bypass, sends no viewing
 or booking requests, and checks two real rental API calls, budget/currency,
 rendered cards, preserved search context, the mobile map count and absence of a
 sign-in prompt. The live catalog can change, so it never hardcodes today's
-three-to-two apartment counts. Guest traces are kept only on first retry and
-screenshots only on failure.
+three-to-two apartment counts. Guest tracing and video are disabled to avoid
+recording Vercel bypass cookies; screenshots are kept only on failure.
 
 Run the same focused guest check manually after the public release:
 
