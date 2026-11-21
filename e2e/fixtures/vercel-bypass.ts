@@ -14,6 +14,20 @@ export function validateVercelCandidateOrigin(rawUrl: string): URL {
   return url;
 }
 
+/** Never inject an authenticated MDE QA session into an arbitrary origin.
+ * Accept only MDE's two canonical production domains or its exact named
+ * Vercel deployment host (already checked by the existing candidate validator).
+ */
+export function validateMdeAuthenticatedQaOrigin(rawUrl: string): URL {
+  const url = new URL(rawUrl);
+  if (url.protocol !== "https:" || url.username || url.password || url.port ||
+      url.pathname !== "/" || url.search || url.hash) {
+    throw new Error("MDE authenticated QA target must be an HTTPS origin without credentials or URL extras");
+  }
+  if (url.hostname === "www.mdeai.co" || url.hostname === "mdeai.co") return url;
+  return validateVercelCandidateOrigin(rawUrl);
+}
+
 /** Public previews do not issue a bypass cookie. Accept one only when its
  * live app version matches the exact expected Git commit and preview environment.
  * Protected previews must still use the existing cookie-verifying bypass path. */

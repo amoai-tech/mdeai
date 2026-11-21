@@ -1,6 +1,6 @@
 import { clearConciergeError, reportConciergeError } from "@/lib/concierge-error-store";
 import { isSelectedRentalCafeNearbyRequest } from "@/lib/cafe-search-fast-path";
-import { looksLikeRentalAnalysis, looksLikeRentalSearch } from "@/lib/rental-query-parser";
+import { clearsFurnishingPreference, looksLikeRentalAnalysis, looksLikeRentalSearch } from "@/lib/rental-query-parser";
 import {
   routerHandlerOrderFromClassification,
   type RouterRoutingTarget,
@@ -38,6 +38,8 @@ export type ConciergeSendHandlers = {
   lastIntent?: FlashRouteClassification["intent"];
   /** True while the conversation is in a rental search (current or saved legacy intent). */
   inRentalSearch?: boolean;
+  /** An initial rental search can be in flight before results/memory are visible. */
+  hasPendingRentalSearch?: () => boolean;
 };
 
 /** Dispatch a classified router target to its fast-path handler; false → try next or agent. */
@@ -78,6 +80,15 @@ export async function sendConciergeUserMessage(
   let agentAttempted = false;
 
   try {
+    // Record a renter's explicit preference clear BEFORE any café/amenity/Details
+    // early return or model dispatch. An initial rental request can still be in
+    // flight before cards/CoAgent working memory are visible.
+    const rentalClearDispatched = Boolean(
+      clearsFurnishingPreference(trimmed) &&
+      (handlers.inRentalSearch || handlers.hasPendingRentalSearch?.()),
+    );
+    if (rentalClearDispatched && await handlers.handleRentalMessage(trimmed, submissionId)) return true;
+
     // Contextual cafés beside the selected rental are NOT a new rental search.
     // If no genuine selected rental exists the handler declines safely.
     if (isSelectedRentalCafeNearbyRequest(trimmed)) {
@@ -140,6 +151,8 @@ export async function sendConciergeUserMessage(
     }
 
     for (const target of routerHandlerOrderFromClassification(classification)) {
+      // The initial clear already reached the canonical rental memory owner.
+      if (target === "rental" && rentalClearDispatched) continue;
       if (await invokeConciergeHandler(target, trimmed, handlers, submissionId)) return true;
     }
 

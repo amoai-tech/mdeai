@@ -392,6 +392,16 @@ export function furnishingFromQueryText(text: string): boolean | undefined {
   return undefined;
 }
 
+/** An explicit user preference is different from an explanatory question.
+ * Reused by live memory and saved-chat hydration to avoid parser drift.
+ */
+export function choosesFurnishingPreference(text: string): boolean {
+  if (typeof furnishingFromQueryText(text) !== "boolean") return false;
+  return /\b(?:prefer|prefiero|quiero|quisiera|necesito|busco|muestra|muéstrame|mostrar|hazlo|ponlo|want|need|find|show|only|actually|instead|switch|rather)\b/i.test(text) ||
+    /\bmake\s+(?:it|them|that)\s+(?:un)?furnished\b/i.test(text) ||
+    /^\s*(?:furnished|unfurnished)[.!]?\s*$/i.test(text);
+}
+
 export function exactBedroomsFromQueryText(text: string): number | undefined {
   if (text.length > MAX_RENTAL_TEXT_CHARS) return undefined;
   const match = BEDROOM_RE.exec(text);
