@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { isRenderableRemoteImage } from "@/lib/images/remote-image-hosts";
+import { reportRentalPhotoFailure } from "@/lib/rentals/rental-photo-telemetry";
 import Link from "next/link";
 import { Bed, Building2, Calendar, ExternalLink, Wifi } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -123,6 +125,8 @@ function RentalBrowseCardMedia({
   nightlyLabel,
   currency,
   mediaLayout,
+  onPhotoError,
+  omittedPhotos = false,
 }: {
   imageUrl?: string;
   title: string;
@@ -130,12 +134,12 @@ function RentalBrowseCardMedia({
   nightlyLabel: string | null;
   currency?: string;
   mediaLayout: "inline" | "cover";
+  onPhotoError: (url: string) => void;
+  omittedPhotos?: boolean;
 }) {
-  // A failed Storage request must fall back to the normal placeholder, not a broken image.
-  const [imageFailed, setImageFailed] = useState(false);
   return (
     <div className="relative">
-      {imageUrl && !imageFailed ? (
+      {imageUrl ? (
         <div className={cn("relative aspect-[16/10] overflow-hidden rounded-xl bg-muted", mediaLayout === "inline" ? "w-24" : "w-full")}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -144,8 +148,12 @@ function RentalBrowseCardMedia({
             className="size-full object-cover"
             loading="lazy"
             data-testid="rental-browse-card-photo"
-            onError={() => setImageFailed(true)}
+            onError={() => onPhotoError(imageUrl)}
           />
+        </div>
+      ) : omittedPhotos ? (
+        <div data-testid="rental-card-more-photos" className="flex aspect-[16/10] items-center justify-center rounded-xl bg-muted p-4 text-center text-sm text-muted-foreground">
+          More listing photos may be available in Details
         </div>
       ) : (
         <VenueCardPlaceholder
@@ -178,7 +186,11 @@ function RentalBrowseCardMedia({
  * pretends to contain all photos when Details has more.
  */
 function rentalBrowsePhotos(rental: Rental): string[] {
-  return [...new Set([rental.image, ...(rental.images ?? [])].filter((url) => url?.trim()))].slice(0, 12);
+  // Browser image requests must never target arbitrary listing-supplied hosts.
+  // This is the same approved-host rule used by next/image, not a second allowlist.
+  return [...new Set([rental.image, ...(rental.images ?? [])].filter(
+    (url): url is string => typeof url === "string" && isRenderableRemoteImage(url),
+  ))].slice(0, 12);
 }
 
 function RentalBrowseCardGallery({
@@ -289,12 +301,20 @@ export function RentalBrowseCard({
     rental.currency,
   );
   const chips = topAmenities(rental.amenities);
-  // Broken URLs must not count as available photos or occupy empty slides.
-  const [failedPhotoUrls, setFailedPhotoUrls] = useState<string[]>([]);
+  // A new rental result object means the search refreshed, even when the ID and
+  // URLs remain identical. Retry transient failures instead of caching them forever.
+  const [failedPhotos, setFailedPhotos] = useState<{ result: Rental; urls: string[] }>(() => ({ result: rental, urls: [] }));
+  const failedPhotoUrls = failedPhotos.result === rental ? failedPhotos.urls : [];
   const photos = rentalBrowsePhotos(rental).filter((url) => !failedPhotoUrls.includes(url));
+  const omittedPhotos = (rental.photo_count ?? 0) > (rental.images?.length ?? (rental.image ? 1 : 0));
   const showPhotoGallery = mediaLayout === "cover" && photos.length > 1;
-  const handlePhotoError = (url: string) =>
-    setFailedPhotoUrls((previous) => previous.includes(url) ? previous : [...previous, url]);
+  const handlePhotoError = (url: string) => {
+    reportRentalPhotoFailure(url);
+    setFailedPhotos((previous) => {
+      const urls = previous.result === rental ? previous.urls : [];
+      return urls.includes(url) ? previous : { result: rental, urls: [...urls, url] };
+    });
+  };
   const matchReason = buildMatchReason(rental, matchParams);
   const hasWifi = rental.wifi || rental.amenities?.some((a) => a.toLowerCase().includes("wifi"));
   const pinId = rentalToMapPin(rental)?.id;
@@ -340,6 +360,8 @@ export function RentalBrowseCard({
           >
             <RentalBrowseCardMedia
               imageUrl={photos[0]}
+              onPhotoError={handlePhotoError}
+              omittedPhotos={omittedPhotos}
               title={rental.title}
               neighborhood={rental.neighborhood}
               nightlyLabel={nightlyLabel}
@@ -350,6 +372,8 @@ export function RentalBrowseCard({
         ) : (
           <RentalBrowseCardMedia
             imageUrl={photos[0]}
+            onPhotoError={handlePhotoError}
+            omittedPhotos={omittedPhotos}
             title={rental.title}
             neighborhood={rental.neighborhood}
             nightlyLabel={nightlyLabel}

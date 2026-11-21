@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => {
     price_monthly: 300,
     wifi_speed: 100,
     amenities: ["wifi"],
-    images: [],
+    images: ["https://images.unsplash.com/a.jpg", "https://images.unsplash.com/b.jpg"],
     host_name: "Host",
     source_url: null,
     available_from: "2026-04-25",
@@ -124,6 +124,20 @@ describe("searchRentals — SAN-1356 monthly price projection", () => {
 
     const web = await searchRentalsTool.execute!(args, {} as never) as { whatsapp_reply?: string };
     expect(web.whatsapp_reply).toBeUndefined();
+  });
+
+
+  it("preserves source gallery images and total count in Ask MDE tool results", async () => {
+    const { searchRentalsTool } = await import("../search-rentals");
+    const result = (await searchRentalsTool.execute!(
+      { neighborhood: "Centro", limit: 5 },
+      {} as never,
+    )) as { results: Array<{ image: string; images?: string[]; photo_count?: number }> };
+    expect(result.results[0]?.image).toBe("https://images.unsplash.com/a.jpg");
+    expect(result.results[0]?.images).toEqual([
+      "https://images.unsplash.com/a.jpg", "https://images.unsplash.com/b.jpg",
+    ]);
+    expect(result.results[0]?.photo_count).toBeUndefined();
   });
 
   it("preserves price_monthly through the Mastra tool output envelope", async () => {

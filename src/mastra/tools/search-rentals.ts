@@ -879,6 +879,8 @@ export const searchRentalsTool = createTool({
         tags: r.tags,
         availability: r.availability,
         image: r.image,
+        images: r.images,
+        photo_count: r.photo_count,
         source_url: r.source_url,
         can_schedule_viewing: r.can_schedule_viewing,
         schedule_viewing_url: r.schedule_viewing_url,
