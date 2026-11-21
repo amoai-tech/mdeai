@@ -2,7 +2,7 @@
 -- All fixtures are rolled back; no persistent test users or approvals.
 begin;
 
-select plan(49);
+select plan(53);
 
 select is(
   has_column_privilege('authenticated','public.profiles','role','UPDATE'),
@@ -476,6 +476,52 @@ select is(
    where application_id='9a621000-0000-4000-8000-000000000081'
      and utm_destination='https://example.com:65535'),
   2, 'website port 65535 is accepted on both placements'
+);
+
+-- Uppercase URL schemes must apply the same port validation as lowercase.
+-- Match the actual approval RPC through stored placements, not just regex syntax.
+
+update sponsor.organizations set website='HTTPS://example.com:70000'
+ where id='9a621000-0000-4000-8000-000000000080';
+update sponsor.applications set status='submitted', approved_by=null, approved_at=null
+ where id='9a621000-0000-4000-8000-000000000081';
+delete from sponsor.placements
+ where application_id='9a621000-0000-4000-8000-000000000081';
+set local role authenticated;
+select set_config('request.jwt.claim.sub','9a621000-0000-4000-8000-000000000001',true);
+select lives_ok(
+  $$select public.approve_sponsor_application(
+    '9a621000-0000-4000-8000-000000000081', null)$$,
+  'uppercase scheme port 70000 does not block development sponsor approval'
+);
+reset role;
+select is(
+  (select count(*)::int from sponsor.placements
+   where application_id='9a621000-0000-4000-8000-000000000081'
+     and utm_destination='https://mdeai.co/sponsors'),
+  2, 'uppercase scheme port 70000 falls back on both placements'
+);
+
+
+update sponsor.organizations set website='HTTPS://example.com:8443'
+ where id='9a621000-0000-4000-8000-000000000080';
+update sponsor.applications set status='submitted', approved_by=null, approved_at=null
+ where id='9a621000-0000-4000-8000-000000000081';
+delete from sponsor.placements
+ where application_id='9a621000-0000-4000-8000-000000000081';
+set local role authenticated;
+select set_config('request.jwt.claim.sub','9a621000-0000-4000-8000-000000000001',true);
+select lives_ok(
+  $$select public.approve_sponsor_application(
+    '9a621000-0000-4000-8000-000000000081', null)$$,
+  'uppercase scheme port 8443 does not block development sponsor approval'
+);
+reset role;
+select is(
+  (select count(*)::int from sponsor.placements
+   where application_id='9a621000-0000-4000-8000-000000000081'
+     and utm_destination='HTTPS://example.com:8443'),
+  2, 'uppercase scheme port 8443 persists valid sponsor destination'
 );
 
 select * from finish();

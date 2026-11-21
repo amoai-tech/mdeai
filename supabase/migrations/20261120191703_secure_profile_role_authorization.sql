@@ -98,7 +98,7 @@ begin
         and coalesce(
           substring(
             btrim(to_jsonb(o)->>'website')
-            from '^https?://[^/?#:]+:([0-9]{1,5})([/?#]|$)'
+            from '(?i)^https?://[^/?#:]+:([0-9]{1,5})([/?#]|$)'
           )::integer,
           0
         ) <= 65535
