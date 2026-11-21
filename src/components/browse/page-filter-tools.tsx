@@ -46,13 +46,18 @@ function usePageFilterRunSnapshot<T extends object>(filters: T, agent: AbstractA
         // Opening a filter link in another tab must not invalidate this page.
         if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey ||
             event.altKey || linkOrAction.getAttribute("target") === "_blank") return;
-        // Active filter chips (e.g. Any date → /events) do not navigate.
+        // Only filter fields are authoritative: a tracking parameter or
+        // explicit dateWindow=any can disappear without changing a filter.
         const destination = new URL(linkOrAction.getAttribute("href")!, window.location.href);
         const current = new URL(window.location.href);
+        const sameFilters = Object.entries(filtersRef.current).every(([key, value]) => {
+          const target = destination.searchParams.get(key);
+          const normalizedTarget = key === "dateWindow" && target === "any" ? null : target;
+          const normalizedCurrent = key === "dateWindow" && value === "any" ? null : value ?? null;
+          return normalizedTarget === normalizedCurrent;
+        });
         if (destination.origin === current.origin &&
-            destination.pathname === current.pathname &&
-            destination.search === current.search &&
-            destination.hash === current.hash) return;
+            destination.pathname === current.pathname && sameFilters) return;
         pendingNavigationFromRef.current = JSON.stringify(filtersRef.current);
       }
       manualEditCountRef.current += 1;

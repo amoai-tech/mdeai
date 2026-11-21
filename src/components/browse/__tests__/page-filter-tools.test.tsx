@@ -175,9 +175,13 @@ describe("page filter tools", () => {
     expect(state.push).toHaveBeenCalledWith("/events?category=food&dateWindow=this_weekend");
   });
 
-  it("does not lock Ask MDE when an active Any date chip navigates to the same URL", async () => {
+  it.each([
+    "/events",
+    "/events?utm_source=ig",
+    "/events?dateWindow=any",
+  ])("does not lock Ask MDE when active Any date preserves canonical filters at %s", async (initialUrl) => {
     const previous = window.location.href;
-    window.history.replaceState(null, "", "/events");
+    window.history.replaceState(null, "", initialUrl);
     try {
       const emptyFilters: Required<EventBrowseFilterState> = {
         category: null, neighborhood: null, dateWindow: null, price: null,
