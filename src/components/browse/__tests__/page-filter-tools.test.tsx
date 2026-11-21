@@ -10,10 +10,18 @@ type Captured = {
 const state = vi.hoisted(() => ({
   tool: null as Captured | null,
   push: vi.fn(),
-  subscriber: null as null | { onRunInitialized?: () => void },
+  subscriber: null as null | {
+    onRunInitialized?: () => void;
+    onRunFinalized?: () => void;
+    onRunFailed?: () => void;
+  },
   agent: {
     threadId: "thread-a",
-    subscribe: vi.fn((subscriber: { onRunInitialized?: () => void }) => {
+    subscribe: vi.fn((subscriber: {
+      onRunInitialized?: () => void;
+      onRunFinalized?: () => void;
+      onRunFailed?: () => void;
+    }) => {
       state.subscriber = subscriber;
       return { unsubscribe: vi.fn() };
     }),
@@ -104,7 +112,7 @@ describe("page filter tools", () => {
 
   const musicFilters = { category: "music" as const, neighborhood: null, dateWindow: "this_weekend" as const, price: null };
 
-  function eventFixture(filters: EventBrowseFilterState) {
+  function eventFixture(filters: Required<EventBrowseFilterState>) {
     return (
       <>
         <EventPageControlTool filters={filters} />
@@ -171,7 +179,7 @@ describe("page filter tools", () => {
     const previous = window.location.href;
     window.history.replaceState(null, "", "/events");
     try {
-      const emptyFilters: EventBrowseFilterState = {
+      const emptyFilters: Required<EventBrowseFilterState> = {
         category: null, neighborhood: null, dateWindow: null, price: null,
       };
       const mounted = render(eventFixture(emptyFilters));
@@ -189,21 +197,31 @@ describe("page filter tools", () => {
     }
   });
 
-  it("recovers when native filter navigation did not complete", async () => {
+  it("keeps slow pending navigation protected even after more than five seconds", async () => {
     const clock = vi.spyOn(Date, "now").mockReturnValue(1000);
     try {
       const { chip } = renderRealEventFilterMarkup();
       fireEvent.click(chip);
-      // A failed/cancelled navigation must not block all future Ask turns.
-      clock.mockReturnValue(7001);
+      clock.mockReturnValue(12001);
       act(() => { state.subscriber?.onRunInitialized?.(); });
-      expect(await tool().handler({ category: "food" })).toMatchObject({
-        ok: true, status: "navigation_requested",
-      });
-      expect(state.push).toHaveBeenCalledWith("/events?category=food&dateWindow=this_weekend");
+      expect(await tool().handler({ category: "music" })).toMatchObject({ ok: false });
+      expect(state.push).not.toHaveBeenCalled();
     } finally {
       clock.mockRestore();
     }
+  });
+
+  it("releases abandoned filter navigation after the old agent run finalizes", async () => {
+    const { chip } = renderRealEventFilterMarkup();
+    fireEvent.click(chip);
+    act(() => { state.subscriber?.onRunInitialized?.(); });
+    expect(await tool().handler({ category: "music" })).toMatchObject({ ok: false });
+    act(() => { state.subscriber?.onRunFinalized?.(); });
+    act(() => { state.subscriber?.onRunInitialized?.(); });
+    expect(await tool().handler({ category: "food" })).toMatchObject({
+      ok: true, status: "navigation_requested",
+    });
+    expect(state.push).toHaveBeenCalledWith("/events?category=food&dateWindow=this_weekend");
   });
 
   it("keeps a user's cleared Events filters when an older tool tries to restore them", async () => {

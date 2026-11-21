@@ -10,9 +10,6 @@ import { rentalPageControlSchema, resolveRentalPageControl } from "@/lib/rentals
 import type { EventBrowseFilterState } from "@/lib/events/browse-url";
 import { eventPageControlSchema, resolveEventPageControl } from "@/lib/events/browse-page-control";
 
-// A failed/cancelled Next navigation must not poison every later Ask run.
-const NAVIGATION_GRACE_MS = 5_000;
-
 /**
  * Preserve a user's newer native filter edit while an older agent run is in flight.
  * A run can change the page only if the URL-backed filters still match its start.
@@ -23,7 +20,7 @@ function usePageFilterRunSnapshot<T extends object>(filters: T, agent: AbstractA
   const manualEditCountRef = useRef(0);
   // A filter Link navigates asynchronously. A delayed RUN_STARTED must not
   // turn that pending human navigation into the snapshot of an "old" run.
-  const pendingNavigationFromRef = useRef<{ filters: string; clickedAt: number } | null>(null);
+  const pendingNavigationFromRef = useRef<string | null>(null);
   // A page mounted mid-run must not accept a late tool from the previous page.
   const startedWithRef = useRef<{ filters: string; manualEdits: number } | null>(
     agent.isRunning ? { filters: "", manualEdits: -1 } : null,
@@ -32,7 +29,7 @@ function usePageFilterRunSnapshot<T extends object>(filters: T, agent: AbstractA
     filtersRef.current = filters;
     // Update before click events; never infer completion from an old effect snapshot.
     if (pendingNavigationFromRef.current &&
-        pendingNavigationFromRef.current.filters !== JSON.stringify(filters)) {
+        pendingNavigationFromRef.current !== JSON.stringify(filters)) {
       pendingNavigationFromRef.current = null;
     }
   }, [filters]);
@@ -56,9 +53,7 @@ function usePageFilterRunSnapshot<T extends object>(filters: T, agent: AbstractA
             destination.pathname === current.pathname &&
             destination.search === current.search &&
             destination.hash === current.hash) return;
-        pendingNavigationFromRef.current = {
-          filters: JSON.stringify(filtersRef.current), clickedAt: Date.now(),
-        };
+        pendingNavigationFromRef.current = JSON.stringify(filtersRef.current);
       }
       manualEditCountRef.current += 1;
     };
@@ -68,17 +63,17 @@ function usePageFilterRunSnapshot<T extends object>(filters: T, agent: AbstractA
   useEffect(() => {
     const subscription = agent.subscribe({
       onRunInitialized: () => {
-        if (pendingNavigationFromRef.current &&
-            Date.now() - pendingNavigationFromRef.current.clickedAt >= NAVIGATION_GRACE_MS) {
-          pendingNavigationFromRef.current = null;
-        }
-        startedWithRef.current = pendingNavigationFromRef.current
+        startedWithRef.current = pendingNavigationFromRef.current !== null
           ? { filters: "", manualEdits: -1 }
           : {
               filters: JSON.stringify(filtersRef.current),
               manualEdits: manualEditCountRef.current,
             };
       },
+      // A failed or canceled navigation must not block future Ask turns forever.
+      // A tool from this run cannot execute after its finalization/failure.
+      onRunFinalized: () => { pendingNavigationFromRef.current = null; },
+      onRunFailed: () => { pendingNavigationFromRef.current = null; },
     });
     return () => {
       subscription.unsubscribe();
