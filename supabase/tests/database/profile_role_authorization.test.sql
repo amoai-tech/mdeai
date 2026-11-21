@@ -2,7 +2,7 @@
 -- All fixtures are rolled back; no persistent test users or approvals.
 begin;
 
-select plan(41);
+select plan(49);
 
 select is(
   has_column_privilege('authenticated','public.profiles','role','UPDATE'),
@@ -386,6 +386,96 @@ select is(
    where application_id='9a621000-0000-4000-8000-000000000081'
      and utm_destination='https://mdeai.co/sponsors'),
   2, 'malformed HTTPS port falls back to existing sponsor landing'
+);
+
+-- Numeric HTTP(S) ports are only valid from 0 to 65535; exercise the
+-- real approval RPC and placement destination, not only the regexp.
+
+update sponsor.organizations set website='https://example.com:65536'
+ where id='9a621000-0000-4000-8000-000000000080';
+update sponsor.applications set status='submitted', approved_by=null, approved_at=null
+ where id='9a621000-0000-4000-8000-000000000081';
+delete from sponsor.placements
+ where application_id='9a621000-0000-4000-8000-000000000081';
+set local role authenticated;
+select set_config('request.jwt.claim.sub','9a621000-0000-4000-8000-000000000001',true);
+select lives_ok(
+  $$select public.approve_sponsor_application(
+    '9a621000-0000-4000-8000-000000000081', null)$$,
+  'sponsor approval succeeds with website port 65536'
+);
+reset role;
+select is(
+  (select count(*)::int from sponsor.placements
+   where application_id='9a621000-0000-4000-8000-000000000081'
+     and utm_destination='https://mdeai.co/sponsors'),
+  2, 'website port 65536 uses safe fallback on both placements'
+);
+
+
+update sponsor.organizations set website='https://example.com:70000'
+ where id='9a621000-0000-4000-8000-000000000080';
+update sponsor.applications set status='submitted', approved_by=null, approved_at=null
+ where id='9a621000-0000-4000-8000-000000000081';
+delete from sponsor.placements
+ where application_id='9a621000-0000-4000-8000-000000000081';
+set local role authenticated;
+select set_config('request.jwt.claim.sub','9a621000-0000-4000-8000-000000000001',true);
+select lives_ok(
+  $$select public.approve_sponsor_application(
+    '9a621000-0000-4000-8000-000000000081', null)$$,
+  'sponsor approval succeeds with website port 70000'
+);
+reset role;
+select is(
+  (select count(*)::int from sponsor.placements
+   where application_id='9a621000-0000-4000-8000-000000000081'
+     and utm_destination='https://mdeai.co/sponsors'),
+  2, 'website port 70000 uses safe fallback on both placements'
+);
+
+
+update sponsor.organizations set website='https://example.com:8443'
+ where id='9a621000-0000-4000-8000-000000000080';
+update sponsor.applications set status='submitted', approved_by=null, approved_at=null
+ where id='9a621000-0000-4000-8000-000000000081';
+delete from sponsor.placements
+ where application_id='9a621000-0000-4000-8000-000000000081';
+set local role authenticated;
+select set_config('request.jwt.claim.sub','9a621000-0000-4000-8000-000000000001',true);
+select lives_ok(
+  $$select public.approve_sponsor_application(
+    '9a621000-0000-4000-8000-000000000081', null)$$,
+  'sponsor approval succeeds with website port 8443'
+);
+reset role;
+select is(
+  (select count(*)::int from sponsor.placements
+   where application_id='9a621000-0000-4000-8000-000000000081'
+     and utm_destination='https://example.com:8443'),
+  2, 'website port 8443 is accepted on both placements'
+);
+
+
+update sponsor.organizations set website='https://example.com:65535'
+ where id='9a621000-0000-4000-8000-000000000080';
+update sponsor.applications set status='submitted', approved_by=null, approved_at=null
+ where id='9a621000-0000-4000-8000-000000000081';
+delete from sponsor.placements
+ where application_id='9a621000-0000-4000-8000-000000000081';
+set local role authenticated;
+select set_config('request.jwt.claim.sub','9a621000-0000-4000-8000-000000000001',true);
+select lives_ok(
+  $$select public.approve_sponsor_application(
+    '9a621000-0000-4000-8000-000000000081', null)$$,
+  'sponsor approval succeeds with website port 65535'
+);
+reset role;
+select is(
+  (select count(*)::int from sponsor.placements
+   where application_id='9a621000-0000-4000-8000-000000000081'
+     and utm_destination='https://example.com:65535'),
+  2, 'website port 65535 is accepted on both placements'
 );
 
 select * from finish();

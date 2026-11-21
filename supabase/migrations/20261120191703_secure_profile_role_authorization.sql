@@ -80,7 +80,8 @@ begin
   -- the sponsorship. No caller-supplied identity is used for either path.
   -- A missing owner remains NULL, not a fabricated admin/sponsor identity.
   -- Use the sponsor's supplied HTTP(S) website with a plausible DNS host
-  -- and numeric port when present. Reject malformed authorities/ports instead
+  -- and numeric port in the WHATWG range 0..65535 when present.
+  -- Reject malformed authorities/ports instead
   -- of persisting a broken URL; not a business approval/ownership gate.
   -- A generic, existing /sponsors page is the development fallback; never
   -- build a non-existent /sponsor/<application-id> destination.
@@ -94,6 +95,13 @@ begin
     case
       when btrim(coalesce(to_jsonb(o)->>'website', ''))
            ~* '^https?://[a-z0-9]([a-z0-9-]*[a-z0-9])?([.][a-z0-9]([a-z0-9-]*[a-z0-9])?)*(:[0-9]{1,5})?([/?#][^[:space:]]*)?$'
+        and coalesce(
+          substring(
+            btrim(to_jsonb(o)->>'website')
+            from '^https?://[^/?#:]+:([0-9]{1,5})([/?#]|$)'
+          )::integer,
+          0
+        ) <= 65535
       then btrim(to_jsonb(o)->>'website')
       else 'https://mdeai.co/sponsors'
     end
