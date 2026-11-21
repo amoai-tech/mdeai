@@ -379,3 +379,14 @@ A passing diagnostic retry is **not** proof that the defect is fixed.
 
 A skipped signed-in test proves **nothing**. The normal guest gate remains
 independent of the QA account and the model's response timing.
+
+### Exact-SHA Vercel preview proof
+
+For preview deployments, the guest smoke accepts a public MDE preview only
+when `VERCEL_DEPLOYMENT_SHA` matches the SHA reported by `/api/version`.
+Protected candidates still require the existing bypass cookie; no bypass
+secret is sent when the public preview is verified.
+
+For manual PR-preview proof, supply the exact commit SHA as
+`VERCEL_DEPLOYMENT_SHA`. Candidate certification already sets this
+environment variable from the Vercel deployment event.

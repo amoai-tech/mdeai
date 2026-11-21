@@ -1,6 +1,9 @@
 import type { Page } from "@playwright/test";
 
-const MDE_VERCEL_HOST = /^mdeai-[a-z0-9-]+-amoco\.vercel\.app$/i;
+// Allow only MDE project previews in the two confirmed Vercel team slugs.
+// Keep the restrictive app prefix and suffix: the bypass token must never
+// be sent to arbitrary *.vercel.app deployments.
+const MDE_VERCEL_HOST = /^mdeai-[a-z0-9-]+-(?:amoco|amo-agency)\.vercel\.app$/i;
 
 export function validateVercelCandidateOrigin(rawUrl: string): URL {
   const url = new URL(rawUrl);
@@ -51,4 +54,37 @@ export async function establishVercelAutomationBypass(
         `measures that instead of MDE.`,
     );
   }
+}
+
+
+/**
+ * Public previews don't need a bypass cookie, but must prove the exact commit.
+ * Protected previews still require the existing cookie-only bypass validation.
+ */
+export async function establishVercelCandidateAccess(
+  page: Page,
+  rawCandidateUrl: string,
+  secret: string,
+  expectedSha?: string,
+): Promise<void> {
+  const candidate = validateVercelCandidateOrigin(rawCandidateUrl);
+  if (expectedSha) {
+    if (!/^[0-9a-f]{40}$/i.test(expectedSha)) {
+      throw new Error("Expected Vercel commit SHA must be 40 hexadecimal characters");
+    }
+    const version = await page.request.get(candidate.origin + "/api/version", {
+      failOnStatusCode: false,
+      maxRedirects: 0,
+    });
+    if (version.status() === 200 && /application\/json/i.test(version.headers()["content-type"] ?? "")) {
+      const body: unknown = await version.json().catch(() => null);
+      const actualSha = body && typeof body === "object" && "sha" in body ? body.sha : undefined;
+      if (actualSha !== expectedSha) {
+        throw new Error("CERTIFICATION_TARGET_INVALID: public preview commit differs from expected SHA");
+      }
+      // Exact application commit answered publicly, without sending a secret.
+      return;
+    }
+  }
+  await establishVercelAutomationBypass(page, candidate.origin, secret);
 }

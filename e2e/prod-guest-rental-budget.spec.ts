@@ -1,5 +1,5 @@
 import { test, expect } from "./fixtures";
-import { establishVercelAutomationBypass } from "./fixtures/vercel-bypass";
+import { establishVercelCandidateAccess } from "./fixtures/vercel-bypass";
 import type { Page } from "@playwright/test";
 import { sendConciergeMessage } from "./helpers/maps-layout";
 
@@ -76,8 +76,11 @@ test.describe("SAN-755 guest budget refinement on public rental search", () => {
       await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
       if (isProtectedPreview) {
         const secret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim() ?? "";
-        expect(secret, "staged deployment must use real Vercel protection bypass").not.toBe("");
-        await establishVercelAutomationBypass(page, guestTarget, secret);
+        // A public preview must prove its exact SHA; a protected preview
+        // retains the cookie-only bypass contract.
+        await establishVercelCandidateAccess(
+          page, guestTarget, secret, process.env.VERCEL_DEPLOYMENT_SHA?.trim(),
+        );
       }
       const errors: string[] = [];
       let searches = 0;

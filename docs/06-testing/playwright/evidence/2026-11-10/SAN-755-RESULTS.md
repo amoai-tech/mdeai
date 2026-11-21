@@ -50,3 +50,24 @@ A read-only public COP 3M result returned three source rows. Two lacked usable p
 
 Verification results for this revision are recorded in the PR review responses.
 The historical 10 Nov evidence above must not be mistaken for fresh proof.
+
+## 21 Nov 2026: current PR preview host/access regression and repair
+
+- GitHub's Vercel bot identified the current MDE preview on the `amo-agency`
+  team, whereas the test helper trusted only the older `amoco` team.
+  The host allowlist now recognizes both *only* with the MDE project prefix.
+- The new preview is public and therefore cannot establish a bypass cookie.
+  The browser fixture now accepts public preview access only after verifying
+  the deployed `/api/version` SHA matches `VERCEL_DEPLOYMENT_SHA`;
+  protected previews must still establish the bypass cookie. A public preview
+  never receives the bypass secret.
+- RED proof: old fixture rejected the new hostname (one failing test).
+  GREEN proof: 21/21 Vercel origin/bypass fixture tests PASS, including
+  negative spoofed-host, wrong-SHA and protected-cookie cases.
+- Exact prior source head `75ac8d9a9ad2daacdde6d61e6e020a152b2aeafb`
+  confirmed by public preview's `/api/version`, not inferred from a label.
+  Guest mobile 390px and desktop 1440px **PASS 2/2 (9.4 seconds)** on that
+  exact deployed preview with the repaired local test fixture.
+  Browser output is local at `/tmp/pr860-publicpreview-sha-1121.log`.
+- The fixture repair commit after this test needs its own latest-HEAD CI and
+  immutable preview SHA verification before claiming the *new* head certified.
