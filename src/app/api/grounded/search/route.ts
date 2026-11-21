@@ -3,6 +3,8 @@ import { RequestContext } from "@mastra/core/request-context";
 import { z } from "zod";
 import { checkSearchFastPathRateLimit } from "@/lib/api-ip-rate-limit";
 import { searchGroundedPlacesTool } from "@/mastra/tools/search-grounded-places";
+import { isMapAreaQuery } from "@/lib/map-area-query";
+import { hasExplicitPlaceScope } from "@/mastra/lib/google-places-cafe-search";
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
 import { RENTAL_SUPABASE_KEY } from "@/mastra/tools/search-rentals";
 import { MDEAI_USER_ID_KEY } from "@/mastra/lib/tool-audit-context";
@@ -18,6 +20,10 @@ const bodySchema = z.object({
   intent: z.enum(["cafe", "nightlife", "general"]).optional(),
   nearbyRentalId: z.string().uuid().optional(),
   nearbyRadiusMeters: z.number().int().min(100).max(5000).optional(),
+  locationBias: z.object({
+    latitude: z.number().finite().min(-90).max(90),
+    longitude: z.number().finite().min(-180).max(180),
+  }).strict().optional(),
 });
 
 /** Fast path — grounded café search without relying on conciergeAgent tool calls. */
@@ -41,10 +47,19 @@ export async function POST(req: Request) {
     );
   }
 
-  const { query, neighborhood, limit, intent, nearbyRentalId, nearbyRadiusMeters } = parsed.data;
+  const { query, neighborhood, limit, intent, nearbyRentalId, nearbyRadiusMeters, locationBias } = parsed.data;
   const searchQuery = neighborhood
     ? `${query.trim()} near ${neighborhood}`
     : query.trim();
+
+  // A map-relative request without a map center must not silently search
+  // around a fixed point. No Places quota is used for this response.
+  if (isMapAreaQuery(searchQuery) && !neighborhood && !hasExplicitPlaceScope(query) && !locationBias && !nearbyRentalId) {
+    return NextResponse.json({
+      results: [], attribution: [], source: "grounding",
+      metadata: { reason: "missing_map_context" },
+    });
+  }
 
   try {
     const execute = searchGroundedPlacesTool.execute;
@@ -87,6 +102,7 @@ export async function POST(req: Request) {
         query: searchQuery,
         pageSize: limit,
         ...(intent ? { intent } : {}),
+        ...(isMapAreaQuery(searchQuery) && !neighborhood && !hasExplicitPlaceScope(query) && locationBias && !nearbyRentalId ? { locationBias } : {}),
         ...(nearbyRentalId ? { nearbyRentalId, nearbyRadiusMeters: nearbyRadiusMeters ?? 800 } : {}),
       },
       context as never,
