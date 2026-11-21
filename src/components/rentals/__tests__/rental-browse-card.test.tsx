@@ -219,16 +219,34 @@ describe("SAN-1695 — failed gallery images never occupy a slide", () => {
     expect(onDetails).toHaveBeenCalledTimes(1);
   });
 
-  it("retries the same photo URLs when a refreshed result object arrives", () => {
+  it("retains failures on unrelated rerenders, then retries on a refreshed result set", () => {
     const urls = ["https://images.unsplash.com/front.jpg", "https://images.unsplash.com/kitchen.jpg"];
     const show = () => rowToRental(apartmentRow({ images: urls }));
-    act(() => { root.render(<RentalBrowseCard rental={show()} mediaLayout="cover" />); });
+    const resultSet = [show()];
+    act(() => { root.render(<RentalBrowseCard rental={resultSet[0]!} resultSet={resultSet} mediaLayout="cover" />); });
     expect(container.querySelectorAll('[data-slot="carousel-item"]')).toHaveLength(2);
     act(() => { container.querySelector<HTMLImageElement>('[data-testid="rental-browse-card-photo"]')?.dispatchEvent(new Event("error")); });
     expect(container.querySelector('[data-slot="carousel"]')).toBeNull();
-    // A new search has new data, even though the listing ID and URLs are identical.
-    act(() => { root.render(<RentalBrowseCard rental={show()} mediaLayout="cover" />); });
+    // Unrelated rerender reconstructs a Rental object but keeps the same search result array.
+    act(() => { root.render(<RentalBrowseCard rental={show()} resultSet={resultSet} mediaLayout="cover" />); });
+    expect(container.querySelector('[data-slot="carousel"]')).toBeNull();
+    // A refreshed search has a new result array even if it contains the same ID and URLs.
+    const refreshed = [show()];
+    act(() => { root.render(<RentalBrowseCard rental={refreshed[0]!} resultSet={refreshed} mediaLayout="cover" />); });
     expect(container.querySelectorAll('[data-slot="carousel-item"]')).toHaveLength(2);
+  });
+
+  it("updates title and omitted-photo text without reinstalling carousel listeners", () => {
+    const rental = rowToRental(apartmentRow({ images: [
+      "https://images.unsplash.com/front.jpg", "https://images.unsplash.com/kitchen.jpg",
+    ] }));
+    const resultSet = [rental];
+    act(() => { root.render(<RentalBrowseCard rental={rental} resultSet={resultSet} mediaLayout="cover" />); });
+    expect(container.querySelector('[data-testid^="rental-photo-counter-"]')?.textContent).toContain("1 of 2 photos");
+    const updated = { ...rental, title: "Updated apartment title", photo_count: 9 };
+    act(() => { root.render(<RentalBrowseCard rental={updated} resultSet={resultSet} mediaLayout="cover" />); });
+    expect(container.querySelector('[data-testid^="rental-photo-counter-"]')?.textContent).toContain("1 of 2 photos shown");
+    expect(container.querySelector('[aria-label="Photos of Updated apartment title"]')).not.toBeNull();
   });
 
   it("offers remaining photos in Details after all 12 preview photos fail", () => {

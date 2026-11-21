@@ -83,6 +83,8 @@ export function externalSourceUrlFor(rental: Rental): string | null {
 
 type RentalBrowseCardProps = {
   rental: Rental;
+  /** Stable result-set identity. Changes on a new search, not unrelated parent rerenders. */
+  resultSet?: readonly Rental[];
   /** Grounded, optional customer query; never a search-score/debug field. */
   matchParams?: RentalSearchApiParams;
   /** SAN-478 / REAL-011 — per-listing id for Playwright (`rental-card-${id}`). */
@@ -276,6 +278,7 @@ function RentalBrowseCardGallery({
 /** Show a real rental card; map controls require coordinates and viewing requires authorization. */
 export function RentalBrowseCard({
   rental,
+  resultSet,
   matchParams,
   testId,
   detailSearch,
@@ -301,18 +304,22 @@ export function RentalBrowseCard({
     rental.currency,
   );
   const chips = topAmenities(rental.amenities);
-  // A new rental result object means the search refreshed, even when the ID and
-  // URLs remain identical. Retry transient failures instead of caching them forever.
-  const [failedPhotos, setFailedPhotos] = useState<{ result: Rental; urls: string[] }>(() => ({ result: rental, urls: [] }));
-  const failedPhotoUrls = failedPhotos.result === rental ? failedPhotos.urls : [];
+  // The parent keeps one stable array for each search. A new result set retries
+  // failed photos, even when the same listing ID and URLs return. A parent rerender
+  // that recreates a Rental object must NOT trigger an image-error retry loop.
+  const photoResultSet = resultSet ?? rental;
+  const [failedPhotos, setFailedPhotos] = useState<{ resultSet: readonly Rental[] | Rental; urls: string[] }>(
+    () => ({ resultSet: photoResultSet, urls: [] }),
+  );
+  const failedPhotoUrls = failedPhotos.resultSet === photoResultSet ? failedPhotos.urls : [];
   const photos = rentalBrowsePhotos(rental).filter((url) => !failedPhotoUrls.includes(url));
   const omittedPhotos = (rental.photo_count ?? 0) > (rental.images?.length ?? (rental.image ? 1 : 0));
   const showPhotoGallery = mediaLayout === "cover" && photos.length > 1;
   const handlePhotoError = (url: string) => {
     reportRentalPhotoFailure(url);
     setFailedPhotos((previous) => {
-      const urls = previous.result === rental ? previous.urls : [];
-      return urls.includes(url) ? previous : { result: rental, urls: [...urls, url] };
+      const urls = previous.resultSet === photoResultSet ? previous.urls : [];
+      return urls.includes(url) ? previous : { resultSet: photoResultSet, urls: [...urls, url] };
     });
   };
   const matchReason = buildMatchReason(rental, matchParams);

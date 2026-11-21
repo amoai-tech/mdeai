@@ -138,6 +138,20 @@ describe("searchRentals — SAN-1356 monthly price projection", () => {
       "https://images.unsplash.com/a.jpg", "https://images.unsplash.com/b.jpg",
     ]);
     expect(result.results[0]?.photo_count).toBeUndefined();
+    const modelResult = searchRentalsTool.toModelOutput?.(result as never) as {
+      type: string;
+      value: { results: Array<{ id: string; image: string; images?: string[]; photo_count?: number }> };
+    };
+    expect(modelResult.type).toBe("json");
+    expect(modelResult.value.results[0]?.id).toBe("apt-1");
+    expect(modelResult.value.results[0]?.image).toBe("https://images.unsplash.com/a.jpg");
+    expect(modelResult.value.results[0]?.images).toBeUndefined();
+    expect(modelResult.value.results[0]?.photo_count).toBeUndefined();
+    const modelWithOmittedPhotos = searchRentalsTool.toModelOutput?.({
+      ...result,
+      results: [{ ...result.results[0]!, photo_count: 76 }],
+    } as never) as { value: { results: Array<{ photo_count?: number }> } };
+    expect(modelWithOmittedPhotos.value.results[0]?.photo_count).toBeUndefined();
   });
 
   it("preserves price_monthly through the Mastra tool output envelope", async () => {
