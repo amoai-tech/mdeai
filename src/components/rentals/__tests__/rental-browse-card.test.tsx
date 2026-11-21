@@ -109,10 +109,8 @@ describe("SAN-1695 — real photos in the V3 browse card", () => {
     );
     expect(html).toContain('data-slot="carousel"');
     expect(html).toContain("$78/night");
-    expect(html).toContain('data-testid="rental-card-nightly-currency"');
-    const dom = document.createElement("div");
-    dom.innerHTML = html;
-    expect(dom.querySelector('[data-testid="rental-card-nightly-currency"]')?.textContent?.trim()).toBe("USD");
+    // Assert the visible badge text without injecting the rendered HTML into the DOM.
+    expect(html).toMatch(/<span\b[^>]*data-testid="rental-card-nightly-currency"[^>]*>\s*USD\s*<\/span>/);
     // The stored nightly price must not be replaced by its derived monthly estimate.
     expect(html.indexOf("$78/night")).toBeGreaterThan(0);
   });
