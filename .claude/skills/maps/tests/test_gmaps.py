@@ -27,6 +27,25 @@ class GMapsTests(unittest.TestCase):
             gmaps.cmd_streetview(args)
         self.assertEqual(call.call_args.args[1]["location"], "0.0,0.0")
 
+    def test_place_photo_requests_json_without_http_redirect(self):
+        args = types.SimpleNamespace(
+            photo_ref="places/test-place/photos/test-photo",
+            max_height=320,
+            max_width=640,
+        )
+        with patch.object(gmaps, "api_get", return_value={}) as api_get, patch.object(
+            gmaps, "out"
+        ):
+            gmaps.cmd_place_photo(args)
+        api_get.assert_called_once_with(
+            "https://places.googleapis.com/v1/places/test-place/photos/test-photo/media",
+            {
+                "maxHeightPx": 320,
+                "maxWidthPx": 640,
+                "skipHttpRedirect": "true",
+            },
+        )
+
     def test_static_map_falls_back_when_coordinate_pair_incomplete(self):
         args = types.SimpleNamespace(lat=0.0, lng=None, center="Medellin", zoom=14, size="600x400", maptype="roadmap", format="png", markers=None, path_line=None, style=None, scale=None, output=None)
         with patch.object(gmaps, "download_file", return_value={"ok": True}) as call, patch.object(gmaps, "out"):
