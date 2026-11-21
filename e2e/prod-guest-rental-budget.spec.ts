@@ -26,8 +26,10 @@ async function askGuestBudget(page: Page, question: string, maximum: number) {
   const incoming = page.waitForResponse((response) =>
     response.request().method() === "POST" && response.url().includes("/api/rentals/search"),
   { timeout: 30_000 });
-  // Reuse the repository's accepted-send detection; the first click can be
-  // dropped during hydration, so only retry when *no* API request was issued.
+  // The shared sendConciergeMessage helper already retries once when no app
+  // API request is issued within its grace period. Never resend after an
+  // accepted request: a second search could double-submit the same turn.
+  // Arm this response waiter first to catch even a fast API response.
   await sendConciergeMessage(page, question);
   const response = await incoming;
   expect(response.status()).toBe(200);
@@ -51,7 +53,7 @@ async function askGuestBudget(page: Page, question: string, maximum: number) {
     // release. Do require a truthful user-facing empty answer, not a vacuous
     // passing price loop; seeded budget-predicate unit tests own price math.
     await expect(page.getByTestId("copilot-chat-region")).toContainText(
-      /No rentals (?:match that search|are available in this search) right now\./,
+      /\bno rentals\b/i,
     );
   }
   for (const card of await cards.allInnerTexts()) {
@@ -85,12 +87,19 @@ test.describe("SAN-755 guest budget refinement on public rental search", () => {
       page.on("pageerror", (error) => errors.push(error.message));
       const home = await page.goto(new URL("/chat", guestTarget).toString(), { waitUntil: "domcontentloaded" });
       expect(home?.status()).toBe(200);
-      const initial = await askGuestBudget(page, "Only show apartments under COP 3 million per month", 3_000_000);
+      const initial = await askGuestBudget(page, "Only show apartments in Laureles under COP 3 million per month", 3_000_000);
       const refined = await askGuestBudget(page, "Now only under COP 2.5 million per month", 2_500_000);
       expect(searches, "one real rental request per user message").toBe(2);
-      // PR #851 failed here when the second request dropped the original
-      // semantic search wording and discovered unrelated cheaper apartments.
-      expect(refined.parameters.queryText).toBe(initial.parameters.queryText);
+      // The refined turn must retain the rental type and Laureles location,
+      // not reproduce an LLM's exact wording. A missing queryText fails too.
+      for (const [turn, queryText] of [
+        ["initial", initial.parameters.queryText],
+        ["refined", refined.parameters.queryText],
+      ] as const) {
+        expect(queryText, `${turn} must retain the rental neighborhood`).toMatch(/\blaureles\b/i);
+        expect(queryText, `${turn} must still search for rentals`)
+          .toMatch(/\b(?:apartments?|rentals?|flats?)\b/i);
+      }
       if (typeof initial.body.total === "number" && typeof refined.body.total === "number") {
         expect(refined.body.total).toBeLessThanOrEqual(initial.body.total);
       }

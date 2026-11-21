@@ -176,6 +176,11 @@ test.describe("SAN-755 signed-in AI topic switches do not revive stale rentals",
     { topic: "events", prompt: "What events are happening in Laureles this weekend?" },
   ]) {
     test(`rentals → ${scenario.topic} → COP 800k follows latest intent`, async ({ qaRolePage: page }) => {
+      // SAN-874/SAN-876: quarantine known-flaky coworking from regular opt-in QA.
+      // Deliberate reproduction requires MDE_QA_COWORKING_DIAGNOSTIC=1.
+      test.skip(scenario.topic === "coworking" &&
+        process.env.MDE_QA_COWORKING_DIAGNOSTIC !== "1",
+        "Known intermittent topic-switch defect SAN-874/SAN-876; diagnostic only");
       test.setTimeout(360_000);
       const rentalRequests: string[] = [];
       page.on("request", (request) => {

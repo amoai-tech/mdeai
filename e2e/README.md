@@ -372,5 +372,10 @@ MDE_QA_INTENT_SWITCH=1 PROD_SMOKE_BASE_URL=https://www.mdeai.co \
   --grep 'SAN-755 signed-in AI topic switches' --workers=1
 ```
 
+The known-intermittent coworking case (SAN-874/SAN-876) is quarantined in
+normal opt-in QA; restaurants and events still run. To investigate coworking
+explicitly, add `MDE_QA_COWORKING_DIAGNOSTIC=1` to the signed-in command.
+A passing diagnostic retry is **not** proof that the defect is fixed.
+
 A skipped signed-in test proves **nothing**. The normal guest gate remains
 independent of the QA account and the model's response timing.

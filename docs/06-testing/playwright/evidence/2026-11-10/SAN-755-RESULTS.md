@@ -33,3 +33,20 @@ A read-only public COP 3M result returned three source rows. Two lacked usable p
 3. Diagnose intermittent signed-in coworking routing separately within the existing SAN-755 owner; **do not** present passing retry as a stable AI guarantee.
 4. After approved merge, verify the deployed SHA and production guest journey without repeating the entire test suite.
 5. The larger SAN-755 end-to-end viewing/lead/showing/broker persistence acceptance is NOT delivered by this small browser gate.
+
+## 21 Nov 2026 code-review remediation (current PR branch)
+
+- Retry finding: already handled by the common `sendConciergeMessage` helper:
+  at most one retry, and only when no app API request began; clarified the
+  local comment instead of adding a duplicate-send retry.
+- Empty state: test semantic `No rentals` plus separate API/zero-card and
+  applied-budget assertions instead of enumerating product copy variants.
+- Search intent: require both API turns to retain rental type and Laureles;
+  the structured budget independently changes from 3M to 2.5M.
+- Coworking: quarantined under `MDE_QA_COWORKING_DIAGNOSTIC=1`; the known
+  flake remains tracked in SAN-874/SAN-876, not declared corrected.
+- Release contract: parse installed `yaml` package (no new dependencies);
+  validate executable step order, conditions, target URL, and simulated bypass.
+
+Verification results for this revision are recorded in the PR review responses.
+The historical 10 Nov evidence above must not be mistaken for fresh proof.
