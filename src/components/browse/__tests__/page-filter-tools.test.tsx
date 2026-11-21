@@ -100,6 +100,28 @@ describe("page filter tools", () => {
     }
   });
 
+  it("blocks a stale Event AI filter action immediately after a native Events chip click", async () => {
+    render(<EventPageControlTool filters={{ category: "music", neighborhood: null, dateWindow: "this_weekend", price: null }} />);
+    act(() => { state.subscriber?.onRunInitialized?.(); });
+    // Real Events markup uses data-testid="events-filters"; navigation props
+    // have not yet refreshed, so only the synchronous click guard can win.
+    const container = document.createElement("div");
+    container.dataset.testid = "events-filters";
+    const link = document.createElement("a");
+    link.href = "/events?category=nightlife&dateWindow=this_weekend";
+    link.addEventListener("click", (event) => event.preventDefault());
+    container.appendChild(link);
+    document.body.appendChild(container);
+    try {
+      fireEvent.click(link);
+      const rejected = await tool().handler({ category: "music" });
+      expect(rejected).toMatchObject({ ok: false });
+      expect(state.push).not.toHaveBeenCalled();
+    } finally {
+      container.remove();
+    }
+  });
+
   it("keeps a user's cleared Events filters when an older tool tries to restore them", async () => {
     const { rerender } = render(
       <EventPageControlTool filters={{ category: "music", neighborhood: null, dateWindow: "this_weekend", price: "paid" }} />,

@@ -29,7 +29,7 @@ function usePageFilterRunSnapshot<T extends object>(filters: T, agent: AbstractA
     const onManualFilterClick = (event: MouseEvent) => {
       if (!(event.target instanceof Element)) return;
       if (event.target.closest(
-        '[data-testid="workspace-filters"] a[href], [data-testid="rentals-dates-apply"], [data-testid="rentals-dates-clear"]',
+        '[data-testid="workspace-filters"] a[href], [data-testid="events-filters"] a[href], [data-testid="rentals-dates-apply"], [data-testid="rentals-dates-clear"]',
       )) manualEditCountRef.current += 1;
     };
     document.addEventListener("click", onManualFilterClick, true);
