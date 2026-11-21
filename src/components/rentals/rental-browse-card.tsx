@@ -1,11 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { isRenderableRemoteImage } from "@/lib/images/remote-image-hosts";
+import { reportRentalPhotoFailure } from "@/lib/rentals/rental-photo-telemetry";
 import Link from "next/link";
 import { Bed, Building2, Calendar, ExternalLink, Wifi } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { VenueCardShell } from "@/components/browse/venue-card-shell";
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+  type CarouselApi,
+} from "@/components/ui/carousel";
 import { VenueCardPlaceholder } from "@/components/browse/venue-card-placeholder";
 import { buildMatchReason, formatRentalPrices } from "@/lib/rental-display";
 import type { RentalSearchApiParams } from "@/lib/rental-query-parser";
@@ -73,6 +83,8 @@ export function externalSourceUrlFor(rental: Rental): string | null {
 
 type RentalBrowseCardProps = {
   rental: Rental;
+  /** Stable result-set identity. Changes on a new search, not unrelated parent rerenders. */
+  resultSet?: readonly Rental[];
   /** Grounded, optional customer query; never a search-score/debug field. */
   matchParams?: RentalSearchApiParams;
   /** SAN-478 / REAL-011 — per-listing id for Playwright (`rental-card-${id}`). */
@@ -115,6 +127,8 @@ function RentalBrowseCardMedia({
   nightlyLabel,
   currency,
   mediaLayout,
+  onPhotoError,
+  omittedPhotos = false,
 }: {
   imageUrl?: string;
   title: string;
@@ -122,12 +136,12 @@ function RentalBrowseCardMedia({
   nightlyLabel: string | null;
   currency?: string;
   mediaLayout: "inline" | "cover";
+  onPhotoError: (url: string) => void;
+  omittedPhotos?: boolean;
 }) {
-  // A failed Storage request must fall back to the normal placeholder, not a broken image.
-  const [imageFailed, setImageFailed] = useState(false);
   return (
     <div className="relative">
-      {imageUrl && !imageFailed ? (
+      {imageUrl ? (
         <div className={cn("relative aspect-[16/10] overflow-hidden rounded-xl bg-muted", mediaLayout === "inline" ? "w-24" : "w-full")}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -136,8 +150,12 @@ function RentalBrowseCardMedia({
             className="size-full object-cover"
             loading="lazy"
             data-testid="rental-browse-card-photo"
-            onError={() => setImageFailed(true)}
+            onError={() => onPhotoError(imageUrl)}
           />
+        </div>
+      ) : omittedPhotos ? (
+        <div data-testid="rental-card-more-photos" className="flex aspect-[16/10] items-center justify-center rounded-xl bg-muted p-4 text-center text-sm text-muted-foreground">
+          More listing photos may be available in Details
         </div>
       ) : (
         <VenueCardPlaceholder
@@ -164,10 +182,103 @@ function RentalBrowseCardMedia({
   );
 }
 
+/**
+ * SAN-1695 — photos come only from the authorized rental search result.
+ * The primary cover remains first, and the limited search gallery never
+ * pretends to contain all photos when Details has more.
+ */
+function rentalBrowsePhotos(rental: Rental): string[] {
+  // Browser image requests must never target arbitrary listing-supplied hosts.
+  // This is the same approved-host rule used by next/image, not a second allowlist.
+  return [...new Set([rental.image, ...(rental.images ?? [])].filter(
+    (url): url is string => typeof url === "string" && isRenderableRemoteImage(url),
+  ))].slice(0, 12);
+}
+
+function RentalBrowseCardGallery({
+  rental,
+  photos,
+  onDetails,
+  nightlyLabel,
+  onPhotoError,
+}: {
+  rental: Rental;
+  photos: string[];
+  onDetails?: () => void;
+  nightlyLabel: string | null;
+  onPhotoError: (url: string) => void;
+}) {
+  const [api, setApi] = useState<CarouselApi>();
+  const [currentIndex, setCurrentIndex] = useState(0);
+
+  useEffect(() => {
+    if (!api) return;
+    const update = () => setCurrentIndex(api.selectedScrollSnap());
+    update();
+    api.on("select", update);
+    api.on("reInit", update);
+    return () => {
+      api.off("select", update);
+      api.off("reInit", update);
+    };
+  }, [api, photos.length]);
+
+  return (
+    <Carousel setApi={setApi} className="w-full" aria-label={`Photos of ${rental.title}`}>
+      <CarouselContent className="ml-0">
+        {photos.map((url, index) => (
+          <CarouselItem key={url} className="pl-0">
+            <div className="aspect-[16/10] overflow-hidden rounded-xl bg-muted">
+                {onDetails ? (
+                  <button
+                    type="button"
+                    onClick={(event) => { event.stopPropagation(); onDetails(); }}
+                    data-testid={index === 0
+                      ? `rental-card-photo-details-${rental.id}`
+                      : `rental-card-photo-details-${rental.id}-${index}`}
+                    aria-label={`Details: ${rental.title} (photo ${index + 1})`}
+                    className="block size-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={url} alt={`${rental.title}, photo ${index + 1} in ${rental.neighborhood}`}
+                      loading="lazy" className="size-full object-cover" data-testid="rental-browse-card-photo"
+                      onError={() => onPhotoError(url)} />
+                  </button>
+                ) : (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img src={url} alt={`${rental.title}, photo ${index + 1} in ${rental.neighborhood}`}
+                    loading="lazy" className="size-full object-cover" data-testid="rental-browse-card-photo"
+                    onError={() => onPhotoError(url)} />
+                )}
+            </div>
+          </CarouselItem>
+        ))}
+      </CarouselContent>
+      <CarouselPrevious className="left-2 size-11 bg-background/90" aria-label={`Previous photo of ${rental.title}`} />
+      <CarouselNext className="right-2 size-11 bg-background/90" aria-label={`Next photo of ${rental.title}`} />
+      <span className="pointer-events-none absolute bottom-2 left-2 rounded-full bg-background/90 px-2.5 py-1 text-xs font-medium text-foreground"
+        data-testid={`rental-photo-counter-${rental.id}`}>
+        {Math.min(currentIndex + 1, photos.length)} of {photos.length} photos{(rental.photo_count ?? 0) > photos.length ? " shown" : ""}
+      </span>
+      {nightlyLabel ? (
+        <span className="pointer-events-none absolute bottom-2 right-2 flex items-center gap-1 rounded-full bg-background/90 px-2.5 py-0.5 font-mono text-xs font-semibold text-foreground backdrop-blur-sm">
+          {nightlyLabel}
+          {rental.currency?.toUpperCase() === "USD" ? (
+            <span className="rounded bg-foreground/10 px-1 text-[10px] font-normal" data-testid="rental-card-nightly-currency">
+              USD
+            </span>
+          ) : null}
+        </span>
+      ) : null}
+    </Carousel>
+  );
+}
+
 // skipcq: JS-0067 - React component (ES module); not browser global scope
 /** Show a real rental card; map controls require coordinates and viewing requires authorization. */
 export function RentalBrowseCard({
   rental,
+  resultSet,
   matchParams,
   testId,
   detailSearch,
@@ -193,6 +304,24 @@ export function RentalBrowseCard({
     rental.currency,
   );
   const chips = topAmenities(rental.amenities);
+  // The parent keeps one stable array for each search. A new result set retries
+  // failed photos, even when the same listing ID and URLs return. A parent rerender
+  // that recreates a Rental object must NOT trigger an image-error retry loop.
+  const photoResultSet = resultSet ?? rental;
+  const [failedPhotos, setFailedPhotos] = useState<{ resultSet: readonly Rental[] | Rental; urls: string[] }>(
+    () => ({ resultSet: photoResultSet, urls: [] }),
+  );
+  const failedPhotoUrls = failedPhotos.resultSet === photoResultSet ? failedPhotos.urls : [];
+  const photos = rentalBrowsePhotos(rental).filter((url) => !failedPhotoUrls.includes(url));
+  const omittedPhotos = (rental.photo_count ?? 0) > (rental.images?.length ?? (rental.image ? 1 : 0));
+  const showPhotoGallery = mediaLayout === "cover" && photos.length > 1;
+  const handlePhotoError = (url: string) => {
+    reportRentalPhotoFailure(url);
+    setFailedPhotos((previous) => {
+      const urls = previous.resultSet === photoResultSet ? previous.urls : [];
+      return urls.includes(url) ? previous : { resultSet: photoResultSet, urls: [...urls, url] };
+    });
+  };
   const matchReason = buildMatchReason(rental, matchParams);
   const hasWifi = rental.wifi || rental.amenities?.some((a) => a.toLowerCase().includes("wifi"));
   const pinId = rentalToMapPin(rental)?.id;
@@ -220,7 +349,15 @@ export function RentalBrowseCard({
       ariaLabel={`Rental: ${rental.title}, ${rental.neighborhood}`}
       onPreview={interactive ? preview : undefined}
       media={
-        onDetails ? (
+        showPhotoGallery ? (
+          <RentalBrowseCardGallery
+            rental={rental}
+            photos={photos}
+            onDetails={onDetails}
+            nightlyLabel={nightlyLabel}
+            onPhotoError={handlePhotoError}
+          />
+        ) : onDetails ? (
           <button
             type="button"
             onClick={onDetails}
@@ -229,7 +366,9 @@ export function RentalBrowseCard({
             className={cn("block rounded-xl text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring", mediaLayout === "inline" ? "w-24 shrink-0 self-start" : "w-full")}
           >
             <RentalBrowseCardMedia
-              imageUrl={rental.image || undefined}
+              imageUrl={photos[0]}
+              onPhotoError={handlePhotoError}
+              omittedPhotos={omittedPhotos}
               title={rental.title}
               neighborhood={rental.neighborhood}
               nightlyLabel={nightlyLabel}
@@ -239,7 +378,9 @@ export function RentalBrowseCard({
           </button>
         ) : (
           <RentalBrowseCardMedia
-            imageUrl={rental.image || undefined}
+            imageUrl={photos[0]}
+            onPhotoError={handlePhotoError}
+            omittedPhotos={omittedPhotos}
             title={rental.title}
             neighborhood={rental.neighborhood}
             nightlyLabel={nightlyLabel}
@@ -420,7 +561,7 @@ export function RentalBrowseCard({
         </div>
       ) : monthlyLabel ? (
         <div className="mt-1.5 flex flex-wrap items-center gap-2">
-          <p className="text-xs text-muted-foreground">{monthlyLabel}</p>
+          <p className={cn(mediaLayout === "cover" ? "text-base font-semibold text-foreground" : "text-xs text-muted-foreground")}>{monthlyLabel}</p>
           {rental.currency?.toUpperCase() === "USD" ? (
             <Badge variant="outline" className="font-normal text-[10px]" data-testid="rental-card-currency">
               USD

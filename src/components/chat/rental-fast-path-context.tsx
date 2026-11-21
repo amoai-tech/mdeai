@@ -14,6 +14,8 @@ import type { RentalSearchApiParams } from "@/lib/rental-query-parser";
 export type RentalSearchMeta = {
   userText: string;
   params: RentalSearchApiParams;
+  /** Only restored history is allowed to reconcile a stale CoAgent checkpoint. */
+  source?: "saved";
 };
 
 /** Only sanitized diagnostics from the existing rental API reach the UI. */

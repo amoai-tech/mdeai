@@ -67,6 +67,7 @@ const PROD_SPECS = [
   "**/prod-signed-in-route.spec.ts",
   "**/prod-ticket-wallet-authed.spec.ts",
   "**/prod-rentals-results-refresh.spec.ts",
+  "**/prod-rental-furnishing-clear.spec.ts",
   "**/prod-rentals-mobile-form-map.spec.ts",
   "**/prod-discovery-inline-ask.spec.ts",
   "**/prod-discovery-nightlife-mobile.spec.ts",
@@ -76,6 +77,7 @@ const PROD_SPECS = [
   ...(process.env.MDE_SAN1631_POSTMERGE === "1"
     ? ["**/prod-san1631-*.spec.ts"] : []),
   "**/prod-renter-mobile-chat.spec.ts",
+  "**/prod-guest-rental-budget.spec.ts",
   "**/prod-release-health.spec.ts",
   "**/san-1413-saved-chat-continuity.spec.ts",
   "**/prod-journey-j05-j20.spec.ts",

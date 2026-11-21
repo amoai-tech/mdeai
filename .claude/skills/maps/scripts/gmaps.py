@@ -56,7 +56,29 @@ def load_api_key():
 
 _CTX = ssl.create_default_context()
 
+# Only the Google Maps API hosts used by this CLI may receive its API key.
+_ALLOWED_HOSTS = frozenset({
+    "maps.googleapis.com", "routes.googleapis.com", "places.googleapis.com",
+    "airquality.googleapis.com", "pollen.googleapis.com", "solar.googleapis.com",
+    "weather.googleapis.com", "addressvalidation.googleapis.com",
+    "roads.googleapis.com", "www.googleapis.com", "aerialview.googleapis.com",
+    "routeoptimization.googleapis.com", "areainsights.googleapis.com",
+})
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Never forward an API key to a redirect destination."""
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def _validate_api_url(url):
+    parsed = urllib.parse.urlsplit(url)
+    if parsed.scheme != "https" or parsed.hostname not in _ALLOWED_HOSTS or parsed.username or parsed.password or parsed.port not in (None, 443):
+        raise ValueError("Refusing non-Google-Maps API destination")
+
 def _request(url, method="GET", body=None, headers=None):
+    _validate_api_url(url)
     hdrs = {"User-Agent": "gmaps-cli/1.0"}
     if headers:
         hdrs.update(headers)
@@ -68,7 +90,8 @@ def _request(url, method="GET", body=None, headers=None):
             body = body.encode()
     req = urllib.request.Request(url, data=body, headers=hdrs, method=method)
     try:
-        with urllib.request.urlopen(req, context=_CTX) as resp:
+        opener = urllib.request.build_opener(urllib.request.HTTPSHandler(context=_CTX), _NoRedirect())
+        with opener.open(req) as resp:
             ct = resp.headers.get("Content-Type", "")
             raw = resp.read()
             if "json" in ct:

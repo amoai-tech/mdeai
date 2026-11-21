@@ -10,10 +10,18 @@ type Captured = {
 const state = vi.hoisted(() => ({
   tool: null as Captured | null,
   push: vi.fn(),
-  subscriber: null as null | { onRunInitialized?: () => void },
+  subscriber: null as null | {
+    onRunInitialized?: () => void;
+    onRunFinalized?: () => void;
+    onRunFailed?: () => void;
+  },
   agent: {
     threadId: "thread-a",
-    subscribe: vi.fn((subscriber: { onRunInitialized?: () => void }) => {
+    subscribe: vi.fn((subscriber: {
+      onRunInitialized?: () => void;
+      onRunFinalized?: () => void;
+      onRunFailed?: () => void;
+    }) => {
       state.subscriber = subscriber;
       return { unsubscribe: vi.fn() };
     }),
@@ -30,6 +38,8 @@ vi.mock("@/lib/deterministic-e2e", () => ({ isDeterministicE2E: () => false }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: state.push }) }));
 
 import { EventPageControlTool, RentalPageControlTool } from "@/components/browse/page-filter-tools";
+import { EventBrowseFilters } from "@/components/events/event-browse-filters";
+import type { EventBrowseFilterState } from "@/lib/events/browse-url";
 
 afterEach(() => { cleanup(); state.tool = null; state.subscriber = null; state.push.mockClear(); state.agent.subscribe.mockClear(); });
 
@@ -98,6 +108,124 @@ describe("page filter tools", () => {
     } finally {
       container.remove();
     }
+  });
+
+  const musicFilters = { category: "music" as const, neighborhood: null, dateWindow: "this_weekend" as const, price: null };
+
+  function eventFixture(filters: Required<EventBrowseFilterState>) {
+    return (
+      <>
+        <EventPageControlTool filters={filters} />
+        {/* Real production composition: Events filterBar inside DiscoveryWorkspace. */}
+        <div data-testid="workspace-filters">
+          <EventBrowseFilters {...filters} />
+        </div>
+      </>
+    );
+  }
+
+  function renderRealEventFilterMarkup() {
+    const mounted = render(eventFixture(musicFilters));
+    const chip = mounted.getByTestId("events-filter-category-nightlife");
+    // Keep navigation pending; do not let jsdom navigate away to another page.
+    chip.addEventListener("click", (event) => event.preventDefault());
+    expect(chip.closest('[data-testid="workspace-filters"]')).not.toBeNull();
+    expect(chip.closest('[data-testid="events-filters"]')).not.toBeNull();
+    return { ...mounted, chip };
+  }
+
+  it("rejects a stale Event tool after clicking a REAL nested Events filter chip", async () => {
+    const { chip } = renderRealEventFilterMarkup();
+    act(() => { state.subscriber?.onRunInitialized?.(); });
+    fireEvent.click(chip);
+    const rejected = await tool().handler({ category: "music" });
+    expect(rejected).toMatchObject({ ok: false });
+    expect(state.push).not.toHaveBeenCalled();
+  });
+
+  it("keeps a newer Events click when a delayed agent run-start arrives before URL props", async () => {
+    const mounted = renderRealEventFilterMarkup();
+    const { chip } = mounted;
+    // User sent an Ask turn earlier; the network has not emitted RUN_STARTED yet.
+    // The user now navigates to Nightlife while the current URL still says Music.
+    fireEvent.click(chip);
+    act(() => { state.subscriber?.onRunInitialized?.(); });
+    // A late tool for the old Music turn must NOT reset the newer human click.
+    const rejected = await tool().handler({ category: "music" });
+    expect(rejected).toMatchObject({ ok: false });
+    expect(state.push).not.toHaveBeenCalled();
+    // After native navigation is reflected in the real URL-backed filter props,
+    // a NEW user Ask run is allowed to change the page again.
+    const nextFilters = { ...musicFilters, category: "nightlife" as const };
+    const { rerender } = mounted;
+    rerender(eventFixture(nextFilters));
+    act(() => { state.subscriber?.onRunInitialized?.(); });
+    const accepted = await tool().handler({ dateWindow: "next_week" });
+    expect(accepted).toMatchObject({ ok: true, status: "navigation_requested" });
+    expect(state.push).toHaveBeenCalledWith("/events?category=nightlife&dateWindow=next_week");
+  });
+
+  it("does not treat opening an Events filter in a new tab as changing this page", async () => {
+    const { chip } = renderRealEventFilterMarkup();
+    act(() => { state.subscriber?.onRunInitialized?.(); });
+    fireEvent.click(chip, { ctrlKey: true });
+    expect(await tool().handler({ category: "food" })).toMatchObject({
+      ok: true, status: "navigation_requested",
+    });
+    expect(state.push).toHaveBeenCalledWith("/events?category=food&dateWindow=this_weekend");
+  });
+
+  it.each([
+    "/events",
+    "/events?utm_source=ig",
+    "/events?dateWindow=any",
+  ])("does not lock Ask MDE when active Any date preserves canonical filters at %s", async (initialUrl) => {
+    const previous = window.location.href;
+    window.history.replaceState(null, "", initialUrl);
+    try {
+      const emptyFilters: Required<EventBrowseFilterState> = {
+        category: null, neighborhood: null, dateWindow: null, price: null,
+      };
+      const mounted = render(eventFixture(emptyFilters));
+      const any = mounted.getByTestId("events-filter-date-any");
+      expect(any.getAttribute("href")).toBe("/events");
+      any.addEventListener("click", (event) => event.preventDefault());
+      fireEvent.click(any);
+      act(() => { state.subscriber?.onRunInitialized?.(); });
+      expect(await tool().handler({ category: "music" })).toMatchObject({
+        ok: true, status: "navigation_requested",
+      });
+      expect(state.push).toHaveBeenCalledWith("/events?category=music");
+    } finally {
+      window.history.replaceState(null, "", previous);
+    }
+  });
+
+  it("keeps slow pending navigation protected even after more than five seconds", async () => {
+    const clock = vi.spyOn(Date, "now").mockReturnValue(1000);
+    try {
+      const { chip } = renderRealEventFilterMarkup();
+      fireEvent.click(chip);
+      clock.mockReturnValue(12001);
+      act(() => { state.subscriber?.onRunInitialized?.(); });
+      expect(await tool().handler({ category: "music" })).toMatchObject({ ok: false });
+      expect(state.push).not.toHaveBeenCalled();
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  it("releases abandoned filter navigation after the old agent run finalizes", async () => {
+    const { chip } = renderRealEventFilterMarkup();
+    fireEvent.click(chip);
+    act(() => { state.subscriber?.onRunInitialized?.(); });
+    expect(await tool().handler({ category: "music" })).toMatchObject({ ok: false });
+    act(() => { state.subscriber?.onRunFinalized?.(); });
+    act(() => { state.subscriber?.onRunInitialized?.(); });
+    expect(await tool().handler({ category: "food" })).toMatchObject({
+      ok: true, status: "navigation_requested",
+    });
+    expect(state.push).toHaveBeenCalledWith("/events?category=food&dateWindow=this_weekend");
   });
 
   it("keeps a user's cleared Events filters when an older tool tries to restore them", async () => {

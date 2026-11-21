@@ -1,3 +1,5 @@
+import { clearsFurnishingPreference } from "@/lib/rental-query-parser";
+
 /**
  * The exact "show me the details" commands a renter types.
  *
@@ -17,7 +19,14 @@ const DETAILS_RE =
   /^(?:please\s+)?(?:show|open|see|view)\s+(?:me\s+)?(?:the\s+)?details?(?:\s+(?:for|of|on)\s+(?:the\s+)?(.+))?$/i;
 
 export function parseDetailsCommand(text: string): DetailsCommand | null {
-  const normalized = text.trim().replace(/[.!?]+$/, "").trim();
+  const raw = text.trim();
+  // When a renter first clears furnishing and then requests real apartment
+  // Details in the same turn, preserve the original user text for the chat
+  // transcript while parsing only the explicit Details clause.
+  const detailsAfterClear = clearsFurnishingPreference(raw)
+    ? raw.match(/[.!?]\s+((?:please\s+)?(?:show|open|see|view)\s+(?:me\s+)?(?:the\s+)?details?\b.*)$/i)?.[1]
+    : undefined;
+  const normalized = (detailsAfterClear ?? raw).replace(/[.!?]+$/, "").trim();
   const match = normalized.match(DETAILS_RE);
   if (!match) return null;
 
