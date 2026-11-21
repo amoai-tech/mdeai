@@ -15,20 +15,29 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import { test } from "node:test";
 import { Client } from "pg";
+// One shared allowlist file, canonicalized on BOTH sides. URL.hostname keeps IPv6
+// brackets ("[::1]") while the file stores the bare form, so comparing raw values
+// wrongly rejected a loopback IPv6 URL. This file runs under plain `node --test`,
+// which cannot import the TypeScript guard that canonicalizes for the vitest
+// callers, so the same normalization is applied here.
+function canonicalizeHost(raw) {
+  return String(raw ?? "")
+    .trim()
+    .replace(/^\[|\]$/g, "")
+    .replace(/\.$/, "")
+    .toLowerCase();
+}
 
-// Reuse the repository's canonical loopback allowlist rather than keeping a
-// private copy (the seeding and rehearsal scripts guard with the same file).
 const LOOPBACK_HOSTS = new Set(
-  JSON.parse(fs.readFileSync(
-    "src/mastra/lib/integration-loopback-hosts.json",
-    "utf8",
-  )),
+  JSON.parse(fs.readFileSync("src/mastra/lib/integration-loopback-hosts.json", "utf8"))
+    .map(canonicalizeHost),
 );
 
-function assertLoopback(connectionString, label) {
-  assert.ok(connectionString, label + " is required");
-  assert.ok(LOOPBACK_HOSTS.has(new URL(connectionString).hostname),
-    label + " must point at a scratch loopback PostgreSQL");
+function assertLoopback(connectionString, flagName) {
+  assert.ok(connectionString, flagName + " is set but DATABASE_URL is missing");
+  const host = canonicalizeHost(new URL(connectionString).hostname);
+  assert.ok(LOOPBACK_HOSTS.has(host),
+    'Refusing to run this proof against non-loopback host "' + host + '" (' + flagName + ").");
 }
 
 function databaseScopedUrl(connectionString, database) {
@@ -41,7 +50,7 @@ const enabled = process.env.MASTRA_184_MIGRATION_INTEGRATION === "1";
 
 test("Mastra 1.84 journal migration is additive, secure and repeatable", { skip: !enabled }, async () => {
   const connectionString = process.env.DATABASE_URL;
-  assertLoopback(connectionString, "DATABASE_URL");
+  assertLoopback(connectionString, "MASTRA_184_MIGRATION_INTEGRATION");
 
   const client = new Client({ connectionString });
   await client.connect();
@@ -65,7 +74,14 @@ test("Mastra 1.84 journal migration is additive, secure and repeatable", { skip:
       "FROM pg_policies WHERE schemaname='public' AND tablename='mastra_san1698_old'",
       "ORDER BY policyname",
     ].join(" "))).rows;
+    // A migration could leave the policy text identical while disabling RLS, which
+    // stops PostgreSQL enforcing it. Capture the enforcement flags as well.
+    const oldRlsFlags = async () => (await client.query([
+      "SELECT relrowsecurity, relforcerowsecurity FROM pg_class",
+      "WHERE oid='public.mastra_san1698_old'::regclass",
+    ].join(" "))).rows[0];
     const before = await oldPolicy();
+    const beforeRls = await oldRlsFlags();
 
     // Pre-upgrade shape: the journal tables do not exist yet. The adapter-level
     // consequence of that is proven in the second test; here we only record the
@@ -111,6 +127,7 @@ test("Mastra 1.84 journal migration is additive, secure and repeatable", { skip:
     assert.deepEqual(preserved[0].snapshot, JSON.parse(legacySnapshot),
       "legacy suspended snapshot contents must be preserved verbatim");
     assert.deepEqual(await oldPolicy(), before, "old table policy definition changed");
+    assert.deepEqual(await oldRlsFlags(), beforeRls, "old table RLS enforcement flags changed");
     assert.equal((await client.query("SELECT contents FROM public.mastra_san1698_old WHERE id=1")).rows[0].contents,
       "legacy-chat-preserved");
 
@@ -167,7 +184,9 @@ test("Mastra 1.84 journal migration is additive, secure and repeatable", { skip:
  * Drives the installed @mastra/pg WorkflowsPG against a real legacy database, so
  * the claim under test is the adapter's, not ours:
  *  - before the migration, a v1-only read fails 42P01 on the missing journal table
- *    (the adapter unions v1 snapshots with v2 runs even when asked for v1);
+ *    (the adapter's read SQL names the journal entries table in its outer
+ *    projection, so even an explicitly v1-only read resolves that relation and
+ *    fails before the migration);
  *  - after the migration, the same calls return the legacy suspended run, with its
  *    state untouched, and the run is listable.
  *
@@ -176,7 +195,7 @@ test("Mastra 1.84 journal migration is additive, secure and repeatable", { skip:
  */
 test("WorkflowsPG reads a legacy suspended run only once the journal exists", { skip: !enabled }, async () => {
   const baseUrl = process.env.DATABASE_URL;
-  assertLoopback(baseUrl, "DATABASE_URL");
+  assertLoopback(baseUrl, "MASTRA_184_MIGRATION_INTEGRATION");
 
   const database = `san1698_adapter_${process.pid}_${Date.now()}`;
   assert.match(database, /^[a-z0-9_]+$/, "generated database name must be a plain identifier");
@@ -254,7 +273,17 @@ test("WorkflowsPG reads a legacy suspended run only once the journal exists", { 
   } finally {
     await store?.close?.();
     // DROP DATABASE cannot run inside a transaction and fails while clients remain.
-    await admin.query(`DROP DATABASE IF EXISTS ${database} WITH (FORCE)`).catch(() => {});
+    try {
+      await admin.query(`DROP DATABASE IF EXISTS ${database} WITH (FORCE)`);
+    } catch (error) {
+      // Surface the leftover database instead of reporting a clean run: a silent
+      // failure leaves the migrated scratch database behind for the next run.
+      console.error(
+        `mastra-184-migration: failed to drop scratch database ${database}:`,
+        error instanceof Error ? error.message : String(error),
+      );
+      throw error;
+    }
     await admin.end();
   }
 });
