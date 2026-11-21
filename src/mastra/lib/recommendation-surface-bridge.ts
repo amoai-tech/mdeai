@@ -2,7 +2,8 @@ import { EventType, type BaseEvent } from "@ag-ui/client";
 import { Observable } from "rxjs";
 import { buildRentalRecommendationOps } from "./rental-recommendations-ui";
 import { buildRentalFilterControlOps } from "./rental-filter-control-ui";
-import { buildComparisonTableOps, type ComparisonRow } from "./comparison-table-ui";
+import { buildComparisonTableOps, RENTAL_COMPARISON_TARGET, type ComparisonRow, type ComparisonTarget } from "./comparison-table-ui";
+import { buildViewingProposalOps, type ViewingProposalInput } from "./viewing-proposal-ui";
 import {
   EVENT_RECOMMENDATIONS_SURFACE_ID,
   buildEventClearOps,
@@ -36,6 +37,48 @@ const COMPARISON_TABLE_TOOLS = new Set([
   "showComparisonTableTool",
   "show-comparison-table",
 ]);
+/** SAN-1658 — the editable viewing request is its own tool, with the same transport. */
+const VIEWING_PROPOSAL_TOOLS = new Set([
+  "showViewingProposal",
+  "showViewingProposalTool",
+  "show-viewing-proposal",
+]);
+
+/** A rejected proposal must not render; only the validated fields cross the boundary. */
+export function viewingProposalFromResult(content: unknown): ViewingProposalInput | null {
+  let value: unknown = content;
+  if (typeof value === "string") {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      return null;
+    }
+  }
+  if (!value || typeof value !== "object") return null;
+  const payload = value as { ok?: unknown; listingId?: unknown; date?: unknown; time?: unknown; result?: unknown };
+  if (payload.ok === false) return null;
+  if (payload.ok === true && typeof payload.listingId === "string" && payload.listingId) {
+    return {
+      listingId: payload.listingId,
+      ...(typeof payload.date === "string" ? { date: payload.date } : {}),
+      ...(typeof payload.time === "string" ? { time: payload.time } : {}),
+    };
+  }
+  if (payload.result && typeof payload.result === "object") return viewingProposalFromResult(payload.result);
+  return null;
+}
+
+export function viewingProposalRenderEvents(input: ViewingProposalInput, toolCallId: string): BaseEvent[] {
+  // Stable surface id with delete-then-create (as the event bridge does): the newest
+  // request replaces the older proposal on the panel.
+  const built = buildViewingProposalOps(input, undefined, { replace: true });
+  const callId = `render-ui-viewing-${toolCallId}`;
+  return [
+    { type: EventType.TOOL_CALL_START, toolCallId: callId, toolCallName: "render_ui" },
+    { type: EventType.TOOL_CALL_ARGS, toolCallId: callId, delta: JSON.stringify(built) },
+    { type: EventType.TOOL_CALL_END, toolCallId: callId },
+  ] as BaseEvent[];
+}
 
 /** The tool result may arrive as an object or as a JSON string, with or without an envelope. */
 export function recommendationIdsFromResult(content: unknown): string[] {
@@ -88,18 +131,29 @@ export function comparisonRowsFromResult(content: unknown): ComparisonRow[] {
   const payload = value as { ok?: unknown; rows?: unknown; result?: unknown };
   if (payload.ok === false) return [];
   if (Array.isArray(payload.rows)) {
+    const safeNumber = (n: unknown): number | null =>
+      typeof n === "number" && Number.isFinite(n) && n >= 0 ? n : null;
     return payload.rows.flatMap((row) => {
       if (!row || typeof row !== "object") return [];
       const r = row as Record<string, unknown>;
       if (typeof r.id !== "string" || typeof r.title !== "string") return [];
-      const period = r.period === "month" || r.period === "night" ? r.period : null;
+      // Replays of older comparisons may still carry one price/period.
+      const legacyMonthly = r.period === "month" ? safeNumber(r.price) : null;
+      const legacyNightly = r.period === "night" ? safeNumber(r.price) : null;
       return [{
         id: r.id,
         title: r.title,
-        bedrooms: typeof r.bedrooms === "number" ? r.bedrooms : null,
-        price: typeof r.price === "number" ? r.price : null,
+        neighborhood: typeof r.neighborhood === "string" ? r.neighborhood : null,
+        bedrooms: safeNumber(r.bedrooms),
+        bathrooms: safeNumber(r.bathrooms),
+        sizeSqm: safeNumber(r.sizeSqm),
+        wifiSpeedMbps: safeNumber(r.wifiSpeedMbps),
+        amenities: Array.isArray(r.amenities)
+          ? r.amenities.filter((s): s is string => typeof s === "string").slice(0, 20)
+          : [],
+        priceMonthly: safeNumber(r.priceMonthly) ?? legacyMonthly,
+        priceNightly: safeNumber(r.priceNightly) ?? legacyNightly,
         currency: typeof r.currency === "string" ? r.currency : null,
-        period,
       }];
     });
   }
@@ -109,8 +163,21 @@ export function comparisonRowsFromResult(content: unknown): ComparisonRow[] {
   return [];
 }
 
-export function comparisonTableRenderEvents(rows: readonly ComparisonRow[], toolCallId: string): BaseEvent[] {
-  const built = buildComparisonTableOps(rows, undefined, { replace: true });
+/** Only the server-side tool may choose a page target, never model UI JSON. */
+export function comparisonTargetFromResult(content: unknown): ComparisonTarget {
+  let value: unknown = content;
+  if (typeof value === "string") {
+    try { value = JSON.parse(value); } catch { return "chat"; }
+  }
+  if (!value || typeof value !== "object") return "chat";
+  const payload = value as { target?: unknown; result?: unknown };
+  if (payload.target === RENTAL_COMPARISON_TARGET) return RENTAL_COMPARISON_TARGET;
+  if (payload.target === "chat") return "chat";
+  return payload.result ? comparisonTargetFromResult(payload.result) : "chat";
+}
+
+export function comparisonTableRenderEvents(rows: readonly ComparisonRow[], toolCallId: string, target: ComparisonTarget = "chat"): BaseEvent[] {
+  const built = buildComparisonTableOps(rows, undefined, { replace: true, target });
   if (!built) return [];
   const callId = `render-ui-comparison-${toolCallId}`;
   return [
@@ -228,6 +295,14 @@ export function emitRecommendationSurface<T extends BaseEvent>(): (source: Obser
             }
             return;
           }
+          if (VIEWING_PROPOSAL_TOOLS.has(name)) {
+            const proposal = viewingProposalFromResult(e.content);
+            if (!proposal) return;
+            for (const synthetic of viewingProposalRenderEvents(proposal, e.toolCallId)) {
+              subscriber.next(synthetic as unknown as T);
+            }
+            return;
+          }
           if (EVENT_RECOMMENDATION_TOOLS.has(name)) {
             const eventIds = eventIdsFromResult(e.content);
             // The surface id is stable for the thread and this bridge cannot know
@@ -241,7 +316,7 @@ export function emitRecommendationSurface<T extends BaseEvent>(): (source: Obser
           }
           if (COMPARISON_TABLE_TOOLS.has(name)) {
             const rows = comparisonRowsFromResult(e.content);
-            for (const synthetic of comparisonTableRenderEvents(rows, e.toolCallId)) {
+            for (const synthetic of comparisonTableRenderEvents(rows, e.toolCallId, comparisonTargetFromResult(e.content))) {
               subscriber.next(synthetic as unknown as T);
             }
             return;

@@ -1,9 +1,12 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
-vi.mock("../../lib/google-places-cafe-search", () => ({
-  searchGoogleCafes: vi.fn().mockResolvedValue({ results: [], attribution: [] }),
-  withMedellinScope: (query: string) => `${query} Medellín, Colombia`,
-}));
+vi.mock("../../lib/google-places-cafe-search", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../../lib/google-places-cafe-search")>();
+  return {
+    ...original,
+    searchGoogleCafes: vi.fn().mockResolvedValue({ results: [], attribution: [] }),
+  };
+});
 
 vi.mock("../../lib/adk-grounding-client", () => ({
   invokeAdkGrounding: vi.fn(),
@@ -12,10 +15,6 @@ vi.mock("../../lib/adk-grounding-client", () => ({
 
 vi.mock("../../lib/grounding-quota", () => ({
   incrementAndCheckGroundingQuota: vi.fn().mockResolvedValue({ allowed: true }),
-}));
-
-vi.mock("../../lib/grounding-location-bias", () => ({
-  resolveGroundingLocationBias: vi.fn(({ locationBias }) => locationBias),
 }));
 
 vi.mock("../search-restaurants", () => ({
@@ -91,6 +90,87 @@ describe("searchGroundedPlacesTool fallback", () => {
     vi.mocked(incrementAndCheckGroundingQuota).mockClear();
   });
 
+  it("SAN-877: real café tool uses thread-scoped map viewport even without explicit input", async () => {
+    vi.mocked(searchRestaurants).mockResolvedValue({ results: [], total: 0, source: "supabase" });
+    const getWorkingMemory = vi.fn(async () => ({
+      mapUi: { viewport: { lat: 6.27, lng: -75.60, zoom: 14 } },
+    }));
+    await searchGroundedPlacesTool.execute!(
+      { query: "cafés with wifi", intent: "cafe" },
+      { agent: { threadId: "thread-2", resourceId: "renter-1" }, memory: { getWorkingMemory } } as never,
+    );
+    expect(getWorkingMemory).toHaveBeenCalledWith({ threadId: "thread-2", resourceId: "renter-1" });
+    expect(searchGoogleCafes).toHaveBeenCalledWith(expect.objectContaining({
+      query: "cafés with wifi",
+      locationBias: { latitude: 6.27, longitude: -75.60 },
+    }));
+    expect(invokeAdkGrounding).not.toHaveBeenCalled();
+  });
+
+  it("uses the actual Medellín thread viewport for Spanish 'en esta zona'", async () => {
+    const getWorkingMemory = vi.fn(async () => ({
+      mapUi: { viewport: { lat: 6.21, lng: -75.57, zoom: 15 } },
+    }));
+    vi.mocked(searchRestaurants).mockResolvedValue({ results: [], total: 0, source: "supabase" });
+    await searchGroundedPlacesTool.execute!(
+      { query: "cafés en esta zona", intent: "cafe" },
+      { agent: { threadId: "thread-2", resourceId: "renter-1" }, memory: { getWorkingMemory } } as never,
+    );
+    expect(getWorkingMemory).toHaveBeenCalledOnce();
+    expect(searchGoogleCafes).toHaveBeenCalledWith(expect.objectContaining({
+      query: "cafés en esta zona",
+      locationBias: { latitude: 6.21, longitude: -75.57 },
+    }));
+  });
+
+  it.each([
+    "cafés near Parque Lleras",
+    "cafés in Manila",
+    "cafés in Ciudad del Río",
+    "cafés in Itagüí",
+  ])("keeps actual Medellín landmarks searchable: %s", async (query) => {
+    vi.mocked(searchRestaurants).mockResolvedValue({ results: [], total: 0, source: "supabase" });
+    await runGrounded(query, "cafe");
+    expect(searchGoogleCafes).toHaveBeenCalledWith(expect.objectContaining({ query }));
+    expect(incrementAndCheckGroundingQuota).toHaveBeenCalledOnce();
+  });
+
+  it("preserves the existing viewport for Sunday opening-hours requests", async () => {
+    const getWorkingMemory = vi.fn(async () => ({ mapUi: { viewport: { lat: 6.21, lng: -75.57, zoom: 15 } } }));
+    vi.mocked(searchRestaurants).mockResolvedValue({ results: [], total: 0, source: "supabase" });
+    await searchGroundedPlacesTool.execute!(
+      { query: "cafés open on Sunday", intent: "cafe" },
+      { agent: { threadId: "thread-sunday", resourceId: "renter-1" }, memory: { getWorkingMemory } } as never,
+    );
+    expect(getWorkingMemory).toHaveBeenCalledWith({ threadId: "thread-sunday", resourceId: "renter-1" });
+    expect(searchGoogleCafes).toHaveBeenCalledWith(expect.objectContaining({
+      query: "cafés open on Sunday",
+      locationBias: { latitude: 6.21, longitude: -75.57 },
+    }));
+  });
+
+  it("does not substitute Medellín cafés for an explicitly unsupported place", async () => {
+    const out = await runGrounded("cafés in Guatapé", "cafe");
+    expect(out.results).toEqual([]);
+    expect(out.metadata?.reason).toBe("outside_catalog_coverage");
+    expect(searchGoogleCafes).not.toHaveBeenCalled();
+    expect(searchRestaurants).not.toHaveBeenCalled();
+    expect(incrementAndCheckGroundingQuota).not.toHaveBeenCalled();
+  });
+
+  it("does not use a Medellín fallback for an out-of-area map viewport", async () => {
+    const getWorkingMemory = vi.fn(async () => ({
+      mapUi: { viewport: { lat: 7.1, lng: -75.8, zoom: 14 } },
+    }));
+    const out = await searchGroundedPlacesTool.execute!(
+      { query: "cafés en esta zona", intent: "cafe" },
+      { agent: { threadId: "thread-3", resourceId: "renter-1" }, memory: { getWorkingMemory } } as never,
+    ) as GroundedOut;
+    expect(out.metadata?.reason).toBe("outside_catalog_coverage");
+    expect(searchGoogleCafes).not.toHaveBeenCalled();
+    expect(incrementAndCheckGroundingQuota).not.toHaveBeenCalled();
+  });
+
   it("GM-P0-06 returns curated fallback when ADK unavailable (403)", async () => {
     vi.mocked(invokeAdkGrounding).mockResolvedValue(
       adkUnavailableMock({ reason: "adk_unavailable", status: 403 }),
@@ -148,7 +228,7 @@ describe("searchGroundedPlacesTool fallback", () => {
     expect(out.attribution).toHaveLength(1);
     expect(out.attribution[0]?.title).toBe("Rituales Compañía de Café");
     expect(searchGoogleCafes).toHaveBeenCalledWith(
-      expect.objectContaining({ query: expect.stringMatching(/quiet cafés in Laureles Medellín, Colombia/) }),
+      expect.objectContaining({ query: "quiet cafés in Laureles" }),
     );
     expect(vi.mocked(searchGoogleCafes).mock.calls[0]?.[0]?.query).not.toMatch(/Exclude bar|Prefer cafés/);
     expect(invokeAdkGrounding).not.toHaveBeenCalled();

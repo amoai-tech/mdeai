@@ -397,6 +397,66 @@ describe("RentalAskComposer (SAN-1421)", () => {
     expect(chat.appendMessage).toHaveBeenLastCalledWith("does this one have a balcony?");
   });
 
+  it("does not publish the old rental result when a new run rejects render_ui", async () => {
+    const onResults = vi.fn();
+    agent.messages.push(
+      { id: "old-user", role: "user", content: "2BR in Laureles" },
+      { id: "old-call", role: "assistant", toolCalls: [{ id: "search-old", function: { name: "searchRentals" } }] },
+      { id: "old-result", role: "tool", toolCallId: "search-old", content: JSON.stringify({ results: [rental("old-1")] }) },
+    );
+    render(<RentalAskComposer onResults={onResults} />);
+    type("Only under COP 2 million");
+    chat.appendMessage.mockImplementationOnce(async () => {
+      for (const notify of agent.listeners) notify();
+      agent.messages.push(
+        { id: "new-user", role: "user", content: "Only under COP 2 million" },
+        { id: "rejected-call", role: "assistant", toolCalls: [{ id: "render-new", function: { name: "render_ui" } }] },
+        { id: "rejected-result", role: "tool", toolCallId: "render-new",
+          content: JSON.stringify({ applied: 0, rejected: [{ reason: "unsupported operation" }] }) },
+      );
+      for (const notify of agent.listeners) notify();
+      return true;
+    });
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+    await waitFor(() => expect(chat.appendMessage).toHaveBeenCalled());
+    // An old tool call may be present, but it is not evidence of the new run.
+    expect(onResults).not.toHaveBeenCalledWith(expect.objectContaining({
+      results: expect.arrayContaining([expect.objectContaining({ id: "old-1" })]),
+    }));
+  });
+
+  it("preserves prior cards on a failed follow-up and retries without duplicate actions", async () => {
+    const onResults = vi.fn();
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ results: [rental("rnt_1")], total: 1 }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: "rental_search_unavailable" }), { status: 503 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ results: [rental("rnt_2")], total: 1 }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<RentalAskComposer onResults={onResults} />);
+
+    type("2BR apartments in Laureles");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+    await waitFor(() => expect(onResults).toHaveBeenCalledTimes(1));
+
+    type("Only under COP 3 million per month");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+    await waitFor(() => expect(screen.getByTestId("rental-ask-error")).not.toBeNull());
+    expect(screen.getByTestId("rental-ask-error").textContent).toContain("temporarily unavailable");
+    expect(onResults).toHaveBeenCalledTimes(1);
+    expect(onResults.mock.calls[0][0].results[0].id).toBe("rnt_1");
+
+    // An agent turn already started. Retrying the same submitted turn would
+    // risk duplicate real actions; the user must explicitly send another message.
+    expect(screen.queryByTestId("rental-ask-retry")).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    type("Search 2BR apartments in Laureles again");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+    await waitFor(() => expect(onResults).toHaveBeenCalledTimes(2));
+    expect(onResults.mock.calls[1][0].results[0].id).toBe("rnt_2");
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    vi.unstubAllGlobals();
+  });
+
   it("does not wipe what the user typed while the answer was still running", async () => {
     const pending = deferred<boolean>();
     chat.appendMessage.mockReturnValueOnce(pending.promise);
@@ -488,14 +548,23 @@ describe("RentalAskComposer (SAN-1421)", () => {
     expect(screen.queryByTestId("rental-ask-error")).toBeNull();
   });
 
-  it("blocks sending until the shared agent connection is ready", () => {
+  it("never silently drops Enter while connecting; keeps the draft for one send when ready", async () => {
     coagent.isReady = false;
-    render(<RentalAskComposer />);
+    const view = render(<RentalAskComposer />);
     type("furnished flats");
     expect((screen.getByTestId("rental-ask-send") as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByRole("status").textContent).toContain("Connecting to MDE");
     fireEvent.keyDown(screen.getByLabelText("Ask MDE about rentals"), { key: "Enter" });
     expect(chat.appendMessage).not.toHaveBeenCalled();
+    expect(draftValue()).toBe("furnished flats");
+    expect(screen.getByRole("alert").textContent).toMatch(/still connecting/i);
+    coagent.isReady = true;
+    view.rerender(<RentalAskComposer />);
+    // The notice must not outlive the connecting state.
+    await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+    fireEvent.keyDown(screen.getByLabelText("Ask MDE about rentals"), { key: "Enter" });
+    await waitFor(() => expect(chat.appendMessage).toHaveBeenCalledTimes(1));
+    expect(chat.appendMessage).toHaveBeenCalledWith("furnished flats");
   });
 
   it("updates the page's cards from the same structured search the chat fast path uses", async () => {
@@ -785,6 +854,45 @@ describe("RentalAskComposer (SAN-1421)", () => {
     vi.unstubAllGlobals();
   });
 
+  it("treats furnishing changes and explicit clearing as fallback filters, but not analysis", async () => {
+    const fetchMock = vi.fn().mockImplementation(async () =>
+      new Response(JSON.stringify({ results: [rental("rnt_1")], total: 1 }), { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const onResults = vi.fn();
+    render(<RentalAskComposer onResults={onResults} />);
+
+    type("Furnished 2BR apartments in Laureles");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(onResults).toHaveBeenCalledTimes(1));
+
+    type("Actually unfurnished");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(JSON.parse(String((fetchMock.mock.calls[1][1] as RequestInit).body)).furnished).toBe(false);
+    await waitFor(() => expect(onResults).toHaveBeenCalledTimes(2));
+
+    const priorSetStateCount = coagent.setState.mock.calls.length;
+    type("Either furnished or unfurnished is fine");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    const last = JSON.parse(String((fetchMock.mock.calls[2][1] as RequestInit).body));
+    expect(last.furnished).toBeUndefined();
+
+    const statePatch = coagent.setState.mock.calls[priorSetStateCount]?.[0];
+    const prior = { lastRentalQuery: { neighborhood: "Laureles", furnished: false, minBedrooms: 2 } };
+    const next = typeof statePatch === "function" ? statePatch(prior) : { ...prior, ...statePatch };
+    expect(next.lastRentalQuery).not.toHaveProperty("furnished");
+    await waitFor(() => expect(onResults).toHaveBeenCalledTimes(3));
+
+    type("Which of these is furnished?");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+    await waitFor(() => expect(chat.appendMessage).toHaveBeenCalledTimes(4));
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    vi.unstubAllGlobals();
+  });
+
   it("keeps the current rows after a fallback search when the next turn only asks about amenities", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(
@@ -1023,6 +1131,38 @@ describe("RentalAskComposer (SAN-1421)", () => {
     vi.unstubAllGlobals();
   });
 
+  it("keeps an exact bedroom count in the real search payload after a budget-only follow-up", async () => {
+    const onResults = vi.fn();
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ results: [rental("rnt_1")], total: 1 }), { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    render(<RentalAskComposer onResults={onResults} />);
+
+    type("Show me furnished 2-bedroom apartments in Laureles under COP 3 million.");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+    const first = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(first).toMatchObject({
+      neighborhood: "Laureles", minBedrooms: 2, maxBedrooms: 2, furnished: true,
+      maxPriceMonthly: 3_000_000,
+    });
+    await waitFor(() => expect(onResults).toHaveBeenCalledTimes(1));
+
+    type("Only under COP 2.5 million per month");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    const second = JSON.parse(String((fetchMock.mock.calls[1][1] as RequestInit).body));
+    expect(second).toMatchObject({
+      neighborhood: "Laureles", minBedrooms: 2, maxBedrooms: 2, furnished: true,
+      maxPriceMonthly: 2_500_000,
+    });
+    // The request contract is the assertion here; another test owns tool-result
+    // publication and the carried furnishing notice when the agent completes.
+    vi.unstubAllGlobals();
+  });
+
   it("names a request the rental search cannot filter instead of implying it applied", async () => {
     const onResults = vi.fn();
     vi.stubGlobal(
@@ -1032,11 +1172,11 @@ describe("RentalAskComposer (SAN-1421)", () => {
       ),
     );
     render(<RentalAskComposer onResults={onResults} />);
-    type("furnished 2BR in Laureles");
+    type("pet-friendly 2BR in Laureles");
     fireEvent.click(screen.getByTestId("rental-ask-send"));
 
     await waitFor(() => expect(onResults).toHaveBeenCalledTimes(1));
-    expect(onResults.mock.calls[0][0].budgetNotice).toContain("can't filter by furnished");
+    expect(onResults.mock.calls[0][0].budgetNotice).toContain("can't filter by pet-friendly");
     vi.unstubAllGlobals();
   });
 
@@ -1081,12 +1221,12 @@ describe("RentalAskComposer (SAN-1421)", () => {
     const pending = deferred<boolean>();
     chat.appendMessage.mockReturnValueOnce(pending.promise);
     render(<RentalAskComposer onResults={onResults} />);
-    type("furnished 2BR in Laureles");
+    type("pet-friendly 2BR in Laureles");
     fireEvent.click(screen.getByTestId("rental-ask-send"));
 
     await act(async () => {
       agent.messages = [
-        { id: "u1", role: "user", content: "furnished 2BR in Laureles" },
+        { id: "u1", role: "user", content: "pet-friendly 2BR in Laureles" },
         {
           id: "a1",
           role: "assistant",
@@ -1108,7 +1248,7 @@ describe("RentalAskComposer (SAN-1421)", () => {
       await pending.promise;
     });
     expect(onResults).toHaveBeenCalledWith(
-      expect.objectContaining({ budgetNotice: expect.stringContaining("can't filter by furnished") }),
+      expect.objectContaining({ budgetNotice: expect.stringContaining("can't filter by pet-friendly") }),
     );
   });
 
@@ -1117,12 +1257,12 @@ describe("RentalAskComposer (SAN-1421)", () => {
     const first = deferred<boolean>();
     chat.appendMessage.mockReturnValueOnce(first.promise);
     render(<RentalAskComposer onResults={onResults} />);
-    type("furnished 2BR in Laureles");
+    type("pet-friendly 2BR in Laureles");
     fireEvent.click(screen.getByTestId("rental-ask-send"));
 
     await act(async () => {
       agent.messages = [
-        { id: "u1", role: "user", content: "furnished 2BR in Laureles" },
+        { id: "u1", role: "user", content: "pet-friendly 2BR in Laureles" },
         {
           id: "a1",
           role: "assistant",
@@ -1143,10 +1283,10 @@ describe("RentalAskComposer (SAN-1421)", () => {
       await first.promise;
     });
     expect(onResults).toHaveBeenCalledWith(
-      expect.objectContaining({ budgetNotice: expect.stringContaining("can't filter by furnished") }),
+      expect.objectContaining({ budgetNotice: expect.stringContaining("can't filter by pet-friendly") }),
     );
 
-    // Refinement names only the budget. The furnishing request is still not filtered.
+    // Refinement names only the budget. The pet-friendly request is still not filtered.
     const second = deferred<boolean>();
     chat.appendMessage.mockReturnValueOnce(second.promise);
     type("only under COP 3 million");
@@ -1176,7 +1316,7 @@ describe("RentalAskComposer (SAN-1421)", () => {
       await second.promise;
     });
     const latest = onResults.mock.calls.at(-1)?.[0];
-    expect(latest?.budgetNotice).toContain("can't filter by furnished");
+    expect(latest?.budgetNotice).toContain("can't filter by pet-friendly");
   });
 
   it("merges carried labels with an unsupported request named by the refinement", async () => {
@@ -1184,11 +1324,11 @@ describe("RentalAskComposer (SAN-1421)", () => {
     const first = deferred<boolean>();
     chat.appendMessage.mockReturnValueOnce(first.promise);
     render(<RentalAskComposer onResults={onResults} />);
-    type("furnished 2BR in Laureles");
+    type("parking 2BR in Laureles");
     fireEvent.click(screen.getByTestId("rental-ask-send"));
     await act(async () => {
       agent.messages = [
-        { id: "u1", role: "user", content: "furnished 2BR in Laureles" },
+        { id: "u1", role: "user", content: "parking 2BR in Laureles" },
         {
           id: "a1",
           role: "assistant",
@@ -1240,10 +1380,10 @@ describe("RentalAskComposer (SAN-1421)", () => {
       await second.promise;
     });
     const latest = onResults.mock.calls.at(-1)?.[0];
-    // The refinement's own notice must not erase the earlier furnishing request.
-    expect(latest?.budgetNotice).toContain("furnished");
+    // The refinement's own notice must not erase the earlier parking request.
+    expect(latest?.budgetNotice).toContain("parking");
     expect(latest?.budgetNotice).toContain("pet-friendly");
-    expect(latest?.unappliedRequests).toEqual(expect.arrayContaining(["furnished", "pet-friendly"]));
+    expect(latest?.unappliedRequests).toEqual(expect.arrayContaining(["parking", "pet-friendly"]));
   });
 
   it("ignores a tool result with a row that is not a real rental", async () => {

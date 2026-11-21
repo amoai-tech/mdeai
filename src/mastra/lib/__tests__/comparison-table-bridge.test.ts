@@ -3,13 +3,14 @@ import { EventType, type BaseEvent } from "@ag-ui/client";
 import { of, toArray } from "rxjs";
 import {
   comparisonRowsFromResult,
+  comparisonTargetFromResult,
   comparisonTableRenderEvents,
   emitRecommendationSurface,
 } from "../recommendation-surface-bridge";
 
 const rows = [
-  { id: "a", title: "Calle 10 #42-15", bedrooms: 2, price: 2_400_000, currency: "COP", period: "month" },
-  { id: "b", title: "Zitios", bedrooms: 2, price: 2_500_000, currency: "COP", period: "month" },
+  { id: "a", title: "Calle 10 #42-15", bedrooms: 2, priceMonthly: 2_400_000, priceNightly: 80_000, currency: "COP", neighborhood: "Laureles", bathrooms: 2, sizeSqm: 72, wifiSpeedMbps: 100, amenities: ["Balcony"] },
+  { id: "b", title: "Zitios", bedrooms: 2, priceMonthly: 2_500_000, priceNightly: null, currency: "COP", neighborhood: "El Poblado", bathrooms: 1, sizeSqm: 65, wifiSpeedMbps: null, amenities: [] },
 ];
 
 describe("comparisonRowsFromResult", () => {
@@ -25,9 +26,17 @@ describe("comparisonRowsFromResult", () => {
   });
 });
 
+describe("comparisonTargetFromResult", () => {
+  it("takes only the server-selected page target, including nested results", () => {
+    expect(comparisonTargetFromResult({ target: "rental-comparison" })).toBe("rental-comparison");
+    expect(comparisonTargetFromResult({ result: { target: "rental-comparison" } })).toBe("rental-comparison");
+    expect(comparisonTargetFromResult({ target: "untrusted" })).toBe("chat");
+  });
+});
+
 describe("comparisonTableRenderEvents", () => {
   it("emits one synthetic render_ui with a Column → Table operation", () => {
-    const events = comparisonTableRenderEvents(rows as never, "call-1");
+    const events = comparisonTableRenderEvents(rows as never, "call-1", "rental-comparison");
     expect(events.map((event) => event.type)).toEqual([
       EventType.TOOL_CALL_START,
       EventType.TOOL_CALL_ARGS,
@@ -38,12 +47,13 @@ describe("comparisonTableRenderEvents", () => {
       target: string;
       operations: Array<{ createSurface?: { components: Array<Record<string, unknown>> } }>;
     };
-    expect(args.target).toBe("chat");
+    expect(args.target).toBe("rental-comparison");
     const create = args.operations.find((operation) => operation.createSurface) as {
       createSurface: { components: Array<Record<string, unknown>> };
     };
     expect(create.createSurface.components[0]).toMatchObject({ component: "Column" });
-    expect(create.createSurface.components[1]).toMatchObject({ component: "Table" });
+    expect(create.createSurface.components[1]).toMatchObject({ component: "Table", columns: ["Feature", "Calle 10 #42-15", "Zitios"] });
+    expect(create.createSurface.components[3]).toMatchObject({ component: "RentalComparisonActions", listingIds: ["a", "b"] });
   });
 
   it("emits nothing for an invalid row set", () => {

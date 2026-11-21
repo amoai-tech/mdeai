@@ -1,5 +1,58 @@
 # mdeapp e2e — focused runs only
 
+## CopilotKit PR preview QA — authenticated, opt-in
+
+Use this only for an **authorized, isolated Vercel preview** running the exact PR
+commit. These suites use the real Supabase database and some tests create
+temporary auth, lead and showing records. They must not run against an
+unverified production URL or with unrelated tenants' credentials.
+
+1. Read `/api/version` on the preview and compare its full `sha` with the
+   current GitHub PR head. Set `VERCEL_DEPLOYMENT_SHA` to that **verified**
+   40-character commit SHA. Abort if they differ. An HTTP 200 alone is not
+   evidence that the correct build is running.
+2. In the **trusted QA process**, provide `PROD_SMOKE_BASE_URL` (the exact
+   preview origin), `PW_SKIP_WEBSERVER=1`, and the authorized Supabase
+   test environment used by `e2e/helpers/auth.ts`. Any `.vercel.app` preview, **even a public one**, requires
+   `VERCEL_AUTOMATION_BYPASS_SECRET` for the isolation suite from the
+   team's secret store. Never log or commit secret values, cookies, screenshots,
+   traces or authenticated Playwright error-context files.
+   The renter suites additionally need `MDE_QA_RENTER_EMAIL` pointing to the
+   existing dedicated renter QA identity; Stop/retry also needs explicit
+   `MDE_QA_STOP_RETRY_WRITE=1`. A skipped suite is **not** a pass.
+3. For the viewing transaction spec, explicitly opt in with
+   `SAN1205_JOURNEY_E2E=1`, `SAN1205_ALLOW_PRODUCTION_WRITES=1` and
+   `SAN1205_CANDIDATE_SHA` equal to the **same verified commit**.
+   Despite the legacy flag name, run this write-capable suite on the approved
+   **preview QA target only**, not production. Do not weaken server auth/RLS.
+4. Run only the relevant existing journeys, one worker and no retries
+   (assumes the trusted process already has the variables above):
+
+```bash
+npx playwright test \
+  e2e/prod-copilotkit-isolation.spec.ts \
+  e2e/rental-conversion-journey.spec.ts \
+  e2e/prod-concierge-stop-retry.spec.ts \
+  e2e/prod-renter-mobile-chat.spec.ts \
+  --project=prod-smoke --workers=1 --retries=0
+```
+
+The shared `qaRolePage` fixture establishes preview access in its own
+context after signing in. The mobile test establishes the same preview access
+for its **separate unsigned-in guest context** before asserting MDE's 401.
+The existing bypass helper verifies a matching `/api/version` response for
+public previews, without bypassing MDE user authentication.
+
+A missing variable is a failed precondition, **not** a passing application
+test. Require the Playwright summary to report the expected tests **passed
+with 0 skipped**, particularly the two signed-in renter suites. A zero-exit
+run containing skipped cases is **not** release proof.
+Check 401/403 authorization, one lead and showing after replay, and
+cleanup by querying the real database. Recheck the deployed SHA before
+claiming exact-preview proof. Keep the evidence private; publicly report
+only counts, statuses and sanitized failure details.
+
+
 Do **not** use bare `npm run test:e2e` (219+ tests) when verifying a single vertical.
 That suite includes maps, screens, mobile sheet, and grounding — failures there do not
 implicate restaurant or CopilotKit budget work.

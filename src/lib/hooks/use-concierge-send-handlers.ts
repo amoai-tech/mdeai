@@ -112,7 +112,7 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
   // The rental hook can need the agent for a message it queued while a search was running and then
   // could not answer; `onAgentSend` is defined below, so it is reached through a ref.
   const agentSendRef = useRef<((text: string) => Promise<boolean>) | null>(null);
-  const { handleUserMessage: handleRentalMessage } = useRentalSearchFastPath({
+  const { handleUserMessage: handleRentalMessage, hasPendingSearch: hasPendingRentalSearch } = useRentalSearchFastPath({
     onUnhandled: async (text) => {
       setConciergePendingSend(true);
       return (await agentSendRef.current?.(text)) ?? false;
@@ -435,6 +435,7 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
       onAgentSend,
       lastIntent: state?.lastIntent,
       inRentalSearch,
+      hasPendingRentalSearch,
       threadId,
       retryLastTurn,
     }),
@@ -451,6 +452,7 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
       onAgentSend,
       state?.lastIntent,
       inRentalSearch,
+      hasPendingRentalSearch,
       retryLastTurn,
       threadId,
     ],

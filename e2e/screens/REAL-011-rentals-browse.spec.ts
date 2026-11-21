@@ -5,10 +5,10 @@ test.describe("REAL-011 /rentals browse", () => {
     await page.goto("/rentals");
     await expect(page.getByTestId("rentals-browse")).toBeVisible();
     await expect(page.getByRole("heading", { name: "Rentals" })).toBeVisible();
-    // SAN-1089: the page never fabricates demo cards. Depending on real inventory and database
-    // health it shows real cards, an honest empty state, or an "unavailable + Retry" state —
-    // and only one of them.
+    // SAN-1687: a direct unfiltered visit is intentionally a fresh start, NOT
+    // "no matches". It cannot show a list, map pins or a database outage yet.
     const states = [
+      page.getByTestId("rentals-fresh-start"),
       page.getByTestId("rentals-grid"),
       page.getByTestId("rentals-empty"),
       page.getByTestId("rentals-error"),
@@ -20,6 +20,22 @@ test.describe("REAL-011 /rentals browse", () => {
         return visible;
       })
       .toBe(1);
+    await expect(page.getByTestId("rentals-fresh-start")).toBeVisible();
+    await expect(page.getByTestId("rentals-grid")).toHaveCount(0);
+    await expect(page.getByTestId("rentals-browse-all")).toHaveAttribute("href", "/rentals?browse=all");
+  });
+
+  test("Browse all explicitly triggers the existing catalogue search", async ({ page }) => {
+    await page.goto("/rentals");
+    await page.getByTestId("rentals-browse-all").click();
+    await expect(page).toHaveURL(/\?browse=all$/);
+    await expect(page.getByTestId("rentals-fresh-start")).toHaveCount(0);
+    // A real catalogue can be populated, empty, or temporarily unavailable.
+    await expect.poll(async () => {
+      const ids = ["rentals-grid", "rentals-empty", "rentals-error"];
+      return (await Promise.all(ids.map((id) => page.getByTestId(id).count())))
+        .filter((count) => count > 0).length;
+    }).toBe(1);
   });
 
   test("neighborhood filter chip sets URL param and shows active state", async ({
@@ -43,7 +59,7 @@ test.describe("REAL-011 /rentals browse", () => {
     await expect(page).toHaveURL(/beds=2/, { timeout: 15_000 });
     await expect(
       bedsGroup.getByRole("link", { name: "2 BR" }),
-    ).toHaveAttribute("aria-pressed", "true");
+    ).toHaveAttribute("aria-current", "true");
   });
 
   test("renders no nightly price chips and ignores a stale ?maxPrice= bookmark", async ({
@@ -70,12 +86,12 @@ test.describe("REAL-011 /rentals browse", () => {
       page
         .getByRole("group", { name: "Neighborhood filters" })
         .getByRole("link", { name: "El Poblado" }),
-    ).toHaveAttribute("aria-pressed", "true");
+    ).toHaveAttribute("aria-current", "true");
     await expect(
       page
         .getByRole("group", { name: "Bedroom filters" })
         .getByRole("link", { name: "1 BR" }),
-    ).toHaveAttribute("aria-pressed", "true");
+    ).toHaveAttribute("aria-current", "true");
   });
 
   test("/rentals no longer redirects to /chat", async ({ page }) => {

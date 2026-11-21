@@ -1,84 +1,120 @@
 import { describe, expect, it } from "vitest";
-import { buildComparisonTableOps, type ComparisonRow } from "../comparison-table-ui";
-
-type Create = { createSurface: { components: Array<Record<string, unknown>> } };
-function createOf(built: ReturnType<typeof buildComparisonTableOps>): Create {
-  return built!.operations.find((op) => "createSurface" in op) as unknown as Create;
-}
+import { buildComparisonTableOps, comparablePriceSummary, type ComparisonRow } from "../comparison-table-ui";
 
 const row = (overrides: Partial<ComparisonRow> = {}): ComparisonRow => ({
   id: "37a05b09-f560-4776-92fd-b8bb2b92e601",
-  title: "Calle 10 #42-15",
+  title: "Laureles One",
+  neighborhood: "Laureles",
   bedrooms: 2,
-  price: 2_400_000,
+  bathrooms: 2,
+  sizeSqm: 70,
+  wifiSpeedMbps: 100,
+  amenities: ["Balcony", "Elevator"],
+  priceMonthly: 2_400_000,
+  priceNightly: null,
   currency: "COP",
-  period: "month",
   ...overrides,
 });
-
-function table(rows: ComparisonRow[], replace = false) {
-  return buildComparisonTableOps(rows, undefined, { replace })!;
+const second = () => row({
+  id: "37a05b09-f560-4776-92fd-b8bb2b92e602",
+  title: "El Poblado Two", neighborhood: "El Poblado", priceMonthly: 2_500_000,
+});
+function surface(rows: ComparisonRow[], replace = false) {
+  const result = buildComparisonTableOps(rows, undefined, { replace })!;
+  const op = result.operations.find((operation) => "createSurface" in operation) as {
+    createSurface: { components: Array<Record<string, unknown>> };
+  };
+  return { result, components: op.createSurface.components };
 }
 
 describe("buildComparisonTableOps", () => {
-  it("puts the official Table inside a plain Column, never a Card", () => {
-    const built = table([row(), row({ id: "37a05b09-f560-4776-92fd-b8bb2b92e602", title: "Zitios", price: 2_500_000 })]);
-    const op = built.operations[0] as { version: string; createSurface: { components: Array<Record<string, unknown>> } };
-    expect(built.target).toBe("chat");
-    expect(op.version).toBe("1.0");
-    expect(op.createSurface.components[0]).toMatchObject({ id: "root", component: "Column", children: ["comparison"] });
-    expect(op.createSurface.components[1]).toMatchObject({
-      id: "comparison",
-      component: "Table",
-      columns: ["Apartment", "Bedrooms", "Monthly Price", "Currency"],
+  it("creates a real A2UI Column → Table, apartments as columns and facts as rows", () => {
+    const { result, components } = surface([row(), second()]);
+    expect(result.target).toBe("chat");
+    expect(result.operations[0].version).toBe("1.0");
+    expect(components[0]).toMatchObject({
+      id: "root", component: "Column",
+      children: ["comparison", "comparison-summary", "comparison-actions"],
     });
-    expect(JSON.stringify(built)).not.toContain('"Card"');
+    expect(components[1]).toMatchObject({
+      component: "Table",
+      columns: ["Feature", "Laureles One", "El Poblado Two"],
+      rows: expect.arrayContaining([
+        ["Neighborhood", "Laureles", "El Poblado"],
+        ["Bedrooms", "2", "2"],
+        ["Bathrooms", "2", "2"],
+        ["Area", "70 m²", "70 m²"],
+        ["Monthly rent", "COP 2,400,000", "COP 2,500,000"],
+        ["Nightly rent", "Not recorded", "Not recorded"],
+      ]),
+    });
+    expect(components[2]).toMatchObject({ component: "Text" });
+    expect(components[3]).toMatchObject({
+      component: "RentalComparisonActions",
+      listingIds: [row().id, second().id],
+    });
+    expect(JSON.stringify(result)).not.toContain('"Card"');
   });
 
-  it("uses monthly values and never invents a nightly rate", () => {
-    const built = table([row(), row({ id: "b", title: "Second", price: 2_500_000 })]);
-    const cells = createOf(built).createSurface.components[1] as { columns: string[]; rows: unknown[][] };
-    expect(cells.rows).toEqual([
-      ["Calle 10 #42-15", 2, "COP 2,400,000", "COP"],
-      ["Second", 2, "COP 2,500,000", "COP"],
+  it("preserves BOTH actual rent periods and never divides monthly values by 30", () => {
+    const both = row({ priceNightly: 85_000 });
+    const { components } = surface([both, second()]);
+    const table = components[1] as { rows: string[][] };
+    expect(table.rows).toContainEqual(["Monthly rent", "COP 2,400,000", "COP 2,500,000"]);
+    expect(table.rows).toContainEqual(["Nightly rent", "COP 85,000", "Not recorded"]);
+    expect(JSON.stringify(table.rows)).not.toContain("80,000");
+  });
+
+  it("renders missing facts truthfully, including absent currencies and Wi-Fi", () => {
+    const { components } = surface([
+      row({ neighborhood: null, bedrooms: null, bathrooms: null, sizeSqm: null, wifiSpeedMbps: null, amenities: [], priceMonthly: null, currency: null }),
+      second(),
     ]);
-    expect(JSON.stringify(cells)).not.toContain("Nightly");
-    expect(JSON.stringify(cells)).not.toContain("80000");
+    const table = components[1] as { rows: string[][] };
+    expect(table.rows).toContainEqual(["Wi-Fi speed", "Not recorded", "100 Mbps (listed)"]);
+    expect(table.rows).toContainEqual(["Amenities", "Not recorded", "Balcony, Elevator"]);
+    expect(table.rows).toContainEqual(["Monthly rent", "Not recorded", "COP 2,500,000"]);
+    const unknownCurrency = surface([row({ currency: null }), second()]).components[1] as { rows: string[][] };
+    expect(unknownCurrency.rows).toContainEqual(["Monthly rent", "2,400,000 (currency not recorded)", "COP 2,500,000"]);
   });
 
-  it("labels mixed periods and keeps missing facts unknown", () => {
-    const built = table([
-      row(),
-      row({ id: "b", title: "Nightly stay", price: 80, currency: "USD", period: "night", bedrooms: null }),
-    ]);
-    const cells = createOf(built).createSurface.components[1] as { columns: string[]; rows: unknown[][] };
-    expect(cells.columns).toEqual(["Apartment", "Bedrooms", "Price", "Currency / Period"]);
-    expect(cells.rows[1]).toEqual(["Nightly stay", "Not recorded", "USD 80", "USD / night"]);
+  it("keeps the comparison bounded at five apartments and caps amenity text", () => {
+    const many = Array.from({ length: 7 }, (_, i) => row({
+      id: String(i), title: `Listing ${i}`, amenities: ["WiFi", "Gym", "Sauna", "Pool", "Balcony"],
+    }));
+    const { components } = surface(many);
+    const table = components[1] as { columns: string[]; rows: string[][] };
+    expect(table.columns).toHaveLength(6);
+    expect(table.rows).toHaveLength(8);
+    expect(table.rows.find((r) => r[0] === "Amenities")?.[1]).toBe("WiFi, Gym, Sauna, Pool (+1 more)");
+    expect((components[3] as { listingIds: string[] }).listingIds).toHaveLength(5);
   });
 
-  it("does not produce a lone period label when currency is missing", () => {
-    const built = table([
-      row(),
-      row({ id: "b", title: "No currency", price: 80, currency: null, period: "night" }),
-    ]);
-    const cells = createOf(built).createSurface.components[1] as { rows: unknown[][] };
-    expect(cells.rows[1]?.[3]).toBe("Not recorded / night");
+  it("routes a Rentals-page comparison to its mounted named surface", () => {
+    expect(buildComparisonTableOps([row(), second()], undefined, { target: "rental-comparison" })?.target).toBe("rental-comparison");
   });
 
-  it("caps at five rows and four columns", () => {
-    const built = table(Array.from({ length: 7 }, (_, index) => row({ id: `id-${index}`, title: `A${index}` })));
-    const cells = createOf(built).createSurface.components[1] as { columns: string[]; rows: unknown[][] };
-    expect(cells.rows).toHaveLength(5);
-    expect(cells.columns).toHaveLength(4);
+  it("replaces a previous surface rather than stacking tables", () => {
+    const { result } = surface([row(), second()], true);
+    expect(result.operations[0]).toMatchObject({
+      version: "1.0", deleteSurface: { surfaceId: "comparison-table" },
+    });
+    expect(result.operations[1]).toMatchObject({ version: "1.0", createSurface: {} });
   });
 
-  it("replaces a previous surface instead of stacking", () => {
-    const built = table([row(), row({ id: "b" })], true);
-    expect(built.operations[0]).toMatchObject({ version: "1.0", deleteSurface: { surfaceId: "comparison-table" } });
-    expect(built.operations[1]).toMatchObject({ version: "1.0", createSurface: {} });
-  });
-
-  it("returns null with fewer than two rows", () => {
+  it("refuses a one-apartment comparison", () => {
     expect(buildComparisonTableOps([row()])).toBeNull();
+  });
+});
+
+describe("comparablePriceSummary", () => {
+  it("identifies a lower listed monthly price only for comparable currencies and complete data", () => {
+    expect(comparablePriceSummary([row(), second()])).toContain("Laureles One at COP 2,400,000");
+    expect(comparablePriceSummary([row(), second()])).toContain("not an overall recommendation");
+  });
+  it("does not rank mixed currencies, missing rates, or ties", () => {
+    expect(comparablePriceSummary([row(), { ...second(), currency: "USD" }])).not.toContain("Lowest listed");
+    expect(comparablePriceSummary([row({ priceMonthly: null }), second()])).not.toContain("Lowest listed");
+    expect(comparablePriceSummary([row(), second(), row({ id: "tied", title: "Tied", priceMonthly: 2_400_000 })])).toContain("Lowest listed");
   });
 });

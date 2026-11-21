@@ -20,6 +20,7 @@ import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 import {
   payloadRows,
   useRentalToolResults,
+  latestRentalToolSignature,
   useTurns,
 } from "@/components/rentals/rental-ask-tool-results";
 import {
@@ -36,6 +37,8 @@ import {
   canFastPathRentalSearch,
   isWholeCityReply,
   looksLikeRentalAnalysis,
+  clearsFurnishingPreference,
+  furnishingFromQueryText,
   scoreRentalQuery,
   statesBudget,
   type RentalSearchApiParams,
@@ -61,6 +64,8 @@ import type { ConciergeWorkingMemory } from "@/lib/types";
  * thread, instead of growing a second card renderer inside the browse column.
  */
 
+/** Shown when Enter arrives before the agent is ready; cleared as soon as it is. */
+const CONNECTING_COPY = "MDE is still connecting. Your question is here — send it once the connection is ready.";
 const ERROR_COPY = "MDE could not answer that. Your question is still here — try again.";
 const ERROR_COPY_RUN =
   "MDE could not answer that. Your question is in the conversation — open the full chat to continue.";
@@ -119,6 +124,8 @@ function memoryFromParams(params: RentalSearchApiParams): ConciergeWorkingMemory
     lastRentalQuery: {
       neighborhood: params.neighborhood,
       minBedrooms: params.minBedrooms,
+      maxBedrooms: params.maxBedrooms,
+      furnished: params.furnished,
       maxPricePerNight: params.maxPricePerNight,
       maxPriceMonthly: params.maxPriceMonthly,
       budgetCurrency: params.budgetCurrency,
@@ -130,9 +137,9 @@ function memoryFromParams(params: RentalSearchApiParams): ConciergeWorkingMemory
 }
 
 /**
- * A refinement is still the same search: if the renter asked for furnished in the first
- * question, telling them only about the new budget cap would imply the furnishing was applied.
- * Keep the unsupported request visible for the rest of this page's conversation.
+ * A refinement is still the same search: if the renter asked for pet-friendly in the first
+ * question, telling them only about the new budget cap would imply pets were filtered.
+ * Keep unsupported amenity requests visible across the conversation.
  */
 function withCarriedNotice(payload: RentalAskResults, labels: readonly string[]): RentalAskResults {
   // Merge labels, never the rendered sentence: a refinement can name its own unsupported request
@@ -285,6 +292,8 @@ function LiveComposer({
   const [sending, setSending] = useState(false);
   // The agent run status updates asynchronously, so React state alone cannot prevent two rapid sends.
   const sendInFlight = useRef(false);
+  // The connecting notice is stale the moment the connection is ready: derive, don't store.
+  const shownError = isReady && error === CONNECTING_COPY ? null : error;
   const cancelled = useRef(false);
   // The supplementary structured search is cancelled on Stop, a new question, or unmount.
   const abortRef = useRef<AbortController | null>(null);
@@ -315,7 +324,9 @@ function LiveComposer({
     // a conversational question look like a new search after an earlier fallback.
     const signals = scoreRentalQuery(text);
     return signals.hasBudget || statesBudget(text) || signals.hasBedrooms ||
-      signals.hasNeighborhood || signals.hasDateRange || isWholeCityReply(text);
+      signals.hasNeighborhood || signals.hasDateRange || isWholeCityReply(text) ||
+      (!looksLikeRentalAnalysis(text) &&
+        (clearsFurnishingPreference(text) || furnishingFromQueryText(text) !== undefined));
   };
   const appliedSignature = useRef("");
   const turnId = useRef(0);
@@ -426,8 +437,19 @@ function LiveComposer({
     }
 
     // Only the full AI path needs a ready CopilotKit/Mastra connection.
-    if (!isReady) return;
+    // The textarea still accepts Enter while connecting. Preserve the draft and
+    // say why it was not sent instead of silently discarding that action.
+    if (!isReady) {
+      setError(CONNECTING_COPY);
+      setRetryable(false);
+      return;
+    }
     sendInFlight.current = true;
+    // A rejected render_ui can trigger another message notification without
+    // producing rental rows. The previous tool result must not become this turn.
+    appliedSignature.current = agent
+      ? latestRentalToolSignature(agent.messages as unknown as Parameters<typeof latestRentalToolSignature>[0])
+      : "";
     acceptToolResults.current = true;
     cancelled.current = false;
     setSending(true);
@@ -436,7 +458,7 @@ function LiveComposer({
     // Clear on dispatch: the sent question is already on its way, and the box must be free for
     // the next question while this one streams (appending to it would send both together).
     setDraft("");
-    // Remember every request this search cannot filter, so a later refinement keeps disclosing it.
+    // Preserve non-filterable amenity requests across later refinements.
     unappliedRef.current = [
       ...new Set([...unappliedRef.current, ...unappliedRentalRequests(text)]),
     ];
@@ -462,6 +484,9 @@ function LiveComposer({
           ...questionFilters,
         },
       };
+      // An explicit 'either is fine' must clear the old CoAgent filter as well
+      // as the local parser memory; spreading undefined cannot remove the key.
+      if (clearsFurnishingPreference(text)) delete next.lastRentalQuery.furnished;
       // An explicitly cleared Details selection must not leave the previous
       // apartment in the next agent turn's working memory (SAN-737).
       if (context && "selectedListingId" in context) {
@@ -655,7 +680,7 @@ function LiveComposer({
       ) : (
         <ComposerInput
           draft={draft}
-          error={error}
+          error={shownError}
           busy={busy}
           canSend={canSend}
           onDraft={setDraft}
@@ -670,8 +695,8 @@ function LiveComposer({
           Connecting to MDE — you can send when the connection is ready.
         </p>
       ) : null}
-      {error ? (
-        <ComposerError error={error} canRetry={canSend} retryable={retryable} onRetry={() => { document.getElementById("rental-ask-input")?.focus(); void send(); }} />
+      {shownError ? (
+        <ComposerError error={shownError} canRetry={canSend} retryable={retryable} onRetry={() => { document.getElementById("rental-ask-input")?.focus(); void send(); }} />
       ) : null}
     </div>
   );

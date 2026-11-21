@@ -33,10 +33,10 @@ type WorkingMemoryContext = {
 
 /**
  * Mirror of the certified native tool's documented merge, used only for the
- * `selectedPinId: null` clear path (the native tool strips that null before merging).
+ * deliberate field-clear paths (the native tool strips nulls before merging).
  * Objects merge, arrays replace, primitives overwrite, `null` deletes, `undefined`
- * is skipped. MDE's `memoryInput` already removed provider padding, so the only null
- * that reaches here is the deliberate pin clear.
+ * is skipped. MDE's `memoryInput` already removed provider padding, so null
+ * here is an explicit pin or furnishing clear.
  */
 function mergeWorkingMemory(existing: PlainObject, patch: PlainObject): PlainObject {
   const result: PlainObject = { ...existing };
@@ -92,10 +92,9 @@ function withThreadLock<T>(key: string, run: () => Promise<T>): Promise<T> {
  * MDE accepts the model's args with `memoryInput` so a blank Gemini placeholder is
  * dropped instead of rejecting the whole update (the native tool would reject it).
  *
- * The upgraded native `updateWorkingMemory` also strips null optional fields before
- * its merge, which silently removes MDE's deliberate `mapUi.selectedPinId: null` =
- * "no pin selected". Keep the MDE input schema and clear the pin through the public
- * Memory API for that one case; every other update still goes through the native tool.
+ * The upgraded native `updateWorkingMemory` strips null optional fields before
+ * merging. MDE's deliberate map-pin and furnishing clears need the same existing
+ * public Memory API path; every ordinary update still uses the native tool.
  */
 class PlaceholderTolerantMemory extends Memory {
   constructor(
@@ -139,7 +138,11 @@ class PlaceholderTolerantMemory extends Memory {
               isPlainObject(patch.mapUi) &&
               Object.prototype.hasOwnProperty.call(patch.mapUi, "selectedPinId") &&
               patch.mapUi.selectedPinId === null;
-            if (!clearSelectedPin) {
+            const clearFurnishing =
+              isPlainObject(patch.lastRentalQuery) &&
+              Object.prototype.hasOwnProperty.call(patch.lastRentalQuery, "furnished") &&
+              patch.lastRentalQuery.furnished === null;
+            if (!clearSelectedPin && !clearFurnishing) {
               return originalExecute(inputData, context);
             }
 
@@ -147,14 +150,14 @@ class PlaceholderTolerantMemory extends Memory {
             if (!memory) {
               return {
                 success: false,
-                message: "Memory is unavailable; the selected pin was not cleared.",
+                message: "Memory is unavailable; the requested memory field was not cleared.",
               };
             }
             if (!lockKey) {
               return {
                 success: false,
                 message:
-                  "Missing thread or resource identity; the selected pin was not cleared.",
+                  "Missing thread or resource identity; the requested memory field was not cleared.",
               };
             }
 
@@ -178,7 +181,7 @@ class PlaceholderTolerantMemory extends Memory {
                 return {
                   success: false,
                   message:
-                    "Could not look up the thread; the selected pin was not cleared.",
+                    "Could not look up the thread; the requested memory field was not cleared.",
                 };
               }
               if (!existingThread && memory.createThread) {
@@ -205,7 +208,7 @@ class PlaceholderTolerantMemory extends Memory {
                     return {
                       success: false,
                       message:
-                        "Could not ensure the thread; the selected pin was not cleared.",
+                        "Could not ensure the thread; the requested memory field was not cleared.",
                     };
                   }
                 }
@@ -223,7 +226,7 @@ class PlaceholderTolerantMemory extends Memory {
               return {
                 success: false,
                 message:
-                  "Could not read working memory; the selected pin was not cleared.",
+                  "Could not read working memory; the requested memory field was not cleared.",
               };
             }
             let existing: PlainObject = {};
@@ -236,7 +239,7 @@ class PlaceholderTolerantMemory extends Memory {
                 return {
                   success: false,
                   message:
-                    "Stored working memory is not valid JSON; the selected pin was not cleared.",
+                    "Stored working memory is not valid JSON; the requested memory field was not cleared.",
                 };
               }
               // A syntactically valid but non-object document (null / array / primitive)
@@ -246,7 +249,7 @@ class PlaceholderTolerantMemory extends Memory {
                 return {
                   success: false,
                   message:
-                    "Stored working memory is not a JSON object; the selected pin was not cleared.",
+                    "Stored working memory is not a JSON object; the requested memory field was not cleared.",
                 };
               }
               existing = parsed;
@@ -272,7 +275,7 @@ class PlaceholderTolerantMemory extends Memory {
               return {
                 success: false,
                 message:
-                  "Could not update working memory; the selected pin was not cleared.",
+                  "Could not update working memory; the requested memory field was not cleared.",
               };
             }
             return { success: true };

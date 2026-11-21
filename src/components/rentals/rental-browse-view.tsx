@@ -14,12 +14,14 @@ import { RentalBrowseFilters } from "@/components/rentals/rental-browse-filters"
 import { RentalDateSuggestionTool } from "@/components/rentals/rental-date-suggestion-tool";
 import type { SuggestedStay } from "@/components/rentals/rental-date-selector";
 import { RentalDetailsPanel, RentalDetailsSheet } from "@/components/rentals/rental-details-panel";
+import { RentalVenueDetailBridge } from "@/components/rentals/rental-venue-detail-bridge";
 import {
   RentalAskComposer,
   type RentalAskDetailsOutcome,
 } from "@/components/rentals/rental-ask-composer";
 import { LeadConfirmationBanner } from "@/components/chat/lead-confirmation-banner";
 import { RentalRecommendationsSurface } from "@/components/copilot/a2ui/rental-recommendations-surface";
+import { RentalComparisonSurface } from "@/components/copilot/a2ui/rental-comparison-surface";
 import { RentalA2UIContext } from "@/components/chat/rental-a2ui-context";
 import { RentalFilterDraftProvider } from "@/components/rentals/rental-filter-draft";
 import { RentalFilterPanelActions } from "@/components/rentals/rental-filter-panel-actions";
@@ -72,6 +74,10 @@ export type RentalBrowseViewProps = {
   through?: string | null;
   /** Why the dates were refused; when set no search ran and no results are shown. */
   dateError?: string | null;
+  /** A direct visit with no search or filters has no catalogue results yet. */
+  freshStart?: boolean;
+  /** Preserve a deliberate Browse all visit through Details and Retry. */
+  browseAll?: boolean;
   /** Only for local previews, never changes actual rental eligibility. */
   previewMode?: boolean;
 };
@@ -86,6 +92,8 @@ function RentalBrowseViewInner({
   from = null,
   through = null,
   dateError = null,
+  freshStart = false,
+  browseAll = false,
   previewMode = false,
 }: RentalBrowseViewProps) {
   const router = useRouter();
@@ -116,9 +124,10 @@ function RentalBrowseViewInner({
   }, [activeAsk, neighborhood, beds]);
   const filterState = { neighborhood, beds, from, through };
   // A preview fixture failure must retry the preview, not send the user to the public browse.
-  const retryHref = previewMode ? buildRetryHref({ neighborhood, beds }, true) : buildRentalsUrl(filterState);
+  const retryHref = previewMode ? buildRetryHref({ neighborhood, beds }, true)
+    : browseAll ? "/rentals?browse=all" : buildRentalsUrl(filterState);
   // Cards link to their detail page with the current filters, so "Back to results" returns to them.
-  const detailSearch = rentalsQueryString(filterState);
+  const detailSearch = browseAll ? "?browse=all" : rentalsQueryString(filterState);
   const stayLabel =
     !dateError && (from || through)
       ? from && through
@@ -194,6 +203,8 @@ function RentalBrowseViewInner({
       ? "Long-stay apartments in Medellín"
       : dateError
         ? "Long-stay rentals in Medellín"
+        : freshStart && !activeAsk
+          ? "Choose filters or ask MDE to find apartments"
         : `Long-stay rentals — ${formatCountSubtitle(total, results.length)}${stayLabel ? ` · open ${stayLabel}` : ""}`;
 
   return (
@@ -202,6 +213,8 @@ function RentalBrowseViewInner({
     <RentalFilterDraftProvider initialBeds={beds ?? null}>
     <>
       <PageRentalResultsBridge results={shownResults} />
+      {/* F8 — Details on an AI-shown card opens this page's own Details panel. */}
+      <RentalVenueDetailBridge results={shownResults} openDetailsFor={openDetailsFor} />
       {coAgent && !isDeterministicE2E() ? (
         <RentalDetailsFrontendTool results={shownResults} onOpen={openDetailsFor} />
       ) : null}
@@ -209,7 +222,7 @@ function RentalBrowseViewInner({
           catalog already resolves cards from, and the existing A2UI context
           publishes their IDs. No second query and no second data path. */}
       {coAgent && !isDeterministicE2E() ? <RentalA2UIContext /> : null}
-      {/* SAN-1655 — live filters for the model + the one real Apply action. */}
+      {/* SAN-1655 — the one real Apply action. */}
       {coAgent && !isDeterministicE2E() ? <RentalFilterPanelActions filters={filterState} /> : null}
       <DiscoveryPageContext page="rentals" filters={filterState} selectedId={selectedForAskId ?? detailsRental?.id ?? null} />
       <RentalPageControlTool filters={filterState} />
@@ -272,6 +285,7 @@ function RentalBrowseViewInner({
           {/* SAN-1656 — the named AI recommendations panel. It renders nothing
               until Ask MDE targets it, so native results/map/Details are unchanged. */}
           <RentalRecommendationsSurface />
+          <RentalComparisonSurface />
           {/* A saved viewing request must be visible where it was made, not only in the chat. */}
           <LeadConfirmationBanner />
           {error ? (
@@ -334,7 +348,26 @@ function RentalBrowseViewInner({
             </div>
           ) : null}
 
-          {!error && !dateError && shownResults.length === 0 ? (
+          {!error && !dateError && freshStart && !activeAsk ? (
+            <div data-testid="rentals-fresh-start">
+              <EmptyState
+                title="Find your next apartment in Medellín"
+                description="Choose a neighborhood, bedrooms, or stay dates above, or ask MDE what you are looking for."
+                icon={<Building2 className="size-8" aria-hidden />}
+              />
+              <div className="mt-4 flex justify-center">
+                <Link
+                  href="/rentals?browse=all"
+                  data-testid="rentals-browse-all"
+                  className={buttonVariants({ variant: "outline", size: "default" })}
+                >
+                  Browse all apartments
+                </Link>
+              </div>
+            </div>
+          ) : null}
+
+          {!error && !dateError && shownResults.length === 0 && (!freshStart || Boolean(activeAsk)) ? (
             <EmptyState
               testId="rentals-empty"
               title="No rentals currently match these filters"
@@ -417,7 +450,7 @@ export function RentalBrowseView(props: RentalBrowseViewProps) {
       <RentalFastPathProvider>
         <BrowseMapContextShell>
           <RentalBrowseViewInner
-            key={JSON.stringify([threadId, props.neighborhood, props.beds, props.from, props.through, props.previewMode, props.dateError])}
+            key={JSON.stringify([threadId, props.neighborhood, props.beds, props.from, props.through, props.previewMode, props.dateError, props.browseAll, props.freshStart])}
             {...props}
           />
         </BrowseMapContextShell>

@@ -76,11 +76,38 @@ const context = browser.contexts()[0];
 const page =
   context.pages().find((p) => p.url().includes("localhost")) ?? context.pages()[0];
 page.setDefaultTimeout(90_000);
+// The QA browser opens with a small default window, which selects the phone layout. The Details
+// checks below read the desktop panel, so pick the layout explicitly: --viewport 1440x900 (desktop)
+// or --viewport 390x844 (phone, where Details is a sheet and these checks are not applicable).
+const viewport = /^(\d{3,4})x(\d{3,4})$/.exec(arg("viewport", "1440x900"));
+if (viewport) await page.setViewportSize({ width: Number(viewport[1]), height: Number(viewport[2]) });
 
+/**
+ * Send one prompt with exactly one Enter. Returns false when the composer never became
+ * ready or did not take the turn, so the caller records a failed case and the run
+ * continues: a user-facing dropped submission must be visible, but it must not erase
+ * the evidence for every remaining case.
+ */
 const ask = async (inputSelector, prompt) => {
   await waitForIdleComposer(page, inputSelector);
   await page.locator(inputSelector).fill(prompt);
-  await page.locator(inputSelector).press("Enter");
+  // Wait for the real composer to become ready. One Enter must dispatch the turn;
+  // retries here would hide a user-facing dropped-submission bug.
+  const sendTestId = inputSelector === "#rental-ask-input" ? "rental-ask-send" : "discovery-ask-send";
+  try {
+    await page.locator(`[data-testid="${sendTestId}"]:not([disabled])`).waitFor({
+      state: "visible", timeout: 30_000,
+    });
+    await page.locator(inputSelector).press("Enter");
+    await page.waitForFunction(
+      (sel) => (document.querySelector(sel)?.value ?? "") === "",
+      inputSelector,
+      { timeout: 6_000 },
+    );
+    return true;
+  } catch {
+    return false;
+  }
 };
 /** Start a clean conversation so each case proves its own selection, not a reused surface. */
 const resetConversation = async () => {
@@ -121,7 +148,11 @@ async function rentCase(c) {
     ),
   );
   const expected = native[c.index - 1] ?? null;
-  await ask("#rental-ask-input", c.prompt);
+  if (!(await ask("#rental-ask-input", c.prompt))) {
+    record({ id: c.id, nativeCount: native.length, expected, cards: [], details: null, status: "fail", reply: "composer did not take the turn after one Enter" });
+    await page.screenshot({ path: path.join(OUT, safeFileName(`${c.id}.png`)) });
+    return false;
+  }
   let cards = [];
   try {
     await page.waitForFunction(
@@ -225,7 +256,11 @@ async function eventCase(c) {
   const expectedTitle = c.index ? sourceTitles[c.index - 1] ?? null : null;
   const expectedSourceId = c.index ? sourceIds[c.index - 1] ?? null : null;
   await resetConversation();
-  await ask('[data-testid="discovery-ask-input"]', c.prompt);
+  if (!(await ask('[data-testid="discovery-ask-input"]', c.prompt))) {
+    record({ id: c.id, expectedSourceTitle: expectedTitle, expectedSourceId, cards: [], detailsEventId: null, detailsTitle: null, status: "fail", reply: "composer did not take the turn after one Enter" });
+    await page.screenshot({ path: path.join(OUT, safeFileName(`${c.id}.png`)) });
+    return false;
+  }
   // Enter is ignored until the composer is ready; confirm the turn was accepted.
   await page.waitForFunction(
     (prompt) => {
@@ -289,12 +324,16 @@ async function eventCase(c) {
       return panel ? panel.getAttribute("data-event-id") : null;
     });
   }
-  const reply = cards.length ? "" : await chatText();
   // Events: the requested result must be genuinely absent from the published grid,
   // and the reply must name that limitation; a refusal for an available event fails.
   const requestedAbsent = Boolean(c.index) && sourceIds.length > 0 && c.index > sourceIds.length;
+  // The Events page also renders the real search results as cards, so cards may be present when
+  // the assistant correctly says the requested position does not exist. That is still honest as
+  // long as every card is a real published event (no invented or foreign card).
+  const onlyRealCards = cards.every((id) => sourceIds.includes(id));
+  const reply = cards.length && !requestedAbsent ? "" : await chatText();
   const unavailable =
-    !cards.length &&
+    onlyRealCards &&
     requestedAbsent &&
     /only|no (?:other|more|second|third|fourth)|can.?t|cannot|not (?:in|among)|unavailable|\d+ events? (?:were|was) (?:returned|found)/i.test(reply);
   // No text-only fallback: a wrong card can open its own matching Details.

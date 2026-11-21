@@ -70,7 +70,7 @@ export function SavedRentalResultsHydrator() {
         if (!isCurrent()) return;
         // A newer search that finished after hydration started owns the cards.
         if (!restoreToolResult(envelope)) return;
-        setSearchMeta({ userText: params.queryText ?? "", params });
+        setSearchMeta({ userText: params.queryText ?? "", params, source: "saved" });
         mergePins?.("rental", pins);
         if (pins.length >= 2) requestFitBounds?.();
       } catch {

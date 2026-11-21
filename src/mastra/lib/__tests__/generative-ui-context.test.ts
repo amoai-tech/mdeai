@@ -17,6 +17,12 @@ function context(value: string) {
 }
 
 describe("A2UI system instructions", () => {
+  it("uses published hint IDs for viewing, never untrusted same-turn search IDs", () => {
+    expect(MDE_A2UI_GUIDE).toContain("not IDs from a same-turn search");
+    expect(MDE_GENERATIVE_UI_RULES).toContain("not IDs from a same-turn search");
+    expect(MDE_A2UI_GUIDE).toContain("never treat the last published hint as the last apartment");
+  });
+
   it("avoids double event surfaces and preserves the chat default target", () => {
     expect(MDE_A2UI_GUIDE).toContain("automatically");
     expect(MDE_GENERATIVE_UI_RULES).toContain("automatically");
@@ -241,6 +247,29 @@ describe("official generative-UI guide forwarding", () => {
     const read = readGenerativeUiGuide({ context: [{ description: "Generative UI guide: x", value: huge }] });
     expect(read.length).toBeLessThan(huge.length);
     expect(read).not.toContain("end");
+  });
+
+  it("forbids restating card facts after showRecommendations", () => {
+    // Measured live: the tool returned IDs only, and the model invented bedroom
+    // counts (said 1 BR/2 BR; the cards were 3 BR/1 BR). The card facts belong
+    // to the cards, never to the model's prose.
+    expect(MDE_A2UI_GUIDE).toContain("for a cards-only request reply with the tool's message only");
+    expect(MDE_A2UI_GUIDE).toContain("When the user also requests a comparison or recommendation");
+    expect(MDE_A2UI_GUIDE).toContain("this ID-only card tool cannot establish the comparison");
+    expect(MDE_A2UI_GUIDE).toContain("Do not restate or guess bedrooms");
+    expect(MDE_A2UI_GUIDE).toContain("tool result deliberately contains no listing facts");
+    // The live /rentals turn receives the official guide plus MDE_GENERATIVE_UI_RULES,
+    // not MDE_A2UI_GUIDE. Both paths must carry the rule.
+    expect(MDE_GENERATIVE_UI_RULES).toContain("Do not restate or guess bedrooms");
+    const cardRulePrefix = "After showRecommendations, for a cards-only request";
+    const fallbackRule = MDE_A2UI_GUIDE.split("\n").find((line) => line.startsWith(cardRulePrefix));
+    const officialRule = MDE_GENERATIVE_UI_RULES.split("\n").find((line) => line.startsWith(cardRulePrefix));
+    expect(fallbackRule).toBeTruthy();
+    expect(officialRule).toBe(fallbackRule);
+    expect(officialRule).toContain("even when those facts also appear on the cards");
+    expect(buildGenerativeUiInstruction(official)).toContain(
+      "After showRecommendations, for a cards-only request reply with the tool's message only",
+    );
   });
 
   it("puts MDE rules after the official guide so they win", () => {

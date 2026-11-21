@@ -12,6 +12,11 @@ export type ConciergeWorkingMemory = {
   lastRentalQuery?: {
     neighborhood?: string;
     minBedrooms?: number;
+    maxBedrooms?: number;
+    /** `null` is an explicit clear (the persisted contract); `undefined` is unknown/legacy. */
+    furnished?: boolean | null;
+    /** Durable marker: Mastra deep-merge deletes a null furnished key. */
+    furnishingCleared?: boolean;
     maxPricePerNight?: number;
     maxPriceMonthly?: number;
     budgetCurrency?: "COP" | "USD";

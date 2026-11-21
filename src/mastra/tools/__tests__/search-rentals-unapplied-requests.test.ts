@@ -7,12 +7,11 @@ import { describe, expect, it } from "vitest";
 import { unappliedRequestsFor } from "../search-rentals";
 
 describe("unappliedRequestsFor", () => {
-  it("reports pets and furnishing from the renter's own words", () => {
+  it("reports unsupported pet and parking requests, not supported furnishing", () => {
     expect(unappliedRequestsFor({ queryText: "pet friendly 2 bedroom in Laureles" })).toEqual([
       "pet-friendly",
     ]);
     expect(unappliedRequestsFor({ queryText: "furnished with parking" })).toEqual([
-      "furnished",
       "parking",
     ]);
   });

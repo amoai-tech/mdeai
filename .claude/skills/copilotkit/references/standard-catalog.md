@@ -40,13 +40,13 @@ const appUI = createGenerativeUI({
 });
 ```
 
-For MDE's **existing small catalog**, extend `src/components/copilot/a2ui/mde-ui-catalog.tsx` with only the needed domain components. Do **not** expose all `standardUI` merely for one `Card`; reuse MDE cards first. If a real feature needs several built-ins, the installed CopilotKit **v1.84.1** API supports `standardUI.omit([...])` and typed `overrides`:
+For MDE's **existing small catalog**, extend `src/components/copilot/a2ui/mde-ui-catalog.tsx` with only the needed domain components. Do **not** expose all `standardUI` merely for one `Card`; reuse MDE cards first. If a real feature needs several built-ins, the installed CopilotKit **v1.88.0** API supports `standardUI.omit([...])` and typed `overrides`:
 
 ```tsx
 import { createGenerativeUI, standardUI } from "@copilotkit/react-core/v2/generative-ui";
 
 // Illustration only; apply to MDE only after checking needed component names.
-// CopilotKit 1.84.1: this removes 3 of 69 built-ins; 66 remain.
+// CopilotKit 1.88.0: this removes 3 of 69 built-ins; 66 remain.
 // It is an example of exclusion, not an allowlist for only Table/Card.
 const narrowedStandard = standardUI.omit(["Map", "Video", "HtmlView"]);
 const ui = createGenerativeUI({
@@ -57,16 +57,16 @@ const ui = createGenerativeUI({
 });
 ```
 
-- **Measured on installed 1.84.1:** removing `Map`, `Video`, and `HtmlView` leaves **66 of 69** built-ins available. The three-name `omit` example is **not an allowlist**; it remains too broad for a single MDE table or card. Prefer adding a typed domain component to existing `mdeUI` instead of expanding the entire catalog. Check remaining advertised names in Inspector, not just the removed names. **Automated compatibility check:** `node --test scripts/__tests__/copilotkit-skill-contract.test.cjs` verifies the installed v2 export and example component names; recheck the catalog against the actual pinned SDK after an upgrade.
+- **Measured on installed 1.88.0:** removing `Map`, `Video`, and `HtmlView` leaves **66 of 69** built-ins available. The three-name `omit` example is **not an allowlist**; it remains too broad for a single MDE table or card. Prefer adding a typed domain component to existing `mdeUI` instead of expanding the entire catalog. Check remaining advertised names in Inspector, not just the removed names. **Automated compatibility check:** `node --test scripts/__tests__/copilotkit-skill-contract.test.cjs` verifies the installed v2 export and example component names; recheck the catalog against the actual pinned SDK after an upgrade.
 - `overrides` only replaces the React renderer of an included component, using that component's exact existing props; typecheck before using.
 - Declare the catalog once at module scope; avoid `extends: [standardUI]` when unused components increase the prompt surface.
-- https://docs.copilotkit.ai/generative-ui/components/standard-catalog → **ADAPT** selective omission and override semantics; https://github.com/CopilotKit/CopilotKit/blob/v1.84.1/packages/react-core/src/v2/generative-ui/catalog.ts → **REFERENCE ONLY** installed-version source; destination: existing MDE catalog *only if needed*; verify TypeScript, Inspector catalog and unsupported-name rejection.
+- https://docs.copilotkit.ai/generative-ui/components/standard-catalog → **ADAPT** selective omission and override semantics; https://github.com/CopilotKit/CopilotKit/blob/v1.88.0/packages/react-core/src/v2/generative-ui/catalog.ts → **REFERENCE ONLY** installed-version source; destination: existing MDE catalog *only if needed*; verify TypeScript, Inspector catalog and unsupported-name rejection.
 
 ## 3. Catalog scope and prompt-cost verification
 
 Choose the smallest vocabulary supported by the **existing route-owner provider and selected agent**. For example, Rentals needs an ID-backed rental comparison; Events needs ticket-tier selection. Neither should receive every general-purpose map, chart, form and media primitive by default.
 
-- **Confirm the actual exposure mechanism.** `generativeUI={{ ui }}` advertises a catalog through its provider; adding `extends: [standardUI]` expands that vocabulary. A runtime agent allowlist is not proof that the UI catalog was narrowed per agent. Do not invent per-agent filtering APIs or nest new providers; inspect exact v1.84.1 typings and the model-facing prompt with [Inspector](https://docs.copilotkit.ai/inspector).
+- **Confirm the actual exposure mechanism.** `generativeUI={{ ui }}` advertises a catalog through its provider; adding `extends: [standardUI]` expands that vocabulary. A runtime agent allowlist is not proof that the UI catalog was narrowed per agent. Do not invent per-agent filtering APIs or nest new providers; inspect exact v1.88.0 typings and the model-facing prompt with [Inspector](https://docs.copilotkit.ai/inspector).
 - **Measure before optimizing.** With the same authorized QA scenario and model settings, compare offered component names, the added generative-UI prompt/context size, response latency, and model usage when available. Record relative results and actual sources; do not invent token savings. Avoid logging private prompt contents.
 - **Keep stable identity.** Share the existing small catalog where both MDE route providers need it; use existing tool renderers for ordinary grounded search. Only broaden vocabulary when a real user journey needs it and tests prove safe operation.
 - **Negative control:** verify an unsupported component/function is absent from the advertised Catalog and fails safely instead of silently being accepted. Validate stale/forged IDs against the current authorized results.
@@ -89,7 +89,7 @@ https://docs.copilotkit.ai/generative-ui/components/theming → **ADAPT** the ty
 ## 6. References with destinations and proof
 
 - https://docs.copilotkit.ai/generative-ui/components/standard-catalog — **REFERENCE** the 69 built-ins, `standardUI`, input behaviors and MapLibre requirement; **destination**: catalog design decision; **proof**: count actual exposed components and check version-matched schemas.
-- https://github.com/CopilotKit/CopilotKit/blob/v1.84.1/packages/react-core/src/v2/generative-ui/index.ts — **REFERENCE** exact pinned exports; **destination**: version-check; **proof**: compare current `package.json` and installed typings.
-- https://github.com/CopilotKit/CopilotKit/blob/v1.84.1/examples/v2/generative-ui-shop/README.md — **MODEL ONLY** bounded catalog/Surface/fallback; do **not** copy TanStack, Prisma or shop payments.
+- https://github.com/CopilotKit/CopilotKit/blob/v1.88.0/packages/react-core/src/v2/generative-ui/index.ts — **REFERENCE** exact pinned exports; **destination**: version-check; **proof**: compare current `package.json` and installed typings.
+- https://github.com/CopilotKit/CopilotKit/blob/v1.88.0/examples/v2/generative-ui-shop/README.md — **MODEL ONLY** bounded catalog/Surface/fallback; do **not** copy TanStack, Prisma or shop payments.
 
 **Acceptance:** the coding agent explains why MDE should or should not expose each component, keeps generated props ID-only, preserves existing map/checkout and proves one real UI turn. Do not treat the built-in component count as an implementation target.

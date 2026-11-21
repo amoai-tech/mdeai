@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   budgetNotApplied,
   buildRentalSearchParams,
+  looksLikeRentalAnalysis,
   scoreRentalQuery,
 } from "@/lib/rental-query-parser";
 
@@ -97,6 +98,110 @@ describe("SAN-1502 postmerge — real COP monthly budget", () => {
   it("still reports a stated budget the parser could not apply", () => {
     expect(budgetNotApplied("2BR in Laureles under $80/night", {})).toBe(true);
     expect(budgetNotApplied("2BR in Laureles", {})).toBe(false);
+  });
+
+  it.each([
+    ["furnished apartments", true],
+    ["amoblado en Laureles", true],
+    ["amueblado apartamento", true],
+    ["unfurnished apartments", false],
+    ["not furnished apartments", false],
+    ["not-furnished 2BR apartments", false],
+    ["no amoblado", false],
+    ["no furnished apartments", false],
+    ["sin amueblar", false],
+    ["furnished or unfurnished, either is fine", undefined],
+    ["either is fine, furnished or unfurnished", undefined],
+    ["I don't care if it's furnished", undefined],
+    ["I don’t care if it’s furnished", undefined],
+    ["Furnishing doesn’t matter", undefined],
+    ["doesn't matter if it is furnished", undefined],
+    ["either furnished or not", undefined],
+  ])("understands explicit furnishing and preference changes: %s", (query, expected) => {
+    expect(buildRentalSearchParams(`Show apartments in Laureles ${query}`, {})?.furnished)
+      .toBe(expected);
+  });
+
+  it.each([
+    ["Do you have any furnished apartments in Laureles?", true],
+    ["Show furnished apartments in Laureles or Envigado", true],
+    ["furnished 2BR or 3BR", true],
+    ["not-furnished 2BR or 3BR", false],
+    ["Price doesn't matter, but it must be furnished", true],
+    ["Furnished 2BR, neighborhood doesn't matter", true],
+    ["Location doesn't matter, only unfurnished", false],
+  ])("does not mistake unrelated any/or for furnishing indifference: %s", (text, expected) => {
+    const memory = { lastRentalQuery: { neighborhood: "Laureles", furnished: true } };
+    expect(buildRentalSearchParams(text, memory)?.furnished).toBe(expected);
+  });
+
+  it("keeps furnishing when either apartment choice is furnished", () => {
+    const memory = { lastRentalQuery: { neighborhood: "Laureles", furnished: true } };
+    expect(buildRentalSearchParams("Either furnished 1BR or furnished 2BR apartments in Laureles", memory)?.furnished).toBe(true);
+    expect(buildRentalSearchParams("Either furnished or not is fine", memory)?.furnished).toBeUndefined();
+    expect(buildRentalSearchParams("Show apartments in Laureles, no furnished apartments", {})?.furnished).toBe(false);
+  });
+
+  it("does not treat an analysis of displayed furnished cards as a fresh search", () => {
+    expect(looksLikeRentalAnalysis("Which of these is furnished?")).toBe(true);
+    expect(looksLikeRentalAnalysis("Are these furnished?")).toBe(true);
+    expect(looksLikeRentalAnalysis("Which of these neighborhoods has furnished apartments?")).toBe(false);
+    expect(looksLikeRentalAnalysis(
+      "Do you have 2BR apartments like these in Envigado under COP 3 million?",
+    )).toBe(false);
+    expect(looksLikeRentalAnalysis(
+      "Show me apartments in Laureles cheaper than these",
+    )).toBe(true);
+  });
+
+  it("clears a previous furnishing requirement when either is fine", () => {
+    const memory = { lastRentalQuery: { neighborhood: "Laureles", furnished: true } };
+    expect(buildRentalSearchParams("Either furnished or unfurnished is fine", memory)?.furnished).toBeUndefined();
+    expect(buildRentalSearchParams("I don't care if it's furnished", memory)?.furnished).toBeUndefined();
+    expect(buildRentalSearchParams("either is fine, furnished or unfurnished", memory)?.furnished).toBeUndefined();
+    expect(buildRentalSearchParams("Only under COP 2 million", memory)?.furnished).toBe(true);
+  });
+
+  it("uses the stored furnished requirement across budget refinement and lets unfurnished replace it", () => {
+    const first = buildRentalSearchParams("Show furnished 2-bedroom apartments in Laureles under COP 3 million", {});
+    expect(first?.furnished).toBe(true);
+    const current = { lastRentalQuery: { neighborhood: "Laureles", minBedrooms: 2,
+      maxBedrooms: 2, furnished: true, maxPriceMonthly: 3_000_000,
+      budgetCurrency: "COP" as const, budgetType: "monthly" as const } };
+    expect(buildRentalSearchParams("Only under COP 2.5 million per month", current)?.furnished).toBe(true);
+    expect(buildRentalSearchParams("Actually unfurnished apartments", current)?.furnished).toBe(false);
+    expect(buildRentalSearchParams("Only under COP 2.5 million per month", {})?.furnished).toBeUndefined();
+  });
+
+  it("keeps exactly two bedrooms through a monthly-budget refinement", () => {
+    const first = buildRentalSearchParams(
+      "Show me furnished 2-bedroom apartments in Laureles under COP 3 million.",
+      {},
+    );
+    expect(first).toMatchObject({
+      neighborhood: "Laureles", minBedrooms: 2, maxBedrooms: 2,
+      maxPriceMonthly: 3_000_000, budgetCurrency: "COP",
+    });
+    const followup = buildRentalSearchParams("Only under COP 2.5 million per month", {
+      lastRentalQuery: {
+        neighborhood: first!.neighborhood, minBedrooms: first!.minBedrooms,
+        maxBedrooms: first!.maxBedrooms, maxPriceMonthly: first!.maxPriceMonthly,
+        budgetCurrency: first!.budgetCurrency, budgetType: first!.stayType,
+      },
+    });
+    expect(followup).toMatchObject({
+      neighborhood: "Laureles", minBedrooms: 2, maxBedrooms: 2,
+      maxPriceMonthly: 2_500_000,
+    });
+  });
+
+  it("replaces an exact bedroom size with a new explicit size", () => {
+    const memory = { lastRentalQuery: { neighborhood: "Laureles", minBedrooms: 2, maxBedrooms: 2 } };
+    expect(buildRentalSearchParams("Actually 1-bedroom apartments", memory))
+      .toMatchObject({ minBedrooms: 1, maxBedrooms: 1 });
+    expect(buildRentalSearchParams("At least 3 bedrooms", memory))
+      .toMatchObject({ minBedrooms: 3 });
+    expect(buildRentalSearchParams("At least 3 bedrooms", memory)?.maxBedrooms).toBeUndefined();
   });
 
   it("retains budget across neighborhood refinements", () => {

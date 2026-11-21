@@ -32,6 +32,8 @@ type ViewProps = {
   from?: string | null;
   through?: string | null;
   dateError?: string | null;
+  freshStart?: boolean;
+  browseAll?: boolean;
   maxPrice?: unknown;
 };
 
@@ -47,6 +49,57 @@ beforeEach(() => {
 });
 
 describe("/rentals page", () => {
+  it("opens with a fresh search and never queries the database until needed", async () => {
+    const props = await render({});
+    expect(searchRentals).not.toHaveBeenCalled();
+    expect(createServerClient).not.toHaveBeenCalled();
+    expect(props).toMatchObject({ results: [], total: 0, error: null, freshStart: true });
+  });
+
+  it("does not search for a retired maxPrice-only bookmark", async () => {
+    const props = await render({ maxPrice: "75" });
+    expect(searchRentals).not.toHaveBeenCalled();
+    expect(props.freshStart).toBe(true);
+  });
+
+  it("Browse all retrieves the existing real catalogue", async () => {
+    searchRentals.mockResolvedValue({ results: [{ id: "real-apartment" }], total: 1, source: "supabase" });
+    const props = await render({ browse: "all" });
+    expect(searchRentals).toHaveBeenCalledTimes(1);
+    expect(props).toMatchObject({ results: [{ id: "real-apartment" }], total: 1, freshStart: false, browseAll: true });
+  });
+
+  it.each([
+    ["neighborhood", { browse: "all", neighborhood: "Laureles" }, { neighborhood: "Laureles" }],
+    ["bedrooms", { browse: "all", beds: "2" }, { minBedrooms: 2, maxBedrooms: 2 }],
+    ["stay dates", { browse: "all", from: "2026-11-20", through: "2026-11-30" }, { checkIn: "2026-11-20", checkOut: "2026-11-30" }],
+    ["combined", { browse: "all", neighborhood: "Laureles", beds: "2" }, { neighborhood: "Laureles", minBedrooms: 2, maxBedrooms: 2 }],
+  ])("real %s filters override the Browse all intent on Details and Retry", async (_label, params, expected) => {
+    searchRentals.mockResolvedValue({ results: [], total: 0, source: "supabase" });
+    const props = await render(params);
+    expect(props.browseAll).toBe(false);
+    expect(props.freshStart).toBe(false);
+    expect(searchRentals).toHaveBeenCalledTimes(1);
+    expect(searchRentals).toHaveBeenCalledWith(
+      expect.objectContaining(expected),
+      expect.objectContaining({ client: expect.anything() }),
+    );
+  });
+
+  it("an outage on a filtered Browse all URL retains the real filter for Retry", async () => {
+    searchRentals.mockRejectedValue(new RentalSearchUnavailableError("client_unavailable"));
+    const props = await render({ browse: "all", neighborhood: "Laureles" });
+    expect(props.error).toMatch(/temporarily unavailable/);
+    expect(props.browseAll).toBe(false);
+    expect(props.neighborhood).toBe("Laureles");
+  });
+
+  it("ignores unknown browse flags rather than loading every apartment", async () => {
+    const props = await render({ browse: "unknown" });
+    expect(searchRentals).not.toHaveBeenCalled();
+    expect(props.freshStart).toBe(true);
+  });
+
   it("does not forward a stale ?maxPrice= as a nightly cap", async () => {
     searchRentals.mockResolvedValue({ results: [], total: 0, source: "supabase" });
     const props = await render({ maxPrice: "75", neighborhood: "Laureles", beds: "2" });
@@ -59,7 +112,7 @@ describe("/rentals page", () => {
 
   it("requests enough results to show the whole development catalogue", async () => {
     searchRentals.mockResolvedValue({ results: [], total: 0, source: "supabase" });
-    await render({});
+    await render({ browse: "all" });
     const call = searchRentals.mock.calls[0]?.[0] as Record<string, unknown>;
     // The old 24-result cap hid ten published Rentberry development listings.
     expect(call.limit).toBeGreaterThanOrEqual(50);
@@ -67,21 +120,22 @@ describe("/rentals page", () => {
 
   it("reports an outage as an error with no results and no count", async () => {
     searchRentals.mockRejectedValue(new RentalSearchUnavailableError("client_unavailable"));
-    const props = await render({});
+    const props = await render({ neighborhood: "Laureles" });
     expect(props.error).toMatch(/temporarily unavailable/i);
     expect(props.results).toEqual([]);
   });
 
   it("a genuine zero is NOT an error", async () => {
     searchRentals.mockResolvedValue({ results: [], total: 0, source: "supabase" });
-    const props = await render({});
+    const props = await render({ neighborhood: "Laureles" });
     expect(props.error).toBeNull();
     expect(props.total).toBe(0);
+    expect(props.freshStart).toBe(false);
   });
 
   it("does not write a raw driver message to the server log", async () => {
     searchRentals.mockRejectedValue(new Error("connection refused to db.prod.internal:5432"));
-    const props = await render({});
+    const props = await render({ neighborhood: "Laureles" });
     expect(props.error).toMatch(/temporarily unavailable/i);
     const logged = vi.mocked(console.error).mock.calls.flat().map(String).join(" | ");
     expect(logged).not.toContain("db.prod.internal");

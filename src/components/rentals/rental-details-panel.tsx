@@ -139,6 +139,10 @@ function DetailsBody({
         <Badge variant="secondary" className="font-normal" data-testid="rental-details-bedrooms">
           {bedroomLabel(rental.bedrooms, rental.bedrooms_unknown)}
         </Badge>
+        <Badge variant="outline" className="font-normal" data-testid="rental-details-furnishing">
+          {rental.furnished === true ? "Furnished listed" :
+            rental.furnished === false ? "Unfurnished listed" : "Furnishing not specified"}
+        </Badge>
         {/* SAN-1449: same disclosure the card shows; a self-attested listing is not reviewed by MDE. */}
         {rental.tags.includes("self-attested") ? (
           <Badge variant="outline" className="font-normal" data-testid="rental-details-self-attested-label">

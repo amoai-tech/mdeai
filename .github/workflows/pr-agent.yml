@@ -22,8 +22,8 @@ jobs:
       contents: read
       issues: write
       pull-requests: write
-    # Shared infra merged #17/#18: 300s model timeout and 16K output budget.
-    uses: amoai-tech/pr-review-infra/.github/workflows/pr-agent.yml@9c6e84f3ffbd3f90095d87a277c4aced8012edef
+    # Shared infra #29: 64K context, up to 16 reviewed chunks, 50m job; strict exact-head verification unchanged.
+    uses: amoai-tech/pr-review-infra/.github/workflows/pr-agent.yml@dc731cbc3f00f6005088e5b5facdc628ac9898b3
     with:
       evidence_title: MDE PR-Agent Evidence
     secrets:

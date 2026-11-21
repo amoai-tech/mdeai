@@ -16,8 +16,9 @@ import { requestVenueBookingTool } from '../tools/request-venue-booking';
 import { showRecommendationsTool } from '../tools/show-recommendations';
 import { showRentalFilterControlTool } from '../tools/show-rental-filter-control';
 import { showComparisonTableTool } from '../tools/show-comparison-table';
-import { shouldRenderRentalFilterControl, shouldRequestRecommendations } from '../lib/recommendation-intent';
 import { shouldForceComparisonTable } from '../lib/comparison-table-intent';
+import { showViewingProposalTool } from '../tools/show-viewing-proposal';
+import { shouldRenderRentalFilterControl, shouldRenderViewingProposal, shouldRequestRecommendations } from '../lib/recommendation-intent';
 import { shouldSearchEventsForCards } from '../lib/event-intent';
 import { CONCIERGE_AGENT_MODEL } from "../lib/models";
 import { geminiMalformedFirstStepRetry } from "../lib/gemini-malformed-retry";
@@ -42,6 +43,10 @@ export const conciergeWorkingMemorySchema = z.object({
     .object({
       neighborhood: z.string().optional(),
       minBedrooms: z.number().optional(),
+      maxBedrooms: z.number().optional(),
+      furnished: z.boolean().nullable().optional(),
+      furnishingCleared: z.boolean().optional().describe('True after an explicit no-preference furnishing request; reset to false when a boolean furnishing preference is stated.'),
+      clearFurnishing: z.boolean().optional().describe('Set true only when the renter explicitly accepts both furnished and unfurnished. Omit otherwise; blanks do not clear saved preferences.'),
       maxPricePerNight: z.number().optional(),
       maxPriceMonthly: z.number().positive().optional(),
       budgetCurrency: z.enum(['COP', 'USD']).optional(),
@@ -159,6 +164,9 @@ const PADDED_FIELDS = {
   lastRentalQuery: [
     'neighborhood',
     'minBedrooms',
+    'maxBedrooms',
+    'furnished',
+    'furnishingCleared',
     'maxPricePerNight',
     'maxPriceMonthly',
     'budgetCurrency',
@@ -224,6 +232,17 @@ function normalizeModelMemory(raw: unknown): unknown {
   // Neither is a meaningful ceiling; discard it instead of poisoning future follow-ups.
   if (isPlainObject(clean.lastRentalQuery)) {
     const query = { ...clean.lastRentalQuery };
+    // Separate model padding (null/empty = no update) from a deliberate clear.
+    // Mastra's deep-merge deletes a stored property for an explicit null patch.
+    if (query.clearFurnishing === true) {
+      // Mastra deep-merges null as a deletion; retain explicit-clear intent separately.
+      query.furnished = null;
+      query.furnishingCleared = true;
+    } else if (typeof query.furnished === 'boolean') {
+      query.furnishingCleared = false;
+    }
+    delete query.clearFurnishing;
+    normalized.lastRentalQuery = query;
     const amount = query.maxPriceMonthly;
     const currency = typeof query.budgetCurrency === 'string' && query.budgetCurrency.trim()
       ? query.budgetCurrency : undefined;
@@ -265,7 +284,7 @@ const conciergeBaseInstructions = `You are the mdeAI Medellín concierge — a h
 # Tools
 - read-broker-workspace: for a SIGNED-IN rental broker asking about MY listings, leads, viewing requests, or broker dashboard. ALWAYS call this read-only, authenticated tool before answering broker questions, including "Which viewing requests need my attention?". It reads only the caller's own RLS-scoped rows. Never use public rental search for private broker operations. If no broker profile or tool error, say so; do not invent data. Never claim it sent a reply, approved a booking, published a listing or changed a viewing. Direct the broker to the manual workspace actions for changes.
 - lookup-public-discovery-item: when the current turn includes a # Server-verified current selection block, the server-side public RLS lookup ALREADY completed. For questions about that selected item, answer only from the verified public fields in that block; do NOT call the lookup tool again for the same ID. If the selected-item block reports UNVERIFIABLE or LOOKUP FAILED, disclose that rather than guessing. For a DIFFERENT specifically identified public item, call this lookup with its page and ID BEFORE answering its facts. For an unrelated new discovery request, use the appropriate search tool normally. Client IDs never grant authorization. Never infer omitted attributes (e.g. balcony/Wi-Fi/availability/ticket prices).
-- search-rentals: apartments, stays, lodging. For natural-language rental discovery (e.g. "digital nomad rental in Laureles near cafes"), call search-rentals with queryText set to the user's exact phrase plus structured filters when known. Keep requests this search cannot filter (pets, furnished, parking, pool, gym) inside queryText — the cards disclose them from that text. Never say or imply such a filter was applied.
+- search-rentals: apartments, stays, lodging. For natural-language rental discovery (e.g. "digital nomad rental in Laureles near cafes"), call search-rentals with queryText set to the user's exact phrase plus structured filters when known. Set furnished=true only when the renter explicitly requests furnished, furnished=false only for unfurnished, and omit the field for no preference; the canonical search uses the stored apartment boolean and treats unknown as nonmatching. For a follow-up that accepts either state, use clearFurnishing=true in lastRentalQuery working memory, and omit furnished in the new search. Keep unsupported requests (pets, parking, pool, gym) inside queryText so cards disclose them. Never say or imply an unsupported filter was applied.
 - search-events: ticketed events, concerts, festivals. For intent-rich queries (e.g. "salsa this weekend", "live music in Poblado"), call search-events with queryText set to the user's phrase plus category/dateWindow when obvious — not for bar/club venue discovery.
 - search-grounded-places: caf\u00e9s, bars, salsa venues, rooftop cocktails, clubs, and other map POIs via Google Maps grounding. For salsa bars, hidden bars, rooftop cocktails, nightlife locals recommend, coffee/coworking, or quiet caf\u00e9s (e.g. "salsa bars in Poblado", "rooftop cocktails Provenza", "cafe with strong Wi-Fi Laureles"), call search-grounded-places with the user's exact phrase — never search-restaurants for those.
 - A restaurant name or table-booking request must use search-restaurants or lookup-public-discovery-item for a canonical restaurant UUID. NEVER pass intent "restaurant" to search-grounded-places: that tool only accepts "cafe", "general", "nightlife". If the user asks to request a table, search the real restaurant first and only then propose booking for review.
@@ -451,7 +470,8 @@ If the search returns zero results:
 Never reply with an empty list and no recovery.
 
 # Follow-up behavior
-- "when can I view" / "schedule viewing" → only when the listing's can_schedule_viewing is true: quote its availability window for selectedListingId (or top pick) + schedule_viewing_url. No tool call. The availability window is the MOVE-IN window, not the tour date: say that a tour can be requested now, before move-in, and never answer "when can I view" with the move-in date alone. When can_schedule_viewing is false or schedule_viewing_url is null, say plainly that no viewing can be requested for that rental yet and offer the next requestable listing.
+- "request a viewing" / "schedule a viewing of <listing>" (an explicit request to schedule that names or selects one apartment, not a question about when) → call showViewingProposal with that apartment's exact ID from the numbered published result IDs ("the second apartment" is published ID 2) and STOP; do not search again and never author render_ui for it. Pass date and time only when the renter stated them. Reply with one short sentence saying a request is ready for the renter to review; never say it was booked, requested or confirmed, and do not state that the apartment can be scheduled. The proposal itself shows when an apartment cannot take a request. If the tool says the apartment is not in the current results, say so plainly.
+- "when can I view" (a question about timing; an explicit request to schedule goes to the ViewingProposal rule above, which wins) → only when the listing's can_schedule_viewing is true: quote its availability window for selectedListingId (or top pick) + schedule_viewing_url. No tool call. The availability window is the MOVE-IN window, not the tour date: say that a tour can be requested now, before move-in, and never answer "when can I view" with the move-in date alone. When can_schedule_viewing is false or schedule_viewing_url is null, say plainly that no viewing can be requested for that rental yet and offer the next requestable listing.
 - "show me the details" / "open details" / "details for the first/second one" on rentals → this is a FRONTEND ACTION, not a search. When openRentalDetails is available, call it with the listingId (or the 1-based index) and STOP. Do NOT call search-rentals for a details request, and do not answer with a description instead of calling the tool. Use the first result when no listing is named. If the apartment or position is not in the current results, say so; never open a different listing.
 - Distinguish stay-DATE intent from LISTING-SEARCH intent, not by matching the word "rental". If the renter is choosing/changing dates without requesting apartment options (e.g. "suggest a rental stay starting Nov 12", "set my move-in date", "change my dates", "I want to stay Nov 12-18"), and suggestRentalDates is available, CALL suggestRentalDates with from as YYYY-MM-DD and through only if an end date was supplied, then STOP; do NOT call search-rentals or ask clarifying questions. If the renter requests apartments or rental listings (e.g. "find me a two-bedroom in Laureles for Nov 12-18", "show cheaper options for those dates", price or neighbourhood searches), it is a SEARCH even when it names dates: call search-rentals with dates as filters; NEVER open the calendar. When both intents appear, the listing request wins.
 - "show cheaper options" → re-run search-rentals with maxPricePerNight ≈ 0.7 × current cap, keep neighborhood + minBedrooms.
@@ -562,6 +582,7 @@ export const conciergeAgent = new Agent({
     showRecommendations: showRecommendationsTool,
     showRentalFilterControl: showRentalFilterControlTool,
     showComparisonTable: showComparisonTableTool,
+    showViewingProposal: showViewingProposalTool,
   },
   inputProcessors: [
     // SAN-737: the verified current selection, tool schemas and working memory must
@@ -578,6 +599,10 @@ export const conciergeAgent = new Agent({
     { id: 'san1655-filter-control-intent', processInputStep: ({ stepNumber, messages, requestContext }) =>
       shouldRenderRentalFilterControl({ stepNumber, messages, requestContext })
         ? { toolChoice: { type: 'tool' as const, toolName: 'showRentalFilterControl' } }
+        : {} },
+    { id: 'san1658-viewing-proposal-intent', processInputStep: ({ stepNumber, messages, requestContext }) =>
+      shouldRenderViewingProposal({ stepNumber, messages, requestContext })
+        ? { toolChoice: { type: 'tool' as const, toolName: 'showViewingProposal' } }
         : {} },
     { id: 'san1656-recommendation-intent', processInputStep: ({ stepNumber, messages, requestContext }) =>
       shouldRequestRecommendations({ stepNumber, messages, requestContext })

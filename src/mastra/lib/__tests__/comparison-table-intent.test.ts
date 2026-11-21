@@ -6,6 +6,7 @@ const ids = [
   "37a05b09-f560-4776-92fd-b8bb2b92e601",
   "37a05b09-f560-4776-92fd-b8bb2b92e602",
   "37a05b09-f560-4776-92fd-b8bb2b92e603",
+  ...Array.from({ length: 7 }, (_, i) => `37a05b09-f560-4776-92fd-b8bb2b92e6${String(i + 3).padStart(2, "0")}`),
 ];
 const context = {
   get: (key: string) => key === "ag-ui"
@@ -24,8 +25,11 @@ describe("shouldForceComparisonTable", () => {
   });
 
   it("does not force ordinary comparisons or new searches", () => {
-    expect(call("Compare the first two apartments.")).toBe(false);
+    expect(call("Compare the first two apartments.")).toBe(true);
+    expect(call("Compare apartments six and seven.")).toBe(true);
+    expect(call("Compare the sixth and seventh rentals side by side.")).toBe(true);
     expect(call("Find 2-bedroom apartments in a table under COP 3M.")).toBe(false);
+    expect(call("Compare six-bedroom apartments in Laureles with seven-bedroom apartments in Poblado.")).toBe(false);
     expect(call("Show me apartments under COP 3M.")).toBe(false);
     expect(call("Show 2-bedroom apartments in a table.")).toBe(false);
     expect(call("Show two-bedroom apartments in a table.")).toBe(false);

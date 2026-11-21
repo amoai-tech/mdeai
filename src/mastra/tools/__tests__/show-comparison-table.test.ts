@@ -3,13 +3,10 @@ import { RENTAL_A2UI_CONTEXT_DESCRIPTION } from "@/lib/rentals/a2ui-context";
 import { showComparisonTableTool } from "../show-comparison-table";
 import { RENTAL_SUPABASE_KEY } from "../search-rentals";
 
-const ids = [
-  "37a05b09-f560-4776-92fd-b8bb2b92e601",
-  "37a05b09-f560-4776-92fd-b8bb2b92e602",
-  "37a05b09-f560-4776-92fd-b8bb2b92e603",
-];
-
-function context(rows: Array<Record<string, unknown>> = []) {
+const ids = Array.from({ length: 10 }, (_, i) =>
+  `37a05b09-f560-4776-92fd-b8bb2b92e6${String(i).padStart(2, "0")}`
+);
+function context(rows: Array<Record<string, unknown>> = [], { withClient = true }: { withClient?: boolean } = {}) {
   const client = {
     from: () => ({
       select: () => ({
@@ -19,64 +16,78 @@ function context(rows: Array<Record<string, unknown>> = []) {
   };
   return {
     requestContext: {
-      get: (key: string) => key === RENTAL_SUPABASE_KEY
-        ? client
-        : key === "ag-ui"
-          ? { context: [{ description: RENTAL_A2UI_CONTEXT_DESCRIPTION, value: JSON.stringify(ids) }] }
-          : undefined,
+      get: (key: string) =>
+        key === RENTAL_SUPABASE_KEY ? (withClient ? client : null)
+          : key === "ag-ui" ? { context: [{ description: RENTAL_A2UI_CONTEXT_DESCRIPTION, value: JSON.stringify(ids) }] }
+            : undefined,
     },
   };
 }
-
 const dbRow = (id: string, title: string, monthly: number | null, daily: number | null = null) => ({
-  id, title, bedrooms: 2, price_monthly: monthly, price_daily: daily, currency: "COP",
+  id, title, bedrooms: 2, bathrooms: 1, neighborhood: "Laureles", size_sqm: 68,
+  wifi_speed: 80, amenities: ["Balcony"], price_monthly: monthly, price_daily: daily, currency: "COP",
 });
-
 type Result = {
   ok: boolean;
-  rows: Array<{ id: string; title: string; bedrooms: number | null; price: number | null; currency: string | null; period: "month" | "night" | null }>;
+  rows: Array<{ id: string; title: string; bedrooms: number | null; bathrooms: number | null;
+    priceMonthly: number | null; priceNightly: number | null; currency: string | null;
+    wifiSpeedMbps: number | null; neighborhood: string | null; sizeSqm: number | null; amenities: string[] }>;
   rejected: string[];
   message: string;
 };
 async function run(input: { ids?: string[]; positions?: number[] }, ctx: unknown): Promise<Result> {
   return await showComparisonTableTool.execute!(input, ctx as never) as unknown as Result;
 }
-
 describe("showComparisonTableTool", () => {
-  it("resolves positions and returns verified facts in display order", async () => {
-    const result = await run(
-      { positions: [1, 2] },
-      context([dbRow(ids[0], "First", 2_400_000), dbRow(ids[1], "Second", 2_500_000)]),
-    );
+  it("resolves position six and seven in display order (not limited to five)", async () => {
+    const result = await run({ positions: [6, 7] }, context([
+      dbRow(ids[6], "Seventh", 2_500_000), dbRow(ids[5], "Sixth", 2_400_000),
+    ]));
     expect(result.ok).toBe(true);
-    expect(result.rows.map((row) => row.title)).toEqual(["First", "Second"]);
-    expect(result.rows[0]).toMatchObject({ price: 2_400_000, currency: "COP", period: "month", bedrooms: 2 });
+    expect(result.rows.map((row) => row.title)).toEqual(["Sixth", "Seventh"]);
+    expect(result.rows[0]).toMatchObject({
+      priceMonthly: 2_400_000, currency: "COP", bedrooms: 2, bathrooms: 1,
+      neighborhood: "Laureles", sizeSqm: 68, wifiSpeedMbps: 80, amenities: ["Balcony"],
+    });
   });
 
-  it("rejects a browser ID outside the published results", async () => {
-    const result = await run(
-      { ids: [ids[0], "37a05b09-f560-4776-92fd-b8bb2b92e699"] },
-      context([dbRow(ids[0], "First", 2_400_000)]),
-    );
+  it("reads both recorded prices without conversion", async () => {
+    const result = await run({ ids: [ids[0], ids[1]] }, context([
+      dbRow(ids[0], "Both rates", 2_400_000, 80_000),
+      dbRow(ids[1], "Monthly only", 2_500_000),
+    ]));
+    expect(result.rows[0]).toMatchObject({ priceMonthly: 2_400_000, priceNightly: 80_000 });
+    expect(result.rows[1]).toMatchObject({ priceMonthly: 2_500_000, priceNightly: null });
+  });
+
+  it("rejects a forged ID outside the current result set", async () => {
+    const result = await run({ ids: [ids[0], "37a05b09-f560-4776-92fd-b8bb2b92e699"] }, context([
+      dbRow(ids[0], "First", 2_400_000),
+    ]));
     expect(result.ok).toBe(false);
     expect(result.rows).toEqual([]);
   });
 
-  it("follows the card period and prefers the nightly rate when both exist", async () => {
-    const result = await run(
-      { ids: [ids[0], ids[1]] },
-      context([dbRow(ids[0], "Both", 2_400_000, 80_000), dbRow(ids[1], "Monthly", 2_500_000)]),
-    );
-    expect(result.rows[0]).toMatchObject({ price: 80_000, period: "night" });
-    expect(result.rows[1]).toMatchObject({ price: 2_500_000, period: "month" });
+  it("fails closed without request-scoped RLS client, not anonymous fallback", async () => {
+    const result = await run({ positions: [1, 2] }, context([dbRow(ids[0], "A", 2_400_000), dbRow(ids[1], "B", 2_500_000)], { withClient: false }));
+    expect(result.ok).toBe(false);
+    expect(result.rows).toEqual([]);
   });
 
-  it("keeps missing prices unknown instead of inventing a rate", async () => {
-    const result = await run(
-      { ids: [ids[0], ids[1]] },
-      context([dbRow(ids[0], "First", 2_400_000), dbRow(ids[1], "Second", null, null)]),
-    );
+  it("does not invent unknown prices, size, or Wi-Fi speed", async () => {
+    const incomplete = { ...dbRow(ids[1], "Unknown", null), size_sqm: null, wifi_speed: null, amenities: null };
+    const result = await run({ ids: [ids[0], ids[1]] }, context([
+      dbRow(ids[0], "First", 2_400_000), incomplete,
+    ]));
     expect(result.ok).toBe(true);
-    expect(result.rows[1]).toMatchObject({ price: null, period: null });
+    expect(result.rows[1]).toMatchObject({
+      priceMonthly: null, priceNightly: null, wifiSpeedMbps: null, sizeSqm: null, amenities: [],
+    });
+  });
+
+  it("refuses inaccessible second row even when listed in browser hints", async () => {
+    const result = await run({ ids: [ids[0], ids[1]] }, context([dbRow(ids[0], "First", 2_400_000)]));
+    expect(result.ok).toBe(false);
+    expect(result.rows).toEqual([]);
   });
 });

@@ -12,6 +12,7 @@ export const rentalSearchBodySchema = z.object({
   neighborhood: z.string().optional(),
   minBedrooms: z.number().int().min(0).optional(),
   maxBedrooms: z.number().int().min(0).optional(),
+  furnished: z.boolean().optional(),
   maxPricePerNight: z.number().positive().optional(),
   maxPriceMonthly: z.number().positive().safe().optional(),
   budgetCurrency: z.enum(["COP", "USD"]).optional(),

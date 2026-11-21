@@ -32,10 +32,9 @@ describe("buildMatchReason — bedrooms", () => {
 });
 
 describe("unappliedRentalRequests", () => {
-  it("finds pets and furnished in the renter's own words", () => {
+  it("reports unsupported pet requests but not supported furnishing", () => {
     expect(unappliedRentalRequests("Find me a furnished 2 bedroom in Laureles, pet friendly")).toEqual([
       "pet-friendly",
-      "furnished",
     ]);
     expect(unappliedRentalRequests("I have a dog")).toEqual(["pet-friendly"]);
   });
@@ -43,15 +42,15 @@ describe("unappliedRentalRequests", () => {
   it("does not fire on ordinary searches or look-alike words", () => {
     expect(unappliedRentalRequests("2 bedroom in Laureles under $1500 a month")).toEqual([]);
     expect(unappliedRentalRequests("a place with a carpet and a catalog")).toEqual([]);
-    expect(unappliedRentalRequests("unfurnished please")).toEqual(["unfurnished"]);
+    expect(unappliedRentalRequests("unfurnished please")).toEqual([]);
   });
 });
 
 describe("fastPathRentalSummary — requests the search cannot apply", () => {
   it("names them after the results instead of dropping them silently", () => {
-    const text = fastPathRentalSummary(2, 2, { unappliedRequests: ["pet-friendly", "furnished"] });
+    const text = fastPathRentalSummary(2, 2, { unappliedRequests: ["pet-friendly", "parking"] });
     expect(text.startsWith("Found 2 rentals")).toBe(true);
-    expect(text).toContain("I can't filter by pet-friendly and furnished yet, so check each card.");
+    expect(text).toContain("I can't filter by pet-friendly and parking yet, so check each card.");
   });
 
   it("adds nothing when every request was applied", () => {
@@ -89,9 +88,9 @@ describe("budget honesty", () => {
 
 describe("unappliedRentalNotice — one sentence for every rental answer path", () => {
   it("is exactly the sentence the fast path appends after results", () => {
-    const labels = ["pet-friendly", "furnished"];
+    const labels = ["pet-friendly", "parking"];
     expect(unappliedRentalNotice(labels)).toBe(
-      "I can't filter by pet-friendly and furnished yet, so check each card.",
+      "I can't filter by pet-friendly and parking yet, so check each card.",
     );
     expect(fastPathRentalSummary(2, 2, { unappliedRequests: labels })).toContain(
       unappliedRentalNotice(labels),

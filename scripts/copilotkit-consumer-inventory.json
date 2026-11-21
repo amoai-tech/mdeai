@@ -30,7 +30,7 @@
       "classification": "migrate",
       "step": 9,
       "implicitContract": true,
-      "note": "Asserts the shared props shape, including `showDevConsole: false` and the absence of the v1 `agent` carrier. Must fail if a legacy prop reappears."
+      "note": "Asserts the shared v2 props shape, including `enableInspector: false`, no obsolete `showDevConsole`, and no v1 `agent` carrier. Must fail if a legacy prop reappears."
     },
     {
       "file": "src/app/api/copilotkit/[[...path]]/route.ts",
@@ -390,6 +390,11 @@
       "note": "SAN-1630 + SAN-1654: one v2 createGenerativeUI catalog extending the official standardUI with RentalCard and EventCard; each card resolves only an authorized ID from the thread result history and mounts no provider or run."
     },
     {
+      "file": "src/components/copilot/a2ui/rental-comparison-surface.tsx",
+      "classification": "keep",
+      "note": "SAN-1681: a single mounted v2 GenerativeUISurface named rental-comparison on the Rentals page for the official Table/Column, grounded summary and ID-only existing rental actions. The full chat retains its built-in chat target; neither surface fetches data or adds another provider."
+    },
+    {
       "file": "src/components/copilot/a2ui/rental-recommendations-surface.tsx",
       "classification": "keep",
       "note": "SAN-1656: one v2 GenerativeUISurface named rental-recommendations, mounted on the Rentals page only; it registers a target plus component allowlist and fetches or stores nothing, so cards keep resolving through the existing catalog."
@@ -443,6 +448,11 @@
       "file": "src/components/copilot/a2ui/__tests__/event-recommendations-surface.test.tsx",
       "classification": "keep",
       "note": "SAN-1653: test-only mock of the v2 generative-ui module proving the Events surface registers the target with a runtime and renders nothing without one; no provider or run is created."
+    },
+    {
+      "file": "src/components/rentals/__tests__/rental-filter-panel-actions-recovery.test.tsx",
+      "classification": "test-only",
+      "note": "F5: mocks the v2 generative-ui function hook to capture the Apply handler and proves the in-flight guard is released after a navigation that never changed the URL filters; no provider or run is created."
     }
   ]
 }
