@@ -389,8 +389,9 @@ function RentalBrowseViewInner({
                 return (
                   <RentalBrowseCard
                     key={r.id}
-                    mediaLayout="inline"
+                    mediaLayout="cover"
                     rental={r}
+                    resultSet={shownResults}
                     matchParams={matchParams}
                     detailSearch={detailSearch}
                     testId={`rental-card-${r.id}`}
