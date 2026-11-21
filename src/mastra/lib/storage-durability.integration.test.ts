@@ -164,4 +164,52 @@ describe.runIf(runIntegration)("VEB-MVP-010 Postgres cold-start durability", () 
     },
     120_000,
   );
+
+  it(
+    "allows one suspended venue workflow resume across two Postgres-backed runners",
+    async () => {
+      assertLoopbackDatabaseUrl(process.env.DATABASE_URL, "VEB_MVP_010_INTEGRATION", {
+        allowRemoteHostEnv: REMOTE_DB_HOST_PIN,
+      });
+
+      const startRun = await buildMastra()
+        .getWorkflow(WORKFLOW_NAME)
+        .createRun();
+      const started = await startRun.start({
+        inputData: { bookingId: BOOKING_ID, userId: USER_ID },
+      });
+      expect(started.status).toBe("suspended");
+      runIdsToCleanup.push(startRun.runId);
+
+      // Simulate separate server instances using distinct PostgresStore pools.
+      resetMastraStorageForTests();
+      const runnerA = await buildMastra()
+        .getWorkflow(WORKFLOW_NAME)
+        .createRun({ runId: startRun.runId });
+      resetMastraStorageForTests();
+      const runnerB = await buildMastra()
+        .getWorkflow(WORKFLOW_NAME)
+        .createRun({ runId: startRun.runId });
+
+      const decision = {
+        step: "suspend-for-admin-review",
+        resumeData: { decision: "approved" as const, actorId: ACTOR_ID },
+      };
+      const outcomes = await Promise.allSettled([
+        runnerA.resume(decision),
+        runnerB.resume(decision),
+      ]);
+      const successes = outcomes.filter(
+        (result) => result.status === "fulfilled" && result.value.status === "success",
+      );
+      const rejected = outcomes.filter((result) => result.status === "rejected");
+      expect(successes).toHaveLength(1);
+      expect(rejected).toHaveLength(1);
+      expect(String((rejected[0] as PromiseRejectedResult).reason)).toMatch(
+        /WORKFLOW_RESUME_ALREADY_CLAIMED|already claimed/i,
+      );
+      expect(applyEventBookingAdminDecision).toHaveBeenCalledTimes(1);
+    },
+    120_000,
+  );
 });
