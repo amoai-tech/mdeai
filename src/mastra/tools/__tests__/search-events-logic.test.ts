@@ -15,6 +15,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   mapCategory,
+  dbEventTypesForCategory,
   extractNeighborhood,
   dateWindow,
   BOGOTA_OFFSET_MS,
@@ -55,6 +56,12 @@ describe('mapCategory', () => {
     expect(mapCategory('sport')).toBe('sport');
     expect(mapCategory('food')).toBe('food');
     expect(mapCategory('festival')).toBe('culture');
+  });
+
+  it('includes the real pageant event type in the same Culture query that labels its card', () => {
+    expect(mapCategory('pageant')).toBe('culture');
+    expect(dbEventTypesForCategory('culture')).toContain('pageant');
+    expect(dbEventTypesForCategory('music')).not.toContain('pageant');
   });
 
   it('returns "culture" for null or unrecognised event_type', () => {
