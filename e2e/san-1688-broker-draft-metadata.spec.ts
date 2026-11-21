@@ -1,6 +1,6 @@
 /**
- * SAN-1688 · a broker saving a free-text address must not wipe a reused draft's
- * provenance metadata.
+ * SAN-1688 · saving free-text or Google-selected addresses must not wipe a
+ * reused broker draft's provenance metadata.
  *
  *   PLAYWRIGHT_WEB_SERVER_COMMAND="npm run dev:ui:worktree" SMOKE_BASE_URL=http://localhost:3002 \
  *     npx playwright test e2e/san-1688-broker-draft-metadata.spec.ts --project=chromium
@@ -10,7 +10,8 @@
  * trigger that raises 42501 when `is_test_fixture`/`inventory_kind` disappears, so
  * only a real authenticated UPDATE proves the save still succeeds. The spec seeds a
  * draft with fixture/provenance keys (service-role setup), saves as the broker, and
- * asserts the place keys are gone while everything else survives.
+ * asserts the free-text save removes stale place keys and the subsequent
+ * Google-selected save adds only verified place keys without losing provenance.
  *
  * It writes real QA rows and therefore removes them and re-queries to prove zero.
  */
@@ -31,7 +32,7 @@ import {
 test.use({ screenshot: "off", trace: "off", video: "off" });
 
 test.describe("SAN-1688 · reused onboarding draft keeps provenance", () => {
-  test("saving a free-text address removes only the place keys", async ({ page }, testInfo) => {
+  test("saving free-text and Google-selected addresses preserves draft provenance", async ({ page }, testInfo) => {
     test.skip(!hasE2eEnv(), "E2E Supabase env missing");
     test.setTimeout(240_000);
 
@@ -112,6 +113,34 @@ test.describe("SAN-1688 · reused onboarding draft keeps provenance", () => {
       expect(metadata.formatted_address).toBeUndefined();
       expect(metadata.address_source).toBeUndefined();
 
+      // 4. Select a REAL Google Places result, not a fabricated ID. Saving the
+      // reused draft must preserve all non-place metadata through the live DB
+      // provenance trigger while replacing only the address-owned keys.
+      await page.goto("/app/rentals/onboarding", { waitUntil: "domcontentloaded" });
+      const selectedPlaceId = await saveOnboarding(
+        page,
+        "Calle 44 Laureles Medellín, Antioquia, Colombia",
+        true,
+      );
+      expect(selectedPlaceId).toBeTruthy();
+      await page.waitForURL(/\/app\/rentals\/listings/, { timeout: 60_000 });
+
+      const { data: selected, error: selectedError } = await admin
+        .from("apartments")
+        .select("id, metadata")
+        .eq("id", apartmentId)
+        .single();
+      if (selectedError || !selected) throw new Error(`selected-place readback failed: ${selectedError?.message}`);
+      expect(selected.id).toBe(apartmentId);
+      const selectedMetadata = (selected.metadata ?? {}) as Record<string, unknown>;
+      expect(selectedMetadata.inventory_kind).toBe("test_fixture");
+      expect(selectedMetadata.is_test_fixture).toBe(true);
+      expect(selectedMetadata.review_required_reason).toBe("material edit after publication");
+      expect(selectedMetadata.review_required_at).toBe("2026-11-19T00:00:00.000Z");
+      expect(selectedMetadata.place_id).toBe(selectedPlaceId);
+      expect(typeof selectedMetadata.formatted_address).toBe("string");
+      expect(selectedMetadata.address_source).toBe("places_search");
+
       await page.screenshot({
         path: testInfo.outputPath("san-1688-draft-metadata-preserved.png"),
         fullPage: true,
@@ -122,7 +151,11 @@ test.describe("SAN-1688 · reused onboarding draft keeps provenance", () => {
   });
 });
 
-async function saveOnboarding(page: import("@playwright/test").Page, address: string) {
+async function saveOnboarding(
+  page: import("@playwright/test").Page,
+  address: string,
+  selectGooglePlace = false,
+): Promise<string | null> {
   await expect(page.locator('[data-testid="rentals-onboarding"]')).toBeVisible();
   await page.addStyleTag({ content: "#cpk-web-inspector { display: none !important; }" });
 
@@ -147,7 +180,25 @@ async function saveOnboarding(page: import("@playwright/test").Page, address: st
   await profileContinue.click({ timeout: 15_000 });
 
   await expect(page.locator('[data-testid="ro-step-listing"]')).toBeVisible();
-  await page.locator("#ro-address").fill(address);
+  let selectedPlaceId: string | null = null;
+  if (selectGooglePlace) {
+    // Use actual authenticated Places results; do not fake a place ID or
+    // shortcut the server's verification step.
+    const responsePromise = page.waitForResponse(
+      (response) => response.url().includes("/api/places/search?q=") && response.status() === 200,
+      { timeout: 30_000 },
+    );
+    await page.locator("#ro-address").fill(address);
+    const response = await responsePromise;
+    const payload = (await response.json()) as { results?: Array<{ placeId: string }> };
+    expect(payload.results?.length).toBeGreaterThan(0);
+    selectedPlaceId = payload.results?.[0]?.placeId ?? null;
+    expect(selectedPlaceId).toBeTruthy();
+    await expect(page.getByTestId("ro-address-option").first()).toBeVisible();
+    await page.getByTestId("ro-address-option").first().click();
+  } else {
+    await page.locator("#ro-address").fill(address);
+  }
   await page.locator("#ro-bedrooms").fill("2");
   await page.locator("#ro-bathrooms").fill("1");
   await page.locator("#ro-rent").fill("2400000");
@@ -158,6 +209,7 @@ async function saveOnboarding(page: import("@playwright/test").Page, address: st
 
   await expect(page.locator('[data-testid="ro-step-review"]')).toBeVisible();
   await page.getByTestId("ro-submit").click({ timeout: 15_000 });
+  return selectedPlaceId;
 }
 
 async function readNewestDraft(admin: SupabaseClient, landlordProfileId: string) {

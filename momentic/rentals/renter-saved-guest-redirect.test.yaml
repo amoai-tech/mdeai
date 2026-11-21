@@ -10,6 +10,24 @@ labels:
 retries: 0
 steps:
   - waitForUrl:
-      substring: /login?next=%2Fapp%2Fme%2Fsaved
+      substring: /login?
       timeout: 12000
+  - javascript:
+      code: |
+        const url = new URL(window.location.href);
+        const next = url.searchParams.get("next");
+        const target = next ? new URL(next, url.origin) : null;
+        const share = url.searchParams.get("_vercel_share");
+        // Vercel may carry its scoped preview token into the return URL.
+        // Accept only that matching token; never relax the saved-workspace path.
+        const safeQuery = target && (
+          target.searchParams.size === 0 ||
+          (target.searchParams.size === 1 && Boolean(share) &&
+            target.searchParams.get("_vercel_share") === share)
+        );
+        if (url.pathname !== "/login" || url.searchParams.getAll("next").length !== 1 ||
+            target?.origin !== url.origin || target?.pathname !== "/app/me/saved" || !safeQuery) {
+          throw new Error("Expected login redirect to saved workspace with only the matching preview share");
+        }
+      environment: BROWSER
   - assert: "The login screen is visible and does not expose private saved listings or renter account details. Do not sign in, create data, or submit anything."
