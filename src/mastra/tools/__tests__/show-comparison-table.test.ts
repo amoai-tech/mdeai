@@ -7,7 +7,7 @@ import { RENTAL_SUPABASE_KEY } from "../search-rentals";
 const ids = Array.from({ length: 10 }, (_, i) =>
   `37a05b09-f560-4776-92fd-b8bb2b92e6${String(i).padStart(2, "0")}`
 );
-function context(rows: Array<Record<string, unknown>> = [], { withClient = true, trustedPositions }: { withClient?: boolean; trustedPositions?: number[] } = {}) {
+function context(rows: Array<Record<string, unknown>> = [], { withClient = true, trustedPositions, visibleIds = ids }: { withClient?: boolean; trustedPositions?: number[]; visibleIds?: string[] } = {}) {
   const client = {
     from: () => ({
       select: () => ({
@@ -20,7 +20,7 @@ function context(rows: Array<Record<string, unknown>> = [], { withClient = true,
       get: (key: string) =>
         key === RENTAL_SUPABASE_KEY ? (withClient ? client : null)
           : key === COMPARISON_POSITIONS_KEY ? trustedPositions
-          : key === "ag-ui" ? { context: [{ description: RENTAL_A2UI_CONTEXT_DESCRIPTION, value: JSON.stringify(ids) }] }
+          : key === "ag-ui" ? { context: [{ description: RENTAL_A2UI_CONTEXT_DESCRIPTION, value: JSON.stringify(visibleIds) }] }
             : undefined,
     },
   };
@@ -78,6 +78,18 @@ describe("showComparisonTableTool", () => {
     );
     expect(result.ok).toBe(true);
     expect(result.rows.map((r) => r.id)).toEqual([ids[1], ids[2]]);
+  });
+
+  it("does not treat stale ordinal positions outside current hints as valid listings", async () => {
+    const result = await run(
+      { ids: [ids[0], ids[1]] },
+      context([
+        dbRow(ids[0], "First", 2_400_000),
+        dbRow(ids[1], "Second", 2_500_000),
+      ], { trustedPositions: [2, 5], visibleIds: ids.slice(0, 3) }),
+    );
+    expect(result.ok).toBe(false);
+    expect(result.rows).toEqual([]);
   });
 
   it("reads both recorded prices without conversion", async () => {

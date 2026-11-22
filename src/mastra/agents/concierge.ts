@@ -612,6 +612,8 @@ export const conciergeAgent = new Agent({
     // ID-list tool; the transport builds the official Column → Table. Forcing
     // render_ui itself produced empty operations, so it is not used here.
     { id: 'san1681-comparison-table-intent', processInputStep: ({ stepNumber, messages, requestContext }) => {
+      // Never carry trusted ordinal selection from a previous conversation turn.
+      if (stepNumber === 0) requestContext?.set(COMPARISON_POSITIONS_KEY, null);
       if (!shouldForceComparisonTable({ stepNumber, messages, requestContext })) return {};
       // The user's exact ordinals outrank model-chosen IDs. This is a trusted
       // server-side interpretation, not a new browser authority or search path.

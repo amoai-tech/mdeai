@@ -25,7 +25,8 @@ const EXPLICIT_RESULT_PAIR = /\b(?:compare|comparison)\b/i;
 export const COMPARISON_POSITIONS_KEY = "mdeai-comparison-requested-positions";
 
 const NUMBERED_RESULT = "(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|one|two|three|four|five|six|seven|eight|nine|ten|(?:10|[1-9])(?:st|nd|rd|th)?)";
-const NUMBERED_PAIR = new RegExp(`\\b(${NUMBERED_RESULT})\\s+(?:and|&|versus|vs\\.?)\\s+(${NUMBERED_RESULT})\\b`, "i");
+const NUMBERED_TOKEN = new RegExp(String.raw`\b(${NUMBERED_RESULT})\b`, "gi");
+const LIST_SEPARATOR = /^\s*(?:,\s*(?:and\s+)?|(?:and|&|versus|vs\.?)\s+)$/i;
 const NUMBER_WORDS = ["first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth"];
 const CARDINAL_WORDS = ["one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
 function resultNumber(word: string): number | null {
@@ -42,12 +43,38 @@ function resultNumber(word: string): number | null {
 export function comparisonRequestedPositions(messages: readonly MessageLike[]): number[] | null {
   const lastUser = [...messages].reverse().find((message) => message?.role === "user");
   const text = messageText(lastUser).trim();
-  if (/\b(?:first|top)\s+(?:two|2)\s+(?:apartments?|listings?|rentals?|results?)\b/i.test(text)) return [1, 2];
-  const pair = text.match(NUMBERED_PAIR);
-  if (!pair) return null;
-  const first = resultNumber(pair[1]);
-  const second = resultNumber(pair[2]);
-  return first !== null && second !== null && first !== second ? [first, second] : null;
+  const firstTwo = /\b(?:first|top)\s+(?:two|2)\s+(?:apartments?|listings?|rentals?|results?)\b/i.exec(text);
+  if (firstTwo) {
+    const extra = text.slice(firstTwo.index + firstTwo[0].length);
+    const additions = Array.from(
+      extra.matchAll(new RegExp(String.raw`(?:,|\band\b)\s*(?:the\s+)?(${NUMBERED_RESULT})\b`, "gi")),
+      (match) => resultNumber(match[1]),
+    ).filter((value): value is number => value !== null);
+    const unique = [...new Set([1, 2, ...additions])];
+    return unique.length <= 5 ? unique : null;
+  }
+
+  // A connected list of ordinals, not just the last pair. Plain counts such as
+  // "show two apartments" must not be mistaken for a requested card index.
+  const tokens = [...text.matchAll(NUMBERED_TOKEN)];
+  let sequence: number[] = [];
+  const sequences: number[][] = [];
+  for (let i = 0; i < tokens.length - 1; i++) {
+    const gap = text.slice(tokens[i].index! + tokens[i][0].length, tokens[i + 1].index!);
+    const left = resultNumber(tokens[i][0]);
+    const right = resultNumber(tokens[i + 1][0]);
+    if (LIST_SEPARATOR.test(gap) && left !== null && right !== null) {
+      if (!sequence.length) sequence.push(left);
+      sequence.push(right);
+    } else if (sequence.length) {
+      sequences.push(sequence);
+      sequence = [];
+    }
+  }
+  if (sequence.length) sequences.push(sequence);
+  if (sequences.length !== 1) return null;
+  const positions = [...new Set(sequences[0])];
+  return positions.length >= 2 && positions.length <= 5 ? positions : null;
 }
 const RENTAL_REFERENCE =
   /\b(apartments?|listings?|rentals?|these|those|them|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|two|three|four|five|six|seven|eight|nine|ten|\d+)\b/i;
