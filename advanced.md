@@ -1,331 +1,137 @@
 ---
-doc_id: MDEAI-ADVANCED
-title: mdeai.co — Advanced & Future Systems
-version: 2.1
-date: 2026-05-28
-status: Active
-audience: founders, product, future engineers
-prerequisites: tasks/MVP-REQUIRED.md (P0 all 🟢 before unfreezing ADV)
-canonical_execution: plan.md
-canonical_roadmap: roadmap.md
-legacy_deep_archive: docs/advanced.md
+title: MDE AI — Advanced AI and Future Product Systems
+updated: 2026-11-22
+status: Candidate roadmap; not an implementation or launch certification claim
+source_of_truth: roadmap.md for sequencing; Linear for live tasks; AGENTS.md for Phase A policy
 ---
 
-# mdeai.co — Advanced & Future Systems
+# MDE AI — Advanced AI and Future Systems
 
-> **What this answers:** *What do we build after MVP — in what order, under what gates, and what stays forbidden?*
->
-> **What this is not:** Phase 1 exit work. If a task mentions OpenClaw prod, Hermes hot-path, contests, sponsor marketplace, or “12 agents” for MVP — it is **mis-scoped**. Move it here or to [`tasks/advanced/`](./tasks/advanced/) when specced.
+**Purpose:** Decide which advanced capabilities to adopt, how they improve actual MDE user journeys, and how to reuse **CopilotKit, OpenBot, OpenFuse and OpenDots** without another agent/search/database platform.
 
-**Execution order (task IDs):** [`plan.md`](./plan.md) Tiers 3–10 · [`tasks/INDEX.md`](./tasks/INDEX.md) · ADV table in [`tasks/MVP-REQUIRED.md`](./tasks/MVP-REQUIRED.md)
+**Current phase:** **Phase A, prelaunch development.** It is valid to design, prototype, integrate and test advanced features **now** using the real MDE app and backend. No MVP completion, launch signoff, landlord ownership evidence, photo-rights paperwork, business approval, publication gate or rental eligibility is required to develop these features. Public-launch certification is a separate owner-initiated Phase B decision as defined in [AGENTS.md](AGENTS.md) and [mvp.md](mvp.md). Keep technical authentication, tenant isolation/RLS, audited privileged actions, accurate facts, safe payment testing and idempotency throughout.
 
-**Read first:** [`mvp.md`](./mvp.md) · [`roadmap.md`](./roadmap.md) · [`plan/unified-execution-review.md`](./plan/unified-execution-review.md)
+**Ownership:** [prd.md](prd.md) defines user outcomes; [roadmap.md](roadmap.md) defines NOW/NEXT/LATER; [mvp.md](mvp.md) defines **future launch acceptance**, not a development freeze; [spec.md](spec.md) and [plan.md](plan.md) define the engineering workflow; [DESIGN.MD](DESIGN.MD) controls visual direction; Linear owns exact task titles/status. This file proposes **advanced options**, not an independent backlog, live checklist or new agent architecture. Earlier 28 May 2026 plan is preserved [as historical source](docs/_archive/root-advanced-2026-05-28.md).
 
----
+## 1. Current baseline — verified against repository and upstream
 
-## Rule of contamination
+- MDE uses **Next.js / React + CopilotKit v2 + AG-UI + Mastra + Supabase**, with Gemini for current product agents, real Google Maps/Places, and Stripe for ticketing. On the inspected 22 Nov 2026 main snapshot, `package.json` pins `@copilotkit/react-core` and `@copilotkit/runtime` to **1.88.0**; always recheck the target SHA before coding.
+- Existing MDE browser-facing contract: `src/components/copilot/a2ui/mde-ui-catalog.tsx` extends official `standardUI`; the current app uses separate existing **Concierge** and **Host** CopilotKit providers, with a shared catalog contract rather than a shared private conversation. Some official controls/media remain deliberately omitted until real handlers exist.
+- **OpenBot**, **OpenFuse** and **OpenDots** are CopilotKit-related upstream applications, **not currently verified as installed MDE product runtimes**. Do not claim their agent computers, memory, tasks, Slack or browser tools already work inside MDE merely because their repositories have demonstrations.
+- The 2026 legacy rule *"no CopilotKit v2 migration until Mastra ships a bridge"* is **obsolete**: MDE already operates on CopilotKit v2; review actual installed APIs and existing Mastra transport. Older `plan/prd/*`, `tasks/MVP-REQUIRED.md`, `docs/advanced.md` and rigid W11/W19 schedules in the archived file are not active owners.
 
-Advanced capabilities need a **stable MVP** (paid ticket, published event, rental pins + lead, `/chat` + MAP-001 green). Until then:
+## 2. How the four products fit together
 
-- No OpenClaw production outbound  
-- No Hermes ranking on live chat latency path  
-- No native rental Stripe booking  
-- No contests, sponsor marketplace, or multi-agent fan-out  
-- No CopilotKit v2 migration unless Mastra ships an official v2 bridge  
+| System | Useful capability | Best MDE role | Adoption |
+| --- | --- | --- | --- |
+| **CopilotKit v2 + Standard Catalog** | Generative UI, reusable structured cards/forms/tables, typed UI actions and human-visible agent state | **Primary MDE product UI layer** for approved Rentals, Events, Places and operator journeys | **Use existing implementation now**; first complete [SAN-1675](https://linear.app/amo100/issue/SAN-1675) component contract and real page bindings |
+| **OpenBot** ([official repo](https://github.com/CopilotKit/OpenBot)) | Optional workspace for agents, browser/files/computer work, routines, external AG-UI agents, activity/audit views | An **optional managed coworker experience** for brokers/operators, *not* a second MDE concierge or booking backend | Prototype via authenticated AG-UI adapter only if a use case exceeds existing Mastra workflows |
+| **OpenFuse** ([official repo](https://github.com/CopilotKit/openfuse)) | Alpha personal-agent reference: visible browser/task plans, stop/continue, takeover, files and rich result cards across web/mobile | **UX/reference patterns** for long-running tasks, media/results and delegated research; can also be tried as the OpenBot OpenFuse skin | Reuse a small pattern or optional UI skin; no separate personal-agent database just to gain cards |
+| **OpenDots** ([official repo](https://github.com/CopilotKit/OpenDots)) | Alpha persistent coworker template: role-specific Dots, editable Spaces/pages, review and save, connected apps | **Review → edit → save and reusable workspaces** for listing/event/partner preparation; optional OpenBot OpenDots skin | Complete existing [SAN-1555](https://linear.app/amo100/issue/SAN-1555) workflow; do not clone OpenDots data stores or backend |
 
-**Allowed during MVP freeze:** `places-proxy` read infrastructure, Mastra shadow logging, manual Postiz posts (human publishes).
+**Important upstream update:** OpenBot now offers **OpenDots and OpenFuse as selectable UI skins** as part of its ecosystem, along with OpenDuet. To evaluate those experiences together, test **one OpenBot installation with skin selection**, not three separately deployed agent platforms. The community OpenDots/OpenFuse repos remain useful for studying UI/source implementation. Their readiness differs: OpenFuse and OpenDots explicitly describe themselves as alpha/template projects. Upstream repository readmes are capability references, not evidence of MDE integration.
 
----
+**Cost / license note:** OpenBot's application template is MIT, but its CopilotKit Intelligence integration is **separately licensed**, including deployment/evaluation terms; OpenFuse Rich Threads and OpenDots conversations can require configured Intelligence. Evaluate actual run cost, infrastructure, model/tool billing, data handling and version compatibility before deciding to host OpenBot. Do not assume a free drop-in replacement for MDE's existing self-hosted CopilotKit runtime.
 
-## Phase map (how this doc relates to the roadmap)
-
-| Horizon | Weeks (realistic) | Theme | This doc section |
-|---------|-------------------|-------|------------------|
-| **Post-MVP** | 11–18 | Moat, ops, bilingual, batch intelligence | §2 |
-| **Advanced** | 19–28 | Money automation, growth, supervised ops | §3–§6 |
-| **Scale** | 29+ | Multi-city, platform operator mode | §7 |
-
-Post-MVP still requires **human approval** on every external effect. Advanced adds **higher automation surface** — never “AI executes money or publish alone.”
-
----
-
-## 1. North-star (24-month intent)
-
-Medellín’s **structured AI concierge** — one chat, one map, one approval gate — with:
-
-| Pillar | Advanced end-state |
-|--------|------------------|
-| **Rentals** | Verified supply, nomad scoring, lease clarity (propose-only), optional Stripe Connect booking at 12% |
-| **Events** | Host ROI dashboard, sponsor matching, dynamic pricing (opt-in), check-in at scale |
-| **Concierge** | Full vertical routing (rentals, events, food, attractions) + trip memory + scam-filter moat |
-| **Ops** | Patricia approves outreach; OpenClaw runs batch jobs; Hermes improves rank offline |
-
-### Anti-vision (permanent rejects)
-
-| Reject | Why |
-|--------|-----|
-| AI as executor (auto-charge, auto-publish, auto-lease) | Propose → human approve → deterministic commit |
-| Second orchestrator (LangGraph, CrewAI, ADK in prod) | Mastra + CK only |
-| Maps as decision layer | Mastra tools + Supabase; map renders |
-| Scraping Google Maps / Facebook as supply v1 | Legal + quality; landlord-direct + partners later |
-| Crypto tickets, global travel app, in-house payments | Stripe + Medellín depth |
-| 15+ nominal agents per vertical | Router + workflows |
-
----
-
-## 2. Post-MVP (weeks 11–18) — “moat without blast radius”
-
-**Unfreeze gate:** MVP exit checklist in [`roadmap.md`](./roadmap.md) all green on staging.
-
-### 2.1 Maps & geo ([`plan/maps/maps-prd.md`](./plan/maps/maps-prd.md))
-
-| Initiative | Outcome | Persona | Proof |
-|------------|---------|---------|-------|
-| **MAP-011** route previews | Commute minutes on cards; parse `"180s"` duration | Camila | Unit + card screenshot |
-| **MAP-012** neighborhood intelligence | Laureles vs Poblado cards (offline Gemini `ai_summary`, not US Places summaries) | Camila | No empty `generativeSummary` in CO |
-| Place Photos on open | Thumbnails via Place Photos (New); server fetch | All | Photo only on user open |
-| **ECL** mobile sheet | `<gmpx-overlay-layout>` behind flag; **one** Maps loader | Camila mobile | 390×844 Playwright |
-| `places_request_log` + quota alerts | Patricia sees spend | Patricia | SQL + alert |
-
-**Defer past Post-MVP:** Contextual View widget, Maps Imagery Grounding, 3D/deck.gl, fleet tracking.
-
-### 2.2 Real estate ([`plan/real-estate/draft/prd-real-estateV2.md`](./plan/real-estate/draft/prd-real-estateV2.md))
-
-| Initiative | Outcome | Proof |
-|------------|---------|-------|
-| Hermes **batch** rerank | NDCG@5 on golden set when labeled data exists | Eval harness green |
-| Landlord dashboard MVP | Inbox, response KPIs, showing rate | 1 landlord weekly active |
-| Scam filter ingest | `considered_but_rejected` in `ToolResponse` | Trust table in UI |
-| Application + showing depth | 4-step apply; calendar sync | 1 E2E showing |
-| **Lingui es-CO** | Spanish UI (Phase 2 language) | Catalog + `/chat` |
-
-**Still frozen:** production WhatsApp outbound, MLS/scrape ingest, LLM-triggered booking writes.
-
-### 2.3 Events ([`plan/events/events-prd.md`](./plan/events/events-prd.md))
-
-| Initiative | Outcome | Proof |
-|------------|---------|-------|
-| Staff scanner PWA | `/staff/scan/:eventId/:token` | 1 check-in at live event |
-| Refunds (manual policy) | Ops playbook + Stripe dashboard | Doc only |
-| Event discovery polish | `event-discovery-workflow` + map pins | Tourist query → pins |
-| Admin Patricia | `/admin/events`, moderation queue | RLS negative test |
-
-**Cut from Post-MVP:** Vendor agent, Budget agent, Marketing agent, Activations agent — use **workflows + cron**, not new Mastra agent names.
-
-### 2.4 Platform & AI
-
-| Initiative | Outcome | Proof |
-|------------|---------|-------|
-| Path A completion | F14–F20 agent port if not in MVP | Parity smoke |
-| `packages/contracts` extract | Shared Zod for edge + app | Single import path |
-| CopilotKit **v2 evaluation** | Only after official Mastra bridge docs | Spike doc, no mixed imports |
-| Vercel Queues spike | OpenClaw job transport | 1 job processed |
-| Affiliate links (Airbnb/Booking) | Referral only — not native booking | Disclosure UI |
-
----
-
-## 3. Advanced — automation & money (weeks 19–28)
-
-**Unfreeze gate:** Post-MVP green + **30 days** production soak with 0 P0 Sentry + Places quota stable.
-
-### 3.1 Rentals — revenue automation
-
-| Initiative | Outcome | Risks |
-|------------|---------|-------|
-| **Stripe rental booking** | 12% service fee E2E; Connect if needed | PCI — hosted checkout only |
-| Lease review workflow | PDF → structured propose-only summary + disclaimer | Not legal advice — UI disclaimer |
-| Predictive lead scoring | Hermes labels → hot/warm/cold on dashboard | No auto-spam landlords |
-| Landlord SaaS tier | Featured listings subscription | Sales ops required |
-
-### 3.2 Events — growth
-
-| Initiative | Outcome | Risks |
-|------------|---------|-------|
-| Dynamic pricing (opt-in) | Tier price rules vs inventory/time | Host trust — default OFF |
-| Sponsor marketplace v1 | Sponsor profiles, brand-fit score, **HITL** outreach | AGPL Hi.Events patterns only |
-| Group buy / split pay | Multi-payer checkout | Stripe complexity |
-| Friends-going social proof | Requires friend graph + privacy | PII — default private |
-
-### 3.3 Concierge — depth
-
-| Initiative | Outcome | Risks |
-|------------|---------|-------|
-| **Map itinerary** (`trips` / `trip_items`) | Multi-day pin plan | Scope creep |
-| Deep research mode | `research-canvas` pattern; citations | Cost + latency |
-| Multi-source listing ingest | Scam filter at scale | Legal review required |
-| MCP Apps venue picker | iframe interactive picker | Security review |
-
-### 3.4 OpenClaw — supervised ops ([`plan/prd/09-openclaw.md`](./plan/prd/09-openclaw.md))
-
-OpenClaw is **background execution**, not chat.
-
-| Job type | Example | Gate |
-|----------|---------|------|
-| Enrichment | Nightly listing quality scan | Read-only + logs |
-| Follow-up drafts | Stale lead WhatsApp **draft** | Paperclip approve |
-| Content drafts | Postiz caption generation | Human publishes |
-| Reconciliation | Stripe vs `event_orders` mismatch | Alerts only |
-
-**Architecture (drop-in after Phase 1 seams):**
-
-```text
-Vercel Cron / Queue → OpenClaw worker → Mastra workflow
-  → approval_requests (if external) → outbox_events → WhatsApp/Postiz/edge
-```
-
-**Never:** auto-send WhatsApp, auto-charge, auto-publish event, autonomous multi-agent campaigns without per-step approval.
-
-### 3.5 Hermes — intelligence layer
-
-| Capability | When | Hot path? |
-|------------|------|-----------|
-| Listing/apartment rerank | ≥100 labeled interactions | **No** — batch |
-| Lead scoring | CRM labels exist | Batch → dashboard |
-| Neighborhood market reports | Weekly cron | Batch |
-| Sponsor/influencer fit | Sponsor module live | Batch |
-
-Hermes **never** replaces Mastra router on user chat p95.
-
-### 3.6 Paperclip — governance
-
-Approvals for: landlord forward, sponsor pitch, bulk outreach, budget thresholds. Same `decide_approval()` RPC as Roberto publish — Patricia UI at `/admin/approvals`.
-
----
-
-## 4. Advanced — contests & sponsors (Phase 3 module)
-
-**Unfreeze gate:** ≥10 paid events, sponsor legal template, anti-fraud design review.
-
-| System | What | Why advanced |
-|--------|------|--------------|
-| **Contest engine** | Miss Elegance–style voting + judges + fans | Identity, fraud, payments adjacent |
-| **Sponsor marketplace** | Two-sided fees, placement tiers | No sponsor supply in MVP |
-| **Influencer discovery** | Geo + engagement scoring | OpenClaw user stories — HITL only |
-
-Canon: [`plan/events/events-prd.md`](./plan/events/events-prd.md) § Advanced — do not copy Hi.Events AGPL code.
-
----
-
-## 5. Advanced — AI & Mastra platform
-
-| Initiative | Purpose | Constraint |
-|------------|---------|------------|
-| Supervisor concierge | Replace router-only when eval proves need | Still one Mastra instance |
-| `@mastra/evals` live scorers | NDCG, tool appropriateness | CI gate |
-| GraphRAG on listings | >100 listings | Batch index |
-| AgentBrowser verification | Admin moderation scale | Sandboxed |
-| Voice concierge (es-CO) | Mobile WA handoff | Phase 3+ |
-| A2A landlord partners | Multi-city | Scale phase |
-
-**CopilotKit v2 migration:** only when CopilotKit documents Mastra + v2 path; **never** mix v1/v2 imports.
-
----
-
-## 6. Advanced — maps & geo (beyond MAP-012)
-
-| Initiative | Notes |
-|------------|-------|
-| Gemini Maps grounding panel | Optional; Lite MCP remains default live path |
-| Weather (`lookup_weather`) | Event outdoor copy; `unitsSystem` camelCase |
-| Offline map tiles / 3D | Not planned Phase 1–3 |
-| Heatmaps / fleet | Reject |
-
----
-
-## 7. Scale (weeks 29+) — multi-city & operator mode
-
-| Initiative | Outcome |
-|------------|---------|
-| Multi-city scaffold | Export Medellín playbook (config, hood profiles, legal) |
-| Operator dashboards | Cross-city KPIs |
-| OpenClaw operational AI | Full job catalog with SLOs |
-| Native mobile apps | Only if mobile web insufficient |
-| Stripe Connect marketplace rules | If rental volume justifies |
-
----
-
-## 8. Gates checklist (when to unfreeze)
-
-| Gate ID | Requirement | Unlocks |
-|---------|-------------|---------|
-| G-MVP | [`mvp.md`](./mvp.md) four outcomes + `npm run floor` | Post-MVP §2 |
-| G-SOAK | 30d prod, 0 P0, attribution on all grounded UI | Advanced §3 |
-| G-EVENTS | ≥10 paid events | Dynamic pricing, sponsors |
-| G-RENTALS | ≥1 paid booking + 25 listings | Stripe rental scale, scrape ingest |
-| G-OPS | Paperclip + WA templates approved | OpenClaw prod send |
-| G-LEGAL | Contest + sponsor counsel sign-off | §4 |
-
----
-
-## 9. Dependency diagram (advanced layer)
+## 3. Architecture — reuse MDE instead of copying an AI agent stack
 
 ```mermaid
 flowchart TB
-  MVP[MVP exit G-MVP]
-  P2[Post-MVP moat]
-  ADV[Advanced automation]
-  SCALE[Scale multi-city]
-  MVP --> P2
-  P2 --> ADV
-  ADV --> SCALE
-  P2 --> MAP12[MAP-011-012]
-  P2 --> HERMES_BATCH[Hermes batch]
-  ADV --> STRIPE_RE[Stripe rental E2E]
-  ADV --> OC[OpenClaw prod gated]
-  ADV --> SPONSOR[Sponsor marketplace]
-  OC --> HERMES_BATCH
-  STRIPE_RE --> SCALE
+  U["Renter / Broker / Host"] --> UI["MDE Next.js + CopilotKit v2"]
+  UI --> CAT["Shared typed Standard Catalog contract"]
+  UI --> MB["Existing Mastra agents / AG-UI bridge"]
+  MB --> T["Existing authenticated tools and workflows"]
+  T --> DB[("Supabase / RLS / atomic RPCs")]
+  T --> MAP["Existing Google Maps / Places"]
+  T --> PAY["Existing Stripe / webhook"]
+  O["Optional OpenBot coworker workspace"] -.->|Authenticated AG-UI adapter| MB
+  O --> SKIN["OpenDots or OpenFuse UI skin"]
+  UI --> REVIEW["MDE review/edit/save state & receipts"]
+  REVIEW --> T
 ```
 
----
+**Boundary rules:**
 
-## 10. Value vs effort (prioritization hint)
+1. **One canonical MDE transaction owner.** An agent may prepare a listing change, request, event draft, reconciliation or follow-up, but only MDE's existing server action/Mastra tool/RPC commits the authorized operation. No parallel OpenBot booking, ticket or approval writer.
+2. **MDE remains usable if OpenBot is offline.** A broker can view listings, manage viewings and save drafts; a renter can filter, inspect Details and request a viewing without an external coworker.
+3. **Per-user identity must be real.** An optional AG-UI connection needs an authenticated user/agent mapping, server-side broker scope, explicit endpoint allowlist, least-privilege tools, audit trail, and readback. Never reuse one privileged OpenBot/Intelligence credential as all MDE users, or expose service role / secrets to a browser.
+4. **Approval UI is a capability, not a Phase A business gate.** Support review/edit/ignore/accept patterns for consequential data edits, but **do not enforce landlord ownership/photo-rights/partner approval or booking/publishing paperwork prerequisites during development**. Required technical confirmations for destructive commands, external sends and financial operations remain.
+5. **Separate history/stores.** Existing Mastra threads and Supabase own MDE conversations/records; external coworker histories require a measured integration and explicit data-retention plan. Avoid silently duplicating conversations, personal information, and model/tool costs.
+6. **Official catalog first.** For MDE product UI, bind typed `Card`, `Table`, `Carousel`, `Form` and other installed components to actual app state and controlled actions. Register only supported components with real handlers; initial/empty/error pages work without waiting for an LLM turn.
+7. **Truth/provenance:** source listing/place/event IDs and known coordinates/prices must resolve in the canonical service. The coworker can summarize a verified result, but cannot invent locations, payments, booking authority, ownership or a successful action.
 
-Use **RICE** when reprioritizing ([`mde-roadmap`](./.claude/skills/mde-roadmap/update-reprioritize.md)). Default order after MVP:
+## 4. Implementation strategy — the minimum incremental path
 
-1. MAP-011–012 + scam filter (trust + Camila retention)  
-2. Landlord dashboard + Hermes batch (supply side)  
-3. Stripe rental booking (revenue)  
-4. OpenClaw sandbox → prod (distribution)  
-5. Sponsor marketplace (new revenue line)  
-6. Contests (brand, high legal cost)  
+### Stage A — now: component-first MDE foundation
 
----
+**Own existing issues; do not create duplicates:** [SAN-1675 · MDE AI — Map Official Standard Catalog Components to Existing Pages](https://linear.app/amo100/issue/SAN-1675), [SAN-1691 · EPIC · MDE Rentals — Playground GenUI: Create Listings, Discovery & Broker Dashboard](https://linear.app/amo100/issue/SAN-1691).
 
-## 11. Risks specific to advanced work
+- Verify exact pinned SDK, source-backed component IDs, supported slots, `standardUI` omissions and agent-guide drift tests.
+- Ship **one deterministic component-first working vertical slice**: card/map/Details → real typed action → API/database receipt. No new provider, search engine or agent backend.
+- Preserve existing in-scope pages and handlers until real feature parity and 390px browser proof.
 
-| Risk | Mitigation |
-|------|------------|
-| OpenClaw spam / Ley 1581 | Templates + approval + suppression list |
-| Hermes wrong rank on thin data | Stay batch until NDCG baseline |
-| Sponsor AGPL contamination | Patterns only from Hi.Events |
-| Contest fraud | Identity + rate limits + manual review |
-| CK v2 half-migration | Spike branch; never production mix |
-| Multi-city dilutes moat | Config-driven; one city playbook export first |
+**Pass:** a user can complete the relevant MDE action with no AI turn; a generative response can additionally render the same source-backed facts without inventing or overwriting a newer human decision.
 
----
+### Stage B — now/next: OpenDots-style reviewed actions and saved results
 
-## 12. Task & doc index
+**Owner:** [SAN-1555 · MDE AI OpenDots — Map Editable AI Reviews and Saved Results to Existing Workflows](https://linear.app/amo100/issue/SAN-1555); optional cross-domain idea tracking [SAN-1550](https://linear.app/amo100/issue/SAN-1550).
 
-| Need | Where |
-|------|-------|
-| **Execution order now** | [`roadmap.md`](./roadmap.md) |
-| **MVP scope** | [`mvp.md`](./mvp.md) |
-| **Maps advanced** | [`plan/maps/maps-prd.md`](./plan/maps/maps-prd.md) §5, §7.3–7.4 |
-| **RE advanced** | [`plan/real-estate/draft/roadmap.md`](./plan/real-estate/draft/roadmap.md) P4–P5 |
-| **Events advanced** | [`plan/events/events-prd.md`](./plan/events/events-prd.md) §2 Post-MVP / Advanced |
-| **OpenClaw** | [`plan/prd/09-openclaw.md`](./plan/prd/09-openclaw.md) |
-| **Legacy long-form archive** (pre-mdeapp) | [`docs/advanced.md`](./docs/advanced.md) — historical detail; verify against v2 stack before trusting paths |
-| **Advanced task specs** | `tasks/advanced/` (when created) |
+- Use existing review proposal, version, draft and receipt contracts; let users edit suggested listing/event/partner fields, **Ignore** with no write, or **Save** exactly the edited values once.
+- A longer research result may be a source-backed saved page/report *only* if a current MDE Saved/Trip/Host requirement benefits; otherwise keep it in the existing thread/workspace.
+- Test stale suggestion versus newer user edit, duplicate replay, restart, unauthorized records, error recovery and user-visible readback.
 
----
+**Pass:** real change once, matching receipt, no new approval subsystem or parallel OpenDots application.
 
-## 13. Summary for stakeholders
+### Stage C — optional: OpenBot AG-UI coworker pilot
 
-> After MVP proves **ticket revenue**, **host publish**, and **map-backed rental discovery**, Post-MVP deepens **trust and lifestyle intelligence** (routes, neighborhoods, scam filter, Spanish). Advanced adds **automated money and distribution** only behind the same **approval gate** Roberto uses today — OpenClaw runs jobs, Hermes scores offline, and the map still only shows what Mastra validated.
+**Owner if pursued:** [SAN-1328 · Put the Broker AI Coworker Inside the Existing Rentals Workspace](https://linear.app/amo100/issue/SAN-1328), and the cross-domain ideas epic [SAN-1550](https://linear.app/amo100/issue/SAN-1550).
 
-**Engineering mantra:** *Automate coordination, not trust.*
+**First use case:** broker asks “Review my pending viewings and prepare follow-up drafts.” Existing broker workspace shows each real scoped showing; optional coworker prepares the draft and displays real run status. It may not fabricate a send or create another appointment. Use a protected AG-UI endpoint/adapter and *read-only or mock external actions for first smoke*, then real authenticated MDE actions when explicitly supported.
 
----
+Verify: one broker sees **only** their scoped records; another broker and guest cannot access them via endpoint, UI, replay or tool calls. Stop/retry/status reflect the actual external run. If the coworker is disabled, the original dashboard/viewing actions still succeed. Evaluate endpoint/session credentials, privacy boundary and separately licensed Intelligence before adopting production operations.
 
-*Update this file when a Post-MVP or Advanced initiative ships — or when [`roadmap.md`](./roadmap.md) is reprioritized.*
+### Stage D — optional: OpenFuse-style delegated work UX
+
+Borrow only proven helpful UI patterns: task plan → progress → grounded results → human takeover when needed → actual completion receipt. Example: an authorized operator asks for a neighborhood research brief grounded in Maps/Places and saved to a permitted MDE workspace. Do not start a second OpenFuse server/worker/storage merely for a plan panel. If an OpenBot skin already meets the visual goal, prefer its skin over a copy.
+
+### Stage E — later: validated intelligence and new domains
+
+Continue [roadmap.md](roadmap.md) NOW/NEXT/LATER: neighborhood comparisons and routing; trusted lead insights; host revenue/reconciliation; saved/trip continuity; optional multi-city scaling; optional guarded background monitoring. Use existing Mastra workflows, pgvector where benchmarked and canonical data. Introduce another agent or service only after a measurable deficiency in existing tools and a clear execution owner.
+
+## 5. Actual acceptance checks (not an approval gate)
+
+| Case | Decisive evidence |
+| --- | --- |
+| CopilotKit page without model | 390px/desktop renders grounded cards, empty/error and authorized primary actions |
+| Catalog component action | Typed input resolves correct source ID and existing backend; no dead UI control |
+| OpenDots-style edit/review | Ignore = 0 writes; Save = 1 accurate write; stale version rejected; readback proves result |
+| OpenBot optional coworker | AG-UI status/run truth, Stop/Retry; authenticated scoped identity; fallback when unavailable |
+| Secrets and isolation | Broker A/B and guest negative tests; no service-role or personal credentials in client/agent transcript |
+| Long-running job | actual persisted run ID/status, bounded retry, cancellation, idempotency, audit and recoverable failure |
+| External effects | no fabricated sends, payments, bookings, payouts or approval; privileged action authorized and traceable |
+| Mobile and accessibility | 320/390/768, keyboard/screen-reader roles, focus/scroll and reduced motion |
+| Implementation | exact commit SHA, focused tests, API/database receipts, matching CI/Playwright where applicable |
+
+**Current proof status:** This document is a *plan*. Its existence does not prove OpenBot/OpenFuse/OpenDots deployed, connected or tested against MDE. The existing Linear issues and GitHub PRs retain progress and evidence. No special "MVP exit" or 30-day production soak is needed to **develop or test** an advanced feature now. Public-launch certification and potentially stricter business policies require the product owner's explicit Phase B decision.
+
+## 6. Future capability shortlist — scoped by value, not artificial dates
+
+| Area | Candidate | MVP/Advanced ownership |
+| --- | --- | --- |
+| Rentals | grounded neighborhood intelligence, editable rental requests, broker follow-up drafts, source-safe comparisons | Existing Rentals search, broker, CopilotKit and Mastra owners |
+| Events | host revenue insights, check-in/ticket validation, refunds/reconciliation, optional sponsor matching | Existing Event/Ticketing and operator RPCs |
+| Discovery/Trips | source-backed itinerary, saved context, researched place briefs and optional voice | Existing Saved/Trip/Places owners |
+| AI workspace | optional OpenBot coworker run status, OpenDots-style saved results, OpenFuse-style task/takeover UI | Existing SAN-1550, SAN-1555 and SAN-1328 where scoped |
+| Scale | evaluated personalized ranking/pgvector, multi-city configuration, new external channels | [roadmap.md](roadmap.md) only after measured need |
+
+Use a source-verified Linear task before taking a candidate to implementation. **Do not treat a source example, optimistic roadmap date, upstream screenshot or unconfigured integration as working software.**
+
+## 7. Official source links and maintenance
+
+- [CopilotKit official Standard Catalog](https://docs.copilotkit.ai/generative-ui/components/standard-catalog) · [State/actions](https://docs.copilotkit.ai/generative-ui/components/state-and-actions) · [Surfaces](https://docs.copilotkit.ai/generative-ui/components/surfaces)
+- [CopilotKit/OpenBot README](https://github.com/CopilotKit/OpenBot) · [OpenBot 1.0 integration and skins](https://www.copilotkit.ai/blog/openbot-whats-new) — AG-UI external agent bridge and OpenDots/OpenFuse/other skins. Check exact upstream revision before adapting its API.
+- [CopilotKit/openfuse README](https://github.com/CopilotKit/openfuse) · [OpenBot integration boundary](https://github.com/CopilotKit/openfuse/blob/main/docs/OPENBOT-INTEGRATION.md) — reference implementation; its older version-specific details are **not** guaranteed compatible with a current OpenBot or MDE deployment.
+- [CopilotKit/OpenDots README](https://github.com/CopilotKit/OpenDots) — reference template for persistent Dots, review/save and workspaces; also an OpenBot skin.
+- MDE canonical [AGENTS.md](AGENTS.md) · [prd.md](prd.md) · [roadmap.md](roadmap.md) · [mvp.md](mvp.md) · [spec.md](spec.md) · [plan.md](plan.md); use current repository skills at `.claude/skills/{copilotkit,openbot,opendots,openmuse}/SKILL.md` if present.
+
+**Historical source:** [28 May 2026 advanced roadmap](docs/_archive/root-advanced-2026-05-28.md) contains superseded OpenClaw/Hermes/Paperclip assumptions, stale documentation paths, rigid development weeks and the obsolete prohibition on CopilotKit v2 migration. Retain it as history, not execution instructions.

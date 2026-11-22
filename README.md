@@ -15,6 +15,8 @@ Production: https://www.mdeai.co
 | Specification contract | [`spec.md`](spec.md) |
 | Implementation and CopilotKit component-first plan | [`plan.md`](plan.md) |
 | Pull request review criteria | [`REVIEW.md`](REVIEW.md) |
+| MVP public-launch definition (Phase B only) | [`mvp.md`](mvp.md) |
+| Advanced AI, OpenBot, OpenFuse and OpenDots plan | [`advanced.md`](advanced.md) |
 | Current documentation audit/index | [`docs/index-docs.md`](docs/index-docs.md) |
 | Product documentation | [`docs/01-product/`](docs/01-product/) |
 | Architecture | [`docs/02-architecture/`](docs/02-architecture/) |

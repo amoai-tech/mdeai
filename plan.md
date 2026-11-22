@@ -2,7 +2,7 @@
 
 **Current operating mode:** Phase A, prelaunch development. **Purpose:** a short, reusable execution plan for real MDE changes, including the current **CopilotKit component-first Rentals migration**. This document does **not** own current issue status or roadmap priority.
 
-**Sources:** [AGENTS.md](AGENTS.md) (policy) · [spec.md](spec.md) (testable contract) · [REVIEW.md](REVIEW.md) (PR findings) · [DESIGN.MD](DESIGN.MD) (design and component UI direction) · [sitemap.md](sitemap.md) (source-verified routes, not status) · [prd.md](prd.md) (product requirements) · [roadmap.md](roadmap.md) (strategy) · [Linear](https://linear.app/amo100/project/mde-ai-bb25cababf6c/issues) (actual task/owner/status) · [tasks skill](.claude/skills/tasks/SKILL.md) (worktrees/PRs).
+**Sources:** [AGENTS.md](AGENTS.md) (policy) · [spec.md](spec.md) (testable contract) · [REVIEW.md](REVIEW.md) (PR findings) · [DESIGN.MD](DESIGN.MD) (design and component UI direction) · [sitemap.md](sitemap.md) (source-verified routes, not status) · [prd.md](prd.md) (product requirements) · [roadmap.md](roadmap.md) (strategy) · [mvp.md](mvp.md) (Phase B public-launch criteria only) · [advanced.md](advanced.md) (optional future CopilotKit/OpenBot/OpenFuse/OpenDots capabilities) · [Linear](https://linear.app/amo100/project/mde-ai-bb25cababf6c/issues) (actual task/owner/status) · [tasks skill](.claude/skills/tasks/SKILL.md) (worktrees/PRs).
 
 > The former June 2026 Phase 1 tracker is preserved as [historical root-plan snapshot](docs/_archive/root-plan-phase1-2026-06-06.md). Its percentages, production SHAs and task ordering are **not** current instructions.
 

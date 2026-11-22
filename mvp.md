@@ -15,7 +15,7 @@ user journeys required for MDE AI to be considered ready to launch in Medellín.
 | Physical database schema | `supabase/migrations` |
 | Detailed per-task specifications | the Linear issue for that task |
 
-`mvp.md` answers one question: **is MDE ready to launch, and what still blocks it?** It is deliberately
+`mvp.md` answers one question: **when the product owner starts Phase B public-launch certification, is MDE ready to launch, and what still blocks it?** Until that explicit decision, all launch gates below are **future acceptance targets, never Phase A development blockers**. Business eligibility, ownership/photo paperwork, partner approvals, publication and viewing/booking permission cannot block development search, mapping, Details, creation or real authorized transactions. Keep authentication, RLS, secrets, truthful data, atomicity, idempotency and payment security throughout; see [AGENTS.md](AGENTS.md). It is deliberately
 shorter than both `prd.md` and `roadmap.md`, and it links to execution owners instead of copying them.
 
 **The division of labour this document depends on:** `mvp.md` states **what must be true to launch**.
@@ -40,13 +40,11 @@ misled, and safely fails when a provider or model does.
 
 ## 2 · The three launch loops
 
-**All three loops are required launch gates. They can be implemented and verified in parallel after
-shared platform foundations are ready. The order below is product focus, not a cross-domain
-dependency chain.**
+**All three loops are Phase B public-launch acceptance targets, not Phase A implementation prerequisites. Develop and test them in parallel using existing real UI/API/DB paths; no business gate may prevent one loop being exercised before the others. The order below is product focus, not a cross-domain dependency chain.**
 
 | Focus | Loop | What it proves that the others do not |
 | --- | --- | --- |
-| 1 | **Rentals** | Deterministic eligibility over real inventory, map/card synchronization, trust signals, and an **atomic, identity-bound commitment** (lead + showing) with correct operator visibility. The highest-correctness write path. |
+| 1 | **Rentals** | Real-inventory discovery, truthful filters and map/card synchronization, and an **atomic, identity-bound commitment** (lead + showing) with correct operator visibility. During Phase B certification only, prove the additional launch inventory/eligibility requirements. |
 | 2 | **Events + Ticketing** | A **real money loop**: external payment authority, exactly-once webhook finalization, entitlement delivery, a wallet that reflects truth, and **host payout/revenue state that reconciles**. |
 | 3 | **AI Concierge + Local Discovery** | Shared capabilities used across every surface — intent routing, grounded facts, structured output, session continuity, safe authenticated tool actions. Consumed by the other loops; it does not gate their execution. |
 
@@ -70,7 +68,7 @@ with a view for tonight near Parque Lleras”** gets grounded, sourced options o
 | Area | MVP capability | Launch requirement |
 | --- | --- | --- |
 | AI Concierge | Intent routing, grounded answers, structured results, safe authenticated actions | Grounded facts, user-scoped tools, working degraded state |
-| Rentals | Natural-language + structured search, eligibility, detail, viewing request | Hard-filter violations = 0; exactly one lead + showing per request |
+| Rentals | Natural-language + structured search, detail, viewing request; launch-only eligibility/freshness policy | Explicit renter hard requirements honored; one atomic lead + showing per request; launch inventory certification only in Phase B |
 | Events | Discovery, detail, host publish/manage | Publish path works for a real host |
 | Ticketing + payout | Checkout, payment finalization, QR/ticket, wallet, host payout | Exactly-once finalization; ticket in the correct wallet; host payout/revenue state traceable |
 | Maps / Places | Pins, card↔pin sync, place detail, field-masked Places calls | Pins match visible results; no model-invented coordinates |
@@ -107,7 +105,7 @@ Explicitly **not** launch requirements. Post-MVP intent lives in `roadmap.md`, n
 - proactive WhatsApp automation
 - broad personalization; full semantic-memory platform expansion
 - complex sponsorship marketplace; loyalty and rewards; broad partner marketplace expansion
-- OpenBot unless required by a launch journey
+- OpenBot, OpenFuse and OpenDots deployment as **independent new runtimes**; their optional advanced MDE integration is scoped in [advanced.md](advanced.md) and can be developed/tested now without becoming an MVP gate
 - speculative new databases or services; duplicated search engines, state stores, or production test suites
 
 The framing rule: **MVP proves the loop; post-MVP scales it.** A capability that adds surface without
@@ -138,7 +136,7 @@ not authorize new architecture.
 
 | Layer | Stack |
 | --- | --- |
-| Frontend | Next.js App Router · React · CopilotKit |
+| Frontend | Next.js App Router · React · **CopilotKit v2** with existing shared `mdeUI` Standard Catalog and separate Concierge/Host providers; official component-first presentation migration is scoped to the existing SAN-1675 owner |
 | AI orchestration | Mastra · Gemini |
 | Data / auth | Supabase Postgres · Supabase Auth · RLS · pgvector where already justified |
 | Maps | Google Maps · Places · Routes · Gemini Maps grounding where appropriate |
@@ -153,13 +151,15 @@ owns rendering/routes/Places UI.** An Edge Function belongs only at a real webho
 provider-secret, public-ingress, or runtime boundary — never inserted between Mastra and an RPC merely
 because the operation is backend.
 
+**Phase separation:** during Phase A, enforce user-stated search requirements, valid authorization and transactional correctness; **do not treat** launch owner verification, listing approval, rights, publication, business eligibility, or inventory freshness as a prerequisite to use the real Rentals search, map, Details, AI, viewing or booking development paths. The `RentalEligibility` contract below describes the **future Phase B certification policy** and must remain disabled as a business gate until the owner explicitly activates Phase B. The environment name or a live URL cannot trigger the policy.
+
 **Shared contracts.** Eligibility, rendering, persistence, notification and tests must not drift into
 separate versions of the same rule, so these are named once and referenced everywhere:
 
 | Contract | Purpose |
 | --- | --- |
 | `NormalizedRentalCriteria` | One canonical renter intent (dates, budget, bedrooms, explicit location) |
-| `RentalEligibility` | Deterministic `eligible \| ineligible \| unknown` **with machine-readable reasons** |
+| `RentalEligibility` | Phase B **public-launch-only** inventory/authority certification (`eligible \| ineligible \| unknown`) with machine-readable reasons; not an active Phase A search, viewing or publication blocker |
 | `RentalResult` | One normalized result: identity, grounded facts, provenance, trust/freshness, score/reasons, coordinates, allowed actions |
 | authenticated actor identity · idempotency key · canonical mutation result · correlation / request ID | One attributable actor; retries and webhook replays cannot duplicate a committed action; one success/failure shape for UI, alerts and tests; a failed journey is traceable across AI → tool → backend → DB |
 
@@ -170,7 +170,7 @@ value.** AI may not invent price, bedrooms, dates, availability, ownership, or c
 
 ## 6 · Production gates
 
-MVP is not ready because screens exist. Every gate below is a release gate.
+**These are Phase B release gates only.** They apply when the product owner explicitly initiates public-launch certification; they are **not** conditions for Phase A implementation, internal publication, QA, viewings or test payments. MVP is not ready merely because screens exist.
 
 | Gate | Requirement |
 | --- | --- |
@@ -194,7 +194,7 @@ Measurable pass/fail. `0` means zero, not "few".
 **Rentals**
 - hard-filter violations = **0**
 - correct rental/source provenance shown on every result
-- external result never exposes an internal **Schedule Viewing** action
+- at **public launch**, an external result without supported MDE viewing authority uses a truthful **View Original Listing** fallback; during Phase A this rule must not add a business-permission gate to legitimate development requests
 - one viewing request creates **exactly one** lead + showing
 - the unrelated broker cannot access it
 
@@ -220,7 +220,7 @@ Measurable pass/fail. `0` means zero, not "few".
 
 ## 8 · Launch checklist
 
-Binary. If a box cannot be checked with current evidence, MVP is not ready.
+**Phase B launch checklist only.** If a box cannot be checked with independently verified release evidence *when public launch is initiated*, MVP is not ready **to launch**. Unchecked boxes do **not** block Phase A real-app feature development or internal functional testing.
 
 **1 · Product**
 - [ ] Journeys 1–6 each complete end to end in production
@@ -232,7 +232,7 @@ Binary. If a box cannot be checked with current evidence, MVP is not ready.
 - [ ] Map pins match visible cards
 - [ ] One viewing request → exactly one committed lead + showing
 - [ ] Owning broker sees it; unrelated broker denied
-- [ ] External result shows provenance and only **View Original Listing**
+- [ ] Public-launch external results show provenance; if MDE has no verified viewing authority, offer **View Original Listing** rather than asserting an unsupported booking
 
 **3 · Events and payout**
 - [ ] Host publish works for a real host
@@ -275,8 +275,8 @@ Three distinct responsibilities. Skipping the middle one is the specific mistake
 to prevent.
 
 `SAN-1315 · EPIC · Finish the rental journey from apartment discovery to committed viewing`
-→ `SAN-1205 · MDE Rentals — Prove the Full Renter-to-Broker Journey End to End`
-→ `SAN-483 · MDE Rentals — Certify the Full Rental Journey on the Exact Production Candidate`
+→ `SAN-1205 · Prove a Renter Can Schedule a Viewing and the Correct Broker Receives It`
+→ `SAN-483 · Certify the Complete Rental Journey on the Exact Production Release`
 
 The search chain decides **what is shown**; the conversion chain decides **what is committed**; the
 security chain decides **who may see it**. `SAN-483 · MDE Rentals — Certify the Full Rental Journey on
@@ -284,19 +284,16 @@ the Exact Production Candidate` certifies all three and is the last thing that c
 
 | Chain | Order |
 | --- | --- |
-| Search — what is shown | SAN-386 · MDE Rentals — Apply Hard Filters Before AI/Vector Ranking → SAN-1364 · GEM-004 · Define and prove Gemini tool combination across MDE → SAN-1235 · RE-TRUST-001 — Listing Trust, Duplicate & Staleness Signals → SAN-1229 · RE-REQ-006 · Match-score result cards + map pins (generative UI) |
+| Search — what is shown | SAN-386 · Only Rank Rentals That Actually Match the Renter's Hard Requirements → SAN-1364 · GEM-004 · Define and prove Gemini tool combination across MDE → SAN-1235 · Show Renters Which Listings Are Fresh, Trustworthy, and Not Duplicates → SAN-1229 · Show Ranked Rental Matches as Clear Cards + Matching Map Pins |
 | Conversion — what is committed | SAN-1203 · MDE Rentals — Show “Viewing Requested” Only After It Is Saved → SAN-1286 · Save the Lead and Viewing Together or Not at All → SAN-474 · Make Sure Every Viewing Request Creates Exactly One Lead and One Showing → SAN-476 · MDE Rentals — Show Each Viewing Request Only to the Correct Broker |
-| Security — who may see it | SAN-482 · Shared rental test harness, fixtures, auth states, and RLS proof → SAN-547 · Prove per-user AI/Supabase isolation and retire the shared anonymous runtime default → SAN-548 · MDE Rentals — Prove Rental Chat Memory Survives a Fresh Runtime, plus SAN-1054 · MDE Rentals — Prove AI Cannot Leak Data or Perform Unauthorized Actions |
+| Security — who may see it | SAN-482 · Prove Only the Right Broker Can Access Rental Data Using One Shared Test Setup → SAN-547 · Prove per-user AI/Supabase isolation and retire the shared anonymous runtime default → SAN-548 · Make Rental Chat Remember the Renter After a Restart, plus SAN-1054 · MDE Rentals — Prove AI Cannot Leak Data or Perform Unauthorized Actions |
 
-**Stable launch rule.** Rental certification requires real, owner-verified rental inventory and one
-successful application-originated renter-to-broker journey — and it must run against real customer data
-only: no synthetic or test-generated record may be present, and any genuine pre-invariant record must
-be annotated rather than deleted. Do not seed or fabricate listings: an empty-state journey is
-*degraded-state* certification, not launch certification. The current production state for that
-requirement — which prerequisites currently hold — is tracked on
-**SAN-1205 · MDE Rentals — Prove the Full Renter-to-Broker Journey End to End**, and the row-level
+**Stable Phase B launch rule (NOT a Phase A development constraint).** Public-launch certification requires truthful, currently authorized rental inventory and one successful application-originated renter-to-broker journey against verified real-world records. **Controlled synthetic QA fixtures are permitted for functional and security testing**, including Phase A, but must be clearly labeled and removed or isolated before inventory is represented as verified public supply. Do not fabricate inventory or treat a synthetic successful test as proof of real ownership/availability. An empty-state journey proves degraded behavior, **not** inventory launch readiness. Never require real customers' personal data for safe automated QA; use scoped test users and read-only verification of the actual authorized inventory when public certification is initiated. The current release evidence for that requirement is tracked on
+**SAN-1205 · Prove a Renter Can Schedule a Viewing and the Correct Broker Receives It**, and the row-level
 cleanup inventory belongs to
-**SAN-483 · MDE Rentals — Certify the Full Rental Journey on the Exact Production Candidate**.
+**SAN-483 · Certify the Complete Rental Journey on the Exact Production Release**.
+
+**Component-first continuity:** [SAN-1675](https://linear.app/amo100/issue/SAN-1675) owns the shared official CopilotKit catalog contract; [SAN-755](https://linear.app/amo100/issue/SAN-755) owns continuous Rentals search → cards/map → Details → viewing proof. These are **implementation and end-to-end QA** owners, not extra business gates. A successful earlier SAN-1205 viewing test does not alone certify the full current production release.
 
 **Supporting enrichment — useful, never blocking.** `SAN-1033 · GEM-RE-013 — Neighborhood intelligence`
 carries `MVP · Launch Supporting` and runs as a supporting branch off the critical path, not a step in
@@ -306,15 +303,15 @@ work when `SAN-1033 · GEM-RE-013 — Neighborhood intelligence` is unavailable.
 absent, stale or degraded; it may never remove, hide or delay a card the critical path already
 qualified.
 
-### Edge Function prerequisite lane
+### Supabase function and Edge safety lane — Phase B certification only
 
-A **separate security lane that feeds** the rental proof. It does not replace it.
+This is a **separate technical correctness lane** for affected Supabase rules/Edge functions. It is **not** a Phase A development prerequisite and does not replace direct rental-journey proof. Verify whether each function is actually on the tested journey; do not invent a dependency from its historical issue category.
 
-`SAN-1295 · Task 48.2H.8A · MDE-EDGE-001 — Recover and Canonicalize All 39 Live Edge Functions`
-→ `SAN-1296 · Stop Edge Functions from Losing Rental Reminders or Running Unsafe Actions`
+`SAN-1295 · MDE Rentals & Rules Engine — Restore Missing Supabase Functions Safely`
+→ `SAN-1296 · Make Rental Edge Actions + Rules Engine Safe and Idempotent`
 → `SAN-1297 · Task 48.2H.8C · MDE-EDGE-003 — Add Edge Function Tests, Deployment Provenance, and Drift Gates`
-→ feeds `SAN-1205 · MDE Rentals — Prove the Full Renter-to-Broker Journey End to End`
-→ `SAN-483 · MDE Rentals — Certify the Full Rental Journey on the Exact Production Candidate`
+→ feeds `SAN-1205 · Prove a Renter Can Schedule a Viewing and the Correct Broker Receives It`
+→ `SAN-483 · Certify the Complete Rental Journey on the Exact Production Release`
 
 This lane must **not** replace the rental journey chain. The plan's own rule, learned the hard way:
 **scheduler enqueue ≠ function success ≠ provider delivery.**
@@ -340,13 +337,13 @@ flowchart TD
 
     subgraph RD["Rental critical path — Build → Prove → Certify"]
         direction LR
-        R1["SAN-386 · MDE Rentals — Apply Hard Filters Before AI/Vector Ranking"]
+        R1["SAN-386 · Only Rank Rentals That Actually Match the Renter's Hard Requirements"]
         R2["SAN-1364 · GEM-004 · Define and prove Gemini tool combination across MDE"]
-        R3["SAN-1235 · RE-TRUST-001 — Listing Trust, Duplicate & Staleness Signals"]
-        R5["SAN-1229 · RE-REQ-006 · Match-score result cards + map pins (generative UI)"]
+        R3["SAN-1235 · Show Renters Which Listings Are Fresh, Trustworthy, and Not Duplicates"]
+        R5["SAN-1229 · Show Ranked Rental Matches as Clear Cards + Matching Map Pins"]
         R6["SAN-1315 · EPIC · Finish the rental journey from apartment discovery to committed viewing"]
-        R8["SAN-1205 · MDE Rentals — Prove the Full Renter-to-Broker Journey End to End"]
-        R7["SAN-483 · MDE Rentals — Certify the Full Rental Journey on the Exact Production Candidate"]
+        R8["SAN-1205 · Prove a Renter Can Schedule a Viewing and the Correct Broker Receives It"]
+        R7["SAN-483 · Certify the Complete Rental Journey on the Exact Production Release"]
         R1 --> R2 --> R3 --> R5 --> R6 --> R8 --> R7
         RS2["SAN-1033 · GEM-RE-013 — Neighborhood intelligence"] -.->|enriches, never blocks| R5
     end
@@ -369,18 +366,19 @@ enriches displayed results and must never block the chain.
 | Event checkout | ✅ | | Core of loop 2; revenue path |
 | Ticket wallet / QR | ✅ | | Entitlement proof; without it payment proves nothing |
 | Host payout | ✅ | | A money loop without host proceeds is not a money loop (`roadmap.md` §4.1) |
-| Mobile event checkout — SAN-526 · PAY-005 — Mobile checkout UX (Stripe + Apple/Google Pay + QR) | ✅ | | Owns phone → event → checkout → payment → ticket/QR; no separate mobile payment flow is added |
-| Edge Function source provenance — SAN-1295 · Task 48.2H.8A · MDE-EDGE-001 — Recover and Canonicalize All 39 Live Edge Functions | ✅ | | Live source cannot be fully accounted for from Git alone, so the deployed surface is not fully reviewable |
-| Edge Function runtime defects — SAN-1296 · Stop Edge Functions from Losing Rental Reminders or Running Unsafe Actions | ✅ | | Rental reminders can be lost silently and some Edge actions are unsafe to expose |
+| Mobile event checkout — SAN-526 · Make Mobile Ticket Checkout and QR Tickets Work Reliably | ✅ | | Owns phone → event → checkout → payment → ticket/QR; no separate mobile payment flow is added |
+| Rules/Edge function recovery — SAN-1295 · MDE Rentals & Rules Engine — Restore Missing Supabase Functions Safely | ✅ only if on launch path | | Verify actual restored functions and SQL/RPC behavior required by the chosen journey; do not inherit a stale claim about all deployed functions |
+| Rental Edge function retry safety — SAN-1296 · Make Rental Edge Actions + Rules Engine Safe and Idempotent | ✅ only if on launch path | | Verify safe authorization, retry/idempotency and failure recovery for actual Edge actions invoked by the journey |
 | Edge Function tests and drift gates — SAN-1297 · Task 48.2H.8C · MDE-EDGE-003 — Add Edge Function Tests, Deployment Provenance, and Drift Gates | ⚪ | | Prevents recurrence of the provenance drift; certification can be performed manually without it |
-| Chat memory durability — SAN-1303 · Task 53.M.25 · MDE-MASTRA-PG-001 — Make AI chat memory survive restarts safely on Supabase | ⚪ | | Only its durability-matrix portion gates `SAN-548 · MDE Rentals — Prove Rental Chat Memory Survives a Fresh Runtime`; SSL, pool and fail-fast hardening are not themselves a launch journey |
+| Supabase runtime reliability — SAN-1303 · Keep MDE AI Connected to Supabase Reliably Under Real Traffic | ⚪ | | Evaluate actual impact on critical journeys; chat-memory restart proof belongs to SAN-548 and must be independently rechecked on the launch candidate |
 | Neighborhood intelligence — SAN-1033 · GEM-RE-013 — Neighborhood intelligence | ⚪ | | Enriches displayed results; a renter can find and commit without it |
 | Saved rental search — SAN-1077 · RE-SAVEDSEARCH-001 — Saved searches | | ✅ | Adds scheduling and repeated search without proving the core rental transaction |
-| Re-match alerts — SAN-1237 · RE-REQ-016 · Saved requests + re-match alerts (suggested) | | ✅ | Needs saved search, change detection, notification idempotency and quiet hours |
+| Re-match alerts — SAN-1237 · Alert Renters Once When a Saved Search Gets a New Verified Match | | ✅ | Needs saved search, change detection, notification idempotency and quiet hours |
 | Rental payments / deposits | | ✅ | Regulatory and reconciliation weight; not needed to prove commitment |
 | Trips | | ✅ (`roadmap.md` §5.5, NEXT) | Routes exist but it is not a launch journey |
 | Venue booking journey | | ✅ (`roadmap.md` §5.4, NEXT) | Valuable, but after approval/booking contracts harden |
 | Native mobile application | | ✅ | Responsive web covers the mobile gate |
+| CopilotKit OpenBot / OpenFuse / OpenDots integrations | | ✅ optional | [advanced.md](advanced.md): reuse existing Mastra/AG-UI, catalog UI and authenticated tools; not a new launch gate or a reason to postpone Phase A prototypes |
 
 ✅ in scope · ⚪ conditional · blank = post-MVP.
 
@@ -392,13 +390,15 @@ repeated here.
 
 ## 11 · Ownership and classification
 
+**Advanced alignment:** [advanced.md](advanced.md) covers optional OpenBot coworkers, OpenFuse-style delegated work and OpenDots-style review/save. These can be implemented and tested during Phase A; none changes the three canonical MVP launch loops or adds a second backend/approval system.
+
 This document deliberately contains **no** live percentages, SHAs, migration counts, or volatile
 production counts. Those change hourly and belong to their owners.
 
 | Need | Canonical owner |
 | --- | --- |
 | Live task order, dependencies, verified progress | [MDE AI Production Task Order, Dependencies and Progress](https://linear.app/amo100/document/mde-ai-production-task-order-dependencies-and-progress-verified-2026-b34a41251abd) |
-| Rental journey coordination and current production state | [SAN-1315 · EPIC · Finish the rental journey from apartment discovery to committed viewing](https://linear.app/amo100/issue/SAN-1315/san-1315-epic-finish-the-rental-journey-from-apartment-discovery-to) · [SAN-1205 · MDE Rentals — Prove the Full Renter-to-Broker Journey End to End](https://linear.app/amo100/issue/SAN-1205/mde-rentals-prove-the-full-renter-to-broker-journey-end-to-end) |
+| Rental journey coordination and current production state | [SAN-1315 · EPIC · Finish the rental journey from apartment discovery to committed viewing](https://linear.app/amo100/issue/SAN-1315/san-1315-epic-finish-the-rental-journey-from-apartment-discovery-to) · [SAN-1205 · Prove a Renter Can Schedule a Viewing and the Correct Broker Receives It](https://linear.app/amo100/issue/SAN-1205/mde-rentals-prove-the-full-renter-to-broker-journey-end-to-end) |
 | Rental external-discovery design | [MDE Rental Search + External Discovery Plan](https://linear.app/amo100/document/mde-rental-search-external-discovery-plan-gemini-search-url-context-d0340a3558e8) |
 | MVP umbrella | Linear label `MVP_MDE` |
 | Launch-blocking work | Linear label `MVP · Launch Blocker` |
