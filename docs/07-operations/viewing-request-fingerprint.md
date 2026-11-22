@@ -39,11 +39,21 @@ match with its status. It is read-only. Exit codes: `0` matched, `2` no match, `
 
 ## Connection and privilege policy
 
-- **TLS:** loopback URLs skip TLS (disposable/local). A URL that declares its own `sslmode` is
-  respected. Anything else must verify the server certificate, using the Supabase CA bundle the app
-  already ships in `src/mastra/lib/supabase-ca.ts`. If verification fails, set
-  `NODE_EXTRA_CA_CERTS` or declare `sslmode=verify-full` — never disable verification, because this
-  connection reads every apartment row.
+- **TLS:** loopback URLs skip TLS (disposable/local). A URL that declares `sslmode` is **validated,
+  not blindly trusted**: `disable`, `allow` and `prefer` are refused for any non-loopback host,
+  because this scan reads every apartment row. Otherwise the server certificate is verified against
+  the Supabase CA bundle the app already ships in `src/mastra/lib/supabase-ca.ts`.
+
+  Trust-store precedence, which is easy to get wrong: an explicit `ca` **replaces** Node's default
+  trust store, and `NODE_EXTRA_CA_CERTS` only **extends** that default store. So when
+  `NODE_EXTRA_CA_CERTS` is set the script deliberately leaves `ca` unset — otherwise your extra root
+  would be ignored. Use this when the server is not Supabase; for Supabase, leave it unset and the
+  shipped CA is used.
+
+  If verification fails and the shipped CA could not be loaded, a warning is printed at startup:
+  verification then silently falls back to the system store, which may trust a different root.
+
+  Never disable verification.
 - **Role:** run it with a **read-only role**. The script prints `current_user`, and when that role
   bypasses RLS (`postgres`, `service_role`) it says so explicitly. That privilege is why the scan can
   see every row; do not extend it beyond this read.

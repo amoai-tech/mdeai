@@ -80,41 +80,83 @@ try {
   ({ SUPABASE_CA_CERT: shippedCa } = await import(
     new URL("../src/mastra/lib/supabase-ca.ts", import.meta.url).href
   ));
-} catch {
-  // Type stripping unavailable or file moved: fall back to the system trust store.
+} catch (error) {
+  // Never degrade this silently: an explicit `ca` is what pins verification to Supabase's root,
+  // so losing it can quietly change which root is trusted on a scan that reads every row.
+  console.error(
+    `warning: could not load the shipped Supabase CA (${error?.message ?? String(error)}). ` +
+      "Certificate verification will use the system trust store instead, which may fail or " +
+      "trust a different root for a hosted Supabase database.",
+  );
   shippedCa = undefined;
 }
 
+/** sslmode values that do not encrypt, or encrypt without verifying. */
+const UNSAFE_SSL_MODES = new Set(["disable", "allow", "prefer"]);
+/** TLS failures that mean "the certificate chain was not trusted", whatever the exact code. */
+const TLS_TRUST_CODES = new Set([
+  "SELF_SIGNED_CERT_IN_CHAIN",
+  "DEPTH_ZERO_SELF_SIGNED_CERT",
+  "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+  "UNABLE_TO_GET_ISSUER_CERT_LOCALLY",
+  "CERT_HAS_EXPIRED",
+  "ERR_TLS_CERT_ALTNAME_INVALID",
+]);
+
 function clientConfigFor(url) {
-  let host = "";
+  let parsed;
   try {
-    host = new URL(url).hostname.replace(/^\[|\]$/g, "").toLowerCase();
+    parsed = new URL(url);
   } catch {
     console.error("DATABASE_URL is not a parseable connection string.");
     process.exit(1);
   }
-  const operatorChoseSslMode = /[?&]sslmode=/i.test(url);
-  if (LOOPBACK.has(host) || operatorChoseSslMode) {
+  const host = parsed.hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  const sslMode = parsed.searchParams.get("sslmode")?.toLowerCase();
+
+  // An operator-chosen sslmode is validated, not blindly trusted: `disable`/`allow`/`prefer`
+  // send every apartment row in plaintext or without verification against a hosted database.
+  if (sslMode && UNSAFE_SSL_MODES.has(sslMode)) {
+    if (!LOOPBACK.has(host)) {
+      console.error(
+        `refusing sslmode=${sslMode} for non-loopback host "${host}": this scan reads every ` +
+          "apartment row. Use sslmode=verify-full (or require), or point DATABASE_URL at loopback.",
+      );
+      process.exit(1);
+    }
     return { connectionString: url, application_name: "find-listing-by-fingerprint" };
   }
-  return {
-    connectionString: url,
-    application_name: "find-listing-by-fingerprint",
-    ssl: shippedCa ? { ca: shippedCa, rejectUnauthorized: true } : { rejectUnauthorized: true },
-  };
+
+  if (LOOPBACK.has(host) || sslMode) {
+    return { connectionString: url, application_name: "find-listing-by-fingerprint" };
+  }
+
+  // No explicit sslmode on a hosted database: verify. An explicit `ca` REPLACES the default
+  // trust store, so when the operator supplies NODE_EXTRA_CA_CERTS (which only *extends* the
+  // default store) the `ca` must be left unset or their root would be ignored.
+  const operatorTrustStore = Boolean(process.env.NODE_EXTRA_CA_CERTS?.trim());
+  const ssl =
+    operatorTrustStore || !shippedCa
+      ? { rejectUnauthorized: true }
+      : { ca: shippedCa, rejectUnauthorized: true };
+  return { connectionString: url, application_name: "find-listing-by-fingerprint", ssl };
 }
 
 const client = new Client(clientConfigFor(connectionString));
 try {
   await client.connect();
 } catch (error) {
-  const code = error?.code;
-  if (code === "SELF_SIGNED_CERT_IN_CHAIN" || code === "DEPTH_ZERO_SELF_SIGNED_CERT") {
+  const code = String(error?.code ?? "");
+  if (TLS_TRUST_CODES.has(code)) {
     console.error(
-      "TLS verification failed against this database's CA. Either pass a URL that declares its " +
-        "own sslmode (e.g. ?sslmode=verify-full) or set NODE_EXTRA_CA_CERTS to the server CA PEM. " +
-        "Do not disable verification: this connection reads every apartment row.",
+      `TLS verification failed (${code}). If this is a Supabase database, the shipped CA should ` +
+        "already be trusted — check that it loaded (see any warning above). For any other server, " +
+        "set NODE_EXTRA_CA_CERTS to its root CA PEM (this script then leaves `ca` unset so that " +
+        "store is honoured) or use an sslmode=verify-full URL. Do not disable verification: this " +
+        "connection reads every apartment row.",
     );
+  } else {
+    console.error(`database connection failed: ${error?.message ?? String(error)}`);
   }
   throw error;
 }
