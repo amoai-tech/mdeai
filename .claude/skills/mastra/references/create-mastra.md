@@ -45,12 +45,6 @@ bun create mastra@latest
 
 ## CLI flags
 
-**Skip the example agent:**
-
-```bash
-npm create mastra@latest --no-example
-```
-
 **Use a specific template:**
 
 ```bash

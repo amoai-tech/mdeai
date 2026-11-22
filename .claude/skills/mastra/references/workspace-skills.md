@@ -204,3 +204,11 @@ When `skillSource` is provided, it's used instead of the workspace filesystem fo
 - [Agent skills specification](https://agentskills.io)
 - [Workspace overview](https://mastra.ai/docs/workspace/overview)
 - [Search and indexing](https://mastra.ai/docs/workspace/search)
+
+## MDE development skills versus runtime skills
+
+This reference concerns **skills loaded by running Mastra agents**. It is not the same as MDE's coding-assistant instructions in .claude/skills/, whose mirror lives at .agents/skills/. Never expose a development skill (which may mention admin tools, secrets, deployments or filesystem access) to public Concierge conversations by accidentally registering the same directory as a runtime workspace.
+
+For runtime skills, verify the installed API and per-request access before enabling dynamic skill discovery. Keep MDE's server-authenticated user/tenant context authoritative; test name collisions, missing files after Vercel deployment, memory isolation and tool permissions. Do not introduce a second skill registry just to load documentation.
+
+Reference: https://github.com/YGhorbel/awesome-mastra-skills/tree/master/skills/mastra-agent-skills

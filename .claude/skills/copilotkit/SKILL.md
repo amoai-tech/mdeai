@@ -4,7 +4,7 @@ description: >-
   Use when implementing or debugging MDE CopilotKit v2 setup, integration and troubleshooting. Use for /api/copilotkit runtime, React hooks, native Components/Surfaces, render_ui, A2UI fixed/dynamic schemas, standardUI catalogs, AG-UI/Mastra transport, frontend tools/actions, shared state, CLI verification, HITL, and CopilotKit-specific errors. Keeps browser-facing bridge failures with the CopilotKit domain owner; Mastra and product skills own their respective business/agent logic.
 metadata:
   mde-version: "2.4.0"
-  upstream-commit: "4f0e86deaebb9d6e6d4625cbed4087912aee6d0c"
+  upstream-commit: "544e64f0423533c5ade8346cd7b9da3c0530a6bc"
   verified-package: "exact aligned pins in package.json (@copilotkit/react-core + @copilotkit/runtime)"
 ---
 
@@ -52,7 +52,7 @@ Use `efficient` for reuse decisions, `implement` for scoped code changes, `testi
 Own the browser-facing agent bridge: provider/hooks, same-origin runtime, AG-UI events, frontend tool/action registration, shared state, generative UI, and CopilotKit-visible failures. `mastra` owns agents/tools/workflows/memory/storage/HITL semantics. Product-domain skills own business invariants.
 ## Current MDE invariants
 
-- MDE uses CopilotKit v2 React APIs from `@copilotkit/react-core/v2`. At the 5 Nov 2026 audit, `package.json` pins `@copilotkit/react-core` and `@copilotkit/runtime` to **1.84.1**, `@mastra/core` to **1.81.0**, `@ag-ui/client` and `@ag-ui/core` to **1.0.2**, and `@ag-ui/mastra` to **2.0.2**; these are a historical snapshot, so check `package.json`, lockfile, installed exports, and the actual checkout/HEAD before relying on them.
+- MDE uses CopilotKit v2 React APIs from `@copilotkit/react-core/v2`. At the 22 Nov 2026 GitHub main audit, `package.json` pins `@copilotkit/react-core` and `@copilotkit/runtime` to **1.88.0**, `@mastra/core` to **1.84.0**, `@ag-ui/client` and `@ag-ui/core` to **1.0.2**, and `@ag-ui/mastra` to **2.0.2**; these are a historical snapshot, so check `package.json`, lockfile, installed exports, and the actual checkout/HEAD before relying on them.
 - Browser traffic uses the same-origin `/api/copilotkit` runtime; do not switch to hosted Intelligence implicitly.
 - Tool render/action names must match the Mastra tool-map key, not a `createTool()` id.
 - Preserve auth, distributed rate limits, request context, telemetry, and agent allowlists on the runtime route.
@@ -131,7 +131,7 @@ upstream's own test bed, so translate before acting:
 
 | A vendored reference says | MDE reality | Do this |
 |---|---|---|
-| "Verified against `@copilotkit/runtime@1.65.0`" and `@copilotkit/channels@0.6.0` (`setup-slack-channel` and its `troubleshooting.md`) | At the 5 Nov 2026 audit, MDE pins React + Runtime at **1.84.1**; `@copilotkit/channels` is **not installed** | Treat the vendored reference versions as upstream history, not current MDE truth. Confirm each volatile API against the **current installed package** and matching official release tag (for the audited pin: [`v1.84.1` exports](https://github.com/CopilotKit/CopilotKit/blob/v1.84.1/packages/react-core/src/v2/generative-ui/index.ts)). Never silently revert to 1.75.0. |
+| "Verified against `@copilotkit/runtime@1.65.0`" and `@copilotkit/channels@0.6.0` (`setup-slack-channel` and its `troubleshooting.md`) | At the 22 Nov 2026 GitHub main audit, MDE pins React + Runtime at **1.88.0**; `@copilotkit/channels` is **not installed** | Treat the vendored reference versions as upstream history, not current MDE truth. Confirm each volatile API against the **current installed package** and matching official release tag (for the audited pin: [`v1.88.0` exports](https://github.com/CopilotKit/CopilotKit/blob/v1.88.0/packages/react-core/src/v2/generative-ui/index.ts)). Never silently revert to 1.75.0. |
 | `pnpm …` commands (the OpenTag starter's convention) | MDE uses npm: `npm run …`, `npx …` | Translate the command; never add pnpm or its lockfile to MDE |
 | Channels / Intelligence setup steps | Neither product is enabled in MDE | Planning reference only, see above |
 

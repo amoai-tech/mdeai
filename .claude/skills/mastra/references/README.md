@@ -21,6 +21,13 @@ Read **one** reference file per task (plus [`topic-routing.md`](topic-routing.md
 | [`official/mastra/references/mastra-api.md`](official/mastra/references/mastra-api.md) | Inspect/call agents, workflows, traces, logs, scores, threads, and server resources with `mastra api` |
 | [`official/mastra/references/trace-query.md`](official/mastra/references/trace-query.md) | Select exact traces and aggregate recurring failure themes using documented queries |
 | [`official/mastra/references/model-selection.md`](official/mastra/references/model-selection.md) | Validate provider/model names with the official registry before changing models |
+| [`testing-gates.md`](testing-gates.md) | Prove Rentals/Events/Concierge runtime behavior with existing tests, persisted writes, retries and negative cases |
+| [`evals-experiments.md`](evals-experiments.md) | Fixed grounded-answer baselines and scorer limitations; real model regression experiments |
+| [`structured-output.md`](structured-output.md) | Typed tool-to-UI output, Gemini tool schemas and provenance |
+| [`processors-guardrails.md`](processors-guardrails.md) | Existing processor chain, latency, injection and tenant boundaries |
+| [`operations-debugging.md`](operations-debugging.md) | Trace one turn, distinguish payments/webhook commits and safe workflow recovery |
+| [`runtime-skills-tool-selection.md`](runtime-skills-tool-selection.md) | Runtime specialty skills versus developer skills, tool choice and when to defer tool/skill search |
+| [`workspace-skills.md`](workspace-skills.md) | Installed Workspace skill discovery API; local dev and hosted packaging boundary |
 | [`create-mastra.md`](create-mastra.md) | New Mastra project / CLI setup |
 | [`workflows.md`](workflows.md) | DAG workflows, suspend/resume, HITL (Roberto) |
 | [`memory.md`](memory.md) | Memory, working memory, threads, recall |
