@@ -41,6 +41,23 @@ function logUpstreamFailure(
 }
 
 /**
+ * Slug shape as `isSlugShape` and the RPC understand it: lowercase alphanumerics joined by
+ * single hyphens. A character scan rather than a regex — the equivalent pattern
+ * `^[a-z0-9]+(?:-[a-z0-9]+)*$` is linear, but static analysis cannot tell that and flags it,
+ * and a plain scan makes the absence of backtracking obvious.
+ */
+function isSlugShape(value: string): boolean {
+  if (value.length === 0) return false;
+  if (value.startsWith("-") || value.endsWith("-") || value.includes("--")) return false;
+  for (const char of value) {
+    const isLower = char >= "a" && char <= "z";
+    const isDigit = char >= "0" && char <= "9";
+    if (!isLower && !isDigit && char !== "-") return false;
+  }
+  return true;
+}
+
+/**
  * `LISTING_UNAVAILABLE` means the atomic RPC could not resolve the listing (it accepts a
  * UUID or an exact lowercase slug) or refused it as not requestable. Without the reference
  * that failed, the outcome is undiagnosable after the fact — the raw value never reaches the
@@ -56,7 +73,7 @@ function describeListingRef(listingId: string): {
   const value = listingId.trim();
   const shape = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
     ? "uuid"
-    : /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value)
+    : isSlugShape(value)
       ? "slug"
       : "other";
   return {
