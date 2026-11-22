@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import { NextResponse } from "next/server";
 import {
   SCHEDULE_VIEWING_ACK_MESSAGE,
@@ -30,9 +30,64 @@ function failure(
 /** Upstream technical detail is diagnostic, so it goes to the server log, not the response. */
 function logUpstreamFailure(
   outcome: string,
-  detail: { status: number; code?: string; message?: string },
+  detail: {
+    status: number;
+    code?: string;
+    message?: string;
+    listing?: { ref?: string; shape: "uuid" | "slug" | "other"; length: number };
+  },
 ) {
   console.error("[api/leads/schedule-viewing] upstream failure", { outcome, ...detail });
+}
+
+/**
+ * Whether the reference could be a stored apartment slug.
+ *
+ * The RPC resolves a slug by EXACT match (`a.slug = v_listing_id`), so the only property that
+ * matters here is "this could be a slug": no whitespace and no path/query characters. An
+ * earlier, stricter `[a-z0-9-]` classifier labelled a real stored slug containing `_` or `.`
+ * as `other`, which would have misdiagnosed a valid slug as a wrong-shaped identifier.
+ */
+function isSlugShape(value: string): boolean {
+  if (value.length === 0 || value.length > 200) return false;
+  if (/[\s/\\?#]/.test(value)) return false;
+  for (const char of value) {
+    // Printable ASCII only; a stored slug never contains control characters or non-ASCII.
+    if (char < "!" || char > "~") return false;
+  }
+  return true;
+}
+
+/**
+ * `LISTING_UNAVAILABLE` means the atomic RPC could not resolve the listing (a UUID or an exact
+ * slug) or refused it as not requestable. Without the reference, that outcome is undiagnosable
+ * afterwards, because the raw value never reaches the renter's response.
+ *
+ * The fingerprint MUST be keyed. Apartment slugs are public, so anyone who can read logs could
+ * hash every published slug with an unkeyed digest and recover which apartment a renter asked
+ * about — the truncation does not help against a candidate set this small. HMAC with a
+ * server-only key prevents that; when the key is absent we log no derived value at all rather
+ * than a reversible one, and the shape/length still narrow the failure.
+ */
+function describeListingRef(listingId: string): {
+  ref?: string;
+  shape: "uuid" | "slug" | "other";
+  length: number;
+} {
+  const value = listingId.trim();
+  const shape = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+    ? "uuid"
+    : isSlugShape(value)
+      ? "slug"
+      : "other";
+
+  const key = process.env.MDE_LOG_FINGERPRINT_KEY?.trim();
+  return {
+    // No key → no fingerprint. Never fall back to an unkeyed digest of a public identifier.
+    ...(key ? { ref: createHmac("sha256", key).update(value).digest("hex").slice(0, 12) } : {}),
+    shape,
+    length: value.length,
+  };
 }
 
 /**
@@ -157,6 +212,8 @@ export async function POST(req: Request) {
       status: edgeRes.status,
       code: edgeJson.error.code,
       message: edgeJson.error.message,
+      // Correlate a future failure with the canonical apartment, without logging the slug.
+      listing: describeListingRef(listingId),
     });
     // The apartment cannot take a request; the renter's own input is not the problem.
     return failure("LISTING_UNAVAILABLE", 409);
