@@ -17,6 +17,8 @@ Every S2–S4 feature spec must answer:
 
 For S0/S1 changes, the verified Linear acceptance criteria can serve as the spec; no mandatory separate Markdown or approval stage.
 
+**Keep four decisions separate:** `intent` = user problem/why; `spec` = observable user/API behavior and failure cases; `plan` = affected files, ordered changes and commands; `evidence` = actual output on an exact commit. A screenshot, model response, hypothetical test or generated Markdown must never be described as an executed result. For a substantial task, capture a short **known / assumption / decision-needed** table *only when it changes implementation*; resolve facts by reading code before asking the owner for a decision.
+
 ## 2. Acceptance criteria — testable, numbered and traceable
 
 Use stable `AC-1`, `AC-2` ... IDs. Each acceptance criterion must state an input, observable behavior and how to prove it. Include only applicable cases:
@@ -32,6 +34,20 @@ Use stable `AC-1`, `AC-2` ... IDs. Each acceptance criterion must state an input
 | AC-7 | A consequential action succeeds | Canonical service commits once; UI shows actual receipt | Browser → API → database readback |
 
 Do not claim every row is required for a pure documentation or styling task. Explicitly mark **N/A with a reason** rather than fabricating execution evidence.
+
+**Task-spec mini-template (S2–S4, only if Linear criteria are insufficient):**
+
+```text
+Problem: <verified actor and unmet outcome>
+Scope: <existing canonical files/services to change> / Not building: <explicit non-goals>
+AC-1: Given <source-backed state>, when <action>, then <visible result + durable readback>
+AC-2: Given <invalid/unauthorized/retry condition>, then <safe result; no duplicate side effect>
+Dependencies: <verified installed version, DB/API contracts, prior issue if truly required>
+Evidence: <focused command + API/DB or browser proof> / NOT RUN: <reason>
+Stop/rollback: <what must stop shipping or allow safe recovery>
+```
+
+Use the existing per-issue [templates](docs/07-operations/intent-spec-plan/README.md), not a new global `tasks.md`, spec registry or mandatory interview. For long-running/irreversible operations, state idempotency key or stable identity, timeout/retry behavior and exactly what constitutes **committed success**. For an ordinary UI display correction, keep the spec correspondingly small.
 
 ## 3. CopilotKit component-first contract — current Rentals work
 
@@ -55,6 +71,6 @@ For S4 risk (payment, authorization/RLS, secrets, destructive data or irreversib
 
 ## 5. Implementation handoff
 
-Only after defining the actual issue acceptance, convert these criteria into ordered steps using [plan.md](plan.md). Reference stable `AC-#` IDs in tests, PR summary and [REVIEW.md](REVIEW.md) review findings. Record *live* status, blocker, PR SHA and final proof in the existing Linear issue—not this root contract.
+Once the issue acceptance is clear, map each `AC-#` to the smallest implementation slice and runnable proof in [plan.md](plan.md). For a focused fix, this may be a two-line plan directly in Linear; for a substantial task, use the optional task-specific plan. Record the **exact Git ref**, affected canonical owners, known failure case, verification command, user-visible outcome and rollback/stop signal. If scope or behavior changes, update the existing issue/spec **alongside the code** rather than adding retrospective paperwork. Record *live* status, blockers and final proof in the existing Linear issue—not this root contract.
 
 **Official references:** [Standard Catalog](https://docs.copilotkit.ai/generative-ui/components/standard-catalog) · [Catalogs](https://docs.copilotkit.ai/generative-ui/components/catalogs) · [State and actions](https://docs.copilotkit.ai/generative-ui/components/state-and-actions) · [Surfaces](https://docs.copilotkit.ai/generative-ui/components/surfaces) · [MDE component-first Linear owner](https://linear.app/amo100/issue/SAN-1675).

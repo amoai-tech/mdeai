@@ -14,6 +14,7 @@ Production: https://www.mdeai.co
 | Agent/repository rules | [`AGENTS.md`](AGENTS.md) |
 | Specification contract | [`spec.md`](spec.md) |
 | Implementation and CopilotKit component-first plan | [`plan.md`](plan.md) |
+| AI-native SDLC methods and source adoption | [`docs/07-operations/intent-spec-plan/README.md`](docs/07-operations/intent-spec-plan/README.md) |
 | Pull request review criteria | [`REVIEW.md`](REVIEW.md) |
 | MVP public-launch definition (Phase B only) | [`mvp.md`](mvp.md) |
 | Advanced AI, OpenBot, OpenFuse and OpenDots plan | [`advanced.md`](advanced.md) |

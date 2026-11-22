@@ -21,6 +21,19 @@ For every implementation, take the smallest correct path:
 
 **Default path for S0/S1:** inspect → focused fix → focused proof → PR. No mandatory interview, documentation stage, business approval or review-only issue. **S2–S4:** persist additional context only when it prevents a real handoff or decision failure; use the existing [task-specific templates](docs/07-operations/intent-spec-plan/README.md).
 
+### Six-stage AI-native loop — one existing task, not six new gates
+
+| Stage | Durable output (reuse existing owner) | Practical stop/feedback signal |
+| --- | --- | --- |
+| **Plan** | Linear issue or optional `intent.md`: actor, problem, target result | User outcome still ambiguous, not merely missing ceremony |
+| **Design** | Task `spec.md`: accepted `AC-#`, alternatives/non-goals and technical risks | No safe authoritative write path or current SDK/API contract |
+| **Build** | Smallest vertical slice + test/diff on isolated branch/worktree | Regression or stale interface means change plan before more code |
+| **Test** | Exact-head focused and applicable negative/browser/API/DB evidence in issue/PR | Failed decisive case or unproved security/payment behavior |
+| **Deploy** | Existing PR/CI and deployed SHA when applicable | Required release check failed or incorrect deployment target |
+| **Maintain** | Existing logs/alerts and reproducible issue when a new defect appears | Report observed failure and re-enter **Plan**, not a second workflow |
+
+This adapts the [AI-native SDLC playbook](https://claude.com/resources/articles/the-ai-native-sdlc-playbook) to MDE: **read the last reliable artifact, do the next small action, and verify it**. Do not automatically create an `intent.md`, spec folder, second Linear issue, reviewer gate or approval for every fix. Authorization/technical safety checks still apply whenever the action touches them.
+
 ## 2. CopilotKit component-first implementation — Rentals
 
 **Goal:** use the installed official CopilotKit Standard Catalog as the approved Rentals presentation system, without replacing the existing real MDE services or making core pages dependent on an AI response.
@@ -51,7 +64,7 @@ Use **A = component/UI, B = real backend+agent integration, C = independent end-
 | Viewing Management | SAN-1684: scoped status table/actions | Existing showing writer; [SAN-1426](https://linear.app/amo100/issue/SAN-1426): renter visibility | SAN-1686 + SAN-1426: transitions and isolation |
 | Ask MDE | [SAN-1685](https://linear.app/amo100/issue/SAN-1685): **one** Host composer; current Concierge elsewhere | SAN-1659: existing hostOpsAgent; SAN-1039: renter filter state | SAN-755 + SAN-1686: grounded responses, Stop/Retry/replay |
 
-**Parallel lanes after A:** Discovery, Onboarding and Broker can progress independently **once their shared catalog contracts are stable**. The single existing backend service in each lane remains authoritative. No automatic new issues or per-layer PRs.
+**Parallel lanes after A:** Discovery, Onboarding and Broker can progress independently **once their shared catalog contracts are stable**. The single existing backend service in each lane remains authoritative. No automatic new issues or per-layer PRs. **Concurrency rule:** give each implementer a separate clean worktree with explicit changed-file ownership and AC IDs; parallelize independent read-only analysis, but serialize edits to shared catalog types, database schema/RPCs, agent context contracts and the same branch. Merge/test integration before recording success.
 
 ### C. Minimal component lifecycle — repeat per page
 
@@ -81,7 +94,7 @@ No development eligibility, ownership document, moderation, photo-rights paperwo
 
 ## 3. Execution evidence and handoff
 
-Attach to the **existing** Linear issue/PR:
+Attach to the **existing** Linear issue/PR. On any context reset, the next agent must be able to reconstruct the next action **without trusting a previous AI summary**: verify current branch/base/head, changed canonical files, completed `AC-#` proof, failed commands, remaining risks and the first executable command. Re-run stale proof when the changed files or test environment invalidate it. For a release-affecting change, record the existing rollback/recovery route and monitor its real failure signals; do not build a new monitoring system to do this.
 
 | Check | Evidence required |
 | --- | --- |

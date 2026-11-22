@@ -2,6 +2,8 @@
 
 Applies to human reviewers, Kilo, Claude Code Review, and other advisory reviewers of `amoai-tech/mdeai`. The source of truth for merge/check policy is [PR review guidelines](docs/06-testing/pr-review-guidelines.md); this file does **not** add another blocking reviewer or status check.
 
+**Claude-managed Code Review limitation:** official [customization docs](https://code.claude.com/docs/en/code-review-customize) state that it reads `REVIEW.md` from the PR **base/default branch, not the PR head**. A new rule introduced here becomes effective for managed reviews only **after merging into the base/default branch**. MDE's existing pinned PR-Agent and exact-head deterministic CI remain the current review/check owners; a Claude review is advisory unless existing protected-branch rules independently say otherwise.
+
 ## Read before reviewing
 
 1. Compare the **actual PR diff** with its correct base/merge-base and record the current head SHA. Review only a defect introduced or exposed by that PR.
@@ -47,6 +49,10 @@ Use this concise shape:
 - **Verification:** runnable test/expected outcome.
 - **Status:** verified defect, or keep as an unposted investigation note.
 
+**Review noise budget:** report material correctness/security/regression defects first; cap nonblocking nits at **two per PR** and prefer zero. Ignore generated/vendor outputs and formatting already checked by CI unless a changed artifact masks a **real behavioral defect**. When a pre-existing issue is noticed, mark it *outside this PR* rather than making it an invented current-head blocker. A missing test is actionable only with a concrete failing or high-risk unexercised scenario and the smallest decisive check.
+
+**Severity mapping:** `BLOCKER` = proven release-threatening access, irreversible corruption/payment or required policy-gate failure; `HIGH` = proven important broken user journey/transaction or security defect; `MEDIUM` = reproducible regression with bounded impact; `LOW` = consequential but nonblocking issue. Label an unverified risk **NEEDS VERIFICATION** rather than elevating it to `HIGH`.
+
 For a claim not independently verified, **do not open a blocking inline thread**. An absence of verified findings is an acceptable review result.
 
 ## Do not post
@@ -60,6 +66,6 @@ For a claim not independently verified, **do not open a blocking inline thread**
 
 ## Review result and correction loop
 
-Classify each proposed finding as **VALID / STALE / INCORRECT / NEEDS VERIFICATION** against the latest head. Repair only valid findings, rerun the decisive tests, and record resolution in the **existing PR**; no review-only PR or new Linear issue is normally necessary.
+Classify each proposed finding as **VALID / STALE / INCORRECT / NEEDS VERIFICATION** against the latest head. Repair only valid findings, rerun the decisive tests, and record resolution in the **existing PR**; no review-only PR or new Linear issue is normally necessary. If the head changes while reviewing, re-read the relevant diff and invalidate any evidence tied only to the old SHA. Deduplicate across PR-Agent, Kilo, Codacy and optional Claude review by **underlying defect**, not comment wording; do not start additional reviewers merely to agree with existing ones.
 
 **Scope of this file:** reviewer guidance, not a new approval gate. The existing protected-branch checks, PR thread-resolution rules, official review-tool configuration and independent S4 verification remain owned by [PR review guidelines](docs/06-testing/pr-review-guidelines.md), [tasks](.claude/skills/tasks/SKILL.md), and [task-verifier](.claude/skills/task-verifier/SKILL.md).
