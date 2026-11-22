@@ -24,8 +24,9 @@ const ORDINAL = /(?:\b(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ni
 const EXPLICIT_RESULT_PAIR = /\b(?:compare|comparison)\b/i;
 export const COMPARISON_POSITIONS_KEY = "mdeai-comparison-requested-positions";
 
-const NUMBERED_RESULT = "(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|one|two|three|four|five|six|seven|eight|nine|ten|(?:10|[1-9])(?:st|nd|rd|th)?)";
-const NUMBERED_TOKEN = new RegExp(String.raw`\b(${NUMBERED_RESULT})\b`, "gi");
+// Use literal patterns: the ordinal vocabulary is fixed, not user-supplied.
+const NUMBERED_TOKEN = /\b(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|one|two|three|four|five|six|seven|eight|nine|ten|(?:10|[1-9])(?:st|nd|rd|th)?)\b/gi;
+const ADDITIONAL_POSITION = /(?:,|\b(?:and|with|versus|vs)\b\.?|&)\s*(?:(?:the\s+)|(?:(?:apartment|listing|rental|result)s?\s+))?(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|one|two|three|four|five|six|seven|eight|nine|ten|(?:10|[1-9])(?:st|nd|rd|th)?)\b(?!\s*(?:columns?|rows?|features?|amenities?|bedrooms?|beds?|bathrooms?)\b)/gi;
 // Only 1–10 are supported display ordinals. Larger numeric references must
 // never disappear from a server-trusted apartment selection.
 const UNSUPPORTED_NUMBERED_TOKEN = /\b(?:1[1-9]|[2-9]\d+)(?:st|nd|rd|th)?\b/i;
@@ -57,7 +58,7 @@ export function comparisonRequestedPositions(messages: readonly MessageLike[]): 
     if ([...text.slice(0, firstTwo.index).matchAll(NUMBERED_TOKEN)].length) return null;
     const extra = text.slice(firstTwo.index + firstTwo[0].length);
     const additions = Array.from(
-      extra.matchAll(new RegExp(String.raw`(?:,|\b(?:and|with|versus|vs)\b\.?|&)\s*(?:(?:the\s+)|(?:(?:apartment|listing|rental|result)s?\s+))?(${NUMBERED_RESULT})\b(?!\s*(?:columns?|rows?|features?|amenities?|bedrooms?|beds?|bathrooms?)\b)`, "gi")),
+      extra.matchAll(ADDITIONAL_POSITION),
       (match) => {
         // "with 5" is not an apartment position; "with the fifth" or
         // "with the 5th" clearly is. Never add a bare table dimension.
