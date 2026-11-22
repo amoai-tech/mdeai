@@ -131,6 +131,8 @@ test.describe(`${SCREEN_ID} mobile responsive shell`, () => {
       await gotoHome(page, { waitForRuntime: false });
 
       await expect(page.locator('aside [data-testid="nav-rail"]')).toBeVisible();
+      // The desktop filter strip must still exist after hiding it on phones.
+      await expect(page.getByTestId("chat-query-bar")).toBeVisible();
       await expect(page.locator('[data-testid="map-panel"]')).toBeVisible();
       await expect(page.locator(NAV_TRIGGER)).toBeHidden();
       await expect(page.locator(FAB)).toBeHidden();
@@ -143,7 +145,9 @@ test.describe(`${SCREEN_ID} console hygiene`, () => {
 
   test("no critical page errors on mobile load", async ({ page }) => {
     const errors = watchCriticalConsoleErrors(page);
-    await gotoHome(page, { waitForRuntime: false });
+    // Keep the runtime observation window for this error check; layout-only
+    // assertions can skip the handshake, but startup error monitoring cannot.
+    await gotoHome(page);
     assertConsoleClean(errors);
   });
 });
