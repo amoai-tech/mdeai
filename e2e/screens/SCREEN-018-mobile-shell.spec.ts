@@ -110,6 +110,7 @@ test.describe(`${SCREEN_ID} mobile responsive shell`, () => {
       const input = page.getByTestId("copilot-chat-textarea");
       await input.click({ timeout: 5_000 });
       await expect(input).toBeFocused();
+      await captureScreenEvidence(page, SCREEN_ID, "mobile-chat-after-map-390.png");
     });
 
     test("FAB tap target is at least 44x44px", async ({ page }) => {
@@ -136,6 +137,7 @@ test.describe(`${SCREEN_ID} mobile responsive shell`, () => {
       await expect(page.locator('[data-testid="map-panel"]')).toBeVisible();
       await expect(page.locator(NAV_TRIGGER)).toBeHidden();
       await expect(page.locator(FAB)).toBeHidden();
+      await captureScreenEvidence(page, SCREEN_ID, "desktop-shell-1280.png");
     });
   });
 });

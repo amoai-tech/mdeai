@@ -206,6 +206,17 @@ jobs:
       - name: Remove private authenticated QA outputs before artifact upload
         if: always()
         run: node scripts/sanitize-playwright-qa-artifacts.mjs
+      # SCREEN-018 exercises only a fresh anonymous chat and never sends messages.
+      # Keep successful 390px/1280px evidence too; sanitizer removes screenshots
+      # whenever a private QA marker is present.
+      - name: Upload anonymous mobile and desktop layout screenshots
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: chat-layout-screenshots-${{ github.run_id }}-${{ github.run_attempt }}
+          path: tmp/screenshots/SCREEN-018/*.png
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Upload real-composer failure traces
         if: failure()
         uses: actions/upload-artifact@v4
