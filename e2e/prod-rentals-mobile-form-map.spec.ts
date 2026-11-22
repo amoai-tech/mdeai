@@ -53,6 +53,10 @@ test.describe('MDE Rentals phone: browse, map and viewing-form layout', () => {
 
     await page.goto(new URL(start, base).href, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId('rentals-browse')).toBeVisible();
+    // The grid renders before its cards do; clicking the first CTA while the skeletons are
+    // still up is a timeout waiting to happen.
+    const staleCards = page.locator('[data-testid="rentals-grid"] [data-result-kind="rental"][data-testid^="rental-card-"]');
+    await expect.poll(() => staleCards.count(), { timeout: 30_000 }).toBeGreaterThan(0);
     await page.getByTestId('rental-schedule-cta').first().click();
     const modal = page.getByTestId('schedule-viewing-modal');
     await expect(modal.getByRole('dialog')).toBeVisible();
@@ -64,7 +68,9 @@ test.describe('MDE Rentals phone: browse, map and viewing-form layout', () => {
     await modal.getByTestId('viewing-date-trigger').click();
     const calendar = modal.getByTestId('viewing-date-calendar');
     await calendar.getByRole('button', { name: 'Go to the Next Month' }).click();
-    await calendar.locator('button[data-day]:not([disabled])').filter({ hasText: /^15$/ }).click();
+    // react-day-picker sets data-day to the full ISO date (day.isoDate, e.g. 2026-06-15), so
+    // anchor on the attribute suffix instead of the button's text or aria-label.
+    await calendar.locator('button[data-day$="-15"]:not([disabled])').click();
     await modal.getByTestId('viewing-time').fill('15:00');
     await modal.getByTestId('schedule-viewing-review-button').click();
     await expect(modal.getByTestId('schedule-viewing-review')).toBeVisible();
