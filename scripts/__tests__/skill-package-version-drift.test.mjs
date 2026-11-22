@@ -69,3 +69,18 @@ test("Mastra skill snapshot matches the exact package-family pins", () => {
     "refresh Mastra skill metadata after a package upgrade",
   );
 });
+
+
+test("active Mastra setup guide excludes unsupported CLI flag and retains template guidance", () => {
+  const active = readFileSync(
+    join(root, ".claude", "skills", "mastra", "references", "create-mastra.md"),
+    "utf8",
+  );
+  const official = readFileSync(
+    join(root, ".claude", "skills", "mastra", "references", "official", "mastra", "references", "create-mastra.md"),
+    "utf8",
+  );
+  assert.doesNotMatch(active, /--no-example\b/, "remove unsupported CLI flags from the active skill");
+  assert.match(active, /npm create mastra@latest --template <template-name>/);
+  assert.match(official, /npm create mastra@latest my-project --empty/);
+});
