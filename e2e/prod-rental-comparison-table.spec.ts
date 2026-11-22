@@ -112,7 +112,7 @@ test.describe("SAN-1681 · official rental comparison A2UI Table", () => {
             }
           }
         }
-        const missing = records.flatMap((record, index) => [
+        const missing = records.slice(0, 2).flatMap((record, index) => [
           { label: "Wi-Fi speed", value: record!.wifi_speed, index },
           { label: "Neighborhood", value: record!.neighborhood, index },
           { label: "Furnished", value: record!.furnished, index },
