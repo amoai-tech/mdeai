@@ -143,6 +143,8 @@ function clientConfigFor(url) {
 }
 
 const client = new Client(clientConfigFor(connectionString));
+/** Hoisted so the failure paths below can name the role they connected as. */
+let role;
 try {
   await client.connect();
 } catch (error) {
@@ -164,7 +166,7 @@ try {
   const who = await client.query(
     "select current_user as role, (select rolsuper from pg_roles where rolname = current_user) as is_super",
   );
-  const { role } = who.rows[0] ?? {};
+  ({ role } = who.rows[0] ?? {});
   console.error(`connected as "${role}" (read-only scan of public.apartments)`);
   if (role === "postgres" || role === "service_role") {
     console.error(
@@ -211,6 +213,17 @@ try {
     );
     process.exitCode = 2;
   }
+} catch (error) {
+  // A wrong DATABASE_URL must read as a configuration mistake, not as a driver stack trace.
+  if (error?.code === "42P01") {
+    console.error(
+      `this database has no public.apartments table (connected as "${role}"): check that ` +
+        "DATABASE_URL points at the MDE database, not an empty one.",
+    );
+  } else {
+    console.error(`scan failed: ${error?.message ?? String(error)}`);
+  }
+  process.exitCode = 1;
 } finally {
   await client.end();
 }
