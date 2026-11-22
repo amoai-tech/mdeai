@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { RENTAL_HINT_MAX } from "@/lib/rentals/a2ui-context";
 import { readRentalResultIds } from "../lib/generative-ui-context";
+import { COMPARISON_POSITIONS_KEY } from "../lib/comparison-table-intent";
 import { RENTAL_SUPABASE_KEY } from "./search-rentals";
 import { isActiveRentalsDiscoveryPage } from "../lib/discovery-agent-context";
 import { COMPARISON_TABLE_TARGET, RENTAL_COMPARISON_TARGET, type ComparisonTarget } from "../lib/comparison-table-ui";
@@ -73,10 +74,14 @@ export const showComparisonTableTool = createTool({
       return { ok: false, rows: [], rejected: [], message: "Search for apartments first; there are fewer than two current results." };
     }
     const unresolved: string[] = [];
-    // Numbered comparison requests must use the current displayed order.
-    // The model can include both arrays and supply stale/mismatched IDs.
-    // The validated positions take precedence; IDs are only a fallback.
-    const requested = input.positions?.length ? input.positions.flatMap((position) => {
+    // Resolve explicit user ordinals against the current authorized page hints,
+    // even when the model supplied different IDs or positions.
+    const serverPositions = (context as { requestContext?: { get?: (key: string) => unknown } })
+      ?.requestContext?.get?.(COMPARISON_POSITIONS_KEY);
+    const positions = z.array(z.number().int().min(1).max(RENTAL_HINT_MAX)).min(2).max(MAX_APARTMENTS)
+      .safeParse(serverPositions);
+    const selectedPositions = positions.success ? positions.data : input.positions;
+    const requested = selectedPositions?.length ? selectedPositions.flatMap((position) => {
       const id = available[position - 1];
       if (!id) { unresolved.push(`Result ${position} is not in the current hints`); return []; }
       return [id];

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { shouldForceComparisonTable } from "../comparison-table-intent";
+import { comparisonRequestedPositions, shouldFinishComparisonWithoutAnotherTool, shouldForceComparisonTable } from "../comparison-table-intent";
 import { RENTAL_A2UI_CONTEXT_DESCRIPTION } from "@/lib/rentals/a2ui-context";
 
 const ids = [
@@ -51,5 +51,47 @@ describe("shouldForceComparisonTable", () => {
   it("requires at least two published results", () => {
     const empty = { get: () => ({ context: [] }) };
     expect(call("Put the first two apartments in a table.", empty)).toBe(false);
+  });
+});
+
+
+describe("comparison follow-up tool suppression", () => {
+  it("allows the grounded table tool in the first step but prevents duplicate model-generated UI afterwards", () => {
+    const messages = [user("Put the first two apartments in a table.")];
+    expect(shouldFinishComparisonWithoutAnotherTool({ stepNumber: 0, messages, requestContext: context })).toBe(false);
+    expect(shouldFinishComparisonWithoutAnotherTool({ stepNumber: 1, messages, requestContext: context })).toBe(true);
+    expect(shouldFinishComparisonWithoutAnotherTool({ stepNumber: 2, messages, requestContext: context })).toBe(true);
+  });
+
+  it("does not suppress tools for other domains, fresh rental searches or missing hints", () => {
+    for (const query of [
+      "Find apartments under COP 3M.",
+      "Compare the first two new projects side by side.",
+      "Book a table for two at a restaurant.",
+    ]) {
+      expect(shouldFinishComparisonWithoutAnotherTool({
+        stepNumber: 1, messages: [user(query)], requestContext: context,
+      })).toBe(false);
+    }
+    expect(shouldFinishComparisonWithoutAnotherTool({
+      stepNumber: 1, messages: [user("Put the first two apartments in a table.")],
+      requestContext: { get: () => ({ context: [] }) },
+    })).toBe(false);
+  });
+});
+
+
+describe("server-owned displayed ordinal interpretation", () => {
+  it("parses exact requested positions rather than accepting the model's IDs", () => {
+    expect(comparisonRequestedPositions([user("Put the first two apartments in a table.")])).toEqual([1, 2]);
+    expect(comparisonRequestedPositions([user("Compare the second and third apartments side by side.")])).toEqual([2, 3]);
+    expect(comparisonRequestedPositions([user("Compare apartments six and seven.")])).toEqual([6, 7]);
+    expect(comparisonRequestedPositions([user("Compare apartments 2nd and 3rd.")])).toEqual([2, 3]);
+  });
+
+  it("never invents an ordinal for generic requests", () => {
+    expect(comparisonRequestedPositions([user("Show these apartments in a table.")])).toBeNull();
+    expect(comparisonRequestedPositions([user("Compare apartment prices.")])).toBeNull();
+    expect(comparisonRequestedPositions([user("Compare apartment 3 and 3.")])).toBeNull();
   });
 });
