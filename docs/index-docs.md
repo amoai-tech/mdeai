@@ -283,6 +283,7 @@ This revision's catalog contains **163 active-document entries** plus **two `_ar
 | Testing | [`06-testing/playwright/evidence/2026-10-30/README.md`](06-testing/playwright/evidence/2026-10-30/README.md) | Markdown | Snapshot / evidence |
 | Testing | [`06-testing/playwright/evidence/2026-10-31/san-481/README.md`](06-testing/playwright/evidence/2026-10-31/san-481/README.md) | Markdown | Snapshot / evidence |
 | Testing | [`06-testing/playwright/evidence/2026-11-10/SAN-755-RESULTS.md`](06-testing/playwright/evidence/2026-11-10/SAN-755-RESULTS.md) | Markdown | Snapshot / evidence |
+| Testing | [`06-testing/playwright/evidence/2026-11-21/san-1681-review-readback-RESULTS.md`](06-testing/playwright/evidence/2026-11-21/san-1681-review-readback-RESULTS.md) | Markdown | Snapshot / evidence |
 | Testing | [`06-testing/playwright/evidence/2026-11-10/pr-862-RESULTS.md`](06-testing/playwright/evidence/2026-11-10/pr-862-RESULTS.md) | Markdown | Snapshot / evidence |
 | Testing | [`06-testing/playwright/evidence/2026-11-12/san412-map-selection.json`](06-testing/playwright/evidence/2026-11-12/san412-map-selection.json) | JSON evidence | Snapshot / evidence |
 | Testing | [`06-testing/pr-agent-quality-snapshot-2026-11-04.md`](06-testing/pr-agent-quality-snapshot-2026-11-04.md) | Markdown | Snapshot / evidence |
