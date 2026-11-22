@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowRightIcon, CheckCircleIcon } from "lucide-react";
 
+import { useHydrated } from "@/hooks/use-hydrated";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -47,6 +48,12 @@ type Props = {
  * Captures interest in-page (no /contact navigation) → /api/partners/venue-leads.
  */
 export function PartnerLeadForm({ testId, variant, signupHref }: Props) {
+  // Preserve one request id across retries so a network retry cannot create a
+  // second lead. Disable submit until hydration: before React owns the form a
+  // click would fall back to a native GET and leak guest details into the URL.
+  const requestId = useRef<string | null>(null);
+  const hydrated = useHydrated();
+  const [receipt, setReceipt] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [venueName, setVenueName] = useState("");
@@ -67,7 +74,9 @@ export function PartnerLeadForm({ testId, variant, signupHref }: Props) {
     }
     setSubmitting(true);
     try {
-      await submitVenueLead({
+      requestId.current ??= crypto.randomUUID();
+      const result = await submitVenueLead({
+        requestId: requestId.current,
         name: name.trim(),
         email: email.trim(),
         venueName: venueName.trim(),
@@ -75,6 +84,7 @@ export function PartnerLeadForm({ testId, variant, signupHref }: Props) {
         message: message.trim() || undefined,
         variant,
       });
+      setReceipt(result.leadId);
       setDone(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not send your request");
@@ -99,6 +109,14 @@ export function PartnerLeadForm({ testId, variant, signupHref }: Props) {
         <p className="mt-1 text-sm text-muted-foreground">
           Want to get started right away? You can list your venue now.
         </p>
+        {receipt ? (
+          <p
+            data-testid={`${testId}-lead-receipt`}
+            className="mt-3 break-all rounded-lg bg-muted px-3 py-2 font-mono text-xs"
+          >
+            Reference: {receipt}
+          </p>
+        ) : null}
         <Button
           variant="outline"
           className="mt-4"
@@ -220,7 +238,7 @@ export function PartnerLeadForm({ testId, variant, signupHref }: Props) {
           size="lg"
           className="w-full"
           data-testid={`${testId}-lead-submit`}
-          disabled={submitting}
+          disabled={submitting || !hydrated}
         >
           {submitting ? "Sending…" : "Request access"}
           {!submitting && <ArrowRightIcon data-icon="inline-end" aria-hidden="true" />}
