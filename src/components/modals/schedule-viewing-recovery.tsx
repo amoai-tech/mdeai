@@ -20,19 +20,43 @@ export const ScheduleViewingRecovery = ({
   resultsHref,
   onRetry,
   onChooseAnother,
+  stale = false,
 }: {
   submitting: boolean;
   resultsHref: string;
   onRetry: () => void;
   onChooseAnother: () => void;
+  /**
+   * SAN-1698: the reference matches no listing. A retry would re-send the same request and fail
+   * identically, so this state offers only the action that can help — refresh the results.
+   */
+  stale?: boolean;
 }) => {
+  if (stale) {
+    return (
+      <div
+        className="flex flex-col gap-2 rounded-lg border p-3"
+        data-testid="schedule-viewing-recovery-stale"
+      >
+        <a
+          href={resultsHref}
+          data-testid="schedule-viewing-refresh-results"
+          className={cn(buttonVariants(), "min-h-11 lg:min-h-0")}
+        >
+          Refresh results
+        </a>
+      </div>
+    );
+  }
+
   return (
     <div
       className="flex flex-col gap-2 rounded-lg border p-3"
       data-testid="schedule-viewing-recovery"
     >
       <p className="text-sm text-muted-foreground">
-        Your details are still here. Retry this viewing request, or choose another one.
+        Your details are still here. Retry this viewing request, or choose
+        another one.
       </p>
       <div className="flex flex-col gap-2 sm:flex-row">
         <Button

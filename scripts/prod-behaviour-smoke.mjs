@@ -73,7 +73,7 @@ async function servedFingerprint() {
 }
 
 // The intentionally nonexistent listing may be rejected during input validation
-// (400) or after a safe domain lookup (409). Both are legitimate negative
+// (400) or after a safe domain lookup (409 unavailable / 410 missing). Both are legitimate negative
 // outcomes. Never accept success or a response leaking database internals.
 export function safeViewingRejection(status, json) {
   const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
@@ -87,6 +87,9 @@ export function safeViewingRejection(status, json) {
 
   const { code, message } = json.error;
   return (
+    (status === 410 &&
+      code === "LISTING_UNRESOLVABLE" &&
+      message === "This listing is no longer available. Refresh the results to see what's still here.") ||
     (status === 409 &&
       code === "LISTING_UNAVAILABLE" &&
       message === "This home isn't accepting viewing requests right now. Pick another apartment from the results.") ||

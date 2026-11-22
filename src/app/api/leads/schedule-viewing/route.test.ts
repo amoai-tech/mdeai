@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
 const { getSession } = vi.hoisted(() => ({ getSession: vi.fn() }));
@@ -269,6 +270,37 @@ describe("POST /api/leads/schedule-viewing (SAN-1203)", () => {
     expect(serverLog()).toContain('"shape":"slug"');
     // A non-empty 12-hex fingerprint: `toContain('"ref":"')` would also pass an empty value.
     expect(serverLog()).toMatch(/"ref":"[0-9a-f]{12}"/);
+    expect(serverLog()).not.toContain("apt-laureles-001");
+  });
+
+  it("tells the renter a gone listing is gone, with 410 and no retry-shaped copy", async () => {
+    // SAN-1059: a reference that matches no apartment must not read as "this home refused you".
+    // 410 is deliberate — the resource is gone, so retrying the same request cannot succeed.
+    vi.stubEnv("MDE_LOG_FINGERPRINT_KEY", "test-log-fingerprint-key");
+    fetchMock.mockResolvedValue(
+      edgeResponse(400, {
+        success: false,
+        error: {
+          code: "LISTING_UNRESOLVABLE",
+          message: "p1_schedule_tour_atomic: listing not found",
+        },
+      }),
+    );
+
+    const res = await post(validBody());
+    const json = await res.json();
+
+    expect(res.status).toBe(410);
+    expect(json.error.code).toBe("LISTING_UNRESOLVABLE");
+    expect(json.error.message).toBe(SCHEDULE_VIEWING_ERROR_MESSAGES.LISTING_UNRESOLVABLE);
+    expect(json.error.message).not.toMatch(/accepting viewing requests right now/i);
+    expect(JSON.stringify(json)).not.toContain("p1_schedule_tour_atomic");
+    expect(serverLog()).toContain("listing_unresolvable");
+    const expectedRef = createHmac("sha256", "test-log-fingerprint-key")
+      .update(validBody().listingId)
+      .digest("hex")
+      .slice(0, 12);
+    expect(serverLog()).toContain(`"ref":"${expectedRef}"`);
     expect(serverLog()).not.toContain("apt-laureles-001");
   });
 

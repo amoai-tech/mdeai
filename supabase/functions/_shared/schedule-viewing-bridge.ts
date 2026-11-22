@@ -75,7 +75,8 @@ export function parsePreferredShowingAt(raw: string): string | null {
     hasTimezone = true;
   } else if (
     trimmed.length >= 22 &&
-    (trimmed[trimmed.length - 6] === "+" || trimmed[trimmed.length - 6] === "-") &&
+    (trimmed[trimmed.length - 6] === "+" ||
+      trimmed[trimmed.length - 6] === "-") &&
     trimmed[trimmed.length - 3] === ":" &&
     isAsciiDigits(trimmed, trimmed.length - 5, trimmed.length - 3) &&
     isAsciiDigits(trimmed, trimmed.length - 2, trimmed.length)
@@ -150,17 +151,28 @@ export async function createScheduleViewingBridge(
     //
     // SAN-1059: the RPC raises SQLSTATE P1287 for exactly this branch, so classification no
     // longer depends on the wording of the message. The message match stays as a fallback for
-    // the window where this function is deployed ahead of the migration (and vice versa).
+    // compatibility with pre-P1287 legacy functions that emitted P0001 with this text.
+    // SAN-1059: P1288 distinguishes a missing reference from an existing rejected row.
+    // New bridge + old SQL may still report P1287 as unavailable (safe, but temporarily
+    // retryable). New SQL + old bridge may report generic DB_ERROR until bridge deploys.
+    // Deploy the updated bridge before applying the migration; never guess from P1287.
+    const isListingUnresolvable =
+      error.code === "P1288" ||
+      (isValidationError && /listing not found/i.test(error.message));
     const isListingUnavailable =
-      error.code === "P1287" ||
-      (isValidationError && /(?:listing|rental) is not requestable/i.test(error.message));
+      !isListingUnresolvable &&
+      (error.code === "P1287" ||
+        (isValidationError &&
+          /(?:listing|rental) is not requestable/i.test(error.message)));
     return {
       ok: false,
-      code: isListingUnavailable
-        ? "LISTING_UNAVAILABLE"
-        : isValidationError
-          ? "VALIDATION_ERROR"
-          : "DB_ERROR",
+      code: isListingUnresolvable
+        ? "LISTING_UNRESOLVABLE"
+        : isListingUnavailable
+          ? "LISTING_UNAVAILABLE"
+          : isValidationError
+            ? "VALIDATION_ERROR"
+            : "DB_ERROR",
       message: isValidationError
         ? error.message
         : "Failed to save viewing request",
