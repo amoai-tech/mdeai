@@ -161,6 +161,8 @@ describe("incomplete apartment references defer rather than compare the wrong su
     "Put the first two apartments in a table with 5 columns.",
     "Put the first two apartments in a table with 5 rows.",
     "Put the first two apartments in a table with 5.",
+    "Compare apartments 1 and 2 with 5 columns.",
+    "Compare apartments 1 and 2 with five columns.",
   ])("does not trust partial or unrelated numeric references: %s", (text) => {
     expect(comparisonRequestedPositions([user(text)])).toBeNull();
   });

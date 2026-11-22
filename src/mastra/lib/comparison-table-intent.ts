@@ -29,6 +29,9 @@ const NUMBERED_TOKEN = new RegExp(String.raw`\b(${NUMBERED_RESULT})\b`, "gi");
 // Only 1–10 are supported display ordinals. Larger numeric references must
 // never disappear from a server-trusted apartment selection.
 const UNSUPPORTED_NUMBERED_TOKEN = /\b(?:1[1-9]|[2-9]\d+)(?:st|nd|rd|th)?\b/i;
+// Numbers describing table layout or features are never displayed apartment
+// positions, including when a numbered list precedes them.
+const NON_APARTMENT_NUMBER = /\b(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+(?:columns?|rows?|features?|amenities?|bedrooms?|beds?|bathrooms?)\b/i;
 const LIST_SEPARATOR = /^\s*(?:(?:apartments?|listings?|rentals?)\s+)?(?:,\s*(?:and\s+)?|(?:and|&|versus|vs\.?|with)\s+)(?:the\s+)?$/i;
 const NUMBER_WORDS = ["first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth"];
 const CARDINAL_WORDS = ["one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
@@ -46,7 +49,7 @@ function resultNumber(word: string): number | null {
 export function comparisonRequestedPositions(messages: readonly MessageLike[]): number[] | null {
   const lastUser = [...messages].reverse().find((message) => message?.role === "user");
   const text = messageText(lastUser).trim();
-  if (UNSUPPORTED_NUMBERED_TOKEN.test(text)) return null;
+  if (UNSUPPORTED_NUMBERED_TOKEN.test(text) || NON_APARTMENT_NUMBER.test(text)) return null;
   const firstTwo = /\b(?:first|top)\s+(?:two|2)\s+(?:apartments?|listings?|rentals?|results?)\b/i.exec(text);
   if (firstTwo) {
     // Do not make a partial trusted list when a renter named an apartment
