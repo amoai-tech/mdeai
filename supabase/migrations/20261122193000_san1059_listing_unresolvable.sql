@@ -1,4 +1,4 @@
--- SAN-1698 · viewing requests: tell "no such listing" apart from "cannot be requested".
+-- SAN-1059 · viewing requests: tell "no such listing" apart from "cannot be requested".
 --
 -- The canonical function raised P1287 for two different worlds: a reference that matches no
 -- apartment at all, and an apartment that exists but is not requestable. The renter saw one
@@ -23,6 +23,7 @@ CREATE OR REPLACE FUNCTION public.p1_schedule_tour_atomic(p_listing_id text, p_u
 AS $function$
 DECLARE
   v_apartment public.apartments%ROWTYPE;
+  v_existing_id uuid;
   v_lead public.leads%ROWTYPE;
   v_showing public.showings%ROWTYPE;
   v_listing_id text := nullif(btrim(p_listing_id), '');
@@ -201,18 +202,29 @@ BEGIN
   -- stays out and fixture access remains an independent authorization decision.
   -- Phase B keeps the normal approval, publication, ownership and availability
   -- contract. The row is locked so a concurrent withdrawal serializes below.
-  -- SAN-1698: distinguish a reference that resolves to no listing from one that exists but
+  -- SAN-1059: distinguish a reference that resolves to no listing from one that exists but
   -- cannot be requested. Everything below this point answers "may this listing be requested?";
   -- this answers the earlier question, so a renter whose card outlived the listing gets a
   -- recoverable state (P1288) instead of being told a real apartment refused them (P1287).
-  -- The id is compared as text so a malformed reference cannot raise a cast error, and the
-  -- lookup deliberately ignores privacy/status so it can tell "missing" from "not allowed".
-  IF NOT EXISTS (
-    SELECT 1
+  -- Lock the matching, visible row before the existing requestability lookup. This
+  -- prevents deletion/rename between the existence check and the transactional write.
+  -- A private/internal reference must look exactly like a missing reference to guests.
+  -- Use indexable UUID/slug comparisons; malformed references never get cast to uuid.
+  IF v_listing_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' THEN
+    SELECT a.id INTO v_existing_id
     FROM public.apartments AS a
-    WHERE a.id::text = lower(v_listing_id)
-       OR a.slug = lower(v_listing_id)
-  ) THEN
+    WHERE a.id = v_listing_id::uuid
+      AND coalesce(lower(a.metadata->>'visibility'), '') NOT IN ('private', 'internal')
+    FOR UPDATE;
+  ELSE
+    SELECT a.id INTO v_existing_id
+    FROM public.apartments AS a
+    WHERE a.slug = lower(v_listing_id)
+      AND coalesce(lower(a.metadata->>'visibility'), '') NOT IN ('private', 'internal')
+    FOR UPDATE;
+  END IF;
+
+  IF v_existing_id IS NULL THEN
     RAISE EXCEPTION 'p1_schedule_tour_atomic: listing not found'
       USING ERRCODE = 'P1288';
   END IF;
@@ -534,3 +546,12 @@ BEGIN
   );
 END;
 $function$;
+
+-- The RPC runs only behind the authorized server/Edge bridge. Retain the canonical
+-- service_role-only EXECUTE contract even on a newly provisioned environment.
+REVOKE ALL ON FUNCTION public.p1_schedule_tour_atomic(
+  text, uuid, text, text, text, text, text, uuid, timestamptz, jsonb, jsonb
+) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.p1_schedule_tour_atomic(
+  text, uuid, text, text, text, text, text, uuid, timestamptz, jsonb, jsonb
+) TO service_role;

@@ -151,9 +151,11 @@ export async function createScheduleViewingBridge(
     //
     // SAN-1059: the RPC raises SQLSTATE P1287 for exactly this branch, so classification no
     // longer depends on the wording of the message. The message match stays as a fallback for
-    // the window where this function is deployed ahead of the migration (and vice versa).
-    // SAN-1698: a reference that matches no apartment at all is a different outcome from one
-    // that exists but cannot be requested. Retrying the former can never succeed.
+    // compatibility with pre-P1287 legacy functions that emitted P0001 with this text.
+    // SAN-1059: P1288 distinguishes a missing reference from an existing rejected row.
+    // New bridge + old SQL may still report P1287 as unavailable (safe, but temporarily
+    // retryable). New SQL + old bridge may report generic DB_ERROR until bridge deploys.
+    // Deploy the updated bridge before applying the migration; never guess from P1287.
     const isListingUnresolvable =
       error.code === "P1288" ||
       (isValidationError && /listing not found/i.test(error.message));

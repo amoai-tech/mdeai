@@ -156,6 +156,8 @@ export const ScheduleViewingModal = () => {
    * replays the one that already exists — never a second one.
    */
   const submitRequest = async (isRetry = false) => {
+    // A disappeared listing cannot be written again, even via a form submit.
+    if (activeFailure?.code === "LISTING_UNRESOLVABLE") return;
     if (submitLockRef.current) return;
     submitLockRef.current = true;
     // Keep the retry action visible while pending so its disabled/loading state is real.
@@ -445,7 +447,7 @@ export const ScheduleViewingModal = () => {
             >
               Cancel
             </Button>
-            {stage === "review" ? (
+            {stage === "review" && activeFailure?.code !== "LISTING_UNRESOLVABLE" ? (
               <Button
                 type="button"
                 variant="outline"
@@ -460,22 +462,24 @@ export const ScheduleViewingModal = () => {
                 Edit
               </Button>
             ) : null}
-            <Button
-              type="submit"
-              className="min-h-11"
-              data-testid={
-                stage === "review"
-                  ? "schedule-viewing-submit"
-                  : "schedule-viewing-review-button"
-              }
-              disabled={submitting}
-            >
-              {submitting
-                ? "Submitting…"
-                : stage === "review"
-                  ? "Request viewing"
-                  : "Review request"}
-            </Button>
+            {activeFailure?.code !== "LISTING_UNRESOLVABLE" ? (
+              <Button
+                type="submit"
+                className="min-h-11"
+                data-testid={
+                  stage === "review"
+                    ? "schedule-viewing-submit"
+                    : "schedule-viewing-review-button"
+                }
+                disabled={submitting}
+              >
+                {submitting
+                  ? "Submitting…"
+                  : stage === "review"
+                    ? "Request viewing"
+                    : "Review request"}
+              </Button>
+            ) : null}
           </div>
         </form>
       </div>

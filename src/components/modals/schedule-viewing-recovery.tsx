@@ -38,15 +38,10 @@ export const ScheduleViewingRecovery = ({
         className="flex flex-col gap-2 rounded-lg border p-3"
         data-testid="schedule-viewing-recovery-stale"
       >
-        <p className="text-sm text-muted-foreground">
-          This listing is no longer available. Refresh the results to see
-          what&apos;s still here.
-        </p>
         <a
           href={resultsHref}
           data-testid="schedule-viewing-refresh-results"
           className={cn(buttonVariants(), "min-h-11 lg:min-h-0")}
-          onClick={onChooseAnother}
         >
           Refresh results
         </a>

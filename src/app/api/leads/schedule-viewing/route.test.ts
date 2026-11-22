@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
 const { getSession } = vi.hoisted(() => ({ getSession: vi.fn() }));
@@ -273,7 +274,7 @@ describe("POST /api/leads/schedule-viewing (SAN-1203)", () => {
   });
 
   it("tells the renter a gone listing is gone, with 410 and no retry-shaped copy", async () => {
-    // SAN-1698: a reference that matches no apartment must not read as "this home refused you".
+    // SAN-1059: a reference that matches no apartment must not read as "this home refused you".
     // 410 is deliberate — the resource is gone, so retrying the same request cannot succeed.
     vi.stubEnv("MDE_LOG_FINGERPRINT_KEY", "test-log-fingerprint-key");
     fetchMock.mockResolvedValue(
@@ -295,7 +296,11 @@ describe("POST /api/leads/schedule-viewing (SAN-1203)", () => {
     expect(json.error.message).not.toMatch(/accepting viewing requests right now/i);
     expect(JSON.stringify(json)).not.toContain("p1_schedule_tour_atomic");
     expect(serverLog()).toContain("listing_unresolvable");
-    expect(serverLog()).toMatch(/"ref":"[0-9a-f]{12}"/);
+    const expectedRef = createHmac("sha256", "test-log-fingerprint-key")
+      .update(validBody().listingId)
+      .digest("hex")
+      .slice(0, 12);
+    expect(serverLog()).toContain(`"ref":"${expectedRef}"`);
     expect(serverLog()).not.toContain("apt-laureles-001");
   });
 

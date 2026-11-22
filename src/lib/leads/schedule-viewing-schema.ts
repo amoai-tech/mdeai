@@ -72,7 +72,7 @@ export const SCHEDULE_VIEWING_ERROR_MESSAGES = {
   // "check your details" sends them round the same loop forever.
   LISTING_UNAVAILABLE:
     "This home isn't accepting viewing requests right now. Pick another apartment from the results.",
-  // SAN-1698: the reference matches no listing at all. Retrying it can never succeed, so the copy
+  // SAN-1059: the reference matches no listing at all. Retrying it can never succeed, so the copy
   // points at the only action that helps: refresh the results.
   LISTING_UNRESOLVABLE:
     "This listing is no longer available. Refresh the results to see what's still here.",
