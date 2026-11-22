@@ -65,7 +65,7 @@ Use the existing per-issue [templates](docs/07-operations/intent-spec-plan/READM
 
 ## 4. Phase A development and risk boundary
 
-During prelaunch development, **do not impose business eligibility, ownership-document, moderation, rights-paperwork, approval, publication or booking prerequisites**. Do not replace these with a shadow UI/SQL gate. Keep required authentication, private-data isolation/RLS, server-side admin authorization, truthful records, safe payment testing, atomic transactions, idempotency and audit.
+During prelaunch development, **do not impose business eligibility, ownership-document, moderation, rights-paperwork, external partner/listing/publication approval, publication-eligibility or booking-permission prerequisites**. These deferred business gates are different from **explicit user confirmation required by a human-in-the-loop (HITL) flow**, such as a host choosing to publish an event or a renter confirming a request; keep that confirmation and do not silently send or commit on the user's behalf. Do not replace deferred business gates with a shadow UI/SQL gate. Keep required authentication, private-data isolation/RLS, server-side admin authorization, truthful records, safe payment testing, atomic transactions, idempotency and audit.
 
 For S4 risk (payment, authorization/RLS, secrets, destructive data or irreversible retry), independently verify the actual effect using the existing [task-verifier skill](.claude/skills/task-verifier/SKILL.md); this is technical proof, **not** public-launch certification.
 

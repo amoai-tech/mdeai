@@ -15,8 +15,10 @@ operator_queue: tasks.md
 
 # Phase 1 MVP — Progress Task Tracker
 
+> **Historical archive (June 2026):** This snapshot is not a current task queue or product-status source. Some legacy targets no longer exist in the repository; those references are retained as historical text rather than redirected to unrelated modern files.
+
 > **North star:** Camila on `/` (cards + pins) · Andrés paid ticket · Roberto host publish @ [mdeai.co](https://www.mdeai.co)
-> **Operator queue (ordered tasks):** **[`tasks.md`](tasks.md)** ← start here (includes screen order)
+> **Operator queue (ordered tasks):** **[`tasks.md`](../../tasks.md)** ← start here (includes screen order)
 > **Verified:** `origin/main` = **`f8ac95b`** · VEN-025 prod routing **PASS** · browse nav live
 > **Also:** [`docs/tasks/design/notes/notes-11.md`](docs/tasks/design/notes/notes-11.md) · [`todo.md`](todo.md) · [`docs/tasks/PR/PROGRESS-TRACKER.md`](docs/tasks/PR/PROGRESS-TRACKER.md)
 
@@ -24,8 +26,8 @@ operator_queue: tasks.md
 
 | Track | Status | What it measures | Operator source |
 |-------|--------|------------------|-----------------|
-| **Discovery Beta** | **Active** | Chat, venues, maps, auth soak, prod journeys | [`tasks.md`](tasks.md) rows 1–50 |
-| **Commerce MVP Exit** | **Deferred** | PAY-001 → PAY-003 → EVT-002 → EVT-001 | [`tasks.md`](tasks.md) rows D1–D5 |
+| **Discovery Beta** | **Active** | Chat, venues, maps, auth soak, prod journeys | [`tasks.md`](../../tasks.md) rows 1–50 |
+| **Commerce MVP Exit** | **Deferred** | PAY-001 → PAY-003 → EVT-002 → EVT-001 | [`tasks.md`](../../tasks.md) rows D1–D5 |
 
 > **Conflict resolver:** Operator may defer Commerce Exit sequence while Discovery Beta remains active. Sequence **1A below** applies only when reopening the commerce track — not to daily Discovery Beta work.
 
@@ -46,7 +48,7 @@ operator_queue: tasks.md
 | **Foundation (F01–F20)** | 100% | 🟢 | Archived IMP-001–078 | — | None |
 | **PR remediation train** | 86% | 🟡 | 15/18 archived @ `bf40ef9` | PR-16 branch protection; PR-18 open | GitHub: protect `main` + Floor |
 | **Stable Beta soak (SAN-462)** | 33% | 🟥 | 1/3 scheduled prod synthetics | 2 more scheduled greens | Wait 09:00 UTC runs |
-| **Discovery Beta readiness** | **72%** | 🟡 | VEN-012/021/020/SEARCH-003 🟢; chat prod smoke | SAN-462 3/3; MAP-002B/008B; `/rentals` redirect | [`tasks.md`](tasks.md) rows 1–50 |
+| **Discovery Beta readiness** | **72%** | 🟡 | VEN-012/021/020/SEARCH-003 🟢; chat prod smoke | SAN-462 3/3; MAP-002B/008B; `/rentals` redirect | [`tasks.md`](../../tasks.md) rows 1–50 |
 | **Commerce MVP Exit (deferred)** | 55% | ⏸ | EVT-013 cards 🟢; G2 lead 🟢 | PAY-001/003; EVT-002; EVT-001 ledger | Sequence 1A when D-track reopened |
 | **CopilotKit + chat UX** | 88% | 🟢 | #41 hoist; wave-1 #35–37; G2d | UX-023 post-soak; UX-033 stale pins | After SAN-462 3/3 |
 | **Mastra + Gemini agents** | 85% | 🟢 | `conciergeAgent` gemini-3.5-flash; 7 agents; roadmap 95/100 | Phase 0 SAN-589→591 not started | [`docs/tasks/mastra/plan/index-mastra.md`](docs/tasks/mastra/plan/index-mastra.md) |
@@ -360,10 +362,10 @@ Linear **default sort is `updatedAt`**, not implementation order. Use **`data-or
 
 | Need | File |
 |------|------|
-| **Ordered task queue** | [`tasks.md`](tasks.md) |
+| **Ordered task queue** | [`tasks.md`](../../tasks.md) |
 | **Implementation playbook** | [`docs/tasks/notes/1/improve.md`](docs/tasks/notes/1/improve.md) |
-| **Forensic tracker / Linear audit** | [`plan.md`](plan.md) |
-| **Slim task index + tiers** | [`docs/tasks/INDEX.md`](docs/tasks/INDEX.md) |
+| **Forensic tracker / Linear audit** | [`plan.md`](../../plan.md) |
+| **Slim task index + tiers** | [`docs/tasks/INDEX.md`](../../docs/tasks/INDEX.md) |
 | **MVP operator dashboard** | [`docs/tasks/MVP-REQUIRED.md`](docs/tasks/MVP-REQUIRED.md) |
 | **Live P0 checklist** | [`todo.md`](todo.md) |
 | **Forensic rollup** | [`docs/tasks/progres.md`](docs/tasks/progres.md) |
@@ -374,7 +376,7 @@ Linear **default sort is `updatedAt`**, not implementation order. Use **`data-or
 | **Screen / wire hub** | [`docs/tasks/wireframes/screens/INDEX.md`](docs/tasks/wireframes/screens/INDEX.md) |
 | **Maps audit** | [`docs/tasks/wireframes/audit/02-maps-audit.md`](docs/tasks/wireframes/audit/02-maps-audit.md) |
 | **Mastra / MIS** | [`docs/tasks/mastra/progress-mastra.md`](docs/tasks/mastra/progress-mastra.md) |
-| **Sitemap (route truth)** | [`sitemap.md`](sitemap.md) |
+| **Sitemap (route truth)** | [`sitemap.md`](../../sitemap.md) |
 | **Machine queue** | [`docs/tasks/linear/mvp-queue.json`](docs/tasks/linear/mvp-queue.json) |
 
 ### Path migrations (2026-06-02)

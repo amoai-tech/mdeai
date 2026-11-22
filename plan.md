@@ -90,7 +90,7 @@ flowchart TD
 - **Broker:** create rental → upload/reorder actual photos → save/resume draft → one atomic final listing → view it in Discovery → receive the first viewing without cross-broker exposure.
 - **AI Concierge:** grounded intent → existing tools → correct catalog Surface/listing ID → authorized action → persisted receipt; failure/Stop/retry cannot invent success.
 
-No development eligibility, ownership document, moderation, photo-rights paperwork, publication approval or booking permission prerequisite. Keep login/server auth, RLS/private isolation, truthful records, idempotent transactions, safe payment testing and audit.
+No Phase A development eligibility, ownership documents, moderation, photo-rights paperwork, **external partner/listing/publication approval**, publication-eligibility or business booking-permission prerequisites. **Keep explicit user confirmation in required HITL flows** (for example, a host confirming event publication); that is not an external business-approval gate. Keep login/server auth, RLS/private isolation, truthful records, idempotent transactions, safe payment testing and audit.
 
 ## 3. Execution evidence and handoff
 
