@@ -68,9 +68,10 @@ test.describe('MDE Rentals phone: browse, map and viewing-form layout', () => {
     await modal.getByTestId('viewing-date-trigger').click();
     const calendar = modal.getByTestId('viewing-date-calendar');
     await calendar.getByRole('button', { name: 'Go to the Next Month' }).click();
-    // react-day-picker sets data-day to the full ISO date (day.isoDate, e.g. 2026-06-15), so
-    // anchor on the attribute suffix instead of the button's text or aria-label.
-    await calendar.locator('button[data-day$="-15"]:not([disabled])').click();
+    // Select by the day number in the button's text. `data-day` is NOT a stable key here:
+    // src/components/ui/calendar.tsx overrides it with `day.date.toLocaleDateString(...)`, so its
+    // value depends on the locale (e.g. 12/15/2026). The day number is what the renter sees.
+    await calendar.locator('button[data-day]:not([disabled])').filter({ hasText: /^15$/ }).click();
     await modal.getByTestId('viewing-time').fill('15:00');
     await modal.getByTestId('schedule-viewing-review-button').click();
     await expect(modal.getByTestId('schedule-viewing-review')).toBeVisible();
