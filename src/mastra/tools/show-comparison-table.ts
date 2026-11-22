@@ -80,6 +80,9 @@ export const showComparisonTableTool = createTool({
       ?.requestContext?.get?.(COMPARISON_POSITIONS_KEY);
     const positions = z.array(z.number().int().min(1).max(RENTAL_HINT_MAX)).min(2).max(MAX_APARTMENTS)
       .safeParse(serverPositions);
+    // Do not fall back to model IDs when valid server ordinals are outside
+    // the current result hints: rejecting is safer than silently choosing
+    // different apartments. This also guards against stale hint contexts.
     const selectedPositions = positions.success ? positions.data : input.positions;
     const requested = selectedPositions?.length ? selectedPositions.flatMap((position) => {
       const id = available[position - 1];

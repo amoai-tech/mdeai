@@ -89,6 +89,10 @@ describe("server-owned displayed ordinal interpretation", () => {
     expect(comparisonRequestedPositions([user("Compare apartments 2nd and 3rd.")])).toEqual([2, 3]);
     expect(comparisonRequestedPositions([user("Compare apartments 1, 2 and 3.")])).toEqual([1, 2, 3]);
     expect(comparisonRequestedPositions([user("Compare the first two apartments and the fifth.")])).toEqual([1, 2, 5]);
+    expect(comparisonRequestedPositions([user("Compare the first two apartments with the fifth.")])).toEqual([1, 2, 5]);
+    expect(comparisonRequestedPositions([user("Compare the first two apartments vs the 4th.")])).toEqual([1, 2, 4]);
+    expect(comparisonRequestedPositions([user("Compare the 1st and 2nd apartments with the 5th.")])).toEqual([1, 2, 5]);
+    expect(comparisonRequestedPositions([user("Compare 1st ,  2nd and 3rd.")])).toEqual([1, 2, 3]);
     expect(comparisonRequestedPositions([user("Compare apartments 1, 2, 3, 4 and 5.")])).toEqual([1, 2, 3, 4, 5]);
   });
 
@@ -97,5 +101,7 @@ describe("server-owned displayed ordinal interpretation", () => {
     expect(comparisonRequestedPositions([user("Compare apartment prices.")])).toBeNull();
     expect(comparisonRequestedPositions([user("Compare apartment 3 and 3.")])).toBeNull();
     expect(comparisonRequestedPositions([user("Compare apartments 1, 2, 3, 4, 5 and 6.")])).toBeNull();
+    expect(comparisonRequestedPositions([user("Compare apartments 1 and 2 plus 5.")])).toBeNull();
+    expect(comparisonRequestedPositions([user("Compare the first two apartments alongside the fifth.")])).toBeNull();
   });
 });

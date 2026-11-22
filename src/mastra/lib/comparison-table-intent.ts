@@ -26,7 +26,7 @@ export const COMPARISON_POSITIONS_KEY = "mdeai-comparison-requested-positions";
 
 const NUMBERED_RESULT = "(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|one|two|three|four|five|six|seven|eight|nine|ten|(?:10|[1-9])(?:st|nd|rd|th)?)";
 const NUMBERED_TOKEN = new RegExp(String.raw`\b(${NUMBERED_RESULT})\b`, "gi");
-const LIST_SEPARATOR = /^\s*(?:,\s*(?:and\s+)?|(?:and|&|versus|vs\.?)\s+)$/i;
+const LIST_SEPARATOR = /^\s*(?:(?:apartments?|listings?|rentals?)\s+)?(?:,\s*(?:and\s+)?|(?:and|&|versus|vs\.?|with)\s+)(?:the\s+)?$/i;
 const NUMBER_WORDS = ["first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth"];
 const CARDINAL_WORDS = ["one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
 function resultNumber(word: string): number | null {
@@ -47,9 +47,12 @@ export function comparisonRequestedPositions(messages: readonly MessageLike[]): 
   if (firstTwo) {
     const extra = text.slice(firstTwo.index + firstTwo[0].length);
     const additions = Array.from(
-      extra.matchAll(new RegExp(String.raw`(?:,|\band\b)\s*(?:the\s+)?(${NUMBERED_RESULT})\b`, "gi")),
+      extra.matchAll(new RegExp(String.raw`(?:,|\b(?:and|with|versus|vs)\b\.?|&)\s*(?:the\s+)?(${NUMBERED_RESULT})\b`, "gi")),
       (match) => resultNumber(match[1]),
     ).filter((value): value is number => value !== null);
+    // Never trust an incomplete partial list; the model can handle phrases
+    // this conservative parser cannot yet unambiguously understand.
+    if ([...extra.matchAll(NUMBERED_TOKEN)].length !== additions.length) return null;
     const unique = [...new Set([1, 2, ...additions])];
     return unique.length <= 5 ? unique : null;
   }
@@ -72,7 +75,7 @@ export function comparisonRequestedPositions(messages: readonly MessageLike[]): 
     }
   }
   if (sequence.length) sequences.push(sequence);
-  if (sequences.length !== 1) return null;
+  if (sequences.length !== 1 || sequences[0].length !== tokens.length) return null;
   const positions = [...new Set(sequences[0])];
   return positions.length >= 2 && positions.length <= 5 ? positions : null;
 }
@@ -132,5 +135,7 @@ export function shouldFinishComparisonWithoutAnotherTool({
   messages: readonly MessageLike[];
   requestContext?: { get?: (key: string) => unknown };
 }): boolean {
+  // The intent detector is first-step-only by design. Re-evaluate the user's
+  // original turn with step 0; passing the current step would always be false.
   return stepNumber > 0 && shouldForceComparisonTable({ stepNumber: 0, messages, requestContext });
 }
