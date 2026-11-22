@@ -30,9 +30,40 @@ function failure(
 /** Upstream technical detail is diagnostic, so it goes to the server log, not the response. */
 function logUpstreamFailure(
   outcome: string,
-  detail: { status: number; code?: string; message?: string },
+  detail: {
+    status: number;
+    code?: string;
+    message?: string;
+    listing?: { ref: string; shape: "uuid" | "slug" | "other"; length: number };
+  },
 ) {
   console.error("[api/leads/schedule-viewing] upstream failure", { outcome, ...detail });
+}
+
+/**
+ * `LISTING_UNAVAILABLE` means the atomic RPC could not resolve the listing (it accepts a
+ * UUID or an exact lowercase slug) or refused it as not requestable. Without the reference
+ * that failed, the outcome is undiagnosable after the fact — the raw value never reaches the
+ * renter's response. Log a short non-reversible fingerprint plus the identifier shape, which
+ * is enough to correlate against the canonical apartment record without writing a
+ * renter-visible slug into the logs.
+ */
+function describeListingRef(listingId: string): {
+  ref: string;
+  shape: "uuid" | "slug" | "other";
+  length: number;
+} {
+  const value = listingId.trim();
+  const shape = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+    ? "uuid"
+    : /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value)
+      ? "slug"
+      : "other";
+  return {
+    ref: createHash("sha256").update(value).digest("hex").slice(0, 12),
+    shape,
+    length: value.length,
+  };
 }
 
 /**
@@ -157,6 +188,8 @@ export async function POST(req: Request) {
       status: edgeRes.status,
       code: edgeJson.error.code,
       message: edgeJson.error.message,
+      // Correlate a future failure with the canonical apartment, without logging the slug.
+      listing: describeListingRef(listingId),
     });
     // The apartment cannot take a request; the renter's own input is not the problem.
     return failure("LISTING_UNAVAILABLE", 409);

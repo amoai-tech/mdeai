@@ -262,6 +262,11 @@ describe("POST /api/leads/schedule-viewing (SAN-1203)", () => {
     expect(json.error.message).not.toMatch(/check your viewing details/i);
     expect(JSON.stringify(json)).not.toContain("p1_schedule_tour_atomic");
     expect(serverLog()).toContain("listing_unavailable");
+    // The failed reference must be correlatable afterwards, but the raw slug must not
+    // reach the logs — the renter-visible identifier stays out, a fingerprint goes in.
+    expect(serverLog()).toContain('"shape":"slug"');
+    expect(serverLog()).toContain('"ref":"');
+    expect(serverLog()).not.toContain("apt-laureles-001");
   });
 
   it("keeps the edge's technical validation prose out of the renter's response", async () => {
