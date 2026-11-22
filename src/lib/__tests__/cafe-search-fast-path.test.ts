@@ -20,6 +20,16 @@ describe("cafe-search-fast-path", () => {
       .toContain("No cafés matched");
   });
 
+  it.each([
+    ["quota", "request limit"],
+    ["disabled", "temporarily paused"],
+    ["quota_unavailable", "temporarily unavailable"],
+  ])("explains %s instead of pretending no cafés exist", (reason, expected) => {
+    const result = fastPathCafeSummary(0, 0, undefined, "cafés around this map", reason);
+    expect(result).toContain(expected);
+    expect(result).not.toContain("No cafés matched");
+  });
+
   it("matches specialty coffee queries", () => {
     expect(canFastPathCafeSearch("good specialty coffee in Laureles")).toBe(true);
     const params = buildCafeSearchParams("good specialty coffee in Laureles");

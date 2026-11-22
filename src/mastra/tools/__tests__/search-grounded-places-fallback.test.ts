@@ -94,6 +94,7 @@ describe("searchGroundedPlacesTool fallback", () => {
   beforeEach(() => {
     vi.mocked(invokeAdkGrounding).mockReset();
     vi.mocked(searchRestaurants).mockReset();
+    vi.mocked(searchCafeVenueAnchors).mockClear();
     vi.mocked(searchGoogleCafes).mockReset().mockResolvedValue({ results: [], attribution: [] });
     vi.mocked(isAdkGroundingConfigured).mockReturnValue(true);
     vi.mocked(incrementAndCheckGroundingQuota).mockReset().mockResolvedValue({ allowed: true });
@@ -199,6 +200,46 @@ describe("searchGroundedPlacesTool fallback", () => {
       locationBias: { latitude: 6.21, longitude: -75.57 },
     }));
   });
+
+  it.each([
+    ["HTTP 403 forbidden", new Error("Google Places HTTP 403 forbidden")],
+    ["HTTP 429 throttled", Object.assign(new Error("Google Places resource exhausted"), { code: 8 })],
+    ["timeout", new Error("Places searchText timed out after 10000ms")],
+    ["provider HTTP 503", new Error("Google Places HTTP 503 unavailable")],
+  ])("returns a truthful empty map result without fallback after %s", async (_label, error) => {
+    vi.mocked(searchGoogleCafes).mockRejectedValue(error);
+    const out = await searchGroundedPlacesTool.execute!(
+      { query: "cafés around this map", intent: "cafe", locationBias: { latitude: 6.2088, longitude: -75.5671 } },
+      {} as never,
+    ) as GroundedOut;
+
+    expect(out.results).toEqual([]);
+    expect(out.attribution).toEqual([]);
+    expect(out.metadata?.reason).toBe("google_places_unavailable");
+    expect(out.metadata).not.toHaveProperty("fallback");
+    expect(searchGoogleCafes).toHaveBeenCalledOnce();
+    expect(incrementAndCheckGroundingQuota).toHaveBeenCalledOnce();
+    expect(searchCafeVenueAnchors).not.toHaveBeenCalled();
+    expect(searchRestaurants).not.toHaveBeenCalled();
+    expect(invokeAdkGrounding).not.toHaveBeenCalled();
+  });
+
+  it.each(["quota", "disabled", "quota_unavailable"] as const)(
+    "stops paid map discovery before Google when budget is %s",
+    async (reason) => {
+      vi.mocked(incrementAndCheckGroundingQuota).mockResolvedValue({ allowed: false, reason });
+      const out = await searchGroundedPlacesTool.execute!(
+        { query: "cafés around this map", intent: "cafe", locationBias: { latitude: 6.2088, longitude: -75.5671 } },
+        {} as never,
+      ) as GroundedOut;
+      expect(out.results).toEqual([]);
+      expect(out.attribution).toEqual([]);
+      expect(out.metadata?.reason).toBe(reason);
+      expect(searchGoogleCafes).not.toHaveBeenCalled();
+      expect(searchCafeVenueAnchors).not.toHaveBeenCalled();
+      expect(searchRestaurants).not.toHaveBeenCalled();
+    },
+  );
 
   it("does not fabricate nearby map results from citywide saved catalog when Google is empty", async () => {
     vi.mocked(searchCafeVenueAnchors).mockClear();
