@@ -91,8 +91,14 @@ try {
   shippedCa = undefined;
 }
 
-/** sslmode values that do not encrypt, or encrypt without verifying. */
-const UNSAFE_SSL_MODES = new Set(["disable", "allow", "prefer"]);
+/**
+ * sslmode values that are unacceptable for a hosted database. `disable`/`allow`/`prefer` send the
+ * rows in plaintext or without verification; `require` and `no-verify` encrypt but deliberately skip
+ * certificate verification, which a MITM still wins. Only the verifying modes are accepted.
+ */
+const UNSAFE_SSL_MODES = new Set(["disable", "allow", "prefer", "require", "no-verify"]);
+/** sslmode values that verify the certificate chain. */
+const VERIFYING_SSL_MODES = new Set(["verify-ca", "verify-full"]);
 /** TLS failures that mean "the certificate chain was not trusted", whatever the exact code. */
 const TLS_TRUST_CODES = new Set([
   "SELF_SIGNED_CERT_IN_CHAIN",
@@ -113,33 +119,41 @@ function clientConfigFor(url) {
   }
   const host = parsed.hostname.replace(/^\[|\]$/g, "").toLowerCase();
   const sslMode = parsed.searchParams.get("sslmode")?.toLowerCase();
+  const base = { connectionString: url, application_name: "find-listing-by-fingerprint" };
 
-  // An operator-chosen sslmode is validated, not blindly trusted: `disable`/`allow`/`prefer`
-  // send every apartment row in plaintext or without verification against a hosted database.
-  if (sslMode && UNSAFE_SSL_MODES.has(sslMode)) {
-    if (!LOOPBACK.has(host)) {
-      console.error(
-        `refusing sslmode=${sslMode} for non-loopback host "${host}": this scan reads every ` +
-          "apartment row. Use sslmode=verify-full (or require), or point DATABASE_URL at loopback.",
-      );
-      process.exit(1);
-    }
-    return { connectionString: url, application_name: "find-listing-by-fingerprint" };
+  if (LOOPBACK.has(host)) return base;
+
+  // Non-loopback: the sslmode is validated, never trusted.
+  if (sslMode && !VERIFYING_SSL_MODES.has(sslMode)) {
+    const why = UNSAFE_SSL_MODES.has(sslMode)
+      ? "it does not verify the server certificate"
+      : "it is not a recognised verifying mode";
+    console.error(
+      `refusing sslmode=${sslMode} for non-loopback host "${host}": ${why}. This scan reads ` +
+        "every apartment row, so the certificate must be verified. Use sslmode=verify-full " +
+        "(or verify-ca), or point DATABASE_URL at loopback.",
+    );
+    process.exit(1);
   }
 
-  if (LOOPBACK.has(host) || sslMode) {
-    return { connectionString: url, application_name: "find-listing-by-fingerprint" };
-  }
+  // Drop sslmode from the URL before passing explicit `ssl` options. pg lets a URL sslmode win
+  // over the config object, which would silently discard the pinned CA below (that is exactly how
+  // an explicit verify-full ended up failing against Supabase's own root).
+  const connectionString = (() => {
+    if (!sslMode) return url;
+    const stripped = new URL(url);
+    stripped.searchParams.delete("sslmode");
+    return stripped.toString();
+  })();
 
-  // No explicit sslmode on a hosted database: verify. An explicit `ca` REPLACES the default
-  // trust store, so when the operator supplies NODE_EXTRA_CA_CERTS (which only *extends* the
-  // default store) the `ca` must be left unset or their root would be ignored.
+  // An explicit `ca` REPLACES the default trust store, while NODE_EXTRA_CA_CERTS only *extends*
+  // that store — so when the operator supplies one, `ca` must stay unset or their root is ignored.
   const operatorTrustStore = Boolean(process.env.NODE_EXTRA_CA_CERTS?.trim());
   const ssl =
     operatorTrustStore || !shippedCa
       ? { rejectUnauthorized: true }
       : { ca: shippedCa, rejectUnauthorized: true };
-  return { connectionString: url, application_name: "find-listing-by-fingerprint", ssl };
+  return { ...base, connectionString, ssl };
 }
 
 const client = new Client(clientConfigFor(connectionString));

@@ -40,20 +40,24 @@ match with its status. It is read-only. Exit codes: `0` matched, `2` no match, `
 ## Connection and privilege policy
 
 - **TLS:** loopback URLs skip TLS (disposable/local). A URL that declares `sslmode` is **validated,
-  not blindly trusted**: `disable`, `allow` and `prefer` are refused for any non-loopback host,
-  because this scan reads every apartment row. Otherwise the server certificate is verified against
-  the Supabase CA bundle the app already ships in `src/mastra/lib/supabase-ca.ts`.
+  not blindly trusted**: `disable`, `allow`, `prefer`, `require` and `no-verify` are all refused for a
+  non-loopback host, and so is any unrecognised mode. Only `verify-full` (or `verify-ca`) is
+  accepted — the others either send the rows in plaintext or encrypt without checking the
+  certificate, which a MITM still wins. When an explicit mode is given it is stripped from the URL
+  before the explicit `ssl` options are passed, because pg lets a URL `sslmode` override the config
+  object and that silently discarded the pinned CA.
 
   Trust-store precedence, which is easy to get wrong: an explicit `ca` **replaces** Node's default
   trust store, and `NODE_EXTRA_CA_CERTS` only **extends** that default store. So when
   `NODE_EXTRA_CA_CERTS` is set the script deliberately leaves `ca` unset — otherwise your extra root
   would be ignored. Use this when the server is not Supabase; for Supabase, leave it unset and the
-  shipped CA is used.
+  shipped CA is used. `?sslmode=verify-full` against a Supabase URL therefore works.
 
   If verification fails and the shipped CA could not be loaded, a warning is printed at startup:
-  verification then silently falls back to the system store, which may trust a different root.
+  verification then falls back to the system store, which may trust a different root.
 
   Never disable verification.
+
 - **Role:** run it with a **read-only role**. The script prints `current_user`, and when that role
   bypasses RLS (`postgres`, `service_role`) it says so explicitly. That privilege is why the scan can
   see every row; do not extend it beyond this read.
