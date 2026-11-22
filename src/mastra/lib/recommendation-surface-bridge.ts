@@ -2,6 +2,7 @@ import { EventType, type BaseEvent } from "@ag-ui/client";
 import { Observable } from "rxjs";
 import { buildRentalRecommendationOps } from "./rental-recommendations-ui";
 import { buildRentalFilterControlOps } from "./rental-filter-control-ui";
+import { buildComparisonTableOps, RENTAL_COMPARISON_TARGET, type ComparisonRow, type ComparisonTarget } from "./comparison-table-ui";
 import { buildViewingProposalOps, type ViewingProposalInput } from "./viewing-proposal-ui";
 import {
   EVENT_RECOMMENDATIONS_SURFACE_ID,
@@ -30,6 +31,12 @@ const FILTER_CONTROL_TOOLS = new Set([
   "show-rental-filter-control",
 ]);
 
+/** SAN-1681 — the comparison tool's rows become the official Column → Table. */
+const COMPARISON_TABLE_TOOLS = new Set([
+  "showComparisonTable",
+  "showComparisonTableTool",
+  "show-comparison-table",
+]);
 /** SAN-1658 — the editable viewing request is its own tool, with the same transport. */
 const VIEWING_PROPOSAL_TOOLS = new Set([
   "showViewingProposal",
@@ -113,6 +120,75 @@ export function eventIdsFromResult(content: unknown): string[] {
   }
   if (payload.result) return eventIdsFromResult(payload.result);
   return [];
+}
+
+export function comparisonRowsFromResult(content: unknown): ComparisonRow[] {
+  let value: unknown = content;
+  if (typeof value === "string") {
+    try { value = JSON.parse(value); } catch { return []; }
+  }
+  if (!value || typeof value !== "object") return [];
+  const payload = value as { ok?: unknown; rows?: unknown; result?: unknown };
+  if (payload.ok === false) return [];
+  if (Array.isArray(payload.rows)) {
+    const safeNumber = (n: unknown): number | null =>
+      typeof n === "number" && Number.isFinite(n) && n >= 0 ? n : null;
+    return payload.rows.flatMap((row) => {
+      if (!row || typeof row !== "object") return [];
+      const r = row as Record<string, unknown>;
+      if (typeof r.id !== "string" || typeof r.title !== "string") return [];
+      // Replays of older comparisons may still carry one price/period.
+      const legacyMonthly = r.period === "month" ? safeNumber(r.price) : null;
+      const legacyNightly = r.period === "night" ? safeNumber(r.price) : null;
+      return [{
+        id: r.id,
+        title: r.title,
+        neighborhood: typeof r.neighborhood === "string" ? r.neighborhood : null,
+        bedrooms: safeNumber(r.bedrooms),
+        furnished: typeof r.furnished === "boolean" ? r.furnished : null,
+        bathrooms: safeNumber(r.bathrooms),
+        sizeSqm: safeNumber(r.sizeSqm),
+        wifiSpeedMbps: safeNumber(r.wifiSpeedMbps),
+        amenities: Array.isArray(r.amenities)
+          ? r.amenities.filter((s): s is string => typeof s === "string").slice(0, 20)
+          : [],
+        priceMonthly: safeNumber(r.priceMonthly) ?? legacyMonthly,
+        priceNightly: safeNumber(r.priceNightly) ?? legacyNightly,
+        currency: typeof r.currency === "string" ? r.currency : null,
+      }];
+    });
+  }
+  if (payload.result && typeof payload.result === "object") {
+    return comparisonRowsFromResult(payload.result);
+  }
+  return [];
+}
+
+/** Only the server-side tool may choose a page target, never model UI JSON. */
+export function comparisonTargetFromResult(content: unknown): ComparisonTarget {
+  let value: unknown = content;
+  if (typeof value === "string") {
+    try { value = JSON.parse(value); } catch { return "chat"; }
+  }
+  if (!value || typeof value !== "object") return "chat";
+  const payload = value as { target?: unknown; result?: unknown };
+  if (payload.target === RENTAL_COMPARISON_TARGET) return RENTAL_COMPARISON_TARGET;
+  if (payload.target === "chat") return "chat";
+  return payload.result ? comparisonTargetFromResult(payload.result) : "chat";
+}
+
+export function comparisonTableRenderEvents(rows: readonly ComparisonRow[], toolCallId: string, target: ComparisonTarget = "chat"): BaseEvent[] {
+  // Each run is a new immutable A2UI activity. Deleting and recreating the
+  // same native surface ID across activities can leave the named target blank.
+  // A unique tool-call surface lets CopilotKit show the newest comparison.
+  const built = buildComparisonTableOps(rows, `comparison-table-${toolCallId}`, { target });
+  if (!built) return [];
+  const callId = `render-ui-comparison-${toolCallId}`;
+  return [
+    { type: EventType.TOOL_CALL_START, toolCallId: callId, toolCallName: "render_ui" },
+    { type: EventType.TOOL_CALL_ARGS, toolCallId: callId, delta: JSON.stringify(built) },
+    { type: EventType.TOOL_CALL_END, toolCallId: callId },
+  ] as BaseEvent[];
 }
 
 /**
@@ -238,6 +314,13 @@ export function emitRecommendationSurface<T extends BaseEvent>(): (source: Obser
             // then re-creates (delete is a no-op when absent); an empty one clears.
             const mode = eventIds.length ? "replace" : "clear";
             for (const synthetic of renderEventUiEventsFor(eventIds, e.toolCallId, mode) ?? []) {
+              subscriber.next(synthetic as unknown as T);
+            }
+            return;
+          }
+          if (COMPARISON_TABLE_TOOLS.has(name)) {
+            const rows = comparisonRowsFromResult(e.content);
+            for (const synthetic of comparisonTableRenderEvents(rows, e.toolCallId, comparisonTargetFromResult(e.content))) {
               subscriber.next(synthetic as unknown as T);
             }
             return;

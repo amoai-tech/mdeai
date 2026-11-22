@@ -21,6 +21,7 @@ import {
 } from "@/components/rentals/rental-ask-composer";
 import { LeadConfirmationBanner } from "@/components/chat/lead-confirmation-banner";
 import { RentalRecommendationsSurface } from "@/components/copilot/a2ui/rental-recommendations-surface";
+import { RentalComparisonSurface } from "@/components/copilot/a2ui/rental-comparison-surface";
 import { RentalA2UIContext } from "@/components/chat/rental-a2ui-context";
 import { RentalFilterDraftProvider } from "@/components/rentals/rental-filter-draft";
 import { RentalFilterPanelActions } from "@/components/rentals/rental-filter-panel-actions";
@@ -220,7 +221,7 @@ function RentalBrowseViewInner({
       {/* SAN-1656 — the page's own authorized rows feed the fast-path context the
           catalog already resolves cards from, and the existing A2UI context
           publishes their IDs. No second query and no second data path. */}
-      {coAgent && !isDeterministicE2E() ? <RentalA2UIContext /> : null}
+      {coAgent && !isDeterministicE2E() ? <RentalA2UIContext visibleRows={shownResults} /> : null}
       {/* SAN-1655 — the one real Apply action. */}
       {coAgent && !isDeterministicE2E() ? <RentalFilterPanelActions filters={filterState} /> : null}
       <DiscoveryPageContext page="rentals" filters={filterState} selectedId={selectedForAskId ?? detailsRental?.id ?? null} />
@@ -284,6 +285,7 @@ function RentalBrowseViewInner({
           {/* SAN-1656 — the named AI recommendations panel. It renders nothing
               until Ask MDE targets it, so native results/map/Details are unchanged. */}
           <RentalRecommendationsSurface />
+          <RentalComparisonSurface />
           {/* A saved viewing request must be visible where it was made, not only in the chat. */}
           <LeadConfirmationBanner />
           {error ? (
