@@ -145,6 +145,7 @@ export function shouldForceComparisonTable({
  * valid table (observed on a real 390px renter run in production).
  */
 type CompletedToolStep = {
+  toolCalls?: readonly { toolName?: string }[];
   toolResults?: readonly { toolName?: string }[];
 };
 /** A tool call alone is not enough: wait until its result is in the step. */
@@ -153,6 +154,17 @@ export function hasCompletedTool(
   toolName: string,
 ): boolean {
   return steps.some((step) => step.toolResults?.some((result) => result.toolName === toolName));
+}
+
+/** One attempted tool per turn, even when its execution threw before
+ * producing a tool result. Do not repeatedly force failing calls. */
+export function hasAttemptedTool(
+  steps: readonly CompletedToolStep[],
+  toolName: string,
+): boolean {
+  return steps.some((step) =>
+    step.toolCalls?.some((call) => call.toolName === toolName) ||
+    step.toolResults?.some((result) => result.toolName === toolName));
 }
 
 /** The first route step may override the initial table choice; retry table
@@ -168,8 +180,8 @@ export function shouldContinueComparisonAfterRoute({
 }): boolean {
   return stepNumber > 0 && hasRouteIntent &&
     shouldForceComparisonTable({ stepNumber: 0, messages, requestContext }) &&
-    hasCompletedTool(steps, "computeRouteTool") &&
-    !hasCompletedTool(steps, "showComparisonTable");
+    hasAttemptedTool(steps, "computeRouteTool") &&
+    !hasAttemptedTool(steps, "showComparisonTable");
 }
 
 /** If the table ran first, the walking route is still owed to the renter. */
@@ -184,8 +196,8 @@ export function shouldContinueRouteAfterComparison({
 }): boolean {
   return stepNumber > 0 && hasRouteIntent &&
     shouldForceComparisonTable({ stepNumber: 0, messages, requestContext }) &&
-    hasCompletedTool(steps, "showComparisonTable") &&
-    !hasCompletedTool(steps, "computeRouteTool");
+    hasAttemptedTool(steps, "showComparisonTable") &&
+    !hasAttemptedTool(steps, "computeRouteTool");
 }
 
 export function shouldFinishComparisonWithoutAnotherTool({

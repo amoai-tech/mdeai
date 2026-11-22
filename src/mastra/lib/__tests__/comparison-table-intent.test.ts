@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { comparisonRequestedPositions, hasCompletedTool, shouldContinueComparisonAfterRoute, shouldContinueRouteAfterComparison, shouldFinishComparisonWithoutAnotherTool, shouldForceComparisonTable } from "../comparison-table-intent";
+import { comparisonRequestedPositions, hasAttemptedTool, hasCompletedTool, shouldContinueComparisonAfterRoute, shouldContinueRouteAfterComparison, shouldFinishComparisonWithoutAnotherTool, shouldForceComparisonTable } from "../comparison-table-intent";
 import { RENTAL_A2UI_CONTEXT_DESCRIPTION } from "@/lib/rentals/a2ui-context";
 import { routePlanForTurn, shouldForceRouteTool } from "../route-tool-choice";
 
@@ -136,6 +136,31 @@ describe("multi-tool comparison + walking route", () => {
     expect(shouldFinishComparisonWithoutAnotherTool({
       stepNumber: 2, messages, requestContext: context, steps: bothDone, hasRouteIntent: true,
     })).toBe(true);
+  });
+
+  it("does not repeatedly force a tool that already failed without a result", () => {
+    const attemptedRoute = [{ toolCalls: [{ toolName: "computeRouteTool" }] }];
+    const attemptedTable = [{ toolCalls: [{ toolName: "showComparisonTable" }] }];
+    expect(hasAttemptedTool(attemptedRoute, "computeRouteTool")).toBe(true);
+    expect(hasCompletedTool(attemptedRoute, "computeRouteTool")).toBe(false);
+    expect(shouldContinueComparisonAfterRoute({
+      stepNumber: 1, messages, requestContext: context, steps: attemptedRoute, hasRouteIntent: true,
+    })).toBe(true);
+    expect(shouldContinueComparisonAfterRoute({
+      stepNumber: 2, messages, requestContext: context,
+      steps: [...attemptedRoute, ...attemptedTable], hasRouteIntent: true,
+    })).toBe(false);
+    expect(shouldContinueRouteAfterComparison({
+      stepNumber: 1, messages, requestContext: context, steps: attemptedTable, hasRouteIntent: true,
+    })).toBe(true);
+    expect(shouldContinueRouteAfterComparison({
+      stepNumber: 2, messages, requestContext: context,
+      steps: [...attemptedTable, ...attemptedRoute], hasRouteIntent: true,
+    })).toBe(false);
+    expect(shouldFinishComparisonWithoutAnotherTool({
+      stepNumber: 2, messages, requestContext: context,
+      steps: [...attemptedTable, ...attemptedRoute], hasRouteIntent: true,
+    })).toBe(false);
   });
 
   it("allows the route after a table-first result, and never finishes while route is pending", () => {
