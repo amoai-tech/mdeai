@@ -1,9 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { evaluateFaithfulness } from "@/mastra/scorers/faithfulness-core";
 import type { EventCard } from "@/mastra/tools/search-events";
-import { findEventFactMismatches, type ClaimedEventFacts } from "../event-answer-accuracy";
+import { findEventFactMismatches, type ClaimedEventFacts } from "./event-answer-accuracy";
 import { summarizeEventTicketOffer, type EventTicketTier } from "../event-ticket-offer";
-import { summarizeEventOrders } from "../event-orders-summary";
 
 const event = (
   id: string,
@@ -89,16 +88,45 @@ describe("SAN-611 · source-bound event answer facts", () => {
     expect(findEventFactMismatches(mixed, [
       { id: tech.id, pricePerTicket: usd.pricePerTicket, currency: "USD" },
       { id: usd.id, pricePerTicket: tech.pricePerTicket, currency: "COP" },
-    ])).toHaveLength(4);
+    ])).toEqual([
+      { eventId: tech.id, field: "pricePerTicket" },
+      { eventId: tech.id, field: "currency" },
+      { eventId: usd.id, field: "pricePerTicket" },
+      { eventId: usd.id, field: "currency" },
+    ]);
   });
 
-  it("preserves unknown net revenue when a refund amount is missing", () => {
-    const orders = summarizeEventOrders([
-      { status: "paid", total_cents: 500000, quantity: 2 },
-      { status: "partial_refund", total_cents: 200000, quantity: 1 },
-    ]);
-    expect(orders.complete).toBe(false);
-    expect(orders.revenueCents).toBe(700000); // collected gross, NOT certified retained net
-    expect(orders.ticketsSold).toBe(2);
+  it("accepts different ISO timestamps for the same instant", () => {
+    expect(findEventFactMismatches(rows, [
+      { id: salsa.id, startsAt: "2026-12-10T23:00:00.000Z" },
+      { id: salsa.id, startsAt: "2026-12-10T18:00:00-05:00" },
+    ])).toEqual([]);
   });
+
+  it("rejects a genuinely different instant and an invalid date", () => {
+    expect(findEventFactMismatches(rows, [
+      { id: salsa.id, startsAt: "2026-12-10T23:00:01Z" },
+      { id: salsa.id, startsAt: "not a real date" },
+    ])).toEqual([
+      { eventId: salsa.id, field: "startsAt" },
+      { eventId: salsa.id, field: "startsAt" },
+    ]);
+  });
+
+  it("keeps unknown values distinct from explicit free/false facts", () => {
+    const unknown = { ...salsa, pricePerTicket: null, canBuyTickets: undefined };
+    expect(findEventFactMismatches([unknown], [
+      { id: unknown.id, pricePerTicket: 0, canBuyTickets: false },
+    ])).toEqual([
+      { eventId: unknown.id, field: "pricePerTicket" },
+      { eventId: unknown.id, field: "canBuyTickets" },
+    ]);
+    expect(findEventFactMismatches([unknown], [
+      { id: unknown.id, pricePerTicket: null },
+    ])).toEqual([]);
+  });
+
+  // TODO(SAN-611): Captured host-revenue replies must be checked separately
+  // for invented *net* totals when partial refund amounts are unknown. The
+  // existing summarizeEventOrders tests cover the source summary, not AI claims.
 });

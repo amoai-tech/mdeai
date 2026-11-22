@@ -5,14 +5,17 @@ import type { EventCard } from "@/mastra/tools/search-events";
  * The generic faithfulness scorer flattens all tool rows and cannot catch
  * swapped dates/prices between two genuine events.
  *
- * This is a deterministic CI assertion helper, not a second agent/scorer or
- * a replacement for the actual event search / ticket-offer owner.
+ * Used by CI fixtures only. No live response adapter extracts source-bound
+ * claims from Concierge prose yet, so this is NOT production enforcement.
+ * TODO(SAN-611): Use captured real model replies + their exact tool rows
+ * before integrating source-bound checks into the existing Mastra scorer.
  */
 export type ClaimedEventFacts = Pick<EventCard, "id"> &
   Partial<Pick<EventCard, "title" | "startsAt" | "pricePerTicket" | "currency" | "canBuyTickets">>;
 
 export type EventFactMismatch = {
   eventId: string;
+  /** id means the claimed event was not present in the source rows. */
   field: "id" | "title" | "startsAt" | "pricePerTicket" | "currency" | "canBuyTickets";
 };
 
@@ -36,7 +39,18 @@ export function findEventFactMismatches(
     for (const field of ["title", "startsAt", "pricePerTicket", "currency", "canBuyTickets"] as const) {
       // Undefined means the answer made no assertion about this field.
       // Null IS an assertion: an unknown price is not a free (zero) ticket.
-      if (claim[field] !== undefined && claim[field] !== row[field]) {
+      if (claim[field] === undefined) continue;
+      if (field === "startsAt") {
+        // ISO strings with Z, fractional seconds, or a local UTC offset can
+        // represent exactly the same instant. Invalid timestamps are never trusted.
+        const claimedAt = Date.parse(claim.startsAt!);
+        const sourceAt = Date.parse(row.startsAt);
+        if (!Number.isFinite(claimedAt) ||
+            !Number.isFinite(sourceAt) ||
+            claimedAt !== sourceAt) {
+          mismatches.push({ eventId: claim.id, field });
+        }
+      } else if (claim[field] !== row[field]) {
         mismatches.push({ eventId: claim.id, field });
       }
     }
