@@ -1,6 +1,6 @@
 # Intent → specification → implementation plan (MDE AI)
 
-**Purpose:** give agents a small, durable context chain for complicated MDE work. This supplements [the existing agent collaboration plan](../agent-workflow-plan.md), not a new tracker or agent runtime.
+**Purpose:** give agents a small, durable context chain for complicated MDE work. Root [spec.md](../../../spec.md) defines the shared acceptance contract, and root [plan.md](../../../plan.md) is the current reusable implementation/CopilotKit component-first playbook. The task-local templates below are optional for substantial handoffs; none is a second tracker, runtime or development approval gate. This supplements [the existing agent collaboration plan](../agent-workflow-plan.md).
 
 ## Start here
 
@@ -16,6 +16,7 @@
 | Source | Owner; not a duplicate of... |
 | --- | --- |
 | `AGENTS.md` | Invariants, Phase A development policy, security, skill routing |
+| Root `spec.md` / `plan.md` / `REVIEW.md` | Shared acceptance contract / execution playbook / review evidence rules; not per-issue live status |
 | `CLAUDE.md` | Claude-only adapter to shared instructions |
 | Linear issue | Exact title, status, priority, dependencies, current acceptance and progress |
 | `prd.md` / `roadmap.md` / `mvp.md` | Product requirements / strategy / public-launch definition |
@@ -51,6 +52,22 @@
 - https://code.claude.com/docs/en/memory — **ADAPT** explicit agent instruction loading; target `.claude/skills/tasks/SKILL.md`; `npm run check:skills` verifies canonical skill/mirror shape (not actual model behavior).
 - https://github.com/Digital-Tvilling/plan.md — **REFERENCE ONLY** Markdown portability; no separate schema standard needed; verify templates are plain text and agent-neutral.
 - https://www.datacamp.com/tutorial/spec-driven-development-with-claude-code — **REFERENCE ONLY** third-party comparison of heavier workflows; no new dependency or forced phase gates.
+
+## Verified external playbooks — choices for MDE (22 Nov 2026)
+
+The sources below are **references to adapt**, not instructions to install new frameworks, replace Linear or add business gates. Every adopted practice points to a current MDE document and a way to verify it. The sources are not evidence that MDE's production journey works.
+
+| Source | Decision | MDE destination and observable verification |
+| --- | --- | --- |
+| [Anthropic — AI-native SDLC playbook](https://claude.com/resources/articles/the-ai-native-sdlc-playbook) | **ADAPT** its Plan → Design → Build → Test → Deploy → Maintain **feedback loop**, with readable handoff artifacts and review/test moving alongside fast implementation. **Do not copy its automatic artifact-triggered approval chain** into Phase A. | Root [plan.md](../../../plan.md) six-stage table; issue/PR names exact outcome, commit, proof and next action without creating six tickets |
+| [Florian Bruniaux — Spec-first workflow](https://github.com/FlorianBruniaux/claude-code-ultimate-guide/blob/main/guide/workflows/spec-first.md) | **MODEL** vertical slices, scope exclusions and runnable acceptance; **do not adopt the recommendation that Claude-only `CLAUDE.md` is the canonical spec** in a multi-agent MDE repository. | Root [spec.md](../../../spec.md), optional task templates and shared [AGENTS.md](../../../AGENTS.md); a renter action has an `AC-#` and a testable persisted result |
+| [Florian Bruniaux — workflow library](https://github.com/FlorianBruniaux/claude-code-ultimate-guide/tree/main/guide/workflows) | **REFERENCE ONLY** for TDD, plan-driven worktrees, code review, test-driven debugging and source exploration. MDE already has `tasks`, `efficient`, `tests`, `praudit` and scoped specialist skills; **do not copy third-party slash commands or add competing reviewers**. | Current [tasks skill](../../../.claude/skills/tasks/SKILL.md), [root plan](../../../plan.md); pass the same issue and test command through a single implementation branch |
+| [Official Claude Code — common workflows](https://code.claude.com/docs/en/common-workflows) | **ADAPT** source-first exploration, optional planning for complex tasks, independent worktrees for parallel agents and test verification after changes. | [AGENTS.md](../../../AGENTS.md) session/parallel guidance and [plan.md](../../../plan.md); concurrent agents cannot edit the same RPC, shared catalog or dirty worktree |
+| [Spec Coding](https://spec-coding.dev/) | **ADAPT** lightweight problem, goal, plan, out-of-scope, acceptance/evidence packet; **skip heavyweight SDD documents for S0/S1**. | Root [spec.md](../../../spec.md) mini-template, [task templates](templates/spec.md); issue contains `AC-#`, an error/retry case and real proof rather than more prose |
+| [AGENTS.md open format](https://agents.md/) | **ADAPT** portable root agent commands, security, test commands and repository ownership. **Do not duplicate** CLAUDE-specific adapters or introduce nested instructions without a distinct directory owner. | Root [AGENTS.md](../../../AGENTS.md) and existing [CLAUDE.md](../../../CLAUDE.md); `CLAUDE.md` imports the canonical shared rules via `@AGENTS.md` |
+| [Official Claude Code — customize code review](https://code.claude.com/docs/en/code-review-customize) | **ADAPT** root review-only guidelines, material severity, a small nit budget, CI/generated-output exclusions and proof-first comments; **do not install another review engine**. Crucially, managed Claude Code Review reads `REVIEW.md` from the **base/default branch, not the PR head**. | Root [REVIEW.md](../../../REVIEW.md), existing [PR review guidelines](../../06-testing/pr-review-guidelines.md); new review rules become available to that managed reviewer after merging, with current PR-Agent/CI unchanged |
+
+**Source-to-change principle:** Prefer **ADAPT** (specific language and proof) over **COPY** (entire framework); future contributors should recheck current upstream details against the installed MDE code and actual GitHub/Linear state. None of these links is an instruction to run or accept a provider's suggested commands unreviewed. Do not claim time savings without a measured before/after sample.
 
 ## Measure the real-world benefit
 

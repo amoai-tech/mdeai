@@ -1,12 +1,13 @@
 # DESIGN.MD — MDE AI Design System and UI/UX Guide
 
-> Updated 2026-10-17 · **Prelaunch development (Phase A)** · Next.js 16 / React 19 / Tailwind v4 / shadcn/ui / CopilotKit v2
+> Updated 2026-11-22 · **Prelaunch development (Phase A)** · Next.js 16 / React 19 / Tailwind v4 / shadcn/ui / CopilotKit v2
 >
 > **Status:** This guide distinguishes **CURRENT (verified in repository code)** from **TARGET (recommended design standard)**. A target is not a claim that the live UI has passed visual, accessibility, or user-journey testing.
 
 ## How this guide is governed
 
-- `AGENTS.md` is the repository-wide policy, including the development/launch separation. Actual design tokens live in `src/app/globals.css`; existing UI primitives live in `src/components/ui/`. Current routes/components own their implemented behavior.
+- `AGENTS.md` is the repository-wide policy, including the development/launch separation. Actual design tokens live in `src/app/globals.css`; existing UI primitives live in `src/components/ui/`. Current routes/components own implemented behavior; the [source-based sitemap](sitemap.md) is the route inventory, **not** a certificate of working production journeys.
+- [Root specification](spec.md) and [implementation plan](plan.md) describe the approved **official CopilotKit Standard Catalog-first** Rentals design direction, owned by [SAN-1675](https://linear.app/amo100/issue/SAN-1675). Existing native components remain current implementation or transitional fallbacks until the official catalog path matches them in real behavior.
 - Use `.claude/skills/frontend-design/SKILL.md` and its `references/ui-ux-patterns.md` for UI work; `tasks/SKILL.md` for PR execution. Verify rather than copy outdated screen inventories or proposed component names.
 - Reuse the existing Next.js application, UI components, Supabase data, CopilotKit/Mastra tools, maps and real action paths. No second search engine, booking flow, component library, or business-policy filter.
 - **Phase A:** Business approval, verification, ownership/photo paperwork, rental eligibility, publication and viewing/booking certification **must not block development workflows**. Preserve technical safeguards: authentication, server-side authorization, RLS/private-data isolation, audit trails, integrity, idempotency, truthful provenance, and safe payment testing.
@@ -67,13 +68,14 @@ Keep long prose within readable measures (~60–75 characters), let card titles 
 
 ## 4. Cards, components and media
 
-**CURRENT owners**
+**CURRENT implementation owners (native presentation is not automatically the final target)**
 
 | Element | Reuse |
 | --- | --- |
-| UI primitives | `src/components/ui/` |
-| Card shell | `src/components/browse/venue-card-shell.tsx` |
-| Rental result card | `src/components/copilot/rental-card.tsx` |
+| Shared AI catalog contract | `src/components/copilot/a2ui/mde-ui-catalog.tsx` — official `standardUI` extended with MDE source-backed adapters; **many controls/Carousel/Map are currently omitted** |
+| UI primitives and branding | `src/components/ui/` and semantic variables in `src/app/globals.css` — reusable for official catalog adapters/overrides |
+| Card shell, current native | `src/components/browse/venue-card-shell.tsx` |
+| Rental result card, current native | `src/components/copilot/rental-card.tsx` |
 | Restaurant result card | `src/components/copilot/restaurant-card.tsx` |
 | Concierge shell | `src/components/chat/geo-chat-shell.tsx` |
 | Responsive columns | `src/components/chat/chat-canvas.tsx` |
@@ -81,6 +83,18 @@ Keep long prose within readable measures (~60–75 characters), let card titles 
 | Nav rail/drawer | `src/components/chat/chat-nav-rail.tsx` / `chat-nav-drawer.tsx` |
 
 **TARGET card order:** photo or neutral fallback → name and neighborhood → actual price/date/bedrooms/cuisine/rating when supplied → optional *grounded* relevance → one prominent CTA → quieter secondary action/source.
+
+### CopilotKit component-first Rentals presentation (TARGET; not implemented parity)
+
+Use the **installed** `@copilotkit/react-core/v2` Standard Catalog as the approved Rentals UI presentation contract. Reuse official catalog layout, `Card`, `Carousel`, `Table`, `Form` and controls **where supported by the pinned package and a working MDE handler**. A shared versioned `mdeUI` contract is correct; a new global provider is not. Keep the existing **separate Concierge and authenticated Host providers, agents and thread boundaries**. Host GenUI registration is tracked by [SAN-1659](https://linear.app/amo100/issue/SAN-1659).
+
+- **Initial page must work without AI:** catalog-compatible deterministic layout, fallback, search, Details and primary actions must remain usable during no model, loading and error states. Do not confuse a `GenerativeUISurface` native `fallback` with proof that every visible element is an official catalog component.
+- **Controls must work:** only enable buttons, sliders, forms and carousels once real typed state, event handlers, validation, keyboard navigation and underlying authenticated services exist. UI renderer functions are **not** agent-invocable database actions; preserve existing Mastra/server tools and atomic RPCs.
+- **Truthful entities:** render images, prices, addresses, availability and map markers from verified authorized source IDs and existing Google Maps/Places adapters. Unknown values remain unknown; no new maps engine, fabricated URL or unsourced media.
+- **Scoped generation:** named AI Surfaces get explicit component allowlists and honest fallback/error states. Agent-visible app state must be intentionally scoped; renderer-local state is not automatically agent-visible. Update `src/mastra/lib/generative-ui-context.ts` and catalog/guide drift tests together.
+- **Migration finish line:** for each Rentals page, verify **A: official component presentation → B: existing UI/API/Supabase actions → C: end-to-end user/mobile/security proof**. Only then retire superseded native **presentation**; retain canonical search, maps, backend and saved-thread services. This guide does not mark any task or component migration Done.
+
+**Example:** a renter filters to furnished 2BR apartments under COP 3M; one authorized source ID stays consistent across an official catalog card, actual map pin when coordinates exist, Details and a reviewed viewing request. Confirm success only after the existing server saves the lead and showing exactly once.
 
 **Media standards**
 
@@ -183,8 +197,10 @@ This replaces obsolete June 2026 SCREEN/SAN “Not Started” status rows. **Rou
 | --- | --- |
 | Public home | `src/app/page.tsx` and `src/components/home/` |
 | Concierge | `src/app/chat/page.tsx` and `src/components/chat/` |
-| Rentals | `/rentals` and `src/components/copilot/rental-card.tsx` |
-| Restaurants | `/restaurants` and `src/components/copilot/restaurant-card.tsx` |
+| Rentals browse | `/rentals` (`src/app/rentals/(browse)/page.tsx`), existing `RentalBrowseView`, and shared AI catalog; source presence does not prove final component parity |
+| Rentals Details and booking review | `/rentals/[id]`, `/rentals/bookings/new`, `/rentals/bookings/[id]` |
+| Broker Rentals workspaces | `/host/rentals`, `/app/rentals`, associated listings/onboarding routes and existing Host provider |
+| Restaurants | `/restaurants`, `/restaurants/[id]`, and existing restaurant cards; **not** `/restaurants/[slug]` |
 | Cafés / nightlife | `/cafes`, `/nightlife` |
 | Events | `/events` and existing events UI |
 | Saved, trips, tickets | `/saved`, `/trips`, `/me/tickets` where present |
@@ -215,10 +231,12 @@ Use **present repository skills**, not June 2026 slugs that no longer exist:
 | Priority | Candidate fix | Existing owner | Proof |
 | --- | --- | --- | --- |
 | P0 | Check theme and typography consistency | `src/app/globals.css` / theme provider | Light/dark screenshots, contrast |
-| P0 | Review homepage's hardcoded “14 venues · open now” demo-looking text | `src/components/home/home-hero.tsx` | Remove or clearly label unsupported status |
+| P0 | Verify real navigation, search result and Details source truth across existing routes | `src/app/`, existing search/card/Details owners | Exact source ID through links and authentic browser action (not a static sitemap status) |
 | P1 | Optimize chat/map widths if 1024px is cramped | `src/components/chat/chat-canvas.tsx` | 1024/1280 desktop browser test |
 | P1 | Polish map sheet + composer on mobile | `src/components/chat/map-mobile-sheet.tsx` | 390px keyboard, sheet and focus tests |
 | P1 | Improve 32px nav targets and small card text | `chat-nav-rail.tsx`, rental/restaurant cards | Touch/keyboard and readability |
 | P1 | Polish media/fallback and action hierarchy | Existing browse/card shells | Real-card/mobile and error journeys |
+
+**Verified documentation correction:** the October 2026 draft's “14 venues · open now” homepage finding is **not present** in current `src/components/home/home-hero.tsx`; it is not a proven open defect. The documented desktop chat columns, mobile map-sheet heights and semantic colors/fonts still match current source as checked on 2026-11-22. No screenshot/contrast/mobile-browser or user-journey certification was performed by this documentation check.
 
 **Definition of done for this guide:** No stale CopilotKit v1 implementation rule, invented CSS token requirements, dark-only claim, chat-only navigation mandate, fake map marker skeletons, outdated mobile snap model or old task statuses passed off as current. Current facts and future design improvements remain clearly separated.
