@@ -16,6 +16,8 @@ const nextConfig: NextConfig = {
   // Hide the Next.js development toolbar during deterministic Chromatic visual tests.
   ...(process.env.CHROMATIC_PILOT === "1" ? { devIndicators: false } : {}),
   experimental: {
+    // Suggest security-only Next.js upgrades to coding agents.
+    agentUpgrade: "security",
     // Reduce peak Webpack compilation memory in dev and build; may slightly increase compile time.
     webpackMemoryOptimizations: true,
   },
