@@ -282,6 +282,9 @@ This revision's catalog contains **163 active-document entries** plus **two `_ar
 | Testing | [`06-testing/ui-verification.md`](06-testing/ui-verification.md) | Markdown | Current |
 | Testing | [`06-testing/playwright/evidence/2026-10-30/README.md`](06-testing/playwright/evidence/2026-10-30/README.md) | Markdown | Snapshot / evidence |
 | Testing | [`06-testing/playwright/evidence/2026-10-31/san-481/README.md`](06-testing/playwright/evidence/2026-10-31/san-481/README.md) | Markdown | Snapshot / evidence |
+| Testing | [`06-testing/playwright/evidence/2026-11-10/SAN-755-RESULTS.md`](06-testing/playwright/evidence/2026-11-10/SAN-755-RESULTS.md) | Markdown | Snapshot / evidence |
+| Testing | [`06-testing/playwright/evidence/2026-11-10/pr-862-RESULTS.md`](06-testing/playwright/evidence/2026-11-10/pr-862-RESULTS.md) | Markdown | Snapshot / evidence |
+| Testing | [`06-testing/playwright/evidence/2026-11-12/san412-map-selection.json`](06-testing/playwright/evidence/2026-11-12/san412-map-selection.json) | JSON evidence | Snapshot / evidence |
 | Testing | [`06-testing/pr-agent-quality-snapshot-2026-11-04.md`](06-testing/pr-agent-quality-snapshot-2026-11-04.md) | Markdown | Snapshot / evidence |
 | Testing | [`06-testing/pr-agent/san-1332-execution-checkpoints.md`](06-testing/pr-agent/san-1332-execution-checkpoints.md) | Markdown | Current |
 | Operations | [`07-operations/README.md`](07-operations/README.md) | Markdown | Current |
@@ -299,6 +302,7 @@ This revision's catalog contains **163 active-document entries** plus **two `_ar
 | Operations | [`07-operations/production-rollback-runbook.md`](07-operations/production-rollback-runbook.md) | Markdown | Current |
 | Operations | [`07-operations/security/dist-leak-scan-maps-key-allowlist.md`](07-operations/security/dist-leak-scan-maps-key-allowlist.md) | Markdown | Current |
 | Operations | [`07-operations/security/supabase-advisor-disposition.md`](07-operations/security/supabase-advisor-disposition.md) | Markdown | Current |
+| Operations | [`07-operations/security/skillspector-triage-2026-11-20.md`](07-operations/security/skillspector-triage-2026-11-20.md) | Markdown | Snapshot / security triage |
 | Operations | [`07-operations/engineering/skill-behavior-evals.md`](07-operations/engineering/skill-behavior-evals.md) | Markdown | Current |
 | Operations | [`07-operations/external-rental-publication-recovery.md`](07-operations/external-rental-publication-recovery.md) | Markdown | Current |
 | Operations | [`07-operations/local-rental-preview.md`](07-operations/local-rental-preview.md) | Markdown | Current |
@@ -306,6 +310,7 @@ This revision's catalog contains **163 active-document entries** plus **two `_ar
 | Operations | [`07-operations/new-projects-inventory-sources.md`](07-operations/new-projects-inventory-sources.md) | Markdown | Current |
 | Operations | [`07-operations/owner-checklist-san1523-rollout.md`](07-operations/owner-checklist-san1523-rollout.md) | Markdown | Current |
 | Operations | [`07-operations/production-release-verification.md`](07-operations/production-release-verification.md) | Markdown | Current |
+| Operations | [`07-operations/viewing-request-fingerprint.md`](07-operations/viewing-request-fingerprint.md) | Markdown | Current |
 | Operations | [`07-operations/qa-fixture-cleanup.md`](07-operations/qa-fixture-cleanup.md) | Markdown | Current |
 | Operations | [`07-operations/rental-photo-rights-remediation.md`](07-operations/rental-photo-rights-remediation.md) | Markdown | Current |
 | Operations | [`07-operations/rentals/san-1503/README.md`](07-operations/rentals/san-1503/README.md) | Markdown | Current |
