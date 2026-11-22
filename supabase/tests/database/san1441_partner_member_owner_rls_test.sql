@@ -2,7 +2,7 @@
 -- outsider/staff may not edit another owner's membership.
 -- Isolated transaction: no QA users or partner data persist.
 begin;
-select plan(10);
+select plan(11);
 
 insert into auth.users (id,instance_id,aud,role,email,encrypted_password,email_confirmed_at,created_at,updated_at)
 values
@@ -25,9 +25,11 @@ insert into public.partner_members(partner_id,profile_id,role) values
 ('b1441000-0000-4000-8000-000000000011','b1441000-0000-4000-8000-000000000003','staff'),
 ('b1441000-0000-4000-8000-000000000012','b1441000-0000-4000-8000-000000000002','owner');
 
-select ok(not has_function_privilege('anon','public.partner_owner_ids_for_user()','EXECUTE'),
+select ok(to_regprocedure('public.partner_owner_ids_for_user()') is null,
+  'privileged owner helper is not exposed through public REST RPC');
+select ok(not has_function_privilege('anon','private.partner_owner_ids_for_user()','EXECUTE'),
   'anon cannot call privileged owner membership helper');
-select ok(has_function_privilege('authenticated','public.partner_owner_ids_for_user()','EXECUTE'),
+select ok(has_function_privilege('authenticated','private.partner_owner_ids_for_user()','EXECUTE'),
   'authenticated may call strictly owner-scoped helper');
 
 set local role authenticated;
@@ -35,7 +37,7 @@ set local search_path=public,extensions,pg_temp;
 select set_config('request.jwt.claim.sub','b1441000-0000-4000-8000-000000000001',true);
 
 select results_eq(
-  'select public.partner_owner_ids_for_user()',
+  'select private.partner_owner_ids_for_user()',
   $$values ('b1441000-0000-4000-8000-000000000011'::uuid)$$,
   'Ana owner helper returns only own partner');
 
@@ -62,7 +64,7 @@ select is_empty(
 
 select set_config('request.jwt.claim.sub','b1441000-0000-4000-8000-000000000003',true);
 select results_eq(
-  'select public.partner_owner_ids_for_user()',
+  'select private.partner_owner_ids_for_user()',
   $$select null::uuid where false$$,
   'staff has no owner membership IDs');
 select is_empty(
