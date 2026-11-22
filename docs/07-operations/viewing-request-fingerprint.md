@@ -37,6 +37,22 @@ MDE_LOG_FINGERPRINT_KEY=... DATABASE_URL=... \
 The script recomputes the fingerprint over every stored apartment `id` and `slug` and prints any
 match with its status. It is read-only. Exit codes: `0` matched, `2` no match, `1` misconfigured.
 
+## Connection and privilege policy
+
+- **TLS:** loopback URLs skip TLS (disposable/local). A URL that declares its own `sslmode` is
+  respected. Anything else must verify the server certificate, using the Supabase CA bundle the app
+  already ships in `src/mastra/lib/supabase-ca.ts`. If verification fails, set
+  `NODE_EXTRA_CA_CERTS` or declare `sslmode=verify-full` — never disable verification, because this
+  connection reads every apartment row.
+- **Role:** run it with a **read-only role**. The script prints `current_user`, and when that role
+  bypasses RLS (`postgres`, `service_role`) it says so explicitly. That privilege is why the scan can
+  see every row; do not extend it beyond this read.
+- **Scope:** the scan is deliberately cross-tenant. The question is "does this reference resolve to
+  **any** apartment?", because a cross-tenant or deleted id is one of the failure modes — scoping to a
+  landlord would hide exactly the rows that explain the failure. It streams in `id` order with bounded
+  memory (`--page-size`, default 500) rather than loading the table in one result set. A `LIMIT` would
+  turn a match on a later row into a false "no such apartment", which is a wrong answer, not a safe one.
+
 ## Reading the result
 
 | Result | Meaning | Next step |
