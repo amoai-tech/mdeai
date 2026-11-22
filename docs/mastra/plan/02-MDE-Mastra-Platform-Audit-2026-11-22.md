@@ -4,7 +4,7 @@
 > **Source of truth:** clean `origin/main` at `0c3daf59afe84b0a8d8423cecb019b05ceee15a5`; live release `/api/version` confirmed same SHA.
 > **Purpose:** source-backed architecture audit and executable remediation plan for the existing MDE Mastra/CopilotKit/Supabase stack.
 > **Source request:** [01 — Full Mastra Audit/Implementation Brief](./01-MDE%20AI%20%E2%80%94%20Complete%20Mastra%20Platform%20Audit-Improvements%20and%20Implementation.md).
-> **Ordered execution:** [03 — One Ordered Mastra Implementation Plan (36 steps, diagrams, Linear owners)](./03-MDE-Mastra-Ordered-Execution-Plan.md). This is the single executable implementation sequence; this file remains the evidence-backed audit.
+> **Ordered execution:** [03 — One Ordered Mastra Implementation Plan (37 steps, diagrams, Linear owners)](./03-MDE-Mastra-Ordered-Execution-Plan.md). This is the single executable implementation sequence; this file remains the evidence-backed audit.
 > **Phase:** A — PRELAUNCH DEVELOPMENT. **Never introduce business approvals, eligibility, ownership, publishing or booking certification prerequisites.** Maintain auth, private data, RLS, atomic writes, idempotency, and truthful provenance.
 
 ## 1. Executive summary

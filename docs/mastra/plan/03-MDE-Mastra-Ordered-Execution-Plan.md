@@ -162,7 +162,7 @@ flowchart LR
 **Checks:** - [ ] one owner per write - [ ] no invented success - [ ] existing schema and A2UI catalog reused.
 **Owner:** [SAN-1591 · MDE AI — Simplify CopilotKit + Mastra Integration Using Official Patterns](https://linear.app/amo100/issue/SAN-1591).
 
-### 1.5 Resolve established event-discovery P1 defects before AI optimization — SAN-125
+### 1.4 Resolve established event-discovery P1 defects before AI optimization — SAN-125
 **Outcome:** Agent distinguishes unavailable backend from genuine zero events, ticket budgets are currency-correct, and Phase A development events are discoverable without new business gates.
 
 **Files:** `src/mastra/tools/search-events.ts`; `src/mastra/tools/__tests__/search-events-logic.test.ts` and `search-events-tier-hydration.test.ts`; `src/mastra/agents/event-agent.ts`; `src/components/copilot/search-tool-result-cards.tsx`; existing server visibility owners `src/lib/events/list-published-events.ts` and `src/lib/events/get-public-event.ts`. Verify intelligent search as well as the structured fallback.
