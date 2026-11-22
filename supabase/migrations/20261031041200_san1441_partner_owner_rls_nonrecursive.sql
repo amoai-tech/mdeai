@@ -26,6 +26,12 @@ revoke all on function private.partner_owner_ids_for_user() from public, anon, a
 grant usage on schema private to authenticated;
 grant execute on function private.partner_owner_ids_for_user() to authenticated, service_role;
 
+-- An owner may change a member's ROLE, not silently replace the member identity
+-- or move the row to another business (those actions use audited server mutations).
+-- Revoke legacy table-wide grants before granting only the role column.
+revoke update on table public.partner_members from public, anon, authenticated;
+grant update (role) on table public.partner_members to authenticated;
+
 drop policy if exists partner_members_update_owner on public.partner_members;
 create policy partner_members_update_owner
   on public.partner_members

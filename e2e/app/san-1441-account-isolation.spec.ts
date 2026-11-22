@@ -129,6 +129,23 @@ test.describe("SAN-1441 · Two-user partner data isolation", () => {
         profile_id: carlos.userId, partner_id: north, role: "staff",
       });
       expect(staffGrant.error).toBeNull();
+      // Even the legitimate owner cannot change the identity or partner ID
+      // of a membership to bypass service-only, audited member creation.
+      const changeIdentity = await clientAna.from("partner_members")
+        .update({ profile_id: ana.userId })
+        .eq("partner_id", north)
+        .eq("profile_id", carlos.userId)
+        .select("partner_id");
+      expect(changeIdentity.data ?? []).toEqual([]);
+      expect(changeIdentity.error?.code).toBe("42501");
+      const moveMembership = await clientAna.from("partner_members")
+        .update({ partner_id: south })
+        .eq("partner_id", north)
+        .eq("profile_id", carlos.userId)
+        .select("partner_id");
+      expect(moveMembership.data ?? []).toEqual([]);
+      expect(moveMembership.error?.code).toBe("42501");
+
       const staffView = await clientCarlos.from("partners")
         .select("id").eq("id", north);
       expect(staffView.error).toBeNull();

@@ -2,7 +2,7 @@
 -- outsider/staff may not edit another owner's membership.
 -- Isolated transaction: no QA users or partner data persist.
 begin;
-select plan(11);
+select plan(18);
 
 insert into auth.users (id,instance_id,aud,role,email,encrypted_password,email_confirmed_at,created_at,updated_at)
 values
@@ -32,6 +32,17 @@ select ok(not has_function_privilege('anon','private.partner_owner_ids_for_user(
 select ok(has_function_privilege('authenticated','private.partner_owner_ids_for_user()','EXECUTE'),
   'authenticated may call strictly owner-scoped helper');
 
+select ok(has_column_privilege('authenticated','public.partner_members','role','UPDATE'),
+  'authenticated users can change member role (subject to owner RLS)');
+select ok(not has_column_privilege('authenticated','public.partner_members','profile_id','UPDATE'),
+  'authenticated users cannot rewrite a member identity');
+select ok(not has_column_privilege('authenticated','public.partner_members','partner_id','UPDATE'),
+  'authenticated users cannot relocate a membership');
+select ok(not has_column_privilege('anon','public.partner_members','role','UPDATE'),
+  'anonymous users lack membership update grants');
+select ok(has_column_privilege('service_role','public.partner_members','profile_id','UPDATE'),
+  'audited server-side service mutations can still manage memberships');
+
 set local role authenticated;
 set local search_path=public,extensions,pg_temp;
 select set_config('request.jwt.claim.sub','b1441000-0000-4000-8000-000000000001',true);
@@ -48,6 +59,19 @@ select results_eq(
       returning role$$,
   $$values ('billing'::text)$$,
   'Ana can change staff role on own partner without recursion');
+
+select throws_ok(
+  $$update public.partner_members
+      set profile_id='b1441000-0000-4000-8000-000000000002'
+      where partner_id='b1441000-0000-4000-8000-000000000011'
+        and profile_id='b1441000-0000-4000-8000-000000000003'$$,
+  '42501'); -- Owner cannot substitute a member identity (SQL column grant denied)
+select throws_ok(
+  $$update public.partner_members
+      set partner_id='b1441000-0000-4000-8000-000000000012'
+      where partner_id='b1441000-0000-4000-8000-000000000011'
+        and profile_id='b1441000-0000-4000-8000-000000000003'$$,
+  '42501'); -- Owner cannot move a membership (SQL column grant denied)
 
 select set_config('request.jwt.claim.sub','b1441000-0000-4000-8000-000000000002',true);
 select is_empty(
