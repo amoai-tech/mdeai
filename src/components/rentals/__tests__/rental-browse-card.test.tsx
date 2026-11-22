@@ -217,6 +217,27 @@ describe("SAN-1695 — failed gallery images never occupy a slide", () => {
     expect(onDetails).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps the previous pin selected when the Show on map button receives keyboard focus", () => {
+    const onPreview = vi.fn();
+    const onSelect = vi.fn();
+    act(() => { root.render(<RentalBrowseCard
+      rental={rowToRental(apartmentRow({
+        latitude: 6.245, longitude: -75.579,
+        images: ["https://images.unsplash.com/front.jpg", "https://images.unsplash.com/kitchen.jpg"],
+      }))}
+      mediaLayout="cover" onPreview={onPreview} onSelect={onSelect}
+    />); });
+    const button = container.querySelector<HTMLButtonElement>('[data-testid^="rental-card-map-select-"]');
+    expect(button).not.toBeNull();
+    act(() => { button?.focus(); });
+    expect(document.activeElement).toBe(button);
+    // Focusing a control must not open the map overlay and steal Enter.
+    expect(onPreview).not.toHaveBeenCalled();
+    expect(onSelect).not.toHaveBeenCalled();
+    act(() => { button?.click(); });
+    expect(onSelect).toHaveBeenCalledTimes(1);
+  });
+
   it("does not preview or select a map pin while focusing and using gallery arrows", () => {
     const onPreview = vi.fn();
     const onSelect = vi.fn();
