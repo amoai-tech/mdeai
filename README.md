@@ -9,6 +9,8 @@ Production: https://www.mdeai.co
 | Need | Go to |
 |---|---|
 | Documentation | [`docs/README.md`](docs/README.md) |
+| Implemented route sitemap (code inventory) | [`sitemap.md`](sitemap.md) |
+| Design system and component-first UI guidance | [`DESIGN.MD`](DESIGN.MD) |
 | Agent/repository rules | [`AGENTS.md`](AGENTS.md) |
 | Specification contract | [`spec.md`](spec.md) |
 | Implementation and CopilotKit component-first plan | [`plan.md`](plan.md) |
