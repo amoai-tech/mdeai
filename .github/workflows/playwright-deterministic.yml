@@ -215,7 +215,9 @@ jobs:
         with:
           name: chat-layout-screenshots-${{ github.run_id }}-${{ github.run_attempt }}
           path: tmp/screenshots/SCREEN-018/*.png
-          if-no-files-found: ignore
+          # A private QA marker intentionally deletes all screenshots. Fail closed
+          # and visibly if this anonymous-only job cannot produce safe evidence.
+          if-no-files-found: error
           retention-days: 7
       - name: Upload real-composer failure traces
         if: failure()

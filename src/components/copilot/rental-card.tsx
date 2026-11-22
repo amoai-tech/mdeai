@@ -58,6 +58,7 @@ export type RentalCardProps = RentalResultRow & {
 /** Display a rental search result without inventing map identity or viewing rights. */
 export function RentalCard({
   id,
+  listingId,
   title,
   neighborhood,
   nightly_price,
@@ -295,6 +296,7 @@ export function RentalCard({
             variant="outline"
             className="min-h-card-action lg:min-h-0"
             data-testid="rental-details-cta"
+            data-listing-id={listingId}
             onClick={(e) => {
               e.stopPropagation();
               onOpenDetails();

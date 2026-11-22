@@ -214,6 +214,12 @@ describe("SAN-1341 Playwright architecture", () => {
     const workflow = fs.readFileSync(".github/workflows/playwright-deterministic.yml", "utf8");
     expect(workflow).toContain("chat-layout-screenshots-${{ github.run_id }}");
     expect(workflow).toContain("tmp/screenshots/SCREEN-018/*.png");
+    const mobileJob = workflow.split("  mobile-composer:")[1]?.split("\n  browser-results:")[0] ?? "";
+    const sanitization = mobileJob.indexOf("node scripts/sanitize-playwright-qa-artifacts.mjs");
+    const imageUpload = mobileJob.indexOf("- name: Upload anonymous mobile and desktop layout screenshots");
+    expect(sanitization).toBeGreaterThanOrEqual(0);
+    expect(imageUpload).toBeGreaterThan(sanitization);
+    expect(mobileJob.slice(imageUpload).split("\n      - name:")[0]).toContain("if-no-files-found: error");
     const sanitizer = fs.readFileSync("scripts/sanitize-playwright-qa-artifacts.mjs", "utf8");
     expect(sanitizer).toContain('"tmp/screenshots"');
   });

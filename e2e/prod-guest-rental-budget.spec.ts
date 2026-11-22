@@ -14,7 +14,6 @@ const isProtectedPreview = guestTarget ? new URL(guestTarget).hostname.endsWith(
 
 type BudgetRow = {
   id: string;
-  title?: string;
   neighborhood?: string;
   bedrooms?: number | null;
   price_monthly: number | null;
@@ -98,25 +97,24 @@ test.describe("SAN-755 guest budget refinement on public rental search", () => {
       expect(parameters.queryText).toMatch(/\b(?:2[\s-]*(?:bedrooms?|br)|two\s*bedrooms?)\b/i);
       // A zero-result marketplace is reported honestly, not mislabeled a tested Details journey.
       expect(body.results.length, "No matching apartments: cannot prove a card-to-Details journey").toBeGreaterThan(0);
-      const detailCards = page.locator('[data-result-kind="rental"]:has([data-testid="rental-details-cta"])');
-      await expect(detailCards.first(), "search must offer Details on a returned real rental").toBeVisible();
-      // Some genuine listings share the same title. Prefer a uniquely titled
-      // card rather than guessing which API row a duplicated heading represents.
-      let selectedCard = detailCards.first();
-      let rental: BudgetRow | undefined;
-      for (const card of await detailCards.all()) {
-        const title = await card.locator("h3").first().innerText();
-        const matches = body.results.filter((row) => row.title === title);
-        if (matches.length !== 1) continue;
-        selectedCard = card;
-        rental = matches[0];
-        break;
-      }
-      expect(rental, "No uniquely identifiable card matching a real search result").toBeDefined();
+      const matchingRows = body.results.filter((row) =>
+        row.bedrooms === 2 && /\blaureles\b/i.test(row.neighborhood ?? ""),
+      );
+      expect(matchingRows.length, "search must return a real Laureles 2BR").toBeGreaterThan(0);
+      // The chat card uses the generic rental-card test ID. Read its actual
+      // listing ID from the Details action instead of matching duplicate titles
+      // or assuming the map pin ID is the listing ID.
+      const detailsButtons = page.getByTestId("rental-details-cta");
+      await expect(detailsButtons.first(), "search must offer Details on a real rental").toBeVisible();
+      const renderedIds = await detailsButtons.evaluateAll((nodes) =>
+        nodes.map((node) => node.getAttribute("data-listing-id")),
+      );
+      const rental = matchingRows.find((row) => renderedIds.includes(row.id));
+      expect(rental, "matching result needs a Details button with its exact listing ID").toBeDefined();
       if (!rental) throw new Error("cannot attribute Details to a source listing");
-      expect(rental.neighborhood).toMatch(/laureles/i);
-      expect(rental.bedrooms).toBe(2);
-      await selectedCard.getByTestId("rental-details-cta").click();
+      const detailsButton = detailsButtons.nth(renderedIds.indexOf(rental.id));
+      await expect(detailsButton).toHaveAttribute("data-listing-id", rental.id);
+      await detailsButton.click();
       const details = page.getByTestId(width === 390 ? "rental-details-sheet" : "rental-details-panel");
       await expect(details).toBeVisible();
       await expect(details).toHaveAttribute("data-listing-id", rental.id);
