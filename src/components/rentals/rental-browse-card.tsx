@@ -351,6 +351,7 @@ export function RentalBrowseCard({
       selected={selected}
       ariaLabel={`Rental: ${rental.title}, ${rental.neighborhood}`}
       onPreview={interactive ? preview : undefined}
+      previewOnFocus={false}
       media={
         showPhotoGallery ? (
           <RentalBrowseCardGallery
@@ -403,9 +404,6 @@ export function RentalBrowseCard({
               aria-label={`Show ${rental.title} on the map`}
               className="min-h-card-action lg:min-h-0"
               onClick={() => onSelect?.()}
-              // Keyboard focus alone must not select a listing or steal Enter
-              // into the map overlay; activation still selects intentionally.
-              onFocus={(event) => event.stopPropagation()}
             >
               Show on map
             </Button>

@@ -238,7 +238,32 @@ describe("SAN-1695 — failed gallery images never occupy a slide", () => {
     expect(onSelect).toHaveBeenCalledTimes(1);
   });
 
-  it("does not preview or select a map pin while focusing and using gallery arrows", () => {
+  it("does not select another map pin when tabbing through rental action buttons", () => {
+    const onPreview = vi.fn();
+    const onSelect = vi.fn();
+    act(() => { root.render(<RentalBrowseCard
+      rental={rowToRental(apartmentRow({ latitude: 6.245, longitude: -75.579 }))}
+      onPreview={onPreview} onSelect={onSelect} onDetails={vi.fn()} onAskSelect={vi.fn()}
+    />); });
+    const selectors = [
+      '[data-testid^="rental-card-map-select-"]',
+      '[data-testid="rental-ask-select"]',
+      '[data-testid^="rental-details-cta-"]',
+    ];
+    for (const selector of selectors) {
+      const button = container.querySelector<HTMLButtonElement>(selector);
+      expect(button, selector).not.toBeNull();
+      act(() => { button?.focus(); });
+      expect(document.activeElement).toBe(button);
+      expect(onPreview, selector).not.toHaveBeenCalled();
+      expect(onSelect, selector).not.toHaveBeenCalled();
+    }
+    const mapButton = container.querySelector<HTMLButtonElement>(selectors[0]!);
+    act(() => { mapButton?.click(); });
+    expect(onSelect).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not preview or select a map pin while focusing and using gallery arrows", async () => {
     const onPreview = vi.fn();
     const onSelect = vi.fn();
     const onDetails = vi.fn();
@@ -249,9 +274,17 @@ describe("SAN-1695 — failed gallery images never occupy a slide", () => {
       }))}
       mediaLayout="cover" onPreview={onPreview} onSelect={onSelect} onDetails={onDetails}
     />); });
+    // Embla announces scroll availability asynchronously after the carousel mounts.
+    await act(async () => { await Promise.resolve(); });
     const next = container.querySelector<HTMLButtonElement>('[data-slot="carousel-next"]');
     expect(next).not.toBeNull();
+    // JSDOM has no carousel layout, so Embla can keep Next disabled even after
+    // the microtask. Enable this DOM control only to exercise focus/click bubbling;
+    // the real 390px Playwright run verifies actual photo movement separately.
+    if (next?.disabled) next.disabled = false;
+    expect(next?.disabled).toBe(false);
     act(() => { next?.focus(); });
+    expect(document.activeElement).toBe(next);
     // Focusing a photo navigation control must not select its apartment on the map.
     expect(onPreview).not.toHaveBeenCalled();
     act(() => { next?.click(); });
