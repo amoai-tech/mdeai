@@ -54,7 +54,7 @@ describe("MDE A2UI catalog", () => {
     // catalog would be a component the model has to guess at. Update both
     // together, never one alone.
     expect([...mdeUI.components.keys()].sort()).toEqual([
-      "ApplyFiltersButton", "Badge", "BedroomFilter", "Box", "Caption", "Card",
+      "ApplyFiltersButton", "Badge", "BedroomFilter", "Box", "Button", "Caption", "Card",
       "Column", "Divider", "EventCard", "FollowUp", "Grid", "GridItem",
       "Label", "RentalCard", "RentalComparisonActions", "Row", "Spacer", "Table", "Text", "Title", "ViewingProposal",
     ]);
@@ -115,10 +115,11 @@ describe("MDE A2UI catalog", () => {
   });
 
   it("omits every control until a catalog function is registered", () => {
-    // A rendered Button or input with no bound action is a dead control next to
-    // real listings. SAN-1655/SAN-1658 add these back with their functions.
+    // The official Button is available for server-generated comparisons with
+    // renderer-only click functions. Other generic inputs remain omitted.
+    expect(mdeUI.components.has("Button")).toBe(true);
     for (const name of [
-      "Button", "Pressable", "Form", "TextField", "TextArea", "Select",
+      "Pressable", "Form", "TextField", "TextArea", "Select",
       "CheckBox", "Radio", "RadioGroup", "Slider", "DateTimeInput",
       "SegmentedControl", "ChoicePicker", "Tabs",
     ]) {

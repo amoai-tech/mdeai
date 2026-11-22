@@ -22,6 +22,7 @@ import {
 import { LeadConfirmationBanner } from "@/components/chat/lead-confirmation-banner";
 import { RentalRecommendationsSurface } from "@/components/copilot/a2ui/rental-recommendations-surface";
 import { RentalComparisonSurface } from "@/components/copilot/a2ui/rental-comparison-surface";
+import { RentalComparisonPageActions } from "@/components/rentals/rental-comparison-page-actions";
 import { RentalA2UIContext } from "@/components/chat/rental-a2ui-context";
 import { RentalFilterDraftProvider } from "@/components/rentals/rental-filter-draft";
 import { RentalFilterPanelActions } from "@/components/rentals/rental-filter-panel-actions";
@@ -222,6 +223,15 @@ function RentalBrowseViewInner({
           catalog already resolves cards from, and the existing A2UI context
           publishes their IDs. No second query and no second data path. */}
       {coAgent && !isDeterministicE2E() ? <RentalA2UIContext visibleRows={shownResults} /> : null}
+      {coAgent && !isDeterministicE2E() ? (
+        <RentalComparisonPageActions
+          results={shownResults}
+          onOpenDetails={openDetailsFor}
+          onScheduleViewing={(rental) => openScheduleViewing({
+            listingId: rental.id, title: rental.title, neighborhood: rental.neighborhood,
+          })}
+        />
+      ) : null}
       {/* SAN-1655 — the one real Apply action. */}
       {coAgent && !isDeterministicE2E() ? <RentalFilterPanelActions filters={filterState} /> : null}
       <DiscoveryPageContext page="rentals" filters={filterState} selectedId={selectedForAskId ?? detailsRental?.id ?? null} />
