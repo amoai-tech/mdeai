@@ -73,6 +73,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
 });
 
 describe("POST /api/leads/schedule-viewing (SAN-1203)", () => {
@@ -243,6 +244,7 @@ describe("POST /api/leads/schedule-viewing (SAN-1203)", () => {
   it("tells the renter the apartment cannot take a request, not that their details are wrong", async () => {
     // The bridge classifies an un-requestable listing separately from bad input. Sending the
     // renter back to "check your details" leaves them retrying a form that can never succeed.
+    vi.stubEnv("MDE_LOG_FINGERPRINT_KEY", "test-log-fingerprint-key");
     fetchMock.mockResolvedValue(
       edgeResponse(400, {
         success: false,
@@ -265,8 +267,75 @@ describe("POST /api/leads/schedule-viewing (SAN-1203)", () => {
     // The failed reference must be correlatable afterwards, but the raw slug must not
     // reach the logs — the renter-visible identifier stays out, a fingerprint goes in.
     expect(serverLog()).toContain('"shape":"slug"');
-    expect(serverLog()).toContain('"ref":"');
+    // A non-empty 12-hex fingerprint: `toContain('"ref":"')` would also pass an empty value.
+    expect(serverLog()).toMatch(/"ref":"[0-9a-f]{12}"/);
     expect(serverLog()).not.toContain("apt-laureles-001");
+  });
+
+  it("logs no fingerprint at all when no key is configured, never an unkeyed digest", async () => {
+    // Slugs are public: an unkeyed digest lets a log reader hash every published slug and
+    // recover which apartment a renter asked about. Without a key, shape and length only.
+    vi.stubEnv("MDE_LOG_FINGERPRINT_KEY", "");
+    fetchMock.mockResolvedValue(
+      edgeResponse(400, {
+        success: false,
+        error: {
+          code: "LISTING_UNAVAILABLE",
+          message: "p1_schedule_tour_atomic: listing is not requestable",
+        },
+      }),
+    );
+
+    const res = await post(validBody());
+    expect(res.status).toBe(409);
+    expect(serverLog()).toContain('"shape":"slug"');
+    expect(serverLog()).not.toContain('"ref"');
+    expect(serverLog()).not.toContain("apt-laureles-001");
+  });
+
+  it("produces a different fingerprint per key, proving the digest is keyed", async () => {
+    // The security property cannot be seen in one value: if the digest were unkeyed, the same
+    // public slug would produce the same ref under every key and be recoverable by hashing
+    // candidate slugs. Different keys must give different refs for the same reference.
+    const refFor = async (key: string) => {
+      errorCalls.length = 0;
+      vi.stubEnv("MDE_LOG_FINGERPRINT_KEY", key);
+      fetchMock.mockResolvedValue(
+        edgeResponse(400, {
+          success: false,
+          error: {
+            code: "LISTING_UNAVAILABLE",
+            message: "p1_schedule_tour_atomic: listing is not requestable",
+          },
+        }),
+      );
+      await post(validBody());
+      return String(serverLog().match(/"ref":"([0-9a-f]{12})"/)?.[1] ?? "");
+    };
+
+    const underKeyA = await refFor("key-a");
+    const underKeyB = await refFor("key-b");
+    expect(underKeyA).toMatch(/^[0-9a-f]{12}$/);
+    expect(underKeyB).toMatch(/^[0-9a-f]{12}$/);
+    expect(underKeyA).not.toBe(underKeyB);
+  });
+
+  it("classifies a stored slug containing an underscore or period as a slug, not other", async () => {
+    // The RPC matches slugs exactly, so a real slug may contain characters an earlier
+    // [a-z0-9-] classifier rejected — which would misreport a valid slug as wrong-shaped.
+    fetchMock.mockResolvedValue(
+      edgeResponse(400, {
+        success: false,
+        error: {
+          code: "LISTING_UNAVAILABLE",
+          message: "p1_schedule_tour_atomic: listing is not requestable",
+        },
+      }),
+    );
+
+    await post(validBody({ listingId: "laureles_2br.v2" }));
+    expect(serverLog()).toContain('"shape":"slug"');
+    expect(serverLog()).not.toContain("laureles_2br.v2");
   });
 
   it("keeps the edge's technical validation prose out of the renter's response", async () => {

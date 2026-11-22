@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import { NextResponse } from "next/server";
 import {
   SCHEDULE_VIEWING_ACK_MESSAGE,
@@ -34,39 +34,43 @@ function logUpstreamFailure(
     status: number;
     code?: string;
     message?: string;
-    listing?: { ref: string; shape: "uuid" | "slug" | "other"; length: number };
+    listing?: { ref?: string; shape: "uuid" | "slug" | "other"; length: number };
   },
 ) {
   console.error("[api/leads/schedule-viewing] upstream failure", { outcome, ...detail });
 }
 
 /**
- * Slug shape as `isSlugShape` and the RPC understand it: lowercase alphanumerics joined by
- * single hyphens. A character scan rather than a regex — the equivalent pattern
- * `^[a-z0-9]+(?:-[a-z0-9]+)*$` is linear, but static analysis cannot tell that and flags it,
- * and a plain scan makes the absence of backtracking obvious.
+ * Whether the reference could be a stored apartment slug.
+ *
+ * The RPC resolves a slug by EXACT match (`a.slug = v_listing_id`), so the only property that
+ * matters here is "this could be a slug": no whitespace and no path/query characters. An
+ * earlier, stricter `[a-z0-9-]` classifier labelled a real stored slug containing `_` or `.`
+ * as `other`, which would have misdiagnosed a valid slug as a wrong-shaped identifier.
  */
 function isSlugShape(value: string): boolean {
-  if (value.length === 0) return false;
-  if (value.startsWith("-") || value.endsWith("-") || value.includes("--")) return false;
+  if (value.length === 0 || value.length > 200) return false;
+  if (/[\s/\\?#]/.test(value)) return false;
   for (const char of value) {
-    const isLower = char >= "a" && char <= "z";
-    const isDigit = char >= "0" && char <= "9";
-    if (!isLower && !isDigit && char !== "-") return false;
+    // Printable ASCII only; a stored slug never contains control characters or non-ASCII.
+    if (char < "!" || char > "~") return false;
   }
   return true;
 }
 
 /**
- * `LISTING_UNAVAILABLE` means the atomic RPC could not resolve the listing (it accepts a
- * UUID or an exact lowercase slug) or refused it as not requestable. Without the reference
- * that failed, the outcome is undiagnosable after the fact — the raw value never reaches the
- * renter's response. Log a short non-reversible fingerprint plus the identifier shape, which
- * is enough to correlate against the canonical apartment record without writing a
- * renter-visible slug into the logs.
+ * `LISTING_UNAVAILABLE` means the atomic RPC could not resolve the listing (a UUID or an exact
+ * slug) or refused it as not requestable. Without the reference, that outcome is undiagnosable
+ * afterwards, because the raw value never reaches the renter's response.
+ *
+ * The fingerprint MUST be keyed. Apartment slugs are public, so anyone who can read logs could
+ * hash every published slug with an unkeyed digest and recover which apartment a renter asked
+ * about — the truncation does not help against a candidate set this small. HMAC with a
+ * server-only key prevents that; when the key is absent we log no derived value at all rather
+ * than a reversible one, and the shape/length still narrow the failure.
  */
 function describeListingRef(listingId: string): {
-  ref: string;
+  ref?: string;
   shape: "uuid" | "slug" | "other";
   length: number;
 } {
@@ -76,8 +80,11 @@ function describeListingRef(listingId: string): {
     : isSlugShape(value)
       ? "slug"
       : "other";
+
+  const key = process.env.MDE_LOG_FINGERPRINT_KEY?.trim();
   return {
-    ref: createHash("sha256").update(value).digest("hex").slice(0, 12),
+    // No key → no fingerprint. Never fall back to an unkeyed digest of a public identifier.
+    ...(key ? { ref: createHmac("sha256", key).update(value).digest("hex").slice(0, 12) } : {}),
     shape,
     length: value.length,
   };

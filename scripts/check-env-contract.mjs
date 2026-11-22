@@ -108,6 +108,11 @@ const OPTIONAL = [
   // Not a CopilotKit credential. Optional because nothing in the repo presents it; when unset the
   // service path is CLOSED (401), never open.
   "MDE_COPILOTKIT_SERVICE_BEARER",
+  // PR #924 — HMAC key for the `listing_unavailable` diagnostic fingerprint in
+  // src/app/api/leads/schedule-viewing/route.ts. Optional and fails closed: with no key the route
+  // logs shape/length and NO fingerprint, never an unkeyed digest of a public apartment slug.
+  // Set it in an environment where those failures need to be correlated.
+  "MDE_LOG_FINGERPRINT_KEY",
   // SAN-1330 — CopilotKit Intelligence credential (server-only; never NEXT_PUBLIC_*). Keep it
   // provisioned, but do not gate a release on it: CopilotKit reads it only through
   // `new CopilotKitIntelligence({ apiKey })`, which MDE does not construct today (same-origin
