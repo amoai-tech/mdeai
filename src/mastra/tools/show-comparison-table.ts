@@ -89,6 +89,11 @@ export const showComparisonTableTool = createTool({
       if (!id) { unresolved.push(`Result ${position} is not in the current hints`); return []; }
       return [id];
     }) : (input.ids ?? []);
+    // Reject the whole request before reading the database. Comparing only the
+    // valid subset would silently change which apartments the renter chose.
+    if (unresolved.length) {
+      return { ok: false, rows: [], rejected: unresolved, message: "One or more requested apartments are not in the current results." };
+    }
     const seen = new Set<string>();
     const ids = requested.filter((id) => {
       if (!available.includes(id) || seen.has(id)) return false;

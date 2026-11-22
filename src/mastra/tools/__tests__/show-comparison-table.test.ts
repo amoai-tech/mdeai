@@ -92,6 +92,24 @@ describe("showComparisonTableTool", () => {
     expect(result.rows).toEqual([]);
   });
 
+  it("rejects any unresolved trusted positions before querying apartments", async () => {
+    let queryCount = 0;
+    const ctx = context([], { trustedPositions: [1, 2, 5], visibleIds: ids.slice(0, 3) });
+    // A DB query would be an error: an incomplete selection must fail first.
+    ctx.requestContext.get(RENTAL_SUPABASE_KEY);
+    const result = await run({ ids: ids.slice(0, 2) }, {
+      requestContext: {
+        get: (key: string) => key === RENTAL_SUPABASE_KEY
+          ? { from: () => { queryCount++; throw new Error("unexpected DB query"); } }
+          : ctx.requestContext.get(key),
+      },
+    });
+    expect(result.ok).toBe(false);
+    expect(result.rows).toEqual([]);
+    expect(result.rejected).toContain("Result 5 is not in the current hints");
+    expect(queryCount).toBe(0);
+  });
+
   it("reads both recorded prices without conversion", async () => {
     const result = await run({ ids: [ids[0], ids[1]] }, context([
       dbRow(ids[0], "Both rates", 2_400_000, 80_000),

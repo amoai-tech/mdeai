@@ -26,6 +26,9 @@ export const COMPARISON_POSITIONS_KEY = "mdeai-comparison-requested-positions";
 
 const NUMBERED_RESULT = "(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|one|two|three|four|five|six|seven|eight|nine|ten|(?:10|[1-9])(?:st|nd|rd|th)?)";
 const NUMBERED_TOKEN = new RegExp(String.raw`\b(${NUMBERED_RESULT})\b`, "gi");
+// Only 1–10 are supported display ordinals. Larger numeric references must
+// never disappear from a server-trusted apartment selection.
+const UNSUPPORTED_NUMBERED_TOKEN = /\b(?:1[1-9]|[2-9]\d+)(?:st|nd|rd|th)?\b/i;
 const LIST_SEPARATOR = /^\s*(?:(?:apartments?|listings?|rentals?)\s+)?(?:,\s*(?:and\s+)?|(?:and|&|versus|vs\.?|with)\s+)(?:the\s+)?$/i;
 const NUMBER_WORDS = ["first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth"];
 const CARDINAL_WORDS = ["one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
@@ -43,16 +46,28 @@ function resultNumber(word: string): number | null {
 export function comparisonRequestedPositions(messages: readonly MessageLike[]): number[] | null {
   const lastUser = [...messages].reverse().find((message) => message?.role === "user");
   const text = messageText(lastUser).trim();
+  if (UNSUPPORTED_NUMBERED_TOKEN.test(text)) return null;
   const firstTwo = /\b(?:first|top)\s+(?:two|2)\s+(?:apartments?|listings?|rentals?|results?)\b/i.exec(text);
   if (firstTwo) {
+    // Do not make a partial trusted list when a renter named an apartment
+    // earlier in the sentence (e.g. fifth + first two).
+    if ([...text.slice(0, firstTwo.index).matchAll(NUMBERED_TOKEN)].length) return null;
     const extra = text.slice(firstTwo.index + firstTwo[0].length);
     const additions = Array.from(
-      extra.matchAll(new RegExp(String.raw`(?:,|\b(?:and|with|versus|vs)\b\.?|&)\s*(?:the\s+)?(${NUMBERED_RESULT})\b`, "gi")),
-      (match) => resultNumber(match[1]),
+      extra.matchAll(new RegExp(String.raw`(?:,|\b(?:and|with|versus|vs)\b\.?|&)\s*(?:(?:the\s+)|(?:(?:apartment|listing|rental|result)s?\s+))?(${NUMBERED_RESULT})\b(?!\s*(?:columns?|rows?|features?|amenities?|bedrooms?|beds?|bathrooms?)\b)`, "gi")),
+      (match) => {
+        // "with 5" is not an apartment position; "with the fifth" or
+        // "with the 5th" clearly is. Never add a bare table dimension.
+        if (/\bwith\s+\d+$/i.test(match[0])) return null;
+        return resultNumber(match[1]);
+      },
     ).filter((value): value is number => value !== null);
     // Never trust an incomplete partial list; the model can handle phrases
     // this conservative parser cannot yet unambiguously understand.
     if ([...extra.matchAll(NUMBERED_TOKEN)].length !== additions.length) return null;
+    // "with 5 columns" is a layout request, not apartment 5; "with the
+    // fifth" explicitly references a displayed apartment.
+    if (/\bwith\s+(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+columns?\b/i.test(extra)) return null;
     const unique = [...new Set([1, 2, ...additions])];
     return unique.length <= 5 ? unique : null;
   }
@@ -126,16 +141,62 @@ export function shouldForceComparisonTable({
  * An extra model-authored render_ui can create an empty surface over the
  * valid table (observed on a real 390px renter run in production).
  */
-export function shouldFinishComparisonWithoutAnotherTool({
-  stepNumber,
-  messages,
-  requestContext,
+type CompletedToolStep = {
+  toolResults?: readonly { toolName?: string }[];
+};
+/** A tool call alone is not enough: wait until its result is in the step. */
+export function hasCompletedTool(
+  steps: readonly CompletedToolStep[],
+  toolName: string,
+): boolean {
+  return steps.some((step) => step.toolResults?.some((result) => result.toolName === toolName));
+}
+
+/** The first route step may override the initial table choice; retry table
+ * after that route's result, but only once. */
+export function shouldContinueComparisonAfterRoute({
+  stepNumber, messages, requestContext, steps, hasRouteIntent,
 }: {
   stepNumber: number;
   messages: readonly MessageLike[];
   requestContext?: { get?: (key: string) => unknown };
+  steps: readonly CompletedToolStep[];
+  hasRouteIntent: boolean;
 }): boolean {
-  // The intent detector is first-step-only by design. Re-evaluate the user's
-  // original turn with step 0; passing the current step would always be false.
-  return stepNumber > 0 && shouldForceComparisonTable({ stepNumber: 0, messages, requestContext });
+  return stepNumber > 0 && hasRouteIntent &&
+    shouldForceComparisonTable({ stepNumber: 0, messages, requestContext }) &&
+    hasCompletedTool(steps, "computeRouteTool") &&
+    !hasCompletedTool(steps, "showComparisonTable");
+}
+
+/** If the table ran first, the walking route is still owed to the renter. */
+export function shouldContinueRouteAfterComparison({
+  stepNumber, messages, requestContext, steps, hasRouteIntent,
+}: {
+  stepNumber: number;
+  messages: readonly MessageLike[];
+  requestContext?: { get?: (key: string) => unknown };
+  steps: readonly CompletedToolStep[];
+  hasRouteIntent: boolean;
+}): boolean {
+  return stepNumber > 0 && hasRouteIntent &&
+    shouldForceComparisonTable({ stepNumber: 0, messages, requestContext }) &&
+    hasCompletedTool(steps, "showComparisonTable") &&
+    !hasCompletedTool(steps, "computeRouteTool");
+}
+
+export function shouldFinishComparisonWithoutAnotherTool({
+  stepNumber, messages, requestContext, steps = [], hasRouteIntent = false,
+}: {
+  stepNumber: number;
+  messages: readonly MessageLike[];
+  requestContext?: { get?: (key: string) => unknown };
+  steps?: readonly CompletedToolStep[];
+  hasRouteIntent?: boolean;
+}): boolean {
+  if (stepNumber === 0 || !shouldForceComparisonTable({ stepNumber: 0, messages, requestContext })) return false;
+  // Do not suppress the table when route processing ran first.
+  if (!hasCompletedTool(steps, "showComparisonTable")) return false;
+  // Conversely, finish only after both results for combined requests.
+  return !hasRouteIntent || hasCompletedTool(steps, "computeRouteTool");
 }

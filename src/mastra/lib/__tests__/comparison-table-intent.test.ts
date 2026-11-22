@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { comparisonRequestedPositions, shouldFinishComparisonWithoutAnotherTool, shouldForceComparisonTable } from "../comparison-table-intent";
+import { comparisonRequestedPositions, hasCompletedTool, shouldContinueComparisonAfterRoute, shouldContinueRouteAfterComparison, shouldFinishComparisonWithoutAnotherTool, shouldForceComparisonTable } from "../comparison-table-intent";
 import { RENTAL_A2UI_CONTEXT_DESCRIPTION } from "@/lib/rentals/a2ui-context";
+import { routePlanForTurn, shouldForceRouteTool } from "../route-tool-choice";
 
 const ids = [
   "37a05b09-f560-4776-92fd-b8bb2b92e601",
@@ -59,8 +60,10 @@ describe("comparison follow-up tool suppression", () => {
   it("allows the grounded table tool in the first step but prevents duplicate model-generated UI afterwards", () => {
     const messages = [user("Put the first two apartments in a table.")];
     expect(shouldFinishComparisonWithoutAnotherTool({ stepNumber: 0, messages, requestContext: context })).toBe(false);
-    expect(shouldFinishComparisonWithoutAnotherTool({ stepNumber: 1, messages, requestContext: context })).toBe(true);
-    expect(shouldFinishComparisonWithoutAnotherTool({ stepNumber: 2, messages, requestContext: context })).toBe(true);
+    expect(shouldFinishComparisonWithoutAnotherTool({ stepNumber: 1, messages, requestContext: context })).toBe(false);
+    const completed = [{ toolResults: [{ toolName: "showComparisonTable" }] }];
+    expect(shouldFinishComparisonWithoutAnotherTool({ stepNumber: 1, messages, requestContext: context, steps: completed })).toBe(true);
+    expect(shouldFinishComparisonWithoutAnotherTool({ stepNumber: 2, messages, requestContext: context, steps: completed })).toBe(true);
   });
 
   it("does not suppress tools for other domains, fresh rental searches or missing hints", () => {
@@ -103,5 +106,71 @@ describe("server-owned displayed ordinal interpretation", () => {
     expect(comparisonRequestedPositions([user("Compare apartments 1, 2, 3, 4, 5 and 6.")])).toBeNull();
     expect(comparisonRequestedPositions([user("Compare apartments 1 and 2 plus 5.")])).toBeNull();
     expect(comparisonRequestedPositions([user("Compare the first two apartments alongside the fifth.")])).toBeNull();
+  });
+});
+
+
+describe("multi-tool comparison + walking route", () => {
+  const text = "Put the first two apartments in a table and give walking directions from Parque Lleras to Provenza.";
+  const messages = [user(text)];
+  const routeDone = [{ toolResults: [{ toolName: "computeRouteTool" }] }];
+  const tableDone = [{ toolResults: [{ toolName: "showComparisonTable" }] }];
+  const bothDone = [...routeDone, ...tableDone];
+
+  it("detects both intents, preserving the first forced route", () => {
+    expect(call(text)).toBe(true);
+    expect(routePlanForTurn(messages)?.travelMode).toBe("WALK");
+    expect(shouldForceRouteTool({ stepNumber: 0, messages, steps: [] })).toBe(true);
+  });
+
+  it("runs the comparison after the route and does not finish until both results exist", () => {
+    expect(shouldContinueComparisonAfterRoute({
+      stepNumber: 1, messages, requestContext: context, steps: routeDone, hasRouteIntent: true,
+    })).toBe(true);
+    expect(shouldFinishComparisonWithoutAnotherTool({
+      stepNumber: 1, messages, requestContext: context, steps: routeDone, hasRouteIntent: true,
+    })).toBe(false);
+    expect(shouldContinueComparisonAfterRoute({
+      stepNumber: 2, messages, requestContext: context, steps: bothDone, hasRouteIntent: true,
+    })).toBe(false);
+    expect(shouldFinishComparisonWithoutAnotherTool({
+      stepNumber: 2, messages, requestContext: context, steps: bothDone, hasRouteIntent: true,
+    })).toBe(true);
+  });
+
+  it("allows the route after a table-first result, and never finishes while route is pending", () => {
+    expect(hasCompletedTool(tableDone, "showComparisonTable")).toBe(true);
+    expect(hasCompletedTool(tableDone, "computeRouteTool")).toBe(false);
+    expect(shouldContinueRouteAfterComparison({
+      stepNumber: 1, messages, requestContext: context, steps: tableDone, hasRouteIntent: true,
+    })).toBe(true);
+    expect(shouldContinueRouteAfterComparison({
+      stepNumber: 2, messages, requestContext: context, steps: bothDone, hasRouteIntent: true,
+    })).toBe(false);
+    expect(shouldFinishComparisonWithoutAnotherTool({
+      stepNumber: 1, messages, requestContext: context, steps: tableDone, hasRouteIntent: true,
+    })).toBe(false);
+  });
+});
+
+describe("incomplete apartment references defer rather than compare the wrong subset", () => {
+  it.each([
+    "Compare apartments 1, 2 and 12 in a table.",
+    "Compare apartments 1, 2 and 11 in a table.",
+    "Compare the fifth apartment with the first two apartments in a table.",
+    "Put the first two apartments in a table with 5 columns.",
+    "Put the first two apartments in a table with 5 rows.",
+    "Put the first two apartments in a table with 5.",
+  ])("does not trust partial or unrelated numeric references: %s", (text) => {
+    expect(comparisonRequestedPositions([user(text)])).toBeNull();
+  });
+  it.each([
+    ["Put the first two apartments in a table.", [1, 2]],
+    ["Compare the first two apartments with the fifth.", [1, 2, 5]],
+    ["Compare the first two apartments with the 5th.", [1, 2, 5]],
+    ["Compare apartments 1, 2 and 10.", [1, 2, 10]],
+    ["Compare the 1st and 2nd apartments with the 5th.", [1, 2, 5]],
+  ])("preserves all supported explicit positions: %s", (text, positions) => {
+    expect(comparisonRequestedPositions([user(text)])).toEqual(positions);
   });
 });
