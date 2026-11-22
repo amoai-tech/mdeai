@@ -89,6 +89,8 @@ html {
 }
 
 :root {
+  /* MDE is light-only: including native controls on dark-preferring devices. */
+  color-scheme: light;
   /* Paisa brand — anchors #0f172a slate, #0f766e teal, #eab308 gold */
   --background: oklch(0.985 0.002 247);
   --foreground: oklch(0.208 0.042 265);
@@ -124,26 +126,6 @@ html {
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: oklch(0.208 0.042 265);
-    --foreground: oklch(0.985 0.002 247);
-    --card: oklch(0.279 0.041 260);
-    --card-foreground: oklch(0.985 0.002 247);
-    --primary: oklch(0.696 0.17 175);
-    --primary-foreground: oklch(0.208 0.042 265);
-    --accent: oklch(0.795 0.184 86);
-    --accent-foreground: oklch(0.208 0.042 265);
-    --success: oklch(0.72 0.18 160);
-    /* Elevated = card (lighter than bg) — matches this app's dark elevation. */
-    --background-elevated: oklch(0.279 0.041 260);
-    --muted: oklch(0.279 0.041 260);
-    --muted-foreground: oklch(0.704 0.04 256);
-    --border: oklch(1 0 0 / 12%);
-    --ring: oklch(0.696 0.17 175);
-  }
 }
 
 .dark {
