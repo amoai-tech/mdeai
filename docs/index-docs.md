@@ -168,6 +168,10 @@ This revision's catalog contains **163 active-document entries** plus **two `_ar
 | Platform | [`03-platform/copilotkit-mastra/reference-pack.md`](03-platform/copilotkit-mastra/reference-pack.md) | Markdown | Current |
 | Platform | [`03-platform/copilotkit-mastra/roadmap.md`](03-platform/copilotkit-mastra/roadmap.md) | Markdown | Current |
 | Platform | [`03-platform/copilotkit-mastra/san-1637-ai-execution-plan.md`](03-platform/copilotkit-mastra/san-1637-ai-execution-plan.md) | Markdown | Current |
+| Platform | [`03-platform/copilotkit-mastra/mastra-plan/01-MDE%20AI%20%E2%80%94%20Complete%20Mastra%20Platform%20Audit-Improvements%20and%20Implementation.md`](03-platform/copilotkit-mastra/mastra-plan/01-MDE%20AI%20%E2%80%94%20Complete%20Mastra%20Platform%20Audit-Improvements%20and%20Implementation.md) | Markdown | Reference / owner brief |
+| Platform | [`03-platform/copilotkit-mastra/mastra-plan/02-MDE-Mastra-Platform-Audit-2026-11-22.md`](03-platform/copilotkit-mastra/mastra-plan/02-MDE-Mastra-Platform-Audit-2026-11-22.md) | Markdown | Snapshot / verified audit |
+| Platform | [`03-platform/copilotkit-mastra/mastra-plan/03-MDE-Mastra-Ordered-Execution-Plan.md`](03-platform/copilotkit-mastra/mastra-plan/03-MDE-Mastra-Ordered-Execution-Plan.md) | Markdown | Current / execution plan |
+| Platform | [`03-platform/copilotkit-mastra/mastra-plan/03-MDE-Mastra-Studio-Live-Audit-2026-11-22.md`](03-platform/copilotkit-mastra/mastra-plan/03-MDE-Mastra-Studio-Live-Audit-2026-11-22.md) | Markdown | Snapshot / Studio audit |
 | Platform | [`03-platform/copilotkit-mastra/genui-plans/21-copilotkit-genui-plan.md`](03-platform/copilotkit-mastra/genui-plans/21-copilotkit-genui-plan.md) | Markdown | Current |
 | Platform | [`03-platform/copilotkit-mastra/genui-plans/21a-genui-task-tracker.md`](03-platform/copilotkit-mastra/genui-plans/21a-genui-task-tracker.md) | Markdown | Current |
 | Platform | [`03-platform/copilotkit-mastra/genui-plans/21b-genui-audit-defects.md`](03-platform/copilotkit-mastra/genui-plans/21b-genui-audit-defects.md) | Markdown | Current |
