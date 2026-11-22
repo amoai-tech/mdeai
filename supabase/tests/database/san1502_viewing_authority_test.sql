@@ -366,8 +366,8 @@ select throws_ok(
       'san1502-viewing-ordinary@example.com', 'Ordinary Renter',
       null, null, current_setting('san1502.scheduled_at')::timestamptz,
       '{}'::jsonb, '{}'::jsonb)$q$,
-  'P1287', 'p1_schedule_tour_atomic: listing is not requestable',
-  'a private/internal apartment is denied');
+  'P1288', 'p1_schedule_tour_atomic: listing not found',
+  'private/internal apartment is indistinguishable from a missing listing');
 
 select is(
   (select count(*)::int from public.leads
