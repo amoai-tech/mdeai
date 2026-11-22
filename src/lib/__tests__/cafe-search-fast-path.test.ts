@@ -13,6 +13,13 @@ describe("cafe-search-fast-path", () => {
     expect(fastPathCafeSummary(0, 0, undefined, "cafés en esta zona")).toContain("No cafés matched");
   });
 
+  it("distinguishes a provider outage from a genuine empty search", () => {
+    expect(fastPathCafeSummary(0, 0, undefined, "cafés around this map", "google_places_unavailable"))
+      .toContain("temporarily unavailable");
+    expect(fastPathCafeSummary(0, 0, undefined, "cafés around this map", "google_places_empty"))
+      .toContain("No cafés matched");
+  });
+
   it("matches specialty coffee queries", () => {
     expect(canFastPathCafeSearch("good specialty coffee in Laureles")).toBe(true);
     const params = buildCafeSearchParams("good specialty coffee in Laureles");

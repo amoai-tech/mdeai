@@ -1,3 +1,4 @@
+import { isMapAreaQuery } from "@/lib/map-area-query";
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { enrichedGroundedPlaceFieldsSchema } from "../lib/adk-grounding-types";
@@ -9,29 +10,36 @@ import {
   MEDELLIN_BIAS,
   searchGoogleCafes,
 } from "../lib/google-places-cafe-search";
-import { groundedPlaceSourceModes, type GroundedPlaceSourceMode } from "@/lib/grounded-place-source";
-import {
-  mapAdkGroundingPins,
-  type GroundedPlaceResult,
-} from "../lib/map-adk-grounding-pins";
+import { groundedPlaceSourceModes } from "@/lib/grounded-place-source";
+import { mapAdkGroundingPins } from "../lib/map-adk-grounding-pins";
 import { incrementAndCheckGroundingQuota } from "../lib/grounding-quota";
 import {
   resolveGroundingLocationBias,
   resolveGroundingMemory,
 } from "../lib/grounding-location-bias";
 import { runAuditedTool } from "../lib/run-audited-search";
+import { filterCafeGroundingRows, filterNightlifeGroundingRows } from "../lib/venue-grounding-filter";
+export { filterCafeGroundingRows, filterNightlifeGroundingRows, normalizeCafeGroundingQuery } from "../lib/venue-grounding-filter";
 import { hasVerifiedNearbyRentalUser, searchNearbyRentalPlaces } from "./nearby-rental-places";
-import { searchRestaurants, type Restaurant } from "./search-restaurants";
+import { curatedFallback, shouldUseCuratedFallback } from "./grounded-places-curated-fallback";
 import {
-  isCoffeeVenueQuery,
-  isNightlifeVenueQuery,
-  searchCafeVenueAnchors,
-  searchNightclubVenueAnchors,
-  venueAnchorMapsUrl,
-  venueAnchorSummary,
-  venueAnchorToCoordinates,
-  type RankedVenueAnchorRow,
-} from "./search-venue-anchors";
+  normalizeVenueGroundingQuery,
+  isCafeGroundingIntent,
+  venueGroundingIntentSchema,
+  resolveVenueGroundingKind,
+  type VenueGroundingIntent,
+} from "../lib/venue-grounding-intent";
+export {
+  isCafeGroundingQuery,
+  isNightlifeGroundingQuery,
+  normalizeVenueGroundingQuery,
+  isCafeGroundingIntent,
+  isNightlifeGroundingIntent,
+  venueGroundingIntentSchema,
+  resolveVenueGroundingKind,
+} from "../lib/venue-grounding-intent";
+export { shouldUseCuratedFallback } from "./grounded-places-curated-fallback";
+export type { VenueGroundingIntent, VenueGroundingKind } from "../lib/venue-grounding-intent";
 
 const groundedPlaceResultSchema = z
   .object({
@@ -47,196 +55,11 @@ const groundedPlaceResultSchema = z
   })
   .merge(enrichedGroundedPlaceFieldsSchema);
 
-const CAFE_QUERY =
-  /\b(caf[eé]s?|cafeter[ií]as?|coffee shops?|quiet caf[eé]s?|top cafes?|list cafes?|coworking|wifi|wi-fi|laptop[- ]friendly)\b/i;
-
-const NIGHTLIFE_QUERY =
-  /\b(nightlife|salsa bars?|hidden bars?|rooftop cocktails?|rooftop bars?|live music bars?|locals go to)\b/i;
-
-export function isCafeGroundingQuery(query: string): boolean {
-  return CAFE_QUERY.test(query);
-}
-
-export function isNightlifeGroundingQuery(query: string): boolean {
-  return NIGHTLIFE_QUERY.test(query);
-}
-
-export function normalizeVenueGroundingQuery(
-  query: string,
-  options?: { hasViewportBias?: boolean },
-): string {
-  const q = query.trim();
-  const destination =
-    hasExplicitPlaceScope(q) || options?.hasViewportBias
-      ? ""
-      : " in Medellín";
-  if (isCafeGroundingQuery(q)) {
-    if (/\b(wifi|wi-fi|laptop|cowork|remote work)\b/i.test(q)) {
-      return `${q}. Prefer cafés with reliable Wi-Fi, power outlets, and laptop-friendly seating${destination}. Exclude bars and nightclubs.`;
-    }
-    return `${q}. Prefer specialty coffee roasters and brunch cafés${destination}. Exclude bar lounges and nightlife venues.`;
-  }
-  if (isNightlifeGroundingQuery(q)) {
-    if (/\bsalsa\b/i.test(q)) {
-      return `${q}. Prefer authentic salsa bars and live salsa venues locals visit${destination}. Exclude generic tourist clubs.`;
-    }
-    if (/\brooftop\b/i.test(q)) {
-      return `${q}. Prefer rooftop bars and cocktail terraces with views${destination}.`;
-    }
-    return `${q}. Prefer nightlife venues and bars locals recommend${destination}.`;
-  }
-  return q;
-}
-
-export function isCafeGroundingIntent(
-  query: string,
-  intent?: string,
-): boolean {
-  if (intent === "cafe") return true;
-  if (intent === "nightlife") return false;
-  return isCafeGroundingQuery(query);
-}
-
-export function isNightlifeGroundingIntent(
-  query: string,
-  intent?: string,
-): boolean {
-  if (intent === "nightlife") return true;
-  return isNightlifeGroundingQuery(query);
-}
-
-export const venueGroundingIntentSchema = z.enum([
-  "cafe",
-  "general",
-  "nightlife",
-]);
-
-export type VenueGroundingIntent = z.infer<typeof venueGroundingIntentSchema>;
-export type VenueGroundingKind = VenueGroundingIntent;
-
-export function resolveVenueGroundingKind(
-  query: string,
-  intent?: VenueGroundingIntent,
-): VenueGroundingKind {
-  if (intent === "nightlife" || intent === "cafe" || intent === "general") {
-    return intent;
-  }
-  if (isNightlifeGroundingQuery(query)) return "nightlife";
-  if (isCafeGroundingQuery(query)) return "cafe";
-  return "general";
-}
-
-function isNightlifeCandidateTitle(title: string): boolean {
-  return /\b(bar|club|salsa|rooftop|nightlife|discotec|lounge|cocktail|night)\b/i.test(
-    title,
-  );
-}
-
-export function filterNightlifeGroundingRows(
-  rows: GroundedPlaceResult[],
-  query: string,
-  intent?: string,
-): GroundedPlaceResult[] {
-  if (!isNightlifeGroundingIntent(query, intent)) return rows;
-  const nightlife = rows.filter(
-    (row) =>
-      isNightlifeCandidateTitle(row.title) && !isBarLoungeDistractor(row.title),
-  );
-  return nightlife.length > 0 ? nightlife : rows;
-}
-
-export function normalizeCafeGroundingQuery(
-  query: string,
-  options?: { hasViewportBias?: boolean },
-): string {
-  return normalizeVenueGroundingQuery(query, options);
-}
-
-function isBarLoungeDistractor(title: string): boolean {
-  if (/\bskybar\b/i.test(title)) return true;
-  if (/\bbar\s*&\s*lounge\b/i.test(title)) return true;
-  if (/general cafe bar/i.test(title)) return true;
-  if (/\bcaf[eé]\s+noir\s+bar/i.test(title)) return true;
-  return false;
-}
-
-function isCafeCandidateTitle(title: string): boolean {
-  return /\bcaf[eé]|cafeter[ií]a|coffee|brunch/i.test(title);
-}
-
-export function filterCafeGroundingRows(
-  rows: GroundedPlaceResult[],
-  query: string,
-  intent?: string,
-): GroundedPlaceResult[] {
-  if (!isCafeGroundingIntent(query, intent)) return rows;
-  return rows.filter((row) => {
-    if (isBarLoungeDistractor(row.title)) return false;
-    if (/^(cafe|coffee_shop|bakery|brunch_restaurant)$/i.test(row.primaryType ?? "")) {
-      return true;
-    }
-    return isCafeCandidateTitle(row.title);
-  });
-}
-
 type GroundedAttributionSource = {
   source: string;
   placeUri: string;
   title?: string;
 };
-
-/** Extract a neighborhood hint from a free-text grounding query. */
-function neighborhoodFromGroundingQuery(query: string): string | undefined {
-  const m = query.match(
-    /\b(laureles|poblado|el\s+poblado|envigado|bel[eé]n|estadio|provenza|el\s+centro)\b/i,
-  );
-  return m?.[0];
-}
-
-/**
- * Map a curated Restaurant row to the GroundedPlaceResult shape expected by
- * parseGroundedToolResult / GroundedCafeResults. Used when ADK is unavailable.
- */
-function restaurantToGroundedRow(r: Restaurant, sourceMode: GroundedPlaceSourceMode): GroundedPlaceResult {
-  return {
-    id: r.id,
-    title: r.name,
-    sourceMode,
-    latitude: r.latitude ?? undefined,
-    longitude: r.longitude ?? undefined,
-    placeId: r.placeId ?? undefined,
-    mapsUrl: (r.mapsUrl ?? undefined) as string | undefined,
-    rating: r.rating != null && r.rating > 0 ? r.rating : undefined,
-    summary: (r.aiSummary ?? r.vibe.slice(0, 3).join(" · ")) || undefined,
-    formattedAddress: r.neighborhood,
-    primaryType: r.cuisine === "cafe" ? "coffee_shop" : "restaurant",
-  };
-}
-
-function anchorToGroundedRow(
-  row: RankedVenueAnchorRow,
-  primaryType: string,
-): GroundedPlaceResult {
-  const { latitude, longitude } = venueAnchorToCoordinates(row);
-  const citation = row.evidence?.[0]?.extractedText;
-  const baseSummary = venueAnchorSummary(row);
-  const summary =
-    citation && baseSummary
-      ? `${baseSummary} — ${citation}`
-      : citation ?? baseSummary;
-  return {
-    id: row.id,
-    title: row.name,
-    sourceMode: "saved_catalog",
-    latitude: latitude ?? undefined,
-    longitude: longitude ?? undefined,
-    placeId: row.google_place_id,
-    mapsUrl: venueAnchorMapsUrl(row.google_place_id),
-    summary,
-    formattedAddress: row.neighborhood ?? undefined,
-    primaryType,
-  } as GroundedPlaceResult;
-}
 
 /**
  * Fallback when ADK grounding is unavailable — café queries use venue_anchors
@@ -256,86 +79,6 @@ function withVenueKindMetadata<T extends Record<string, unknown>>(
     ...payload,
     metadata: { ...existing, venueKind },
   };
-}
-
-const MEDELLIN_FALLBACK_BOUNDS = {
-  minLat: 5.95,
-  maxLat: 6.55,
-  minLng: -75.75,
-  maxLng: -75.25,
-} as const;
-
-/** The saved catalog is Medellín-only; do not use it for another city/viewport. */
-export function shouldUseCuratedFallback(input: {
-  hasNonMedellinCity: boolean;
-  locationBias?: { latitude: number; longitude: number };
-}): boolean {
-  if (input.hasNonMedellinCity) return false;
-  if (!input.locationBias) return true;
-  return (
-    input.locationBias.latitude >= MEDELLIN_FALLBACK_BOUNDS.minLat &&
-    input.locationBias.latitude <= MEDELLIN_FALLBACK_BOUNDS.maxLat &&
-    input.locationBias.longitude >= MEDELLIN_FALLBACK_BOUNDS.minLng &&
-    input.locationBias.longitude <= MEDELLIN_FALLBACK_BOUNDS.maxLng
-  );
-}
-
-async function curatedFallback(
-  rawQuery: string,
-  pageSize: number,
-  intent?: VenueGroundingIntent,
-  allowed = true,
-): Promise<GroundedPlaceResult[]> {
-  if (!allowed) return [];
-  const neighborhood = neighborhoodFromGroundingQuery(rawQuery);
-  const isNightlife =
-    intent === "nightlife" ||
-    (intent !== "cafe" && isNightlifeVenueQuery(rawQuery));
-  const isCoffee =
-    intent === "cafe" ||
-    (intent !== "nightlife" && isCoffeeVenueQuery(rawQuery));
-
-  if (isNightlife) {
-    const anchors = await searchNightclubVenueAnchors({
-      neighborhood,
-      limit: pageSize,
-      queryText: rawQuery,
-    });
-    if (anchors.length > 0) {
-      return anchors.map((row) => anchorToGroundedRow(row, "night_club"));
-    }
-    return [];
-  }
-
-  if (isCoffee) {
-    const anchors = await searchCafeVenueAnchors({
-      neighborhood,
-      limit: pageSize,
-      queryText: rawQuery,
-    });
-    if (anchors.length > 0) {
-      return anchors.map((row) => anchorToGroundedRow(row, "coffee_shop"));
-    }
-  }
-
-  const { results, source } = await searchRestaurants({
-    neighborhood,
-    cuisine: isCoffee ? ("cafe" as const) : undefined,
-    limit: pageSize,
-  });
-  if (results.length > 0) return results.map((row) => restaurantToGroundedRow(
-    row, source === "fallback" ? "demo_fixture" : "saved_catalog",
-  ));
-  if (isCoffee) {
-    const { results: broader, source: broaderSource } = await searchRestaurants({
-      neighborhood,
-      limit: pageSize,
-    });
-    return broader.map((row) => restaurantToGroundedRow(
-      row, broaderSource === "fallback" ? "demo_fixture" : "saved_catalog",
-    ));
-  }
-  return [];
 }
 
 /**
@@ -487,10 +230,23 @@ export const searchGroundedPlacesTool = createTool({
         intent,
       );
     }
+    const mapRelativeSearch = isMapAreaQuery(rawQuery) && !hasExplicitPlace;
+    // A map-relative question without a real camera must never be silently
+    // geolocated to the default city or charged to Google Places.
+    if (mapRelativeSearch && !resolvedLocationBias) {
+      return withVenueKindMetadata(
+        { results: [], attribution: [], source: "grounding" as const,
+          metadata: { reason: "missing_map_context" } },
+        rawQuery,
+        intent,
+      );
+    }
     const effectiveLocationBias =
       resolvedLocationBias ??
       (hasNonMedellinCityMatch ? undefined : MEDELLIN_BIAS);
-    const curatedAllowed = shouldUseCuratedFallback({
+    // A citywide saved catalog is not evidence that a cafe is near a moved
+    // map. Do not substitute unfiltered saved results for viewport queries.
+    const curatedAllowed = !mapRelativeSearch && shouldUseCuratedFallback({
       hasNonMedellinCity: hasNonMedellinCityMatch,
       locationBias: effectiveLocationBias,
     });
@@ -505,7 +261,9 @@ export const searchGroundedPlacesTool = createTool({
             results: [],
             attribution: [],
             source: "grounding" as const,
-            metadata: { fallback: "curated", reason: "outside_catalog_coverage" },
+            metadata: mapRelativeSearch
+              ? { reason: "adk_not_configured" }
+              : { fallback: "curated", reason: "outside_catalog_coverage" },
           },
           rawQuery,
           intent,
@@ -546,7 +304,9 @@ export const searchGroundedPlacesTool = createTool({
             results: [],
             attribution: [],
             source: "grounding" as const,
-            metadata: { reason: quota.reason, fallback: "curated", outsideCatalogCoverage: true },
+            metadata: mapRelativeSearch
+              ? { reason: quota.reason }
+              : { reason: quota.reason, fallback: "curated", outsideCatalogCoverage: true },
           },
           rawQuery,
           intent,
@@ -626,8 +386,10 @@ export const searchGroundedPlacesTool = createTool({
             source: "grounding" as const,
             metadata: {
               provider: "google_places",
-              fallback: "curated",
-              reason: "outside_catalog_coverage",
+              ...(mapRelativeSearch ? {} : { fallback: "curated" }),
+              reason: mapRelativeSearch
+                ? (directCafeError ? "google_places_unavailable" : "google_places_empty")
+                : "outside_catalog_coverage",
             },
           },
           rawQuery,
@@ -681,7 +443,9 @@ export const searchGroundedPlacesTool = createTool({
             results: [],
             attribution: [],
             source: "grounding" as const,
-            metadata: { ...adk.metadata, fallback: "curated", outsideCatalogCoverage: true },
+            metadata: mapRelativeSearch
+              ? adk.metadata
+              : { ...adk.metadata, fallback: "curated", outsideCatalogCoverage: true },
           },
           rawQuery,
           intent,

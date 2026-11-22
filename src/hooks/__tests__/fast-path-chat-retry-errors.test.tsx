@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   clearLocalMessages: vi.fn(),
   showExchange: vi.fn(),
   setState: vi.fn(),
+  viewport: null as { lat: number; lng: number; zoom: number } | null,
 }));
 
 vi.mock("@/components/chat/concierge-coagent-context", () => ({
@@ -45,7 +46,7 @@ vi.mock("@/hooks/use-clear-other-fast-path-results", () => ({
   useClearOtherFastPathResults: () => vi.fn(),
 }));
 vi.mock("@/platform/maps/map-context", () => ({
-  useMapContext: () => ({ mergePinsByCategory: vi.fn(), requestFitBounds: vi.fn() }),
+  useMapContext: () => ({ mergePinsByCategory: vi.fn(), requestFitBounds: vi.fn(), viewport: mocks.viewport }),
 }));
 vi.mock("@/lib/intelligence-telemetry", () => ({ logRoutingDecision: vi.fn() }));
 
@@ -68,6 +69,7 @@ function renderHook<T>(useHook: () => T): T {
 }
 
 beforeEach(() => {
+  mocks.viewport = null;
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 503 }));
   vi.spyOn(console, "error").mockImplementation(() => {});
   mocks.setToolResult.mockClear();
@@ -131,6 +133,101 @@ describe("chat fast-path failures reach operation-specific Retry", () => {
     });
     expect(mocks.setToolResult).toHaveBeenCalledWith(null);
     expect(mocks.showExchange).not.toHaveBeenCalled();
+  });
+
+  it("sends the latest real map viewport with a café query", async () => {
+    mocks.viewport = { lat: 6.2088, lng: -75.5671, zoom: 15 };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ results: [], attribution: [], source: "grounding" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const hook = renderHook(useGroundedSearchFastPath);
+    await act(async () => {
+      expect(await hook.handleUserMessage("cafés around this map")).toBe(true);
+    });
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.locationBias).toEqual({ latitude: 6.2088, longitude: -75.5671 });
+    expect(body.query).toBe("cafés around this map");
+  });
+
+  it("shows service-unavailable messaging after a failed Google map search", async () => {
+    mocks.viewport = { lat: 6.2088, lng: -75.5671, zoom: 15 };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        results: [], attribution: [], source: "grounding",
+        metadata: { reason: "google_places_unavailable" },
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const hook = renderHook(useGroundedSearchFastPath);
+    await act(async () => expect(await hook.handleUserMessage("cafés around this map")).toBe(true));
+    expect(mocks.showExchange).toHaveBeenCalledWith(
+      "cafés around this map",
+      expect.stringContaining("temporarily unavailable"),
+      undefined,
+    );
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("recognizes accented Spanish map-relative queries", async () => {
+    mocks.viewport = { lat: 6.2088, lng: -75.5671, zoom: 15 };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true, json: async () => ({ results: [], attribution: [], source: "grounding" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const hook = renderHook(useGroundedSearchFastPath);
+    await act(async () => expect(await hook.handleUserMessage("cafés por aquí")).toBe(true));
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).locationBias)
+      .toEqual({ latitude: 6.2088, longitude: -75.5671 });
+  });
+
+  it("does not let a stale map viewport override an explicit neighborhood", async () => {
+    mocks.viewport = { lat: 7.1, lng: -75.8, zoom: 14 }; // outside Medellín
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true, json: async () => ({ results: [], attribution: [], source: "grounding" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const hook = renderHook(useGroundedSearchFastPath);
+    await act(async () => expect(await hook.handleUserMessage("good specialty coffee in Laureles")).toBe(true));
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body).not.toHaveProperty("locationBias");
+    expect(body.query).toMatch(/Laureles/i);
+  });
+
+  it("keeps explicit Laureles context over a mixed 'around here' phrase", async () => {
+    mocks.viewport = { lat: 7.1, lng: -75.8, zoom: 14 };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true, json: async () => ({ results: [], attribution: [], source: "grounding" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const hook = renderHook(useGroundedSearchFastPath);
+    await act(async () => expect(await hook.handleUserMessage("coffee around here in Laureles")).toBe(true));
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body).not.toHaveProperty("locationBias");
+    expect(body.query).toMatch(/Laureles/i);
+  });
+
+  it("never forwards invalid map coordinates to paid search", async () => {
+    mocks.viewport = { lat: 500, lng: -75.5671, zoom: 15 };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ results: [], attribution: [], source: "grounding", metadata: { reason: "missing_map_context" } }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const hook = renderHook(useGroundedSearchFastPath);
+    await act(async () => {
+      expect(await hook.handleUserMessage("cafés around this map")).toBe(true);
+    });
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body).not.toHaveProperty("locationBias");
+    expect(mocks.showExchange).toHaveBeenCalledWith(
+      "cafés around this map",
+      expect.stringContaining("Move the map"),
+      undefined,
+    );
   });
 
   it("surfaces a failing café search instead of silently falling through to the agent", async () => {

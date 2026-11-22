@@ -12,6 +12,7 @@ import {
   type CafeSearchApiParams,
 } from "@/lib/cafe-search-fast-path";
 import { useMapContext } from "@/platform/maps/map-context";
+import { isMapAreaQuery } from "@/lib/map-area-query";
 import { normalizeToolOutput } from "@/platform/maps/normalize-tool-output";
 import { parseGroundedToolResult } from "@/lib/parse-grounded-tool-result";
 import { groundedFastPathMemory } from "@/lib/grounded-fast-path-memory";
@@ -40,7 +41,7 @@ export function useGroundedSearchFastPath() {
   const { showExchange, clearLocalMessages } = useEventLocalChat();
   const clearOthers = useClearOtherFastPathResults();
   const { setToolResult } = useGroundedFastPath();
-  const { mergePinsByCategory, requestFitBounds, pins: currentPins, selectedPinId } = useMapContext();
+  const { mergePinsByCategory, requestFitBounds, pins: currentPins, selectedPinId, viewport } = useMapContext();
   // The fetch can finish after a newer rental search replaced the map. Compare
   // against the pins that exist when the response arrives, not the click-time snapshot.
   const pinsRef = useRef(currentPins);
@@ -177,12 +178,23 @@ export function useGroundedSearchFastPath() {
 
       const params = buildCafeSearchParams(trimmed);
       if (!params) return false;
+      // The public fast path has no Mastra thread memory. Forward the real
+      // current map camera rather than silently using the Medellín default.
+      const validViewport = viewport &&
+        Number.isFinite(viewport.lat) && viewport.lat >= -90 && viewport.lat <= 90 &&
+        Number.isFinite(viewport.lng) && viewport.lng >= -180 && viewport.lng <= 180 &&
+        Number.isFinite(viewport.zoom) && viewport.zoom >= 0 && viewport.zoom <= 22;
+      // A named neighborhood always wins over whatever map the user
+      // previously browsed. Only map-relative questions use this camera.
+      if (validViewport && isMapAreaQuery(trimmed) && !params.neighborhood) {
+        params.locationBias = { latitude: viewport.lat, longitude: viewport.lng };
+      }
 
       if (groundedSearchesInFlight.has(setToolResult)) return false;
       clearLocalMessages();
       return runSearch(trimmed, params, submissionId);
     },
-    [clearLocalMessages, runSearch, currentPins, selectedPinId, setToolResult],
+    [clearLocalMessages, runSearch, currentPins, selectedPinId, setToolResult, viewport],
   );
 
   // A card action uses the SAME read-only Nearby fast path as a typed
