@@ -30,6 +30,13 @@ Do not create a new search engine, scorer registry, telemetry pipeline, or detac
 - Event: a title returned by the event tool may be mentioned, but a fabricated ticket time must be caught by a **separate date/time assertion**; the current scorers do not guarantee it.
 - Booking: never use “agent says booked” as a successful grade. Verify authenticated API write, one persisted record, retry idempotency and UI readback.
 
+## Budget and tool-choice assertions beyond the scorers
+
+- For a COP 3M/month rental request, use `src/mastra/tools/__tests__/rental-monthly-budget.test.ts` and `search-rentals-budget-pagination.test.ts` to verify the **actual** same-currency PostgREST predicate and result page; then check Concierge-selected tool calls and displayed cards in an authorized integration/browser run. A faithful answer can still be **over budget** if it faithfully repeats a bad tool result.
+- `src/mastra/lib/search-intent-router.test.ts` verifies the deterministic events/Maps decision; `src/mastra/tools/__tests__/classify-intent.test.ts` verifies intent-tool schemas. Neither proves the LLM chose the correct tool. Capture expected vs actual tool call and unchanged retrieved record IDs for that.
+- For ticketing, use the actual `src/app/api/tickets/checkout/route.test.ts`, `supabase/functions/ticket-payment-webhook/index.ts`, and the transactional `ticket_payment_finalize` RPC. Scorer text or a synthetic mock cannot certify a paid order, exactly one ticket set or retry correctness.
+- Choose `testing-gates.md` for risk-matched commands and a full pass/fail evidence matrix. Do not register a new model judge just to catch a deterministic budget or tool-selection failure.
+
 ## What to report
 
 Case name; input/tool facts; expected versus actual; scorer result; any uncovered fields; exact code SHA; test command and pass/fail. A zero-claim score of 1.0 means “no claims found”, **not** that the answer is verified.

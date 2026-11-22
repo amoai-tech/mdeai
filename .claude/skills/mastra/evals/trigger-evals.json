@@ -34,5 +34,23 @@
     "prompt": "Review the payment processor webhook for Stripe idempotency with no Mastra workflow involvement.",
     "should_trigger": false,
     "expected_owner": "stripe"
+  },
+  {
+    "id": "mastra-7",
+    "prompt": "Our Mastra rental agent often calls the wrong discovery tool. Check tool registry and routing before considering ToolSearchProcessor.",
+    "should_trigger": true,
+    "expected_owner": "mastra"
+  },
+  {
+    "id": "mastra-8",
+    "prompt": "Can our Mastra Concierge on Vercel dynamically load a new runtime SKILL.md without exposing coding-agent skills?",
+    "should_trigger": true,
+    "expected_owner": "mastra"
+  },
+  {
+    "id": "mastra-9",
+    "prompt": "Audit a Stripe ticket payment webhook for duplicate fulfillment; no Mastra workflow or agent is involved.",
+    "should_trigger": false,
+    "expected_owner": "stripe"
   }
 ]

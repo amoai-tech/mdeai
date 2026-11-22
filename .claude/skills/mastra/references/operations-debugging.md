@@ -28,6 +28,16 @@
 - Test initial suspend; accepted and rejected resumption; double submit; resume after restart; stale/missing runId; unauthorized actor; one persisted transition only. Distinguish a transition already committed before user Stop from an uncommitted request.
 - Preserve atomic backend transitions and audit records. Approval management can be tested separately without becoming a booking or publication prerequisite.
 
+## Ticket payment recovery — separate from agent workflows
+
+The real ticket flow belongs to `src/app/api/tickets/checkout/route.ts`, `supabase/functions/ticket-payment-webhook/index.ts`, and the existing `ticket_payment_finalize` / `ticket_checkout_cancel` database RPCs. Do **not** move webhook processing into a Mastra run or add a second booking engine.
+
+1. Verify the Stripe webhook **signature** and test/live-mode boundary; the existing `supabase/functions/tests/ticket-stripe-webhook-guards_test.ts` proves these guard primitives, not end-to-end idempotency.
+2. Follow `checkout.session.completed` and `payment_intent.succeeded`: they may refer to the **same** payment with **different event IDs**. The existing event-ID check in `idempotency_keys` alone cannot prove cross-event exactly-once behavior; check the canonical `ticket_payment_finalize` RPC's transactional behavior and durable order/ticket uniqueness.
+3. Replay an identical event ID; then deliver distinct relevant event types for the same checkout; then try concurrent delivery and a failure before/after commit in a safe, authorized TEST-mode environment. Assert paid order, issued ticket IDs, inventory and total amount from persisted data — never from the agent's wording.
+4. If a response timed out after commit, retry safely and read back the original order instead of creating a new one. If the payment was never committed, record the actual error and avoid a success claim. A client Stop cannot undo an already committed payment.
+5. Confirm duplicates cause no second tickets or stock decrement, and failure/replay leaves no orphaned records. Use existing checkout tests and database proof, with cleanup recorded. Do not claim the signature-guard unit tests alone verify concurrency or Stripe delivery.
+
 ## Real failure example
 
 A renter asks on WhatsApp for apartments under COP 3M and gets no useful answer. First verify the search tool returned rows; then inspect the agent turn and message formatter; finally confirm outbound sending. If retrieval produced zero because a specific vector path missed real structured inventory, fix the canonical retrieval/fallback owner rather than building a separate WhatsApp search engine.

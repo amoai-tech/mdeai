@@ -106,6 +106,7 @@ MDE overlays — read the one matching the affected contract:
 | Concierge agent | `references/mdeai-concierge.md` |
 | CopilotKit bridge | Current `src/app/api/copilotkit/[[...path]]/route.ts`, CopilotKit skill `references/mastra-bridge.md`; `references/copilotkit.md` is standalone-only |
 | Memory | `references/memory.md`; `references/supabase-auth.md` is standalone Mastra HTTP auth only |
+| Test requirements and proof | `references/testing-gates.md` — risk-based regression, integration and idempotency checks |
 | Evals and experiments | `references/evals-experiments.md` — existing deterministic scorers, fixed golden cases, baseline comparison |
 | Structured agent output | `references/structured-output.md` — typed UI payloads, Zod, Gemini tool compatibility |
 | Technical processors | `references/processors-guardrails.md` — token limits, optional injection guard, costs, security boundary |
@@ -116,6 +117,7 @@ MDE overlays — read the one matching the affected contract:
 | RAG | `references/rag-mastra.md`, `references/rag-pgvector.md` |
 | Models | `references/model-providers.md`, `references/gemini.md`, `references/openai.md`, `references/ai-sdk.md` |
 | MCP | `references/mcp.md`, `references/mcp-apps.md`, `references/mcp-docs-lookup.md` |
+| Runtime skills and tool selection | `references/runtime-skills-tool-selection.md` — development vs hosted skills, current tool owners, when to measure lazy search |
 | Skills and routing | `references/topic-routing.md`, `references/embedded-docs.md`, `references/remote-docs.md` |
 | First setup and migration | `references/create-mastra.md`, `references/migration-guide.md` |
 | Errors | `references/common-errors.md`, `references/operations-debugging.md` — trace, WhatsApp, resume/retry truth |
