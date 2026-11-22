@@ -257,6 +257,12 @@ describe("EventResults empty and unavailable states", () => {
     expect(container.querySelector('[data-testid="events-empty"]')).toBeNull();
   });
 
+  it("renders provider-unavailable tool status as an error, never a zero-inventory result", () => {
+    showResult({ results: [], total: 0, source: "unavailable" });
+    expect(container.querySelector('[data-testid="events-search-error"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="events-empty"]')).toBeNull();
+  });
+
   it("does not disguise malformed tool output as a healthy empty market", () => {
     showResult({ total: 0, source: "supabase" });
     expect(container.querySelector('[data-testid="events-search-error"]')).not.toBeNull();

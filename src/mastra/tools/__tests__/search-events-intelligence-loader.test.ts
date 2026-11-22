@@ -17,7 +17,7 @@ describe('search-events optional intelligence startup', () => {
     await expect(searchEvents({ category: 'music', limit: 5 })).resolves.toEqual({
       results: [],
       total: 0,
-      source: 'fallback',
+      source: 'unavailable',
     });
   });
 
@@ -25,7 +25,7 @@ describe('search-events optional intelligence startup', () => {
     await expect(searchEvents({ queryText: 'salsa events this weekend', limit: 5 })).resolves.toEqual({
       results: [],
       total: 0,
-      source: 'fallback',
+      source: 'unavailable',
     });
   });
 });

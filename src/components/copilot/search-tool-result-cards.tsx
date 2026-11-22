@@ -720,7 +720,7 @@ export function EventResults({ result }: { result: unknown }) {
     Array.isArray((raw as { results?: unknown }).results);
   const envelope = normalizeToolEnvelope(result);
   const reasons = visibleEventSearchReasons(envelope.rankExplanation ?? []);
-  const searchUnavailable = !validEnvelope ||
+  const searchUnavailable = !validEnvelope || envelope.source === "unavailable" ||
     (envelope.source === "fallback" && (envelope.results?.length ?? 0) === 0);
   // SAN-1422 — an event without trusted coordinates is a usable card with no pin, so it must not
   // pan, select or highlight a map target that does not exist.

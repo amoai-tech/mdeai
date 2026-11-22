@@ -242,7 +242,7 @@ export async function searchEventsIntelligent( // skipcq: JS-R1005, JS-0067
 ): Promise<{
   results: IntelligenceEventResult[];
   total: number;
-  source: "supabase" | "fallback";
+  source: "supabase" | "fallback" | "unavailable";
   hybridUsed: boolean;
   rankExplanation: RankExplanationEntry[];
   slots: EventIntelligenceSlots;
@@ -257,7 +257,7 @@ export async function searchEventsIntelligent( // skipcq: JS-R1005, JS-0067
   const client = getAnonClient();
 
   if (!client) {
-    return { results: [], total: 0, source: "fallback", hybridUsed: false, rankExplanation, slots };
+    return { results: [], total: 0, source: "unavailable", hybridUsed: false, rankExplanation, slots };
   }
 
   let hybridRows: HybridEventRow[] = [];
