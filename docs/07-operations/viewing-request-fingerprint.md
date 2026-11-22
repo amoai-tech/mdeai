@@ -43,9 +43,13 @@ match with its status. It is read-only. Exit codes: `0` matched, `2` no match, `
   not blindly trusted**: `disable`, `allow`, `prefer`, `require` and `no-verify` are all refused for a
   non-loopback host, and so is any unrecognised mode. Only `verify-full` (or `verify-ca`) is
   accepted — the others either send the rows in plaintext or encrypt without checking the
-  certificate, which a MITM still wins. When an explicit mode is given it is stripped from the URL
-  before the explicit `ssl` options are passed, because pg lets a URL `sslmode` override the config
-  object and that silently discarded the pinned CA.
+  certificate, which a MITM still wins. A bare `ssl=0` / `ssl=false` is also refused: that is not
+  an sslmode, it maps to `ssl: false` and would disable TLS entirely.
+
+  **Every `ssl*` URL parameter is stripped** before the explicit `ssl` options are passed. pg merges
+  the parsed connection string over the config object, so `sslmode`, `ssl`, `sslrootcert` and
+  friends would otherwise win over the verified settings — that is how an explicit `verify-full`
+  once ended up failing against Supabase's own root, and how `ssl=0` could have forced plaintext.
 
   Trust-store precedence, which is easy to get wrong: an explicit `ca` **replaces** Node's default
   trust store, and `NODE_EXTRA_CA_CERTS` only **extends** that default store. So when

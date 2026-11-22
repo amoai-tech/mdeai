@@ -121,7 +121,22 @@ function clientConfigFor(url) {
   const sslMode = parsed.searchParams.get("sslmode")?.toLowerCase();
   const base = { connectionString: url, application_name: "find-listing-by-fingerprint" };
 
+  // `?ssl=0` is not an sslmode: pg-connection-string maps it to `ssl: false`, and URL parameters are
+  // merged over the config object, so it would silently override a verified `ssl` option and send
+  // every row in plaintext. Refuse an explicit attempt to disable TLS.
+  const tlsDisabledByParam = ["0", "false", "no", "off"].includes(
+    parsed.searchParams.get("ssl")?.toLowerCase() ?? "",
+  );
+
   if (LOOPBACK.has(host)) return base;
+
+  if (tlsDisabledByParam) {
+    console.error(
+      `refusing ssl=${parsed.searchParams.get("ssl")} for non-loopback host "${host}": it disables ` +
+        "TLS, and this scan reads every apartment row.",
+    );
+    process.exit(1);
+  }
 
   // Non-loopback: the sslmode is validated, never trusted.
   if (sslMode && !VERIFYING_SSL_MODES.has(sslMode)) {
@@ -136,14 +151,20 @@ function clientConfigFor(url) {
     process.exit(1);
   }
 
-  // Drop sslmode from the URL before passing explicit `ssl` options. pg lets a URL sslmode win
-  // over the config object, which would silently discard the pinned CA below (that is exactly how
-  // an explicit verify-full ended up failing against Supabase's own root).
+  // Drop EVERY `ssl*` parameter before passing explicit options. pg merges the parsed connection
+  // string over the config object, so any of them — sslmode, ssl, sslrootcert — would win over the
+  // verified `ssl` below. That is exactly how an explicit verify-full ended up failing against
+  // Supabase's own root, and how `ssl=0` could have forced plaintext.
   const connectionString = (() => {
-    if (!sslMode) return url;
     const stripped = new URL(url);
-    stripped.searchParams.delete("sslmode");
-    return stripped.toString();
+    let removed = false;
+    for (const key of [...stripped.searchParams.keys()]) {
+      if (/^ssl/i.test(key)) {
+        stripped.searchParams.delete(key);
+        removed = true;
+      }
+    }
+    return removed ? stripped.toString() : url;
   })();
 
   // An explicit `ca` REPLACES the default trust store, while NODE_EXTRA_CA_CERTS only *extends*
