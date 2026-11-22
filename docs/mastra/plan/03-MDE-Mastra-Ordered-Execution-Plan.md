@@ -56,7 +56,7 @@ sequenceDiagram
   U->>UI: Retry same request
   UI->>API: Same logical idempotency key
   API->>PG: Read/reuse once-only transaction
-  PG-->>UI: Same receipt; no duplicate
+  PG-->>UI: Same receipt, no duplicate
 ```
 
 ## Diagram 3/3 — implementation order and conditional advanced work
@@ -591,7 +591,7 @@ flowchart LR
 ### 8.2 Verify current PR, code, CI and exact deployed SHA
 **Do:** Confirm origin/main vs PR head, ensure scoped changes only, no accidental live production DB writes; merge after code review and CI; verify /api/version on target environment and rerun one real journey. Do not say deployed or Done before proof.
 **Official reference → adaptation → verification (step 8.2; follow in this order):**
-- **URL:** https://docs.github.com/en/actions/monitoring-and-troubleshooting-workflows/viewing-workflow-run-history → **Exact upstream file/example:** GitHub Actions run history/status example → **REFERENCE ONLY for CI evidence** → **Exact destination:** `existing .github/workflows/ and docs/mastra/plan/03-MDE-Mastra-Ordered-Execution-Plan.md` → **Verify:** exact PR SHA CI and after-merge /api/version proof.
+- **URL:** https://docs.github.com/en/actions/how-tos/monitor-workflows/view-workflow-run-history → **Exact upstream file/example:** GitHub Actions run history/status example → **REFERENCE ONLY for CI evidence** → **Exact destination:** `existing .github/workflows/ and docs/mastra/plan/03-MDE-Mastra-Ordered-Execution-Plan.md` → **Verify:** exact PR SHA CI and after-merge /api/version proof.
 
 **Checks:** - [ ] exact head commit - [ ] CI outcome from that head - [ ] post-merge API/UI/DB receipts - [ ] wrong-user denials.
 
