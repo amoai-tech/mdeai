@@ -59,7 +59,7 @@ For a claim not independently verified, **do not open a blocking inline thread**
 
 - Style, formatting or naming comments without behavioral impact.
 - Speculation based on remembered GitHub Actions, CopilotKit, Mastra, Supabase or other provider semantics.
-- Duplicates of existing resolved/open threads, or bugs wholly outside the changed code.
+- Duplicates of existing resolved/open threads, or pre-existing bugs **neither introduced nor exposed by the PR**. Report a defect in unchanged code when the PR changes a caller, input, contract or execution path that makes that defect reachable.
 - A generic "add tests" request without a specific material failure path.
 - Demands for Phase B apartment eligibility, ownership/paperwork, photo-rights, publishing or booking approval before the owner explicitly starts public-launch certification.
 - A statement that review, passing unit tests, PR merge or deployment alone certifies the full user journey.

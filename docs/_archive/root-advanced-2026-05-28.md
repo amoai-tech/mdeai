@@ -17,9 +17,9 @@ legacy_deep_archive: docs/advanced.md
 >
 > **What this is not:** Phase 1 exit work. If a task mentions OpenClaw prod, Hermes hot-path, contests, sponsor marketplace, or “12 agents” for MVP — it is **mis-scoped**. Move it here or to [`tasks/advanced/`](./tasks/advanced/) when specced.
 
-**Execution order (task IDs):** [`plan.md`](./plan.md) Tiers 3–10 · [`tasks/INDEX.md`](./tasks/INDEX.md) · ADV table in [`tasks/MVP-REQUIRED.md`](./tasks/MVP-REQUIRED.md)
+**Execution order (task IDs):** [`plan.md`](../../plan.md) Tiers 3–10 · [`tasks/INDEX.md`](./tasks/INDEX.md) · ADV table in [`tasks/MVP-REQUIRED.md`](./tasks/MVP-REQUIRED.md)
 
-**Read first:** [`mvp.md`](./mvp.md) · [`roadmap.md`](./roadmap.md) · [`plan/unified-execution-review.md`](./plan/unified-execution-review.md)
+**Read first:** [`mvp.md`](../../mvp.md) · [`roadmap.md`](../../roadmap.md) · [`plan/unified-execution-review.md`](./plan/unified-execution-review.md)
 
 ---
 
@@ -75,7 +75,7 @@ Medellín’s **structured AI concierge** — one chat, one map, one approval ga
 
 ## 2. Post-MVP (weeks 11–18) — “moat without blast radius”
 
-**Unfreeze gate:** MVP exit checklist in [`roadmap.md`](./roadmap.md) all green on staging.
+**Unfreeze gate:** MVP exit checklist in [`roadmap.md`](../../roadmap.md) all green on staging.
 
 ### 2.1 Maps & geo ([`plan/maps/maps-prd.md`](./plan/maps/maps-prd.md))
 
@@ -248,7 +248,7 @@ Canon: [`plan/events/events-prd.md`](./plan/events/events-prd.md) § Advanced �
 
 | Gate ID | Requirement | Unlocks |
 |---------|-------------|---------|
-| G-MVP | [`mvp.md`](./mvp.md) four outcomes + `npm run floor` | Post-MVP §2 |
+| G-MVP | [`mvp.md`](../../mvp.md) four outcomes + `npm run floor` | Post-MVP §2 |
 | G-SOAK | 30d prod, 0 P0, attribution on all grounded UI | Advanced §3 |
 | G-EVENTS | ≥10 paid events | Dynamic pricing, sponsors |
 | G-RENTALS | ≥1 paid booking + 25 listings | Stripe rental scale, scrape ingest |
@@ -309,8 +309,8 @@ Use **RICE** when reprioritizing ([`mde-roadmap`](./.claude/skills/mde-roadmap/u
 
 | Need | Where |
 |------|-------|
-| **Execution order now** | [`roadmap.md`](./roadmap.md) |
-| **MVP scope** | [`mvp.md`](./mvp.md) |
+| **Execution order now** | [`roadmap.md`](../../roadmap.md) |
+| **MVP scope** | [`mvp.md`](../../mvp.md) |
 | **Maps advanced** | [`plan/maps/maps-prd.md`](./plan/maps/maps-prd.md) §5, §7.3–7.4 |
 | **RE advanced** | [`plan/real-estate/draft/roadmap.md`](./plan/real-estate/draft/roadmap.md) P4–P5 |
 | **Events advanced** | [`plan/events/events-prd.md`](./plan/events/events-prd.md) §2 Post-MVP / Advanced |
@@ -328,4 +328,4 @@ Use **RICE** when reprioritizing ([`mde-roadmap`](./.claude/skills/mde-roadmap/u
 
 ---
 
-*Update this file when a Post-MVP or Advanced initiative ships — or when [`roadmap.md`](./roadmap.md) is reprioritized.*
+*Update this file when a Post-MVP or Advanced initiative ships — or when [`roadmap.md`](../../roadmap.md) is reprioritized.*
