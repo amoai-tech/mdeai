@@ -364,6 +364,83 @@ function MdeRentalCard({ listingId }: { listingId: string }) {
 }
 
 /**
+ * ID-only actions under the official comparison Table. The existing results
+ * supply the listing; the established detail sheet and viewing modal still
+ * own the user journey. No second booking or detail implementation.
+ */
+function MdeComparisonAction({ listingId }: { listingId: string }) {
+  const row = useRentalRow(listingId);
+  const map = useOptionalMapContext();
+  const rentalUi = useOptionalRentalUi();
+  if (!row) {
+    // A saved comparison may outlive the authorized search row. Show an honest
+    // non-actionable state rather than silently losing an apartment or exposing
+    // any stale button. Never trust a rendered listing ID as permission.
+    return (
+      <p role="status" data-testid="rental-comparison-unavailable" className="text-sm text-muted-foreground">
+        This apartment is no longer in the current authorized results.
+      </p>
+    );
+  }
+
+  const detailRental = toDetailRental(row);
+  const safeNeighborhood = row.neighborhood?.trim() || "Not recorded";
+  const safeTitle = row.title?.trim() || "Listing";
+  const pinId = `rental-${listingId}`;
+  const hasPin = map?.pins.some((pin) => pin.id === pinId) ?? false;
+  const canOpenDetail = !(row.tags?.includes("external-source") && !detailRental);
+  const canRequest = canOpenNativeViewingReview(row, Boolean(rentalUi?.openScheduleViewing));
+
+  const openDetails = () => {
+    if (rentalUi?.openVenueDetail) {
+      if (hasPin) map?.panToPin?.(pinId);
+      rentalUi.openVenueDetail({
+        kind: "rental",
+        listingId: row.id,
+        pinId,
+        pinned: hasPin,
+        rental: detailRental ?? undefined,
+        title: safeTitle,
+        neighborhood: safeNeighborhood,
+        nightlyPrice: row.nightly_price ?? undefined,
+        bedrooms: row.bedrooms ?? undefined,
+        photoUrl: row.photo_url ?? row.image_url,
+        amenities: row.amenities ?? [],
+        availability: row.availability ?? undefined,
+        hostName: row.host_name ?? undefined,
+        canScheduleViewing: canRequest,
+      });
+    } else {
+      window.open(rentalDetailHref(listingId), "_blank", "noopener,noreferrer");
+    }
+  };
+
+  return (
+    <div data-listing-id={listingId} className="flex min-w-0 flex-wrap items-center gap-2 py-1 text-sm">
+      <span className="min-w-0 max-w-48 truncate font-medium" title={safeTitle}>{safeTitle}</span>
+      {canOpenDetail ? (
+        <Button type="button" size="sm" variant="outline" className="min-h-11"
+          onClick={openDetails}>Details</Button>
+      ) : null}
+      {canRequest ? (
+        <Button type="button" size="sm" variant="outline" className="min-h-11"
+          onClick={() => rentalUi?.openScheduleViewing?.({ listingId, title: safeTitle, neighborhood: safeNeighborhood })}>
+          Schedule viewing
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
+function MdeRentalComparisonActions({ listingIds }: { listingIds: string[] }) {
+  return (
+    <div data-testid="rental-comparison-actions" className="flex flex-col gap-1" aria-label="Apartment actions">
+      {listingIds.map((id) => <MdeComparisonAction key={id} listingId={id} />)}
+    </div>
+  );
+}
+
+/**
  * SAN-1658 — editable viewing proposal. The listing facts come from the current
  * authorized result (never from props); date/time are only a proposal. Continue
  * hands the renter's latest values to the existing ScheduleViewingModal, which
@@ -656,6 +733,11 @@ export const mdeUI = createGenerativeUI({
       // harmless shape so a valid card is not rejected; this component renders
       // no child content of its own.
       slots: { children: "multiple" },
+    },
+    RentalComparisonActions: {
+      component: MdeRentalComparisonActions,
+      description: "Link already-verified rental comparison IDs to existing Details and Schedule Viewing actions. Never provide listing facts in props.",
+      props: z.object({ listingIds: z.array(z.string().min(1)).min(2).max(5) }),
     },
     EventCard: {
       component: MdeEventCard,

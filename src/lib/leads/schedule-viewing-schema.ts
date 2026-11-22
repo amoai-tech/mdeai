@@ -1,5 +1,8 @@
 import { z } from "zod";
-import { isFutureInstant, resolvePreferredAtInstant } from "./schedule-viewing-time";
+import {
+  isFutureInstant,
+  resolvePreferredAtInstant,
+} from "./schedule-viewing-time";
 
 /**
  * SAN-1203 — the single request contract for a rental viewing request.
@@ -46,12 +49,14 @@ export type ScheduleViewingInput = z.infer<typeof scheduleViewingInputSchema>;
 export const scheduleViewingErrorCodes = [
   "VALIDATION_ERROR",
   "LISTING_UNAVAILABLE",
+  "LISTING_UNRESOLVABLE",
   "RATE_LIMITED",
   "SHOWING_NOT_COMMITTED",
   "UPSTREAM_ERROR",
 ] as const;
 
-export type ScheduleViewingErrorCode = (typeof scheduleViewingErrorCodes)[number];
+export type ScheduleViewingErrorCode =
+  (typeof scheduleViewingErrorCodes)[number];
 
 /**
  * The `message` a renter sees for each failure code — the only prose the API may return.
@@ -67,8 +72,14 @@ export const SCHEDULE_VIEWING_ERROR_MESSAGES = {
   // "check your details" sends them round the same loop forever.
   LISTING_UNAVAILABLE:
     "This home isn't accepting viewing requests right now. Pick another apartment from the results.",
-  RATE_LIMITED: "Too many viewing requests — please wait a minute and try again.",
-  SHOWING_NOT_COMMITTED: "We couldn't confirm your viewing was saved. Please try again.",
+  // SAN-1059: the reference matches no listing at all. Retrying it can never succeed, so the copy
+  // points at the only action that helps: refresh the results.
+  LISTING_UNRESOLVABLE:
+    "This listing is no longer available. Refresh the results to see what's still here.",
+  RATE_LIMITED:
+    "Too many viewing requests — please wait a minute and try again.",
+  SHOWING_NOT_COMMITTED:
+    "We couldn't confirm your viewing was saved. Please try again.",
   UPSTREAM_ERROR: "We couldn't send your viewing request. Please try again.",
 } as const satisfies Record<ScheduleViewingErrorCode, string>;
 

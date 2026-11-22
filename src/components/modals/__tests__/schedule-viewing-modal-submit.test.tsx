@@ -204,6 +204,39 @@ describe("ScheduleViewingModal submit behaviour (SAN-1203)", () => {
 
   });
 
+  it("offers a read-only refresh, not a write-retry, when the listing is gone", async () => {
+    // SAN-1059: retrying a reference that matches no apartment re-sends the same request and
+    // fails identically, so this state must not put a write button in front of the renter.
+    const { ScheduleViewingError: MockedError } = await import("@/lib/leads/submit-schedule-viewing");
+    const gone = new (MockedError as unknown as new () => Error & {
+      code: string;
+      message: string;
+    })();
+    gone.code = "LISTING_UNRESOLVABLE";
+    gone.message = "This listing is no longer available. Refresh the results to see what's still here.";
+    vi.mocked(submitScheduleViewing).mockRejectedValue(gone);
+
+    window.history.replaceState({}, "", "/rentals?beds=2&area=Laureles");
+    await renderModalAndFill();
+    await act(() => {
+      submitForm();
+      return Promise.resolve();
+    });
+
+    expect(container.querySelector('[data-testid="schedule-viewing-recovery-stale"]')).not.toBeNull();
+    const refresh = container.querySelector('[data-testid="schedule-viewing-refresh-results"]') as HTMLAnchorElement;
+    expect(refresh.tagName).toBe("A");
+    expect(refresh.getAttribute("href")).toBe("/rentals?beds=2&area=Laureles");
+    expect(useRentalUi().closeScheduleViewing).not.toHaveBeenCalled();
+    expect(container.querySelector('[data-testid="schedule-viewing-submit"]')).toBeNull();
+    expect(container.querySelector('[data-testid="schedule-viewing-edit"]')).toBeNull();
+    // No write action that can never succeed.
+    expect(container.querySelector('[data-testid="schedule-viewing-retry"]')).toBeNull();
+    // And nothing the renter typed is lost.
+    expect(container.textContent).toContain("camila@example.com");
+    window.history.replaceState({}, "", "/");
+  });
+
   it("keeps Retry visible and disabled while the resubmission is pending", async () => {
     const { ScheduleViewingError: MockedError } = await import("@/lib/leads/submit-schedule-viewing");
     const unavailable = new (MockedError as unknown as new () => Error & { code: string })();

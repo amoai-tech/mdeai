@@ -24,7 +24,10 @@ function failure(
   status: number,
   message: string = SCHEDULE_VIEWING_ERROR_MESSAGES[code],
 ) {
-  return NextResponse.json({ success: false, error: { code, message } }, { status });
+  return NextResponse.json(
+    { success: false, error: { code, message } },
+    { status },
+  );
 }
 
 /** Upstream technical detail is diagnostic, so it goes to the server log, not the response. */
@@ -34,10 +37,17 @@ function logUpstreamFailure(
     status: number;
     code?: string;
     message?: string;
-    listing?: { ref?: string; shape: "uuid" | "slug" | "other"; length: number };
+    listing?: {
+      ref?: string;
+      shape: "uuid" | "slug" | "other";
+      length: number;
+    };
   },
 ) {
-  console.error("[api/leads/schedule-viewing] upstream failure", { outcome, ...detail });
+  console.error("[api/leads/schedule-viewing] upstream failure", {
+    outcome,
+    ...detail,
+  });
 }
 
 /**
@@ -75,16 +85,26 @@ function describeListingRef(listingId: string): {
   length: number;
 } {
   const value = listingId.trim();
-  const shape = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
-    ? "uuid"
-    : isSlugShape(value)
-      ? "slug"
-      : "other";
+  const shape =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      value,
+    )
+      ? "uuid"
+      : isSlugShape(value)
+        ? "slug"
+        : "other";
 
   const key = process.env.MDE_LOG_FINGERPRINT_KEY?.trim();
   return {
     // No key → no fingerprint. Never fall back to an unkeyed digest of a public identifier.
-    ...(key ? { ref: createHmac("sha256", key).update(value).digest("hex").slice(0, 12) } : {}),
+    ...(key
+      ? {
+          ref: createHmac("sha256", key)
+            .update(value)
+            .digest("hex")
+            .slice(0, 12),
+        }
+      : {}),
     shape,
     length: value.length,
   };
@@ -207,6 +227,18 @@ export async function POST(req: Request) {
     return failure("RATE_LIMITED", 429);
   }
 
+  if (!edgeRes.ok && edgeJson.error?.code === "LISTING_UNRESOLVABLE") {
+    logUpstreamFailure("listing_unresolvable", {
+      status: edgeRes.status,
+      code: edgeJson.error.code,
+      message: edgeJson.error.message,
+      // Same keyed correlation as above: enough to find the apartment, never the identifier.
+      listing: describeListingRef(listingId),
+    });
+    // 410, not 409: the resource is gone for good, so a retry is not the answer.
+    return failure("LISTING_UNRESOLVABLE", 410);
+  }
+
   if (!edgeRes.ok && edgeJson.error?.code === "LISTING_UNAVAILABLE") {
     logUpstreamFailure("listing_unavailable", {
       status: edgeRes.status,
@@ -237,15 +269,21 @@ export async function POST(req: Request) {
   // SAN-1203 — a request counts only when BOTH records committed. A lead-only
   // response is a server failure, never a partial success.
   if (!edgeRes.ok || !edgeJson.success || !leadId || !showingId) {
-    logUpstreamFailure(leadId && !showingId ? "showing_not_committed" : "upstream_error", {
-      status: edgeRes.status,
-      code: edgeJson.error?.code,
-      message: edgeJson.error?.message,
-    });
+    logUpstreamFailure(
+      leadId && !showingId ? "showing_not_committed" : "upstream_error",
+      {
+        status: edgeRes.status,
+        code: edgeJson.error?.code,
+        message: edgeJson.error?.message,
+      },
+    );
     if (leadId && !showingId) {
       return failure("SHOWING_NOT_COMMITTED", 502);
     }
-    return failure("UPSTREAM_ERROR", edgeRes.status >= 400 ? edgeRes.status : 502);
+    return failure(
+      "UPSTREAM_ERROR",
+      edgeRes.status >= 400 ? edgeRes.status : 502,
+    );
   }
 
   return NextResponse.json({

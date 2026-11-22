@@ -15,6 +15,21 @@ test("accepts a safe 409 response for the deliberately nonexistent listing", () 
   assert.equal(safeViewingRejection(409, unavailable), true);
 });
 
+const gone = {
+  success: false,
+  error: {
+    code: "LISTING_UNRESOLVABLE",
+    message: "This listing is no longer available. Refresh the results to see what's still here.",
+  },
+};
+
+test("accepts only the safe 410 for a disappeared apartment", () => {
+  assert.equal(safeViewingRejection(410, gone), true);
+  assert.equal(safeViewingRejection(410, { ...gone, error: { ...gone.error, detail: "private" } }), false);
+  assert.equal(safeViewingRejection(409, gone), false);
+  assert.equal(safeViewingRejection(410, { ...gone, error: { ...gone.error, message: "db error" } }), false);
+});
+
 test("rejects a 409 with database information in an extra response field", () => {
   // The error code and user-facing message are otherwise exactly the safe response.
   assert.equal(safeViewingRejection(409, {

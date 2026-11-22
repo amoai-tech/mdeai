@@ -153,6 +153,31 @@ Deno.test("createScheduleViewingBridge — classifies the stable P1287 without r
   if (!result.ok) assertEquals(result.code, "LISTING_UNAVAILABLE");
 });
 
+// SQLSTATE is authoritative; preserve the temporary pre-P1288 text fallback too.
+for (const scenario of [
+  { label: "P1288", code: "P1288", message: "unrelated SQL prose" },
+  { label: "legacy P0001", code: "P0001", message: "p1_schedule_tour_atomic: listing not found" },
+]) {
+  Deno.test(`createScheduleViewingBridge — maps ${scenario.label} to gone listing`, async () => {
+    const client = {
+      rpc: () => Promise.resolve({
+        data: null,
+        error: { code: scenario.code, message: scenario.message },
+      }),
+    } as unknown as Parameters<typeof createScheduleViewingBridge>[0];
+
+    const result = await createScheduleViewingBridge(client, {
+      listingId: "missing-listing",
+      preferredAt: "2026-10-15T14:00:00.000Z",
+      idempotencyKey: "sv-test-1288-123",
+      email: "camila@example.com",
+    });
+
+    assertEquals(result.ok, false);
+    if (!result.ok) assertEquals(result.code, "LISTING_UNRESOLVABLE");
+  });
+}
+
 Deno.test("createScheduleViewingBridge — resolves a differently-cased listing id", async () => {
   const calls: Array<Record<string, unknown>> = [];
   const client = {

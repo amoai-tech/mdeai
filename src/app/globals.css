@@ -380,3 +380,19 @@ html {
     transform: none !important;
   }
 }
+
+
+/* SAN-1681: CopilotKit's standard Table wrapper has no overflow-x of its own.
+   Side-by-side rental comparisons may have six columns; keep the chat viewport
+   and 390px mobile layout intact without replacing the official renderer. */
+.a2ui-std-table-wrap {
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.a2ui-std-table-wrap > .a2ui-std-table {
+  min-width: max-content;
+}

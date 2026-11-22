@@ -1,7 +1,13 @@
 # Viewing-request `LISTING_UNAVAILABLE` — correlating a log entry to an apartment
 
-When a renter asks to schedule a viewing and the atomic RPC cannot resolve the listing, the API
-responds with safe copy and the server logs:
+When a renter asks to schedule a viewing, the API returns safe renter copy. An **unknown
+or private** reference returns `LISTING_UNRESOLVABLE` (HTTP 410, outcome
+`listing_unresolvable`) and offers a read-only **Refresh results** link. A visible existing
+listing rejected by the current requestability policy remains `LISTING_UNAVAILABLE`
+(HTTP 409, outcome `listing_unavailable`). Both log only the keyed fingerprint,
+shape and length; neither logs raw apartment IDs or slugs in the new diagnostic.
+
+Example server log:
 
 ```
 [api/leads/schedule-viewing] upstream failure {
@@ -85,3 +91,12 @@ match with its status. It is read-only. Exit codes: `0` matched, `2` no match, `
 
 - Route: `src/app/api/leads/schedule-viewing/route.ts` (`describeListingRef`)
 - RPC: `public.p1_schedule_tour_atomic` — resolves a UUID or an **exact** slug
+
+## Deployment order for the error-code split
+
+Deploy the updated Supabase Edge bridge (recognizes P1288) **before** applying the
+new `p1_schedule_tour_atomic` migration, then deploy the Next.js 410/recovery UI.
+During version skew, the old SQL can still report a gone row as P1287/409, and
+an old bridge can report a new P1288 as a generic error. Do not claim 410 live
+until the **bridge, migration and application** have been verified together.
+Only a restricted key owner can correlate production fingerprints.

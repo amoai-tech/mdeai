@@ -5,19 +5,17 @@ import { useRentalFastPath } from "@/components/chat/rental-fast-path-context";
 import { normalizeToolEnvelope } from "@/lib/normalize-tool-envelope";
 import { isRentalA2UIId } from "@/lib/rentals/a2ui-id";
 import { RENTAL_A2UI_CONTEXT_DESCRIPTION, RENTAL_HINT_MAX, RENTAL_RESULT_COUNT_CONTEXT_DESCRIPTION } from "@/lib/rentals/a2ui-context";
-import type { ConciergeWorkingMemory } from "@/lib/types";
-
-type RentalRow = NonNullable<ConciergeWorkingMemory["lastRentalResults"]>[number];
+type RentalIdRow = { id: string };
 
 /** IDs only: no untrusted titles, prices or instructions enter the prompt. */
-export function rentalA2UIContextValue(rows: readonly RentalRow[] | undefined): string {
+export function rentalA2UIContextValue<T extends RentalIdRow>(rows: readonly T[] | undefined): string {
   return JSON.stringify(
     (rows ?? []).slice(0, RENTAL_HINT_MAX).map((row) => row.id).filter(isRentalA2UIId),
   );
 }
 
 /** Keep the original ID array contract while publishing its full result count separately. */
-export function rentalA2UIRenderedCountValue(rows: readonly RentalRow[] | undefined): string {
+export function rentalA2UIRenderedCountValue(rows: readonly RentalIdRow[] | undefined): string {
   return JSON.stringify(rows?.length ?? null);
 }
 
@@ -36,11 +34,19 @@ export function rentalHintSource(
   return toolResult ?? toolResults?.[0] ?? null;
 }
 
-export function RentalA2UIContext() {
+export function RentalA2UIContext({ visibleRows }: { visibleRows?: readonly RentalIdRow[] } = {}) {
   const { toolResult, toolResults } = useRentalFastPath();
   const latest = rentalHintSource(toolResult, toolResults);
   const envelopeRows = latest ? normalizeToolEnvelope(latest).results : undefined;
-  const rows = (Array.isArray(envelopeRows) ? envelopeRows : undefined) as RentalRow[] | undefined;
+  // On Rentals browse the actual visible cards are authoritative for ordinal
+  // references. The fast-path envelope can be older/differently ordered during
+  // streaming or hydration, making "first two" resolve to cards 2 and 3.
+  // Other consumers continue using the existing fast-path fallback.
+  const rows = visibleRows ?? (Array.isArray(envelopeRows)
+    ? envelopeRows.filter((row): row is RentalIdRow =>
+        row !== null && typeof row === "object" && !Array.isArray(row) &&
+        "id" in row && typeof row.id === "string" && isRentalA2UIId(row.id))
+    : undefined);
   useAgentContext({
     description: RENTAL_A2UI_CONTEXT_DESCRIPTION,
     value: rentalA2UIContextValue(rows),
