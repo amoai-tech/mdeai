@@ -336,3 +336,39 @@ flowchart TD
 **Evidence boundary:** The fresh audit did **not** execute every tool, send new live event/host/ticket transactions, benchmark p95/provider cost, force a two-process memory conflict, or certify production ticket payment and recovery. Those remain in the scoped roadmap above. Some tasks are Done in Linear but this is neither a reason to re-open them reflexively nor proof of untested adjacent journeys.
 
 **Next immediate action:** Use **existing `SAN-755`** and open #924 to prove and, if necessary, fix the exact failing rental listing→viewing identity path. Then use **existing `SAN-305` / `SAN-754`** to prove venue booking and host publishing under real persisted QA transactions. After those, optimize advanced Mastra features only when a before/after measurement demonstrates value.
+### Independent read-only verification addendum — 2026-11-22
+
+This is an **independent check on the same exact clean-main commit** `0c3daf59afe8`, not a fresh certification of every production transaction. It supplements, rather than replaces, the original audit evidence. An existing clean detached worktree was used so the owner's modified local checkout was not changed.
+
+| Check | Current direct observation | Meaning / action |
+|---|---|---|
+| `npm run check:mastra` | **PASS**, schema contract matched Core `1.84.0` and PG adapter `1.37.0` | Runtime registry/DDL consistency established; local LibSQL warning is expected development fallback |
+| `npm run test:mastra -- --reporter=dot` | **1,203 passed, 46 skipped, 0 failed**, 120 passed files; exit 0 | 100% of **executed** Mastra tests passed. Neither skipped cases nor live end-to-end journeys count as successes |
+| Studio `GET /api/agents` | **9** registered agents | Confirms runtime registration, not that all nine are used by Concierge |
+| Studio `GET /api/tools` | **21** registered tools | Different from the **15** Concierge-selected tools; do not conflate global and agent-specific catalogs |
+| Studio `GET /api/workflows` | **6** entries: four MDE workflows plus two agent processor workflows | Studio listing includes internal processor entries. MDE's explicitly registered domain workflow count remains four |
+| Studio `GET /api/processors` | **11** registered processors | Registration proof; no claim of eleven distinct model calls or processing-cost measurement |
+| Studio `GET /api/workspaces` | **1** workspace, `status: pending`, `readOnly: true`, `hasSkills: true` | Configured but operational readiness **not proven**; investigate only if a user-facing workspace operation fails |
+| Studio `GET /api/mcps` | HTTP **404** | UI page existing does not imply a runtime MCP server was configured. Optional feature, not a defect |
+| Live Supabase catalog (read-only SQL) | **36/36** `public.mastra_*` tables have RLS **and** FORCE RLS, **0** direct `SELECT` grants to `anon` or `authenticated` | Strong table-permission baseline; an actual two-user negative test remains separate proof |
+| Mastra primary keys | **35/36** tables have a PK; `mastra_workflow_snapshot` does not | Legacy snapshot table requires adapter/migration-context review before calling this a defect or altering live DDL |
+
+The live Supabase security advisor also reports warnings **outside** the Mastra table cluster, including publicly callable `SECURITY DEFINER` functions. Those require function-by-function intent and authorization review in the **existing Supabase security track**; advisor warnings alone are not evidence of exploitable defects. Do not change service grants, geospatial extension tables or database schema as a side effect of this Mastra documentation PR.
+
+**Other non-blocking feedback:** Vitest reports a forward-compatibility warning about Vite native configuration loading. The full Mastra run still exited 0. No runtime code, payments, permissions, data or model settings were changed.
+
+**Evidence-maturity scores (engineering estimates /100, not observed customer success rates):**
+
+| Area | Estimated evidence maturity | Interpretation |
+|---|---:|---|
+| Version pins, registration and schema consistency | **95** | Independently checked clean-main runtime, Studio and contract |
+| Mastra storage table access controls | **92** | Read-only live grants/RLS verified, no fresh user-A/user-B auth test in this pass |
+| Agent/tool unit behavior | **88** | Broad passing suite; not every live provider/tool failure mode exercised |
+| CopilotKit-to-Mastra UI/actions | **76** | v2 renderer/frontend-tool wiring present; new transactional journey proof pending |
+| Durable workflow resume and retries | **72** | Workflow registered; exact saved review and cross-process replay unproven |
+| AI cost/quality observability | **60** | Scorers and usage wrappers registered; no sample-based latency/cost report |
+| Full rental + event/ticket transaction success rate | **Not measurable** | No defensible denominator of fresh end-to-end attempts in this review |
+
+**Scoring rubric:** 90–100 = current direct runtime and core security proof; 75–89 = substantial unit/source proof but real actions unverified; 60–74 = implemented but key integration/recovery evidence absent. These are review-confidence estimates, **not percent-correct claims**. The only measured execution rate here is 1,203/1,203 executed Mastra unit cases passing.
+
+**Fastest next move:** retain the existing `SAN-755` rental journey / #924 diagnosis and `SAN-305` / `SAN-754` venue-event action proof. Run one known-identity end-to-end transaction with a retry and wrong-user negative case, then correlate the saved DB receipt. Only after that evidence should the Mastra platform be scored as transaction-ready. Official recovery pattern: https://mastra.ai/docs/workflows/suspend-and-resume and https://mastra.ai/reference/workflows/workflow-state-reader; installed API exports and current tests take precedence over upstream `main`.
