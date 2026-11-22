@@ -2,7 +2,7 @@
 
 **Date:** 2026-11-22 · **Phase:** A / PRELAUNCH DEVELOPMENT  
 **Baseline:** clean GitHub main 0c3daf59afe84b0a8d8423cecb019b05ceee15a5 (reverify on implementation day).  
-**Audit basis:** [02 — Verified Mastra Platform Audit](./02-MDE-Mastra-Platform-Audit-2026-11-22.md).  
+**Audit basis:** [02 — Verified Mastra Platform Audit](./02-MDE-Mastra-Platform-Audit-2026-11-22.md) **and** [03 — Studio Live Audit (three event-search P1s)](./03-MDE-Mastra-Studio-Live-Audit-2026-11-22.md).
 **Linear parent:** [SAN-1299 · EPIC · Make MDE AI Chats, Memory, and Workflows Reliable in Production](https://linear.app/amo100/issue/SAN-1299).  
 **Primary rule:** Reuse → configure → adapt a supported upstream pattern → minimal change → focused test → live transaction receipt. No duplicate agent/search/tool/booking/memory engine.
 
@@ -132,7 +132,7 @@ flowchart LR
 ### 1.1 Pin the correct source and protect ongoing work — PRIMARY STEP
 **Outcome:** Implementation is based on main, not the dirty local checkout, old docs, or an unmerged PR.
 
-**Files:** /home/sk/mdeai/AGENTS.md; .claude/skills/{linear-task,plan,implement,mastra,supabase,testing,efficient}/SKILL.md; package.json; src/mastra/index.ts; docs/mastra/plan/02-MDE-Mastra-Platform-Audit-2026-11-22.md.
+**Files:** AGENTS.md; .claude/skills/{linear-task,plan,implement,mastra,supabase,testing,efficient}/SKILL.md; package.json; src/mastra/index.ts; docs/mastra/plan/02-MDE-Mastra-Platform-Audit-2026-11-22.md.
 **Do:** Read the files and relevant task-specific instructions; create/use a clean worktree; verify branch SHA and check GitHub PR #925 and Linear owner before changes. Run npm run check:mastra and npm run test:mastra.
 **Official reference → adaptation → verification (step 1.1; follow in this order):**
 - **URL:** https://github.com/amoai-tech/mdeai/blob/main/.claude/skills/mermaid-diagrams/SKILL.md → **Exact upstream file/example:** .claude/skills/mermaid-diagrams/SKILL.md (diagram pass) → **REFERENCE ONLY** → **Exact destination:** `docs/mastra/plan/03-MDE-Mastra-Ordered-Execution-Plan.md` → **Verify:** render 12 Mermaid graphs in GitHub, then record clean main SHA.
@@ -162,6 +162,17 @@ flowchart LR
 **Checks:** - [ ] one owner per write - [ ] no invented success - [ ] existing schema and A2UI catalog reused.
 **Owner:** [SAN-1591 · MDE AI — Simplify CopilotKit + Mastra Integration Using Official Patterns](https://linear.app/amo100/issue/SAN-1591).
 
+### 1.5 Resolve established event-discovery P1 defects before AI optimization — SAN-125
+**Outcome:** Agent distinguishes unavailable backend from genuine zero events, ticket budgets are currency-correct, and Phase A development events are discoverable without new business gates.
+
+**Files:** `src/mastra/tools/search-events.ts`; `src/mastra/tools/__tests__/search-events-logic.test.ts` and `search-events-tier-hydration.test.ts`; `src/mastra/agents/event-agent.ts`; `src/components/copilot/search-tool-result-cards.tsx`; existing server visibility owners `src/lib/events/list-published-events.ts` and `src/lib/events/get-public-event.ts`. Verify intelligent search as well as the structured fallback.
+
+**Do:** (1) Replace the null-client/query-error “successful empty fallback” contract with a safe explicit `unavailable` state for the **agent** and all consumers. Keep Events cards' already-working fallback error display. (2) Replace unconditional `lte('ticket_price_min',maxPricePerTicket)` comparisons across currencies: accept an explicit budget currency, compare with matching source currency or a **verified** currency-aware USD equivalent, using real ticket-tier prices; mark incomparable prices unknown, never silently exclude them on raw COP/USD numbers or invent FX. (3) Remove publication/active *business* exclusion for authorized Phase A development in the canonical server-controlled event visibility owner, consistently across search, cards, Details and AI. Preserve actor authorization, honest development labels and Phase B as owner-triggered.
+
+**Acceptance cases:** USD $30 → USD $25 included and USD $40 excluded; COP 100,000 → COP 80,000 included and COP 120,000 excluded. USD budget vs COP event (and reverse): only compare when a valid exchange/normalized equivalent exists, otherwise mark incomparable, **not** an invented within-budget match. SQL 401/503 or missing client → **search unavailable** in agent reply; successful empty catalog → **no matching events**. Authorized inactive/draft development event → visible with honest status; other user's private records → denied. Run existing tests and authenticated/guest Events search at 390px.
+
+**Owner:** [SAN-125 · EVT-007 — eventDiscoveryWorkflow (Mastra)](https://linear.app/amo100/issue/SAN-125) (already exists). SAN-1701 covers cross-tool output receipts; event-domain tasks own their pages. These are **runtime follow-up acceptance criteria**, not claimed code fixes in this documentation-only PR.
+
 ## 2. Fix actual user journeys first (the fastest way to deliver value)
 
 **Phase 2 — ownership, failure and proof (planned behavior, not test evidence):**
@@ -185,10 +196,10 @@ flowchart TD
 ### 2.1 Rental search → Details → one saved viewing — PRIMARY STEP
 **Outcome:** A test renter sees genuine listings (including development records without business eligibility gates), opens Details, requests viewing and sees one lead+showing tied to the correct broker.
 
-**Files:** src/mastra/tools/search-rentals.ts; src/mastra/lib/rental-search-engine.ts; src/components/modals/schedule-viewing-modal.tsx; src/app/api/leads/schedule-viewing/route.ts; the **existing** p1_schedule_tour_atomic RPC and exact source migrations supabase/migrations/20260406120001_p1_schedule_tour_atomic.sql, supabase/migrations/20261026021125_san1502_phase_a_unrestricted_viewings.sql and supabase/migrations/20261102090000_san1059_viewing_error_contract.sql (check which definition is active before any edit); e2e/screens/SCREEN-008-schedule-viewing.spec.ts.
+**Files:** src/mastra/tools/search-rentals.ts; src/mastra/lib/rental-search-engine.ts; src/components/modals/schedule-viewing-modal.tsx; src/app/api/leads/schedule-viewing/route.ts; existing `p1_schedule_tour_atomic` RPC and **historical applied migrations (reference only)**: `supabase/migrations/20260406120001_p1_schedule_tour_atomic.sql`, `supabase/migrations/20261026021125_san1502_phase_a_unrestricted_viewings.sql`, `supabase/migrations/20261102090000_san1059_viewing_error_contract.sql`. If SQL/RPC must change, create **new timestamped `supabase/migrations/YYYYMMDDHHMMSS_<scope>.sql`**. Verify with `e2e/screens/SCREEN-008-schedule-viewing.spec.ts`.
 **Do:** Reproduce LISTING_UNAVAILABLE with truthful record identity; check open [PR #924](https://github.com/amoai-tech/mdeai/pull/924) diagnostics before making a minimal canonical identity fix; submit through the real UI/API; re-query lead, showing, broker; retry same intent; check User B cannot see private record. Never loosen authentication to remove business gates.
 **Official reference → adaptation → verification (step 2.1; follow in this order):**
-- **URL:** https://supabase.com/docs/guides/database/functions → **Exact upstream file/example:** Postgres Functions SQL/RPC examples → **REFERENCE ONLY; reuse canonical RPC** → **Exact destination:** `src/app/api/leads/schedule-viewing/route.ts; supabase/migrations/20260406120001_p1_schedule_tour_atomic.sql` → **Verify:** real lead+showing+correct broker; retry zero duplicates.
+- **URL:** https://supabase.com/docs/guides/database/functions → **Exact upstream file/example:** Postgres Functions SQL/RPC examples → **REFERENCE ONLY; reuse canonical RPC** → **Exact destination:** `src/app/api/leads/schedule-viewing/route.ts`; if an RPC SQL change is required, **new timestamped** `supabase/migrations/YYYYMMDDHHMMSS_<scope>.sql` (old April/October/November files read-only historical references) → **Verify:** real lead+showing+correct broker; retry zero duplicates.
 
 **Checks:** - [ ] search/cards/map/details share real listing ID - [ ] one saved lead AND showing - [ ] correct broker - [ ] retry adds zero duplicates - [ ] 390px usable - [ ] unknown availability/photo rights not invented.
 **Owners:** [SAN-755 · MDE QA — Prove AI Rental Search, Map, Details, and Viewing End-to-End](https://linear.app/amo100/issue/SAN-755); [SAN-1502 · MDE Rentals — Enable Full Development Journeys and Defer Real-World Approval Gates](https://linear.app/amo100/issue/SAN-1502).
@@ -602,9 +613,11 @@ flowchart LR
 
 **Checks:** - [ ] existing issue IDs reused - [ ] completed only with evidence - [ ] no speculative launch gates enabled.
 
-## Canonical Linear ownership — no duplicate tasks
+## Canonical Linear ownership — scoped work, no duplicate implementation
 
-**New, category-specific execution tickets:** [SAN-1700 · MDE Mastra Agents — Prove Nine Agent Roles, Routing and Tenant Safety](https://linear.app/amo100/issue/SAN-1700); [SAN-1701 · MDE Mastra Tools — Test Grounded Contracts and CopilotKit Action Receipts](https://linear.app/amo100/issue/SAN-1701); [SAN-1702 · MDE Mastra Workflows — Recover Venue Review Safely From Saved State](https://linear.app/amo100/issue/SAN-1702); [SAN-1703 · MDE Mastra MCP — Decide on One Safe External Integration Without Duplicating Services](https://linear.app/amo100/issue/SAN-1703); [SAN-1704 · MDE Mastra Memory — Prove Concurrent Thread Updates Across Two Server Processes](https://linear.app/amo100/issue/SAN-1704).
+**Five newly created, narrowly scoped execution tickets (not pre-existing issues):** [SAN-1700 · MDE Mastra Agents — Prove Nine Agent Roles, Routing and Tenant Safety](https://linear.app/amo100/issue/SAN-1700); [SAN-1701 · MDE Mastra Tools — Test Grounded Contracts and CopilotKit Action Receipts](https://linear.app/amo100/issue/SAN-1701); [SAN-1702 · MDE Mastra Workflows — Recover Venue Review Safely From Saved State](https://linear.app/amo100/issue/SAN-1702); [SAN-1703 · MDE Mastra MCP — Decide on One Safe External Integration Without Duplicating Services](https://linear.app/amo100/issue/SAN-1703); [SAN-1704 · MDE Mastra Memory — Prove Concurrent Thread Updates Across Two Server Processes](https://linear.app/amo100/issue/SAN-1704).
+
+**Explicit scope split:** SAN-1700 checks nine agents' real caller/tenant contracts; SAN-876 owns multi-turn topic switches, SAN-1255 previously completed role cleanup. SAN-1701 tests 21 tool outputs and action receipts; SAN-303 owns registry/render-name drift CI, SAN-396 owns source provenance enforcement. SAN-1702 tests current saved suspended-step discovery and exactly-once cold resume; SAN-501 already implements the workflow and SAN-881 already checked suspend durability. SAN-1704 runs a two-process set/clear concurrency regression *under* parent SAN-1299, without another memory store. SAN-1703 is only a conditional MCP GO/NO-GO decision. Do not reimplement existing task owners.
 
 **Reused existing owners:** SAN-755 / SAN-1502 (rental truth and viewing); SAN-305 (once-only venue request); SAN-754 / SAN-675 (host + ticket); SAN-396 (source verification); SAN-303 (tool/UI registry); SAN-1591 (CopilotKit-Mastra bridge); SAN-125 (event discovery); SAN-876 (routing); SAN-1309 (cross-system tests); SAN-856 / SAN-1003 (performance); SAN-1395 (answer quality); SAN-1245 (failure handling). Existing SAN-501, SAN-881, SAN-1255 and SAN-1698 are Done for their **original** scope—do not reopen/reimplement those just to inflate a roadmap.
 
