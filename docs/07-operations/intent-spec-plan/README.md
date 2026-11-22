@@ -1,6 +1,6 @@
 # Intent → specification → implementation plan (MDE AI)
 
-**Purpose:** give agents a small, durable context chain for complicated MDE work. This supplements [the existing agent collaboration plan](../agent-workflow-plan.md), not a new tracker or agent runtime.
+**Purpose:** give agents a small, durable context chain for complicated MDE work. Root [spec.md](../../../spec.md) defines the shared acceptance contract, and root [plan.md](../../../plan.md) is the current reusable implementation/CopilotKit component-first playbook. The task-local templates below are optional for substantial handoffs; none is a second tracker, runtime or development approval gate. This supplements [the existing agent collaboration plan](../agent-workflow-plan.md).
 
 ## Start here
 
@@ -16,6 +16,7 @@
 | Source | Owner; not a duplicate of... |
 | --- | --- |
 | `AGENTS.md` | Invariants, Phase A development policy, security, skill routing |
+| Root `spec.md` / `plan.md` / `REVIEW.md` | Shared acceptance contract / execution playbook / review evidence rules; not per-issue live status |
 | `CLAUDE.md` | Claude-only adapter to shared instructions |
 | Linear issue | Exact title, status, priority, dependencies, current acceptance and progress |
 | `prd.md` / `roadmap.md` / `mvp.md` | Product requirements / strategy / public-launch definition |

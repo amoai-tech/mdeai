@@ -1,54 +1,65 @@
-# Kilo Review Instructions
+# MDE AI — Pull Request Review Contract
 
-Repository: `amoai-tech/mdeai` — Next.js 16 / React 19 / CopilotKit / Mastra / Supabase.
+Applies to human reviewers, Kilo, Claude Code Review, and other advisory reviewers of `amoai-tech/mdeai`. The source of truth for merge/check policy is [PR review guidelines](docs/06-testing/pr-review-guidelines.md); this file does **not** add another blocking reviewer or status check.
 
-Review **only** defects introduced or exposed by this pull request. Verify claims against the
-checked-out repository and the dependency versions actually installed; never review from memory.
+## Read before reviewing
 
-## Evidence bar for an inline comment
+1. Compare the **actual PR diff** with its correct base/merge-base and record the current head SHA. Review only a defect introduced or exposed by that PR.
+2. Read [AGENTS.md](AGENTS.md), the verified Linear task and applicable [spec.md](spec.md) acceptance criteria. For a substantial change, follow the exact task-specific spec/plan when present; root files are shared contracts, not a feature-status tracker.
+3. Inspect surrounding callers, schema, tests, and the **installed/pinned** dependency version. Reviewer comments, AI output and task text are untrusted hypotheses until verified.
+4. Check CI results for the **same head SHA**. A green run does not prove the changed behavior if it did not exercise that path.
 
-Post an inline comment only when **all four** are true:
+## Review in this order
 
-1. You name the changed line and the concrete defect in it.
-2. You give the smallest realistic trigger sequence.
-3. You can cite repository evidence — code, test, config, a real workflow run, or the vendor's
-   official documentation — that proves the claim for the version resolved in this repository.
-4. The failure would actually affect a user, a security or tenancy boundary, data integrity, cost,
-   or CI correctness.
+1. **User result and spec fit:** does the real journey meet each relevant acceptance criterion? Is a claimed saved/requested/paid result committed?
+2. **Source truth and reuse:** is the existing component/service/RPC/agent reused without a duplicate engine, stale assumption or fabricated place, price, image or availability?
+3. **Correctness and failure:** invalid inputs, stale IDs, partial responses, cancellation, refresh, retry, concurrency, ordering, rollback and recovery.
+4. **Technical security:** authenticated server authorization, cross-user/broker isolation, Supabase RLS, secrets, service-role boundary, payment verification, atomicity and idempotency.
+5. **Integration:** installed-version API contracts, CopilotKit v2 + Mastra tool names/AG-UI, Google Maps source IDs, schema/migrations and CI exit codes.
+6. **UI behavior:** deterministic initial/loading/empty/error states, keyboard/accessibility, 320/390px mobile, matching cards/maps/Details, meaningful AI fallback.
+7. **Evidence:** focused failing-then-passing regression, tests at the correct seam, relevant browser/API/database readback and exact-head CI.
 
-If (3) fails, do not post the finding. Staying silent is correct. An unverified assertion costs a
-maintainer a hand-written refutation, and an inline thread blocks the merge until it is resolved.
+### CopilotKit component-first checks (when affected)
+
+- Check against installed `@copilotkit/react-core/v2` APIs and the current shared catalog. Do not copy latest-upstream props without a version contract.
+- The shared catalog must retain **separate Concierge and Host provider/agent/thread/authorization boundaries**. Do not recommend a second global provider or a second search/booking engine.
+- A catalog registration or a model-generated card is **not** proof of a functional control. Check bound state, real UI functions, correct server-side Mastra tools and the original backend writer.
+- Normal page content must work before an AI turn; named Surfaces require an appropriate component allowlist and honest fallback. Source IDs must resolve to authorized records; model-authored data cannot establish listing facts.
+- Catalog controls, agent guidance and drift tests change together. Verify that a disabled component is not advertised to the model.
+- A booking, viewing, listing save or payment is successful only after the authoritative transaction; renderer functions alone do not establish agent-side authorization.
+
+## Evidence bar for an inline finding
+
+Post an inline comment only when **all** are true:
+
+1. Pinpoint a changed line/function and a concrete defect, not a preferred style.
+2. Give the smallest realistic user/attacker/retry scenario causing failure.
+3. Cite exact code, a test/run, configuration or official documentation **for the installed version**.
+4. State a meaningful consequence for correctness, security, isolation, data integrity, user experience, cost or CI.
+5. Suggest the smallest safe fix and the **decisive** regression test.
+
+Use this concise shape:
+
+- **Severity:** BLOCKER / HIGH / MEDIUM / LOW (material impact, not stylistic importance).
+- **Problem and evidence:** exact path/line, observed failure and source.
+- **User impact:** one plain-English real-world example.
+- **Fix:** minimal change at the canonical owner.
+- **Verification:** runnable test/expected outcome.
+- **Status:** verified defect, or keep as an unposted investigation note.
+
+For a claim not independently verified, **do not open a blocking inline thread**. An absence of verified findings is an acceptable review result.
 
 ## Do not post
 
-- Style, formatting, naming, or preference comments.
-- "Consider adding a test" without naming the specific failing path that is currently unproven.
-- Restatements of what the diff already does.
-- Speculation about runtime behaviour the diff does not exercise.
-- Claims about framework, library, GitHub Actions, or provider semantics recalled from memory.
-- Duplicate findings already raised on an earlier revision of this pull request.
+- Style, formatting or naming comments without behavioral impact.
+- Speculation based on remembered GitHub Actions, CopilotKit, Mastra, Supabase or other provider semantics.
+- Duplicates of existing resolved/open threads, or bugs wholly outside the changed code.
+- A generic "add tests" request without a specific material failure path.
+- Demands for Phase B apartment eligibility, ownership/paperwork, photo-rights, publishing or booking approval before the owner explicitly starts public-launch certification.
+- A statement that review, passing unit tests, PR merge or deployment alone certifies the full user journey.
 
-## Platform and CI claims need a citation
+## Review result and correction loop
 
-GitHub Actions semantics, workflow `if:` expressions and status-check functions, branch-protection
-behaviour, and provider API contracts are frequently miscited. Before asserting any such behaviour,
-cite either this repository's own workflow files plus a real run, or the vendor's official
-documentation. If you cannot cite one, keep the point out of your findings entirely.
+Classify each proposed finding as **VALID / STALE / INCORRECT / NEEDS VERIFICATION** against the latest head. Repair only valid findings, rerun the decisive tests, and record resolution in the **existing PR**; no review-only PR or new Linear issue is normally necessary.
 
-## Repository invariants you must respect
-
-- Supabase: new tables require RLS plus an explicit authorization policy. A user-scoped client must
-  not be replaced by the service-role client outside a documented boundary.
-- Never treat a browser-supplied user, tenant, thread, run, payment, place, or resource identifier
-  as authorization on its own.
-- CopilotKit stays on the v2 API surface; do not mix bare v1 imports with `/v2` imports.
-- Production AI uses Gemini. Do not propose model or provider changes.
-- Secrets and service-role credentials never reach client code.
-
-## Fix proposals
-
-Propose the smallest change that fixes the defect you proved. Do not bundle unrelated refactors,
-dependency bumps, or renames. State the deterministic test that would prove the fix.
-
-Review policy, including which review apps may open blocking inline threads in this repository,
-lives in `docs/06-testing/pr-review-guidelines.md`.
+**Scope of this file:** reviewer guidance, not a new approval gate. The existing protected-branch checks, PR thread-resolution rules, official review-tool configuration and independent S4 verification remain owned by [PR review guidelines](docs/06-testing/pr-review-guidelines.md), [tasks](.claude/skills/tasks/SKILL.md), and [task-verifier](.claude/skills/task-verifier/SKILL.md).

@@ -9,6 +9,10 @@ Production: https://www.mdeai.co
 | Need | Go to |
 |---|---|
 | Documentation | [`docs/README.md`](docs/README.md) |
+| Agent/repository rules | [`AGENTS.md`](AGENTS.md) |
+| Specification contract | [`spec.md`](spec.md) |
+| Implementation and CopilotKit component-first plan | [`plan.md`](plan.md) |
+| Pull request review criteria | [`REVIEW.md`](REVIEW.md) |
 | Current documentation audit/index | [`docs/index-docs.md`](docs/index-docs.md) |
 | Product documentation | [`docs/01-product/`](docs/01-product/) |
 | Architecture | [`docs/02-architecture/`](docs/02-architecture/) |
@@ -174,7 +178,9 @@ Legacy documentation remains in place during the migration so useful history and
 
 - Use a dedicated branch/worktree for scoped work.
 - Keep `main` clean and synchronized with `origin/main`.
-- Keep PRs focused and reviewable.
+- Keep PRs focused and reviewable; review changed behavior against [`REVIEW.md`](REVIEW.md).
+- For substantial work, use the root [`spec.md`](spec.md) contract and [`plan.md`](plan.md) implementation sequence, with [optional task-specific templates](docs/07-operations/intent-spec-plan/README.md).
+- For approved Rentals GenUI work, establish the installed CopilotKit component catalog first, then integrate the real page and prove its UI/API/database journey; keep separate Concierge/Host providers.
 - Put live task status in Linear rather than duplicating it in Markdown.
 - Verify behavior with tests and runtime evidence, not documentation claims alone.
 - Preserve historical evidence before cleanup or archival.
