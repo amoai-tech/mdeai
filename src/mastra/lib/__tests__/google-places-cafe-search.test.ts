@@ -16,6 +16,27 @@ it("removes all repeated map-area phrases without changing repeated intent detec
   expect(isMapAreaQuery(query)).toBe(true);
 });
 
+it.each([
+  "cafés por aquí",
+  "cerca de aquí",
+  "cafés en esta zona",
+  "cafés around this map",
+  "café por aquí",
+  "Cafés Por Aquí!",
+])("recognizes current-map intent, including Unicode wording: %s", (query) => {
+  expect(isMapAreaQuery(query)).toBe(true);
+});
+
+it.each([
+  "cafés in Laureles",
+  "acerca de aquí",
+  "cafés por aquí_ajá",
+  "cafés around this mapping",
+  "cafés en esta zonación",
+])("does not confuse partial words or named-area queries with map intent: %s", (query) => {
+  expect(isMapAreaQuery(query)).toBe(false);
+});
+
 const response = {
   places: [
     {
