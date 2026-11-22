@@ -61,7 +61,7 @@
     "check:mastra:schema:strict": "node scripts/check-mastra-schema-contract.mjs --strict",
     "check:mastra:schema:init": "node scripts/verify-mastra-schema-init.mjs",
     "check:function-acl": "node scripts/check-function-acl-optin.mjs",
-    "check:skills": "python3 scripts/check-skill-layout.py && python3 scripts/check-skill-upstream.py",
+    "check:skills": "python3 scripts/check-skill-layout.py && python3 scripts/check-skill-upstream.py && node --test scripts/__tests__/skill-package-version-drift.test.mjs",
     "mastra:init": "node --env-file-if-exists=.env.local scripts/init-mastra-schema.mjs",
     "mastra:cleanup": "node --env-file-if-exists=.env.local scripts/cleanup-mastra.mjs",
     "test:watch": "vitest",

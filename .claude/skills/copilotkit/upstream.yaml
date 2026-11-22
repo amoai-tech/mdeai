@@ -2,8 +2,8 @@ vendor: CopilotKit
 repository: https://github.com/CopilotKit/CopilotKit
 source_path: skills
 # Core and CLI are refreshed; untouched optional feature skills remain pinned to their original source commit.
-reviewed_commit: 4f0e86deaebb9d6e6d4625cbed4087912aee6d0c
-reviewed_at: 2026-11-03
+reviewed_commit: 544e64f0423533c5ade8346cd7b9da3c0530a6bc
+reviewed_at: 2026-11-22
 policy:
   active_skill: copilotkit
   upstream_files_are_read_only: true
@@ -13,8 +13,8 @@ sources:
   core:
     path: skills/copilotkit
     local: references/official/copilotkit
-    source_commit: 4f0e86deaebb9d6e6d4625cbed4087912aee6d0c
-    tree_sha256: 0dd90a6961f38dc7885640a69991e7c7de7d1ec091031d96f1d509522d4e5f23
+    source_commit: 544e64f0423533c5ade8346cd7b9da3c0530a6bc
+    tree_sha256: 8ae09dda2ecc30d7cbcae8c8b66deaab2ed3ee21d27a33788be677470bc2fc25
   cli:
     path: skills/copilotkit-cli
     local: references/official/copilotkit-cli
@@ -51,9 +51,9 @@ optional_upstream_skills:
 
 local_integrity:
   algorithm: "sha256(per file sorted by relative path: utf8(path) + NUL + bytes + NUL)"
-  verified_at: "2026-11-03"
+  verified_at: "2026-11-22"
   trees:
-    references/official/copilotkit: 0dd90a6961f38dc7885640a69991e7c7de7d1ec091031d96f1d509522d4e5f23
+    references/official/copilotkit: 8ae09dda2ecc30d7cbcae8c8b66deaab2ed3ee21d27a33788be677470bc2fc25
     references/official/copilotkit-cli: 7b8042a96b66e6dbf3d2c9e2e86ece60b149651c31eb0150de5c8f0bc5f36e99
     references/official/channels-setup: 4de87e36382682bb989fe92458fa60312e4126a0687f1bca6470c8379789ecc0
     references/official/copilotkit-channels: bf5ab2769e0e49b9b1aef8959054bf7b540b2464a9258c6ff0010c7b642a26b6

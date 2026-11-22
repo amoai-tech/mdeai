@@ -4,9 +4,9 @@ description: >-
   Use for any MDE request clearly involving Mastra, including agents, tools, workflows, memory, storage, RequestContext, streaming, suspend/resume, HITL, evals, traces, runtime bridges, and Mastra-specific bugs/errors/failures. A known Mastra failure stays with this domain owner rather than generic systematic-debugging.
 metadata:
   mde-version: "2.1.0"
-  upstream-commit: "1b3d178260a3ff88a075bc44075439d8d227e990"
-  verified-package: "@mastra/core 1.74.0"
-  verified-at: "2026-10-05"
+  upstream-commit: "045740138738bee82d5c9bbebea2f4373b5ca2dc"
+  verified-package: "@mastra/core 1.84.0"
+  verified-at: "2026-11-22"
 ---
 
 # Mastra — official upstream + MDE overlay
@@ -17,21 +17,21 @@ MDE runs one **coherent stable** Mastra family (SAN-1338). The previous mixed
 alpha/beta surface and the `Memory.recall()` type-drift suppression are gone; verify
 against the installed type definition rather than assuming a signature.
 
-The versions below are a **PR #717 snapshot**, not a promise about every worktree or a
-future SAN-1626 upgrade. Before any API recommendation, compare this table with the
-current `package.json`, `package-lock.json`, and the actual installed package
+The versions below are a **GitHub main snapshot (2026-11-22)**, not a promise about
+every checkout or future dependency upgrade. Before any API recommendation, compare
+this table with the current `package.json`, `package-lock.json`, and the actual installed package
 `package.json`/exports (when `node_modules` exists). Update this snapshot in the
 same PR as a family upgrade; do not install `@latest` to make the table true.
 
 | Package | Snapshot | Release line |
 |---|---|---|
-| `@mastra/core` | 1.74.0 | stable |
-| `@mastra/pg` | 1.29.0 | stable |
-| `@mastra/client-js` | 1.51.2 | stable |
-| `@mastra/memory` | 1.35.0 | stable |
-| `@mastra/libsql` | 1.25.0 | stable |
-| `mastra` | 1.32.1 | stable |
-| `@ag-ui/mastra` | 1.1.6 | stable |
+| `@mastra/core` | 1.84.0 | stable |
+| `@mastra/pg` | 1.37.0 | stable |
+| `@mastra/client-js` | 1.61.0 | stable |
+| `@mastra/memory` | 1.41.2 | stable |
+| `@mastra/libsql` | 1.31.0 | stable |
+| `mastra` | 1.40.0 | stable |
+| `@ag-ui/mastra` | 2.0.2 | stable |
 
 `@ag-ui/mastra` is a real boundary: `LoggingMastraAgent` extends its `MastraAgent`, so
 re-verify `resourceId`, newest-turn trimming, streaming, and telemetry when it changes.
