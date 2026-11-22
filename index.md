@@ -66,7 +66,7 @@ Local URLs: UI `http://localhost:3001` · CopilotKit runtime `…/api/copilotkit
 | [`tasks.md`](./tasks.md) · [`plan.md`](./plan.md) · [`dashboard.md`](./dashboard.md) | Backlog, plan snapshot, health dashboard. |
 | [`changelog.md`](./changelog.md) | Evidence-scored change log. |
 | `package.json` · `next.config.ts` · `tsconfig.json` | Build config. |
-| `vitest.config.ts` · `playwright.config.ts` | Test runners. |
+| `vitest.config.mts` · `playwright.config.ts` | Test runners. |
 | `.env.example` · `.env.infisical` · `.mcp.json` | Env (Infisical-injected) + MCP servers. |
 
 ---
