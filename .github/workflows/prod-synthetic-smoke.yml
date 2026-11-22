@@ -68,6 +68,9 @@ jobs:
       # PROD_SMOKE_BASE_URL. Run just that case here: the suite intercepts the POST, so it asserts
       # the recovery UI without writing a viewing request to production.
       - name: 390px stale-viewing recovery (intercepted, no writes)
+        # A stalled Chromium or an unfulfilled intercepted route can hang Playwright; keep the
+        # failure bounded so the workflow reports red instead of sitting in progress.
+        timeout-minutes: 10
         env:
           PROD_SMOKE_BASE_URL: ${{ vars.PROD_SMOKE_BASE_URL }}
           PW_SKIP_WEBSERVER: "1"
