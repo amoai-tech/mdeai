@@ -161,6 +161,8 @@ export default defineConfig({
         "**/browse-map-close-touch.spec.ts",
         "**/mobile-bottom-nav.spec.ts",
         "**/san-1524-contests.spec.ts",
+        // PR #929: OS dark-preference must never override the light-only theme.
+        "**/light-only-appearance.spec.ts",
         // SAN-1140/SAN-1122: discovery card actions against the deterministic inventory fixture.
         "**/san-1140-discovery-card-actions.spec.ts",
       ],
