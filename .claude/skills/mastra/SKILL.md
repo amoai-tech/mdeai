@@ -74,10 +74,11 @@ Own Mastra agent definitions, tools, workflows, memory, storage, streaming, Requ
 - Prefer durable storage for resumable workflows; never assume ephemeral process state is sufficient.
 - Verify model/provider identifiers with the official provider-registry helper when model selection changes.
 - Keep MDE agent allowlists and telemetry intact when changing runtime registration.
+- In Phase A, optional HITL/admin review is not an eligibility, publication or booking prerequisite; keep technical auth, idempotency and truthful tool facts.
 
 ## Workflow
 
-1. Classify the change: agent, tool, workflow, memory/storage, streaming, HITL/resume, model, or trace/eval.
+1. Classify the change: agent, tool, workflow, memory/storage, streaming, HITL/resume, structured output, processor, model, trace/eval, or channel.
 2. Follow the matching official Mastra reference under `references/official/mastra/`.
 3. Load only the MDE reference needed for the affected project contract.
 4. For bugs, reproduce and trace the failure before editing.
@@ -105,6 +106,9 @@ MDE overlays — read the one matching the affected contract:
 | Concierge agent | `references/mdeai-concierge.md` |
 | CopilotKit bridge | Current `src/app/api/copilotkit/[[...path]]/route.ts`, CopilotKit skill `references/mastra-bridge.md`; `references/copilotkit.md` is standalone-only |
 | Memory | `references/memory.md`; `references/supabase-auth.md` is standalone Mastra HTTP auth only |
+| Evals and experiments | `references/evals-experiments.md` — existing deterministic scorers, fixed golden cases, baseline comparison |
+| Structured agent output | `references/structured-output.md` — typed UI payloads, Zod, Gemini tool compatibility |
+| Technical processors | `references/processors-guardrails.md` — token limits, optional injection guard, costs, security boundary |
 | Workflows | `references/workflows.md`, `references/workspace.md`, `references/workspace-skills.md` |
 | Tools and approval | `references/tools.md`, `references/human-in-the-loop.md` |
 | Streaming | `references/streaming.md` |
@@ -114,7 +118,7 @@ MDE overlays — read the one matching the affected contract:
 | MCP | `references/mcp.md`, `references/mcp-apps.md`, `references/mcp-docs-lookup.md` |
 | Skills and routing | `references/topic-routing.md`, `references/embedded-docs.md`, `references/remote-docs.md` |
 | First setup and migration | `references/create-mastra.md`, `references/migration-guide.md` |
-| Errors | `references/common-errors.md` |
+| Errors | `references/common-errors.md`, `references/operations-debugging.md` — trace, WhatsApp, resume/retry truth |
 | UI surface | `references/browser.md`, `references/react.md`, `references/slots.md` |
 
 - https://mastra.ai/docs

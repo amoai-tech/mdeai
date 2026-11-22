@@ -1,0 +1,84 @@
+[
+  {
+    "id": "rental-grounded",
+    "domain": "rentals",
+    "toolOutputs": [
+      {
+        "results": [
+          {
+            "name": "Casa Jardin Azul",
+            "monthly_price_cop": 2400000
+          }
+        ]
+      }
+    ],
+    "reply": "Casa Jardin Azul costs 2,400,000 COP monthly.",
+    "faithful": true,
+    "covered": true
+  },
+  {
+    "id": "rental-invented-price",
+    "domain": "rentals",
+    "toolOutputs": [
+      {
+        "results": [
+          {
+            "name": "Casa Jardin Azul",
+            "monthly_price_cop": 2400000
+          }
+        ]
+      }
+    ],
+    "reply": "Casa Jardin Azul costs 3,100,000 COP monthly.",
+    "faithful": false,
+    "covered": true
+  },
+  {
+    "id": "restaurant-fabricated-venue",
+    "domain": "restaurants",
+    "toolOutputs": [
+      {
+        "results": [
+          {
+            "name": "Carmen Patio Centro"
+          }
+        ]
+      }
+    ],
+    "reply": "Carmen Patio Centro and Golden River Bistro are good choices.",
+    "faithful": false,
+    "covered": false
+  },
+  {
+    "id": "event-grounded-title",
+    "domain": "events",
+    "toolOutputs": [
+      {
+        "results": [
+          {
+            "title": "Festival Rio Sonoro"
+          }
+        ]
+      }
+    ],
+    "reply": "Festival Rio Sonoro appears in the search results.",
+    "faithful": true,
+    "covered": true
+  },
+  {
+    "id": "event-fabricated-title",
+    "domain": "events",
+    "toolOutputs": [
+      {
+        "results": [
+          {
+            "title": "Festival Rio Sonoro"
+          }
+        ]
+      }
+    ],
+    "reply": "Festival Rio Sonoro and Mercado Luna Alta appear in search results.",
+    "faithful": false,
+    "covered": false
+  }
+]
