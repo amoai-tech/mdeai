@@ -101,7 +101,7 @@ export async function waitForMapPinsUpdated(page: Page, timeout = 120_000) {
 }
 
 /** Canonical concierge surface — GeoChatShell on /chat (D-13 restore). */
-export async function gotoConcierge(page: Page) {
+export async function gotoConcierge(page: Page, options: { waitForRuntime?: boolean } = {}) {
   const res = await page.goto("/chat", { waitUntil: "domcontentloaded" });
   if (!res?.ok()) {
     throw new Error(`GET /chat failed: ${res?.status()}`);
@@ -116,12 +116,16 @@ export async function gotoConcierge(page: Page) {
   // saved history is loading and throws when that history failed to load.
   await ensureChatInputVisible(page, 30_000);
   await hideCopilotWebInspector(page);
-  await waitForCopilotRuntime(page);
+  // UI-only browser tests need the usable composer, not an extra 30-second
+  // network handshake. Agent interaction tests retain the original behavior.
+  if (options.waitForRuntime !== false) {
+    await waitForCopilotRuntime(page);
+  }
 }
 
 /** @deprecated Use gotoConcierge — kept for existing e2e imports. */
-export async function gotoHome(page: Page) {
-  await gotoConcierge(page);
+export async function gotoHome(page: Page, options: { waitForRuntime?: boolean } = {}) {
+  await gotoConcierge(page, options);
 }
 
 const CPK_INSPECTOR_HIDE_CSS =
