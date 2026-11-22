@@ -75,7 +75,8 @@ export function parsePreferredShowingAt(raw: string): string | null {
     hasTimezone = true;
   } else if (
     trimmed.length >= 22 &&
-    (trimmed[trimmed.length - 6] === "+" || trimmed[trimmed.length - 6] === "-") &&
+    (trimmed[trimmed.length - 6] === "+" ||
+      trimmed[trimmed.length - 6] === "-") &&
     trimmed[trimmed.length - 3] === ":" &&
     isAsciiDigits(trimmed, trimmed.length - 5, trimmed.length - 3) &&
     isAsciiDigits(trimmed, trimmed.length - 2, trimmed.length)
@@ -151,16 +152,25 @@ export async function createScheduleViewingBridge(
     // SAN-1059: the RPC raises SQLSTATE P1287 for exactly this branch, so classification no
     // longer depends on the wording of the message. The message match stays as a fallback for
     // the window where this function is deployed ahead of the migration (and vice versa).
+    // SAN-1698: a reference that matches no apartment at all is a different outcome from one
+    // that exists but cannot be requested. Retrying the former can never succeed.
+    const isListingUnresolvable =
+      error.code === "P1288" ||
+      (isValidationError && /listing not found/i.test(error.message));
     const isListingUnavailable =
-      error.code === "P1287" ||
-      (isValidationError && /(?:listing|rental) is not requestable/i.test(error.message));
+      !isListingUnresolvable &&
+      (error.code === "P1287" ||
+        (isValidationError &&
+          /(?:listing|rental) is not requestable/i.test(error.message)));
     return {
       ok: false,
-      code: isListingUnavailable
-        ? "LISTING_UNAVAILABLE"
-        : isValidationError
-          ? "VALIDATION_ERROR"
-          : "DB_ERROR",
+      code: isListingUnresolvable
+        ? "LISTING_UNRESOLVABLE"
+        : isListingUnavailable
+          ? "LISTING_UNAVAILABLE"
+          : isValidationError
+            ? "VALIDATION_ERROR"
+            : "DB_ERROR",
       message: isValidationError
         ? error.message
         : "Failed to save viewing request",

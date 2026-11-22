@@ -272,6 +272,33 @@ describe("POST /api/leads/schedule-viewing (SAN-1203)", () => {
     expect(serverLog()).not.toContain("apt-laureles-001");
   });
 
+  it("tells the renter a gone listing is gone, with 410 and no retry-shaped copy", async () => {
+    // SAN-1698: a reference that matches no apartment must not read as "this home refused you".
+    // 410 is deliberate — the resource is gone, so retrying the same request cannot succeed.
+    vi.stubEnv("MDE_LOG_FINGERPRINT_KEY", "test-log-fingerprint-key");
+    fetchMock.mockResolvedValue(
+      edgeResponse(400, {
+        success: false,
+        error: {
+          code: "LISTING_UNRESOLVABLE",
+          message: "p1_schedule_tour_atomic: listing not found",
+        },
+      }),
+    );
+
+    const res = await post(validBody());
+    const json = await res.json();
+
+    expect(res.status).toBe(410);
+    expect(json.error.code).toBe("LISTING_UNRESOLVABLE");
+    expect(json.error.message).toBe(SCHEDULE_VIEWING_ERROR_MESSAGES.LISTING_UNRESOLVABLE);
+    expect(json.error.message).not.toMatch(/accepting viewing requests right now/i);
+    expect(JSON.stringify(json)).not.toContain("p1_schedule_tour_atomic");
+    expect(serverLog()).toContain("listing_unresolvable");
+    expect(serverLog()).toMatch(/"ref":"[0-9a-f]{12}"/);
+    expect(serverLog()).not.toContain("apt-laureles-001");
+  });
+
   it("logs no fingerprint at all when no key is configured, never an unkeyed digest", async () => {
     // Slugs are public: an unkeyed digest lets a log reader hash every published slug and
     // recover which apartment a renter asked about. Without a key, shape and length only.
