@@ -24,11 +24,14 @@ test.describe(`${SCREEN_ID} mobile responsive shell`, () => {
       page,
     }) => {
       const errors = watchCriticalConsoleErrors(page);
-      await gotoHome(page);
+      await gotoHome(page, { waitForRuntime: false });
 
       await expect(page.locator(FAB)).toBeVisible();
       await expect(page.locator(NAV_TRIGGER)).toBeVisible();
-      await expect(page.locator('[data-testid="chat-query-bar"]')).toBeVisible();
+      // The filter chip strip is desktop-only; phones get bottom navigation.
+      await expect(page.locator('[data-testid="chat-query-bar"]')).toBeHidden();
+      await expect(page.getByTestId("mobile-bottom-nav")).toBeVisible();
+      await expect(page.getByTestId("copilot-chat-textarea")).toBeVisible();
       // Desktop left rail collapses behind the drawer on mobile.
       await expect(page.locator('aside [data-testid="nav-rail"]')).toBeHidden();
 
@@ -42,7 +45,7 @@ test.describe(`${SCREEN_ID} mobile responsive shell`, () => {
     });
 
     test("nav drawer opens with hamburger and shows nav rail", async ({ page }) => {
-      await gotoHome(page);
+      await gotoHome(page, { waitForRuntime: false });
 
       await page.locator(NAV_TRIGGER).click();
       await expect(page.locator(NAV_CONTENT)).toBeVisible();
@@ -54,7 +57,7 @@ test.describe(`${SCREEN_ID} mobile responsive shell`, () => {
     test("nav drawer closes with Escape and restores focus to hamburger", async ({
       page,
     }) => {
-      await gotoHome(page);
+      await gotoHome(page, { waitForRuntime: false });
 
       await page.locator(NAV_TRIGGER).click();
       await expect(page.locator(NAV_CONTENT)).toBeVisible();
@@ -65,7 +68,7 @@ test.describe(`${SCREEN_ID} mobile responsive shell`, () => {
     });
 
     test("nav drawer closes on outside (backdrop) click", async ({ page }) => {
-      await gotoHome(page);
+      await gotoHome(page, { waitForRuntime: false });
 
       await page.locator(NAV_TRIGGER).click();
       await expect(page.locator(NAV_CONTENT)).toBeVisible();
@@ -78,7 +81,7 @@ test.describe(`${SCREEN_ID} mobile responsive shell`, () => {
     test("map FAB opens sheet; closing restores focus + leaves chat usable", async ({
       page,
     }) => {
-      await gotoHome(page);
+      await gotoHome(page, { waitForRuntime: false });
 
       await page.locator(FAB).click();
       await expect(page.locator(MAP_CONTENT)).toBeVisible();
@@ -88,13 +91,14 @@ test.describe(`${SCREEN_ID} mobile responsive shell`, () => {
       await page.keyboard.press("Escape");
       await expect(page.locator(MAP_CONTENT)).toBeHidden();
       await expect(page.locator(FAB)).toBeFocused();
-      await expect(page.locator('[data-testid="chat-query-bar"]')).toBeVisible();
+      await expect(page.getByTestId("copilot-chat-textarea")).toBeVisible();
+      await expect(page.getByTestId("mobile-bottom-nav")).toBeVisible();
     });
 
     test("chat input clickable after a map sheet open/close cycle", async ({
       page,
     }) => {
-      await gotoHome(page);
+      await gotoHome(page, { waitForRuntime: false });
 
       await page.locator(FAB).click();
       await expect(page.locator(MAP_CONTENT)).toBeVisible();
@@ -109,7 +113,7 @@ test.describe(`${SCREEN_ID} mobile responsive shell`, () => {
     });
 
     test("FAB tap target is at least 44x44px", async ({ page }) => {
-      await gotoHome(page);
+      await gotoHome(page, { waitForRuntime: false });
 
       const box = await page.locator(FAB).boundingBox();
       expect(box).not.toBeNull();
@@ -124,9 +128,11 @@ test.describe(`${SCREEN_ID} mobile responsive shell`, () => {
     test("desktop: rail visible, hamburger + FAB hidden, map panel visible", async ({
       page,
     }) => {
-      await gotoHome(page);
+      await gotoHome(page, { waitForRuntime: false });
 
       await expect(page.locator('aside [data-testid="nav-rail"]')).toBeVisible();
+      // The desktop filter strip must still exist after hiding it on phones.
+      await expect(page.getByTestId("chat-query-bar")).toBeVisible();
       await expect(page.locator('[data-testid="map-panel"]')).toBeVisible();
       await expect(page.locator(NAV_TRIGGER)).toBeHidden();
       await expect(page.locator(FAB)).toBeHidden();
@@ -139,6 +145,8 @@ test.describe(`${SCREEN_ID} console hygiene`, () => {
 
   test("no critical page errors on mobile load", async ({ page }) => {
     const errors = watchCriticalConsoleErrors(page);
+    // Keep the runtime observation window for this error check; layout-only
+    // assertions can skip the handshake, but startup error monitoring cannot.
     await gotoHome(page);
     assertConsoleClean(errors);
   });
