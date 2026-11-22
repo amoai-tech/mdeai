@@ -2,7 +2,7 @@
 -- outsider/staff may not edit another owner's membership.
 -- Isolated transaction: no QA users or partner data persist.
 begin;
-select plan(18);
+select plan(20);
 
 insert into auth.users (id,instance_id,aud,role,email,encrypted_password,email_confirmed_at,created_at,updated_at)
 values
@@ -97,6 +97,20 @@ select is_empty(
         and profile_id='b1441000-0000-4000-8000-000000000003'
       returning role$$,
   'staff cannot elevate their own role');
+
+-- Staff of Ana cannot edit Carlos's completely separate partner or owner identity.
+select is_empty(
+  $$update public.partner_members set role='staff'
+      where partner_id='b1441000-0000-4000-8000-000000000012'
+        and profile_id='b1441000-0000-4000-8000-000000000002'
+      returning role$$,
+  'staff cannot change another business owner membership');
+select is_empty(
+  $$delete from public.partner_members
+      where partner_id='b1441000-0000-4000-8000-000000000012'
+        and profile_id='b1441000-0000-4000-8000-000000000002'
+      returning partner_id$$,
+  'staff cannot delete another business owner membership');
 
 select set_config('request.jwt.claim.sub','b1441000-0000-4000-8000-000000000001',true);
 select results_eq(
