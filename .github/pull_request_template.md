@@ -31,7 +31,7 @@ Follow AGENTS.md and .claude/skills/tasks/references/github-pr.md; preserve exis
 
 **Risks / limitations:** [Material risks, missing proof and exclusions, or N/A.]
 
-<!-- Record material external source receipts per AGENTS.md only when relevant. -->
+<!-- Reuse stays in Section 2. In Section 4, include only useful official links with what matters and exact application; skip filler citations. -->
 
 ## 3. User Journey & Architecture
 
@@ -55,7 +55,15 @@ flowchart LR
 ~~~
 -->
 
-## 4. Success Criteria
+## 4. Best Reference URLs
+
+<!-- When outside references help solve/review the task, choose up to 3–5 exact, verified official docs, official GitHub repos or version-matched examples. Read the specific source before citing it. Include only sources relevant to the changed implementation; otherwise write "N/A — existing code and tests are sufficient." A link explains the contract; it does not prove that MDE works. -->
+
+| Official reference URL | What matters | How to apply it to this PR |
+| --- | --- | --- |
+| [Exact official docs / GitHub source or example URL] | [Relevant API, feature, file or version detail] | [Specific implementation step, affected file, or verification to perform] |
+
+## 5. Success Criteria
 
 <!-- Replace with 1–4 task-specific, observable requirements. Check only with evidence. -->
 - [ ] [Primary feature or change behaves correctly.]
@@ -63,7 +71,7 @@ flowchart LR
 - [ ] [Relevant error, retry, authorization or security behavior passes.]
 - [ ] [Affected real user journey passes, when applicable.]
 
-## 5. Tests & Evidence
+## 6. Tests & Evidence
 
 **Tested PR head:** [Exact commit SHA]
 
@@ -80,7 +88,7 @@ flowchart LR
 
 <!-- Use PASS / FAIL / PENDING / NOT RUN / N/A; explain skips. Every PASS needs its environment, tested SHA and evidence. Never reuse a stale green check. Add separate lint/typecheck/build rows only if individually run. -->
 
-## 6. Pre-Merge Checklist
+## 7. Pre-Merge Checklist
 
 **Complete before merging:**
 - [ ] **Requirements:** Match the verified Linear scope and success criteria; do not claim partial work completes a whole issue.
@@ -93,7 +101,7 @@ flowchart LR
 
 **Merge decision:** NOT READY / READY — [Head SHA, evidence and any blocker.]
 
-## 7. Post-Merge Verification & Recovery
+## 8. Post-Merge Verification & Recovery
 
 <!-- Plan these before merging; execute and check the applicable steps only AFTER merge. -->
 - [ ] **1. Verify merge:** Confirm merge SHA, intended files on `main` and merged-main CI.
