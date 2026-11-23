@@ -111,6 +111,9 @@ describe("same-message rental search and comparison", () => {
     expect(shouldSearchBeforeComparison({ stepNumber: 0, messages: newCheapest, steps: [] })).toBe(true);
     expect(requestsFreshRentalDiscovery(newCheapest)).toBe(true);
     expect(requestsFreshRentalDiscovery(cheaperPrefix)).toBe(false);
+    expect(requestsFreshRentalDiscovery([user("Can you help me find a time to view the second apartment?")])).toBe(false);
+    expect(requestsFreshRentalDiscovery([user("Find a slot for a viewing of apartment two.")])).toBe(false);
+    expect(requestsFreshRentalDiscovery([user("Find an appointment date for the first apartment.")])).toBe(false);
     expect(requestsFreshRentalDiscovery([user("Find apartments in Laureles and show the first one as a card.")])).toBe(true);
     const tableRequest = [user("Put the first two apartments in a table and find the cheaper one.")];
     expect(shouldSearchBeforeComparison({ stepNumber: 0, messages: tableRequest, steps: [] })).toBe(false);

@@ -124,6 +124,9 @@ const TABLE_COMMAND = /\b(put|show|display|render|make|create|build)\b/i;
 // already visible cards. A trailing budget is an instruction to filter, even
 // when the user mentions "first two" earlier in the sentence.
 const NEW_SEARCH = /\b(?:find|search|discover|look(?:ing)? for)\b/i;
+// A discovery verb must actually target apartments. A time/slot/viewing request
+// about an existing apartment is not a new inventory search.
+const INVENTORY_DISCOVERY = /\b(?:find|search|discover|look(?:ing)? for)\s+(?:(?!\b(?:time|slot|viewing|tour|appointment|date)\b)[\s\S]){0,70}\b(?:apartments?|rentals?|listings?|properties|homes?)\b/i;
 const RENTAL_INVENTORY = /\b(?:apartments?|listings?|rentals?|properties|homes?)\b/i;
 const ANALYSIS_FIND = /\bfind\s+(?:the\s+)?(?:cheaper|cheapest|better|lowest-priced|most affordable)\s+(?:one\b|(?:of|between|from)\s+(?:the\s+)?(?:first|top|these|those|two|\d+))/i;
 const COMPARISON_START = /\b(?:compare|comparison|table|tabular|side[\s-]?by[\s-]?side|versus|vs)\b/i;
@@ -137,7 +140,7 @@ function requestsRentalSearchBeforeComparison(text: string): boolean {
   const comparisonAt = text.search(COMPARISON_START);
   const prefix = comparisonAt < 0 ? text : text.slice(0, comparisonAt);
   if (RENTAL_BUDGET.test(text)) return true;
-  if (NEW_SEARCH.test(prefix) && RENTAL_INVENTORY.test(prefix) && !ANALYSIS_FIND.test(prefix)) return true;
+  if (NEW_SEARCH.test(prefix) && INVENTORY_DISCOVERY.test(prefix) && !ANALYSIS_FIND.test(prefix)) return true;
   const filter = RENTAL_SEARCH_FILTER.exec(text);
   return Boolean(filter && !DISPLAYED_ORDINAL.test(text.slice(0, filter.index)));
 }
@@ -146,7 +149,7 @@ function requestsRentalSearchBeforeComparison(text: string): boolean {
 export function requestsFreshRentalDiscovery(messages: readonly MessageLike[]): boolean {
   const text = messageText([...messages].reverse().find((message) => message?.role === "user")).trim();
   if (!text) return false;
-  return (NEW_SEARCH.test(text) && RENTAL_INVENTORY.test(text) && !ANALYSIS_FIND.test(text)) ||
+  return (NEW_SEARCH.test(text) && INVENTORY_DISCOVERY.test(text) && !ANALYSIS_FIND.test(text)) ||
     (RENTAL_BUDGET.test(text) && RENTAL_INVENTORY.test(text));
 }
 const RESTAURANT_TABLE = /\b(book|reserve|reservation|restaurant|caf[eé]|nightlife|table for|party size)\b/i;

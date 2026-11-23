@@ -193,6 +193,7 @@ describe("shouldRenderViewingProposal (SAN-1658)", () => {
     expect(run("Find apartments in Laureles and schedule a viewing of the first apartment.")).toBe(false);
     expect(run("Search rentals under COP 3M and request a viewing of apartment 2.")).toBe(false);
     expect(run("Schedule a viewing of the second apartment.")).toBe(true);
+    expect(run("Please schedule a viewing of the second apartment and find a time.")).toBe(true);
   });
 
   it("does not force the tool when no apartment is named (the model would have to guess an ID)", () => {
