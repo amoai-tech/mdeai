@@ -56,6 +56,10 @@ import {
  * clicks exactly once. It never repeats a click until something happens to appear.
  */
 
+// This journey signs in real QA users. Never record credentials, sessions or
+// private broker data in Playwright artifacts, even when an assertion fails.
+test.use({ screenshot: "off", trace: "off", video: "off" });
+
 test.describe.configure({ mode: "serial" });
 
 test.describe("SAN-1205 · a renter's viewing request reaches the correct broker", () => {

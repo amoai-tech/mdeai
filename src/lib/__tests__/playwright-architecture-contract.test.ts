@@ -224,6 +224,11 @@ describe("SAN-1341 Playwright architecture", () => {
     expect(sanitizer).toContain('"tmp/screenshots"');
   });
 
+  it("keeps signed-in viewing QA screenshots, traces and video disabled", () => {
+    const source = fs.readFileSync("e2e/rental-conversion-journey.spec.ts", "utf8");
+    expect(source).toContain('test.use({ screenshot: "off", trace: "off", video: "off" });');
+  });
+
   it("adds scheduled/manual critical cross-browser certification without slowing PRs", () => {
     const workflow = fs.readFileSync(
       ".github/workflows/playwright-cross-browser.yml",
