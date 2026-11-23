@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => {
-  const state = { projection: "", bedroomFilters: [] as string[], rows: null as null | Array<Record<string, unknown>> };
+  const state = { projection: "", bedroomFilters: [] as string[], budgetFilters: [] as string[], rows: null as null | Array<Record<string, unknown>> };
   const row = {
     id: "apt-1",
     title: "Centro Budget Studio · 300 USD",
@@ -38,7 +38,7 @@ const mocks = vi.hoisted(() => {
     ilike: passthrough,
     gte: vi.fn((key: string, value: number) => { if (key === "bedrooms") state.bedroomFilters.push(`gte:${value}`); return chain; }),
     lte: vi.fn((key: string, value: number) => { if (key === "bedrooms") state.bedroomFilters.push(`lte:${value}`); return chain; }),
-    or: passthrough,
+    or: vi.fn((value: string) => { state.budgetFilters.push(value); return chain; }),
     then: (resolve: (value: unknown) => unknown, reject?: (reason: unknown) => unknown) => {
       const projectedRow = state.projection.includes("price_monthly")
         ? row
@@ -76,6 +76,22 @@ describe("searchRentals — SAN-1356 monthly price projection", () => {
 
     expect(mocks.state.projection).toContain("price_monthly");
     expect(result.results[0]?.price_monthly).toBe(300);
+  });
+
+  it("uses the renter's explicit comparison COP ceiling even when the model omits it", async () => {
+    const { searchRentalsTool } = await import("../search-rentals");
+    const { COMPARISON_COP_MONTHLY_BUDGET_KEY } = await import("../../lib/comparison-table-intent");
+    mocks.state.budgetFilters.length = 0;
+    await searchRentalsTool.execute!({ neighborhood: "Laureles", limit: 5 }, {
+      requestContext: {
+        get: (key: string) => key === COMPARISON_COP_MONTHLY_BUDGET_KEY ? 3_000_000 : undefined,
+        set: () => undefined,
+      },
+    } as never);
+    expect(mocks.state.budgetFilters).toEqual(expect.arrayContaining([
+      expect.stringContaining("currency.eq.COP"),
+    ]));
+    expect(mocks.state.budgetFilters.some((text) => text.includes("price_monthly.lte.3000000"))).toBe(true);
   });
 
   it("passes an exact bedroom interval through the existing Mastra tool to Supabase", async () => {

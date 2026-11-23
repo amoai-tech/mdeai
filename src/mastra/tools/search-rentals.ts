@@ -13,6 +13,7 @@ import { applyAvailabilityFilters } from '@/lib/rentals/availability-filter';
 import { z } from 'zod';
 import { runAuditedSearch } from '../lib/run-audited-search';
 import { startRentalRunSearch } from '../lib/generative-ui-context';
+import { COMPARISON_COP_MONTHLY_BUDGET_KEY } from '../lib/comparison-table-intent';
 import { EXTERNAL_RENTAL_BUDGET_NOTE, getOptionalExternalRentals, mixRentalResults } from '@/lib/rentals/mixed-rental-results';
 import {
   RentalSearchUnavailableError,
@@ -866,6 +867,13 @@ export const searchRentalsTool = createTool({
     const exactBedrooms = queryText ? exactBedroomsFromQueryText(queryText) : undefined;
     const requestedMinBedrooms = exactBedrooms ?? minBedrooms;
     const requestedMaxBedrooms = exactBedrooms ?? maxBedrooms;
+    // Exact COP budget supplied by the renter outranks missing/wrong model slots.
+    // Reuse the canonical SQL monthly-budget predicate, not a second filter.
+    const trustedCopBudget = context?.requestContext?.get(COMPARISON_COP_MONTHLY_BUDGET_KEY);
+    const requestedMaxPriceMonthly = typeof trustedCopBudget === 'number' &&
+      Number.isFinite(trustedCopBudget) && trustedCopBudget > 0 ? trustedCopBudget : maxPriceMonthly;
+    const requestedBudgetCurrency = typeof trustedCopBudget === 'number' &&
+      Number.isFinite(trustedCopBudget) && trustedCopBudget > 0 ? 'COP' : budgetCurrency;
     const rentalClient = context?.requestContext?.get(RENTAL_SUPABASE_KEY) as
       | SupabaseClient
       | undefined;
@@ -879,7 +887,7 @@ export const searchRentalsTool = createTool({
       searched = await runAuditedSearch(
         'search-rentals',
         (q: RentalQuery) => searchRentals(q, options),
-        { neighborhood, minBedrooms: requestedMinBedrooms, maxBedrooms: requestedMaxBedrooms, furnished, maxPricePerNight, maxPriceMonthly, stayType, budgetCurrency, limit, queryText },
+        { neighborhood, minBedrooms: requestedMinBedrooms, maxBedrooms: requestedMaxBedrooms, furnished, maxPricePerNight, maxPriceMonthly: requestedMaxPriceMonthly, stayType, budgetCurrency: requestedBudgetCurrency, limit, queryText },
         context,
       );
     } catch (error) {

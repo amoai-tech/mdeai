@@ -80,6 +80,11 @@ describe("conciergeAgent", () => {
 
     expect(await comparison!.processInputStep({ stepNumber: 0, messages, steps: [], requestContext }))
       .toEqual({ toolChoice: { type: "tool", toolName: "searchRentalsTool" } });
+    const { RENTAL_RUN_RESULT_IDS_KEY } = await import("../../lib/generative-ui-context");
+    requestContext.set(RENTAL_RUN_RESULT_IDS_KEY, { order: 1, ids: [
+      "37a05b09-f560-4776-92fd-b8bb2b92e601",
+      "37a05b09-f560-4776-92fd-b8bb2b92e602",
+    ] });
     expect(await comparison!.processInputStep({
       stepNumber: 1,
       messages,

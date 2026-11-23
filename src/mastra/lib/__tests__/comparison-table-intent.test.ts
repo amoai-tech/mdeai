@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { comparisonRequestedPositions, hasAttemptedTool, hasCompletedTool, shouldContinueComparisonAfterRoute, shouldContinueComparisonAfterSearch, shouldContinueRouteAfterComparison, shouldFinishComparisonWithoutAnotherTool, shouldForceComparisonTable, shouldSearchBeforeComparison } from "../comparison-table-intent";
+import { comparisonCopMonthlyBudget, comparisonRequestedPositions, requestsFreshRentalDiscovery, hasAttemptedTool, hasCompletedTool, shouldContinueComparisonAfterRoute, shouldContinueComparisonAfterSearch, shouldContinueRouteAfterComparison, shouldFinishComparisonWithoutAnotherTool, shouldForceComparisonTable, shouldSearchBeforeComparison } from "../comparison-table-intent";
 import { RENTAL_A2UI_CONTEXT_DESCRIPTION } from "@/lib/rentals/a2ui-context";
+import { RENTAL_RUN_RESULT_IDS_KEY } from "../generative-ui-context";
 import { routePlanForTurn, shouldForceRouteTool } from "../route-tool-choice";
 
 const ids = [
@@ -58,15 +59,35 @@ describe("shouldForceComparisonTable", () => {
 describe("same-message rental search and comparison", () => {
   const messages = [user("Find apartments in Laureles and compare the first two in a table.")];
 
-  it("forces the search first, then the comparison after the search result", () => {
+  it("forces a new search first, then a table only after two usable fresh IDs", () => {
     expect(shouldSearchBeforeComparison({ stepNumber: 0, messages, steps: [] })).toBe(true);
     expect(shouldContinueComparisonAfterSearch({ stepNumber: 0, messages, steps: [] })).toBe(false);
     const searched = [{ toolResults: [{ toolName: "searchRentalsTool" }] }];
+    const freshContext = { get: (key: string) => key === RENTAL_RUN_RESULT_IDS_KEY
+      ? { order: 1, ids: ids.slice(0, 2) } : undefined };
     expect(shouldSearchBeforeComparison({ stepNumber: 1, messages, steps: searched })).toBe(false);
-    expect(shouldContinueComparisonAfterSearch({ stepNumber: 1, messages, steps: searched })).toBe(true);
+    expect(shouldContinueComparisonAfterSearch({ stepNumber: 1, messages, steps: searched, requestContext: freshContext })).toBe(true);
     expect(shouldContinueComparisonAfterSearch({
       stepNumber: 2, messages, steps: [...searched, { toolCalls: [{ toolName: "showComparisonTable" }] }],
+      requestContext: freshContext,
     })).toBe(false);
+  });
+
+  it("extracts an explicit COP ceiling without confusing apartment positions and money", () => {
+    expect(comparisonCopMonthlyBudget([user("Compare first two under COP 3M.")])).toBe(3_000_000);
+    expect(comparisonCopMonthlyBudget([user("Compare first two under COP 2,900,000.")])).toBe(2_900_000);
+    expect(comparisonCopMonthlyBudget([user("Compare first two apartments.")])).toBeNull();
+    expect(comparisonRequestedPositions([user("Compare the first two apartments in a table under COP 3M.")])).toEqual([1, 2]);
+  });
+
+  it("never forces a table after an empty search, a single result or a failed attempt", () => {
+    const searched = [{ toolResults: [{ toolName: "searchRentalsTool" }] }];
+    expect(shouldContinueComparisonAfterSearch({ stepNumber: 1, messages, steps: searched, requestContext: context })).toBe(false);
+    expect(shouldContinueComparisonAfterSearch({ stepNumber: 1, messages, steps: searched,
+      requestContext: { get: (key: string) => key === RENTAL_RUN_RESULT_IDS_KEY ? { order: 1, ids: ids.slice(0, 1) } : undefined },
+    })).toBe(false);
+    expect(shouldContinueComparisonAfterSearch({ stepNumber: 1, messages,
+      steps: [{ toolCalls: [{ toolName: "searchRentalsTool" }] }], requestContext: context })).toBe(false);
   });
 
   it("does not start a new search when 'find' means analyze apartments already displayed", () => {
@@ -78,7 +99,19 @@ describe("same-message rental search and comparison", () => {
     expect(shouldSearchBeforeComparison({ stepNumber: 0, messages: referencedBedrooms, steps: [] })).toBe(false);
     expect(shouldForceComparisonTable({ stepNumber: 0, messages: referencedBedrooms, requestContext: context })).toBe(true);
     const numberedFilter = [user("Compare the first two apartments in a table under COP 3M.")];
-    expect(shouldSearchBeforeComparison({ stepNumber: 0, messages: numberedFilter, steps: [] })).toBe(false);
+    expect(shouldSearchBeforeComparison({ stepNumber: 0, messages: numberedFilter, steps: [] })).toBe(true);
+    expect(shouldForceComparisonTable({ stepNumber: 0, messages: numberedFilter, requestContext: context })).toBe(false);
+    const trailingBedrooms = [user("Compare the first two apartments in a table with 2BR under COP 3M.")];
+    expect(shouldSearchBeforeComparison({ stepNumber: 0, messages: trailingBedrooms, steps: [] })).toBe(true);
+    expect(shouldForceComparisonTable({ stepNumber: 0, messages: trailingBedrooms, requestContext: context })).toBe(false);
+    const cheaperPrefix = [user("Find the cheaper of the first two apartments and put them in a table.")];
+    expect(shouldSearchBeforeComparison({ stepNumber: 0, messages: cheaperPrefix, steps: [] })).toBe(false);
+    expect(shouldForceComparisonTable({ stepNumber: 0, messages: cheaperPrefix, requestContext: context })).toBe(true);
+    const newCheapest = [user("Find the cheapest apartments in Laureles and compare the first two.")];
+    expect(shouldSearchBeforeComparison({ stepNumber: 0, messages: newCheapest, steps: [] })).toBe(true);
+    expect(requestsFreshRentalDiscovery(newCheapest)).toBe(true);
+    expect(requestsFreshRentalDiscovery(cheaperPrefix)).toBe(false);
+    expect(requestsFreshRentalDiscovery([user("Find apartments in Laureles and show the first one as a card.")])).toBe(true);
     const tableRequest = [user("Put the first two apartments in a table and find the cheaper one.")];
     expect(shouldSearchBeforeComparison({ stepNumber: 0, messages: tableRequest, steps: [] })).toBe(false);
     expect(shouldForceComparisonTable({ stepNumber: 0, messages: tableRequest, requestContext: context })).toBe(true);
@@ -86,6 +119,7 @@ describe("same-message rental search and comparison", () => {
     expect(shouldForceComparisonTable({ stepNumber: 0, messages: analysis, requestContext: context })).toBe(true);
     expect(shouldContinueComparisonAfterSearch({
       stepNumber: 1, messages: analysis, steps: [{ toolResults: [{ toolName: "searchRentalsTool" }] }],
+      requestContext: context,
     })).toBe(false);
     // Still search first for a genuine new neighborhood search.
     expect(shouldSearchBeforeComparison({

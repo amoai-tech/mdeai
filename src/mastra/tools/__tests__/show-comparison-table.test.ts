@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { RENTAL_A2UI_CONTEXT_DESCRIPTION } from "@/lib/rentals/a2ui-context";
-import { COMPARISON_POSITIONS_KEY } from "../../lib/comparison-table-intent";
+import { COMPARISON_COP_MONTHLY_BUDGET_KEY, COMPARISON_POSITIONS_KEY } from "../../lib/comparison-table-intent";
 import { comparisonInputSchema, showComparisonTableTool } from "../show-comparison-table";
 import { RENTAL_SUPABASE_KEY } from "../search-rentals";
 import { RENTAL_RUN_RESULT_IDS_KEY, startRentalRunSearch } from "../../lib/generative-ui-context";
@@ -156,6 +156,46 @@ describe("showComparisonTableTool", () => {
     expect(result.rows[0]).toMatchObject({ priceMonthly: 2_400_000, priceNightly: 80_000 });
     expect(result.rows[1]).toMatchObject({ priceMonthly: 2_500_000, priceNightly: null });
     expect(result.rows.map((r) => r.furnished)).toEqual([true, true]);
+  });
+
+  it("rejects all rows before the database read when one of three IDs is stale", async () => {
+    let queries = 0;
+    const base = context([dbRow(ids[0], "One", 2_000_000), dbRow(ids[1], "Two", 2_100_000)]);
+    const result = await run({ ids: [ids[0], ids[1], "37a05b09-f560-4776-92fd-b8bb2b92e699"] }, {
+      requestContext: { get: (key: string) => key === RENTAL_SUPABASE_KEY ? {
+        from: () => { queries += 1; throw new Error("Must reject before DB"); },
+      } : base.requestContext.get(key) },
+    });
+    expect(queries).toBe(0);
+    expect(result.ok).toBe(false);
+    expect(result.rows).toEqual([]);
+    expect(result.rejected).toEqual(["37a05b09-f560-4776-92fd-b8bb2b92e699"]);
+  });
+
+  it("a budget-filtered fresh result table never falls back to pricier old cards", async () => {
+    const freshContext = context([
+      dbRow(fresh[0], "Under COP 3M", 2_400_000),
+      dbRow(fresh[1], "Also under COP 3M", 2_800_000),
+      dbRow(ids[0], "Old penthouse", 6_000_000),
+      dbRow(ids[1], "Old penthouse 2", 7_000_000),
+    ], { runIds: fresh });
+    const result = await run({ positions: [1, 2] }, { requestContext: {
+      get: (key: string) => key === COMPARISON_COP_MONTHLY_BUDGET_KEY ? 3_000_000 : freshContext.requestContext.get(key),
+    } });
+    expect(result.ok).toBe(true);
+    expect(result.rows.map((row) => row.priceMonthly)).toEqual([2_400_000, 2_800_000]);
+    expect(result.rows.every((row) => (row.priceMonthly ?? Infinity) < 3_000_000)).toBe(true);
+    expect(result.rows.map((row) => row.id)).toEqual(fresh.slice(0, 2));
+  });
+
+  it("never displays an over-budget apartment as a COP 3M match", async () => {
+    const ctx = context([dbRow(ids[0], "Cheap", 2_400_000), dbRow(ids[1], "Penthouse", 7_000_000)]);
+    const result = await run({ positions: [1, 2] }, { requestContext: {
+      get: (key: string) => key === COMPARISON_COP_MONTHLY_BUDGET_KEY ? 3_000_000 : ctx.requestContext.get(key),
+    } });
+    expect(result.ok).toBe(false);
+    expect(result.rows).toEqual([]);
+    expect(result.message).toContain("budget");
   });
 
   it("rejects a forged ID outside the current result set", async () => {

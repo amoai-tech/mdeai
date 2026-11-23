@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { RENTAL_A2UI_CONTEXT_DESCRIPTION } from "@/lib/rentals/a2ui-context";
-import { MDE_GENERATIVE_UI_RULES, buildGenerativeUiInstruction, hasGenerativeUIGuide, MDE_A2UI_GUIDE, readEventResultHints, readGenerativeUiGuide, readRentalResultHints, readRentalResultIds, currentRentalResultIds, startRentalRunSearch } from "../generative-ui-context";
+import { MDE_GENERATIVE_UI_RULES, buildGenerativeUiInstruction, hasGenerativeUIGuide, MDE_A2UI_GUIDE, readEventResultHints, readGenerativeUiGuide, readRentalResultHints, readRentalResultIds, currentRentalResultIds, startRentalRunSearch, requireFreshRentalRunResults } from "../generative-ui-context";
 import { EVENT_A2UI_CONTEXT_DESCRIPTION } from "@/lib/events/a2ui-context";
 import { mdeUI } from "@/components/copilot/a2ui/mde-ui-catalog";
 
@@ -352,13 +352,37 @@ describe("currentRentalResultIds — this run's searches versus the browser list
     expect(await reading).toEqual(a);
   });
 
-  it("lets the later-called search win even when the earlier one finishes last", async () => {
+  it("selects the last completed nonempty result like the browser tool-message order", async () => {
     const ctx = await runContext();
     const first = startRentalRunSearch(ctx);
     const second = startRentalRunSearch(ctx);
     second(b);
     first(a);
-    expect(await currentRentalResultIds(ctx)).toEqual(b);
+    expect(await currentRentalResultIds(ctx)).toEqual(a);
+  });
+
+  it("waits when the consumer starts before the expected search registers", async () => {
+    const ctx = await runContext();
+    requireFreshRentalRunResults(ctx);
+    const reading = currentRentalResultIds(ctx);
+    const finish = startRentalRunSearch(ctx);
+    finish(a);
+    expect(await reading).toEqual(a);
+  });
+
+  it("never uses older page IDs when an explicitly required search returns nothing", async () => {
+    const ctx = await runContext();
+    requireFreshRentalRunResults(ctx);
+    startRentalRunSearch(ctx)([]);
+    expect(await currentRentalResultIds(ctx)).toEqual([]);
+  });
+
+  it("does not reuse an earlier successful search when the latest required search is empty", async () => {
+    const ctx = await runContext();
+    requireFreshRentalRunResults(ctx);
+    startRentalRunSearch(ctx)(a);
+    startRentalRunSearch(ctx)([]);
+    expect(await currentRentalResultIds(ctx)).toEqual([]);
   });
 
   it("turns an unsafe ID into a gap so later positions do not shift", async () => {
