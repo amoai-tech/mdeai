@@ -103,7 +103,10 @@ export function filterHybridEventRows( // skipcq: JS-0067
   }
   if (typeof maxPricePerTicket === "number") {
     const maxPrice = maxPricePerTicket;
-    filtered = filtered.filter((r) => (num(r.ticket_price_min) ?? 0) <= maxPrice);
+    filtered = filtered.filter((r) => {
+      const price = num(r.ticket_price_min);
+      return price !== undefined && price <= maxPrice;
+    });
   }
   return filtered;
 }

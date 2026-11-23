@@ -153,6 +153,20 @@ describe("filterHybridEventRows", () => {
     expect(filtered[0]?.id).toBe("e1");
   });
 
+  it("does not treat unknown ticket prices as free when a budget is specified", () => {
+    const candidates = [
+      { ...sampleRow, id: "missing-price", ticket_price_min: null },
+      { ...sampleRow, id: "invalid-price", ticket_price_min: "unknown" },
+      { ...sampleRow, id: "free-ticket", ticket_price_min: 0 },
+      { ...sampleRow, id: "within-budget", ticket_price_min: 40000 },
+      { ...sampleRow, id: "over-budget", ticket_price_min: 80000 },
+    ];
+    expect(filterHybridEventRows(candidates, undefined, 50000).map((row) => row.id))
+      .toEqual(["free-ticket", "within-budget"]);
+    // Unknown prices remain discoverable when no budget was requested.
+    expect(filterHybridEventRows(candidates)).toHaveLength(5);
+  });
+
   it("applies category remap used with queryText (nightlife+salsa → music)", () => {
     const category = resolveEventCategoryForQuery(
       "nightlife",
