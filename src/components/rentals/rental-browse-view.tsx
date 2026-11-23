@@ -22,7 +22,7 @@ import {
 import { LeadConfirmationBanner } from "@/components/chat/lead-confirmation-banner";
 import { RentalRecommendationsSurface } from "@/components/copilot/a2ui/rental-recommendations-surface";
 import { RentalComparisonSurface } from "@/components/copilot/a2ui/rental-comparison-surface";
-import { RentalComparisonPageActions } from "@/components/rentals/rental-comparison-page-actions";
+import { RentalComparisonPageActions, RentalComparisonStatus } from "@/components/rentals/rental-comparison-page-actions";
 import { RentalA2UIContext } from "@/components/chat/rental-a2ui-context";
 import { RentalFilterDraftProvider } from "@/components/rentals/rental-filter-draft";
 import { RentalFilterPanelActions } from "@/components/rentals/rental-filter-panel-actions";
@@ -155,6 +155,7 @@ function RentalBrowseViewInner({
   // If a new search drops the open rental, `detailsRental` becomes null and the panel closes.
   const isLgUp = useIsLgUp();
   const [detailsId, setDetailsId] = useState<string | null>(null);
+  const [comparisonErrorMessage, setComparisonErrorMessage] = useState<string | null>(null);
   // SAN-1611 — an AI-proposed stay. One owner for the tool: this view mounts once, while the
   // filter bar (and therefore the calendar) mounts twice for desktop and phone.
   const [suggestedStay, setSuggestedStay] = useState<SuggestedStay | null>(null);
@@ -226,6 +227,7 @@ function RentalBrowseViewInner({
       {coAgent && !isDeterministicE2E() ? (
         <RentalComparisonPageActions
           results={shownResults}
+          onStatusChange={setComparisonErrorMessage}
           onOpenDetails={openDetailsFor}
           onScheduleViewing={(rental) => openScheduleViewing({
             listingId: rental.id, title: rental.title, neighborhood: rental.neighborhood,
@@ -296,6 +298,7 @@ function RentalBrowseViewInner({
               until Ask MDE targets it, so native results/map/Details are unchanged. */}
           <RentalRecommendationsSurface />
           <RentalComparisonSurface />
+          <RentalComparisonStatus message={comparisonErrorMessage} />
           {/* A saved viewing request must be visible where it was made, not only in the chat. */}
           <LeadConfirmationBanner />
           {error ? (

@@ -43,6 +43,17 @@ describe("MDE A2UI catalog", () => {
     expect(canOpenNativeViewingReview({ tags: [] }, false)).toBe(false);
   });
 
+  it("restricts comparison actions to user-activated renderer calls", () => {
+    for (const name of ["openComparedRentalDetails", "requestComparedRentalViewing"]) {
+      const fn = mdeUI.functions.get(name);
+      expect(fn, name).toBeDefined();
+      expect(fn).toMatchObject({
+        allowedCallers: "rendererOnly",
+        requiresUserActivation: true,
+      });
+    }
+  });
+
   it("keeps a small, versioned grounded core with RentalCard and EventCard", () => {
     expect(mdeUI.id).toBe("mde/discovery@1");
     expect(mdeUI.components.has("RentalCard")).toBe(true);
