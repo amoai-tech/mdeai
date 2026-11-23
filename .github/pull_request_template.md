@@ -35,27 +35,25 @@ Follow AGENTS.md and .claude/skills/tasks/references/github-pr.md; preserve exis
 
 ## 3. User Journey & Architecture
 
-<!-- For a changed user journey or cross-system flow: create task-specific Mermaid diagrams and EMBED them here, directly in the PR description (not just an image/link).
-Replace the sample nodes with verified route/component/service names. Show the result and a failure/retry path when relevant. Use one diagram if a single view is enough; two if user flow and architecture are distinct.
-For docs-only/test-only changes with no relevant flow, replace this section's examples with "N/A — no user journey or architecture changed."
-Never leave an example diagram pretending to describe implemented code, and never use a diagram as test evidence.
-GitHub supports Mermaid inside ~~~mermaid fences. -->
+**User journey:** N/A — no changed user journey. [For a meaningful changed flow: describe the actual user → action → result, then embed a verified Mermaid diagram here.]
 
-**User journey:** [Actual user → action → observable result; replace example.]
+**Architecture / data flow:** N/A — no changed architecture. [When relevant: show the existing UI/agent → API/tool → canonical data owner in a second embedded Mermaid diagram.]
+
+<!-- Agent instructions:
+For substantive user-journey or cross-system architecture changes, REPLACE the N/A lines with task-specific Mermaid code blocks directly in the GitHub PR body, not separate image links. One diagram is enough if it explains both; otherwise add a second. Include failure/retry when material. Never invent implemented routes, data ownership or success. Diagrams explain the flow and are not test evidence.
+Examples (uncomment ONLY after replacing all example nodes with verified paths):
+~~~mermaid
+flowchart LR
+    A["User action"] --> B["Real UI or tool"]
+    B --> C["Verified visible result"]
+~~~
 
 ~~~mermaid
 flowchart LR
-    A["User action — replace"] --> B["Existing UI or tool — replace"]
-    B --> C["Visible result — replace"]
+    UI["Existing UI or agent"] --> API["Canonical server action or tool"]
+    API --> DB["Real source of truth"]
 ~~~
-
-**Architecture / data flow:** [Existing component → trusted service → source of truth; replace example.]
-
-~~~mermaid
-flowchart LR
-    UI["UI or agent — replace"] --> API["Server API or tool — replace"]
-    API --> DB["Canonical data owner — replace"]
-~~~
+-->
 
 ## 4. Success Criteria
 
@@ -100,8 +98,8 @@ flowchart LR
 <!-- Plan these before merging; execute and check the applicable steps only AFTER merge. -->
 - [ ] **1. Verify merge:** Confirm merge SHA, intended files on `main` and merged-main CI.
 - [ ] **2. Verify deployment:** Confirm Vercel production serves the merged SHA; deploy only if needed.
-- [ ] **3. Verify Supabase/config:** Apply and verify only missing required migrations, Edge Functions or configuration. N/A if unchanged.
-- [ ] **4. Test live result:** Exercise the affected user journey/API/agent and verify persistence, security, errors and 390px UI when relevant.
+- [ ] **3. Verify Supabase/config:** Check deployed migrations, Edge Functions and settings; deploy only missing required changes through the approved workflow. Obtain explicit opt-in and a recovery plan before destructive/irreversible production data changes. N/A if unchanged.
+- [ ] **4. Test live result:** Verify the affected user journey/API/agent, security, errors and 390px UI as relevant. **Read-only by default**; writing tests need task-specific opt-in, isolated QA fixtures and verified cleanup. `npm run verify:production` is **not read-only** (it can persist a thread).
 - [ ] **5. Fix failures:** Find root cause, apply the smallest safe fix through normal PR review, retest and redeploy or safely roll back.
 - [ ] **6. Update GitHub & Linear:** Record SHA, tests, real URLs, screenshots, fixes and unresolved work; mark Done only after actual acceptance criteria pass.
 - [ ] **7. Clean up:** Remove the merged task worktree/branch only after proving all work is preserved; never force-delete unrelated changes.
