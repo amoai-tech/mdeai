@@ -36,7 +36,8 @@ If already in a linked worktree, continue there unless the task requires a diffe
 **Run the following example only on the configured MDE `/home/sk` host.** Other hosts must set an explicitly configured external worktree directory and substitute that path.
 
 ```bash
-# Run after the preflight above, in the same shell (WT_ROOT is set).
+# Run after the preflight above, in the same shell.
+: "${WT_ROOT:?Run the worktree preflight first in this shell}"
 git fetch origin
 git worktree add "$WT_ROOT/san-NNN-slug" -b ai/san-NNN-slug <resolved-base>
 git -C "$WT_ROOT/san-NNN-slug" status --short
