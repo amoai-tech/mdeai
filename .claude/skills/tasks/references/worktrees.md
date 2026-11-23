@@ -15,6 +15,7 @@ Protect unrelated work first. A task should run from the correct base in an isol
 5. Prefer a native worktree tool when the environment provides one; otherwise use Git directly.
 
 ```bash
+# Configured MDE /home/sk host only; use another configured root on other hosts.
 GIT_DIR=$(cd "$(git rev-parse --git-dir)" && pwd -P)
 GIT_COMMON=$(cd "$(git rev-parse --git-common-dir)" && pwd -P)
 git worktree list
@@ -24,6 +25,8 @@ test -d /home/sk/mde-worktrees || mkdir -p /home/sk/mde-worktrees
 If already in a linked worktree, continue there unless the task requires a different base. Do not create nested worktrees.
 
 ## Manual fallback
+
+**Run the following example only on the configured MDE `/home/sk` host.** Other hosts must set an explicitly configured external worktree directory and substitute that path.
 
 ```bash
 git fetch origin
