@@ -173,6 +173,10 @@ describe("server-owned displayed ordinal interpretation", () => {
     expect(comparisonRequestedPositions([user("Find apartments in Laureles and compare the first two in a table.")])).toEqual([1, 2]);
     expect(comparisonRequestedPositions([user("Find 2BR rentals in Laureles and compare the first two.")])).toEqual([1, 2]);
     expect(comparisonRequestedPositions([user("Compare the first two in a table.")])).toEqual([1, 2]);
+    expect(comparisonRequestedPositions([user("Compare the top 2-bedroom apartments in a table.")])).toBeNull();
+    expect(comparisonRequestedPositions([user("Compare the top 2 BR apartments in a table.")])).toBeNull();
+    expect(comparisonRequestedPositions([user("Compare the top two-bedroom apartments in a table.")])).toBeNull();
+    expect(comparisonRequestedPositions([user("Compare the top 2 bedrooms in a table.")])).toBeNull();
     expect(comparisonRequestedPositions([user("Put the first two columns in a table.")])).toBeNull();
     expect(comparisonRequestedPositions([user("Put the first two apartments in a table.")])).toEqual([1, 2]);
     expect(comparisonRequestedPositions([user("Compare the first two apartments in a table and find the cheaper one.")])).toEqual([1, 2]);
