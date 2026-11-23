@@ -7,13 +7,14 @@ import { cn } from "@/lib/utils";
 const ITEMS = [
   { href: "/app/me", label: "Overview" },
   { href: "/app/me/saved", label: "Saved" },
+  { href: "/app/me/viewings", label: "Viewings" },
   { href: "/app/me/tickets", label: "Tickets" },
   { href: "/app/me/notifications", label: "Notifications" },
 ] as const;
 
 /**
- * SAN-1576 — Personal sub-navigation. Viewings and Votes stay absent until their
- * domain owners prove a real read path; one honest "not yet" beats broken tiles.
+ * SAN-1576 / SAN-1426 — Personal sections, including RLS-scoped renter viewings.
+ * Votes remain absent until they have an authorized read path.
  */
 // skipcq: JS-0067
 export function MeNav() {
