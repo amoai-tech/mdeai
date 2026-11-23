@@ -74,6 +74,9 @@ describe("same-message rental search and comparison", () => {
     const filteredTable = [user("Show me a table of 2BR apartments in Laureles under $3M.")];
     expect(shouldSearchBeforeComparison({ stepNumber: 0, messages: filteredTable, steps: [] })).toBe(true);
     expect(shouldForceComparisonTable({ stepNumber: 0, messages: filteredTable, requestContext: context })).toBe(false);
+    const referencedBedrooms = [user("Compare these two 3BR apartments in a table.")];
+    expect(shouldSearchBeforeComparison({ stepNumber: 0, messages: referencedBedrooms, steps: [] })).toBe(false);
+    expect(shouldForceComparisonTable({ stepNumber: 0, messages: referencedBedrooms, requestContext: context })).toBe(true);
     const numberedFilter = [user("Compare the first two apartments in a table under COP 3M.")];
     expect(shouldSearchBeforeComparison({ stepNumber: 0, messages: numberedFilter, steps: [] })).toBe(false);
     const tableRequest = [user("Put the first two apartments in a table and find the cheaper one.")];

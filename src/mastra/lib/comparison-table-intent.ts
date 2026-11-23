@@ -113,7 +113,7 @@ const COMPARISON_START = /\b(?:compare|comparison|table|tabular|side[\s-]?by[\s-
 const RENTAL_SEARCH_FILTER =
   /\b(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten)[\s-]*(?:br|bed|bedrooms?)\b|\bunder\s+(?:cop|usd|\$|\d)/i;
 const DISPLAYED_ORDINAL =
-  /\b(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)\b|\b(?:apartments?|rentals?|listings?|results?)\s+(?:10|[1-9])\b/i;
+  /\b(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|these|those|them)\b|\b(?:apartments?|rentals?|listings?|results?)\s+(?:10|[1-9])\b/i;
 function requestsRentalSearchBeforeComparison(text: string): boolean {
   const comparisonAt = text.search(COMPARISON_START);
   const prefix = comparisonAt < 0 ? text : text.slice(0, comparisonAt);
