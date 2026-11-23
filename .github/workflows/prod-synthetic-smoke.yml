@@ -109,6 +109,23 @@ jobs:
           PW_SKIP_WEBSERVER: "1"
         run: npm run test:e2e:prod-synthetic
 
+      # SAN-1059: the 390px stale-listing recovery is a browser regression that was not executed
+      # anywhere, because e2e/prod-rentals-mobile-form-map.spec.ts skips itself without
+      # PROD_SMOKE_BASE_URL. It runs AFTER the core smoke on purpose: one intercepted-browser case
+      # must never hide whether the runtime contract and the four verticals still pass.
+      - name: 390px stale-viewing recovery (intercepted, no writes)
+        # A stalled Chromium or an unfulfilled intercepted route can hang Playwright; keep the
+        # failure bounded so the workflow reports red instead of sitting in progress.
+        timeout-minutes: 10
+        env:
+          PROD_SMOKE_BASE_URL: ${{ vars.PROD_SMOKE_BASE_URL }}
+          PW_SKIP_WEBSERVER: "1"
+        run: |
+          npx playwright test e2e/prod-rentals-mobile-form-map.spec.ts \
+            --project=prod-smoke \
+            -g "390px stale viewing offers" \
+            --retries=0 --reporter=line
+
       - name: Run full production journey on manual certification
         if: ${{ github.event_name == 'workflow_dispatch' }}
         env:

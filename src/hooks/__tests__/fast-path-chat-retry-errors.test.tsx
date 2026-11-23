@@ -172,6 +172,28 @@ describe("chat fast-path failures reach operation-specific Retry", () => {
     expect(fetchMock).toHaveBeenCalledOnce();
   });
 
+  it.each([
+    ["quota", "request limit"],
+    ["disabled", "temporarily paused"],
+    ["quota_unavailable", "temporarily unavailable"],
+    ["google_places_empty", "No cafés matched"],
+  ])("shows correct café search state for %s", async (reason, expectedMessage) => {
+    mocks.viewport = { lat: 6.2088, lng: -75.5671, zoom: 15 };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ results: [], attribution: [], source: "grounding", metadata: { reason } }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const hook = renderHook(useGroundedSearchFastPath);
+    await act(async () => expect(await hook.handleUserMessage("cafés around this map")).toBe(true));
+    expect(mocks.showExchange).toHaveBeenCalledWith(
+      "cafés around this map",
+      expect.stringContaining(expectedMessage),
+      undefined,
+    );
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
   it("recognizes accented Spanish map-relative queries", async () => {
     mocks.viewport = { lat: 6.2088, lng: -75.5671, zoom: 15 };
     const fetchMock = vi.fn().mockResolvedValue({

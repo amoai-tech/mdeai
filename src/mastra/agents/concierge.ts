@@ -16,7 +16,7 @@ import { requestVenueBookingTool } from '../tools/request-venue-booking';
 import { showRecommendationsTool } from '../tools/show-recommendations';
 import { showRentalFilterControlTool } from '../tools/show-rental-filter-control';
 import { showComparisonTableTool } from '../tools/show-comparison-table';
-import { shouldForceComparisonTable } from '../lib/comparison-table-intent';
+import { COMPARISON_POSITIONS_KEY, comparisonRequestedPositions, shouldContinueComparisonAfterRoute, shouldContinueRouteAfterComparison, shouldFinishComparisonWithoutAnotherTool, shouldForceComparisonTable } from '../lib/comparison-table-intent';
 import { showViewingProposalTool } from '../tools/show-viewing-proposal';
 import { shouldRenderRentalFilterControl, shouldRenderViewingProposal, shouldRequestRecommendations } from '../lib/recommendation-intent';
 import { shouldSearchEventsForCards } from '../lib/event-intent';
@@ -285,7 +285,7 @@ const conciergeBaseInstructions = `You are the mdeAI Medellín concierge — a h
 - read-broker-workspace: for a SIGNED-IN rental broker asking about MY listings, leads, viewing requests, or broker dashboard. ALWAYS call this read-only, authenticated tool before answering broker questions, including "Which viewing requests need my attention?". It reads only the caller's own RLS-scoped rows. Never use public rental search for private broker operations. If no broker profile or tool error, say so; do not invent data. Never claim it sent a reply, approved a booking, published a listing or changed a viewing. Direct the broker to the manual workspace actions for changes.
 - lookup-public-discovery-item: when the current turn includes a # Server-verified current selection block, the server-side public RLS lookup ALREADY completed. For questions about that selected item, answer only from the verified public fields in that block; do NOT call the lookup tool again for the same ID. If the selected-item block reports UNVERIFIABLE or LOOKUP FAILED, disclose that rather than guessing. For a DIFFERENT specifically identified public item, call this lookup with its page and ID BEFORE answering its facts. For an unrelated new discovery request, use the appropriate search tool normally. Client IDs never grant authorization. Never infer omitted attributes (e.g. balcony/Wi-Fi/availability/ticket prices).
 - search-rentals: apartments, stays, lodging. For natural-language rental discovery (e.g. "digital nomad rental in Laureles near cafes"), call search-rentals with queryText set to the user's exact phrase plus structured filters when known. Set furnished=true only when the renter explicitly requests furnished, furnished=false only for unfurnished, and omit the field for no preference; the canonical search uses the stored apartment boolean and treats unknown as nonmatching. For a follow-up that accepts either state, use clearFurnishing=true in lastRentalQuery working memory, and omit furnished in the new search. Keep unsupported requests (pets, parking, pool, gym) inside queryText so cards disclose them. Never say or imply an unsupported filter was applied.
-- search-events: ticketed events, concerts, festivals. For intent-rich queries (e.g. "salsa this weekend", "live music in Poblado"), call search-events with queryText set to the user's phrase plus category/dateWindow when obvious — not for bar/club venue discovery.
+- search-events: ticketed events, concerts, festivals. For intent-rich queries (e.g. "salsa this weekend", "live music in Poblado"), call search-events with queryText set to the user's phrase plus category/dateWindow when obvious — not for bar/club venue discovery. If its source is "unavailable", report a temporary search failure, not zero events. Do not invent event details or availability.
 - search-grounded-places: caf\u00e9s, bars, salsa venues, rooftop cocktails, clubs, and other map POIs via Google Maps grounding. For salsa bars, hidden bars, rooftop cocktails, nightlife locals recommend, coffee/coworking, or quiet caf\u00e9s (e.g. "salsa bars in Poblado", "rooftop cocktails Provenza", "cafe with strong Wi-Fi Laureles"), call search-grounded-places with the user's exact phrase — never search-restaurants for those.
 - A restaurant name or table-booking request must use search-restaurants or lookup-public-discovery-item for a canonical restaurant UUID. NEVER pass intent "restaurant" to search-grounded-places: that tool only accepts "cafe", "general", "nightlife". If the user asks to request a table, search the real restaurant first and only then propose booking for review.
 - search-grounded-places intent param (optional, pass only when confident): intent "nightlife" for clubs, discotecas, reggaeton, cocktail bars, salsa bars, rooftop bars, bar crawl, "venues tonight", "where to party" — including generic nightlife phrasing without bar keywords (e.g. "popular venues in Provenza tonight"); intent "cafe" for coffee, coworking, laptop-friendly caf\u00e9s; omit intent when ambiguous or mixed. Never intent "nightlife" for sit-down restaurant meals (use search-restaurants) or ticketed events (use search-events — event category "nightlife" is different).
@@ -611,10 +611,21 @@ export const conciergeAgent = new Agent({
     // SAN-1681 — an explicit comparison-table request is a UI command. Pin the
     // ID-list tool; the transport builds the official Column → Table. Forcing
     // render_ui itself produced empty operations, so it is not used here.
-    { id: 'san1681-comparison-table-intent', processInputStep: ({ stepNumber, messages, requestContext }) =>
-      shouldForceComparisonTable({ stepNumber, messages, requestContext })
-        ? { toolChoice: { type: 'tool' as const, toolName: 'showComparisonTable' } }
-        : {} },
+    { id: 'san1681-comparison-table-intent', processInputStep: ({ stepNumber, messages, steps, requestContext }) => {
+      // Never carry trusted ordinal selection from a previous conversation turn.
+      if (stepNumber === 0) requestContext?.set(COMPARISON_POSITIONS_KEY, null);
+      const forceFirst = shouldForceComparisonTable({ stepNumber, messages, requestContext });
+      const forceAfterRoute = shouldContinueComparisonAfterRoute({
+        stepNumber, messages, steps, requestContext,
+        hasRouteIntent: Boolean(routePlanForTurn(messages)),
+      });
+      if (!forceFirst && !forceAfterRoute) return {};
+      // The user's exact ordinals outrank model-chosen IDs. This is a trusted
+      // server-side interpretation, not a new browser authority or search path.
+      const positions = comparisonRequestedPositions(messages);
+      if (positions) requestContext?.set(COMPARISON_POSITIONS_KEY, positions);
+      return { toolChoice: { type: 'tool' as const, toolName: 'showComparisonTable' } };
+    } },
     // SAN-1653 — "show events as cards" pins the event search so the bridge always
     // emits the render_ui call; relying on model choice produced prose-only turns.
     { id: 'san1653-event-card-intent', processInputStep: ({ stepNumber, messages, requestContext }) =>
@@ -626,7 +637,13 @@ export const conciergeAgent = new Agent({
         ? { toolChoice: { type: 'tool' as const, toolName: 'requestVenueBooking' } }
         : {} },
     { id: 'san465-route-tool-choice', processInputStep: ({ stepNumber, messages, steps, requestContext }) => {
-      if (!shouldForceRouteTool({ stepNumber, messages, steps })) return {};
+      // If the comparison ran first, complete the route on the next step;
+      // when the route ran first, the comparison processor completes it next.
+      const afterTable = shouldContinueRouteAfterComparison({
+        stepNumber, messages, steps, requestContext,
+        hasRouteIntent: Boolean(routePlanForTurn(messages)),
+      });
+      if (!afterTable && !shouldForceRouteTool({ stepNumber, messages, steps })) return {};
       // Hand the user's own endpoints and travel mode to the tool. The model's
       // generated place IDs are untrusted; Google must receive the named places.
       const plan = routePlanForTurn(messages);
@@ -649,6 +666,15 @@ export const conciergeAgent = new Agent({
       withComparisonRecords(messages, requestContext?.get("ag-ui"), lookupPublicDiscoveryItemFromServer) },
     { id: "san1600-verified-selection-facts", processInput: ({ messages, requestContext }) =>
       withVerifiedSelectionFacts(messages, requestContext?.get("ag-ui"), lookupPublicDiscoveryItemFromServer) },
+    // The existing stream bridge builds render_ui from showComparisonTable's
+    // authorized result. Never let the LLM send an additional empty surface
+    // during the same comparison turn; keep ordinary turns/tools unaffected.
+    { id: "san1681-comparison-text-finish", processInputStep: ({ stepNumber, messages, steps, requestContext }) =>
+      shouldFinishComparisonWithoutAnotherTool({
+        stepNumber, messages, steps, requestContext, hasRouteIntent: Boolean(routePlanForTurn(messages)),
+      })
+        ? { toolChoice: 'none' as const }
+        : {} },
   ],
   // A failed Google route cannot become a model-estimated distance or ETA.
   // This filters streaming text before CopilotKit renders it or memory saves it.

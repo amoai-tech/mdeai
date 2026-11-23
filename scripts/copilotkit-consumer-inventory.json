@@ -385,6 +385,11 @@
       "note": "SAN-1124: guards v2 CopilotChat and useRenderTool registration plus broker workspace contract."
     },
     {
+      "file": "src/components/copilot/a2ui/mde-theme.ts",
+      "classification": "keep",
+      "note": "SAN-1675: reusable, typed CopilotKit v2 GenerativeUITheme maps official --a2ui-* tokens onto existing MDE design tokens; imported by the current chat and discovery providers, no new runtime/provider."
+    },
+    {
       "file": "src/components/copilot/a2ui/mde-ui-catalog.tsx",
       "classification": "keep",
       "note": "SAN-1630 + SAN-1654: one v2 createGenerativeUI catalog extending the official standardUI with RentalCard and EventCard; each card resolves only an authorized ID from the thread result history and mounts no provider or run."
@@ -443,6 +448,16 @@
       "file": "scripts/check-mastra-builder-isolation.mjs",
       "classification": "test-only",
       "note": "SAN-1255 PR #842 deterministic release gate: scans built Next server code for absent Mastra Editor imports and asserts the CopilotKit runtime stays pinned to its original OpenAI 4.104.0 SDK. It does not import or invoke CopilotKit."
+    },
+    {
+      "file": "src/components/rentals/__tests__/rental-comparison-page-actions.test.tsx",
+      "classification": "test-only",
+      "note": "SAN-1694: factory-mocks the official v2 generative UI function hook to assert visible stale-ID and dev-preview viewing errors, while allowing stored Phase A external candidates."
+    },
+    {
+      "file": "src/components/rentals/rental-comparison-page-actions.tsx",
+      "classification": "keep",
+      "note": "Uses the official v2 useGenerativeUIFunction to connect server-built rental comparison Buttons to the existing in-page Details and viewing review actions, rechecking listing IDs against currently visible results; no second provider or service."
     },
     {
       "file": "src/components/rentals/rental-filter-panel-actions.tsx",

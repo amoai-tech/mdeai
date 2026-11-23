@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { RENTAL_A2UI_CONTEXT_DESCRIPTION } from "@/lib/rentals/a2ui-context";
+import { COMPARISON_POSITIONS_KEY } from "../../lib/comparison-table-intent";
 import { comparisonInputSchema, showComparisonTableTool } from "../show-comparison-table";
 import { RENTAL_SUPABASE_KEY } from "../search-rentals";
 
 const ids = Array.from({ length: 10 }, (_, i) =>
   `37a05b09-f560-4776-92fd-b8bb2b92e6${String(i).padStart(2, "0")}`
 );
-function context(rows: Array<Record<string, unknown>> = [], { withClient = true }: { withClient?: boolean } = {}) {
+function context(rows: Array<Record<string, unknown>> = [], { withClient = true, trustedPositions, visibleIds = ids }: { withClient?: boolean; trustedPositions?: number[]; visibleIds?: string[] } = {}) {
   const client = {
     from: () => ({
       select: () => ({
@@ -18,7 +19,8 @@ function context(rows: Array<Record<string, unknown>> = [], { withClient = true 
     requestContext: {
       get: (key: string) =>
         key === RENTAL_SUPABASE_KEY ? (withClient ? client : null)
-          : key === "ag-ui" ? { context: [{ description: RENTAL_A2UI_CONTEXT_DESCRIPTION, value: JSON.stringify(ids) }] }
+          : key === COMPARISON_POSITIONS_KEY ? trustedPositions
+          : key === "ag-ui" ? { context: [{ description: RENTAL_A2UI_CONTEXT_DESCRIPTION, value: JSON.stringify(visibleIds) }] }
             : undefined,
     },
   };
@@ -62,6 +64,50 @@ describe("showComparisonTableTool", () => {
     );
     expect(result.ok).toBe(true);
     expect(result.rows.map((row) => row.id)).toEqual([ids[1], ids[2]]);
+  });
+
+  it("honors server-read ordinals over plausible but wrong model IDs and positions", async () => {
+    const result = await run(
+      { ids: [ids[3], ids[4]], positions: [4, 5] },
+      context([
+        dbRow(ids[1], "Actual second", 2_400_000),
+        dbRow(ids[2], "Actual third", 2_500_000),
+        dbRow(ids[3], "Wrong fourth", 4_500_000),
+        dbRow(ids[4], "Wrong fifth", 7_500_000),
+      ], { trustedPositions: [2, 3] }),
+    );
+    expect(result.ok).toBe(true);
+    expect(result.rows.map((r) => r.id)).toEqual([ids[1], ids[2]]);
+  });
+
+  it("does not treat stale ordinal positions outside current hints as valid listings", async () => {
+    const result = await run(
+      { ids: [ids[0], ids[1]] },
+      context([
+        dbRow(ids[0], "First", 2_400_000),
+        dbRow(ids[1], "Second", 2_500_000),
+      ], { trustedPositions: [2, 5], visibleIds: ids.slice(0, 3) }),
+    );
+    expect(result.ok).toBe(false);
+    expect(result.rows).toEqual([]);
+  });
+
+  it("rejects any unresolved trusted positions before querying apartments", async () => {
+    let queryCount = 0;
+    const ctx = context([], { trustedPositions: [1, 2, 5], visibleIds: ids.slice(0, 3) });
+    // A DB query would be an error: an incomplete selection must fail first.
+    ctx.requestContext.get(RENTAL_SUPABASE_KEY);
+    const result = await run({ ids: ids.slice(0, 2) }, {
+      requestContext: {
+        get: (key: string) => key === RENTAL_SUPABASE_KEY
+          ? { from: () => { queryCount++; throw new Error("unexpected DB query"); } }
+          : ctx.requestContext.get(key),
+      },
+    });
+    expect(result.ok).toBe(false);
+    expect(result.rows).toEqual([]);
+    expect(result.rejected).toContain("Result 5 is not in the current hints");
+    expect(queryCount).toBe(0);
   });
 
   it("reads both recorded prices without conversion", async () => {

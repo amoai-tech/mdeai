@@ -224,7 +224,10 @@ function RentalBrowseCardGallery({
   }, [api, photos.length]);
 
   return (
-    <Carousel setApi={setApi} className="w-full" aria-label={`Photos of ${rental.title}`}>
+    <Carousel setApi={setApi} className="w-full" aria-label={`Photos of ${rental.title}`}
+      // Focusing photo controls must not bubble to VenueCardShell's map-pin preview.
+      // A real card/map selection still uses Show on map or an intentional card hover.
+      onFocus={(event) => event.stopPropagation()}>
       <CarouselContent className="ml-0">
         {photos.map((url, index) => (
           <CarouselItem key={url} className="pl-0">
@@ -348,6 +351,7 @@ export function RentalBrowseCard({
       selected={selected}
       ariaLabel={`Rental: ${rental.title}, ${rental.neighborhood}`}
       onPreview={interactive ? preview : undefined}
+      previewOnFocus={false}
       media={
         showPhotoGallery ? (
           <RentalBrowseCardGallery
@@ -400,7 +404,6 @@ export function RentalBrowseCard({
               aria-label={`Show ${rental.title} on the map`}
               className="min-h-card-action lg:min-h-0"
               onClick={() => onSelect?.()}
-              onFocus={preview}
             >
               Show on map
             </Button>

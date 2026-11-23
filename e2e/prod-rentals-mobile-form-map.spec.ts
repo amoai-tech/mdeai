@@ -32,6 +32,75 @@ test.describe('MDE Rentals phone: browse, map and viewing-form layout', () => {
     await expect(modal).toHaveCount(0);
   });
 
+  test('390px stale viewing offers Refresh results without retrying and preserves filters', async ({ page }) => {
+    // The browser exercises the actual modal and calendar; interception guarantees this
+    // regression never writes a real viewing request to the production backend.
+    let writeAttempts = 0;
+    await page.route('**/api/leads/schedule-viewing', async (route) => {
+      writeAttempts += 1;
+      await route.fulfill({
+        status: 410,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: false,
+          error: {
+            code: 'LISTING_UNRESOLVABLE',
+            message: "This listing is no longer available. Refresh the results to see what's still here.",
+          },
+        }),
+      });
+    });
+
+    await page.goto(new URL(start, base).href, { waitUntil: 'domcontentloaded' });
+    await expect(page.getByTestId('rentals-browse')).toBeVisible();
+    // The grid renders before its cards do; clicking the first CTA while the skeletons are
+    // still up is a timeout waiting to happen.
+    // Zero published inventory is a valid product state and must not turn a healthy deploy red
+    // (see the prod-synthetic-smoke header). This case needs one real card to exercise, so an
+    // empty grid reports "skipped" rather than a false green.
+    const staleCards = page.locator('[data-testid="rentals-grid"] [data-result-kind="rental"][data-testid^="rental-card-"]');
+    let hasInventory = true;
+    try {
+      await expect.poll(() => staleCards.count(), { timeout: 30_000 }).toBeGreaterThan(0);
+    } catch {
+      hasInventory = false;
+    }
+    test.skip(!hasInventory, 'No Laureles two-bedroom inventory to exercise the recovery case.');
+    await page.getByTestId('rental-schedule-cta').first().click();
+    const modal = page.getByTestId('schedule-viewing-modal');
+    await expect(modal.getByRole('dialog')).toBeVisible();
+    await modal.locator('input[name="name"]').fill('Stale Viewing QA');
+    await modal.locator('input[name="email"]').fill('stale-viewing-no-write@example.com');
+
+    // The viewing date is a custom DayPicker, not a native <input type="date">.
+    // Choose the 15th of next month so the requested time is always in the future.
+    await modal.getByTestId('viewing-date-trigger').click();
+    const calendar = modal.getByTestId('viewing-date-calendar');
+    await calendar.getByRole('button', { name: 'Go to the Next Month' }).click();
+    // Select by the day number in the button's text. `data-day` is NOT a stable key here:
+    // src/components/ui/calendar.tsx overrides it with `day.date.toLocaleDateString(...)`, so its
+    // value depends on the locale (e.g. 12/15/2026). The day number is what the renter sees.
+    await calendar.locator('button[data-day]:not([disabled])').filter({ hasText: /^15$/ }).click();
+    await modal.getByTestId('viewing-time').fill('15:00');
+    await modal.getByTestId('schedule-viewing-review-button').click();
+    await expect(modal.getByTestId('schedule-viewing-review')).toBeVisible();
+    await modal.getByTestId('schedule-viewing-submit').click();
+
+    await expect(modal.getByTestId('schedule-viewing-error')).toContainText('This listing is no longer available');
+    const refresh = modal.getByTestId('schedule-viewing-refresh-results');
+    await expect(refresh).toBeVisible();
+    await expect(refresh).toHaveAttribute('href', start);
+    await expect(modal.getByTestId('schedule-viewing-retry')).toHaveCount(0);
+    await expect(modal.getByTestId('schedule-viewing-submit')).toHaveCount(0);
+    await expect(modal.getByTestId('schedule-viewing-edit')).toHaveCount(0);
+    expect(writeAttempts).toBe(1);
+
+    await refresh.click();
+    await expect(page).toHaveURL(new URL(start, base).href);
+    await expect(page.getByTestId('rentals-browse')).toBeVisible();
+    expect(writeAttempts).toBe(1);
+  });
+
   test('390px card/map pins stay grounded and the mobile map opens', async ({ page }) => {
     await page.goto(new URL(start, base).href, { waitUntil: 'domcontentloaded' });
     const cards = page.locator('[data-testid="rentals-grid"] [data-result-kind="rental"][data-testid^="rental-card-"]');

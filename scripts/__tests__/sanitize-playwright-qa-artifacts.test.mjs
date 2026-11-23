@@ -14,8 +14,12 @@ test("retains ordinary Playwright diagnostics", () => withTempFolder(root => {
   const folder = join(root, "test-results", "public-test");
   mkdirSync(folder, { recursive: true });
   writeFileSync(join(folder, "error-context.md"), "safe public diagnostic");
+  const imageDir = join(root, "tmp", "screenshots", "SCREEN-018");
+  mkdirSync(imageDir, { recursive: true });
+  writeFileSync(join(imageDir, "desktop-shell-1280.png"), "anonymous public screenshot");
   assert.equal(sanitizePlaywrightQaArtifacts(root), false);
   assert.equal(existsSync(join(folder, "error-context.md")), true);
+  assert.equal(existsSync(join(imageDir, "desktop-shell-1280.png")), true);
 }));
 
 test("removes every possible report when a privileged test ran", () => withTempFolder(root => {
@@ -23,14 +27,16 @@ test("removes every possible report when a privileged test ran", () => withTempF
   const publicRun = join(root, "test-results", "public-test");
   const html = join(root, "tmp", "playwright-report");
   const blob = join(root, "blob-report");
-  for (const dir of [privateRun, publicRun, html, blob]) mkdirSync(dir, { recursive: true });
+  const screenshots = join(root, "tmp", "screenshots", "SCREEN-018");
+  for (const dir of [privateRun, publicRun, html, blob, screenshots]) mkdirSync(dir, { recursive: true });
   writeFileSync(join(privateRun, "mde-private-qa.marker"), "PRIVATE_QA_ARTIFACTS");
   writeFileSync(join(privateRun, "error-context.md"), "protected page contents");
   writeFileSync(join(publicRun, "test-failed.png"), "normal screenshot");
   writeFileSync(join(html, "index.html"), "private html report");
   writeFileSync(join(blob, "shard-1.zip"), "private blob");
+  writeFileSync(join(screenshots, "mobile-shell-390.png"), "potentially private screenshot");
   assert.equal(sanitizePlaywrightQaArtifacts(root), true);
-  for (const rel of ["test-results", "tmp/playwright-report", "blob-report"]) {
+  for (const rel of ["test-results", "tmp/playwright-report", "tmp/screenshots", "blob-report"]) {
     assert.equal(existsSync(join(root, rel)), false, rel);
   }
 }));

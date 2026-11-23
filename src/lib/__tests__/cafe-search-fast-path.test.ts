@@ -20,6 +20,30 @@ describe("cafe-search-fast-path", () => {
       .toContain("No cafés matched");
   });
 
+  it.each([
+    ["quota", "request limit"],
+    ["disabled", "temporarily paused"],
+    ["quota_unavailable", "temporarily unavailable"],
+  ])("explains %s instead of pretending no cafés exist", (reason, expected) => {
+    const result = fastPathCafeSummary(0, 0, undefined, "cafés around this map", reason);
+    expect(result).toContain(expected);
+    expect(result).not.toContain("No cafés matched");
+  });
+
+  it.each([
+    ["quota", "Place search has reached its request limit"],
+    ["disabled", "Live place search is temporarily paused"],
+    ["quota_unavailable", "Place search is temporarily unavailable"],
+    ["google_places_unavailable", "Place search is temporarily unavailable"],
+  ])("uses a neutral place-search error for nightlife %s", (reason, expected) => {
+    const query = "Salsa bars and rooftop cocktails locals go to in El Poblado";
+    expect(buildCafeSearchParams(query)?.intent).toBe("nightlife");
+    const message = fastPathCafeSummary(0, 0, "El Poblado", query, reason);
+    expect(message).toContain(expected);
+    expect(message).not.toMatch(/café search|live café search/i);
+    expect(message).not.toContain("No cafés matched");
+  });
+
   it("matches specialty coffee queries", () => {
     expect(canFastPathCafeSearch("good specialty coffee in Laureles")).toBe(true);
     const params = buildCafeSearchParams("good specialty coffee in Laureles");

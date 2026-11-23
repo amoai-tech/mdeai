@@ -315,15 +315,24 @@ export async function githubFloorStatus({ fetchImpl = fetch, token = process.env
  * Fail immediately on failure, invalid API data or an unknown state; do not
  * permit promotion on timeout or by reusing a prior green PR check.
  */
-export async function waitForFloorSuccess({ readStatus, attempts = 81, delayMs = 15_000,
-  pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms)) }) {
-  if (!Number.isInteger(attempts) || attempts < 1 || attempts > 100 ||
+export async function waitForFloorSuccess({ readStatus, readMain, expectedSha, attempts = 81,
+  delayMs = 15_000, pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms)) }) {
+  if (typeof readStatus !== "function" || typeof readMain !== "function" ||
+      typeof expectedSha !== "string" || !/^[0-9a-f]{40}$/i.test(expectedSha) ||
+      !Number.isInteger(attempts) || attempts < 1 || attempts > 100 ||
       !Number.isInteger(delayMs) || delayMs < 0 || delayMs > 60_000) {
-    fail("invalid Floor wait budget");
+    fail("invalid Floor wait configuration");
   }
   for (let i = 0; i < attempts; i += 1) {
+    // A superseded candidate must not hold the serialized certification queue
+    // while waiting for a Floor run that no longer matters (SAN-1330).
+    checkCurrentMain(await readMain(), expectedSha);
     const state = await readStatus();
-    if (state === "success") return;
+    if (state === "success") {
+      // Main might have advanced while the GitHub Floor request was in flight.
+      checkCurrentMain(await readMain(), expectedSha);
+      return;
+    }
     if (state === "failed") fail("exact-SHA Floor workflow failed; production promotion denied");
     if (state !== "pending") fail("unknown Floor state; production promotion denied");
     if (i < attempts - 1) await pause(delayMs);
@@ -430,7 +439,11 @@ async function main(command) {
     console.log("vercel-release: both production domains serve live main " + sha.slice(0, 12) + " on " + id);
   } else if (command === "wait-floor") {
     const sha = required("VERCEL_DEPLOYMENT_SHA");
-    await waitForFloorSuccess({ readStatus: () => githubFloorStatus({ sha }) });
+    await waitForFloorSuccess({
+      readStatus: () => githubFloorStatus({ sha }),
+      readMain: () => githubMainSha(),
+      expectedSha: sha,
+    });
     console.log("vercel-release: exact main-push Floor SUCCESS for " + sha.slice(0, 12));
   } else if (command === "assert-current-main") {
     checkCurrentMain(await githubMainSha(), required("VERCEL_DEPLOYMENT_SHA"));

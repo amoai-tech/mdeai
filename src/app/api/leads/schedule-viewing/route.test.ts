@@ -25,9 +25,10 @@ const fetchMock = vi.fn();
  * be "delete the detail" — it has to move it.
  */
 const errorCalls: unknown[][] = [];
+const warningCalls: unknown[][] = [];
 
 function serverLog(): string {
-  return JSON.stringify(errorCalls);
+  return JSON.stringify([...errorCalls, ...warningCalls]);
 }
 
 function validBody(overrides: Record<string, unknown> = {}) {
@@ -66,8 +67,12 @@ beforeEach(() => {
   fetchMock.mockReset();
   vi.stubGlobal("fetch", fetchMock);
   errorCalls.length = 0;
+  warningCalls.length = 0;
   vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
     errorCalls.push(args);
+  });
+  vi.spyOn(console, "warn").mockImplementation((...args: unknown[]) => {
+    warningCalls.push(args);
   });
 });
 
@@ -117,6 +122,8 @@ describe("POST /api/leads/schedule-viewing (SAN-1203)", () => {
       SCHEDULE_VIEWING_ERROR_MESSAGES.SHOWING_NOT_COMMITTED,
     );
     expect(json.showingId).toBeUndefined();
+    expect(errorCalls).toHaveLength(1);
+    expect(warningCalls).toHaveLength(0);
   });
 
   it("fails closed when the edge commits a showing but no lead", async () => {
@@ -296,6 +303,8 @@ describe("POST /api/leads/schedule-viewing (SAN-1203)", () => {
     expect(json.error.message).not.toMatch(/accepting viewing requests right now/i);
     expect(JSON.stringify(json)).not.toContain("p1_schedule_tour_atomic");
     expect(serverLog()).toContain("listing_unresolvable");
+    expect(errorCalls).toHaveLength(0);
+    expect(warningCalls).toHaveLength(1);
     const expectedRef = createHmac("sha256", "test-log-fingerprint-key")
       .update(validBody().listingId)
       .digest("hex")
@@ -331,6 +340,7 @@ describe("POST /api/leads/schedule-viewing (SAN-1203)", () => {
     // candidate slugs. Different keys must give different refs for the same reference.
     const refFor = async (key: string) => {
       errorCalls.length = 0;
+      warningCalls.length = 0;
       vi.stubEnv("MDE_LOG_FINGERPRINT_KEY", key);
       fetchMock.mockResolvedValue(
         edgeResponse(400, {

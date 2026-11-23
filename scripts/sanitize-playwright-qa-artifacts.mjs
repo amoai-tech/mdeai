@@ -22,7 +22,7 @@ function hasPrivateMarker(directory) {
 export function sanitizePlaywrightQaArtifacts(root) {
   const target = resolve(root);
   if (!hasPrivateMarker(join(target, "test-results"))) return false;
-  for (const rel of ["test-results", "tmp/playwright-report", "blob-report"]) {
+  for (const rel of ["test-results", "tmp/playwright-report", "tmp/screenshots", "blob-report"]) {
     rmSync(join(target, rel), { force: true, recursive: true });
   }
   return true;

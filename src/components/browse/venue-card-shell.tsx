@@ -26,6 +26,8 @@ export type VenueCardShellProps = {
   mediaLayout?: VenueCardShellMediaLayout;
   /** Map pin preview on hover/focus (restaurant / café chat cards). */
   onPreview?: () => void;
+  /** Rental cards reserve selection for explicit actions; keep other cards' focus previews. */
+  previewOnFocus?: boolean;
   bodyRole?: "button";
   bodyTabIndex?: 0;
   bodyAriaLabel?: string;
@@ -85,6 +87,7 @@ export function VenueCardShell({
   composition = "legacy",
   mediaLayout = "inline",
   onPreview,
+  previewOnFocus = true,
   bodyRole,
   bodyTabIndex,
   bodyAriaLabel,
@@ -129,7 +132,7 @@ export function VenueCardShell({
     "data-pin-id": pinId,
     "data-selected": selected ? "true" : "false",
     onPointerEnter: previewFromPointer,
-    onFocus: onPreview,
+    onFocus: previewOnFocus ? onPreview : undefined,
     "aria-label": ariaLabel,
   };
 

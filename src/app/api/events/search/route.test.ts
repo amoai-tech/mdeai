@@ -52,3 +52,53 @@ describe("event search API — explicit vs inferred date", () => {
     expect(searchEventsMock.mock.calls[0]?.[0].dateWindow).toBe("tonight");
   });
 });
+
+describe("SAN-1701 · event search provider truth", () => {
+  beforeEach(() => searchEventsMock.mockReset());
+
+  it("returns HTTP 503, not an empty-market success, on unavailable provider", async () => {
+    searchEventsMock.mockResolvedValue({ results: [], total: 0, source: "unavailable" });
+    const response = await POST(request({ queryText: "salsa in Laureles", limit: 5 }));
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({
+      error: "event_search_unavailable",
+      message: "Event search is temporarily unavailable.",
+    });
+  });
+
+  it("keeps a genuine zero-result search as HTTP 200", async () => {
+    searchEventsMock.mockResolvedValue({ results: [], total: 0, source: "supabase" });
+    const response = await POST(request({ queryText: "salsa in Laureles", limit: 5 }));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      results: [], total: 0, source: "supabase",
+    });
+  });
+
+  it("preserves canonical event ID, date, currency, price and availability", async () => {
+    const sourceRow = {
+      id: "grounded-event-123",
+      title: "Salsa in Laureles",
+      startsAt: "2026-12-11T23:00:00Z",
+      pricePerTicket: 80000,
+      currency: "COP",
+      canBuyTickets: true,
+      venue: "Source-backed venue",
+      neighborhood: "Laureles",
+      category: "nightlife",
+      imageUrl: "",
+    };
+    searchEventsMock.mockResolvedValue({
+      results: [sourceRow], total: 1, source: "supabase",
+    });
+    const response = await POST(request({ queryText: "salsa in Laureles", limit: 5 }));
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.results).toEqual([sourceRow]);
+    expect(body.total).toBe(1);
+    expect(body.source).toBe("supabase");
+    expect(searchEventsMock).toHaveBeenCalledWith(expect.objectContaining({
+      queryText: "salsa in Laureles", limit: 5,
+    }));
+  });
+});
