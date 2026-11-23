@@ -108,12 +108,41 @@ describe("establishVercelAutomationBypass", () => {
     ).resolves.toBeUndefined();
   });
 
-  it("fails loudly when the secret is missing", async () => {
-    const { page, get } = fakePage(200, [BYPASS_COOKIE]);
-    await expect(establishVercelAutomationBypass(page, CANDIDATE, "")).rejects.toThrow(
-      /bypass secret is required/i,
-    );
-    expect(get).not.toHaveBeenCalled();
+  it("accepts a public candidate without a bypass secret when SHA and environment match", async () => {
+    const sha = "a".repeat(40);
+    vi.stubEnv("VERCEL_DEPLOYMENT_SHA", sha);
+    const get = vi.fn().mockResolvedValue({
+      status: () => 200,
+      headers: () => ({ "content-type": "application/json" }),
+      json: async () => ({ sha, environment: "production" }),
+    });
+    const page = { request: { get }, context: () => ({ cookies: vi.fn() }) } as unknown as Page;
+    await expect(establishVercelAutomationBypass(page, CANDIDATE, "", "production"))
+      .resolves.toBeUndefined();
+    expect(get).toHaveBeenCalledTimes(1);
+    expect(get).toHaveBeenCalledWith(`${CANDIDATE}/api/version`, {
+      failOnStatusCode: false,
+      maxRedirects: 0,
+    });
+  });
+
+  it("rejects a public candidate with no expected commit SHA", async () => {
+    vi.stubEnv("VERCEL_DEPLOYMENT_SHA", "");
+    const get = vi.fn().mockResolvedValue({
+      status: () => 200,
+      headers: () => ({ "content-type": "application/json" }),
+      json: async () => ({ sha: "a".repeat(40), environment: "preview" }),
+    });
+    const page = { request: { get }, context: () => ({ cookies: vi.fn() }) } as unknown as Page;
+    await expect(establishVercelAutomationBypass(page, CANDIDATE, ""))
+      .rejects.toThrow(/missing or invalid expected deployment SHA/);
+  });
+
+  it("rejects a Vercel login redirect without a bypass secret", async () => {
+    const get = vi.fn().mockResolvedValue({ status: () => 302 });
+    const page = { request: { get }, context: () => ({ cookies: vi.fn() }) } as unknown as Page;
+    await expect(establishVercelAutomationBypass(page, CANDIDATE, ""))
+      .rejects.toThrow(/CERTIFICATION_TARGET_INVALID/);
   });
 
   it("accepts an unprotected deployment after an unauthenticated exact-app version probe", async () => {
