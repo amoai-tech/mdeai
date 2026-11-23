@@ -632,11 +632,11 @@ function MdeApplyFilters({
  * model would have to guess at. Two consequences:
  *
  * - **Controls that need an MDE action are omitted until they are wired.**
- *   Booking, saving, filtering and submitting require a registered catalog
- *   function; without one they would be a fake "Book viewing" next to real
- *   listings. A Button or Pressable can still perform built-in browser
- *   actions (href, copy) with no MDE function, but the catalog does not rely
- *   on that yet. SAN-1655/SAN-1658 add the real controls with their functions.
+ *   Booking, saving and filtering require a registered catalog function; a
+ *   generic button must never open a model-chosen URL, copy arbitrary text,
+ *   or submit a form. The official Button renderer is retained below, but
+ *   its catalog props forbid href/copy/submit; comparison clicks use MDE's
+ *   user-activated, ID-resolving renderer functions.
  * - **Table is exposed for short, tool-grounded comparisons** using its
  *   columns/rows data form, documented in the server guide. TableSection,
  *   TableRow and TableCell stay omitted: the data form does not need them.
@@ -664,9 +664,9 @@ export const MDE_OMITTED_STANDARD_COMPONENTS = [
   "Link",
   "LinkCard",
   "Citation",
-  // Controls with no registered catalog function yet (SAN-1655 / SAN-1658).
-  // Official Button is used by the server-generated comparison action rows;
-  // all actions are bound to renderer-only functions and verified by the page.
+  // Controls without a registered catalog function (SAN-1655 / SAN-1658).
+  // The official Button renderer is re-registered with link/copy/submit props
+  // removed; only server-generated comparison clicks are ID-bound by design.
   "Pressable",
   "Form",
   "TextField",
@@ -714,9 +714,26 @@ export const MDE_OMITTED_STANDARD_COMPONENTS = [
   "Video",
 ] as const;
 
+// Reuse the official renderer and onClick event; never ship a separate Button.
+// If an SDK upgrade changes its shape, omit Button safely rather than either
+// exposing unrestricted browser actions or crashing unrelated AI surfaces.
+const standardButton = standardUI.components.get("Button");
+const clickOnlyButton = standardButton?.props instanceof z.ZodObject
+  ? {
+      component: standardButton.component,
+      description: "MDE click action only. No href, copy or submit. The Rentals comparison tool supplies the validated listing ID and renderer-only action.",
+      props: standardButton.props.omit({ href: true, copy: true, submit: true }).strict(),
+      events: standardButton.events,
+      slots: standardButton.slots,
+    }
+  : null;
+
 export const mdeUI = createGenerativeUI({
   id: "mde/discovery@1",
-  extends: [standardUI.omit(MDE_OMITTED_STANDARD_COMPONENTS)],
+  extends: [standardUI.omit([
+    ...MDE_OMITTED_STANDARD_COMPONENTS,
+    ...(standardButton ? ["Button" as const] : []),
+  ])],
   // The editable bedroom draft lives in the page provider so the agent can never
   // overwrite a user's edit; the model learns the applied filters from the page
   // context (DiscoveryPageContext), because it does not see catalog `state`.
@@ -735,6 +752,7 @@ export const mdeUI = createGenerativeUI({
     },
   },
   components: {
+    ...(clickOnlyButton ? { Button: clickOnlyButton } : {}),
     RentalCard: {
       component: MdeRentalCard,
       description:

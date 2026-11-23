@@ -188,12 +188,12 @@ describe("A2UI system instructions", () => {
     expect(MDE_A2UI_GUIDE).toContain("Use openRentalDetails only when the user asks to open one apartment's details");
   });
 
-  it("does not promise controls that have no registered action", () => {
-    // A rendered Button/input with no catalog function is a dead control next
-    // to real listings. The catalog omits them until SAN-1655/1658.
-    expect(MDE_A2UI_GUIDE).toContain("no buttons, inputs, forms");
-    expect(MDE_A2UI_GUIDE).toContain("Do not promise one");
-    expect(MDE_A2UI_GUIDE).toContain("Offer a FollowUp instead");
+  it("documents only safe comparison buttons and avoids promising unregistered controls", () => {
+    // Comparison Buttons are server-built and ID-bound. The model may not
+    // author their events or use built-in URL, clipboard or submit actions.
+    expect(MDE_A2UI_GUIDE).toContain("catalog rejects href/copy/submit");
+    expect(MDE_A2UI_GUIDE).toContain("Never hand-author comparison Buttons");
+    expect(MDE_A2UI_GUIDE).toContain("a FollowUp instead");
     expect(MDE_A2UI_GUIDE).not.toMatch(/component: "Button"/);
   });
 
