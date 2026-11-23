@@ -1,63 +1,107 @@
 <!--
-  mdeai PR template — keep PRs small, single-purpose, and reviewable.
-  Lesson banked 2026-06-10: a 64-file PR that mixed UI + backend + docs hid 3 bugs
-  and took longer to split than it would have to ship as 4 small PRs.
-  One issue · one layer · one small PR.
+  MDE AI PR template: one independently testable outcome, across layers when needed.
+  Keep descriptions concise and evidence-based. Remove irrelevant optional rows.
+  Never overwrite an existing PR body to apply a new template.
 -->
 
-## What & why
-<!-- One or two sentences. Plain English: what does this change do for a real user? -->
+## What changes for people
+<!-- One short summary; use plain English. Only link a verified Linear issue/title. -->
+- **Outcome:** [Who can do what, and what changes?]
+- **Real-world example:** [Renter/attendee/host/admin] → [action] → [visible and persisted result].
+- **Why needed / reuse:** [What was broken/missing? Which existing UI/API/RPC/tool did you reuse?]
+- **Key features:** [1–3 meaningful capabilities, not a diff summary.]
+- **Change type:** Product/runtime / Test-only / Docs-only / Infrastructure (choose one).
+- **Tech stack touched:** [Only changed systems, e.g. Next.js, CopilotKit, Mastra, Supabase, Stripe, Maps, Playwright.]
+- **Out of scope:** [Explicit non-goals or N/A.]
+- **Linear:** [Choose `Closes SAN-#### · SPEC-ID — Exact Linear Task Title` only when this PR fully finishes that verified issue; `Part of SAN-#### · SPEC-ID — Exact Linear Task Title` when it is partial; `N/A — no linked task` otherwise. Do not auto-close incomplete work.]
 
-Closes SAN-___ · <SPEC-ID> — <full Linear title>
+## Scope, changed files and reviewer fast path
+<!-- One independently testable outcome per PR. A small complete journey may span UI/API/DB.
+     Soft size budget: ~400 net lines and ~15 files; explain justified exceptions.
+     Avoid unrelated changes and stale bases. Do not add business eligibility/approval gates in Phase A. -->
+- **Changed files and purpose:** [Short list of paths → why each matters.]
+- **Review these first:** [3–5 highest-risk files, or fewer for a small PR, and what to inspect.]
+- **Reproduce:** [Exact UI path/action or test; URL/environment if applicable.]
+- **Risk / failure mode:** [What might break? Security, tenant isolation, duplicates, recovery, data, or N/A.]
+- **Size / scope exceptions:** [N/A, or why the smallest working change needs multiple layers/files.]
 
-## Layer (pick ONE)
-<!-- A PR should live in a single layer. Mixing them is what creates unreviewable PRs. -->
-- [ ] **UI** — presentational component(s), mock/fixture data, no DB/agent
-- [ ] **Data / DTO** — fetch/query + typed mapping, read-only
-- [ ] **Backend / AI** — Mastra tool, core logic, DB write, edge fn (mocked-Supabase unit tests, no UI)
-- [ ] **Wire** — connect an existing UI to an existing tool/action + e2e
-- [ ] **Docs / chore** — no `src/**` runtime change
+## User journey and architecture (only if useful)
+<!-- For a nontrivial cross-system/stateful journey, show actor → UI → canonical owner →
+     persisted result and a failure/retry branch. Use one verified Mermaid diagram.
+     GitHub syntax:
+     ~~~mermaid
+     flowchart LR
+       A[User action] --> B[Existing UI or API]
+       B --> C[Canonical service]
+       C --> D[Verified result]
+     ~~~
+     For docs-only, test-only or simple changes: N/A — reason.
+     Never present an illustrative diagram as evidence of implementation. -->
+- **Journey / Mermaid:** [Verified diagram or N/A — reason.]
 
-## Size budget
-<!-- Soft budget. Over it? Either justify here or split the PR. -->
-- [ ] ≤ ~400 net lines and ≤ ~15 files **— or** I've justified why below
-- [ ] No unrelated files (docs trees, lockfile churn, other features) rode along
-- [ ] Branch is **up to date with `main`** (rebased/merged) — not a stale base
+## Success criteria — observable outcomes
+<!-- Replace examples below with 1–4 task-specific, falsifiable criteria.
+     Each checked item needs evidence linked in the verification table.
+     For test-only work, specify the regression the new test catches; for docs-only,
+     specify the documentation behavior confirmed. Do not tick ahead of proof. -->
+- [ ] [User action produces expected UI/API/persisted result — evidence.]
+- [ ] [Failure/retry does not create duplicate side effects — when applicable.]
+- [ ] [Auth/tenant isolation, truthful data and 390px mobile confirmed — when affected.]
 
-<!-- If over budget, justify or note the follow-up split: -->
+## Reuse and material source receipts (only when relevant)
+<!-- Describe the first working rung: existing app → platform/native API → installed dependency
+     → official recipe → minimal new code. Material external sources must follow
+     AGENTS.md Source receipts: URL, exact source, decision, disposition
+     (COPY / ADAPT / MODEL / REFERENCE ONLY), destination, implementation,
+     verification, and version/commit when relevant. Do not add generic links for padding. -->
+- **Faster/smaller solution considered:** [Existing code/native method reused; rejected alternative and reason.]
+- **Material sources and how used:** [Receipt(s) per AGENTS.md, or N/A — none materially affected the change.]
 
-## Faster / smaller solution considered
-<!--
-  AGENTS.md § Ponytail. What existing/native/prebuilt option did you check first, and why did it not
-  win? "Nothing existed" is a valid answer — but name what you looked at.
-  - does not need to exist? · already in this repo? · standard library? · native platform or CLI?
-  - installed dependency? · official template, example, or recipe? · only then custom code?
--->
-- [ ] Checked the reuse ladder and stopped at the earliest rung that works
-<!-- If the platform only offers a dashboard/console path: is it reproducible from Git? If not, it belongs in a migration or committed config. -->
+## Pre-merge verification — actual commands and results
+<!-- Risk-based: exact diff/scope → focused Vitest/contract/SQL → typecheck/build as needed
+     → browser/preview when UI or deployed behavior changed. Follow
+     .claude/skills/tasks/references/pre-merge-tests.md.
+     Each independently run command/check gets its OWN row.
+     In "Where / SHA" state environment AND source/head SHA for every PASS.
+     Link logs, CI jobs, screenshots or DB readback. Use PASS / FAIL / NOT RUN / N/A;
+     explain skipped tests. Do not report a green test from an older PR head as current.
+     Existing Floor/PR Agent/Playwright CI already performs automation: do not duplicate. -->
+| Check / exact command | Result | Where / tested SHA | Evidence / reason |
+| --- | --- | --- | --- |
+| `npm test -- <actual-test-path>` (focused, when relevant) | NOT RUN | | |
+| `npm run lint` (if run separately) | NOT RUN | | |
+| `npm run typecheck` (if run separately) | NOT RUN | | |
+| `npm run floor` (full local gate, when run) | NOT RUN | | |
+| Playwright/browser or preview URL (when relevant) | NOT RUN | | |
+| `npx supabase test db` (schema/RLS/RPC changes only) | N/A | | No database change unless stated |
+| GitHub CI: `floor` | NOT RUN | PR head: | |
+| GitHub CI: `mastra-schema-init` | NOT RUN | PR head: | |
+| GitHub CI: `review / verify-review-result` | NOT RUN | PR head: | |
+<!-- For UI, provide preview URL and desktop/390px screenshot links where safe.
+     For test/docs-only, use focused test/structural verification and N/A for
+     unrelated runtime journeys; required repository CI still applies. -->
 
-## Source receipts
-<!--
-  AGENTS.md § Evidence rules. One row per external source that MATERIALLY affected the solution.
-  Background reading gets no row — an inflated table buries the rows that mattered.
-  REFERENCE ONLY must state why nothing was adopted and what alternative was rejected.
--->
+## Pre-merge decision and self-review
+- [ ] Changed-file scope, source receipts, and review evidence reflect the current PR head.
+- [ ] No secrets in client/runtime code; new Supabase tables have appropriate RLS + policies, if applicable.
+- [ ] Preserve authorization, data integrity, idempotency, and truthful source attribution; no Phase A business certification prerequisites.
+- [ ] Places field mask / Google Maps mapId checked if changed; Linear references use exact verified task title.
+- [ ] All valid review findings addressed or explained; required exact-head checks passed and required approval/authorized exception satisfied.
+- **Merge decision:** NOT READY / READY — [Current head SHA and supporting evidence; never infer from older runs.]
 
-| URL | Source (file/section/command) | Decision | Disposition | Destination | Implementation | Verification | Version/commit |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-|  |  |  |  |  |  |  |  |
+## Post-merge verification and recovery
+<!-- These steps are PLAN only until actually executed. Record PASS / FAIL / NOT VERIFIED afterward. -->
+1. **All PR types:** Confirm merge commit and intended changed files on `main`. Confirm no unintended changes.
+2. **Docs-only:** Open a *new* PR editor to verify template rendering, if changed; runtime smoke N/A. **Test-only:** Verify the test/CI behavior, not an invented product feature.
+3. **Runtime only:** Verify Vercel production deployment and `https://www.mdeai.co` serve the merged commit (and `/api/version` when applicable). Preview URL is not proof of production.
+4. **Runtime only:** Check affected read-only user journey, network/console errors and 390px UI if applicable. Use a safe read-only probe by default; before any scripted smoke, inspect its current side effects. `npm run verify:production` exercises a real host-agent journey and persists a thread, so it is **NOT read-only**: run it or other production-writing tests only with explicit task-specific opt-in, private QA fixtures and verified cleanup.
+5. **Report:** Tested SHA, environment, URLs, exact checks, PASS/FAIL/NOT VERIFIED, unresolved issues and links to evidence.
+6. **Recovery:** [If regression: responsible owner, rollback/revert or safe forward-fix path; for database migrations, explain data-safe recovery. N/A + reason for docs-only.]
 
-- [ ] None needed — no external source materially affected this change
-
-## Test plan & evidence
-- [ ] `npm run floor` green (lint · typecheck · build · test · audit)
-- [ ] Tests added/updated for the change (unit for logic, e2e for a user path)
-- [ ] Evidence: `docs/06-testing/playwright/evidence/YYYY-MM-DD/<id>-RESULTS.md` (link below)
-<!-- Paste the floor result / test counts / evidence path here. State honestly what was NOT run. -->
-<!-- Source proof and implementation proof are different: a URL is not a test, and a passing test does not validate an unchecked assumption. -->
-
-
-## Self-review
-- [ ] No secrets / service-role keys added under `src/**` (F13 carve-outs only)
-- [ ] New Supabase table → RLS + ≥1 policy · Places call → field mask · `<Map>` → `mapId`
-- [ ] Every `SAN-NNN` in this PR is written as `SAN-NNN · SPEC-ID — full title`
+## Official documentation (only when materially used)
+<!-- Record exact official URL + version, how applied, and proof under material source receipts above.
+     GitHub PR templates: https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/creating-a-pull-request-template-for-your-repository
+     Mermaid: https://docs.github.com/en/get-started/writing-on-github/working-with-advanced-formatting/creating-diagrams
+     Playwright: https://playwright.dev/docs/running-tests
+     Vercel preview/production: https://vercel.com/docs/deployments/environments -->
+- **References:** [Exact material URL → decision and implementation step, or N/A.]
