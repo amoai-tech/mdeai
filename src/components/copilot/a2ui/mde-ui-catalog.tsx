@@ -717,9 +717,9 @@ export const MDE_OMITTED_STANDARD_COMPONENTS = [
 // Reuse the installed official renderer and onClick event rather than adding a
 // parallel button implementation. Strict props ensure href/copy/submit are
 // rejected (not silently stripped) before any browser action can occur.
-const standardButton = standardUI.components.get("Button")!;
-if (!(standardButton.props instanceof z.ZodObject)) {
-  throw new Error("Installed CopilotKit Button props schema has changed");
+const standardButton = standardUI.components.get("Button");
+if (!standardButton || !(standardButton.props instanceof z.ZodObject)) {
+  throw new Error("Installed CopilotKit Button component or props schema has changed");
 }
 const clickOnlyButtonProps = standardButton.props.omit({
   href: true,
