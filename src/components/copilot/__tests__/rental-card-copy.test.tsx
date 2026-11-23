@@ -63,6 +63,14 @@ describe("SAN-1349 rental card viewing CTA gating", () => {
     bedrooms: 1,
   } as const;
 
+  it("exposes the canonical listing ID on Details even when the map pin ID differs", () => {
+    const html = renderToStaticMarkup(
+      <RentalCard {...base} onOpenDetails={() => undefined} />,
+    );
+    expect(html).toMatch(/data-testid="rental-details-cta"[^>]*data-listing-id="apt-1"/);
+    expect(html).not.toContain('data-listing-id="rental-1"');
+  });
+
   it("renders the CTA when requestability is proven and a handler exists", () => {
     const html = renderToStaticMarkup(
       <RentalCard {...base} canScheduleViewing onSchedule={() => undefined} />,

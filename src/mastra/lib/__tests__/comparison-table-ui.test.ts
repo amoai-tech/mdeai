@@ -136,6 +136,28 @@ describe("buildComparisonTableOps", () => {
     expect(buildComparisonTableOps([row(), second()], undefined, { target: "rental-comparison" })?.target).toBe("rental-comparison");
   });
 
+  it("uses official CopilotKit Text, Row and Button actions on the Rentals page", () => {
+    const result = buildComparisonTableOps([row(), second()], undefined, { target: "rental-comparison" });
+    expect(result).not.toBeNull();
+    const components = (result!.operations.find((op) => "createSurface" in op) as {
+      createSurface: { components: Array<Record<string, unknown>> };
+    }).createSurface.components;
+    expect(components.some((node) => node.component === "RentalComparisonActions")).toBe(false);
+    const button = (id: string) => components.find((node) => node.id === id);
+    expect(button("comparison-details-0")).toMatchObject({
+      component: "Button", label: "Details",
+      onClick: { functionCall: { "@call": "openComparedRentalDetails", args: { listingId: row().id } } },
+    });
+    expect(button("comparison-view-1")).toMatchObject({
+      component: "Button", label: "Schedule viewing",
+      onClick: { functionCall: { "@call": "requestComparedRentalViewing", args: { listingId: second().id } } },
+    });
+    expect(button("comparison-action-buttons-0")).toMatchObject({ component: "Row", wrap: "wrap" });
+    const actualIds = components.filter((c) => c.component === "Button")
+      .map((c) => (c.onClick as { functionCall: { args: { listingId: string } } }).functionCall.args.listingId);
+    expect(actualIds).toEqual([row().id, row().id, second().id, second().id]);
+  });
+
   it("replaces a previous surface rather than stacking tables", () => {
     const { result } = surface([row(), second()], true);
     expect(result.operations[0]).toMatchObject({

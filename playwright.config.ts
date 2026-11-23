@@ -155,6 +155,8 @@ export default defineConfig({
         "**/chat-thread-history.spec.ts",
         "**/chat-workspace-layout.spec.ts",
         "**/screens/MOB-CK-001-mobile-composer.spec.ts",
+        // PR #930 regression: run the real chat, map, drawer, and desktop strip in the same lane.
+        "**/screens/SCREEN-018-mobile-shell.spec.ts",
         "**/maps-layout-mobile.spec.ts",
         "**/viewing-modal-keyboard.spec.ts",
         "**/mobile-header.spec.ts",

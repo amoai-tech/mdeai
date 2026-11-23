@@ -204,6 +204,31 @@ describe("SAN-1341 Playwright architecture", () => {
     expect(workflow).not.toContain("run: npm run test:e2e:chat-virtualization");
   });
 
+  it("keeps the real chat layout screenshot suite in PR CI with private-artifact protection", () => {
+    const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+    expect(pkg.scripts["test:e2e:mobile-composer"]).toContain(
+      "e2e/screens/SCREEN-018-mobile-shell.spec.ts",
+    );
+    const project = (config.projects ?? []).find((entry) => entry.name === "local-chromium");
+    expect(JSON.stringify(project?.testMatch ?? [])).toContain("SCREEN-018-mobile-shell.spec.ts");
+    const workflow = fs.readFileSync(".github/workflows/playwright-deterministic.yml", "utf8");
+    expect(workflow).toContain("chat-layout-screenshots-${{ github.run_id }}");
+    expect(workflow).toContain("tmp/screenshots/SCREEN-018/*.png");
+    const mobileJob = workflow.split("  mobile-composer:")[1]?.split("\n  browser-results:")[0] ?? "";
+    const sanitization = mobileJob.indexOf("node scripts/sanitize-playwright-qa-artifacts.mjs");
+    const imageUpload = mobileJob.indexOf("- name: Upload anonymous mobile and desktop layout screenshots");
+    expect(sanitization).toBeGreaterThanOrEqual(0);
+    expect(imageUpload).toBeGreaterThan(sanitization);
+    expect(mobileJob.slice(imageUpload).split("\n      - name:")[0]).toContain("if-no-files-found: error");
+    const sanitizer = fs.readFileSync("scripts/sanitize-playwright-qa-artifacts.mjs", "utf8");
+    expect(sanitizer).toContain('"tmp/screenshots"');
+  });
+
+  it("keeps signed-in viewing QA screenshots, traces and video disabled", () => {
+    const source = fs.readFileSync("e2e/rental-conversion-journey.spec.ts", "utf8");
+    expect(source).toContain('test.use({ screenshot: "off", trace: "off", video: "off" });');
+  });
+
   it("adds scheduled/manual critical cross-browser certification without slowing PRs", () => {
     const workflow = fs.readFileSync(
       ".github/workflows/playwright-cross-browser.yml",

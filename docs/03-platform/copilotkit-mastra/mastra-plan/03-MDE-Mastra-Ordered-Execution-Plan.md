@@ -132,11 +132,11 @@ flowchart LR
 ### 1.1 Pin the correct source and protect ongoing work — PRIMARY STEP
 **Outcome:** Implementation is based on main, not the dirty local checkout, old docs, or an unmerged PR.
 
-**Files:** AGENTS.md; .claude/skills/{linear-task,plan,implement,mastra,supabase,testing,efficient}/SKILL.md; package.json; src/mastra/index.ts; docs/mastra/plan/02-MDE-Mastra-Platform-Audit-2026-11-22.md.
+**Files:** AGENTS.md; .claude/skills/{linear-task,plan,implement,mastra,supabase,testing,efficient}/SKILL.md; package.json; src/mastra/index.ts; docs/03-platform/copilotkit-mastra/mastra-plan/02-MDE-Mastra-Platform-Audit-2026-11-22.md.
 **Do:** Read the files and relevant task-specific instructions; create/use a clean worktree; verify branch SHA and check GitHub PR #925 and Linear owner before changes. Run npm run check:mastra and npm run test:mastra.
 **Official reference → adaptation → verification (step 1.1; follow in this order):**
-- **URL:** https://github.com/amoai-tech/mdeai/blob/main/.claude/skills/mermaid-diagrams/SKILL.md → **Exact upstream file/example:** .claude/skills/mermaid-diagrams/SKILL.md (diagram pass) → **REFERENCE ONLY** → **Exact destination:** `docs/mastra/plan/03-MDE-Mastra-Ordered-Execution-Plan.md` → **Verify:** render 12 Mermaid graphs in GitHub, then record clean main SHA.
-- **URL:** https://github.com/mermaid-js/mermaid → **Exact upstream file/example:** README.md (flowchart and sequence diagram examples) → **MODEL diagram syntax only** → **Exact destination:** `docs/mastra/plan/03-MDE-Mastra-Ordered-Execution-Plan.md` → **Verify:** GitHub Mermaid code fences render.
+- **URL:** https://github.com/amoai-tech/mdeai/blob/main/.claude/skills/mermaid-diagrams/SKILL.md → **Exact upstream file/example:** .claude/skills/mermaid-diagrams/SKILL.md (diagram pass) → **REFERENCE ONLY** → **Exact destination:** `docs/03-platform/copilotkit-mastra/mastra-plan/03-MDE-Mastra-Ordered-Execution-Plan.md` → **Verify:** render 12 Mermaid graphs in GitHub, then record clean main SHA.
+- **URL:** https://github.com/mermaid-js/mermaid → **Exact upstream file/example:** README.md (flowchart and sequence diagram examples) → **MODEL diagram syntax only** → **Exact destination:** `docs/03-platform/copilotkit-mastra/mastra-plan/03-MDE-Mastra-Ordered-Execution-Plan.md` → **Verify:** GitHub Mermaid code fences render.
 
 **Checks:** - [ ] exact SHA + clean worktree recorded - [ ] no unrelated files modified - [ ] test pass/fail/skip counts recorded - [ ] no production migration started.
 
@@ -602,7 +602,7 @@ flowchart LR
 ### 8.2 Verify current PR, code, CI and exact deployed SHA
 **Do:** Confirm origin/main vs PR head, ensure scoped changes only, no accidental live production DB writes; merge after code review and CI; verify /api/version on target environment and rerun one real journey. Do not say deployed or Done before proof.
 **Official reference → adaptation → verification (step 8.2; follow in this order):**
-- **URL:** https://docs.github.com/en/actions/how-tos/monitor-workflows/view-workflow-run-history → **Exact upstream file/example:** GitHub Actions run history/status example → **REFERENCE ONLY for CI evidence** → **Exact destination:** `existing .github/workflows/ and docs/mastra/plan/03-MDE-Mastra-Ordered-Execution-Plan.md` → **Verify:** exact PR SHA CI and after-merge /api/version proof.
+- **URL:** https://docs.github.com/en/actions/how-tos/monitor-workflows/view-workflow-run-history → **Exact upstream file/example:** GitHub Actions run history/status example → **REFERENCE ONLY for CI evidence** → **Exact destination:** `existing .github/workflows/ and docs/03-platform/copilotkit-mastra/mastra-plan/03-MDE-Mastra-Ordered-Execution-Plan.md` → **Verify:** exact PR SHA CI and after-merge /api/version proof.
 
 **Checks:** - [ ] exact head commit - [ ] CI outcome from that head - [ ] post-merge API/UI/DB receipts - [ ] wrong-user denials.
 

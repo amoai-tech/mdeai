@@ -706,6 +706,8 @@ test("pre-promotion Floor: pending waits without promotion; successful run proce
   let calls = 0;
   let pauses = 0;
   await waitForFloorSuccess({
+    readMain: async () => SHA,
+    expectedSha: SHA,
     readStatus: async () => { calls++; return seen.shift(); },
     attempts: 4,
     delayMs: 1,
@@ -719,6 +721,8 @@ test("pre-promotion Floor: failures, unknown states and timeout fail closed", as
   for (const status of ["failed", "unknown"]) {
     let reads = 0;
     await assert.rejects(() => waitForFloorSuccess({
+    readMain: async () => SHA,
+    expectedSha: SHA,
       readStatus: async () => { reads++; return status; },
       attempts: 3,
       pause: async () => { throw new Error("should not wait"); },
@@ -726,9 +730,37 @@ test("pre-promotion Floor: failures, unknown states and timeout fail closed", as
     assert.equal(reads, 1);
   }
   await assert.rejects(() => waitForFloorSuccess({
+    readMain: async () => SHA,
+    expectedSha: SHA,
     readStatus: async () => "pending",
     attempts: 2,
     delayMs: 1,
     pause: async () => {},
   }), /vercel-release.*Floor/);
+});
+
+test("pre-promotion Floor: superseded candidate releases the queue before another Floor poll", async () => {
+  let mainReads = 0;
+  let floorReads = 0;
+  await assert.rejects(() => waitForFloorSuccess({
+    expectedSha: SHA,
+    readMain: async () => ++mainReads === 1 ? SHA : "d".repeat(40),
+    readStatus: async () => { floorReads++; return "pending"; },
+    attempts: 5,
+    delayMs: 0,
+    pause: async () => {},
+  }), /candidate superseded/);
+  assert.equal(mainReads, 2);
+  assert.equal(floorReads, 1, "obsolete candidate never polls Floor again");
+});
+
+test("pre-promotion Floor: reject a stale success if main moved during GitHub API lookup", async () => {
+  let mainReads = 0;
+  await assert.rejects(() => waitForFloorSuccess({
+    expectedSha: SHA,
+    readMain: async () => ++mainReads === 1 ? SHA : "e".repeat(40),
+    readStatus: async () => "success",
+    attempts: 2,
+  }), /candidate superseded/);
+  assert.equal(mainReads, 2);
 });

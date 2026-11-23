@@ -140,7 +140,26 @@ export function buildComparisonTableOps(
               id: "comparison-note", component: "Caption",
               text: 'Prices are listing rates, not confirmed availability. Monthly and nightly rates are different; "Not recorded" means the listing does not provide that detail.',
             },
-            { id: "comparison-actions", component: "RentalComparisonActions", listingIds: safe.map((row) => row.id) },
+            // The Rentals page uses only official Standard Catalog components.
+            // Chat keeps the existing action adapter until that surface gains
+            // its own page-scoped handlers; never add dead buttons to chat.
+            ...(options.target === RENTAL_COMPARISON_TARGET
+              ? [
+                  { id: "comparison-actions", component: "Column", gap: 2,
+                    children: safe.map((_, index) => `comparison-action-${index}`) },
+                  ...safe.flatMap((row, index) => [
+                    { id: `comparison-action-${index}`, component: "Column", gap: 1,
+                      children: [`comparison-action-title-${index}`, `comparison-action-buttons-${index}`] },
+                    { id: `comparison-action-title-${index}`, component: "Text", text: row.title },
+                    { id: `comparison-action-buttons-${index}`, component: "Row", wrap: "wrap", gap: 2,
+                      children: [`comparison-details-${index}`, `comparison-view-${index}`] },
+                    { id: `comparison-details-${index}`, component: "Button", label: "Details", size: "md",
+                      onClick: { functionCall: { "@call": "openComparedRentalDetails", args: { listingId: row.id } } } },
+                    { id: `comparison-view-${index}`, component: "Button", label: "Schedule viewing", size: "md",
+                      onClick: { functionCall: { "@call": "requestComparedRentalViewing", args: { listingId: row.id } } } },
+                  ]),
+                ]
+              : [{ id: "comparison-actions", component: "RentalComparisonActions", listingIds: safe.map((row) => row.id) }]),
           ],
         },
       },

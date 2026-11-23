@@ -11,7 +11,7 @@ import { warnIfRemoteDatabaseUrl } from "../warn-remote-database-url.mjs";
 // when a runner (IDE, `node --test` from a subdirectory) uses a different cwd.
 const script = fileURLToPath(new URL("../warn-remote-database-url.mjs", import.meta.url));
 const vitestEntry = fileURLToPath(new URL("../../node_modules/vitest/vitest.mjs", import.meta.url));
-const vitestConfig = fileURLToPath(new URL("../../vitest.config.ts", import.meta.url));
+const vitestConfig = fileURLToPath(new URL("../../vitest.config.mts", import.meta.url));
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
 
 /**
@@ -474,7 +474,7 @@ test("Vitest runs the direct-start guard in globalSetup, not during config evalu
   let setupSource;
   try {
     process.chdir(repoRoot);
-    configSource = fs.readFileSync("vitest.config.ts", "utf8");
+    configSource = fs.readFileSync("vitest.config.mts", "utf8");
     setupSource = fs.readFileSync("vitest.global-setup.ts", "utf8");
   } finally {
     process.chdir(previous);

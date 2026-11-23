@@ -8,7 +8,7 @@ import { useOptionalConciergeCoAgent } from "@/components/chat/concierge-coagent
  * same official Table a real page target; the full /chat keeps target="chat".
  * No new data or rendering library is introduced. */
 export const RENTAL_COMPARISON_TARGET = "rental-comparison";
-export const RENTAL_COMPARISON_COMPONENTS = ["Column", "Row", "Title", "Badge", "Table", "Text", "Caption", "RentalComparisonActions"] as const;
+export const RENTAL_COMPARISON_COMPONENTS = ["Column", "Row", "Title", "Badge", "Table", "Text", "Caption", "Button"] as const;
 
 export function RentalComparisonSurface() {
   const runtime = useGenerativeUIRuntime();
@@ -16,14 +16,16 @@ export function RentalComparisonSurface() {
   if (!runtime || !coAgent) return null;
 
   return (
-    <GenerativeUISurface
+    <section aria-label="Apartment comparison" data-testid="rental-comparison-surface">
+      <GenerativeUISurface
       id={RENTAL_COMPARISON_TARGET}
       ui={mdeUI}
       components={[...RENTAL_COMPARISON_COMPONENTS]}
       description="Accurate side-by-side comparison of two to five already displayed rentals. The server supplies the Table, factual summary, and ID-only Details and viewing actions. Never generate prices or a second search."
       className="mb-4 min-w-0 max-w-full rounded-xl border border-border bg-card px-3 py-3 shadow-sm sm:px-4"
       fallback={null}
-      autoScroll={false}
-    />
+        autoScroll={false}
+      />
+    </section>
   );
 }

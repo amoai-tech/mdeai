@@ -146,7 +146,7 @@ if in_filter files; then
   for f in \
     ".env.local" \
     "components.json" \
-    "vitest.config.ts" \
+    "vitest.config.mts" \
     "tailwind.config.ts" \
     "src/lib/utils.ts" \
     "src/app/host/event/new/page.tsx"; do

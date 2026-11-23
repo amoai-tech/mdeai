@@ -77,6 +77,15 @@ test.describe("MDE Chromatic mobile UI pilot", () => {
     viewport: { width: 390, height: 844 },
   });
 
+  test("Chat mobile shell keeps navigation and map controls usable", async ({ page }, testInfo) => {
+    await prepareVisualPage(page);
+    await gotoDeterministicChat(page);
+    await expect(page.getByTestId("mobile-bottom-nav")).toBeVisible();
+    await expect(page.getByTestId("map-sheet-trigger")).toBeVisible();
+    await expect(page.locator('aside [data-testid="nav-rail"]')).toBeHidden();
+    await takeSnapshot(page, "Chat mobile shell — 390px", testInfo);
+  });
+
   test("Rental results and viewing controls stay clear of the floating map", async ({ page }, testInfo) => {
     await prepareVisualPage(page);
     await gotoDeterministicChat(page);
@@ -199,5 +208,24 @@ test.describe("MDE Chromatic mobile UI pilot", () => {
     // Intentionally NEVER click the checkout CTA: review is display-only here.
     await expect(page.getByTestId("booking-checkout-modal")).toHaveCount(0);
     expect(checkoutRequests).toEqual([]);
+  });
+});
+
+test.describe("MDE Chromatic desktop Chat shell", () => {
+  test.skip(process.env.CHROMATIC_PILOT !== "1", "Chromatic pilot is opt-in");
+  test.use({
+    disableAutoSnapshot: true,
+    cropToViewport: true,
+    viewport: { width: 1280, height: 900 },
+  });
+
+  test("Desktop navigation, filter strip and map stay visible together", async ({ page }, testInfo) => {
+    await prepareVisualPage(page);
+    await gotoDeterministicChat(page);
+    await expect(page.locator('aside [data-testid="nav-rail"]')).toBeVisible();
+    await expect(page.getByTestId("chat-query-bar")).toBeVisible();
+    await expect(page.getByTestId("map-panel")).toBeVisible();
+    await expect(page.getByTestId("map-sheet-trigger")).toBeHidden();
+    await takeSnapshot(page, "Chat desktop shell — 1280px", testInfo);
   });
 });

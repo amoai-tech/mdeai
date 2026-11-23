@@ -47,6 +47,12 @@ export async function POST(req: Request) {
       limit,
       queryText,
     });
+    if (source === "unavailable") {
+      return NextResponse.json(
+        { error: "event_search_unavailable", message: "Event search is temporarily unavailable." },
+        { status: 503 },
+      );
+    }
     return NextResponse.json({ results, total, source, hybridUsed, rankExplanation });
   } catch (error) {
     console.error("[api/events/search]", error);

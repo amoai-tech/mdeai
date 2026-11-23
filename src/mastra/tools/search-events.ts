@@ -288,7 +288,7 @@ export type EventQuery = {
 export type EventSearchResult = {
   results: EventCard[];
   total: number;
-  source: 'supabase' | 'fallback';
+  source: 'supabase' | 'fallback' | 'unavailable';
   hybridUsed?: boolean;
   rankExplanation?: import('../lib/search-logs').RankExplanationEntry[];
 };
@@ -354,8 +354,8 @@ export async function searchEvents(
   const client = getSupabaseClient();
 
   if (!client) {
-    console.warn('[search-events] Supabase client unavailable — returning empty');
-    return { results: [], total: 0, source: 'fallback' };
+    console.warn('[search-events] Supabase client unavailable');
+    return { results: [], total: 0, source: 'unavailable' };
   }
 
   let q = client
@@ -389,7 +389,7 @@ export async function searchEvents(
 
   if (error) {
     console.error('[search-events] Supabase error:', error.message);
-    return { results: [], total: 0, source: 'fallback' };
+    return { results: [], total: 0, source: 'unavailable' };
   }
 
   const results = (data as EventRow[]).map(rowToCard);
@@ -428,7 +428,7 @@ export const searchEventsTool = createTool({
       }),
     ),
     total: z.number(),
-    source: z.enum(['supabase', 'fallback']),
+    source: z.enum(['supabase', 'fallback', 'unavailable']),
     hybridUsed: z.boolean().optional(),
     rankExplanation: z
       .array(

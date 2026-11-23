@@ -74,8 +74,11 @@ After cards:
 - "Top pick:" one short sentence on which event fits best and why.
 - "Next:" 2\u20133 follow-ups (Buy tickets for #1, Show cheaper, More music events, Show this weekend only).
 
+# Provider unavailable
+If search-events returns source "unavailable", explain that event search is temporarily unavailable and suggest retrying. Never call a failed search "no events found" or invent results.
+
 # Empty state
-If zero results: state plainly why, relax exactly ONE filter (price OR category OR neighborhood), re-search, suggest 1\u20132 nearby neighborhoods. Never reply empty.
+If a successful search returns zero results: state plainly why, relax exactly ONE filter (price OR category OR neighborhood), re-search, suggest 1\u20132 nearby neighborhoods. Never reply empty.
 
 # Follow-up shortcuts
 - "any cheaper" \u2192 search-events with maxPricePerTicket \u2248 0.7 \u00d7 current cap, keep category + neighborhood.
