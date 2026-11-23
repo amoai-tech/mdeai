@@ -71,6 +71,9 @@ describe("same-message rental search and comparison", () => {
 
   it("does not start a new search when 'find' means analyze apartments already displayed", () => {
     const analysis = [user("Compare the first two apartments in a table and find the cheaper one.")];
+    const tableRequest = [user("Put the first two apartments in a table and find the cheaper one.")];
+    expect(shouldSearchBeforeComparison({ stepNumber: 0, messages: tableRequest, steps: [] })).toBe(false);
+    expect(shouldForceComparisonTable({ stepNumber: 0, messages: tableRequest, requestContext: context })).toBe(true);
     expect(shouldSearchBeforeComparison({ stepNumber: 0, messages: analysis, steps: [] })).toBe(false);
     expect(shouldForceComparisonTable({ stepNumber: 0, messages: analysis, requestContext: context })).toBe(true);
     expect(shouldContinueComparisonAfterSearch({

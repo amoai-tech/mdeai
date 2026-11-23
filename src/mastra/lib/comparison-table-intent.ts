@@ -109,7 +109,7 @@ const NEW_SEARCH = /\b(find|search|discover|look(?:ing)? for|new search|another|
 // Only a new search BEFORE the comparison request should replace the cards.
 // "Compare the first two and find the cheaper one" is analysis of shown rows,
 // not a new rental search. Bedroom-category comparisons still need a search.
-const COMPARISON_START = /\b(?:compare|comparison)\b/i;
+const COMPARISON_START = /\b(?:compare|comparison|table|tabular|side[\s-]?by[\s-]?side|versus|vs)\b/i;
 const BEDROOM_CATEGORY_COMPARISON =
   /\b(?:compare|comparison)\s+(?:the\s+)?(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten)[\s-]*(?:br|bed|bedrooms?)\b/i;
 function requestsRentalSearchBeforeComparison(text: string): boolean {
