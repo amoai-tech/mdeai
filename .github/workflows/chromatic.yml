@@ -27,7 +27,7 @@ concurrency:
 
 jobs:
   visual:
-    name: Rentals and Events mobile visual checks
+    name: Rentals, Events and Chat responsive visual checks
     # Never expose the project token to code from untrusted fork PRs.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
@@ -51,7 +51,7 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Capture 390px rental and event states
+      - name: Capture rental/event states and 390px/1280px Chat snapshots
         run: npm run test:e2e:chromatic-pilot
 
       - name: Upload and compare UI snapshots
