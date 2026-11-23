@@ -4,7 +4,7 @@
   Never overwrite an existing PR body to apply a new template.
 -->
 
-## What changes for people
+## Summary
 <!-- One short summary; use plain English. Only link a verified Linear issue/title. -->
 - **Outcome:** [Who can do what, and what changes?]
 - **Real-world example:** [Renter/attendee/host/admin] → [action] → [visible and persisted result].
