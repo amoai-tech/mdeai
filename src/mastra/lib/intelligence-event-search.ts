@@ -104,6 +104,8 @@ export function filterHybridEventRows( // skipcq: JS-0067
   if (typeof maxPricePerTicket === "number") {
     const maxPrice = maxPricePerTicket;
     filtered = filtered.filter((r) => {
+      // Unknown or unparseable prices are not confirmed budget matches.
+      // Without an explicit price cap, these events remain discoverable.
       const price = num(r.ticket_price_min);
       return price !== undefined && price <= maxPrice;
     });

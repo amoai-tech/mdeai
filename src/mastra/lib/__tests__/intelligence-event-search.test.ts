@@ -160,11 +160,15 @@ describe("filterHybridEventRows", () => {
       { ...sampleRow, id: "free-ticket", ticket_price_min: 0 },
       { ...sampleRow, id: "within-budget", ticket_price_min: 40000 },
       { ...sampleRow, id: "over-budget", ticket_price_min: 80000 },
+      { ...sampleRow, id: "na-price", ticket_price_min: "N/A" },
+      { ...sampleRow, id: "numeric-string", ticket_price_min: "30000" },
     ];
     expect(filterHybridEventRows(candidates, undefined, 50000).map((row) => row.id))
-      .toEqual(["free-ticket", "within-budget"]);
+      .toEqual(["free-ticket", "within-budget", "numeric-string"]);
+    expect(filterHybridEventRows(candidates, undefined, 0).map((row) => row.id))
+      .toEqual(["free-ticket"]);
     // Unknown prices remain discoverable when no budget was requested.
-    expect(filterHybridEventRows(candidates)).toHaveLength(5);
+    expect(filterHybridEventRows(candidates)).toHaveLength(7);
   });
 
   it("applies category remap used with queryText (nightlife+salsa → music)", () => {
