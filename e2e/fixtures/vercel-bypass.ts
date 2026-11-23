@@ -45,28 +45,32 @@ export async function establishVercelAutomationBypass(
   secret: string,
   expectedEnvironment: "preview" | "production" = "preview",
 ): Promise<void> {
-  if (!secret.trim()) throw new Error("Vercel automation bypass secret is required");
   const candidate = validateVercelCandidateOrigin(rawCandidateUrl);
-  const response = await page.request.get(`${candidate.origin}/`, {
-    failOnStatusCode: false,
-    maxRedirects: 0,
-    headers: {
-      "x-vercel-protection-bypass": secret,
-      "x-vercel-set-bypass-cookie": "true",
-    },
-  });
-  const status = response.status();
-  if (status >= 500) {
-    throw new Error(`CERTIFICATION_TARGET_INVALID: bypass setup returned ${status}`);
+  let setupStatus: number | "not requested" = "not requested";
+  let cookieNames: string[] = [];
+
+  // Only protected deployments need a bypass cookie. A public Vercel candidate
+  // must instead prove the exact app SHA and environment before use.
+  if (secret.trim()) {
+    const response = await page.request.get(`${candidate.origin}/`, {
+      failOnStatusCode: false,
+      maxRedirects: 0,
+      headers: {
+        "x-vercel-protection-bypass": secret,
+        "x-vercel-set-bypass-cookie": "true",
+      },
+    });
+    setupStatus = response.status();
+    if (setupStatus >= 500) {
+      throw new Error(`CERTIFICATION_TARGET_INVALID: bypass setup returned ${setupStatus}`);
+    }
+    const cookies = await page.context().cookies(candidate.origin);
+    cookieNames = cookies.map((cookie) => cookie.name);
+    if (cookieNames.includes("_vercel_jwt")) return;
   }
 
-  // Protected deployments set _vercel_jwt. An unprotected Vercel deployment
-  // legitimately returns 200 without setting it. In that case, prove we can
-  // reach the exact MDE candidate WITHOUT bypass headers or redirects.
-  const cookies = await page.context().cookies(candidate.origin);
-  const bypass = cookies.find((cookie) => cookie.name === "_vercel_jwt");
-  if (bypass) return;
-
+  // No cookie/secret: reach the app without bypass headers or redirects.
+  // A login page, wrong deployment SHA or unexpected environment must fail.
   const probe = await page.request.get(`${candidate.origin}/api/version`, {
     failOnStatusCode: false,
     maxRedirects: 0,
@@ -107,8 +111,8 @@ export async function establishVercelAutomationBypass(
   if (!verifiedApp) {
     throw new Error(
       `CERTIFICATION_TARGET_INVALID: Vercel bypass cookie was not established for ` +
-        `${candidate.origin}. Setup returned ${status}; cookies present: ` +
-        `${cookies.map((cookie) => cookie.name).join(", ") || "none"}. ` +
+        `${candidate.origin}. Setup returned ${setupStatus}; cookies present: ` +
+        `${cookieNames.join(", ") || "none"}. ` +
         `Unauthenticated app identity probe failed: ${failureReason} (HTTP ${probeStatus}); ` +
         `the candidate cannot be certified without reaching MDE.`,
     );

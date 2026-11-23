@@ -46,8 +46,18 @@ test.use({ trace: "off", screenshot: "off", video: "off" });
  */
 const baseUrl = process.env.PROD_SMOKE_BASE_URL?.trim() ?? "";
 const enabled = Boolean(baseUrl);
-/** Protected Vercel previews need the automation bypass; production does not. */
+/** A .vercel.app URL can be a preview OR a staged production deployment.
+ * For the latter, explicitly pin both its environment and exact commit SHA;
+ * never accept a protection/login page as a real MDE response.
+ * Example: MDE_VERCEL_CANDIDATE_ENVIRONMENT=production
+ *          VERCEL_DEPLOYMENT_SHA=<40-character GitHub commit>.
+ */
 const isVercelPreview = /\.vercel\.app$/i.test(baseUrl ? new URL(baseUrl).hostname : "");
+const configuredCandidateEnvironment = process.env.MDE_VERCEL_CANDIDATE_ENVIRONMENT?.trim() || "preview";
+if (configuredCandidateEnvironment !== "preview" && configuredCandidateEnvironment !== "production") {
+  throw new Error("MDE_VERCEL_CANDIDATE_ENVIRONMENT must be 'preview' or 'production'");
+}
+const candidateEnvironment: "preview" | "production" = configuredCandidateEnvironment;
 const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim() ?? "";
 
 /** Build an absolute URL without doubling slashes on a trailing-slash base. */
@@ -101,11 +111,11 @@ async function expectSignedInRuntimeReached(page: Page): Promise<void> {
 }
 
 async function signInWithDeploymentAccess(page: Page, email: string): Promise<void> {
-  if (isVercelPreview) await establishVercelAutomationBypass(page, baseUrl, bypassSecret);
+  if (isVercelPreview) await establishVercelAutomationBypass(page, baseUrl, bypassSecret, candidateEnvironment);
   await signInAsOnOrigin(page, baseUrl, email);
   // Session injection clears cookies, so restore the same-origin bypass cookie.
   if (isVercelPreview) {
-    await establishVercelAutomationBypass(page, baseUrl, bypassSecret);
+    await establishVercelAutomationBypass(page, baseUrl, bypassSecret, candidateEnvironment);
     await expectSignedInRuntimeReached(page);
   }
 }
@@ -225,7 +235,7 @@ test.describe("prod CopilotKit per-user isolation (SAN-547 · D17)", () => {
   });
 
   test("anonymous callers reach neither the runtime nor a named thread", async ({ page }) => {
-    if (isVercelPreview) await establishVercelAutomationBypass(page, baseUrl, bypassSecret);
+    if (isVercelPreview) await establishVercelAutomationBypass(page, baseUrl, bypassSecret, candidateEnvironment);
 
     const info = await page.request.get(route("/api/copilotkit/info"), {
       maxRedirects: 0,
