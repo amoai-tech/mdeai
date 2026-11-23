@@ -110,6 +110,17 @@ test("rejects a binary with an incompatible version", (t) => {
   assert.equal(result.status, 1);
   assert.match(result.stderr, /Incompatible Graphify/);
   assert.match(result.stderr, /graphifyy\[sql\]==0\.9\.115/);
+  // The uv install alone cannot fix an explicit override, so say how to repair it.
+  assert.match(result.stderr, /GRAPHIFY_BIN is set .*unset GRAPHIFY_BIN before retrying/);
+});
+
+test("keeps the plain uv repair message when no GRAPHIFY_BIN override is set", (t) => {
+  const temp = sandbox(t);
+  fakeGraphify(join(temp, "graphifyy", "bin", "graphify"), "graphify 0.9.11");
+  const result = run(["query", "conciergeAgent"], { GRAPHIFY_BIN: "", UV_TOOL_DIR: temp }, root);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /Repair: uv tool install --reinstall --force 'graphifyy\[sql\]==0\.9\.115'/);
+  assert.doesNotMatch(result.stderr, /GRAPHIFY_BIN/);
 });
 
 test("ignores skill-version warnings that Graphify prints on stderr", (t) => {
