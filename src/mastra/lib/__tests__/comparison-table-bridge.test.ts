@@ -60,7 +60,39 @@ describe("comparisonTableRenderEvents", () => {
     expect(item("comparison-badge")).toMatchObject({ component: "Badge", label: "Recorded details" });
     expect(item("comparison")).toMatchObject({ component: "Table", columns: ["Feature", "Calle 10 #42-15", "Zitios"] });
     expect(item("comparison-note")).toMatchObject({ component: "Caption" });
-    expect(item("comparison-actions")).toMatchObject({ component: "RentalComparisonActions", listingIds: ["a", "b"] });
+    expect(item("comparison-actions")).toMatchObject({
+      component: "Column", children: ["comparison-action-0", "comparison-action-1"],
+    });
+    for (const [index, row] of rows.entries()) {
+      expect(item(`comparison-action-${index}`)).toMatchObject({
+        component: "Column",
+        children: [`comparison-action-title-${index}`, `comparison-action-buttons-${index}`],
+      });
+      expect(item(`comparison-action-title-${index}`)).toMatchObject({
+        component: "Text", text: row.title,
+      });
+      expect(item(`comparison-details-${index}`)).toMatchObject({
+        component: "Button", label: "Details",
+        onClick: { functionCall: { "@call": "openComparedRentalDetails", args: { listingId: row.id } } },
+      });
+      expect(item(`comparison-view-${index}`)).toMatchObject({
+        component: "Button", label: "Schedule viewing",
+        onClick: { functionCall: { "@call": "requestComparedRentalViewing", args: { listingId: row.id } } },
+      });
+    }
+  });
+
+  it("keeps the existing action adapter for the generic chat target", () => {
+    const events = comparisonTableRenderEvents(rows as never, "call-chat", "chat");
+    const args = JSON.parse((events[1] as unknown as { delta: string }).delta) as {
+      target: string;
+      operations: Array<{ createSurface?: { components: Array<Record<string, unknown>> } }>;
+    };
+    expect(args.target).toBe("chat");
+    const components = args.operations[0].createSurface?.components ?? [];
+    expect(components.find((part) => part.id === "comparison-actions")).toMatchObject({
+      component: "RentalComparisonActions", listingIds: ["a", "b"],
+    });
   });
 
   it("uses a new activity surface for each comparison instead of deleting a live earlier surface", () => {

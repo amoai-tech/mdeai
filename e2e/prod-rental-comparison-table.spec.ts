@@ -66,10 +66,8 @@ test.describe("SAN-1681 · official rental comparison A2UI Table", () => {
         const byId = new Map((authorized ?? []).map((record) => [String(record.id), record]));
         const records = cardIds.map((id) => byId.get(id));
         expect(records.every(Boolean)).toBe(true);
-        const comparisonIds = () => page.getByTestId("rental-comparison-actions")
-          .locator("[data-listing-id]")
-          .evaluateAll((elements) => elements.map((element) => element.getAttribute("data-listing-id")));
-        const table = page.getByRole("table", { name: /side-by-side apartment comparison/i });
+        const comparisonSurface = page.getByTestId("rental-comparison-surface");
+        const table = comparisonSurface.getByRole("table", { name: /side-by-side apartment comparison/i });
         const queryCounts: number[] = [];
         page.on("response", (r) => {
           if (new URL(r.url()).pathname === "/api/rentals/search" && r.request().method() === "POST") {
@@ -88,8 +86,10 @@ test.describe("SAN-1681 · official rental comparison A2UI Table", () => {
         await expect(table.getByRole("cell", { name: "Furnished", exact: true })).toBeVisible();
         await expect(table.getByRole("row").filter({ hasText: "Wi-Fi speed" })).toBeVisible();
         await expect(page.locator(".a2ui-std-table-wrap")).toBeVisible();
-        await expect(page.getByTestId("rental-comparison-actions")).toBeVisible();
-        await expect.poll(comparisonIds, { timeout: 40_000 }).toEqual(cardIds.slice(0, 2));
+        // Official Standard Buttons are rendered from the authorized result,
+        // not custom React wrappers with listing IDs copied into DOM attributes.
+        await expect(comparisonSurface.getByRole("button", { name: "Details" })).toHaveCount(2);
+        await expect(comparisonSurface.getByRole("button", { name: "Schedule viewing" })).toHaveCount(2);
         // Compare identities and recorded facts with renter-visible database rows.
         const featureCell = (label: string, index: number) =>
           table.locator("tbody tr").filter({ hasText: label }).first().locator("td").nth(index + 1);
@@ -122,7 +122,7 @@ test.describe("SAN-1681 · official rental comparison A2UI Table", () => {
         expect(queryCounts, "comparison reuses current results rather than searching").toEqual([]);
         expect(await cards.count()).toBe(initialCount);
 
-        const action = page.getByTestId("rental-comparison-actions").getByRole("button", { name: "Details" }).first();
+        const action = comparisonSurface.getByRole("button", { name: "Details" }).first();
         await action.focus();
         await expect(action).toBeFocused();
         // Keyboard Enter uses the existing Rental Details flow, not a fake
@@ -135,8 +135,7 @@ test.describe("SAN-1681 · official rental comparison A2UI Table", () => {
 
         // Only persisted, requestable listing actions are offered. Opening
         // the existing review form is read-only: never submit a QA viewing.
-        const viewing = page.getByTestId("rental-comparison-actions")
-          .getByRole("button", { name: "Schedule viewing" }).first();
+        const viewing = comparisonSurface.getByRole("button", { name: "Schedule viewing" }).first();
         if (await viewing.count()) {
           await viewing.click();
           const proposal = page.getByTestId("schedule-viewing-modal");
@@ -148,7 +147,8 @@ test.describe("SAN-1681 · official rental comparison A2UI Table", () => {
         await ask("Compare the second and third apartments side by side.");
         await expect(table).toBeVisible({ timeout: 120_000 });
         await expect(table.locator("thead th")).toHaveCount(3);
-        await expect.poll(comparisonIds, { timeout: 120000 }).toEqual(cardIds.slice(1, 3));
+        await expect(comparisonSurface.getByRole("button", { name: "Details" })).toHaveCount(2);
+        await expect(comparisonSurface.getByRole("button", { name: "Schedule viewing" })).toHaveCount(2);
         await expect(table.locator("thead th").nth(1)).toHaveText(records[1]!.title);
         await expect(table.locator("thead th").nth(2)).toHaveText(records[2]!.title);
         await expect(table).toHaveCount(1);

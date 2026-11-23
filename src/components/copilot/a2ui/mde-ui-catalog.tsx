@@ -665,7 +665,8 @@ export const MDE_OMITTED_STANDARD_COMPONENTS = [
   "LinkCard",
   "Citation",
   // Controls with no registered catalog function yet (SAN-1655 / SAN-1658).
-  "Button",
+  // Official Button is used by the server-generated comparison action rows;
+  // all actions are bound to renderer-only functions and verified by the page.
   "Pressable",
   "Form",
   "TextField",
@@ -722,6 +723,16 @@ export const mdeUI = createGenerativeUI({
   // Renderer-only action: the page decides what "apply" means.
   functions: {
     applyRentalFilters: { parameters: z.object({}) },
+    openComparedRentalDetails: {
+      parameters: z.object({ listingId: z.string().min(1) }),
+      allowedCallers: "rendererOnly",
+      requiresUserActivation: true,
+    },
+    requestComparedRentalViewing: {
+      parameters: z.object({ listingId: z.string().min(1) }),
+      allowedCallers: "rendererOnly",
+      requiresUserActivation: true,
+    },
   },
   components: {
     RentalCard: {
