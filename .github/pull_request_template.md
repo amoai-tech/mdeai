@@ -13,7 +13,7 @@
 - **Change type:** Product/runtime / Test-only / Docs-only / Infrastructure (choose one).
 - **Tech stack touched:** [Only changed systems, e.g. Next.js, CopilotKit, Mastra, Supabase, Stripe, Maps, Playwright.]
 - **Out of scope:** [Explicit non-goals or N/A.]
-- **Linear:** [Verified `SAN-#### · SPEC-ID — Exact Linear Task Title`, or N/A — no linked task.]
+- **Linear:** [Choose `Closes SAN-#### · SPEC-ID — Exact Linear Task Title` only when this PR fully finishes that verified issue; `Part of SAN-#### · SPEC-ID — Exact Linear Task Title` when it is partial; `N/A — no linked task` otherwise. Do not auto-close incomplete work.]
 
 ## Scope, changed files and reviewer fast path
 <!-- One independently testable outcome per PR. A small complete journey may span UI/API/DB.
