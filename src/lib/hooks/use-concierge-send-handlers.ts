@@ -416,6 +416,13 @@ export function useConciergeSendHandlers(): ConciergeSendHandlers {
       // restore their matching query so a legitimate refinement still works.
       setState((previous) => ({ ...previous, ...recovery.previous }));
     } else {
+      // SAN-874 deliberately retires the *previous rental category* after a
+      // successful topic change: its rental cards are no longer current, so
+      // leaving their pins would misrepresent the active chat result. SAN-1422
+      // is different: an empty grounded SEARCH preserves unrelated pins when
+      // that result has nothing mappable; this callback is not such a result.
+      // Only clear rentals after success and the same-view/thread check above;
+      // never clear event, restaurant or grounded pins here.
       rentalFastPath?.clearToolResults();
       map?.mergePinsByCategory?.("rental", []);
     }
