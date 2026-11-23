@@ -93,10 +93,20 @@ export async function openRequestForm(page: Page, apartmentId: string): Promise<
   await page.goto(route(`/rentals/${apartmentId}`), { waitUntil: "domcontentloaded" });
   await expect(page.locator('[data-testid="rental-detail"]')).toBeVisible({ timeout: 60_000 });
 
-  // The detail view renders TWO request buttons: a desktop one and a phone one
-  // (rental-detail-request-cta-mobile) inside the sticky bar. A phone viewport shows only the
-  // latter, so pinning the desktop testid made this step wait on a hidden element.
-  const cta = page.locator('[data-testid^="rental-detail-request-cta"]:visible').first();
+  // The detail view renders TWO request buttons and the layout decides which one is live: the
+  // desktop button sits in <aside className="hidden lg:block">, the phone one in a lg:hidden
+  // sticky bar. Assert the CTA this viewport is SUPPOSED to show, so a layout regression that
+  // leaks the desktop sidebar into a 390px screen fails here instead of passing on the wrong
+  // button. `lg` is 1024px in this project's Tailwind config.
+  const expectedCtaTestId =
+    (page.viewportSize()?.width ?? 1280) < 1024
+      ? "rental-detail-request-cta-mobile"
+      : "rental-detail-request-cta";
+  const cta = page.getByTestId(expectedCtaTestId);
+  await expect(
+    cta,
+    `the ${expectedCtaTestId} button must be the visible request control at this viewport`,
+  ).toBeVisible({ timeout: 60_000 });
   await waitUntilInteractive(cta, "the Request viewing button");
   await cta.click();
   await expect(
