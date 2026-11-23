@@ -32,9 +32,11 @@ Always include:
 - explicit non-goals
 - post-merge checks
 
-Add only when they apply — **never to satisfy a format**, because a docs-only PR needs no architecture diagram:
+For changes to a real user journey or cross-system architecture, create task-specific **Mermaid diagrams directly in the PR body** under **User Journey & Architecture**. Show the actual user path and canonical UI → API/agent → data owner (plus failure/retry when it matters). Use one concise diagram when sufficient; two when the journey and architecture need separate views. Replace example nodes before review; diagrams explain design, not test proof. For docs-only/test-only work without an affected flow, state N/A rather than inventing one.
 
-- architecture/data-flow Mermaid
+Add only when they apply — **never to satisfy a format**:
+
+- additional architecture/data-flow Mermaid
 - database proof: schema, RLS, or migration changes
 - auth/tenant/RLS/HITL impact
 - external contracts/versions verified
