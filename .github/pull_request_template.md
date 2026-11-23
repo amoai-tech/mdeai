@@ -31,9 +31,33 @@ Follow AGENTS.md and .claude/skills/tasks/references/github-pr.md; preserve exis
 
 **Risks / limitations:** [Material risks, missing proof and exclusions, or N/A.]
 
-<!-- Add Mermaid only if a complex flow needs explanation. Include material external source receipts per AGENTS.md only when relevant. -->
+<!-- Record material external source receipts per AGENTS.md only when relevant. -->
 
-## 3. Success Criteria
+## 3. User Journey & Architecture
+
+<!-- For a changed user journey or cross-system flow: create task-specific Mermaid diagrams and EMBED them here, directly in the PR description (not just an image/link).
+Replace the sample nodes with verified route/component/service names. Show the result and a failure/retry path when relevant. Use one diagram if a single view is enough; two if user flow and architecture are distinct.
+For docs-only/test-only changes with no relevant flow, replace this section's examples with "N/A — no user journey or architecture changed."
+Never leave an example diagram pretending to describe implemented code, and never use a diagram as test evidence.
+GitHub supports Mermaid inside ~~~mermaid fences. -->
+
+**User journey:** [Actual user → action → observable result; replace example.]
+
+~~~mermaid
+flowchart LR
+    A["User action — replace"] --> B["Existing UI or tool — replace"]
+    B --> C["Visible result — replace"]
+~~~
+
+**Architecture / data flow:** [Existing component → trusted service → source of truth; replace example.]
+
+~~~mermaid
+flowchart LR
+    UI["UI or agent — replace"] --> API["Server API or tool — replace"]
+    API --> DB["Canonical data owner — replace"]
+~~~
+
+## 4. Success Criteria
 
 <!-- Replace with 1–4 task-specific, observable requirements. Check only with evidence. -->
 - [ ] [Primary feature or change behaves correctly.]
@@ -41,7 +65,7 @@ Follow AGENTS.md and .claude/skills/tasks/references/github-pr.md; preserve exis
 - [ ] [Relevant error, retry, authorization or security behavior passes.]
 - [ ] [Affected real user journey passes, when applicable.]
 
-## 4. Tests & Evidence
+## 5. Tests & Evidence
 
 **Tested PR head:** [Exact commit SHA]
 
@@ -58,7 +82,7 @@ Follow AGENTS.md and .claude/skills/tasks/references/github-pr.md; preserve exis
 
 <!-- Use PASS / FAIL / PENDING / NOT RUN / N/A; explain skips. Every PASS needs its environment, tested SHA and evidence. Never reuse a stale green check. Add separate lint/typecheck/build rows only if individually run. -->
 
-## 5. Pre-Merge Checklist
+## 6. Pre-Merge Checklist
 
 **Complete before merging:**
 - [ ] **Requirements:** Match the verified Linear scope and success criteria; do not claim partial work completes a whole issue.
@@ -71,7 +95,7 @@ Follow AGENTS.md and .claude/skills/tasks/references/github-pr.md; preserve exis
 
 **Merge decision:** NOT READY / READY — [Head SHA, evidence and any blocker.]
 
-## 6. Post-Merge Verification & Recovery
+## 7. Post-Merge Verification & Recovery
 
 <!-- Plan these before merging; execute and check the applicable steps only AFTER merge. -->
 - [ ] **1. Verify merge:** Confirm merge SHA, intended files on `main` and merged-main CI.
