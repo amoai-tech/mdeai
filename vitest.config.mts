@@ -1,17 +1,17 @@
-import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src"),
+      "@": fileURLToPath(new URL("./src", import.meta.url)),
     },
   },
   // Tests never need real CSS. An inline (empty) PostCSS config stops Vite from
   // loading the app's Tailwind pipeline for the inlined CopilotKit stylesheet.
   css: { postcss: { plugins: [] } },
   test: {
-    globalSetup: [path.resolve(__dirname, "./vitest.global-setup.ts")],
+    globalSetup: [fileURLToPath(new URL("./vitest.global-setup.ts", import.meta.url))],
     environment: "node",
     globals: true,
     // The real CopilotKit v2 entry imports its stylesheet. Processing just this
