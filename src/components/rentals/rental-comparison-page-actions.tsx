@@ -1,9 +1,25 @@
 "use client";
 
-import { useLayoutEffect, useRef } from "react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { useGenerativeUIFunction } from "@copilotkit/react-core/v2/generative-ui";
 import { canOpenNativeViewingReview, mdeUI } from "@/components/copilot/a2ui/mde-ui-catalog";
 import type { Rental } from "@/mastra/tools/search-rentals";
+
+/** Keep a stale comparison warning only while the displayed apartment set is unchanged. */
+export function useRentalComparisonStatus(rows: readonly Rental[]) {
+  // The results array itself may be recreated on unrelated renders; key only
+  // on the ordered IDs so those renders do not silently dismiss a warning.
+  const resultIds = JSON.stringify(rows.map((row) => row.id));
+  const [status, setStatus] = useState<{ resultIds: string; message: string | null }>({
+    resultIds, message: null,
+  });
+  const setMessage = useCallback((message: string | null) => {
+    setStatus({ resultIds, message });
+  }, [resultIds]);
+  // Derive the visible message; a new result set invalidates the old warning
+  // without a setState-in-effect render loop.
+  return [status.resultIds === resultIds ? status.message : null, setMessage] as const;
+}
 
 /**
  * One page-owned action bridge for the official CopilotKit Buttons in rental

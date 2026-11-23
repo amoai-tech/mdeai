@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { act, render, screen } from "@testing-library/react";
-import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Rental } from "@/mastra/tools/search-rentals";
 
@@ -19,7 +18,7 @@ vi.mock("@copilotkit/react-core/v2/generative-ui", async (importOriginal) => {
   };
 });
 
-import { currentComparedRental, RentalComparisonPageActions, RentalComparisonStatus } from "../rental-comparison-page-actions";
+import { currentComparedRental, RentalComparisonPageActions, RentalComparisonStatus, useRentalComparisonStatus } from "../rental-comparison-page-actions";
 
 const current = [
   { id: "a", title: "Current first", tags: [] },
@@ -31,7 +30,7 @@ function ComparisonHarness({ results, onOpenDetails, onScheduleViewing }: {
   onOpenDetails: (rental: Rental) => void;
   onScheduleViewing: (rental: Rental) => void;
 }) {
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useRentalComparisonStatus(results);
   return (
     <>
       <RentalComparisonPageActions
@@ -73,6 +72,20 @@ describe("official CopilotKit comparison Button IDs", () => {
     act(() => { result = state.handlers.openComparedRentalDetails({ listingId: "a" }); });
     expect(result).toMatchObject({ ok: true });
     expect(openDetails).toHaveBeenCalledWith(current[0]);
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("clears an old comparison warning when the displayed result IDs change", () => {
+    const openDetails = vi.fn();
+    const openViewing = vi.fn();
+    const view = render(<ComparisonHarness results={current} onOpenDetails={openDetails} onScheduleViewing={openViewing} />);
+    act(() => { state.handlers.openComparedRentalDetails({ listingId: "stale" }); });
+    expect(screen.getByRole("status")).toBeVisible();
+    // A new array of the same rows must not dismiss the warning.
+    view.rerender(<ComparisonHarness results={[...current]} onOpenDetails={openDetails} onScheduleViewing={openViewing} />);
+    expect(screen.getByRole("status")).toBeVisible();
+    // A fresh result set makes the old message irrelevant to the new table.
+    view.rerender(<ComparisonHarness results={[current[1]]} onOpenDetails={openDetails} onScheduleViewing={openViewing} />);
     expect(screen.queryByRole("status")).toBeNull();
   });
 
