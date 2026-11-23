@@ -32,7 +32,7 @@ Always include:
 - explicit non-goals
 - post-merge checks
 
-For changes to a real user journey or cross-system architecture, create task-specific **Mermaid diagrams directly in the PR body** under **User Journey & Architecture**. Show the actual user path and canonical UI → API/agent → data owner (plus failure/retry when it matters). Use one concise diagram when sufficient; two when the journey and architecture need separate views. Replace example nodes before review; diagrams explain design, not test proof. For docs-only/test-only work without an affected flow, state N/A rather than inventing one.
+For substantive user-journey or cross-system architecture changes, create task-specific **Mermaid diagrams directly in the PR body** under **User Journey & Architecture**. Keep example diagrams hidden in the default template; replace N/A only when a real flow is changed. Show the actual user path and canonical UI → API/agent → data owner (plus failure/retry when it matters). Use one concise diagram when sufficient; two when the journey and architecture need separate views. Replace example nodes before review; diagrams explain design, not test proof. For docs-only/test-only work without an affected flow, state N/A rather than inventing one.
 
 Add only when they apply — **never to satisfy a format**:
 
