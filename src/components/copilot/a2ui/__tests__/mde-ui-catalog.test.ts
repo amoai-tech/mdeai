@@ -54,6 +54,24 @@ describe("MDE A2UI catalog", () => {
     }
   });
 
+  it("rejects link/copy/submit actions on official comparison Buttons but keeps renderer clicks", () => {
+    const button = mdeUI.components.get("Button");
+    const official = standardUI.components.get("Button");
+    expect(button).toBeDefined();
+    expect(button?.component).toBe(official?.component);
+    expect(button?.events).toHaveProperty("onClick");
+    const props = button?.props as z.ZodTypeAny;
+    expect(props.safeParse({ label: "Details", size: "md" }).success).toBe(true);
+    for (const rejected of [
+      { label: "External", href: "https://example.com/unrelated" },
+      { label: "Copy listing", copy: "invented property details" },
+      { label: "Submit", submit: true },
+      { label: "Details", href: "https://example.com", copy: "text" },
+    ]) {
+      expect(props.safeParse(rejected).success, JSON.stringify(rejected)).toBe(false);
+    }
+  });
+
   it("keeps a small, versioned grounded core with RentalCard and EventCard", () => {
     expect(mdeUI.id).toBe("mde/discovery@1");
     expect(mdeUI.components.has("RentalCard")).toBe(true);
