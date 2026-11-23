@@ -10,6 +10,7 @@ import {
 } from "./helpers/rental-journey-fixture";
 import {
   CANDIDATE_SHA,
+  MOBILE_VIEWPORT,
   OPT_IN,
   ORIGIN,
   expectOneLeadOneShowing,
@@ -63,7 +64,15 @@ test.describe("SAN-1205 · a renter's viewing request reaches the correct broker
     "Opt-in only: needs SAN1205_JOURNEY_E2E=1, PROD_SMOKE_BASE_URL and live Supabase env.",
   );
 
-  test("request, ownership, isolation, failure, replay and cleanup", async ({ browser }) => {
+  // One journey, two viewports. The renter form is where a phone-sized failure would hide, and
+  // duplicating the body for mobile would let the two paths drift apart.
+  const viewportVariants: Array<[string, { width: number; height: number } | undefined]> = [
+    ["desktop", undefined],
+    ["390px phone", MOBILE_VIEWPORT],
+  ];
+
+  for (const [label, viewport] of viewportVariants) {
+    test(`request, ownership, isolation, failure, replay and cleanup (${label})`, async ({ browser }) => {
     test.setTimeout(600_000);
     assertWriteTargetAllowed();
 
@@ -81,7 +90,7 @@ test.describe("SAN-1205 · a renter's viewing request reaches the correct broker
       const renter = { name: `Sofia ${run}`, email: renterEmail(run, "renter"), phone: "+57 3000000000" };
       const slot = futureLocalSlot(3);
 
-      const renterCtx = await browser.newContext();
+      const renterCtx = await browser.newContext(viewport ? { viewport } : {});
       const renterPage = await renterCtx.newPage();
       await openCandidate(renterPage);
 
@@ -117,6 +126,7 @@ test.describe("SAN-1205 · a renter's viewing request reaches the correct broker
     expect(cleanupFailures, "cleanup must not fail").toEqual([]);
     expect(residue, "every row this run created must be gone").toEqual([]);
 
-    console.log(`SAN-1205 journey PASSED  origin=${ORIGIN}  sha=${CANDIDATE_SHA || "(not recorded)"}`);
-  });
+      console.log(`SAN-1205 journey PASSED (${label})  origin=${ORIGIN}  sha=${CANDIDATE_SHA || "(not recorded)"}`);
+    });
+  }
 });

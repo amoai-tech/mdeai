@@ -93,7 +93,10 @@ export async function openRequestForm(page: Page, apartmentId: string): Promise<
   await page.goto(route(`/rentals/${apartmentId}`), { waitUntil: "domcontentloaded" });
   await expect(page.locator('[data-testid="rental-detail"]')).toBeVisible({ timeout: 60_000 });
 
-  const cta = page.locator('[data-testid="rental-detail-request-cta"]');
+  // The detail view renders TWO request buttons: a desktop one and a phone one
+  // (rental-detail-request-cta-mobile) inside the sticky bar. A phone viewport shows only the
+  // latter, so pinning the desktop testid made this step wait on a hidden element.
+  const cta = page.locator('[data-testid^="rental-detail-request-cta"]:visible').first();
   await waitUntilInteractive(cta, "the Request viewing button");
   await cta.click();
   await expect(
