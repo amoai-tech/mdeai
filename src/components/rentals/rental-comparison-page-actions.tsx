@@ -13,11 +13,15 @@ export function useRentalComparisonStatus(rows: readonly Rental[]) {
   const [status, setStatus] = useState<{ resultIds: string; message: string | null }>({
     resultIds, message: null,
   });
+  // When the apartment set changes, discard the previous message, not just
+  // hide it: returning to a prior set must never resurrect an old warning.
+  // React permits a guarded same-component state adjustment during render.
+  if (status.resultIds !== resultIds) {
+    setStatus({ resultIds, message: null });
+  }
   const setMessage = useCallback((message: string | null) => {
     setStatus({ resultIds, message });
   }, [resultIds]);
-  // Derive the visible message; a new result set invalidates the old warning
-  // without a setState-in-effect render loop.
   return [status.resultIds === resultIds ? status.message : null, setMessage] as const;
 }
 

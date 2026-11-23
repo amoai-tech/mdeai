@@ -87,6 +87,9 @@ describe("official CopilotKit comparison Button IDs", () => {
     // A fresh result set makes the old message irrelevant to the new table.
     view.rerender(<ComparisonHarness results={[current[1]]} onOpenDetails={openDetails} onScheduleViewing={openViewing} />);
     expect(screen.queryByRole("status")).toBeNull();
+    // Regression: an A → B → A navigation cannot resurrect the old warning.
+    view.rerender(<ComparisonHarness results={[...current]} onOpenDetails={openDetails} onScheduleViewing={openViewing} />);
+    expect(screen.queryByRole("status")).toBeNull();
   });
 
   it("shows the stale comparison error after current results change", () => {
