@@ -44,10 +44,17 @@ function logUpstreamFailure(
     };
   },
 ) {
-  console.error("[api/leads/schedule-viewing] upstream failure", {
-    outcome,
-    ...detail,
-  });
+  const expectedClientRejection =
+    detail.status >= 400 && detail.status < 500 &&
+    ["rate_limited", "listing_unresolvable", "listing_unavailable", "validation_rejected"].includes(outcome);
+  const record = { outcome, ...detail };
+  if (expectedClientRejection) {
+    // Invalid/gone listing IDs and client validation are not a server outage.
+    // Keep the fingerprint for investigation without inflating error alerts.
+    console.warn("[api/leads/schedule-viewing] request rejected", record);
+  } else {
+    console.error("[api/leads/schedule-viewing] upstream failure", record);
+  }
 }
 
 /**
