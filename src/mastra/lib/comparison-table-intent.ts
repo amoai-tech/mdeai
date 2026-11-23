@@ -73,7 +73,7 @@ export function comparisonRequestedPositions(messages: readonly MessageLike[]): 
   // mistaken for a server-trusted apartment selection.
   const firstTwo = /\b(?:first|top)\s+(?:two|2)\s+(?:apartments?|listings?|rentals?|results?)\b/i.exec(text)
     ?? (hasExplicitRentalComparisonRequest(messages)
-      ? /\b(?:first|top)\s+(?:two|2)\b(?!\s*-?\s*(?:br|beds?|bedrooms?)\b)/i.exec(text)
+      ? /\b(?:first|top)\s+(?:two|2)\b(?!\s*-?\s*(?:br|bd|bdrms?|beds?|bedrooms?|ba|baths?|bathrooms?|columns?|rows?|features?|amenities?)\b)/i.exec(text)
       : null);
   if (firstTwo) {
     // Do not make a partial trusted list when a renter named an apartment
