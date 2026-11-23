@@ -127,6 +127,15 @@ describe("searchRentals — SAN-1356 monthly price projection", () => {
   });
 
 
+  it("records this run's result IDs in display order for later tools in the same run", async () => {
+    const { searchRentalsTool } = await import("../search-rentals");
+    const { RequestContext } = await import("@mastra/core/request-context");
+    const { RENTAL_RUN_RESULT_IDS_KEY } = await import("../../lib/generative-ui-context");
+    const requestContext = new RequestContext();
+    await searchRentalsTool.execute!({ neighborhood: "Centro", limit: 5 }, { requestContext } as never);
+    expect(requestContext.get(RENTAL_RUN_RESULT_IDS_KEY)).toEqual(["apt-1"]);
+  });
+
   it("preserves source gallery images and total count in Ask MDE tool results", async () => {
     const { searchRentalsTool } = await import("../search-rentals");
     const result = (await searchRentalsTool.execute!(

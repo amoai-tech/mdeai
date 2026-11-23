@@ -73,6 +73,25 @@ export function readRentalResultIds(agUiContext: unknown): string[] {
   return rows.slice(0, RENTAL_HINT_MAX).flatMap((row) => isRentalA2UIId(row) ? [row] : []);
 }
 
+/**
+ * SAN-1694: the browser publishes its result IDs when a message is SENT. If the
+ * same agent run then searches, the page swaps to that search's cards (in the
+ * tool's order), so the earlier browser list is stale for the rest of the run.
+ * The search tool records its own ordered IDs here; the RequestContext is
+ * created per runtime request, so this never leaks into a later turn.
+ */
+export const RENTAL_RUN_RESULT_IDS_KEY = "mdeai-rental-run-result-ids";
+
+/** Ordered IDs the renter sees now: this run's latest search, else the browser hint. */
+export function currentRentalResultIds(
+  requestContext: { get?: (key: string) => unknown } | undefined,
+): string[] {
+  const run = requestContext?.get?.(RENTAL_RUN_RESULT_IDS_KEY);
+  // Keep positions faithful: an unsafe ID becomes an unresolvable gap, not a shift.
+  if (Array.isArray(run)) return run.slice(0, RENTAL_HINT_MAX).map((id) => isRentalA2UIId(id) ? id : "");
+  return readRentalResultIds(requestContext?.get?.("ag-ui"));
+}
+
 /** The count is an untrusted browser hint, never an apartment ID or authority.
  * If absent/malformed, "last" is ambiguous and must not select a rental. */
 export function readRentalRenderedCount(agUiContext: unknown): number | null {

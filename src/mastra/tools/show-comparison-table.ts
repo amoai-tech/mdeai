@@ -2,7 +2,7 @@ import { createTool } from "@mastra/core/tools";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { RENTAL_HINT_MAX } from "@/lib/rentals/a2ui-context";
-import { readRentalResultIds } from "../lib/generative-ui-context";
+import { currentRentalResultIds } from "../lib/generative-ui-context";
 import { COMPARISON_POSITIONS_KEY } from "../lib/comparison-table-intent";
 import { RENTAL_SUPABASE_KEY } from "./search-rentals";
 import { isActiveRentalsDiscoveryPage } from "../lib/discovery-agent-context";
@@ -67,10 +67,12 @@ export const showComparisonTableTool = createTool({
     message: z.string(),
   }),
   execute: async (input, context) => {
-    const agUiContext = (context as { requestContext?: { get?: (key: string) => unknown } })
-      ?.requestContext?.get?.("ag-ui");
-    const available = readRentalResultIds(agUiContext);
-    if (available.length < 2) {
+    const requestContext = (context as { requestContext?: { get?: (key: string) => unknown } })?.requestContext;
+    const agUiContext = requestContext?.get?.("ag-ui");
+    // A search earlier in this run replaced the visible cards; positions and IDs
+    // must address those, not the browser list sent before it (SAN-1694).
+    const available = currentRentalResultIds(requestContext);
+    if (available.filter(Boolean).length < 2) {
       return { ok: false, rows: [], rejected: [], message: "Search for apartments first; there are fewer than two current results." };
     }
     const unresolved: string[] = [];

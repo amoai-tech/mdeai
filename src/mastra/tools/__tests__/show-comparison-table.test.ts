@@ -3,11 +3,12 @@ import { RENTAL_A2UI_CONTEXT_DESCRIPTION } from "@/lib/rentals/a2ui-context";
 import { COMPARISON_POSITIONS_KEY } from "../../lib/comparison-table-intent";
 import { comparisonInputSchema, showComparisonTableTool } from "../show-comparison-table";
 import { RENTAL_SUPABASE_KEY } from "../search-rentals";
+import { RENTAL_RUN_RESULT_IDS_KEY } from "../../lib/generative-ui-context";
 
 const ids = Array.from({ length: 10 }, (_, i) =>
   `37a05b09-f560-4776-92fd-b8bb2b92e6${String(i).padStart(2, "0")}`
 );
-function context(rows: Array<Record<string, unknown>> = [], { withClient = true, trustedPositions, visibleIds = ids }: { withClient?: boolean; trustedPositions?: number[]; visibleIds?: string[] } = {}) {
+function context(rows: Array<Record<string, unknown>> = [], { withClient = true, trustedPositions, visibleIds = ids, runIds }: { withClient?: boolean; trustedPositions?: number[]; visibleIds?: string[]; runIds?: string[] } = {}) {
   const client = {
     from: () => ({
       select: () => ({
@@ -20,6 +21,7 @@ function context(rows: Array<Record<string, unknown>> = [], { withClient = true,
       get: (key: string) =>
         key === RENTAL_SUPABASE_KEY ? (withClient ? client : null)
           : key === COMPARISON_POSITIONS_KEY ? trustedPositions
+          : key === RENTAL_RUN_RESULT_IDS_KEY ? runIds
           : key === "ag-ui" ? { context: [{ description: RENTAL_A2UI_CONTEXT_DESCRIPTION, value: JSON.stringify(visibleIds) }] }
             : undefined,
     },
@@ -41,6 +43,34 @@ async function run(input: { ids?: string[]; positions?: number[] }, ctx: unknown
   return await showComparisonTableTool.execute!(input, ctx as never) as unknown as Result;
 }
 describe("showComparisonTableTool", () => {
+  // SAN-1694 prod receipt (23 Nov 2026): "find … and compare the first two" in
+  // one message compared two apartments that were no longer on screen. The
+  // browser list was sent before this run's search replaced the cards.
+  const fresh = Array.from({ length: 3 }, (_, i) => `9b1c7e2a-0000-4000-8000-00000000000${i}`);
+
+  it("resolves positions against a search that ran earlier in this run, not the older page list", async () => {
+    const result = await run({ positions: [1, 2] }, context(
+      [dbRow(fresh[0], "New first", 2_100_000), dbRow(fresh[1], "New second", 2_200_000)],
+      { runIds: fresh },
+    ));
+    expect(result.ok).toBe(true);
+    expect(result.rows.map((row) => row.id)).toEqual([fresh[0], fresh[1]]);
+  });
+
+  it("rejects apartments from the older page list once this run has searched again", async () => {
+    const result = await run({ ids: [ids[0], ids[1]] }, context(
+      [dbRow(ids[0], "Old first", 2_000_000), dbRow(ids[1], "Old second", 2_000_000)],
+      { runIds: fresh },
+    ));
+    expect(result.ok).toBe(false);
+    expect(result.rejected).toEqual([ids[0], ids[1]]);
+  });
+
+  it("compares nothing when this run's search found fewer than two apartments", async () => {
+    const result = await run({ positions: [1, 2] }, context([], { runIds: [] }));
+    expect(result.ok).toBe(false);
+  });
+
   it("resolves position six and seven in display order (not limited to five)", async () => {
     const result = await run({ positions: [6, 7] }, context([
       dbRow(ids[6], "Seventh", 2_500_000), dbRow(ids[5], "Sixth", 2_400_000),

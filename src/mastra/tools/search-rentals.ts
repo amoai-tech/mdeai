@@ -12,6 +12,7 @@ import {
 import { applyAvailabilityFilters } from '@/lib/rentals/availability-filter';
 import { z } from 'zod';
 import { runAuditedSearch } from '../lib/run-audited-search';
+import { RENTAL_RUN_RESULT_IDS_KEY } from '../lib/generative-ui-context';
 import { EXTERNAL_RENTAL_BUDGET_NOTE, getOptionalExternalRentals, mixRentalResults } from '@/lib/rentals/mixed-rental-results';
 import {
   RentalSearchUnavailableError,
@@ -875,6 +876,10 @@ export const searchRentalsTool = createTool({
       { neighborhood, minBedrooms: requestedMinBedrooms, maxBedrooms: requestedMaxBedrooms, furnished, maxPricePerNight, maxPriceMonthly, stayType, budgetCurrency, limit, queryText },
       context,
     );
+    // SAN-1694: these rows become the visible cards, in this order. Later tools in
+    // the same run (comparison, cards, viewing proposal) must address them, not
+    // the browser list sent before this search replaced the page.
+    context?.requestContext?.set?.(RENTAL_RUN_RESULT_IDS_KEY, results.map((r) => String(r.id)));
 
     return {
       results: results.map((r) => ({
