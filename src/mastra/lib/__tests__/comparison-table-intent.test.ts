@@ -69,6 +69,19 @@ describe("same-message rental search and comparison", () => {
     })).toBe(false);
   });
 
+  it("does not start a new search when 'find' means analyze apartments already displayed", () => {
+    const analysis = [user("Compare the first two apartments in a table and find the cheaper one.")];
+    expect(shouldSearchBeforeComparison({ stepNumber: 0, messages: analysis, steps: [] })).toBe(false);
+    expect(shouldForceComparisonTable({ stepNumber: 0, messages: analysis, requestContext: context })).toBe(true);
+    expect(shouldContinueComparisonAfterSearch({
+      stepNumber: 1, messages: analysis, steps: [{ toolResults: [{ toolName: "searchRentalsTool" }] }],
+    })).toBe(false);
+    // Still search first for a genuine new neighborhood search.
+    expect(shouldSearchBeforeComparison({
+      stepNumber: 0, messages: [user("Find 2BR rentals in Laureles and compare the first two.")], steps: [],
+    })).toBe(true);
+  });
+
   it("does not turn a new search without an explicit table or comparison request into a forced comparison", () => {
     expect(shouldSearchBeforeComparison({
       stepNumber: 0,
@@ -110,6 +123,7 @@ describe("comparison follow-up tool suppression", () => {
 describe("server-owned displayed ordinal interpretation", () => {
   it("parses exact requested positions rather than accepting the model's IDs", () => {
     expect(comparisonRequestedPositions([user("Put the first two apartments in a table.")])).toEqual([1, 2]);
+    expect(comparisonRequestedPositions([user("Compare the first two apartments in a table and find the cheaper one.")])).toEqual([1, 2]);
     expect(comparisonRequestedPositions([user("Compare the second and third apartments side by side.")])).toEqual([2, 3]);
     expect(comparisonRequestedPositions([user("Compare apartments six and seven.")])).toEqual([6, 7]);
     expect(comparisonRequestedPositions([user("Compare apartments 2nd and 3rd.")])).toEqual([2, 3]);

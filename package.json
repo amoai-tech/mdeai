@@ -135,6 +135,7 @@
     "test:local:embedding:journey": "node scripts/test-local-embedding-journey.mjs",
     "test:e2e:chromatic-pilot": "node scripts/run-chromatic-pilot.cjs",
     "chromatic:pilot": "chromatic --playwright --no-interactive",
+    "qa:test:rental-compare": "MDE_COMPARE_TABLE_QA=1 PW_SKIP_WEBSERVER=1 playwright test e2e/prod-rental-comparison-table.spec.ts --project=prod-smoke --workers=1 --retries=0",
     "qa:auth:check": "node --import=tsx scripts/qa-auth-check.ts",
     "qa:test:admin": "npm run qa:auth:check && MDE_SUPER_ADMIN_QA=1 playwright test e2e/qa-super-admin-fixture.spec.ts --project=chromium --workers=1 --retries=0",
     "qa:browser": "node --import=tsx scripts/qa-browser.ts"

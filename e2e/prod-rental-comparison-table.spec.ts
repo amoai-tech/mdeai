@@ -196,43 +196,58 @@ test.describe("SAN-1681 · official rental comparison A2UI Table", () => {
   // SAN-1694 prod receipt (23 Nov 2026): one message that searches AND compares
   // produced a table of apartments that were no longer on screen. Start from a
   // different visible set so a stale browser list would pick other apartments.
-  test("1440px: search and compare in one message uses the newly shown cards", async ({ qaRolePage: page }) => {
-    test.setTimeout(300_000);
-    await page.setViewportSize({ width: 1440, height: 900 });
-    expect((await page.goto("/rentals", { waitUntil: "domcontentloaded" }))?.ok()).toBe(true);
-    const input = page.locator('[data-testid="rental-ask-composer"]:visible #rental-ask-input').first();
-    const send = page.locator('[data-testid="rental-ask-composer"]:visible [data-testid="rental-ask-send"]').first();
-    const cards = page.locator('[data-testid="rentals-grid"] [data-result-kind="rental"][data-testid^="rental-card-"]');
-    const firstIds = () => cards.evaluateAll((elements) => elements.slice(0, 2).map((element) =>
-      (element.getAttribute("data-testid") ?? "").replace(/^rental-card-/, "")));
-    const ask = async (query: string) => {
-      await expect(input).toBeVisible({ timeout: 40_000 });
-      await input.fill(query);
-      await expect(send).toBeEnabled({ timeout: 45_000 });
-      await send.click();
-      await expect(input).toBeEmpty({ timeout: 20_000 });
-      await expect(send).toBeVisible({ timeout: 120_000 });
-    };
+  for (const width of [1440, 390] as const) {
+    test(`${width}px: search and compare in one message uses the newly shown cards`, async ({ qaRolePage: page }) => {
+      test.setTimeout(300_000);
+      await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+      expect((await page.goto("/rentals", { waitUntil: "domcontentloaded" }))?.ok()).toBe(true);
+      const input = page.locator('[data-testid="rental-ask-composer"]:visible #rental-ask-input').first();
+      const send = page.locator('[data-testid="rental-ask-composer"]:visible [data-testid="rental-ask-send"]').first();
+      const cards = page.locator('[data-testid="rentals-grid"] [data-result-kind="rental"][data-testid^="rental-card-"]');
+      const firstIds = () => cards.evaluateAll((elements) => elements.slice(0, 2).map((element) =>
+        (element.getAttribute("data-testid") ?? "").replace(/^rental-card-/, "")));
+      const ask = async (query: string) => {
+        await expect(input).toBeVisible({ timeout: 40_000 });
+        await input.fill(query);
+        await expect(send).toBeEnabled({ timeout: 45_000 });
+        await send.click();
+        await expect(input).toBeEmpty({ timeout: 20_000 });
+        await expect(send).toBeVisible({ timeout: 120_000 });
+      };
 
-    await ask("Show apartments in El Poblado.");
-    await expect.poll(() => cards.count(), { timeout: 120_000 }).toBeGreaterThanOrEqual(2);
-    const before = await firstIds();
+      await ask("Show apartments in El Poblado.");
+      await expect.poll(() => cards.count(), { timeout: 120_000 }).toBeGreaterThanOrEqual(2);
+      const before = await firstIds();
 
-    await ask("Find apartments in Laureles and compare the first two in a table.");
-    const table = page.getByTestId("rental-comparison-surface")
-      .getByRole("table", { name: /side-by-side apartment comparison/i });
-    await expect(table).toBeVisible({ timeout: 120_000 });
-    const shown = await firstIds();
-    expect(shown.every(Boolean)).toBe(true);
-    expect(shown, "the one-message search replaced the visible cards").not.toEqual(before);
+      await ask("Find apartments in Laureles and compare the first two in a table.");
+      const comparisonSurface = page.getByTestId("rental-comparison-surface");
+      const table = comparisonSurface.getByRole("table", { name: /side-by-side apartment comparison/i });
+      await expect(table).toBeVisible({ timeout: 120_000 });
+      await expect.poll(firstIds, { timeout: 30_000 }).not.toEqual(before);
+      const shown = await firstIds();
+      expect(shown.every(Boolean)).toBe(true);
 
-    // Renter-scoped readback: the table columns are the first two cards now visible.
-    const renter = asUser(await getTestSession(resolveQaRoleEmail("renter")!, { requireExisting: true }));
-    const { data, error } = await renter.from("apartments").select("id,title").in("id", shown);
-    expect(error).toBeNull();
-    const title = new Map((data ?? []).map((row) => [String(row.id), row.title]));
-    await expect(table.locator("thead th")).toHaveCount(3);
-    await expect(table.locator("thead th").nth(1)).toHaveText(title.get(shown[0])!);
-    await expect(table.locator("thead th").nth(2)).toHaveText(title.get(shown[1])!);
-  });
+      // Renter-scoped readback: the table columns are the first two cards now visible.
+      const renter = asUser(await getTestSession(resolveQaRoleEmail("renter")!, { requireExisting: true }));
+      const { data, error } = await renter.from("apartments").select("id,title").in("id", shown);
+      expect(error).toBeNull();
+      const title = new Map((data ?? []).map((row) => [String(row.id), row.title]));
+      await expect(table.locator("thead th")).toHaveCount(3);
+      await expect(table.locator("thead th").nth(1)).toHaveText(title.get(shown[0])!);
+      await expect(table.locator("thead th").nth(2)).toHaveText(title.get(shown[1])!);
+
+      // The real official Button must open the Details UI for the first *new* card.
+      // This also proves the server-side ID resolution is usable, not just display text.
+      await comparisonSurface.getByRole("button", { name: "Details" }).first().click();
+      const details = page.getByTestId(width === 390 ? "rental-details-sheet" : "rental-details-panel");
+      await expect(details).toBeVisible({ timeout: 20_000 });
+      await expect(details.getByText(title.get(shown[0])!, { exact: true }).first()).toBeVisible();
+      await page.getByTestId("rental-details-close").click();
+      await expect(details).not.toBeVisible();
+      if (width === 390) {
+        const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+        expect(overflow, "comparison must not cause page-level mobile overflow").toBeLessThanOrEqual(2);
+      }
+    });
+  }
 });
