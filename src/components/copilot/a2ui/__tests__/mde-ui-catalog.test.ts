@@ -3,6 +3,7 @@ import { isRentalBedValue, normalizeBedSelection } from "@/components/rentals/re
 import { resolveRentalPageControl } from "@/lib/rentals/browse-page-control";
 import type { z } from "zod";
 import { standardUI } from "@copilotkit/react-core/v2/generative-ui";
+import { validateOperation } from "@copilotkit/shared";
 import {
   MDE_OMITTED_STANDARD_COMPONENTS,
   canOpenNativeViewingReview,
@@ -69,6 +70,43 @@ describe("MDE A2UI catalog", () => {
       { label: "Details", href: "https://example.com", copy: "text" },
     ]) {
       expect(props.safeParse(rejected).success, JSON.stringify(rejected)).toBe(false);
+    }
+  });
+
+  it("validates actual server-built comparison click Buttons with the installed SDK validator", () => {
+    const row = (id: string) => ({
+      id, title: `Apartment ${id}`, neighborhood: "Laureles", bedrooms: 2, furnished: true,
+      bathrooms: 1, sizeSqm: null, wifiSpeedMbps: null, amenities: [],
+      priceMonthly: 2_400_000, priceNightly: null, currency: "COP",
+    });
+    const built = buildComparisonTableOps([row("first-id"), row("second-id")], undefined, {
+      target: "rental-comparison",
+    });
+    expect(built).not.toBeNull();
+    const operation = built!.operations.find((part) => "createSurface" in part);
+    expect(operation).toBeDefined();
+    const options = {
+      manifest: { catalogId: mdeUI.id, components: mdeUI.manifestComponents },
+      knownSurfaces: new Set<string>(),
+      // Component prop and event validation is real; runtime function permission
+      // is separately exercised by the existing renderer-only action tests.
+      allowedComponents: {
+        target: "rental-comparison",
+        names: new Set<string>(RENTAL_COMPARISON_COMPONENTS),
+      },
+    };
+    expect(validateOperation(operation, options)).toEqual({ ok: true });
+    for (const invalidProp of ["href", "copy", "submit"] as const) {
+      const forged = structuredClone(operation) as {
+        createSurface: { components: Array<Record<string, unknown>> };
+      };
+      const button = forged.createSurface.components.find((part) => part.component === "Button");
+      expect(button).toBeDefined();
+      button![invalidProp] = invalidProp === "submit" ? true : "https://example.com/untrusted";
+      expect(validateOperation(forged, options)).toMatchObject({
+        ok: false,
+        reason: expect.stringContaining(`unknown prop "${invalidProp}"`),
+      });
     }
   });
 
