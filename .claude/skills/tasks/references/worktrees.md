@@ -10,7 +10,7 @@ Protect unrelated work first. A task should run from the correct base in an isol
 
 1. Resolve the intended base (`origin/main`, parent branch, or merge-base for stacked work).
 2. Detect whether the current directory is already a linked worktree.
-3. If using project-local `.worktrees/`, verify it is ignored.
+3. On the configured MDE `/home/sk` host, put **every new MDE worktree** inside `/home/sk/mde-worktrees/` (not `.worktrees/` within the repo); ensure the parent directory exists.
 4. Inspect existing worktrees and dirty state before creating another path.
 5. Prefer a native worktree tool when the environment provides one; otherwise use Git directly.
 
@@ -18,7 +18,7 @@ Protect unrelated work first. A task should run from the correct base in an isol
 GIT_DIR=$(cd "$(git rev-parse --git-dir)" && pwd -P)
 GIT_COMMON=$(cd "$(git rev-parse --git-common-dir)" && pwd -P)
 git worktree list
-git check-ignore -q .worktrees
+test -d /home/sk/mde-worktrees || mkdir -p /home/sk/mde-worktrees
 ```
 
 If already in a linked worktree, continue there unless the task requires a different base. Do not create nested worktrees.
@@ -27,11 +27,11 @@ If already in a linked worktree, continue there unless the task requires a diffe
 
 ```bash
 git fetch origin
-git worktree add .worktrees/wt-san-NNN-slug -b ai/san-NNN-slug <resolved-base>
-git -C .worktrees/wt-san-NNN-slug status --short
+git worktree add /home/sk/mde-worktrees/san-NNN-slug -b ai/san-NNN-slug <resolved-base>
+git -C /home/sk/mde-worktrees/san-NNN-slug status --short
 ```
 
-Do not hardcode developer-specific legacy app paths or obsolete split repositories. Treat the current repository root and resolved Git base as authoritative.
+The `/home/sk/mde-worktrees/` rule applies on the configured MDE development host. Do not relocate existing worktrees. On other hosts use an explicitly configured external worktree directory; resolve the current Git repository root and base instead of assuming the checkout path.
 
 ## Dependency setup
 
