@@ -59,14 +59,14 @@ describe("searchEventsIntelligent — coverage branches", () => {
     vi.unstubAllEnvs();
   });
 
-  it("returns fallback when Supabase env is missing", async () => {
+  it("reports provider unavailable when Supabase env is missing", async () => {
     vi.unstubAllEnvs();
     const { searchEventsIntelligent } = await import("../intelligence-event-search");
 
     await expect(searchEventsIntelligent({ limit: 5 })).resolves.toEqual({
       results: [],
       total: 0,
-      source: "fallback",
+      source: "unavailable",
       hybridUsed: false,
       rankExplanation: [],
       slots: {},

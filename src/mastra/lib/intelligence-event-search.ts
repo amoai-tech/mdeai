@@ -103,7 +103,12 @@ export function filterHybridEventRows( // skipcq: JS-0067
   }
   if (typeof maxPricePerTicket === "number") {
     const maxPrice = maxPricePerTicket;
-    filtered = filtered.filter((r) => (num(r.ticket_price_min) ?? 0) <= maxPrice);
+    filtered = filtered.filter((r) => {
+      // Unknown or unparseable prices are not confirmed budget matches.
+      // Without an explicit price cap, these events remain discoverable.
+      const price = num(r.ticket_price_min);
+      return price !== undefined && price <= maxPrice;
+    });
   }
   return filtered;
 }
@@ -242,7 +247,7 @@ export async function searchEventsIntelligent( // skipcq: JS-R1005, JS-0067
 ): Promise<{
   results: IntelligenceEventResult[];
   total: number;
-  source: "supabase" | "fallback";
+  source: "supabase" | "fallback" | "unavailable";
   hybridUsed: boolean;
   rankExplanation: RankExplanationEntry[];
   slots: EventIntelligenceSlots;
@@ -257,7 +262,7 @@ export async function searchEventsIntelligent( // skipcq: JS-R1005, JS-0067
   const client = getAnonClient();
 
   if (!client) {
-    return { results: [], total: 0, source: "fallback", hybridUsed: false, rankExplanation, slots };
+    return { results: [], total: 0, source: "unavailable", hybridUsed: false, rankExplanation, slots };
   }
 
   let hybridRows: HybridEventRow[] = [];
