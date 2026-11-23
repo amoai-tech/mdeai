@@ -44,7 +44,7 @@ export const showRecommendationsTool = createTool({
     // Browser hints are not authorization. RentalCard alone resolves facts from
     // existing actual tool results, never this client-controlled ID list.
     const published = isActiveRentalsDiscoveryPage(agUiContext)
-      ? new Set(currentRentalResultIds(context?.requestContext).filter(Boolean)) : new Set<string>();
+      ? new Set((await currentRentalResultIds(context?.requestContext)).filter(Boolean)) : new Set<string>();
     const requested = normalizeRecommendationIds(ids);
     const verified = requested.filter((id) => published.has(id));
     const rejected = requested.filter((id) => !published.has(id));

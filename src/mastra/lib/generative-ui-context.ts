@@ -77,18 +77,50 @@ export function readRentalResultIds(agUiContext: unknown): string[] {
  * SAN-1694: the browser publishes its result IDs when a message is SENT. If the
  * same agent run then searches, the page swaps to that search's cards (in the
  * tool's order), so the earlier browser list is stale for the rest of the run.
- * The search tool records its own ordered IDs here; the RequestContext is
- * created per runtime request, so this never leaks into a later turn.
+ * Each search registers here; the RequestContext is created per runtime
+ * request, so nothing leaks into a later turn.
+ *
+ * The rules mirror the page (`latestRentalToolResult`): the latest-CALLED search
+ * that returned rows wins; an empty or failed search leaves the cards in place.
  */
 export const RENTAL_RUN_RESULT_IDS_KEY = "mdeai-rental-run-result-ids";
+const RENTAL_RUN_SEARCHES_KEY = "mdeai-rental-run-searches";
 
-/** Ordered IDs the renter sees now: this run's latest search, else the browser hint. */
-export function currentRentalResultIds(
-  requestContext: { get?: (key: string) => unknown } | undefined,
-): string[] {
-  const run = requestContext?.get?.(RENTAL_RUN_RESULT_IDS_KEY);
+type RunContext = { get?: (key: string) => unknown; set?: (key: string, value: unknown) => void } | undefined;
+type RunSearches = { started: number; pending: Promise<void>[] };
+type RunResult = { order: number; ids: string[] };
+
+/** Call when a rental search starts; call the returned function once with its IDs (or null on failure). */
+export function startRentalRunSearch(requestContext: RunContext): (ids: readonly string[] | null) => void {
+  if (!requestContext?.get || !requestContext.set) return () => {};
+  const searches = (requestContext.get(RENTAL_RUN_SEARCHES_KEY) as RunSearches | undefined) ?? { started: 0, pending: [] };
+  const order = searches.started + 1;
+  let settle = () => {};
+  const done = new Promise<void>((resolve) => { settle = resolve; });
+  requestContext.set(RENTAL_RUN_SEARCHES_KEY, { started: order, pending: [...searches.pending, done] });
+  let finished = false;
+  return (ids) => {
+    if (finished) return;
+    finished = true;
+    const current = requestContext.get?.(RENTAL_RUN_RESULT_IDS_KEY) as RunResult | undefined;
+    // A slower, earlier search must not overwrite a later one's cards.
+    if (ids && ids.length > 0 && (!current || order > current.order)) {
+      requestContext.set?.(RENTAL_RUN_RESULT_IDS_KEY, { order, ids: [...ids] });
+    }
+    settle();
+  };
+}
+
+/** Ordered IDs the renter sees now: this run's latest non-empty search, else the browser hint. */
+export async function currentRentalResultIds(requestContext: RunContext): Promise<string[]> {
+  // A search requested in the same step may still be running; wait for it.
+  const searches = requestContext?.get?.(RENTAL_RUN_SEARCHES_KEY) as RunSearches | undefined;
+  if (searches?.pending.length) await Promise.all(searches.pending);
+  const run = requestContext?.get?.(RENTAL_RUN_RESULT_IDS_KEY) as RunResult | undefined;
   // Keep positions faithful: an unsafe ID becomes an unresolvable gap, not a shift.
-  if (Array.isArray(run)) return run.slice(0, RENTAL_HINT_MAX).map((id) => isRentalA2UIId(id) ? id : "");
+  if (run && Array.isArray(run.ids)) {
+    return run.ids.slice(0, RENTAL_HINT_MAX).map((id) => isRentalA2UIId(id) ? id : "");
+  }
   return readRentalResultIds(requestContext?.get?.("ag-ui"));
 }
 

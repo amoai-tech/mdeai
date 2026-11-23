@@ -59,6 +59,35 @@ describe("conciergeAgent", () => {
     })).toEqual({});
   });
 
+  it("sequences a fresh rental search before the requested comparison", async () => {
+    const configured = await conciergeAgent.listConfiguredInputProcessors();
+    const comparison = configured.find((processor) => processor.id === "san1681-comparison-table-intent") as
+      | { processInputStep: (input: {
+          stepNumber: number;
+          messages: unknown[];
+          steps: unknown[];
+          requestContext: { get: (key: string) => unknown; set: (key: string, value: unknown) => void };
+        }) => unknown }
+      | undefined;
+    expect(comparison).toBeDefined();
+    const user = (text: string) => ({ role: "user", content: { parts: [{ type: "text", text }] } });
+    const store = new Map<string, unknown>();
+    const requestContext = {
+      get: (key: string) => store.get(key),
+      set: (key: string, value: unknown) => store.set(key, value),
+    };
+    const messages = [user("Find apartments in Laureles and compare the first two in a table.")];
+
+    expect(await comparison!.processInputStep({ stepNumber: 0, messages, steps: [], requestContext }))
+      .toEqual({ toolChoice: { type: "tool", toolName: "searchRentalsTool" } });
+    expect(await comparison!.processInputStep({
+      stepNumber: 1,
+      messages,
+      steps: [{ toolResults: [{ toolName: "searchRentalsTool" }] }],
+      requestContext,
+    })).toEqual({ toolChoice: { type: "tool", toolName: "showComparisonTable" } });
+  });
+
   it("registers all search tools including grounding and web events", async () => {
     const tools = await conciergeAgent.listTools();
     const toolIds = Object.values(tools).map((tool) => tool.id);

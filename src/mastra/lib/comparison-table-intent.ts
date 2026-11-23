@@ -107,6 +107,16 @@ const RESTAURANT_TABLE = /\b(book|reserve|reservation|restaurant|caf[eé]|nightl
 // Explicit other verticals override ordinal pronouns, even when rental hints exist.
 const OTHER_COMPARISON_DOMAIN = /\b(?:new\s+projects?|projects?|startups?|companies|events?|tickets?|trips?|hotels?)\b/i;
 
+function hasExplicitRentalComparisonRequest(messages: readonly MessageLike[]): boolean {
+  const lastUser = [...messages].reverse().find((message) => message?.role === "user");
+  const text = messageText(lastUser).trim();
+  if (!text || RESTAURANT_TABLE.test(text) || OTHER_COMPARISON_DOMAIN.test(text)) return false;
+  const references = text.match(ORDINAL) ?? [];
+  const ordinalPair = references.length >= 2 && EXPLICIT_RESULT_PAIR.test(text);
+  return (TABLE_REQUEST.test(text) || ordinalPair) && RENTAL_REFERENCE.test(text) &&
+    (COMPARISON_WORD.test(text) || TABLE_COMMAND.test(text));
+}
+
 /**
  * An explicit "put those apartments in a table" is a UI command. The model
  * answers it with Markdown (measured), so the first step is pinned to the one
@@ -126,16 +136,34 @@ export function shouldForceComparisonTable({
   if (readRentalResultIds(requestContext?.get?.("ag-ui")).length < 2) return false;
   const lastUser = [...messages].reverse().find((message) => message?.role === "user");
   const text = messageText(lastUser).trim();
-  if (!text) return false;
-  // Unambiguous pairs of already-shown positions are comparisons too, even
-  // when the renter does not literally say "table".
-  const references = text.match(ORDINAL) ?? [];
-  const ordinalPair = references.length >= 2 && EXPLICIT_RESULT_PAIR.test(text);
-  if (!TABLE_REQUEST.test(text) && !ordinalPair) return false;
-  if (RESTAURANT_TABLE.test(text) || OTHER_COMPARISON_DOMAIN.test(text)) return false;
-  if (!RENTAL_REFERENCE.test(text)) return false;
-  if (!COMPARISON_WORD.test(text) && !TABLE_COMMAND.test(text)) return false;
-  return !NEW_SEARCH.test(text);
+  return Boolean(text) && hasExplicitRentalComparisonRequest(messages) && !NEW_SEARCH.test(text);
+}
+
+/** For a same-message search and explicit comparison, ground the search first. */
+export function shouldSearchBeforeComparison({
+  stepNumber, messages, steps,
+}: {
+  stepNumber: number;
+  messages: readonly MessageLike[];
+  steps: readonly CompletedToolStep[];
+}): boolean {
+  if (stepNumber !== 0 || !hasExplicitRentalComparisonRequest(messages)) return false;
+  const text = messageText([...messages].reverse().find((message) => message?.role === "user")).trim();
+  return NEW_SEARCH.test(text) && !hasAttemptedTool(steps, "searchRentalsTool");
+}
+
+/** After the forced search result, force the requested table against its new cards. */
+export function shouldContinueComparisonAfterSearch({
+  stepNumber, messages, steps,
+}: {
+  stepNumber: number;
+  messages: readonly MessageLike[];
+  steps: readonly CompletedToolStep[];
+}): boolean {
+  if (stepNumber === 0 || !hasExplicitRentalComparisonRequest(messages)) return false;
+  const text = messageText([...messages].reverse().find((message) => message?.role === "user")).trim();
+  return NEW_SEARCH.test(text) && hasAttemptedTool(steps, "searchRentalsTool") &&
+    !hasAttemptedTool(steps, "showComparisonTable");
 }
 
 

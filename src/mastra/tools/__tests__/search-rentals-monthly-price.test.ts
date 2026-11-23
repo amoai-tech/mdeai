@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => {
-  const state = { projection: "", bedroomFilters: [] as string[] };
+  const state = { projection: "", bedroomFilters: [] as string[], rows: null as null | Array<Record<string, unknown>> };
   const row = {
     id: "apt-1",
     title: "Centro Budget Studio · 300 USD",
@@ -43,7 +43,8 @@ const mocks = vi.hoisted(() => {
       const projectedRow = state.projection.includes("price_monthly")
         ? row
         : { ...row, price_monthly: undefined };
-      return Promise.resolve({ data: [projectedRow], error: null, count: 1 }).then(resolve, reject);
+      const data = state.rows ?? [projectedRow];
+      return Promise.resolve({ data, error: null, count: data.length }).then(resolve, reject);
     },
   });
 
@@ -127,13 +128,36 @@ describe("searchRentals — SAN-1356 monthly price projection", () => {
   });
 
 
-  it("records this run's result IDs in display order for later tools in the same run", async () => {
+  it("records this run's result IDs in the same order as the returned cards", async () => {
+    const { searchRentalsTool } = await import("../search-rentals");
+    const { RequestContext } = await import("@mastra/core/request-context");
+    const { currentRentalResultIds } = await import("../../lib/generative-ui-context");
+    const base = { title: "Centro", neighborhood: "Centro", bedrooms: 1, price_daily: 18, price_monthly: 300,
+      wifi_speed: 100, amenities: [], images: [], host_name: "Host", source_url: null, available_from: null,
+      available_to: null, pet_friendly: false, parking_included: false, minimum_stay_days: 1, latitude: 6.25, longitude: -75.57 };
+    mocks.state.rows = ["apt-c", "apt-a", "apt-b"].map((id, i) => ({ ...base, id, slug: id, price_monthly: 300 + i }));
+    try {
+      const requestContext = new RequestContext();
+      const result = await searchRentalsTool.execute!({ neighborhood: "Centro", limit: 5 }, { requestContext } as never) as { results: Array<{ id: string }> };
+      expect(result.results.length).toBe(3);
+      expect(await currentRentalResultIds(requestContext as never)).toEqual(result.results.map((row) => row.id));
+    } finally {
+      mocks.state.rows = null;
+    }
+  });
+
+  it("does not replace the visible list when this run's search finds nothing", async () => {
     const { searchRentalsTool } = await import("../search-rentals");
     const { RequestContext } = await import("@mastra/core/request-context");
     const { RENTAL_RUN_RESULT_IDS_KEY } = await import("../../lib/generative-ui-context");
-    const requestContext = new RequestContext();
-    await searchRentalsTool.execute!({ neighborhood: "Centro", limit: 5 }, { requestContext } as never);
-    expect(requestContext.get(RENTAL_RUN_RESULT_IDS_KEY)).toEqual(["apt-1"]);
+    mocks.state.rows = [];
+    try {
+      const requestContext = new RequestContext();
+      await searchRentalsTool.execute!({ neighborhood: "Centro", limit: 5 }, { requestContext } as never);
+      expect(requestContext.get(RENTAL_RUN_RESULT_IDS_KEY)).toBeUndefined();
+    } finally {
+      mocks.state.rows = null;
+    }
   });
 
   it("preserves source gallery images and total count in Ask MDE tool results", async () => {

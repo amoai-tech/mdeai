@@ -16,7 +16,7 @@ import { requestVenueBookingTool } from '../tools/request-venue-booking';
 import { showRecommendationsTool } from '../tools/show-recommendations';
 import { showRentalFilterControlTool } from '../tools/show-rental-filter-control';
 import { showComparisonTableTool } from '../tools/show-comparison-table';
-import { COMPARISON_POSITIONS_KEY, comparisonRequestedPositions, shouldContinueComparisonAfterRoute, shouldContinueRouteAfterComparison, shouldFinishComparisonWithoutAnotherTool, shouldForceComparisonTable } from '../lib/comparison-table-intent';
+import { COMPARISON_POSITIONS_KEY, comparisonRequestedPositions, shouldContinueComparisonAfterRoute, shouldContinueRouteAfterComparison, shouldFinishComparisonWithoutAnotherTool, shouldForceComparisonTable, shouldSearchBeforeComparison, shouldContinueComparisonAfterSearch } from '../lib/comparison-table-intent';
 import { showViewingProposalTool } from '../tools/show-viewing-proposal';
 import { shouldRenderRentalFilterControl, shouldRenderViewingProposal, shouldRequestRecommendations } from '../lib/recommendation-intent';
 import { shouldSearchEventsForCards } from '../lib/event-intent';
@@ -614,6 +614,17 @@ export const conciergeAgent = new Agent({
     { id: 'san1681-comparison-table-intent', processInputStep: ({ stepNumber, messages, steps, requestContext }) => {
       // Never carry trusted ordinal selection from a previous conversation turn.
       if (stepNumber === 0) requestContext?.set(COMPARISON_POSITIONS_KEY, null);
+      // A same-message fresh search and comparison must be sequenced: the table
+      // reads the run-scoped IDs written by search-rentals, so do not let the
+      // model execute both tools against the pre-search browser hints.
+      if (shouldSearchBeforeComparison({ stepNumber, messages, steps })) {
+        return { toolChoice: { type: 'tool' as const, toolName: 'searchRentalsTool' } };
+      }
+      if (shouldContinueComparisonAfterSearch({ stepNumber, messages, steps })) {
+        const positions = comparisonRequestedPositions(messages);
+        if (positions) requestContext?.set(COMPARISON_POSITIONS_KEY, positions);
+        return { toolChoice: { type: 'tool' as const, toolName: 'showComparisonTable' } };
+      }
       const forceFirst = shouldForceComparisonTable({ stepNumber, messages, requestContext });
       const forceAfterRoute = shouldContinueComparisonAfterRoute({
         stepNumber, messages, steps, requestContext,

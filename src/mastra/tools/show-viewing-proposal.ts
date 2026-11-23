@@ -34,7 +34,7 @@ export const showViewingProposalTool = createTool({
     }
     // Browser hints are not authorization; the proposal re-resolves the real row.
     // A search earlier in this run replaced the cards; use that list (SAN-1694).
-    const published = new Set(currentRentalResultIds(context?.requestContext).filter(Boolean));
+    const published = new Set((await currentRentalResultIds(context?.requestContext)).filter(Boolean));
     const [safeId] = normalizeRecommendationIds([listingId]);
     if (!safeId || !published.has(safeId)) {
       return { ok: false, message: "That apartment is not in the current page results." };

@@ -71,7 +71,7 @@ export const showComparisonTableTool = createTool({
     const agUiContext = requestContext?.get?.("ag-ui");
     // A search earlier in this run replaced the visible cards; positions and IDs
     // must address those, not the browser list sent before it (SAN-1694).
-    const available = currentRentalResultIds(requestContext);
+    const available = await currentRentalResultIds(requestContext);
     if (available.filter(Boolean).length < 2) {
       return { ok: false, rows: [], rejected: [], message: "Search for apartments first; there are fewer than two current results." };
     }
@@ -134,8 +134,15 @@ export const showComparisonTableTool = createTool({
     } satisfies Row]));
     const rows = ids.flatMap((id) => byId.get(id) ?? []);
     const missing = ids.filter((id) => !byId.has(id));
-    if (rows.length < 2) {
-      return { ok: false, rows: [], rejected: [...rejected, ...missing], message: "Fewer than two apartments are accessible in this session." };
+    if (missing.length > 0 || rows.length < 2) {
+      return {
+        ok: false,
+        rows: [],
+        rejected: [...rejected, ...missing],
+        message: missing.length > 0
+          ? "One or more selected apartments are unavailable for comparison."
+          : "Fewer than two apartments are accessible in this session.",
+      };
     }
     return {
       ok: true,

@@ -12,7 +12,7 @@ import {
 import { applyAvailabilityFilters } from '@/lib/rentals/availability-filter';
 import { z } from 'zod';
 import { runAuditedSearch } from '../lib/run-audited-search';
-import { RENTAL_RUN_RESULT_IDS_KEY } from '../lib/generative-ui-context';
+import { startRentalRunSearch } from '../lib/generative-ui-context';
 import { EXTERNAL_RENTAL_BUDGET_NOTE, getOptionalExternalRentals, mixRentalResults } from '@/lib/rentals/mixed-rental-results';
 import {
   RentalSearchUnavailableError,
@@ -870,16 +870,24 @@ export const searchRentalsTool = createTool({
       | SupabaseClient
       | undefined;
     const options = rentalClient ? { client: rentalClient } : undefined;
-    const { results, source, budgetNote, hybridUsed, rankExplanation } = await runAuditedSearch(
-      'search-rentals',
-      (q: RentalQuery) => searchRentals(q, options),
-      { neighborhood, minBedrooms: requestedMinBedrooms, maxBedrooms: requestedMaxBedrooms, furnished, maxPricePerNight, maxPriceMonthly, stayType, budgetCurrency, limit, queryText },
-      context,
-    );
-    // SAN-1694: these rows become the visible cards, in this order. Later tools in
-    // the same run (comparison, cards, viewing proposal) must address them, not
-    // the browser list sent before this search replaced the page.
-    context?.requestContext?.set?.(RENTAL_RUN_RESULT_IDS_KEY, results.map((r) => String(r.id)));
+    // SAN-1694: these rows become the visible cards, in this order. Register before
+    // searching so a comparison/cards/viewing tool called in the same step waits
+    // for them instead of reading the browser list sent before this search.
+    const finishRunSearch = startRentalRunSearch(context?.requestContext);
+    let searched: Awaited<ReturnType<typeof searchRentals>>;
+    try {
+      searched = await runAuditedSearch(
+        'search-rentals',
+        (q: RentalQuery) => searchRentals(q, options),
+        { neighborhood, minBedrooms: requestedMinBedrooms, maxBedrooms: requestedMaxBedrooms, furnished, maxPricePerNight, maxPriceMonthly, stayType, budgetCurrency, limit, queryText },
+        context,
+      );
+    } catch (error) {
+      finishRunSearch(null);
+      throw error;
+    }
+    const { results, source, budgetNote, hybridUsed, rankExplanation } = searched;
+    finishRunSearch(results.map((r) => String(r.id)));
 
     return {
       results: results.map((r) => ({

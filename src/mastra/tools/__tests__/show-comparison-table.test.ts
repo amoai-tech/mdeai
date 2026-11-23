@@ -3,7 +3,7 @@ import { RENTAL_A2UI_CONTEXT_DESCRIPTION } from "@/lib/rentals/a2ui-context";
 import { COMPARISON_POSITIONS_KEY } from "../../lib/comparison-table-intent";
 import { comparisonInputSchema, showComparisonTableTool } from "../show-comparison-table";
 import { RENTAL_SUPABASE_KEY } from "../search-rentals";
-import { RENTAL_RUN_RESULT_IDS_KEY } from "../../lib/generative-ui-context";
+import { RENTAL_RUN_RESULT_IDS_KEY, startRentalRunSearch } from "../../lib/generative-ui-context";
 
 const ids = Array.from({ length: 10 }, (_, i) =>
   `37a05b09-f560-4776-92fd-b8bb2b92e6${String(i).padStart(2, "0")}`
@@ -21,7 +21,7 @@ function context(rows: Array<Record<string, unknown>> = [], { withClient = true,
       get: (key: string) =>
         key === RENTAL_SUPABASE_KEY ? (withClient ? client : null)
           : key === COMPARISON_POSITIONS_KEY ? trustedPositions
-          : key === RENTAL_RUN_RESULT_IDS_KEY ? runIds
+          : key === RENTAL_RUN_RESULT_IDS_KEY ? (runIds ? { order: 1, ids: runIds } : undefined)
           : key === "ag-ui" ? { context: [{ description: RENTAL_A2UI_CONTEXT_DESCRIPTION, value: JSON.stringify(visibleIds) }] }
             : undefined,
     },
@@ -66,9 +66,17 @@ describe("showComparisonTableTool", () => {
     expect(result.rejected).toEqual([ids[0], ids[1]]);
   });
 
-  it("compares nothing when this run's search found fewer than two apartments", async () => {
-    const result = await run({ positions: [1, 2] }, context([], { runIds: [] }));
-    expect(result.ok).toBe(false);
+  it("keeps comparing the cards on screen when this run's search found nothing", async () => {
+    // The page keeps its cards after an empty search, so must the tool.
+    const { RequestContext } = await import("@mastra/core/request-context");
+    const real = new RequestContext();
+    const page = context([dbRow(ids[0], "Visible first", 2_000_000), dbRow(ids[1], "Visible second", 2_100_000),
+      dbRow(fresh[0], "Never shown", 1_000_000)]).requestContext;
+    for (const key of [RENTAL_SUPABASE_KEY, "ag-ui"]) real.set(key, page.get(key));
+    startRentalRunSearch(real as never)([]);
+    const result = await run({ positions: [1, 2] }, { requestContext: real });
+    expect(result.ok).toBe(true);
+    expect(result.rows.map((row) => row.id)).toEqual([ids[0], ids[1]]);
   });
 
   it("resolves position six and seven in display order (not limited to five)", async () => {
@@ -197,5 +205,18 @@ describe("showComparisonTableTool", () => {
     const result = await run({ ids: [ids[0], ids[1]] }, context([dbRow(ids[0], "First", 2_400_000)]));
     expect(result.ok).toBe(false);
     expect(result.rows).toEqual([]);
+  });
+
+  it("rejects the whole comparison when one selected result is source-backed rather than a database apartment", async () => {
+    const result = await run(
+      { ids: [ids[0], ids[1], ids[2]] },
+      context([
+        dbRow(ids[0], "Database first", 2_400_000),
+        dbRow(ids[1], "Database second", 2_500_000),
+      ]),
+    );
+    expect(result.ok).toBe(false);
+    expect(result.rows).toEqual([]);
+    expect(result.rejected).toEqual([ids[2]]);
   });
 });

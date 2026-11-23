@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { comparisonRequestedPositions, hasAttemptedTool, hasCompletedTool, shouldContinueComparisonAfterRoute, shouldContinueRouteAfterComparison, shouldFinishComparisonWithoutAnotherTool, shouldForceComparisonTable } from "../comparison-table-intent";
+import { comparisonRequestedPositions, hasAttemptedTool, hasCompletedTool, shouldContinueComparisonAfterRoute, shouldContinueComparisonAfterSearch, shouldContinueRouteAfterComparison, shouldFinishComparisonWithoutAnotherTool, shouldForceComparisonTable, shouldSearchBeforeComparison } from "../comparison-table-intent";
 import { RENTAL_A2UI_CONTEXT_DESCRIPTION } from "@/lib/rentals/a2ui-context";
 import { routePlanForTurn, shouldForceRouteTool } from "../route-tool-choice";
 
@@ -52,6 +52,29 @@ describe("shouldForceComparisonTable", () => {
   it("requires at least two published results", () => {
     const empty = { get: () => ({ context: [] }) };
     expect(call("Put the first two apartments in a table.", empty)).toBe(false);
+  });
+});
+
+describe("same-message rental search and comparison", () => {
+  const messages = [user("Find apartments in Laureles and compare the first two in a table.")];
+
+  it("forces the search first, then the comparison after the search result", () => {
+    expect(shouldSearchBeforeComparison({ stepNumber: 0, messages, steps: [] })).toBe(true);
+    expect(shouldContinueComparisonAfterSearch({ stepNumber: 0, messages, steps: [] })).toBe(false);
+    const searched = [{ toolResults: [{ toolName: "searchRentalsTool" }] }];
+    expect(shouldSearchBeforeComparison({ stepNumber: 1, messages, steps: searched })).toBe(false);
+    expect(shouldContinueComparisonAfterSearch({ stepNumber: 1, messages, steps: searched })).toBe(true);
+    expect(shouldContinueComparisonAfterSearch({
+      stepNumber: 2, messages, steps: [...searched, { toolCalls: [{ toolName: "showComparisonTable" }] }],
+    })).toBe(false);
+  });
+
+  it("does not turn a new search without an explicit table or comparison request into a forced comparison", () => {
+    expect(shouldSearchBeforeComparison({
+      stepNumber: 0,
+      messages: [user("Find apartments in Laureles under COP 3M.")],
+      steps: [],
+    })).toBe(false);
   });
 });
 

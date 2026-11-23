@@ -44,7 +44,7 @@ describe("showRecommendations — page-hint membership, not anonymous public eli
     const { RENTAL_RUN_RESULT_IDS_KEY } = await import("../../lib/generative-ui-context");
     const fresh = "9b1c7e2a-0000-4000-8000-000000000000";
     const page = context("/rentals", [uuid]).requestContext.get;
-    const ctx = { requestContext: { get: (key: string) => key === RENTAL_RUN_RESULT_IDS_KEY ? [fresh] : page(key) } };
+    const ctx = { requestContext: { get: (key: string) => key === RENTAL_RUN_RESULT_IDS_KEY ? { order: 1, ids: [fresh] } : page(key) } };
     expect(await showRecommendationsTool.execute!({ ids: [fresh, uuid] }, ctx as never))
       .toMatchObject({ ok: true, ids: [fresh], rejected: [uuid] });
   });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { RENTAL_A2UI_CONTEXT_DESCRIPTION } from "@/lib/rentals/a2ui-context";
-import { MDE_GENERATIVE_UI_RULES, buildGenerativeUiInstruction, hasGenerativeUIGuide, MDE_A2UI_GUIDE, readEventResultHints, readGenerativeUiGuide, readRentalResultHints, readRentalResultIds } from "../generative-ui-context";
+import { MDE_GENERATIVE_UI_RULES, buildGenerativeUiInstruction, hasGenerativeUIGuide, MDE_A2UI_GUIDE, readEventResultHints, readGenerativeUiGuide, readRentalResultHints, readRentalResultIds, currentRentalResultIds, startRentalRunSearch } from "../generative-ui-context";
 import { EVENT_A2UI_CONTEXT_DESCRIPTION } from "@/lib/events/a2ui-context";
 import { mdeUI } from "@/components/copilot/a2ui/mde-ui-catalog";
 
@@ -308,5 +308,62 @@ describe("official generative-UI guide forwarding", () => {
     expect(blank).toBe(MDE_A2UI_GUIDE);
     expect(buildGenerativeUiInstruction(undefined)).toBe("");
     expect(buildGenerativeUiInstruction({ context: [] })).toBe("");
+  });
+});
+
+// SAN-1694 — after a search in the same run, tools must address the cards the
+// page shows. These rules mirror `latestRentalToolResult` in the browser.
+describe("currentRentalResultIds — this run's searches versus the browser list", () => {
+  const page = ["37a05b09-f560-4776-92fd-b8bb2b92e600", "37a05b09-f560-4776-92fd-b8bb2b92e601"];
+  const a = ["9b1c7e2a-0000-4000-8000-00000000000a", "9b1c7e2a-0000-4000-8000-00000000000b", "9b1c7e2a-0000-4000-8000-00000000000c"];
+  const b = ["9b1c7e2a-0000-4000-8000-0000000000b1", "9b1c7e2a-0000-4000-8000-0000000000b2"];
+  async function runContext() {
+    const { RequestContext } = await import("@mastra/core/request-context");
+    const requestContext = new RequestContext();
+    requestContext.set("ag-ui", { context: [{ description: RENTAL_A2UI_CONTEXT_DESCRIPTION, value: JSON.stringify(page) }] });
+    return requestContext as unknown as { get: (key: string) => unknown; set: (key: string, value: unknown) => void };
+  }
+
+  it("uses the browser list when this run has not searched", async () => {
+    expect(await currentRentalResultIds(await runContext())).toEqual(page);
+  });
+
+  it("uses this run's search, keeping its display order", async () => {
+    const ctx = await runContext();
+    startRentalRunSearch(ctx)(a);
+    expect(await currentRentalResultIds(ctx)).toEqual(a);
+  });
+
+  it("keeps the cards on screen when this run's search is empty or fails", async () => {
+    const ctx = await runContext();
+    startRentalRunSearch(ctx)([]);
+    startRentalRunSearch(ctx)(null);
+    expect(await currentRentalResultIds(ctx)).toEqual(page);
+    startRentalRunSearch(ctx)(a);
+    startRentalRunSearch(ctx)([]);
+    expect(await currentRentalResultIds(ctx)).toEqual(a);
+  });
+
+  it("waits for a search started in the same step instead of reading the old list", async () => {
+    const ctx = await runContext();
+    const finish = startRentalRunSearch(ctx);
+    const reading = currentRentalResultIds(ctx);
+    finish(a);
+    expect(await reading).toEqual(a);
+  });
+
+  it("lets the later-called search win even when the earlier one finishes last", async () => {
+    const ctx = await runContext();
+    const first = startRentalRunSearch(ctx);
+    const second = startRentalRunSearch(ctx);
+    second(b);
+    first(a);
+    expect(await currentRentalResultIds(ctx)).toEqual(b);
+  });
+
+  it("turns an unsafe ID into a gap so later positions do not shift", async () => {
+    const ctx = await runContext();
+    startRentalRunSearch(ctx)([a[0], "bad id with spaces", a[2]]);
+    expect(await currentRentalResultIds(ctx)).toEqual([a[0], "", a[2]]);
   });
 });
