@@ -16,7 +16,7 @@ import { requestVenueBookingTool } from '../tools/request-venue-booking';
 import { showRecommendationsTool } from '../tools/show-recommendations';
 import { showRentalFilterControlTool } from '../tools/show-rental-filter-control';
 import { showComparisonTableTool } from '../tools/show-comparison-table';
-import { shouldForceComparisonTable } from '../lib/comparison-table-intent';
+import { COMPARISON_POSITIONS_KEY, comparisonRequestedPositions, shouldContinueComparisonAfterRoute, shouldContinueRouteAfterComparison, shouldFinishComparisonWithoutAnotherTool, shouldForceComparisonTable } from '../lib/comparison-table-intent';
 import { showViewingProposalTool } from '../tools/show-viewing-proposal';
 import { shouldRenderRentalFilterControl, shouldRenderViewingProposal, shouldRequestRecommendations } from '../lib/recommendation-intent';
 import { shouldSearchEventsForCards } from '../lib/event-intent';
@@ -611,10 +611,21 @@ export const conciergeAgent = new Agent({
     // SAN-1681 — an explicit comparison-table request is a UI command. Pin the
     // ID-list tool; the transport builds the official Column → Table. Forcing
     // render_ui itself produced empty operations, so it is not used here.
-    { id: 'san1681-comparison-table-intent', processInputStep: ({ stepNumber, messages, requestContext }) =>
-      shouldForceComparisonTable({ stepNumber, messages, requestContext })
-        ? { toolChoice: { type: 'tool' as const, toolName: 'showComparisonTable' } }
-        : {} },
+    { id: 'san1681-comparison-table-intent', processInputStep: ({ stepNumber, messages, steps, requestContext }) => {
+      // Never carry trusted ordinal selection from a previous conversation turn.
+      if (stepNumber === 0) requestContext?.set(COMPARISON_POSITIONS_KEY, null);
+      const forceFirst = shouldForceComparisonTable({ stepNumber, messages, requestContext });
+      const forceAfterRoute = shouldContinueComparisonAfterRoute({
+        stepNumber, messages, steps, requestContext,
+        hasRouteIntent: Boolean(routePlanForTurn(messages)),
+      });
+      if (!forceFirst && !forceAfterRoute) return {};
+      // The user's exact ordinals outrank model-chosen IDs. This is a trusted
+      // server-side interpretation, not a new browser authority or search path.
+      const positions = comparisonRequestedPositions(messages);
+      if (positions) requestContext?.set(COMPARISON_POSITIONS_KEY, positions);
+      return { toolChoice: { type: 'tool' as const, toolName: 'showComparisonTable' } };
+    } },
     // SAN-1653 — "show events as cards" pins the event search so the bridge always
     // emits the render_ui call; relying on model choice produced prose-only turns.
     { id: 'san1653-event-card-intent', processInputStep: ({ stepNumber, messages, requestContext }) =>
@@ -626,7 +637,13 @@ export const conciergeAgent = new Agent({
         ? { toolChoice: { type: 'tool' as const, toolName: 'requestVenueBooking' } }
         : {} },
     { id: 'san465-route-tool-choice', processInputStep: ({ stepNumber, messages, steps, requestContext }) => {
-      if (!shouldForceRouteTool({ stepNumber, messages, steps })) return {};
+      // If the comparison ran first, complete the route on the next step;
+      // when the route ran first, the comparison processor completes it next.
+      const afterTable = shouldContinueRouteAfterComparison({
+        stepNumber, messages, steps, requestContext,
+        hasRouteIntent: Boolean(routePlanForTurn(messages)),
+      });
+      if (!afterTable && !shouldForceRouteTool({ stepNumber, messages, steps })) return {};
       // Hand the user's own endpoints and travel mode to the tool. The model's
       // generated place IDs are untrusted; Google must receive the named places.
       const plan = routePlanForTurn(messages);
@@ -649,6 +666,15 @@ export const conciergeAgent = new Agent({
       withComparisonRecords(messages, requestContext?.get("ag-ui"), lookupPublicDiscoveryItemFromServer) },
     { id: "san1600-verified-selection-facts", processInput: ({ messages, requestContext }) =>
       withVerifiedSelectionFacts(messages, requestContext?.get("ag-ui"), lookupPublicDiscoveryItemFromServer) },
+    // The existing stream bridge builds render_ui from showComparisonTable's
+    // authorized result. Never let the LLM send an additional empty surface
+    // during the same comparison turn; keep ordinary turns/tools unaffected.
+    { id: "san1681-comparison-text-finish", processInputStep: ({ stepNumber, messages, steps, requestContext }) =>
+      shouldFinishComparisonWithoutAnotherTool({
+        stepNumber, messages, steps, requestContext, hasRouteIntent: Boolean(routePlanForTurn(messages)),
+      })
+        ? { toolChoice: 'none' as const }
+        : {} },
   ],
   // A failed Google route cannot become a model-estimated distance or ETA.
   // This filters streaming text before CopilotKit renders it or memory saves it.
