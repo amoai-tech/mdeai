@@ -103,12 +103,12 @@ Do not invent architecture, database effects, or product behavior.
 <!-- Run only relevant checks. Never mark an unrun command as PASS. Match current package.json and test config. -->
 | Check / command | Result (PASS / FAIL / NOT RUN / N/A) | Evidence / reason |
 | --- | --- | --- |
-| \`npm test -- <focused-test>\` (replace with actual test selector) | NOT RUN | |
-| \`npm run lint\` and \`npm run typecheck\` | NOT RUN | |
-| \`npm run floor\` (canonical full repo gate) | NOT RUN | |
-| \`npx playwright test <relevant-spec> --project=chromium --workers=1\` | NOT RUN | |
-| \`npx supabase test db\` (schema / RLS / RPC changes only) | N/A | No DB change unless stated |
-| Exact-head required CI: \`floor\`, \`mastra-schema-init\`, review | NOT RUN | Current PR head SHA: |
+| `npm test -- <focused-test>` (replace with actual test selector) | NOT RUN | |
+| `npm run lint` and `npm run typecheck` | NOT RUN | |
+| `npm run floor` (canonical full repo gate) | NOT RUN | |
+| `npx playwright test <relevant-spec> --project=chromium --workers=1` | NOT RUN | |
+| `npx supabase test db` (schema / RLS / RPC changes only) | N/A | No DB change unless stated |
+| Exact-head required CI: `floor`, `mastra-schema-init`, review | NOT RUN | Current PR head SHA: |
 <!-- Keep the earlier "Test plan & evidence" section; summarize proofs here, do not replace it. -->
 
 ## Pre-merge decision
@@ -121,11 +121,11 @@ Do not invent architecture, database effects, or product behavior.
 
 ## Post-merge and live verification
 <!-- These are planned commands, not proof they have run. Docs-only changes need no runtime rollout. -->
-1. Confirm PR merge SHA and required checks on \`main\`.
-2. If runtime changed, confirm Vercel deployment serves the **merged commit** (deployment URL + environment + \`/api/version\` when available); do not equate a preview URL with the live site.
-3. For runtime changes, run the relevant safe production smoke: \`npm run smoke:prod\`, \`npm run verify:production\`, or a named read-only Playwright production spec after checking prerequisites.
-4. Verify the actual affected user journey at \`https://www.mdeai.co\` (desktop + 390px where applicable), console/network errors, and DB readback only for approved write tests.
-5. Report live result **PASS / FAIL / NOT VERIFIED**, tested commit, URLs, exact commands, and any follow-up. A docs-only PR: verify files on merged \`main\` and that a *new* PR displays the template; runtime deploy smoke is N/A.
+1. Confirm PR merge SHA and required checks on `main`.
+2. If runtime changed, confirm Vercel deployment serves the **merged commit** (deployment URL + environment + `/api/version` when available); do not equate a preview URL with the live site.
+3. For runtime changes, run the relevant safe production smoke: `npm run smoke:prod`, `npm run verify:production`, or a named read-only Playwright production spec after checking prerequisites.
+4. Verify the actual affected user journey at `https://www.mdeai.co` (desktop + 390px where applicable), console/network errors, and DB readback only for approved write tests.
+5. Report live result **PASS / FAIL / NOT VERIFIED**, tested commit, URLs, exact commands, and any follow-up. A docs-only PR: verify files on merged `main` and that a *new* PR displays the template; runtime deploy smoke is N/A.
 
 ## Official references and implementation instructions
 <!-- Include only links actually used; the Source receipts table above remains canonical for material decisions. -->
