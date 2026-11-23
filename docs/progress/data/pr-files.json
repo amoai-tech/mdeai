@@ -1,0 +1,508 @@
+{
+ "generated_at": "2026-10-21",
+ "source": "gh pr view <n> --json files,additions,deletions",
+ "prs": {
+  "100": {
+   "files": [
+    ".github/workflows/codacy-coverage.yml",
+    ".gitignore"
+   ],
+   "additions": 52,
+   "deletions": 0
+  },
+  "214": {
+   "files": [
+    ".codacy.yml",
+    ".github/workflows/codacy-coverage.yml",
+    ".gitignore"
+   ],
+   "additions": 70,
+   "deletions": 12
+  },
+  "234": {
+   "files": [
+    ".gitignore",
+    ".infisical.json"
+   ],
+   "additions": 6,
+   "deletions": 0
+  },
+  "238": {
+   "files": [
+    "e2e/prod-rental-chat-restart.spec.ts",
+    "playwright.config.ts"
+   ],
+   "additions": 406,
+   "deletions": 0
+  },
+  "244": {
+   "files": [
+    "src/lib/onboarding/__tests__/contracts.test.ts",
+    "src/lib/onboarding/__tests__/definitions.test.ts",
+    "src/lib/onboarding/__tests__/state.test.ts",
+    "src/lib/onboarding/contracts.ts",
+    "src/lib/onboarding/definitions.ts",
+    "src/lib/onboarding/drafts.ts",
+    "src/lib/onboarding/index.ts",
+    "src/lib/onboarding/state.ts",
+    "src/lib/supabase/database.types.ts",
+    "supabase/migrations/20261006131205_san1391_add_landlord_partner_type.sql",
+    "supabase/tests/database/san1391_partner_drafts_race_guard_test.sql"
+   ],
+   "additions": 1540,
+   "deletions": 0
+  },
+  "248": {
+   "files": [
+    "e2e/helpers/deterministic-chat.ts",
+    "e2e/screens/SAN-1380-chat-journey.spec.ts",
+    "package.json",
+    "playwright.config.ts",
+    "src/app/dev/_probe/concierge-probe.tsx",
+    "src/components/chat/__tests__/concierge-transcript-contract.test.tsx",
+    "src/components/chat/__tests__/concierge-transcript-tail.test.tsx",
+    "src/components/chat/concierge-transcript-tail.tsx",
+    "src/components/chat/geo-chat-shell.tsx",
+    "src/components/chat/new-project-fast-path-context.tsx",
+    "src/components/chat/new-project-fast-path-panel.tsx",
+    "src/hooks/__tests__/fast-path-stale-results.test.tsx",
+    "src/hooks/__tests__/new-project-fast-path-failure.test.tsx",
+    "src/hooks/use-clear-other-fast-path-results.ts",
+    "src/hooks/use-new-project-search-fast-path.ts",
+    "src/lib/__tests__/concierge-send-user-message.test.ts",
+    "src/lib/concierge-send-user-message.ts",
+    "src/lib/hooks/__tests__/use-concierge-send-handlers.test.tsx",
+    "src/lib/hooks/use-concierge-send-handlers.ts",
+    "src/lib/new-projects/__tests__/fast-path.test.ts",
+    "src/lib/new-projects/__tests__/format.test.ts",
+    "src/lib/new-projects/__tests__/mappers.test.ts",
+    "src/lib/new-projects/fast-path.ts",
+    "src/lib/new-projects/mappers.ts",
+    "src/lib/new-projects/queries.ts",
+    "src/lib/new-projects/search-envelope.ts",
+    "src/lib/new-projects/types.ts",
+    "src/lib/router-intent.ts",
+    "src/lib/supabase/database.types.ts",
+    "src/mastra/tools/__tests__/compare-new-projects.test.ts",
+    "src/mastra/tools/__tests__/search-new-projects.test.ts",
+    "src/mastra/tools/compare-new-projects.ts",
+    "src/mastra/tools/search-new-projects.ts"
+   ],
+   "additions": 805,
+   "deletions": 51
+  },
+  "255": {
+   "files": [
+    "scripts/function-acl-baseline.json",
+    "supabase/migrations/20261008100000_san1284d_ticket_validate_consume_service_only.sql",
+    "supabase/tests/database/san1284d_ticket_validate_consume_test.sql"
+   ],
+   "additions": 89,
+   "deletions": 5
+  },
+  "256": {
+   "files": [
+    "package-lock.json",
+    "package.json"
+   ],
+   "additions": 4,
+   "deletions": 4
+  },
+  "313": {
+   "files": [
+    "docs/07-operations/merge-approval-history.md"
+   ],
+   "additions": 123,
+   "deletions": 6
+  },
+  "324": {
+   "files": [
+    ".pr-body-monthly.md",
+    "src/mastra/agents/concierge.ts",
+    "src/mastra/tools/__tests__/whatsapp-rental-reply.test.ts",
+    "src/mastra/tools/search-rentals.ts",
+    "src/mastra/tools/whatsapp-rental-reply.ts"
+   ],
+   "additions": 402,
+   "deletions": 39
+  },
+  "362": {
+   "files": [
+    "src/components/rentals/__tests__/rental-browse-card.test.tsx",
+    "src/components/rentals/rental-browse-card.tsx",
+    "src/components/rentals/rental-detail-view.tsx",
+    "src/lib/rentals/__tests__/get-rental-detail.test.ts",
+    "src/lib/rentals/__tests__/mixed-rental-results.test.ts",
+    "src/lib/rentals/__tests__/provenance-attribution.test.ts",
+    "src/lib/rentals/get-rental-detail.ts",
+    "src/lib/rentals/mixed-rental-results.ts",
+    "src/lib/rentals/provenance.ts",
+    "src/mastra/tools/__tests__/search-rentals-dedupe.test.ts",
+    "src/mastra/tools/search-rentals.ts"
+   ],
+   "additions": 213,
+   "deletions": 15
+  },
+  "364": {
+   "files": [
+    "supabase/migrations/20261017020000_san1502_publish_retry_auth_audit.sql",
+    "supabase/tests/database/san1502_publish_retry_audit_test.sql"
+   ],
+   "additions": 177,
+   "deletions": 0
+  },
+  "367": {
+   "files": [
+    "src/components/rentals/__tests__/rental-detail-confirmation.test.tsx",
+    "src/components/rentals/__tests__/rental-detail-preview-fields.test.tsx",
+    "src/components/rentals/rental-detail-view.tsx"
+   ],
+   "additions": 35,
+   "deletions": 23
+  },
+  "373": {
+   "files": [
+    "scripts/__tests__/pr-agent-review-evals.test.mjs",
+    "scripts/pr-agent/evals/score-review.mjs"
+   ],
+   "additions": 55,
+   "deletions": 12
+  },
+  "376": {
+   "files": [
+    "e2e/san-691-rentals-landing.spec.ts",
+    "src/__tests__/partners/partner-hub.test.tsx",
+    "src/__tests__/partners/partner-landing-placeholders.test.tsx",
+    "src/app/partners/rentals/page.tsx",
+    "src/components/partners/partner-landing-shell.tsx",
+    "src/components/partners/rentals-landing.tsx",
+    "src/lib/partners/partner-hub-config.ts"
+   ],
+   "additions": 187,
+   "deletions": 49
+  },
+  "387": {
+   "files": [
+    "src/mastra/lib/models.test.ts"
+   ],
+   "additions": 18,
+   "deletions": 5
+  },
+  "389": {
+   "files": [
+    "src/__tests__/api/copilotkit-v2-contract.test.ts"
+   ],
+   "additions": 5,
+   "deletions": 2
+  },
+  "394": {
+   "files": [
+    "docs/plans/mde-partners-review-roadmap.md",
+    "src/__tests__/partners/partner-lead-form.test.tsx",
+    "src/__tests__/partners/submit-venue-lead.test.ts",
+    "src/app/api/partners/venue-leads/route.test.ts",
+    "src/app/api/partners/venue-leads/route.ts",
+    "src/components/partners/partner-lead-form.tsx",
+    "src/lib/partners/venue-lead-schema.ts"
+   ],
+   "additions": 568,
+   "deletions": 45
+  },
+  "400": {
+   "files": [
+    "scripts/copilotkit-consumer-inventory.json",
+    "src/__tests__/smoke.test.ts",
+    "src/components/partners/partner-workspace-chat.tsx",
+    "src/lib/__tests__/copilotkit-client-props.test.ts",
+    "src/lib/copilotkit-client-props.ts",
+    "src/mastra/__tests__/registry-workspace.test.ts",
+    "src/mastra/agents/__tests__/partner-agent.test.ts",
+    "src/mastra/agents/index.ts",
+    "src/mastra/agents/partner-agent.ts",
+    "src/mastra/copilotkit/logging-mastra-agent.test.ts",
+    "src/mastra/copilotkit/logging-mastra-agent.ts",
+    "src/mastra/index.ts",
+    "src/mastra/lib/__tests__/partner-request-context.test.ts",
+    "src/mastra/lib/partner-request-context.ts"
+   ],
+   "additions": 291,
+   "deletions": 4
+  },
+  "402": {
+   "files": [
+    "src/app/api/partners/profile/route.ts",
+    "src/app/partners/profile/page.tsx",
+    "src/components/partners/partner-hub.tsx",
+    "src/components/partners/partner-profile-form.tsx",
+    "src/lib/partners/__tests__/partner-profile-schema.test.ts",
+    "src/lib/partners/partner-profile-schema.ts"
+   ],
+   "additions": 460,
+   "deletions": 0
+  },
+  "403": {
+   "files": [
+    "scripts/copilotkit-consumer-inventory.json",
+    "src/app/partners/signup/page.tsx",
+    "src/components/onboarding/__tests__/onboarding-ai-suggestion-card.test.tsx",
+    "src/components/onboarding/onboarding-ai-suggestion-card.tsx",
+    "src/components/onboarding/onboarding-copilot-bridge.tsx",
+    "src/components/partners/partner-signup-assistant.tsx",
+    "src/components/partners/partner-signup-nav.tsx",
+    "src/components/partners/partner-signup-wizard.tsx",
+    "src/lib/onboarding/__tests__/ai-suggestion.test.ts",
+    "src/lib/onboarding/ai-context.ts",
+    "src/lib/onboarding/ai-suggestion.ts",
+    "src/mastra/agents/partner-agent.ts"
+   ],
+   "additions": 597,
+   "deletions": 9
+  },
+  "404": {
+   "files": [
+    "src/app/api/partners/onboarding/url-draft/route.test.ts",
+    "src/app/api/partners/onboarding/url-draft/route.ts",
+    "src/components/onboarding/business-url-import-card.tsx",
+    "src/components/onboarding/onboarding-ai-suggestion-card.tsx",
+    "src/components/partners/partner-signup-assistant.tsx",
+    "src/components/partners/partner-signup-wizard.tsx",
+    "src/lib/onboarding/__tests__/business-url.test.ts",
+    "src/lib/onboarding/__tests__/extract-business-url.test.ts",
+    "src/lib/onboarding/ai-suggestion.ts",
+    "src/lib/onboarding/business-url.ts",
+    "src/lib/onboarding/extract-business-url.ts",
+    "src/lib/partners/activate-client.ts",
+    "src/lib/partners/activate-partner.ts",
+    "src/lib/partners/activate-schema.ts"
+   ],
+   "additions": 713,
+   "deletions": 8
+  },
+  "405": {
+   "files": [
+    "src/components/copilot/__tests__/rental-results-map-neutral.test.tsx",
+    "src/components/copilot/search-tool-result-cards.tsx"
+   ],
+   "additions": 41,
+   "deletions": 3
+  },
+  "406": {
+   "files": [
+    "src/components/chat/chat-center-panel.tsx",
+    "src/lib/__tests__/rental-example-query.test.ts",
+    "src/lib/rental-failure-recovery.ts"
+   ],
+   "additions": 39,
+   "deletions": 3
+  },
+  "420": {
+   "files": [
+    "e2e/prod-journey-j05-j20.spec.ts"
+   ],
+   "additions": 26,
+   "deletions": 7
+  },
+  "447": {
+   "files": [
+    "src/components/rentals/__tests__/rental-inline-ask.test.tsx",
+    "src/components/rentals/rental-browse-view.tsx",
+    "src/components/rentals/rental-inline-ask.tsx"
+   ],
+   "additions": 365,
+   "deletions": 20
+  },
+  "452": {
+   "files": [
+    "src/lib/pr-agent-review-smoke.ts"
+   ],
+   "additions": 5,
+   "deletions": 0
+  },
+  "453": {
+   "files": [
+    "src/components/events/__tests__/event-browse-card.test.tsx",
+    "src/components/events/event-browse-card.tsx",
+    "src/lib/events/__tests__/list-published-events.test.ts",
+    "src/lib/events/list-published-events.ts"
+   ],
+   "additions": 151,
+   "deletions": 16
+  },
+  "455": {
+   "files": [
+    "e2e/README.md",
+    "e2e/helpers/cleanup-broker-onboarding.test.ts",
+    "e2e/helpers/cleanup-broker-onboarding.ts",
+    "e2e/san-1092-broker-onboarding.spec.ts",
+    "package.json",
+    "scripts/__tests__/broker-onboarding-e2e-safety.test.mjs"
+   ],
+   "additions": 250,
+   "deletions": 53
+  },
+  "456": {
+   "files": [
+    "supabase/migrations/20261021030000_san1562_restrict_event_commerce_rpcs.sql",
+    "supabase/tests/database/san1284c_trigger_internal_function_acls_test.sql",
+    "supabase/tests/database/san1562_restrict_event_commerce_rpcs_test.sql",
+    "supabase/tests/database/sb002_live_only_recovery_test.sql"
+   ],
+   "additions": 144,
+   "deletions": 3
+  },
+  "459": {
+   "files": [
+    ".github/workflows/supabase-acl.yml",
+    "scripts/function-acl-baseline.json",
+    "src/__tests__/build-event-insert.test.ts",
+    "src/__tests__/event-review-panel.test.tsx",
+    "src/__tests__/publish-errors.test.ts",
+    "src/__tests__/publish-slug.test.ts",
+    "src/components/host/event-publish-approval-panel.tsx",
+    "supabase/functions/approval-commit/build-event-insert.ts",
+    "supabase/functions/approval-commit/index.ts",
+    "supabase/functions/approval-commit/publish-errors.ts",
+    "supabase/functions/approval-commit/publish-slug.ts",
+    "supabase/functions/approval-commit/review-receipt.ts",
+    "supabase/migrations/20261021033000_san1285_atomic_event_publish.sql",
+    "supabase/migrations/20261021043000_san1285_widen_event_order_money.sql",
+    "supabase/tests/concurrency/san1285_publish_concurrency.mjs",
+    "supabase/tests/database/san1284c_trigger_internal_function_acls_test.sql",
+    "supabase/tests/database/san1285_atomic_event_publish_test.sql",
+    "supabase/tests/database/san1285_checkout_minor_units_test.sql",
+    "supabase/tests/database/san1304a_recover_missing_column_contracts_test.sql",
+    "supabase/tests/database/sb002_live_only_recovery_test.sql"
+   ],
+   "additions": 1497,
+   "deletions": 494
+  },
+  "461": {
+   "files": [
+    "src/lib/discovery/__tests__/fetch-discovery-rows.test.ts",
+    "src/lib/discovery/fetch-discovery-rows.ts",
+    "src/lib/events/__tests__/get-public-event-fixtures.test.ts",
+    "src/lib/events/__tests__/list-published-events.test.ts",
+    "src/lib/events/__tests__/public-event-fixtures.test.ts",
+    "src/lib/events/get-public-event.ts",
+    "src/lib/events/list-published-events.ts",
+    "src/lib/events/public-event-fixtures.ts",
+    "src/mastra/lib/__tests__/intelligence-event-search-coverage.test.ts",
+    "src/mastra/lib/__tests__/intelligence-event-search-hydration.test.ts",
+    "src/mastra/lib/__tests__/intelligence-event-search.test.ts",
+    "src/mastra/lib/intelligence-event-search.ts",
+    "src/mastra/tools/search-events.ts"
+   ],
+   "additions": 146,
+   "deletions": 15
+  },
+  "467": {
+   "files": [
+    "src/mastra/tools/search-events.ts",
+    "src/mastra/tools/search-rentals.ts",
+    "src/mastra/tools/search-restaurants.ts"
+   ],
+   "additions": 7,
+   "deletions": 4
+  },
+  "471": {
+   "files": [
+    "package.json",
+    "scripts/__tests__/check-release-freshness.test.mjs",
+    "scripts/check-release-freshness.mjs"
+   ],
+   "additions": 213,
+   "deletions": 0
+  },
+  "473": {
+   "files": [
+    "docs/07-operations/README.md",
+    "e2e/maps-mobile-lifecycle.spec.ts",
+    "package.json",
+    "playwright.config.ts"
+   ],
+   "additions": 201,
+   "deletions": 0
+  },
+  "474": {
+   "files": [
+    "e2e/maps-layout-mobile.spec.ts",
+    "src/components/chat/map-mobile-sheet.tsx"
+   ],
+   "additions": 42,
+   "deletions": 0
+  },
+  "476": {
+   "files": [
+    "e2e/chat-result-order.spec.ts",
+    "e2e/san-1554-cold-start-retry.spec.ts",
+    "src/components/chat/__tests__/concierge-error-notice.test.tsx",
+    "src/components/chat/__tests__/concierge-run-feedback.test.tsx",
+    "src/components/chat/chat-center-panel.tsx",
+    "src/components/chat/concierge-error-notice.tsx",
+    "src/components/chat/concierge-run-feedback.tsx",
+    "src/components/chat/concierge-transcript-tail.tsx",
+    "src/components/chat/deterministic-concierge-chat.tsx",
+    "src/lib/hooks/use-chat-keyboard-height.ts"
+   ],
+   "additions": 165,
+   "deletions": 31
+  },
+  "479": {
+   "files": [
+    "src/components/rentals/__tests__/rental-ask-composer.test.tsx",
+    "src/components/rentals/rental-ask-composer.tsx",
+    "src/components/rentals/rental-ask-tool-results.ts",
+    "src/lib/types.ts",
+    "src/mastra/agents/concierge.ts"
+   ],
+   "additions": 110,
+   "deletions": 5
+  },
+  "480": {
+   "files": [
+    "src/components/restaurants/__tests__/vote-panel-checking-guard.test.tsx",
+    "src/components/restaurants/restaurant-vote-panel.tsx"
+   ],
+   "additions": 33,
+   "deletions": 2
+  },
+  "481": {
+   "files": [
+    "e2e/san-1524-contests.spec.ts",
+    "src/app/contests/[id]/page.tsx",
+    "src/app/contests/page.tsx",
+    "src/app/login/page.tsx",
+    "src/app/restaurants/[id]/page.tsx"
+   ],
+   "additions": 17,
+   "deletions": 6
+  },
+  "482": {
+   "files": [
+    "supabase/tests/database/dev_discovery_excludes_test_fixtures_test.sql",
+    "supabase/tests/database/dev_enrichment_follows_listing_visibility_test.sql",
+    "supabase/tests/database/san468_apartment_public_exposure_rls_test.sql"
+   ],
+   "additions": 35,
+   "deletions": 35
+  },
+  "483": {
+   "files": [
+    "e2e/chat-virtualization.spec.ts"
+   ],
+   "additions": 15,
+   "deletions": 14
+  },
+  "484": {
+   "files": [
+    "supabase/migrations/20261021080000_san1502_viewing_authority.sql",
+    "supabase/tests/database/san1286_atomic_viewing_test.sql",
+    "supabase/tests/database/san1502_normal_renter_viewings_test.sql",
+    "supabase/tests/database/san1502_phase_a_no_business_gates_test.sql",
+    "supabase/tests/database/san1502_viewing_authority_test.sql"
+   ],
+   "additions": 1252,
+   "deletions": 14
+  }
+ }
+}
