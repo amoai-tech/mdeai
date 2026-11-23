@@ -340,6 +340,7 @@ describe("POST /api/leads/schedule-viewing (SAN-1203)", () => {
     // candidate slugs. Different keys must give different refs for the same reference.
     const refFor = async (key: string) => {
       errorCalls.length = 0;
+      warningCalls.length = 0;
       vi.stubEnv("MDE_LOG_FINGERPRINT_KEY", key);
       fetchMock.mockResolvedValue(
         edgeResponse(400, {
