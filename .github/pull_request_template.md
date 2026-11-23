@@ -44,14 +44,14 @@ For substantive user-journey or cross-system architecture changes, REPLACE the N
 Examples (uncomment ONLY after replacing all example nodes with verified paths):
 ~~~mermaid
 flowchart LR
-    A["User action"] --> B["Real UI or tool"]
-    B --> C["Verified visible result"]
+    A["User action"] ==> B["Real UI or tool"]
+    B ==> C["Verified visible result"]
 ~~~
 
 ~~~mermaid
 flowchart LR
-    UI["Existing UI or agent"] --> API["Canonical server action or tool"]
-    API --> DB["Real source of truth"]
+    UI["Existing UI or agent"] ==> API["Canonical server action or tool"]
+    API ==> DB["Real source of truth"]
 ~~~
 -->
 
