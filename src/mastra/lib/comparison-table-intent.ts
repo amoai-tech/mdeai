@@ -66,7 +66,15 @@ export function comparisonRequestedPositions(messages: readonly MessageLike[]): 
   const lastUser = [...messages].reverse().find((message) => message?.role === "user");
   const text = messageText(lastUser).trim();
   if (UNSUPPORTED_NUMBERED_TOKEN.test(text) || NON_APARTMENT_NUMBER.test(text)) return null;
-  const firstTwo = /\b(?:first|top)\s+(?:two|2)\s+(?:apartments?|listings?|rentals?|results?)\b/i.exec(text);
+  // "Compare the first two in a table" still selects displayed apartments
+  // 1 and 2: the renter need not repeat "apartments" after "two".
+  // Keep bare "first two" limited to explicit rental comparisons; otherwise
+  // headings, table dimensions, or unrelated ordinal references could be
+  // mistaken for a server-trusted apartment selection.
+  const firstTwo = /\b(?:first|top)\s+(?:two|2)\s+(?:apartments?|listings?|rentals?|results?)\b/i.exec(text)
+    ?? (hasExplicitRentalComparisonRequest(messages)
+      ? /\b(?:first|top)\s+(?:two|2)\b/i.exec(text)
+      : null);
   if (firstTwo) {
     // Do not make a partial trusted list when a renter named an apartment
     // earlier in the sentence (e.g. fifth + first two).

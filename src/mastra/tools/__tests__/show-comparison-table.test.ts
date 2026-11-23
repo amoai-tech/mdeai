@@ -57,6 +57,19 @@ describe("showComparisonTableTool", () => {
     expect(result.rows.map((row) => row.id)).toEqual([fresh[0], fresh[1]]);
   });
 
+  it("uses server-trusted bare first-two ordinals even if the model supplies older IDs", async () => {
+    const freshRows = [
+      dbRow(fresh[0], "New first", 2_100_000),
+      dbRow(fresh[1], "New second", 2_200_000),
+    ];
+    const result = await run({ ids: [ids[0], ids[1]] }, context(freshRows, {
+      runIds: fresh,
+      trustedPositions: [1, 2],
+    }));
+    expect(result.ok).toBe(true);
+    expect(result.rows.map((row) => row.id)).toEqual(fresh.slice(0, 2));
+  });
+
   it("rejects apartments from the older page list once this run has searched again", async () => {
     const result = await run({ ids: [ids[0], ids[1]] }, context(
       [dbRow(ids[0], "Old first", 2_000_000), dbRow(ids[1], "Old second", 2_000_000)],

@@ -91,6 +91,11 @@ describe("conciergeAgent", () => {
       steps: [{ toolResults: [{ toolName: "searchRentalsTool" }] }],
       requestContext,
     })).toEqual({ toolChoice: { type: "tool", toolName: "showComparisonTable" } });
+    // The actual live prompt says "first two in a table", without repeating
+    // "apartments". The server must pin current search positions despite
+    // model-supplied IDs from an older turn.
+    const { COMPARISON_POSITIONS_KEY } = await import("../../lib/comparison-table-intent");
+    expect(requestContext.get(COMPARISON_POSITIONS_KEY)).toEqual([1, 2]);
   });
 
   it("registers all search tools including grounding and web events", async () => {

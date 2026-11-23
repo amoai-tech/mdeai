@@ -170,6 +170,10 @@ describe("comparison follow-up tool suppression", () => {
 
 describe("server-owned displayed ordinal interpretation", () => {
   it("parses exact requested positions rather than accepting the model's IDs", () => {
+    expect(comparisonRequestedPositions([user("Find apartments in Laureles and compare the first two in a table.")])).toEqual([1, 2]);
+    expect(comparisonRequestedPositions([user("Find 2BR rentals in Laureles and compare the first two.")])).toEqual([1, 2]);
+    expect(comparisonRequestedPositions([user("Compare the first two in a table.")])).toEqual([1, 2]);
+    expect(comparisonRequestedPositions([user("Put the first two columns in a table.")])).toBeNull();
     expect(comparisonRequestedPositions([user("Put the first two apartments in a table.")])).toEqual([1, 2]);
     expect(comparisonRequestedPositions([user("Compare the first two apartments in a table and find the cheaper one.")])).toEqual([1, 2]);
     expect(comparisonRequestedPositions([user("Compare the second and third apartments side by side.")])).toEqual([2, 3]);
