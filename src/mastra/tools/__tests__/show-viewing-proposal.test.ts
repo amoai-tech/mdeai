@@ -34,6 +34,15 @@ describe("showViewingProposal tool", () => {
     expect(await run({ listingId: second }, "/chat")).toMatchObject({ ok: false });
   });
 
+  it("uses this run's newer search results instead of the older page list", async () => {
+    const { RENTAL_RUN_RESULT_IDS_KEY } = await import("../../lib/generative-ui-context");
+    const fresh = "9b1c7e2a-0000-4000-8000-000000000000";
+    const page = context("/rentals", [second]).requestContext.get;
+    const ctx = { requestContext: { get: (key: string) => key === RENTAL_RUN_RESULT_IDS_KEY ? { order: 1, ids: [fresh] } : page(key) } };
+    expect(await showViewingProposalTool.execute!({ listingId: fresh }, ctx as never)).toMatchObject({ ok: true, listingId: fresh });
+    expect(await showViewingProposalTool.execute!({ listingId: second }, ctx as never)).toMatchObject({ ok: false });
+  });
+
   it("drops a past or impossible date (a model guess) and keeps a real future one", async () => {
     const past = await run({ listingId: second, date: "2026-01-15", time: "15:15" });
     expect(past).toMatchObject({ ok: true, time: "15:15" });

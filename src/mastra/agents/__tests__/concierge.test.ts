@@ -59,6 +59,40 @@ describe("conciergeAgent", () => {
     })).toEqual({});
   });
 
+  it("sequences a fresh rental search before the requested comparison", async () => {
+    const configured = await conciergeAgent.listConfiguredInputProcessors();
+    const comparison = configured.find((processor) => processor.id === "san1681-comparison-table-intent") as
+      | { processInputStep: (input: {
+          stepNumber: number;
+          messages: unknown[];
+          steps: unknown[];
+          requestContext: { get: (key: string) => unknown; set: (key: string, value: unknown) => void };
+        }) => unknown }
+      | undefined;
+    expect(comparison).toBeDefined();
+    const user = (text: string) => ({ role: "user", content: { parts: [{ type: "text", text }] } });
+    const store = new Map<string, unknown>();
+    const requestContext = {
+      get: (key: string) => store.get(key),
+      set: (key: string, value: unknown) => store.set(key, value),
+    };
+    const messages = [user("Find apartments in Laureles and compare the first two in a table.")];
+
+    expect(await comparison!.processInputStep({ stepNumber: 0, messages, steps: [], requestContext }))
+      .toEqual({ toolChoice: { type: "tool", toolName: "searchRentalsTool" } });
+    const { RENTAL_RUN_RESULT_IDS_KEY } = await import("../../lib/generative-ui-context");
+    requestContext.set(RENTAL_RUN_RESULT_IDS_KEY, { order: 1, ids: [
+      "37a05b09-f560-4776-92fd-b8bb2b92e601",
+      "37a05b09-f560-4776-92fd-b8bb2b92e602",
+    ] });
+    expect(await comparison!.processInputStep({
+      stepNumber: 1,
+      messages,
+      steps: [{ toolResults: [{ toolName: "searchRentalsTool" }] }],
+      requestContext,
+    })).toEqual({ toolChoice: { type: "tool", toolName: "showComparisonTable" } });
+  });
+
   it("registers all search tools including grounding and web events", async () => {
     const tools = await conciergeAgent.listTools();
     const toolIds = Object.values(tools).map((tool) => tool.id);

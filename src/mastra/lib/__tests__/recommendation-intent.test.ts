@@ -189,6 +189,13 @@ describe("shouldRenderViewingProposal (SAN-1658)", () => {
     expect(run(text)).toBe(false);
   });
 
+  it("does not show a viewing proposal from old cards when a new search is requested", () => {
+    expect(run("Find apartments in Laureles and schedule a viewing of the first apartment.")).toBe(false);
+    expect(run("Search rentals under COP 3M and request a viewing of apartment 2.")).toBe(false);
+    expect(run("Schedule a viewing of the second apartment.")).toBe(true);
+    expect(run("Please schedule a viewing of the second apartment and find a time.")).toBe(true);
+  });
+
   it("does not force the tool when no apartment is named (the model would have to guess an ID)", () => {
     expect(run("Can I book a tour that fits my schedule?")).toBe(false);
     expect(run("Schedule a visit here")).toBe(false);

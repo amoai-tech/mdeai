@@ -73,6 +73,105 @@ export function readRentalResultIds(agUiContext: unknown): string[] {
   return rows.slice(0, RENTAL_HINT_MAX).flatMap((row) => isRentalA2UIId(row) ? [row] : []);
 }
 
+/**
+ * SAN-1694: the browser publishes its result IDs when a message is SENT. If the
+ * same agent run then searches, the page swaps to that search's cards (in the
+ * tool's order), so the earlier browser list is stale for the rest of the run.
+ * Each search registers here; the RequestContext is created per runtime
+ * request, so nothing leaks into a later turn.
+ *
+ * The rules mirror the page (`latestRentalToolResult`): the latest-COMPLETED search
+ * that returned rows wins; empty results leave the prior cards in place,
+ * unless this run explicitly requires fresh search results for comparison.
+ */
+export const RENTAL_RUN_RESULT_IDS_KEY = "mdeai-rental-run-result-ids";
+const RENTAL_RUN_SEARCHES_KEY = "mdeai-rental-run-searches";
+const RENTAL_RUN_REQUIRE_FRESH_KEY = "mdeai-rental-require-fresh";
+const RENTAL_RUN_REGISTRATION_KEY = "mdeai-rental-search-registration";
+
+type RunContext = { get?: (key: string) => unknown; set?: (key: string, value: unknown) => void } | undefined;
+type RunSearches = { completed: number; pending: Promise<void>[]; lastCompleted?: readonly string[] | null };
+type RunResult = { order: number; ids: string[] };
+type SearchRegistration = { ready: Promise<void>; resolve: () => void };
+
+/** Called by the search-first input processor, before any tools can start.
+ * Consumer tools await registration instead of using old browser hints. */
+export function requireFreshRentalRunResults(requestContext: RunContext): void {
+  if (!requestContext?.get || !requestContext.set) return;
+  requestContext.set(RENTAL_RUN_REQUIRE_FRESH_KEY, true);
+  if (requestContext.get(RENTAL_RUN_REGISTRATION_KEY)) return;
+  let resolve = () => {};
+  const ready = new Promise<void>((done) => { resolve = done; });
+  requestContext.set(RENTAL_RUN_REGISTRATION_KEY, { ready, resolve } satisfies SearchRegistration);
+}
+
+/** Only a completed search returning at least two valid IDs can force a new table. */
+export function hasUsableRentalRunResults(requestContext: RunContext): boolean {
+  const searches = requestContext?.get?.(RENTAL_RUN_SEARCHES_KEY) as RunSearches | undefined;
+  // Never let an earlier successful search substitute for the latest failed one.
+  if (searches && "lastCompleted" in searches) {
+    return Array.isArray(searches.lastCompleted) &&
+      searches.lastCompleted.filter(isRentalA2UIId).length >= 2;
+  }
+  const run = requestContext?.get?.(RENTAL_RUN_RESULT_IDS_KEY) as RunResult | undefined;
+  return Array.isArray(run?.ids) && run.ids.filter(isRentalA2UIId).length >= 2;
+}
+
+/** Call when a rental search starts; call the returned function once with its IDs (or null on failure). */
+export function startRentalRunSearch(requestContext: RunContext): (ids: readonly string[] | null) => void {
+  if (!requestContext?.get || !requestContext.set) return () => {};
+  const searches = (requestContext.get(RENTAL_RUN_SEARCHES_KEY) as RunSearches | undefined) ?? { completed: 0, pending: [] };
+  let settle = () => {};
+  const done = new Promise<void>((resolve) => { settle = resolve; });
+  requestContext.set(RENTAL_RUN_SEARCHES_KEY, { completed: searches.completed, pending: [...searches.pending, done] });
+  // Release a consumer that began before searchRentalsTool registered itself.
+  (requestContext.get(RENTAL_RUN_REGISTRATION_KEY) as SearchRegistration | undefined)?.resolve();
+  let finished = false;
+  return (ids) => {
+    if (finished) return;
+    finished = true;
+    const currentSearches = (requestContext.get?.(RENTAL_RUN_SEARCHES_KEY) as RunSearches | undefined) ?? searches;
+    const order = currentSearches.completed + 1;
+    requestContext.set?.(RENTAL_RUN_SEARCHES_KEY, { ...currentSearches, completed: order,
+      lastCompleted: ids ? [...ids] : null });
+    // The browser uses the last nonempty search result message.
+    if (ids && ids.length > 0) {
+      requestContext.set?.(RENTAL_RUN_RESULT_IDS_KEY, { order, ids: [...ids] });
+    }
+    settle();
+  };
+}
+
+/** Ordered IDs the renter sees now: this run's latest non-empty search, else the browser hint. */
+export async function currentRentalResultIds(requestContext: RunContext): Promise<string[]> {
+  // The input processor may require a search before the executor registers it.
+  // Wait boundedly for registration, then for completion. Never use old page IDs
+  // for an explicitly fresh comparison, including empty/failed searches.
+  const required = requestContext?.get?.(RENTAL_RUN_REQUIRE_FRESH_KEY) === true;
+  const registration = requestContext?.get?.(RENTAL_RUN_REGISTRATION_KEY) as SearchRegistration | undefined;
+  if (required && registration) {
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([registration.ready, new Promise<void>((resolve) => {
+        timeout = setTimeout(resolve, 5000);
+      })]);
+    } finally {
+      if (timeout) clearTimeout(timeout);
+    }
+  }
+  const searches = requestContext?.get?.(RENTAL_RUN_SEARCHES_KEY) as RunSearches | undefined;
+  if (searches?.pending.length) await Promise.all(searches.pending);
+  const latestSearches = requestContext?.get?.(RENTAL_RUN_SEARCHES_KEY) as RunSearches | undefined;
+  if (required && latestSearches && "lastCompleted" in latestSearches &&
+      (!Array.isArray(latestSearches.lastCompleted) || latestSearches.lastCompleted.length === 0)) return [];
+  const run = requestContext?.get?.(RENTAL_RUN_RESULT_IDS_KEY) as RunResult | undefined;
+  // Keep positions faithful: an unsafe ID becomes an unresolvable gap, not a shift.
+  if (run && Array.isArray(run.ids)) {
+    return run.ids.slice(0, RENTAL_HINT_MAX).map((id) => isRentalA2UIId(id) ? id : "");
+  }
+  return required ? [] : readRentalResultIds(requestContext?.get?.("ag-ui"));
+}
+
 /** The count is an untrusted browser hint, never an apartment ID or authority.
  * If absent/malformed, "last" is ambiguous and must not select a rental. */
 export function readRentalRenderedCount(agUiContext: unknown): number | null {

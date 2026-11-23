@@ -1,4 +1,4 @@
-import { readRentalResultIds } from "./generative-ui-context";
+import { hasUsableRentalRunResults, readRentalResultIds } from "./generative-ui-context";
 
 type MessageLike = { role?: string; content?: unknown };
 
@@ -23,6 +23,21 @@ const TABLE_REQUEST = /\b(table|tabular|side[\s-]?by[\s-]?side)\b/i;
 const ORDINAL = /(?:\b(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|one|two|three|four|five|six|seven|eight|nine|ten)\b|\b(?:10|[1-9])(?:st|nd|rd|th)?\b)/gi;
 const EXPLICIT_RESULT_PAIR = /\b(?:compare|comparison)\b/i;
 export const COMPARISON_POSITIONS_KEY = "mdeai-comparison-requested-positions";
+export const COMPARISON_COP_MONTHLY_BUDGET_KEY = "mdeai-comparison-cop-monthly-budget";
+
+/** Server-read COP ceiling for an explicit same-message comparison query.
+ * The canonical rental search applies the actual SQL filter; the table
+ * independently rejects rows outside this ceiling if a model omitted it. */
+export function comparisonCopMonthlyBudget(messages: readonly MessageLike[]): number | null {
+  const text = messageText([...messages].reverse().find((message) => message?.role === "user"));
+  const match = /\b(?:under|below|at most)\s+COP\s*(\d+(?:[.,]\d+)*)\s*(million|millones|m)?\b/i.exec(text);
+  if (!match) return null;
+  const suffix = match[2]?.toLowerCase();
+  const amount = suffix
+    ? Number(match[1].replace(",", ".")) * 1_000_000
+    : Number(match[1].replace(/[,.]/g, ""));
+  return Number.isFinite(amount) && amount > 0 ? amount : null;
+}
 
 // Use literal patterns: the ordinal vocabulary is fixed, not user-supplied.
 const NUMBERED_TOKEN = /\b(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|one|two|three|four|five|six|seven|eight|nine|ten|(?:10|[1-9])(?:st|nd|rd|th)?)\b/gi;
@@ -56,7 +71,10 @@ export function comparisonRequestedPositions(messages: readonly MessageLike[]): 
     // Do not make a partial trusted list when a renter named an apartment
     // earlier in the sentence (e.g. fifth + first two).
     if ([...text.slice(0, firstTwo.index).matchAll(NUMBERED_TOKEN)].length) return null;
-    const extra = text.slice(firstTwo.index + firstTwo[0].length);
+    // "find the cheaper one" refers to the selected pair, not apartment #1.
+    // Ignore only that comparative pronoun; unknown extra ordinals still fail closed.
+    const extra = text.slice(firstTwo.index + firstTwo[0].length)
+      .replace(/\b(?:cheaper|cheapest|better|more affordable|less expensive)\s+one\b/gi, "");
     const additions = Array.from(
       extra.matchAll(ADDITIONAL_POSITION),
       (match) => {
@@ -102,10 +120,52 @@ const RENTAL_REFERENCE =
   /\b(apartments?|listings?|rentals?|these|those|them|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|two|three|four|five|six|seven|eight|nine|ten|\d+)\b/i;
 const COMPARISON_WORD = /\b(compare|comparison|versus|vs\.?|cheaper|better|difference)\b/i;
 const TABLE_COMMAND = /\b(put|show|display|render|make|create|build)\b/i;
-const NEW_SEARCH = /\b(find|search|discover|look(?:ing)? for|new search|another|different)\b|\b(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten)[\s-]*(?:br|bed|bedrooms?)\b|\bunder\s+(?:cop|usd|\$|\d)/i;
+// Discovery must name rental inventory, not simply "find the cheaper one" from
+// already visible cards. A trailing budget is an instruction to filter, even
+// when the user mentions "first two" earlier in the sentence.
+const NEW_SEARCH = /\b(?:find|search|discover|look(?:ing)? for)\b/i;
+// A discovery verb must actually target apartments. A time/slot/viewing request
+// about an existing apartment is not a new inventory search.
+const INVENTORY_DISCOVERY = /\b(?:find|search|discover|look(?:ing)? for)\s+(?:(?!\b(?:time|slot|viewing|tour|appointment|date)\b)[\s\S]){0,70}\b(?:apartments?|rentals?|listings?|properties|homes?)\b/i;
+const RENTAL_INVENTORY = /\b(?:apartments?|listings?|rentals?|properties|homes?)\b/i;
+const ANALYSIS_FIND = /\bfind\s+(?:the\s+)?(?:cheaper|cheapest|better|lowest-priced|most affordable)\s+(?:one\b|(?:of|between|from)\s+(?:the\s+)?(?:first|top|these|those|two|\d+))/i;
+const COMPARISON_START = /\b(?:compare|comparison|table|tabular|side[\s-]?by[\s-]?side|versus|vs)\b/i;
+const RENTAL_SEARCH_FILTER =
+  /\b(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten)[\s-]*(?:br|bed|bedrooms?)\b|\bunder\s+(?:cop|usd|\$|\d)/i;
+const RENTAL_BUDGET = /\b(?:under|below|less than|at most)\s+(?:(?:cop|usd)\s*)?\$?\s*\d/i;
+const DISPLAYED_ORDINAL =
+  /\b(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|these|those|them)\b|\b(?:apartments?|rentals?|listings?|results?)\s+(?:10|[1-9])\b/i;
+const BEDROOM_CATEGORY_COMPARISON = /\bcompare\s+(?:(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten)[\s-]*(?:br|bed|bedrooms?)\s+(?:apartments?|rentals?|listings?))\s+(?:in\s+\w+\s+)?(?:with|versus|vs\.?)/i;
+function requestsRentalSearchBeforeComparison(text: string): boolean {
+  const comparisonAt = text.search(COMPARISON_START);
+  const prefix = comparisonAt < 0 ? text : text.slice(0, comparisonAt);
+  if (RENTAL_BUDGET.test(text)) return true;
+  if (NEW_SEARCH.test(prefix) && INVENTORY_DISCOVERY.test(prefix) && !ANALYSIS_FIND.test(prefix)) return true;
+  const filter = RENTAL_SEARCH_FILTER.exec(text);
+  return Boolean(filter && !DISPLAYED_ORDINAL.test(text.slice(0, filter.index)));
+}
+/** Mark a requested rental discovery before parallel consumer tools start.
+ * A generic "find the cheaper one" is analysis, not discovery. */
+export function requestsFreshRentalDiscovery(messages: readonly MessageLike[]): boolean {
+  const text = messageText([...messages].reverse().find((message) => message?.role === "user")).trim();
+  if (!text) return false;
+  return (NEW_SEARCH.test(text) && INVENTORY_DISCOVERY.test(text) && !ANALYSIS_FIND.test(text)) ||
+    (RENTAL_BUDGET.test(text) && RENTAL_INVENTORY.test(text));
+}
 const RESTAURANT_TABLE = /\b(book|reserve|reservation|restaurant|caf[eé]|nightlife|table for|party size)\b/i;
 // Explicit other verticals override ordinal pronouns, even when rental hints exist.
 const OTHER_COMPARISON_DOMAIN = /\b(?:new\s+projects?|projects?|startups?|companies|events?|tickets?|trips?|hotels?)\b/i;
+
+function hasExplicitRentalComparisonRequest(messages: readonly MessageLike[]): boolean {
+  const lastUser = [...messages].reverse().find((message) => message?.role === "user");
+  const text = messageText(lastUser).trim();
+  if (!text || RESTAURANT_TABLE.test(text) || OTHER_COMPARISON_DOMAIN.test(text) ||
+      BEDROOM_CATEGORY_COMPARISON.test(text)) return false;
+  const references = text.match(ORDINAL) ?? [];
+  const ordinalPair = references.length >= 2 && EXPLICIT_RESULT_PAIR.test(text);
+  return (TABLE_REQUEST.test(text) || ordinalPair) && RENTAL_REFERENCE.test(text) &&
+    (COMPARISON_WORD.test(text) || TABLE_COMMAND.test(text));
+}
 
 /**
  * An explicit "put those apartments in a table" is a UI command. The model
@@ -126,16 +186,37 @@ export function shouldForceComparisonTable({
   if (readRentalResultIds(requestContext?.get?.("ag-ui")).length < 2) return false;
   const lastUser = [...messages].reverse().find((message) => message?.role === "user");
   const text = messageText(lastUser).trim();
-  if (!text) return false;
-  // Unambiguous pairs of already-shown positions are comparisons too, even
-  // when the renter does not literally say "table".
-  const references = text.match(ORDINAL) ?? [];
-  const ordinalPair = references.length >= 2 && EXPLICIT_RESULT_PAIR.test(text);
-  if (!TABLE_REQUEST.test(text) && !ordinalPair) return false;
-  if (RESTAURANT_TABLE.test(text) || OTHER_COMPARISON_DOMAIN.test(text)) return false;
-  if (!RENTAL_REFERENCE.test(text)) return false;
-  if (!COMPARISON_WORD.test(text) && !TABLE_COMMAND.test(text)) return false;
-  return !NEW_SEARCH.test(text);
+  return Boolean(text) && hasExplicitRentalComparisonRequest(messages) && !requestsRentalSearchBeforeComparison(text);
+}
+
+/** For a same-message search and explicit comparison, ground the search first. */
+export function shouldSearchBeforeComparison({
+  stepNumber, messages, steps,
+}: {
+  stepNumber: number;
+  messages: readonly MessageLike[];
+  steps: readonly CompletedToolStep[];
+}): boolean {
+  if (stepNumber !== 0 || !hasExplicitRentalComparisonRequest(messages)) return false;
+  const text = messageText([...messages].reverse().find((message) => message?.role === "user")).trim();
+  return requestsRentalSearchBeforeComparison(text) && !hasAttemptedTool(steps, "searchRentalsTool");
+}
+
+/** After the forced search result, force the requested table against its new cards. */
+export function shouldContinueComparisonAfterSearch({
+  stepNumber, messages, steps, requestContext,
+}: {
+  stepNumber: number;
+  messages: readonly MessageLike[];
+  steps: readonly CompletedToolStep[];
+  requestContext?: { get?: (key: string) => unknown };
+}): boolean {
+  if (stepNumber === 0 || !hasExplicitRentalComparisonRequest(messages)) return false;
+  const text = messageText([...messages].reverse().find((message) => message?.role === "user")).trim();
+  return requestsRentalSearchBeforeComparison(text) &&
+    hasCompletedTool(steps, "searchRentalsTool") &&
+    hasUsableRentalRunResults(requestContext) &&
+    !hasAttemptedTool(steps, "showComparisonTable");
 }
 
 

@@ -1,6 +1,6 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import { readRentalResultIds } from "../lib/generative-ui-context";
+import { currentRentalResultIds } from "../lib/generative-ui-context";
 import { isActiveRentalsDiscoveryPage } from "../lib/discovery-agent-context";
 import { normalizeRecommendationIds } from "../lib/rental-recommendations-ui";
 import { isFutureInstant, resolvePreferredAtInstant } from "@/lib/leads/schedule-viewing-time";
@@ -33,7 +33,8 @@ export const showViewingProposalTool = createTool({
       return { ok: false, message: "The Rentals page is not the active page, so no viewing request was shown." };
     }
     // Browser hints are not authorization; the proposal re-resolves the real row.
-    const published = new Set(readRentalResultIds(agUiContext));
+    // A search earlier in this run replaced the cards; use that list (SAN-1694).
+    const published = new Set((await currentRentalResultIds(context?.requestContext)).filter(Boolean));
     const [safeId] = normalizeRecommendationIds([listingId]);
     if (!safeId || !published.has(safeId)) {
       return { ok: false, message: "That apartment is not in the current page results." };

@@ -2,8 +2,8 @@ import { createTool } from "@mastra/core/tools";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { RENTAL_HINT_MAX } from "@/lib/rentals/a2ui-context";
-import { readRentalResultIds } from "../lib/generative-ui-context";
-import { COMPARISON_POSITIONS_KEY } from "../lib/comparison-table-intent";
+import { currentRentalResultIds } from "../lib/generative-ui-context";
+import { COMPARISON_COP_MONTHLY_BUDGET_KEY, COMPARISON_POSITIONS_KEY } from "../lib/comparison-table-intent";
 import { RENTAL_SUPABASE_KEY } from "./search-rentals";
 import { isActiveRentalsDiscoveryPage } from "../lib/discovery-agent-context";
 import { COMPARISON_TABLE_TARGET, RENTAL_COMPARISON_TARGET, type ComparisonTarget } from "../lib/comparison-table-ui";
@@ -67,10 +67,12 @@ export const showComparisonTableTool = createTool({
     message: z.string(),
   }),
   execute: async (input, context) => {
-    const agUiContext = (context as { requestContext?: { get?: (key: string) => unknown } })
-      ?.requestContext?.get?.("ag-ui");
-    const available = readRentalResultIds(agUiContext);
-    if (available.length < 2) {
+    const requestContext = (context as { requestContext?: { get?: (key: string) => unknown } })?.requestContext;
+    const agUiContext = requestContext?.get?.("ag-ui");
+    // A search earlier in this run replaced the visible cards; positions and IDs
+    // must address those, not the browser list sent before it (SAN-1694).
+    const available = await currentRentalResultIds(requestContext);
+    if (available.filter(Boolean).length < 2) {
       return { ok: false, rows: [], rejected: [], message: "Search for apartments first; there are fewer than two current results." };
     }
     const unresolved: string[] = [];
@@ -94,9 +96,16 @@ export const showComparisonTableTool = createTool({
     if (unresolved.length) {
       return { ok: false, rows: [], rejected: unresolved, message: "One or more requested apartments are not in the current results." };
     }
+    // Fail the entire comparison if *any* requested ID is stale. A partial
+    // table would silently change the renter's requested pair or selection.
+    const stale = requested.filter((id) => !available.includes(id));
+    if (stale.length) {
+      return { ok: false, rows: [], rejected: [...new Set(stale)],
+        message: "One or more requested apartments are not in the current results." };
+    }
     const seen = new Set<string>();
     const ids = requested.filter((id) => {
-      if (!available.includes(id) || seen.has(id)) return false;
+      if (seen.has(id)) return false;
       seen.add(id);
       return true;
     }).slice(0, MAX_APARTMENTS);
@@ -132,8 +141,23 @@ export const showComparisonTableTool = createTool({
     } satisfies Row]));
     const rows = ids.flatMap((id) => byId.get(id) ?? []);
     const missing = ids.filter((id) => !byId.has(id));
-    if (rows.length < 2) {
-      return { ok: false, rows: [], rejected: [...rejected, ...missing], message: "Fewer than two apartments are accessible in this session." };
+    if (missing.length > 0 || rows.length < 2) {
+      return {
+        ok: false,
+        rows: [],
+        rejected: [...rejected, ...missing],
+        message: missing.length > 0
+          ? "One or more selected apartments are unavailable for comparison."
+          : "Fewer than two apartments are accessible in this session.",
+      };
+    }
+    // The search enforces the budget in SQL. This last guard ensures even a
+    // malformed model search cannot present pricier results as budget matches.
+    const cap = requestContext?.get?.(COMPARISON_COP_MONTHLY_BUDGET_KEY);
+    if (typeof cap === "number" && (rows.some((row) =>
+      row.currency !== "COP" || row.priceMonthly === null || row.priceMonthly > cap))) {
+      return { ok: false, rows: [], rejected: [],
+        message: "The selected apartments do not all have a confirmed monthly price within the requested COP budget." };
     }
     return {
       ok: true,

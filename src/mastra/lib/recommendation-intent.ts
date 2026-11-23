@@ -1,4 +1,5 @@
 import { readRentalResultHints, readRentalResultIds, readRentalRenderedCount } from "./generative-ui-context";
+import { requestsFreshRentalDiscovery } from "./comparison-table-intent";
 import { isActiveRentalsDiscoveryPage, selectedDiscoveryEntityId } from "./discovery-agent-context";
 
 type MessageLike = { role?: string; content?: unknown };
@@ -199,6 +200,8 @@ export function shouldRenderViewingProposal({
   const text = messageText(lastUser).trim();
   if (!text) return false;
   if (!SCHEDULE_VERB.test(text) || !VIEWING_NOUN.test(text)) return false;
+  // Never force a viewing of old cards before the newly requested search.
+  if (requestsFreshRentalDiscovery(messages)) return false;
   if (NEGATED_VIEWING_REQUEST.test(text)) return false;
   if (TIMING_QUESTION.test(text)) return false;
   const publishedIds = readRentalResultIds(agUiContext);

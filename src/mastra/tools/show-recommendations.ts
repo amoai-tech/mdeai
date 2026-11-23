@@ -1,6 +1,6 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import { readRentalResultIds } from "../lib/generative-ui-context";
+import { currentRentalResultIds } from "../lib/generative-ui-context";
 import { isActiveRentalsDiscoveryPage } from "../lib/discovery-agent-context";
 import { normalizeRecommendationIds } from "../lib/rental-recommendations-ui";
 
@@ -44,7 +44,7 @@ export const showRecommendationsTool = createTool({
     // Browser hints are not authorization. RentalCard alone resolves facts from
     // existing actual tool results, never this client-controlled ID list.
     const published = isActiveRentalsDiscoveryPage(agUiContext)
-      ? new Set(readRentalResultIds(agUiContext)) : new Set<string>();
+      ? new Set((await currentRentalResultIds(context?.requestContext)).filter(Boolean)) : new Set<string>();
     const requested = normalizeRecommendationIds(ids);
     const verified = requested.filter((id) => published.has(id));
     const rejected = requested.filter((id) => !published.has(id));

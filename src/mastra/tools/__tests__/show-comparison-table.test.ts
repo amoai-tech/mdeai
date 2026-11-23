@@ -1,13 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { RENTAL_A2UI_CONTEXT_DESCRIPTION } from "@/lib/rentals/a2ui-context";
-import { COMPARISON_POSITIONS_KEY } from "../../lib/comparison-table-intent";
+import { COMPARISON_COP_MONTHLY_BUDGET_KEY, COMPARISON_POSITIONS_KEY } from "../../lib/comparison-table-intent";
 import { comparisonInputSchema, showComparisonTableTool } from "../show-comparison-table";
 import { RENTAL_SUPABASE_KEY } from "../search-rentals";
+import { RENTAL_RUN_RESULT_IDS_KEY, startRentalRunSearch } from "../../lib/generative-ui-context";
 
 const ids = Array.from({ length: 10 }, (_, i) =>
   `37a05b09-f560-4776-92fd-b8bb2b92e6${String(i).padStart(2, "0")}`
 );
-function context(rows: Array<Record<string, unknown>> = [], { withClient = true, trustedPositions, visibleIds = ids }: { withClient?: boolean; trustedPositions?: number[]; visibleIds?: string[] } = {}) {
+function context(rows: Array<Record<string, unknown>> = [], { withClient = true, trustedPositions, visibleIds = ids, runIds }: { withClient?: boolean; trustedPositions?: number[]; visibleIds?: string[]; runIds?: string[] } = {}) {
   const client = {
     from: () => ({
       select: () => ({
@@ -20,6 +21,7 @@ function context(rows: Array<Record<string, unknown>> = [], { withClient = true,
       get: (key: string) =>
         key === RENTAL_SUPABASE_KEY ? (withClient ? client : null)
           : key === COMPARISON_POSITIONS_KEY ? trustedPositions
+          : key === RENTAL_RUN_RESULT_IDS_KEY ? (runIds ? { order: 1, ids: runIds } : undefined)
           : key === "ag-ui" ? { context: [{ description: RENTAL_A2UI_CONTEXT_DESCRIPTION, value: JSON.stringify(visibleIds) }] }
             : undefined,
     },
@@ -41,6 +43,42 @@ async function run(input: { ids?: string[]; positions?: number[] }, ctx: unknown
   return await showComparisonTableTool.execute!(input, ctx as never) as unknown as Result;
 }
 describe("showComparisonTableTool", () => {
+  // SAN-1694 prod receipt (23 Nov 2026): "find … and compare the first two" in
+  // one message compared two apartments that were no longer on screen. The
+  // browser list was sent before this run's search replaced the cards.
+  const fresh = Array.from({ length: 3 }, (_, i) => `9b1c7e2a-0000-4000-8000-00000000000${i}`);
+
+  it("resolves positions against a search that ran earlier in this run, not the older page list", async () => {
+    const result = await run({ positions: [1, 2] }, context(
+      [dbRow(fresh[0], "New first", 2_100_000), dbRow(fresh[1], "New second", 2_200_000)],
+      { runIds: fresh },
+    ));
+    expect(result.ok).toBe(true);
+    expect(result.rows.map((row) => row.id)).toEqual([fresh[0], fresh[1]]);
+  });
+
+  it("rejects apartments from the older page list once this run has searched again", async () => {
+    const result = await run({ ids: [ids[0], ids[1]] }, context(
+      [dbRow(ids[0], "Old first", 2_000_000), dbRow(ids[1], "Old second", 2_000_000)],
+      { runIds: fresh },
+    ));
+    expect(result.ok).toBe(false);
+    expect(result.rejected).toEqual([ids[0], ids[1]]);
+  });
+
+  it("keeps comparing the cards on screen when this run's search found nothing", async () => {
+    // The page keeps its cards after an empty search, so must the tool.
+    const { RequestContext } = await import("@mastra/core/request-context");
+    const real = new RequestContext();
+    const page = context([dbRow(ids[0], "Visible first", 2_000_000), dbRow(ids[1], "Visible second", 2_100_000),
+      dbRow(fresh[0], "Never shown", 1_000_000)]).requestContext;
+    for (const key of [RENTAL_SUPABASE_KEY, "ag-ui"]) real.set(key, page.get(key));
+    startRentalRunSearch(real as never)([]);
+    const result = await run({ positions: [1, 2] }, { requestContext: real });
+    expect(result.ok).toBe(true);
+    expect(result.rows.map((row) => row.id)).toEqual([ids[0], ids[1]]);
+  });
+
   it("resolves position six and seven in display order (not limited to five)", async () => {
     const result = await run({ positions: [6, 7] }, context([
       dbRow(ids[6], "Seventh", 2_500_000), dbRow(ids[5], "Sixth", 2_400_000),
@@ -120,6 +158,46 @@ describe("showComparisonTableTool", () => {
     expect(result.rows.map((r) => r.furnished)).toEqual([true, true]);
   });
 
+  it("rejects all rows before the database read when one of three IDs is stale", async () => {
+    let queries = 0;
+    const base = context([dbRow(ids[0], "One", 2_000_000), dbRow(ids[1], "Two", 2_100_000)]);
+    const result = await run({ ids: [ids[0], ids[1], "37a05b09-f560-4776-92fd-b8bb2b92e699"] }, {
+      requestContext: { get: (key: string) => key === RENTAL_SUPABASE_KEY ? {
+        from: () => { queries += 1; throw new Error("Must reject before DB"); },
+      } : base.requestContext.get(key) },
+    });
+    expect(queries).toBe(0);
+    expect(result.ok).toBe(false);
+    expect(result.rows).toEqual([]);
+    expect(result.rejected).toEqual(["37a05b09-f560-4776-92fd-b8bb2b92e699"]);
+  });
+
+  it("a budget-filtered fresh result table never falls back to pricier old cards", async () => {
+    const freshContext = context([
+      dbRow(fresh[0], "Under COP 3M", 2_400_000),
+      dbRow(fresh[1], "Also under COP 3M", 2_800_000),
+      dbRow(ids[0], "Old penthouse", 6_000_000),
+      dbRow(ids[1], "Old penthouse 2", 7_000_000),
+    ], { runIds: fresh });
+    const result = await run({ positions: [1, 2] }, { requestContext: {
+      get: (key: string) => key === COMPARISON_COP_MONTHLY_BUDGET_KEY ? 3_000_000 : freshContext.requestContext.get(key),
+    } });
+    expect(result.ok).toBe(true);
+    expect(result.rows.map((row) => row.priceMonthly)).toEqual([2_400_000, 2_800_000]);
+    expect(result.rows.every((row) => (row.priceMonthly ?? Infinity) < 3_000_000)).toBe(true);
+    expect(result.rows.map((row) => row.id)).toEqual(fresh.slice(0, 2));
+  });
+
+  it("never displays an over-budget apartment as a COP 3M match", async () => {
+    const ctx = context([dbRow(ids[0], "Cheap", 2_400_000), dbRow(ids[1], "Penthouse", 7_000_000)]);
+    const result = await run({ positions: [1, 2] }, { requestContext: {
+      get: (key: string) => key === COMPARISON_COP_MONTHLY_BUDGET_KEY ? 3_000_000 : ctx.requestContext.get(key),
+    } });
+    expect(result.ok).toBe(false);
+    expect(result.rows).toEqual([]);
+    expect(result.message).toContain("budget");
+  });
+
   it("rejects a forged ID outside the current result set", async () => {
     const result = await run({ ids: [ids[0], "37a05b09-f560-4776-92fd-b8bb2b92e699"] }, context([
       dbRow(ids[0], "First", 2_400_000),
@@ -167,5 +245,18 @@ describe("showComparisonTableTool", () => {
     const result = await run({ ids: [ids[0], ids[1]] }, context([dbRow(ids[0], "First", 2_400_000)]));
     expect(result.ok).toBe(false);
     expect(result.rows).toEqual([]);
+  });
+
+  it("rejects the whole comparison when one selected result is source-backed rather than a database apartment", async () => {
+    const result = await run(
+      { ids: [ids[0], ids[1], ids[2]] },
+      context([
+        dbRow(ids[0], "Database first", 2_400_000),
+        dbRow(ids[1], "Database second", 2_500_000),
+      ]),
+    );
+    expect(result.ok).toBe(false);
+    expect(result.rows).toEqual([]);
+    expect(result.rejected).toEqual([ids[2]]);
   });
 });
