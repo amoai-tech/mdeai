@@ -106,16 +106,20 @@ const RENTAL_REFERENCE =
 const COMPARISON_WORD = /\b(compare|comparison|versus|vs\.?|cheaper|better|difference)\b/i;
 const TABLE_COMMAND = /\b(put|show|display|render|make|create|build)\b/i;
 const NEW_SEARCH = /\b(find|search|discover|look(?:ing)? for|new search|another|different)\b|\b(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten)[\s-]*(?:br|bed|bedrooms?)\b|\bunder\s+(?:cop|usd|\$|\d)/i;
-// Only a new search BEFORE the comparison request should replace the cards.
-// "Compare the first two and find the cheaper one" is analysis of shown rows,
-// not a new rental search. Bedroom-category comparisons still need a search.
+// "Find the cheaper one" after a comparison is analysis, not a new search.
+// But explicit bedrooms/budget after "table" ("show a table of 2BR rentals")
+// still require new results unless the renter numbered current apartments first.
 const COMPARISON_START = /\b(?:compare|comparison|table|tabular|side[\s-]?by[\s-]?side|versus|vs)\b/i;
-const BEDROOM_CATEGORY_COMPARISON =
-  /\b(?:compare|comparison)\s+(?:the\s+)?(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten)[\s-]*(?:br|bed|bedrooms?)\b/i;
+const RENTAL_SEARCH_FILTER =
+  /\b(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten)[\s-]*(?:br|bed|bedrooms?)\b|\bunder\s+(?:cop|usd|\$|\d)/i;
+const DISPLAYED_ORDINAL =
+  /\b(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)\b|\b(?:apartments?|rentals?|listings?|results?)\s+(?:10|[1-9])\b/i;
 function requestsRentalSearchBeforeComparison(text: string): boolean {
   const comparisonAt = text.search(COMPARISON_START);
   const prefix = comparisonAt < 0 ? text : text.slice(0, comparisonAt);
-  return NEW_SEARCH.test(prefix) || BEDROOM_CATEGORY_COMPARISON.test(text);
+  if (NEW_SEARCH.test(prefix)) return true;
+  const filter = RENTAL_SEARCH_FILTER.exec(text);
+  return Boolean(filter && !DISPLAYED_ORDINAL.test(text.slice(0, filter.index)));
 }
 const RESTAURANT_TABLE = /\b(book|reserve|reservation|restaurant|caf[eé]|nightlife|table for|party size)\b/i;
 // Explicit other verticals override ordinal pronouns, even when rental hints exist.
