@@ -88,6 +88,17 @@ export async function waitUntilInteractive(control: Locator, label: string): Pro
     .toBe(true);
 }
 
+/**
+ * Mirror of Tailwind's `lg` breakpoint, which this layout uses to swap the request button: below it
+ * the detail view shows `rental-detail-request-cta-mobile` in the sticky phone bar, at or above it
+ * the desktop button in `<aside className="hidden lg:block">`.
+ *
+ * This project is on Tailwind v4, whose breakpoints live in CSS (`@theme` in src/app/globals.css),
+ * not in a config module a test could import — and that file does not override `--breakpoint-lg`,
+ * so 1024px is Tailwind's default. If `lg` is ever overridden, update this constant with it.
+ */
+const LG_BREAKPOINT_PX = 1024;
+
 /** Open the request form on a listing page. One click; the form must appear. */
 export async function openRequestForm(page: Page, apartmentId: string): Promise<void> {
   await page.goto(route(`/rentals/${apartmentId}`), { waitUntil: "domcontentloaded" });
@@ -98,8 +109,18 @@ export async function openRequestForm(page: Page, apartmentId: string): Promise<
   // sticky bar. Assert the CTA this viewport is SUPPOSED to show, so a layout regression that
   // leaks the desktop sidebar into a 390px screen fails here instead of passing on the wrong
   // button. `lg` is 1024px in this project's Tailwind config.
+  // Fail loudly rather than guessing. Defaulting to a desktop width here would assert the
+  // desktop button on a page whose layout we know nothing about — the exact false pass this
+  // assertion exists to prevent.
+  const viewport = page.viewportSize();
+  if (!viewport) {
+    throw new Error(
+      "openRequestForm needs a page with a known viewport: it asserts which of the two request " +
+        "buttons the layout is supposed to show.",
+    );
+  }
   const expectedCtaTestId =
-    (page.viewportSize()?.width ?? 1280) < 1024
+    viewport.width < LG_BREAKPOINT_PX
       ? "rental-detail-request-cta-mobile"
       : "rental-detail-request-cta";
   const cta = page.getByTestId(expectedCtaTestId);
