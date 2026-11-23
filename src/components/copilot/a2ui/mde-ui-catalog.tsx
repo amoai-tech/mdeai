@@ -714,22 +714,26 @@ export const MDE_OMITTED_STANDARD_COMPONENTS = [
   "Video",
 ] as const;
 
-// Reuse the installed official renderer and onClick event rather than adding a
-// parallel button implementation. Strict props ensure href/copy/submit are
-// rejected (not silently stripped) before any browser action can occur.
+// Reuse the official renderer and onClick event; never ship a separate Button.
+// If an SDK upgrade changes its shape, omit Button safely rather than either
+// exposing unrestricted browser actions or crashing unrelated AI surfaces.
 const standardButton = standardUI.components.get("Button");
-if (!standardButton || !(standardButton.props instanceof z.ZodObject)) {
-  throw new Error("Installed CopilotKit Button component or props schema has changed");
-}
-const clickOnlyButtonProps = standardButton.props.omit({
-  href: true,
-  copy: true,
-  submit: true,
-}).strict();
+const clickOnlyButton = standardButton?.props instanceof z.ZodObject
+  ? {
+      component: standardButton.component,
+      description: "MDE click action only. No href, copy or submit. The Rentals comparison tool supplies the validated listing ID and renderer-only action.",
+      props: standardButton.props.omit({ href: true, copy: true, submit: true }).strict(),
+      events: standardButton.events,
+      slots: standardButton.slots,
+    }
+  : null;
 
 export const mdeUI = createGenerativeUI({
   id: "mde/discovery@1",
-  extends: [standardUI.omit([...MDE_OMITTED_STANDARD_COMPONENTS, "Button"])],
+  extends: [standardUI.omit([
+    ...MDE_OMITTED_STANDARD_COMPONENTS,
+    ...(standardButton ? ["Button" as const] : []),
+  ])],
   // The editable bedroom draft lives in the page provider so the agent can never
   // overwrite a user's edit; the model learns the applied filters from the page
   // context (DiscoveryPageContext), because it does not see catalog `state`.
@@ -748,13 +752,7 @@ export const mdeUI = createGenerativeUI({
     },
   },
   components: {
-    Button: {
-      component: standardButton.component,
-      description: "MDE click action only. No href, copy or submit. The Rentals comparison tool supplies the validated listing ID and renderer-only action.",
-      props: clickOnlyButtonProps,
-      events: standardButton.events,
-      slots: standardButton.slots,
-    },
+    ...(clickOnlyButton ? { Button: clickOnlyButton } : {}),
     RentalCard: {
       component: MdeRentalCard,
       description:
