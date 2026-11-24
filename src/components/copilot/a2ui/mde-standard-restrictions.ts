@@ -6,9 +6,9 @@ import { remoteImageRules } from "@/lib/images/remote-image-hosts";
 /**
  * SAN-1675 — official Standard Catalog components that take a URL or a
  * sensitive input mode, re-registered with the official renderer and a
- * narrower schema. The schema is the trust boundary: CopilotKit validates every
- * model-authored operation against it (runtime and browser), so a regex here is
- * enforced, while a sentence in the guide is only advice.
+ * narrower schema. CopilotKit validates literal props in the browser against the schema;
+ * the guarded renderer also validates bound
+ * values. Manifest descriptions alone are not an enforcement boundary.
  *
  * - Image URLs: only the hosts `next/image` already trusts (`remote-image-hosts.ts`).
  * - Links: only MDE's own pages. `safeHref` in the SDK opens absolute http(s)
@@ -23,34 +23,37 @@ import { remoteImageRules } from "@/lib/images/remote-image-hosts";
  * untrusted image or link renders nothing instead of reaching the browser.
  */
 
-const escape = (value: string) => value.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
-
-/** Exported for tests; the same rules `next.config.ts` uses for `next/image`. */
-export function trustedImageUrlPattern(): RegExp {
-  const prefixes = remoteImageRules().map(
-    (rule) => `https://${escape(rule.hostname)}${escape(rule.pathPrefix ?? "/")}`,
-  );
-  return new RegExp(`^(?:${prefixes.join("|")})[^\\s"'<>\\\\]*$`);
+/** Keep raw browser-normalized characters out before parsing an absolute URL. */
+function parseTrustedCandidate(value: unknown): URL | null {
+  if (typeof value !== "string" || /[\s"'<>\\]/.test(value)) return null;
+  for (let index = 0; index < value.length; index++) {
+    const code = value.charCodeAt(index);
+    if (code < 32 || code === 127) return null;
+  }
+  try {
+    const url = new URL(value);
+    return url.username || url.password ? null : url;
+  } catch {
+    return null;
+  }
 }
 
 function siteOrigins(): string[] {
+  // Fixed canonical MDE deployment domains; configuration may add a trusted
+  // preview/dev origin, but cannot replace these production destinations.
   const origins = ["https://www.mdeai.co", "https://mdeai.co"];
   const configured = process.env.NEXT_PUBLIC_SITE_URL?.trim();
   if (configured) {
-    try {
-      const url = new URL(/^https?:\/\//i.test(configured) ? configured : `https://${configured}`);
-      const local = url.hostname === "localhost" || url.hostname === "127.0.0.1";
-      if (url.protocol === "https:" || local) origins.push(url.origin);
-    } catch {
-      // A malformed env value adds nothing; MDE's canonical origins still work.
+    const url = parseTrustedCandidate(/^https?:\/\//i.test(configured) ? configured : `https://${configured}`);
+    const local = url?.hostname === "localhost" || url?.hostname === "127.0.0.1";
+    if (url && (url.protocol === "https:" || (local && url.protocol === "http:"))
+      && url.pathname === "/" && !url.search && !url.hash) {
+      origins.push(url.origin);
+    } else {
+      console.warn("[MDE GenUI] Invalid NEXT_PUBLIC_SITE_URL; using canonical MDE origins.");
     }
   }
   return [...new Set(origins)];
-}
-
-/** Exported for tests: an absolute link to an MDE page, never another site. */
-export function trustedMdeLinkPattern(): RegExp {
-  return new RegExp(`^(?:${siteOrigins().map(escape).join("|")})/(?![/\\\\])[^\\s"'<>\\\\]*$`);
 }
 
 type StandardName = Parameters<typeof standardUI.components.get>[0];
@@ -115,12 +118,25 @@ function has(props: z.ZodObject<Shape>, ...keys: string[]): boolean {
 }
 
 export function buildRestrictedStandardComponents() {
-  const image = trustedImageUrlPattern();
-  const link = trustedMdeLinkPattern();
-  const imageUrl = z.string().regex(image, "Only stored MDE media URLs");
-  const mdeLink = z.string().regex(link, "Only links to MDE pages");
-  const isImage = (value: unknown) => typeof value === "string" && image.test(value);
-  const isLink = (value: unknown) => typeof value === "string" && link.test(value);
+  const rules = remoteImageRules();
+  const origins = siteOrigins();
+  const isImage = (value: unknown): boolean => {
+    const url = parseTrustedCandidate(value);
+    if (!url || typeof value !== "string" || url.protocol !== "https:") return false;
+    return rules.some((rule) => {
+      const prefix = rule.pathPrefix ?? "/";
+      return value.startsWith(`https://${rule.hostname}${prefix}`) &&
+        url.hostname === rule.hostname && !url.port && url.pathname.startsWith(prefix);
+    });
+  };
+  const isLink = (value: unknown): boolean => {
+    const url = parseTrustedCandidate(value);
+    if (!url || typeof value !== "string" || !origins.includes(url.origin)) return false;
+    const path = value.slice(url.origin.length);
+    return value.startsWith(`${url.origin}/`) && !path.startsWith("//") && !url.pathname.startsWith("//");
+  };
+  const imageUrl = z.string().refine(isImage, "Only stored MDE media URLs").describe("HTTPS stored media from trusted MDE image hosts");
+  const mdeLink = z.string().refine(isLink, "Only links to MDE pages").describe("Absolute links to trusted MDE pages");
   // Drop an untrusted optional image; drop new-tab props even if bound.
   const without = (props: Props, ...keys: string[]) => {
     const copy = { ...props };

@@ -452,7 +452,7 @@ export function SavedThreadReplay({
  * `useThreadNav` is the single source of truth; nothing here calls the
  * configuration provider's imperative setters.
  */
-function LiveChatProvider({ children, persistThread = false }: { children: ReactNode; persistThread?: boolean }) {
+function LiveChatProvider({ children, persistThread = false, sessionFallback = null }: { children: ReactNode; persistThread?: boolean; sessionFallback?: ReactNode }) {
   const { user, loading: sessionLoading } = useSession();
   const { sessionThreadId, activeThreadId, hasPersistedThread, restoredThread } = useThreadNav();
   const threadId = activeThreadId ?? sessionThreadId;
@@ -470,7 +470,7 @@ function LiveChatProvider({ children, persistThread = false }: { children: React
   // returns after sign-in, making a *guest* 401 look like a signed-in failure.
   // Match the discovery provider: start only with a resolved identity, and
   // remount on actual user changes so old requests keep their original context.
-  if (sessionLoading && !user) return null;
+  if (sessionLoading && !user) return <>{sessionFallback}</>;
 
   return (
     <CopilotKitProvider
@@ -710,11 +710,14 @@ export function BrokerThreadSaver({
 export function ChatProvider({
   children,
   persistThread = false,
+  sessionFallback,
 }: {
   children: ReactNode;
+  /** Safe loading UI while identity is unresolved; never mount the live runtime early. */
+  sessionFallback?: ReactNode;
   /** Opt in to writing completed turns to history, so a reload can replay them. */
   persistThread?: boolean;
 }) {
   if (isDeterministicE2E()) return <>{children}</>;
-  return <LiveChatProvider persistThread={persistThread}>{children}</LiveChatProvider>;
+  return <LiveChatProvider persistThread={persistThread} sessionFallback={sessionFallback}>{children}</LiveChatProvider>;
 }

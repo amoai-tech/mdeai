@@ -62,7 +62,7 @@ function DashboardSurfaceView({ surfaceId, operations, fallback, children, class
   const failed = !surface || surface.failed || surface.clientRejected.length > 0;
   if (failed && surface?.clientRejected.length) {
     // A rejected operation is a bug in our own builder, not user input: surface it to developers.
-    console.error(`[MdeDashboardSurface] ${surfaceId} rejected`, surface.clientRejected);
+    console.error("[MdeDashboardSurface] Surface rejected", { surfaceId, rejected: surface.clientRejected });
   }
 
   return (

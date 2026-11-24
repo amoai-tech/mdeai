@@ -12,9 +12,9 @@ describe("SAN-1124 broker concierge integration contract", () => {
     const center = readComponent("rentals-concierge-center.tsx");
     expect(center).toContain('from "@copilotkit/react-core/v2"');
     const shell = readComponent("rentals-concierge-shell.tsx");
-    expect(shell.match(/<ChatProvider persistThread>/g)).toHaveLength(1);
+    expect(shell.match(/<ChatProvider persistThread sessionFallback=/g)).toHaveLength(1);
     expect(center).not.toContain("<ChatProvider");
-    expect(shell).toMatch(/<ChatProvider persistThread>[\s\S]*<RentalsConciergeCenter[\s\S]*<RentalsDynamicWorkspace[\s\S]*<\/ChatProvider>/);
+    expect(shell).toMatch(/<ChatProvider persistThread sessionFallback=[\s\S]*<RentalsConciergeCenter[\s\S]*<RentalsDynamicWorkspace[\s\S]*<\/ChatProvider>/);
     expect(center).toContain("<BrokerWorkspaceToolRenderer />");
     expect(center).toContain("<CopilotChat");
     expect(center).toContain('agentId="conciergeAgent"');
@@ -59,7 +59,7 @@ describe("broker conversation survives a reload", () => {
   it("opts into thread persistence and relies on the shared writer", () => {
     const shell = readComponent("rentals-concierge-shell.tsx");
     // Without this the broker chat runs but never saves, so a refresh erased the conversation.
-    expect(shell).toContain("<ChatProvider persistThread>");
+    expect(shell).toContain("<ChatProvider persistThread sessionFallback=");
     const provider = readFileSync(join(ROOT, "..", "..", "chat", "chat-provider.tsx"), "utf8");
     expect(provider).toContain("export function BrokerThreadSaver");
     expect(provider).toContain('fetch(`/api/threads/${encodeURIComponent(threadId)}/messages`');

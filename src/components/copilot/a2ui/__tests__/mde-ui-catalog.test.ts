@@ -1,11 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { isRentalBedValue, normalizeBedSelection } from "@/components/rentals/rental-filter-draft";
 import { resolveRentalPageControl } from "@/lib/rentals/browse-page-control";
 import type { z } from "zod";
 import type { ComponentType, ReactElement } from "react";
 import { standardUI } from "@copilotkit/react-core/v2/generative-ui";
 import { validateOperation } from "@copilotkit/shared";
-import { MDE_RESTRICTED_STANDARD_NAMES } from "../mde-standard-restrictions";
+import { buildRestrictedStandardComponents, MDE_RESTRICTED_STANDARD_NAMES } from "../mde-standard-restrictions";
 import {
   MDE_OMITTED_STANDARD_COMPONENTS,
   canOpenNativeViewingReview,
@@ -250,20 +250,77 @@ describe("MDE A2UI catalog", () => {
     expect(props("ImageGrid").safeParse({ images: [{ url: media, href: page }] }).success).toBe(false);
   });
 
+  it("checks normalized storage paths, exact origins and bound values without dynamic regexes", () => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://qa-project.supabase.co");
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://preview.example.com");
+    try {
+      const components = buildRestrictedStandardComponents();
+      const image = components.Image!.props as z.ZodTypeAny;
+      const link = components.Link!.props as z.ZodTypeAny;
+      const renderImage = components.Image!.component as (p: Record<string, unknown>) => ReactElement | null;
+      const renderLink = components.Link!.component as (p: Record<string, unknown>) => ReactElement | null;
+      const publicPhoto = "https://qa-project.supabase.co/storage/v1/object/public/photos/a.jpg";
+      expect(image.safeParse({ url: publicPhoto }).success).toBe(true);
+      expect(renderImage({ url: publicPhoto })).not.toBeNull();
+      for (const url of [
+        "https://qa-project.supabase.co/storage/v1/object/sign/photos/a.jpg",
+        "https://qa-project.supabase.co/storage/v1/object/public/../sign/photos/a.jpg",
+        "https://qa-project.supabase.co/storage/v1/object/public/%2e%2e/sign/photos/a.jpg",
+        "https://qa-project.supabase.co:444/storage/v1/object/public/photos/a.jpg",
+        "https://picsum.photos@evil.example/x",
+        "https://picsum.photos/" + String.fromCharCode(10) + "x",
+        "https://upload.wikimedia.org/wikipedia/commons/../private/x.jpg",
+      ]) {
+        expect(image.safeParse({ url }).success, url).toBe(false);
+        expect(renderImage({ url }), url).toBeNull();
+      }
+      for (const href of ["https://preview.example.com/rentals", "https://mdeai.co/rentals"]) {
+        expect(link.safeParse({ text: "Open", href }).success).toBe(true);
+        expect(renderLink({ text: "Open", href })).not.toBeNull();
+      }
+      for (const href of [
+        "https://preview.example.com.evil.example/rentals",
+        "https://www.mdeai.co@evil.example/rentals",
+        "https://www.mdeai.co:444/rentals",
+        "https://www.mdeai.co/a/..//evil.example",
+        "https://www.mdeai.co/" + String.fromCharCode(92) + "evil.example",
+      ]) {
+        expect(link.safeParse({ text: "Open", href }).success, href).toBe(false);
+        expect(renderLink({ text: "Open", href }), href).toBeNull();
+      }
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("reports malformed configured origins without exposing the value or dropping canonical origins", () => {
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://invalid.example/path");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const link = buildRestrictedStandardComponents().Link!.props as z.ZodTypeAny;
+      expect(warn).toHaveBeenCalledWith("[MDE GenUI] Invalid NEXT_PUBLIC_SITE_URL; using canonical MDE origins.");
+      expect(link.safeParse({ text: "Open", href: "https://invalid.example/rentals" }).success).toBe(false);
+      expect(link.safeParse({ text: "Open", href: "https://www.mdeai.co/rentals" }).success).toBe(true);
+    } finally {
+      warn.mockRestore();
+      vi.unstubAllEnvs();
+    }
+  });
+
   it("never lets the model build a password field", () => {
     const props = mdeUI.components.get("TextField")?.props as z.ZodTypeAny;
     expect(props.safeParse({ label: "Name", variant: "shortText" }).success).toBe(true);
     expect(props.safeParse({ label: "Password", variant: "obscured" }).success).toBe(false);
   });
 
-  it("documents that the installed manifest validator ignores URL patterns", () => {
+  it("documents that the installed manifest validator does not enforce custom URL refinements", () => {
     const options = { manifest: { catalogId: mdeUI.id, components: mdeUI.manifestComponents }, knownSurfaces: new Set<string>() };
     const op = (image: Record<string, unknown>) => ({
       version: "1.0",
       createSurface: { surfaceId: "media", components: [{ id: "root", component: "Image", ...image }] },
     });
     expect(validateOperation(op({ url: "https://picsum.photos/seed/a/400/300" }), options)).toEqual({ ok: true });
-    // Installed 1.88.0 manifest validation does not enforce JSON Schema `pattern`;
+    // Installed 1.88.0 manifest validation does not enforce custom URL refinements;
     // the browser rejects literal values through the zod schema (above) and the
     // guarded renderer covers data-bound values. Pin that so an SDK change is noticed.
     expect(validateOperation(op({ url: "https://evil.example/a.jpg" }), options)).toEqual({ ok: true });

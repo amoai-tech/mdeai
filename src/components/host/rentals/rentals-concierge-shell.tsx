@@ -60,7 +60,11 @@ export function RentalsConciergeShell({
           <RentalsConversationHistory dashboard={dashboard} />
         </div>
 
-        <ChatProvider persistThread>
+        <ChatProvider persistThread sessionFallback={
+          <div role="status" className="min-h-32 rounded-lg border border-border p-4 text-sm text-muted-foreground lg:col-span-2">
+            Loading your workspace…
+          </div>
+        }>
           <div
             className={cn(
               "min-h-0 min-w-0",

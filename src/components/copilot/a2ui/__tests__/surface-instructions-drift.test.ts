@@ -56,7 +56,7 @@ describe("Surface instructions agree with their allowlists and the Mastra guide"
   });
 
   it("SAN-1675: the guide names every exposed component and never advertises an omitted one as available", () => {
-    const named = (text: string, name: string) => new RegExp(`\\b${name}\\b`).test(text);
+    const named = (text: string, name: string) => text.split(/\W+/).includes(name);
     for (const name of mdeUI.components.keys()) {
       expect(named(MDE_A2UI_GUIDE, name), `${name} missing from the fallback guide`).toBe(true);
     }
