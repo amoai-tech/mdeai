@@ -10,6 +10,7 @@ import {
   externalSourceProvider,
 } from '@/lib/rentals/provenance';
 import { applyAvailabilityFilters } from '@/lib/rentals/availability-filter';
+import { deduplicateApartmentRows } from '@/lib/rentals/duplicate-listings';
 import { z } from 'zod';
 import { runAuditedSearch } from '../lib/run-audited-search';
 import { startRentalRunSearch } from '../lib/generative-ui-context';
@@ -94,6 +95,9 @@ export type Rental = z.infer<typeof rentalSchema>;
  * listing's own page (`photo_count` says how many there are), which shows every photo.
  */
 export const RENTAL_PANEL_PHOTO_LIMIT = 12;
+
+/** One raw, server-side projection for structured and semantic discovery. */
+export const APARTMENT_SEARCH_SELECT = 'id, title, neighborhood, bedrooms, furnished, price_daily, price_monthly, currency, wifi_speed, amenities, images, host_name, source_url, metadata, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status, rental_can_request_viewing, address, city, description, host_id, bathrooms, size_sqm, floor_number, total_floors, price_weekly, deposit_amount, utilities_included, building_amenities, video_url, virtual_tour_url, source, source_listing_id, maximum_stay_days, smoking_allowed';
 
 export type RentalQuery = {
   neighborhood?: string;
@@ -542,12 +546,12 @@ async function searchRentalsFromSupabase(
   const monthlyBudget = monthlyBudgetFromQuery(query);
   // MVP: count:'exact' for accurate browse subtitle (~180 active listings). Revisit
   // estimated/cached counts post-MVP if apartments table grows materially.
-  const APARTMENT_SELECT =
-    'id, title, neighborhood, bedrooms, furnished, price_daily, price_monthly, currency, wifi_speed, amenities, images, host_name, source_url, metadata, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status, rental_can_request_viewing';
+  // Bounded headroom lets copies give way to the next distinct listing.
+  const candidateLimit = (n: number) => Math.max(n, Math.min(100, n * 2));
 
   // `head` asks PostgREST for the exact count without shipping the rows, so the alternatives'
   // total is still reported when the confirmed group already filled the page.
-  const baseQuery = (columns: string = APARTMENT_SELECT, head = false) => {
+  const baseQuery = (columns: string = APARTMENT_SEARCH_SELECT, head = false) => {
     let b = client
       .from('apartments')
       .select(columns, head ? { count: 'exact', head: true } : { count: 'exact' });
@@ -583,7 +587,10 @@ async function searchRentalsFromSupabase(
       // Only the stable PostgREST/Postgres code travels; the message can carry hosts and ports.
       throw new RentalSearchUnavailableError(`query_failed${error.code ? `:${error.code}` : ''}`);
     }
-    return { rows: (data ?? []) as ApartmentRow[], count: count ?? 0 };
+    const raw = (data ?? []) as ApartmentRow[];
+    const rows = deduplicateApartmentRows(raw);
+    // Exact for a complete candidate window; otherwise subtract only observed copies.
+    return { rows, count: Math.max(rows.length, (count ?? raw.length) - (raw.length - rows.length)) };
   };
 
   let confirmedRows: ApartmentRow[] = [];
@@ -603,7 +610,7 @@ async function searchRentalsFromSupabase(
           nullsFirst: false,
         })
         .order('id', { ascending: true })
-        .limit(limit),
+        .limit(candidateLimit(limit)),
     );
     const remaining = Math.max(0, limit - confirmed.rows.length);
     // The alternatives' exact count is independent of how many of them fit on this page, so a full
@@ -628,14 +635,14 @@ async function searchRentalsFromSupabase(
               .or(predicate)
               .order('price_daily', { ascending: true, nullsFirst: false })
               .order('id', { ascending: true })
-              .limit(remaining),
+              .limit(candidateLimit(remaining)),
           );
     confirmedRows = confirmed.rows;
     alternativeRows = alternatives.rows;
     total = confirmed.count + alternatives.count;
   } else {
     const all = await runQuery(
-      baseQuery().order('price_daily', { ascending: true, nullsFirst: false }).order('id', { ascending: true }).limit(limit),
+      baseQuery().order('price_daily', { ascending: true, nullsFirst: false }).order('id', { ascending: true }).limit(candidateLimit(limit)),
     );
     confirmedRows = all.rows;
     total = all.count;
@@ -645,7 +652,7 @@ async function searchRentalsFromSupabase(
   // remain labelled and always appear after confirmed matches.
   const toRentals = (list: ApartmentRow[]) =>
     query.stayType === 'monthly' ? sortForMonthlyStay(list.map(rowToRental)) : list.map(rowToRental);
-  const results = [...toRentals(confirmedRows), ...toRentals(alternativeRows)];
+  const results = [...toRentals(confirmedRows.slice(0, limit)), ...toRentals(alternativeRows.slice(0, Math.max(0, limit - confirmedRows.length)))];
   return { results, total, source: 'supabase' };
 }
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Rental } from "@/mastra/tools/search-rentals";
-import { duplicateListingNotes } from "@/lib/rentals/duplicate-listings";
+import { APARTMENT_DUPLICATE_FIELDS, deduplicateApartmentRows, duplicateListingNotes } from "@/lib/rentals/duplicate-listings";
 
 const row = (id: string, overrides: Partial<Rental> = {}): Rental =>
   ({
@@ -59,5 +59,30 @@ describe("duplicateListingNotes", () => {
       { ...row("b"), nightly_price: undefined },
     ]);
     expect(notes.size).toBe(0);
+  });
+});
+
+const rawRow = (id: string, overrides: Record<string, unknown> = {}) => ({
+  ...Object.fromEntries(APARTMENT_DUPLICATE_FIELDS.map((field) => [field, null])),
+  id, title: "Calle 10 #42-15, Laureles", address: "Calle 10 #42-15", neighborhood: "Laureles",
+  landlord_id: "owner-a", bedrooms: 2, bathrooms: 1, furnished: true,
+  price_monthly: 2_400_000, currency: "COP", ...overrides,
+});
+
+describe("deduplicateApartmentRows", () => {
+  it("keeps the first copy and the next distinct listing", () => {
+    const first = rawRow("a");
+    const different = rawRow("c", { address: "Calle 12 #30-20" });
+    expect(deduplicateApartmentRows([first, rawRow("b"), different])).toEqual([first, different]);
+  });
+  it.each([{ landlord_id: "owner-b" }, { floor_number: 5 }, { source_listing_id: "another-unit" },
+    { slug: "another-unit" }, { images: ["https://example.com/other.jpg"] }, { price_monthly: 2_500_000 },
+    { bathrooms: 2 }, { description: "Different apartment number" }])("preserves distinct evidence: %j", (difference) => {
+    expect(deduplicateApartmentRows([rawRow("a"), rawRow("b", difference)])).toHaveLength(2);
+  });
+  it("does not infer equality from missing addresses, owners or partial projections", () => {
+    expect(deduplicateApartmentRows([rawRow("a", { address: null }), rawRow("b", { address: null })])).toHaveLength(2);
+    expect(deduplicateApartmentRows([rawRow("a", { landlord_id: null }), rawRow("b", { landlord_id: null })])).toHaveLength(2);
+    expect(deduplicateApartmentRows([{ id: "a" }, { id: "b" }])).toHaveLength(2);
   });
 });
