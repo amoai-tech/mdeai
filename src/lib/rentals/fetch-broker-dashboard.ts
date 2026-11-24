@@ -109,7 +109,24 @@ export async function fetchBrokerDashboard(
     if (leads30d.error || leads30d.count === null) return failDashboard("leads_30d_count", leads30d.error ?? "Missing exact total");
     if (upcomingCount.error || upcomingCount.count === null) return failDashboard("viewings_booked_count", upcomingCount.error ?? "Missing exact total");
     if (upcoming.error || upcoming.count === null) return failDashboard("upcoming_showings", upcoming.error ?? "Missing exact total");
-    if (requests.error || requests.count === null) return failDashboard("request_showings", requests.error ?? "Missing exact total");
+    // The SDK drops Content-Range counts on errors. Recover only a real out-of-range page,
+    // using the same ownership scope; never turn an unrelated failure into empty data.
+    const requestOutOfRange = requests.status === 416 && requests.error?.code === "PGRST103";
+    const inboxOutOfRange = inbox?.status === 416 && inbox.error?.code === "PGRST103";
+    const [requestTotal, inboxTotal] = await Promise.all([
+      requestOutOfRange && requests.count === null
+        ? supabase.from("showings").select("id, apartment:apartments!showings_apartment_id_fkey!inner(landlord_id)", { count: "exact", head: true })
+          .in("apartment.landlord_id", landlordProfileIds)
+        : { count: requests.count, error: requestOutOfRange ? null : requests.error },
+      inboxOutOfRange && inbox?.count === null
+        ? supabase.from("leads").select("id, apartment:apartments!leads_apartment_id_fkey!inner(landlord_id)", { count: "exact", head: true })
+          .in("apartment.landlord_id", landlordProfileIds)
+        : { count: inbox?.count ?? null, error: inboxOutOfRange ? null : inbox?.error },
+    ]);
+    if (requestTotal.error || requestTotal.count === null ||
+        (requestOutOfRange && viewingPage.offset < requestTotal.count)) {
+      return failDashboard("request_showings", requestTotal.error ?? requests.error ?? "Missing exact total");
+    }
 
     leads7dCount = leads7d.count;
     unansweredLeads = (unanswered.data ?? []) as BrokerLeadRow[];
@@ -117,17 +134,20 @@ export async function fetchBrokerDashboard(
     viewingsBookedCount = upcomingCount.count;
     upcomingShowings = (upcoming.data ?? []) as BrokerShowingRow[];
     requestShowings = (requests.data ?? []) as BrokerShowingRow[];
-    requestShowingsTotal = requests.count;
+    requestShowingsTotal = requestTotal.count;
     attentionIsPartial ||= unanswered.count > 5 || upcoming.count > 5;
     if (inbox && leadPage) {
-      if (inbox.error || inbox.count === null) return failDashboard("lead_inbox", inbox.error ?? "Missing exact total");
+      if (inboxTotal.error || inboxTotal.count === null ||
+          (inboxOutOfRange && leadPage.offset < inboxTotal.count)) {
+        return failDashboard("lead_inbox", inboxTotal.error ?? inbox.error ?? "Missing exact total");
+      }
       leadInbox = {
         rows: (inbox.data ?? []).map((row) => ({
           id: row.id, name: row.name, status: row.status,
           createdAt: row.created_at, lastContactedAt: row.last_contacted_at,
           apartmentId: row.apartment_id, apartmentTitle: row.apartment?.title ?? null,
         })),
-        total: inbox.count, offset: leadPage.offset,
+        total: inboxTotal.count, offset: leadPage.offset,
       };
     }
 
