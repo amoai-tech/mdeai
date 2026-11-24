@@ -22,6 +22,21 @@ describe("official comparison surface identity bridge", () => {
     expect(comparedRentalIds([], ["a", "b"])).toEqual([]);
   });
 
+  it("rejects malformed nested actions and ignores arbitrary media in the surface", () => {
+    const { createSurface } = ops[0] as { createSurface: { surfaceId: string; components: Array<Record<string, unknown>> } };
+    const mutate = (onClick: unknown) => [{ createSurface: {
+      ...createSurface,
+      components: createSurface.components.map((node) =>
+        node.id === "comparison-details-0" ? { ...node, onClick } : node),
+    } }];
+    for (const value of [null, [], "bad", { functionCall: null }, { functionCall: { args: null } },
+      { functionCall: { "@call": "openComparedRentalDetails", args: { listingId: ["b"] } } },
+      { functionCall: { "@call": "openComparedRentalDetails", args: { listingId: "not-visible" } } }]) {
+      expect(comparedRentalIds(mutate(value), ["a", "b"])).toEqual([]);
+    }
+    expect(comparedRentalIds([null, 1, { updateComponents: null }], ["a", "b"])).toEqual([]);
+  });
+
   it("supports the committed create plus component-update operation shape", () => {
     const { createSurface } = ops[0] as { createSurface: { surfaceId: string; components: unknown[] } };
     const { components, surfaceId } = createSurface;

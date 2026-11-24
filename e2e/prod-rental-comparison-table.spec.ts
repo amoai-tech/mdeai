@@ -225,7 +225,8 @@ test.describe("SAN-1681 · official rental comparison A2UI Table", () => {
       await expect(table).toBeVisible({ timeout: 120_000 });
       await expect(page.getByTestId("rental-ask-transcript")).toHaveCount(0);
       await expect(page.getByTestId("rental-ask-toggle-transcript")).toHaveCount(0);
-      await expect(page.getByTestId("rental-ask-text-answer")).toHaveCount(0);
+      // One current completed answer may accompany cards, never the old transcript.
+      expect(await page.getByTestId("rental-ask-text-answer").count()).toBeLessThanOrEqual(1);
       await expect.poll(firstIds, { timeout: 30_000 }).not.toEqual(before);
       const shown = await firstIds();
       expect(shown.every(Boolean)).toBe(true);

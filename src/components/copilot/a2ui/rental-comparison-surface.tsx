@@ -60,6 +60,8 @@ export function comparedRentalIds(operations: readonly unknown[], currentIds: re
 export function useComparedRentalIds(results: readonly Rental[]): string[] {
   const runtime = useGenerativeUIRuntime();
   const manager = runtime?.manager;
+  // CopilotKit's GenerativeUISurfaceManager requires both bound methods.
+  // Keep the hook unconditional even when the runtime provider is absent.
   useSyncExternalStore(manager?.subscribe ?? noopSubscribe, manager?.getVersion ?? zero, zero);
   const surface = manager?.getSurfaceForTarget(RENTAL_COMPARISON_TARGET);
   if (!surface || surface.status !== "ready" || surface.failed ||

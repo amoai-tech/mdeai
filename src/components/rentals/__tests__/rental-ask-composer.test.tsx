@@ -1035,6 +1035,28 @@ describe("RentalAskComposer (SAN-1421)", () => {
     expect(screen.getByRole("link", { name: "Open full chat" }).getAttribute("href")).toBe("/chat");
   });
 
+  it("publishes cards AND the completed answer for a mixed search and question", async () => {
+    const onResults = vi.fn();
+    const onTextAnswer = vi.fn();
+    const question = "Find 2BR apartments in Laureles and which is closest to the metro?";
+    chat.appendMessage.mockImplementationOnce(() => {
+      agent.messages = [
+        { id: "u-mixed", role: "user", content: question },
+        { id: "a-tool", role: "assistant", toolCalls: [{ id: "call-mixed", type: "function", function: { name: "searchRentalsTool" } }] },
+        { id: "t-mixed", role: "tool", toolCallId: "call-mixed", content: JSON.stringify({ results: [rental("rnt_1"), rental("rnt_2")] }) },
+      ];
+      reportCompletedAnswer("run-mixed", "a-final", "The listings do not establish which is closest to the metro.");
+      return Promise.resolve(true);
+    });
+    render(<RentalAskComposer onResults={onResults} onTextAnswer={onTextAnswer} />);
+    type(question);
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+    await waitFor(() => expect(onResults).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(onTextAnswer).toHaveBeenLastCalledWith("The listings do not establish which is closest to the metro."));
+    expect(screen.queryByTestId("rental-ask-transcript")).toBeNull();
+    expect(screen.queryByTestId("rental-ask-toggle-transcript")).toBeNull();
+  });
+
   it("sends only a completed current text-only answer to the results column", async () => {
     const onTextAnswer = vi.fn();
     chat.appendMessage.mockImplementationOnce(() => {

@@ -69,7 +69,7 @@ describe("comparisonTableRenderEvents", () => {
         children: [`comparison-action-title-${index}`, `comparison-action-buttons-${index}`],
       });
       expect(item(`comparison-action-title-${index}`)).toMatchObject({
-        component: "Text", text: row.title,
+        component: "Text", text: `Option ${index + 1}: ${row.title}`,
       });
       expect(item(`comparison-details-${index}`)).toMatchObject({
         component: "Button", label: "Details",

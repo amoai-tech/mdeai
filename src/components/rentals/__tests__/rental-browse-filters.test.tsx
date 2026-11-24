@@ -41,10 +41,13 @@ describe("RentalBrowseFilters", () => {
   it("provides a single reset to the canonical rental URL when filters are applied", () => {
     const chosen = renderToStaticMarkup(<RentalBrowseFilters neighborhood="Laureles" beds="2" from="2026-11-01" through="2026-11-30" />);
     const doc = new DOMParser().parseFromString(chosen, "text/html");
-    const reset = doc.querySelector('[data-testid="rentals-clear-filters"]');
+    const resets = doc.querySelectorAll('[data-testid="rentals-clear-filters"]');
+    expect(resets).toHaveLength(1);
+    const reset = resets[0];
     expect(reset?.textContent).toBe("Clear filters");
     expect(reset?.getAttribute("href")).toBe("/rentals");
-    expect(html).not.toContain("rentals-clear-filters");
+    const unfiltered = new DOMParser().parseFromString(html, "text/html");
+    expect(unfiltered.querySelectorAll('[data-testid="rentals-clear-filters"]')).toHaveLength(0);
   });
 
   it("never writes maxPrice into a filter link", () => {

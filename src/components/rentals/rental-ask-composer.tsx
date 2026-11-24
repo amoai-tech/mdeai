@@ -58,7 +58,7 @@ import type { ConciergeWorkingMemory } from "@/lib/types";
  * `DiscoveryConciergeProvider` already owns the thread and replays saved history), so a question asked
  * here is the same conversation the user finds on /chat, with the same answer and the same saved state.
  *
- * The composer is input-only. The page displays a single current text-only answer when needed;
+ * The composer is input-only. The page displays only the current completed assistant answer;
  * complete history remains on /chat. Rich rental cards and map retain their existing renderers.
  */
 
@@ -537,7 +537,6 @@ function LiveComposer({
     pendingToolResult.current = null;
     const errorVersionBefore = getConciergeErrorVersion();
     let agentSendAttempted = false;
-    let publishedResults = false;
     try {
       if (cancelled.current) return;
       agentSendAttempted = true;
@@ -568,7 +567,6 @@ function LiveComposer({
       if (pendingToolResult.current && onResults && mounted.current &&
           !cancelled.current && turn === turnId.current) {
         onResults(pendingToolResult.current);
-        publishedResults = true;
         pendingToolResult.current = null;
       }
       // The cards normally come from the agent's own rental tool result. Only when the turn
@@ -594,7 +592,6 @@ function LiveComposer({
               hasAnswer.current = true;
               const enriched = withCarriedNotice(found.payload, unappliedRef.current);
               onResults(enriched);
-              publishedResults = true;
               // The fallback rows also become the agent's referent for "which of these…".
               setState((prev) => ({
                 ...prev,
@@ -615,10 +612,11 @@ function LiveComposer({
           }
         }
       }
-      // A real completed text-only answer belongs in the results column, not a
-      // second chat history under the cards. Never show stale or partial turns.
+      // Show only the current completed assistant answer above the cards. A mixed
+      // search + question must not lose the answer just because cards were published.
+      // No history, tool-status messages, stale turns or partial responses.
       if (mounted.current && turn === turnId.current && !cancelled.current &&
-          !publishedResults && runSucceeded && !runFailed && latestCompletedText) {
+          runSucceeded && !runFailed && latestCompletedText) {
         onTextAnswer?.(latestCompletedText);
       }
     } catch {
