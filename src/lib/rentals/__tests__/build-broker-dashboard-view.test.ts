@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildBrokerDashboardView } from "../build-broker-dashboard-view";
+import { buildBrokerDashboardView, buildViewingRequests } from "../build-broker-dashboard-view";
 import { DATA_PENDING_LABEL } from "../data-pending";
 import type { BrokerListingDetail } from "../broker-listing-detail";
 
@@ -174,5 +174,29 @@ describe("buildBrokerDashboardView", () => {
 
     expect(page.viewingRequests).toHaveLength(1);
     expect(page.viewingRequestsTotal).toBe(137);
+  });
+});
+
+describe("bounded attention and showing identity", () => {
+  it("does not attach another apartment's renter to a showing", () => {
+    const requests = buildViewingRequests({
+      showings: [{ id: "s1", apartment_id: "a1", lead_id: "l1", scheduled_at: "2026-12-01T15:00:00Z", created_at: "2026-11-24T15:00:00Z", status: "scheduled", apartment: { title: "Apartment A" } }],
+      leads: [{ id: "l1", name: "Other renter", status: "new", created_at: "", last_contacted_at: null, apartment_id: "a2" }],
+      listings: [],
+    });
+    expect(requests[0]).toMatchObject({ renterName: null, apartmentTitle: "Apartment A" });
+  });
+
+  it("never calls a bounded empty preview caught up", () => {
+    const view = buildBrokerDashboardView({
+      displayName: null, listings: [], publishedListingsCount: 200,
+      leads7dCount: 0, viewingsBookedCount: 0, apartmentCount: 251,
+      unansweredLeads: [], upcomingShowings: [], requestShowings: [],
+      requestShowingsTotal: 0, requestLeads: [], leads30dCount: 0, views30dCount: null,
+      attentionIsPartial: true,
+    });
+    expect(view.attentionIsPartial).toBe(true);
+    expect(view.briefing.summary).toContain("preview");
+    expect(view.briefing.summary).not.toContain("caught up");
   });
 });

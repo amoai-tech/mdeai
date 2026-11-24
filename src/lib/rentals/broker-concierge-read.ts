@@ -39,11 +39,12 @@ export async function readBrokerWorkspace(
       focus,
       listings,
       listingsReturned: listings.length,
+      listingsTotal: inventory.total,
       listingsMayBeTruncated: inventory.total > listings.length,
       kpis: [],
       attention: [],
       viewingRequests: [],
-      viewingRequestsTotal: 0,
+      viewingRequestsTotal: null, // Not requested; do not claim zero.
       viewingsMayBeTruncated: false,
     };
   }
@@ -59,6 +60,8 @@ export async function readBrokerWorkspace(
     listingsMayBeTruncated: focus === "viewings" ? false :
       inventory.total > listings.length,
     kpis: view.kpis.map(({ label, value }) => ({ label, value })),
+    attentionIsPartial: view.attentionIsPartial ?? false,
+    listingsTotal: inventory.total,
     attention: view.attention.map(({ title, detail }) => ({ title, detail })),
     viewingRequests: requests.map((request) => ({
       showingId: request.showingId,

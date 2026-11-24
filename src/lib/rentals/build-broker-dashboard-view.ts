@@ -46,10 +46,12 @@ export type BuildBrokerDashboardInput = {
   requestShowings: BrokerShowingRow[];
   /** SAN-1204 · how many requests exist in total, so a capped page is never presented as all. */
   requestShowingsTotal: number;
+  requestShowingsOffset?: number;
   /** SAN-1204 · leads backing `requestShowings`, joined for the renter's display name. */
   requestLeads: BrokerLeadRow[];
   leads30dCount: number | null;
   views30dCount: number | null;
+  attentionIsPartial?: boolean;
 };
 
 /** Shared viewing-time label. Computed once on the server so SSR and hydration agree. */
@@ -71,7 +73,7 @@ function formatScheduledLabel(scheduledAt: string): string { // skipcq: JS-0067 
  * SAN-1204 · collapse each persisted showing into exactly one visible viewing request.
  *
  * Pure and order-stable so the "one card per request" rule can be unit-tested without Supabase.
- * Requests are sorted newest-scheduled-first, and a showing is never emitted twice.
+ * Requests are sorted newest-created-first, and a showing is never emitted twice.
  */
 // skipcq: JS-0067 - ES module export; not browser global scope
 export function buildViewingRequests(input: {
@@ -91,7 +93,8 @@ export function buildViewingRequests(input: {
     seen.add(showing.id);
 
     const lead = leadById.get(showing.lead_id);
-    const renterName = lead?.name?.trim() || lead?.email?.trim() || null;
+    const renterName = lead?.apartment_id === showing.apartment_id
+      ? lead.name?.trim() || lead.email?.trim() || null : null;
 
     requests.push({
       leadId: showing.lead_id,
@@ -210,21 +213,22 @@ export function buildBrokerDashboardView(input: BuildBrokerDashboardInput): Brok
   }
 
   const attentionCount = attention.length;
+  const attentionIsPartial = Boolean(input.attentionIsPartial || draftsNeedingPhotos.length > 5 || input.unansweredLeads.length > 5 || input.upcomingShowings.filter((s) => s.status === "scheduled").length > 5);
   const bullets: string[] = [];
   if (draftsNeedingPhotos.length > 0) {
     bullets.push(
-      `${draftsNeedingPhotos.length} listing${draftsNeedingPhotos.length === 1 ? "" : "s"} need photos`,
+      `${draftsNeedingPhotos.length} listing${draftsNeedingPhotos.length === 1 ? "" : "s"} in this preview need photos`,
     );
   }
   if (input.unansweredLeads.length > 0) {
     bullets.push(
-      `${input.unansweredLeads.length} lead${input.unansweredLeads.length === 1 ? "" : "s"} waiting`,
+      `${input.unansweredLeads.length} lead${input.unansweredLeads.length === 1 ? "" : "s"} in this preview waiting`,
     );
   }
   const pendingShowings = input.upcomingShowings.filter((s) => s.status === "scheduled").length;
   if (pendingShowings > 0) {
     bullets.push(
-      `${pendingShowings} viewing${pendingShowings === 1 ? "" : "s"} to confirm`,
+      `${pendingShowings} viewing${pendingShowings === 1 ? "" : "s"} in this preview to confirm`,
     );
   }
 
@@ -232,8 +236,8 @@ export function buildBrokerDashboardView(input: BuildBrokerDashboardInput): Brok
     greeting: greetingFor(input.displayName),
     summary:
       attentionCount > 0
-        ? `${attentionCount} item${attentionCount === 1 ? "" : "s"} need you today.`
-        : "You're caught up on listings and leads.",
+        ? `Showing ${attentionCount} item${attentionCount === 1 ? "" : "s"} needing attention.`
+        : attentionIsPartial ? "No items found in this preview; more records may need review." : "You're caught up on listings and leads.",
     bullets,
   };
 
@@ -281,8 +285,10 @@ export function buildBrokerDashboardView(input: BuildBrokerDashboardInput): Brok
     displayName: input.displayName,
     kpis,
     attention,
+    attentionIsPartial,
     viewingRequests,
     viewingRequestsTotal: Math.max(input.requestShowingsTotal, viewingRequests.length),
+    viewingRequestsOffset: input.requestShowingsOffset ?? 0,
     trends,
     briefing,
     isEmpty,

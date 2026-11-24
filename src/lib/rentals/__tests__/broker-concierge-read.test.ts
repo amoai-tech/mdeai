@@ -43,6 +43,8 @@ describe("readBrokerWorkspace", () => {
       status:"draft",priceMonthly:2400000,currency:"COP",bedrooms:2,
     }]);
     expect(result.viewingRequests).toEqual([]);
+    expect(result.viewingRequestsTotal).toBeNull();
+    expect(result.listingsTotal).toBe(1);
   });
 
   it("returns actual lead/showing IDs and states without creating actions", async () => {
