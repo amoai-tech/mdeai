@@ -97,7 +97,14 @@ export function buildBrokerOverviewOperations(view: BrokerDashboardView, rendere
   const requests = view.viewingRequests;
   const counts = statusCounts(requests);
   const perRequest = requests.map((request) => requestNodes(request, rendererKey));
-  const truncated = view.viewingRequestsTotal > requests.length;
+  const offset = view.viewingRequestsOffset ?? 0;
+  const truncated = view.viewingRequestsTotal > requests.length || offset > 0;
+  const pageLabel = offset > 0
+    ? `${offset + 1}–${offset + requests.length} of ${view.viewingRequestsTotal}`
+    : `latest ${requests.length} of ${view.viewingRequestsTotal}`;
+  const noRows = view.viewingRequestsTotal > 0
+    ? "No viewing requests on this page."
+    : "No viewing requests yet.";
 
   const summaryChildren = ["kpis"];
   summaryChildren.push(counts.length > 0 ? "status-chart" : "status-empty");
@@ -111,7 +118,7 @@ export function buildBrokerOverviewOperations(view: BrokerDashboardView, rendere
     { id: "tabs", component: "Tabs", tabs: [
       { title: "Summary", child: "summary" },
       { title: `Viewings (${view.viewingRequestsTotal})`, child: "viewings" },
-      { title: `Needs attention (${view.attention.length})`, child: "attention" },
+      { title: `Needs attention (${view.attention.length}${view.attentionIsPartial ? " shown" : ""})`, child: "attention" },
     ] },
     { id: "summary", component: "Column", gap: 3, children: summaryChildren },
     { id: "kpis", component: "List", marker: "none",
@@ -121,9 +128,9 @@ export function buildBrokerOverviewOperations(view: BrokerDashboardView, rendere
       // Counts are whole numbers: a max divisible by 4 keeps the 5 default ticks on integers.
       format: "number", yAxis: { label: "Requests", min: 0, max: Math.max(4, Math.ceil(Math.max(0, ...counts.map((c) => c.requests)) / 4) * 4) },
       title: truncated
-        ? `Viewing requests by status (latest ${requests.length} of ${view.viewingRequestsTotal})`
+        ? `Viewing requests by status (${pageLabel})`
         : "Viewing requests by status (all requests)" },
-    { id: "status-empty", component: "Caption", text: "No viewing requests yet, so there is nothing to chart." },
+    { id: "status-empty", component: "Caption", text: `${noRows} There is nothing to chart.` },
     ...(requests.length > 0
       ? [
           { id: "viewings", component: "Column", gap: 2, children: truncated ? ["viewings-table", "viewings-more"] : ["viewings-table"] },
@@ -139,14 +146,14 @@ export function buildBrokerOverviewOperations(view: BrokerDashboardView, rendere
           { id: "viewings-body", component: "TableSection", rowDivider: true,
             children: requests.map((request) => `req-${request.showingId}-row`) },
           { id: "viewings-more", component: "Caption",
-            text: `Showing the latest ${requests.length} of ${view.viewingRequestsTotal} requests.` },
+            text: offset > 0 ? `Showing requests ${pageLabel}.` : `Showing the ${pageLabel} requests.` },
           ...perRequest.flatMap(({ cells, nodes }) => [...cells, ...nodes]),
         ]
-      : [{ id: "viewings", component: "Caption", text: "No viewing requests yet. They appear here when renters submit them." }]),
+      : [{ id: "viewings", component: "Caption", text: view.viewingRequestsTotal > 0 ? noRows : "No viewing requests yet. They appear here when renters submit them." }]),
     view.attention.length > 0
       ? { id: "attention", component: "List", marker: "none",
           items: view.attention.map((item) => ({ label: item.title, description: item.detail, icon: "circle-alert" })) }
-      : { id: "attention", component: "Caption", text: "Nothing needs your attention right now." },
+      : { id: "attention", component: "Caption", text: view.attentionIsPartial ? "No items in this preview. More records may need review." : "Nothing needs your attention right now." },
   ];
 
   return [{ version: A2UI_VERSION, createSurface: { surfaceId: BROKER_OVERVIEW_SURFACE_ID, components } }];

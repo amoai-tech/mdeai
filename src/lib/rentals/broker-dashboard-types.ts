@@ -62,14 +62,32 @@ export type BrokerDashboardView = {
   displayName: string | null;
   kpis: BrokerDashboardKpi[];
   attention: BrokerAttentionItem[];
+  /** True when the attention list is only a bounded preview. */
+  attentionIsPartial?: boolean;
   viewingRequests: BrokerViewingRequest[];
   /** Total requests that exist, so the UI can say when the list is a page rather than all of it. */
   viewingRequestsTotal: number;
+  /** Offset of this bounded viewing page; absent for legacy first-page callers. */
+  viewingRequestsOffset?: number;
   trends: BrokerTrendCard[];
   briefing: BrokerDashboardBriefing;
   isEmpty: boolean;
 };
 
+export type BrokerLeadPage = {
+  rows: Array<{
+    id: string;
+    name: string | null;
+    status: string;
+    createdAt: string;
+    lastContactedAt: string | null;
+    apartmentId: string | null;
+    apartmentTitle: string | null;
+  }>;
+  total: number;
+  offset: number;
+};
+
 export type FetchBrokerDashboardResult =
-  | { ok: true; view: BrokerDashboardView; inventory: BrokerListingsPage }
+  | { ok: true; view: BrokerDashboardView; inventory: BrokerListingsPage; leadInbox?: BrokerLeadPage }
   | { ok: false; message: string };

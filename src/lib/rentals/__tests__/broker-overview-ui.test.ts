@@ -88,6 +88,18 @@ describe("broker Overview as official CopilotKit components (SAN-1675)", () => {
     expect((nodes.find((n) => n.id === "kpis")!.items as Array<{ value: string }>).map((i) => i.value)).toEqual(["4", "Data pending"]);
   });
 
+  it("labels later pages and out-of-range pages without implying there are no appointments", () => {
+    const page = { ...view([request({})], 76), viewingRequestsOffset: 50, attentionIsPartial: true };
+    const ops = buildBrokerOverviewOperations(page);
+    acceptedByCatalog(ops);
+    const nodes = nodesOf(ops);
+    expect(nodes.find(n => n.id === "status-chart")?.title).toBe("Viewing requests by status (51–51 of 76)");
+    expect(nodes.find(n => n.id === "viewings-more")?.text).toBe("Showing requests 51–51 of 76.");
+    expect(nodes.find(n => n.id === "attention")?.text).toContain("preview");
+    const empty = nodesOf(buildBrokerOverviewOperations({ ...view([], 76), viewingRequestsOffset: 100 }));
+    expect(empty.find(n => n.id === "viewings")?.text).toBe("No viewing requests on this page.");
+  });
+
   it("binds only the persisted status's actions, by showing ID, and reads the reschedule draft from the data model", () => {
     const id = "22222222-2222-4222-8222-222222222222";
     const row = request({ showingId: id });
