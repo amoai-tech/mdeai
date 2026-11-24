@@ -12,9 +12,16 @@ describe("SAN-1124 broker concierge integration contract", () => {
     const center = readComponent("rentals-concierge-center.tsx");
     expect(center).toContain('from "@copilotkit/react-core/v2"');
     const shell = readComponent("rentals-concierge-shell.tsx");
-    expect(shell.match(/<ChatProvider persistThread sessionFallback=/g)).toHaveLength(1);
+    // One provider per route family: the app frame owns it; the legacy host
+    // shell retains its standalone provider.
+    expect(shell.match(/<ChatProvider persistThread sessionFallback=/g)).toHaveLength(2);
+    expect(shell).toContain('basePath === "/app/rentals" ? workspace : (');
+    expect(shell).toContain('basePath !== "/app/rentals" && <HostRentalsNav');
     expect(center).not.toContain("<ChatProvider");
-    expect(shell).toMatch(/<ChatProvider persistThread sessionFallback=[\s\S]*<RentalsConciergeCenter[\s\S]*<RentalsDynamicWorkspace[\s\S]*<\/ChatProvider>/);
+    expect(shell).toContain("<RentalsConciergeCenter");
+    expect(shell).toContain("<RentalsDynamicWorkspace");
+    const appLayout = readFileSync(join(ROOT, "../../../app/app/rentals/(broker)/layout.tsx"), "utf8");
+    expect(appLayout).toContain("<RentalsBrokerFrame>{children}</RentalsBrokerFrame>");
     expect(center).toContain("<BrokerWorkspaceToolRenderer />");
     expect(center).toContain("<CopilotChat");
     expect(center).toContain('agentId="conciergeAgent"');
@@ -65,5 +72,15 @@ describe("broker conversation survives a reload", () => {
     expect(provider).toContain('fetch(`/api/threads/${encodeURIComponent(threadId)}/messages`');
     // Every other route keeps the old behaviour.
     expect(provider).toMatch(/persistThread = false/);
+  });
+});
+
+describe("SAN-1683 shared route frame", () => {
+  it("renders the selected Overview instead of hiding it behind mobile Chat", () => {
+    const shell = readComponent("rentals-concierge-shell.tsx");
+    expect(shell).toContain('basePath === "/app/rentals" && workspaceMode === "overview"');
+    expect(shell).toContain('surfaceId="rentals-workspace-header"');
+    expect(shell).toContain('data-testid="rentals-ask-mde-slot"');
+    expect(readComponent("host-rentals-nav.tsx")).toContain('aria-current={active ? "page" : undefined}');
   });
 });

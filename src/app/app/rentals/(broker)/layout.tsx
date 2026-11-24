@@ -1,3 +1,4 @@
+import { RentalsBrokerFrame } from "@/components/host/rentals/rentals-concierge-shell";
 import { redirect } from "next/navigation";
 import { BrokerRentalsGateError } from "@/components/host/rentals/broker-rentals-gate-error";
 import { getBrokerContext } from "@/lib/rentals/get-broker-context";
@@ -19,5 +20,5 @@ export default async function AppBrokerRentalsLayout({
   if (!ctx.hasBrokerProfile) {
     redirect("/app/rentals/onboarding");
   }
-  return children;
+  return <RentalsBrokerFrame>{children}</RentalsBrokerFrame>;
 }
