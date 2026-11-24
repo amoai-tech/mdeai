@@ -1,6 +1,6 @@
 import { hasUsableRentalRunResults, readRentalResultIds } from "./generative-ui-context";
 import { isActiveRentalsDiscoveryPage } from "./discovery-agent-context";
-import { isExactMonthlyBudgetOnlyRefinement, looksLikeInjection, scoreRentalQuery, furnishingFromQueryText, clearsFurnishingPreference } from "@/lib/rental-query-parser";
+import { isExactMonthlyBudgetOnlyRefinement, looksLikeInjection, scoreRentalQuery, furnishingFromQueryText, clearsFurnishingPreference, choosesFurnishingPreference } from "@/lib/rental-query-parser";
 
 type MessageLike = { role?: string; content?: unknown };
 
@@ -28,6 +28,7 @@ const EXPLICIT_RESULT_PAIR = /\b(?:compare|comparison)\b/i;
 // arbitrary browser context. Clear at step zero so preferences cannot leak turns.
 export const RENTAL_SEARCH_TEXT_KEY = "mdeai-original-rental-search-text";
 export const RENTAL_REFINEMENT_TEXT_KEY = "mdeai-rental-refinement-base-text";
+export const RENTAL_REFINEMENT_FURNISHING_KEY = "mdeai-rental-refinement-furnishing";
 export const COMPARISON_CHEAPEST_KEY = "mdeai-comparison-cheapest-current";
 export const COMPARISON_POSITIONS_KEY = "mdeai-comparison-requested-positions";
 export const COMPARISON_COP_MONTHLY_BUDGET_KEY = "mdeai-comparison-cop-monthly-budget";
@@ -228,19 +229,41 @@ export function trustedRentalSearchText(
     isRentalBudgetRefinement(messages, requestContext) ? text : null;
 }
 
-/** Skip only consecutive pure budget refinements to recover the original
- * explicit rental search. Stop at intervening questions or other topics. */
-export function rentalRefinementBaseText(
+/** Recognize only a pure furnishing choice, not a new search with additional
+ * criteria, an explanatory question, or a non-rental topic. */
+function furnishingOnlyRefinement(text: string): boolean {
+  if (text.includes("?") || /\d/.test(text) ||
+      /\b(?:do\s+not|don['’]t)\s+(?:show|want|need|prefer|make|switch)\b/i.test(text) ||
+      !(choosesFurnishingPreference(text) || clearsFurnishingPreference(text))) return false;
+  const words = text.match(/[\p{L}]+(?:['’][\p{L}]+)?/gu) ?? [];
+  return words.length > 0 && words.every(word =>
+    /^(?:please|show|me|only|actually|instead|switch|to|make|it|them|that|i|prefer|want|need|rather|apartments?|rentals?|listings?|furnished|unfurnished|furnishing|either|or|and|not|no|preference|any|don't|don’t|do|care|if|whether|about|for|doesn't|doesn’t|matter|is|fine|way|both)$/i.test(word));
+}
+
+/** Recover the base search and latest independent furnishing preference.
+ * Skip consecutive budget/furnishing-only refinements, but never cross a
+ * different topic, a question, a display command, or a replacement search. */
+export function rentalRefinementContext(
   messages: readonly MessageLike[],
   requestContext?: { get?: (key: string) => unknown },
-): string | null {
-  if (!isRentalBudgetRefinement(messages, requestContext)) return null;
+): { baseText: string | null; furnishing?: boolean | null } {
+  if (!isRentalBudgetRefinement(messages, requestContext)) return { baseText: null };
   const users = messages.filter((message) => message?.role === "user");
+  let furnishing: boolean | null | undefined;
+  let furnishingText: string | null = null;
+  const fallback = () => ({ baseText: furnishingText, furnishing });
   for (let index = users.length - 2; index >= 0; index--) {
     const prior = messageText(users[index]).trim();
     if (!prior || prior.length > 4000 || looksLikeInjection(prior) ||
-        RESTAURANT_TABLE.test(prior) || OTHER_COMPARISON_DOMAIN.test(prior)) return null;
+        RESTAURANT_TABLE.test(prior) || OTHER_COMPARISON_DOMAIN.test(prior)) return fallback();
     if (budgetRefinementText(prior)) continue;
+    if (furnishingOnlyRefinement(prior)) {
+      if (furnishing === undefined) {
+        furnishing = clearsFurnishingPreference(prior) ? null : furnishingFromQueryText(prior);
+        furnishingText = prior;
+      }
+      continue;
+    }
     const signals = scoreRentalQuery(prior);
     // "Show those rentals" or "show the first two" is not a new search base.
     // Only trust a show command with actual search criteria, not a display action.
@@ -250,9 +273,17 @@ export function rentalRefinementBaseText(
       (signals.neighborhood !== undefined || signals.minBedrooms !== undefined ||
         furnishingFromQueryText(prior) !== undefined || clearsFurnishingPreference(prior) ||
         signals.maxPriceMonthly !== undefined);
-    return requestsFreshRentalDiscovery([users[index]]) || explicitShow ? prior : null;
+    return requestsFreshRentalDiscovery([users[index]]) || explicitShow
+      ? { baseText: prior, furnishing } : fallback();
   }
-  return null;
+  return fallback();
+}
+
+export function rentalRefinementBaseText(
+  messages: readonly MessageLike[],
+  requestContext?: { get?: (key: string) => unknown },
+): string | null {
+  return rentalRefinementContext(messages, requestContext).baseText;
 }
 
 function hasExplicitRentalComparisonRequest(messages: readonly MessageLike[]): boolean {

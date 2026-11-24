@@ -14,7 +14,7 @@ import { deduplicateApartmentRows } from '@/lib/rentals/duplicate-listings';
 import { z } from 'zod';
 import { runAuditedSearch } from '../lib/run-audited-search';
 import { startRentalRunSearch } from '../lib/generative-ui-context';
-import { RENTAL_SEARCH_TEXT_KEY, RENTAL_REFINEMENT_TEXT_KEY, isRentalBudgetRefinement, COMPARISON_COP_MONTHLY_BUDGET_KEY } from '../lib/comparison-table-intent';
+import { RENTAL_SEARCH_TEXT_KEY, RENTAL_REFINEMENT_TEXT_KEY, RENTAL_REFINEMENT_FURNISHING_KEY, isRentalBudgetRefinement, COMPARISON_COP_MONTHLY_BUDGET_KEY } from '../lib/comparison-table-intent';
 import { comparisonRowSchema, comparisonRowFromApartment } from '../lib/comparison-table-ui';
 import { EXTERNAL_RENTAL_BUDGET_NOTE, getOptionalExternalRentals, mixRentalResults } from '@/lib/rentals/mixed-rental-results';
 import {
@@ -895,7 +895,11 @@ export const searchRentalsTool = createTool({
     // A pure budget change retains the base preference. Otherwise the actual
     // current renter wording wins over a contradictory model boolean.
     const furnishingText = typeof baseText === 'string' ? baseText : effectiveText;
-    const requestedFurnished = furnishingText && clearsFurnishingPreference(furnishingText) ? undefined :
+    const refinementFurnishing = budgetRefinement
+      ? context?.requestContext?.get(RENTAL_REFINEMENT_FURNISHING_KEY) : undefined;
+    const requestedFurnished = refinementFurnishing === null ? undefined :
+      typeof refinementFurnishing === 'boolean' ? refinementFurnishing :
+      furnishingText && clearsFurnishingPreference(furnishingText) ? undefined :
       (furnishingText ? furnishingFromQueryText(furnishingText) : undefined) ?? furnished;
     // Exact COP budget supplied by the renter outranks missing/wrong model slots.
     // Reuse the canonical SQL monthly-budget predicate, not a second filter.

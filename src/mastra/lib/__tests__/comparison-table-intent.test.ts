@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { rentalRefinementBaseText, trustedRentalSearchText, isRentalBudgetRefinement, comparisonCheapestRequested, comparisonCopMonthlyBudget, comparisonRequestedPositions, requestsFreshRentalDiscovery, hasAttemptedTool, hasCompletedTool, shouldContinueComparisonAfterRoute, shouldContinueComparisonAfterSearch, shouldContinueRouteAfterComparison, shouldFinishComparisonWithoutAnotherTool, shouldForceComparisonTable, shouldSearchBeforeComparison } from "../comparison-table-intent";
+import { rentalRefinementContext, rentalBudgetRefinementPreference, rentalRefinementBaseText, trustedRentalSearchText, isRentalBudgetRefinement, comparisonCheapestRequested, comparisonCopMonthlyBudget, comparisonRequestedPositions, requestsFreshRentalDiscovery, hasAttemptedTool, hasCompletedTool, shouldContinueComparisonAfterRoute, shouldContinueComparisonAfterSearch, shouldContinueRouteAfterComparison, shouldFinishComparisonWithoutAnotherTool, shouldForceComparisonTable, shouldSearchBeforeComparison } from "../comparison-table-intent";
 import { RENTAL_A2UI_CONTEXT_DESCRIPTION } from "@/lib/rentals/a2ui-context";
 import { RENTAL_RUN_RESULT_IDS_KEY } from "../generative-ui-context";
 import { routePlanForTurn, shouldForceRouteTool } from "../route-tool-choice";
@@ -327,6 +327,24 @@ describe("SAN-1694 production grounding regressions", () => {
     expect(rentalRefinementBaseText([cap3, cap2], context)).toBeNull();
     expect(rentalRefinementBaseText([search, user("Show the first two rentals."), cap2], context)).toBeNull();
     expect(rentalRefinementBaseText([user("Show 2BR apartments in Laureles."), cap2], context)).toBe("Show 2BR apartments in Laureles.");
+  });
+  it("retains the original location and bedrooms across furnishing-only and budget changes", () => {
+    const original = user("Find unfurnished 2BR apartments in Laureles.");
+    const furnished = user("Show furnished apartments.");
+    const cap = user("Show only apartments under COP 2 million per month.");
+    expect(rentalRefinementBaseText([original, furnished, cap], context)).toBe(original.content.parts[0].text);
+    expect(rentalRefinementContext([original, furnished, cap], context)).toEqual({ baseText: original.content.parts[0].text, furnishing: true });
+    expect(rentalRefinementContext([original, furnished, user("Show unfurnished apartments."), cap], context)).toEqual({ baseText: original.content.parts[0].text, furnishing: false });
+    expect(rentalRefinementContext([original, furnished, user("Either furnished or unfurnished."), cap], context)).toEqual({ baseText: original.content.parts[0].text, furnishing: null });
+    expect(rentalRefinementContext([original, furnished, user("Show furnished 1BR apartments in El Poblado."), cap], context)).toEqual({ baseText: "Show furnished 1BR apartments in El Poblado.", furnishing: undefined });
+    expect(rentalRefinementContext([original, user("Find restaurants in El Poblado."), furnished, cap], context)).toEqual({ baseText: furnished.content.parts[0].text, furnishing: true });
+    expect(rentalRefinementContext([original, user("Are the apartments furnished?"), cap], context)).toEqual({ baseText: null, furnishing: undefined });
+    expect(rentalRefinementContext([original, user("Do not show furnished apartments."), cap], context)).toEqual({ baseText: null, furnishing: undefined });
+  });
+  it("only produces the canonical COP or USD monthly preference", () => {
+    expect(rentalBudgetRefinementPreference([user("Show apartments under COP 2 million per month.")], context)).toEqual({ maxPriceMonthly: 2_000_000, budgetCurrency: "COP" });
+    expect(rentalBudgetRefinementPreference([user("Show apartments under USD 900 per month.")], context)).toEqual({ maxPriceMonthly: 900, budgetCurrency: "USD" });
+    expect(rentalBudgetRefinementPreference([user("Show apartments under EUR 900 per month.")], context)).toBeNull();
   });
   it("forces the official comparison for the two cheapest current rentals without choosing ordinal two", () => {
     const messages = [user("Compare the two cheapest apartments.")];

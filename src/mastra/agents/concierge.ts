@@ -16,7 +16,7 @@ import { requestVenueBookingTool } from '../tools/request-venue-booking';
 import { showRecommendationsTool } from '../tools/show-recommendations';
 import { showRentalFilterControlTool } from '../tools/show-rental-filter-control';
 import { showComparisonTableTool } from '../tools/show-comparison-table';
-import { RENTAL_SEARCH_TEXT_KEY, RENTAL_REFINEMENT_TEXT_KEY, rentalRefinementBaseText, rentalBudgetRefinementPreference, COMPARISON_CHEAPEST_KEY, comparisonCheapestRequested, isRentalBudgetRefinement, trustedRentalSearchText, COMPARISON_POSITIONS_KEY, COMPARISON_COP_MONTHLY_BUDGET_KEY, comparisonCopMonthlyBudget, comparisonRequestedPositions, requestsFreshRentalDiscovery, shouldContinueComparisonAfterRoute, shouldContinueRouteAfterComparison, shouldFinishComparisonWithoutAnotherTool, shouldForceComparisonTable, shouldSearchBeforeComparison, shouldContinueComparisonAfterSearch } from '../lib/comparison-table-intent';
+import { RENTAL_SEARCH_TEXT_KEY, RENTAL_REFINEMENT_TEXT_KEY, RENTAL_REFINEMENT_FURNISHING_KEY, rentalRefinementContext, rentalBudgetRefinementPreference, COMPARISON_CHEAPEST_KEY, comparisonCheapestRequested, isRentalBudgetRefinement, trustedRentalSearchText, COMPARISON_POSITIONS_KEY, COMPARISON_COP_MONTHLY_BUDGET_KEY, comparisonCopMonthlyBudget, comparisonRequestedPositions, requestsFreshRentalDiscovery, shouldContinueComparisonAfterRoute, shouldContinueRouteAfterComparison, shouldFinishComparisonWithoutAnotherTool, shouldForceComparisonTable, shouldSearchBeforeComparison, shouldContinueComparisonAfterSearch } from '../lib/comparison-table-intent';
 import { requireFreshRentalRunResults } from '../lib/generative-ui-context';
 import { showViewingProposalTool } from '../tools/show-viewing-proposal';
 import { shouldRenderRentalFilterControl, shouldRenderViewingProposal, shouldRequestRecommendations } from '../lib/recommendation-intent';
@@ -617,7 +617,9 @@ export const conciergeAgent = new Agent({
       if (stepNumber === 0) {
         requestContext?.set(COMPARISON_POSITIONS_KEY, null);
         requestContext?.set(RENTAL_SEARCH_TEXT_KEY, trustedRentalSearchText(messages, requestContext));
-        requestContext?.set(RENTAL_REFINEMENT_TEXT_KEY, rentalRefinementBaseText(messages, requestContext));
+        const refinement = rentalRefinementContext(messages, requestContext);
+        requestContext?.set(RENTAL_REFINEMENT_TEXT_KEY, refinement.baseText);
+        requestContext?.set(RENTAL_REFINEMENT_FURNISHING_KEY, refinement.furnishing);
         requestContext?.set(COMPARISON_CHEAPEST_KEY, comparisonCheapestRequested(messages));
         requestContext?.set(COMPARISON_COP_MONTHLY_BUDGET_KEY, comparisonCopMonthlyBudget(messages));
         // Also protect recommendation/viewing tools launched before a search

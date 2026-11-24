@@ -318,3 +318,34 @@ it("keeps unsupported base requests and uses the server COP ceiling as a pair wi
   expect(mocks.state.budgetFilters.filter(filter => filter.includes("price_"))).toEqual(["and(currency.eq.COP,price_monthly.not.is.null,price_monthly.lte.2000000)"]);
   expect(result.unappliedRequests.join(" ")).toMatch(/pet/i);
 });
+
+describe("SAN-1694 furnishing choice between budget refinements", () => {
+  it.each([
+    ["Show furnished apartments.", true, [true]],
+    ["Show unfurnished apartments.", false, [false]],
+    ["Either furnished or unfurnished.", null, []],
+  ] as const)("retains original location and bedrooms and applies latest furnishing: %s", async (choice, furnishing, expected) => {
+    const { searchRentalsTool } = await import("../search-rentals");
+    const { rentalRefinementContext, RENTAL_SEARCH_TEXT_KEY, RENTAL_REFINEMENT_TEXT_KEY, RENTAL_REFINEMENT_FURNISHING_KEY } = await import("../../lib/comparison-table-intent");
+    const original = "Find unfurnished 2BR apartments in Laureles.";
+    const cap = "Show only apartments under COP 2 million per month.";
+    const messages = [original, "Show only apartments under COP 3 million per month.", choice, cap].map(content => ({ role: "user", content }));
+    const refinement = rentalRefinementContext(messages);
+    expect(refinement).toEqual({ baseText: original, furnishing });
+    mocks.state.neighborhoodFilters.length = 0;
+    mocks.state.bedroomFilters.length = 0;
+    mocks.state.furnishingFilters.length = 0;
+    mocks.state.budgetFilters.length = 0;
+    await searchRentalsTool.execute!({ neighborhood: "El Poblado", minBedrooms: 3, maxBedrooms: 3, furnished: true, limit: 8 },
+      { requestContext: {
+        get: (key: string) => key === RENTAL_SEARCH_TEXT_KEY ? cap :
+          key === RENTAL_REFINEMENT_TEXT_KEY ? refinement.baseText :
+          key === RENTAL_REFINEMENT_FURNISHING_KEY ? refinement.furnishing : undefined,
+        set: () => undefined,
+      } } as never);
+    expect(mocks.state.neighborhoodFilters).toEqual(["%Laureles%"]);
+    expect(mocks.state.bedroomFilters).toEqual(["gte:2", "lte:2"]);
+    expect(mocks.state.furnishingFilters).toEqual(expected);
+    expect(mocks.state.budgetFilters.filter(filter => filter.includes("price_"))).toEqual(["and(currency.eq.COP,price_monthly.not.is.null,price_monthly.lte.2000000)"]);
+  });
+});
