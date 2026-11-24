@@ -2,7 +2,7 @@
 
 Navigational map of the repository root — the **mdeai** app (`github.com/amoai-tech/mdeai`). Next.js 16 (App Router, React 19, Turbopack, Tailwind v4) wiring **CopilotKit v2** (exact pins in `package.json`) → a local **Mastra** agent over **AG-UI**, on **Supabase**. Production AI = **Gemini only**.
 
-> **Repo split:** the sibling planning/workspace repo `github.com/amo-tech-ai/mdeai` lives one level above this checkout and `.gitignore`s `mdeapp/`. This repository is self-contained for build/run/test; planning history lives in the parent. All paths below are **repository-root-relative**.
+> **Repo split:** the sibling planning/workspace repo `github.com/amo-tech-ai/mdeai` lives one level above this checkout and `.gitignore`s `mdeapp/`. This repository is self-contained for build/run/test; planning history lives in the parent. Paths below are **repository-root-relative**, except explicit absolute host paths.
 
 **Last indexed:** 2026-06-10 (post [PR #158](https://github.com/amo-tech-ai/mdeapp/pull/158) docs restore on `main` @ `6542210`)
 
@@ -37,7 +37,8 @@ Local URLs: UI `http://localhost:3001` · CopilotKit runtime `…/api/copilotkit
 | `config/` | Tooling config (`mcporter.json`). |
 | `commerce/` | Standalone commerce — `mercur/` (tracked); `b2c-storefront/` local reference (gitignored). |
 | `graphify-out/` | Generated codebase graph (`graph.json`, `GRAPH_REPORT.md`) — gitignored, rebuilt on commit. |
-| `.worktrees/` | Canonical linked worktrees (`wt-san-NNN-slug/`) — gitignored. |
+| `/home/sk/mde-worktrees/<task-slug>` | Canonical location for new MDE worktrees on the configured host. |
+| `.worktrees/` | Legacy location for existing linked worktrees — gitignored; keep them in place. |
 | `workspace/` | Scratch / infra-workflow working area (`skills/`, worktree notes). |
 | `github/` | Vendored reference clones — gitignored (`/github/`). |
 | `.claude/` | Claude Code config — **skills scan root** (`.claude/skills/`), hooks, settings. |

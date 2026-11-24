@@ -26,15 +26,17 @@ Always include:
 - faster/better implementation choice
 - real user journey (or an explicit "no user-visible change")
 - files changed and purpose
-- source/reuse decisions, with a receipt for every external source that materially affected the solution — field list in `AGENTS.md` § Evidence rules
+- relevant official reference URLs (docs, GitHub repositories, version-matched examples): for each, say **what matters** and **exactly how it helps complete or verify this PR**; omit irrelevant sources and formal receipt/disposition tables
 - exact tests and results
 - reviewer fast path: 3–5 files to inspect first
 - explicit non-goals
 - post-merge checks
 
-Add only when they apply — **never to satisfy a format**, because a docs-only PR needs no architecture diagram:
+For substantive user-journey or cross-system architecture changes, create task-specific **Mermaid diagrams directly in the PR body** under **User Journey & Architecture**. Keep example diagrams hidden in the default template; replace N/A only when a real flow is changed. Show the actual user path and canonical UI → API/agent → data owner (plus failure/retry when it matters). Use one concise diagram when sufficient; two when the journey and architecture need separate views. Replace example nodes before review; diagrams explain design, not test proof. For docs-only/test-only work without an affected flow, state N/A rather than inventing one.
 
-- architecture/data-flow Mermaid
+Add only when they apply — **never to satisfy a format**:
+
+- additional architecture/data-flow Mermaid
 - database proof: schema, RLS, or migration changes
 - auth/tenant/RLS/HITL impact
 - external contracts/versions verified
@@ -123,11 +125,11 @@ Prepare or troubleshoot this PR as part of the same Linear task. Re-read the tas
 
 **Plain-English title:** Name the real outcome for a user (e.g. "Rentals: Show Viewing Requested Only After Saving"), not just an internal test ID or library refactor. Use the verified exact Linear title in the PR body; never invent an issue association. For an actually finished issue use `Closes SAN-#### · SPEC-ID — Exact Linear Task Title`; for partial work use `Part of SAN-#### · SPEC-ID — Exact Linear Task Title` to avoid moving the issue to Done too early (see `linear.md` § GitHub integration). Distinguish **product/runtime**, **test-only**, **documentation-only**, and **infrastructure** work explicitly. For test-only work, say what failures the tests catch and confirm they do not ship a user-facing feature.
 
-**Good description order:** Existing explanation retained → one outcome and real-world example → reuse and changed stack → files/reviewer fast path → journey/Mermaid only if complex → task-specific success criteria → **one** verification table with separate results per check and run environment/SHA → merge decision → post-merge/recovery → material official references. Keep a single authoritative section for each subject; don't append a duplicated template below an existing complete description. Delete irrelevant new-PR prompts and use `N/A — reason` where that informs reviewers.
+**Good description order:** Existing explanation retained → one purpose and real-world example → reuse and changed stack → files/reviewer fast path → journey/Mermaid only if useful → best reference URLs (when relevant) → task-specific success criteria → **one** verification table with separate results per check and run environment/SHA → merge decision → post-merge/recovery. Keep a single authoritative section for each subject; don't append a duplicated template below an existing complete description. Delete irrelevant new-PR prompts and use `N/A — reason` where that informs reviewers.
 
 **No fake PASS:** Record `PASS`, `FAIL`, `NOT RUN` or `N/A` separately for each focused command, `floor`, `mastra-schema-init`, and the canonical `review / verify-review-result` check. For **every PASS**, record run environment, exact source SHA and link to output (local evidence or CI). Use the risk-matched pre-merge matrix rather than running every expensive browser/database test on every PR. Existing MDE Floor, PR Agent, Playwright and deployment-freshness workflows own automation; do not add duplicate CI. For changed UI include preview URL and desktop/390px screenshot proof when safe and relevant. Docs-only PRs need structural/template rendering checks rather than invented runtime user journeys; test-only PRs should prove which regression their tests catch. Do not promise production verification before merge.
 
-**Official reference pointers:** [GitHub PR templates](https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/creating-a-pull-request-template-for-your-repository) for the template location; [GitHub Mermaid](https://docs.github.com/en/get-started/writing-on-github/working-with-advanced-formatting/creating-diagrams) for renderable journeys; [Playwright tests](https://playwright.dev/docs/running-tests) for browser commands; [Vercel environments](https://vercel.com/docs/deployments/environments) for preview, production and commit verification. Add component-specific docs when relevant; links are not test evidence.
+**Best reference URL guidance:** Include only verified, relevant official documentation, official GitHub source/repositories, or version-matched examples. Give the exact URL, identify the important part, and state the precise next implementation/test step for this PR. Prefer 2–5 meaningful links, not generic tutorials or an inventory of every dependency. A link is not proof that the implementation works. Common MDE references: [GitHub PR templates](https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/creating-a-pull-request-template-for-your-repository) for the template location; [GitHub Mermaid](https://docs.github.com/en/get-started/writing-on-github/working-with-advanced-formatting/creating-diagrams) for renderable journeys; [Playwright tests](https://playwright.dev/docs/running-tests) for browser commands; [Vercel environments](https://vercel.com/docs/deployments/environments) for preview, production and commit verification. Add component-specific docs when relevant; links are not test evidence.
 
 ## Post-merge safety and recovery
 
