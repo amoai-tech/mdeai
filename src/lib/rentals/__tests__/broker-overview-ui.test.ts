@@ -90,21 +90,40 @@ describe("broker Overview as official CopilotKit components (SAN-1675)", () => {
 
   it("binds only the persisted status's actions, by showing ID, and reads the reschedule draft from the data model", () => {
     const id = "22222222-2222-4222-8222-222222222222";
-    const nodes = nodesOf(buildBrokerOverviewOperations(view([request({ showingId: id })])));
-    expect(nodes.find((n) => n.id === "req-0-confirm")?.onClick).toEqual({
-      functionCall: { "@call": "brokerViewingAction", args: { rendererKey, showingId: id, action: "confirm" } },
+    const row = request({ showingId: id });
+    const expected = { expectedStatus: row.status, expectedScheduledAt: row.scheduledAt };
+    const nodes = nodesOf(buildBrokerOverviewOperations(view([row])));
+    expect(nodes.find((n) => n.id === `req-${id}-confirm`)?.onClick).toEqual({
+      functionCall: { "@call": "brokerViewingAction", args: { rendererKey, ...expected, showingId: id, action: "confirm" } },
     });
-    expect(nodes.find((n) => n.id === "req-0-move")?.onClick).toEqual({
+    expect(nodes.find((n) => n.id === `req-${id}-move`)?.onClick).toEqual({
       functionCall: { "@call": "brokerViewingAction",
-        args: { rendererKey, showingId: id, action: "reschedule", newWallClock: { "@path": rescheduleDraftPath(id) } } },
+        args: { rendererKey, ...expected, showingId: id, action: "reschedule", newWallClock: { "@path": rescheduleDraftPath(row) } } },
     });
-    expect(nodes.find((n) => n.id === "req-0-when")?.value).toEqual({ "@path": rescheduleDraftPath(id) });
+    expect(nodes.find((n) => n.id === `req-${id}-when-${Date.parse(row.scheduledAt)}`)?.value).toEqual({ "@path": rescheduleDraftPath(row) });
     // A confirmed request can only be cancelled; a closed one has no actions.
     const confirmed = nodesOf(buildBrokerOverviewOperations(view([request({ status: "confirmed" })])));
-    expect(confirmed.some((n) => n.id === "req-0-confirm")).toBe(false);
-    expect(confirmed.find((n) => n.id === "req-0-cancel")?.label).toBe("Cancel");
-    expect((confirmed.find((n) => n.id === "req-0-content")?.children as string[])).not.toContain("req-0-reschedule");
+    expect(confirmed.some((n) => n.id === `req-${id}-confirm`)).toBe(false);
+    expect(confirmed.find((n) => n.id === `req-${id}-cancel`)?.label).toBe("Cancel");
+    expect((confirmed.find((n) => n.id === `req-${id}-content`)?.children as string[])).not.toContain(`req-${id}-reschedule`);
     const closed = nodesOf(buildBrokerOverviewOperations(view([request({ status: "completed" })])));
-    expect((closed.find((n) => n.id === "req-0-content")?.children as string[])).toEqual(["req-0-facts", "req-0-closed"]);
+    expect((closed.find((n) => n.id === `req-${id}-content`)?.children as string[])).toEqual([`req-${id}-facts`, `req-${id}-closed`]);
   });
+  it("preserves showing identity across reorder and invalidates only a changed viewing draft", () => {
+    const first = request({});
+    const second = request({ showingId: "44444444-4444-4444-8444-444444444444" });
+    const moved = { ...first, scheduledAt: "2026-12-01T16:00:00Z" };
+    const before = nodesOf(buildBrokerOverviewOperations(view([first, second])));
+    const after = nodesOf(buildBrokerOverviewOperations(view([second, moved])));
+    const find = (nodes: Node[], id: string) => nodes.find((node) => node.id === id);
+    expect(find(before, `req-${second.showingId}-modal`)).toEqual(find(after, `req-${second.showingId}-modal`));
+    expect(find(after, "viewings-body")?.children).toEqual([`req-${second.showingId}-row`, `req-${first.showingId}-row`]);
+    expect(rescheduleDraftPath(moved)).not.toBe(rescheduleDraftPath(first));
+    expect(rescheduleDraftPath({ ...first, status: "confirmed" })).not.toBe(rescheduleDraftPath(first));
+    expect(find(after, `req-${first.showingId}-move`)?.onClick).toMatchObject({
+      functionCall: { args: { expectedStatus: moved.status, expectedScheduledAt: moved.scheduledAt,
+        newWallClock: { "@path": rescheduleDraftPath(moved) } } },
+    });
+  });
+
 });

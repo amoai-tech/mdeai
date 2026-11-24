@@ -728,6 +728,8 @@ export const mdeUI = createGenerativeUI({
       parameters: z.object({
         rendererKey: z.string().uuid(),
         showingId: z.string().uuid(),
+        expectedStatus: z.string().min(1),
+        expectedScheduledAt: z.string().datetime({ offset: true }),
         action: z.enum(["confirm", "cancel", "reschedule"]),
         // The bound DateTimeInput draft; empty until the broker picks a time. The
         // handler validates the format and the server resolves it to a Medellín instant.

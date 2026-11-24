@@ -13,11 +13,11 @@ import {
   buildBrokerOverviewOperations,
   rescheduleDraftPath,
 } from "@/lib/rentals/broker-overview-ui";
-import { submitBrokerViewingAction } from "@/lib/rentals/submit-broker-viewing-action";
+import { STALE_VIEWING_ACTION_MESSAGE, submitBrokerViewingAction } from "@/lib/rentals/submit-broker-viewing-action";
 
 const WALL_CLOCK = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
 
-type ActionArgs = { rendererKey: string; showingId: string; action: "confirm" | "cancel" | "reschedule"; newWallClock?: string };
+type ActionArgs = { rendererKey: string; showingId: string; expectedStatus: string; expectedScheduledAt: string; action: "confirm" | "cancel" | "reschedule"; newWallClock?: string };
 
 /**
  * Handles `brokerViewingAction` for the Overview surface. The surface passes
@@ -46,10 +46,24 @@ function BrokerViewingFunction({
     return () => { mounted.current = false; };
   }, []);
   useLayoutEffect(() => {
+    // Discard a draft when the underlying request changes or leaves the page.
+    // Versioned paths also keep the old value out of the new date picker.
+    const surface = runtime?.manager.getSurface(MDE_DASHBOARD_THREAD_ID, BROKER_OVERVIEW_SURFACE_ID);
+    if (surface && runtime) {
+      for (const previous of latest.current.view.viewingRequests) {
+        const current = view.viewingRequests.find((row) => row.showingId === previous.showingId);
+        if (!current || current.status !== previous.status || current.scheduledAt !== previous.scheduledAt) {
+          const path = rescheduleDraftPath(previous);
+          if (surface.model.dataModel.get(path) != null) {
+            runtime.manager.setOwnedValue(surface.key, path, null);
+          }
+        }
+      }
+    }
     latest.current = { view, onStatus, onSaved };
-  }, [view, onStatus, onSaved]);
+  }, [view, onStatus, onSaved, runtime]);
 
-  useGenerativeUIFunction(mdeUI, "brokerViewingAction", async ({ rendererKey: suppliedKey, showingId, action, newWallClock }: ActionArgs) => {
+  useGenerativeUIFunction(mdeUI, "brokerViewingAction", async ({ rendererKey: suppliedKey, showingId, expectedStatus, expectedScheduledAt, action, newWallClock }: ActionArgs) => {
     // Renderer-only still permits model-authored clickable buttons. Only the
     // private app-authored dashboard thread receives this per-mount key.
     // The server continues to enforce ownership and persisted expectations.
@@ -62,6 +76,7 @@ function BrokerViewingFunction({
     };
     const request = latest.current.view.viewingRequests.find((row) => row.showingId === showingId);
     if (!request) return fail("This viewing request is no longer on this page. Refresh and try again.");
+    if (request.status !== expectedStatus || request.scheduledAt !== expectedScheduledAt) return fail(STALE_VIEWING_ACTION_MESSAGE);
     if (!availableBrokerViewingActions(request.status).includes(action)) {
       return fail("That action is not available for this request any more. Refresh and try again.");
     }
@@ -75,8 +90,8 @@ function BrokerViewingFunction({
       const result = await submitBrokerViewingAction({
         showingId,
         action,
-        expectedStatus: request.status,
-        expectedScheduledAt: request.scheduledAt,
+        expectedStatus,
+        expectedScheduledAt,
         newWallClock: action === "reschedule" ? newWallClock : undefined,
       });
       if (!result.ok) return fail(result.error);
@@ -84,7 +99,7 @@ function BrokerViewingFunction({
       // flight (or an edit to another request) must survive the refresh.
       if (action === "reschedule" && runtime && mounted.current) {
         const surface = runtime.manager.getSurface(MDE_DASHBOARD_THREAD_ID, BROKER_OVERVIEW_SURFACE_ID);
-        const path = rescheduleDraftPath(showingId);
+        const path = rescheduleDraftPath(request);
         if (surface && surface.model.dataModel.get(path) === newWallClock) {
           runtime.manager.setOwnedValue(surface.key, path, null);
         }

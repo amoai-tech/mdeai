@@ -19,9 +19,9 @@ import {
 const A2UI_VERSION = "1.0";
 export const BROKER_OVERVIEW_SURFACE_ID = "broker-overview";
 
-/** Data-model path holding the broker's draft reschedule time for one showing. */
-export function rescheduleDraftPath(showingId: string): string {
-  return `/reschedule/${showingId}`;
+/** A changed persisted expectation starts a fresh draft, never re-bases an old edit. */
+export function rescheduleDraftPath(request: Pick<BrokerViewingRequest, "showingId" | "status" | "scheduledAt">): string {
+  return `/reschedule/${request.showingId}/${encodeURIComponent(request.status)}/${encodeURIComponent(request.scheduledAt)}`;
 }
 
 type Node = Record<string, unknown> & { id: string; component: string };
@@ -35,10 +35,11 @@ function statusCounts(requests: readonly BrokerViewingRequest[]) {
   return [...counts].map(([status, count]) => ({ status, requests: count }));
 }
 
-function requestNodes(request: BrokerViewingRequest, index: number, rendererKey: string): { cells: Node[]; nodes: Node[] } {
-  const key = `req-${index}`;
+function requestNodes(request: BrokerViewingRequest, rendererKey: string): { cells: Node[]; nodes: Node[] } {
+  const key = `req-${request.showingId}`;
+  const dateKey = `${key}-when-${Date.parse(request.scheduledAt)}`;
   const call = (action: string, extra: Record<string, unknown> = {}) => ({
-    functionCall: { "@call": "brokerViewingAction", args: { rendererKey, showingId: request.showingId, action, ...extra } },
+    functionCall: { "@call": "brokerViewingAction", args: { rendererKey, showingId: request.showingId, expectedStatus: request.status, expectedScheduledAt: request.scheduledAt, action, ...extra } },
   });
   const actions = availableBrokerViewingActions(request.status);
   const actionIds: string[] = [];
@@ -73,12 +74,12 @@ function requestNodes(request: BrokerViewingRequest, index: number, rendererKey:
     { id: `${key}-actions`, component: "Row", gap: 2, wrap: "wrap", children: actionIds },
     { id: `${key}-closed`, component: "Caption", text: "This request is closed; no actions are available." },
     { id: `${key}-reschedule`, component: "Form", label: "Move this viewing", gap: 2,
-      children: [`${key}-when`, `${key}-move`] },
-    { id: `${key}-when`, component: "DateTimeInput", label: "New viewing time (Medellín)",
+      children: [dateKey, `${key}-move`] },
+    { id: dateKey, component: "DateTimeInput", label: "New viewing time (Medellín)",
       enableDate: true, enableTime: true, timeStep: 30,
-      value: { "@path": rescheduleDraftPath(request.showingId) } },
+      value: { "@path": rescheduleDraftPath(request) } },
     { id: `${key}-move`, component: "Button", size: "sm", label: "Move viewing", icon: "calendar-sync",
-      onClick: call("reschedule", { newWallClock: { "@path": rescheduleDraftPath(request.showingId) } }) },
+      onClick: call("reschedule", { newWallClock: { "@path": rescheduleDraftPath(request) } }) },
   );
   const cells: Node[] = [
     { id: `${key}-row`, component: "TableRow", children: [`${key}-apt`, `${key}-renter`, `${key}-when-cell`, `${key}-status`, `${key}-manage`] },
@@ -95,7 +96,7 @@ function requestNodes(request: BrokerViewingRequest, index: number, rendererKey:
 export function buildBrokerOverviewOperations(view: BrokerDashboardView, rendererKey: string) {
   const requests = view.viewingRequests;
   const counts = statusCounts(requests);
-  const perRequest = requests.map((request, index) => requestNodes(request, index, rendererKey));
+  const perRequest = requests.map((request) => requestNodes(request, rendererKey));
   const truncated = view.viewingRequestsTotal > requests.length;
 
   const summaryChildren = ["kpis"];
@@ -136,7 +137,7 @@ export function buildBrokerOverviewOperations(view: BrokerDashboardView, rendere
           { id: "h-status", component: "TableCell", header: true, text: "Status" },
           { id: "h-manage", component: "TableCell", header: true, text: "Action" },
           { id: "viewings-body", component: "TableSection", rowDivider: true,
-            children: perRequest.map((_, index) => `req-${index}-row`) },
+            children: requests.map((request) => `req-${request.showingId}-row`) },
           { id: "viewings-more", component: "Caption",
             text: `Showing the latest ${requests.length} of ${view.viewingRequestsTotal} requests.` },
           ...perRequest.flatMap(({ cells, nodes }) => [...cells, ...nodes]),

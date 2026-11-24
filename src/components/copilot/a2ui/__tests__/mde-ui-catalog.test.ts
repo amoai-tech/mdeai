@@ -274,15 +274,17 @@ describe("MDE A2UI catalog", () => {
     expect(fn).toMatchObject({ allowedCallers: "rendererOnly", requiresUserActivation: true });
     const params = fn?.parameters as z.ZodTypeAny;
     const id = "4f6f2c1e-8d0a-4b8e-9c55-1f2e3d4c5b6a";
-    expect(params.safeParse({ rendererKey: id, showingId: id, action: "confirm" }).success).toBe(true);
-    expect(params.safeParse({ rendererKey: id, showingId: id, action: "reschedule", newWallClock: "2026-12-01T10:30" }).success).toBe(true);
-    expect(params.safeParse({ rendererKey: id, showingId: "not-a-uuid", action: "confirm" }).success).toBe(false);
-    expect(params.safeParse({ rendererKey: id, showingId: id, action: "delete" }).success).toBe(false);
-    expect(params.safeParse({ rendererKey: id, showingId: id, action: "reschedule", newWallClock: "x".repeat(40) }).success).toBe(false);
-    expect(params.safeParse({ rendererKey: id, showingId: id, action: "reschedule", newWallClock: "tomorrow" }).success).toBe(false);
-    expect(params.safeParse({ rendererKey: id, showingId: id, action: "reschedule", newWallClock: "2026-12-01T10:30Z" }).success).toBe(false);
-    expect(params.safeParse({ showingId: id, action: "confirm" }).success).toBe(false);
-    expect(params.safeParse({ rendererKey: "guessed", showingId: id, action: "confirm" }).success).toBe(false);
+    const expectation = { expectedStatus: "scheduled", expectedScheduledAt: "2026-12-01T15:00:00Z" };
+    expect(params.safeParse({ ...expectation, rendererKey: id, showingId: id, action: "confirm" }).success).toBe(true);
+    expect(params.safeParse({ ...expectation, rendererKey: id, showingId: id, action: "reschedule", newWallClock: "2026-12-01T10:30" }).success).toBe(true);
+    expect(params.safeParse({ ...expectation, rendererKey: id, showingId: "not-a-uuid", action: "confirm" }).success).toBe(false);
+    expect(params.safeParse({ ...expectation, rendererKey: id, showingId: id, action: "delete" }).success).toBe(false);
+    expect(params.safeParse({ ...expectation, rendererKey: id, showingId: id, action: "reschedule", newWallClock: "x".repeat(40) }).success).toBe(false);
+    expect(params.safeParse({ ...expectation, rendererKey: id, showingId: id, action: "reschedule", newWallClock: "tomorrow" }).success).toBe(false);
+    expect(params.safeParse({ ...expectation, rendererKey: id, showingId: id, action: "reschedule", newWallClock: "2026-12-01T10:30Z" }).success).toBe(false);
+    expect(params.safeParse({ ...expectation, showingId: id, action: "confirm" }).success).toBe(false);
+    expect(params.safeParse({ ...expectation, rendererKey: "guessed", showingId: id, action: "confirm" }).success).toBe(false);
+    expect(params.safeParse({ rendererKey: id, showingId: id, action: "confirm" }).success).toBe(false);
   });
 
   it("keeps markup, maps and third-party fetches omitted", () => {
