@@ -157,22 +157,20 @@ test.describe("SAN-1421 — same-thread filtered cards survive production reload
     // not a reason to fabricate the neighborhood centre.
     expect(pinsBefore).toEqual(mappedCardIds);
 
-    const transcriptToggle = page.locator('[data-testid="rental-ask-toggle-transcript"]:visible').first();
-    await expect(transcriptToggle).toBeVisible({ timeout: 40_000 });
-    if (await transcriptToggle.getAttribute("aria-expanded") === "false") await transcriptToggle.click();
-    const lines = page.locator('[data-testid="rental-ask-transcript"]:visible li');
-    await expect.poll(async () => (await lines.allInnerTexts())
-      .filter((s) => s.startsWith("You") && s.includes(firstQuery)).length,
-    { timeout: 30_000 }).toBe(1);
-    await expect.poll(async () => (await lines.allInnerTexts())
-      .filter((s) => s.startsWith("You") && s.includes(budgetQuery)).length,
-    { timeout: 30_000 }).toBe(1);
-    // Regression: the conversation remains EXPANDED while the renter clicks Details.
-    // No forced click or hidden control is acceptable at 390px.
-    if (isMobile) {
-      await expect.poll(() => page.getByTestId("workspace-ask-composer").evaluate(
-        (el) => getComputedStyle(el).position,
-      )).toBe("static");
+    await expect(page.getByTestId("rental-ask-transcript")).toHaveCount(0);
+    await expect(page.getByTestId("rental-ask-toggle-transcript")).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Open full chat" }).filter({ visible: true }).first()).toBeVisible();
+    const owner = await admin.from("mastra_threads").select("id")
+      .eq("id", threadBefore).eq("resourceId", identity!.userId).maybeSingle();
+    expect(owner.error).toBeNull();
+    expect(owner.data?.id).toBe(threadBefore);
+    for (const question of [firstQuery, budgetQuery]) {
+      await expect.poll(async () => {
+        const saved = await admin.from("mastra_messages").select("id", { count: "exact", head: true })
+          .eq("thread_id", threadBefore).eq("role", "user").ilike("content", "%" + question + "%");
+        expect(saved.error).toBeNull();
+        return saved.count;
+      }, { timeout: 30_000 }).toBe(1);
     }
     // AI result → real Details: same selected listing, not another search or a fake link.
     const firstResult = before[0];

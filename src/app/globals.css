@@ -352,14 +352,6 @@ html {
   }
 }
 
-/* An expanded transcript takes up to 224px. On phones it must be in normal
-   flow, rather than a sticky overlay above listing Details actions. */
-@media (max-width: 1023px) {
-  [data-testid="workspace-ask-composer"]:has([data-testid="rental-ask-transcript"]) {
-    position: static !important;
-  }
-}
-
 /* WCAG 1.4.10 reflow: a 400% zoom (or an open phone keyboard) leaves a window only ~250-450px tall. The pinned
    header and Ask MDE bar of the discovery pages would then fill the screen and cover the cards, so on very
    short windows they scroll with the page instead of staying pinned. */

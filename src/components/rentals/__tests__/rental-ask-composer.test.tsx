@@ -4,8 +4,7 @@
  *
  * What this proves: one press sends one message on the existing thread, an answer that fails keeps the
  * text (including anything typed while waiting), Retry resends it, a running answer can be stopped, a
- * signed-out visitor is offered sign-in without losing the current filters, the transcript follows the
- * agent's live messages, and the box publishes its height for the phone Map button.
+ * signed-out visitor is offered sign-in without losing the current filters, text-only answers reach the results column, and the box publishes its height for the phone Map button.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -1011,7 +1010,7 @@ describe("RentalAskComposer (SAN-1421)", () => {
     expect(screen.queryByLabelText("Ask MDE about rentals")).toBeNull();
   });
 
-  it("keeps history collapsed after publishing rental results, but allows manual expansion", async () => {
+  it("has no embedded history or toggle after publishing rental results", async () => {
     const onResults = vi.fn();
     const pending = deferred<boolean>();
     chat.appendMessage.mockReturnValueOnce(pending.promise);
@@ -1031,24 +1030,24 @@ describe("RentalAskComposer (SAN-1421)", () => {
     });
     await waitFor(() => expect(onResults).toHaveBeenCalledTimes(1));
     expect(screen.queryByTestId("rental-ask-transcript")).toBeNull();
-    fireEvent.click(screen.getByTestId("rental-ask-toggle-transcript"));
-    expect(screen.getByTestId("rental-ask-transcript").textContent).toContain("Found two apartments.");
+    expect(screen.queryByTestId("rental-ask-toggle-transcript")).toBeNull();
+    expect(screen.queryByText("Found two apartments.")).toBeNull();
+    expect(screen.getByRole("link", { name: "Open full chat" }).getAttribute("href")).toBe("/chat");
   });
 
-  it("updates the transcript from the agent's live messages, not just the first render", async () => {
-    render(<RentalAskComposer />);
-    expect(screen.queryByTestId("rental-ask-transcript")).toBeNull();
-
-    await act(async () => {
-      agent.messages.push({ id: "u1", role: "user", content: "cheaper 2BR in Laureles" });
-      agent.messages.push({ id: "a1", role: "assistant", content: "Here are three under 3M COP." });
-      agent.listeners.forEach((listener) => listener());
+  it("sends only a completed current text-only answer to the results column", async () => {
+    const onTextAnswer = vi.fn();
+    chat.appendMessage.mockImplementationOnce(() => {
+      reportCompletedAnswer("run-1", "a1", "The listing does not specify a balcony.");
+      return Promise.resolve(true);
     });
-
-    fireEvent.click(screen.getByTestId("rental-ask-toggle-transcript"));
-    const transcript = screen.getByTestId("rental-ask-transcript");
-    expect(transcript.textContent).toContain("cheaper 2BR in Laureles");
-    expect(transcript.textContent).toContain("Here are three under 3M COP.");
+    render(<RentalAskComposer onTextAnswer={onTextAnswer} />);
+    type("Does the first apartment have a balcony?");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+    await waitFor(() => expect(onTextAnswer).toHaveBeenLastCalledWith("The listing does not specify a balcony."));
+    expect(screen.queryByTestId("rental-ask-transcript")).toBeNull();
+    expect(screen.queryByTestId("rental-ask-toggle-transcript")).toBeNull();
+    expect(screen.getByRole("link", { name: "Open full chat" })).not.toBeNull();
   });
 
   it("refuses a malformed 200 row instead of putting it on the page", async () => {

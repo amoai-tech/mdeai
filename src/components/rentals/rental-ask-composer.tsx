@@ -21,7 +21,6 @@ import {
   payloadRows,
   useRentalToolResults,
   latestRentalToolSignature,
-  useTurns,
 } from "@/components/rentals/rental-ask-tool-results";
 import {
   ComposerError,
@@ -29,7 +28,6 @@ import {
   ComposerInput,
   InertComposer,
   SHELL_CLASS,
-  Transcript,
 } from "@/components/rentals/rental-ask-composer-ui";
 import {
   budgetNotApplied,
@@ -60,8 +58,8 @@ import type { ConciergeWorkingMemory } from "@/lib/types";
  * `DiscoveryConciergeProvider` already owns the thread and replays saved history), so a question asked
  * here is the same conversation the user finds on /chat, with the same answer and the same saved state.
  *
- * It shows plain-text turns only. Rich rental cards and the map stay where they already render for the
- * thread, instead of growing a second card renderer inside the browse column.
+ * The composer is input-only. The page displays a single current text-only answer when needed;
+ * complete history remains on /chat. Rich rental cards and map retain their existing renderers.
  */
 
 /** Shown when Enter arrives before the agent is ready; cleared as soon as it is. */
@@ -266,12 +264,14 @@ function usePublishHeight(element: HTMLDivElement | null): void {
 // skipcq: JS-0067 - module-local React component; not a browser global
 function LiveComposer({
   onResults,
+  onTextAnswer,
   context,
   onOpenDetails,
   hasSelectedListing,
   onClearSelection,
 }: {
   onResults?: (results: RentalAskResults) => void;
+  onTextAnswer?: (answer: string | null) => void;
   context?: RentalAskContext;
   onOpenDetails?: (target: DetailsCommand) => RentalAskDetailsOutcome;
   hasSelectedListing?: boolean;
@@ -288,7 +288,6 @@ function LiveComposer({
   const [error, setError] = useState<string | null>(null);
   // Retry only when the user turn is known not to have been appended.
   const [retryable, setRetryable] = useState(false);
-  const [showTranscript, setShowTranscript] = useState(false);
   const [sending, setSending] = useState(false);
   // The agent run status updates asynchronously, so React state alone cannot prevent two rapid sends.
   const sendInFlight = useRef(false);
@@ -375,7 +374,6 @@ function LiveComposer({
   );
   useRentalToolResults(agent, applyToolResult);
 
-  const turns = useTurns(agent);
   const signedOut = !sessionLoading && !user;
   const busy = isLoading || sending;
   // Supported native URL commands need no agent connection or model run.
@@ -445,6 +443,7 @@ function LiveComposer({
       return;
     }
     sendInFlight.current = true;
+    onTextAnswer?.(null);
     // A rejected render_ui can trigger another message notification without
     // producing rental rows. The previous tool result must not become this turn.
     appliedSignature.current = agent
@@ -507,6 +506,7 @@ function LiveComposer({
     let runSucceeded = false;
     let runFailed = false;
     let completedAssistantText = false;
+    let latestCompletedText = "";
     const assistantTextMessageIds = new Set<string>();
     const runSubscription = agent?.subscribe({
       onRunInitialized: ({ input }) => { activeRunId = input.runId; },
@@ -520,6 +520,7 @@ function LiveComposer({
         if (input.runId === activeRunId && assistantTextMessageIds.has(event.messageId) &&
             textMessageBuffer.trim().length > 0) {
           completedAssistantText = true;
+          latestCompletedText = textMessageBuffer.trim();
         }
       },
       onRunFinishedEvent: ({ event, outcome }) => {
@@ -614,9 +615,12 @@ function LiveComposer({
           }
         }
       }
-      // Cards and the comparison already present the result; keep the history
-      // collapsed by default while still revealing text-only answers.
-      if (mounted.current && !publishedResults) setShowTranscript(true);
+      // A real completed text-only answer belongs in the results column, not a
+      // second chat history under the cards. Never show stale or partial turns.
+      if (mounted.current && turn === turnId.current && !cancelled.current &&
+          !publishedResults && runSucceeded && !runFailed && latestCompletedText) {
+        onTextAnswer?.(latestCompletedText);
+      }
     } catch {
       if (!cancelled.current && mounted.current) {
         // runAgent may reject after addMessage already persisted the user turn.
@@ -634,7 +638,7 @@ function LiveComposer({
       sendInFlight.current = false;
       if (mounted.current) setSending(false);
     }
-  }, [agent, appendMessage, busy, draft, signedOut, isReady, onResults, onOpenDetails, context, setState, router, searchParams]);
+  }, [agent, appendMessage, busy, draft, signedOut, isReady, onResults, onTextAnswer, onOpenDetails, context, setState, router, searchParams]);
 
   const onStop = useCallback(() => {
     if (sendInFlight.current) cancelled.current = true;
@@ -658,11 +662,7 @@ function LiveComposer({
 
   return (
     <div ref={setShellElement} data-testid="rental-ask-composer" className={SHELL_CLASS}>
-      {showTranscript && turns.length > 0 ? <Transcript turns={turns} busy={busy} /> : null}
       <ComposerHeader
-        turnCount={turns.length}
-        showTranscript={showTranscript}
-        onToggle={() => setShowTranscript((open) => !open)}
         hasSelectedListing={hasSelectedListing}
         onClearSelection={onClearSelection}
       />
@@ -709,12 +709,14 @@ function LiveComposer({
 
 export function RentalAskComposer({
   onResults,
+  onTextAnswer,
   context,
   onOpenDetails,
   hasSelectedListing,
   onClearSelection,
 }: {
   onResults?: (results: RentalAskResults) => void;
+  onTextAnswer?: (answer: string | null) => void;
   context?: RentalAskContext;
   onOpenDetails?: (target: DetailsCommand) => RentalAskDetailsOutcome;
   hasSelectedListing?: boolean;
@@ -727,6 +729,7 @@ export function RentalAskComposer({
   return (
     <LiveComposer
       onResults={onResults}
+      onTextAnswer={onTextAnswer}
       context={context}
       onOpenDetails={onOpenDetails}
       hasSelectedListing={hasSelectedListing}

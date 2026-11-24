@@ -116,6 +116,11 @@ function RentalBrowseViewInner({
     [neighborhood, beds, from, through],
   );
   const { activeAsk, acceptResults, clearResults } = useRentalAskResults(threadId, askSignature);
+  const [textAnswer, setTextAnswer] = useState<{ scope: string; text: string } | null>(null);
+  const answerScope = JSON.stringify([threadId, askSignature]);
+  const acceptTextAnswer = useCallback((text: string | null) => {
+    setTextAnswer(text ? { scope: answerScope, text } : null);
+  }, [answerScope]);
   const shownResults = activeAsk?.results ?? results;
   const shownTotal = activeAsk?.total ?? total;
   const comparedIds = useComparedRentalIds(shownResults);
@@ -284,6 +289,7 @@ function RentalBrowseViewInner({
         askComposer={
           <RentalAskComposer
             onResults={acceptResults}
+            onTextAnswer={acceptTextAnswer}
             onOpenDetails={openDetailsFromCommand}
             context={{ neighborhood, beds, from, through, selectedListingId: selectedForAskId ?? detailsRental?.id ?? null }}
             hasSelectedListing={Boolean(selectedForAskId ?? detailsRental?.id)}
@@ -341,6 +347,10 @@ function RentalBrowseViewInner({
             />
           ) : null}
 
+          {textAnswer?.scope === answerScope ? (
+            <p role="status" data-testid="rental-ask-text-answer" className="mb-3 whitespace-pre-wrap break-words rounded-lg border border-border bg-card px-3 py-2 text-sm">{textAnswer.text}</p>
+          ) : null}
+
           {activeAsk ? (
             <div
               data-testid="rental-ask-answer"
@@ -361,7 +371,7 @@ function RentalBrowseViewInner({
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={clearResults}
+                onClick={() => { clearResults(); acceptTextAnswer(null); }}
                 data-testid="rental-ask-answer-clear"
               >
                 Clear answer

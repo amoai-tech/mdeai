@@ -50,32 +50,6 @@ function streamResponse(page: Page) {
   );
 }
 
-async function openTranscript(page: Page): Promise<void> {
-  const panel = composer(page).getByTestId("rental-ask-transcript");
-  if ((await panel.count()) === 0) {
-    const toggle = composer(page).getByTestId("rental-ask-toggle-transcript");
-    await expect(toggle).toBeVisible({ timeout: 30_000 });
-    await toggle.click();
-  }
-  await expect(panel).toBeVisible({ timeout: 30_000 });
-}
-
-/**
- * Mark the assistant rows that existed BEFORE resending. /rentals shows only
- * the last six turns, so comparing assistant counts gives a false failure when
- * an older answer falls off the list. React retains the existing keyed <li>s;
- * a new assistant turn gets a new row even when its text happens to be identical.
- */
-async function markExistingAssistantTurns(page: Page): Promise<void> {
-  await composer(page).getByTestId("rental-ask-transcript").locator("li").evaluateAll((rows) => {
-    for (const row of rows) {
-      if (row.firstElementChild?.textContent?.trim() === "MDE") {
-        row.setAttribute("data-existing-assistant-turn", "");
-      }
-    }
-  });
-}
-
 /** The composer is idle only when Stop is gone, Send is back and the input accepts text. */
 async function expectComposerIdle(page: Page, timeout = 60_000): Promise<void> {
   const active = composer(page);
@@ -159,24 +133,23 @@ test.describe("SAN-1605 · signed-in Stop on /rentals", () => {
     await expectComposerIdle(page);
     await expectNoErrorBanner(page);
 
-    await openTranscript(page);
-    await markExistingAssistantTurns(page);
 
     // The recovery path after a Stop is sending again. Observe the new run
     // starting AND settling; a stale answer from the first run is not proof.
     await input.fill(QUESTION);
     const secondResponse = streamResponse(page);
     await send.click();
-    await secondResponse;
+    const response = await secondResponse;
+    expect(await response.finished()).toBeNull();
+    const stream = await response.text();
+    expect(stream).toContain('"type":"RUN_FINISHED"');
+    expect(stream).toMatch(/"type":"(?:TEXT_MESSAGE_CONTENT|TOOL_CALL_RESULT)"/);
     await expectComposerIdle(page, 180_000);
     await expectNoErrorBanner(page);
 
-    // The last transcript row must be the answer AFTER the newly resent You
-    // turn, not an older reply or merely a response-count increase. A bounded
-    // six-turn window can evict older answers without changing its length.
-    const lastRow = composer(page).getByTestId("rental-ask-transcript").locator("li").last();
-    await expect(lastRow.locator("span").first()).toHaveText("MDE");
-    await expect(lastRow.locator("span").nth(1)).not.toBeEmpty();
-    await expect(lastRow).not.toHaveAttribute("data-existing-assistant-turn", "");
+    await expect(page.getByTestId("rental-ask-transcript")).toHaveCount(0);
+    await expect(page.getByTestId("rental-ask-toggle-transcript")).toHaveCount(0);
+    const answer = page.getByTestId("rental-ask-answer").or(page.getByTestId("rental-ask-text-answer"));
+    await expect(answer.first()).toBeVisible({ timeout: 30_000 });
   });
 });

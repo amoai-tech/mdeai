@@ -223,6 +223,9 @@ test.describe("SAN-1681 · official rental comparison A2UI Table", () => {
       const comparisonSurface = page.getByTestId("rental-comparison-surface");
       const table = comparisonSurface.getByRole("table", { name: /side-by-side apartment comparison/i });
       await expect(table).toBeVisible({ timeout: 120_000 });
+      await expect(page.getByTestId("rental-ask-transcript")).toHaveCount(0);
+      await expect(page.getByTestId("rental-ask-toggle-transcript")).toHaveCount(0);
+      await expect(page.getByTestId("rental-ask-text-answer")).toHaveCount(0);
       await expect.poll(firstIds, { timeout: 30_000 }).not.toEqual(before);
       const shown = await firstIds();
       expect(shown.every(Boolean)).toBe(true);
