@@ -49,8 +49,8 @@ export const BrokerChatView = Object.assign(BrokerChatViewInner, CopilotChatView
 /**
  * SAN-1124 — a real CopilotKit v2 chat using the existing conciergeAgent.
  * /app/rentals and /host/rentals are excluded from the root provider,
- * so RentalsConciergeShell owns the ONE live runtime connection for chat.
- * The /app Overview uses the transport-free dashboard renderer.
+ * so BrokerChatProvider owns the ONE live runtime connection for chat.
+ * The /app dashboard stays independent of the lazy bottom chat.
  *
  * Send, Stop and Retry belong to CopilotChat; no parallel chat state,
  * API transport, synthetic replies, or second broker agent.

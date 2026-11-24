@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { MdeDashboardRenderProvider, MdeDashboardSurface } from "@/components/copilot/a2ui/mde-dashboard-surface";
-import { ChatProvider } from "@/components/chat/chat-provider";
+import { BrokerChatProvider, RentalsAskMde } from "@/components/host/rentals/rentals-ask-mde";
 import { HostRentalsNav } from "@/components/host/rentals/host-rentals-nav";
 import { RentalsConciergeCenter } from "@/components/host/rentals/rentals-concierge-center";
 import { RentalsConversationHistory } from "@/components/host/rentals/rentals-conversation-history";
@@ -40,7 +40,7 @@ const RENTALS_HEADER_OPERATIONS = [{
  * Persistent frame for the /app/rentals broker route group only.
  * The legacy /host/rentals shell owns its own navigation and chat. Keep
  * that route separate until it is migrated; no speculative basePath API.
- * Page children own data; no loader or agent runs here.
+ * Page children own data; Ask MDE initializes only on explicit chat navigation or opening.
  */
 export function RentalsBrokerFrame({ children }: { children: ReactNode }) {
   return (
@@ -52,9 +52,7 @@ export function RentalsBrokerFrame({ children }: { children: ReactNode }) {
           fallback={<div><h2 className="font-serif text-xl font-semibold">Rentals workspace</h2><p className="text-sm text-muted-foreground">Manage your listings and viewing requests.</p></div>}
         />
         <HostRentalsNav basePath="/app/rentals" />
-        <div className="min-w-0">{children}</div>
-        {/* SAN-1685 owns the actual persistent composer. No second chat here. */}
-        <div data-testid="rentals-ask-mde-slot" />
+        <RentalsAskMde>{children}</RentalsAskMde>
       </div>
     </MdeDashboardRenderProvider>
   );
@@ -72,15 +70,12 @@ export function RentalsConciergeShell({
   basePath = "/host/rentals",
 }: RentalsConciergeShellProps) {
   const [mobilePane, setMobilePane] = useState<MobilePane>("chat");
-  // The /app route group owns its transport-free renderer and navigation.
-  // Overview intentionally omits the legacy feed/chat pane switcher: the
-  // parent frame still renders domain navigation, and Overview has its own
-  // Needs attention tab. Concierge (including its saved thread) remains
-  // available through the shared navigation. Legacy host is unchanged.
-  if (basePath === "/app/rentals" && workspaceMode === "overview") {
+  // /app owns the single persistent bottom chat in its route layout.
+  // The legacy host keeps its separate three-panel presentation.
+  if (basePath === "/app/rentals") {
     return (
       <div data-testid="rentals-concierge" className="min-w-0">
-        <RentalsDynamicWorkspace mode={workspaceMode} dashboard={dashboard} loadError={loadError} />
+        <RentalsDynamicWorkspace mode="overview" dashboard={dashboard} loadError={loadError} />
       </div>
     );
   }
@@ -88,15 +83,7 @@ export function RentalsConciergeShell({
   const workspace = (
     <>
       <div className={cn("min-h-0 min-w-0", mobilePane !== "chat" && "max-lg:hidden", "lg:block")}>
-        {basePath === "/app/rentals" ? (
-          <ChatProvider persistThread sessionFallback={
-            <div role="status" className="p-4 text-sm text-muted-foreground">Loading Ask MDE…</div>
-          }>
-            <RentalsConciergeCenter mode={workspaceMode} />
-          </ChatProvider>
-        ) : (
-          <RentalsConciergeCenter mode={workspaceMode} />
-        )}
+        <RentalsConciergeCenter mode={workspaceMode} />
       </div>
       <div className={cn("min-h-0 min-w-0", mobilePane !== "workspace" && "max-lg:hidden", "lg:block")}>
         <RentalsDynamicWorkspace mode={workspaceMode} dashboard={dashboard} loadError={loadError} />
@@ -109,7 +96,7 @@ export function RentalsConciergeShell({
       data-testid="rentals-concierge"
       className="flex min-h-[calc(100dvh-7rem)] flex-col gap-3 md:min-h-[calc(100dvh-5rem)]"
     >
-      {basePath !== "/app/rentals" && <HostRentalsNav basePath={basePath} />}
+      <HostRentalsNav basePath={basePath} />
 
       <div
         className={cn(
@@ -128,15 +115,13 @@ export function RentalsConciergeShell({
           <RentalsConversationHistory dashboard={dashboard} />
         </div>
 
-        {basePath === "/app/rentals" ? workspace : (
-          <ChatProvider persistThread sessionFallback={
-            <div role="status" className="min-h-32 rounded-lg border border-border p-4 text-sm text-muted-foreground lg:col-span-2">
-              Loading your workspace…
-            </div>
-          }>
-            {workspace}
-          </ChatProvider>
-        )}
+        <BrokerChatProvider sessionFallback={
+          <div role="status" className="min-h-32 rounded-lg border border-border p-4 text-sm text-muted-foreground lg:col-span-2">
+            Loading your workspace…
+          </div>
+        }>
+          {workspace}
+        </BrokerChatProvider>
       </div>
 
       <nav

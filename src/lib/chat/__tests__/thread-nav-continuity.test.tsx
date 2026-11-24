@@ -21,8 +21,8 @@ function Probe() {
   useEffect(() => { nav = value; });
   return <span data-testid="thread">{value.sessionThreadId}</span>;
 }
-async function show(key = "root") {
-  await act(async () => { root.render(<ThreadNavProvider key={key}><Probe /></ThreadNavProvider>); });
+async function show(key = "root", scope: "discovery" | "broker" = "discovery") {
+  await act(async () => { root.render(<ThreadNavProvider key={key} scope={scope}><Probe /></ThreadNavProvider>); });
 }
 const change = (fn: () => void) => act(async () => fn());
 const saved = () => JSON.parse(window.sessionStorage.getItem("mde:thread-selection:v1") || "{}");
@@ -39,6 +39,30 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
+});
+
+describe("SAN-1685 · broker thread selection", () => {
+  it("restores broker history separately from discovery, and never adopts another owner", async () => {
+    auth.id = "broker-a";
+    await show("discovery");
+    const discovery = nav.sessionThreadId!;
+    await change(() => nav.markThreadSaved(discovery));
+    await show("broker", "broker");
+    const broker = nav.sessionThreadId!;
+    expect(broker).not.toBe(discovery);
+    expect(nav.hasPersistedThread).toBe(false);
+    await change(() => nav.markThreadSaved(broker));
+    await show("broker-reload", "broker");
+    expect(nav.sessionThreadId).toBe(broker);
+    expect(nav.restoredThread).toBe(true);
+    await show("discovery-return");
+    expect(nav.sessionThreadId).toBe(discovery);
+    expect(nav.restoredThread).toBe(true);
+    auth.id = "broker-b";
+    await show("broker-other-owner", "broker");
+    expect(nav.sessionThreadId).not.toBe(broker);
+    expect(nav.hasPersistedThread).toBe(false);
+  });
 });
 
 describe("SAN-1413 · per-tab thread ownership", () => {

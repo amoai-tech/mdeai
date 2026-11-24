@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { SignOutButton } from "@/components/auth/sign-out-button";
+import { BROKER_ASK_MDE_EVENT } from "@/lib/rentals/broker-ask-mde";
 import { WorkspaceSwitcher } from "@/components/app/workspace-switcher";
 import {
   activeWorkspaceContext,
@@ -31,6 +32,7 @@ export function AppShell({ resolution, children }: AppShellProps) {
       ? resolution.email
       : null;
   const active = activeWorkspaceContext(pathname, contexts);
+  const brokerRentals = pathname === "/app/rentals" || pathname.startsWith("/app/rentals/listings");
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
@@ -56,7 +58,15 @@ export function AppShell({ resolution, children }: AppShellProps) {
               Explore
             </Link>
             <Link
-              href="/chat"
+              href={brokerRentals ? "/app/rentals" : "/chat"}
+              onClick={brokerRentals ? (event) => {
+                if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+                // If the broker frame is present, focus its existing chat without navigating.
+                // Otherwise the ordinary link opens the broker concierge route.
+                if (!window.dispatchEvent(new Event(BROKER_ASK_MDE_EVENT, { cancelable: true }))) {
+                  event.preventDefault();
+                }
+              } : undefined}
               className="inline-flex min-h-11 items-center rounded-full px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
               Ask MDE

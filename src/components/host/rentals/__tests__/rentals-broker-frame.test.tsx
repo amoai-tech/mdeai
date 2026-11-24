@@ -1,29 +1,36 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { RentalsBrokerFrame, RentalsConciergeShell } from "../rentals-concierge-shell";
+import { BROKER_ASK_MDE_EVENT } from "@/lib/rentals/broker-ask-mde";
 import type { BrokerDashboardView } from "@/lib/rentals/broker-dashboard-types";
 
 const state = vi.hoisted(() => ({
   chatMounts: 0,
+  mode: "overview",
+  authLoading: false,
+  renderChat: false,
   submit: vi.fn(),
   refresh: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({
   usePathname: () => "/app/rentals",
-  useSearchParams: () => new URLSearchParams("mode=overview"),
+  useSearchParams: () => new URLSearchParams(state.mode ? "mode=" + state.mode : ""),
   useRouter: () => ({ refresh: state.refresh, push: vi.fn(), replace: vi.fn() }),
 }));
-// Simulate unresolved browser auth: ChatProvider would hide its entire subtree.
+vi.mock("@/hooks/use-session", () => ({
+  useSession: () => ({ user: state.authLoading ? null : { id: "broker-a" }, loading: state.authLoading }),
+}));
+// Simulate unavailable AI: its fallback must never hide page children.
 vi.mock("@/components/chat/chat-provider", () => ({
-  ChatProvider: ({ sessionFallback }: { sessionFallback: React.ReactNode }) => {
+  ChatProvider: ({ children, sessionFallback }: { children: React.ReactNode; sessionFallback: React.ReactNode }) => {
     state.chatMounts++;
-    return sessionFallback;
+    return state.renderChat ? children : sessionFallback;
   },
 }));
 vi.mock("../rentals-concierge-center", () => ({
-  RentalsConciergeCenter: () => <div>Live chat</div>,
+  RentalsConciergeCenter: () => <textarea aria-label="Test composer" />,
 }));
 vi.mock("@/lib/rentals/submit-broker-viewing-action", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/lib/rentals/submit-broker-viewing-action")>(),
@@ -44,6 +51,10 @@ const dashboard: BrokerDashboardView = {
 afterEach(() => {
   cleanup();
   state.chatMounts = 0;
+  state.mode = "overview";
+  state.authLoading = false;
+  state.renderChat = false;
+  sessionStorage.clear();
   state.submit.mockReset();
   state.refresh.mockReset();
   vi.unstubAllGlobals();
@@ -136,13 +147,39 @@ describe("SAN-1683 broker frame without live chat", () => {
     expect(screen.queryByTestId("ctx-empty")).toBeNull();
   });
 
-  it("limits unresolved auth fallback to the concierge chat pane", () => {
+  it("limits unresolved auth fallback to the one bottom chat, leaving data visible", () => {
+    state.mode = "";
+    state.authLoading = true;
     render(<RentalsBrokerFrame><RentalsConciergeShell basePath="/app/rentals" dashboard={dashboard} /></RentalsBrokerFrame>);
     expect(screen.getByText("Loading Ask MDE…")).toBeTruthy();
     expect(screen.getByTestId("rc-right")).toBeTruthy();
-    expect(screen.getByTestId("rc-left")).toBeTruthy();
-    expect(screen.getByRole("navigation", { name: "Concierge mobile panes" })).toBeTruthy();
+    expect(screen.queryByRole("navigation", { name: "Concierge mobile panes" })).toBeNull();
     expect(screen.getByTestId("host-rentals-nav-listings")).toBeTruthy();
-    expect(state.chatMounts).toBeGreaterThan(0);
+    expect(state.chatMounts).toBe(0);
+  });
+
+  it("opens the same bottom chat from Overview and retains its panel across page changes and collapse", async () => {
+    state.renderChat = true;
+    const { rerender } = render(<RentalsBrokerFrame><p>Overview data</p></RentalsBrokerFrame>);
+    expect(state.chatMounts).toBe(0);
+    act(() => { expect(window.dispatchEvent(new Event(BROKER_ASK_MDE_EVENT, { cancelable: true }))).toBe(false); });
+    await waitFor(() => expect(state.chatMounts).toBeGreaterThan(0));
+    const panel = document.getElementById("rentals-ask-mde-panel")!;
+    expect(panel.hidden).toBe(false);
+    expect(screen.getAllByTestId("rentals-ask-mde-slot")).toHaveLength(1);
+    expect(screen.getByText("Overview data")).toBeTruthy();
+    const composer = await screen.findByRole("textbox", { name: "Test composer" });
+    await waitFor(() => expect(document.activeElement).toBe(composer));
+    fireEvent.change(composer, { target: { value: "Unsent draft" } });
+    rerender(<RentalsBrokerFrame><p>Listings data</p></RentalsBrokerFrame>);
+    expect(document.getElementById("rentals-ask-mde-panel")).toBe(panel);
+    expect(screen.getByText("Listings data")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Collapse chat" }));
+    expect(panel.hidden).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Open chat" }));
+    expect(panel.hidden).toBe(false);
+    expect(document.getElementById("rentals-ask-mde-panel")).toBe(panel);
+    expect(screen.getByRole("textbox", { name: "Test composer" })).toBe(composer);
+    expect((composer as HTMLTextAreaElement).value).toBe("Unsent draft");
   });
 });
