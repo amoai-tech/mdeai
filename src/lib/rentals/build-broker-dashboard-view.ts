@@ -214,21 +214,22 @@ export function buildBrokerDashboardView(input: BuildBrokerDashboardInput): Brok
 
   const attentionCount = attention.length;
   const attentionIsPartial = Boolean(input.attentionIsPartial || draftsNeedingPhotos.length > 5 || input.unansweredLeads.length > 5 || input.upcomingShowings.filter((s) => s.status === "scheduled").length > 5);
+  const preview = attentionIsPartial ? " in this preview" : "";
   const bullets: string[] = [];
   if (draftsNeedingPhotos.length > 0) {
     bullets.push(
-      `${draftsNeedingPhotos.length} listing${draftsNeedingPhotos.length === 1 ? "" : "s"} in this preview need photos`,
+      `${draftsNeedingPhotos.length} listing${draftsNeedingPhotos.length === 1 ? "" : "s"}${preview} need photos`,
     );
   }
   if (input.unansweredLeads.length > 0) {
     bullets.push(
-      `${input.unansweredLeads.length} lead${input.unansweredLeads.length === 1 ? "" : "s"} in this preview waiting`,
+      `${input.unansweredLeads.length} lead${input.unansweredLeads.length === 1 ? "" : "s"}${preview} waiting for a reply`,
     );
   }
   const pendingShowings = input.upcomingShowings.filter((s) => s.status === "scheduled").length;
   if (pendingShowings > 0) {
     bullets.push(
-      `${pendingShowings} viewing${pendingShowings === 1 ? "" : "s"} in this preview to confirm`,
+      `${pendingShowings} viewing${pendingShowings === 1 ? "" : "s"}${preview} to confirm`,
     );
   }
 

@@ -27,8 +27,9 @@ function listing(overrides: Partial<BrokerListingDetail> = {}): BrokerListingDet
 }
 
 describe("buildBrokerDashboardView", () => {
-  it("uses aggregate KPI counts, not capped queue lengths", () => {
+  it.each([false, true])("uses aggregate KPI counts and truthful preview wording (partial=%s)", (attentionIsPartial) => {
     const view = buildBrokerDashboardView({
+      attentionIsPartial,
       displayName: "Ana",
       listings: [
         listing({ id: "a1", listingWorkflowStatus: "published" }),
@@ -83,6 +84,9 @@ describe("buildBrokerDashboardView", () => {
       views30dCount: null,
     });
 
+    expect(view.attentionIsPartial).toBe(attentionIsPartial);
+    expect(view.briefing.bullets).toHaveLength(3);
+    expect(view.briefing.bullets.every(b => b.includes("in this preview") === attentionIsPartial)).toBe(true);
     expect(view.kpis[0]?.value).toBe("42");
     expect(view.kpis[1]?.value).toBe("150");
     expect(view.kpis[2]?.value).toBe("25");

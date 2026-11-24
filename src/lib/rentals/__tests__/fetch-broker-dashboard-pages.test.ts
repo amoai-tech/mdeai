@@ -49,6 +49,11 @@ function fixture(failInbox = false) {
       }
       data = data.slice(offset, offset + limit);
     }
+    if (method === "GET" && offset > 0 && offset >= total) {
+      return new Response(JSON.stringify({ code: "PGRST103", message: "Requested range not satisfiable", details: null, hint: null }), {
+        status: 416, headers: { "content-type": "application/json", "content-range": `*/${total}` },
+      });
+    }
     return new Response(method === "HEAD" ? null : JSON.stringify(data), {
       status: 200,
       headers: { "content-type": "application/json", "content-range": `0-${Math.max(0, data.length - 1)}/${total}` },
@@ -81,6 +86,22 @@ describe("SAN-1684 dashboard page query contracts", () => {
     expect(calls.filter(c => c.url.pathname.endsWith("/apartments") && c.method === "GET")).toHaveLength(1);
     expect(calls.some(c => c.url.searchParams.get("offset") === "50" && c.url.searchParams.get("limit") === "20" && c.url.searchParams.get("order") === "created_at.desc,id.asc")).toBe(true);
     expect(calls.some(c => c.url.searchParams.get("offset") === "25" && c.url.searchParams.get("limit") === "20")).toBe(true);
+  });
+
+  it.each([76, 100])("recovers both out-of-range pages at offset %i with scoped exact totals", async (offset) => {
+    const { client, calls } = fixture();
+    const result = await fetchBrokerDashboard(client, actor, { viewings: { offset }, leads: { offset } });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.message);
+    expect(result.view.viewingRequests).toEqual([]);
+    expect(result.view.viewingRequestsTotal).toBe(76);
+    expect(result.view.viewingRequestsOffset).toBe(offset);
+    expect(result.leadInbox).toEqual({ rows: [], total: 76, offset });
+    for (const table of ["leads", "showings"]) {
+      expect(calls.some(c => c.method === "HEAD" && c.url.pathname.endsWith(`/${table}`) &&
+        c.url.searchParams.get("apartment.landlord_id") === "in.(profile-a)" &&
+        !c.url.searchParams.has("created_at") && !c.url.searchParams.has("scheduled_at"))).toBe(true);
+    }
   });
 
   it("does not prefetch an inbox when the default dashboard is requested", async () => {
