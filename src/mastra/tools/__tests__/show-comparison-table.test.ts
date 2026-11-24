@@ -212,6 +212,20 @@ describe("showComparisonTableTool", () => {
     expect(result.message).toContain("budget");
   });
 
+  it("rejects an oversized fresh result set instead of ranking only its first ten", async () => {
+    const all = [...ids, fresh[0]];
+    const rows = all.map((id, index) => dbRow(id, "Apartment " + index, index === 10 ? 1_000_000 : 2_400_000 + index));
+    const result = await run({ positions: [1, 2] }, context(rows, { runIds: all, visibleIds: ids, cheapest: true }));
+    expect(result.ok).toBe(false);
+    expect(result.rows).toEqual([]);
+    expect(result.message).toContain("complete current result list");
+    const browser = await run({ positions: [1, 2] }, context(rows, { visibleIds: all, cheapest: true }));
+    expect(browser.ok).toBe(false);
+    expect(browser.rows).toEqual([]);
+    const ordinal = await run({ positions: [1, 2] }, context(rows, { runIds: all }));
+    expect(ordinal.ok).toBe(true);
+    expect(ordinal.rows.map(row => row.id)).toEqual(ids.slice(0, 2));
+  });
   it("rejects a forged ID outside the current result set", async () => {
     const result = await run({ ids: [ids[0], "37a05b09-f560-4776-92fd-b8bb2b92e699"] }, context([
       dbRow(ids[0], "First", 2_400_000),

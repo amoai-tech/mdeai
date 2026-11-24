@@ -1,7 +1,7 @@
 import { Agent } from '@mastra/core/agent';
 import { z } from 'zod';
-import { createThreadMemory, rememberRentalMonthlyBudget } from '../lib/agent-memory';
-import { searchRentalsTool } from '../tools/search-rentals';
+import { createThreadMemory, rememberRentalMonthlyBudget, rememberShownRentalResults } from '../lib/agent-memory';
+import { searchRentalsTool, rentalSchema } from '../tools/search-rentals';
 import { readBrokerWorkspaceTool } from '../tools/read-broker-workspace';
 import { searchNewProjectsTool } from '../tools/search-new-projects';
 import { compareNewProjectsTool } from '../tools/compare-new-projects';
@@ -714,12 +714,49 @@ export const conciergeAgent = new Agent({
     // The existing stream bridge builds render_ui from showComparisonTable's
     // authorized result. Never let the LLM send an additional empty surface
     // during the same comparison turn; keep ordinary turns/tools unaffected.
-    { id: "san1681-comparison-text-finish", processInputStep: ({ stepNumber, messages, steps, requestContext }) =>
-      shouldFinishComparisonWithoutAnotherTool({
+    { id: "san1681-comparison-text-finish", processInputStep: async ({ stepNumber, messages, steps, requestContext, agent, messageList }) => {
+      if (!shouldFinishComparisonWithoutAnotherTool({
         stepNumber, messages, steps, requestContext, hasRouteIntent: Boolean(routePlanForTurn(messages)),
-      })
-        ? { toolChoice: 'none' as const }
-        : {} },
+      })) return {};
+      // Persist the same latest nonempty search used by the page bridge, before
+      // disabling model tools. Read actual tool output, never model prose or hints.
+      const identity = messageList?.serialize().memoryInfo;
+      if (agent && identity?.threadId && identity.resourceId) {
+        const shown = [...steps].reverse().flatMap(step => [...(step.toolResults ?? [])].reverse())
+          .filter(result => result.toolName === "searchRentalsTool")
+          .map(result => {
+            const output = result.output;
+            return output && typeof output === "object" && "type" in output &&
+              output.type === "json" && "value" in output ? output.value : output;
+          })
+          .map(output => z.object({ source: z.literal("supabase"), results: z.array(rentalSchema).min(1).max(20) }).safeParse(output))
+          .find(result => result.success);
+        if (shown?.success) {
+          const rows = shown.data.results.map(row => ({
+            id: row.id, title: row.title, neighborhood: row.neighborhood,
+            // Prefer recorded facts over legacy display defaults and derived nightly prices.
+            nightly_price: row.comparison_facts ? row.comparison_facts.priceNightly ?? undefined :
+              row.nightly_price > 0 ? row.nightly_price : undefined,
+            price_monthly: row.comparison_facts ? row.comparison_facts.priceMonthly ?? undefined : row.price_monthly,
+            currency: row.comparison_facts ? row.comparison_facts.currency ?? undefined : row.currency,
+            bedrooms: row.comparison_facts ? row.comparison_facts.bedrooms ?? undefined :
+              row.bedrooms_unknown ? undefined : row.bedrooms,
+            amenities: row.amenities,
+          }));
+          try {
+            const memory = await agent.getMemory({ requestContext });
+            if (memory) await rememberShownRentalResults(memory, {
+              threadId: identity.threadId, resourceId: identity.resourceId,
+            }, rows);
+          } catch (error) {
+            console.warn("[agent-memory] rental result memory unavailable", {
+              error: error instanceof Error ? error.message : "unknown error",
+            });
+          }
+        }
+      }
+      return { toolChoice: 'none' as const };
+    } },
   ],
   // A failed Google route cannot become a model-estimated distance or ETA.
   // This filters streaming text before CopilotKit renders it or memory saves it.

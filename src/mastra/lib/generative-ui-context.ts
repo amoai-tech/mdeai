@@ -57,7 +57,7 @@ const RENTAL_HINT_PREFIX = RENTAL_A2UI_CONTEXT_DESCRIPTION;
  * catalog re-resolves the id from the current authorized tool result.
  */
 /** Browser-published IDs are hints only; RentalCard revalidates the actual row. */
-function readRentalResultSlots(agUiContext: unknown): string[] {
+function readRentalResultSlots(agUiContext: unknown, limit = RENTAL_HINT_MAX): string[] {
   if (!agUiContext || typeof agUiContext !== "object") return [];
   const entries = (agUiContext as { context?: unknown }).context;
   if (!Array.isArray(entries)) return [];
@@ -70,7 +70,7 @@ function readRentalResultSlots(agUiContext: unknown): string[] {
   let rows: unknown;
   try { rows = JSON.parse(entry.value); } catch { return []; }
   if (!Array.isArray(rows)) return [];
-  return rows.slice(0, RENTAL_HINT_MAX).map((row) => isRentalA2UIId(row) ? row : "");
+  return rows.slice(0, limit).map((row) => isRentalA2UIId(row) ? row : "");
 }
 
 export function readRentalResultIds(agUiContext: unknown): string[] {
@@ -171,9 +171,13 @@ export async function currentRentalResultIds(requestContext: RunContext, { prese
   const run = requestContext?.get?.(RENTAL_RUN_RESULT_IDS_KEY) as RunResult | undefined;
   // Keep positions faithful: an unsafe ID becomes an unresolvable gap, not a shift.
   if (run && Array.isArray(run.ids)) {
-    return run.ids.slice(0, RENTAL_HINT_MAX).map((id) => isRentalA2UIId(id) ? id : "");
+    return run.ids.slice(0, preserveGaps ? RENTAL_HINT_MAX + 1 : RENTAL_HINT_MAX)
+      .map((id) => isRentalA2UIId(id) ? id : "");
   }
-  return required ? [] : (preserveGaps ? readRentalResultSlots : readRentalResultIds)(requestContext?.get?.("ag-ui"));
+  // The extra slot is a bounded overflow signal for complete-set ranking.
+  return required ? [] : preserveGaps
+    ? readRentalResultSlots(requestContext?.get?.("ag-ui"), RENTAL_HINT_MAX + 1)
+    : readRentalResultIds(requestContext?.get?.("ag-ui"));
 }
 
 /** The count is an untrusted browser hint, never an apartment ID or authority.

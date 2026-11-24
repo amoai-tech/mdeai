@@ -349,3 +349,19 @@ describe("SAN-1694 furnishing choice between budget refinements", () => {
     expect(mocks.state.budgetFilters.filter(filter => filter.includes("price_"))).toEqual(["and(currency.eq.COP,price_monthly.not.is.null,price_monthly.lte.2000000)"]);
   });
 });
+
+it("uses the resolved monthly amount and currency in the WhatsApp reply", async () => {
+  const { searchRentalsTool } = await import("../search-rentals");
+  const { RENTAL_SEARCH_TEXT_KEY, COMPARISON_COP_MONTHLY_BUDGET_KEY } = await import("../../lib/comparison-table-intent");
+  const ctx = (text: string, cop: number | null) => ({ requestContext: {
+    get: (key: string) => key === "channel" ? "whatsapp" : key === RENTAL_SEARCH_TEXT_KEY ? text : key === COMPARISON_COP_MONTHLY_BUDGET_KEY ? cop : undefined,
+    set: () => undefined,
+  } });
+  const input = { maxPriceMonthly: 1200, budgetCurrency: "USD" as const, limit: 5 };
+  const usd = await searchRentalsTool.execute!(input, ctx("Show apartments under USD 900 per month.", null) as never) as { whatsapp_reply?: string };
+  expect(usd.whatsapp_reply).toContain("under USD 900/month");
+  expect(usd.whatsapp_reply).not.toContain("USD 1,200");
+  const cop = await searchRentalsTool.execute!(input, ctx("Show apartments under COP 3 million per month.", 3_000_000) as never) as { whatsapp_reply?: string };
+  expect(cop.whatsapp_reply).toContain("not compared to your budget");
+  expect(cop.whatsapp_reply).not.toContain("USD 1,200");
+});

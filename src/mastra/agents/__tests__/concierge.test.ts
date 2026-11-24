@@ -763,6 +763,30 @@ describe("SAN-1694 budget preference persistence", () => {
     expect(requestContext.get(COMPARISON_COP_MONTHLY_BUDGET_KEY)).toBeNull();
     expect(saved.lastRentalQuery).toMatchObject({ maxPriceMonthly: 900, budgetCurrency: "USD" });
   });
+  it("replaces prior result facts before the finish gate and keeps the last displayed rows on empty or failed searches", async () => {
+    const configured = await conciergeAgent.listConfiguredInputProcessors();
+    const finish = configured.find(p => p.id === "san1681-comparison-text-finish");
+    if (!finish || !("processInputStep" in finish)) throw new Error("Missing finish processor");
+    const existing = { lastRentalQuery: { maxPriceMonthly: 3_000_000, budgetCurrency: "COP" }, lastRentalResults: [{ id: "old", title: "Old", neighborhood: "Laureles", amenities: ["Balcony"] }], selectedListingId: "old", lastEventQuery: { category: "music" } };
+    let saved: Record<string, unknown> = existing;
+    const memory = {
+      getThreadById: vi.fn(async () => ({ resourceId: "renter" })),
+      getWorkingMemory: vi.fn(async () => JSON.stringify(saved)),
+      updateWorkingMemory: vi.fn(async ({ workingMemory }: { workingMemory: string }) => { saved = JSON.parse(workingMemory); }),
+    };
+    const row = { id: "new", title: "New", neighborhood: "Laureles", nightly_price: 100_000, price_monthly: 2_400_000, currency: "COP", bedrooms: 0, wifi: true, amenities: ["Wi-Fi"], image: "", source_url: "https://example.com", can_schedule_viewing: false, schedule_viewing_url: null, host_name: "Host", availability: "Availability unconfirmed", tags: [], comparison_facts: { id: "new", title: "New", neighborhood: "Laureles", bedrooms: null, furnished: null, bathrooms: null, sizeSqm: null, wifiSpeedMbps: null, amenities: ["Wi-Fi"], priceMonthly: 2_400_000, priceNightly: null, currency: "COP" } };
+    const messages = [{ role: "user", content: "Show only apartments under COP 3 million per month." }];
+    const args = { stepNumber: 1, messages, steps: [], messageList: { serialize: () => ({ memoryInfo: { threadId: "thread", resourceId: "renter" } }) }, agent: { getMemory: async () => memory } };
+    const result = (results: unknown[]) => [{ toolResults: [{ toolName: "searchRentalsTool", output: { type: "json", value: { source: "supabase", results } } }] }];
+    expect(await finish.processInputStep!({ ...args, steps: result([row]) } as never)).toEqual({ toolChoice: "none" });
+    expect(saved).toEqual({ lastIntent: "rental_search", lastRentalQuery: existing.lastRentalQuery, lastEventQuery: existing.lastEventQuery, lastRentalResults: [{ id: "new", title: "New", neighborhood: "Laureles", price_monthly: 2_400_000, currency: "COP", amenities: ["Wi-Fi"] }] });
+    expect(memory.updateWorkingMemory).toHaveBeenCalledTimes(1);
+    await finish.processInputStep!({ ...args, steps: result([]) } as never);
+    await finish.processInputStep!({ ...args, steps: [{ toolCalls: [{ toolName: "searchRentalsTool" }] }] } as never);
+    await finish.processInputStep!({ ...args, steps: result([{ id: "invalid" }]) } as never);
+    await finish.processInputStep!({ ...args, messageList: { serialize: () => ({ memoryInfo: { threadId: "thread", resourceId: "other" } }) }, steps: result([row]) } as never);
+    expect(memory.updateWorkingMemory).toHaveBeenCalledTimes(1);
+  });
   it("does not write a different renter's thread or replace malformed memory", async () => {
     const memory = { getThreadById: vi.fn(async () => ({ resourceId: "other" })), getWorkingMemory: vi.fn(async () => "{"), updateWorkingMemory: vi.fn(async () => undefined) };
     const budget = { maxPriceMonthly: 2_000_000, budgetCurrency: "COP" as const };

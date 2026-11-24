@@ -53,7 +53,7 @@ export const showComparisonTableTool = createTool({
     // Ranking an incomplete or malformed set would misrepresent "cheapest".
     // A browser count is only a hint, and never authorizes additional reads.
     const renderedCount = readRentalRenderedCount(agUiContext);
-    if (cheapest && (available.some((id) => !id) ||
+    if (cheapest && (available.length > RENTAL_HINT_MAX || available.some((id) => !id) ||
         (renderedCount !== null && renderedCount > available.length))) {
       return { ok: false, rows: [], rejected: [],
         message: "The complete current result list is not available for ranking. Narrow the search and compare again." };

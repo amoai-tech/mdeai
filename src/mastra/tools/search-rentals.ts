@@ -897,10 +897,15 @@ export const searchRentalsTool = createTool({
     const furnishingText = typeof baseText === 'string' ? baseText : effectiveText;
     const refinementFurnishing = budgetRefinement
       ? context?.requestContext?.get(RENTAL_REFINEMENT_FURNISHING_KEY) : undefined;
-    const requestedFurnished = refinementFurnishing === null ? undefined :
-      typeof refinementFurnishing === 'boolean' ? refinementFurnishing :
-      furnishingText && clearsFurnishingPreference(furnishingText) ? undefined :
-      (furnishingText ? furnishingFromQueryText(furnishingText) : undefined) ?? furnished;
+    let requestedFurnished: boolean | undefined = furnished;
+    if (refinementFurnishing === null) {
+      requestedFurnished = undefined;
+    } else if (typeof refinementFurnishing === 'boolean') {
+      requestedFurnished = refinementFurnishing;
+    } else if (furnishingText) {
+      requestedFurnished = clearsFurnishingPreference(furnishingText)
+        ? undefined : furnishingFromQueryText(furnishingText) ?? furnished;
+    }
     // Exact COP budget supplied by the renter outranks missing/wrong model slots.
     // Reuse the canonical SQL monthly-budget predicate, not a second filter.
     const trustedCopBudget = context?.requestContext?.get(COMPARISON_COP_MONTHLY_BUDGET_KEY);
@@ -973,7 +978,7 @@ export const searchRentalsTool = createTool({
         ...unappliedRequestsFor({ queryText: effectiveText }),
       ])],
       whatsapp_reply: isWhatsAppRun(context)
-        ? formatWhatsAppRentalReply(results, monthlyBudgetFromQuery(inputData))
+        ? formatWhatsAppRentalReply(results, monthlyBudgetFromQuery({ ...inputData, maxPriceMonthly: requestedMaxPriceMonthly, budgetCurrency: requestedBudgetCurrency }))
         : undefined,
       hybridUsed,
       rankExplanation,
