@@ -2,7 +2,7 @@
 import "@testing-library/jest-dom/vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { comparedRentalIds, ComparedRentalOptions } from "../rental-comparison-surface";
+import { comparedRentalIds, comparisonMatchesCurrentResults, ComparedRentalOptions } from "../rental-comparison-surface";
 import { buildComparisonTableOps, type ComparisonRow } from "@/mastra/lib/comparison-table-ui";
 import type { Rental } from "@/mastra/tools/search-rentals";
 
@@ -46,6 +46,43 @@ describe("official comparison surface identity bridge", () => {
     ];
     expect(comparedRentalIds(split, ["a", "b"])).toEqual(["b", "a"]);
     expect(comparedRentalIds([...split, { deleteSurface: { surfaceId } }], ["a", "b"])).toEqual([]);
+  });
+
+  it("withholds stale prices and every changed recorded fact even when IDs are unchanged", () => {
+    const results = ["a", "b"].map((id) => ({ id, comparison_facts: row(id) })) as Rental[];
+    expect(comparisonMatchesCurrentResults(ops, ["b", "a"], results)).toBe(true);
+    for (const change of [
+      { priceMonthly: 3100000 }, { bathrooms: 2 }, { sizeSqm: 80 },
+      { wifiSpeedMbps: 300 }, { amenities: ["Balcony"] }, { furnished: false },
+      { priceNightly: 150000 }, { currency: "USD" }, { title: "Updated title" },
+    ]) {
+      const updated = [results[0], { ...results[1], comparison_facts: { ...row("b"), ...change } }];
+      expect(comparedRentalIds(ops, updated.map((r) => r.id))).toEqual(["b", "a"]);
+      expect(comparisonMatchesCurrentResults(ops, ["b", "a"], updated)).toBe(false);
+      const fresh = buildComparisonTableOps([updated[1].comparison_facts!, row("a")], undefined, { target: "rental-comparison" })!;
+      expect(comparisonMatchesCurrentResults(fresh.operations, ["b", "a"], updated)).toBe(true);
+    }
+    expect(comparisonMatchesCurrentResults(ops, ["b", "a"], [results[0], { id: "b" } as Rental])).toBe(false);
+    const { createSurface } = ops[0] as { createSurface: { components: Array<Record<string, unknown>> } };
+    const badSummary = [{ createSurface: { ...createSurface, components: createSurface.components.map((node) =>
+      node.id === "comparison-summary" ? { ...node, text: "Stale cheapest price" } : node) } }];
+    expect(comparisonMatchesCurrentResults(badSummary, ["b", "a"], results)).toBe(false);
+  });
+
+  it("keeps the compared apartment Ask-select controls visible and clearable", () => {
+    const results = ["a", "b"].map((id) => ({ id, title: id, neighborhood: "Laureles", image: "" })) as Rental[];
+    const select = vi.fn();
+    const { rerender } = render(<ComparedRentalOptions ids={["a", "b"]} results={results} selectedPinId={null}
+      onSelectMap={vi.fn()} selectedForAskId="a" onAskSelect={select} />);
+    const clear = screen.getByRole("button", { name: "Clear selection" });
+    expect(clear).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(clear);
+    expect(select).toHaveBeenLastCalledWith(results[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Ask about this" }));
+    expect(select).toHaveBeenLastCalledWith(results[1]);
+    rerender(<ComparedRentalOptions ids={["a", "b"]} results={results} selectedPinId={null}
+      onSelectMap={vi.fn()} selectedForAskId="b" onAskSelect={select} />);
+    expect(screen.getByRole("button", { name: "Clear selection" }).closest("[data-listing-id]")).toHaveAttribute("data-listing-id", "b");
   });
 
   it("uses authorized photos and only offers map selection when coordinates validate", () => {

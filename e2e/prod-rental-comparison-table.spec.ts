@@ -173,6 +173,16 @@ test.describe("SAN-1681 · official rental comparison A2UI Table", () => {
         expect(await cards.count()).toBe(initialCount - 2);
         await expect(page.getByTestId("rental-other-results")).not.toHaveAttribute("open", "");
 
+        const options = page.getByTestId("rental-compared-options");
+        const askSelect = options.locator("[data-listing-id]").first().getByTestId("rental-ask-select");
+        await expect(askSelect).toHaveAttribute("aria-pressed", "false");
+        await askSelect.click();
+        await expect(askSelect).toHaveAttribute("aria-pressed", "true");
+        await expect(page.getByTestId("rental-ask-clear-selection")).toBeVisible();
+        await askSelect.click();
+        await expect(askSelect).toHaveAttribute("aria-pressed", "false");
+        await expect(page.getByTestId("rental-ask-clear-selection")).toHaveCount(0);
+
         const action = comparisonSurface.getByRole("button", { name: "Details" }).first();
         await action.focus();
         await expect(action).toBeFocused();

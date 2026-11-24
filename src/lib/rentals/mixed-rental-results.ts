@@ -57,7 +57,7 @@ export function mixRentalResults(
   const canonical = [];
   for (const r of verified) {
     const keys = identityKeys(r);
-    if (keys.some((key) => seen.has(key))) continue;
+    if (seen.has("id:" + r.id)) continue;
     keys.forEach((key) => seen.add(key));
     canonical.push(r);
   }

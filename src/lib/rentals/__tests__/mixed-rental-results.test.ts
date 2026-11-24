@@ -52,6 +52,15 @@ describe("mixed verified and source-linked rentals", () => {
     expect(mixed.distinctExternal).toBe(1);
   });
 
+  it("keeps distinct saved records with different viewing/provenance facts even if their source URL is shared", () => {
+    const first = rental("saved-a", "https://fincaraiz.com.co/apartamento/1", ["external-source"]);
+    const second = { ...first, id: "saved-b", can_schedule_viewing: true, tags: ["self-attested"] };
+    const duplicate = rental("external-copy", first.source_url);
+    const result = mixRentalResults([first, second], [duplicate], 8);
+    expect(result.results.map((r) => r.id)).toEqual(["saved-a", "saved-b"]);
+    expect(result.distinctExternal).toBe(0);
+  });
+
   it("keeps all external entries when canonical search returns no inventory", () => {
     expect(mixRentalResults([], Array.from({ length: 9 }, (_, i) => external(i)), 8).results).toHaveLength(8);
   });

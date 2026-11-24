@@ -1,6 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import { RENTAL_COMPARISON_TARGET, buildComparisonTableOps, comparisonRowSchema } from "@/mastra/lib/comparison-table-ui";
 import { GenerativeUISurface, useGenerativeUIRuntime } from "@copilotkit/react-core/v2/generative-ui";
 import { Button } from "@/components/ui/button";
 import { GalleryImage } from "@/components/rentals/gallery-image";
@@ -14,7 +15,7 @@ import { useOptionalConciergeCoAgent } from "@/components/chat/concierge-coagent
 /** The Rentals browse page does not mount the full chat transcript. Give the
  * same official Table a real page target; the full /chat keeps target="chat".
  * No new data or rendering library is introduced. */
-export const RENTAL_COMPARISON_TARGET = "rental-comparison";
+export { RENTAL_COMPARISON_TARGET };
 export const RENTAL_COMPARISON_COMPONENTS = ["Column", "Row", "Title", "Badge", "Table", "Text", "Caption", "Button", "Grid"] as const;
 
 const noopSubscribe = () => () => {};
@@ -27,12 +28,12 @@ function record(value: unknown): Record<string, unknown> | null {
 
 /** Read the ordered IDs from the existing server-built official Details buttons.
  * Treat the UI operations only as hints, never as a source of listing facts. */
-export function comparedRentalIds(operations: readonly unknown[], currentIds: readonly string[]): string[] {
+function comparisonNodes(operations: readonly unknown[]) {
   const nodes = new Map<string, Record<string, unknown>>();
   for (const operation of operations) {
     const op = record(operation);
     if (!op) continue;
-    if ("deleteSurface" in op) nodes.clear();
+    if ("deleteSurface" in op || "createSurface" in op) nodes.clear();
     const update = record(op.createSurface ?? op.updateComponents);
     if (!update || !Array.isArray(update.components)) continue;
     for (const value of update.components) {
@@ -40,6 +41,11 @@ export function comparedRentalIds(operations: readonly unknown[], currentIds: re
       if (node && typeof node.id === "string") nodes.set(node.id, node);
     }
   }
+  return nodes;
+}
+
+export function comparedRentalIds(operations: readonly unknown[], currentIds: readonly string[]): string[] {
+  const nodes = comparisonNodes(operations);
   const table = nodes.get("comparison");
   if (table?.component !== "Table" || !Array.isArray(table.columns)) return [];
   const count = table.columns.length - 1;
@@ -57,7 +63,35 @@ export function comparedRentalIds(operations: readonly unknown[], currentIds: re
   return ids;
 }
 
-export function useComparedRentalIds(results: readonly Rental[]): string[] {
+/** Compare the actual committed official Table and its price summary with the
+ * current search snapshot, not just IDs. No new query, inferred fields, or timing assumptions. */
+export function comparisonMatchesCurrentResults(
+  operations: readonly unknown[], ids: readonly string[], results: readonly Rental[],
+): boolean {
+  const rows = ids.flatMap((id) => {
+    const rental = results.find((row) => row.id === id);
+    const facts = comparisonRowSchema.safeParse(rental?.comparison_facts);
+    return facts.success && facts.data.id === id ? [facts.data] : [];
+  });
+  // Older cache entries without a complete recorded snapshot cannot prove freshness.
+  if (rows.length !== ids.length || ids.length < 2) return false;
+  const expected = buildComparisonTableOps(rows, undefined, { target: RENTAL_COMPARISON_TARGET });
+  if (!expected) return false;
+  const actualNodes = comparisonNodes(operations);
+  const expectedNodes = comparisonNodes(expected.operations);
+  const actual = actualNodes.get("comparison");
+  const wanted = expectedNodes.get("comparison");
+  return actual?.component === "Table" &&
+    JSON.stringify(actual.columns) === JSON.stringify(wanted?.columns) &&
+    JSON.stringify(actual.rows) === JSON.stringify(wanted?.rows) &&
+    actualNodes.get("comparison-summary")?.text === expectedNodes.get("comparison-summary")?.text;
+}
+
+export function comparisonIsCurrent(surfaceId: string, invalidated: ReadonlySet<string>): boolean {
+  return surfaceId.startsWith("comparison-table-") && !invalidated.has(surfaceId);
+}
+
+export function useComparedRentalIds(results: readonly Rental[], invalidated: ReadonlySet<string>): { ids: string[]; surfaceId?: string; stale?: boolean } {
   const runtime = useGenerativeUIRuntime();
   const manager = runtime?.manager;
   // CopilotKit's GenerativeUISurfaceManager requires both bound methods.
@@ -66,19 +100,23 @@ export function useComparedRentalIds(results: readonly Rental[]): string[] {
   const surface = manager?.getSurfaceForTarget(RENTAL_COMPARISON_TARGET);
   if (!surface || surface.status !== "ready" || surface.failed ||
       surface.serverRejected.length || surface.clientRejected.length ||
-      !surface.surfaceId.startsWith("comparison-table-")) return [];
-  return comparedRentalIds(surface.operations, results.map((row) => row.id));
+      !comparisonIsCurrent(surface.surfaceId, invalidated)) return { ids: [], surfaceId: surface?.surfaceId };
+  const ids = comparedRentalIds(surface.operations, results.map((row) => row.id));
+  const matches = comparisonMatchesCurrentResults(surface.operations, ids, results);
+  return { ids: matches ? ids : [], surfaceId: surface.surfaceId, stale: !matches };
 }
 
 /** The page supplies only current, authorized rows. Never enable arbitrary
  * Image URLs in the model catalog to show a comparison thumbnail. */
 export function ComparedRentalOptions({
-  ids, results, selectedPinId, onSelectMap,
+  ids, results, selectedPinId, onSelectMap, selectedForAskId, onAskSelect,
 }: {
   ids: readonly string[];
   results: readonly Rental[];
   selectedPinId: string | null;
   onSelectMap: (row: Rental) => void;
+  selectedForAskId?: string | null;
+  onAskSelect?: (row: Rental) => void;
 }) {
   if (ids.length < 2) return null;
   return (
@@ -103,6 +141,13 @@ export function ComparedRentalOptions({
               aria-label={"Show compared apartment " + (index + 1) + " on map"}>
               Show on map
             </Button> : <p className="mt-auto flex min-h-11 items-center text-sm text-muted-foreground">Map location unavailable</p>}
+            {onAskSelect ? <Button type="button" size="sm" className="mt-2 min-h-11 w-full"
+              variant={selectedForAskId === id ? "secondary" : "outline"}
+              aria-pressed={selectedForAskId === id}
+              data-testid="rental-ask-select"
+              onClick={() => onAskSelect(row)}>
+              {selectedForAskId === id ? "Clear selection" : "Ask about this"}
+            </Button> : null}
           </div>
         );
       })}
@@ -110,13 +155,13 @@ export function ComparedRentalOptions({
   );
 }
 
-export function RentalComparisonSurface({ children }: { children?: React.ReactNode }) {
+export function RentalComparisonSurface({ children, visible }: { children?: React.ReactNode; visible: boolean }) {
   const runtime = useGenerativeUIRuntime();
   const coAgent = useOptionalConciergeCoAgent();
   if (!runtime || !coAgent) return null;
 
   return (
-    <section aria-label="Apartment comparison" data-testid="rental-comparison-surface" className={children ? "mb-3 min-w-0 max-w-full rounded-xl border border-border bg-card p-3 shadow-sm sm:p-4" : undefined}>
+    <section hidden={!visible} aria-label="Apartment comparison" data-testid="rental-comparison-surface" className={children ? "mb-3 min-w-0 max-w-full rounded-xl border border-border bg-card p-3 shadow-sm sm:p-4" : undefined}>
       {children}
       <GenerativeUISurface
       id={RENTAL_COMPARISON_TARGET}

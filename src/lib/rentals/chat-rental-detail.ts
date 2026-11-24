@@ -1,4 +1,5 @@
 import type { Rental } from "@/mastra/tools/search-rentals";
+import { comparisonRowSchema } from "@/mastra/lib/comparison-table-ui";
 
 /**
  * SAN-1504 — turn one rental result row from the chat envelope into the full `Rental` the details
@@ -45,6 +46,7 @@ const OPTIONAL: Record<string, (value: unknown) => boolean> = {
   latitude: isNumber,
   longitude: isNumber,
   price_monthly: isNumber,
+  comparison_facts: (value) => comparisonRowSchema.safeParse(value).success,
 };
 
 export function toDetailRental(row: unknown): Rental | null {

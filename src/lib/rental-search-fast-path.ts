@@ -27,6 +27,8 @@ export function rentalsToToolEnvelope(
       neighborhood: r.neighborhood,
       bedrooms: r.bedrooms,
       bedrooms_unknown: r.bedrooms_unknown,
+      furnished: r.furnished,
+      comparison_facts: r.comparison_facts,
       nightly_price: r.nightly_price,
       price_monthly: r.price_monthly,
       currency: r.currency,

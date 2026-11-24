@@ -77,7 +77,9 @@ describe("deduplicateApartmentRows", () => {
   });
   it.each([{ landlord_id: "owner-b" }, { floor_number: 5 }, { source_listing_id: "another-unit" },
     { slug: "another-unit" }, { images: ["https://example.com/other.jpg"] }, { price_monthly: 2_500_000 },
-    { bathrooms: 2 }, { description: "Different apartment number" }])("preserves distinct evidence: %j", (difference) => {
+    { bathrooms: 2 }, { description: "Different apartment number" },
+    { moderation_status: "approved" }, { listing_workflow_status: "published" },
+    { rental_can_request_viewing: true }, { metadata: { provenance: "external-source" } }])("preserves distinct evidence: %j", (difference) => {
     expect(deduplicateApartmentRows([rawRow("a"), rawRow("b", difference)])).toHaveLength(2);
   });
   it("does not infer equality from missing addresses, owners or partial projections", () => {

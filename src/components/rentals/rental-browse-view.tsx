@@ -123,7 +123,12 @@ function RentalBrowseViewInner({
   }, [answerScope]);
   const shownResults = activeAsk?.results ?? results;
   const shownTotal = activeAsk?.total ?? total;
-  const comparedIds = useComparedRentalIds(shownResults);
+  const [invalidatedComparisons, setInvalidatedComparisons] = useState<ReadonlySet<string>>(() => new Set());
+  const invalidateComparison = useCallback((surfaceId: string | undefined) => {
+    if (surfaceId) setInvalidatedComparisons((previous) =>
+      previous.has(surfaceId) ? previous : new Set([...previous, surfaceId]));
+  }, []);
+  const { ids: comparedIds, surfaceId: comparisonSurfaceId, stale: comparisonStale } = useComparedRentalIds(shownResults, invalidatedComparisons);
   const otherResults = comparedIds.length ? shownResults.filter((row) => !comparedIds.includes(row.id)) : shownResults;
   const currentAnswer = textAnswer?.scope === answerScope ? textAnswer.text : null;
   const matchParams = useMemo(() => {
@@ -169,6 +174,10 @@ function RentalBrowseViewInner({
   const [suggestedStay, setSuggestedStay] = useState<SuggestedStay | null>(null);
   const [askSelectedId, setAskSelectedId] = useState<string | null>(null);
   const selectedForAskId = shownResults.some((r) => r.id === askSelectedId) ? askSelectedId : null;
+  const toggleAskSelection = (rental: Rental) => {
+    setDetailsId(null);
+    setAskSelectedId((previous) => previous === rental.id ? null : rental.id);
+  };
   const detailsRental = useMemo(
     () => (detailsId ? (shownResults.find((r) => r.id === detailsId) ?? null) : null),
     [detailsId, shownResults],
@@ -235,10 +244,7 @@ function RentalBrowseViewInner({
         duplicateNote={duplicateNotes.get(r.id)}
         onDetails={() => openDetailsFor(r)}
         selectedForAsk={selectedForAskId === r.id}
-        onAskSelect={() => {
-          setDetailsId(null);
-          setAskSelectedId((previous) => previous === r.id ? null : r.id);
-        }}
+        onAskSelect={() => toggleAskSelection(r)}
       />
     );
   });
@@ -336,11 +342,12 @@ function RentalBrowseViewInner({
           {/* SAN-1656 — the named AI recommendations panel. It renders nothing
               until Ask MDE targets it, so native results/map/Details are unchanged. */}
           {!comparedIds.length ? <RentalRecommendationsSurface /> : null}
-          <RentalComparisonSurface>
+          <RentalComparisonSurface visible={comparedIds.length > 0}>
             {comparedIds.length > 0 ? <ComparedRentalOptions ids={comparedIds} results={shownResults} selectedPinId={selectedPinId}
+              selectedForAskId={selectedForAskId} onAskSelect={toggleAskSelection}
               onSelectMap={(row) => { const pin = rentalToMapPin(row); if (pin) panToPin(pin.id); }} /> : null}
           </RentalComparisonSurface>
-          <RentalComparisonStatus message={comparisonErrorMessage} />
+          <RentalComparisonStatus message={comparisonErrorMessage ?? (comparisonStale ? "This comparison no longer matches the displayed listings. Search again and compare the latest results." : null)} />
           {/* A saved viewing request must be visible where it was made, not only in the chat. */}
           <LeadConfirmationBanner />
           {error ? (
@@ -405,7 +412,7 @@ function RentalBrowseViewInner({
                 variant="ghost"
                 size="sm"
                 className="min-h-11 lg:min-h-0"
-                onClick={() => { clearResults(); acceptTextAnswer(null); }}
+                onClick={() => { invalidateComparison(comparisonSurfaceId); clearResults(); acceptTextAnswer(null); }}
                 data-testid="rental-ask-answer-clear"
               >
                 Clear answer

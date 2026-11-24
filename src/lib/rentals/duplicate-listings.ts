@@ -92,7 +92,11 @@ export const APARTMENT_DUPLICATE_FIELDS = [
   "pet_friendly",
   "smoking_allowed",
   "parking_included",
-  "status"
+  "status",
+  "moderation_status",
+  "listing_workflow_status",
+  "rental_can_request_viewing",
+  "metadata",
 ] as const;
 
 /** Preserve the first ranked record and its original ID. Only collapse records with

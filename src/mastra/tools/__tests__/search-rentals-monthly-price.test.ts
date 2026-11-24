@@ -182,6 +182,9 @@ describe("searchRentals — SAN-1356 monthly price projection", () => {
       const requestContext = new RequestContext();
       const answer = await searchRentalsTool.execute!(query, { requestContext } as never) as { results: Array<{ id: string }> };
       expect(answer.results.map((row) => row.id)).toEqual(["apt-a", "apt-c"]);
+      expect(answer.results[0]).toMatchObject({ comparison_facts: {
+        id: "apt-a", priceMonthly: 2400000, priceNightly: null, bathrooms: 1, furnished: true,
+      } });
       expect(await currentRentalResultIds(requestContext as never)).toEqual(["apt-a", "apt-c"]);
     } finally {
       mocks.state.rows = null;

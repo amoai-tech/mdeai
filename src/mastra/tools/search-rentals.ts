@@ -15,6 +15,7 @@ import { z } from 'zod';
 import { runAuditedSearch } from '../lib/run-audited-search';
 import { startRentalRunSearch } from '../lib/generative-ui-context';
 import { COMPARISON_COP_MONTHLY_BUDGET_KEY } from '../lib/comparison-table-intent';
+import { comparisonRowSchema, comparisonRowFromApartment } from '../lib/comparison-table-ui';
 import { EXTERNAL_RENTAL_BUDGET_NOTE, getOptionalExternalRentals, mixRentalResults } from '@/lib/rentals/mixed-rental-results';
 import {
   RentalSearchUnavailableError,
@@ -84,6 +85,8 @@ export const rentalSchema = z.object({
   longitude: z.number().optional(),
   /** Monthly price when available (authoritative for monthly display). */
   price_monthly: z.number().optional(),
+  /** Raw recorded comparison facts, not inferred nightly/bedroom display defaults. */
+  comparison_facts: comparisonRowSchema.optional(),
 });
 
 export type Rental = z.infer<typeof rentalSchema>;
@@ -181,6 +184,8 @@ export interface ApartmentRow {
   neighborhood: string;
   bedrooms: number | null;
   furnished?: boolean | null;
+  bathrooms?: number | null;
+  size_sqm?: number | null;
   /**
    * Genuinely nullable in the database. It was declared non-null here, which is what let
    * `Number(null) === 0` pass unnoticed and turn a monthly-only listing into "$0/night".
@@ -485,6 +490,7 @@ export function rowToRental(r: ApartmentRow): Rental {
     latitude: r.latitude != null ? Number(r.latitude) : undefined,
     longitude: r.longitude != null ? Number(r.longitude) : undefined,
     price_monthly: r.price_monthly != null ? Number(r.price_monthly) : undefined,
+    comparison_facts: comparisonRowFromApartment(r),
   });
 }
 
@@ -544,17 +550,12 @@ async function searchRentalsFromSupabase(
   const maxNightly =
     typeof query.maxPricePerNight === 'number' ? query.maxPricePerNight : null;
   const monthlyBudget = monthlyBudgetFromQuery(query);
-  // MVP: count:'exact' for accurate browse subtitle (~180 active listings). Revisit
-  // estimated/cached counts post-MVP if apartments table grows materially.
-  // Bounded headroom lets copies give way to the next distinct listing.
-  const candidateLimit = (n: number) => Math.max(n, Math.min(100, n * 2));
-
-  // `head` asks PostgREST for the exact count without shipping the rows, so the alternatives'
-  // total is still reported when the confirmed group already filled the page.
-  const baseQuery = (columns: string = APARTMENT_SEARCH_SELECT, head = false) => {
-    let b = client
-      .from('apartments')
-      .select(columns, head ? { count: 'exact', head: true } : { count: 'exact' });
+  // The catalogue is small prelaunch, but PostgREST has a row cap. Read the complete
+  // ordered matching set in bounded pages before deduplicating and slicing results.
+  // An exact raw count alone cannot tell us how many of the unseen rows are copies.
+  const PAGE_SIZE = 100;
+  const baseQuery = () => {
+    let b = client.from('apartments').select(APARTMENT_SEARCH_SELECT, { count: 'exact' });
     if (!developmentMode) {
       b = b.eq('status', 'active').not('landlord_id', 'is', null);
     }
@@ -580,69 +581,60 @@ async function searchRentalsFromSupabase(
     });
   };
 
-  type BudgetQueryResult = { data: unknown; error: { code?: string } | null; count: number | null };
-  const runQuery = async (q: PromiseLike<BudgetQueryResult>) => {
-    const { data, error, count } = await q;
-    if (error) {
-      // Only the stable PostgREST/Postgres code travels; the message can carry hosts and ports.
-      throw new RentalSearchUnavailableError(`query_failed${error.code ? `:${error.code}` : ''}`);
+  const runQuery = async (build: () => ReturnType<typeof baseQuery>) => {
+    const raw: ApartmentRow[] = [];
+    for (let offset = 0; ;) {
+      const builder = build();
+      const { data, error, count } = await (offset === 0
+        ? builder.limit(PAGE_SIZE)
+        : builder.range(offset, offset + PAGE_SIZE - 1));
+      if (error) {
+        // Only the stable PostgREST/Postgres code travels, never hosts or ports.
+        throw new RentalSearchUnavailableError('query_failed' + (error.code ? ':' + error.code : ''));
+      }
+      const page = (data ?? []) as ApartmentRow[];
+      raw.push(...page);
+      offset += page.length;
+      if (count != null ? offset >= count : page.length < PAGE_SIZE) break;
+      // Do not return a misleading count if pagination unexpectedly stops.
+      if (!page.length) throw new RentalSearchUnavailableError('incomplete_result_count');
     }
-    const raw = (data ?? []) as ApartmentRow[];
     const rows = deduplicateApartmentRows(raw);
-    // Exact for a complete candidate window; otherwise subtract only observed copies.
-    return { rows, count: Math.max(rows.length, (count ?? raw.length) - (raw.length - rows.length)) };
+    return { rows, count: rows.length };
   };
 
   let confirmedRows: ApartmentRow[] = [];
   let alternativeRows: ApartmentRow[] = [];
   let total: number;
   if (monthlyBudget || maxNightly !== null) {
-    // A hard monthly budget returns ONLY comparable monthly prices in the named currency.
-    // For a nightly cap, keep the existing clearly labelled other-currency alternatives.
+    // Hard monthly budgets remain currency-specific. Nightly alternatives use
+    // the same distinct-count semantics even when the confirmed page is full.
     const budgetCurrency = monthlyBudget ? monthlyBudget.currency : NIGHTLY_BUDGET_CURRENCY;
     const predicate = rentalBudgetPredicate(maxNightly, monthlyBudget);
-    const confirmed = await runQuery(
+    const confirmed = await runQuery(() =>
       baseQuery()
         .eq('currency', budgetCurrency)
         .or(predicate)
         .order(monthlyBudget ? 'price_monthly' : 'price_daily', {
-          ascending: true,
-          nullsFirst: false,
+          ascending: true, nullsFirst: false,
         })
-        .order('id', { ascending: true })
-        .limit(candidateLimit(limit)),
+        .order('id', { ascending: true }),
     );
-    const remaining = Math.max(0, limit - confirmed.rows.length);
-    // The alternatives' exact count is independent of how many of them fit on this page, so a full
-    // confirmed page still reports the true total instead of dropping the alternatives from it.
-    const countAlternatives = async () => {
-      const { count, error } = await baseQuery('id', true)
-        .neq('currency', budgetCurrency)
-        .or(predicate);
-      if (error) {
-        throw new RentalSearchUnavailableError(`query_failed${error.code ? `:${error.code}` : ''}`);
-      }
-      return count ?? 0;
-    };
-    const alternatives =
-      monthlyBudget
-        ? { rows: [] as ApartmentRow[], count: 0 }
-        : remaining === 0
-          ? { rows: [] as ApartmentRow[], count: await countAlternatives() }
-          : await runQuery(
-            baseQuery()
-              .neq('currency', budgetCurrency)
-              .or(predicate)
-              .order('price_daily', { ascending: true, nullsFirst: false })
-              .order('id', { ascending: true })
-              .limit(candidateLimit(remaining)),
-          );
+    const alternatives = monthlyBudget
+      ? { rows: [] as ApartmentRow[], count: 0 }
+      : await runQuery(() =>
+        baseQuery()
+          .neq('currency', budgetCurrency)
+          .or(predicate)
+          .order('price_daily', { ascending: true, nullsFirst: false })
+          .order('id', { ascending: true }),
+      );
     confirmedRows = confirmed.rows;
     alternativeRows = alternatives.rows;
     total = confirmed.count + alternatives.count;
   } else {
-    const all = await runQuery(
-      baseQuery().order('price_daily', { ascending: true, nullsFirst: false }).order('id', { ascending: true }).limit(candidateLimit(limit)),
+    const all = await runQuery(() =>
+      baseQuery().order('price_daily', { ascending: true, nullsFirst: false }).order('id', { ascending: true }),
     );
     confirmedRows = all.rows;
     total = all.count;
@@ -913,6 +905,7 @@ export const searchRentalsTool = createTool({
         // The Mastra chat tool manually projects rows: keep the canonical stored
         // furnishing fact, or mobile cards silently turn true/false into unknown.
         furnished: r.furnished ?? null,
+        comparison_facts: r.comparison_facts,
         nightly_price: r.nightly_price,
         price_monthly: r.price_monthly,
         currency: r.currency,
@@ -925,6 +918,7 @@ export const searchRentalsTool = createTool({
         images: r.images,
         photo_count: r.photo_count,
         source_url: r.source_url,
+        source_provider: r.source_provider,
         can_schedule_viewing: r.can_schedule_viewing,
         schedule_viewing_url: r.schedule_viewing_url,
         latitude: r.latitude,
