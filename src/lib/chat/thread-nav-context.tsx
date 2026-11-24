@@ -42,8 +42,8 @@ function parseTabThread(raw: string | null, owner: string): TabThread | null {
   } catch { return null; }
 }
 
-function historySelection(owner: string): string | null | undefined {
-  const value: unknown = window.history.state?.[HISTORY_KEY];
+function historySelection(owner: string, historyKey: string): string | null | undefined {
+  const value: unknown = window.history.state?.[historyKey];
   if (!value || typeof value !== "object") return undefined;
   const record = value as Partial<HistorySelection>;
   if (record.owner !== owner) return undefined;
@@ -52,8 +52,8 @@ function historySelection(owner: string): string | null | undefined {
     ? record.threadId : undefined;
 }
 
-function recordSelection(owner: string, threadId: string | null, push: boolean) {
-  const state = { ...window.history.state, [HISTORY_KEY]: { owner, threadId } };
+function recordSelection(owner: string, threadId: string | null, push: boolean, historyKey: string) {
+  const state = { ...window.history.state, [historyKey]: { owner, threadId } };
   // Keep the current URL and all of Next's internal history fields intact.
   if (push) window.history.pushState(state, "", window.location.href);
   else window.history.replaceState(state, "", window.location.href);
@@ -93,7 +93,11 @@ const ThreadNavContext = createContext<ThreadNavContextValue | null>(null);
  * Until then the tab gets a brand-new, non-explicit UUID that cannot replay
  * anyone's history.
  */
-export function ThreadNavProvider({ children }: { children: ReactNode }) {
+export function ThreadNavProvider({ children, scope = "discovery" }: { children: ReactNode; scope?: "discovery" | "broker" }) {
+  // Broker operations must not adopt the customer discovery tab's selection.
+  // Both scopes retain the existing owner validation and per-tab persistence.
+  const storageKey = scope === "broker" ? STORAGE_KEY + ":broker" : STORAGE_KEY;
+  const historyKey = scope === "broker" ? HISTORY_KEY + "_broker" : HISTORY_KEY;
   const { user, loading } = useSession();
   const owner = user?.id ?? "anon";
   // Client-minted so the chat has one stable id from its first paint. The
@@ -113,7 +117,7 @@ export function ThreadNavProvider({ children }: { children: ReactNode }) {
   const [mayRestore] = useState(() => {
     if (typeof window === "undefined") return false;
     try {
-      const raw = sessionStorage.getItem(STORAGE_KEY);
+      const raw = sessionStorage.getItem(storageKey);
       if (!raw) return false;
       const value = JSON.parse(raw) as { activeThreadId?: unknown; savedThreadId?: unknown };
       return typeof value.activeThreadId === "string" || typeof value.savedThreadId === "string";
@@ -131,9 +135,9 @@ export function ThreadNavProvider({ children }: { children: ReactNode }) {
       const nav = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
       const copiedFromOpener = Boolean(window.opener && nav?.type === "navigate");
       stored = copiedFromOpener || restoreDismissed
-        ? null : parseTabThread(sessionStorage.getItem(STORAGE_KEY), owner);
+        ? null : parseTabThread(sessionStorage.getItem(storageKey), owner);
     } catch { /* Storage may be disabled; in-memory navigation still works. */ }
-    const fromHistory = historySelection(owner);
+    const fromHistory = historySelection(owner, historyKey);
     const next: TabThread = stored
       ? {
           ...stored,
@@ -153,9 +157,9 @@ export function ThreadNavProvider({ children }: { children: ReactNode }) {
     queueMicrotask(() => {
       if (!cancelled) setTab(next);
     });
-    recordSelection(owner, next.activeThreadId ?? null, false);
+    recordSelection(owner, next.activeThreadId ?? null, false, historyKey);
     return () => { cancelled = true; };
-  }, [owner, loading, tab, restoreDismissed]);
+  }, [owner, loading, tab, restoreDismissed, storageKey, historyKey]);
 
   useEffect(() => {
     // Before the owner is resolved, only a selection the person just made may
@@ -171,24 +175,24 @@ export function ThreadNavProvider({ children }: { children: ReactNode }) {
         owner: tab.owner === PENDING ? owner : tab.owner,
       };
       delete stored.restored;
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
+      sessionStorage.setItem(storageKey, JSON.stringify(stored));
     } catch { /* no storage */ }
-  }, [tab, owner, ready]);
+  }, [tab, owner, ready, storageKey]);
 
   useEffect(() => {
     if (!ready) return;
     const onPopState = () => {
-      const threadId = historySelection(owner);
+      const threadId = historySelection(owner, historyKey);
       if (threadId === undefined || threadId === (tab?.activeThreadId ?? null)) return;
       // The chat surface detaches an in-flight answer and clears stale cards
       // before changing threads. Nothing listens outside /chat.
-      window.dispatchEvent(new Event("mde:chat-history-selection"));
+      if (scope === "discovery") window.dispatchEvent(new Event("mde:chat-history-selection"));
       setTab((old) => old?.owner === owner
         ? { ...old, activeThreadId: threadId ?? undefined } : old);
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
-  }, [owner, ready, tab?.activeThreadId]);
+  }, [owner, ready, tab?.activeThreadId, historyKey, scope]);
 
   const currentActiveThreadId = tab?.activeThreadId;
   const setActiveThreadId = useCallback<Dispatch<SetStateAction<string | undefined>>>((value) => {
@@ -210,9 +214,9 @@ export function ThreadNavProvider({ children }: { children: ReactNode }) {
     // A direct selection becomes one Back/Forward step. Doing it here keeps the
     // rail on the same public contract it had before SAN-1413 (setActiveThreadId
     // + stopActiveRun), so both behaviours compose.
-    recordSelection(owner, value ?? null, true);
+    recordSelection(owner, value ?? null, true, historyKey);
     setTab((old) => (applies(old) ? { ...old, activeThreadId: value } : old));
-  }, [owner, ready, restoringSavedThread, currentActiveThreadId]);
+  }, [owner, ready, restoringSavedThread, currentActiveThreadId, historyKey]);
 
   const selectSavedThread = useCallback((id: string) => {
     if (!UUID.test(id)) return;
@@ -223,10 +227,10 @@ export function ThreadNavProvider({ children }: { children: ReactNode }) {
     // New Chat is a deliberate discard, even if a stored selection is still
     // waiting for auth. Never resurrect that conversation after auth settles.
     setRestoreDismissed(true);
-    recordSelection(owner, null, true);
+    recordSelection(owner, null, true, historyKey);
     setTab({ owner: ready ? owner : PENDING, sessionThreadId: crypto.randomUUID() });
     setNewChatCount((n) => n + 1);
-  }, [owner, ready]);
+  }, [owner, ready, historyKey]);
 
   const markThreadSaved = useCallback((id: string) => {
     // Owned transcript replay is authenticated. A guest's local fast path or

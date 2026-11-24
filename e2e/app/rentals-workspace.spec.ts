@@ -94,7 +94,8 @@ test.describe("SAN-1578 /app rentals", { tag: ["@app", "@rentals"] }, () => {
         await page.setViewportSize({ width, height: 900 });
         await expect(page.getByTestId("rentals-broker-frame")).toBeVisible();
         await expect(page.getByTestId("rc-right")).toBeVisible();
-        await expect(page.getByTestId("rc-center")).not.toBeVisible();
+        await expect(page.getByTestId("rentals-ask-mde-slot")).toBeVisible();
+        await expect(page.getByTestId("rc-center")).toHaveCount(1);
         await expect(page.getByTestId("host-rentals-nav-overview")).toHaveAttribute("aria-current", "page");
         await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
       }

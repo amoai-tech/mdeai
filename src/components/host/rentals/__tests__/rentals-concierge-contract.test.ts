@@ -12,15 +12,19 @@ describe("SAN-1124 broker concierge integration contract", () => {
     const center = readComponent("rentals-concierge-center.tsx");
     expect(center).toContain('from "@copilotkit/react-core/v2"');
     const shell = readComponent("rentals-concierge-shell.tsx");
-    // One live provider per concierge route: app chat only, legacy host
-    // retains its standalone provider. The shared frame never starts chat.
-    expect(shell.match(/<ChatProvider persistThread sessionFallback=/g)).toHaveLength(2);
-    expect(shell).toContain('basePath === "/app/rentals" ? workspace : (');
-    const frame = shell.split("export function RentalsBrokerFrame")[1].split("export function RentalsConciergeShell")[0];
-    expect(frame).toContain("<MdeDashboardRenderProvider>");
-    expect(frame).not.toContain("<ChatProvider");
-    expect(frame).toContain("{children}");
-    expect(shell).toContain('basePath !== "/app/rentals" && <HostRentalsNav');
+    // The shared frame owns the app's bottom chat; legacy host uses the
+    // same scoped provider without mounting a second chat in app children.
+    const ask = readComponent("rentals-ask-mde.tsx");
+    expect(ask.match(/<ChatProvider persistThread sessionFallback=/g)).toHaveLength(1);
+    expect(ask).toContain('scope="broker"');
+    expect(ask).toContain("window.addEventListener(BROKER_ASK_MDE_EVENT, onAsk)");
+    const appShell = readFileSync(join(ROOT, "../../app/app-shell.tsx"), "utf8");
+    expect(appShell).toContain('href={brokerRentals ? "/app/rentals" : "/chat"}');
+    expect(appShell).toContain("window.dispatchEvent(new Event(BROKER_ASK_MDE_EVENT");
+    expect(ask).toContain('activated && <BrokerChatProvider');
+    expect(shell).toContain("<RentalsAskMde>{children}</RentalsAskMde>");
+    expect(shell).toContain("<MdeDashboardRenderProvider>");
+    expect(shell).toContain('if (basePath === "/app/rentals")');
     expect(center).not.toContain("<ChatProvider");
     expect(shell).toContain("<RentalsConciergeCenter");
     expect(shell).toContain("<RentalsDynamicWorkspace");
@@ -68,9 +72,9 @@ describe("one top-level heading on the broker concierge", () => {
 
 describe("broker conversation survives a reload", () => {
   it("opts into thread persistence and relies on the shared writer", () => {
-    const shell = readComponent("rentals-concierge-shell.tsx");
+    const ask = readComponent("rentals-ask-mde.tsx");
     // Without this the broker chat runs but never saves, so a refresh erased the conversation.
-    expect(shell).toContain("<ChatProvider persistThread sessionFallback=");
+    expect(ask).toContain("<ChatProvider persistThread sessionFallback=");
     const provider = readFileSync(join(ROOT, "..", "..", "chat", "chat-provider.tsx"), "utf8");
     expect(provider).toContain("export function BrokerThreadSaver");
     expect(provider).toContain('fetch(`/api/threads/${encodeURIComponent(threadId)}/messages`');
@@ -82,9 +86,9 @@ describe("broker conversation survives a reload", () => {
 describe("SAN-1683 shared route frame", () => {
   it("renders the selected Overview instead of hiding it behind mobile Chat", () => {
     const shell = readComponent("rentals-concierge-shell.tsx");
-    expect(shell).toContain('basePath === "/app/rentals" && workspaceMode === "overview"');
+    expect(shell).toContain('if (basePath === "/app/rentals")');
     expect(shell).toContain('surfaceId="rentals-workspace-header"');
-    expect(shell).toContain('data-testid="rentals-ask-mde-slot"');
+    expect(readComponent("rentals-ask-mde.tsx")).toContain('data-testid="rentals-ask-mde-slot"');
     expect(readComponent("host-rentals-nav.tsx")).toContain('aria-current={active ? "page" : undefined}');
   });
 });
