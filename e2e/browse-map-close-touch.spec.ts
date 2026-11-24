@@ -123,3 +123,32 @@ test("390px Rentals exposes compact filters and account without losing the map o
   await expect(filter).toHaveCount(0);
   await expect(page.getByRole("group", { name: "Neighborhood filters" })).toBeVisible();
 });
+
+for (const viewport of [{ width: 844, height: 390 }, { width: 320, height: 256 }]) {
+  test(`Rentals keeps the map reachable and closable at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+    test.slow();
+    await page.setViewportSize(viewport);
+    await page.goto("/rentals", { waitUntil: "domcontentloaded" });
+    const trigger = page.getByTestId("browse-map-fab");
+    await expect(trigger).toHaveCount(1);
+    await expect(trigger).toBeVisible({ timeout: 10000 });
+    await expect(trigger).toHaveCSS("position", "static");
+    await waitUntilInteractive(trigger, "short-screen Map button");
+    await trigger.click();
+    const close = page.getByTestId("browse-map-close");
+    const map = page.locator('[data-slot="sheet-content"]').getByTestId("chat-map");
+    await expect(close).toBeInViewport();
+    await expect(map).toBeVisible();
+    await expect(page.getByTestId("browse-map-loading")).toBeHidden({ timeout: 15000 });
+    await expect.poll(async () => {
+      const rect = await close.boundingBox();
+      return rect ? rect.y >= 0 && rect.y + rect.height <= viewport.height && rect.height >= 44 : false;
+    }).toBe(true);
+    await close.click();
+    await expect(close).toBeHidden();
+    await expect(trigger).toBeFocused();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(trigger).toHaveCSS("position", "fixed");
+    await expect(trigger).toBeInViewport();
+  });
+}

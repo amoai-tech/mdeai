@@ -433,15 +433,31 @@ html {
   [data-testid="rentals-browse"] [data-testid="browse-map-fab"][data-reserve-mobile-nav="true"] {
     min-width: 44px;
   }
+  /* When the keyboard hides navigation, put the same trigger in normal flow
+     rather than overlay the composer or remove access to the map. */
   html[data-mde-no-nav] [data-testid="rentals-browse"] [data-testid="browse-map-fab"][data-reserve-mobile-nav="true"] {
-    display: none;
+    position: static;
+    display: flex;
+    margin: 0.5rem 1rem 0.5rem auto;
   }
 }
-@media (max-height: 480px) {
+@media (max-width: 1023px) and (max-height: 480px) {
   [data-testid="rentals-browse"] [data-testid="workspace-header"] {
     transform: none;
   }
+  /* The header is already in normal flow at short heights. Keep the one map
+     trigger just below it, reachable by scrolling, including at 400% reflow. */
   [data-testid="rentals-browse"] [data-testid="browse-map-fab"][data-reserve-mobile-nav="true"] {
-    display: none;
+    position: static;
+    display: flex;
+    margin: 0.5rem 1rem 0.5rem auto;
+  }
+}
+@media (max-height: 480px) {
+  /* Leave room for the 56px Close toolbar and the safe area on short screens. */
+  [data-testid="browse-map-holder"] {
+    min-height: 0;
+    max-height: calc(100vh - 3.5rem - env(safe-area-inset-bottom, 0px) - 1px);
+    max-height: calc(100dvh - 3.5rem - env(safe-area-inset-bottom, 0px) - 1px);
   }
 }

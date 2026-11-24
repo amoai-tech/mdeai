@@ -86,7 +86,7 @@ export function BrowseMapSheet({ raised = false, inline = false, reserveMobileNa
               map sheet; `vh` rather than `dvh` so an older browser cannot drop the declaration and blank
               the map again. */}
           <AppErrorBoundary fallback={<BrowseMapFallback />} label="browse-map-sheet">
-            <div className="relative h-[min(70vh,520px)] min-h-[280px] w-full">
+            <div data-testid="browse-map-holder" className="relative h-[min(70vh,520px)] min-h-[280px] w-full">
               <MapsShell>
                 <ChatMap mapDomId="browse-map-sheet" mapResizeSignal={open ? 1 : 0} onMapSettled={markLoaded} />
               </MapsShell>
