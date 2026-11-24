@@ -3,7 +3,10 @@ import { validateOperation } from "@copilotkit/shared";
 import { mdeUI } from "@/components/copilot/a2ui/mde-ui-catalog";
 import type { z } from "zod";
 import type { BrokerDashboardView, BrokerViewingRequest } from "../broker-dashboard-types";
-import { buildBrokerOverviewOperations, rescheduleDraftPath } from "../broker-overview-ui";
+import { buildBrokerOverviewOperations as buildOperations, rescheduleDraftPath } from "../broker-overview-ui";
+
+const rendererKey = "77777777-7777-4777-8777-777777777777";
+const buildBrokerOverviewOperations = (view: BrokerDashboardView) => buildOperations(view, rendererKey);
 
 const request = (overrides: Partial<BrokerViewingRequest>): BrokerViewingRequest => ({
   leadId: "11111111-1111-4111-8111-111111111111",
@@ -89,11 +92,11 @@ describe("broker Overview as official CopilotKit components (SAN-1675)", () => {
     const id = "22222222-2222-4222-8222-222222222222";
     const nodes = nodesOf(buildBrokerOverviewOperations(view([request({ showingId: id })])));
     expect(nodes.find((n) => n.id === "req-0-confirm")?.onClick).toEqual({
-      functionCall: { "@call": "brokerViewingAction", args: { showingId: id, action: "confirm" } },
+      functionCall: { "@call": "brokerViewingAction", args: { rendererKey, showingId: id, action: "confirm" } },
     });
     expect(nodes.find((n) => n.id === "req-0-move")?.onClick).toEqual({
       functionCall: { "@call": "brokerViewingAction",
-        args: { showingId: id, action: "reschedule", newWallClock: { "@path": rescheduleDraftPath(id) } } },
+        args: { rendererKey, showingId: id, action: "reschedule", newWallClock: { "@path": rescheduleDraftPath(id) } } },
     });
     expect(nodes.find((n) => n.id === "req-0-when")?.value).toEqual({ "@path": rescheduleDraftPath(id) });
     // A confirmed request can only be cancelled; a closed one has no actions.

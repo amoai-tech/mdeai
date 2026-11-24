@@ -482,7 +482,7 @@
     {
       "file": "src/components/copilot/a2ui/mde-dashboard-surface.tsx",
       "classification": "keep",
-      "note": "SAN-1675: renders official Standard Catalog operations from real page data with no AI turn, using the public v2 surface manager ingest + SurfaceView on a dashboard thread with no registered target. Reuses an existing provider; agentless broker routes get the same CopilotKitProvider with MDE_GENERATIVE_UI and run no agent."
+      "note": "SAN-1675: renders official Standard Catalog operations from real page data with no AI turn, using the public v2 surface manager ingest + SurfaceView on a dashboard thread with no registered target. Reuses the existing route-owned provider; never creates a second runtime connection."
     },
     {
       "file": "src/components/copilot/a2ui/mde-standard-restrictions.ts",
@@ -492,7 +492,7 @@
     {
       "file": "src/components/host/rentals/broker-overview-surface.tsx",
       "classification": "keep",
-      "note": "SAN-1675: broker Overview consumer; registers brokerViewingAction with the official useGenerativeUIFunction and calls the existing PATCH /api/host/rentals/viewings/:id writer with the persisted expectation."
+      "note": "SAN-1675: broker Overview consumer; registers a mount-key-scoped brokerViewingAction with the official useGenerativeUIFunction and calls the existing PATCH /api/host/rentals/viewings/:id writer with the persisted expectation."
     },
     {
       "file": "src/lib/rentals/__tests__/broker-overview-ui.test.ts",

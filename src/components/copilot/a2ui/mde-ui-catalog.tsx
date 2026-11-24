@@ -726,11 +726,12 @@ export const mdeUI = createGenerativeUI({
     // status/time as the expectation to the existing PATCH route (409 on stale).
     brokerViewingAction: {
       parameters: z.object({
+        rendererKey: z.string().uuid(),
         showingId: z.string().uuid(),
         action: z.enum(["confirm", "cancel", "reschedule"]),
         // The bound DateTimeInput draft; empty until the broker picks a time. The
         // handler validates the format and the server resolves it to a Medellín instant.
-        newWallClock: z.string().max(32).optional(),
+        newWallClock: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/).optional(),
       }),
       allowedCallers: "rendererOnly",
       requiresUserActivation: true,

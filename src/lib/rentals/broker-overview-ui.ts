@@ -12,7 +12,7 @@ import {
  * No AI turn: the page ingests these operations directly (see
  * `MdeDashboardSurface`). Every value comes from the loaded view; nothing is
  * estimated. Viewing actions call the registered `brokerViewingAction`
- * function with only a showing ID; the page resolves the record and sends the
+ * function with a showing ID and a private dashboard mount key; the page resolves the record and sends the
  * persisted status/time to the existing PATCH route.
  */
 
@@ -35,10 +35,10 @@ function statusCounts(requests: readonly BrokerViewingRequest[]) {
   return [...counts].map(([status, count]) => ({ status, requests: count }));
 }
 
-function requestNodes(request: BrokerViewingRequest, index: number): { cells: Node[]; nodes: Node[] } {
+function requestNodes(request: BrokerViewingRequest, index: number, rendererKey: string): { cells: Node[]; nodes: Node[] } {
   const key = `req-${index}`;
   const call = (action: string, extra: Record<string, unknown> = {}) => ({
-    functionCall: { "@call": "brokerViewingAction", args: { showingId: request.showingId, action, ...extra } },
+    functionCall: { "@call": "brokerViewingAction", args: { rendererKey, showingId: request.showingId, action, ...extra } },
   });
   const actions = availableBrokerViewingActions(request.status);
   const actionIds: string[] = [];
@@ -92,10 +92,10 @@ function requestNodes(request: BrokerViewingRequest, index: number): { cells: No
   return { cells, nodes };
 }
 
-export function buildBrokerOverviewOperations(view: BrokerDashboardView) {
+export function buildBrokerOverviewOperations(view: BrokerDashboardView, rendererKey: string) {
   const requests = view.viewingRequests;
   const counts = statusCounts(requests);
-  const perRequest = requests.map(requestNodes);
+  const perRequest = requests.map((request, index) => requestNodes(request, index, rendererKey));
   const truncated = view.viewingRequestsTotal > requests.length;
 
   const summaryChildren = ["kpis"];

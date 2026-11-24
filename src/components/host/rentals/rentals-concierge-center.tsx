@@ -4,7 +4,6 @@ import type React from "react";
 import { CopilotChat, CopilotChatView, useAgent, type CopilotChatViewProps } from "@copilotkit/react-core/v2";
 import { useThreadNav } from "@/lib/chat/thread-nav-context";
 import { beginLiveUserSubmit } from "@/lib/chat/live-user-message-ids";
-import { ChatProvider } from "@/components/chat/chat-provider";
 import { BrokerWorkspaceToolRenderer } from "@/components/host/rentals/broker-workspace-tool-renderer";
 import { cn } from "@/lib/utils";
 import { isDeterministicE2E } from "@/lib/deterministic-e2e";
@@ -50,7 +49,7 @@ export const BrokerChatView = Object.assign(BrokerChatViewInner, CopilotChatView
 /**
  * SAN-1124 — a real CopilotKit v2 chat using the existing conciergeAgent.
  * /app/rentals and /host/rentals are excluded from the root provider,
- * so this subtree owns the ONE runtime connection on broker pages.
+ * so RentalsConciergeShell owns the ONE runtime connection for chat and Overview.
  *
  * Send, Stop and Retry belong to CopilotChat; no parallel chat state,
  * API transport, synthetic replies, or second broker agent.
@@ -76,7 +75,7 @@ export function RentalsConciergeCenter({ mode }: RentalsConciergeCenterProps) {
           Live AI is disabled during deterministic browser tests. Broker workspace actions remain available.
         </p>
       ) : (
-        <ChatProvider persistThread>
+        <>
           <BrokerWorkspaceToolRenderer />
           <CopilotChat
             agentId="conciergeAgent"
@@ -92,7 +91,7 @@ export function RentalsConciergeCenter({ mode }: RentalsConciergeCenterProps) {
             // first message -- but as a paragraph instead of a heading.
             welcomeScreen={{ welcomeMessage: WelcomeMessageCopy }}
           />
-        </ChatProvider>
+        </>
       )}
     </section>
   );

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ChatProvider } from "@/components/chat/chat-provider";
 import { HostRentalsNav } from "@/components/host/rentals/host-rentals-nav";
 import { RentalsConciergeCenter } from "@/components/host/rentals/rentals-concierge-center";
 import { RentalsConversationHistory } from "@/components/host/rentals/rentals-conversation-history";
@@ -59,29 +60,31 @@ export function RentalsConciergeShell({
           <RentalsConversationHistory dashboard={dashboard} />
         </div>
 
-        <div
-          className={cn(
-            "min-h-0 min-w-0",
-            mobilePane !== "chat" && "max-lg:hidden",
-            "lg:block",
-          )}
-        >
-          <RentalsConciergeCenter mode={workspaceMode} />
-        </div>
+        <ChatProvider persistThread>
+          <div
+            className={cn(
+              "min-h-0 min-w-0",
+              mobilePane !== "chat" && "max-lg:hidden",
+              "lg:block",
+            )}
+          >
+            <RentalsConciergeCenter mode={workspaceMode} />
+          </div>
 
-        <div
-          className={cn(
-            "min-h-0",
-            mobilePane !== "workspace" && "max-lg:hidden",
-            "lg:block",
-          )}
-        >
-          <RentalsDynamicWorkspace
-            mode={workspaceMode}
-            dashboard={dashboard}
-            loadError={loadError}
-          />
-        </div>
+          <div
+            className={cn(
+              "min-h-0",
+              mobilePane !== "workspace" && "max-lg:hidden",
+              "lg:block",
+            )}
+          >
+            <RentalsDynamicWorkspace
+              mode={workspaceMode}
+              dashboard={dashboard}
+              loadError={loadError}
+            />
+          </div>
+        </ChatProvider>
       </div>
 
       <nav

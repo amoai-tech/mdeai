@@ -69,6 +69,8 @@ describe("Surface instructions agree with their allowlists and the Mastra guide"
       expect(notAvailable).toMatch(/\bMap\b/);
       // The trust limits the schema enforces are stated in both agent paths.
       expect(text).toMatch(/never claim a save, booking or payment/);
+      expect(text).toContain("TableSection, TableRow and TableCell are reserved for app-authored deterministic dashboards, not model-authored tables");
+      expect(text).not.toContain("TableSection, TableRow and TableCell for data");
       expect(text).toMatch(/only stored MDE photo URLs/);
       expect(text).toMatch(/never estimate, round or invent a number/);
     }

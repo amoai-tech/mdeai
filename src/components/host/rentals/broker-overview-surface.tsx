@@ -1,44 +1,61 @@
 "use client";
 
-import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useGenerativeUIFunction } from "@copilotkit/react-core/v2/generative-ui";
-import { MdeDashboardSurface } from "@/components/copilot/a2ui/mde-dashboard-surface";
+import { useGenerativeUIRuntime } from "@copilotkit/react-core/v2/generative-ui/native";
+import { MDE_DASHBOARD_THREAD_ID, MdeDashboardSurface } from "@/components/copilot/a2ui/mde-dashboard-surface";
 import { mdeUI } from "@/components/copilot/a2ui/mde-ui-catalog";
 import type { BrokerDashboardView } from "@/lib/rentals/broker-dashboard-types";
 import { availableBrokerViewingActions } from "@/lib/rentals/broker-viewing-action";
 import {
   BROKER_OVERVIEW_SURFACE_ID,
   buildBrokerOverviewOperations,
+  rescheduleDraftPath,
 } from "@/lib/rentals/broker-overview-ui";
 import { submitBrokerViewingAction } from "@/lib/rentals/submit-broker-viewing-action";
 
 const WALL_CLOCK = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
 
-type ActionArgs = { showingId: string; action: "confirm" | "cancel" | "reschedule"; newWallClock?: string };
+type ActionArgs = { rendererKey: string; showingId: string; action: "confirm" | "cancel" | "reschedule"; newWallClock?: string };
 
 /**
  * Handles `brokerViewingAction` for the Overview surface. The surface passes
- * only a showing ID; the record, its persisted status and its persisted time
+ * a showing ID and a private mount key; the record, persisted status and time
  * come from the RLS-scoped page data. One call per showing at a time, so a
  * double click cannot send two writes; the server's expectation check (409)
  * covers a stale page.
  */
 function BrokerViewingFunction({
   view,
+  rendererKey,
   onStatus,
+  onSaved,
 }: {
   view: BrokerDashboardView;
+  rendererKey: string;
   onStatus: (message: string | null) => void;
+  onSaved: () => void;
 }) {
-  const router = useRouter();
-  const latest = useRef({ view, onStatus });
+  const runtime = useGenerativeUIRuntime();
+  const latest = useRef({ view, onStatus, onSaved });
   const pending = useRef(new Set<string>());
+  const mounted = useRef(false);
   useLayoutEffect(() => {
-    latest.current = { view, onStatus };
-  }, [view, onStatus]);
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+  useLayoutEffect(() => {
+    latest.current = { view, onStatus, onSaved };
+  }, [view, onStatus, onSaved]);
 
-  useGenerativeUIFunction(mdeUI, "brokerViewingAction", async ({ showingId, action, newWallClock }: ActionArgs) => {
+  useGenerativeUIFunction(mdeUI, "brokerViewingAction", async ({ rendererKey: suppliedKey, showingId, action, newWallClock }: ActionArgs) => {
+    // Renderer-only still permits model-authored clickable buttons. Only the
+    // private app-authored dashboard thread receives this per-mount key.
+    // The server continues to enforce ownership and persisted expectations.
+    if (suppliedKey !== rendererKey || !mounted.current) {
+      return { ok: false, error: "Open the viewing request in Overview to manage it." };
+    }
     const fail = (error: string) => {
       latest.current.onStatus(error);
       return { ok: false, error };
@@ -63,9 +80,16 @@ function BrokerViewingFunction({
         newWallClock: action === "reschedule" ? newWallClock : undefined,
       });
       if (!result.ok) return fail(result.error);
-      latest.current.onStatus("Saved. Refreshing…");
-      // Re-read the Server Component: the surface shows only what the database committed.
-      router.refresh();
+      // Clear only the draft that was submitted. A newer edit while PATCH was in
+      // flight (or an edit to another request) must survive the refresh.
+      if (action === "reschedule" && runtime && mounted.current) {
+        const surface = runtime.manager.getSurface(MDE_DASHBOARD_THREAD_ID, BROKER_OVERVIEW_SURFACE_ID);
+        const path = rescheduleDraftPath(showingId);
+        if (surface && surface.model.dataModel.get(path) === newWallClock) {
+          runtime.manager.setOwnedValue(surface.key, path, null);
+        }
+      }
+      if (mounted.current) latest.current.onSaved();
       return { ok: true, status: "saved" };
     } finally {
       pending.current.delete(showingId);
@@ -81,16 +105,24 @@ export function BrokerOverviewSurface({
   dashboard: BrokerDashboardView;
   fallback: ReactNode;
 }) {
+  const router = useRouter();
+  const [rendererKey] = useState(() => crypto.randomUUID());
   const [status, setStatus] = useState<string | null>(null);
-  const operations = useMemo(() => buildBrokerOverviewOperations(dashboard), [dashboard]);
+  const [refreshing, startRefresh] = useTransition();
+  const onSaved = useCallback(() => {
+    setStatus("Saved.");
+    // The transition tracks the actual server refresh, not an arbitrary timer.
+    startRefresh(() => router.refresh());
+  }, [router]);
+  const operations = useMemo(() => buildBrokerOverviewOperations(dashboard, rendererKey), [dashboard, rendererKey]);
   return (
     <div className="space-y-2">
       <MdeDashboardSurface surfaceId={BROKER_OVERVIEW_SURFACE_ID} operations={operations} fallback={fallback}>
-        <BrokerViewingFunction view={dashboard} onStatus={setStatus} />
+        <BrokerViewingFunction view={dashboard} rendererKey={rendererKey} onStatus={setStatus} onSaved={onSaved} />
       </MdeDashboardSurface>
       {status ? (
         <p role="status" data-testid="broker-overview-status" className="text-xs text-muted-foreground">
-          {status}
+          {status === "Saved." && refreshing ? "Saved. Refreshing…" : status}
         </p>
       ) : null}
     </div>

@@ -1,16 +1,12 @@
 "use client";
 
 import { useLayoutEffect, type ReactNode } from "react";
-import { CopilotKitProvider } from "@copilotkit/react-core/v2";
 import {
   SurfaceView,
   useGenerativeUIRuntime,
   useManagerVersion,
 } from "@copilotkit/react-core/v2/generative-ui/native";
-import { MDE_GENERATIVE_UI } from "@/components/copilot/a2ui/mde-generative-ui";
 import { mdeUI } from "@/components/copilot/a2ui/mde-ui-catalog";
-import { getCopilotKitClientProps } from "@/lib/copilotkit-client-props";
-import { isDeterministicE2E } from "@/lib/deterministic-e2e";
 
 /**
  * SAN-1675 — render official Standard Catalog components from real page data,
@@ -27,10 +23,8 @@ import { isDeterministicE2E } from "@/lib/deterministic-e2e";
  * the surface but keeps every value the user typed (the manager's owned paths),
  * so a refresh never wipes an edit in progress.
  *
- * Routes that already mount a CopilotKit provider reuse it. Agentless routes
- * (broker Rentals) get the same provider with the same `MDE_GENERATIVE_UI`
- * config; no agent is run and no chat is mounted. Deterministic browser tests
- * run without live CopilotKit transport and see `fallback`.
+ * The route owns the existing provider; the dashboard never mounts a second
+ * provider or starts an AI run. Transport-free tests see the honest fallback.
  */
 export const MDE_DASHBOARD_THREAD_ID = "mde-dashboard";
 
@@ -52,6 +46,8 @@ function DashboardSurfaceView({ surfaceId, operations, fallback, children, class
 
   useLayoutEffect(() => {
     if (!runtime) return;
+    // The installed manager fingerprints committed operations and no-ops identical
+    // content; changed operations must still reach it after a data refresh.
     runtime.manager.ingest(MDE_DASHBOARD_THREAD_ID, undefined, {
       surfaceId,
       target: surfaceId,
@@ -84,10 +80,5 @@ function DashboardSurfaceView({ surfaceId, operations, fallback, children, class
 export function MdeDashboardSurface(props: MdeDashboardSurfaceProps) {
   const runtime = useGenerativeUIRuntime();
   if (runtime) return <DashboardSurfaceView {...props} />;
-  if (isDeterministicE2E()) return <>{props.fallback}</>;
-  return (
-    <CopilotKitProvider {...getCopilotKitClientProps("conciergeAgent")} generativeUI={MDE_GENERATIVE_UI}>
-      <DashboardSurfaceView {...props} />
-    </CopilotKitProvider>
-  );
+  return <>{props.fallback}</>;
 }
