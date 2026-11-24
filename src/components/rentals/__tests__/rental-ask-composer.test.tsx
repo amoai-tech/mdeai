@@ -1011,6 +1011,30 @@ describe("RentalAskComposer (SAN-1421)", () => {
     expect(screen.queryByLabelText("Ask MDE about rentals")).toBeNull();
   });
 
+  it("keeps history collapsed after publishing rental results, but allows manual expansion", async () => {
+    const onResults = vi.fn();
+    const pending = deferred<boolean>();
+    chat.appendMessage.mockReturnValueOnce(pending.promise);
+    render(<RentalAskComposer onResults={onResults} />);
+    type("Find 2BR apartments in Laureles and compare the first two");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+    await act(async () => {
+      agent.messages = [
+        { id: "u1", role: "user", content: "Find 2BR apartments in Laureles and compare the first two" },
+        { id: "a1", role: "assistant", toolCalls: [{ id: "call-1", type: "function", function: { name: "searchRentalsTool" } }] },
+        { id: "t1", role: "tool", toolCallId: "call-1", content: JSON.stringify({ results: [rental("rnt_1"), rental("rnt_2")] }) },
+        { id: "a2", role: "assistant", content: "Found two apartments." },
+      ];
+      agent.listeners.forEach((listener) => listener());
+      pending.resolve(true);
+      await pending.promise;
+    });
+    await waitFor(() => expect(onResults).toHaveBeenCalledTimes(1));
+    expect(screen.queryByTestId("rental-ask-transcript")).toBeNull();
+    fireEvent.click(screen.getByTestId("rental-ask-toggle-transcript"));
+    expect(screen.getByTestId("rental-ask-transcript").textContent).toContain("Found two apartments.");
+  });
+
   it("updates the transcript from the agent's live messages, not just the first render", async () => {
     render(<RentalAskComposer />);
     expect(screen.queryByTestId("rental-ask-transcript")).toBeNull();

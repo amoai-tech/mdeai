@@ -536,6 +536,7 @@ function LiveComposer({
     pendingToolResult.current = null;
     const errorVersionBefore = getConciergeErrorVersion();
     let agentSendAttempted = false;
+    let publishedResults = false;
     try {
       if (cancelled.current) return;
       agentSendAttempted = true;
@@ -566,6 +567,7 @@ function LiveComposer({
       if (pendingToolResult.current && onResults && mounted.current &&
           !cancelled.current && turn === turnId.current) {
         onResults(pendingToolResult.current);
+        publishedResults = true;
         pendingToolResult.current = null;
       }
       // The cards normally come from the agent's own rental tool result. Only when the turn
@@ -591,6 +593,7 @@ function LiveComposer({
               hasAnswer.current = true;
               const enriched = withCarriedNotice(found.payload, unappliedRef.current);
               onResults(enriched);
+              publishedResults = true;
               // The fallback rows also become the agent's referent for "which of these…".
               setState((prev) => ({
                 ...prev,
@@ -611,7 +614,9 @@ function LiveComposer({
           }
         }
       }
-      if (mounted.current) setShowTranscript(true);
+      // Cards and the comparison already present the result; keep the history
+      // collapsed by default while still revealing text-only answers.
+      if (mounted.current && !publishedResults) setShowTranscript(true);
     } catch {
       if (!cancelled.current && mounted.current) {
         // runAgent may reject after addMessage already persisted the user turn.

@@ -347,7 +347,7 @@ function RentalBrowseViewInner({
               className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm"
             >
               <div className="min-w-0 flex-1">
-                <p className="font-semibold">{formatCountSubtitle(shownTotal, shownResults.length)}</p>
+                <p className="font-semibold">{comparedIds.length > 0 ? `Comparing ${comparedIds.length} of ${shownResults.length} shown apartments` : formatCountSubtitle(shownTotal, shownResults.length)}</p>
                 <p className="break-words text-xs text-muted-foreground">Answer to: {activeAsk.query}</p>
                 {shownResults.length > 0 ? (
                   <p className="mt-1 text-xs text-muted-foreground">
