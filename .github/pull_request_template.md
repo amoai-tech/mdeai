@@ -1,5 +1,5 @@
 <!--
-MDE AI — one independently testable PR outcome. Remove optional fields/rows that do not apply.
+MDE AI — one clear, testable outcome per PR. Remove unused prompts; explain N/A.
 Before merge, leave post-merge boxes unchecked. After merge, record actual results in the PR body.
 Follow AGENTS.md and .claude/skills/tasks/references/github-pr.md; preserve existing PR body edits.
 -->
@@ -10,11 +10,12 @@ Follow AGENTS.md and .claude/skills/tasks/references/github-pr.md; preserve exis
 
 **Expected outcome:** [What will work better for users?]
 
-**Real-world example:** [User] → [action] → [visible result; persisted result if relevant].
+**Real-world example:** [Who uses it, what they do, and what happens. Include saved data if relevant.]
 
-**Linear:** [`Closes SAN-#### · SPEC-ID — Exact verified title` if fully completed; `Part of SAN-#### · SPEC-ID — Exact verified title` for partial work; otherwise N/A.]
+**Linear task:** [Link the verified task, using its exact title and SPEC-ID if applicable.]
+<!-- Use `Closes SAN-#### · SPEC-ID — Exact verified title` for completed scope; `Part of SAN-#### · SPEC-ID — Exact verified title` for partial work. Use N/A if no task exists. -->
 
-**Type / Tech stack:** [Runtime / Tests / Docs / Infrastructure] · [Only affected technologies]
+**Type / Tech stack:** [App feature / Bug fix / Tests / Docs / Infrastructure] · [Technologies changed]
 
 ## 2. Changes & Improvements
 
@@ -23,24 +24,22 @@ Follow AGENTS.md and .claude/skills/tasks/references/github-pr.md; preserve exis
 - [Second change, if needed]
 - [Third change, if needed]
 
-**Existing functionality reused:** [Current components, APIs, RPCs, agents or tools; why this is the simplest solution.]
+**What we reused:** [Existing component, service or tool. Why is this the simplest fix?]
 
-**Files to review:** [Up to 3–5 important paths → what to check.]
+**Files to review:** [Up to 5 key files and what to check.]
 
-**How to reproduce:** [Exact user steps, preview URL or test command.]
+**How to try it:** [Exact steps, preview URL or test command.]
 
-**Risks / limitations:** [Material risks, missing proof and exclusions, or N/A.]
-
-<!-- Reuse stays in Section 2. In Section 4, include only useful official links with what matters and exact application; skip filler citations. -->
+**Risks / limitations:** [What could fail, what is untested, or N/A.]
 
 ## 3. User Journey & Architecture
 
-**User journey:** N/A — no changed user journey. [For a meaningful changed flow: describe the actual user → action → result, then embed a verified Mermaid diagram here.]
+**User journey:** [Show what the user does and what happens, using a Mermaid diagram. N/A if unchanged.]
 
-**Architecture / data flow:** N/A — no changed architecture. [When relevant: show the existing UI/agent → API/tool → canonical data owner in a second embedded Mermaid diagram.]
+**Architecture:** [Show how the app, server, agent and database connect, as relevant. N/A if unchanged.]
 
 <!-- Agent instructions:
-For substantive user-journey or cross-system architecture changes, REPLACE the N/A lines with task-specific Mermaid code blocks directly in the GitHub PR body, not separate image links. One diagram is enough if it explains both; otherwise add a second. Include failure/retry when material. Never invent implemented routes, data ownership or success. Diagrams explain the flow and are not test evidence.
+For meaningful user journey or architecture changes, embed real Mermaid code blocks directly in the PR description. Use one diagram if it explains both; add a second if needed. Include important failure/retry paths. Verify the routes, components and data sources. Diagrams explain the design; tests prove it works.
 Examples (uncomment ONLY after replacing all example nodes with verified paths):
 ~~~mermaid
 flowchart LR
@@ -57,25 +56,25 @@ flowchart LR
 
 ## 4. Best Reference URLs
 
-<!-- When outside references help solve/review the task, choose up to 3–5 exact, verified official docs, official GitHub repos or version-matched examples. Read the specific source before citing it. Include only sources relevant to the changed implementation; otherwise write "N/A — existing code and tests are sufficient." A link explains the contract; it does not prove that MDE works. -->
+<!-- Read and verify up to 5 useful official docs, GitHub examples or version-matched sources. Explain how each helps finish the task. No receipt table needed. Use N/A if existing code and tests are enough. Links are not test evidence. -->
 
 | Official reference URL | What matters | How to apply it to this PR |
 | --- | --- | --- |
-| [Exact official docs / GitHub source or example URL] | [Relevant API, feature, file or version detail] | [Specific implementation step, affected file, or verification to perform] |
+| [Exact official docs / GitHub example URL] | [Important feature or instruction] | [What to change or test] |
 
 ## 5. Success Criteria
 
-<!-- Replace with 1–4 task-specific, observable requirements. Check only with evidence. -->
-- [ ] [Primary feature or change behaves correctly.]
-- [ ] [Results are accurate/persisted, when applicable.]
-- [ ] [Relevant error, retry, authorization or security behavior passes.]
-- [ ] [Affected real user journey passes, when applicable.]
+<!-- Write 1–4 specific outcomes for this task. Tick only when proven. -->
+- [ ] [The feature or fix works as expected.]
+- [ ] [Results are correct and saved when needed.]
+- [ ] [Errors, retries and access rules work correctly when relevant.]
+- [ ] [The full user workflow works when relevant.]
 
 ## 6. Tests & Evidence
 
-**Tested PR head:** [Exact commit SHA]
+**Tested commit:** [Latest PR commit SHA]
 
-| Check | Result | Evidence / environment / SHA |
+| Check | Result | Proof: command, environment, commit SHA and link |
 | --- | --- | --- |
 | Focused tests | NOT RUN | [Command, results and link] |
 | GitHub CI: `floor` | PENDING | [Run link and exact head SHA] |
@@ -84,37 +83,37 @@ flowchart LR
 | Playwright / browser, if relevant | N/A | [Preview URL, screenshot/test, or reason] |
 | Supabase / API / integrations, if relevant | N/A | [Query, test, or reason] |
 
-**Unverified:** [Outstanding proof, or None.]
+**Not yet verified:** [What still needs testing, or None.]
 
-<!-- Use PASS / FAIL / PENDING / NOT RUN / N/A; explain skips. Every PASS needs its environment, tested SHA and evidence. Never reuse a stale green check. Add separate lint/typecheck/build rows only if individually run. -->
+<!-- Use PASS / FAIL / PENDING / NOT RUN / N/A and explain skipped checks. For each PASS record the environment, exact tested SHA and evidence. Old green checks do not prove the latest commit. Add separate rows for each command run, including lint/typecheck/build. -->
 
 ## 7. Pre-Merge Checklist
 
 **Complete before merging:**
-- [ ] **Requirements:** Match the verified Linear scope and success criteria; do not claim partial work completes a whole issue.
-- [ ] **Code review:** Minimal, correct change; reused existing architecture; no unrelated files or Phase A business approval/eligibility blockers.
-- [ ] **Review comments:** Recheck findings against current code; fix and verify valid issues, explain stale/incorrect ones; no unresolved blocking threads.
-- [ ] **Tests & CI:** Focused tests and required checks pass on the exact head; include relevant security, DB and failure/retry tests.
-- [ ] **Preview:** Verify the affected real workflow; test desktop and 390px mobile if UI changed. Mark N/A for docs-only changes.
-- [ ] **Safety & approval:** Auth, RLS, secrets, data integrity and idempotency preserved; required GitHub approvals and branch rules satisfied.
-- [ ] **Worktree:** Any new MDE worktree on the development host is under `/home/sk/mde-worktrees/`; no unrelated or uncommitted work lost.
+- [ ] **Requirements:** Meet the agreed task and success criteria. Do not mark partial work complete.
+- [ ] **Code review:** Keep changes small and correct. Reuse existing code; no unrelated changes or Phase A business approval/eligibility blockers.
+- [ ] **Review comments:** Check each finding against current code. Fix and test real issues; explain incorrect ones. Resolve threads after proof.
+- [ ] **Tests & CI:** Focused tests and required GitHub checks pass on the latest PR commit (or its GitHub-tested merge commit). Check security, data and retries when affected.
+- [ ] **Preview:** Try the changed feature. For UI changes, test desktop and 390px mobile. Use N/A for docs-only work.
+- [ ] **Safety & approval:** Protect login, data access (RLS), secrets and saved data. Retries must not create duplicates. Meet required GitHub approvals and branch rules.
+- [ ] **Worktree:** Create new MDE worktrees on the development host under `/home/sk/mde-worktrees/`. Preserve other work and uncommitted changes.
 
-**Merge decision:** NOT READY / READY — [Head SHA, evidence and any blocker.]
+**Merge decision:** NOT READY / READY — [Tested commit, proof and anything blocking merge.]
 
 ## 8. Post-Merge Verification & Recovery
 
 <!-- Plan these before merging; execute and check the applicable steps only AFTER merge. -->
-- [ ] **1. Verify merge:** Confirm merge SHA, intended files on `main` and merged-main CI.
-- [ ] **2. Verify deployment:** Confirm Vercel production serves the merged SHA; deploy only if needed.
-- [ ] **3. Verify Supabase/config:** Check deployed migrations, Edge Functions and settings; deploy only missing required changes through the approved workflow. Obtain explicit opt-in and a recovery plan before destructive/irreversible production data changes. N/A if unchanged.
-- [ ] **4. Test live result:** Verify the affected user journey/API/agent, security, errors and 390px UI as relevant. **Read-only by default**; writing tests need task-specific opt-in, isolated QA fixtures and verified cleanup. `npm run verify:production` is **not read-only** (it can persist a thread).
-- [ ] **5. Fix failures:** Find root cause, apply the smallest safe fix through normal PR review, retest and redeploy or safely roll back.
-- [ ] **6. Update GitHub & Linear:** Record SHA, tests, real URLs, screenshots, fixes and unresolved work; mark Done only after actual acceptance criteria pass.
-- [ ] **7. Clean up:** Remove the merged task worktree/branch only after proving all work is preserved; never force-delete unrelated changes.
+- [ ] **1. Verify merge:** Check the merged commit, changed files on `main`, and GitHub checks.
+- [ ] **2. Verify deployment:** For app changes, confirm Vercel runs the merged commit. Deploy only if needed.
+- [ ] **3. Verify Supabase:** Check database migrations, Edge Functions and settings. Apply only missing required changes through the approved workflow. Destructive or irreversible production data changes need explicit opt-in and a recovery plan. N/A if unchanged.
+- [ ] **4. Test live result:** Try the affected feature, API or agent. Check saved results, permissions, errors and 390px mobile when relevant. **Read-only by default.** Tests that write data need task-specific opt-in, isolated QA data and verified cleanup. `npm run verify:production` can save a real chat thread; it is not read-only.
+- [ ] **5. Fix failures:** Find the cause, make a small safe fix through PR review, retest and redeploy, or roll back safely.
+- [ ] **6. Update GitHub & Linear:** Record the commit, tests, working links, screenshots, fixes and remaining work. Mark Done only when success criteria pass.
+- [ ] **7. Clean up:** Remove the merged branch/worktree only when all work is safely preserved. Never force-delete unrelated changes.
 
-**By PR type:** Runtime/UI → live feature; DB/API → migration and durable transactions; AI → grounded output and authorized actions; Tests-only → regression/CI; Docs-only → published docs/template.
+**What to test:** App/UI → live feature; Database/API → saved data and migrations; AI → accurate answers and authorized actions; Tests-only → regression tests and CI; Docs-only → updated docs/template.
 
-**Recovery plan:** [Rollback/revert or safe forward fix for runtime changes; N/A with reason otherwise.]
+**Recovery plan:** [How to undo or safely fix a failed deployment. N/A with reason if no app change.]
 
 ### Final Post-Merge Results
 
