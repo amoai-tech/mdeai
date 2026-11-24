@@ -2,7 +2,7 @@
 MDE AI — one clear, testable outcome per PR. Remove unused prompts; explain N/A.
 Before merge, leave post-merge boxes unchecked. After merge, record actual results in the PR body.
 Follow AGENTS.md and .claude/skills/tasks/references/github-pr.md; preserve existing PR body edits.
-Keep all eight numbered sections, with each checklist item on its own Markdown line.
+Keep all eight numbered sections in new PRs. For existing PRs, preserve the current structure and add only missing required details or sections in place. Keep each checklist item on its own Markdown line.
 Customize Sections 6–8 for the actual task; retain the recovery plan and final post-merge results table.
 Read back the saved GitHub body to verify formatting, details and prior evidence survived.
 -->
@@ -90,13 +90,14 @@ flowchart LR
 | Playwright / browser, if relevant | N/A | [Preview URL, screenshot/test, or reason] |
 | Supabase / API / integrations, if relevant | N/A | [Query, test, or reason] |
 
+<!-- Use PASS / FAIL / PENDING / NOT RUN / N/A and explain skipped checks. For each PASS record the environment, exact tested SHA and evidence. Old green checks do not prove the latest commit. Add separate rows for each command run, including lint/typecheck/build. -->
+
 **Not yet verified:** [What still needs testing, or None.]
 
 ### Pre-merge test commands
 
 [Exact task-specific commands, required environment/setup and expected results. Use the current package scripts and existing CI; do not prefill generic install/full-suite commands or repeat checks already proven on the exact head.]
 
-<!-- Use PASS / FAIL / PENDING / NOT RUN / N/A and explain skipped checks. For each PASS record the environment, exact tested SHA and evidence. Old green checks do not prove the latest commit. Add separate rows for each command run, including lint/typecheck/build. -->
 
 ## 7. Pre-Merge Checklist
 
