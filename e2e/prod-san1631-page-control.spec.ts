@@ -113,7 +113,11 @@ for (const viewport of [
       await beds2.click();
       await expect.poll(() => new URL(page.url()).searchParams.get("beds")).toBe("2");
       if (viewport.width === 390) {
+        const sheet = page.getByTestId("rentals-mobile-filter-sheet");
         await expect(page.getByTestId("rentals-active-filter-chips")).toContainText("2 BR");
+        // Navigation may remount the drawer; dismiss it if it survives.
+        if (await sheet.isVisible()) await sheet.getByRole("button", { name: "Show apartments" }).click();
+        await expect(sheet).toBeHidden();
       } else await expect(beds2).toHaveAttribute("aria-current", "true");
       await expectCurrentResults(page);
 

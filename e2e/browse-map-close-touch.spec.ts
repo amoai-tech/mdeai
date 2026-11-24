@@ -104,7 +104,10 @@ test("390px Rentals exposes compact filters and account without losing the map o
   await calendar.getByTestId("rentals-dates-cancel").click();
   await expect(calendar).toBeHidden();
   await expect(sheet).toBeVisible();
-  await sheet.getByRole("button", { name: "Show apartments" }).click();
+  await sheet.getByTestId("rentals-filter-beds-2").click();
+  await expect.poll(() => new URL(page.url()).searchParams.get("beds")).toBe("2");
+  await expect(page.getByTestId("rentals-active-filter-chips")).toContainText("2 BR");
+  if (await sheet.isVisible()) await sheet.getByRole("button", { name: "Show apartments" }).click();
   await expect(sheet).toBeHidden();
   await page.getByTestId("workspace-mobile-profile").click();
   const profile = page.getByRole("dialog", { name: "Profile" });
@@ -119,6 +122,10 @@ test("390px Rentals exposes compact filters and account without losing the map o
   expect(mapBox!.height).toBeGreaterThanOrEqual(44);
   expect(mapBox!.y + mapBox!.height).toBeLessThanOrEqual(composerBox!.y + 1);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+  await map.click();
+  await expect(page.getByTestId("browse-map-close")).toBeVisible();
+  await page.getByTestId("browse-map-close").click();
+  await expect(page.getByTestId("browse-map-close")).toBeHidden();
   await page.setViewportSize({ width: 1440, height: 900 });
   await expect(filter).toHaveCount(0);
   await expect(page.getByRole("group", { name: "Neighborhood filters" })).toBeVisible();
