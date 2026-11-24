@@ -96,6 +96,21 @@ describe("conciergeAgent", () => {
     // model-supplied IDs from an older turn.
     const { COMPARISON_POSITIONS_KEY } = await import("../../lib/comparison-table-intent");
     expect(requestContext.get(COMPARISON_POSITIONS_KEY)).toEqual([1, 2]);
+    const { RENTAL_SEARCH_TEXT_KEY, RENTAL_REFINEMENT_TEXT_KEY, COMPARISON_CHEAPEST_KEY } = await import("../../lib/comparison-table-intent");
+    expect(requestContext.get(RENTAL_SEARCH_TEXT_KEY)).toBe(messages[0].content.parts[0].text);
+    const budget = user("Show only apartments under COP 3 million per month.");
+    expect(await comparison!.processInputStep({ stepNumber: 0, messages: [...messages, budget], steps: [], requestContext }))
+      .toEqual({ toolChoice: { type: "tool", toolName: "searchRentalsTool" } });
+    expect(requestContext.get(RENTAL_REFINEMENT_TEXT_KEY)).toBe(messages[0].content.parts[0].text);
+    const { RENTAL_A2UI_CONTEXT_DESCRIPTION } = await import("@/lib/rentals/a2ui-context");
+    requestContext.set("ag-ui", { context: [{ description: RENTAL_A2UI_CONTEXT_DESCRIPTION,
+      value: JSON.stringify(["37a05b09-f560-4776-92fd-b8bb2b92e601","37a05b09-f560-4776-92fd-b8bb2b92e602"]) }] });
+    expect(await comparison!.processInputStep({ stepNumber: 0, messages: [user("Compare the two cheapest apartments.")], steps: [], requestContext }))
+      .toEqual({ toolChoice: { type: "tool", toolName: "showComparisonTable" } });
+    expect(requestContext.get(COMPARISON_CHEAPEST_KEY)).toBe(true);
+    expect(requestContext.get(RENTAL_SEARCH_TEXT_KEY)).toBeNull();
+    expect(requestContext.get(RENTAL_REFINEMENT_TEXT_KEY)).toBeNull();
+    expect(requestContext.get(COMPARISON_POSITIONS_KEY)).toBeNull();
   });
 
   it("registers all search tools including grounding and web events", async () => {

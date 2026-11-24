@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => {
-  const state = { projection: "", bedroomFilters: [] as string[], budgetFilters: [] as string[], rows: null as null | Array<Record<string, unknown>> };
+  const state = { projection: "", bedroomFilters: [] as string[], neighborhoodFilters: [] as string[], budgetFilters: [] as string[], rows: null as null | Array<Record<string, unknown>> };
   const row = {
     id: "apt-1",
     title: "Centro Budget Studio · 300 USD",
@@ -35,7 +35,7 @@ const mocks = vi.hoisted(() => {
     not: passthrough,
     order: passthrough,
     limit: passthrough,
-    ilike: passthrough,
+    ilike: vi.fn((key: string, value: string) => { if (key === "neighborhood") state.neighborhoodFilters.push(value); return chain; }),
     gte: vi.fn((key: string, value: number) => { if (key === "bedrooms") state.bedroomFilters.push(`gte:${value}`); return chain; }),
     lte: vi.fn((key: string, value: number) => { if (key === "bedrooms") state.bedroomFilters.push(`lte:${value}`); return chain; }),
     or: vi.fn((value: string) => { state.budgetFilters.push(value); return chain; }),
@@ -242,4 +242,38 @@ describe("searchRentals — SAN-1356 monthly price projection", () => {
 
     expect(result.results[0]?.price_monthly).toBe(300);
   });
+});
+
+describe("SAN-1694 original-turn search constraints", () => {
+  it("overrides model-rewritten neighborhood and exact bedrooms using the original renter text", async () => {
+    const { searchRentalsTool } = await import("../search-rentals");
+    const { RENTAL_SEARCH_TEXT_KEY } = await import("../../lib/comparison-table-intent");
+    mocks.state.neighborhoodFilters.length = 0;
+    mocks.state.bedroomFilters.length = 0;
+    await searchRentalsTool.execute!({
+      neighborhood: "El Poblado", minBedrooms: 3, maxBedrooms: 3,
+      queryText: "Compare apartments", limit: 8,
+    }, { requestContext: { get: (key: string) => key === RENTAL_SEARCH_TEXT_KEY ? "Find 2BR apartments in Laureles and compare the first two." : undefined, set: () => undefined } } as never);
+    expect(mocks.state.neighborhoodFilters).toEqual(["%Laureles%"]);
+    expect(mocks.state.bedroomFilters).toEqual(["gte:2", "lte:2"]);
+  });
+});
+
+it("budget refinement preserves the preceding explicit 2BR Laureles search and overrides model nightly slots", async () => {
+  const { searchRentalsTool } = await import("../search-rentals");
+  const { RENTAL_SEARCH_TEXT_KEY, RENTAL_REFINEMENT_TEXT_KEY } = await import("../../lib/comparison-table-intent");
+  mocks.state.neighborhoodFilters.length = 0;
+  mocks.state.bedroomFilters.length = 0;
+  mocks.state.budgetFilters.length = 0;
+  await searchRentalsTool.execute!({
+    neighborhood: "El Poblado", minBedrooms: 3, maxBedrooms: 3,
+    maxPricePerNight: 100, stayType: "nightly", limit: 8,
+  }, { requestContext: {
+    get: (key: string) => key === RENTAL_SEARCH_TEXT_KEY ? "Show only apartments under COP 3 million per month." :
+      key === RENTAL_REFINEMENT_TEXT_KEY ? "Find 2BR apartments in Laureles and compare the first two." : undefined,
+    set: () => undefined,
+  } } as never);
+  expect(mocks.state.neighborhoodFilters).toEqual(["%Laureles%"]);
+  expect(mocks.state.bedroomFilters).toEqual(["gte:2", "lte:2"]);
+  expect(mocks.state.budgetFilters.filter((filter) => filter.includes("price_"))).toEqual(["and(currency.eq.COP,price_monthly.not.is.null,price_monthly.lte.3000000)"]);
 });

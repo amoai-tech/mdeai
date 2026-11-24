@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { comparisonCopMonthlyBudget, comparisonRequestedPositions, requestsFreshRentalDiscovery, hasAttemptedTool, hasCompletedTool, shouldContinueComparisonAfterRoute, shouldContinueComparisonAfterSearch, shouldContinueRouteAfterComparison, shouldFinishComparisonWithoutAnotherTool, shouldForceComparisonTable, shouldSearchBeforeComparison } from "../comparison-table-intent";
+import { rentalRefinementBaseText, trustedRentalSearchText, isRentalBudgetRefinement, comparisonCheapestRequested, comparisonCopMonthlyBudget, comparisonRequestedPositions, requestsFreshRentalDiscovery, hasAttemptedTool, hasCompletedTool, shouldContinueComparisonAfterRoute, shouldContinueComparisonAfterSearch, shouldContinueRouteAfterComparison, shouldFinishComparisonWithoutAnotherTool, shouldForceComparisonTable, shouldSearchBeforeComparison } from "../comparison-table-intent";
 import { RENTAL_A2UI_CONTEXT_DESCRIPTION } from "@/lib/rentals/a2ui-context";
 import { RENTAL_RUN_RESULT_IDS_KEY } from "../generative-ui-context";
 import { routePlanForTurn, shouldForceRouteTool } from "../route-tool-choice";
@@ -297,5 +297,38 @@ describe("incomplete apartment references defer rather than compare the wrong su
     ["Compare the 1st and 2nd apartments with the 5th.", [1, 2, 5]],
   ])("preserves all supported explicit positions: %s", (text, positions) => {
     expect(comparisonRequestedPositions([user(text)])).toEqual(positions);
+  });
+});
+
+describe("SAN-1694 production grounding regressions", () => {
+  it("preserves the actual search words and forces a bounded search for the explicit budget command", () => {
+    const search = user("Find 2BR apartments in Laureles and compare the first two.");
+    const budget = user("Show only apartments under COP 3 million per month.");
+    expect(trustedRentalSearchText([search])).toBe(search.content.parts[0].text);
+    expect(isRentalBudgetRefinement([search, budget], context)).toBe(true);
+    expect(trustedRentalSearchText([search, budget])).toBe(budget.content.parts[0].text);
+    expect(rentalRefinementBaseText([search, budget], context)).toBe(search.content.parts[0].text);
+    expect(rentalRefinementBaseText([search, user("Which apartment has a balcony?"), budget], context)).toBeNull();
+    expect(comparisonRequestedPositions([user("Find two-bedroom apartments in Laureles and compare the first two.")])).toEqual([1, 2]);
+    expect(isRentalBudgetRefinement([user("Show restaurants under COP 3 million per month.")], context)).toBe(false);
+    expect(isRentalBudgetRefinement([user("Which apartment is under COP 3 million per month?")], context)).toBe(false);
+    expect(trustedRentalSearchText([user("Compare the first two apartments.")])).toBeNull();
+    expect(shouldFinishComparisonWithoutAnotherTool({ stepNumber: 0, messages: [budget], requestContext: context })).toBe(false);
+    expect(shouldFinishComparisonWithoutAnotherTool({ stepNumber: 1, messages: [budget], requestContext: context,
+      steps: [{ toolCalls: [{ toolName: "searchRentalsTool" }] }] })).toBe(true);
+  });
+  it("forces the official comparison for the two cheapest current rentals without choosing ordinal two", () => {
+    const messages = [user("Compare the two cheapest apartments.")];
+    expect(comparisonCheapestRequested(messages)).toBe(true);
+    expect(shouldForceComparisonTable({stepNumber: 0, messages, requestContext: context})).toBe(true);
+    expect(comparisonRequestedPositions(messages)).toBeNull();
+    expect(shouldSearchBeforeComparison({stepNumber: 0, messages, steps: []})).toBe(false);
+    expect(comparisonCheapestRequested([user("Find the two cheapest apartments in Laureles.")])).toBe(false);
+    expect(comparisonCheapestRequested([user("Compare the two cheapest events.")])).toBe(false);
+  });
+  it("stops model tools after a successful same-message search and comparison", () => {
+    const messages = [user("Find 2BR apartments in Laureles and compare the first two.")];
+    const steps = [{ toolResults: [{ toolName: "searchRentalsTool" }] }, { toolResults: [{ toolName: "showComparisonTable" }] }];
+    expect(shouldFinishComparisonWithoutAnotherTool({stepNumber: 2, messages, steps, requestContext: context})).toBe(true);
   });
 });

@@ -1,4 +1,6 @@
 import { hasUsableRentalRunResults, readRentalResultIds } from "./generative-ui-context";
+import { isActiveRentalsDiscoveryPage } from "./discovery-agent-context";
+import { isExactMonthlyBudgetOnlyRefinement, looksLikeInjection } from "@/lib/rental-query-parser";
 
 type MessageLike = { role?: string; content?: unknown };
 
@@ -22,6 +24,11 @@ function messageText(message: MessageLike | undefined): string {
 const TABLE_REQUEST = /\b(table|tabular|side[\s-]?by[\s-]?side)\b/i;
 const ORDINAL = /(?:\b(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|one|two|three|four|five|six|seven|eight|nine|ten)\b|\b(?:10|[1-9])(?:st|nd|rd|th)?\b)/gi;
 const EXPLICIT_RESULT_PAIR = /\b(?:compare|comparison)\b/i;
+// Set by the server from the actual current user message, never tool arguments or
+// arbitrary browser context. Clear at step zero so preferences cannot leak turns.
+export const RENTAL_SEARCH_TEXT_KEY = "mdeai-original-rental-search-text";
+export const RENTAL_REFINEMENT_TEXT_KEY = "mdeai-rental-refinement-base-text";
+export const COMPARISON_CHEAPEST_KEY = "mdeai-comparison-cheapest-current";
 export const COMPARISON_POSITIONS_KEY = "mdeai-comparison-requested-positions";
 export const COMPARISON_COP_MONTHLY_BUDGET_KEY = "mdeai-comparison-cop-monthly-budget";
 
@@ -64,7 +71,13 @@ function resultNumber(word: string): number | null {
 /** Ground explicit ordinals in the current displayed order before any model IDs. */
 export function comparisonRequestedPositions(messages: readonly MessageLike[]): number[] | null {
   const lastUser = [...messages].reverse().find((message) => message?.role === "user");
-  const text = messageText(lastUser).trim();
+  const raw = messageText(lastUser).trim();
+  // Bedroom counts in the preceding search clause are not selection ordinals.
+  // Only split a confirmed search-and-compare command; category comparisons
+  // and ambiguous numbered table instructions must still fail closed.
+  const comparisonAt = raw.search(COMPARISON_START);
+  const text = comparisonAt > 0 && hasExplicitRentalComparisonRequest(messages) &&
+    requestsRentalSearchBeforeComparison(raw) ? raw.slice(comparisonAt) : raw;
   if (UNSUPPORTED_NUMBERED_TOKEN.test(text) || NON_APARTMENT_NUMBER.test(text)) return null;
   // "Compare the first two in a table" still selects displayed apartments
   // 1 and 2: the renter need not repeat "apartments" after "two".
@@ -164,11 +177,63 @@ const RESTAURANT_TABLE = /\b(book|reserve|reservation|restaurant|caf[eé]|nightl
 // Explicit other verticals override ordinal pronouns, even when rental hints exist.
 const OTHER_COMPARISON_DOMAIN = /\b(?:new\s+projects?|projects?|startups?|companies|events?|tickets?|trips?|hotels?)\b/i;
 
+/** A price-ranking command for the current rentals, not a new discovery or a
+ * comparison of nightly/monthly prices, currencies, or other verticals. */
+export function comparisonCheapestRequested(messages: readonly MessageLike[]): boolean {
+  const text = messageText([...messages].reverse().find((m) => m?.role === "user")).trim();
+  return /^(?:please\s+)?compare\s+(?:the\s+)?(?:two|2)\s+(?:cheapest|lowest[- ]priced|most affordable)\s+(?:apartments?|rentals?|listings?)[.!]?$/i.test(text);
+}
+
+function budgetRefinementText(text: string): boolean {
+  return !looksLikeInjection(text) && !text.includes("?") &&
+    isExactMonthlyBudgetOnlyRefinement(text.replace(/\b(?:apartments?|rentals?|listings?)\b/gi, ""));
+}
+
+/** A bounded, currency-grounded budget command must search, not answer in prose.
+ * Without a rental noun, require the current rental page or published hints. */
+export function isRentalBudgetRefinement(
+  messages: readonly MessageLike[],
+  requestContext?: { get?: (key: string) => unknown },
+): boolean {
+  const text = messageText([...messages].reverse().find((m) => m?.role === "user")).trim();
+  const agui = requestContext?.get?.("ag-ui");
+  return budgetRefinementText(text) && (RENTAL_INVENTORY.test(text) ||
+    isActiveRentalsDiscoveryPage(agui) || readRentalResultIds(agui).length > 0);
+}
+
+/** Only the explicit current search turn can override model-generated slots. */
+export function trustedRentalSearchText(
+  messages: readonly MessageLike[],
+  requestContext?: { get?: (key: string) => unknown },
+): string | null {
+  const text = messageText([...messages].reverse().find((m) => m?.role === "user")).trim();
+  if (!text || text.length > 4000 || looksLikeInjection(text)) return null;
+  return (hasExplicitRentalComparisonRequest(messages) && requestsRentalSearchBeforeComparison(text)) ||
+    isRentalBudgetRefinement(messages, requestContext) ? text : null;
+}
+
+/** The immediately preceding explicit rental search is the base of a pure
+ * budget refinement. Do not mine older questions or model prose for filters. */
+export function rentalRefinementBaseText(
+  messages: readonly MessageLike[],
+  requestContext?: { get?: (key: string) => unknown },
+): string | null {
+  if (!isRentalBudgetRefinement(messages, requestContext)) return null;
+  const users = messages.filter((message) => message?.role === "user");
+  const prior = messageText(users[users.length - 2]).trim();
+  if (!prior || prior.length > 4000 || looksLikeInjection(prior) ||
+      RESTAURANT_TABLE.test(prior) || OTHER_COMPARISON_DOMAIN.test(prior)) return null;
+  return requestsFreshRentalDiscovery([users[users.length - 2]]) ||
+    (/^(?:please\s+)?show\b/i.test(prior) && RENTAL_INVENTORY.test(prior) && !prior.includes("?") &&
+      !hasExplicitRentalComparisonRequest([users[users.length - 2]])) ? prior : null;
+}
+
 function hasExplicitRentalComparisonRequest(messages: readonly MessageLike[]): boolean {
   const lastUser = [...messages].reverse().find((message) => message?.role === "user");
   const text = messageText(lastUser).trim();
   if (!text || RESTAURANT_TABLE.test(text) || OTHER_COMPARISON_DOMAIN.test(text) ||
       BEDROOM_CATEGORY_COMPARISON.test(text)) return false;
+  if (comparisonCheapestRequested(messages)) return true;
   const references = text.match(ORDINAL) ?? [];
   const ordinalPair = references.length >= 2 && EXPLICIT_RESULT_PAIR.test(text);
   return (TABLE_REQUEST.test(text) || ordinalPair) && RENTAL_REFERENCE.test(text) &&
@@ -299,7 +364,16 @@ export function shouldFinishComparisonWithoutAnotherTool({
   steps?: readonly CompletedToolStep[];
   hasRouteIntent?: boolean;
 }): boolean {
-  if (stepNumber === 0 || !shouldForceComparisonTable({ stepNumber: 0, messages, requestContext })) return false;
+  if (stepNumber === 0) return false;
+  // Budget-only refinements owe exactly one search, not a second search or a
+  // model-authored table. The existing search result bridge owns the cards.
+  if (isRentalBudgetRefinement(messages, requestContext) && !hasRouteIntent) {
+    return hasAttemptedTool(steps, "searchRentalsTool");
+  }
+  const combined = shouldSearchBeforeComparison({ stepNumber: 0, messages, steps: [] });
+  if (!combined && !shouldForceComparisonTable({ stepNumber: 0, messages, requestContext })) return false;
+  if (combined && !hasRouteIntent && hasAttemptedTool(steps, "searchRentalsTool") &&
+      !hasUsableRentalRunResults(requestContext) && !hasCompletedTool(steps, "showComparisonTable")) return true;
   // Do not suppress the table when route processing ran first.
   if (!hasCompletedTool(steps, "showComparisonTable")) return false;
   // Conversely, finish only after both results for combined requests.

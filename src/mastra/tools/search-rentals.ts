@@ -14,7 +14,7 @@ import { deduplicateApartmentRows } from '@/lib/rentals/duplicate-listings';
 import { z } from 'zod';
 import { runAuditedSearch } from '../lib/run-audited-search';
 import { startRentalRunSearch } from '../lib/generative-ui-context';
-import { COMPARISON_COP_MONTHLY_BUDGET_KEY } from '../lib/comparison-table-intent';
+import { RENTAL_SEARCH_TEXT_KEY, RENTAL_REFINEMENT_TEXT_KEY, isRentalBudgetRefinement, COMPARISON_COP_MONTHLY_BUDGET_KEY } from '../lib/comparison-table-intent';
 import { comparisonRowSchema, comparisonRowFromApartment } from '../lib/comparison-table-ui';
 import { EXTERNAL_RENTAL_BUDGET_NOTE, getOptionalExternalRentals, mixRentalResults } from '@/lib/rentals/mixed-rental-results';
 import {
@@ -176,6 +176,8 @@ export type RentalSearchOptions = {
   client?: SupabaseClient | null;
   /** SAN-1502 — pre-computed phase so one search performs a single phase lookup. */
   developmentPhase?: boolean;
+  /** Pure price refinement uses complete structured rows instead of semantic candidates. */
+  structuredOnly?: boolean;
 };
 
 export interface ApartmentRow {
@@ -706,7 +708,7 @@ export async function searchRentals(
   };
 
   // Exact browse/API ceilings use canonical SQL counting, not a truncated semantic candidate window.
-  if (query.queryText?.trim() && query.maxBedrooms === undefined && query.furnished === undefined) {
+  if (!options?.structuredOnly && query.queryText?.trim() && query.maxBedrooms === undefined && query.furnished === undefined) {
     try {
       const started = Date.now();
       // Load after tool initialization; intelligence search reuses our row-mapping helpers.
@@ -863,20 +865,38 @@ export const searchRentalsTool = createTool({
     // Prefer an explicit exact bedroom request in the renter's original words over
     // a model's accidentally broader minimum. The canonical search applies both
     // constraints in SQL; never remove valid rows in a second UI filter.
-    const exactBedrooms = queryText ? exactBedroomsFromQueryText(queryText) : undefined;
-    const requestedMinBedrooms = exactBedrooms ?? minBedrooms;
-    const requestedMaxBedrooms = exactBedrooms ?? maxBedrooms;
+    const originalText = context?.requestContext?.get(RENTAL_SEARCH_TEXT_KEY);
+    const trustedText = typeof originalText === 'string' ? originalText : undefined;
+    const effectiveText = trustedText ?? queryText;
+    const trustedSignals = trustedText ? scoreRentalQuery(trustedText) : undefined;
+    const budgetRefinement = trustedText !== undefined && isRentalBudgetRefinement(
+      [{ role: "user", content: trustedText }], context?.requestContext);
+    const baseText = budgetRefinement ? context?.requestContext?.get(RENTAL_REFINEMENT_TEXT_KEY) : undefined;
+    const base = typeof baseText === 'string' ? scoreRentalQuery(baseText) : undefined;
+    const exactBedrooms = effectiveText ? exactBedroomsFromQueryText(effectiveText) : undefined;
+    const baseExactBedrooms = typeof baseText === 'string' ? exactBedroomsFromQueryText(baseText) : undefined;
+    const knownMinBedrooms = trustedSignals?.minBedrooms ?? base?.minBedrooms;
+    const requestedMinBedrooms = exactBedrooms ?? baseExactBedrooms ?? knownMinBedrooms ?? minBedrooms;
+    const requestedMaxBedrooms = exactBedrooms ?? baseExactBedrooms ?? (knownMinBedrooms !== undefined ? undefined : maxBedrooms);
+    const requestedNeighborhood = trustedSignals?.neighborhood ?? base?.neighborhood ?? neighborhood;
+    const requestedFurnished = typeof baseText === 'string' && clearsFurnishingPreference(baseText) ? undefined :
+      (typeof baseText === 'string' ? furnishingFromQueryText(baseText) : undefined) ?? furnished;
     // Exact COP budget supplied by the renter outranks missing/wrong model slots.
     // Reuse the canonical SQL monthly-budget predicate, not a second filter.
     const trustedCopBudget = context?.requestContext?.get(COMPARISON_COP_MONTHLY_BUDGET_KEY);
-    const requestedMaxPriceMonthly = typeof trustedCopBudget === 'number' &&
-      Number.isFinite(trustedCopBudget) && trustedCopBudget > 0 ? trustedCopBudget : maxPriceMonthly;
-    const requestedBudgetCurrency = typeof trustedCopBudget === 'number' &&
-      Number.isFinite(trustedCopBudget) && trustedCopBudget > 0 ? 'COP' : budgetCurrency;
+    const hasTrustedCopBudget = typeof trustedCopBudget === 'number' &&
+      Number.isFinite(trustedCopBudget) && trustedCopBudget > 0;
+    const requestedMaxPriceMonthly = trustedSignals?.maxPriceMonthly ??
+      (hasTrustedCopBudget ? trustedCopBudget as number : maxPriceMonthly);
+    const requestedBudgetCurrency = trustedSignals?.budgetCurrency ??
+      (hasTrustedCopBudget ? 'COP' : budgetCurrency);
+    const explicitMonthly = trustedSignals?.budgetType === 'monthly' || hasTrustedCopBudget;
+    // A monthly ceiling cannot become a nightly USD filter or a nightly sort.
+    const requestedStayType = explicitMonthly ? 'monthly' : stayType;
     const rentalClient = context?.requestContext?.get(RENTAL_SUPABASE_KEY) as
       | SupabaseClient
       | undefined;
-    const options = rentalClient ? { client: rentalClient } : undefined;
+    const options = budgetRefinement ? { client: rentalClient, structuredOnly: true } : rentalClient ? { client: rentalClient } : undefined;
     // SAN-1694: these rows become the visible cards, in this order. Register before
     // searching so a comparison/cards/viewing tool called in the same step waits
     // for them instead of reading the browser list sent before this search.
@@ -886,7 +906,7 @@ export const searchRentalsTool = createTool({
       searched = await runAuditedSearch(
         'search-rentals',
         (q: RentalQuery) => searchRentals(q, options),
-        { neighborhood, minBedrooms: requestedMinBedrooms, maxBedrooms: requestedMaxBedrooms, furnished, maxPricePerNight, maxPriceMonthly: requestedMaxPriceMonthly, stayType, budgetCurrency: requestedBudgetCurrency, limit, queryText },
+        { neighborhood: requestedNeighborhood, minBedrooms: requestedMinBedrooms, maxBedrooms: requestedMaxBedrooms, furnished: requestedFurnished, maxPricePerNight: explicitMonthly ? undefined : maxPricePerNight, maxPriceMonthly: requestedMaxPriceMonthly, stayType: requestedStayType, budgetCurrency: requestedBudgetCurrency, limit, queryText: effectiveText },
         context,
       );
     } catch (error) {
@@ -928,7 +948,7 @@ export const searchRentalsTool = createTool({
       })),
       source,
       budgetNote,
-      unappliedRequests: unappliedRequestsFor({ queryText }),
+      unappliedRequests: unappliedRequestsFor({ queryText: effectiveText }),
       whatsapp_reply: isWhatsAppRun(context)
         ? formatWhatsAppRentalReply(results, monthlyBudgetFromQuery(inputData))
         : undefined,
