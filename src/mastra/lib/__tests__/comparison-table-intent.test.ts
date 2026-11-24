@@ -351,6 +351,22 @@ describe("SAN-1694 production grounding regressions", () => {
     expect(rentalRefinementContext([original, user("Are the apartments furnished?"), cap], context)).toEqual({ baseText: null, furnishing: undefined });
     expect(rentalRefinementContext([original, user("Do not show furnished apartments."), cap], context)).toEqual({ baseText: null, furnishing: undefined });
   });
+  it("resolves a standalone furnishing clear as a field update, keeping the original search and latest cap", () => {
+    const original = user("Find pet-friendly furnished 2BR apartments in Laureles under COP 4 million per month.");
+    const cap3 = user("Show only apartments under COP 3 million per month.");
+    const cap2 = user("Show only apartments under COP 2 million per month.");
+    const clear = user("Either furnished or unfurnished.");
+    expect(rentalRefinementContext([original, cap3, cap2, clear], context)).toEqual({
+      baseText: original.content.parts[0].text, furnishing: null,
+      budget: { maxPriceMonthly: 2_000_000, budgetCurrency: "COP" },
+    });
+    expect(rentalRefinementContext([original, user("Find restaurants in El Poblado."), clear], context)).toEqual({ baseText: null, furnishing: null });
+    expect(rentalRefinementContext([original, clear])).toEqual({ baseText: null });
+    expect(rentalRefinementContext([original, cap3, user("Show only apartments under USD 800 per month."), clear], context)).toEqual({
+      baseText: original.content.parts[0].text, furnishing: null,
+      budget: { maxPriceMonthly: 800, budgetCurrency: "USD" },
+    });
+  });
   it("only produces the canonical COP or USD monthly preference", () => {
     expect(rentalBudgetRefinementPreference([user("Show apartments under COP 2 million per month.")], context)).toEqual({ maxPriceMonthly: 2_000_000, budgetCurrency: "COP" });
     expect(rentalBudgetRefinementPreference([user("Show apartments under USD 900 per month.")], context)).toEqual({ maxPriceMonthly: 900, budgetCurrency: "USD" });

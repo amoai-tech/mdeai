@@ -29,6 +29,7 @@ const EXPLICIT_RESULT_PAIR = /\b(?:compare|comparison)\b/i;
 export const RENTAL_SEARCH_TEXT_KEY = "mdeai-original-rental-search-text";
 export const RENTAL_REFINEMENT_TEXT_KEY = "mdeai-rental-refinement-base-text";
 export const RENTAL_REFINEMENT_FURNISHING_KEY = "mdeai-rental-refinement-furnishing";
+export const RENTAL_REFINEMENT_BUDGET_KEY = "mdeai-rental-refinement-budget";
 export const COMPARISON_CHEAPEST_KEY = "mdeai-comparison-cheapest-current";
 export const COMPARISON_POSITIONS_KEY = "mdeai-comparison-requested-positions";
 export const COMPARISON_COP_MONTHLY_BUDGET_KEY = "mdeai-comparison-cop-monthly-budget";
@@ -227,10 +228,8 @@ export function trustedRentalSearchText(
   if (!text || text.length > 4000 || looksLikeInjection(text)) return null;
   // Non-budget clears must also survive stale model slots. Restrict the
   // override to explicit rental discovery or a pure choice in rental context.
-  const agui = requestContext?.get?.("ag-ui");
-  const explicitFurnishingClear = !text.includes("?") && clearsFurnishingPreference(text) &&
-    (requestsFreshRentalDiscovery(messages) || (furnishingOnlyRefinement(text) &&
-      (RENTAL_INVENTORY.test(text) || isActiveRentalsDiscoveryPage(agui) || readRentalResultIds(agui).length > 0)));
+  const explicitFurnishingClear = isRentalFurnishingClear(messages, requestContext) ||
+    (!text.includes("?") && clearsFurnishingPreference(text) && requestsFreshRentalDiscovery(messages));
   return (hasExplicitRentalComparisonRequest(messages) && requestsRentalSearchBeforeComparison(text)) ||
     isRentalBudgetRefinement(messages, requestContext) || explicitFurnishingClear ? text : null;
 }
@@ -246,23 +245,46 @@ function furnishingOnlyRefinement(text: string): boolean {
     /^(?:please|show|me|only|actually|instead|switch|to|make|it|them|that|i|prefer|want|need|rather|apartments?|rentals?|listings?|furnished|unfurnished|furnishing|either|or|and|not|no|preference|any|don't|don’t|do|care|if|whether|about|for|doesn't|doesn’t|matter|is|fine|way|both)$/i.test(word));
 }
 
+/** A standalone clear updates one field; it is not a replacement search. */
+export function isRentalFurnishingClear(
+  messages: readonly MessageLike[],
+  requestContext?: { get?: (key: string) => unknown },
+): boolean {
+  const text = messageText([...messages].reverse().find(m => m?.role === "user")).trim();
+  const agui = requestContext?.get?.("ag-ui");
+  return Boolean(text && text.length <= 4000 && !looksLikeInjection(text) &&
+    furnishingOnlyRefinement(text) && clearsFurnishingPreference(text) &&
+    (RENTAL_INVENTORY.test(text) || isActiveRentalsDiscoveryPage(agui) || readRentalResultIds(agui).length > 0));
+}
+
+type MonthlyPreference = NonNullable<ReturnType<typeof rentalBudgetRefinementPreference>>;
+
 /** Recover the base search and latest independent furnishing preference.
  * Skip consecutive budget/furnishing-only refinements, but never cross a
  * different topic, a question, a display command, or a replacement search. */
 export function rentalRefinementContext(
   messages: readonly MessageLike[],
   requestContext?: { get?: (key: string) => unknown },
-): { baseText: string | null; furnishing?: boolean | null } {
-  if (!isRentalBudgetRefinement(messages, requestContext)) return { baseText: null };
+): { baseText: string | null; furnishing?: boolean | null; budget?: MonthlyPreference } {
+  const clear = isRentalFurnishingClear(messages, requestContext);
+  if (!clear && !isRentalBudgetRefinement(messages, requestContext)) return { baseText: null };
   const users = messages.filter((message) => message?.role === "user");
-  let furnishing: boolean | null | undefined;
+  let furnishing: boolean | null | undefined = clear ? null : undefined;
   let furnishingText: string | null = null;
-  const fallback = () => ({ baseText: furnishingText, furnishing });
+  let budget: MonthlyPreference | null = null;
+  const resolved = (baseText: string | null) => ({
+    baseText, furnishing, ...(budget ? { budget } : {}),
+  });
+  const fallback = () => resolved(furnishingText);
   for (let index = users.length - 2; index >= 0; index--) {
     const prior = messageText(users[index]).trim();
     if (!prior || prior.length > 4000 || looksLikeInjection(prior) ||
         RESTAURANT_TABLE.test(prior) || OTHER_COMPARISON_DOMAIN.test(prior)) return fallback();
-    if (budgetRefinementText(prior)) continue;
+    if (budgetRefinementText(prior)) {
+      // On a furnishing clear, keep the most recent independent monthly cap.
+      if (clear && !budget) budget = rentalBudgetRefinementPreference([users[index]], requestContext);
+      continue;
+    }
     if (furnishingOnlyRefinement(prior)) {
       if (furnishing === undefined) {
         furnishing = clearsFurnishingPreference(prior) ? null : furnishingFromQueryText(prior);
@@ -280,7 +302,7 @@ export function rentalRefinementContext(
         furnishingFromQueryText(prior) !== undefined || clearsFurnishingPreference(prior) ||
         signals.maxPriceMonthly !== undefined);
     return requestsFreshRentalDiscovery([users[index]]) || explicitShow
-      ? { baseText: prior, furnishing } : fallback();
+      ? resolved(prior) : fallback();
   }
   return fallback();
 }

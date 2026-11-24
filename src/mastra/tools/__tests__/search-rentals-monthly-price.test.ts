@@ -377,3 +377,40 @@ it("uses the resolved monthly amount and currency in the WhatsApp reply", async 
   expect(cop.whatsapp_reply).toContain("not compared to your budget");
   expect(cop.whatsapp_reply).not.toContain("USD 1,200");
 });
+
+it("keeps the base location, exact bedrooms, latest budget and amenity disclosure when clearing furnishing", async () => {
+  const { searchRentalsTool } = await import("../search-rentals");
+  const { rentalRefinementContext, RENTAL_SEARCH_TEXT_KEY, RENTAL_REFINEMENT_TEXT_KEY, RENTAL_REFINEMENT_BUDGET_KEY } = await import("../../lib/comparison-table-intent");
+  const original = "Find pet-friendly furnished 2BR apartments in Laureles under COP 4 million per month.";
+  // Use an explicit rental noun so this is unambiguously a rental clear even without page hints.
+  const current = "Show either furnished or unfurnished apartments.";
+  const messages = [original, "Show only apartments under COP 3 million per month.", "Show only apartments under COP 2 million per month.", current].map(content => ({role: "user", content}));
+  const refinement = rentalRefinementContext(messages);
+  expect(refinement).toEqual({baseText: original, furnishing: null, budget: {maxPriceMonthly: 2_000_000, budgetCurrency: "COP"}});
+  mocks.state.neighborhoodFilters.length = 0;
+  mocks.state.bedroomFilters.length = 0;
+  mocks.state.furnishingFilters.length = 0;
+  mocks.state.budgetFilters.length = 0;
+  const result = await searchRentalsTool.execute!({ neighborhood: "El Poblado", minBedrooms: 3, maxBedrooms: 3, maxPriceMonthly: 1200, budgetCurrency: "USD", furnished: true, queryText: "Find furnished apartments", limit: 8 },
+    {requestContext: {get: (key: string) => key === RENTAL_SEARCH_TEXT_KEY ? current : key === RENTAL_REFINEMENT_TEXT_KEY ? refinement.baseText : key === RENTAL_REFINEMENT_BUDGET_KEY ? refinement.budget : undefined, set: () => undefined}} as never) as {unappliedRequests: string[]};
+  expect(mocks.state.neighborhoodFilters).toEqual(["%Laureles%"]);
+  expect(mocks.state.bedroomFilters).toEqual(["gte:2", "lte:2"]);
+  expect(mocks.state.furnishingFilters).toEqual([]);
+  expect(mocks.state.budgetFilters.filter(filter => filter.includes("price_"))).toEqual(["and(currency.eq.COP,price_monthly.not.is.null,price_monthly.lte.2000000)"]);
+  expect(result.unappliedRequests.join(" ")).toMatch(/pet/i);
+});
+
+it("keeps model query wording and disclosures if a standalone clear has no recoverable base", async () => {
+  const { searchRentalsTool } = await import("../search-rentals");
+  const { RENTAL_SEARCH_TEXT_KEY } = await import("../../lib/comparison-table-intent");
+  const { RENTAL_A2UI_CONTEXT_DESCRIPTION } = await import("@/lib/rentals/a2ui-context");
+  mocks.state.neighborhoodFilters.length = 0;
+  mocks.state.bedroomFilters.length = 0;
+  mocks.state.furnishingFilters.length = 0;
+  const result = await searchRentalsTool.execute!({ queryText: "Find pet-friendly furnished 2BR apartments in Laureles.", furnished: true, limit: 8 },
+    {requestContext: {get: (key: string) => key === RENTAL_SEARCH_TEXT_KEY ? "Either furnished or unfurnished." : key === "ag-ui" ? {context: [{description: RENTAL_A2UI_CONTEXT_DESCRIPTION, value: JSON.stringify(["37a05b09-f560-4776-92fd-b8bb2b92e601"])}]} : undefined, set: () => undefined}} as never) as {unappliedRequests: string[]};
+  expect(mocks.state.neighborhoodFilters).toEqual(["%Laureles%"]);
+  expect(mocks.state.bedroomFilters).toEqual(["gte:2", "lte:2"]);
+  expect(mocks.state.furnishingFilters).toEqual([]);
+  expect(result.unappliedRequests.join(" ")).toMatch(/pet/i);
+});

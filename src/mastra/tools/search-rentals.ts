@@ -14,7 +14,7 @@ import { deduplicateApartmentRows } from '@/lib/rentals/duplicate-listings';
 import { z } from 'zod';
 import { runAuditedSearch } from '../lib/run-audited-search';
 import { startRentalRunSearch } from '../lib/generative-ui-context';
-import { RENTAL_SEARCH_TEXT_KEY, RENTAL_REFINEMENT_TEXT_KEY, RENTAL_REFINEMENT_FURNISHING_KEY, isRentalBudgetRefinement, COMPARISON_COP_MONTHLY_BUDGET_KEY } from '../lib/comparison-table-intent';
+import { RENTAL_SEARCH_TEXT_KEY, RENTAL_REFINEMENT_TEXT_KEY, RENTAL_REFINEMENT_FURNISHING_KEY, RENTAL_REFINEMENT_BUDGET_KEY, isRentalFurnishingClear, isRentalBudgetRefinement, COMPARISON_COP_MONTHLY_BUDGET_KEY } from '../lib/comparison-table-intent';
 import { comparisonRowSchema, comparisonRowFromApartment } from '../lib/comparison-table-ui';
 import { EXTERNAL_RENTAL_BUDGET_NOTE, getOptionalExternalRentals, mixRentalResults } from '@/lib/rentals/mixed-rental-results';
 import {
@@ -880,11 +880,17 @@ export const searchRentalsTool = createTool({
     // constraints in SQL; never remove valid rows in a second UI filter.
     const originalText = context?.requestContext?.get(RENTAL_SEARCH_TEXT_KEY);
     const trustedText = typeof originalText === 'string' ? originalText : undefined;
-    const effectiveText = trustedText ?? queryText;
     const trustedSignals = trustedText ? scoreRentalQuery(trustedText) : undefined;
-    const budgetRefinement = trustedText !== undefined && isRentalBudgetRefinement(
-      [{ role: "user", content: trustedText }], context?.requestContext);
-    const baseText = budgetRefinement ? context?.requestContext?.get(RENTAL_REFINEMENT_TEXT_KEY) : undefined;
+    const turn = [{ role: "user", content: trustedText }];
+    const budgetRefinement = trustedText !== undefined && isRentalBudgetRefinement(turn, context?.requestContext);
+    const furnishingClear = trustedText !== undefined && isRentalFurnishingClear(turn, context?.requestContext);
+    const baseText = budgetRefinement || furnishingClear
+      ? context?.requestContext?.get(RENTAL_REFINEMENT_TEXT_KEY) : undefined;
+    // Keep amenity/search wording, but include the actual clear so the canonical
+    // search's text parser cannot reintroduce an obsolete furnishing filter.
+    const effectiveText = furnishingClear
+      ? [typeof baseText === "string" ? baseText : queryText, trustedText].filter(Boolean).join(" ")
+      : trustedText ?? queryText;
     const base = typeof baseText === 'string' ? scoreRentalQuery(baseText) : undefined;
     const exactBedrooms = effectiveText ? exactBedroomsFromQueryText(effectiveText) : undefined;
     const baseExactBedrooms = typeof baseText === 'string' ? exactBedroomsFromQueryText(baseText) : undefined;
@@ -895,7 +901,7 @@ export const searchRentalsTool = createTool({
     // A pure budget change retains the base preference. Otherwise the actual
     // current renter wording wins over a contradictory model boolean.
     const furnishingText = typeof baseText === 'string' ? baseText : effectiveText;
-    const refinementFurnishing = budgetRefinement
+    const refinementFurnishing = furnishingClear ? null : budgetRefinement
       ? context?.requestContext?.get(RENTAL_REFINEMENT_FURNISHING_KEY) : undefined;
     let requestedFurnished: boolean | undefined = furnished;
     if (refinementFurnishing === null) {
@@ -911,11 +917,18 @@ export const searchRentalsTool = createTool({
     const trustedCopBudget = context?.requestContext?.get(COMPARISON_COP_MONTHLY_BUDGET_KEY);
     const hasTrustedCopBudget = typeof trustedCopBudget === 'number' &&
       Number.isFinite(trustedCopBudget) && trustedCopBudget > 0;
+    const carried = furnishingClear ? z.object({
+      maxPriceMonthly: z.number().positive().finite(),
+      budgetCurrency: z.enum(["COP", "USD"]),
+    }).safeParse(context?.requestContext?.get(RENTAL_REFINEMENT_BUDGET_KEY)) : undefined;
+    const carriedBudget = carried?.success ? carried.data :
+      furnishingClear && base?.maxPriceMonthly && base.budgetCurrency
+        ? { maxPriceMonthly: base.maxPriceMonthly, budgetCurrency: base.budgetCurrency } : undefined;
     const requestedMaxPriceMonthly = hasTrustedCopBudget ? trustedCopBudget :
-      trustedSignals?.maxPriceMonthly ?? maxPriceMonthly;
+      trustedSignals?.maxPriceMonthly ?? carriedBudget?.maxPriceMonthly ?? maxPriceMonthly;
     const requestedBudgetCurrency = hasTrustedCopBudget ? 'COP' :
-      trustedSignals?.budgetCurrency ?? budgetCurrency;
-    const explicitMonthly = trustedSignals?.budgetType === 'monthly' || hasTrustedCopBudget;
+      trustedSignals?.budgetCurrency ?? carriedBudget?.budgetCurrency ?? budgetCurrency;
+    const explicitMonthly = trustedSignals?.budgetType === 'monthly' || hasTrustedCopBudget || carriedBudget !== undefined;
     // A monthly ceiling cannot become a nightly USD filter or a nightly sort.
     const requestedStayType = explicitMonthly ? 'monthly' : stayType;
     const rentalClient = context?.requestContext?.get(RENTAL_SUPABASE_KEY) as
