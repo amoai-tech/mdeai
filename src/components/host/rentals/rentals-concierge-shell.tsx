@@ -36,7 +36,12 @@ const RENTALS_HEADER_OPERATIONS = [{
   },
 }];
 
-/** Persistent /app route frame. Page children own data; no loader or agent runs here. */
+/**
+ * Persistent frame for the /app/rentals broker route group only.
+ * The legacy /host/rentals shell owns its own navigation and chat. Keep
+ * that route separate until it is migrated; no speculative basePath API.
+ * Page children own data; no loader or agent runs here.
+ */
 export function RentalsBrokerFrame({ children }: { children: ReactNode }) {
   return (
     <MdeDashboardRenderProvider>
@@ -68,8 +73,10 @@ export function RentalsConciergeShell({
 }: RentalsConciergeShellProps) {
   const [mobilePane, setMobilePane] = useState<MobilePane>("chat");
   // The /app route group owns its transport-free renderer and navigation.
-  // Keep the existing concierge available, but make the chosen Overview the
-  // full-width primary content on every viewport. The legacy host route stays compatible.
+  // Overview intentionally omits the legacy feed/chat pane switcher: the
+  // parent frame still renders domain navigation, and Overview has its own
+  // Needs attention tab. Concierge (including its saved thread) remains
+  // available through the shared navigation. Legacy host is unchanged.
   if (basePath === "/app/rentals" && workspaceMode === "overview") {
     return (
       <div data-testid="rentals-concierge" className="min-w-0">

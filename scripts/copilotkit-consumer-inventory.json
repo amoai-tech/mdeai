@@ -485,9 +485,14 @@
       "note": "F5: mocks the v2 generative-ui function hook to capture the Apply handler and proves the in-flight guard is released after a navigation that never changed the URL filters; no provider or run is created."
     },
     {
+      "file": "src/components/host/rentals/__tests__/rentals-renderer-lifecycle.test.tsx",
+      "classification": "test-only",
+      "note": "SAN-1683: real SDK StrictMode subscription cleanup and mount-local surface isolation."
+    },
+    {
       "file": "src/components/copilot/a2ui/mde-dashboard-surface.tsx",
       "classification": "keep",
-      "note": "SAN-1675: renders official Standard Catalog operations from real page data with no AI turn, using the public v2 surface manager ingest + SurfaceView on a dashboard thread with no registered target. Reuses the existing route-owned provider; never creates a second runtime connection."
+      "note": "SAN-1675: renders official Standard Catalog operations from real page data with no AI turn, using the public v2 surface manager ingest + SurfaceView on a dashboard thread with no registered target. Uses the route-owned context or a mount-local native renderer with no runtime URL or agents; never creates a second runtime connection."
     },
     {
       "file": "src/components/copilot/a2ui/mde-standard-restrictions.ts",

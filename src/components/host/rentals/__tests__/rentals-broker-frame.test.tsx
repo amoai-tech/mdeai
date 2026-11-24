@@ -89,6 +89,13 @@ describe("SAN-1683 broker frame without live chat", () => {
     render(<RentalsBrokerFrame><RentalsConciergeShell basePath="/app/rentals" workspaceMode="overview" dashboard={{ ...dashboard, viewingRequests: [request], viewingRequestsTotal: 1 }} /></RentalsBrokerFrame>);
     const surface = await screen.findByTestId("mde-surface-broker-overview");
     expect(within(surface).getByText("Active listings")).toBeTruthy();
+    expect(screen.getAllByTestId("host-rentals-nav")).toHaveLength(1);
+    expect(screen.getByTestId("host-rentals-nav-concierge").getAttribute("href")).toBe("/app/rentals");
+    expect(screen.getByTestId("host-rentals-nav-overview").getAttribute("aria-current")).toBe("page");
+    expect(screen.queryByTestId("rc-left")).toBeNull();
+    expect(screen.queryByRole("navigation", { name: "Concierge mobile panes" })).toBeNull();
+    fireEvent.click(within(surface).getByRole("tab", { name: "Needs attention (0)" }));
+    expect(within(surface).getByText("Nothing needs your attention right now.")).toBeTruthy();
     fireEvent.click(within(surface).getByRole("tab", { name: "Viewings (1)" }));
     const row = within(surface).getByRole("row", { name: /Laureles 2BR/ });
     fireEvent.click(within(row).getByRole("button", { name: "Manage" }));
@@ -110,6 +117,8 @@ describe("SAN-1683 broker frame without live chat", () => {
     render(<RentalsBrokerFrame><RentalsConciergeShell basePath="/app/rentals" dashboard={dashboard} /></RentalsBrokerFrame>);
     expect(screen.getByText("Loading Ask MDE…")).toBeTruthy();
     expect(screen.getByTestId("rc-right")).toBeTruthy();
+    expect(screen.getByTestId("rc-left")).toBeTruthy();
+    expect(screen.getByRole("navigation", { name: "Concierge mobile panes" })).toBeTruthy();
     expect(screen.getByTestId("host-rentals-nav-listings")).toBeTruthy();
     expect(state.chatMounts).toBeGreaterThan(0);
   });

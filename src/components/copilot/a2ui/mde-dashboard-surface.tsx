@@ -18,6 +18,12 @@ import { MDE_GENERATIVE_UI } from "@/components/copilot/a2ui/mde-generative-ui";
  * No runtime URL, agents, credentials, chat configuration or thread replay:
  * this context cannot connect to the AI backend. The authenticated route and
  * existing server actions remain the authority for data and writes.
+ *
+ * In pinned CopilotKit 1.88, useGenerativeUIRoot owns and cleans up its
+ * subscriptions, forwarded action entries and debug source; function hooks
+ * unregister themselves. The core has no
+ * dispose() API. With no agents or runtime URL there is no remote connection
+ * to close. Keep this instance mount-local; do not share it across routes.
  */
 export function MdeDashboardRenderProvider({ children }: { children: ReactNode }) {
   const [core] = useState(() => new CopilotKitCoreReact({ deferInitialConnection: true }));
