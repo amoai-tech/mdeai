@@ -1,12 +1,33 @@
 "use client";
 
-import { useLayoutEffect, type ReactNode } from "react";
+import { useLayoutEffect, useState, type ReactNode } from "react";
+import { CopilotKitCoreReact } from "@copilotkit/react-core/v2/context";
 import {
+  GenerativeUIRuntimeContext,
   SurfaceView,
+  useGenerativeUIRoot,
   useGenerativeUIRuntime,
   useManagerVersion,
 } from "@copilotkit/react-core/v2/generative-ui/native";
 import { mdeUI } from "@/components/copilot/a2ui/mde-ui-catalog";
+import { MDE_GENERATIVE_UI } from "@/components/copilot/a2ui/mde-generative-ui";
+
+/**
+ * App-authored dashboard rendering only. Use the installed SDK's native root
+ * hook (the same surface manager and dispatcher used by CopilotKitProvider).
+ * No runtime URL, agents, credentials, chat configuration or thread replay:
+ * this context cannot connect to the AI backend. The authenticated route and
+ * existing server actions remain the authority for data and writes.
+ */
+export function MdeDashboardRenderProvider({ children }: { children: ReactNode }) {
+  const [core] = useState(() => new CopilotKitCoreReact({ deferInitialConnection: true }));
+  const runtime = useGenerativeUIRoot(core, MDE_GENERATIVE_UI);
+  return (
+    <GenerativeUIRuntimeContext.Provider value={runtime}>
+      {children}
+    </GenerativeUIRuntimeContext.Provider>
+  );
+}
 
 /**
  * SAN-1675 — render official Standard Catalog components from real page data,
@@ -23,8 +44,8 @@ import { mdeUI } from "@/components/copilot/a2ui/mde-ui-catalog";
  * the surface but keeps every value the user typed (the manager's owned paths),
  * so a refresh never wipes an edit in progress.
  *
- * The route owns the existing provider; the dashboard never mounts a second
- * provider or starts an AI run. Transport-free tests see the honest fallback.
+ * The route supplies a renderer context; the dashboard never starts an AI run.
+ * Server rendering and missing/rejected surfaces show the honest fallback.
  */
 export const MDE_DASHBOARD_THREAD_ID = "mde-dashboard";
 

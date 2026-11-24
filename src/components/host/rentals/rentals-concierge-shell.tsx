@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { MdeDashboardSurface } from "@/components/copilot/a2ui/mde-dashboard-surface";
+import { MdeDashboardRenderProvider, MdeDashboardSurface } from "@/components/copilot/a2ui/mde-dashboard-surface";
 import { ChatProvider } from "@/components/chat/chat-provider";
 import { HostRentalsNav } from "@/components/host/rentals/host-rentals-nav";
 import { RentalsConciergeCenter } from "@/components/host/rentals/rentals-concierge-center";
@@ -39,9 +39,7 @@ const RENTALS_HEADER_OPERATIONS = [{
 /** Persistent /app route frame. Page children own data; no loader or agent runs here. */
 export function RentalsBrokerFrame({ children }: { children: ReactNode }) {
   return (
-    <ChatProvider persistThread sessionFallback={
-      <div role="status" className="p-4 text-sm text-muted-foreground">Loading your workspace…</div>
-    }>
+    <MdeDashboardRenderProvider>
       <div data-testid="rentals-broker-frame" className="flex min-w-0 flex-col gap-4">
         <MdeDashboardSurface
           surfaceId="rentals-workspace-header"
@@ -53,7 +51,7 @@ export function RentalsBrokerFrame({ children }: { children: ReactNode }) {
         {/* SAN-1685 owns the actual persistent composer. No second chat here. */}
         <div data-testid="rentals-ask-mde-slot" />
       </div>
-    </ChatProvider>
+    </MdeDashboardRenderProvider>
   );
 }
 
@@ -69,7 +67,7 @@ export function RentalsConciergeShell({
   basePath = "/host/rentals",
 }: RentalsConciergeShellProps) {
   const [mobilePane, setMobilePane] = useState<MobilePane>("chat");
-  // The /app route group owns its persistent provider and navigation.
+  // The /app route group owns its transport-free renderer and navigation.
   // Keep the existing concierge available, but make the chosen Overview the
   // full-width primary content on every viewport. The legacy host route stays compatible.
   if (basePath === "/app/rentals" && workspaceMode === "overview") {
@@ -83,7 +81,15 @@ export function RentalsConciergeShell({
   const workspace = (
     <>
       <div className={cn("min-h-0 min-w-0", mobilePane !== "chat" && "max-lg:hidden", "lg:block")}>
-        <RentalsConciergeCenter mode={workspaceMode} />
+        {basePath === "/app/rentals" ? (
+          <ChatProvider persistThread sessionFallback={
+            <div role="status" className="p-4 text-sm text-muted-foreground">Loading Ask MDE…</div>
+          }>
+            <RentalsConciergeCenter mode={workspaceMode} />
+          </ChatProvider>
+        ) : (
+          <RentalsConciergeCenter mode={workspaceMode} />
+        )}
       </div>
       <div className={cn("min-h-0 min-w-0", mobilePane !== "workspace" && "max-lg:hidden", "lg:block")}>
         <RentalsDynamicWorkspace mode={workspaceMode} dashboard={dashboard} loadError={loadError} />

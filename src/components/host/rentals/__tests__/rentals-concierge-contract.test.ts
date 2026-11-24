@@ -12,10 +12,14 @@ describe("SAN-1124 broker concierge integration contract", () => {
     const center = readComponent("rentals-concierge-center.tsx");
     expect(center).toContain('from "@copilotkit/react-core/v2"');
     const shell = readComponent("rentals-concierge-shell.tsx");
-    // One provider per route family: the app frame owns it; the legacy host
-    // shell retains its standalone provider.
+    // One live provider per concierge route: app chat only, legacy host
+    // retains its standalone provider. The shared frame never starts chat.
     expect(shell.match(/<ChatProvider persistThread sessionFallback=/g)).toHaveLength(2);
     expect(shell).toContain('basePath === "/app/rentals" ? workspace : (');
+    const frame = shell.split("export function RentalsBrokerFrame")[1].split("export function RentalsConciergeShell")[0];
+    expect(frame).toContain("<MdeDashboardRenderProvider>");
+    expect(frame).not.toContain("<ChatProvider");
+    expect(frame).toContain("{children}");
     expect(shell).toContain('basePath !== "/app/rentals" && <HostRentalsNav');
     expect(center).not.toContain("<ChatProvider");
     expect(shell).toContain("<RentalsConciergeCenter");
