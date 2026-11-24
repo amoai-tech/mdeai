@@ -317,6 +317,15 @@ describe("SAN-1694 production grounding regressions", () => {
     expect(shouldFinishComparisonWithoutAnotherTool({ stepNumber: 1, messages: [budget], requestContext: context,
       steps: [{ toolCalls: [{ toolName: "searchRentalsTool" }] }] })).toBe(true);
   });
+  it("skips consecutive pure budget refinements without resurrecting an older search across a topic change", () => {
+    const search = user("Find furnished 2BR apartments in Laureles and compare the first two.");
+    const cap3 = user("Show only apartments under COP 3 million per month.");
+    const cap2 = user("Show only apartments under COP 2 million per month.");
+    expect(rentalRefinementBaseText([search, cap3, cap2], context)).toBe(search.content.parts[0].text);
+    expect(rentalRefinementBaseText([search, cap3, user("Find restaurants in El Poblado."), cap2], context)).toBeNull();
+    expect(rentalRefinementBaseText([search, cap3, user("Find 1BR apartments in El Poblado."), cap2], context)).toBe("Find 1BR apartments in El Poblado.");
+    expect(rentalRefinementBaseText([cap3, cap2], context)).toBeNull();
+  });
   it("forces the official comparison for the two cheapest current rentals without choosing ordinal two", () => {
     const messages = [user("Compare the two cheapest apartments.")];
     expect(comparisonCheapestRequested(messages)).toBe(true);

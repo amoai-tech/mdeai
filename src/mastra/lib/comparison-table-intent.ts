@@ -212,20 +212,24 @@ export function trustedRentalSearchText(
     isRentalBudgetRefinement(messages, requestContext) ? text : null;
 }
 
-/** The immediately preceding explicit rental search is the base of a pure
- * budget refinement. Do not mine older questions or model prose for filters. */
+/** Skip only consecutive pure budget refinements to recover the original
+ * explicit rental search. Stop at intervening questions or other topics. */
 export function rentalRefinementBaseText(
   messages: readonly MessageLike[],
   requestContext?: { get?: (key: string) => unknown },
 ): string | null {
   if (!isRentalBudgetRefinement(messages, requestContext)) return null;
   const users = messages.filter((message) => message?.role === "user");
-  const prior = messageText(users[users.length - 2]).trim();
-  if (!prior || prior.length > 4000 || looksLikeInjection(prior) ||
-      RESTAURANT_TABLE.test(prior) || OTHER_COMPARISON_DOMAIN.test(prior)) return null;
-  return requestsFreshRentalDiscovery([users[users.length - 2]]) ||
-    (/^(?:please\s+)?show\b/i.test(prior) && RENTAL_INVENTORY.test(prior) && !prior.includes("?") &&
-      !hasExplicitRentalComparisonRequest([users[users.length - 2]])) ? prior : null;
+  for (let index = users.length - 2; index >= 0; index--) {
+    const prior = messageText(users[index]).trim();
+    if (!prior || prior.length > 4000 || looksLikeInjection(prior) ||
+        RESTAURANT_TABLE.test(prior) || OTHER_COMPARISON_DOMAIN.test(prior)) return null;
+    if (budgetRefinementText(prior)) continue;
+    return requestsFreshRentalDiscovery([users[index]]) ||
+      (/^(?:please\s+)?show\b/i.test(prior) && RENTAL_INVENTORY.test(prior) && !prior.includes("?") &&
+        !hasExplicitRentalComparisonRequest([users[index]])) ? prior : null;
+  }
+  return null;
 }
 
 function hasExplicitRentalComparisonRequest(messages: readonly MessageLike[]): boolean {

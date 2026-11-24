@@ -119,15 +119,24 @@ export const showComparisonTableTool = createTool({
           : "Fewer than two apartments are accessible in this session.",
       };
     }
+    let rankingMessage: string | undefined;
     if (cheapest) {
+      const unpriced = rows.filter((row) => row.priceMonthly === null || row.currency === null);
       const priced = rows.filter((row) => row.priceMonthly !== null && row.currency !== null);
       // Missing prices are not zero, and currencies cannot be ranked without FX.
+      // Report exclusions even when fewer than two comparable rows remain.
+      const excludedPositions = unpriced.map((row) => `#${available.indexOf(row.id) + 1}`);
+      const excluded = unpriced.length
+        ? ` ${unpriced.length} apartment${unpriced.length === 1 ? "" : "s"} excluded due to missing monthly price or currency (search result${unpriced.length === 1 ? "" : "s"} ${excludedPositions.join(", ")}).`
+        : "";
+      rejected.push(...unpriced.map((row) => row.id));
       if (priced.length < 2 || new Set(priced.map((row) => row.currency)).size !== 1) {
-        return { ok: false, rows: [], rejected: [],
-          message: "There are fewer than two comparable recorded monthly prices in one currency among the current results." };
+        return { ok: false, rows: [], rejected,
+          message: "There are fewer than two comparable recorded monthly prices in one currency among the current results." + excluded };
       }
       // Stable sort preserves the displayed order for equal recorded prices.
       rows = priced.sort((a, b) => a.priceMonthly! - b.priceMonthly!).slice(0, 2);
+      rankingMessage = "Comparing the two lowest recorded monthly rents among the current results in one currency." + excluded;
     }
     // The search enforces the budget in SQL. This last guard ensures even a
     // malformed model search cannot present pricier results as budget matches.
@@ -142,7 +151,7 @@ export const showComparisonTableTool = createTool({
       target: (isActiveRentalsDiscoveryPage(agUiContext) ? RENTAL_COMPARISON_TARGET : COMPARISON_TABLE_TARGET) as ComparisonTarget,
       rows,
       rejected: [...rejected, ...missing],
-      message: `Comparing ${rows.length} apartments using recorded listing facts.`,
+      message: rankingMessage ?? `Comparing ${rows.length} apartments using recorded listing facts.`,
     };
   },
 });

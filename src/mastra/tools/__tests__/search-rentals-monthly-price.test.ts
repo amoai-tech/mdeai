@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => {
-  const state = { projection: "", bedroomFilters: [] as string[], neighborhoodFilters: [] as string[], budgetFilters: [] as string[], rows: null as null | Array<Record<string, unknown>> };
+  const state = { projection: "", bedroomFilters: [] as string[], furnishingFilters: [] as boolean[], neighborhoodFilters: [] as string[], budgetFilters: [] as string[], rows: null as null | Array<Record<string, unknown>> };
   const row = {
     id: "apt-1",
     title: "Centro Budget Studio · 300 USD",
@@ -31,7 +31,7 @@ const mocks = vi.hoisted(() => {
       state.projection = projection;
       return chain;
     }),
-    eq: passthrough,
+    eq: vi.fn((key: string, value: boolean) => { if (key === "furnished") state.furnishingFilters.push(value); return chain; }),
     not: passthrough,
     order: passthrough,
     limit: passthrough,
@@ -276,4 +276,31 @@ it("budget refinement preserves the preceding explicit 2BR Laureles search and o
   expect(mocks.state.neighborhoodFilters).toEqual(["%Laureles%"]);
   expect(mocks.state.bedroomFilters).toEqual(["gte:2", "lte:2"]);
   expect(mocks.state.budgetFilters.filter((filter) => filter.includes("price_"))).toEqual(["and(currency.eq.COP,price_monthly.not.is.null,price_monthly.lte.3000000)"]);
+});
+
+describe("SAN-1694 original furnishing wins over stale model arguments", () => {
+  it.each([
+    ["Find furnished 2BR apartments in Laureles and compare the first two.", false, [true]],
+    ["Find unfurnished 2BR apartments in Laureles and compare the first two.", true, [false]],
+    ["Find 2BR apartments in Laureles, furnished or unfurnished, and compare the first two.", true, []],
+  ] as const)("applies the recorded original preference: %s", async (original, furnished, expected) => {
+    const { searchRentalsTool } = await import("../search-rentals");
+    const { RENTAL_SEARCH_TEXT_KEY } = await import("../../lib/comparison-table-intent");
+    mocks.state.furnishingFilters.length = 0;
+    await searchRentalsTool.execute!({ furnished, queryText: "Find apartments", limit: 8 },
+      { requestContext: { get: (key: string) => key === RENTAL_SEARCH_TEXT_KEY ? original : undefined, set: () => undefined } } as never);
+    expect(mocks.state.furnishingFilters).toEqual(expected);
+  });
+  it.each([
+    ["Find unfurnished 2BR apartments in Laureles.", [false]],
+    ["Find 2BR apartments in Laureles, furnished or unfurnished.", []],
+  ] as const)("preserves the base preference during a pure budget refinement: %s", async (base, expected) => {
+    const { searchRentalsTool } = await import("../search-rentals");
+    const { RENTAL_SEARCH_TEXT_KEY, RENTAL_REFINEMENT_TEXT_KEY } = await import("../../lib/comparison-table-intent");
+    mocks.state.furnishingFilters.length = 0;
+    await searchRentalsTool.execute!({ furnished: true, queryText: "Find furnished apartments", limit: 8 },
+      { requestContext: { get: (key: string) => key === RENTAL_SEARCH_TEXT_KEY ? "Show only apartments under COP 2 million per month." :
+        key === RENTAL_REFINEMENT_TEXT_KEY ? base : undefined, set: () => undefined } } as never);
+    expect(mocks.state.furnishingFilters).toEqual(expected);
+  });
 });

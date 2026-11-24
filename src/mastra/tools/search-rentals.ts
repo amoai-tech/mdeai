@@ -879,8 +879,11 @@ export const searchRentalsTool = createTool({
     const requestedMinBedrooms = exactBedrooms ?? baseExactBedrooms ?? knownMinBedrooms ?? minBedrooms;
     const requestedMaxBedrooms = exactBedrooms ?? baseExactBedrooms ?? (knownMinBedrooms !== undefined ? undefined : maxBedrooms);
     const requestedNeighborhood = trustedSignals?.neighborhood ?? base?.neighborhood ?? neighborhood;
-    const requestedFurnished = typeof baseText === 'string' && clearsFurnishingPreference(baseText) ? undefined :
-      (typeof baseText === 'string' ? furnishingFromQueryText(baseText) : undefined) ?? furnished;
+    // A pure budget change retains the base preference. Otherwise the actual
+    // current renter wording wins over a contradictory model boolean.
+    const furnishingText = typeof baseText === 'string' ? baseText : effectiveText;
+    const requestedFurnished = furnishingText && clearsFurnishingPreference(furnishingText) ? undefined :
+      (furnishingText ? furnishingFromQueryText(furnishingText) : undefined) ?? furnished;
     // Exact COP budget supplied by the renter outranks missing/wrong model slots.
     // Reuse the canonical SQL monthly-budget predicate, not a second filter.
     const trustedCopBudget = context?.requestContext?.get(COMPARISON_COP_MONTHLY_BUDGET_KEY);

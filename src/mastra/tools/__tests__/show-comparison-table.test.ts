@@ -286,6 +286,24 @@ describe("SAN-1694 current-result cheapest comparison", () => {
     ], { visibleIds: ids.slice(0, 4), cheapest: true }));
     expect(result.ok).toBe(true);
     expect(result.rows.map(row => row.id)).toEqual([ids[1], ids[2]]);
+    expect(result.rejected).toEqual([ids[3]]);
+    expect(result.message).toContain("lowest recorded monthly rents");
+    expect(result.message).toContain("1 apartment excluded");
+    expect(result.message).toContain("search result #4");
+    expect(result.message).toContain("missing monthly price or currency");
+  });
+  it("discloses both missing currency and nightly-only listings without ranking them", async () => {
+    const result = await run({ positions: [1, 2] }, context([
+      dbRow(ids[0], "Monthly A", 2_400_000),
+      dbRow(ids[1], "Monthly B", 2_500_000),
+      dbRow(ids[2], "Nightly only", null, 50_000),
+      { ...dbRow(ids[3], "Unknown currency", 1_000_000), currency: null },
+    ], { visibleIds: ids.slice(0, 4), cheapest: true }));
+    expect(result.ok).toBe(true);
+    expect(result.rejected).toEqual([ids[2], ids[3]]);
+    expect(result.message).toContain("2 apartments excluded");
+    expect(result.message).toContain("search results #3, #4");
+    expect(result.message).toContain("missing monthly price or currency");
   });
   it("breaks equal-price ties by visible order and rejects a truncated result set", async () => {
     const rows = [dbRow(ids[2], "Third", 2_400_000), dbRow(ids[1], "Second", 2_400_000), dbRow(ids[0], "First", 4_200_000)];
