@@ -45,11 +45,11 @@ export const showComparisonTableTool = createTool({
     const agUiContext = requestContext?.get?.("ag-ui");
     // A search earlier in this run replaced the visible cards; positions and IDs
     // must address those, not the browser list sent before it (SAN-1694).
-    const available = await currentRentalResultIds(requestContext);
+    const cheapest = requestContext?.get?.(COMPARISON_CHEAPEST_KEY) === true;
+    const available = await currentRentalResultIds(requestContext, { preserveGaps: cheapest });
     if (available.filter(Boolean).length < 2) {
       return { ok: false, rows: [], rejected: [], message: "Search for apartments first; there are fewer than two current results." };
     }
-    const cheapest = requestContext?.get?.(COMPARISON_CHEAPEST_KEY) === true;
     // Ranking an incomplete or malformed set would misrepresent "cheapest".
     // A browser count is only a hint, and never authorizes additional reads.
     const renderedCount = readRentalRenderedCount(agUiContext);

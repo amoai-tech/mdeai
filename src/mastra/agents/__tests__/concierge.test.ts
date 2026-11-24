@@ -1,6 +1,6 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { zodToJsonSchema } from "@mastra/schema-compat/zod-to-json";
-import { createThreadMemory } from "../../lib/agent-memory";
+import { createThreadMemory, rememberRentalMonthlyBudget } from "../../lib/agent-memory";
 import { MDEAI_ROUTE_PLAN_KEY } from "../../lib/route-tool-choice";
 import {
   conciergeAgent,
@@ -726,5 +726,44 @@ describe("answers never narrate the work", () => {
     // The ban must not silence the disclosures other rules require.
     expect(instructions).toContain("still state the source, verification status, tool errors");
     expect(instructions).toContain("subject to the clarification rules below");
+  });
+});
+
+describe("SAN-1694 budget preference persistence", () => {
+  it("saves the cap before a forced search, even if the next step records a failed attempt", async () => {
+    const configured = await conciergeAgent.listConfiguredInputProcessors();
+    const processor = configured.find(p => p.id === "san1681-comparison-table-intent");
+    const finish = configured.find(p => p.id === "san1681-comparison-text-finish");
+    if (!processor || !("processInputStep" in processor) || !finish || !("processInputStep" in finish)) {
+      throw new Error("Expected configured comparison processors");
+    }
+    const existing = { lastRentalQuery: { neighborhood: "Laureles", minBedrooms: 2, maxPriceMonthly: 4_000_000, maxPricePerNight: 120, budgetCurrency: "COP" }, lastIntent: "rental_search", selectedListingId: "selected" };
+    let saved = existing;
+    const memory = {
+      getThreadById: vi.fn(async () => ({ resourceId: "renter" })),
+      getWorkingMemory: vi.fn(async () => JSON.stringify(saved)),
+      updateWorkingMemory: vi.fn(async ({ workingMemory }: { workingMemory: string }) => { saved = JSON.parse(workingMemory); }),
+    };
+    const store = new Map<string, unknown>();
+    const requestContext = { get: (key: string) => store.get(key), set: (key: string, value: unknown) => store.set(key, value) };
+    const messages = [{ role: "user", content: { parts: [{ type: "text", text: "Show only apartments under COP 3 million per month." }] } }];
+    const args = { stepNumber: 0, messages, steps: [], requestContext, messageList: { serialize: () => ({ memoryInfo: { threadId: "thread", resourceId: "renter" } }) }, agent: { getMemory: async () => memory } };
+    expect(await processor.processInputStep!(args as never)).toEqual({ toolChoice: { type: "tool", toolName: "searchRentalsTool" } });
+    expect(saved).toEqual({ lastRentalQuery: { neighborhood: "Laureles", minBedrooms: 2, maxPriceMonthly: 3_000_000, budgetCurrency: "COP", budgetType: "monthly" }, lastIntent: "rental_search", selectedListingId: "selected" });
+    expect(await finish.processInputStep!({ ...args, stepNumber: 1, steps: [{ toolCalls: [{ toolName: "searchRentalsTool" }] }] } as never)).toEqual({ toolChoice: "none" });
+    expect(memory.updateWorkingMemory).toHaveBeenCalledTimes(1);
+    const usd = [{ role: "user", content: { parts: [{ type: "text", text: "Show only apartments under USD 900 per month." }] } }];
+    await processor.processInputStep!({ ...args, messages: usd } as never);
+    const { COMPARISON_COP_MONTHLY_BUDGET_KEY } = await import("../../lib/comparison-table-intent");
+    expect(requestContext.get(COMPARISON_COP_MONTHLY_BUDGET_KEY)).toBeNull();
+    expect(saved.lastRentalQuery).toMatchObject({ maxPriceMonthly: 900, budgetCurrency: "USD" });
+  });
+  it("does not write a different renter's thread or replace malformed memory", async () => {
+    const memory = { getThreadById: vi.fn(async () => ({ resourceId: "other" })), getWorkingMemory: vi.fn(async () => "{"), updateWorkingMemory: vi.fn(async () => undefined) };
+    const budget = { maxPriceMonthly: 2_000_000, budgetCurrency: "COP" as const };
+    expect(await rememberRentalMonthlyBudget(memory, { threadId: "thread", resourceId: "renter" }, budget)).toBe(false);
+    expect(memory.getWorkingMemory).not.toHaveBeenCalled();
+    expect(await rememberRentalMonthlyBudget(memory, { threadId: "thread", resourceId: "other" }, budget)).toBe(false);
+    expect(memory.updateWorkingMemory).not.toHaveBeenCalled();
   });
 });

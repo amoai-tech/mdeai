@@ -328,6 +328,15 @@ describe("currentRentalResultIds — this run's searches versus the browser list
     expect(await currentRentalResultIds(await runContext())).toEqual(page);
   });
 
+  it("preserves malformed browser gaps only when explicitly requested", async () => {
+    const ctx = await runContext();
+    const agui = { context: [{ description: RENTAL_A2UI_CONTEXT_DESCRIPTION, value: JSON.stringify([page[0], "bad entry", page[1]]) }] };
+    ctx.set("ag-ui", agui);
+    expect(readRentalResultIds(agui)).toEqual(page);
+    expect(await currentRentalResultIds(ctx)).toEqual(page);
+    expect(await currentRentalResultIds(ctx, { preserveGaps: true })).toEqual([page[0], "", page[1]]);
+  });
+
   it("uses this run's search, keeping its display order", async () => {
     const ctx = await runContext();
     startRentalRunSearch(ctx)(a);

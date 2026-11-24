@@ -325,6 +325,8 @@ describe("SAN-1694 production grounding regressions", () => {
     expect(rentalRefinementBaseText([search, cap3, user("Find restaurants in El Poblado."), cap2], context)).toBeNull();
     expect(rentalRefinementBaseText([search, cap3, user("Find 1BR apartments in El Poblado."), cap2], context)).toBe("Find 1BR apartments in El Poblado.");
     expect(rentalRefinementBaseText([cap3, cap2], context)).toBeNull();
+    expect(rentalRefinementBaseText([search, user("Show the first two rentals."), cap2], context)).toBeNull();
+    expect(rentalRefinementBaseText([user("Show 2BR apartments in Laureles."), cap2], context)).toBe("Show 2BR apartments in Laureles.");
   });
   it("forces the official comparison for the two cheapest current rentals without choosing ordinal two", () => {
     const messages = [user("Compare the two cheapest apartments.")];

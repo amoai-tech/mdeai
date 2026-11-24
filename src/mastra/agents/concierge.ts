@@ -1,6 +1,6 @@
 import { Agent } from '@mastra/core/agent';
 import { z } from 'zod';
-import { createThreadMemory } from '../lib/agent-memory';
+import { createThreadMemory, rememberRentalMonthlyBudget } from '../lib/agent-memory';
 import { searchRentalsTool } from '../tools/search-rentals';
 import { readBrokerWorkspaceTool } from '../tools/read-broker-workspace';
 import { searchNewProjectsTool } from '../tools/search-new-projects';
@@ -16,7 +16,7 @@ import { requestVenueBookingTool } from '../tools/request-venue-booking';
 import { showRecommendationsTool } from '../tools/show-recommendations';
 import { showRentalFilterControlTool } from '../tools/show-rental-filter-control';
 import { showComparisonTableTool } from '../tools/show-comparison-table';
-import { RENTAL_SEARCH_TEXT_KEY, RENTAL_REFINEMENT_TEXT_KEY, rentalRefinementBaseText, COMPARISON_CHEAPEST_KEY, comparisonCheapestRequested, isRentalBudgetRefinement, trustedRentalSearchText, COMPARISON_POSITIONS_KEY, COMPARISON_COP_MONTHLY_BUDGET_KEY, comparisonCopMonthlyBudget, comparisonRequestedPositions, requestsFreshRentalDiscovery, shouldContinueComparisonAfterRoute, shouldContinueRouteAfterComparison, shouldFinishComparisonWithoutAnotherTool, shouldForceComparisonTable, shouldSearchBeforeComparison, shouldContinueComparisonAfterSearch } from '../lib/comparison-table-intent';
+import { RENTAL_SEARCH_TEXT_KEY, RENTAL_REFINEMENT_TEXT_KEY, rentalRefinementBaseText, rentalBudgetRefinementPreference, COMPARISON_CHEAPEST_KEY, comparisonCheapestRequested, isRentalBudgetRefinement, trustedRentalSearchText, COMPARISON_POSITIONS_KEY, COMPARISON_COP_MONTHLY_BUDGET_KEY, comparisonCopMonthlyBudget, comparisonRequestedPositions, requestsFreshRentalDiscovery, shouldContinueComparisonAfterRoute, shouldContinueRouteAfterComparison, shouldFinishComparisonWithoutAnotherTool, shouldForceComparisonTable, shouldSearchBeforeComparison, shouldContinueComparisonAfterSearch } from '../lib/comparison-table-intent';
 import { requireFreshRentalRunResults } from '../lib/generative-ui-context';
 import { showViewingProposalTool } from '../tools/show-viewing-proposal';
 import { shouldRenderRentalFilterControl, shouldRenderViewingProposal, shouldRequestRecommendations } from '../lib/recommendation-intent';
@@ -612,7 +612,7 @@ export const conciergeAgent = new Agent({
     // SAN-1681 — an explicit comparison-table request is a UI command. Pin the
     // ID-list tool; the transport builds the official Column → Table. Forcing
     // render_ui itself produced empty operations, so it is not used here.
-    { id: 'san1681-comparison-table-intent', processInputStep: ({ stepNumber, messages, steps, requestContext }) => {
+    { id: 'san1681-comparison-table-intent', processInputStep: async ({ stepNumber, messages, steps, requestContext, agent, messageList }) => {
       // Never carry trusted ordinal selection from a previous conversation turn.
       if (stepNumber === 0) {
         requestContext?.set(COMPARISON_POSITIONS_KEY, null);
@@ -628,6 +628,23 @@ export const conciergeAgent = new Agent({
       // reads the run-scoped IDs written by search-rentals, so do not let the
       // model execute both tools against the pre-search browser hints.
       if (stepNumber === 0 && isRentalBudgetRefinement(messages, requestContext)) {
+        // The finish gate intentionally disables tools after the search attempt,
+        // including a failed search. Save the requested preference beforehand,
+        // not the claimed search outcome. Use the actual run's memory identity.
+        const budget = rentalBudgetRefinementPreference(messages, requestContext);
+        const identity = messageList?.serialize().memoryInfo;
+        if (budget && agent && identity?.threadId && identity.resourceId) {
+          try {
+            const memory = await agent.getMemory({ requestContext });
+            if (memory) await rememberRentalMonthlyBudget(memory, {
+              threadId: identity.threadId, resourceId: identity.resourceId,
+            }, budget);
+          } catch (error) {
+            console.warn("[agent-memory] rental budget memory unavailable", {
+              error: error instanceof Error ? error.message : "unknown error",
+            });
+          }
+        }
         requireFreshRentalRunResults(requestContext);
         return { toolChoice: { type: 'tool' as const, toolName: 'searchRentalsTool' } };
       }

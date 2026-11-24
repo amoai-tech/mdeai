@@ -292,6 +292,13 @@ describe("SAN-1694 current-result cheapest comparison", () => {
     expect(result.message).toContain("search result #4");
     expect(result.message).toContain("missing monthly price or currency");
   });
+  it("rejects malformed browser hints even without a published count", async () => {
+    const result = await run({ positions: [1, 2] }, context([
+      dbRow(ids[0], "First", 2_400_000), dbRow(ids[1], "Second", 2_500_000),
+    ], { visibleIds: [ids[0], "bad entry", ids[1]], cheapest: true }));
+    expect(result.ok).toBe(false);
+    expect(result.rows).toEqual([]);
+  });
   it("discloses both missing currency and nightly-only listings without ranking them", async () => {
     const result = await run({ positions: [1, 2] }, context([
       dbRow(ids[0], "Monthly A", 2_400_000),

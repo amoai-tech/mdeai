@@ -86,6 +86,41 @@ function withThreadLock<T>(key: string, run: () => Promise<T>): Promise<T> {
   return next;
 }
 
+/** Persist a requested monthly cap independently of the model-facing tool.
+ * The run supplies the thread/resource identity; verify ownership against storage.
+ * Share the existing per-thread lock so other MDE memory updates cannot clobber it.
+ */
+export async function rememberRentalMonthlyBudget(
+  memory: {
+    getThreadById: (args: { threadId: string }) => Promise<{ resourceId: string } | null>;
+    getWorkingMemory: (args: { threadId: string; resourceId: string }) => Promise<string | null>;
+    updateWorkingMemory: (args: { threadId: string; resourceId: string; workingMemory: string }) => Promise<unknown>;
+  },
+  where: { threadId: string; resourceId: string },
+  budget: { maxPriceMonthly: number; budgetCurrency: "COP" | "USD" },
+): Promise<boolean> {
+  if (!where.threadId || !where.resourceId || !Number.isFinite(budget.maxPriceMonthly) || budget.maxPriceMonthly <= 0) return false;
+  return withThreadLock("thread:" + where.threadId, async () => {
+    try {
+      const thread = await memory.getThreadById({ threadId: where.threadId });
+      // No stale memory exists on a missing thread. Never create or write a
+      // thread here, and never trust identity from browser-provided hints.
+      if (!thread || thread.resourceId !== where.resourceId) return false;
+      const raw = await memory.getWorkingMemory(where);
+      const existing: unknown = raw ? JSON.parse(raw) : {};
+      if (!isPlainObject(existing)) return false;
+      const patch = { lastRentalQuery: { ...budget, budgetType: "monthly", maxPricePerNight: null } };
+      await memory.updateWorkingMemory({ ...where, workingMemory: JSON.stringify(mergeWorkingMemory(existing, patch)) });
+      return true;
+    } catch (error) {
+      console.warn("[agent-memory] rental budget preference update failed", {
+        error: error instanceof Error ? error.message : "unknown error",
+      });
+      return false;
+    }
+  });
+}
+
 /**
  * SAN-1387 + SAN-1338 — MDE's working-memory boundary.
  *

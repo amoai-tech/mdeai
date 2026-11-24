@@ -529,9 +529,22 @@ export function sortForMonthlyStay<T extends Rental>(results: T[]): T[] {
     const aLong = a.tags.includes('long-stay') ? 0 : 1;
     const bLong = b.tags.includes('long-stay') ? 0 : 1;
     if (aLong !== bLong) return aLong - bLong;
-    const aPrice = Number.isFinite(a.nightly_price) ? a.nightly_price : Number.POSITIVE_INFINITY;
-    const bPrice = Number.isFinite(b.nightly_price) ? b.nightly_price : Number.POSITIVE_INFINITY;
-    if (aPrice !== bPrice) return aPrice - bPrice;
+    const price = (row: Rental) => {
+      const amount = row.comparison_facts ? row.comparison_facts.priceMonthly : row.price_monthly;
+      const currency = row.comparison_facts ? row.comparison_facts.currency : row.currency;
+      return typeof amount === 'number' && Number.isFinite(amount) && amount > 0 && currency?.trim()
+        ? { amount, currency: currency.trim().toUpperCase() } : null;
+    };
+    const ap = price(a);
+    const bp = price(b);
+    if (ap && !bp) return -1;
+    if (!ap && bp) return 1;
+    if (ap && bp) {
+      // Group currencies deterministically; never compare COP and USD amounts.
+      const group = ap.currency.localeCompare(bp.currency);
+      if (group !== 0) return group;
+      if (ap.amount !== bp.amount) return ap.amount - bp.amount;
+    }
     return a.id.localeCompare(b.id);
   });
 }
@@ -889,10 +902,10 @@ export const searchRentalsTool = createTool({
     const trustedCopBudget = context?.requestContext?.get(COMPARISON_COP_MONTHLY_BUDGET_KEY);
     const hasTrustedCopBudget = typeof trustedCopBudget === 'number' &&
       Number.isFinite(trustedCopBudget) && trustedCopBudget > 0;
-    const requestedMaxPriceMonthly = trustedSignals?.maxPriceMonthly ??
-      (hasTrustedCopBudget ? trustedCopBudget as number : maxPriceMonthly);
-    const requestedBudgetCurrency = trustedSignals?.budgetCurrency ??
-      (hasTrustedCopBudget ? 'COP' : budgetCurrency);
+    const requestedMaxPriceMonthly = hasTrustedCopBudget ? trustedCopBudget :
+      trustedSignals?.maxPriceMonthly ?? maxPriceMonthly;
+    const requestedBudgetCurrency = hasTrustedCopBudget ? 'COP' :
+      trustedSignals?.budgetCurrency ?? budgetCurrency;
     const explicitMonthly = trustedSignals?.budgetType === 'monthly' || hasTrustedCopBudget;
     // A monthly ceiling cannot become a nightly USD filter or a nightly sort.
     const requestedStayType = explicitMonthly ? 'monthly' : stayType;
@@ -951,7 +964,10 @@ export const searchRentalsTool = createTool({
       })),
       source,
       budgetNote,
-      unappliedRequests: unappliedRequestsFor({ queryText: effectiveText }),
+      unappliedRequests: [...new Set([
+        ...unappliedRequestsFor({ queryText: typeof baseText === "string" ? baseText : undefined }),
+        ...unappliedRequestsFor({ queryText: effectiveText }),
+      ])],
       whatsapp_reply: isWhatsAppRun(context)
         ? formatWhatsAppRentalReply(results, monthlyBudgetFromQuery(inputData))
         : undefined,

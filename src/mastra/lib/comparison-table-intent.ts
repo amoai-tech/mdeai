@@ -1,6 +1,6 @@
 import { hasUsableRentalRunResults, readRentalResultIds } from "./generative-ui-context";
 import { isActiveRentalsDiscoveryPage } from "./discovery-agent-context";
-import { isExactMonthlyBudgetOnlyRefinement, looksLikeInjection } from "@/lib/rental-query-parser";
+import { isExactMonthlyBudgetOnlyRefinement, looksLikeInjection, scoreRentalQuery, furnishingFromQueryText, clearsFurnishingPreference } from "@/lib/rental-query-parser";
 
 type MessageLike = { role?: string; content?: unknown };
 
@@ -201,6 +201,22 @@ export function isRentalBudgetRefinement(
     isActiveRentalsDiscoveryPage(agui) || readRentalResultIds(agui).length > 0);
 }
 
+/** Parse a pure refinement's requested preference from the actual user message.
+ * Keep amount and currency paired, matching the canonical search tool.
+ */
+export function rentalBudgetRefinementPreference(
+  messages: readonly MessageLike[],
+  requestContext?: { get?: (key: string) => unknown },
+): { maxPriceMonthly: number; budgetCurrency: "COP" | "USD" } | null {
+  if (!isRentalBudgetRefinement(messages, requestContext)) return null;
+  const text = messageText([...messages].reverse().find((m) => m?.role === "user"));
+  const cop = comparisonCopMonthlyBudget(messages);
+  if (cop !== null) return { maxPriceMonthly: cop, budgetCurrency: "COP" };
+  const signals = scoreRentalQuery(text);
+  return signals.maxPriceMonthly != null && signals.maxPriceMonthly > 0 && signals.budgetCurrency
+    ? { maxPriceMonthly: signals.maxPriceMonthly, budgetCurrency: signals.budgetCurrency } : null;
+}
+
 /** Only the explicit current search turn can override model-generated slots. */
 export function trustedRentalSearchText(
   messages: readonly MessageLike[],
@@ -225,9 +241,16 @@ export function rentalRefinementBaseText(
     if (!prior || prior.length > 4000 || looksLikeInjection(prior) ||
         RESTAURANT_TABLE.test(prior) || OTHER_COMPARISON_DOMAIN.test(prior)) return null;
     if (budgetRefinementText(prior)) continue;
-    return requestsFreshRentalDiscovery([users[index]]) ||
-      (/^(?:please\s+)?show\b/i.test(prior) && RENTAL_INVENTORY.test(prior) && !prior.includes("?") &&
-        !hasExplicitRentalComparisonRequest([users[index]])) ? prior : null;
+    const signals = scoreRentalQuery(prior);
+    // "Show those rentals" or "show the first two" is not a new search base.
+    // Only trust a show command with actual search criteria, not a display action.
+    const explicitShow = /^(?:please\s+)?show\b/i.test(prior) && RENTAL_INVENTORY.test(prior) &&
+      !prior.includes("?") && !DISPLAYED_ORDINAL.test(prior) &&
+      !hasExplicitRentalComparisonRequest([users[index]]) &&
+      (signals.neighborhood !== undefined || signals.minBedrooms !== undefined ||
+        furnishingFromQueryText(prior) !== undefined || clearsFurnishingPreference(prior) ||
+        signals.maxPriceMonthly !== undefined);
+    return requestsFreshRentalDiscovery([users[index]]) || explicitShow ? prior : null;
   }
   return null;
 }

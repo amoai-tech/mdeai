@@ -304,3 +304,17 @@ describe("SAN-1694 original furnishing wins over stale model arguments", () => {
     expect(mocks.state.furnishingFilters).toEqual(expected);
   });
 });
+
+it("keeps unsupported base requests and uses the server COP ceiling as a pair with its currency", async () => {
+  const { searchRentalsTool } = await import("../search-rentals");
+  const { RENTAL_SEARCH_TEXT_KEY, RENTAL_REFINEMENT_TEXT_KEY, COMPARISON_COP_MONTHLY_BUDGET_KEY } = await import("../../lib/comparison-table-intent");
+  mocks.state.budgetFilters.length = 0;
+  const result = await searchRentalsTool.execute!({ limit: 8 }, { requestContext: {
+    get: (key: string) => key === RENTAL_SEARCH_TEXT_KEY ? "Show only apartments under COP 3 million per month." :
+      key === RENTAL_REFINEMENT_TEXT_KEY ? "Find pet-friendly 2BR apartments in Laureles." :
+      key === COMPARISON_COP_MONTHLY_BUDGET_KEY ? 2_000_000 : undefined,
+    set: () => undefined,
+  } } as never) as { unappliedRequests: string[] };
+  expect(mocks.state.budgetFilters.filter(filter => filter.includes("price_"))).toEqual(["and(currency.eq.COP,price_monthly.not.is.null,price_monthly.lte.2000000)"]);
+  expect(result.unappliedRequests.join(" ")).toMatch(/pet/i);
+});
