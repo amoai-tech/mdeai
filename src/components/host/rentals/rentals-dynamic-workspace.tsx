@@ -31,8 +31,13 @@ export function RentalsDynamicWorkspace({
   loadError = null,
 }: RentalsDynamicWorkspaceProps) {
   const requests = dashboard?.viewingRequests ?? [];
+  const stateLabel = loadError ? "Unavailable" : dashboard ? "Live" : "Not loaded";
 
-  const requestsSurface = (
+  const requestsSurface = !dashboard && !loadError ? (
+    <p role="status" className="text-xs text-muted-foreground">
+      Viewing request data is not loaded.
+    </p>
+  ) : (
     <BrokerViewingRequests
       requests={requests}
       total={dashboard?.viewingRequestsTotal}
@@ -45,7 +50,7 @@ export function RentalsDynamicWorkspace({
       <Sparkles className="size-4 text-accent" aria-hidden />
       <h2 className="font-serif text-base font-semibold">Overview</h2>
       <Badge variant="secondary" className="ml-auto text-xs">
-        Live
+        {stateLabel}
       </Badge>
     </div>
   );
@@ -64,7 +69,7 @@ export function RentalsDynamicWorkspace({
 
         <div data-testid="ctx-analytics" className="space-y-3 rounded-lg border border-border bg-card p-4">
           <div className="grid grid-cols-2 gap-2">
-            {(dashboard?.kpis ?? []).map((kpi) => (
+            {(loadError ? [] : dashboard?.kpis ?? []).map((kpi) => (
               <div
                 key={kpi.id}
                 data-testid={kpi.testId}
@@ -74,7 +79,7 @@ export function RentalsDynamicWorkspace({
                 <div className="font-mono text-lg font-semibold">{kpi.value}</div>
               </div>
             ))}
-            {dashboard === null ? (
+            {dashboard === null && !loadError ? (
               <div
                 data-testid="r1-kpi-0"
                 className="rounded-md border border-border bg-background p-3"
@@ -115,7 +120,7 @@ export function RentalsDynamicWorkspace({
         <Sparkles className="size-4 text-accent" aria-hidden />
         <h2 className="font-serif text-base font-semibold">Workspace</h2>
         <Badge variant="secondary" className="ml-auto text-xs">
-          Live
+          {stateLabel}
         </Badge>
       </div>
 
@@ -126,7 +131,7 @@ export function RentalsDynamicWorkspace({
         {requestsSurface}
       </section>
 
-      {requests.length === 0 ? (
+      {dashboard && !loadError && requests.length === 0 ? (
         <p
           data-testid="ctx-empty"
           className="text-xs text-muted-foreground"
