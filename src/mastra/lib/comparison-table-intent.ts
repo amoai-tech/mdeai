@@ -225,8 +225,14 @@ export function trustedRentalSearchText(
 ): string | null {
   const text = messageText([...messages].reverse().find((m) => m?.role === "user")).trim();
   if (!text || text.length > 4000 || looksLikeInjection(text)) return null;
+  // Non-budget clears must also survive stale model slots. Restrict the
+  // override to explicit rental discovery or a pure choice in rental context.
+  const agui = requestContext?.get?.("ag-ui");
+  const explicitFurnishingClear = !text.includes("?") && clearsFurnishingPreference(text) &&
+    (requestsFreshRentalDiscovery(messages) || (furnishingOnlyRefinement(text) &&
+      (RENTAL_INVENTORY.test(text) || isActiveRentalsDiscoveryPage(agui) || readRentalResultIds(agui).length > 0)));
   return (hasExplicitRentalComparisonRequest(messages) && requestsRentalSearchBeforeComparison(text)) ||
-    isRentalBudgetRefinement(messages, requestContext) ? text : null;
+    isRentalBudgetRefinement(messages, requestContext) || explicitFurnishingClear ? text : null;
 }
 
 /** Recognize only a pure furnishing choice, not a new search with additional

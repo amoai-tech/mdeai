@@ -317,6 +317,16 @@ describe("SAN-1694 production grounding regressions", () => {
     expect(shouldFinishComparisonWithoutAnotherTool({ stepNumber: 1, messages: [budget], requestContext: context,
       steps: [{ toolCalls: [{ toolName: "searchRentalsTool" }] }] })).toBe(true);
   });
+  it("trusts explicit non-budget furnishing clears without trusting amenity questions or unrelated topics", () => {
+    const plain = user("Find 2BR apartments in Laureles, furnished or unfurnished.");
+    const clear = user("Either furnished or unfurnished.");
+    expect(isRentalBudgetRefinement([plain], context)).toBe(false);
+    expect(trustedRentalSearchText([plain], context)).toBe(plain.content.parts[0].text);
+    expect(trustedRentalSearchText([clear], context)).toBe(clear.content.parts[0].text);
+    expect(trustedRentalSearchText([clear])).toBeNull();
+    expect(trustedRentalSearchText([user("Are these apartments furnished or unfurnished?")], context)).toBeNull();
+    expect(trustedRentalSearchText([user("Find hotels, furnished or unfurnished.")], context)).toBeNull();
+  });
   it("skips consecutive pure budget refinements without resurrecting an older search across a topic change", () => {
     const search = user("Find furnished 2BR apartments in Laureles and compare the first two.");
     const cap3 = user("Show only apartments under COP 3 million per month.");

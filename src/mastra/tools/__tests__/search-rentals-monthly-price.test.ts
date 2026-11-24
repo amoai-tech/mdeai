@@ -291,6 +291,18 @@ describe("SAN-1694 original furnishing wins over stale model arguments", () => {
       { requestContext: { get: (key: string) => key === RENTAL_SEARCH_TEXT_KEY ? original : undefined, set: () => undefined } } as never);
     expect(mocks.state.furnishingFilters).toEqual(expected);
   });
+  it("clears stale model furnishing on a plain rental search using the actual user turn", async () => {
+    const { searchRentalsTool } = await import("../search-rentals");
+    const { RENTAL_SEARCH_TEXT_KEY, RENTAL_REFINEMENT_FURNISHING_KEY, trustedRentalSearchText, isRentalBudgetRefinement } = await import("../../lib/comparison-table-intent");
+    const messages = [{ role: "user", content: "Find 2BR apartments in Laureles, furnished or unfurnished." }];
+    const original = trustedRentalSearchText(messages);
+    expect(isRentalBudgetRefinement(messages)).toBe(false);
+    mocks.state.furnishingFilters.length = 0;
+    await searchRentalsTool.execute!({ furnished: true, queryText: "Find furnished apartments", limit: 8 },
+      { requestContext: { get: (key: string) => key === RENTAL_SEARCH_TEXT_KEY ? original :
+        key === RENTAL_REFINEMENT_FURNISHING_KEY ? true : undefined, set: () => undefined } } as never);
+    expect(mocks.state.furnishingFilters).toEqual([]);
+  });
   it.each([
     ["Find unfurnished 2BR apartments in Laureles.", [false]],
     ["Find 2BR apartments in Laureles, furnished or unfurnished.", []],
