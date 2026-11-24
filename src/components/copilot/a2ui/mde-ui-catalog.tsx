@@ -738,6 +738,16 @@ export const mdeUI = createGenerativeUI({
       allowedCallers: "rendererOnly",
       requiresUserActivation: true,
     },
+    // SAN-1710 — the Overview's own navigation. The model can never call it; the
+    // page maps a closed set of targets to real, implemented destinations.
+    brokerOverviewNavigate: {
+      parameters: z.object({
+        rendererKey: z.string().uuid(),
+        target: z.enum(["listings", "new_listing", "ask_mde"]),
+      }),
+      allowedCallers: "rendererOnly",
+      requiresUserActivation: true,
+    },
   },
   components: {
     ...(clickOnlyButton ? { Button: clickOnlyButton } : {}),

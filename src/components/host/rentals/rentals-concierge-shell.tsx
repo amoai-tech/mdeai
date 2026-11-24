@@ -72,15 +72,23 @@ export function RentalsConciergeShell({
   basePath = "/host/rentals",
 }: RentalsConciergeShellProps) {
   const [mobilePane, setMobilePane] = useState<MobilePane>("chat");
-  // The /app route group owns its transport-free renderer and navigation.
-  // Overview intentionally omits the legacy feed/chat pane switcher: the
-  // parent frame still renders domain navigation, and Overview has its own
-  // Needs attention tab. Concierge (including its saved thread) remains
-  // available through the shared navigation. Legacy host is unchanged.
-  if (basePath === "/app/rentals" && workspaceMode === "overview") {
+  // SAN-1710 — Overview is one page, not a right-hand panel. It renders at the
+  // full content width in natural page flow for both route families: no
+  // feed/chat column, no pane switcher and no nested scroll. The one existing
+  // concierge chat remains reachable from the shared navigation, and SAN-1685
+  // owns mounting that chat at the bottom of this overview.
+  if (workspaceMode === "overview") {
     return (
       <div data-testid="rentals-concierge" className="min-w-0">
-        <RentalsDynamicWorkspace mode={workspaceMode} dashboard={dashboard} loadError={loadError} />
+        {/* The /app route gets its navigation from RentalsBrokerFrame; the legacy
+            host tree still owns its own domain navigation in every mode. */}
+        {basePath !== "/app/rentals" && <HostRentalsNav basePath={basePath} />}
+        <RentalsDynamicWorkspace
+          mode={workspaceMode}
+          dashboard={dashboard}
+          loadError={loadError}
+          basePath={basePath}
+        />
       </div>
     );
   }
@@ -99,7 +107,7 @@ export function RentalsConciergeShell({
         )}
       </div>
       <div className={cn("min-h-0 min-w-0", mobilePane !== "workspace" && "max-lg:hidden", "lg:block")}>
-        <RentalsDynamicWorkspace mode={workspaceMode} dashboard={dashboard} loadError={loadError} />
+        <RentalsDynamicWorkspace mode={workspaceMode} dashboard={dashboard} loadError={loadError} basePath={basePath} />
       </div>
     </>
   );

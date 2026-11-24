@@ -95,6 +95,13 @@ test.describe("SAN-1578 /app rentals", { tag: ["@app", "@rentals"] }, () => {
         await expect(page.getByTestId("rentals-broker-frame")).toBeVisible();
         await expect(page.getByTestId("rc-right")).toBeVisible();
         await expect(page.getByTestId("rc-center")).not.toBeVisible();
+        // SAN-1710: four real metrics, no chart and no tab strip, at every width.
+        const overview = page.getByTestId("mde-surface-broker-overview");
+        await expect(overview.getByText("Listings", { exact: true })).toBeVisible();
+        await expect(overview.getByText("Open leads", { exact: true })).toBeVisible();
+        await expect(overview.getByText("Upcoming", { exact: true }).first()).toBeVisible();
+        await expect(overview.getByRole("tab")).toHaveCount(0);
+        await expect(overview.locator("svg.recharts-surface")).toHaveCount(0);
         await expect(page.getByTestId("host-rentals-nav-overview")).toHaveAttribute("aria-current", "page");
         await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
       }

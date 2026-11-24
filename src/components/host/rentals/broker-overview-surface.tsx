@@ -18,25 +18,31 @@ import { STALE_VIEWING_ACTION_MESSAGE, submitBrokerViewingAction } from "@/lib/r
 const WALL_CLOCK = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
 
 type ActionArgs = { rendererKey: string; showingId: string; expectedStatus: string; expectedScheduledAt: string; action: "confirm" | "cancel" | "reschedule"; newWallClock?: string };
+type NavigateArgs = { rendererKey: string; target: "listings" | "new_listing" | "ask_mde" };
 
 /**
- * Handles `brokerViewingAction` for the Overview surface. The surface passes
- * a showing ID and a private mount key; the record, persisted status and time
- * come from the RLS-scoped page data. One call per showing at a time, so a
- * double click cannot send two writes; the server's expectation check (409)
- * covers a stale page.
+ * Handles the Overview's two renderer-only functions. The surface passes a
+ * private mount key with every call; only this app-authored surface receives it,
+ * and the model can never call either function.
+ *
+ * - `brokerViewingAction` resolves the record, persisted status and time from the
+ *   RLS-scoped page data, then calls the existing PATCH route (409 on a stale page).
+ * - `brokerOverviewNavigate` maps a closed set of destinations to real routes.
  */
-function BrokerViewingFunction({
+function BrokerOverviewFunctions({
   view,
   rendererKey,
+  basePath,
   onStatus,
   onSaved,
 }: {
   view: BrokerDashboardView;
   rendererKey: string;
+  basePath: string;
   onStatus: (message: string | null) => void;
   onSaved: () => void;
 }) {
+  const router = useRouter();
   const runtime = useGenerativeUIRuntime();
   const latest = useRef({ view, onStatus, onSaved });
   const pending = useRef(new Set<string>());
@@ -50,8 +56,9 @@ function BrokerViewingFunction({
     // Versioned paths also keep the old value out of the new date picker.
     const surface = runtime?.manager.getSurface(MDE_DASHBOARD_THREAD_ID, BROKER_OVERVIEW_SURFACE_ID);
     if (surface && runtime) {
-      for (const previous of latest.current.view.viewingRequests) {
-        const current = view.viewingRequests.find((row) => row.showingId === previous.showingId);
+      const currentRows = [...view.todaySchedule, ...view.upcomingPreview, ...view.viewingRequests];
+      for (const previous of [...latest.current.view.todaySchedule, ...latest.current.view.upcomingPreview, ...latest.current.view.viewingRequests]) {
+        const current = currentRows.find((row) => row.showingId === previous.showingId);
         if (!current || current.status !== previous.status || current.scheduledAt !== previous.scheduledAt) {
           const path = rescheduleDraftPath(previous);
           if (surface.model.dataModel.get(path) != null) {
@@ -62,6 +69,18 @@ function BrokerViewingFunction({
     }
     latest.current = { view, onStatus, onSaved };
   }, [view, onStatus, onSaved, runtime]);
+
+  useGenerativeUIFunction(mdeUI, "brokerOverviewNavigate", async ({ rendererKey: suppliedKey, target }: NavigateArgs) => {
+    if (suppliedKey !== rendererKey || !mounted.current) {
+      return { ok: false, error: "Open Overview to use this action." };
+    }
+    if (target === "listings") router.push(`${basePath}/listings`);
+    else if (target === "new_listing") router.push(`${basePath}/onboarding`);
+    // The existing concierge chat lives on the workspace root until SAN-1685
+    // mounts the single bottom composer; this never creates a second chat.
+    else router.push(basePath);
+    return { ok: true };
+  });
 
   useGenerativeUIFunction(mdeUI, "brokerViewingAction", async ({ rendererKey: suppliedKey, showingId, expectedStatus, expectedScheduledAt, action, newWallClock }: ActionArgs) => {
     // Renderer-only still permits model-authored clickable buttons. Only the
@@ -74,7 +93,14 @@ function BrokerViewingFunction({
       latest.current.onStatus(error);
       return { ok: false, error };
     };
-    const request = latest.current.view.viewingRequests.find((row) => row.showingId === showingId);
+    // Today and Upcoming rows are joined directly from the schedule queries, so a
+    // request shown there may not be on the latest-created request page. Resolve
+    // against every loaded row, never against the bounded table alone.
+    const request = [
+      ...latest.current.view.todaySchedule,
+      ...latest.current.view.upcomingPreview,
+      ...latest.current.view.viewingRequests,
+    ].find((row) => row.showingId === showingId);
     if (!request) return fail("This viewing request is no longer on this page. Refresh and try again.");
     if (request.status !== expectedStatus || request.scheduledAt !== expectedScheduledAt) return fail(STALE_VIEWING_ACTION_MESSAGE);
     if (!availableBrokerViewingActions(request.status).includes(action)) {
@@ -116,9 +142,11 @@ function BrokerViewingFunction({
 export function BrokerOverviewSurface({
   dashboard,
   fallback,
+  basePath = "/app/rentals",
 }: {
   dashboard: BrokerDashboardView;
   fallback: ReactNode;
+  basePath?: string;
 }) {
   const router = useRouter();
   const [rendererKey] = useState(() => crypto.randomUUID());
@@ -133,7 +161,13 @@ export function BrokerOverviewSurface({
   return (
     <div className="space-y-2">
       <MdeDashboardSurface surfaceId={BROKER_OVERVIEW_SURFACE_ID} operations={operations} fallback={fallback}>
-        <BrokerViewingFunction view={dashboard} rendererKey={rendererKey} onStatus={setStatus} onSaved={onSaved} />
+        <BrokerOverviewFunctions
+          view={dashboard}
+          rendererKey={rendererKey}
+          basePath={basePath}
+          onStatus={setStatus}
+          onSaved={onSaved}
+        />
       </MdeDashboardSurface>
       {status ? (
         <p role="status" data-testid="broker-overview-status" className="text-xs text-muted-foreground">

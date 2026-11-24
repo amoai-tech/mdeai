@@ -3,41 +3,56 @@ import { validateOperation } from "@copilotkit/shared";
 import { mdeUI } from "@/components/copilot/a2ui/mde-ui-catalog";
 import type { z } from "zod";
 import type { BrokerDashboardView, BrokerViewingRequest } from "../broker-dashboard-types";
-import { buildBrokerOverviewOperations as buildOperations, rescheduleDraftPath } from "../broker-overview-ui";
+import {
+  buildBrokerOverviewOperations as buildOperations,
+  brokerViewingStatusTone,
+  rescheduleDraftPath,
+} from "../broker-overview-ui";
 
 const rendererKey = "77777777-7777-4777-8777-777777777777";
 const buildBrokerOverviewOperations = (view: BrokerDashboardView) => buildOperations(view, rendererKey);
 
-const request = (overrides: Partial<BrokerViewingRequest>): BrokerViewingRequest => ({
+const request = (overrides: Partial<BrokerViewingRequest>): BrokerViewingRequest => Object.assign({
   leadId: "11111111-1111-4111-8111-111111111111",
   showingId: "22222222-2222-4222-8222-222222222222",
   apartmentId: "33333333-3333-4333-8333-333333333333",
   apartmentTitle: "Laureles 2BR",
+  apartmentNeighborhood: "Laureles",
   renterName: "Ana",
   scheduledAt: "2026-12-01T15:00:00.000Z",
-  scheduledLabel: "Tue 1 Dec, 10:00",
+  scheduledLabel: "Tue, Dec 1, 10:00 AM",
+  scheduledTimeLabel: "10:00 AM",
   createdAt: "2026-11-20T15:00:00.000Z",
   status: "scheduled",
-  ...overrides,
-});
+}, overrides);
 
-const view = (requests: BrokerViewingRequest[], total = requests.length): BrokerDashboardView => ({
+const kpis = [
+  { id: "listings_total", label: "Listings", value: "42", provenance: "All listings you own", testId: "r1-kpi-0" },
+  { id: "open_leads", label: "Open leads", value: "12", provenance: "New, contacted or qualified leads", testId: "r1-kpi-1" },
+  { id: "upcoming", label: "Upcoming", value: "8", provenance: "Scheduled or confirmed, still ahead", testId: "r1-kpi-2" },
+  { id: "today", label: "Today", value: "3", provenance: "Appointments today, Medellín time", testId: "r1-kpi-3" },
+];
+
+const view = (overrides: Partial<BrokerDashboardView> = {}): BrokerDashboardView => Object.assign({
   displayName: "Broker",
-  kpis: [
-    { id: "a", label: "Active listings", value: "4", provenance: "apartments", testId: "r1-kpi-0" },
-    { id: "b", label: "Avg response time", value: "Data pending", provenance: "none", testId: "r1-kpi-3" },
-  ],
+  kpis,
   attention: [],
-  viewingRequests: requests,
-  viewingRequestsTotal: total,
+  todaySchedule: [],
+  todayTotal: 0,
+  upcomingPreview: [],
+  upcomingPreviewTotal: 0,
+  viewingRequests: [],
+  viewingRequestsTotal: 0,
   trends: [],
   briefing: { greeting: "", summary: "", bullets: [] },
-  isEmpty: requests.length === 0,
-});
+  isEmpty: false,
+}, overrides);
 
 type Node = Record<string, unknown> & { id: string; component: string };
 const nodesOf = (ops: ReturnType<typeof buildBrokerOverviewOperations>) =>
   (ops[0].createSurface.components as Node[]);
+const find = (nodes: Node[], id: string) => nodes.find((node) => node.id === id);
+const nodeIds = (nodes: Node[]) => nodes.map((node) => node.id);
 
 /** The same two checks the browser surface manager runs before it applies an operation. */
 function acceptedByCatalog(ops: ReturnType<typeof buildBrokerOverviewOperations>) {
@@ -56,86 +71,154 @@ function acceptedByCatalog(ops: ReturnType<typeof buildBrokerOverviewOperations>
   }
 }
 
-describe("broker Overview as official CopilotKit components (SAN-1675)", () => {
-  it("is accepted by the real catalog for an open, a confirmed and a closed request", () => {
-    const ops = buildBrokerOverviewOperations(view([
-      request({}),
-      request({ showingId: "44444444-4444-4444-8444-444444444444", status: "confirmed", renterName: null }),
-      request({ showingId: "55555555-5555-4555-8555-555555555555", status: "completed", apartmentTitle: null }),
-    ], 60));
-    acceptedByCatalog(ops);
-  });
-
-  it("is accepted with no requests and shows honest empty states instead of a zero chart", () => {
-    const ops = buildBrokerOverviewOperations(view([]));
-    acceptedByCatalog(ops);
-    const nodes = nodesOf(ops);
-    expect(nodes.find((n) => n.id === "status-chart")).toBeDefined();
-    expect((nodes.find((n) => n.id === "summary")?.children as string[])).toEqual(["kpis", "status-empty"]);
-    expect(nodes.find((n) => n.id === "viewings")?.component).toBe("Caption");
-  });
-
-  it("charts real counts by status and labels a truncated page", () => {
-    const nodes = nodesOf(buildBrokerOverviewOperations(view([
-      request({}), request({ showingId: "44444444-4444-4444-8444-444444444444", status: "confirmed" }),
-      request({ showingId: "66666666-6666-4666-8666-666666666666" }),
-    ], 9)));
-    const chart = nodes.find((n) => n.id === "status-chart")!;
-    expect(chart.data).toEqual([{ status: "Requested", requests: 2 }, { status: "Confirmed", requests: 1 }]);
-    expect(chart.title).toBe("Viewing requests by status (latest 3 of 9)");
-    expect(chart.yAxis).toEqual({ label: "Requests", min: 0, max: 4 });
-    // KPI values are passed through verbatim; "Data pending" never becomes 0.
-    expect((nodes.find((n) => n.id === "kpis")!.items as Array<{ value: string }>).map((i) => i.value)).toEqual(["4", "Data pending"]);
-  });
-
-  it("labels later pages and out-of-range pages without implying there are no appointments", () => {
-    const page = { ...view([request({})], 76), viewingRequestsOffset: 50, attentionIsPartial: true };
-    const ops = buildBrokerOverviewOperations(page);
+describe("SAN-1710 broker Overview as official CopilotKit components", () => {
+  it("is accepted by the real catalog and renders four KPI cards in one Grid", () => {
+    const ops = buildBrokerOverviewOperations(view({
+      attention: [{
+        id: "leads", kind: "lead_unanswered", title: "5 unanswered enquiries",
+        detail: "Renters are waiting for a reply.", action: "ask_mde", ctaLabel: "Ask MDE", testId: "r1-attn-leads",
+      }],
+      todaySchedule: [request({})],
+      todayTotal: 1,
+      upcomingPreview: [request({ showingId: "44444444-4444-4444-8444-444444444444", status: "confirmed" })],
+      upcomingPreviewTotal: 1,
+      viewingRequests: [request({})],
+      viewingRequestsTotal: 1,
+    }));
     acceptedByCatalog(ops);
     const nodes = nodesOf(ops);
-    expect(nodes.find(n => n.id === "status-chart")?.title).toBe("Viewing requests by status (51–51 of 76)");
-    expect(nodes.find(n => n.id === "viewings-more")?.text).toBe("Showing requests 51–51 of 76.");
-    expect(nodes.find(n => n.id === "attention")?.text).toContain("preview");
-    const empty = nodesOf(buildBrokerOverviewOperations({ ...view([], 76), viewingRequestsOffset: 100 }));
-    expect(empty.find(n => n.id === "viewings")?.text).toBe("No viewing requests on this page.");
+
+    const grid = find(nodes, "kpis")!;
+    expect(grid.component).toBe("Grid");
+    expect(grid.columns).toBe(4);
+    expect(grid.children).toEqual(kpis.map((kpi) => `kpi-${kpi.id}`));
+    for (const kpi of kpis) {
+      expect(find(nodes, `kpi-${kpi.id}`)?.component).toBe("Card");
+      expect(find(nodes, `kpi-${kpi.id}`)?.variant).toBe("outline");
+      expect(find(nodes, `kpi-${kpi.id}-label`)?.text).toBe(kpi.label);
+      expect(find(nodes, `kpi-${kpi.id}-value`)?.text).toBe(kpi.value);
+    }
   });
 
-  it("binds only the persisted status's actions, by showing ID, and reads the reschedule draft from the data model", () => {
-    const id = "22222222-2222-4222-8222-222222222222";
-    const row = request({ showingId: id });
-    const expected = { expectedStatus: row.status, expectedScheduledAt: row.scheduledAt };
-    const nodes = nodesOf(buildBrokerOverviewOperations(view([row])));
-    expect(nodes.find((n) => n.id === `req-${id}-confirm`)?.onClick).toEqual({
-      functionCall: { "@call": "brokerViewingAction", args: { rendererKey, ...expected, showingId: id, action: "confirm" } },
-    });
-    expect(nodes.find((n) => n.id === `req-${id}-move`)?.onClick).toEqual({
-      functionCall: { "@call": "brokerViewingAction",
-        args: { rendererKey, ...expected, showingId: id, action: "reschedule", newWallClock: { "@path": rescheduleDraftPath(row) } } },
-    });
-    expect(nodes.find((n) => n.id === `req-${id}-when-${Date.parse(row.scheduledAt)}`)?.value).toEqual({ "@path": rescheduleDraftPath(row) });
-    // A confirmed request can only be cancelled; a closed one has no actions.
-    const confirmed = nodesOf(buildBrokerOverviewOperations(view([request({ status: "confirmed" })])));
-    expect(confirmed.some((n) => n.id === `req-${id}-confirm`)).toBe(false);
-    expect(confirmed.find((n) => n.id === `req-${id}-cancel`)?.label).toBe("Cancel");
-    expect((confirmed.find((n) => n.id === `req-${id}-content`)?.children as string[])).not.toContain(`req-${id}-reschedule`);
-    const closed = nodesOf(buildBrokerOverviewOperations(view([request({ status: "completed" })])));
-    expect((closed.find((n) => n.id === `req-${id}-content`)?.children as string[])).toEqual([`req-${id}-facts`, `req-${id}-closed`]);
-  });
-  it("preserves showing identity across reorder and invalidates only a changed viewing draft", () => {
-    const first = request({});
-    const second = request({ showingId: "44444444-4444-4444-8444-444444444444" });
-    const moved = { ...first, scheduledAt: "2026-12-01T16:00:00Z" };
-    const before = nodesOf(buildBrokerOverviewOperations(view([first, second])));
-    const after = nodesOf(buildBrokerOverviewOperations(view([second, moved])));
-    const find = (nodes: Node[], id: string) => nodes.find((node) => node.id === id);
-    expect(find(before, `req-${second.showingId}-modal`)).toEqual(find(after, `req-${second.showingId}-modal`));
-    expect(find(after, "viewings-body")?.children).toEqual([`req-${second.showingId}-row`, `req-${first.showingId}-row`]);
-    expect(rescheduleDraftPath(moved)).not.toBe(rescheduleDraftPath(first));
-    expect(rescheduleDraftPath({ ...first, status: "confirmed" })).not.toBe(rescheduleDraftPath(first));
-    expect(find(after, `req-${first.showingId}-move`)?.onClick).toMatchObject({
-      functionCall: { args: { expectedStatus: moved.status, expectedScheduledAt: moved.scheduledAt,
-        newWallClock: { "@path": rescheduleDraftPath(moved) } } },
-    });
+  it("has no chart and no internal tab strip in the initial Overview", () => {
+    const nodes = nodesOf(buildBrokerOverviewOperations(view({
+      todaySchedule: [request({})], todayTotal: 1, viewingRequests: [request({})], viewingRequestsTotal: 1,
+    })));
+    expect(nodes.some((node) => node.component === "Chart")).toBe(false);
+    expect(nodes.some((node) => node.component === "Tabs")).toBe(false);
+    // No component may opt itself into an inner scroll region.
+    expect(nodes.every((node) => node.scrollable === undefined)).toBe(true);
+    // Today and Needs attention are visible without opening anything.
+    expect(find(nodes, "attention")?.component).toBe("Card");
+    expect(find(nodes, "today")?.component).toBe("Card");
+    expect(find(nodes, "upcoming")?.component).toBe("Card");
   });
 
+  it("shows exact attention rows and an honest empty state", () => {
+    const nodes = nodesOf(buildBrokerOverviewOperations(view({
+      attention: [
+        { id: "leads", kind: "lead_unanswered", title: "5 unanswered enquiries", detail: "Renters are waiting for a reply.", action: "ask_mde", ctaLabel: "Ask MDE", testId: "r1-attn-leads" },
+        { id: "viewings", kind: "viewing_pending", title: "1 viewing request awaiting a decision", detail: "Confirm, decline or reschedule from Today or Upcoming.", action: null, ctaLabel: null, testId: "r1-attn-viewings" },
+        { id: "listings", kind: "listing", title: "Listings need attention", detail: "3 drafts · 2 without photos", action: "listings", ctaLabel: "Manage listings", testId: "r1-attn-listings" },
+      ],
+    })));
+    expect(find(nodes, "attn-leads-title")?.text).toBe("5 unanswered enquiries");
+    expect(find(nodes, "attn-leads-cta")?.onClick).toEqual({
+      functionCall: { "@call": "brokerOverviewNavigate", args: { rendererKey, target: "ask_mde" } },
+    });
+    expect(find(nodes, "attn-listings-cta")?.label).toBe("Manage listings");
+    expect(find(nodes, "attn-viewings-cta")).toBeUndefined();
+
+    const empty = nodesOf(buildBrokerOverviewOperations(view()));
+    expect(find(empty, "attention-empty")?.text).toBe("Nothing needs your attention right now.");
+    expect(find(empty, "today-empty")?.text).toBe("No viewings scheduled for today.");
+    expect(find(empty, "upcoming-empty")?.text).toBe("No upcoming appointments after today.");
+    expect(find(empty, "upcoming-all-modal")).toBeUndefined();
+    acceptedByCatalog(buildBrokerOverviewOperations(view()));
+  });
+
+  it("renders today chronologically with time, neighborhood, status and the real Manage action", () => {
+    const late = request({ showingId: "55555555-5555-4555-8555-555555555555", scheduledAt: "2026-12-01T21:30:00.000Z", scheduledTimeLabel: "4:30 PM", status: "confirmed" });
+    const early = request({ showingId: "22222222-2222-4222-8222-222222222222", scheduledAt: "2026-12-01T15:00:00.000Z", scheduledTimeLabel: "10:00 AM" });
+    const nodes = nodesOf(buildBrokerOverviewOperations(view({
+      todaySchedule: [early, late], todayTotal: 2,
+      viewingRequests: [early, late], viewingRequestsTotal: 2,
+    })));
+    expect(find(nodes, "today")?.children).toEqual([
+      "today-header", `today-${early.showingId}`, `today-${late.showingId}`,
+    ]);
+    expect(find(nodes, `today-${early.showingId}-time`)?.text).toBe("10:00 AM");
+    expect(find(nodes, `today-${early.showingId}-neighborhood`)?.text).toBe("Laureles");
+    expect(find(nodes, `today-${early.showingId}-badge`)?.label).toBe("Requested");
+    expect(find(nodes, `today-${early.showingId}-badge`)?.color).toBe("warning");
+    expect(find(nodes, `today-${late.showingId}-badge`)?.color).toBe("success");
+    // The Manage slot is the modal trigger, bound to the persisted expectation.
+    expect(find(nodes, `today-${early.showingId}-modal`)?.trigger).toBe(`today-${early.showingId}-open`);
+    expect(find(nodes, `today-${early.showingId}-confirm`)?.onClick).toEqual({
+      functionCall: { "@call": "brokerViewingAction", args: {
+        rendererKey, showingId: early.showingId, expectedStatus: early.status,
+        expectedScheduledAt: early.scheduledAt, action: "confirm",
+      } },
+    });
+    expect(find(nodes, `today-${early.showingId}-when-${Date.parse(early.scheduledAt)}`)?.value)
+      .toEqual({ "@path": rescheduleDraftPath(early) });
+  });
+
+  it("bounds the upcoming preview, never repeats today, and labels the exact total", () => {
+    const today = request({});
+    const next = [0, 1, 2, 3, 4].map((index) => request({
+      showingId: `${index}4444444-4444-4444-8444-444444444444`,
+      scheduledAt: `2026-12-0${index + 2}T15:00:00.000Z`,
+      scheduledLabel: `Wed, Dec ${index + 2}, 10:00 AM`,
+    }));
+    const nodes = nodesOf(buildBrokerOverviewOperations(view({
+      todaySchedule: [today], todayTotal: 1,
+      upcomingPreview: next, upcomingPreviewTotal: 12,
+      viewingRequests: [today, ...next], viewingRequestsTotal: 6,
+    })));
+    expect(find(nodes, "upcoming")?.children).toEqual([
+      "upcoming-header", ...next.map((row) => `next-${row.showingId}`), "upcoming-caption",
+    ]);
+    expect(find(nodes, "upcoming-caption")?.text).toBe("Showing the next 5 of 12 upcoming appointments after today.");
+    expect(nodeIds(nodes).some((id) => id.startsWith(`today-${next[0]!.showingId}`))).toBe(false);
+
+    // All upcoming appointments after today (not just the preview) stay reachable.
+    expect(find(nodes, "upcoming-all-open")?.label).toBe("View all requests");
+    expect(find(nodes, "upcoming-all-modal")?.trigger).toBe("upcoming-all-open");
+    expect(find(nodes, "all-body")?.children).toEqual(
+      [today, ...next].map((row) => `all-${row.showingId}-row`),
+    );
+    expect(find(nodes, "upcoming-all-caption")?.text).toBe("All 6 viewing requests.");
+  });
+
+  it("labels a later request page without implying there are no appointments", () => {
+    const later = { ...view({
+      viewingRequests: [request({})], viewingRequestsTotal: 76, viewingRequestsOffset: 50,
+    }) };
+    expect(find(nodesOf(buildBrokerOverviewOperations(later)), "upcoming-all-caption")?.text)
+      .toBe("Requests 51–51 of 76.");
+  });
+
+  it("binds only the persisted status's actions and reads the reschedule draft from the data model", () => {
+    const confirmed = request({ status: "confirmed" });
+    const closed = request({ showingId: "66666666-6666-4666-8666-666666666666", status: "completed" });
+    const nodes = nodesOf(buildBrokerOverviewOperations(view({
+      todaySchedule: [confirmed, closed], todayTotal: 2,
+      viewingRequests: [confirmed, closed], viewingRequestsTotal: 2,
+    })));
+    expect(find(nodes, `today-${confirmed.showingId}-confirm`)).toBeUndefined();
+    expect(find(nodes, `today-${confirmed.showingId}-cancel`)?.label).toBe("Cancel");
+    expect((find(nodes, `today-${confirmed.showingId}-content`)?.children as string[]))
+      .not.toContain(`today-${confirmed.showingId}-reschedule`);
+    expect((find(nodes, `today-${closed.showingId}-content`)?.children as string[]))
+      .toEqual([`today-${closed.showingId}-facts`, `today-${closed.showingId}-closed`]);
+  });
+
+  it("uses a truthful badge tone for every persisted status", () => {
+    expect(brokerViewingStatusTone("scheduled")).toBe("warning");
+    expect(brokerViewingStatusTone("confirmed")).toBe("success");
+    expect(brokerViewingStatusTone("cancelled")).toBe("danger");
+    expect(brokerViewingStatusTone("no_show")).toBe("danger");
+    expect(brokerViewingStatusTone("completed")).toBe("secondary");
+  });
 });

@@ -485,44 +485,52 @@ test.describe("SAN-1206 · broker viewing actions", () => {
       await page.goto("/host/rentals?mode=overview", { waitUntil: "domcontentloaded" });
       const surface = page.getByTestId("mde-surface-broker-overview");
       await expect(surface).toBeVisible({ timeout: 45_000 });
-      await expect(surface.getByText("Active listings", { exact: true })).toBeVisible();
-      await expect(surface.locator("svg.recharts-surface").first()).toBeVisible();
+      // SAN-1710: four metrics, no chart and no tab strip; Today and Needs
+      // attention are visible on the first paint.
+      await expect(surface.getByText("Listings", { exact: true })).toBeVisible();
+      await expect(surface.getByText("Needs attention", { exact: true })).toBeVisible();
+      await expect(surface.getByText("Today", { exact: true }).first()).toBeVisible();
+      await expect(surface.getByRole("tab")).toHaveCount(0);
+      await expect(surface.locator("svg.recharts-surface")).toHaveCount(0);
       for (const width of [320, 390, 768, 1440]) {
         await page.setViewportSize({ width, height: 900 });
-        if (width < 1024) {
-          const workspace = page.getByRole("button", { name: "Workspace", exact: true });
-          if (!(await surface.isVisible())) await workspace.click();
-        }
         await expect(surface).toBeVisible();
         await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);
-        const tabs = surface.getByRole("tab");
-        await tabs.first().focus();
-        await page.keyboard.press("ArrowRight");
-        await expect(tabs.nth(1)).toBeFocused();
-        await tabs.nth(1).click();
-        await expect(surface.getByRole("table")).toBeVisible();
-        await tabs.first().click();
+        // Natural page scroll only: no inner scroll container outside a dialog.
+        const innerScrollers = await page.evaluate(() => Array.from(document.querySelectorAll("*")).filter((el) => {
+          const style = getComputedStyle(el);
+          return /(auto|scroll)/.test(style.overflowY) && el.scrollHeight > el.clientHeight + 4 && !el.closest('[role="dialog"]');
+        }).length);
+        expect(innerScrollers).toBe(0);
       }
+      // Keyboard: the real row action is reachable and opens the same dialog.
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await surface.getByRole("button", { name: "Manage", exact: true }).first().focus();
+      await page.keyboard.press("Enter");
+      await expect(page.getByRole("dialog")).toBeVisible();
+      await page.keyboard.press("Escape");
       // The product is intentionally light-only, including dark OS preference.
       await page.emulateMedia({ colorScheme: "dark" });
       await expect.poll(() => page.evaluate(() => getComputedStyle(document.documentElement).colorScheme)).toBe("light");
       await page.emulateMedia({ colorScheme: "light" });
-      await surface.getByRole("tab", { name: /Viewings/ }).click();
-      const rowFor = (renter: string) => surface.getByRole("row").filter({ hasText: renter });
-      const open = async (renter: string) => {
-        await rowFor(renter).getByRole("button", { name: "Manage" }).click();
-        const dialog = page.getByRole("dialog");
-        await expect(dialog).toContainText(renter);
+      // The after-today preview is chronological: A (20 Nov), B (21 Nov), C (22 Nov).
+      // Its rows carry the same existing Manage action, keyed by the persisted row.
+      const openManage = async (index: number) => {
+        await surface.getByRole("button", { name: "Manage", exact: true }).nth(index).click();
+        const dialog = page.getByRole("dialog").last();
+        await expect(dialog).toBeVisible();
         return dialog;
       };
       const renterA = `SAN1206 Renter A ${fixture.run}`;
       const renterB = `SAN1206 Renter B ${fixture.run}`;
       // Keep B's draft while A is confirmed and the real page refreshes.
-      let dialog = await open(renterB);
+      let dialog = await openManage(1);
+      await expect(dialog).toContainText(renterB);
       await dialog.getByLabel("Date", { exact: true }).fill(RESCHEDULE_WALL_CLOCK.slice(0, 10));
       await dialog.getByLabel("Time", { exact: true }).selectOption(RESCHEDULE_WALL_CLOCK.slice(11));
       await page.keyboard.press("Escape");
-      dialog = await open(renterA);
+      dialog = await openManage(0);
+      await expect(dialog).toContainText(renterA);
       let confirmRequests = 0;
       page.on("request", (request) => {
         if (request.method() === "PATCH" &&
@@ -536,10 +544,13 @@ test.describe("SAN-1206 · broker viewing actions", () => {
       await expect.poll(async () => (await readShowing(fixture.showingIdA!)).status).toBe("confirmed");
       await expect(page.getByTestId("broker-overview-status")).toHaveText("Saved.");
       await page.keyboard.press("Escape");
-      await surface.getByRole("tab", { name: /Viewings/ }).click();
-      await expect(rowFor(renterA)).toContainText("Confirmed");
+      // Re-opening A reads the refreshed persisted state, not the old click.
+      dialog = await openManage(0);
+      await expect(dialog).toContainText("Confirmed");
+      await expect(dialog.getByRole("button", { name: "Confirm", exact: true })).toHaveCount(0);
+      await page.keyboard.press("Escape");
       expect(confirmRequests).toBe(1);
-      dialog = await open(renterB);
+      dialog = await openManage(1);
       await expect(dialog.getByLabel("Date", { exact: true })).toHaveValue(RESCHEDULE_WALL_CLOCK.slice(0, 10));
       await expect(dialog.getByLabel("Time", { exact: true })).toHaveValue(RESCHEDULE_WALL_CLOCK.slice(11));
       const movedResponse = page.waitForResponse((response) =>
@@ -550,12 +561,13 @@ test.describe("SAN-1206 · broker viewing actions", () => {
       await expect.poll(async () => instantOf((await readShowing(fixture.showingIdB!)).scheduled_at)).toBe(T_RESCHEDULE_TO);
       await expect(page.getByTestId("broker-overview-status")).toHaveText("Saved.");
       await page.keyboard.press("Escape");
-      await surface.getByRole("tab", { name: /Viewings/ }).click();
-      dialog = await open(renterB);
+      dialog = await openManage(1);
       await expect(dialog.getByLabel("Date", { exact: true })).toHaveValue("");
       await expect(dialog.getByLabel("Time", { exact: true })).toHaveValue("");
       await page.keyboard.press("Escape");
-      expect(overviewInfoRequests).toBe(1);
+      // The Overview itself makes no AI request; the old panel's ChatProvider is
+      // gone, and nothing here can start an agent run.
+      expect(overviewInfoRequests).toBe(0);
       expect(overviewAgentRuns).toBe(0);
       expect(overviewErrors).toEqual([]);
       page.off("request", trackRuntime);
@@ -565,9 +577,14 @@ test.describe("SAN-1206 · broker viewing actions", () => {
       await expect(surface).toHaveCount(0);
       await page.getByTestId("host-rentals-nav-overview").click();
       await expect(surface).toBeVisible();
-      await surface.getByRole("tab", { name: /Viewings/ }).click();
-      await expect(rowFor(renterA)).toContainText("Confirmed");
-      await expect(rowFor(renterB)).toContainText(EXPECTED_TIME_LABEL);
+      dialog = await openManage(0);
+      await expect(dialog).toContainText(renterA);
+      await expect(dialog).toContainText("Confirmed");
+      await page.keyboard.press("Escape");
+      dialog = await openManage(1);
+      await expect(dialog).toContainText(renterB);
+      await expect(dialog).toContainText(EXPECTED_TIME_LABEL);
+      await page.keyboard.press("Escape");
       const stale = await page.request.patch(`/api/host/rentals/viewings/${fixture.showingIdB}`, {
         data: { action: "reschedule", expectedStatus: "scheduled", expectedScheduledAt: T_RESCHEDULE_FROM,
           newWallClock: "2099-11-21T16:00" },

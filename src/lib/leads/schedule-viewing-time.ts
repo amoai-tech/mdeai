@@ -121,6 +121,35 @@ export function splitPreferredAt(raw: string): { date: string; time: string } | 
   return { date, time: time.slice(0, 5) };
 }
 
+/**
+ * The half-open `[start, end)` instants of the current day in the listing timezone.
+ *
+ * A broker's "today" is not the server process day: Vercel runs UTC, so a 9:00 PM
+ * Medellín appointment belongs to the next UTC day. Callers pass these bounds to the
+ * database so the day boundary is computed once, from the canonical zone, and the
+ * rendered schedule can never disagree with the count in the same response.
+ */
+export function listingDayBounds(now: Date = new Date()): { start: string; end: string } {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: LISTING_TIME_ZONE,
+    year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(now);
+  const value = (type: string) => Number(parts.find((part) => part.type === type)?.value);
+  const startWall = Date.UTC(value("year"), value("month") - 1, value("day"));
+  const endWall = Date.UTC(value("year"), value("month") - 1, value("day") + 1);
+  // Two passes resolve the offset in force at the exact instant, the same rule
+  // `resolvePreferredAtInstant` uses. Bogotá has a fixed offset today; this stays
+  // correct if the zone ever changes without hard-coding −05:00.
+  const toInstant = (wall: number) => {
+    const estimate = wall - timeZoneOffsetMinutes(LISTING_TIME_ZONE, new Date(wall)) * 60_000;
+    return wall - timeZoneOffsetMinutes(LISTING_TIME_ZONE, new Date(estimate)) * 60_000;
+  };
+  return {
+    start: new Date(toInstant(startWall)).toISOString(),
+    end: new Date(toInstant(endWall)).toISOString(),
+  };
+}
+
 /** Strictly-future check against a canonical instant. */
 export function isFutureInstant(instantIso: string, now: Date = new Date()): boolean {
   const instant = new Date(instantIso);

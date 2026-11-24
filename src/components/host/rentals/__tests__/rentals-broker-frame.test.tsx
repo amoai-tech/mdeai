@@ -32,8 +32,17 @@ vi.mock("@/lib/rentals/submit-broker-viewing-action", async (importOriginal) => 
 
 const dashboard: BrokerDashboardView = {
   displayName: "Broker",
-  kpis: [{ id: "listings", label: "Active listings", value: "4", provenance: "DB", testId: "kpi-listings" }],
+  kpis: [
+    { id: "listings_total", label: "Listings", value: "4", provenance: "All listings you own", testId: "r1-kpi-0" },
+    { id: "open_leads", label: "Open leads", value: "0", provenance: "New, contacted or qualified leads", testId: "r1-kpi-1" },
+    { id: "upcoming", label: "Upcoming", value: "0", provenance: "Scheduled or confirmed, still ahead", testId: "r1-kpi-2" },
+    { id: "today", label: "Today", value: "0", provenance: "Appointments today, Medellín time", testId: "r1-kpi-3" },
+  ],
   attention: [],
+  todaySchedule: [],
+  todayTotal: 0,
+  upcomingPreview: [],
+  upcomingPreviewTotal: 0,
   viewingRequests: [],
   viewingRequestsTotal: 0,
   trends: [],
@@ -79,26 +88,35 @@ describe("SAN-1683 broker frame without live chat", () => {
       showingId: "22222222-2222-4222-8222-222222222222",
       apartmentId: "33333333-3333-4333-8333-333333333333",
       apartmentTitle: "Laureles 2BR",
+      apartmentNeighborhood: "Laureles",
       renterName: "Ana",
       scheduledAt: "2026-12-01T15:00:00.000Z",
-      scheduledLabel: "Tue 1 Dec, 10:00",
+      scheduledLabel: "Tue, Dec 1, 10:00 AM",
+      scheduledTimeLabel: "10:00 AM",
       createdAt: "2026-11-20T15:00:00.000Z",
       status: "scheduled",
     };
     state.submit.mockResolvedValue({ ok: true });
-    render(<RentalsBrokerFrame><RentalsConciergeShell basePath="/app/rentals" workspaceMode="overview" dashboard={{ ...dashboard, viewingRequests: [request], viewingRequestsTotal: 1 }} /></RentalsBrokerFrame>);
+    render(<RentalsBrokerFrame><RentalsConciergeShell basePath="/app/rentals" workspaceMode="overview" dashboard={{
+      ...dashboard,
+      todaySchedule: [request], todayTotal: 1,
+      upcomingPreview: [request], upcomingPreviewTotal: 1,
+      viewingRequests: [request], viewingRequestsTotal: 1,
+    }} /></RentalsBrokerFrame>);
     const surface = await screen.findByTestId("mde-surface-broker-overview");
-    expect(within(surface).getByText("Active listings")).toBeTruthy();
+    expect(within(surface).getByText("Listings")).toBeTruthy();
+    expect(within(surface).getAllByText("Today").length).toBeGreaterThan(0);
+    expect(within(surface).queryByRole("tab")).toBeNull();
+    expect(within(surface).getByText("Nothing needs your attention right now.")).toBeTruthy();
     expect(screen.getAllByTestId("host-rentals-nav")).toHaveLength(1);
     expect(screen.getByTestId("host-rentals-nav-concierge").getAttribute("href")).toBe("/app/rentals");
     expect(screen.getByTestId("host-rentals-nav-overview").getAttribute("aria-current")).toBe("page");
     expect(screen.queryByTestId("rc-left")).toBeNull();
     expect(screen.queryByRole("navigation", { name: "Concierge mobile panes" })).toBeNull();
-    fireEvent.click(within(surface).getByRole("tab", { name: "Needs attention (0)" }));
-    expect(within(surface).getByText("Nothing needs your attention right now.")).toBeTruthy();
-    fireEvent.click(within(surface).getByRole("tab", { name: "Viewings (1)" }));
-    const row = within(surface).getByRole("row", { name: /Laureles 2BR/ });
-    fireEvent.click(within(row).getByRole("button", { name: "Manage" }));
+    // Today's real appointment row carries the existing Manage action.
+    expect(within(surface).getAllByText("Laureles 2BR").length).toBeGreaterThan(0);
+    const manage = within(surface).getAllByRole("button", { name: "Manage" })[0]!;
+    fireEvent.click(manage);
     const dialog = await screen.findByRole("dialog");
     fireEvent.click(within(dialog).getByRole("button", { name: /^Confirm$/ }));
     await waitFor(() => expect(state.submit).toHaveBeenCalledWith({
@@ -120,20 +138,19 @@ describe("SAN-1683 broker frame without live chat", () => {
       </RentalsBrokerFrame>,
     );
     expect(screen.getByTestId("host-rentals-nav")).toBeTruthy();
-    expect(screen.getByText("Unavailable")).toBeTruthy();
-    expect(screen.getByTestId("viewing-requests-error")).toBeTruthy();
-    expect(screen.queryByText("Live")).toBeNull();
-    expect(screen.queryByTestId("viewing-requests-empty")).toBeNull();
+    expect(screen.getByTestId("broker-overview-error")).toBeTruthy();
+    expect(screen.getByText("Database unavailable")).toBeTruthy();
+    // A failed load is never rendered as four confident zeroes.
+    expect(screen.queryByTestId("r1-kpi-0")).toBeNull();
     expect(screen.queryByTestId("mde-surface-broker-overview")).toBeNull();
     rerender(
       <RentalsBrokerFrame>
-        <RentalsConciergeShell basePath="/app/rentals" dashboard={null} />
+        <RentalsConciergeShell basePath="/app/rentals" workspaceMode="overview" dashboard={null} />
       </RentalsBrokerFrame>,
     );
-    expect(screen.getByText("Not loaded")).toBeTruthy();
     expect(screen.getByText("Viewing request data is not loaded.")).toBeTruthy();
-    expect(screen.queryByTestId("viewing-requests-empty")).toBeNull();
-    expect(screen.queryByTestId("ctx-empty")).toBeNull();
+    expect(screen.queryByTestId("broker-overview-error")).toBeNull();
+    expect(screen.queryByTestId("mde-surface-broker-overview")).toBeNull();
   });
 
   it("limits unresolved auth fallback to the concierge chat pane", () => {

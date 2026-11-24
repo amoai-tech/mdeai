@@ -82,7 +82,10 @@ describe("broker conversation survives a reload", () => {
 describe("SAN-1683 shared route frame", () => {
   it("renders the selected Overview instead of hiding it behind mobile Chat", () => {
     const shell = readComponent("rentals-concierge-shell.tsx");
-    expect(shell).toContain('basePath === "/app/rentals" && workspaceMode === "overview"');
+    // SAN-1710: Overview is the whole content width on both route families, so the
+    // old right-column/pane treatment cannot reintroduce a nested scroll area.
+    expect(shell).toContain('if (workspaceMode === "overview")');
+    expect(shell).toContain("<RentalsDynamicWorkspace");
     expect(shell).toContain('surfaceId="rentals-workspace-header"');
     expect(shell).toContain('data-testid="rentals-ask-mde-slot"');
     expect(readComponent("host-rentals-nav.tsx")).toContain('aria-current={active ? "page" : undefined}');
