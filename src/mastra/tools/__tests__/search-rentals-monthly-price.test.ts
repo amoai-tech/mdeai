@@ -414,3 +414,23 @@ it("keeps model query wording and disclosures if a standalone clear has no recov
   expect(mocks.state.furnishingFilters).toEqual([]);
   expect(result.unappliedRequests.join(" ")).toMatch(/pet/i);
 });
+
+it("resolves missing model currency before enforcing the canonical monthly budget", async () => {
+  const { searchRentalsTool } = await import("../search-rentals");
+  const { RENTAL_SEARCH_TEXT_KEY, COMPARISON_COP_MONTHLY_BUDGET_KEY } = await import("../../lib/comparison-table-intent");
+  const parsed = (searchRentalsTool.inputSchema as unknown as import("zod").ZodType).safeParse({ maxPriceMonthly: 1_200, limit: 8 });
+  expect(parsed.success).toBe(true);
+  mocks.state.budgetFilters.length = 0;
+  await searchRentalsTool.execute!(parsed.data as never, { requestContext: {
+    get: (key: string) => key === RENTAL_SEARCH_TEXT_KEY ? "Show only apartments under COP 3 million per month." :
+      key === COMPARISON_COP_MONTHLY_BUDGET_KEY ? 3_000_000 : undefined,
+    set: () => undefined,
+  } } as never);
+  expect(mocks.state.budgetFilters.filter(filter => filter.includes("price_"))).toEqual(["and(currency.eq.COP,price_monthly.not.is.null,price_monthly.lte.3000000)"]);
+});
+
+it.each([null, undefined, { error: true, validationErrors: { budgetCurrency: ["Required"] } }, { results: "invalid" }])("projects a failed tool output as an explicit error, not a crash or empty success: %j", async (value) => {
+  const { searchRentalsTool } = await import("../search-rentals");
+  expect(searchRentalsTool.toModelOutput?.(value as never)).toMatchObject({ type: "error-text", value: expect.stringContaining("did not complete") });
+  expect(searchRentalsTool.toModelOutput?.({ source: "supabase", results: [] } as never)).toEqual({ type: "json", value: { source: "supabase", results: [] } });
+});

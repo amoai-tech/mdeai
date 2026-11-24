@@ -440,7 +440,7 @@ test.describe("SAN-1694 · sequential renter prompts", () => {
       const balcony = records.some((r) => Array.isArray(r.amenities) && r.amenities.some((a) => /balc[oó]n|balcony/i.test(String(a))));
       if (!balcony) {
         // Missing amenity evidence is not proof that a balcony is absent.
-        await expect(answer).toContainText(/\b(?:not (?:explicitly )?(?:recorded|specified|mentioned|confirmed|listed|documented)|(?:does|do) not (?:explicitly )?(?:record|specify|mention|confirm|list|document)|unknown|no (?:recorded|confirmed|documented) (?:balcon(?:y|ies)|(?:information|data|evidence) about (?:a )?balcon(?:y|ies)))\b/i);
+        await expect(answer).toContainText(/\b(?:not (?:explicitly )?(?:recorded|specified|mentioned|confirmed|listed|documented)|(?:does|do) not (?:explicitly )?(?:record|specify|mention|confirm|list|document)|unknown|no (?:recorded|confirmed|documented) (?:balcon(?:y|ies)|(?:information|data|evidence) about (?:a )?balcon(?:y|ies))|none of (?:the )?(?:current |displayed |shown )?(?:listings|apartments|results) (?:explicitly )?(?:record|specify|mention|confirm|list|document) (?:a |any )?balcon(?:y|ies))\b/i);
       }
       expect(await optionIds()).toEqual(ids);
       await ask("Show Option #2 on the map.");

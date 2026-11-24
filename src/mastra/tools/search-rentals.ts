@@ -815,10 +815,10 @@ export const searchRentalsTool = createTool({
       .string()
       .optional()
       .describe('Natural-language rental search e.g. digital nomad rental in Laureles near cafes'),
-  }).refine(monthlyBudgetHasCurrency, {
-    message: MONTHLY_CURRENCY_REQUIRED,
-    path: ['budgetCurrency'],
   }),
+  // The model may omit a paired currency even when the renter stated it.
+  // Resolve the trusted user cap in execute first; canonical searchRentals
+  // still rejects a currency-free monthly cap before any database access.
   outputSchema: z.object({
     results: z.array(
       rentalSchema.extend({
@@ -846,18 +846,25 @@ export const searchRentalsTool = createTool({
   // The UI gets complete source-backed galleries, but Gemini only needs one
   // cover URL per apartment; never spend tokens on 12 photo URLs per result.
   // Installed Mastra 1.81 supports this native app-vs-model projection.
-  toModelOutput: (output) => ({
-    type: 'json',
-    value: {
-      ...output,
-      results: output.results.map((r) => {
-        const modelRental = { ...r };
-        delete modelRental.images;
-        delete modelRental.photo_count;
-        return modelRental;
-      }),
-    },
-  }),
+  toModelOutput: (output) => {
+    // Mastra also maps strict input/output validation-error objects. They have
+    // no results array; never turn a failed search into an empty successful one.
+    if (!output || !Array.isArray(output.results)) {
+      return { type: 'error-text', value: 'Rental search did not complete. Check the search arguments; do not claim matching apartments.' };
+    }
+    return {
+      type: 'json',
+      value: {
+        ...output,
+        results: output.results.map((r) => {
+          const modelRental = { ...r };
+          delete modelRental.images;
+          delete modelRental.photo_count;
+          return modelRental;
+        }),
+      },
+    };
+  },
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   execute: async (inputData: RentalQuery, context?: any) => {
     const {
