@@ -417,6 +417,10 @@ html {
 /* Rentals phone only: keep the feature labels anchored inside the official Table scroller.
    Opaque cell backgrounds prevent horizontally scrolling values bleeding through the labels. */
 @media (max-width: 1023px) {
+  /* Contain the sticky cells' z-index within this table, below page overlays. */
+  [data-testid="rental-comparison-surface"] .a2ui-std-table-wrap {
+    isolation: isolate;
+  }
   [data-testid="rental-comparison-surface"] .a2ui-std-table :is(th, td):first-child {
     position: sticky;
     left: 0;

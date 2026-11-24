@@ -245,10 +245,21 @@ test.describe("SAN-1681 · official rental comparison A2UI Table", () => {
           expect(layout.screenWidth).toBeLessThanOrEqual(layout.windowWidth + 2);
           expect(layout.tableScrollerWidth).toBeLessThanOrEqual(390);
           expect(layout.overflowingTable, "comparison scrolls inside its container").toBe(true);
-          const scroll = await page.locator(".a2ui-std-table-wrap").evaluate((element) => {
+          const scroller = comparisonSurface.locator(".a2ui-std-table-wrap");
+          await expect(scroller).toHaveCSS("isolation", "isolate");
+          const featureLabel = scroller.locator("tbody tr:first-child td:first-child");
+          await featureLabel.scrollIntoViewIfNeeded();
+          const scroll = await scroller.evaluate((element) => {
+            const label = element.querySelector("tbody tr:first-child td:first-child")!;
+            const before = label.getBoundingClientRect().left;
             element.scrollLeft = element.scrollWidth;
-            return { left: element.scrollLeft, full: element.scrollWidth, viewport: element.clientWidth };
+            const after = label.getBoundingClientRect();
+            const hit = document.elementFromPoint(after.left + after.width / 2, after.top + after.height / 2);
+            return { left: element.scrollLeft, full: element.scrollWidth, viewport: element.clientWidth,
+              labelShift: Math.abs(after.left - before), labelOnTop: hit !== null && label.contains(hit) };
           });
+          expect(scroll.labelShift, "feature label stays anchored during horizontal scroll").toBeLessThanOrEqual(2);
+          expect(scroll.labelOnTop, "feature label remains above scrolling values").toBe(true);
           expect(scroll.full).toBeGreaterThan(scroll.viewport);
           expect(scroll.left, "long apartment name and amount are reachable by horizontal scroll").toBeGreaterThan(0);
         }
