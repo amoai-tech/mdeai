@@ -2,7 +2,7 @@
 title: Graphify Reference — MDE AI
 description: Canonical Graphify usage, repository intelligence workflow, and limitations for MDE agents.
 status: current
-updated: 2026-11-11
+updated: 2026-11-23
 source_of_truth: current repository code and tests
 ---
 
@@ -10,7 +10,7 @@ source_of_truth: current repository code and tests
 
 Knowledge graph tool for codebase + docs analysis. Builds a queryable graph of every function, component, file, and document and the connections between them.
 
-**Verified CLI:** `graphifyy[sql]==0.9.106` (November 10, 2026); command `graphify`
+**Verified CLI:** `graphifyy[sql]==0.9.115` (released November 21, 2026; pinned November 23, 2026); command `graphify`
 **Install:** isolated `uv tool`, normally `~/.local/bin/graphify` (no activation required)
 **Output:** `graphify-out/` (gitignored, per checkout/worktree)
 **Builder:** `npm run graphify:update` (code-only AST, no LLM or clustering)
@@ -73,8 +73,8 @@ you have an exact identifier to anchor on.
 
 ```bash
 # Official PyPI package is graphifyy (double y). Pin the verified version + SQL support.
-uv tool install --reinstall --force 'graphifyy[sql]==0.9.106'
-GRAPHIFY_NO_AUTO_REFRESH=1 graphify --version    # expect 0.9.106; no skill modifications
+uv tool install --reinstall --force 'graphifyy[sql]==0.9.115'
+GRAPHIFY_NO_AUTO_REFRESH=1 graphify --version    # expect 0.9.115; no skill modifications
 uv tool list
 
 # Run from the checkout containing the code you are editing.
@@ -83,19 +83,19 @@ npm run graphify:update                    # regenerate code index for this chec
 npm run graphify:explain -- conciergeAgent
 ```
 
-If Graphify reports `ModuleNotFoundError`, reinstall with the `uv tool` command above. The wrapper resolves an explicit `GRAPHIFY_BIN` first, then the isolated `uv` tool environment, `~/.local/bin/graphify`, and finally the legacy venv. It never executes arbitrary Graphify binaries from `PATH`; it verifies version 0.9.106 and checks SQL support when updating. In nonstandard installations, set `GRAPHIFY_BIN` explicitly. Direct CLI commands must use `GRAPHIFY_NO_AUTO_REFRESH=1` or the wrapper to avoid refreshing unrelated agent configurations.
+If Graphify reports `ModuleNotFoundError`, reinstall with the `uv tool` command above. The wrapper resolves an explicit `GRAPHIFY_BIN` first, then the isolated `uv` tool environment, `~/.local/bin/graphify`, and finally the legacy venv. It never executes arbitrary Graphify binaries from `PATH`; it verifies version 0.9.115 and checks SQL support when updating. In nonstandard installations, set `GRAPHIFY_BIN` explicitly. Direct CLI commands must use `GRAPHIFY_NO_AUTO_REFRESH=1` or the wrapper to avoid refreshing unrelated agent configurations.
 
-### Upstream source receipt (v0.9.106)
+### Upstream source receipt (v0.9.115)
 
 | Field | Verified source / decision |
 | --- | --- |
-| URL and exact source | [v0.9.106 README — Install](https://github.com/Graphify-Labs/graphify/blob/v0.9.106/README.md#install); [v0.9.106 pyproject.toml — `project.optional-dependencies.sql` and `project.scripts`](https://github.com/Graphify-Labs/graphify/blob/v0.9.106/pyproject.toml); [v0.9.106 `graphify/__main__.py` — automatic skill refresh opt-out](https://github.com/Graphify-Labs/graphify/blob/v0.9.106/graphify/__main__.py) |
+| URL and exact source | [v0.9.115 README — Install](https://github.com/Graphify-Labs/graphify/blob/v0.9.115/README.md#install); [v0.9.115 pyproject.toml — `project.optional-dependencies.sql` and `project.scripts`](https://github.com/Graphify-Labs/graphify/blob/v0.9.115/pyproject.toml); [v0.9.115 `graphify/__main__.py` — automatic skill refresh opt-out](https://github.com/Graphify-Labs/graphify/blob/v0.9.115/graphify/__main__.py) |
 | Decision | Use the official `graphifyy` CLI and optional SQL grammar, pin the tested version, keep skill auto-refresh disabled during ordinary repository queries, and index the active checkout |
 | Disposition | **ADAPT** official package/CLI configuration; do not copy upstream agent settings |
 | Destination | `scripts/graphify-run.sh`; `scripts/__tests__/graphify-run.test.mjs`; this guide; `.claude/skills/tasks/SKILL.md`; `.claude/skills/tasks/references/domain-routing.md` |
 | Implementation | Prefer the isolated `uv` executable over arbitrary PATH; verify version and SQL support, preserve argument and working-directory behavior, and route agent commands through the wrapper |
 | Verification | `GRAPHIFY_NO_AUTO_REFRESH=1 graphify --version`; `npm run graphify:update`; `npm run graphify:explain -- conciergeAgent`; `node --test scripts/__tests__/graphify-run.test.mjs` |
-| Version / commit | Graphify **v0.9.106**, released November 10, 2026 |
+| Version / commit | Graphify **v0.9.115**, released November 21, 2026 (earlier pin: v0.9.106, November 10, 2026) |
 
 ---
 
@@ -142,11 +142,11 @@ npm run graphify:query -- "what calls createClient" --budget 3000
 npm run graphify:query -- "Mastra tool registration" --dfs
 ```
 
-Graphify 0.9.106 ranks source nodes ahead of test/document/config nodes (without excluding them). The committed `.graphifyrc` sets the default query budget to 4000 tokens; explicit `--budget 2000` overrides it. For noisy or truncated results, **narrow by an exact symbol** and use `graphify:explain` or `affected` rather than repeatedly increasing the budget. To prove the real pinned CLI reads this setting after `graphify:update`, run `MDE_GRAPHIFY_REAL_SMOKE=1 node --test scripts/__tests__/graphify-run.test.mjs` with the 0.9.106 binary installed.
+Graphify 0.9.115 ranks source nodes ahead of test/document/config nodes (without excluding them). The committed `.graphifyrc` sets the default query budget to 4000 tokens; explicit `--budget 2000` overrides it. For noisy or truncated results, **narrow by an exact symbol** and use `graphify:explain` or `affected` rather than repeatedly increasing the budget. To prove the real pinned CLI reads this setting after `graphify:update`, run `MDE_GRAPHIFY_REAL_SMOKE=1 node --test scripts/__tests__/graphify-run.test.mjs` with the pinned binary installed.
 
 ### Blast radius — what depends on X
 
-Graphify **v0.9.106 includes `affected`**, which performs bounded reverse dependency traversal:
+Graphify **v0.9.115 includes `affected`**, which performs bounded reverse dependency traversal:
 
 ```bash
 bash scripts/graphify-run.sh affected "conciergeAgent" --depth 1

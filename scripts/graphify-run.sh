@@ -7,8 +7,16 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 export GRAPHIFY_NO_AUTO_REFRESH="${GRAPHIFY_NO_AUTO_REFRESH:-1}"
-EXPECTED_VERSION="graphify 0.9.106"
-INSTALL_CMD="uv tool install --reinstall --force 'graphifyy[sql]==0.9.106'"
+EXPECTED_VERSION="graphify 0.9.115"
+INSTALL_CMD="uv tool install --reinstall --force 'graphifyy[sql]==0.9.115'"
+
+# GRAPHIFY_BIN always wins, so the uv install alone cannot repair an override.
+repair_hint() {
+  echo "$1: $INSTALL_CMD" >&2
+  if [[ -n "${GRAPHIFY_BIN:-}" ]]; then
+    echo "GRAPHIFY_BIN is set ($GRAPHIFY_BIN): install $EXPECTED_VERSION with SQL support in that environment, or run the command above and unset GRAPHIFY_BIN before retrying." >&2
+  fi
+}
 
 if [[ -n "${GRAPHIFY_BIN:-}" ]]; then
   GRAPHIFY="$GRAPHIFY_BIN"
@@ -25,7 +33,7 @@ fi
 
 if [[ ! -x "$GRAPHIFY" ]]; then
   echo "Graphify executable not found: $GRAPHIFY" >&2
-  echo "Install: $INSTALL_CMD" >&2
+  repair_hint Install
   exit 1
 fi
 
@@ -48,7 +56,7 @@ if [[ "$VERSION_STATUS" -ne 0 || "$VERSION" != "$EXPECTED_VERSION" ]]; then
   if [[ -n "$VERSION_DIAG" ]]; then
     echo "$VERSION_DIAG" >&2
   fi
-  echo "Repair: $INSTALL_CMD" >&2
+  repair_hint Repair
   exit 1
 fi
 
@@ -59,7 +67,7 @@ if [[ "${1:-}" = "update" || "${1:-}" = "extract" ]]; then
   TOOL_PYTHON="$(dirname "$RESOLVED_BIN")/python"
   if [[ ! -x "$TOOL_PYTHON" ]] || ! "$TOOL_PYTHON" -c 'import tree_sitter_sql' >/dev/null 2>&1; then
     echo "Graphify SQL parser missing from the selected tool environment: $GRAPHIFY" >&2
-    echo "Repair: $INSTALL_CMD" >&2
+    repair_hint Repair
     exit 1
   fi
 fi

@@ -18,7 +18,7 @@ function sandbox(t) {
   return temp;
 }
 
-function fakeGraphify(path, version = "graphify 0.9.106") {
+function fakeGraphify(path, version = "graphify 0.9.115") {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, `#!/bin/sh
 if [ "${"\$"}1" = "--version" ]; then
@@ -109,7 +109,18 @@ test("rejects a binary with an incompatible version", (t) => {
   const result = run(["query", "conciergeAgent"], { GRAPHIFY_BIN: exe }, root);
   assert.equal(result.status, 1);
   assert.match(result.stderr, /Incompatible Graphify/);
-  assert.match(result.stderr, /graphifyy\[sql\]==0\.9\.106/);
+  assert.match(result.stderr, /graphifyy\[sql\]==0\.9\.115/);
+  // The uv install alone cannot fix an explicit override, so say how to repair it.
+  assert.match(result.stderr, /GRAPHIFY_BIN is set .*unset GRAPHIFY_BIN before retrying/);
+});
+
+test("keeps the plain uv repair message when no GRAPHIFY_BIN override is set", (t) => {
+  const temp = sandbox(t);
+  fakeGraphify(join(temp, "graphifyy", "bin", "graphify"), "graphify 0.9.11");
+  const result = run(["query", "conciergeAgent"], { GRAPHIFY_BIN: "", UV_TOOL_DIR: temp }, root);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /Repair: uv tool install --reinstall --force 'graphifyy\[sql\]==0\.9\.115'/);
+  assert.doesNotMatch(result.stderr, /GRAPHIFY_BIN/);
 });
 
 test("ignores skill-version warnings that Graphify prints on stderr", (t) => {
@@ -174,7 +185,7 @@ test("provides an actionable repair command for a unique missing executable", (t
   const result = run(["query", "conciergeAgent"], { GRAPHIFY_BIN: missing }, root);
   assert.equal(result.status, 1);
   assert.match(result.stderr, /Graphify executable not found/);
-  assert.match(result.stderr, /graphifyy\[sql\]==0\.9\.106/);
+  assert.match(result.stderr, /graphifyy\[sql\]==0\.9\.115/);
 });
 
 test("the active agent guidance routes Graphify through the safe wrapper", () => {
@@ -188,7 +199,7 @@ test("the active agent guidance routes Graphify through the safe wrapper", () =>
   assert.doesNotMatch(guide, /^graphify (?:query|explain|path|affected) /m);
   assert.match(guide, /Graph Stats \(verified example, not a shared current index\)\]\(#graph-stats-verified-example-not-a-shared-current-index\)/);
   assert.match(guide, /GRAPH_REPORT\.md.*historical/);
-  assert.match(guide, /Upstream source receipt \(v0\.9\.106\)/);
+  assert.match(guide, /Upstream source receipt \(v0\.9\.115\)/);
   assert.match(tasks, /npm run graphify:query --/);
   assert.doesNotMatch(tasks, /PATH="\$HOME\/\.local\/bin:\$PATH" graphify query/);
   assert.match(routing, /active PR\/feature checkout/);
