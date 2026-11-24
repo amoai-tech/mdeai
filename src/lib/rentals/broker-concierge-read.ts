@@ -13,7 +13,10 @@ export async function readBrokerWorkspace(
   userId: string,
   focus: "listings" | "viewings" | "overview" = "overview",
 ) {
-  const inventory = await fetchBrokerListings(supabase, userId);
+  // A dashboard read already contains its scoped inventory. Do not fetch it twice.
+  const dashboard = focus === "listings" ? null : await fetchBrokerDashboard(supabase, userId);
+  if (dashboard && !dashboard.ok) throw new Error(dashboard.message);
+  const inventory = dashboard?.inventory ?? await fetchBrokerListings(supabase, userId);
   if (!inventory.ok) throw new Error(inventory.message);
   if (inventory.landlordProfileIds.length === 0) {
     throw new Error("Set up your rental profile before asking about private broker records.");
@@ -36,8 +39,7 @@ export async function readBrokerWorkspace(
       focus,
       listings,
       listingsReturned: listings.length,
-      listingsMayBeTruncated: inventory.listings.length > listings.length ||
-        inventory.listings.length === 200,
+      listingsMayBeTruncated: inventory.total > listings.length,
       kpis: [],
       attention: [],
       viewingRequests: [],
@@ -46,8 +48,7 @@ export async function readBrokerWorkspace(
     };
   }
 
-  const dashboard = await fetchBrokerDashboard(supabase, userId);
-  if (!dashboard.ok) throw new Error(dashboard.message);
+  if (!dashboard?.ok) throw new Error("Dashboard unavailable.");
   const { view } = dashboard;
   const requests = view.viewingRequests.slice(0, 20);
   return {
@@ -56,7 +57,7 @@ export async function readBrokerWorkspace(
     listingsReturned: listings.length,
     // This focus deliberately omits listings; that is not pagination/truncation.
     listingsMayBeTruncated: focus === "viewings" ? false :
-      inventory.listings.length > listings.length || inventory.listings.length === 200,
+      inventory.total > listings.length,
     kpis: view.kpis.map(({ label, value }) => ({ label, value })),
     attention: view.attention.map(({ title, detail }) => ({ title, detail })),
     viewingRequests: requests.map((request) => ({

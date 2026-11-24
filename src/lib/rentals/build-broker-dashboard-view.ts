@@ -27,6 +27,8 @@ export type BrokerShowingRow = {
   scheduled_at: string;
   status: string;
   lead_id: string;
+  /** Joined title remains available beyond the first inventory page. */
+  apartment?: { title: string | null } | null;
   /** Ordering key for the request queue. Present on every query that builds these rows. */
   created_at: string;
 };
@@ -95,7 +97,7 @@ export function buildViewingRequests(input: {
       leadId: showing.lead_id,
       showingId: showing.id,
       apartmentId: showing.apartment_id,
-      apartmentTitle: titleByApartmentId.get(showing.apartment_id) ?? null,
+      apartmentTitle: titleByApartmentId.get(showing.apartment_id) ?? showing.apartment?.title ?? null,
       renterName,
       scheduledAt: showing.scheduled_at,
       scheduledLabel: formatScheduledLabel(showing.scheduled_at),
@@ -110,7 +112,7 @@ export function buildViewingRequests(input: {
   // FARTHEST-FUTURE appointments at the top. The soonest-appointment-first view belongs to the
   // broker schedule surface (SAN-1206), not to this request inbox.
   return requests.sort((a, b) => {
-    if (a.createdAt === b.createdAt) return 0;
+    if (a.createdAt === b.createdAt) return a.showingId.localeCompare(b.showingId);
     return a.createdAt < b.createdAt ? 1 : -1;
   });
 }

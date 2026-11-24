@@ -17,13 +17,13 @@ const listing = {
   currency: "COP", bedrooms: 2,
 };
 
+const inventory = { ok: true as const, landlordProfileIds: ["profile-a"], listings: [listing] as never, displayName: "Carlos", total: 1, offset: 0 };
+
 beforeEach(() => {
   vi.resetAllMocks();
-  vi.mocked(fetchBrokerListings).mockResolvedValue({
-    ok: true, landlordProfileIds: ["profile-a"], listings: [listing] as never,
-  });
+  vi.mocked(fetchBrokerListings).mockResolvedValue(inventory);
   vi.mocked(fetchBrokerDashboard).mockResolvedValue({
-    ok: true,
+    ok: true, inventory,
     view: {
       displayName: "Carlos", kpis: [{ id:"listings", label:"Listings", value:"1", provenance:"DB", testId:"listings" }],
       attention: [{ id:"lead", kind:"lead_unanswered", title:"Reply to lead", detail:"New lead", href:"/app/rentals", ctaLabel:"Open", testId:"lead" }],
@@ -48,6 +48,7 @@ describe("readBrokerWorkspace", () => {
   it("returns actual lead/showing IDs and states without creating actions", async () => {
     const result = await readBrokerWorkspace(client, actorId, "viewings");
     expect(fetchBrokerDashboard).toHaveBeenCalledWith(client, actorId);
+    expect(fetchBrokerListings).not.toHaveBeenCalled();
     expect(result.viewingRequests).toEqual([{
       leadId:"lead-a", showingId:"show-a", apartmentId:"apartment-a",
       apartmentTitle:"Laureles 2BR", renterName:"Camila",
@@ -60,20 +61,20 @@ describe("readBrokerWorkspace", () => {
 
   it("refuses an authenticated person with no broker profile", async () => {
     vi.mocked(fetchBrokerListings).mockResolvedValue({
-      ok:true, landlordProfileIds:[], listings:[],
+      ok:true, landlordProfileIds:[], listings:[], displayName: null, total: 0, offset: 0,
     });
-    await expect(readBrokerWorkspace(client, actorId)).rejects.toThrow(/profile/);
+    await expect(readBrokerWorkspace(client, actorId, "listings")).rejects.toThrow(/profile/);
     expect(fetchBrokerDashboard).not.toHaveBeenCalled();
   });
 
   it("fails closed on a database load failure, not a fabricated empty result", async () => {
     vi.mocked(fetchBrokerListings).mockResolvedValue({ ok:false, message:"Unavailable" });
-    await expect(readBrokerWorkspace(client, actorId)).rejects.toThrow("Unavailable");
+    await expect(readBrokerWorkspace(client, actorId, "listings")).rejects.toThrow("Unavailable");
   });
 
   it("reports truncated request counts rather than claiming a complete queue", async () => {
     vi.mocked(fetchBrokerDashboard).mockResolvedValueOnce({
-      ok:true,view: {
+      ok:true,inventory,view: {
         displayName:null,kpis:[],attention:[],viewingRequests:[],viewingRequestsTotal:60,
         trends:[],briefing:{greeting:"",summary:"",bullets:[]},isEmpty:false,
       },

@@ -7,8 +7,17 @@ import { mapBrokerListingRow, type ApartmentBrokerListingRow } from "./map-broke
 const BROKER_LISTING_SELECT =
   "id, title, neighborhood, listing_workflow_status, landlord_id, bedrooms, bathrooms, price_monthly, currency, address, description, images, latitude, longitude, published_at, amenities";
 
+export type BrokerListingsPage = {
+  ok: true;
+  listings: BrokerListingDetail[];
+  landlordProfileIds: string[];
+  displayName: string | null;
+  total: number;
+  offset: number;
+};
+
 export type FetchBrokerListingsResult =
-  | { ok: true; listings: BrokerListingDetail[]; landlordProfileIds: string[] }
+  | BrokerListingsPage
   | { ok: false; message: string };
 
 type DbClient = SupabaseClient<Database>;
@@ -27,10 +36,18 @@ function failListings(context: string, error: unknown): FetchBrokerListingsResul
 export async function fetchBrokerListings(
   supabase: DbClient,
   userId: string,
+  page: { offset?: number; limit?: number } = {},
 ): Promise<FetchBrokerListingsResult> {
+  const offset = page.offset ?? 0;
+  const limit = page.limit ?? 200;
+  if (!Number.isSafeInteger(offset) || offset < 0 ||
+      !Number.isSafeInteger(limit) || limit < 1 || limit > 200 ||
+      !Number.isSafeInteger(offset + limit - 1)) {
+    return { ok: false, message: "Invalid listings page." };
+  }
   const { data: profiles, error: profileError } = await supabase
     .from("landlord_profiles")
-    .select("id")
+    .select("id, display_name")
     .eq("user_id", userId);
 
   if (profileError) {
@@ -41,12 +58,12 @@ export async function fetchBrokerListings(
 
   // No landlord profile means no inventory; skip the round trip entirely.
   if (landlordProfileIds.length === 0) {
-    return { ok: true, listings: [], landlordProfileIds: [] };
+    return { ok: true, listings: [], landlordProfileIds: [], displayName: null, total: 0, offset };
   }
 
-  const { data, error } = await supabase
+  const { data, error, count } = await supabase
     .from("apartments")
-    .select(BROKER_LISTING_SELECT)
+    .select(BROKER_LISTING_SELECT, { count: "exact" })
     // Ownership must be filtered IN THE QUERY, before the row limit. Filtering only afterwards
     // client-side meant this fetched the 200 most recently updated apartments visible under RLS
     // across the whole marketplace, so a broker whose listing fell outside that window lost
@@ -54,16 +71,15 @@ export async function fetchBrokerListings(
     // apartment name. `filterOwnedBrokerListings` below stays as defence in depth.
     .in("landlord_id", landlordProfileIds)
     .order("updated_at", { ascending: false })
-    // ponytail: still caps a single broker at 200 listings. Raise to a paged query if any broker
-    // can exceed that; ownership is already correct, so only volume would be truncated.
-    .limit(200);
+    .order("id", { ascending: true })
+    .range(offset, offset + limit - 1);
 
-  if (error) {
-    return failListings("apartments", error);
+  if (error || count === null) {
+    return failListings("apartments", error ?? "Missing exact total");
   }
 
-  const mapped = (data as ApartmentBrokerListingRow[]).map(mapBrokerListingRow);
+  const mapped = ((data ?? []) as ApartmentBrokerListingRow[]).map(mapBrokerListingRow);
   const listings = filterOwnedBrokerListings(mapped, landlordProfileIds);
 
-  return { ok: true, listings, landlordProfileIds };
+  return { ok: true, listings, landlordProfileIds, displayName: profiles?.[0]?.display_name ?? null, total: count, offset };
 }

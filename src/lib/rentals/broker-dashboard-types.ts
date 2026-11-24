@@ -1,3 +1,5 @@
+import type { BrokerListingsPage } from "./fetch-broker-listings";
+
 /** SAN-1095 · RE-DES-004 — broker dashboard view model (SQL-backed, no fake KPIs). */
 
 export type BrokerAttentionKind =
@@ -69,5 +71,5 @@ export type BrokerDashboardView = {
 };
 
 export type FetchBrokerDashboardResult =
-  | { ok: true; view: BrokerDashboardView }
+  | { ok: true; view: BrokerDashboardView; inventory: BrokerListingsPage }
   | { ok: false; message: string };
