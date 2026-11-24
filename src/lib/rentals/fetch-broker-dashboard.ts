@@ -133,9 +133,9 @@ export async function fetchBrokerDashboard(
         .order("scheduled_at", { ascending: true }).order("id", { ascending: true }).limit(UPCOMING_PREVIEW_LIMIT),
       supabase.from("apartments").select("id", { count: "exact", head: true })
         .in("landlord_id", landlordProfileIds).eq("listing_workflow_status", "draft"),
-      // Exact "no photos": PostgREST array equality. `images` defaults to '{}', not NULL.
+      // Exact "no photos": the array default is '{}', but legacy rows can be NULL.
       supabase.from("apartments").select("id", { count: "exact", head: true })
-        .in("landlord_id", landlordProfileIds).filter("images", "eq", "{}"),
+        .in("landlord_id", landlordProfileIds).or("images.is.null,images.eq.{}"),
       supabase.from("apartments").select("id", { count: "exact", head: true })
         .in("landlord_id", landlordProfileIds)
         .or("description.is.null,price_monthly.is.null,bedrooms.is.null"),

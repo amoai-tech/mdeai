@@ -31,7 +31,7 @@ function fixture(failInbox = false) {
       expect(q.get("landlord_id")).toBe("in.(profile-a)");
       if (method === "HEAD") {
         if (q.get("listing_workflow_status") === "eq.draft") total = 3;
-        else if (q.get("images") === "eq.{}") total = 2;
+        else if (q.get("or")?.includes("images")) total = 2;
         else if (q.has("or")) total = 1;
         else total = 251;
         data = [];
