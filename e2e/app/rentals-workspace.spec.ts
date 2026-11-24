@@ -55,6 +55,29 @@ test.describe("SAN-1578 /app rentals", { tag: ["@app", "@rentals"] }, () => {
         "/app/rentals",
       );
 
+      // A broker can use both ordinary pages even when AI is unavailable.
+      // Hard loads must neither hide server data nor start any CopilotKit request.
+      const runtimeRequests: string[] = [];
+      const runtimeRoute = /\/api\/copilotkit(?:[/?]|$)/;
+      await page.route(runtimeRoute, async (route) => {
+        runtimeRequests.push(route.request().method());
+        await route.abort();
+      });
+      try {
+        await page.goto("/app/rentals/listings");
+        await expect(page.getByTestId("mde-surface-rentals-workspace-header")).toBeVisible();
+        await expect(page.getByTestId("rentals-listings-empty")).toBeVisible();
+        await expect(page.getByTestId("host-rentals-nav-listings")).toHaveAttribute("aria-current", "page");
+        await page.goto("/app/rentals?mode=overview");
+        await expect(page.getByTestId("mde-surface-broker-overview")).toBeVisible();
+        await expect(page.getByTestId("host-rentals-nav-overview")).toHaveAttribute("aria-current", "page");
+        await page.reload();
+        await expect(page.getByTestId("mde-surface-broker-overview")).toBeVisible();
+        expect(runtimeRequests).toEqual([]);
+      } finally {
+        await page.unroute(runtimeRoute);
+      }
+
       await page.goto("/app/rentals");
       await expect(page.getByTestId("rentals-concierge")).toBeVisible();
       await expect(
