@@ -109,6 +109,8 @@ describe("SAN-1204 broker viewing-request surface contract", () => {
 
   it("keeps the loading state truthful before the dashboard resolves", () => {
     const html = renderToStaticMarkup(<RentalsDynamicWorkspace mode="overview" />);
-    expect(html).toContain('data-testid="viewing-requests-empty"');
+    expect(html).toContain("Viewing request data is not loaded.");
+    expect(html).toContain("Not loaded");
+    expect(html).not.toContain('data-testid="viewing-requests-empty"');
   });
 });

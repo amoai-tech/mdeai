@@ -113,6 +113,29 @@ describe("SAN-1683 broker frame without live chat", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("keeps navigation visible and distinguishes a failed load from an empty dashboard", () => {
+    const { rerender } = render(
+      <RentalsBrokerFrame>
+        <RentalsConciergeShell basePath="/app/rentals" workspaceMode="overview" loadError="Database unavailable" />
+      </RentalsBrokerFrame>,
+    );
+    expect(screen.getByTestId("host-rentals-nav")).toBeTruthy();
+    expect(screen.getByText("Unavailable")).toBeTruthy();
+    expect(screen.getByTestId("viewing-requests-error")).toBeTruthy();
+    expect(screen.queryByText("Live")).toBeNull();
+    expect(screen.queryByTestId("viewing-requests-empty")).toBeNull();
+    expect(screen.queryByTestId("mde-surface-broker-overview")).toBeNull();
+    rerender(
+      <RentalsBrokerFrame>
+        <RentalsConciergeShell basePath="/app/rentals" dashboard={null} />
+      </RentalsBrokerFrame>,
+    );
+    expect(screen.getByText("Not loaded")).toBeTruthy();
+    expect(screen.getByText("Viewing request data is not loaded.")).toBeTruthy();
+    expect(screen.queryByTestId("viewing-requests-empty")).toBeNull();
+    expect(screen.queryByTestId("ctx-empty")).toBeNull();
+  });
+
   it("limits unresolved auth fallback to the concierge chat pane", () => {
     render(<RentalsBrokerFrame><RentalsConciergeShell basePath="/app/rentals" dashboard={dashboard} /></RentalsBrokerFrame>);
     expect(screen.getByText("Loading Ask MDE…")).toBeTruthy();
