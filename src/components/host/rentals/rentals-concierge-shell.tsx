@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import { usePathname } from "next/navigation";
 import { MdeDashboardRenderProvider, MdeDashboardSurface } from "@/components/copilot/a2ui/mde-dashboard-surface";
 import { BrokerChatProvider, RentalsAskMde } from "@/components/host/rentals/rentals-ask-mde";
 import { HostRentalsNav } from "@/components/host/rentals/host-rentals-nav";
@@ -43,9 +44,15 @@ const RENTALS_HEADER_OPERATIONS = [{
  * Page children own data; Ask MDE initializes only on explicit chat navigation or opening.
  */
 export function RentalsBrokerFrame({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+  // SAN-1685 — the dashboard and the embedded chat each render their own
+  // section heading. One visually hidden page heading keeps the document
+  // outline valid (the chat's own title is a secondary h2 when embedded).
+  const pageHeading = pathname === "/app/rentals/listings" ? "Rentals listings" : "Rentals overview";
   return (
     <MdeDashboardRenderProvider>
       <div data-testid="rentals-broker-frame" className="flex min-w-0 flex-col gap-4">
+        <h1 className="sr-only">{pageHeading}</h1>
         <MdeDashboardSurface
           surfaceId="rentals-workspace-header"
           operations={RENTALS_HEADER_OPERATIONS}

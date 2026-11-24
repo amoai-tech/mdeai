@@ -101,7 +101,7 @@ describe("SAN-1683 broker frame without live chat", () => {
     const surface = await screen.findByTestId("mde-surface-broker-overview");
     expect(within(surface).getByText("Active listings")).toBeTruthy();
     expect(screen.getAllByTestId("host-rentals-nav")).toHaveLength(1);
-    expect(screen.getByTestId("host-rentals-nav-concierge").getAttribute("href")).toBe("/app/rentals");
+    expect(screen.getByTestId("host-rentals-nav-concierge").getAttribute("href")).toBe("/app/rentals?mode=concierge");
     expect(screen.getByTestId("host-rentals-nav-overview").getAttribute("aria-current")).toBe("page");
     expect(screen.queryByTestId("rc-left")).toBeNull();
     expect(screen.queryByRole("navigation", { name: "Concierge mobile panes" })).toBeNull();
@@ -148,7 +148,7 @@ describe("SAN-1683 broker frame without live chat", () => {
   });
 
   it("limits unresolved auth fallback to the one bottom chat, leaving data visible", () => {
-    state.mode = "";
+    state.mode = "concierge";
     state.authLoading = true;
     render(<RentalsBrokerFrame><RentalsConciergeShell basePath="/app/rentals" dashboard={dashboard} /></RentalsBrokerFrame>);
     expect(screen.getByText("Loading Ask MDE…")).toBeTruthy();
@@ -156,6 +156,19 @@ describe("SAN-1683 broker frame without live chat", () => {
     expect(screen.queryByRole("navigation", { name: "Concierge mobile panes" })).toBeNull();
     expect(screen.getByTestId("host-rentals-nav-listings")).toBeTruthy();
     expect(state.chatMounts).toBe(0);
+  });
+
+  it("opens Overview by default with the chat collapsed and no AI runtime mounted", () => {
+    state.mode = "";
+    render(<RentalsBrokerFrame><RentalsConciergeShell basePath="/app/rentals" dashboard={dashboard} /></RentalsBrokerFrame>);
+    expect(screen.getByTestId("rc-right")).toBeTruthy();
+    expect(screen.getByTestId("rentals-ask-mde-slot")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Open chat" })).toBeTruthy();
+    expect(screen.queryByTestId("rc-center")).toBeNull();
+    expect(state.chatMounts).toBe(0);
+    // One page-level heading remains for the document outline.
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Rentals overview");
   });
 
   it("opens the same bottom chat from Overview and retains its panel across page changes and collapse", async () => {

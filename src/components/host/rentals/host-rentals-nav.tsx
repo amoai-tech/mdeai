@@ -16,12 +16,23 @@ type HostRentalsNavProps = {
 export function HostRentalsNav({ basePath = "/host/rentals" }: HostRentalsNavProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  // SAN-1685 — the /app tree treats Overview as the default page and Concierge
+  // as an explicit chat mode. The legacy /host tree keeps its original
+  // Concierge-landing behaviour until it is migrated.
+  const appTree = basePath === "/app/rentals";
+  const mode = searchParams.get("mode");
   const overviewHref = `${basePath}?mode=overview`;
-  const isOverview = pathname === basePath && searchParams.get("mode") === "overview";
+  const conciergeHref = appTree ? `${basePath}?mode=concierge` : basePath;
+  const isOverview = appTree
+    ? pathname === basePath && mode !== "concierge"
+    : pathname === basePath && mode === "overview";
+  const isConcierge = appTree
+    ? pathname === basePath && mode === "concierge"
+    : pathname === basePath && !isOverview;
 
   const navItems = [
     {
-      href: basePath,
+      href: conciergeHref,
       label: "Concierge",
       testId: "host-rentals-nav-concierge",
       match: "concierge" as const,
@@ -42,7 +53,7 @@ export function HostRentalsNav({ basePath = "/host/rentals" }: HostRentalsNavPro
 
   function isActive(match: (typeof navItems)[number]["match"]): boolean {
     if (match === "overview") return isOverview;
-    if (match === "concierge") return pathname === basePath && !isOverview;
+    if (match === "concierge") return isConcierge;
     return pathname.startsWith(`${basePath}/listings`);
   }
 

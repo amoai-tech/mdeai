@@ -6,7 +6,7 @@ import { getBrokerContext } from "@/lib/rentals/get-broker-context";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata = {
-  title: "Rentals concierge · mdeai",
+  title: "Rentals overview · mdeai",
 };
 
 type PageProps = {
@@ -44,12 +44,19 @@ async function WorkspaceContent({
   );
 }
 
-/** SAN-1578 — /app adapter over the existing broker concierge workspace. */
+/**
+ * SAN-1685 — one route-mode rule for Overview and the persistent chat.
+ *
+ * Overview is the default: `/app/rentals`, `?mode=overview` and any unknown
+ * value all render the dashboard with the chat collapsed. Only the explicit
+ * `?mode=concierge` opens the existing chat. The legacy `/host/rentals` page
+ * keeps its own mode handling.
+ */
 // skipcq: JS-0067 - Next.js App Router page export
 export default async function AppRentalsHomePage({ searchParams }: PageProps) {
   const { mode } = await searchParams;
   const workspaceMode: RentalsWorkspaceMode =
-    mode === "overview" ? "overview" : "concierge";
+    mode === "concierge" ? "concierge" : "overview";
 
   return (
     <div data-testid="rentals-broker-workspace">
