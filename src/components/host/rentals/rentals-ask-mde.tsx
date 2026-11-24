@@ -33,7 +33,11 @@ export function RentalsAskMde({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const params = useSearchParams();
   const mode = params.get("mode");
-  const conciergeRoute = pathname === "/app/rentals" && (!mode || mode === "concierge");
+  // SAN-1685 — Overview is the default landing page. The chat is collapsed and
+  // NOT activated until the broker opens it, or explicitly asks for
+  // `?mode=concierge` (the Concierge nav link / a deep link). Unknown values
+  // behave like Overview.
+  const conciergeRoute = pathname === "/app/rentals" && mode === "concierge";
   const [activated, setActivated] = useState(conciergeRoute);
   const [expanded, setExpanded] = useState(conciergeRoute);
   const [focusRequest, setFocusRequest] = useState(0);
@@ -100,7 +104,7 @@ export function RentalsAskMde({ children }: { children: ReactNode }) {
           {activated && <BrokerChatProvider sessionFallback={
             <div role="status" className="p-4 text-sm text-muted-foreground">Loading Ask MDE…</div>
           }>
-            <RentalsConciergeCenter mode="concierge" />
+            <RentalsConciergeCenter mode="concierge" embedded />
           </BrokerChatProvider>}
         </div>
       </section>

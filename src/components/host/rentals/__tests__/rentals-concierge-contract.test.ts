@@ -65,7 +65,11 @@ describe("one top-level heading on the broker concierge", () => {
     expect(center).toContain("welcomeScreen={{ welcomeMessage:");
     expect(center).toContain('data-testid="rc-welcome"');
     expect(center).toMatch(/WelcomeMessageCopy[\s\S]{0,200}?<p/);
-    expect(center.match(/<h1\s/g) ?? []).toHaveLength(1);
+    // SAN-1685: the standalone Concierge keeps the page-level h1; the embedded
+    // bottom chat renders a secondary heading because the dashboard owns the h1.
+    expect(center).toContain('const Heading = embedded ? "h2" : "h1";');
+    expect(center).toContain("<Heading className=");
+    expect(center).not.toMatch(/^\s*<h1\s/m);
     expect(center).toContain("I can read your actual rental dashboard");
   });
 });
