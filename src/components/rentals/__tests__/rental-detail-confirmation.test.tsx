@@ -187,7 +187,10 @@ describe("rental detail page — viewing confirmation", () => {
   });
 
   it("does not animate the scroll for renters who asked for reduced motion", async () => {
-    vi.stubGlobal("matchMedia", (query: string) => ({ matches: /reduce/.test(query), media: query }));
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: /reduce/.test(query), media: query,
+      addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    }));
     try {
       vi.mocked(submitScheduleViewing).mockResolvedValue(saved);
       await requestViewing();

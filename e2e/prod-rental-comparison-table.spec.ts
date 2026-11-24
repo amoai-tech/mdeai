@@ -24,6 +24,29 @@ test.describe("SAN-1681 · official rental comparison A2UI Table", () => {
         await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
         const response = await page.goto("/rentals", { waitUntil: "domcontentloaded" });
         expect(response?.ok()).toBe(true);
+        const mobileFilters = page.getByTestId("rentals-mobile-filters-trigger");
+        if (width === 390) {
+          await expect(mobileFilters).toBeVisible();
+          await expect(page.getByRole("group", { name: "Neighborhood filters" })).toHaveCount(0);
+          expect((await mobileFilters.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+          await mobileFilters.click();
+          const filterSheet = page.getByTestId("rentals-mobile-filter-sheet");
+          await expect(filterSheet).toBeVisible();
+          await expect(filterSheet.getByRole("group", { name: "Neighborhood filters" })).toBeVisible();
+          await expect(filterSheet.getByRole("group", { name: "Bedroom filters" })).toBeVisible();
+          await expect(filterSheet.getByTestId("rentals-dates-trigger")).toBeVisible();
+          await filterSheet.getByRole("button", { name: "Show apartments" }).click();
+          await expect(filterSheet).toBeHidden();
+          await page.getByTestId("workspace-mobile-profile").click();
+          const profile = page.getByRole("dialog", { name: "Profile" });
+          await expect(profile).toBeVisible();
+          await expect(profile.getByRole("button", { name: "Sign out" })).toBeVisible();
+          await profile.getByRole("button", { name: "Close" }).click();
+          await expect(profile).toBeHidden();
+        } else {
+          await expect(mobileFilters).toHaveCount(0);
+          await expect(page.getByRole("group", { name: "Neighborhood filters" })).toBeVisible();
+        }
 
         const input = page.locator('[data-testid="rental-ask-composer"]:visible #rental-ask-input').first();
         const send = page.locator('[data-testid="rental-ask-composer"]:visible [data-testid="rental-ask-send"]').first();
@@ -42,6 +65,23 @@ test.describe("SAN-1681 · official rental comparison A2UI Table", () => {
         await ask("Show apartments in Laureles.");
         await expect.poll(() => cards.count(), { timeout: 120_000 }).toBeGreaterThanOrEqual(3);
         const initialCount = await cards.count();
+        if (width === 390) {
+          const header = page.getByTestId("workspace-header");
+          await page.evaluate(() => { (document.activeElement as HTMLElement | null)?.blur(); window.scrollTo(0, 0); });
+          await expect(header).toHaveAttribute("data-scroll-hidden", "false");
+          await page.evaluate(() => window.scrollTo(0, 400));
+          await expect(header).toHaveAttribute("data-scroll-hidden", "true");
+          await expect.poll(async () => (await header.boundingBox())!.y + (await header.boundingBox())!.height).toBeLessThanOrEqual(1);
+          const map = page.getByTestId("browse-map-fab");
+          const composer = page.getByTestId("workspace-ask-composer");
+          await expect(map).toBeInViewport();
+          await expect(composer).toBeInViewport();
+          expect((await map.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+          expect((await map.boundingBox())!.y + (await map.boundingBox())!.height).toBeLessThanOrEqual((await composer.boundingBox())!.y + 1);
+          await page.evaluate(() => window.scrollTo(0, 120));
+          await expect(header).toHaveAttribute("data-scroll-hidden", "false");
+          await expect.poll(async () => (await header.boundingBox())!.y).toBeGreaterThanOrEqual(-1);
+        }
         // Card identities come from the real authorized rental search.
         // Use them to prove that the next comparison selects *different*
         // apartments rather than merely keeping the old Table visible.
@@ -86,6 +126,11 @@ test.describe("SAN-1681 · official rental comparison A2UI Table", () => {
 
 
         await expect(page.locator(".a2ui-std-table-wrap")).toBeVisible();
+        if (width === 390) {
+          const feature = table.locator("tbody tr").first().locator("td").first();
+          await expect(feature).toHaveCSS("position", "sticky");
+          await expect(feature).toHaveCSS("left", "0px");
+        }
         // Official Standard Buttons are rendered from the authorized result,
         // not custom React wrappers with listing IDs copied into DOM attributes.
         await expect(comparisonSurface.getByRole("button", { name: "Details" })).toHaveCount(2);

@@ -313,11 +313,11 @@ export function RentalDetailsSheet({ rental, onClose, onSchedule, bookingReviewH
       <SheetContent
         side="bottom"
         showCloseButton={false}
-        className="max-h-[90vh] overflow-y-auto p-4"
+        className="data-[side=bottom]:h-dvh max-h-dvh overflow-y-auto overscroll-contain p-4 pb-[max(1rem,env(safe-area-inset-bottom))] lg:data-[side=bottom]:h-auto lg:max-h-[90vh]"
         data-testid="rental-details-sheet"
         data-listing-id={rental.id}
       >
-        <div className="mb-3 flex items-start justify-between gap-2">
+        <div className="sticky top-0 z-10 -mx-4 -mt-4 mb-3 flex shrink-0 items-start justify-between gap-2 bg-popover px-4 pt-4 pb-2">
           <div className="min-w-0">
             <p className="text-xs font-medium text-muted-foreground">{rental.neighborhood}</p>
             <SheetTitle className="font-serif text-lg font-semibold leading-snug">{rental.title}</SheetTitle>

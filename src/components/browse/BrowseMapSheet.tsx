@@ -9,7 +9,7 @@ import { AppErrorBoundary } from "@/components/errors/error-boundary";
 import { MapsShell } from "@/components/maps/MapProvider";
 import { ChatMap } from "@/components/maps/ChatMap";
 
-export function BrowseMapSheet({ raised = false, inline = false }: { raised?: boolean; inline?: boolean }) {
+export function BrowseMapSheet({ raised = false, inline = false, reserveMobileNav = false }: { raised?: boolean; inline?: boolean; reserveMobileNav?: boolean }) {
   const [open, setOpen] = useState(false);
   const [mapLoaded, setMapLoaded] = useState(false);
   const markLoaded = useCallback(() => setMapLoaded(true), []);
@@ -35,11 +35,12 @@ export function BrowseMapSheet({ raised = false, inline = false }: { raised?: bo
         size="sm"
         // SAN-1421: on a page with a pinned Ask MDE composer, the phone FAB sits above that bar —
         // measured, so an expanded transcript or an error row cannot end up underneath the button.
-        className={inline ? "min-h-11 gap-2" : raised ? "fixed right-4 z-50 gap-2 shadow-lg" : "fixed bottom-6 right-4 z-50 gap-2 shadow-lg"}
-        style={raised && !inline ? { bottom: composerHeight == null ? "calc(1rem + var(--mde-ask-composer-height, 6rem))" : `calc(1rem + ${composerHeight}px)` } : undefined}
+        className={inline ? "min-h-11 gap-2" : raised ? (reserveMobileNav ? "fixed right-4 z-30 min-h-11 gap-2 shadow-lg" : "fixed right-4 z-50 gap-2 shadow-lg") : "fixed bottom-6 right-4 z-50 gap-2 shadow-lg"}
+        style={raised && !inline ? { bottom: "calc(1rem + " + (reserveMobileNav ? "var(--mde-mobile-nav-clearance) + " : "") + (composerHeight == null ? "var(--mde-ask-composer-height, 6rem)" : composerHeight + "px") + ")" } : undefined}
         onClick={() => onOpenChange(true)}
         aria-label="Open map"
         data-testid="browse-map-fab"
+        data-reserve-mobile-nav={reserveMobileNav ? "true" : undefined}
       >
         <MapIcon className="size-4" aria-hidden />
         Map

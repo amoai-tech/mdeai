@@ -413,3 +413,35 @@ html {
 [data-testid="rental-comparison-surface"] button {
   min-height: 44px;
 }
+
+/* Rentals phone only: keep the feature labels anchored inside the official Table scroller.
+   Opaque cell backgrounds prevent horizontally scrolling values bleeding through the labels. */
+@media (max-width: 1023px) {
+  [data-testid="rental-comparison-surface"] .a2ui-std-table :is(th, td):first-child {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: var(--card);
+    box-shadow: 1px 0 0 var(--border);
+  }
+  [data-testid="rental-comparison-surface"] .a2ui-std-table tbody tr:nth-child(even) td:first-child {
+    background: var(--muted);
+  }
+  [data-testid="rentals-browse"] [data-testid="rental-other-results"] > summary {
+    min-height: 44px;
+  }
+  [data-testid="rentals-browse"] [data-testid="browse-map-fab"][data-reserve-mobile-nav="true"] {
+    min-width: 44px;
+  }
+  html[data-mde-no-nav] [data-testid="rentals-browse"] [data-testid="browse-map-fab"][data-reserve-mobile-nav="true"] {
+    display: none;
+  }
+}
+@media (max-height: 480px) {
+  [data-testid="rentals-browse"] [data-testid="workspace-header"] {
+    transform: none;
+  }
+  [data-testid="rentals-browse"] [data-testid="browse-map-fab"][data-reserve-mobile-nav="true"] {
+    display: none;
+  }
+}

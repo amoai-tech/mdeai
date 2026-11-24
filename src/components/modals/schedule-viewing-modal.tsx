@@ -2,6 +2,8 @@
 
 import { useEffect, useReducer, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { useIsLgUp } from "@/hooks/use-is-lg-up";
 import { Calendar } from "@/components/ui/calendar";
 import {
   isFutureInstant,
@@ -70,7 +72,9 @@ const medellinToday = (): string => {
 };
 
 /** SCREEN-008 / SAN-262 — local viewing draft → review → original atomic write. */
-export const ScheduleViewingModal = () => {
+export const ScheduleViewingModal = ({ fullHeightMobile = false }: { fullHeightMobile?: boolean } = {}) => {
+  const isLgUp = useIsLgUp();
+  const fullHeight = fullHeightMobile && !isLgUp;
   const { scheduleTarget, closeScheduleViewing, setLeadConfirmation } =
     useRentalUi();
   // SAN-1075 — iOS overlays the keyboard instead of shrinking the layout viewport.
@@ -225,8 +229,8 @@ export const ScheduleViewingModal = () => {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
-      style={keyboardInset ? { paddingBottom: keyboardInset + 16 } : undefined}
+      className={cn("fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center", fullHeight && "p-0 items-end sm:items-end")}
+      style={keyboardInset ? { paddingBottom: keyboardInset + (fullHeight ? 0 : 16) } : undefined}
       role="presentation"
       data-testid="schedule-viewing-modal"
       onClick={(e) => {
@@ -238,8 +242,8 @@ export const ScheduleViewingModal = () => {
         role="dialog"
         aria-modal="true"
         aria-labelledby="schedule-viewing-title"
-        className="max-h-[calc(100vh-2rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-xl border border-border bg-background p-4 shadow-lg"
-        style={{ maxHeight: `calc(100dvh - 2rem - ${keyboardInset}px)` }}
+        className={cn("max-h-[calc(100vh-2rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-xl border border-border bg-background p-4 shadow-lg", fullHeight && "max-w-none rounded-none border-0 pb-[max(1rem,env(safe-area-inset-bottom))]")}
+        style={fullHeight ? { height: `calc(100dvh - ${keyboardInset}px)`, maxHeight: "none" } : { maxHeight: `calc(100dvh - 2rem - ${keyboardInset}px)` }}
       >
         <h2 id="schedule-viewing-title" className="text-lg font-semibold">
           Schedule a viewing

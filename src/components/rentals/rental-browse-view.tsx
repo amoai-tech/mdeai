@@ -10,7 +10,7 @@ import { BrowseMapContextShell } from "@/components/browse/BrowseMapContextShell
 import { BrowseMapPanel } from "@/components/browse/BrowseMapPanel";
 import { BrowseMapSheet } from "@/components/browse/BrowseMapSheet";
 import { RentalBrowseCard } from "@/components/rentals/rental-browse-card";
-import { RentalBrowseFilters } from "@/components/rentals/rental-browse-filters";
+import { RentalBrowseFilters, RentalMobileFilters } from "@/components/rentals/rental-browse-filters";
 import { RentalDateSuggestionTool } from "@/components/rentals/rental-date-suggestion-tool";
 import type { SuggestedStay } from "@/components/rentals/rental-date-selector";
 import { RentalDetailsPanel, RentalDetailsSheet } from "@/components/rentals/rental-details-panel";
@@ -272,21 +272,25 @@ function RentalBrowseViewInner({
       {coAgent && !isDeterministicE2E() ? <RentalFilterPanelActions filters={filterState} /> : null}
       <DiscoveryPageContext page="rentals" filters={filterState} selectedId={selectedForAskId ?? detailsRental?.id ?? null} />
       <RentalPageControlTool filters={filterState} />
+      {/* A single frontend tool stays mounted independently of the responsive filter presentation. */}
+      {!previewMode && coAgent && !isDeterministicE2E() ? (
+        <RentalDateSuggestionTool onSuggest={setSuggestedStay} />
+      ) : null}
       <DiscoveryWorkspace
         testId="rentals-browse"
         activeSlug="rentals"
         title="Rentals in Medellín"
         subtitle={subtitle}
-        mobileMapTrigger={<BrowseMapSheet inline />}
+        mobileMapTrigger={<BrowseMapSheet raised reserveMobileNav />}
+        mobileFilterBar={previewMode ? (
+          <p className="text-sm text-muted-foreground">Preview only — filters and bookings are disabled.</p>
+        ) : <RentalMobileFilters neighborhood={neighborhood} beds={beds} from={from} through={through}
+          dateError={dateError} suggestedStay={suggestedStay} onSuggestionHandled={() => setSuggestedStay(null)} />}
         filterBar={
           previewMode ? (
             <p className="text-sm text-muted-foreground">Preview only — filters and bookings are disabled.</p>
           ) : (
             <>
-              {/* Same guard as the existing Details tool: a frontend tool needs a live co-agent. */}
-              {coAgent && !isDeterministicE2E() ? (
-                <RentalDateSuggestionTool onSuggest={setSuggestedStay} />
-              ) : null}
               <RentalBrowseFilters
                 neighborhood={neighborhood}
                 beds={beds}
@@ -400,6 +404,7 @@ function RentalBrowseViewInner({
               <Button
                 variant="ghost"
                 size="sm"
+                className="min-h-11 lg:min-h-0"
                 onClick={() => { clearResults(); acceptTextAnswer(null); }}
                 data-testid="rental-ask-answer-clear"
               >
@@ -499,7 +504,7 @@ export function RentalBrowseView(props: RentalBrowseViewProps) {
             {...props}
           />
         </BrowseMapContextShell>
-        <ScheduleViewingModal />
+        <ScheduleViewingModal fullHeightMobile />
       </RentalFastPathProvider>
     </RentalUiProvider>
   );

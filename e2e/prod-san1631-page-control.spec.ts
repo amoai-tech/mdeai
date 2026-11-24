@@ -107,11 +107,14 @@ for (const viewport of [
       );
       expect(nativeCommandAgentPosts).toBe(0); // Model-free native navigation.
 
+      if (viewport.width === 390) await page.getByTestId("rentals-mobile-filters-trigger").click();
       const beds2 = page.getByTestId("rentals-filter-beds-2");
       await expect(beds2).toBeVisible();
       await beds2.click();
       await expect.poll(() => new URL(page.url()).searchParams.get("beds")).toBe("2");
-      await expect(beds2).toHaveAttribute("aria-current", "true");
+      if (viewport.width === 390) {
+        await expect(page.getByTestId("rentals-active-filter-chips")).toContainText("2 BR");
+      } else await expect(beds2).toHaveAttribute("aria-current", "true");
       await expectCurrentResults(page);
 
       await page.goBack({ waitUntil: "domcontentloaded" });

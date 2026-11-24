@@ -52,6 +52,17 @@ describe("ScheduleViewingModal (SAN-716 / SCREEN-008)", () => {
     expect(html).toContain('data-testid="schedule-viewing-modal"');
   });
 
+  it("opts Rentals into a full-height phone sheet while keeping the same dialog", () => {
+    vi.mocked(useRentalUi).mockReturnValue({
+      scheduleTarget: MOCK_TARGET, closeScheduleViewing: vi.fn(), setLeadConfirmation: vi.fn(),
+    } as unknown as ReturnType<typeof useRentalUi>);
+    const html = renderToStaticMarkup(<ScheduleViewingModal fullHeightMobile />);
+    expect(html).toContain("height:calc(100dvh - 0px)");
+    expect(html).toContain("max-height:none");
+    expect(html).toContain("max-w-none");
+    expect(html).toContain('aria-modal="true"');
+  });
+
   it("shows listing title and neighborhood in the header", () => {
     vi.mocked(useRentalUi).mockReturnValue({
       scheduleTarget: MOCK_TARGET,
