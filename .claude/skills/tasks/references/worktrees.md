@@ -42,13 +42,15 @@ Run the preflight above first, on the configured MDE host or with an explicitly 
 
 ```bash
 # Run after the preflight above, in the same shell.
-# Replace origin/main with the resolved base for stacked work.
-if [ -n "${WT_ROOT:-}" ] && [ -d "$WT_ROOT" ]; then
-  git fetch origin &&
-    git worktree add "$WT_ROOT/san-NNN-slug" -b ai/san-NNN-slug origin/main &&
-    git -C "$WT_ROOT/san-NNN-slug" status --short
-else
+# Set BASE_REF to the intended base resolved in step 1 before running.
+if [ -z "${WT_ROOT:-}" ] || [ ! -d "$WT_ROOT" ]; then
   printf '%s\n' 'Worktree root missing. Run the preflight first.' >&2
+elif [ -z "${BASE_REF:-}" ]; then
+  printf '%s\n' 'Set BASE_REF to the intended base first.' >&2
+else
+  git fetch origin &&
+    git worktree add -b ai/san-NNN-slug -- "$WT_ROOT/san-NNN-slug" "$BASE_REF" &&
+    git -C "$WT_ROOT/san-NNN-slug" status --short
 fi
 ```
 
