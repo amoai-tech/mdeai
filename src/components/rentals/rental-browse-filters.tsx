@@ -57,6 +57,12 @@ export function RentalBrowseFilters({
   const errorId = useId();
   return (
     <>
+      {neighborhood || beds || from || through || dateError ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+          <span className="font-medium text-foreground">Active filters</span>
+          <Link href={buildRentalsUrl({})} data-testid="rentals-clear-filters" className={cn(chip, "min-h-card-action text-primary")}>Clear filters</Link>
+        </div>
+      ) : null}
       {/* Neighborhood */}
       <div>
         <p className="mb-2 text-xs font-medium text-muted-foreground">

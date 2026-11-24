@@ -70,7 +70,7 @@ export function SelectedPlaceOverlayCard({
         ) : (
           <div
             // Events have no photo to show: a short glyph strip, so the date and Details come into view sooner.
-            className={pin.category === "event" ? "flex h-14 items-center justify-center bg-muted text-3xl" : "flex h-32 items-center justify-center bg-muted text-4xl"}
+            className={pin.category === "event" || pin.category === "rental" ? "flex h-14 items-center justify-center bg-muted text-3xl" : "flex h-32 items-center justify-center bg-muted text-4xl"}
             data-testid="selected-place-overlay-photo-placeholder"
             aria-hidden
           >

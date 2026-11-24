@@ -87,8 +87,10 @@ describe("buildComparisonTableOps", () => {
       id: "b", title: "Second", currency: "USD", priceMonthly: null, priceNightly: 99.6,
     });
     const table = surface([first, secondUsd]).component("comparison") as { rows: string[][] };
+    expect(table.rows.slice(0, 2).map((row) => row[0])).toEqual(["Monthly rent", "Nightly rent"]);
     expect(table.rows).toContainEqual(["Nightly rent", "USD 99.50", "USD 99.60"]);
     expect(comparablePriceSummary([first, secondUsd])).toContain("USD 99.50");
+    expect(comparablePriceSummary([first, secondUsd])).toContain("USD 0.10 less");
     expect((surface([row(), second()]).component("comparison") as { rows: string[][] }).rows)
       .toContainEqual(["Monthly rent", "COP 2,400,000", "COP 2,500,000"]);
   });
@@ -175,6 +177,7 @@ describe("comparablePriceSummary", () => {
   it("identifies a lower listed monthly price only for comparable currencies and complete data", () => {
     expect(comparablePriceSummary([row(), second()])).toContain("Laureles One at COP 2,400,000");
     expect(comparablePriceSummary([row(), second()])).toContain("not an overall recommendation");
+    expect(comparablePriceSummary([row(), second()])).toContain("COP 100,000 less");
   });
   it("does not rank mixed currencies, missing rates, or ties", () => {
     expect(comparablePriceSummary([row(), { ...second(), currency: "USD" }])).not.toContain("Lowest listed");

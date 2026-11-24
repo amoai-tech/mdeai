@@ -21,7 +21,7 @@ import {
 } from "@/components/rentals/rental-ask-composer";
 import { LeadConfirmationBanner } from "@/components/chat/lead-confirmation-banner";
 import { RentalRecommendationsSurface } from "@/components/copilot/a2ui/rental-recommendations-surface";
-import { RentalComparisonSurface } from "@/components/copilot/a2ui/rental-comparison-surface";
+import { ComparedRentalOptions, RentalComparisonSurface, useComparedRentalIds } from "@/components/copilot/a2ui/rental-comparison-surface";
 import { RentalComparisonPageActions, RentalComparisonStatus, useRentalComparisonStatus } from "@/components/rentals/rental-comparison-page-actions";
 import { RentalA2UIContext } from "@/components/chat/rental-a2ui-context";
 import { RentalFilterDraftProvider } from "@/components/rentals/rental-filter-draft";
@@ -118,6 +118,7 @@ function RentalBrowseViewInner({
   const { activeAsk, acceptResults, clearResults } = useRentalAskResults(threadId, askSignature);
   const shownResults = activeAsk?.results ?? results;
   const shownTotal = activeAsk?.total ?? total;
+  const comparedIds = useComparedRentalIds(shownResults);
   const matchParams = useMemo(() => {
     if (activeAsk) return buildRentalSearchParams(activeAsk.query, {}) ?? undefined;
     return { neighborhood: neighborhood ?? undefined, minBedrooms: beds != null ? Number(beds) : undefined,
@@ -297,6 +298,8 @@ function RentalBrowseViewInner({
           {/* SAN-1656 — the named AI recommendations panel. It renders nothing
               until Ask MDE targets it, so native results/map/Details are unchanged. */}
           <RentalRecommendationsSurface />
+          <ComparedRentalOptions ids={comparedIds} results={shownResults} selectedPinId={selectedPinId}
+            onSelectMap={(row) => { const pin = rentalToMapPin(row); if (pin) panToPin(pin.id); }} />
           <RentalComparisonSurface />
           <RentalComparisonStatus message={comparisonErrorMessage} />
           {/* A saved viewing request must be visible where it was made, not only in the chat. */}
@@ -343,10 +346,15 @@ function RentalBrowseViewInner({
               data-testid="rental-ask-answer"
               className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm"
             >
-              <span className="min-w-0 flex-1">
-                <span className="text-muted-foreground">Answer to: </span>
-                <span className="font-medium">{activeAsk.query}</span>
-              </span>
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold">{formatCountSubtitle(shownTotal, shownResults.length)}</p>
+                <p className="break-words text-xs text-muted-foreground">Answer to: {activeAsk.query}</p>
+                {shownResults.length > 0 ? (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {comparedIds.length > 0 ? "Compare the options above, then open Details." : "Open Details or ask MDE to compare apartments."}
+                  </p>
+                ) : null}
+              </div>
               {activeAsk.budgetNotice ? (
                 <span className="w-full text-xs text-muted-foreground">{activeAsk.budgetNotice}</span>
               ) : null}
@@ -356,7 +364,7 @@ function RentalBrowseViewInner({
                 onClick={clearResults}
                 data-testid="rental-ask-answer-clear"
               >
-                Clear
+                Clear answer
               </Button>
             </div>
           ) : null}
@@ -404,7 +412,8 @@ function RentalBrowseViewInner({
                 return (
                   <RentalBrowseCard
                     key={r.id}
-                    mediaLayout="cover"
+                    mediaLayout="inline"
+                    comparisonPosition={comparedIds.includes(r.id) ? comparedIds.indexOf(r.id) + 1 : undefined}
                     rental={r}
                     resultSet={shownResults}
                     matchParams={matchParams}

@@ -236,12 +236,32 @@ test.describe("SAN-1681 · official rental comparison A2UI Table", () => {
       await expect(table.locator("thead th").nth(1)).toHaveText(title.get(shown[0])!);
       await expect(table.locator("thead th").nth(2)).toHaveText(title.get(shown[1])!);
 
+      // The numbered comparison strip must use the same current authorized IDs
+      // as the original Table and the cards, not the earlier El Poblado search.
+      const options = page.getByTestId("rental-compared-options");
+      await expect(options).toBeVisible();
+      await expect(page.getByTestId("rental-compared-" + shown[0])).toHaveText("Option #1");
+      await expect(page.getByTestId("rental-compared-" + shown[1])).toHaveText("Option #2");
+      await expect(cards.locator('[data-testid^="rental-compared-"]')).toHaveCount(2);
+      await expect(options.getByText(title.get(shown[0])!, { exact: true })).toBeVisible();
+      await expect(options.getByText(title.get(shown[1])!, { exact: true })).toBeVisible();
+      const firstMap = options.getByRole("button", { name: "Show compared apartment 1 on map" });
+      if (await firstMap.count()) {
+        await firstMap.click();
+        await expect(page.getByTestId("rental-card-" + shown[0])).toHaveAttribute("data-selected", "true");
+      }
+
       // The real official Button must open the Details UI for the first *new* card.
       // This also proves the server-side ID resolution is usable, not just display text.
       await comparisonSurface.getByRole("button", { name: "Details" }).first().click();
       const details = page.getByTestId(width === 390 ? "rental-details-sheet" : "rental-details-panel");
       await expect(details).toBeVisible({ timeout: 20_000 });
       await expect(details.getByText(title.get(shown[0])!, { exact: true }).first()).toBeVisible();
+      await page.getByTestId("rental-details-close").click();
+      await expect(details).not.toBeVisible();
+      await comparisonSurface.getByRole("button", { name: "Details" }).nth(1).click();
+      await expect(details).toBeVisible({ timeout: 20_000 });
+      await expect(details.getByText(title.get(shown[1])!, { exact: true }).first()).toBeVisible();
       await page.getByTestId("rental-details-close").click();
       await expect(details).not.toBeVisible();
       if (width === 390) {

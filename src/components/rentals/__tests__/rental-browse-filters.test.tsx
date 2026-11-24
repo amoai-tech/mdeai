@@ -38,6 +38,15 @@ describe("RentalBrowseFilters", () => {
     expect(chosen.match(/aria-current="true"/g)?.length).toBe(2);
   });
 
+  it("provides a single reset to the canonical rental URL when filters are applied", () => {
+    const chosen = renderToStaticMarkup(<RentalBrowseFilters neighborhood="Laureles" beds="2" from="2026-11-01" through="2026-11-30" />);
+    const doc = new DOMParser().parseFromString(chosen, "text/html");
+    const reset = doc.querySelector('[data-testid="rentals-clear-filters"]');
+    expect(reset?.textContent).toBe("Clear filters");
+    expect(reset?.getAttribute("href")).toBe("/rentals");
+    expect(html).not.toContain("rentals-clear-filters");
+  });
+
   it("never writes maxPrice into a filter link", () => {
     expect(html).not.toContain("maxPrice");
   });

@@ -84,7 +84,12 @@ export function comparablePriceSummary(rows: readonly ComparisonRow[]): string {
     if (candidates.length !== rows.length || new Set(candidates.map((row) => row.currency)).size !== 1) return null;
     const cheapest = candidates.reduce((best, row) => (row[period] as number) < (best[period] as number) ? row : best);
     if (candidates.every((row) => row[period] === cheapest[period])) return null;
-    return `Lowest listed ${label}: ${cheapest.title} at ${money(cheapest[period], cheapest.currency)}. This is a price comparison, not an overall recommendation.`;
+    const amounts = candidates.map((candidate) => candidate[period] as number);
+    const precision = Math.min(12, Math.max(...amounts.map((amount) => String(amount).split(".")[1]?.length ?? 0)));
+    const difference = amounts.length === 2
+      ? Number(Math.abs(amounts[0] - amounts[1]).toFixed(precision)) : null;
+    const savings = difference ? ` — ${money(difference, cheapest.currency)} less` : "";
+    return `Lowest listed ${label}: ${cheapest.title} at ${money(cheapest[period], cheapest.currency)}${savings} (not an overall recommendation).`;
   };
   return choose("priceMonthly", "monthly rent")
     ?? choose("priceNightly", "nightly rent")
@@ -101,13 +106,13 @@ export function buildComparisonTableOps(
   if (safe.length < 2) return null;
   const columns = ["Feature", ...safe.map((row) => row.title)];
   const metricRows: Array<[string, (row: ComparisonRow) => string | number]> = [
+    ["Monthly rent", (row) => money(row.priceMonthly, row.currency)],
+    ["Nightly rent", (row) => money(row.priceNightly, row.currency)],
     ["Neighborhood", (row) => row.neighborhood?.trim() || "Not recorded"],
     ["Bedrooms", (row) => numberLabel(row.bedrooms)],
     ["Furnished", (row) => row.furnished === true ? "Yes" : row.furnished === false ? "No" : "Not recorded"],
     ["Bathrooms", (row) => numberLabel(row.bathrooms)],
     ["Area", (row) => sizeLabel(row.sizeSqm)],
-    ["Monthly rent", (row) => money(row.priceMonthly, row.currency)],
-    ["Nightly rent", (row) => money(row.priceNightly, row.currency)],
     ["Wi-Fi speed", (row) => wifiLabel(row.wifiSpeedMbps)],
     ["Amenities", (row) => amenitiesLabel(row.amenities)],
   ];
@@ -150,7 +155,7 @@ export function buildComparisonTableOps(
                   ...safe.flatMap((row, index) => [
                     { id: `comparison-action-${index}`, component: "Column", gap: 1,
                       children: [`comparison-action-title-${index}`, `comparison-action-buttons-${index}`] },
-                    { id: `comparison-action-title-${index}`, component: "Text", text: row.title },
+                    { id: `comparison-action-title-${index}`, component: "Text", text: `Option ${index + 1}: ${row.title}` },
                     { id: `comparison-action-buttons-${index}`, component: "Row", wrap: "wrap", gap: 2,
                       children: [`comparison-details-${index}`, `comparison-view-${index}`] },
                     { id: `comparison-details-${index}`, component: "Button", label: "Details", size: "md",

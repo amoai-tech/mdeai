@@ -396,3 +396,28 @@ html {
 .a2ui-std-table-wrap > .a2ui-std-table {
   min-width: max-content;
 }
+
+/* Rentals only: polish the official CopilotKit Table without replacing its renderer.
+   Keep natural column width for larger comparisons, and preserve its scroll wrapper. */
+[data-testid="rental-comparison-surface"] .a2ui-std-table :is(th, td) {
+  padding: 0.55rem 0.65rem;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  vertical-align: top;
+}
+[data-testid="rental-comparison-surface"] .a2ui-std-table thead th {
+  max-width: 12rem;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  font-weight: 650;
+}
+[data-testid="rental-comparison-surface"] .a2ui-std-table tbody tr:nth-child(-n+2) td {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+[data-testid="rental-comparison-surface"] .a2ui-std-table tbody tr:nth-child(even) {
+  background: var(--muted);
+}
+[data-testid="rental-comparison-surface"] button {
+  min-height: 44px;
+}
