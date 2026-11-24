@@ -1,7 +1,7 @@
 ---
 name: ponytail
 description: >-
-  Use when implementation needs source receipts or a thorough reuse-before-build audit of existing code, installed packages and pinned official APIs. For a quick simpler-path recommendation use efficient.
+  Use when task evidence needs source receipts or a thorough reuse-before-build audit of existing code, installed packages and pinned official APIs. PR bodies use the simpler reference-URL rule in AGENTS.md. For a quick simpler-path recommendation use efficient.
 
 ---
 
@@ -11,7 +11,7 @@ Own one question: **should this code exist?** `tasks` owns execution, `research`
 gathering, and the stack skills own implementation. This skill owns the decision that comes first.
 
 Upstream: `references/official/ponytail/ponytail.md` (vendored read-only, pinned in `upstream.yaml`).
-The ladder and discipline below are the MDE form of it; the source receipt is our addition.
+The ladder and discipline below are the MDE form of it; task-level source evidence is our addition.
 
 ## Scope the complete change before minimizing
 
@@ -66,8 +66,8 @@ For substantial work, before writing custom code:
 9. Write custom code only for the remaining gap.
 10. Leave a runnable verification proving the chosen solution.
 
-Steps 5–7 are also where the source receipt comes from: the source you actually used is the one
-worth recording.
+Steps 5–7 identify material sources worth recording in task evidence. In the PR, use only the
+relevant reference URLs and explain what matters and how to apply them.
 
 ## Bug fixes climb from the root
 
@@ -95,13 +95,18 @@ Trivial one-liners need none. Delete the check only when you delete the logic.
 
 ## Source receipts
 
-Reading a doc is not reusing it. An external source that **materially affects the implementation or
-the decision** produces one row — in the PR body, or in the task's evidence file. Background reading
-gets none: an inflated citation table is documentation noise, and it buries the rows that mattered.
-A source with no row did not influence the work, so it must not be cited as its justification.
+Reading a doc is not reusing it. Record external sources that **materially affect the implementation
+or decision** in the existing task evidence (for example, the Linear issue or its evidence file).
+Background reading needs no receipt. Do not create a separate evidence file just to satisfy a format.
 
-The required fields are the contract in `AGENTS.md` § Evidence rules → Source receipts. This skill
-owns the judgement, which is the part that gets misused:
+**PR descriptions:** Follow `AGENTS.md` § Source evidence, PRs and Done → PR reference URLs:
+exact relevant official URL, what matters, and how to apply it. No formal receipt or disposition
+table is required in the PR body. Test evidence stays separate.
+
+**Detailed task evidence:** Ponytail owns the receipt fields: URL, exact source (file/section/symbol),
+decision, disposition, destination, implementation, verification, and version/commit where relevant.
+Use these fields when documenting a material source in task evidence; do not duplicate the table
+in the PR. The disposition explains the reuse decision:
 
 - **COPY** — verbatim. Keeps its license/attribution and takes no local edits.
 - **ADAPT** — same approach, changed to our conventions. State what changed.
@@ -168,8 +173,8 @@ The first version asked Git "which files are untracked?" — rung 3 skipped, and
 directions (a gitignored migration was applied while the guard said PASS; an uppercase `.SQL` was
 reported but never applied). Mirroring the CLI's own rule fixed both.
 
-Receipt — the Destination is an **open pull request, not `main`**, so that path does not resolve in
-this checkout yet. A receipt may name unlanded work, but it must say so:
+Example task receipt — the Destination is an **open pull request, not `main`**, so that path does
+not resolve in this checkout yet. A receipt may name unlanded work, but it must say so:
 
 | Field | Value |
 | -- | -- |
@@ -189,6 +194,7 @@ this checkout yet. A receipt may name unlanded work, but it must say so:
 
 ## Verification
 
-The rule is satisfied when the diff is the smallest that safely works **and** every consulted source
-has a receipt with a real destination and a real verification command. A task with no receipts and no
-stated rung has not shown that it climbed the ladder — it has only not mentioned it.
+The rule is satisfied when the diff is the smallest that safely works, the chosen rung is stated,
+and each material external source has a real destination and verification in task evidence.
+If no external source materially influenced the change, no receipt is needed. The PR uses the
+simple reference-URL format, not a detailed receipt table. Source proof never replaces test proof.
