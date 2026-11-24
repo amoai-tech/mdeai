@@ -19,8 +19,8 @@ test.use({
  * smallest identity the broker gate accepts.
  */
 test.describe("SAN-1578 /app rentals", { tag: ["@app", "@rentals"] }, () => {
-  // Cold dev compilation of both broker routes takes ~50s in CI shards.
-  test.setTimeout(120_000);
+  // Cold dev compilation now includes shared layout and both broker routes.
+  test.setTimeout(180_000);
   test.skip(!hasE2eEnv(), "Supabase e2e env is not configured");
 
   test("landlord opens the concierge and listings under /app", async ({
@@ -64,7 +64,26 @@ test.describe("SAN-1578 /app rentals", { tag: ["@app", "@rentals"] }, () => {
         page.getByTestId("host-rentals-nav-listings"),
       ).toHaveAttribute("href", "/app/rentals/listings");
 
-      await page.goto("/app/rentals/listings");
+      await expect(page.getByText("Rentals workspace", { exact: true })).toBeVisible();
+      await page.getByTestId("host-rentals-nav-overview").click();
+      await expect(page).toHaveURL(/\/app\/rentals\?mode=overview$/, { timeout: 30_000 });
+      for (const width of [320, 390, 768, 1440]) {
+        await page.setViewportSize({ width, height: 900 });
+        await expect(page.getByTestId("rentals-broker-frame")).toBeVisible();
+        await expect(page.getByTestId("rc-right")).toBeVisible();
+        await expect(page.getByTestId("rc-center")).not.toBeVisible();
+        await expect(page.getByTestId("host-rentals-nav-overview")).toHaveAttribute("aria-current", "page");
+        await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
+      }
+      await page.getByTestId("host-rentals-nav-listings").click();
+      await expect(page).toHaveURL(/\/app\/rentals\/listings$/, { timeout: 30_000 });
+      await expect(page.getByTestId("rentals-broker-frame")).toBeVisible();
+      await expect(page.getByTestId("host-rentals-nav")).toHaveCount(1);
+      await page.goBack();
+      await expect(page.getByTestId("host-rentals-nav-overview")).toHaveAttribute("aria-current", "page");
+      await page.reload();
+      await expect(page.getByTestId("rc-right")).toBeVisible();
+      await page.getByTestId("host-rentals-nav-listings").click();
       const visibleWorkspace = page.locator("#main-content");
       await expect(visibleWorkspace.getByTestId("rentals-listings")).toBeVisible();
       // /app already provides the sole main landmark. A nested main is invalid.

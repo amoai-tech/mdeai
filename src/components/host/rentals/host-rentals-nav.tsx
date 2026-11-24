@@ -59,6 +59,7 @@ export function HostRentalsNav({ basePath = "/host/rentals" }: HostRentalsNavPro
             key={item.href}
             href={item.href}
             data-testid={item.testId}
+            aria-current={active ? "page" : undefined}
             className={cn(
               "rounded-full px-3 py-1.5 text-sm font-medium transition-colors",
               active

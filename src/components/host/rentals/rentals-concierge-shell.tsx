@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
+import { MdeDashboardSurface } from "@/components/copilot/a2ui/mde-dashboard-surface";
 import { ChatProvider } from "@/components/chat/chat-provider";
 import { HostRentalsNav } from "@/components/host/rentals/host-rentals-nav";
 import { RentalsConciergeCenter } from "@/components/host/rentals/rentals-concierge-center";
@@ -23,6 +24,39 @@ export type RentalsConciergeShellProps = {
   basePath?: string;
 };
 
+const RENTALS_HEADER_OPERATIONS = [{
+  version: "1.0",
+  createSurface: {
+    surfaceId: "rentals-workspace-header",
+    components: [
+      { id: "root", component: "Column", gap: 1, children: ["title", "caption"] },
+      { id: "title", component: "Title", size: "xl", text: "Rentals workspace" },
+      { id: "caption", component: "Caption", text: "Manage your listings and viewing requests." },
+    ],
+  },
+}];
+
+/** Persistent /app route frame. Page children own data; no loader or agent runs here. */
+export function RentalsBrokerFrame({ children }: { children: ReactNode }) {
+  return (
+    <ChatProvider persistThread sessionFallback={
+      <div role="status" className="p-4 text-sm text-muted-foreground">Loading your workspace…</div>
+    }>
+      <div data-testid="rentals-broker-frame" className="flex min-w-0 flex-col gap-4">
+        <MdeDashboardSurface
+          surfaceId="rentals-workspace-header"
+          operations={RENTALS_HEADER_OPERATIONS}
+          fallback={<div><h2 className="font-serif text-xl font-semibold">Rentals workspace</h2><p className="text-sm text-muted-foreground">Manage your listings and viewing requests.</p></div>}
+        />
+        <HostRentalsNav basePath="/app/rentals" />
+        <div className="min-w-0">{children}</div>
+        {/* SAN-1685 owns the actual persistent composer. No second chat here. */}
+        <div data-testid="rentals-ask-mde-slot" />
+      </div>
+    </ChatProvider>
+  );
+}
+
 /**
  * SAN-1093 · RE-DES-002 Phase A — broker three-panel shell (kit: RentalsConcierge.jsx).
  * CopilotChat + brokerAgent wire in SAN-1124 / SAN-1035.
@@ -35,13 +69,34 @@ export function RentalsConciergeShell({
   basePath = "/host/rentals",
 }: RentalsConciergeShellProps) {
   const [mobilePane, setMobilePane] = useState<MobilePane>("chat");
+  // The /app route group owns its persistent provider and navigation.
+  // Keep the existing concierge available, but make the chosen Overview the
+  // full-width primary content on every viewport. The legacy host route stays compatible.
+  if (basePath === "/app/rentals" && workspaceMode === "overview") {
+    return (
+      <div data-testid="rentals-concierge" className="min-w-0">
+        <RentalsDynamicWorkspace mode={workspaceMode} dashboard={dashboard} loadError={loadError} />
+      </div>
+    );
+  }
+
+  const workspace = (
+    <>
+      <div className={cn("min-h-0 min-w-0", mobilePane !== "chat" && "max-lg:hidden", "lg:block")}>
+        <RentalsConciergeCenter mode={workspaceMode} />
+      </div>
+      <div className={cn("min-h-0 min-w-0", mobilePane !== "workspace" && "max-lg:hidden", "lg:block")}>
+        <RentalsDynamicWorkspace mode={workspaceMode} dashboard={dashboard} loadError={loadError} />
+      </div>
+    </>
+  );
 
   return (
     <div
       data-testid="rentals-concierge"
       className="flex min-h-[calc(100dvh-7rem)] flex-col gap-3 md:min-h-[calc(100dvh-5rem)]"
     >
-      <HostRentalsNav basePath={basePath} />
+      {basePath !== "/app/rentals" && <HostRentalsNav basePath={basePath} />}
 
       <div
         className={cn(
@@ -60,35 +115,15 @@ export function RentalsConciergeShell({
           <RentalsConversationHistory dashboard={dashboard} />
         </div>
 
-        <ChatProvider persistThread sessionFallback={
-          <div role="status" className="min-h-32 rounded-lg border border-border p-4 text-sm text-muted-foreground lg:col-span-2">
-            Loading your workspace…
-          </div>
-        }>
-          <div
-            className={cn(
-              "min-h-0 min-w-0",
-              mobilePane !== "chat" && "max-lg:hidden",
-              "lg:block",
-            )}
-          >
-            <RentalsConciergeCenter mode={workspaceMode} />
-          </div>
-
-          <div
-            className={cn(
-              "min-h-0",
-              mobilePane !== "workspace" && "max-lg:hidden",
-              "lg:block",
-            )}
-          >
-            <RentalsDynamicWorkspace
-              mode={workspaceMode}
-              dashboard={dashboard}
-              loadError={loadError}
-            />
-          </div>
-        </ChatProvider>
+        {basePath === "/app/rentals" ? workspace : (
+          <ChatProvider persistThread sessionFallback={
+            <div role="status" className="min-h-32 rounded-lg border border-border p-4 text-sm text-muted-foreground lg:col-span-2">
+              Loading your workspace…
+            </div>
+          }>
+            {workspace}
+          </ChatProvider>
+        )}
       </div>
 
       <nav
