@@ -46,7 +46,7 @@ import {
   unappliedRentalRequests,
 } from "@/lib/rental-display";
 import { toDetailRental } from "@/lib/rentals/chat-rental-detail";
-import { parseDetailsCommand, type DetailsCommand } from "@/lib/rentals/details-command";
+import { parseDetailsCommand, parseComparisonActionCommand, type ComparisonActionCommand, type DetailsCommand } from "@/lib/rentals/details-command";
 import { parseRentalPageCommand, resolveRentalPageControl } from "@/lib/rentals/browse-page-control";
 import type { Rental } from "@/mastra/tools/search-rentals";
 import type { ConciergeWorkingMemory } from "@/lib/types";
@@ -267,6 +267,7 @@ function LiveComposer({
   onTextAnswer,
   context,
   onOpenDetails,
+  onComparisonAction,
   hasSelectedListing,
   onClearSelection,
 }: {
@@ -274,6 +275,7 @@ function LiveComposer({
   onTextAnswer?: (answer: string | null) => void;
   context?: RentalAskContext;
   onOpenDetails?: (target: DetailsCommand) => RentalAskDetailsOutcome;
+  onComparisonAction?: (target: ComparisonActionCommand) => RentalAskDetailsOutcome;
   hasSelectedListing?: boolean;
   onClearSelection?: () => void;
 }) {
@@ -377,7 +379,8 @@ function LiveComposer({
   const signedOut = !sessionLoading && !user;
   const busy = isLoading || sending;
   // Supported native URL commands need no agent connection or model run.
-  const canUsePageCommand = parseRentalPageCommand(draft.trim()) !== null;
+  const canUsePageCommand = parseRentalPageCommand(draft.trim()) !== null ||
+    Boolean(onOpenDetails && parseDetailsCommand(draft)) || Boolean(onComparisonAction && parseComparisonActionCommand(draft));
   const canSend = draft.trim().length > 0 && !busy && !signedOut && (isReady || canUsePageCommand);
 
   const query = searchParams?.toString() ?? "";
@@ -391,6 +394,16 @@ function LiveComposer({
     const raw = draft;
     const text = raw.trim();
     if (!text || busy || signedOut || sendInFlight.current) return;
+
+    const comparisonAction = onComparisonAction ? parseComparisonActionCommand(text) : null;
+    if (comparisonAction && onComparisonAction) {
+      const outcome = onComparisonAction(comparisonAction);
+      onTextAnswer?.(null);
+      setDraft("");
+      setError(outcome.ok ? null : outcome.message);
+      setRetryable(false);
+      return;
+    }
 
     // A clear "show me the details" command is a frontend action, not a model turn. The model
     // proved non-deterministic here on production (it sometimes ran a new search and replaced the
@@ -636,7 +649,7 @@ function LiveComposer({
       sendInFlight.current = false;
       if (mounted.current) setSending(false);
     }
-  }, [agent, appendMessage, busy, draft, signedOut, isReady, onResults, onTextAnswer, onOpenDetails, context, setState, router, searchParams]);
+  }, [agent, appendMessage, busy, draft, signedOut, isReady, onResults, onTextAnswer, onOpenDetails, onComparisonAction, context, setState, router, searchParams]);
 
   const onStop = useCallback(() => {
     if (sendInFlight.current) cancelled.current = true;
@@ -710,6 +723,7 @@ export function RentalAskComposer({
   onTextAnswer,
   context,
   onOpenDetails,
+  onComparisonAction,
   hasSelectedListing,
   onClearSelection,
 }: {
@@ -717,6 +731,7 @@ export function RentalAskComposer({
   onTextAnswer?: (answer: string | null) => void;
   context?: RentalAskContext;
   onOpenDetails?: (target: DetailsCommand) => RentalAskDetailsOutcome;
+  onComparisonAction?: (target: ComparisonActionCommand) => RentalAskDetailsOutcome;
   hasSelectedListing?: boolean;
   onClearSelection?: () => void;
 } = {}) {
@@ -730,6 +745,7 @@ export function RentalAskComposer({
       onTextAnswer={onTextAnswer}
       context={context}
       onOpenDetails={onOpenDetails}
+      onComparisonAction={onComparisonAction}
       hasSelectedListing={hasSelectedListing}
       onClearSelection={onClearSelection}
     />

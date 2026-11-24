@@ -233,6 +233,7 @@ export const ScheduleViewingModal = ({ fullHeightMobile = false }: { fullHeightM
       style={keyboardInset ? { paddingBottom: keyboardInset + (fullHeight ? 0 : 16) } : undefined}
       role="presentation"
       data-testid="schedule-viewing-modal"
+      data-listing-id={scheduleTarget.listingId}
       onClick={(e) => {
         if (e.target === e.currentTarget) closeScheduleViewing();
       }}

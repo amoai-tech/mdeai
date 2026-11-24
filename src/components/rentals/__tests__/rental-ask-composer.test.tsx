@@ -268,6 +268,28 @@ describe("RentalAskComposer (SAN-1636) · a stopped run must not fail the next q
 });
 
 describe("RentalAskComposer (SAN-1421)", () => {
+  it("routes option commands locally even while connecting; failed map actions are not success text", async () => {
+    coagent.isReady = false;
+    const onTextAnswer = vi.fn();
+    const onOpenDetails = vi.fn((): RentalAskDetailsOutcome => ({ ok: true }));
+    const onComparisonAction = vi.fn((target): RentalAskDetailsOutcome =>
+      target.action === "map" ? { ok: false, message: "This apartment does not have a recorded map location." } : { ok: true });
+    render(<RentalAskComposer onOpenDetails={onOpenDetails} onComparisonAction={onComparisonAction} onTextAnswer={onTextAnswer} />);
+    type("Show Option #2 on the map.");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+    expect(onComparisonAction).toHaveBeenCalledWith({ action: "map", index: 2 });
+    expect(screen.getByTestId("rental-ask-error").textContent).toContain("does not have a recorded map location");
+    expect(onTextAnswer).toHaveBeenCalledWith(null);
+    type("Open Details for Option #1.");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+    expect(onOpenDetails).toHaveBeenCalledWith({ index: 1, comparison: true });
+    type("Schedule a viewing for Option #2.");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+    expect(onComparisonAction).toHaveBeenLastCalledWith({ action: "viewing", index: 2 });
+    expect(screen.queryByTestId("rental-ask-error")).toBeNull();
+    expect(chat.appendMessage).not.toHaveBeenCalled();
+  });
+
   it("opens the first apartment locally for the exact details command, without a model search", async () => {
     const onResults = vi.fn();
     const onOpenDetails = vi.fn((): RentalAskDetailsOutcome => ({ ok: true }));

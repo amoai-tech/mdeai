@@ -4,7 +4,7 @@ import { useAgentContext } from "@copilotkit/react-core/v2";
 import { useRentalFastPath } from "@/components/chat/rental-fast-path-context";
 import { normalizeToolEnvelope } from "@/lib/normalize-tool-envelope";
 import { isRentalA2UIId } from "@/lib/rentals/a2ui-id";
-import { RENTAL_A2UI_CONTEXT_DESCRIPTION, RENTAL_HINT_MAX, RENTAL_RESULT_COUNT_CONTEXT_DESCRIPTION } from "@/lib/rentals/a2ui-context";
+import { RENTAL_A2UI_CONTEXT_DESCRIPTION, RENTAL_HINT_MAX, RENTAL_RESULT_COUNT_CONTEXT_DESCRIPTION, RENTAL_COMPARISON_CONTEXT_DESCRIPTION } from "@/lib/rentals/a2ui-context";
 type RentalIdRow = { id: string };
 
 /** IDs only: no untrusted titles, prices or instructions enter the prompt. */
@@ -34,7 +34,7 @@ export function rentalHintSource(
   return toolResult ?? toolResults?.[0] ?? null;
 }
 
-export function RentalA2UIContext({ visibleRows }: { visibleRows?: readonly RentalIdRow[] } = {}) {
+export function RentalA2UIContext({ visibleRows, comparisonIds }: { visibleRows?: readonly RentalIdRow[]; comparisonIds?: readonly string[] } = {}) {
   const { toolResult, toolResults } = useRentalFastPath();
   const latest = rentalHintSource(toolResult, toolResults);
   const envelopeRows = latest ? normalizeToolEnvelope(latest).results : undefined;
@@ -54,6 +54,10 @@ export function RentalA2UIContext({ visibleRows }: { visibleRows?: readonly Rent
   useAgentContext({
     description: RENTAL_RESULT_COUNT_CONTEXT_DESCRIPTION,
     value: rentalA2UIRenderedCountValue(rows),
+  });
+  useAgentContext({
+    description: RENTAL_COMPARISON_CONTEXT_DESCRIPTION,
+    value: JSON.stringify((comparisonIds ?? []).filter((id) => rows?.some((row) => row.id === id) && isRentalA2UIId(id)).slice(0, 5)),
   });
   return null;
 }

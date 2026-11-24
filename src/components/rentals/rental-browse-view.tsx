@@ -22,6 +22,7 @@ import {
 import { LeadConfirmationBanner } from "@/components/chat/lead-confirmation-banner";
 import { RentalRecommendationsSurface } from "@/components/copilot/a2ui/rental-recommendations-surface";
 import { ComparedRentalOptions, RentalComparisonSurface, useComparedRentalIds } from "@/components/copilot/a2ui/rental-comparison-surface";
+import { canOpenNativeViewingReview } from "@/components/copilot/a2ui/mde-ui-catalog";
 import { RentalComparisonPageActions, RentalComparisonStatus, useRentalComparisonStatus } from "@/components/rentals/rental-comparison-page-actions";
 import { RentalA2UIContext } from "@/components/chat/rental-a2ui-context";
 import { RentalFilterDraftProvider } from "@/components/rentals/rental-filter-draft";
@@ -32,16 +33,17 @@ import {
 } from "@/components/chat/rental-fast-path-context";
 import { RentalUiProvider, useRentalUi } from "@/components/chat/rental-ui-context";
 import { useOptionalConciergeCoAgent } from "@/components/chat/concierge-coagent-context";
+import { FocusMapPinAction } from "@/components/copilot/focus-map-pin-action";
 import { RentalDetailsFrontendTool } from "@/components/rentals/rental-details-tool";
 import { RentalPageControlTool } from "@/components/browse/page-filter-tools";
 import { isDeterministicE2E } from "@/lib/deterministic-e2e";
-import { resolveRentalForDetails } from "@/lib/rentals/details-target";
+import { resolveComparedRental, resolveRentalForDetails } from "@/lib/rentals/details-target";
 import { bookingReviewHref } from "@/lib/rentals/booking-review-url";
 import { duplicateListingNotes } from "@/lib/rentals/duplicate-listings";
 import { askFilterSignature } from "@/lib/rentals/ask-results-storage";
 import { useRentalAskResults } from "@/components/rentals/use-rental-ask-results";
 import { useOptionalThreadNav } from "@/lib/chat/thread-nav-context";
-import type { DetailsCommand } from "@/lib/rentals/details-command";
+import type { ComparisonActionCommand, DetailsCommand } from "@/lib/rentals/details-command";
 import { ScheduleViewingModal } from "@/components/modals/schedule-viewing-modal";
 import { EmptyState } from "@/components/empty/empty-state";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -98,7 +100,7 @@ function RentalBrowseViewInner({
   previewMode = false,
 }: RentalBrowseViewProps) {
   const router = useRouter();
-  const { selectedPinId, setSelectedPinId, panToPin } = useMapContext();
+  const { pins: currentMapPins, selectedPinId, setSelectedPinId, panToPin } = useMapContext();
   // The inline composer and this Details tool share the one concierge provider. Without it
   // (previews, deterministic E2E, isolated tests) the tool is not registered at all.
   const coAgent = useOptionalConciergeCoAgent();
@@ -167,6 +169,7 @@ function RentalBrowseViewInner({
   // is plain local state, so closing it can never reset the filters, the card list or its scroll.
   // If a new search drops the open rental, `detailsRental` becomes null and the panel closes.
   const isLgUp = useIsLgUp();
+  const [mobileMapOpen, setMobileMapOpen] = useState(false);
   const [detailsId, setDetailsId] = useState<string | null>(null);
   const [comparisonErrorMessage, setComparisonErrorMessage] = useRentalComparisonStatus(shownResults);
   // SAN-1611 — an AI-proposed stay. One owner for the tool: this view mounts once, while the
@@ -200,15 +203,40 @@ function RentalBrowseViewInner({
       if (shownResults.length === 0) {
         return { ok: false, message: "No apartments are shown yet. Ask MDE to search first." };
       }
-      const rental = resolveRentalForDetails(shownResults, target);
+      const rental = target.comparison
+        ? resolveComparedRental(shownResults, comparedIds, target.index)
+        : resolveRentalForDetails(shownResults, target);
       if (!rental) {
-        return { ok: false, message: `There is no apartment ${target.index} in the current results.` };
+        return { ok: false, message: target.comparison ? "That option is not in the current comparison." : `There is no apartment ${target.index} in the current results.` };
       }
       openDetailsFor(rental);
       return { ok: true };
     },
-    [shownResults, openDetailsFor],
+    [shownResults, comparedIds, openDetailsFor],
   );
+  const showRentalOnMap = (rental: Rental): RentalAskDetailsOutcome => {
+    const pin = rentalToMapPin(rental);
+    if (!pin || !currentMapPins.some((candidate) => candidate.id === pin.id)) {
+      return { ok: false, message: "This apartment does not have a recorded map location." };
+    }
+    setDetailsId(null);
+    panToPin(pin.id);
+    if (!isLgUp) setMobileMapOpen(true);
+    // Selection is handled by the real map reducer. Do not claim the camera
+    // has settled, or generate an assistant success message.
+    return { ok: true };
+  };
+  const runComparisonAction = (target: ComparisonActionCommand): RentalAskDetailsOutcome => {
+    const row = resolveComparedRental(shownResults, comparedIds, target.index);
+    if (!row) return { ok: false, message: "That option is not in the current comparison." };
+    if (target.action === "map") return showRentalOnMap(row);
+    if (!canOpenNativeViewingReview(row, !previewMode)) {
+      return { ok: false, message: "This preview has no saved apartment record for a viewing request." };
+    }
+    setDetailsId(null);
+    openScheduleViewing({ listingId: row.id, title: row.title, neighborhood: row.neighborhood });
+    return { ok: true };
+  };
   const scheduleFor = (r: Rental) => () =>
     openScheduleViewing({ listingId: r.id, title: r.title, neighborhood: r.neighborhood });
 
@@ -238,7 +266,7 @@ function RentalBrowseViewInner({
         detailSearch={detailSearch}
         testId={`rental-card-${r.id}`}
         selected={mappedIds.has(pinId) && selectedPinId === pinId}
-        onSelect={mappedIds.has(pinId) ? () => panToPin(pinId) : undefined}
+        onSelect={mappedIds.has(pinId) ? () => { showRentalOnMap(r); } : undefined}
         onPreview={mappedIds.has(pinId) ? () => setSelectedPinId(pinId) : undefined}
         onSchedule={scheduleFor(r)}
         duplicateNote={duplicateNotes.get(r.id)}
@@ -258,15 +286,24 @@ function RentalBrowseViewInner({
       {/* F8 — Details on an AI-shown card opens this page's own Details panel. */}
       <RentalVenueDetailBridge results={shownResults} openDetailsFor={openDetailsFor} />
       {coAgent && !isDeterministicE2E() ? (
-        <RentalDetailsFrontendTool results={shownResults} onOpen={openDetailsFor} />
+        <>
+          <RentalDetailsFrontendTool results={shownResults} onOpen={openDetailsFor} />
+          <FocusMapPinAction onPageFocus={(pinId) => {
+            const row = resolveRentalForDetails(shownResults, { listingId: pinId });
+            const outcome: RentalAskDetailsOutcome = row ? showRentalOnMap(row) :
+              { ok: false, message: "That apartment is not in the current results." };
+            setComparisonErrorMessage(outcome.ok ? null : outcome.message);
+            return outcome;
+          }} />
+        </>
       ) : null}
       {/* SAN-1656 — the page's own authorized rows feed the fast-path context the
           catalog already resolves cards from, and the existing A2UI context
           publishes their IDs. No second query and no second data path. */}
-      {coAgent && !isDeterministicE2E() ? <RentalA2UIContext visibleRows={shownResults} /> : null}
+      {coAgent && !isDeterministicE2E() ? <RentalA2UIContext visibleRows={shownResults} comparisonIds={comparedIds} /> : null}
       {coAgent && !isDeterministicE2E() ? (
         <RentalComparisonPageActions
-          results={shownResults}
+          results={shownResults.filter((row) => comparedIds.includes(row.id))}
           onStatusChange={setComparisonErrorMessage}
           onOpenDetails={openDetailsFor}
           onScheduleViewing={(rental) => openScheduleViewing({
@@ -287,7 +324,7 @@ function RentalBrowseViewInner({
         activeSlug="rentals"
         title="Rentals in Medellín"
         subtitle={subtitle}
-        mobileMapTrigger={<BrowseMapSheet raised reserveMobileNav />}
+        mobileMapTrigger={<BrowseMapSheet raised reserveMobileNav open={!isLgUp && mobileMapOpen} onOpenChange={setMobileMapOpen} />}
         mobileFilterBar={previewMode ? (
           <p className="text-sm text-muted-foreground">Preview only — filters and bookings are disabled.</p>
         ) : <RentalMobileFilters neighborhood={neighborhood} beds={beds} from={from} through={through}
@@ -329,6 +366,7 @@ function RentalBrowseViewInner({
             onResults={acceptResults}
             onTextAnswer={acceptTextAnswer}
             onOpenDetails={openDetailsFromCommand}
+            onComparisonAction={runComparisonAction}
             context={{ neighborhood, beds, from, through, selectedListingId: selectedForAskId ?? detailsRental?.id ?? null }}
             hasSelectedListing={Boolean(selectedForAskId ?? detailsRental?.id)}
             onClearSelection={() => {
@@ -341,11 +379,11 @@ function RentalBrowseViewInner({
         <section className="mt-4" aria-label="Rental listings">
           {/* SAN-1656 — the named AI recommendations panel. It renders nothing
               until Ask MDE targets it, so native results/map/Details are unchanged. */}
-          {!comparedIds.length ? <RentalRecommendationsSurface /> : null}
+          <RentalRecommendationsSurface comparisonActive={comparedIds.length > 0} />
           <RentalComparisonSurface visible={comparedIds.length > 0}>
             {comparedIds.length > 0 ? <ComparedRentalOptions ids={comparedIds} results={shownResults} selectedPinId={selectedPinId}
               selectedForAskId={selectedForAskId} onAskSelect={toggleAskSelection}
-              onSelectMap={(row) => { const pin = rentalToMapPin(row); if (pin) panToPin(pin.id); }} /> : null}
+              onSelectMap={(row) => { const outcome = showRentalOnMap(row); setComparisonErrorMessage(outcome.ok ? null : outcome.message); }} /> : null}
           </RentalComparisonSurface>
           <RentalComparisonStatus message={comparisonErrorMessage ?? (comparisonStale ? "This comparison no longer matches the displayed listings. Search again and compare the latest results." : null)} />
           {/* A saved viewing request must be visible where it was made, not only in the chat. */}

@@ -8,7 +8,7 @@ import { clearsFurnishingPreference } from "@/lib/rental-query-parser";
  * the page perform the same frontend action deterministically for the clear command; anything it
  * cannot resolve (a named apartment, "details about furnished places") still goes to the agent.
  */
-export type DetailsCommand = { index: number };
+export type DetailsCommand = { index: number; comparison?: true };
 
 const ORDINALS: Record<string, number> = {
   first: 1, second: 2, third: 3, fourth: 4, fifth: 5,
@@ -37,6 +37,8 @@ export function parseDetailsCommand(text: string): DetailsCommand | null {
 
   // Only a clear position ("apartment 2", "2", "2nd", "second apartment"). An address like
   // "Calle 10 #42-15" also contains a number and must not be read as position 10.
+  const option = tail.match(/^option\s*#?\s*(\d+)$/i);
+  if (option) return { index: Number(option[1]), comparison: true };
   const numeric =
     tail.match(/^(?:apartment|listing|number|#)\s*(\d+)$/i) ??
     tail.match(/^(\d+)(?:st|nd|rd|th)?(?:\s+(?:apartment|listing))?$/i);
@@ -57,5 +59,17 @@ export function parseDetailsCommand(text: string): DetailsCommand | null {
   }
 
   // A named apartment ("details for Calle 10") is not resolved blindly here.
+  return null;
+}
+
+/** Explicit comparison-only UI commands. Do not consume questions, searches,
+ * combined requests, or viewing requests with date/time instructions. */
+export type ComparisonActionCommand = { action: "map" | "viewing"; index: number };
+export function parseComparisonActionCommand(text: string): ComparisonActionCommand | null {
+  const raw = text.trim().replace(/[.!]+$/, "").trim();
+  const map = raw.match(/^(?:please\s+)?(?:show|focus|locate)\s+option\s*#?\s*(\d+)\s+on\s+(?:the\s+)?map$/i);
+  const viewing = raw.match(/^(?:please\s+)?(?:schedule|request)\s+(?:a\s+)?viewing\s+(?:for|of)\s+option\s*#?\s*(\d+)$/i);
+  if (map) return { action: "map", index: Number(map[1]) };
+  if (viewing) return { action: "viewing", index: Number(viewing[1]) };
   return null;
 }

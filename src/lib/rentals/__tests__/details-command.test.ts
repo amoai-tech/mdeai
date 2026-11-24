@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseDetailsCommand } from "@/lib/rentals/details-command";
+import { parseDetailsCommand, parseComparisonActionCommand } from "@/lib/rentals/details-command";
 
 describe("parseDetailsCommand", () => {
   it.each([
@@ -38,5 +38,15 @@ describe("parseDetailsCommand", () => {
     expect(parseDetailsCommand("Show me the details for Calle 10 #42-15.")).toBeNull();
     expect(parseDetailsCommand("Show me details about furnished apartments.")).toBeNull();
     expect(parseDetailsCommand("Find furnished apartments in Laureles.")).toBeNull();
+  });
+});
+
+describe("explicit comparison actions", () => {
+  it("parses option numbers without conflating them with search positions", () => {
+    expect(parseDetailsCommand("Open Details for Option #1.")).toEqual({ index: 1, comparison: true });
+    expect(parseComparisonActionCommand("Show Option #2 on the map.")).toEqual({ action: "map", index: 2 });
+    expect(parseComparisonActionCommand("Schedule a viewing for Option #2.")).toEqual({ action: "viewing", index: 2 });
+    expect(parseComparisonActionCommand("Schedule a viewing for Option #2 tomorrow at 3pm")).toBeNull();
+    expect(parseComparisonActionCommand("Is Option #2 on the map?")).toBeNull();
   });
 });

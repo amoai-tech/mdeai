@@ -333,6 +333,10 @@ test.describe("SAN-1681 · official rental comparison A2UI Table", () => {
       if (await firstMap.count()) {
         await firstMap.click();
         await expect(optionCards.nth(0)).toHaveAttribute("data-selected", "true");
+        if (width === 390) {
+          await expect(page.getByTestId("browse-map-close")).toBeVisible();
+          await page.getByTestId("browse-map-close").click();
+        }
       }
 
       // The real official Button must open the Details UI for the first *new* card.
@@ -352,6 +356,104 @@ test.describe("SAN-1681 · official rental comparison A2UI Table", () => {
         const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
         expect(overflow, "comparison must not cause page-level mobile overflow").toBeLessThanOrEqual(2);
       }
+    });
+  }
+});
+
+test.describe("SAN-1694 · sequential renter prompts", () => {
+  test.skip(!enabled, "Explicit MDE_COMPARE_TABLE_QA=1 required.");
+  for (const width of [1440, 390] as const) {
+    test(`${width}px: seven prompts preserve the current options and real action outcomes`, async ({ qaRolePage: page }) => {
+      test.setTimeout(360_000);
+      await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+      expect((await page.goto("/rentals", { waitUntil: "domcontentloaded" }))?.ok()).toBe(true);
+      const renter = asUser(await getTestSession(resolveQaRoleEmail("renter")!, { requireExisting: true }));
+      const input = page.locator('[data-testid="rental-ask-composer"]:visible #rental-ask-input').first();
+      const send = page.getByTestId("rental-ask-send");
+      const surface = page.getByTestId("rental-comparison-surface");
+      const options = page.getByTestId("rental-compared-options").locator("[data-listing-id]");
+      const answer = page.getByTestId("rental-ask-text-answer");
+      const askError = page.getByTestId("rental-ask-error");
+      const details = page.getByTestId(width === 390 ? "rental-details-sheet" : "rental-details-panel");
+      const modal = page.getByTestId("schedule-viewing-modal");
+      const resultIds = async () => JSON.parse((await page.getByTestId("rentals-grid").getAttribute("data-result-ids")) ?? "[]") as string[];
+      const optionIds = async () => options.evaluateAll((elements) => elements.map((e) => e.getAttribute("data-listing-id")!));
+      const ask = async (text: string) => {
+        await expect(input).toBeVisible({ timeout: 40_000 });
+        await input.fill(text);
+        await expect(send).toBeEnabled({ timeout: 45_000 });
+        await send.click();
+        await expect(input).toBeEmpty({ timeout: 20_000 });
+        await expect(send).toBeVisible({ timeout: 120_000 });
+      };
+      const read = async (ids: string[]) => {
+        const { data, error } = await renter.from("apartments")
+          .select("id,title,neighborhood,bedrooms,price_monthly,currency,latitude,longitude,amenities").in("id", ids);
+        expect(error).toBeNull();
+        expect(data).toHaveLength(ids.length);
+        return data!;
+      };
+      await ask("Find 2BR apartments in Laureles and compare the first two.");
+      await expect(surface).toBeVisible({ timeout: 120_000 });
+      const initial = await resultIds();
+      expect(await optionIds()).toEqual(initial.slice(0, 2));
+      expect((await read(initial)).every((r) => r.bedrooms === 2 && r.neighborhood?.toLowerCase().includes("laureles"))).toBe(true);
+      // Positive map path, if the actual authorized first pair includes a valid pin.
+      const firstMappable = options.locator('button[aria-label*="on map"]').first();
+      if (await firstMappable.count()) {
+        const id = await firstMappable.locator("xpath=ancestor::*[@data-listing-id][1]").getAttribute("data-listing-id");
+        await firstMappable.click();
+        await expect(page.getByTestId("rental-compared-options").locator(`[data-listing-id="${id}"]`)).toHaveAttribute("data-selected", "true");
+        if (width === 390) {
+          await expect(page.getByTestId("browse-map-close")).toBeVisible();
+          await page.getByTestId("browse-map-close").click();
+        }
+      }
+      await ask("Show only apartments under COP 3 million per month.");
+      await expect(surface).toBeHidden();
+      const filtered = await resultIds();
+      const records = await read(filtered);
+      expect(records.length).toBeGreaterThanOrEqual(2);
+      expect(records.every((r) => r.currency === "COP" && Number(r.price_monthly) > 0 && Number(r.price_monthly) <= 3000000)).toBe(true);
+      await ask("Compare the two cheapest apartments.");
+      await expect(surface).toBeVisible({ timeout: 120_000 });
+      const ids = await optionIds();
+      expect(ids).toHaveLength(2);
+      expect(new Set(ids).size).toBe(2);
+      expect(ids.every((id) => filtered.includes(id))).toBe(true);
+      const selected = ids.map((id) => records.find((r) => r.id === id)!);
+      const twoCheapest = records.map((r) => Number(r.price_monthly)).sort((a,b) => a-b).slice(0,2);
+      expect(selected.map((r) => Number(r.price_monthly)).sort((a,b) => a-b)).toEqual(twoCheapest);
+      await ask("Which apartment has a balcony?");
+      await expect(answer).toBeVisible();
+      const balcony = records.some((r) => Array.isArray(r.amenities) && r.amenities.some((a) => /balc[oó]n|balcony/i.test(String(a))));
+      if (!balcony) await expect(answer).toContainText(/not (?:record|specif|mention)|none|no .*balcon|unknown|not confirmed/i);
+      expect(await optionIds()).toEqual(ids);
+      await ask("Show Option #2 on the map.");
+      const option2 = options.nth(1);
+      const mapped = Boolean(await option2.getAttribute("data-pin-id"));
+      if (mapped) {
+        await expect(option2).toHaveAttribute("data-selected", "true");
+        if (width === 390) {
+          await expect(page.getByTestId("browse-map-close")).toBeVisible();
+          await page.getByTestId("browse-map-close").click();
+        }
+      } else {
+        await expect(askError).toContainText("does not have a recorded map location");
+        await expect(page.getByTestId("browse-map-close")).toBeHidden();
+      }
+      await ask("Open Details for Option #1.");
+      await expect(details).toBeVisible();
+      await expect(details).toHaveAttribute("data-listing-id", ids[0]);
+      await page.getByTestId("rental-details-close").click();
+      await expect(details).toBeHidden();
+      await ask("Schedule a viewing for Option #2.");
+      await expect(modal).toBeVisible();
+      await expect(modal).toHaveAttribute("data-listing-id", ids[1]);
+      // Never submit a viewing or send contact data from this read-only preview test.
+      await page.keyboard.press("Escape");
+      await expect(modal).toBeHidden();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(2);
     });
   }
 });

@@ -9,11 +9,17 @@ import { AppErrorBoundary } from "@/components/errors/error-boundary";
 import { MapsShell } from "@/components/maps/MapProvider";
 import { ChatMap } from "@/components/maps/ChatMap";
 
-export function BrowseMapSheet({ raised = false, inline = false, reserveMobileNav = false }: { raised?: boolean; inline?: boolean; reserveMobileNav?: boolean }) {
-  const [open, setOpen] = useState(false);
+export function BrowseMapSheet({ raised = false, inline = false, reserveMobileNav = false, open: controlledOpen, onOpenChange: changeOpen }: { raised?: boolean; inline?: boolean; reserveMobileNav?: boolean; open?: boolean; onOpenChange?: (open: boolean) => void }) {
+  const [localOpen, setLocalOpen] = useState(false);
+  const open = controlledOpen ?? localOpen;
   const [mapLoaded, setMapLoaded] = useState(false);
   const markLoaded = useCallback(() => setMapLoaded(true), []);
-  const onOpenChange = (next: boolean) => { setOpen(next); if (next) setMapLoaded(false); };
+  const onOpenChange = (next: boolean) => { if (changeOpen) changeOpen(next); else setLocalOpen(next); };
+  const [previousOpen, setPreviousOpen] = useState(open);
+  if (previousOpen !== open) {
+    setPreviousOpen(open);
+    if (!open) setMapLoaded(false);
+  }
   const [composerHeight, setComposerHeight] = useState<number | null>(null);
   // The inline conversation grows as turns arrive. Measure the actual composer
   // instead of assuming its height is always six rem (which overlays chat text).
