@@ -20,27 +20,36 @@ GIT_COMMON=$(cd "$(git rev-parse --git-common-dir)" && pwd -P)
 git worktree list
 # The configured MDE host always uses /home/sk/mde-worktrees.
 # Other hosts must set MDE_WORKTREE_ROOT to an external directory first.
+unset WT_ROOT
 if [ -d /home/sk/mdeai ]; then
   WT_ROOT=/home/sk/mde-worktrees
-else
-  : "${MDE_WORKTREE_ROOT:?Set an external MDE_WORKTREE_ROOT on this host}"
+elif [ -n "${MDE_WORKTREE_ROOT:-}" ]; then
   WT_ROOT="$MDE_WORKTREE_ROOT"
+else
+  printf '%s\n' 'Set an external MDE_WORKTREE_ROOT on this host.' >&2
 fi
-test -d "$WT_ROOT" || mkdir -p "$WT_ROOT"
+# Keep the root unset if directory creation fails.
+if [ -n "${WT_ROOT:-}" ]; then
+  mkdir -p "$WT_ROOT" || unset WT_ROOT
+fi
 ```
 
 If already in a linked worktree, continue there unless the task requires a different base. Do not create nested worktrees.
 
 ## Manual fallback
 
-**Run the following example only on the configured MDE `/home/sk` host.** Other hosts must set an explicitly configured external worktree directory and substitute that path.
+Run the preflight above first, on the configured MDE host or with an explicitly configured external root on other hosts.
 
 ```bash
 # Run after the preflight above, in the same shell.
-: "${WT_ROOT:?Run the worktree preflight first in this shell}"
-git fetch origin
-git worktree add "$WT_ROOT/san-NNN-slug" -b ai/san-NNN-slug <resolved-base>
-git -C "$WT_ROOT/san-NNN-slug" status --short
+# Replace origin/main with the resolved base for stacked work.
+if [ -n "${WT_ROOT:-}" ] && [ -d "$WT_ROOT" ]; then
+  git fetch origin &&
+    git worktree add "$WT_ROOT/san-NNN-slug" -b ai/san-NNN-slug origin/main &&
+    git -C "$WT_ROOT/san-NNN-slug" status --short
+else
+  printf '%s\n' 'Worktree root missing. Run the preflight first.' >&2
+fi
 ```
 
 The `/home/sk/mde-worktrees/` rule applies on the configured MDE development host. Do not relocate existing worktrees. On other hosts use an explicitly configured external worktree directory; resolve the current Git repository root and base instead of assuming the checkout path.

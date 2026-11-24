@@ -32,14 +32,16 @@ Follow AGENTS.md and .claude/skills/tasks/references/github-pr.md; preserve exis
 
 **Risks / limitations:** [What could fail, what is untested, or N/A.]
 
+**Non-goals:** [What this PR deliberately does not change.]
+
 ## 3. User Journey & Architecture
 
-**User journey:** [Show what the user does and what happens, using a Mermaid diagram. N/A if unchanged.]
+**User journey:** N/A — unchanged.
 
-**Architecture:** [Show how the app, server, agent and database connect, as relevant. N/A if unchanged.]
+**Architecture:** N/A — unchanged.
 
 <!-- Agent instructions:
-For meaningful user journey or architecture changes, embed real Mermaid code blocks directly in the PR description. Use one diagram if it explains both; add a second if needed. Include important failure/retry paths. Verify the routes, components and data sources. Diagrams explain the design; tests prove it works.
+For meaningful user journey or architecture changes, replace N/A with the actual flow and embed real Mermaid code blocks directly in the PR description. Use one diagram if it explains both; add a second if needed. Include important failure/retry paths. Verify the routes, components and data sources. Diagrams explain the design; tests prove it works.
 Examples (uncomment ONLY after replacing all example nodes with verified paths):
 ~~~mermaid
 flowchart LR
