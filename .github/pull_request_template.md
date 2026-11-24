@@ -2,6 +2,9 @@
 MDE AI — one clear, testable outcome per PR. Remove unused prompts; explain N/A.
 Before merge, leave post-merge boxes unchecked. After merge, record actual results in the PR body.
 Follow AGENTS.md and .claude/skills/tasks/references/github-pr.md; preserve existing PR body edits.
+Keep all eight numbered sections, with each checklist item on its own Markdown line.
+Customize Sections 6–8 for the actual task; retain the recovery plan and final post-merge results table.
+Read back the saved GitHub body to verify formatting, details and prior evidence survived.
 -->
 
 ## 1. Purpose
@@ -9,6 +12,8 @@ Follow AGENTS.md and .claude/skills/tasks/references/github-pr.md; preserve exis
 **Purpose:** [What problem does this PR solve, and why is it needed?]
 
 **Expected outcome:** [What will work better for users?]
+
+**Do we need this? / Production impact:** [Why now; what happens without it; runtime, tests-only, docs-only or infrastructure; deployment needed or N/A.]
 
 **Real-world example:** [Who uses it, what they do, and what happens. Include saved data if relevant.]
 
@@ -20,7 +25,7 @@ Follow AGENTS.md and .claude/skills/tasks/references/github-pr.md; preserve exis
 ## 2. Changes & Improvements
 
 **Implemented**
-- [Main change]
+- [Main change: previous behavior → new behavior → practical benefit]
 - [Second change, if needed]
 - [Third change, if needed]
 
@@ -87,33 +92,44 @@ flowchart LR
 
 **Not yet verified:** [What still needs testing, or None.]
 
+### Pre-merge test commands
+
+[Exact task-specific commands, required environment/setup and expected results. Use the current package scripts and existing CI; do not prefill generic install/full-suite commands or repeat checks already proven on the exact head.]
+
 <!-- Use PASS / FAIL / PENDING / NOT RUN / N/A and explain skipped checks. For each PASS record the environment, exact tested SHA and evidence. Old green checks do not prove the latest commit. Add separate rows for each command run, including lint/typecheck/build. -->
 
 ## 7. Pre-Merge Checklist
 
 **Complete before merging:**
-- [ ] **Requirements:** Meet the agreed task and success criteria. Do not mark partial work complete.
-- [ ] **Code review:** Keep changes small and correct. Reuse existing code; no unrelated changes or Phase A business approval/eligibility blockers.
-- [ ] **Review comments:** Check each finding against current code. Fix and test real issues; explain incorrect ones. Resolve threads after proof.
-- [ ] **Tests & CI:** Focused tests and required GitHub checks pass on the latest PR commit (or its GitHub-tested merge commit). Check security, data and retries when affected.
-- [ ] **Preview:** Try the changed feature. For UI changes, test desktop and 390px mobile. Use N/A for docs-only work.
-- [ ] **Safety & approval:** Protect login, data access (RLS), secrets and saved data. Retries must not create duplicates. Meet required GitHub approvals and branch rules.
-- [ ] **Worktree:** Create new MDE worktrees on the development host under `/home/sk/mde-worktrees/`. Preserve other work and uncommitted changes.
+
+<!-- Replace generic descriptions with the actual checks, affected route/component/data owner, expected result and evidence or pending status. Keep each checkbox on its own line. Use N/A with a reason, not a bare label. -->
+- [ ] **1. Requirements & scope:** Confirm the verified Linear outcome, changed behavior, measurable success criteria and remaining work. Do not mark partial work complete.
+- [ ] **2. Code & architecture review:** Name the affected components, API/agent and data owners. Verify reuse, small changes and no unrelated changes or Phase A business approval/eligibility blockers.
+- [ ] **3. Review comments:** Check each finding against current code. Fix and test real issues; explain incorrect ones. Resolve threads after proof and record unresolved blockers.
+- [ ] **4. Tests & CI:** Identify the relevant commands in Section 6 and required GitHub checks on the latest PR commit (or its GitHub-tested merge commit). Record results and links; skipped checks are not test proof.
+- [ ] **5. Real user journey & preview:** Name the actual route, user role, action and expected result. Verify the intended Vercel preview commit when relevant, desktop and 390px mobile for UI changes, and loading/empty/error behavior. Use N/A for docs-only work.
+- [ ] **6. Data, security & integrations:** Name the affected API/RPC and persisted result when relevant. Protect login, data access (RLS), secrets and saved data. Test unauthorized access, failures and duplicate prevention where affected, using isolated QA data.
+- [ ] **7. Worktree:** Create new MDE worktrees on the development host under `/home/sk/mde-worktrees/`. Confirm the intended base/head, review changed paths and preserve other work and uncommitted changes.
+- [ ] **8. Merge readiness:** Meet required GitHub approvals and branch rules. Identify missing evidence and the next action; do not mark READY until applicable requirements pass.
 
 **Merge decision:** NOT READY / READY — [Tested commit, proof and anything blocking merge.]
 
 ## 8. Post-Merge Verification & Recovery
 
-<!-- Plan these before merging; execute and check the applicable steps only AFTER merge. -->
+<!-- Plan these before merging; execute and check the applicable steps only AFTER merge. Keep all seven steps on separate Markdown lines and customize with actual target, command/URL, expected result and recovery when relevant. Mark N/A with a reason. -->
 - [ ] **1. Verify merge:** Check the merged commit, changed files on `main`, and GitHub checks.
-- [ ] **2. Verify deployment:** For app changes, confirm Vercel runs the merged commit. Deploy only if needed.
-- [ ] **3. Verify Supabase:** Check database migrations, Edge Functions and settings. Apply only missing required changes through the approved workflow. Destructive or irreversible production data changes need explicit opt-in and a recovery plan. N/A if unchanged.
+- [ ] **2. Verify deployment:** For app changes, confirm the existing Vercel release workflow succeeds and the actual live domain serves the merged commit or a verified descendant. Record the deployment URL and version proof. Deploy only if needed; do not bypass the existing release workflow.
+- [ ] **3. Verify Supabase:** Check database migrations, Edge Functions and settings. Apply only missing required changes through the approved workflow. Destructive or irreversible production data changes need explicit opt-in and a recovery plan. N/A for unchanged migrations/settings; still prove persisted behavior if the PR changes writes or reads.
 - [ ] **4. Test live result:** Try the affected feature, API or agent. Check saved results, permissions, errors and 390px mobile when relevant. **Read-only by default.** Tests that write data need task-specific opt-in, isolated QA data and verified cleanup. `npm run verify:production` can save a real chat thread; it is not read-only.
 - [ ] **5. Fix failures:** Find the cause, make a small safe fix through PR review, retest and redeploy, or roll back safely.
 - [ ] **6. Update GitHub & Linear:** Record the commit, tests, working links, screenshots, fixes and remaining work. Mark Done only when success criteria pass.
 - [ ] **7. Clean up:** Remove the merged branch/worktree only when all work is safely preserved. Never force-delete unrelated changes.
 
 **What to test:** App/UI → live feature; Database/API → saved data and migrations; AI → accurate answers and authorized actions; Tests-only → regression tests and CI; Docs-only → updated docs/template.
+
+### Post-merge tests to run
+
+[Exact task-specific merged-main checks, actual deployment/live URLs if applicable, user journey or regression commands, required setup and expected results. Use N/A with a reason for unrelated checks; do not duplicate Section 6's evidence.]
 
 **Recovery plan:** [How to undo or safely fix a failed deployment. N/A with reason if no app change.]
 
