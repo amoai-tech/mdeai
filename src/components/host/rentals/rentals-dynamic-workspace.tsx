@@ -1,6 +1,7 @@
 "use client";
 
 import { Sparkles } from "lucide-react";
+import { BrokerOverviewSurface } from "@/components/host/rentals/broker-overview-surface";
 import { BrokerViewingRequests } from "@/components/host/rentals/broker-viewing-requests";
 import { Badge } from "@/components/ui/badge";
 import type { BrokerDashboardView } from "@/lib/rentals/broker-dashboard-types";
@@ -39,21 +40,21 @@ export function RentalsDynamicWorkspace({
     />
   );
 
-  if (mode === "overview") {
-    return (
-      <aside
-        data-testid="rc-right"
-        className="flex min-h-0 flex-col gap-3 overflow-y-auto border-border lg:border-l lg:pl-4"
-        aria-label="Broker overview workspace"
-      >
-        <div className="flex items-center gap-2">
-          <Sparkles className="size-4 text-accent" aria-hidden />
-          <h2 className="font-serif text-base font-semibold">Overview</h2>
-          <Badge variant="secondary" className="ml-auto text-xs">
-            Live
-          </Badge>
-        </div>
+  const overviewHeader = (
+    <div className="flex items-center gap-2">
+      <Sparkles className="size-4 text-accent" aria-hidden />
+      <h2 className="font-serif text-base font-semibold">Overview</h2>
+      <Badge variant="secondary" className="ml-auto text-xs">
+        Live
+      </Badge>
+    </div>
+  );
 
+  if (mode === "overview") {
+    // SAN-1675 — the panel below is the fallback when official components cannot
+    // render (deterministic tests, load error, or a rejected surface).
+    const legacyOverview = (
+      <>
         <section data-testid="ctx-viewing-requests" className="space-y-2">
           <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Viewing requests
@@ -84,6 +85,22 @@ export function RentalsDynamicWorkspace({
             ) : null}
           </div>
         </div>
+      </>
+    );
+    return (
+      <aside
+        data-testid="rc-right"
+        className="flex min-h-0 flex-col gap-3 overflow-y-auto border-border lg:border-l lg:pl-4"
+        aria-label="Broker overview workspace"
+      >
+        {dashboard && !loadError ? (
+          <BrokerOverviewSurface dashboard={dashboard} fallback={<>{overviewHeader}{legacyOverview}</>} />
+        ) : (
+          <>
+            {overviewHeader}
+            {legacyOverview}
+          </>
+        )}
       </aside>
     );
   }

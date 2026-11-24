@@ -10,12 +10,7 @@ import {
   availableBrokerViewingActions,
   type BrokerViewingAction,
 } from "@/lib/rentals/broker-viewing-action";
-
-/**
- * A stale page is not something the broker can repair by clicking again, so the copy says what
- * to actually do rather than restating the conflict.
- */
-const STALE_ACTION_MESSAGE = "This request changed. Refresh and try again.";
+import { submitBrokerViewingAction } from "@/lib/rentals/submit-broker-viewing-action";
 
 type BrokerViewingRequestActionsProps = {
   showingId: string;
@@ -61,33 +56,21 @@ export function BrokerViewingRequestActions({
     setError(null);
 
     try {
-      const response = await fetch(`/api/host/rentals/viewings/${showingId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action,
-          expectedStatus: status,
-          expectedScheduledAt: scheduledAt,
-          ...(newWallClock ? { newWallClock } : {}),
-        }),
+      const result = await submitBrokerViewingAction({
+        showingId,
+        action,
+        expectedStatus: status,
+        expectedScheduledAt: scheduledAt,
+        newWallClock,
       });
-
-      if (response.status === 409) {
-        setError(STALE_ACTION_MESSAGE);
-        return;
-      }
-
-      const body = (await response.json().catch(() => ({}))) as { error?: string };
-      if (!response.ok) {
-        setError(body.error ?? "Couldn't update this request.");
+      if (!result.ok) {
+        setError(result.error);
         return;
       }
 
       setRescheduleOpen(false);
       setWallClock("");
       router.refresh();
-    } catch {
-      setError("Couldn't reach the server. Try again.");
     } finally {
       setPending(null);
     }

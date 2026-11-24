@@ -478,6 +478,26 @@
       "file": "src/components/rentals/__tests__/rental-filter-panel-actions-recovery.test.tsx",
       "classification": "test-only",
       "note": "F5: mocks the v2 generative-ui function hook to capture the Apply handler and proves the in-flight guard is released after a navigation that never changed the URL filters; no provider or run is created."
+    },
+    {
+      "file": "src/components/copilot/a2ui/mde-dashboard-surface.tsx",
+      "classification": "keep",
+      "note": "SAN-1675: renders official Standard Catalog operations from real page data with no AI turn, using the public v2 surface manager ingest + SurfaceView on a dashboard thread with no registered target. Reuses an existing provider; agentless broker routes get the same CopilotKitProvider with MDE_GENERATIVE_UI and run no agent."
+    },
+    {
+      "file": "src/components/copilot/a2ui/mde-standard-restrictions.ts",
+      "classification": "keep",
+      "note": "SAN-1675: re-registers URL-bearing official components (Image, Link, EntityCard, Carousel media, Pressable) and TextField with narrower schemas plus a render-time URL re-check, delegating to the official renderers."
+    },
+    {
+      "file": "src/components/host/rentals/broker-overview-surface.tsx",
+      "classification": "keep",
+      "note": "SAN-1675: broker Overview consumer; registers brokerViewingAction with the official useGenerativeUIFunction and calls the existing PATCH /api/host/rentals/viewings/:id writer with the persisted expectation."
+    },
+    {
+      "file": "src/lib/rentals/__tests__/broker-overview-ui.test.ts",
+      "classification": "test-only",
+      "note": "SAN-1675: validates the broker Overview operations with the installed validateOperation and the catalog's own prop schemas."
     }
   ]
 }

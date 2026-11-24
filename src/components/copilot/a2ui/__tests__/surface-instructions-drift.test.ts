@@ -8,6 +8,7 @@ import {
   EVENT_RECOMMENDATIONS_DESCRIPTION,
 } from "@/components/copilot/a2ui/event-recommendations-surface";
 import { MDE_A2UI_GUIDE, MDE_GENERATIVE_UI_RULES } from "@/mastra/lib/generative-ui-context";
+import { MDE_OMITTED_STANDARD_COMPONENTS, mdeUI } from "@/components/copilot/a2ui/mde-ui-catalog";
 
 /**
  * F1/F6 of the Generative UI forensic audit: a Surface description, its component
@@ -52,5 +53,24 @@ describe("Surface instructions agree with their allowlists and the Mastra guide"
   it("events: the description works on /events and in chat, and allows no controls", () => {
     expect(EVENT_RECOMMENDATIONS_DESCRIPTION).not.toMatch(/concierge chat/i);
     expect([...EVENT_RECOMMENDATIONS_COMPONENTS]).toEqual(["EventCard", "Column", "Title"]);
+  });
+
+  it("SAN-1675: the guide names every exposed component and never advertises an omitted one as available", () => {
+    const named = (text: string, name: string) => new RegExp(`\\b${name}\\b`).test(text);
+    for (const name of mdeUI.components.keys()) {
+      expect(named(MDE_A2UI_GUIDE, name), `${name} missing from the fallback guide`).toBe(true);
+    }
+    for (const text of [MDE_A2UI_GUIDE, MDE_GENERATIVE_UI_RULES]) {
+      const available = text.slice(text.indexOf("Official components also available"), text.indexOf(" are not available"));
+      const notAvailable = available.slice(available.lastIndexOf(".") + 1);
+      for (const name of MDE_OMITTED_STANDARD_COMPONENTS) {
+        expect(named(available.slice(0, available.lastIndexOf(".")), name), `${name} advertised as available`).toBe(false);
+      }
+      expect(notAvailable).toMatch(/\bMap\b/);
+      // The trust limits the schema enforces are stated in both agent paths.
+      expect(text).toMatch(/never claim a save, booking or payment/);
+      expect(text).toMatch(/only stored MDE photo URLs/);
+      expect(text).toMatch(/never estimate, round or invent a number/);
+    }
   });
 });

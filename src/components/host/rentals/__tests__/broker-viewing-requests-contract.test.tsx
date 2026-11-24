@@ -41,6 +41,7 @@ function dashboard(requests: BrokerViewingRequest[]): BrokerDashboardView {
     kpis: [
       { id: "kpi-active", label: "Active listings", value: "3", provenance: "test", testId: "kpi-active-listings" },
     ],
+    attention: [],
   } as unknown as BrokerDashboardView;
 }
 
