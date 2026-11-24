@@ -264,8 +264,11 @@ function BrokerOverviewFallback({ dashboard, basePath }: { dashboard: BrokerDash
       </section>
 
       <p className="text-xs text-muted-foreground">
-        Manage viewing requests from the Concierge pane. All counts are read from your own listings,
-        enquiries and viewings.
+        <Link href={basePath} className="font-medium text-primary hover:underline">
+          Open the Concierge workspace
+        </Link>{" "}
+        to manage viewing requests. All counts are read from your own listings, enquiries and
+        viewings.
       </p>
     </div>
   );

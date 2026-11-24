@@ -116,8 +116,10 @@ export async function fetchBrokerDashboard(
         .in("apartment.landlord_id", landlordProfileIds).in("status", [...BROKER_OPEN_LEAD_STATUSES]),
       supabase.from("leads").select("id, apartment:apartments!leads_apartment_id_fkey!inner(landlord_id)", { count: "exact", head: true })
         .in("apartment.landlord_id", landlordProfileIds).in("status", [...BROKER_UNANSWERED_LEAD_STATUSES]),
+      // A request nobody has answered still needs a decision even after its slot
+      // passed: the broker can decline or reschedule it. Do not hide that backlog.
       supabase.from("showings").select("id, apartment:apartments!showings_apartment_id_fkey!inner(landlord_id)", { count: "exact", head: true })
-        .in("apartment.landlord_id", landlordProfileIds).gte("scheduled_at", nowIso)
+        .in("apartment.landlord_id", landlordProfileIds)
         .in("status", [...BROKER_PENDING_APPOINTMENT_STATUSES]),
       supabase.from("showings").select("id, apartment:apartments!showings_apartment_id_fkey!inner(landlord_id)", { count: "exact", head: true })
         .in("apartment.landlord_id", landlordProfileIds).gte("scheduled_at", nowIso)
@@ -136,9 +138,11 @@ export async function fetchBrokerDashboard(
       // Exact "no photos": the array default is '{}', but legacy rows can be NULL.
       supabase.from("apartments").select("id", { count: "exact", head: true })
         .in("landlord_id", landlordProfileIds).or("images.is.null,images.eq.{}"),
+      // Blank is incomplete too: `listingCompletenessChecks` trims these fields, and a
+      // wizard draft can store '' without violating the NOT NULL constraint on title.
       supabase.from("apartments").select("id", { count: "exact", head: true })
         .in("landlord_id", landlordProfileIds)
-        .or("description.is.null,price_monthly.is.null,bedrooms.is.null"),
+        .or("description.is.null,description.eq.,title.eq.,neighborhood.eq.,price_monthly.is.null,bedrooms.is.null"),
       supabase.from("leads").select("id, apartment:apartments!leads_apartment_id_fkey!inner(landlord_id)", { count: "exact", head: true })
         .in("apartment.landlord_id", landlordProfileIds).gte("created_at", thirtyDaysAgo).lte("created_at", nowIso),
       // Keep past-due requests visible and newest-created first. Exact total is separate.

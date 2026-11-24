@@ -214,6 +214,26 @@ describe("SAN-1710 broker Overview as official CopilotKit components", () => {
       .toEqual([`today-${closed.showingId}-facts`, `today-${closed.showingId}-closed`]);
   });
 
+  it("gives each placement its own modal trigger but one shared reschedule draft per request", () => {
+    const row = request({});
+    const nodes = nodesOf(buildBrokerOverviewOperations(view({
+      todaySchedule: [row], todayTotal: 1,
+      upcomingPreview: [row], upcomingPreviewTotal: 1,
+      viewingRequests: [row], viewingRequestsTotal: 1,
+    })));
+    const placements = ["today", "next", "all"];
+    const triggers = placements.map((placement) => find(nodes, `${placement}-${row.showingId}-modal`)?.trigger);
+    // Three independent dialogs: no duplicate component id can steal focus or state.
+    expect(triggers).toEqual(placements.map((placement) => `${placement}-${row.showingId}-open`));
+    // One draft per persisted request, so an edit opened from Today also shows in
+    // Upcoming and in the View all table, and a refresh cannot split the value.
+    const draft = rescheduleDraftPath(row);
+    for (const placement of placements) {
+      expect(find(nodes, `${placement}-${row.showingId}-when-${Date.parse(row.scheduledAt)}`)?.value)
+        .toEqual({ "@path": draft });
+    }
+  });
+
   it("uses a truthful badge tone for every persisted status", () => {
     expect(brokerViewingStatusTone("scheduled")).toBe("warning");
     expect(brokerViewingStatusTone("confirmed")).toBe("success");

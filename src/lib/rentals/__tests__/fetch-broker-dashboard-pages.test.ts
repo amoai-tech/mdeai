@@ -121,6 +121,17 @@ describe("SAN-1710 exact dashboard query contracts", () => {
     expect(result.view.attention[2]?.detail).toBe("3 drafts · 2 without photos · 1 missing details");
     // The old published/7-day/avg-response queries are gone, not quietly reused.
     expect(calls.some((c) => c.url.searchParams.get("listing_workflow_status") === "eq.published")).toBe(false);
+    // Blank title/description/neighborhood count as missing details, matching the
+    // completeness checks the listing editor already shows.
+    expect(calls.some((c) => {
+      const or = c.url.searchParams.get("or") ?? "";
+      return or.includes("description.is.null") && or.includes("description.eq.") && or.includes("title.eq.");
+    })).toBe(true);
+    // "Awaiting a decision" is every unanswered `scheduled` request, including one
+    // whose slot has passed; the count is not silently limited to the future.
+    expect(calls.some((c) => c.method === "HEAD" && c.url.pathname.endsWith("/showings") &&
+      c.url.searchParams.get("status") === "in.(scheduled)" &&
+      !c.url.searchParams.has("scheduled_at"))).toBe(true);
     expect(calls.some((c) => c.method === "HEAD" && c.url.pathname.endsWith("/leads") && c.url.searchParams.get("created_at")?.startsWith("gte."))).toBe(true);
   });
 
