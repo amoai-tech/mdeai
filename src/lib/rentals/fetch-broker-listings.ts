@@ -61,7 +61,7 @@ export async function fetchBrokerListings(
     return { ok: true, listings: [], landlordProfileIds: [], displayName: null, total: 0, offset };
   }
 
-  const { data, error, count } = await supabase
+  const { data, error, count, status } = await supabase
     .from("apartments")
     .select(BROKER_LISTING_SELECT, { count: "exact" })
     // Ownership must be filtered IN THE QUERY, before the row limit. Filtering only afterwards
@@ -73,6 +73,19 @@ export async function fetchBrokerListings(
     .order("updated_at", { ascending: false })
     .order("id", { ascending: true })
     .range(offset, offset + limit - 1);
+
+  // PostgREST rejects a stale page offset; the SDK may discard the error response count.
+  // Only recover when the same broker-scoped exact total proves the page is past the end.
+  if (status === 416 && error?.code === "PGRST103") {
+    const exact = count === null
+      ? await supabase.from("apartments").select("id", { count: "exact", head: true })
+        .in("landlord_id", landlordProfileIds)
+      : { count, error: null };
+    if (exact.error || exact.count === null || offset < exact.count) {
+      return failListings("apartments", exact.error ?? error);
+    }
+    return { ok: true, listings: [], landlordProfileIds, displayName: profiles?.[0]?.display_name ?? null, total: exact.count, offset };
+  }
 
   if (error || count === null) {
     return failListings("apartments", error ?? "Missing exact total");
