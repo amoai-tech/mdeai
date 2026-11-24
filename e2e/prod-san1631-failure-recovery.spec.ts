@@ -113,6 +113,8 @@ test("a slow stopped AI request cannot resurrect stale filters after page switch
     await stop.click();
 
     // The manual choice is 2 bedrooms while the stopped question asked for 3.
+    const filters = page.getByTestId("rentals-mobile-filters-trigger");
+    if (await filters.isVisible()) await filters.click();
     await page.getByTestId("rentals-filter-beds-2").click();
     await expect.poll(() => new URL(page.url()).searchParams.get("beds")).toBe("2");
 

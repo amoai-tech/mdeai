@@ -405,6 +405,29 @@ describe("RentalBrowseCard — SAN-1349 viewing CTA truthfulness", () => {
     expect(html).toContain("Constructor");
   });
 
+  it("keeps the real photo gallery in compact layout and labels only compared apartments", () => {
+    const html = renderToStaticMarkup(<RentalBrowseCard
+      rental={rowToRental(apartmentRow({
+        images: ["https://images.unsplash.com/photo-one.jpg", "https://images.unsplash.com/photo-two.jpg"],
+      }))}
+      mediaLayout="inline"
+      comparisonPosition={2}
+      onDetails={vi.fn()}
+    />);
+    expect(html).toContain('data-slot="carousel"');
+    expect(html).toContain('data-slot="carousel-next"');
+    expect(html).toContain("sm:w-36");
+    expect(html).toContain("1 of 2 photos");
+    expect(html).toContain('data-testid="rental-compared-rnt_lau_001"');
+    expect(html).toContain("Option #2");
+    const missing = renderToStaticMarkup(<RentalBrowseCard
+      rental={rowToRental(apartmentRow({ images: [] }))}
+      mediaLayout="inline"
+    />);
+    expect(missing).toContain("Photo unavailable");
+    expect(missing).not.toContain('data-testid="rental-compared-rnt_lau_001"');
+  });
+
   it("renders inline 96px photo, honest price and existing viewing action", () => {
     const html = renderToStaticMarkup(<RentalBrowseCard
       rental={rowToRental(apartmentRow())}
@@ -630,6 +653,8 @@ describe("SAN-472: only mapped rentals have map selection", () => {
   it("rejects invalid/out-of-range coordinates instead of adding map pins", () => {
     const good = rowToRental(apartmentRow({ latitude: 6.244, longitude: -75.592 }));
     expect(rentalToMapPin(good)?.id).toBe("rental-rnt_lau_001");
+    expect(rentalToMapPin({ ...good, image: "", images: ["https://images.unsplash.com/actual.jpg"] })?.meta?.rentalPhotoUrl).toBe("https://images.unsplash.com/actual.jpg");
+    expect(rentalToMapPin({ ...good, image: "https://invalid.example/x", images: [] })?.meta?.rentalPhotoUrl).toBeUndefined();
     expect(rentalToMapPin({ ...good, latitude: 99 })).toBeNull();
     expect(rentalToMapPin({ ...good, longitude: Number.POSITIVE_INFINITY })).toBeNull();
     expect(rentalToMapPin({ ...good, latitude: undefined })).toBeNull();

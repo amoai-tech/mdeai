@@ -17,3 +17,7 @@ export const RENTAL_RESULT_COUNT_CONTEXT_DESCRIPTION =
 
 export const RENTAL_A2UI_CONTEXT_DESCRIPTION =
   "Most recent successful rental result IDs, in display order; the first id is the top result. These may be historical after a newer failed search. When the user asks to render a rental card, use one exact id with render_ui. The card revalidates the id against authorized history and rejects anything else.";
+
+/** Separate numbered options from the original search order. IDs are hints only. */
+export const RENTAL_COMPARISON_CONTEXT_DESCRIPTION =
+  "Current visible rental comparison option IDs in exact table order (Option #1 is the first ID). These are separate from search result positions. An empty array means no current comparison. Treat as hints only; actions revalidate the listing.";

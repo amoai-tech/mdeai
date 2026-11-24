@@ -5,7 +5,7 @@ import { useHydrated } from "@/hooks/use-hydrated";
 import { useSession } from "@/hooks/use-session";
 import { SignOutButton } from "@/components/auth/sign-out-button";
 
-export function AuthStatus() {
+export function AuthStatus({ mobileMenu = false }: { mobileMenu?: boolean } = {}) {
   const hydrated = useHydrated();
   const { user, loading } = useSession();
 
@@ -40,7 +40,7 @@ export function AuthStatus() {
   return (
     <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
       <span className="font-mono truncate max-w-[14rem]">{user.email}</span>
-      <SignOutButton />
+      <SignOutButton className={mobileMenu ? "min-h-11" : undefined} />
     </div>
   );
 }

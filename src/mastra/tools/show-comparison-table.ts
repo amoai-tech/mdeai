@@ -6,7 +6,7 @@ import { currentRentalResultIds } from "../lib/generative-ui-context";
 import { COMPARISON_COP_MONTHLY_BUDGET_KEY, COMPARISON_POSITIONS_KEY } from "../lib/comparison-table-intent";
 import { RENTAL_SUPABASE_KEY } from "./search-rentals";
 import { isActiveRentalsDiscoveryPage } from "../lib/discovery-agent-context";
-import { COMPARISON_TABLE_TARGET, RENTAL_COMPARISON_TARGET, type ComparisonTarget } from "../lib/comparison-table-ui";
+import { COMPARISON_TABLE_TARGET, RENTAL_COMPARISON_TARGET, comparisonRowSchema, comparisonRowFromApartment, type ComparisonTarget } from "../lib/comparison-table-ui";
 
 const MAX_APARTMENTS = 5;
 
@@ -19,32 +19,6 @@ export const comparisonInputSchema = z.object({
   message: "Pass two to five IDs or positions from the current rental results.",
 });
 
-const rowSchema = z.object({
-  id: z.string(),
-  title: z.string(),
-  neighborhood: z.string().nullable(),
-  bedrooms: z.number().nullable(),
-  furnished: z.boolean().nullable(),
-  bathrooms: z.number().nullable(),
-  sizeSqm: z.number().nullable(),
-  wifiSpeedMbps: z.number().nullable(),
-  amenities: z.array(z.string()),
-  priceMonthly: z.number().nullable(),
-  priceNightly: z.number().nullable(),
-  currency: z.string().nullable(),
-});
-
-type Row = z.infer<typeof rowSchema>;
-function knownPositive(value: unknown): number | null {
-  if (value == null) return null;
-  const amount = Number(value);
-  return Number.isFinite(amount) && amount > 0 ? amount : null;
-}
-function knownNonnegative(value: unknown): number | null {
-  if (value == null) return null;
-  const amount = Number(value);
-  return Number.isFinite(amount) && amount >= 0 ? amount : null;
-}
 
 function clientFor(context: unknown): SupabaseClient | null {
   // No anonymous fallback. The host must supply the existing request-scoped
@@ -62,7 +36,7 @@ export const showComparisonTableTool = createTool({
   outputSchema: z.object({
     ok: z.boolean(),
     target: z.enum([COMPARISON_TABLE_TARGET, RENTAL_COMPARISON_TARGET]).optional(),
-    rows: z.array(rowSchema),
+    rows: z.array(comparisonRowSchema),
     rejected: z.array(z.string()),
     message: z.string(),
   }),
@@ -123,22 +97,7 @@ export const showComparisonTableTool = createTool({
     if (error) {
       return { ok: false, rows: [], rejected, message: "Rental details could not be read." };
     }
-    const byId = new Map((data ?? []).map((row) => [String(row.id), {
-      id: String(row.id),
-      title: typeof row.title === "string" && row.title.trim() ? row.title : "Listing",
-      neighborhood: typeof row.neighborhood === "string" ? row.neighborhood : null,
-      bedrooms: knownNonnegative(row.bedrooms),
-      furnished: typeof row.furnished === "boolean" ? row.furnished : null,
-      bathrooms: knownNonnegative(row.bathrooms),
-      sizeSqm: knownPositive(row.size_sqm),
-      wifiSpeedMbps: knownPositive(row.wifi_speed),
-      amenities: Array.isArray(row.amenities)
-        ? row.amenities.filter((item: unknown): item is string => typeof item === "string").slice(0, 20)
-        : [],
-      priceMonthly: knownPositive(row.price_monthly),
-      priceNightly: knownPositive(row.price_daily),
-      currency: typeof row.currency === "string" && row.currency.trim() ? row.currency : null,
-    } satisfies Row]));
+    const byId = new Map((data ?? []).map((row) => [String(row.id), comparisonRowFromApartment(row)]));
     const rows = ids.flatMap((id) => byId.get(id) ?? []);
     const missing = ids.filter((id) => !byId.has(id));
     if (missing.length > 0 || rows.length < 2) {

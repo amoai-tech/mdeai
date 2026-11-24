@@ -1,6 +1,7 @@
 import { mapPinSchema, type MapPin } from "@/platform/contracts/map-pin";
 import { formatEventStartsAt } from "@/lib/events/format-event";
 import type { Rental } from "@/mastra/tools/search-rentals";
+import { isRenderableRemoteImage } from "@/lib/images/remote-image-hosts";
 
 /** Returns the URL string only if it parses as a valid absolute URL, else undefined. */
 function safeUrl(url: string | null | undefined): string | undefined {
@@ -59,6 +60,7 @@ export function rentalToMapPin(r: Rental): MapPin | null {
     title: r.title,
     subtitle: r.neighborhood,
     source: "sql",
+    meta: { rentalPhotoUrl: [r.image, ...(r.images ?? [])].find(isRenderableRemoteImage) },
   });
   return validated.success ? validated.data : null;
 }

@@ -162,6 +162,35 @@ describe("searchRentals — SAN-1356 monthly price projection", () => {
     }
   });
 
+  it("registers distinct result IDs before comparison", async () => {
+    const { searchRentals, searchRentalsTool } = await import("../search-rentals");
+    const { APARTMENT_DUPLICATE_FIELDS } = await import("@/lib/rentals/duplicate-listings");
+    const { RequestContext } = await import("@mastra/core/request-context");
+    const { currentRentalResultIds } = await import("../../lib/generative-ui-context");
+    const base = { ...Object.fromEntries(APARTMENT_DUPLICATE_FIELDS.map((field) => [field, null])),
+      title: "Calle 10 #42-15, Laureles", neighborhood: "Laureles", address: "Calle 10 #42-15",
+      landlord_id: "owner-a", bedrooms: 2, bathrooms: 1, furnished: true,
+      price_monthly: 2_400_000, currency: "COP", wifi_speed: 0, amenities: [], images: [],
+      host_name: "Host", pet_friendly: false, parking_included: false, minimum_stay_days: 1, status: "active" };
+    mocks.state.rows = [{ ...base, id: "apt-a" }, { ...base, id: "apt-b" },
+      { ...base, id: "apt-c", title: "Another apartment", address: "Calle 12 #30-20" }];
+    try {
+      const query = { neighborhood: "Laureles", minBedrooms: 2, maxBedrooms: 2, limit: 2 };
+      const result = await searchRentals(query);
+      expect(result.total).toBe(2);
+      expect(result.results.map((row) => row.id)).toEqual(["apt-a", "apt-c"]);
+      const requestContext = new RequestContext();
+      const answer = await searchRentalsTool.execute!(query, { requestContext } as never) as { results: Array<{ id: string }> };
+      expect(answer.results.map((row) => row.id)).toEqual(["apt-a", "apt-c"]);
+      expect(answer.results[0]).toMatchObject({ comparison_facts: {
+        id: "apt-a", priceMonthly: 2400000, priceNightly: null, bathrooms: 1, furnished: true,
+      } });
+      expect(await currentRentalResultIds(requestContext as never)).toEqual(["apt-a", "apt-c"]);
+    } finally {
+      mocks.state.rows = null;
+    }
+  });
+
   it("does not replace the visible list when this run's search finds nothing", async () => {
     const { searchRentalsTool } = await import("../search-rentals");
     const { RequestContext } = await import("@mastra/core/request-context");

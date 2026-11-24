@@ -1,6 +1,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseServerAnonEnv } from "@/lib/supabase/server-env";
 import { applyAvailabilityFilters } from "@/lib/rentals/availability-filter";
+import { deduplicateApartmentRows } from "@/lib/rentals/duplicate-listings";
 import { RentalSearchUnavailableError } from "./rental-search-unavailable";
 import {
   embedQueryTextDetailed,
@@ -11,6 +12,7 @@ import type { EmbedStatus, RankExplanationEntry } from "./search-logs";
 import {
   type Rental,
   type RentalQuery,
+  APARTMENT_SEARCH_SELECT,
   monthlyBudgetFromQuery,
   nightlyPriceFrom,
   rentalAvailabilityDate,
@@ -165,7 +167,7 @@ export async function searchRentalsIntelligent(
     let q = client
       .from("apartments")
       .select(
-        "id, title, neighborhood, bedrooms, furnished, price_daily, price_monthly, currency, wifi_speed, amenities, images, host_name, source_url, metadata, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status, rental_can_request_viewing",
+        APARTMENT_SEARCH_SELECT,
       )
       .order("price_daily", { ascending: true, nullsFirst: false })
       .limit(RENTAL_KEYWORD_OVERSCAN_LIMIT);
@@ -279,7 +281,7 @@ export async function searchRentalsIntelligent(
     let aptQ = client
       .from("apartments")
       .select(
-        "id, title, neighborhood, bedrooms, furnished, price_daily, price_monthly, currency, wifi_speed, amenities, images, host_name, source_url, metadata, available_from, available_to, pet_friendly, parking_included, minimum_stay_days, slug, latitude, longitude, status, landlord_id, moderation_status, listing_workflow_status, rental_can_request_viewing",
+        APARTMENT_SEARCH_SELECT,
       )
       .in("id", ids)
       // RLS applies customer eligibility and authorized development visibility.
@@ -433,7 +435,12 @@ export async function searchRentalsIntelligent(
     });
   }
 
-  let results: IntelligenceRentalResult[] = scored.slice(0, limit).map(({ row, rankScore, sig }) => {
+  // Collapse exact copies before limiting or publishing ranked listing IDs.
+  const distinctIds = new Set(deduplicateApartmentRows(scored.map(({ row }) => ({
+    ...aptMap.get(row.id), id: row.id,
+  }))).map((row) => row.id));
+  const distinctScored = scored.filter(({ row }) => distinctIds.delete(row.id));
+  let results: IntelligenceRentalResult[] = distinctScored.slice(0, limit).map(({ row, rankScore, sig }) => {
     const apt = aptMap.get(row.id);
     if (apt) {
       // SAN-1349: requestability is derived ONLY from the canonical apartments row mapped by
@@ -479,7 +486,7 @@ export async function searchRentalsIntelligent(
 
   return {
     results,
-    total: scored.length,
+    total: distinctScored.length,
     source: "supabase",
     hybridUsed,
     embedStatus,

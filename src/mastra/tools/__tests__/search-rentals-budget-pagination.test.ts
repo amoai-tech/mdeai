@@ -8,11 +8,12 @@
 import { describe, expect, it, vi } from "vitest";
 import { searchPublicExternalRentals } from "@/lib/rentals/public-external-discovery";
 import type { Rental } from "../search-rentals";
+import { APARTMENT_DUPLICATE_FIELDS } from "@/lib/rentals/duplicate-listings";
 
 const COP_COUNT = 5;
 const USD_COUNT = 8;
 
-const apartmentRows = [
+const initialApartmentRows = [
   ...Array.from({ length: COP_COUNT }, (_, i) => ({
     id: `cop-${i + 1}-aaaaaaaa`,
     title: `COP ${i + 1}`,
@@ -69,10 +70,13 @@ const apartmentRows = [
   })),
 ];
 
+let apartmentRows: Array<Record<string, unknown>> = initialApartmentRows;
+
 /** PostgREST stub: honours the currency split and the monthly ceiling, and reports full counts. */
 function stub() {
   const conditions: Array<(row: Record<string, unknown>) => boolean> = [];
   let limit = Number.POSITIVE_INFINITY;
+  let offset = 0;
   const builder: Record<string, unknown> = {};
   Object.assign(builder, {
     select: () => builder,
@@ -91,7 +95,12 @@ function stub() {
     or: (clause: string) => {
       conditions.push((row) => row.price_daily != null || row.price_monthly != null);
       const ceiling = /price_monthly\.lte\.(\d+)/.exec(clause);
-      if (ceiling) {
+      const nightlyCeiling = /price_daily\.lte\.(\d+)/.exec(clause);
+      if (nightlyCeiling && ceiling) {
+        conditions.push((row) => row.currency !== "USD" ||
+          (row.price_daily != null ? Number(row.price_daily) <= Number(nightlyCeiling[1]) :
+            row.price_monthly != null && Number(row.price_monthly) <= Number(ceiling[1])));
+      } else if (ceiling) {
         conditions.push(
           (row) => row.price_monthly != null && Number(row.price_monthly) <= Number(ceiling[1]),
         );
@@ -103,12 +112,13 @@ function stub() {
       limit = value;
       return builder;
     },
+    range: (start: number, end: number) => { offset = start; limit = end - start + 1; return builder; },
     then: (resolve: (value: unknown) => unknown) => {
       const matched = apartmentRows.filter((row) =>
         conditions.every((matches) => matches(row as unknown as Record<string, unknown>)),
       );
       return Promise.resolve({
-        data: matched.slice(0, limit),
+        data: matched.slice(offset, offset + limit),
         error: null,
         count: matched.length,
       }).then(resolve);
@@ -195,5 +205,52 @@ describe("a monthly budget never lets another currency crowd out the confirmed m
     });
     expect(results.slice(0, COP_COUNT).every((r) => r.currency === "COP")).toBe(true);
     expect(results.filter((r) => r.currency === "COP")).toHaveLength(COP_COUNT);
+  });
+});
+
+describe("exact distinct totals across pages", () => {
+  it("counts all duplicate copies and fills the requested page with distinct apartments", async () => {
+    const base = {
+      ...Object.fromEntries(APARTMENT_DUPLICATE_FIELDS.map((field) => [field, null])),
+      ...initialApartmentRows[0], title: "Same listing", address: "Calle 10 #42-15",
+      landlord_id: "owner", slug: null, rental_can_request_viewing: true,
+    };
+    apartmentRows = [
+      ...Array.from({ length: 105 }, (_, i) => ({ ...base, id: "copy-" + i })),
+      { ...base, id: "distinct", address: "Calle 11 #42-15" },
+    ];
+    try {
+      const { searchRentals } = await import("../search-rentals");
+      const first = await searchRentals({ neighborhood: "Laureles", limit: 1 });
+      const three = await searchRentals({ neighborhood: "Laureles", limit: 3 });
+      expect(first.total).toBe(2);
+      expect(first.results).toHaveLength(1);
+      expect(three.total).toBe(2);
+      expect(three.results.map((r) => r.id)).toEqual(["copy-0", "distinct"]);
+      expect(three.results[0].comparison_facts?.priceMonthly).toBe(base.price_monthly);
+      expect(three.results[0].comparison_facts?.priceNightly).toBeNull();
+    } finally { apartmentRows = initialApartmentRows; }
+  });
+
+  it("counts distinct other-currency alternatives even when the confirmed group fills the limit", async () => {
+    const base = {
+      ...Object.fromEntries(APARTMENT_DUPLICATE_FIELDS.map((field) => [field, null])),
+      ...initialApartmentRows[0], address: "Calle 10 #42-15",
+      landlord_id: "owner", slug: null, rental_can_request_viewing: true,
+    };
+    const alternative = { ...base, currency: "COP", price_daily: 60 };
+    apartmentRows = [
+      { ...base, id: "confirmed", currency: "USD", price_daily: 50 },
+      ...Array.from({ length: 6 }, (_, i) => ({ ...alternative, id: "copy-" + i })),
+    ];
+    try {
+      const { searchRentals } = await import("../search-rentals");
+      const first = await searchRentals({ neighborhood: "Laureles", maxPricePerNight: 80, limit: 1 });
+      const three = await searchRentals({ neighborhood: "Laureles", maxPricePerNight: 80, limit: 3 });
+      expect(first.total).toBe(2);
+      expect(first.results.map((r) => r.id)).toEqual(["confirmed"]);
+      expect(three.total).toBe(2);
+      expect(three.results.map((r) => r.id)).toEqual(["confirmed", "copy-0"]);
+    } finally { apartmentRows = initialApartmentRows; }
   });
 });

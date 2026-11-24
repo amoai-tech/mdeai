@@ -83,3 +83,79 @@ for (const route of ["/rentals", "/restaurants"]) {
     });
   }
 }
+
+test("390px Rentals exposes compact filters and account without losing the map or composer", async ({ page }) => {
+  test.slow();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/rentals", { waitUntil: "domcontentloaded" });
+  const filter = page.getByTestId("rentals-mobile-filters-trigger");
+  await waitUntilInteractive(filter, "mobile filters");
+  await expect(page.getByRole("group", { name: "Neighborhood filters" })).toHaveCount(0);
+  await expect(page.getByTestId("workspace-mobile-profile")).toBeVisible();
+  expect((await filter.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  await filter.click();
+  const sheet = page.getByTestId("rentals-mobile-filter-sheet");
+  await expect(sheet).toBeVisible();
+  await expect(sheet.getByRole("group", { name: "Neighborhood filters" })).toBeVisible();
+  const date = sheet.getByTestId("rentals-dates-trigger");
+  await date.click();
+  const calendar = page.getByTestId("rentals-dates-dialog");
+  await expect(calendar).toBeVisible();
+  await calendar.getByTestId("rentals-dates-cancel").click();
+  await expect(calendar).toBeHidden();
+  await expect(sheet).toBeVisible();
+  await sheet.getByTestId("rentals-filter-beds-2").click();
+  await expect.poll(() => new URL(page.url()).searchParams.get("beds")).toBe("2");
+  await expect(page.getByTestId("rentals-active-filter-chips")).toContainText("2 BR");
+  if (await sheet.isVisible()) await sheet.getByRole("button", { name: "Show apartments" }).click();
+  await expect(sheet).toBeHidden();
+  await page.getByTestId("workspace-mobile-profile").click();
+  const profile = page.getByRole("dialog", { name: "Profile" });
+  await expect(profile).toBeVisible();
+  await profile.getByRole("button", { name: "Close" }).click();
+  await expect(profile).toBeHidden();
+  const map = page.getByTestId("browse-map-fab");
+  const composer = page.getByTestId("workspace-ask-composer");
+  await expect(map).toBeInViewport();
+  await expect(composer).toBeInViewport();
+  const [mapBox, composerBox] = await Promise.all([map.boundingBox(), composer.boundingBox()]);
+  expect(mapBox!.height).toBeGreaterThanOrEqual(44);
+  expect(mapBox!.y + mapBox!.height).toBeLessThanOrEqual(composerBox!.y + 1);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+  await map.click();
+  await expect(page.getByTestId("browse-map-close")).toBeVisible();
+  await page.getByTestId("browse-map-close").click();
+  await expect(page.getByTestId("browse-map-close")).toBeHidden();
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await expect(filter).toHaveCount(0);
+  await expect(page.getByRole("group", { name: "Neighborhood filters" })).toBeVisible();
+});
+
+for (const viewport of [{ width: 844, height: 390 }, { width: 320, height: 256 }]) {
+  test(`Rentals keeps the map reachable and closable at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+    test.slow();
+    await page.setViewportSize(viewport);
+    await page.goto("/rentals", { waitUntil: "domcontentloaded" });
+    const trigger = page.getByTestId("browse-map-fab");
+    await expect(trigger).toHaveCount(1);
+    await expect(trigger).toBeVisible({ timeout: 10000 });
+    await expect(trigger).toHaveCSS("position", "static");
+    await waitUntilInteractive(trigger, "short-screen Map button");
+    await trigger.click();
+    const close = page.getByTestId("browse-map-close");
+    const map = page.locator('[data-slot="sheet-content"]').getByTestId("chat-map");
+    await expect(close).toBeInViewport();
+    await expect(map).toBeVisible();
+    await expect(page.getByTestId("browse-map-loading")).toBeHidden({ timeout: 15000 });
+    await expect.poll(async () => {
+      const rect = await close.boundingBox();
+      return rect ? rect.y >= 0 && rect.y + rect.height <= viewport.height && rect.height >= 44 : false;
+    }).toBe(true);
+    await close.click();
+    await expect(close).toBeHidden();
+    await expect(trigger).toBeFocused();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(trigger).toHaveCSS("position", "fixed");
+    await expect(trigger).toBeInViewport();
+  });
+}

@@ -171,3 +171,20 @@ describe("BrowseMapSheet placement above a pinned composer", () => {
     expect(fab.className).not.toContain("bottom-6");
   });
 });
+
+describe("BrowseMapSheet page-controlled opening", () => {
+  it("opens the actual sheet from a page action and reports dismissal to its owner", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const onOpenChange = vi.fn();
+    await act(async () => root.render(<BrowseMapSheet open={false} onOpenChange={onOpenChange} />));
+    expect(document.querySelector('[data-testid="chat-map-stub"]')).toBeNull();
+    await act(async () => root.render(<BrowseMapSheet open={true} onOpenChange={onOpenChange} />));
+    expect(document.querySelector('[data-testid="chat-map-stub"]')).not.toBeNull();
+    await act(async () => (document.querySelector('[data-testid="browse-map-close"]') as HTMLButtonElement).click());
+    expect(onOpenChange).toHaveBeenLastCalledWith(false);
+    await act(async () => root.render(<BrowseMapSheet open={false} onOpenChange={onOpenChange} />));
+    await act(async () => root.unmount());
+  });
+});

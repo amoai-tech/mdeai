@@ -1,5 +1,8 @@
 "use client";
 
+import { useSyncExternalStore } from "react";
+import { VIEWING_PROPOSAL_SURFACE_ID } from "@/mastra/lib/viewing-proposal-ui";
+
 import {
   GenerativeUISurface,
   useGenerativeUIRuntime,
@@ -49,7 +52,10 @@ export const RENTAL_RECOMMENDATIONS_COMPONENTS = [
   "ViewingProposal",
 ] as const;
 
-export function RentalRecommendationsSurface() {
+const noopSubscribe = () => () => {};
+const zero = () => 0;
+
+export function RentalRecommendationsSurface({ comparisonActive = false }: { comparisonActive?: boolean } = {}) {
   // Mount only where the page actually has a concierge agent. Without one there
   // is nothing that could target this panel, so registering the target would be
   // dead weight on every visit — and deterministic browser tests mount the app
@@ -60,9 +66,14 @@ export function RentalRecommendationsSurface() {
   // target before mounting is circular and the panel could never be reached.
   const runtime = useGenerativeUIRuntime();
   const coAgent = useOptionalConciergeCoAgent();
+  const manager = runtime?.manager;
+  useSyncExternalStore(manager?.subscribe ?? noopSubscribe, manager?.getVersion ?? zero, zero);
+  const surface = manager?.getSurfaceForTarget(RENTAL_RECOMMENDATIONS_SURFACE_ID);
+  const isViewingProposal = surface?.surfaceId === VIEWING_PROPOSAL_SURFACE_ID;
   if (!runtime || !coAgent) return null;
 
   return (
+    <div hidden={comparisonActive && !isViewingProposal}>
     <GenerativeUISurface
       id={RENTAL_RECOMMENDATIONS_SURFACE_ID}
       ui={mdeUI}
@@ -72,5 +83,6 @@ export function RentalRecommendationsSurface() {
       fallback={null}
       autoScroll={false}
     />
+    </div>
   );
 }

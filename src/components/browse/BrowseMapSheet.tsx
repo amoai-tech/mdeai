@@ -9,11 +9,17 @@ import { AppErrorBoundary } from "@/components/errors/error-boundary";
 import { MapsShell } from "@/components/maps/MapProvider";
 import { ChatMap } from "@/components/maps/ChatMap";
 
-export function BrowseMapSheet({ raised = false, inline = false }: { raised?: boolean; inline?: boolean }) {
-  const [open, setOpen] = useState(false);
+export function BrowseMapSheet({ raised = false, inline = false, reserveMobileNav = false, open: controlledOpen, onOpenChange: changeOpen }: { raised?: boolean; inline?: boolean; reserveMobileNav?: boolean; open?: boolean; onOpenChange?: (open: boolean) => void }) {
+  const [localOpen, setLocalOpen] = useState(false);
+  const open = controlledOpen ?? localOpen;
   const [mapLoaded, setMapLoaded] = useState(false);
   const markLoaded = useCallback(() => setMapLoaded(true), []);
-  const onOpenChange = (next: boolean) => { setOpen(next); if (next) setMapLoaded(false); };
+  const onOpenChange = (next: boolean) => { if (changeOpen) changeOpen(next); else setLocalOpen(next); };
+  const [previousOpen, setPreviousOpen] = useState(open);
+  if (previousOpen !== open) {
+    setPreviousOpen(open);
+    if (!open) setMapLoaded(false);
+  }
   const [composerHeight, setComposerHeight] = useState<number | null>(null);
   // The inline conversation grows as turns arrive. Measure the actual composer
   // instead of assuming its height is always six rem (which overlays chat text).
@@ -35,11 +41,12 @@ export function BrowseMapSheet({ raised = false, inline = false }: { raised?: bo
         size="sm"
         // SAN-1421: on a page with a pinned Ask MDE composer, the phone FAB sits above that bar —
         // measured, so an expanded transcript or an error row cannot end up underneath the button.
-        className={inline ? "min-h-11 gap-2" : raised ? "fixed right-4 z-50 gap-2 shadow-lg" : "fixed bottom-6 right-4 z-50 gap-2 shadow-lg"}
-        style={raised && !inline ? { bottom: composerHeight == null ? "calc(1rem + var(--mde-ask-composer-height, 6rem))" : `calc(1rem + ${composerHeight}px)` } : undefined}
+        className={inline ? "min-h-11 gap-2" : raised ? (reserveMobileNav ? "fixed right-4 z-30 min-h-11 gap-2 shadow-lg" : "fixed right-4 z-50 gap-2 shadow-lg") : "fixed bottom-6 right-4 z-50 gap-2 shadow-lg"}
+        style={raised && !inline ? { bottom: "calc(1rem + " + (reserveMobileNav ? "var(--mde-mobile-nav-clearance) + " : "") + (composerHeight == null ? "var(--mde-ask-composer-height, 6rem)" : composerHeight + "px") + ")" } : undefined}
         onClick={() => onOpenChange(true)}
         aria-label="Open map"
         data-testid="browse-map-fab"
+        data-reserve-mobile-nav={reserveMobileNav ? "true" : undefined}
       >
         <MapIcon className="size-4" aria-hidden />
         Map
@@ -85,7 +92,7 @@ export function BrowseMapSheet({ raised = false, inline = false }: { raised?: bo
               map sheet; `vh` rather than `dvh` so an older browser cannot drop the declaration and blank
               the map again. */}
           <AppErrorBoundary fallback={<BrowseMapFallback />} label="browse-map-sheet">
-            <div className="relative h-[min(70vh,520px)] min-h-[280px] w-full">
+            <div data-testid="browse-map-holder" className="relative h-[min(70vh,520px)] min-h-[280px] w-full">
               <MapsShell>
                 <ChatMap mapDomId="browse-map-sheet" mapResizeSignal={open ? 1 : 0} onMapSettled={markLoaded} />
               </MapsShell>

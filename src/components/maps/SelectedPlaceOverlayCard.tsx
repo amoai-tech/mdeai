@@ -1,6 +1,8 @@
 "use client";
 
 import type { MapPin } from "@/platform/contracts";
+import { isRenderableRemoteImage } from "@/lib/images/remote-image-hosts";
+import { GalleryImage } from "@/components/rentals/gallery-image";
 import { mapsDeepLinksEnabled } from "@/lib/maps-deep-links";
 import { placesPhotoProxyUrl } from "@/lib/places-photo-proxy";
 import {
@@ -27,6 +29,9 @@ export function SelectedPlaceOverlayCard({
 }: SelectedPlaceOverlayCardProps) {
   const meta = parseMapPinPreviewMeta(pin.meta);
   const { glyph } = getCategoryMarkerGlyph(pin.category);
+  const rentalPhoto = pin.category === "rental" && pin.source === "sql" &&
+    typeof pin.meta?.rentalPhotoUrl === "string" && isRenderableRemoteImage(pin.meta.rentalPhotoUrl)
+    ? pin.meta.rentalPhotoUrl : null;
   const photoSrc = meta.photoName
     ? placesPhotoProxyUrl(meta.photoName, 480)
     : null;
@@ -35,7 +40,7 @@ export function SelectedPlaceOverlayCard({
   const typeLabel = primaryTypeToLabel(meta.primaryType);
   const hoursLabel = openNowLabel(meta.openNow);
   const editorial =
-    meta.summary?.trim() || pin.subtitle?.trim() || null;
+    meta.summary?.trim() || (pin.category === "rental" ? null : pin.subtitle?.trim()) || null;
   const mapsUrl = pin.placeUri;
   const deepLinks = mapsDeepLinksEnabled();
 
@@ -46,7 +51,10 @@ export function SelectedPlaceOverlayCard({
       data-pin-id={pin.id}
     >
       <div className="relative">
-        {photoSrc ? (
+        {rentalPhoto ? (
+          <GalleryImage key={rentalPhoto} src={rentalPhoto} alt={pin.title} loading="lazy"
+            testId="selected-place-overlay-photo" className="h-40 w-full object-cover" />
+        ) : photoSrc ? (
           <div
             className="relative h-40 w-full bg-muted"
             data-testid="selected-place-overlay-photo"
@@ -70,7 +78,7 @@ export function SelectedPlaceOverlayCard({
         ) : (
           <div
             // Events have no photo to show: a short glyph strip, so the date and Details come into view sooner.
-            className={pin.category === "event" ? "flex h-14 items-center justify-center bg-muted text-3xl" : "flex h-32 items-center justify-center bg-muted text-4xl"}
+            className={pin.category === "event" || pin.category === "rental" ? "flex h-14 items-center justify-center bg-muted text-3xl" : "flex h-32 items-center justify-center bg-muted text-4xl"}
             data-testid="selected-place-overlay-photo-placeholder"
             aria-hidden
           >

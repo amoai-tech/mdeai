@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Rental } from "@/mastra/tools/search-rentals";
-import { resolveRentalForDetails } from "@/lib/rentals/details-target";
+import { resolveComparedRental, resolveRentalForDetails } from "@/lib/rentals/details-target";
 
 const rental = (id: string) => ({ id, title: `Apartment ${id}` }) as Rental;
 const rows = [rental("a"), rental("b"), rental("c")];
@@ -31,5 +31,16 @@ describe("resolveRentalForDetails", () => {
 
   it("opens nothing when the page has no results", () => {
     expect(resolveRentalForDetails([], { index: 1 })).toBeNull();
+  });
+});
+
+describe("current comparison identity", () => {
+  it("resolves reversed table order, rejects absent/stale options, and never falls back to search order", () => {
+    expect(resolveComparedRental(rows, ["c", "a"], 1)?.id).toBe("c");
+    expect(resolveComparedRental(rows, ["c", "a"], 2)?.id).toBe("a");
+    expect(resolveComparedRental(rows, ["c", "a"], 3)).toBeNull();
+    expect(resolveComparedRental(rows, [], 1)).toBeNull();
+    expect(resolveComparedRental(rows, ["stale", "b"], 1)).toBeNull();
+    expect(resolveComparedRental(rows, ["c", "a"], 0)).toBeNull();
   });
 });

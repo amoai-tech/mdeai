@@ -50,3 +50,72 @@ export function duplicateListingNotes(
 
   return notes;
 }
+
+/** Exact recorded listing facts: never treat a shared building or title as a unit ID. */
+export const APARTMENT_DUPLICATE_FIELDS = [
+  "title",
+  "neighborhood",
+  "address",
+  "city",
+  "description",
+  "landlord_id",
+  "host_id",
+  "host_name",
+  "bedrooms",
+  "bathrooms",
+  "size_sqm",
+  "floor_number",
+  "total_floors",
+  "furnished",
+  "price_daily",
+  "price_weekly",
+  "price_monthly",
+  "currency",
+  "deposit_amount",
+  "utilities_included",
+  "wifi_speed",
+  "amenities",
+  "building_amenities",
+  "images",
+  "video_url",
+  "virtual_tour_url",
+  "source",
+  "source_listing_id",
+  "source_url",
+  "slug",
+  "latitude",
+  "longitude",
+  "available_from",
+  "available_to",
+  "minimum_stay_days",
+  "maximum_stay_days",
+  "pet_friendly",
+  "smoking_allowed",
+  "parking_included",
+  "status",
+  "moderation_status",
+  "listing_workflow_status",
+  "rental_can_request_viewing",
+  "metadata",
+] as const;
+
+/** Preserve the first ranked record and its original ID. Only collapse records with
+ * a known matching owner/address and an identical, complete projection of listing facts.
+ * Does not modify stored listings, leads, photos or ownership. */
+export function deduplicateApartmentRows<T extends { id: string }>(rows: readonly T[]): T[] {
+  const ids = new Set<string>();
+  const facts = new Set<string>();
+  return rows.filter((row) => {
+    if (ids.has(row.id)) return false;
+    ids.add(row.id);
+    const record = row as unknown as Record<string, unknown>;
+    if (typeof record.address !== "string" || !record.address.trim() ||
+        typeof record.landlord_id !== "string" || !record.landlord_id.trim() ||
+        !APARTMENT_DUPLICATE_FIELDS.every((field) =>
+          Object.prototype.hasOwnProperty.call(record, field) && record[field] !== undefined)) return true;
+    const key = JSON.stringify(APARTMENT_DUPLICATE_FIELDS.map((field) => record[field]));
+    if (facts.has(key)) return false;
+    facts.add(key);
+    return true;
+  });
+}

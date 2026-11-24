@@ -7,7 +7,7 @@ vi.mock("@/components/auth/auth-status", () => ({ AuthStatus: () => <span data-t
 
 import { DiscoveryWorkspace } from "../DiscoveryWorkspace";
 
-function render(askComposer?: ReactNode) {
+function render(askComposer?: ReactNode, mobileFilterBar?: ReactNode) {
   return renderToStaticMarkup(
     <DiscoveryWorkspace
       mobileMapTrigger={<button type="button" data-testid="map-trigger-stub">Map</button>}
@@ -16,6 +16,7 @@ function render(askComposer?: ReactNode) {
       title="Rentals in Medellín"
       subtitle="9 apartments"
       filterBar={<div data-testid="filters" />}
+      mobileFilterBar={mobileFilterBar}
       rightPanel={<div data-testid="right-panel" />}
       askComposer={askComposer}
     >
@@ -63,6 +64,17 @@ describe("DiscoveryWorkspace (SAN-1421)", () => {
     expect(map).toBeGreaterThan(header);
     expect(map).toBeLessThan(filters);
     expect(html).toContain('data-testid="workspace-mobile-map-trigger"');
+  });
+
+  it("opts Rentals into compact mobile chrome without duplicating account or filter controls", () => {
+    const html = render(<div data-testid="ask-composer" />, <button data-testid="compact-filters">Filters</button>);
+    expect(html).toContain('data-testid="workspace-mobile-profile"');
+    expect(html).not.toContain('data-testid="auth-status"');
+    expect(html).not.toContain('data-testid="filters"');
+    const header = html.slice(html.indexOf("<header"), html.indexOf("</header>"));
+    expect(header).toContain('data-testid="compact-filters"');
+    expect(header).not.toContain('data-testid="map-trigger-stub"');
+    expect(html).toContain('data-testid="map-trigger-stub"');
   });
 
   it("gives phones a menu button", () => {

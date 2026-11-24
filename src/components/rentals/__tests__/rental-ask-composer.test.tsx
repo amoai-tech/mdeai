@@ -4,8 +4,7 @@
  *
  * What this proves: one press sends one message on the existing thread, an answer that fails keeps the
  * text (including anything typed while waiting), Retry resends it, a running answer can be stopped, a
- * signed-out visitor is offered sign-in without losing the current filters, the transcript follows the
- * agent's live messages, and the box publishes its height for the phone Map button.
+ * signed-out visitor is offered sign-in without losing the current filters, text-only answers reach the results column, and the box publishes its height for the phone Map button.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -269,6 +268,28 @@ describe("RentalAskComposer (SAN-1636) · a stopped run must not fail the next q
 });
 
 describe("RentalAskComposer (SAN-1421)", () => {
+  it("routes option commands locally even while connecting; failed map actions are not success text", async () => {
+    coagent.isReady = false;
+    const onTextAnswer = vi.fn();
+    const onOpenDetails = vi.fn((): RentalAskDetailsOutcome => ({ ok: true }));
+    const onComparisonAction = vi.fn((target): RentalAskDetailsOutcome =>
+      target.action === "map" ? { ok: false, message: "This apartment does not have a recorded map location." } : { ok: true });
+    render(<RentalAskComposer onOpenDetails={onOpenDetails} onComparisonAction={onComparisonAction} onTextAnswer={onTextAnswer} />);
+    type("Show Option #2 on the map.");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+    expect(onComparisonAction).toHaveBeenCalledWith({ action: "map", index: 2 });
+    expect(screen.getByTestId("rental-ask-error").textContent).toContain("does not have a recorded map location");
+    expect(onTextAnswer).toHaveBeenCalledWith(null);
+    type("Open Details for Option #1.");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+    expect(onOpenDetails).toHaveBeenCalledWith({ index: 1, comparison: true });
+    type("Schedule a viewing for Option #2.");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+    expect(onComparisonAction).toHaveBeenLastCalledWith({ action: "viewing", index: 2 });
+    expect(screen.queryByTestId("rental-ask-error")).toBeNull();
+    expect(chat.appendMessage).not.toHaveBeenCalled();
+  });
+
   it("opens the first apartment locally for the exact details command, without a model search", async () => {
     const onResults = vi.fn();
     const onOpenDetails = vi.fn((): RentalAskDetailsOutcome => ({ ok: true }));
@@ -1011,20 +1032,66 @@ describe("RentalAskComposer (SAN-1421)", () => {
     expect(screen.queryByLabelText("Ask MDE about rentals")).toBeNull();
   });
 
-  it("updates the transcript from the agent's live messages, not just the first render", async () => {
-    render(<RentalAskComposer />);
-    expect(screen.queryByTestId("rental-ask-transcript")).toBeNull();
-
+  it("has no embedded history or toggle after publishing rental results", async () => {
+    const onResults = vi.fn();
+    const pending = deferred<boolean>();
+    chat.appendMessage.mockReturnValueOnce(pending.promise);
+    render(<RentalAskComposer onResults={onResults} />);
+    type("Find 2BR apartments in Laureles and compare the first two");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
     await act(async () => {
-      agent.messages.push({ id: "u1", role: "user", content: "cheaper 2BR in Laureles" });
-      agent.messages.push({ id: "a1", role: "assistant", content: "Here are three under 3M COP." });
+      agent.messages = [
+        { id: "u1", role: "user", content: "Find 2BR apartments in Laureles and compare the first two" },
+        { id: "a1", role: "assistant", toolCalls: [{ id: "call-1", type: "function", function: { name: "searchRentalsTool" } }] },
+        { id: "t1", role: "tool", toolCallId: "call-1", content: JSON.stringify({ results: [rental("rnt_1"), rental("rnt_2")] }) },
+        { id: "a2", role: "assistant", content: "Found two apartments." },
+      ];
       agent.listeners.forEach((listener) => listener());
+      pending.resolve(true);
+      await pending.promise;
     });
+    await waitFor(() => expect(onResults).toHaveBeenCalledTimes(1));
+    expect(screen.queryByTestId("rental-ask-transcript")).toBeNull();
+    expect(screen.queryByTestId("rental-ask-toggle-transcript")).toBeNull();
+    expect(screen.queryByText("Found two apartments.")).toBeNull();
+    expect(screen.getByRole("link", { name: "Open full chat" }).getAttribute("href")).toBe("/chat");
+  });
 
-    fireEvent.click(screen.getByTestId("rental-ask-toggle-transcript"));
-    const transcript = screen.getByTestId("rental-ask-transcript");
-    expect(transcript.textContent).toContain("cheaper 2BR in Laureles");
-    expect(transcript.textContent).toContain("Here are three under 3M COP.");
+  it("publishes cards AND the completed answer for a mixed search and question", async () => {
+    const onResults = vi.fn();
+    const onTextAnswer = vi.fn();
+    const question = "Find 2BR apartments in Laureles and which is closest to the metro?";
+    chat.appendMessage.mockImplementationOnce(() => {
+      agent.messages = [
+        { id: "u-mixed", role: "user", content: question },
+        { id: "a-tool", role: "assistant", toolCalls: [{ id: "call-mixed", type: "function", function: { name: "searchRentalsTool" } }] },
+        { id: "t-mixed", role: "tool", toolCallId: "call-mixed", content: JSON.stringify({ results: [rental("rnt_1"), rental("rnt_2")] }) },
+      ];
+      reportCompletedAnswer("run-mixed", "a-final", "The listings do not establish which is closest to the metro.");
+      return Promise.resolve(true);
+    });
+    render(<RentalAskComposer onResults={onResults} onTextAnswer={onTextAnswer} />);
+    type(question);
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+    await waitFor(() => expect(onResults).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(onTextAnswer).toHaveBeenLastCalledWith("The listings do not establish which is closest to the metro."));
+    expect(screen.queryByTestId("rental-ask-transcript")).toBeNull();
+    expect(screen.queryByTestId("rental-ask-toggle-transcript")).toBeNull();
+  });
+
+  it("sends only a completed current text-only answer to the results column", async () => {
+    const onTextAnswer = vi.fn();
+    chat.appendMessage.mockImplementationOnce(() => {
+      reportCompletedAnswer("run-1", "a1", "The listing does not specify a balcony.");
+      return Promise.resolve(true);
+    });
+    render(<RentalAskComposer onTextAnswer={onTextAnswer} />);
+    type("Does the first apartment have a balcony?");
+    fireEvent.click(screen.getByTestId("rental-ask-send"));
+    await waitFor(() => expect(onTextAnswer).toHaveBeenLastCalledWith("The listing does not specify a balcony."));
+    expect(screen.queryByTestId("rental-ask-transcript")).toBeNull();
+    expect(screen.queryByTestId("rental-ask-toggle-transcript")).toBeNull();
+    expect(screen.getByRole("link", { name: "Open full chat" })).not.toBeNull();
   });
 
   it("refuses a malformed 200 row instead of putting it on the page", async () => {

@@ -18,6 +18,7 @@ function sample(type: z.ZodTypeAny): unknown {
   if (type instanceof z.ZodNumber) return 1;
   if (type instanceof z.ZodBoolean) return true;
   if (type instanceof z.ZodArray && type.element instanceof z.ZodString) return ["x"];
+  if (type instanceof z.ZodObject) return Object.fromEntries(Object.entries(type.shape).map(([key, field]) => [key, sample(field as z.ZodTypeAny)]));
   throw new Error(`rentalSchema has a field type this drift test does not know (${type.constructor.name})`);
 }
 

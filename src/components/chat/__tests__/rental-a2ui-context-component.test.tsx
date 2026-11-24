@@ -11,7 +11,7 @@ vi.mock("@copilotkit/react-core/v2", () => ({ useAgentContext: publish }));
 vi.mock("@/components/chat/rental-fast-path-context", () => ({ useRentalFastPath: fastPath }));
 
 import { RentalA2UIContext } from "../rental-a2ui-context";
-import { RENTAL_A2UI_CONTEXT_DESCRIPTION, RENTAL_RESULT_COUNT_CONTEXT_DESCRIPTION } from "@/lib/rentals/a2ui-context";
+import { RENTAL_A2UI_CONTEXT_DESCRIPTION, RENTAL_RESULT_COUNT_CONTEXT_DESCRIPTION, RENTAL_COMPARISON_CONTEXT_DESCRIPTION } from "@/lib/rentals/a2ui-context";
 
 function valueFor(description: string): unknown {
   const call = publish.mock.calls.find(([arg]) => arg.description === description);
@@ -32,6 +32,12 @@ describe("RentalA2UIContext mounted publishing", () => {
     render(<RentalA2UIContext visibleRows={[{ id: "visible-first" }, { id: "visible-second" }]} />);
     expect(valueFor(RENTAL_A2UI_CONTEXT_DESCRIPTION)).toEqual(["visible-first", "visible-second"]);
     expect(valueFor(RENTAL_RESULT_COUNT_CONTEXT_DESCRIPTION)).toBe(2);
+  });
+
+  it("publishes comparison order separately and excludes stale option IDs", () => {
+    render(<RentalA2UIContext visibleRows={[{ id: "a" }, { id: "b" }, { id: "c" }]} comparisonIds={["c", "a", "stale"]} />);
+    expect(valueFor(RENTAL_A2UI_CONTEXT_DESCRIPTION)).toEqual(["a", "b", "c"]);
+    expect(valueFor(RENTAL_COMPARISON_CONTEXT_DESCRIPTION)).toEqual(["c", "a"]);
   });
 
   it("uses latest fast-path results when mounted without visibleRows", () => {

@@ -118,6 +118,8 @@ type RentalBrowseCardProps = {
   duplicateNote?: string;
   /** Compact /chat-style browse feed, or existing cover layout. */
   mediaLayout?: "inline" | "cover";
+  /** Number in the active, current-result comparison; absent for other cards. */
+  comparisonPosition?: number;
 };
 
 function RentalBrowseCardMedia({
@@ -142,7 +144,7 @@ function RentalBrowseCardMedia({
   return (
     <div className="relative">
       {imageUrl ? (
-        <div className={cn("relative aspect-[16/10] overflow-hidden rounded-xl bg-muted", mediaLayout === "inline" ? "w-24" : "w-full")}>
+        <div className={cn("relative aspect-[16/10] overflow-hidden rounded-xl bg-muted", mediaLayout === "inline" ? "w-24 sm:w-36" : "w-full")}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={imageUrl}
@@ -154,12 +156,13 @@ function RentalBrowseCardMedia({
           />
         </div>
       ) : omittedPhotos ? (
-        <div data-testid="rental-card-more-photos" className="flex aspect-[16/10] items-center justify-center rounded-xl bg-muted p-4 text-center text-sm text-muted-foreground">
+        <div data-testid="rental-card-more-photos" className={cn("flex aspect-[16/10] items-center justify-center rounded-xl bg-muted p-2 text-center text-xs text-muted-foreground", mediaLayout === "inline" ? "w-24 sm:w-36" : "w-full")}>
           More listing photos may be available in Details
         </div>
       ) : (
         <VenueCardPlaceholder
-          label="Apartment"
+          label="Photo unavailable"
+          className={mediaLayout === "inline" ? "w-24 sm:w-36 text-center" : "text-center"}
           icon={<Building2 className="size-5" aria-hidden />}  
           mediaLayout={mediaLayout}
           testId="rental-browse-card-photo-placeholder"
@@ -201,12 +204,14 @@ function RentalBrowseCardGallery({
   onDetails,
   nightlyLabel,
   onPhotoError,
+  mediaLayout,
 }: {
   rental: Rental;
   photos: string[];
   onDetails?: () => void;
   nightlyLabel: string | null;
   onPhotoError: (url: string) => void;
+  mediaLayout: "inline" | "cover";
 }) {
   const [api, setApi] = useState<CarouselApi>();
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -224,7 +229,7 @@ function RentalBrowseCardGallery({
   }, [api, photos.length]);
 
   return (
-    <Carousel setApi={setApi} className="w-full" aria-label={`Photos of ${rental.title}`}
+    <Carousel setApi={setApi} className={mediaLayout === "inline" ? "w-24 sm:w-36 shrink-0 self-start" : "w-full"} aria-label={`Photos of ${rental.title}`}
       // Focusing photo controls must not bubble to VenueCardShell's map-pin preview.
       // A real card/map selection still uses Show on map or an intentional card hover.
       onFocus={(event) => event.stopPropagation()}>
@@ -257,13 +262,15 @@ function RentalBrowseCardGallery({
           </CarouselItem>
         ))}
       </CarouselContent>
-      <CarouselPrevious className="left-2 size-11 bg-background/90" aria-label={`Previous photo of ${rental.title}`} />
-      <CarouselNext className="right-2 size-11 bg-background/90" aria-label={`Next photo of ${rental.title}`} />
-      <span className="pointer-events-none absolute bottom-2 left-2 rounded-full bg-background/90 px-2.5 py-1 text-xs font-medium text-foreground"
+      <div className={mediaLayout === "inline" ? "flex items-center justify-between" : "contents"}>
+        <CarouselPrevious className={mediaLayout === "inline" ? "static size-11 translate-y-0 bg-background" : "left-2 size-11 bg-background/90"} aria-label={`Previous photo of ${rental.title}`} />
+        <CarouselNext className={mediaLayout === "inline" ? "static size-11 translate-y-0 bg-background" : "right-2 size-11 bg-background/90"} aria-label={`Next photo of ${rental.title}`} />
+      </div>
+      <span className={cn("text-xs font-medium text-foreground", mediaLayout === "inline" ? "block text-center" : "pointer-events-none absolute bottom-2 left-2 rounded-full bg-background/90 px-2.5 py-1")}
         data-testid={`rental-photo-counter-${rental.id}`}>
         {Math.min(currentIndex + 1, photos.length)} of {photos.length} photos{(rental.photo_count ?? 0) > photos.length ? " shown" : ""}
       </span>
-      {nightlyLabel ? (
+      {nightlyLabel && mediaLayout === "cover" ? (
         <span className="pointer-events-none absolute bottom-2 right-2 flex items-center gap-1 rounded-full bg-background/90 px-2.5 py-0.5 font-mono text-xs font-semibold text-foreground backdrop-blur-sm">
           {nightlyLabel}
           {rental.currency?.toUpperCase() === "USD" ? (
@@ -294,6 +301,7 @@ export function RentalBrowseCard({
   onAskSelect,
   duplicateNote,
   mediaLayout = "cover",
+  comparisonPosition,
 }: RentalBrowseCardProps) {
   // Pass the listing's own currency: a COP monthly rent must not be labelled with a USD symbol.
   // A listing that stores a monthly rent leads with that rent. Its nightly figure is only rent ÷ 30,
@@ -317,7 +325,7 @@ export function RentalBrowseCard({
   const failedPhotoUrls = failedPhotos.resultSet === photoResultSet ? failedPhotos.urls : [];
   const photos = rentalBrowsePhotos(rental).filter((url) => !failedPhotoUrls.includes(url));
   const omittedPhotos = (rental.photo_count ?? 0) > (rental.images?.length ?? (rental.image ? 1 : 0));
-  const showPhotoGallery = mediaLayout === "cover" && photos.length > 1;
+  const showPhotoGallery = photos.length > 1;
   const handlePhotoError = (url: string) => {
     reportRentalPhotoFailure(url);
     setFailedPhotos((previous) => {
@@ -360,6 +368,7 @@ export function RentalBrowseCard({
             onDetails={onDetails}
             nightlyLabel={nightlyLabel}
             onPhotoError={handlePhotoError}
+            mediaLayout={mediaLayout}
           />
         ) : onDetails ? (
           <button
@@ -367,7 +376,7 @@ export function RentalBrowseCard({
             onClick={onDetails}
             data-testid={`rental-card-photo-details-${rental.id}`}
             aria-label={`Details: ${rental.title}`}
-            className={cn("block rounded-xl text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring", mediaLayout === "inline" ? "w-24 shrink-0 self-start" : "w-full")}
+            className={cn("block rounded-xl text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring", mediaLayout === "inline" ? "w-24 sm:w-36 shrink-0 self-start" : "w-full")}
           >
             <RentalBrowseCardMedia
               imageUrl={photos[0]}
@@ -470,6 +479,7 @@ export function RentalBrowseCard({
     >
       <div className="flex flex-wrap items-center gap-1.5">
         <p className="text-[11px] font-medium text-muted-foreground">{rental.neighborhood}</p>
+        {comparisonPosition != null ? <Badge data-testid={"rental-compared-" + rental.id} variant="secondary">Option #{comparisonPosition}</Badge> : null}
         {duplicateNote ? (
           <Badge
             variant="outline"
@@ -481,7 +491,7 @@ export function RentalBrowseCard({
           </Badge>
         ) : null}
       </div>
-      <h3 className="mt-0.5 font-medium leading-snug">
+      <h3 className="mt-0.5 break-words font-semibold leading-snug">
         {onDetails ? (
           <button
             type="button"
@@ -564,7 +574,7 @@ export function RentalBrowseCard({
         </div>
       ) : monthlyLabel ? (
         <div className="mt-1.5 flex flex-wrap items-center gap-2">
-          <p className={cn(mediaLayout === "cover" ? "text-base font-semibold text-foreground" : "text-xs text-muted-foreground")}>{monthlyLabel}</p>
+          <p className="text-base font-semibold tabular-nums text-foreground">{monthlyLabel}</p>
           {rental.currency?.toUpperCase() === "USD" ? (
             <Badge variant="outline" className="font-normal text-[10px]" data-testid="rental-card-currency">
               USD

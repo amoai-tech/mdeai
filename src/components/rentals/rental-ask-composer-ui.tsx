@@ -1,9 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowUp, MessageSquare, Square } from "lucide-react";
-import { useEffect, useRef, type KeyboardEvent, type ReactNode } from "react";
-import type { PlainTurn } from "@/components/rentals/rental-ask-tool-results";
+import { ArrowUp, Square } from "lucide-react";
+import { type KeyboardEvent, type ReactNode } from "react";
 import { SelectedItemClearAction } from "@/components/chat/selected-item-clear-action";
 
 const PLACEHOLDER = "Ask about these apartments";
@@ -13,10 +12,9 @@ const PLACEHOLDER = "Ask about these apartments";
 /** One rule for the pinned surface; `LiveComposer` owns its own element so it can measure it. */
 export const SHELL_CLASS = "px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 sm:px-6";
 
-export function ComposerShell(props: { children: ReactNode; conversation?: ReactNode }) {
+export function ComposerShell(props: { children: ReactNode }) {
   return (
     <div data-testid="rental-ask-composer" className={SHELL_CLASS}>
-      {props.conversation}
       {props.children}
     </div>
   );
@@ -42,40 +40,7 @@ export function InertComposer() {
   );
 }
 
-export function Transcript({ turns, busy }: { turns: PlainTurn[]; busy: boolean }) {
-  const listRef = useRef<HTMLOListElement>(null);
-  useEffect(() => {
-    const list = listRef.current;
-    if (list) list.scrollTop = list.scrollHeight;
-  }, [turns]);
-  return (
-    <ol
-      ref={listRef}
-      id="rental-ask-transcript"
-      data-testid="rental-ask-transcript"
-      role="log"
-      aria-live="polite"
-      aria-busy={busy}
-      className="mb-3 max-h-56 space-y-2 overflow-y-auto rounded-lg border border-border bg-muted/20 p-3"
-    >
-      {turns.map((turn) => (
-        <li key={turn.id} className="text-sm">
-          <span className="mr-2 text-xs font-medium text-muted-foreground">
-            {turn.role === "user" ? "You" : "MDE"}
-          </span>
-          <span className={turn.role === "assistant" ? "text-foreground" : "text-muted-foreground"}>
-            {turn.text}
-          </span>
-        </li>
-      ))}
-    </ol>
-  );
-}
-
 export function ComposerHeader(props: {
-  turnCount: number;
-  showTranscript: boolean;
-  onToggle: () => void;
   hasSelectedListing?: boolean;
   onClearSelection?: () => void;
 }) {
@@ -84,19 +49,6 @@ export function ComposerHeader(props: {
     <div className="mb-2 flex items-center justify-between gap-3">
       <p className="text-sm font-medium">Ask MDE</p>
       <div className="flex items-center gap-3">
-        {props.turnCount > 0 ? (
-          <button
-            type="button"
-            data-testid="rental-ask-toggle-transcript"
-            aria-expanded={props.showTranscript}
-            onClick={props.onToggle}
-            aria-controls="rental-ask-transcript"
-            className="inline-flex min-h-11 items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
-          >
-            <MessageSquare className="h-3.5 w-3.5" aria-hidden />
-            {props.showTranscript ? "Hide conversation" : "Show conversation"}
-          </button>
-        ) : null}
         <Link href="/chat" className="inline-flex min-h-11 items-center text-xs font-medium text-primary hover:underline">
           Open full chat
         </Link>

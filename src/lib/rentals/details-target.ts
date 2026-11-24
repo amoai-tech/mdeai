@@ -26,3 +26,12 @@ export function resolveRentalForDetails(
   if (!Number.isInteger(position) || position < 1 || position > results.length) return null;
   return results[position - 1] ?? null;
 }
+
+/** Options refer ONLY to the current validated table, never the search order. */
+export function resolveComparedRental(
+  results: readonly Rental[], comparedIds: readonly string[], index: number,
+): Rental | null {
+  if (!Number.isSafeInteger(index) || index < 1) return null;
+  const id = comparedIds[index - 1];
+  return id ? results.find((row) => row.id === id) ?? null : null;
+}

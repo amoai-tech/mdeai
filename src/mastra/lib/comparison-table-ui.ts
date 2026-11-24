@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 /** A2UI v1.0 data-form Table. The server owns the facts and the layout. */
 export const COMPARISON_TABLE_TARGET = "chat";
 export const RENTAL_COMPARISON_TARGET = "rental-comparison";
@@ -6,20 +8,51 @@ export const COMPARISON_TABLE_SURFACE_ID = "comparison-table";
 const A2UI_VERSION = "1.0";
 const MAX_APARTMENTS = 5;
 
-export type ComparisonRow = {
-  id: string;
-  title: string;
-  neighborhood: string | null;
-  bedrooms: number | null;
-  furnished: boolean | null;
-  bathrooms: number | null;
-  sizeSqm: number | null;
-  wifiSpeedMbps: number | null;
-  amenities: string[];
-  priceMonthly: number | null;
-  priceNightly: number | null;
-  currency: string | null;
-};
+/** Shared normalized facts, read by search and comparison from the same authorized row. */
+export const comparisonRowSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  neighborhood: z.string().nullable(),
+  bedrooms: z.number().nullable(),
+  furnished: z.boolean().nullable(),
+  bathrooms: z.number().nullable(),
+  sizeSqm: z.number().nullable(),
+  wifiSpeedMbps: z.number().nullable(),
+  amenities: z.array(z.string()),
+  priceMonthly: z.number().nullable(),
+  priceNightly: z.number().nullable(),
+  currency: z.string().nullable(),
+});
+export type ComparisonRow = z.infer<typeof comparisonRowSchema>;
+
+function knownNumber(value: unknown, minimum: number, inclusive: boolean): number | null {
+  if (value == null) return null;
+  const amount = Number(value);
+  return Number.isFinite(amount) && (inclusive ? amount >= minimum : amount > minimum) ? amount : null;
+}
+
+export function comparisonRowFromApartment(row: {
+  id: unknown; title?: unknown; neighborhood?: unknown; bedrooms?: unknown;
+  furnished?: unknown; bathrooms?: unknown; size_sqm?: unknown; wifi_speed?: unknown;
+  amenities?: unknown; price_monthly?: unknown; price_daily?: unknown; currency?: unknown;
+}): ComparisonRow {
+  return {
+    id: String(row.id),
+    title: typeof row.title === "string" && row.title.trim() ? row.title : "Listing",
+    neighborhood: typeof row.neighborhood === "string" ? row.neighborhood : null,
+    bedrooms: knownNumber(row.bedrooms, 0, true),
+    furnished: typeof row.furnished === "boolean" ? row.furnished : null,
+    bathrooms: knownNumber(row.bathrooms, 0, true),
+    sizeSqm: knownNumber(row.size_sqm, 0, false),
+    wifiSpeedMbps: knownNumber(row.wifi_speed, 0, false),
+    amenities: Array.isArray(row.amenities)
+      ? row.amenities.filter((item: unknown): item is string => typeof item === "string").slice(0, 20)
+      : [],
+    priceMonthly: knownNumber(row.price_monthly, 0, false),
+    priceNightly: knownNumber(row.price_daily, 0, false),
+    currency: typeof row.currency === "string" && row.currency.trim() ? row.currency : null,
+  };
+}
 
 export type ComparisonTableOps = {
   target: string;
@@ -84,7 +117,12 @@ export function comparablePriceSummary(rows: readonly ComparisonRow[]): string {
     if (candidates.length !== rows.length || new Set(candidates.map((row) => row.currency)).size !== 1) return null;
     const cheapest = candidates.reduce((best, row) => (row[period] as number) < (best[period] as number) ? row : best);
     if (candidates.every((row) => row[period] === cheapest[period])) return null;
-    return `Lowest listed ${label}: ${cheapest.title} at ${money(cheapest[period], cheapest.currency)}. This is a price comparison, not an overall recommendation.`;
+    const amounts = candidates.map((candidate) => candidate[period] as number);
+    const precision = Math.min(12, Math.max(...amounts.map((amount) => String(amount).split(".")[1]?.length ?? 0)));
+    const difference = amounts.length === 2
+      ? Number(Math.abs(amounts[0] - amounts[1]).toFixed(precision)) : null;
+    const savings = difference ? ` — ${money(difference, cheapest.currency)} less` : "";
+    return `Lowest listed ${label}: ${cheapest.title} at ${money(cheapest[period], cheapest.currency)}${savings} (not an overall recommendation).`;
   };
   return choose("priceMonthly", "monthly rent")
     ?? choose("priceNightly", "nightly rent")
@@ -99,19 +137,23 @@ export function buildComparisonTableOps(
 ): ComparisonTableOps | null {
   const safe = rows.slice(0, MAX_APARTMENTS);
   if (safe.length < 2) return null;
-  const columns = ["Feature", ...safe.map((row) => row.title)];
+  const rentalPage = options.target === RENTAL_COMPARISON_TARGET;
+  const columns = ["Feature", ...safe.map((row, index) => rentalPage ? `Option #${index + 1}\n${row.title}` : row.title)];
   const metricRows: Array<[string, (row: ComparisonRow) => string | number]> = [
+    ["Monthly rent", (row) => money(row.priceMonthly, row.currency)],
+    ["Nightly rent", (row) => money(row.priceNightly, row.currency)],
     ["Neighborhood", (row) => row.neighborhood?.trim() || "Not recorded"],
     ["Bedrooms", (row) => numberLabel(row.bedrooms)],
     ["Furnished", (row) => row.furnished === true ? "Yes" : row.furnished === false ? "No" : "Not recorded"],
     ["Bathrooms", (row) => numberLabel(row.bathrooms)],
     ["Area", (row) => sizeLabel(row.sizeSqm)],
-    ["Monthly rent", (row) => money(row.priceMonthly, row.currency)],
-    ["Nightly rent", (row) => money(row.priceNightly, row.currency)],
     ["Wi-Fi speed", (row) => wifiLabel(row.wifiSpeedMbps)],
     ["Amenities", (row) => amenitiesLabel(row.amenities)],
   ];
-  const tableRows = metricRows.map(([feature, get]) => [feature, ...safe.map(get)]);
+  const tableRows = metricRows.map(([feature, get]) => [feature, ...safe.map(get)])
+    // Hide entirely unknown features only in the focused Rentals comparison.
+    // Keep partial rows and both real rental periods; never infer missing rates.
+    .filter((row) => !rentalPage || row.slice(1).some((value) => value !== "Not recorded"));
   return {
     target: options.target ?? COMPARISON_TABLE_TARGET,
     operations: [
@@ -145,12 +187,12 @@ export function buildComparisonTableOps(
             // its own page-scoped handlers; never add dead buttons to chat.
             ...(options.target === RENTAL_COMPARISON_TARGET
               ? [
-                  { id: "comparison-actions", component: "Column", gap: 2,
+                  { id: "comparison-actions", component: "Grid", columns: 2, gap: 2,
                     children: safe.map((_, index) => `comparison-action-${index}`) },
                   ...safe.flatMap((row, index) => [
                     { id: `comparison-action-${index}`, component: "Column", gap: 1,
                       children: [`comparison-action-title-${index}`, `comparison-action-buttons-${index}`] },
-                    { id: `comparison-action-title-${index}`, component: "Text", text: row.title },
+                    { id: `comparison-action-title-${index}`, component: "Text", text: `Option #${index + 1}` },
                     { id: `comparison-action-buttons-${index}`, component: "Row", wrap: "wrap", gap: 2,
                       children: [`comparison-details-${index}`, `comparison-view-${index}`] },
                     { id: `comparison-details-${index}`, component: "Button", label: "Details", size: "md",
