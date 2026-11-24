@@ -183,7 +183,7 @@ function attentionItems(input: BuildBrokerDashboardInput): BrokerAttentionItem[]
       id: "viewings",
       kind: "viewing_pending",
       title: `${input.pendingDecisionsCount} viewing request${input.pendingDecisionsCount === 1 ? "" : "s"} awaiting a decision`,
-      detail: "Confirm, decline or reschedule from Today or Upcoming.",
+      detail: "Confirm, decline or reschedule from the viewing actions below.",
       action: null,
       ctaLabel: null,
       testId: "r1-attn-viewings",
