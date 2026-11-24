@@ -46,6 +46,18 @@ describe("SelectedPlaceOverlayCard", () => {
     expect(html).not.toContain('data-testid="map-pin-preview"');
   });
 
+  it("shows only a trusted rental listing photo and falls back if loading fails", () => {
+    const pin: MapPin = { ...groundedPin, id: "rental-a", category: "rental", source: "sql",
+      title: "Actual listing", meta: { rentalPhotoUrl: "https://images.unsplash.com/photo-real.jpg" } };
+    const { getByTestId, rerender, queryByTestId } = render(<SelectedPlaceOverlayCard pin={pin} />);
+    expect(getByTestId("selected-place-overlay-photo").getAttribute("src")).toBe(pin.meta?.rentalPhotoUrl);
+    fireEvent.error(getByTestId("selected-place-overlay-photo"));
+    expect(getByTestId("selected-place-overlay-photo-unavailable").textContent).toContain("Photo unavailable");
+    rerender(<SelectedPlaceOverlayCard pin={{ ...pin, meta: { rentalPhotoUrl: "https://evil.invalid/secret" } }} />);
+    expect(queryByTestId("selected-place-overlay-photo")).toBeNull();
+    expect(getByTestId("selected-place-overlay-photo-placeholder")).toBeTruthy();
+  });
+
   it("uses glyph placeholder when no photo (never on map marker)", () => {
     const pin: MapPin = { ...groundedPin, meta: { rating: 4.5 } };
     const html = renderToStaticMarkup(

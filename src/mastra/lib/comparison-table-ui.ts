@@ -104,7 +104,8 @@ export function buildComparisonTableOps(
 ): ComparisonTableOps | null {
   const safe = rows.slice(0, MAX_APARTMENTS);
   if (safe.length < 2) return null;
-  const columns = ["Feature", ...safe.map((row) => row.title)];
+  const rentalPage = options.target === RENTAL_COMPARISON_TARGET;
+  const columns = ["Feature", ...safe.map((row, index) => rentalPage ? `Option #${index + 1}\n${row.title}` : row.title)];
   const metricRows: Array<[string, (row: ComparisonRow) => string | number]> = [
     ["Monthly rent", (row) => money(row.priceMonthly, row.currency)],
     ["Nightly rent", (row) => money(row.priceNightly, row.currency)],
@@ -116,7 +117,10 @@ export function buildComparisonTableOps(
     ["Wi-Fi speed", (row) => wifiLabel(row.wifiSpeedMbps)],
     ["Amenities", (row) => amenitiesLabel(row.amenities)],
   ];
-  const tableRows = metricRows.map(([feature, get]) => [feature, ...safe.map(get)]);
+  const tableRows = metricRows.map(([feature, get]) => [feature, ...safe.map(get)])
+    // Hide entirely unknown features only in the focused Rentals comparison.
+    // Keep partial rows and both real rental periods; never infer missing rates.
+    .filter((row) => !rentalPage || row.slice(1).some((value) => value !== "Not recorded"));
   return {
     target: options.target ?? COMPARISON_TABLE_TARGET,
     operations: [
@@ -150,12 +154,12 @@ export function buildComparisonTableOps(
             // its own page-scoped handlers; never add dead buttons to chat.
             ...(options.target === RENTAL_COMPARISON_TARGET
               ? [
-                  { id: "comparison-actions", component: "Column", gap: 2,
+                  { id: "comparison-actions", component: "Grid", columns: 2, gap: 2,
                     children: safe.map((_, index) => `comparison-action-${index}`) },
                   ...safe.flatMap((row, index) => [
                     { id: `comparison-action-${index}`, component: "Column", gap: 1,
                       children: [`comparison-action-title-${index}`, `comparison-action-buttons-${index}`] },
-                    { id: `comparison-action-title-${index}`, component: "Text", text: `Option ${index + 1}: ${row.title}` },
+                    { id: `comparison-action-title-${index}`, component: "Text", text: `Option #${index + 1}` },
                     { id: `comparison-action-buttons-${index}`, component: "Row", wrap: "wrap", gap: 2,
                       children: [`comparison-details-${index}`, `comparison-view-${index}`] },
                     { id: `comparison-details-${index}`, component: "Button", label: "Details", size: "md",

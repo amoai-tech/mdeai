@@ -399,7 +399,7 @@ html {
 }
 [data-testid="rental-comparison-surface"] .a2ui-std-table thead th {
   max-width: 12rem;
-  white-space: normal;
+  white-space: pre-line;
   overflow-wrap: anywhere;
   font-weight: 650;
 }

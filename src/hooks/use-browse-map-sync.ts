@@ -14,7 +14,7 @@ export function useBrowseMapSync(
 
   useEffect(() => {
     const key = `${category}:${pins
-      .map((p) => `${p.id}:${p.lat}:${p.lng}:${p.title}:${p.subtitle ?? ""}`)
+      .map((p) => JSON.stringify([p.id, p.lat, p.lng, p.title, p.subtitle, p.meta?.rentalPhotoUrl]))
       .sort()
       .join("|")}`;
     if (key === prevKeyRef.current) return;

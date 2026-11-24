@@ -138,6 +138,19 @@ describe("buildComparisonTableOps", () => {
     expect(buildComparisonTableOps([row(), second()], undefined, { target: "rental-comparison" })?.target).toBe("rental-comparison");
   });
 
+  it("uses numbered headers, hides wholly unknown fields, and keeps partially recorded facts on Rentals only", () => {
+    const first = row({ wifiSpeedMbps: null, amenities: [], sizeSqm: null });
+    const other = second();
+    const rental = buildComparisonTableOps([first, other], undefined, { target: "rental-comparison" })!;
+    const operation = rental.operations[0] as { createSurface: { components: Array<Record<string, unknown>> } };
+    const table = operation.createSurface.components.find((item) => item.id === "comparison") as { columns: string[]; rows: string[][] };
+    expect(table.columns).toEqual(["Feature", "Option #1\nLaureles One", "Option #2\nEl Poblado Two"]);
+    expect(table.rows.some((r) => r[0] === "Nightly rent")).toBe(false);
+    expect(table.rows).toContainEqual(["Area", "Not recorded", "70 m²"]);
+    expect(table.rows).toContainEqual(["Wi-Fi speed", "Not recorded", "100 Mbps (listed)"]);
+    expect(operation.createSurface.components.find((item) => item.id === "comparison-actions")).toMatchObject({ component: "Grid", columns: 2 });
+  });
+
   it("uses official CopilotKit Text, Row and Button actions on the Rentals page", () => {
     const result = buildComparisonTableOps([row(), second()], undefined, { target: "rental-comparison" });
     expect(result).not.toBeNull();

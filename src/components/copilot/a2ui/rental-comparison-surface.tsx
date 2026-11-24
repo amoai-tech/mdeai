@@ -15,7 +15,7 @@ import { useOptionalConciergeCoAgent } from "@/components/chat/concierge-coagent
  * same official Table a real page target; the full /chat keeps target="chat".
  * No new data or rendering library is introduced. */
 export const RENTAL_COMPARISON_TARGET = "rental-comparison";
-export const RENTAL_COMPARISON_COMPONENTS = ["Column", "Row", "Title", "Badge", "Table", "Text", "Caption", "Button"] as const;
+export const RENTAL_COMPARISON_COMPONENTS = ["Column", "Row", "Title", "Badge", "Table", "Text", "Caption", "Button", "Grid"] as const;
 
 const noopSubscribe = () => () => {};
 const zero = () => 0;
@@ -82,7 +82,7 @@ export function ComparedRentalOptions({
 }) {
   if (ids.length < 2) return null;
   return (
-    <div className="mb-3 grid grid-cols-2 gap-2" aria-label="Compared apartments" data-testid="rental-compared-options">
+    <div className="mb-3 grid grid-cols-2 gap-3" aria-label="Compared apartments" data-testid="rental-compared-options">
       {ids.map((id, index) => {
         const row = results.find((rental) => rental.id === id);
         if (!row) return null;
@@ -91,18 +91,18 @@ export function ComparedRentalOptions({
         );
         const selected = selectedPinId === "rental-" + id;
         return (
-          <div key={id} className={cn("min-w-0 overflow-hidden rounded-lg border bg-card p-2", selected && "ring-2 ring-primary/40")}>
+          <div key={id} data-listing-id={id} data-pin-id={rentalToMapPin(row)?.id} data-selected={selected} className={cn("flex min-w-0 flex-col overflow-hidden rounded-lg border bg-card p-2", selected && "ring-2 ring-primary/40")}>
             {photo ? (
               <GalleryImage key={photo} src={photo} alt={row.title} loading="lazy" className="aspect-[16/9] w-full rounded-md object-cover" />
             ) : (
-              <p className="flex h-14 items-center justify-center rounded-md bg-muted text-center text-xs text-muted-foreground">Photo unavailable</p>
+              <p className="flex aspect-[16/9] w-full items-center justify-center rounded-md bg-muted text-center text-sm text-muted-foreground">Photo unavailable</p>
             )}
-            <p className="mt-1 text-xs font-semibold">Option #{index + 1}</p>
-            <p className="break-words text-xs text-muted-foreground">{row.title}</p>
-            {rentalToMapPin(row) ? <Button variant="outline" size="sm" className="mt-2 min-h-11 w-full" onClick={() => onSelectMap(row)}
+            <p className="mt-2 text-sm font-semibold">Option #{index + 1}</p>
+            <p className="mb-2 break-words text-sm leading-snug text-foreground">{row.title}</p>
+            {rentalToMapPin(row) ? <Button variant="outline" size="sm" className="mt-auto min-h-11 w-full" onClick={() => onSelectMap(row)}
               aria-label={"Show compared apartment " + (index + 1) + " on map"}>
               Show on map
-            </Button> : <p className="mt-2 text-xs text-muted-foreground">Map location unavailable</p>}
+            </Button> : <p className="mt-auto flex min-h-11 items-center text-sm text-muted-foreground">Map location unavailable</p>}
           </div>
         );
       })}
@@ -110,19 +110,20 @@ export function ComparedRentalOptions({
   );
 }
 
-export function RentalComparisonSurface() {
+export function RentalComparisonSurface({ children }: { children?: React.ReactNode }) {
   const runtime = useGenerativeUIRuntime();
   const coAgent = useOptionalConciergeCoAgent();
   if (!runtime || !coAgent) return null;
 
   return (
-    <section aria-label="Apartment comparison" data-testid="rental-comparison-surface">
+    <section aria-label="Apartment comparison" data-testid="rental-comparison-surface" className={children ? "mb-3 min-w-0 max-w-full rounded-xl border border-border bg-card p-3 shadow-sm sm:p-4" : undefined}>
+      {children}
       <GenerativeUISurface
       id={RENTAL_COMPARISON_TARGET}
       ui={mdeUI}
       components={[...RENTAL_COMPARISON_COMPONENTS]}
       description="Accurate side-by-side comparison of two to five already displayed rentals. The server supplies the Table, factual summary, and ID-only Details and viewing actions. Never generate prices or a second search."
-      className="mb-4 min-w-0 max-w-full rounded-xl border border-border bg-card px-3 py-3 shadow-sm sm:px-4"
+      className={cn("min-w-0 max-w-full", !children && "mb-4 rounded-xl border border-border bg-card px-3 py-3 shadow-sm sm:px-4")}
       fallback={null}
         autoScroll={false}
       />

@@ -58,10 +58,10 @@ describe("comparisonTableRenderEvents", () => {
     const item = (id: string) => create.createSurface.components.find((part) => part.id === id);
     expect(item("comparison-title")).toMatchObject({ component: "Title", text: "Compare 2 apartments" });
     expect(item("comparison-badge")).toMatchObject({ component: "Badge", label: "Recorded details" });
-    expect(item("comparison")).toMatchObject({ component: "Table", columns: ["Feature", "Calle 10 #42-15", "Zitios"] });
+    expect(item("comparison")).toMatchObject({ component: "Table", columns: ["Feature", "Option #1\nCalle 10 #42-15", "Option #2\nZitios"] });
     expect(item("comparison-note")).toMatchObject({ component: "Caption" });
     expect(item("comparison-actions")).toMatchObject({
-      component: "Column", children: ["comparison-action-0", "comparison-action-1"],
+      component: "Grid", columns: 2, children: ["comparison-action-0", "comparison-action-1"],
     });
     for (const [index, row] of rows.entries()) {
       expect(item(`comparison-action-${index}`)).toMatchObject({
@@ -69,7 +69,7 @@ describe("comparisonTableRenderEvents", () => {
         children: [`comparison-action-title-${index}`, `comparison-action-buttons-${index}`],
       });
       expect(item(`comparison-action-title-${index}`)).toMatchObject({
-        component: "Text", text: `Option ${index + 1}: ${row.title}`,
+        component: "Text", text: `Option #${index + 1}`,
       });
       expect(item(`comparison-details-${index}`)).toMatchObject({
         component: "Button", label: "Details",

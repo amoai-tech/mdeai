@@ -124,6 +124,8 @@ function RentalBrowseViewInner({
   const shownResults = activeAsk?.results ?? results;
   const shownTotal = activeAsk?.total ?? total;
   const comparedIds = useComparedRentalIds(shownResults);
+  const otherResults = comparedIds.length ? shownResults.filter((row) => !comparedIds.includes(row.id)) : shownResults;
+  const currentAnswer = textAnswer?.scope === answerScope ? textAnswer.text : null;
   const matchParams = useMemo(() => {
     if (activeAsk) return buildRentalSearchParams(activeAsk.query, {}) ?? undefined;
     return { neighborhood: neighborhood ?? undefined, minBedrooms: beds != null ? Number(beds) : undefined,
@@ -215,6 +217,32 @@ function RentalBrowseViewInner({
           ? "Choose filters or ask MDE to find apartments"
         : `Long-stay rentals — ${formatCountSubtitle(total, results.length)}${stayLabel ? ` · open ${stayLabel}` : ""}`;
 
+  const renderOtherCards = () => otherResults.map((r) => {
+    const pinId = `rental-${r.id}`;
+    return (
+      <RentalBrowseCard
+        key={r.id}
+        mediaLayout="inline"
+        rental={r}
+        resultSet={shownResults}
+        matchParams={matchParams}
+        detailSearch={detailSearch}
+        testId={`rental-card-${r.id}`}
+        selected={mappedIds.has(pinId) && selectedPinId === pinId}
+        onSelect={mappedIds.has(pinId) ? () => panToPin(pinId) : undefined}
+        onPreview={mappedIds.has(pinId) ? () => setSelectedPinId(pinId) : undefined}
+        onSchedule={scheduleFor(r)}
+        duplicateNote={duplicateNotes.get(r.id)}
+        onDetails={() => openDetailsFor(r)}
+        selectedForAsk={selectedForAskId === r.id}
+        onAskSelect={() => {
+          setDetailsId(null);
+          setAskSelectedId((previous) => previous === r.id ? null : r.id);
+        }}
+      />
+    );
+  });
+
   return (
     // The inner view is already keyed on the URL filters, so a native change
     // remounts it and reseeds this draft. A key here would duplicate that reset.
@@ -303,10 +331,11 @@ function RentalBrowseViewInner({
         <section className="mt-4" aria-label="Rental listings">
           {/* SAN-1656 — the named AI recommendations panel. It renders nothing
               until Ask MDE targets it, so native results/map/Details are unchanged. */}
-          <RentalRecommendationsSurface />
-          <ComparedRentalOptions ids={comparedIds} results={shownResults} selectedPinId={selectedPinId}
-            onSelectMap={(row) => { const pin = rentalToMapPin(row); if (pin) panToPin(pin.id); }} />
-          <RentalComparisonSurface />
+          {!comparedIds.length ? <RentalRecommendationsSurface /> : null}
+          <RentalComparisonSurface>
+            {comparedIds.length > 0 ? <ComparedRentalOptions ids={comparedIds} results={shownResults} selectedPinId={selectedPinId}
+              onSelectMap={(row) => { const pin = rentalToMapPin(row); if (pin) panToPin(pin.id); }} /> : null}
+          </RentalComparisonSurface>
           <RentalComparisonStatus message={comparisonErrorMessage} />
           {/* A saved viewing request must be visible where it was made, not only in the chat. */}
           <LeadConfirmationBanner />
@@ -347,8 +376,8 @@ function RentalBrowseViewInner({
             />
           ) : null}
 
-          {textAnswer?.scope === answerScope ? (
-            <p role="status" data-testid="rental-ask-text-answer" className="mb-3 whitespace-pre-wrap break-words rounded-lg border border-border bg-card px-3 py-2 text-sm">{textAnswer.text}</p>
+          {currentAnswer && !activeAsk ? (
+            <p role="status" data-testid="rental-ask-text-answer" className="mb-3 whitespace-pre-wrap break-words rounded-lg border border-border bg-card px-3 py-2 text-sm">{currentAnswer}</p>
           ) : null}
 
           {activeAsk ? (
@@ -358,15 +387,15 @@ function RentalBrowseViewInner({
             >
               <div className="min-w-0 flex-1">
                 <p className="font-semibold">{comparedIds.length > 0 ? `Comparing ${comparedIds.length} of ${shownResults.length} shown apartments` : formatCountSubtitle(shownTotal, shownResults.length)}</p>
-                <p className="break-words text-xs text-muted-foreground">Answer to: {activeAsk.query}</p>
-                {shownResults.length > 0 ? (
-                  <p className="mt-1 text-xs text-muted-foreground">
+                {currentAnswer ? <p role="status" data-testid="rental-ask-text-answer" className="mt-1 whitespace-pre-wrap break-words text-sm leading-relaxed">{currentAnswer}</p> : null}
+                {!currentAnswer && shownResults.length > 0 ? (
+                  <p className="mt-1 text-sm text-muted-foreground">
                     {comparedIds.length > 0 ? "Compare the options above, then open Details." : "Open Details or ask MDE to compare apartments."}
                   </p>
                 ) : null}
               </div>
               {activeAsk.budgetNotice ? (
-                <span className="w-full text-xs text-muted-foreground">{activeAsk.budgetNotice}</span>
+                <span className="w-full text-sm text-muted-foreground">{activeAsk.budgetNotice}</span>
               ) : null}
               <Button
                 variant="ghost"
@@ -412,37 +441,20 @@ function RentalBrowseViewInner({
           ) : null}
 
           {!error && !dateError && shownResults.length > 0 ? (
-            <div
-              className="flex flex-col gap-3"
-              aria-label={`${shownResults.length} rentals`}
-              data-testid="rentals-grid"
-            >
-              {shownResults.map((r) => {
-                const pinId = `rental-${r.id}`;
-                return (
-                  <RentalBrowseCard
-                    key={r.id}
-                    mediaLayout="inline"
-                    comparisonPosition={comparedIds.includes(r.id) ? comparedIds.indexOf(r.id) + 1 : undefined}
-                    rental={r}
-                    resultSet={shownResults}
-                    matchParams={matchParams}
-                    detailSearch={detailSearch}
-                    testId={`rental-card-${r.id}`}
-                    selected={mappedIds.has(pinId) && selectedPinId === pinId}
-                    onSelect={mappedIds.has(pinId) ? () => panToPin(pinId) : undefined}
-                    onPreview={mappedIds.has(pinId) ? () => setSelectedPinId(pinId) : undefined}
-                    onSchedule={scheduleFor(r)}
-                    duplicateNote={duplicateNotes.get(r.id)}
-                    onDetails={() => openDetailsFor(r)}
-                    selectedForAsk={selectedForAskId === r.id}
-                    onAskSelect={() => {
-                      setDetailsId(null);
-                      setAskSelectedId((previous) => previous === r.id ? null : r.id);
-                    }}
-                  />
-                );
-              })}
+            <div data-testid="rentals-grid" data-result-ids={JSON.stringify(shownResults.map((row) => row.id))}
+              aria-label={shownResults.length + " rentals"}>
+              {comparedIds.length > 0 ? (
+                <details key={JSON.stringify(comparedIds)} data-testid="rental-other-results" data-map-expand
+                  className="rounded-lg border border-border bg-card">
+                  <summary className="cursor-pointer px-3 py-3 text-sm font-semibold">
+                    Other matching apartments ({otherResults.length})
+                  </summary>
+                  <div className="flex flex-col gap-3 p-2">
+                    {otherResults.length === 0 ? <p className="px-2 text-sm text-muted-foreground">All displayed apartments are included in the comparison.</p> : null}
+                    {renderOtherCards()}
+                  </div>
+                </details>
+              ) : <div className="flex flex-col gap-3">{renderOtherCards()}</div>}
             </div>
           ) : null}
         </section>

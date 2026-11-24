@@ -82,9 +82,9 @@ test.describe("SAN-1681 · official rental comparison A2UI Table", () => {
         await expect(page.getByText(/Prices are listing rates, not confirmed availability/)).toBeVisible();
         await expect(table.locator("thead th")).toHaveCount(3);
         await expect(table.getByRole("row").filter({ hasText: "Monthly rent" })).toBeVisible();
-        await expect(table.getByRole("row").filter({ hasText: "Nightly rent" })).toBeVisible();
-        await expect(table.getByRole("cell", { name: "Furnished", exact: true })).toBeVisible();
-        await expect(table.getByRole("row").filter({ hasText: "Wi-Fi speed" })).toBeVisible();
+
+
+
         await expect(page.locator(".a2ui-std-table-wrap")).toBeVisible();
         // Official Standard Buttons are rendered from the authorized result,
         // not custom React wrappers with listing IDs copied into DOM attributes.
@@ -95,17 +95,22 @@ test.describe("SAN-1681 · official rental comparison A2UI Table", () => {
           table.locator("tbody tr").filter({ hasText: label }).first().locator("td").nth(index + 1);
         for (const index of [0, 1]) {
           const record = records[index]!;
-          await expect(table.locator("thead th").nth(index + 1)).toHaveText(record.title);
-          await expect(featureCell("Neighborhood", index)).toHaveText(record.neighborhood || "Not recorded");
-          await expect(featureCell("Bedrooms", index)).toHaveText(
+          await expect(table.locator("thead th").nth(index + 1)).toHaveText("Option #" + (index + 1) + " " + record.title);
+          if (records.slice(0, 2).some((r) => r?.neighborhood)) await expect(featureCell("Neighborhood", index)).toHaveText(record.neighborhood || "Not recorded");
+          if (records.slice(0, 2).some((r) => r?.bedrooms != null)) await expect(featureCell("Bedrooms", index)).toHaveText(
             record.bedrooms == null ? "Not recorded" : String(record.bedrooms));
-          await expect(featureCell("Furnished", index)).toHaveText(
+          if (records.slice(0, 2).some((r) => r?.furnished != null)) await expect(featureCell("Furnished", index)).toHaveText(
             record.furnished == null ? "Not recorded" : record.furnished ? "Yes" : "No");
           for (const [label, amount] of [
             ["Monthly rent", record.price_monthly], ["Nightly rent", record.price_daily],
           ] as const) {
+            const hasRecordedPrice = records.slice(0, 2).some((r) => Number(label === "Monthly rent" ? r?.price_monthly : r?.price_daily) > 0);
+            if (!hasRecordedPrice) {
+              await expect(table.getByRole("row").filter({ hasText: label })).toHaveCount(0);
+              continue;
+            }
             const displayed = (await featureCell(label, index).innerText()).trim();
-            if (amount == null) expect(displayed).toBe("Not recorded");
+            if (amount == null || Number(amount) <= 0) expect(displayed).toBe("Not recorded");
             else {
               expect(Number(displayed.replace(/[^\d.]/g, ""))).toBe(Number(amount));
               if (record.currency) expect(displayed).toContain(record.currency);
@@ -117,10 +122,11 @@ test.describe("SAN-1681 · official rental comparison A2UI Table", () => {
           { label: "Neighborhood", value: record!.neighborhood, index },
           { label: "Furnished", value: record!.furnished, index },
         ]).find(({ value }) => value == null);
-        if (missing) await expect(featureCell(missing.label, missing.index)).toHaveText("Not recorded");
+        if (missing && await featureCell(missing.label, missing.index).count()) await expect(featureCell(missing.label, missing.index)).toHaveText("Not recorded");
         await expect(page.locator("[data-streamdown] table")).toHaveCount(0);
         expect(queryCounts, "comparison reuses current results rather than searching").toEqual([]);
-        expect(await cards.count()).toBe(initialCount);
+        expect(await cards.count()).toBe(initialCount - 2);
+        await expect(page.getByTestId("rental-other-results")).not.toHaveAttribute("open", "");
 
         const action = comparisonSurface.getByRole("button", { name: "Details" }).first();
         await action.focus();
@@ -149,11 +155,12 @@ test.describe("SAN-1681 · official rental comparison A2UI Table", () => {
         await expect(table.locator("thead th")).toHaveCount(3);
         await expect(comparisonSurface.getByRole("button", { name: "Details" })).toHaveCount(2);
         await expect(comparisonSurface.getByRole("button", { name: "Schedule viewing" })).toHaveCount(2);
-        await expect(table.locator("thead th").nth(1)).toHaveText(records[1]!.title);
-        await expect(table.locator("thead th").nth(2)).toHaveText(records[2]!.title);
+        await expect(table.locator("thead th").nth(1)).toHaveText("Option #1 " + records[1]!.title);
+        await expect(table.locator("thead th").nth(2)).toHaveText("Option #2 " + records[2]!.title);
         await expect(table).toHaveCount(1);
         expect(queryCounts).toEqual([]);
-        expect(await cards.count()).toBe(initialCount);
+        expect(await cards.count()).toBe(initialCount - 2);
+        await expect(page.getByTestId("rental-other-results")).not.toHaveAttribute("open", "");
 
         if (width === 390) {
           // Read-only DOM stress test on the genuine rendered CopilotKit table.
@@ -204,8 +211,11 @@ test.describe("SAN-1681 · official rental comparison A2UI Table", () => {
       const input = page.locator('[data-testid="rental-ask-composer"]:visible #rental-ask-input').first();
       const send = page.locator('[data-testid="rental-ask-composer"]:visible [data-testid="rental-ask-send"]').first();
       const cards = page.locator('[data-testid="rentals-grid"] [data-result-kind="rental"][data-testid^="rental-card-"]');
-      const firstIds = () => cards.evaluateAll((elements) => elements.slice(0, 2).map((element) =>
-        (element.getAttribute("data-testid") ?? "").replace(/^rental-card-/, "")));
+      // The canonical result order stays intact even when compared cards are
+      // replaced by the single comparison section and other cards are collapsed.
+      const firstIds = async () => (JSON.parse(
+        (await page.getByTestId("rentals-grid").getAttribute("data-result-ids")) ?? "[]"
+      ) as string[]).slice(0, 2);
       const ask = async (query: string) => {
         await expect(input).toBeVisible({ timeout: 40_000 });
         await input.fill(query);
@@ -219,7 +229,7 @@ test.describe("SAN-1681 · official rental comparison A2UI Table", () => {
       await expect.poll(() => cards.count(), { timeout: 120_000 }).toBeGreaterThanOrEqual(2);
       const before = await firstIds();
 
-      await ask("Find apartments in Laureles and compare the first two in a table.");
+      await ask("Find 2BR apartments in Laureles and compare the first two.");
       const comparisonSurface = page.getByTestId("rental-comparison-surface");
       const table = comparisonSurface.getByRole("table", { name: /side-by-side apartment comparison/i });
       await expect(table).toBeVisible({ timeout: 120_000 });
@@ -233,26 +243,41 @@ test.describe("SAN-1681 · official rental comparison A2UI Table", () => {
 
       // Renter-scoped readback: the table columns are the first two cards now visible.
       const renter = asUser(await getTestSession(resolveQaRoleEmail("renter")!, { requireExisting: true }));
-      const { data, error } = await renter.from("apartments").select("id,title").in("id", shown);
+      const { data, error } = await renter.from("apartments").select("id,title,bedrooms,neighborhood").in("id", shown);
       expect(error).toBeNull();
+      expect(data).toHaveLength(2);
+      expect(data?.every((row) => row.bedrooms === 2 && row.neighborhood?.toLowerCase().includes("laureles"))).toBe(true);
       const title = new Map((data ?? []).map((row) => [String(row.id), row.title]));
       await expect(table.locator("thead th")).toHaveCount(3);
-      await expect(table.locator("thead th").nth(1)).toHaveText(title.get(shown[0])!);
-      await expect(table.locator("thead th").nth(2)).toHaveText(title.get(shown[1])!);
+      await expect(table.locator("thead th").nth(1)).toHaveText("Option #1 " + title.get(shown[0])!);
+      await expect(table.locator("thead th").nth(2)).toHaveText("Option #2 " + title.get(shown[1])!);
 
       // The numbered comparison strip must use the same current authorized IDs
       // as the original Table and the cards, not the earlier El Poblado search.
       const options = page.getByTestId("rental-compared-options");
       await expect(options).toBeVisible();
-      await expect(page.getByTestId("rental-compared-" + shown[0])).toHaveText("Option #1");
-      await expect(page.getByTestId("rental-compared-" + shown[1])).toHaveText("Option #2");
-      await expect(cards.locator('[data-testid^="rental-compared-"]')).toHaveCount(2);
+      const optionCards = options.locator("[data-listing-id]");
+      await expect(optionCards).toHaveCount(2);
+      await expect(optionCards.nth(0)).toHaveAttribute("data-listing-id", shown[0]);
+      await expect(optionCards.nth(1)).toHaveAttribute("data-listing-id", shown[1]);
+      await expect(page.getByTestId("rental-card-" + shown[0])).toHaveCount(0);
+      await expect(page.getByTestId("rental-card-" + shown[1])).toHaveCount(0);
+      const other = page.getByTestId("rental-other-results");
+      await expect(other).not.toHaveAttribute("open", "");
+      const remaining = await cards.count();
+      if (remaining > 0) {
+        await expect(cards.first()).toBeHidden();
+        await other.locator("summary").click();
+        await expect(cards.first()).toBeVisible();
+        await other.locator("summary").click();
+        await expect(cards.first()).toBeHidden();
+      }
       await expect(options.getByText(title.get(shown[0])!, { exact: true })).toBeVisible();
       await expect(options.getByText(title.get(shown[1])!, { exact: true })).toBeVisible();
       const firstMap = options.getByRole("button", { name: "Show compared apartment 1 on map" });
       if (await firstMap.count()) {
         await firstMap.click();
-        await expect(page.getByTestId("rental-card-" + shown[0])).toHaveAttribute("data-selected", "true");
+        await expect(optionCards.nth(0)).toHaveAttribute("data-selected", "true");
       }
 
       // The real official Button must open the Details UI for the first *new* card.

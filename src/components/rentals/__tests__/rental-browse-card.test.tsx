@@ -653,6 +653,8 @@ describe("SAN-472: only mapped rentals have map selection", () => {
   it("rejects invalid/out-of-range coordinates instead of adding map pins", () => {
     const good = rowToRental(apartmentRow({ latitude: 6.244, longitude: -75.592 }));
     expect(rentalToMapPin(good)?.id).toBe("rental-rnt_lau_001");
+    expect(rentalToMapPin({ ...good, image: "", images: ["https://images.unsplash.com/actual.jpg"] })?.meta?.rentalPhotoUrl).toBe("https://images.unsplash.com/actual.jpg");
+    expect(rentalToMapPin({ ...good, image: "https://invalid.example/x", images: [] })?.meta?.rentalPhotoUrl).toBeUndefined();
     expect(rentalToMapPin({ ...good, latitude: 99 })).toBeNull();
     expect(rentalToMapPin({ ...good, longitude: Number.POSITIVE_INFINITY })).toBeNull();
     expect(rentalToMapPin({ ...good, latitude: undefined })).toBeNull();

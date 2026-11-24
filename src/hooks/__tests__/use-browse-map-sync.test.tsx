@@ -86,6 +86,15 @@ describe("SAN-472 browse map sync", () => {
     expect(state.select).toHaveBeenCalledWith(null);
   });
 
+  it("refreshes a rental pin when its photo changes without changing coordinates or selection", () => {
+    state.selectedPinId = "rental-old";
+    act(() => root.render(<Probe pins={[pin("old")]} />));
+    const updated = { ...pin("old"), meta: { rentalPhotoUrl: "https://images.unsplash.com/real.jpg" } };
+    act(() => root.render(<Probe pins={[updated]} />));
+    expect(state.merge).toHaveBeenLastCalledWith("rental", [updated]);
+    expect(state.select).not.toHaveBeenCalled();
+  });
+
   it("keeps a matching selection when only its coordinate/title changes", () => {
     state.selectedPinId = "rental-old";
     act(() => root.render(<Probe pins={[pin("old")]} />));

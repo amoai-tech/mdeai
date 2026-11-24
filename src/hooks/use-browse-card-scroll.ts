@@ -16,6 +16,9 @@ export function useBrowseCardScroll() {
     if (!focusPinId) return;
     const card = document.querySelector(`[data-pin-id="${focusPinId}"]`);
     if (card instanceof HTMLElement) {
+      // A map pin can target an apartment inside the collapsed other-results list.
+      const disclosure = card.closest<HTMLDetailsElement>("details[data-map-expand]");
+      if (disclosure) disclosure.open = true;
       card.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }
   }, [focusPinId]);
