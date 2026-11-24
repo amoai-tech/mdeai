@@ -83,6 +83,22 @@ describe("concierge provider auth/error transitions", () => {
     expect(getConciergeErrorForThread("guest-thread").version).toBe(0);
   });
 
+  it("shows a safe workspace loading state without starting the runtime", () => {
+    const draw = () => act(() => root.render(
+      <ChatProvider sessionFallback={<span role="status">Loading workspace</span>}>
+        <span>Workspace ready</span>
+      </ChatProvider>,
+    ));
+    draw();
+    expect(container.textContent).toBe("Loading workspace");
+    expect(session.onError).toBeNull();
+    session.user = { id: "user-a" };
+    session.loading = false;
+    draw();
+    expect(container.textContent).toBe("Workspace ready");
+    expect(session.onError).toBeTypeOf("function");
+  });
+
   it("ignores a late 401 from an old guest provider after sign-in", () => {
     session.loading = false;
     render();

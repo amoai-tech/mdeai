@@ -420,6 +420,11 @@
       "note": "SAN-1630 EventCard: v2 useAgentContext publishes only the most recent authorized event UUIDs; the catalog revalidates every ID against authorized results and rejects forged/cross-thread IDs."
     },
     {
+      "file": "src/components/copilot/a2ui/__tests__/mde-standard-restrictions.test.ts",
+      "classification": "test-only",
+      "note": "SAN-1675: verifies official renderer delegation, URL and input restrictions, bound values and manifest validation behavior."
+    },
+    {
       "file": "src/components/copilot/a2ui/__tests__/mde-ui-catalog.test.ts",
       "classification": "test-only",
       "note": "SAN-1654/1656: imports the installed standardUI to prove the exposed catalog vocabulary matches the documented guide and cannot drift from the pinned SDK."
@@ -478,6 +483,26 @@
       "file": "src/components/rentals/__tests__/rental-filter-panel-actions-recovery.test.tsx",
       "classification": "test-only",
       "note": "F5: mocks the v2 generative-ui function hook to capture the Apply handler and proves the in-flight guard is released after a navigation that never changed the URL filters; no provider or run is created."
+    },
+    {
+      "file": "src/components/copilot/a2ui/mde-dashboard-surface.tsx",
+      "classification": "keep",
+      "note": "SAN-1675: renders official Standard Catalog operations from real page data with no AI turn, using the public v2 surface manager ingest + SurfaceView on a dashboard thread with no registered target. Reuses the existing route-owned provider; never creates a second runtime connection."
+    },
+    {
+      "file": "src/components/copilot/a2ui/mde-standard-restrictions.ts",
+      "classification": "keep",
+      "note": "SAN-1675: re-registers URL-bearing official components (Image, Link, EntityCard, Carousel media, Pressable) and TextField with narrower schemas plus a render-time URL re-check, delegating to the official renderers."
+    },
+    {
+      "file": "src/components/host/rentals/broker-overview-surface.tsx",
+      "classification": "keep",
+      "note": "SAN-1675: broker Overview consumer; registers a mount-key-scoped brokerViewingAction with the official useGenerativeUIFunction and calls the existing PATCH /api/host/rentals/viewings/:id writer with the persisted expectation."
+    },
+    {
+      "file": "src/lib/rentals/__tests__/broker-overview-ui.test.ts",
+      "classification": "test-only",
+      "note": "SAN-1675: validates the broker Overview operations with the installed validateOperation and the catalog's own prop schemas."
     }
   ]
 }

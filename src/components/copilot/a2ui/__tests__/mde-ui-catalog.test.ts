@@ -116,15 +116,26 @@ describe("MDE A2UI catalog", () => {
     expect(mdeUI.components.has("EventCard")).toBe(true);
   });
 
-  it("exposes exactly the documented vocabulary", () => {
-    // The server guide documents these props by name; anything else in the
-    // catalog would be a component the model has to guess at. Update both
-    // together, never one alone.
-    expect([...mdeUI.components.keys()].sort()).toEqual([
-      "ApplyFiltersButton", "Badge", "BedroomFilter", "Box", "Button", "Caption", "Card",
-      "Column", "Divider", "EventCard", "FollowUp", "Grid", "GridItem",
-      "Label", "RentalCard", "RentalComparisonActions", "Row", "Spacer", "Table", "Text", "Title", "ViewingProposal",
-    ]);
+  it("exposes exactly the documented vocabulary: 50 official components plus 6 MDE components", () => {
+    // The server guide names every one of these; anything else in the catalog
+    // would be a component the model has to guess at. Update both together.
+    const official = [
+      // SAN-1654 baseline (16)
+      "Badge", "Box", "Button", "Caption", "Card", "Column", "Divider", "FollowUp", "Grid", "GridItem",
+      "Label", "Row", "Spacer", "Table", "Text", "Title",
+      // SAN-1675 Batch 1 — layout, navigation and overlays
+      "Icon", "Tabs", "List", "ListItem", "Modal", "Popover", "PopoverTrigger", "PopoverContent", "ShimmerText", "Tooltip",
+      // Batch 2 — forms and interactive controls
+      "Pressable", "Form", "TextField", "TextArea", "Select", "CheckBox", "Radio", "RadioGroup", "Slider",
+      "DateTimeInput", "ChoicePicker", "SegmentedControl",
+      // Batch 3 — data and analytics
+      "Chart", "EntityCard", "TableSection", "TableRow", "TableCell",
+      // Batch 4 — media and navigation (URL-restricted)
+      "Image", "ImageGrid", "Carousel", "CarouselItem", "CarouselMediaItem", "Link", "LinkCard",
+    ];
+    const mde = ["ApplyFiltersButton", "BedroomFilter", "EventCard", "RentalCard", "RentalComparisonActions", "ViewingProposal"];
+    expect(official).toHaveLength(50);
+    expect([...mdeUI.components.keys()].sort()).toEqual([...official, ...mde].sort());
   });
 
   it("accepts the documented Table columns and rows shape", () => {
@@ -181,25 +192,26 @@ describe("MDE A2UI catalog", () => {
     }
   });
 
-  it("omits every control until a catalog function is registered", () => {
-    // The official Button is available for server-generated comparisons with
-    // renderer-only click functions. Other generic inputs remain omitted.
-    expect(mdeUI.components.has("Button")).toBe(true);
-    for (const name of [
-      "Pressable", "Form", "TextField", "TextArea", "Select",
-      "CheckBox", "Radio", "RadioGroup", "Slider", "DateTimeInput",
-      "SegmentedControl", "ChoicePicker", "Tabs",
-    ]) {
-      expect(mdeUI.components.has(name), `${name} must stay omitted`).toBe(false);
-    }
+  it("restricts the broker viewing action to user-activated renderer calls with a real showing UUID", () => {
+    const fn = mdeUI.functions.get("brokerViewingAction");
+    expect(fn).toMatchObject({ allowedCallers: "rendererOnly", requiresUserActivation: true });
+    const params = fn?.parameters as z.ZodTypeAny;
+    const id = "4f6f2c1e-8d0a-4b8e-9c55-1f2e3d4c5b6a";
+    const expectation = { expectedStatus: "scheduled", expectedScheduledAt: "2026-12-01T15:00:00Z" };
+    expect(params.safeParse({ ...expectation, rendererKey: id, showingId: id, action: "confirm" }).success).toBe(true);
+    expect(params.safeParse({ ...expectation, rendererKey: id, showingId: id, action: "reschedule", newWallClock: "2026-12-01T10:30" }).success).toBe(true);
+    expect(params.safeParse({ ...expectation, rendererKey: id, showingId: "not-a-uuid", action: "confirm" }).success).toBe(false);
+    expect(params.safeParse({ ...expectation, rendererKey: id, showingId: id, action: "delete" }).success).toBe(false);
+    expect(params.safeParse({ ...expectation, rendererKey: id, showingId: id, action: "reschedule", newWallClock: "x".repeat(40) }).success).toBe(false);
+    expect(params.safeParse({ ...expectation, rendererKey: id, showingId: id, action: "reschedule", newWallClock: "tomorrow" }).success).toBe(false);
+    expect(params.safeParse({ ...expectation, rendererKey: id, showingId: id, action: "reschedule", newWallClock: "2026-12-01T10:30Z" }).success).toBe(false);
+    expect(params.safeParse({ ...expectation, showingId: id, action: "confirm" }).success).toBe(false);
+    expect(params.safeParse({ ...expectation, rendererKey: "guessed", showingId: id, action: "confirm" }).success).toBe(false);
+    expect(params.safeParse({ rendererKey: id, showingId: id, action: "confirm" }).success).toBe(false);
   });
 
-  it("omits data structures and remote-content components the guide does not teach", () => {
-    for (const name of [
-      "TableSection", "TableRow", "TableCell", "List", "ListItem",
-      "Chart", "Map", "Icon", "Image", "ImageGrid", "Link", "LinkCard",
-      "Citation", "HtmlView", "Svg",
-    ]) {
+  it("keeps markup, maps and third-party fetches omitted", () => {
+    for (const name of ["Map", "HtmlView", "Svg", "Citation", "Favicon", "Video", "AudioPlayer", "Markdown"]) {
       expect(mdeUI.components.has(name), `${name} must stay omitted`).toBe(false);
     }
   });

@@ -32,7 +32,9 @@ function read(path: string): string {
  * Every assertion below is chosen to fail on a specific real regression, not to restate a line.
  */
 describe("SAN-1206 broker viewing-action surface contract", () => {
-  const actions = read(join(COMPONENTS, "broker-viewing-request-actions.tsx"));
+  // SAN-1675: the wire call lives in one shared helper used by the card and the Overview surface.
+  const actions = read(join(COMPONENTS, "broker-viewing-request-actions.tsx")) +
+    read(join(process.cwd(), "src", "lib", "rentals", "submit-broker-viewing-action.ts"));
   const surface = read(join(COMPONENTS, "broker-viewing-requests.tsx"));
 
   it("renders actions from the persisted status and instant, not from a local copy", () => {

@@ -9,6 +9,10 @@ import { isStoredRentalUuid } from "@/lib/cafe-search-fast-path";
 import { useAgent, UseAgentUpdate } from "@copilotkit/react-core/v2";
 import { useOptionalEventLocalChat } from "@/components/chat/event-local-chat-context";
 import { createGenerativeUI, standardUI } from "@copilotkit/react-core/v2/generative-ui";
+import {
+  MDE_RESTRICTED_STANDARD_NAMES,
+  buildRestrictedStandardComponents,
+} from "@/components/copilot/a2ui/mde-standard-restrictions";
 import { RentalCard as ExistingRentalCard } from "@/components/copilot/rental-card";
 import { ViewingProposalView } from "@/components/copilot/a2ui/viewing-proposal";
 import { EventCard as ExistingEventCard } from "@/components/copilot/event-card";
@@ -622,97 +626,62 @@ function MdeApplyFilters({
 }
 
 /**
- * SAN-1654 — the official Standard Catalog is the base of MDE's one catalog, so
- * the agent can arrange and label real cards instead of only ever rendering one.
+ * SAN-1654 / SAN-1675 — the official Standard Catalog is the base of MDE's one
+ * catalog. SAN-1675 enables 50 of the 69 installed components for the new
+ * dashboards: layout/navigation/overlays (Tabs, List, Modal, Popover, Tooltip,
+ * Icon, ShimmerText), forms (Form, TextField, Select, DateTimeInput, …), data
+ * (Chart, EntityCard, Table parts) and media/links (Image, Carousel, Link, …).
  *
- * The kept vocabulary is deliberately tiny and is documented prop-by-prop in
- * the server guide (`src/mastra/lib/generative-ui-context.ts`). The model does
- * not receive the upstream component schemas: MDE builds its own guide from a
- * presence flag, so a component the guide does not document is a component the
- * model would have to guess at. Two consequences:
+ * Rules that keep that safe:
  *
- * - **Controls that need an MDE action are omitted until they are wired.**
- *   Booking, saving and filtering require a registered catalog function; a
- *   generic button must never open a model-chosen URL, copy arbitrary text,
- *   or submit a form. The official Button renderer is retained below, but
- *   its catalog props forbid href/copy/submit; comparison clicks use MDE's
- *   user-activated, ID-resolving renderer functions.
- * - **Table is exposed for short, tool-grounded comparisons** using its
- *   columns/rows data form, documented in the server guide. TableSection,
- *   TableRow and TableCell stay omitted: the data form does not need them.
- *   Chart works in React through CopilotKit's bundled recharts; Map needs
- *   maplibre-gl for the map view and otherwise shows a place list, and MDE
- *   already owns Google Maps. HtmlView/Svg would let the model author markup,
- *   and Image/Link/Citation would accept model-chosen URLs.
+ * - **URLs are schema-restricted, not prompt-restricted.** Components that take
+ *   a URL are re-registered in `mde-standard-restrictions.ts`: images only from
+ *   the hosts `next/image` trusts, links only to MDE pages, and no
+ *   "open this URL in a new tab" props. The official renderer is reused.
+ * - **Actions are registered functions.** A control changes nothing until an
+ *   event is bound to a function declared below and handled by the page that
+ *   owns the real writer (for example `brokerViewingAction`). The official
+ *   Button keeps its link/copy/submit props removed.
+ * - **Still omitted:** Map (MDE owns Google Maps), HtmlView/Svg (model-authored
+ *   markup), Citation/Favicon (third-party favicon fetches), Video/AudioPlayer
+ *   (no trusted media pipeline), and typographic/teaching widgets with no
+ *   dashboard use.
  *
  * Every omitted name must still exist in the installed `standardUI`, and the
  * exposed set must equal exactly what the guide documents — both enforced by
  * `mde-ui-catalog.test.ts`, so an SDK upgrade cannot silently drift.
  */
 export const MDE_OMITTED_STANDARD_COMPONENTS = [
-  // Map needs maplibre-gl for its map view; Chart uses bundled recharts and
-  // Icon uses the installed lucide-react, so those two are blocked by policy,
-  // not by a missing package.
-  "Chart",
-  "Icon",
+  // MDE already owns Google Maps; Map would pull in maplibre-gl.
   "Map",
-  // Model-authored markup or model-chosen URLs.
+  // Model-authored markup.
   "HtmlView",
   "Svg",
-  "Image",
-  "ImageGrid",
-  "Link",
-  "LinkCard",
+  // Fetch a third-party favicon for any model-chosen host.
   "Citation",
-  // Controls without a registered catalog function (SAN-1655 / SAN-1658).
-  // The official Button renderer is re-registered with link/copy/submit props
-  // removed; only server-generated comparison clicks are ID-bound by design.
-  "Pressable",
-  "Form",
-  "TextField",
-  "TextArea",
-  "Select",
-  "CheckBox",
-  "Radio",
-  "RadioGroup",
-  "Slider",
-  "DateTimeInput",
-  "SegmentedControl",
-  "ChoicePicker",
-  "Tabs",
-  // Nested data structures the guide does not teach yet.
-  "TableSection",
-  "TableRow",
-  "TableCell",
-  "List",
-  "ListItem",
-  "EntityCard",
-  // Media, overlay and typographic ornament with no discovery answer behind it.
+  "Favicon",
+  // No trusted MDE media pipeline for these yet.
   "AudioPlayer",
+  "Video",
+  // Typographic ornament and teaching widgets with no dashboard consumer.
   "Blockquote",
   "Bold",
-  "Carousel",
-  "CarouselItem",
-  "CarouselMediaItem",
   "Code",
-  "Favicon",
   "FlashcardFlip",
   "Flow",
   "FlowItem",
   "Italic",
   "Markdown",
   "Math",
-  "Modal",
-  "Popover",
-  "PopoverContent",
-  "PopoverTrigger",
   "PulseIndicator",
-  "ShimmerText",
   "Strikethrough",
-  "Tooltip",
   "Underline",
-  "Video",
 ] as const;
+
+const restrictedStandard = buildRestrictedStandardComponents();
+const restrictedStandardComponents = Object.fromEntries(
+  Object.entries(restrictedStandard).filter((entry): entry is [string, NonNullable<typeof entry[1]>] => entry[1] !== null),
+);
 
 // Reuse the official renderer and onClick event; never ship a separate Button.
 // If an SDK upgrade changes its shape, omit Button safely rather than either
@@ -732,6 +701,8 @@ export const mdeUI = createGenerativeUI({
   id: "mde/discovery@1",
   extends: [standardUI.omit([
     ...MDE_OMITTED_STANDARD_COMPONENTS,
+    // Re-registered below with narrower props (or left out if the SDK shape drifted).
+    ...MDE_RESTRICTED_STANDARD_NAMES,
     ...(standardButton ? ["Button" as const] : []),
   ])],
   // The editable bedroom draft lives in the page provider so the agent can never
@@ -750,9 +721,27 @@ export const mdeUI = createGenerativeUI({
       allowedCallers: "rendererOnly",
       requiresUserActivation: true,
     },
+    // SAN-1675 — broker Overview viewing actions. The handler resolves the
+    // showing from the page's loaded, RLS-scoped rows and sends the persisted
+    // status/time as the expectation to the existing PATCH route (409 on stale).
+    brokerViewingAction: {
+      parameters: z.object({
+        rendererKey: z.string().uuid(),
+        showingId: z.string().uuid(),
+        expectedStatus: z.string().min(1),
+        expectedScheduledAt: z.string().datetime({ offset: true }),
+        action: z.enum(["confirm", "cancel", "reschedule"]),
+        // The bound DateTimeInput draft; empty until the broker picks a time. The
+        // handler validates the format and the server resolves it to a Medellín instant.
+        newWallClock: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/).optional(),
+      }),
+      allowedCallers: "rendererOnly",
+      requiresUserActivation: true,
+    },
   },
   components: {
     ...(clickOnlyButton ? { Button: clickOnlyButton } : {}),
+    ...restrictedStandardComponents,
     RentalCard: {
       component: MdeRentalCard,
       description:

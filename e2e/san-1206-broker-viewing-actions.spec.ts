@@ -37,6 +37,12 @@ import {
 
 const OPT_IN = process.env.SAN1206_BROKER_E2E === "1";
 
+test.use({
+  screenshot: "off", trace: "off", video: "off",
+  launchOptions: process.env.MDE_E2E_CHROME_PATH
+    ? { executablePath: process.env.MDE_E2E_CHROME_PATH } : {},
+});
+
 /** 19:00Z is 2:00 PM in Medellín; 20:00Z is 3:00 PM. */
 const T_CONFIRM = "2099-11-20T19:00:00.000Z";
 const T_RESCHEDULE_FROM = "2099-11-21T19:00:00.000Z";
@@ -462,13 +468,114 @@ test.describe("SAN-1206 · broker viewing actions", () => {
       );
       await expect(page.getByTestId(`viewing-request-reschedule-${fixture.showingIdA}`)).toBeVisible();
 
-      // ── Confirm ──────────────────────────────────────────────────────────────
-      await clickAndAwaitPersisted(
-        page,
-        `viewing-request-confirm-${fixture.showingIdA}`,
-        async () => (await readShowing(fixture.showingIdA!)).status === "confirmed",
-        "confirm",
-      );
+      // SAN-1675: exercise the actual official renderer, not the legacy
+      // deterministic fallback. Reuse this test's real local DB fixture.
+      let overviewInfoRequests = 0;
+      let overviewAgentRuns = 0;
+      const overviewErrors: string[] = [];
+      const trackRuntime = (request: import("@playwright/test").Request) => {
+        if (!new URL(request.url()).pathname.includes("/api/copilotkit")) return;
+        const method = request.method() === "POST" ? request.postDataJSON()?.method : undefined;
+        if (method === "info") overviewInfoRequests++;
+        if (method === "agent/run") overviewAgentRuns++;
+      };
+      const trackPageError = (error: Error) => overviewErrors.push(error.message);
+      page.on("request", trackRuntime);
+      page.on("pageerror", trackPageError);
+      await page.goto("/host/rentals?mode=overview", { waitUntil: "domcontentloaded" });
+      const surface = page.getByTestId("mde-surface-broker-overview");
+      await expect(surface).toBeVisible({ timeout: 45_000 });
+      await expect(surface.getByText("Active listings", { exact: true })).toBeVisible();
+      await expect(surface.locator("svg.recharts-surface").first()).toBeVisible();
+      for (const width of [320, 390, 768, 1440]) {
+        await page.setViewportSize({ width, height: 900 });
+        if (width < 1024) {
+          const workspace = page.getByRole("button", { name: "Workspace", exact: true });
+          if (!(await surface.isVisible())) await workspace.click();
+        }
+        await expect(surface).toBeVisible();
+        await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);
+        const tabs = surface.getByRole("tab");
+        await tabs.first().focus();
+        await page.keyboard.press("ArrowRight");
+        await expect(tabs.nth(1)).toBeFocused();
+        await tabs.nth(1).click();
+        await expect(surface.getByRole("table")).toBeVisible();
+        await tabs.first().click();
+      }
+      // The product is intentionally light-only, including dark OS preference.
+      await page.emulateMedia({ colorScheme: "dark" });
+      await expect.poll(() => page.evaluate(() => getComputedStyle(document.documentElement).colorScheme)).toBe("light");
+      await page.emulateMedia({ colorScheme: "light" });
+      await surface.getByRole("tab", { name: /Viewings/ }).click();
+      const rowFor = (renter: string) => surface.getByRole("row").filter({ hasText: renter });
+      const open = async (renter: string) => {
+        await rowFor(renter).getByRole("button", { name: "Manage" }).click();
+        const dialog = page.getByRole("dialog");
+        await expect(dialog).toContainText(renter);
+        return dialog;
+      };
+      const renterA = `SAN1206 Renter A ${fixture.run}`;
+      const renterB = `SAN1206 Renter B ${fixture.run}`;
+      // Keep B's draft while A is confirmed and the real page refreshes.
+      let dialog = await open(renterB);
+      await dialog.getByLabel("Date", { exact: true }).fill(RESCHEDULE_WALL_CLOCK.slice(0, 10));
+      await dialog.getByLabel("Time", { exact: true }).selectOption(RESCHEDULE_WALL_CLOCK.slice(11));
+      await page.keyboard.press("Escape");
+      dialog = await open(renterA);
+      let confirmRequests = 0;
+      page.on("request", (request) => {
+        if (request.method() === "PATCH" &&
+            request.url().endsWith(`/api/host/rentals/viewings/${fixture.showingIdA}`)) confirmRequests++;
+      });
+      const confirmResponse = page.waitForResponse((response) =>
+        response.request().method() === "PATCH" &&
+        response.url().endsWith(`/api/host/rentals/viewings/${fixture.showingIdA}`));
+      await dialog.getByRole("button", { name: "Confirm", exact: true }).dblclick();
+      expect((await confirmResponse).status()).toBe(200);
+      await expect.poll(async () => (await readShowing(fixture.showingIdA!)).status).toBe("confirmed");
+      await expect(page.getByTestId("broker-overview-status")).toHaveText("Saved.");
+      await page.keyboard.press("Escape");
+      await surface.getByRole("tab", { name: /Viewings/ }).click();
+      await expect(rowFor(renterA)).toContainText("Confirmed");
+      expect(confirmRequests).toBe(1);
+      dialog = await open(renterB);
+      await expect(dialog.getByLabel("Date", { exact: true })).toHaveValue(RESCHEDULE_WALL_CLOCK.slice(0, 10));
+      await expect(dialog.getByLabel("Time", { exact: true })).toHaveValue(RESCHEDULE_WALL_CLOCK.slice(11));
+      const movedResponse = page.waitForResponse((response) =>
+        response.request().method() === "PATCH" &&
+        response.url().endsWith(`/api/host/rentals/viewings/${fixture.showingIdB}`));
+      await dialog.getByRole("button", { name: "Move viewing" }).click();
+      expect((await movedResponse).status()).toBe(200);
+      await expect.poll(async () => instantOf((await readShowing(fixture.showingIdB!)).scheduled_at)).toBe(T_RESCHEDULE_TO);
+      await expect(page.getByTestId("broker-overview-status")).toHaveText("Saved.");
+      await page.keyboard.press("Escape");
+      await surface.getByRole("tab", { name: /Viewings/ }).click();
+      dialog = await open(renterB);
+      await expect(dialog.getByLabel("Date", { exact: true })).toHaveValue("");
+      await expect(dialog.getByLabel("Time", { exact: true })).toHaveValue("");
+      await page.keyboard.press("Escape");
+      expect(overviewInfoRequests).toBe(1);
+      expect(overviewAgentRuns).toBe(0);
+      expect(overviewErrors).toEqual([]);
+      page.off("request", trackRuntime);
+      page.off("pageerror", trackPageError);
+      // Navigate away and remount via the real route, without a full page reload.
+      await page.getByTestId("host-rentals-nav-concierge").click();
+      await expect(surface).toHaveCount(0);
+      await page.getByTestId("host-rentals-nav-overview").click();
+      await expect(surface).toBeVisible();
+      await surface.getByRole("tab", { name: /Viewings/ }).click();
+      await expect(rowFor(renterA)).toContainText("Confirmed");
+      await expect(rowFor(renterB)).toContainText(EXPECTED_TIME_LABEL);
+      const stale = await page.request.patch(`/api/host/rentals/viewings/${fixture.showingIdB}`, {
+        data: { action: "reschedule", expectedStatus: "scheduled", expectedScheduledAt: T_RESCHEDULE_FROM,
+          newWallClock: "2099-11-21T16:00" },
+      });
+      expect(stale.status()).toBe(409);
+      expect(instantOf((await readShowing(fixture.showingIdB!)).scheduled_at)).toBe(T_RESCHEDULE_TO);
+      // Existing native card contract remains covered below.
+      await page.goto("/host/rentals", { waitUntil: "domcontentloaded" });
 
       // A full server render must show the persisted decision.
       await page.reload({ waitUntil: "domcontentloaded" });
@@ -498,12 +605,8 @@ test.describe("SAN-1206 · broker viewing actions", () => {
       expect(await countShowings(fixture.apartmentId!)).toBe(3);
 
       // ── Reschedule 2:00 PM → 3:00 PM on the same row ──────────────────────────
-      await rescheduleViaUi(
-        page,
-        fixture.showingIdB!,
-        RESCHEDULE_WALL_CLOCK,
-        T_RESCHEDULE_TO,
-      );
+      await rescheduleViaUi(page, fixture.showingIdB!, "2099-11-21T14:00", T_RESCHEDULE_FROM);
+      await rescheduleViaUi(page, fixture.showingIdB!, RESCHEDULE_WALL_CLOCK, T_RESCHEDULE_TO);
 
       const rescheduled = await readShowing(fixture.showingIdB!);
       expect(instantOf(rescheduled.scheduled_at)).toBe(T_RESCHEDULE_TO);
