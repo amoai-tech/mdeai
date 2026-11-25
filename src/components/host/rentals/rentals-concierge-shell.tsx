@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import { usePathname } from "next/navigation";
 import { MdeDashboardRenderProvider, MdeDashboardSurface } from "@/components/copilot/a2ui/mde-dashboard-surface";
-import { ChatProvider } from "@/components/chat/chat-provider";
+import { BrokerChatProvider, RentalsAskMde } from "@/components/host/rentals/rentals-ask-mde";
 import { HostRentalsNav } from "@/components/host/rentals/host-rentals-nav";
 import { RentalsConciergeCenter } from "@/components/host/rentals/rentals-concierge-center";
 import { RentalsConversationHistory } from "@/components/host/rentals/rentals-conversation-history";
@@ -40,21 +41,25 @@ const RENTALS_HEADER_OPERATIONS = [{
  * Persistent frame for the /app/rentals broker route group only.
  * The legacy /host/rentals shell owns its own navigation and chat. Keep
  * that route separate until it is migrated; no speculative basePath API.
- * Page children own data; no loader or agent runs here.
+ * Page children own data; Ask MDE initializes only on explicit chat navigation or opening.
  */
 export function RentalsBrokerFrame({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+  // SAN-1685 — the dashboard and the embedded chat each render their own
+  // section heading. One visually hidden page heading keeps the document
+  // outline valid (the chat's own title is a secondary h2 when embedded).
+  const pageHeading = pathname === "/app/rentals/listings" ? "Rentals listings" : "Rentals overview";
   return (
     <MdeDashboardRenderProvider>
       <div data-testid="rentals-broker-frame" className="flex min-w-0 flex-col gap-4">
+        <h1 className="sr-only">{pageHeading}</h1>
         <MdeDashboardSurface
           surfaceId="rentals-workspace-header"
           operations={RENTALS_HEADER_OPERATIONS}
           fallback={<div><h2 className="font-serif text-xl font-semibold">Rentals workspace</h2><p className="text-sm text-muted-foreground">Manage your listings and viewing requests.</p></div>}
         />
         <HostRentalsNav basePath="/app/rentals" />
-        <div className="min-w-0">{children}</div>
-        {/* SAN-1685 owns the actual persistent composer. No second chat here. */}
-        <div data-testid="rentals-ask-mde-slot" />
+        <RentalsAskMde>{children}</RentalsAskMde>
       </div>
     </MdeDashboardRenderProvider>
   );
@@ -72,17 +77,29 @@ export function RentalsConciergeShell({
   basePath = "/host/rentals",
 }: RentalsConciergeShellProps) {
   const [mobilePane, setMobilePane] = useState<MobilePane>("chat");
-  // SAN-1710 — Overview is one page, not a right-hand panel. It renders at the
-  // full content width in natural page flow for both route families: no
-  // feed/chat column, no pane switcher and no nested scroll. The one existing
-  // concierge chat remains reachable from the shared navigation, and SAN-1685
-  // owns mounting that chat at the bottom of this overview.
+  // /app owns the single persistent bottom chat in its route layout. Both
+  // `?mode=overview` and `?mode=concierge` show the one Overview page; the
+  // mode only controls whether that chat starts open, never a second page.
+  if (basePath === "/app/rentals") {
+    return (
+      <div data-testid="rentals-concierge" className="min-w-0">
+        <RentalsDynamicWorkspace
+          mode="overview"
+          dashboard={dashboard}
+          loadError={loadError}
+          basePath={basePath}
+        />
+      </div>
+    );
+  }
+
+  // SAN-1710 — the legacy host overview is one full-width page, not a
+  // right-hand panel. It keeps its own domain navigation because it has no
+  // shared frame; the host concierge three-panel view is unchanged below.
   if (workspaceMode === "overview") {
     return (
       <div data-testid="rentals-concierge" className="min-w-0">
-        {/* The /app route gets its navigation from RentalsBrokerFrame; the legacy
-            host tree still owns its own domain navigation in every mode. */}
-        {basePath !== "/app/rentals" && <HostRentalsNav basePath={basePath} />}
+        <HostRentalsNav basePath={basePath} />
         <RentalsDynamicWorkspace
           mode={workspaceMode}
           dashboard={dashboard}
@@ -96,15 +113,7 @@ export function RentalsConciergeShell({
   const workspace = (
     <>
       <div className={cn("min-h-0 min-w-0", mobilePane !== "chat" && "max-lg:hidden", "lg:block")}>
-        {basePath === "/app/rentals" ? (
-          <ChatProvider persistThread sessionFallback={
-            <div role="status" className="p-4 text-sm text-muted-foreground">Loading Ask MDE…</div>
-          }>
-            <RentalsConciergeCenter mode={workspaceMode} />
-          </ChatProvider>
-        ) : (
-          <RentalsConciergeCenter mode={workspaceMode} />
-        )}
+        <RentalsConciergeCenter mode={workspaceMode} />
       </div>
       <div className={cn("min-h-0 min-w-0", mobilePane !== "workspace" && "max-lg:hidden", "lg:block")}>
         <RentalsDynamicWorkspace mode={workspaceMode} dashboard={dashboard} loadError={loadError} basePath={basePath} />
@@ -117,7 +126,7 @@ export function RentalsConciergeShell({
       data-testid="rentals-concierge"
       className="flex min-h-[calc(100dvh-7rem)] flex-col gap-3 md:min-h-[calc(100dvh-5rem)]"
     >
-      {basePath !== "/app/rentals" && <HostRentalsNav basePath={basePath} />}
+      <HostRentalsNav basePath={basePath} />
 
       <div
         className={cn(
@@ -136,15 +145,13 @@ export function RentalsConciergeShell({
           <RentalsConversationHistory dashboard={dashboard} />
         </div>
 
-        {basePath === "/app/rentals" ? workspace : (
-          <ChatProvider persistThread sessionFallback={
-            <div role="status" className="min-h-32 rounded-lg border border-border p-4 text-sm text-muted-foreground lg:col-span-2">
-              Loading your workspace…
-            </div>
-          }>
-            {workspace}
-          </ChatProvider>
-        )}
+        <BrokerChatProvider sessionFallback={
+          <div role="status" className="min-h-32 rounded-lg border border-border p-4 text-sm text-muted-foreground lg:col-span-2">
+            Loading your workspace…
+          </div>
+        }>
+          {workspace}
+        </BrokerChatProvider>
       </div>
 
       <nav

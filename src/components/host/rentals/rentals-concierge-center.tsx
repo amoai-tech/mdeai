@@ -11,6 +11,12 @@ import type { RentalsWorkspaceMode } from "@/components/host/rentals/rentals-dyn
 
 type RentalsConciergeCenterProps = {
   mode: RentalsWorkspaceMode;
+  /**
+   * SAN-1685 — the /app dashboard owns the page-level h1, so the embedded chat
+   * renders its title as a secondary heading. The standalone legacy Concierge
+   * page keeps the h1.
+   */
+  embedded?: boolean;
 };
 
 /** The welcome copy, as a paragraph: the page already has one heading. */
@@ -49,14 +55,15 @@ export const BrokerChatView = Object.assign(BrokerChatViewInner, CopilotChatView
 /**
  * SAN-1124 — a real CopilotKit v2 chat using the existing conciergeAgent.
  * /app/rentals and /host/rentals are excluded from the root provider,
- * so RentalsConciergeShell owns the ONE live runtime connection for chat.
- * The /app Overview uses the transport-free dashboard renderer.
+ * so BrokerChatProvider owns the ONE live runtime connection for chat.
+ * The /app dashboard stays independent of the lazy bottom chat.
  *
  * Send, Stop and Retry belong to CopilotChat; no parallel chat state,
  * API transport, synthetic replies, or second broker agent.
  */
-export function RentalsConciergeCenter({ mode }: RentalsConciergeCenterProps) {
+export function RentalsConciergeCenter({ mode, embedded = false }: RentalsConciergeCenterProps) {
   const deterministic = isDeterministicE2E();
+  const Heading = embedded ? "h2" : "h1";
   return (
     <section
       data-testid="rc-center"
@@ -64,7 +71,7 @@ export function RentalsConciergeCenter({ mode }: RentalsConciergeCenterProps) {
       aria-label="Broker concierge chat"
     >
       <div className="shrink-0 border-b border-border px-2 py-2">
-        <h1 className="font-serif text-lg font-semibold">Your rentals, run by AI</h1>
+        <Heading className="font-serif text-lg font-semibold">Your rentals, run by AI</Heading>
         <p className="text-xs text-muted-foreground">
           Ask about your real listings, leads and viewing requests. The assistant is read-only.
           Use the workspace to confirm, decline or publish.

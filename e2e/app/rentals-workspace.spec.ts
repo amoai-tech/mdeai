@@ -78,23 +78,37 @@ test.describe("SAN-1578 /app rentals", { tag: ["@app", "@rentals"] }, () => {
         await page.unroute(runtimeRoute);
       }
 
+      // SAN-1685: /app/rentals now lands on Overview with the one chat collapsed.
       await page.goto("/app/rentals");
       await expect(page.getByTestId("rentals-concierge")).toBeVisible();
-      await expect(
-        page.getByRole("heading", { name: "Your rentals, run by AI" }),
-      ).toBeVisible();
+      await expect(page.getByTestId("mde-surface-broker-overview")).toBeVisible();
+      await expect(page.getByTestId("rc-center")).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Open chat" })).toBeVisible();
+      await expect(page.getByTestId("host-rentals-nav-overview")).toHaveAttribute("aria-current", "page");
+      await expect(page.getByTestId("host-rentals-nav-concierge")).toHaveAttribute(
+        "href",
+        "/app/rentals?mode=concierge",
+      );
       await expect(
         page.getByTestId("host-rentals-nav-listings"),
       ).toHaveAttribute("href", "/app/rentals/listings");
 
+      // The explicit concierge mode opens the same existing chat.
+      await page.goto("/app/rentals?mode=concierge");
+      await expect(page.getByTestId("rc-center")).toHaveCount(1);
+      await expect(
+        page.getByRole("heading", { name: "Your rentals, run by AI" }),
+      ).toBeVisible();
+      await expect(page.getByTestId("host-rentals-nav-concierge")).toHaveAttribute("aria-current", "page");
+
       await expect(page.getByText("Rentals workspace", { exact: true })).toBeVisible();
-      await page.getByTestId("host-rentals-nav-overview").click();
-      await expect(page).toHaveURL(/\/app\/rentals\?mode=overview$/, { timeout: 30_000 });
+      await page.goto("/app/rentals?mode=overview");
       for (const width of [320, 390, 768, 1440]) {
         await page.setViewportSize({ width, height: 900 });
         await expect(page.getByTestId("rentals-broker-frame")).toBeVisible();
         await expect(page.getByTestId("rc-right")).toBeVisible();
-        await expect(page.getByTestId("rc-center")).not.toBeVisible();
+        await expect(page.getByTestId("rentals-ask-mde-slot")).toBeVisible();
+        await expect(page.getByTestId("rc-center")).toHaveCount(0);
         // SAN-1710: four real metrics, no chart and no tab strip, at every width.
         const overview = page.getByTestId("mde-surface-broker-overview");
         await expect(overview.getByText("Listings", { exact: true })).toBeVisible();
