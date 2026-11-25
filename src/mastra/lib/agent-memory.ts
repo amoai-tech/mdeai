@@ -2,6 +2,7 @@ import { createTool } from "@mastra/core/tools";
 import { Memory } from "@mastra/memory";
 import { z, type ZodObject, type ZodRawShape, type ZodTypeAny } from "zod";
 import { getMastraStorage } from "./storage";
+import type { ConciergeWorkingMemory } from "@/lib/types";
 
 type MemoryConfig = ConstructorParameters<typeof Memory>[0];
 
@@ -84,6 +85,71 @@ function withThreadLock<T>(key: string, run: () => Promise<T>): Promise<T> {
     }
   });
   return next;
+}
+
+type OwnedWorkingMemory = {
+  getThreadById: (args: { threadId: string }) => Promise<{ resourceId: string } | null>;
+  getWorkingMemory: (args: { threadId: string; resourceId: string }) => Promise<string | null>;
+  updateWorkingMemory: (args: { threadId: string; resourceId: string; workingMemory: string }) => Promise<unknown>;
+};
+type OwnedThread = { threadId: string; resourceId: string };
+
+/** Shared server-side writer for the requested budget and actual search results.
+ * Verify ownership and serialize the read/merge/write using the existing lock.
+ */
+async function patchOwnedRentalMemory(
+  memory: OwnedWorkingMemory,
+  where: OwnedThread,
+  patchFor: (existing: PlainObject) => PlainObject,
+): Promise<boolean> {
+  if (!where.threadId || !where.resourceId) return false;
+  return withThreadLock("thread:" + where.threadId, async () => {
+    try {
+      const thread = await memory.getThreadById({ threadId: where.threadId });
+      // No stale memory exists on a missing thread. Never create or write a
+      // thread here, and never trust identity from browser-provided hints.
+      if (!thread || thread.resourceId !== where.resourceId) return false;
+      const raw = await memory.getWorkingMemory(where);
+      const existing: unknown = raw ? JSON.parse(raw) : {};
+      if (!isPlainObject(existing)) return false;
+      await memory.updateWorkingMemory({ ...where, workingMemory: JSON.stringify(mergeWorkingMemory(existing, patchFor(existing))) });
+      return true;
+    } catch (error) {
+      console.warn("[agent-memory] rental working-memory update failed", {
+        error: error instanceof Error ? error.message : "unknown error",
+      });
+      return false;
+    }
+  });
+}
+
+/** Save the requested preference even if the ensuing search fails. */
+export async function rememberRentalMonthlyBudget(
+  memory: OwnedWorkingMemory,
+  where: OwnedThread,
+  budget: { maxPriceMonthly: number; budgetCurrency: "COP" | "USD" },
+): Promise<boolean> {
+  if (!Number.isFinite(budget.maxPriceMonthly) || budget.maxPriceMonthly <= 0) return false;
+  return patchOwnedRentalMemory(memory, where, () => ({
+    lastRentalQuery: { ...budget, budgetType: "monthly", maxPricePerNight: null },
+  }));
+}
+
+/** Replace the saved result array with the actual newly displayed rows.
+ * Empty/failed searches retain the prior cards in the existing page bridge.
+ */
+export async function rememberShownRentalResults(
+  memory: OwnedWorkingMemory,
+  where: OwnedThread,
+  rows: NonNullable<ConciergeWorkingMemory["lastRentalResults"]>,
+): Promise<boolean> {
+  if (!rows.length) return false;
+  return patchOwnedRentalMemory(memory, where, (existing) => ({
+    lastIntent: "rental_search",
+    lastRentalResults: rows,
+    ...(typeof existing.selectedListingId === "string" &&
+      !rows.some(row => row.id === existing.selectedListingId) ? { selectedListingId: null } : {}),
+  }));
 }
 
 /**

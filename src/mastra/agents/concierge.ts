@@ -1,7 +1,7 @@
 import { Agent } from '@mastra/core/agent';
 import { z } from 'zod';
-import { createThreadMemory } from '../lib/agent-memory';
-import { searchRentalsTool } from '../tools/search-rentals';
+import { createThreadMemory, rememberRentalMonthlyBudget, rememberShownRentalResults } from '../lib/agent-memory';
+import { searchRentalsTool, rentalSchema } from '../tools/search-rentals';
 import { readBrokerWorkspaceTool } from '../tools/read-broker-workspace';
 import { searchNewProjectsTool } from '../tools/search-new-projects';
 import { compareNewProjectsTool } from '../tools/compare-new-projects';
@@ -16,7 +16,7 @@ import { requestVenueBookingTool } from '../tools/request-venue-booking';
 import { showRecommendationsTool } from '../tools/show-recommendations';
 import { showRentalFilterControlTool } from '../tools/show-rental-filter-control';
 import { showComparisonTableTool } from '../tools/show-comparison-table';
-import { COMPARISON_POSITIONS_KEY, COMPARISON_COP_MONTHLY_BUDGET_KEY, comparisonCopMonthlyBudget, comparisonRequestedPositions, requestsFreshRentalDiscovery, shouldContinueComparisonAfterRoute, shouldContinueRouteAfterComparison, shouldFinishComparisonWithoutAnotherTool, shouldForceComparisonTable, shouldSearchBeforeComparison, shouldContinueComparisonAfterSearch } from '../lib/comparison-table-intent';
+import { RENTAL_SEARCH_TEXT_KEY, RENTAL_REFINEMENT_TEXT_KEY, RENTAL_REFINEMENT_FURNISHING_KEY, RENTAL_REFINEMENT_BUDGET_KEY, rentalRefinementContext, rentalBudgetRefinementPreference, COMPARISON_CHEAPEST_KEY, comparisonCheapestRequested, isRentalBudgetRefinement, trustedRentalSearchText, COMPARISON_POSITIONS_KEY, COMPARISON_COP_MONTHLY_BUDGET_KEY, comparisonCopMonthlyBudget, comparisonRequestedPositions, requestsFreshRentalDiscovery, shouldContinueComparisonAfterRoute, shouldContinueRouteAfterComparison, shouldFinishComparisonWithoutAnotherTool, shouldForceComparisonTable, shouldSearchBeforeComparison, shouldContinueComparisonAfterSearch } from '../lib/comparison-table-intent';
 import { requireFreshRentalRunResults } from '../lib/generative-ui-context';
 import { showViewingProposalTool } from '../tools/show-viewing-proposal';
 import { shouldRenderRentalFilterControl, shouldRenderViewingProposal, shouldRequestRecommendations } from '../lib/recommendation-intent';
@@ -477,7 +477,7 @@ Never reply with an empty list and no recovery.
 - Distinguish stay-DATE intent from LISTING-SEARCH intent, not by matching the word "rental". If the renter is choosing/changing dates without requesting apartment options (e.g. "suggest a rental stay starting Nov 12", "set my move-in date", "change my dates", "I want to stay Nov 12-18"), and suggestRentalDates is available, CALL suggestRentalDates with from as YYYY-MM-DD and through only if an end date was supplied, then STOP; do NOT call search-rentals or ask clarifying questions. If the renter requests apartments or rental listings (e.g. "find me a two-bedroom in Laureles for Nov 12-18", "show cheaper options for those dates", price or neighbourhood searches), it is a SEARCH even when it names dates: call search-rentals with dates as filters; NEVER open the calendar. When both intents appear, the listing request wins.
 - "show cheaper options" → re-run search-rentals with maxPricePerNight ≈ 0.7 × current cap, keep neighborhood + minBedrooms.
 - "more like that" / "similar" → re-run search-rentals with same filters, slightly higher limit (capped at 5 cards shown).
-- "compare X and Y" / "compare the first two" / "which is cheaper?" on rentals already shown → compare ONLY lastRentalResults for those exact IDs: price (keep monthly vs nightly and its currency), bedrooms, amenities, availability, host. Do NOT call search-rentals to answer a comparison; that replaces the cards the renter is asking about. If a needed fact is missing, say it is not recorded. End with one short recommendation sentence. For a comparison table, call showComparisonTable with two to five verified IDs from the current results and do not author Table operations, columns, rows, prices or Markdown. Keep ordinary comparison prose when no table is requested. NEVER add a Nightly Price to a monthly listing or divide the monthly rent by 30.
+- "compare X and Y" / "compare the first two" / "which is cheaper?" on rentals already shown → compare ONLY lastRentalResults for those exact IDs: price (keep monthly vs nightly and its currency), bedrooms, amenities, availability, host. Do NOT call search-rentals to answer a comparison; that replaces the cards the renter is asking about. If a needed fact is missing, say it is not recorded. End with one short recommendation sentence. For a comparison table, call showComparisonTable with two to five verified IDs from the current results and do not author Table operations, columns, rows, prices or Markdown. For explicit first-two and two-cheapest commands the server owns the selection and table; after showComparisonTable reply with its result message only, including any failure, not a second prose or Markdown table. Keep ordinary comparison prose when no table is requested. NEVER add a Nightly Price to a monthly listing or divide the monthly rent by 30.
 
 # Venue booking (table / café / nightlife — venue_booking_requests only)
 When the user wants to book a table, café visit, or nightlife reservation:
@@ -612,10 +612,16 @@ export const conciergeAgent = new Agent({
     // SAN-1681 — an explicit comparison-table request is a UI command. Pin the
     // ID-list tool; the transport builds the official Column → Table. Forcing
     // render_ui itself produced empty operations, so it is not used here.
-    { id: 'san1681-comparison-table-intent', processInputStep: ({ stepNumber, messages, steps, requestContext }) => {
+    { id: 'san1681-comparison-table-intent', processInputStep: async ({ stepNumber, messages, steps, requestContext, agent, messageList }) => {
       // Never carry trusted ordinal selection from a previous conversation turn.
       if (stepNumber === 0) {
         requestContext?.set(COMPARISON_POSITIONS_KEY, null);
+        requestContext?.set(RENTAL_SEARCH_TEXT_KEY, trustedRentalSearchText(messages, requestContext));
+        const refinement = rentalRefinementContext(messages, requestContext);
+        requestContext?.set(RENTAL_REFINEMENT_TEXT_KEY, refinement.baseText);
+        requestContext?.set(RENTAL_REFINEMENT_FURNISHING_KEY, refinement.furnishing);
+        requestContext?.set(RENTAL_REFINEMENT_BUDGET_KEY, refinement.budget);
+        requestContext?.set(COMPARISON_CHEAPEST_KEY, comparisonCheapestRequested(messages));
         requestContext?.set(COMPARISON_COP_MONTHLY_BUDGET_KEY, comparisonCopMonthlyBudget(messages));
         // Also protect recommendation/viewing tools launched before a search
         // registers in the same step; never fall back to stale browser IDs.
@@ -624,6 +630,27 @@ export const conciergeAgent = new Agent({
       // A same-message fresh search and comparison must be sequenced: the table
       // reads the run-scoped IDs written by search-rentals, so do not let the
       // model execute both tools against the pre-search browser hints.
+      if (stepNumber === 0 && isRentalBudgetRefinement(messages, requestContext)) {
+        // The finish gate intentionally disables tools after the search attempt,
+        // including a failed search. Save the requested preference beforehand,
+        // not the claimed search outcome. Use the actual run's memory identity.
+        const budget = rentalBudgetRefinementPreference(messages, requestContext);
+        const identity = messageList?.serialize().memoryInfo;
+        if (budget && agent && identity?.threadId && identity.resourceId) {
+          try {
+            const memory = await agent.getMemory({ requestContext });
+            if (memory) await rememberRentalMonthlyBudget(memory, {
+              threadId: identity.threadId, resourceId: identity.resourceId,
+            }, budget);
+          } catch (error) {
+            console.warn("[agent-memory] rental budget memory unavailable", {
+              error: error instanceof Error ? error.message : "unknown error",
+            });
+          }
+        }
+        requireFreshRentalRunResults(requestContext);
+        return { toolChoice: { type: 'tool' as const, toolName: 'searchRentalsTool' } };
+      }
       if (shouldSearchBeforeComparison({ stepNumber, messages, steps })) {
         requireFreshRentalRunResults(requestContext);
         return { toolChoice: { type: 'tool' as const, toolName: 'searchRentalsTool' } };
@@ -688,12 +715,49 @@ export const conciergeAgent = new Agent({
     // The existing stream bridge builds render_ui from showComparisonTable's
     // authorized result. Never let the LLM send an additional empty surface
     // during the same comparison turn; keep ordinary turns/tools unaffected.
-    { id: "san1681-comparison-text-finish", processInputStep: ({ stepNumber, messages, steps, requestContext }) =>
-      shouldFinishComparisonWithoutAnotherTool({
+    { id: "san1681-comparison-text-finish", processInputStep: async ({ stepNumber, messages, steps, requestContext, agent, messageList }) => {
+      if (!shouldFinishComparisonWithoutAnotherTool({
         stepNumber, messages, steps, requestContext, hasRouteIntent: Boolean(routePlanForTurn(messages)),
-      })
-        ? { toolChoice: 'none' as const }
-        : {} },
+      })) return {};
+      // Persist the same latest nonempty search used by the page bridge, before
+      // disabling model tools. Read actual tool output, never model prose or hints.
+      const identity = messageList?.serialize().memoryInfo;
+      if (agent && identity?.threadId && identity.resourceId) {
+        const shown = [...steps].reverse().flatMap(step => [...(step.toolResults ?? [])].reverse())
+          .filter(result => result.toolName === "searchRentalsTool")
+          .map(result => {
+            const output = result.output;
+            return output && typeof output === "object" && "type" in output &&
+              output.type === "json" && "value" in output ? output.value : output;
+          })
+          .map(output => z.object({ source: z.literal("supabase"), results: z.array(rentalSchema).min(1).max(20) }).safeParse(output))
+          .find(result => result.success);
+        if (shown?.success) {
+          const rows = shown.data.results.map(row => ({
+            id: row.id, title: row.title, neighborhood: row.neighborhood,
+            // Prefer recorded facts over legacy display defaults and derived nightly prices.
+            nightly_price: row.comparison_facts ? row.comparison_facts.priceNightly ?? undefined :
+              row.nightly_price > 0 ? row.nightly_price : undefined,
+            price_monthly: row.comparison_facts ? row.comparison_facts.priceMonthly ?? undefined : row.price_monthly,
+            currency: row.comparison_facts ? row.comparison_facts.currency ?? undefined : row.currency,
+            bedrooms: row.comparison_facts ? row.comparison_facts.bedrooms ?? undefined :
+              row.bedrooms_unknown ? undefined : row.bedrooms,
+            amenities: row.amenities,
+          }));
+          try {
+            const memory = await agent.getMemory({ requestContext });
+            if (memory) await rememberShownRentalResults(memory, {
+              threadId: identity.threadId, resourceId: identity.resourceId,
+            }, rows);
+          } catch (error) {
+            console.warn("[agent-memory] rental result memory unavailable", {
+              error: error instanceof Error ? error.message : "unknown error",
+            });
+          }
+        }
+      }
+      return { toolChoice: 'none' as const };
+    } },
   ],
   // A failed Google route cannot become a model-estimated distance or ETA.
   // This filters streaming text before CopilotKit renders it or memory saves it.

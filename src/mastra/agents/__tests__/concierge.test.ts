@@ -1,6 +1,6 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { zodToJsonSchema } from "@mastra/schema-compat/zod-to-json";
-import { createThreadMemory } from "../../lib/agent-memory";
+import { createThreadMemory, rememberRentalMonthlyBudget } from "../../lib/agent-memory";
 import { MDEAI_ROUTE_PLAN_KEY } from "../../lib/route-tool-choice";
 import {
   conciergeAgent,
@@ -96,6 +96,26 @@ describe("conciergeAgent", () => {
     // model-supplied IDs from an older turn.
     const { COMPARISON_POSITIONS_KEY } = await import("../../lib/comparison-table-intent");
     expect(requestContext.get(COMPARISON_POSITIONS_KEY)).toEqual([1, 2]);
+    const { RENTAL_SEARCH_TEXT_KEY, RENTAL_REFINEMENT_TEXT_KEY, RENTAL_REFINEMENT_FURNISHING_KEY, COMPARISON_CHEAPEST_KEY } = await import("../../lib/comparison-table-intent");
+    expect(requestContext.get(RENTAL_SEARCH_TEXT_KEY)).toBe(messages[0].content.parts[0].text);
+    const budget = user("Show only apartments under COP 3 million per month.");
+    expect(await comparison!.processInputStep({ stepNumber: 0, messages: [...messages, budget], steps: [], requestContext }))
+      .toEqual({ toolChoice: { type: "tool", toolName: "searchRentalsTool" } });
+    expect(requestContext.get(RENTAL_REFINEMENT_TEXT_KEY)).toBe(messages[0].content.parts[0].text);
+    expect(await comparison!.processInputStep({ stepNumber: 0, messages: [...messages, user("Show furnished apartments."), budget], steps: [], requestContext }))
+      .toEqual({ toolChoice: { type: "tool", toolName: "searchRentalsTool" } });
+    expect(requestContext.get(RENTAL_REFINEMENT_TEXT_KEY)).toBe(messages[0].content.parts[0].text);
+    expect(requestContext.get(RENTAL_REFINEMENT_FURNISHING_KEY)).toBe(true);
+    const { RENTAL_A2UI_CONTEXT_DESCRIPTION } = await import("@/lib/rentals/a2ui-context");
+    requestContext.set("ag-ui", { context: [{ description: RENTAL_A2UI_CONTEXT_DESCRIPTION,
+      value: JSON.stringify(["37a05b09-f560-4776-92fd-b8bb2b92e601","37a05b09-f560-4776-92fd-b8bb2b92e602"]) }] });
+    expect(await comparison!.processInputStep({ stepNumber: 0, messages: [user("Compare the two cheapest apartments.")], steps: [], requestContext }))
+      .toEqual({ toolChoice: { type: "tool", toolName: "showComparisonTable" } });
+    expect(requestContext.get(COMPARISON_CHEAPEST_KEY)).toBe(true);
+    expect(requestContext.get(RENTAL_SEARCH_TEXT_KEY)).toBeNull();
+    expect(requestContext.get(RENTAL_REFINEMENT_TEXT_KEY)).toBeNull();
+    expect(requestContext.get(RENTAL_REFINEMENT_FURNISHING_KEY)).toBeUndefined();
+    expect(requestContext.get(COMPARISON_POSITIONS_KEY)).toBeNull();
   });
 
   it("registers all search tools including grounding and web events", async () => {
@@ -711,5 +731,68 @@ describe("answers never narrate the work", () => {
     // The ban must not silence the disclosures other rules require.
     expect(instructions).toContain("still state the source, verification status, tool errors");
     expect(instructions).toContain("subject to the clarification rules below");
+  });
+});
+
+describe("SAN-1694 budget preference persistence", () => {
+  it("saves the cap before a forced search, even if the next step records a failed attempt", async () => {
+    const configured = await conciergeAgent.listConfiguredInputProcessors();
+    const processor = configured.find(p => p.id === "san1681-comparison-table-intent");
+    const finish = configured.find(p => p.id === "san1681-comparison-text-finish");
+    if (!processor || !("processInputStep" in processor) || !finish || !("processInputStep" in finish)) {
+      throw new Error("Expected configured comparison processors");
+    }
+    const existing = { lastRentalQuery: { neighborhood: "Laureles", minBedrooms: 2, maxPriceMonthly: 4_000_000, maxPricePerNight: 120, budgetCurrency: "COP" }, lastIntent: "rental_search", selectedListingId: "selected" };
+    let saved = existing;
+    const memory = {
+      getThreadById: vi.fn(async () => ({ resourceId: "renter" })),
+      getWorkingMemory: vi.fn(async () => JSON.stringify(saved)),
+      updateWorkingMemory: vi.fn(async ({ workingMemory }: { workingMemory: string }) => { saved = JSON.parse(workingMemory); }),
+    };
+    const store = new Map<string, unknown>();
+    const requestContext = { get: (key: string) => store.get(key), set: (key: string, value: unknown) => store.set(key, value) };
+    const messages = [{ role: "user", content: { parts: [{ type: "text", text: "Show only apartments under COP 3 million per month." }] } }];
+    const args = { stepNumber: 0, messages, steps: [], requestContext, messageList: { serialize: () => ({ memoryInfo: { threadId: "thread", resourceId: "renter" } }) }, agent: { getMemory: async () => memory } };
+    expect(await processor.processInputStep!(args as never)).toEqual({ toolChoice: { type: "tool", toolName: "searchRentalsTool" } });
+    expect(saved).toEqual({ lastRentalQuery: { neighborhood: "Laureles", minBedrooms: 2, maxPriceMonthly: 3_000_000, budgetCurrency: "COP", budgetType: "monthly" }, lastIntent: "rental_search", selectedListingId: "selected" });
+    expect(await finish.processInputStep!({ ...args, stepNumber: 1, steps: [{ toolCalls: [{ toolName: "searchRentalsTool" }] }] } as never)).toEqual({ toolChoice: "none" });
+    expect(memory.updateWorkingMemory).toHaveBeenCalledTimes(1);
+    const usd = [{ role: "user", content: { parts: [{ type: "text", text: "Show only apartments under USD 900 per month." }] } }];
+    await processor.processInputStep!({ ...args, messages: usd } as never);
+    const { COMPARISON_COP_MONTHLY_BUDGET_KEY } = await import("../../lib/comparison-table-intent");
+    expect(requestContext.get(COMPARISON_COP_MONTHLY_BUDGET_KEY)).toBeNull();
+    expect(saved.lastRentalQuery).toMatchObject({ maxPriceMonthly: 900, budgetCurrency: "USD" });
+  });
+  it("replaces prior result facts before the finish gate and keeps the last displayed rows on empty or failed searches", async () => {
+    const configured = await conciergeAgent.listConfiguredInputProcessors();
+    const finish = configured.find(p => p.id === "san1681-comparison-text-finish");
+    if (!finish || !("processInputStep" in finish)) throw new Error("Missing finish processor");
+    const existing = { lastRentalQuery: { maxPriceMonthly: 3_000_000, budgetCurrency: "COP" }, lastRentalResults: [{ id: "old", title: "Old", neighborhood: "Laureles", amenities: ["Balcony"] }], selectedListingId: "old", lastEventQuery: { category: "music" } };
+    let saved: Record<string, unknown> = existing;
+    const memory = {
+      getThreadById: vi.fn(async () => ({ resourceId: "renter" })),
+      getWorkingMemory: vi.fn(async () => JSON.stringify(saved)),
+      updateWorkingMemory: vi.fn(async ({ workingMemory }: { workingMemory: string }) => { saved = JSON.parse(workingMemory); }),
+    };
+    const row = { id: "new", title: "New", neighborhood: "Laureles", nightly_price: 100_000, price_monthly: 2_400_000, currency: "COP", bedrooms: 0, wifi: true, amenities: ["Wi-Fi"], image: "", source_url: "https://example.com", can_schedule_viewing: false, schedule_viewing_url: null, host_name: "Host", availability: "Availability unconfirmed", tags: [], comparison_facts: { id: "new", title: "New", neighborhood: "Laureles", bedrooms: null, furnished: null, bathrooms: null, sizeSqm: null, wifiSpeedMbps: null, amenities: ["Wi-Fi"], priceMonthly: 2_400_000, priceNightly: null, currency: "COP" } };
+    const messages = [{ role: "user", content: "Show only apartments under COP 3 million per month." }];
+    const args = { stepNumber: 1, messages, steps: [], messageList: { serialize: () => ({ memoryInfo: { threadId: "thread", resourceId: "renter" } }) }, agent: { getMemory: async () => memory } };
+    const result = (results: unknown[]) => [{ toolResults: [{ toolName: "searchRentalsTool", output: { type: "json", value: { source: "supabase", results } } }] }];
+    expect(await finish.processInputStep!({ ...args, steps: result([row]) } as never)).toEqual({ toolChoice: "none" });
+    expect(saved).toEqual({ lastIntent: "rental_search", lastRentalQuery: existing.lastRentalQuery, lastEventQuery: existing.lastEventQuery, lastRentalResults: [{ id: "new", title: "New", neighborhood: "Laureles", price_monthly: 2_400_000, currency: "COP", amenities: ["Wi-Fi"] }] });
+    expect(memory.updateWorkingMemory).toHaveBeenCalledTimes(1);
+    await finish.processInputStep!({ ...args, steps: result([]) } as never);
+    await finish.processInputStep!({ ...args, steps: [{ toolCalls: [{ toolName: "searchRentalsTool" }] }] } as never);
+    await finish.processInputStep!({ ...args, steps: result([{ id: "invalid" }]) } as never);
+    await finish.processInputStep!({ ...args, messageList: { serialize: () => ({ memoryInfo: { threadId: "thread", resourceId: "other" } }) }, steps: result([row]) } as never);
+    expect(memory.updateWorkingMemory).toHaveBeenCalledTimes(1);
+  });
+  it("does not write a different renter's thread or replace malformed memory", async () => {
+    const memory = { getThreadById: vi.fn(async () => ({ resourceId: "other" })), getWorkingMemory: vi.fn(async () => "{"), updateWorkingMemory: vi.fn(async () => undefined) };
+    const budget = { maxPriceMonthly: 2_000_000, budgetCurrency: "COP" as const };
+    expect(await rememberRentalMonthlyBudget(memory, { threadId: "thread", resourceId: "renter" }, budget)).toBe(false);
+    expect(memory.getWorkingMemory).not.toHaveBeenCalled();
+    expect(await rememberRentalMonthlyBudget(memory, { threadId: "thread", resourceId: "other" }, budget)).toBe(false);
+    expect(memory.updateWorkingMemory).not.toHaveBeenCalled();
   });
 });

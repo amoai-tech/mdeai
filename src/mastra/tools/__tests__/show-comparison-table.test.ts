@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { RENTAL_A2UI_CONTEXT_DESCRIPTION } from "@/lib/rentals/a2ui-context";
-import { COMPARISON_COP_MONTHLY_BUDGET_KEY, COMPARISON_POSITIONS_KEY } from "../../lib/comparison-table-intent";
+import { RENTAL_A2UI_CONTEXT_DESCRIPTION, RENTAL_RESULT_COUNT_CONTEXT_DESCRIPTION } from "@/lib/rentals/a2ui-context";
+import { COMPARISON_CHEAPEST_KEY, COMPARISON_COP_MONTHLY_BUDGET_KEY, COMPARISON_POSITIONS_KEY } from "../../lib/comparison-table-intent";
 import { comparisonInputSchema, showComparisonTableTool } from "../show-comparison-table";
 import { RENTAL_SUPABASE_KEY } from "../search-rentals";
 import { RENTAL_RUN_RESULT_IDS_KEY, startRentalRunSearch } from "../../lib/generative-ui-context";
@@ -8,7 +8,7 @@ import { RENTAL_RUN_RESULT_IDS_KEY, startRentalRunSearch } from "../../lib/gener
 const ids = Array.from({ length: 10 }, (_, i) =>
   `37a05b09-f560-4776-92fd-b8bb2b92e6${String(i).padStart(2, "0")}`
 );
-function context(rows: Array<Record<string, unknown>> = [], { withClient = true, trustedPositions, visibleIds = ids, runIds }: { withClient?: boolean; trustedPositions?: number[]; visibleIds?: string[]; runIds?: string[] } = {}) {
+function context(rows: Array<Record<string, unknown>> = [], { withClient = true, trustedPositions, visibleIds = ids, runIds, cheapest }: { withClient?: boolean; trustedPositions?: number[]; visibleIds?: string[]; runIds?: string[]; cheapest?: boolean } = {}) {
   const client = {
     from: () => ({
       select: () => ({
@@ -21,6 +21,7 @@ function context(rows: Array<Record<string, unknown>> = [], { withClient = true,
       get: (key: string) =>
         key === RENTAL_SUPABASE_KEY ? (withClient ? client : null)
           : key === COMPARISON_POSITIONS_KEY ? trustedPositions
+          : key === COMPARISON_CHEAPEST_KEY ? cheapest
           : key === RENTAL_RUN_RESULT_IDS_KEY ? (runIds ? { order: 1, ids: runIds } : undefined)
           : key === "ag-ui" ? { context: [{ description: RENTAL_A2UI_CONTEXT_DESCRIPTION, value: JSON.stringify(visibleIds) }] }
             : undefined,
@@ -211,6 +212,20 @@ describe("showComparisonTableTool", () => {
     expect(result.message).toContain("budget");
   });
 
+  it("rejects an oversized fresh result set instead of ranking only its first ten", async () => {
+    const all = [...ids, fresh[0]];
+    const rows = all.map((id, index) => dbRow(id, "Apartment " + index, index === 10 ? 1_000_000 : 2_400_000 + index));
+    const result = await run({ positions: [1, 2] }, context(rows, { runIds: all, visibleIds: ids, cheapest: true }));
+    expect(result.ok).toBe(false);
+    expect(result.rows).toEqual([]);
+    expect(result.message).toContain("complete current result list");
+    const browser = await run({ positions: [1, 2] }, context(rows, { visibleIds: all, cheapest: true }));
+    expect(browser.ok).toBe(false);
+    expect(browser.rows).toEqual([]);
+    const ordinal = await run({ positions: [1, 2] }, context(rows, { runIds: all }));
+    expect(ordinal.ok).toBe(true);
+    expect(ordinal.rows.map(row => row.id)).toEqual(ids.slice(0, 2));
+  });
   it("rejects a forged ID outside the current result set", async () => {
     const result = await run({ ids: [ids[0], "37a05b09-f560-4776-92fd-b8bb2b92e699"] }, context([
       dbRow(ids[0], "First", 2_400_000),
@@ -271,5 +286,68 @@ describe("showComparisonTableTool", () => {
     expect(result.ok).toBe(false);
     expect(result.rows).toEqual([]);
     expect(result.rejected).toEqual([ids[2]]);
+  });
+});
+
+describe("SAN-1694 current-result cheapest comparison", () => {
+  it("chooses two lowest recorded monthly prices from current authorized IDs, ignoring model order", async () => {
+    const result = await run({ ids: [ids[0], ids[3]] }, context([
+      dbRow(ids[0], "Expensive", 4_200_000),
+      dbRow(ids[1], "Cheapest", 2_400_000),
+      dbRow(ids[2], "Second cheapest", 2_500_000),
+      dbRow(ids[3], "Unknown monthly", null),
+      dbRow(ids[4], "Not visible", 1_000_000),
+    ], { visibleIds: ids.slice(0, 4), cheapest: true }));
+    expect(result.ok).toBe(true);
+    expect(result.rows.map(row => row.id)).toEqual([ids[1], ids[2]]);
+    expect(result.rejected).toEqual([ids[3]]);
+    expect(result.message).toContain("lowest recorded monthly rents");
+    expect(result.message).toContain("1 apartment excluded");
+    expect(result.message).toContain("search result #4");
+    expect(result.message).toContain("missing monthly price or currency");
+  });
+  it("rejects malformed browser hints even without a published count", async () => {
+    const result = await run({ positions: [1, 2] }, context([
+      dbRow(ids[0], "First", 2_400_000), dbRow(ids[1], "Second", 2_500_000),
+    ], { visibleIds: [ids[0], "bad entry", ids[1]], cheapest: true }));
+    expect(result.ok).toBe(false);
+    expect(result.rows).toEqual([]);
+  });
+  it("discloses both missing currency and nightly-only listings without ranking them", async () => {
+    const result = await run({ positions: [1, 2] }, context([
+      dbRow(ids[0], "Monthly A", 2_400_000),
+      dbRow(ids[1], "Monthly B", 2_500_000),
+      dbRow(ids[2], "Nightly only", null, 50_000),
+      { ...dbRow(ids[3], "Unknown currency", 1_000_000), currency: null },
+    ], { visibleIds: ids.slice(0, 4), cheapest: true }));
+    expect(result.ok).toBe(true);
+    expect(result.rejected).toEqual([ids[2], ids[3]]);
+    expect(result.message).toContain("2 apartments excluded");
+    expect(result.message).toContain("search results #3, #4");
+    expect(result.message).toContain("missing monthly price or currency");
+  });
+  it("breaks equal-price ties by visible order and rejects a truncated result set", async () => {
+    const rows = [dbRow(ids[2], "Third", 2_400_000), dbRow(ids[1], "Second", 2_400_000), dbRow(ids[0], "First", 4_200_000)];
+    const ctx = context(rows, { visibleIds: ids.slice(0, 3), cheapest: true });
+    const ranked = await run({ positions: [1, 2] }, ctx);
+    expect(ranked.rows.map(row => row.id)).toEqual([ids[1], ids[2]]);
+    const originalGet = ctx.requestContext.get;
+    ctx.requestContext.get = (key: string) => key === "ag-ui" ? { context: [
+      { description: RENTAL_A2UI_CONTEXT_DESCRIPTION, value: JSON.stringify(ids.slice(0, 3)) },
+      { description: RENTAL_RESULT_COUNT_CONTEXT_DESCRIPTION, value: "11" },
+    ] } : originalGet(key);
+    expect((await run({ positions: [1, 2] }, ctx)).ok).toBe(false);
+  });
+  it("does not rank mixed currencies or silently substitute inaccessible results", async () => {
+    const mixed = await run({ positions: [1, 2] }, context([
+      dbRow(ids[0], "COP", 2_400_000),
+      { ...dbRow(ids[1], "USD", 400), currency: "USD" },
+    ], { visibleIds: ids.slice(0, 2), cheapest: true }));
+    expect(mixed.ok).toBe(false);
+    const missing = await run({ positions: [1, 2] }, context([
+      dbRow(ids[0], "Visible", 2_400_000),
+      dbRow(ids[1], "Visible", 2_500_000),
+    ], { visibleIds: ids.slice(0, 3), cheapest: true }));
+    expect(missing.ok).toBe(false);
   });
 });

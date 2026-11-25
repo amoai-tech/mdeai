@@ -14,7 +14,7 @@ import { deduplicateApartmentRows } from '@/lib/rentals/duplicate-listings';
 import { z } from 'zod';
 import { runAuditedSearch } from '../lib/run-audited-search';
 import { startRentalRunSearch } from '../lib/generative-ui-context';
-import { COMPARISON_COP_MONTHLY_BUDGET_KEY } from '../lib/comparison-table-intent';
+import { RENTAL_SEARCH_TEXT_KEY, RENTAL_REFINEMENT_TEXT_KEY, RENTAL_REFINEMENT_FURNISHING_KEY, RENTAL_REFINEMENT_BUDGET_KEY, isRentalFurnishingClear, isRentalBudgetRefinement, COMPARISON_COP_MONTHLY_BUDGET_KEY } from '../lib/comparison-table-intent';
 import { comparisonRowSchema, comparisonRowFromApartment } from '../lib/comparison-table-ui';
 import { EXTERNAL_RENTAL_BUDGET_NOTE, getOptionalExternalRentals, mixRentalResults } from '@/lib/rentals/mixed-rental-results';
 import {
@@ -176,6 +176,8 @@ export type RentalSearchOptions = {
   client?: SupabaseClient | null;
   /** SAN-1502 — pre-computed phase so one search performs a single phase lookup. */
   developmentPhase?: boolean;
+  /** Pure price refinement uses complete structured rows instead of semantic candidates. */
+  structuredOnly?: boolean;
 };
 
 export interface ApartmentRow {
@@ -527,9 +529,22 @@ export function sortForMonthlyStay<T extends Rental>(results: T[]): T[] {
     const aLong = a.tags.includes('long-stay') ? 0 : 1;
     const bLong = b.tags.includes('long-stay') ? 0 : 1;
     if (aLong !== bLong) return aLong - bLong;
-    const aPrice = Number.isFinite(a.nightly_price) ? a.nightly_price : Number.POSITIVE_INFINITY;
-    const bPrice = Number.isFinite(b.nightly_price) ? b.nightly_price : Number.POSITIVE_INFINITY;
-    if (aPrice !== bPrice) return aPrice - bPrice;
+    const price = (row: Rental) => {
+      const amount = row.comparison_facts ? row.comparison_facts.priceMonthly : row.price_monthly;
+      const currency = row.comparison_facts ? row.comparison_facts.currency : row.currency;
+      return typeof amount === 'number' && Number.isFinite(amount) && amount > 0 && currency?.trim()
+        ? { amount, currency: currency.trim().toUpperCase() } : null;
+    };
+    const ap = price(a);
+    const bp = price(b);
+    if (ap && !bp) return -1;
+    if (!ap && bp) return 1;
+    if (ap && bp) {
+      // Group currencies deterministically; never compare COP and USD amounts.
+      const group = ap.currency.localeCompare(bp.currency);
+      if (group !== 0) return group;
+      if (ap.amount !== bp.amount) return ap.amount - bp.amount;
+    }
     return a.id.localeCompare(b.id);
   });
 }
@@ -706,7 +721,7 @@ export async function searchRentals(
   };
 
   // Exact browse/API ceilings use canonical SQL counting, not a truncated semantic candidate window.
-  if (query.queryText?.trim() && query.maxBedrooms === undefined && query.furnished === undefined) {
+  if (!options?.structuredOnly && query.queryText?.trim() && query.maxBedrooms === undefined && query.furnished === undefined) {
     try {
       const started = Date.now();
       // Load after tool initialization; intelligence search reuses our row-mapping helpers.
@@ -800,10 +815,10 @@ export const searchRentalsTool = createTool({
       .string()
       .optional()
       .describe('Natural-language rental search e.g. digital nomad rental in Laureles near cafes'),
-  }).refine(monthlyBudgetHasCurrency, {
-    message: MONTHLY_CURRENCY_REQUIRED,
-    path: ['budgetCurrency'],
   }),
+  // The model may omit a paired currency even when the renter stated it.
+  // Resolve the trusted user cap in execute first; canonical searchRentals
+  // still rejects a currency-free monthly cap before any database access.
   outputSchema: z.object({
     results: z.array(
       rentalSchema.extend({
@@ -831,18 +846,25 @@ export const searchRentalsTool = createTool({
   // The UI gets complete source-backed galleries, but Gemini only needs one
   // cover URL per apartment; never spend tokens on 12 photo URLs per result.
   // Installed Mastra 1.81 supports this native app-vs-model projection.
-  toModelOutput: (output) => ({
-    type: 'json',
-    value: {
-      ...output,
-      results: output.results.map((r) => {
-        const modelRental = { ...r };
-        delete modelRental.images;
-        delete modelRental.photo_count;
-        return modelRental;
-      }),
-    },
-  }),
+  toModelOutput: (output) => {
+    // Mastra also maps strict input/output validation-error objects. They have
+    // no results array; never turn a failed search into an empty successful one.
+    if (!output || !Array.isArray(output.results)) {
+      return { type: 'error-text', value: 'Rental search did not complete. Check the search arguments; do not claim matching apartments.' };
+    }
+    return {
+      type: 'json',
+      value: {
+        ...output,
+        results: output.results.map((r) => {
+          const modelRental = { ...r };
+          delete modelRental.images;
+          delete modelRental.photo_count;
+          return modelRental;
+        }),
+      },
+    };
+  },
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   execute: async (inputData: RentalQuery, context?: any) => {
     const {
@@ -863,20 +885,63 @@ export const searchRentalsTool = createTool({
     // Prefer an explicit exact bedroom request in the renter's original words over
     // a model's accidentally broader minimum. The canonical search applies both
     // constraints in SQL; never remove valid rows in a second UI filter.
-    const exactBedrooms = queryText ? exactBedroomsFromQueryText(queryText) : undefined;
-    const requestedMinBedrooms = exactBedrooms ?? minBedrooms;
-    const requestedMaxBedrooms = exactBedrooms ?? maxBedrooms;
+    const originalText = context?.requestContext?.get(RENTAL_SEARCH_TEXT_KEY);
+    const trustedText = typeof originalText === 'string' ? originalText : undefined;
+    const trustedSignals = trustedText ? scoreRentalQuery(trustedText) : undefined;
+    const turn = [{ role: "user", content: trustedText }];
+    const budgetRefinement = trustedText !== undefined && isRentalBudgetRefinement(turn, context?.requestContext);
+    const furnishingClear = trustedText !== undefined && isRentalFurnishingClear(turn, context?.requestContext);
+    const baseText = budgetRefinement || furnishingClear
+      ? context?.requestContext?.get(RENTAL_REFINEMENT_TEXT_KEY) : undefined;
+    // Keep amenity/search wording, but include the actual clear so the canonical
+    // search's text parser cannot reintroduce an obsolete furnishing filter.
+    const effectiveText = furnishingClear
+      ? [typeof baseText === "string" ? baseText : queryText, trustedText].filter(Boolean).join(" ")
+      : trustedText ?? queryText;
+    const base = typeof baseText === 'string' ? scoreRentalQuery(baseText) : undefined;
+    const exactBedrooms = effectiveText ? exactBedroomsFromQueryText(effectiveText) : undefined;
+    const baseExactBedrooms = typeof baseText === 'string' ? exactBedroomsFromQueryText(baseText) : undefined;
+    const knownMinBedrooms = trustedSignals?.minBedrooms ?? base?.minBedrooms;
+    const requestedMinBedrooms = exactBedrooms ?? baseExactBedrooms ?? knownMinBedrooms ?? minBedrooms;
+    const requestedMaxBedrooms = exactBedrooms ?? baseExactBedrooms ?? (knownMinBedrooms !== undefined ? undefined : maxBedrooms);
+    const requestedNeighborhood = trustedSignals?.neighborhood ?? base?.neighborhood ?? neighborhood;
+    // A pure budget change retains the base preference. Otherwise the actual
+    // current renter wording wins over a contradictory model boolean.
+    const furnishingText = typeof baseText === 'string' ? baseText : effectiveText;
+    const refinementFurnishing = furnishingClear ? null : budgetRefinement
+      ? context?.requestContext?.get(RENTAL_REFINEMENT_FURNISHING_KEY) : undefined;
+    let requestedFurnished: boolean | undefined = furnished;
+    if (refinementFurnishing === null) {
+      requestedFurnished = undefined;
+    } else if (typeof refinementFurnishing === 'boolean') {
+      requestedFurnished = refinementFurnishing;
+    } else if (furnishingText) {
+      requestedFurnished = clearsFurnishingPreference(furnishingText)
+        ? undefined : furnishingFromQueryText(furnishingText) ?? furnished;
+    }
     // Exact COP budget supplied by the renter outranks missing/wrong model slots.
     // Reuse the canonical SQL monthly-budget predicate, not a second filter.
     const trustedCopBudget = context?.requestContext?.get(COMPARISON_COP_MONTHLY_BUDGET_KEY);
-    const requestedMaxPriceMonthly = typeof trustedCopBudget === 'number' &&
-      Number.isFinite(trustedCopBudget) && trustedCopBudget > 0 ? trustedCopBudget : maxPriceMonthly;
-    const requestedBudgetCurrency = typeof trustedCopBudget === 'number' &&
-      Number.isFinite(trustedCopBudget) && trustedCopBudget > 0 ? 'COP' : budgetCurrency;
+    const hasTrustedCopBudget = typeof trustedCopBudget === 'number' &&
+      Number.isFinite(trustedCopBudget) && trustedCopBudget > 0;
+    const carried = furnishingClear ? z.object({
+      maxPriceMonthly: z.number().positive().finite(),
+      budgetCurrency: z.enum(["COP", "USD"]),
+    }).safeParse(context?.requestContext?.get(RENTAL_REFINEMENT_BUDGET_KEY)) : undefined;
+    const carriedBudget = carried?.success ? carried.data :
+      furnishingClear && base?.maxPriceMonthly && base.budgetCurrency
+        ? { maxPriceMonthly: base.maxPriceMonthly, budgetCurrency: base.budgetCurrency } : undefined;
+    const requestedMaxPriceMonthly = hasTrustedCopBudget ? trustedCopBudget :
+      trustedSignals?.maxPriceMonthly ?? carriedBudget?.maxPriceMonthly ?? maxPriceMonthly;
+    const requestedBudgetCurrency = hasTrustedCopBudget ? 'COP' :
+      trustedSignals?.budgetCurrency ?? carriedBudget?.budgetCurrency ?? budgetCurrency;
+    const explicitMonthly = trustedSignals?.budgetType === 'monthly' || hasTrustedCopBudget || carriedBudget !== undefined;
+    // A monthly ceiling cannot become a nightly USD filter or a nightly sort.
+    const requestedStayType = explicitMonthly ? 'monthly' : stayType;
     const rentalClient = context?.requestContext?.get(RENTAL_SUPABASE_KEY) as
       | SupabaseClient
       | undefined;
-    const options = rentalClient ? { client: rentalClient } : undefined;
+    const options = budgetRefinement ? { client: rentalClient, structuredOnly: true } : rentalClient ? { client: rentalClient } : undefined;
     // SAN-1694: these rows become the visible cards, in this order. Register before
     // searching so a comparison/cards/viewing tool called in the same step waits
     // for them instead of reading the browser list sent before this search.
@@ -886,7 +951,7 @@ export const searchRentalsTool = createTool({
       searched = await runAuditedSearch(
         'search-rentals',
         (q: RentalQuery) => searchRentals(q, options),
-        { neighborhood, minBedrooms: requestedMinBedrooms, maxBedrooms: requestedMaxBedrooms, furnished, maxPricePerNight, maxPriceMonthly: requestedMaxPriceMonthly, stayType, budgetCurrency: requestedBudgetCurrency, limit, queryText },
+        { neighborhood: requestedNeighborhood, minBedrooms: requestedMinBedrooms, maxBedrooms: requestedMaxBedrooms, furnished: requestedFurnished, maxPricePerNight: explicitMonthly ? undefined : maxPricePerNight, maxPriceMonthly: requestedMaxPriceMonthly, stayType: requestedStayType, budgetCurrency: requestedBudgetCurrency, limit, queryText: effectiveText },
         context,
       );
     } catch (error) {
@@ -928,9 +993,12 @@ export const searchRentalsTool = createTool({
       })),
       source,
       budgetNote,
-      unappliedRequests: unappliedRequestsFor({ queryText }),
+      unappliedRequests: [...new Set([
+        ...unappliedRequestsFor({ queryText: typeof baseText === "string" ? baseText : undefined }),
+        ...unappliedRequestsFor({ queryText: effectiveText }),
+      ])],
       whatsapp_reply: isWhatsAppRun(context)
-        ? formatWhatsAppRentalReply(results, monthlyBudgetFromQuery(inputData))
+        ? formatWhatsAppRentalReply(results, monthlyBudgetFromQuery({ ...inputData, maxPriceMonthly: requestedMaxPriceMonthly, budgetCurrency: requestedBudgetCurrency }))
         : undefined,
       hybridUsed,
       rankExplanation,

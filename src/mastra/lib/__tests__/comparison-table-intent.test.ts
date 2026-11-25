@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { comparisonCopMonthlyBudget, comparisonRequestedPositions, requestsFreshRentalDiscovery, hasAttemptedTool, hasCompletedTool, shouldContinueComparisonAfterRoute, shouldContinueComparisonAfterSearch, shouldContinueRouteAfterComparison, shouldFinishComparisonWithoutAnotherTool, shouldForceComparisonTable, shouldSearchBeforeComparison } from "../comparison-table-intent";
+import { rentalRefinementContext, rentalBudgetRefinementPreference, rentalRefinementBaseText, trustedRentalSearchText, isRentalBudgetRefinement, comparisonCheapestRequested, comparisonCopMonthlyBudget, comparisonRequestedPositions, requestsFreshRentalDiscovery, hasAttemptedTool, hasCompletedTool, shouldContinueComparisonAfterRoute, shouldContinueComparisonAfterSearch, shouldContinueRouteAfterComparison, shouldFinishComparisonWithoutAnotherTool, shouldForceComparisonTable, shouldSearchBeforeComparison } from "../comparison-table-intent";
 import { RENTAL_A2UI_CONTEXT_DESCRIPTION } from "@/lib/rentals/a2ui-context";
 import { RENTAL_RUN_RESULT_IDS_KEY } from "../generative-ui-context";
 import { routePlanForTurn, shouldForceRouteTool } from "../route-tool-choice";
@@ -297,5 +297,93 @@ describe("incomplete apartment references defer rather than compare the wrong su
     ["Compare the 1st and 2nd apartments with the 5th.", [1, 2, 5]],
   ])("preserves all supported explicit positions: %s", (text, positions) => {
     expect(comparisonRequestedPositions([user(text)])).toEqual(positions);
+  });
+});
+
+describe("SAN-1694 production grounding regressions", () => {
+  it("preserves the actual search words and forces a bounded search for the explicit budget command", () => {
+    const search = user("Find 2BR apartments in Laureles and compare the first two.");
+    const budget = user("Show only apartments under COP 3 million per month.");
+    expect(trustedRentalSearchText([search])).toBe(search.content.parts[0].text);
+    expect(isRentalBudgetRefinement([search, budget], context)).toBe(true);
+    expect(trustedRentalSearchText([search, budget])).toBe(budget.content.parts[0].text);
+    expect(rentalRefinementBaseText([search, budget], context)).toBe(search.content.parts[0].text);
+    expect(rentalRefinementBaseText([search, user("Which apartment has a balcony?"), budget], context)).toBeNull();
+    expect(comparisonRequestedPositions([user("Find two-bedroom apartments in Laureles and compare the first two.")])).toEqual([1, 2]);
+    expect(isRentalBudgetRefinement([user("Show restaurants under COP 3 million per month.")], context)).toBe(false);
+    expect(isRentalBudgetRefinement([user("Which apartment is under COP 3 million per month?")], context)).toBe(false);
+    expect(trustedRentalSearchText([user("Compare the first two apartments.")])).toBeNull();
+    expect(shouldFinishComparisonWithoutAnotherTool({ stepNumber: 0, messages: [budget], requestContext: context })).toBe(false);
+    expect(shouldFinishComparisonWithoutAnotherTool({ stepNumber: 1, messages: [budget], requestContext: context,
+      steps: [{ toolCalls: [{ toolName: "searchRentalsTool" }] }] })).toBe(true);
+  });
+  it("trusts explicit non-budget furnishing clears without trusting amenity questions or unrelated topics", () => {
+    const plain = user("Find 2BR apartments in Laureles, furnished or unfurnished.");
+    const clear = user("Either furnished or unfurnished.");
+    expect(isRentalBudgetRefinement([plain], context)).toBe(false);
+    expect(trustedRentalSearchText([plain], context)).toBe(plain.content.parts[0].text);
+    expect(trustedRentalSearchText([clear], context)).toBe(clear.content.parts[0].text);
+    expect(trustedRentalSearchText([clear])).toBeNull();
+    expect(trustedRentalSearchText([user("Are these apartments furnished or unfurnished?")], context)).toBeNull();
+    expect(trustedRentalSearchText([user("Find hotels, furnished or unfurnished.")], context)).toBeNull();
+  });
+  it("skips consecutive pure budget refinements without resurrecting an older search across a topic change", () => {
+    const search = user("Find furnished 2BR apartments in Laureles and compare the first two.");
+    const cap3 = user("Show only apartments under COP 3 million per month.");
+    const cap2 = user("Show only apartments under COP 2 million per month.");
+    expect(rentalRefinementBaseText([search, cap3, cap2], context)).toBe(search.content.parts[0].text);
+    expect(rentalRefinementBaseText([search, cap3, user("Find restaurants in El Poblado."), cap2], context)).toBeNull();
+    expect(rentalRefinementBaseText([search, cap3, user("Find 1BR apartments in El Poblado."), cap2], context)).toBe("Find 1BR apartments in El Poblado.");
+    expect(rentalRefinementBaseText([cap3, cap2], context)).toBeNull();
+    expect(rentalRefinementBaseText([search, user("Show the first two rentals."), cap2], context)).toBeNull();
+    expect(rentalRefinementBaseText([user("Show 2BR apartments in Laureles."), cap2], context)).toBe("Show 2BR apartments in Laureles.");
+  });
+  it("retains the original location and bedrooms across furnishing-only and budget changes", () => {
+    const original = user("Find unfurnished 2BR apartments in Laureles.");
+    const furnished = user("Show furnished apartments.");
+    const cap = user("Show only apartments under COP 2 million per month.");
+    expect(rentalRefinementBaseText([original, furnished, cap], context)).toBe(original.content.parts[0].text);
+    expect(rentalRefinementContext([original, furnished, cap], context)).toEqual({ baseText: original.content.parts[0].text, furnishing: true });
+    expect(rentalRefinementContext([original, furnished, user("Show unfurnished apartments."), cap], context)).toEqual({ baseText: original.content.parts[0].text, furnishing: false });
+    expect(rentalRefinementContext([original, furnished, user("Either furnished or unfurnished."), cap], context)).toEqual({ baseText: original.content.parts[0].text, furnishing: null });
+    expect(rentalRefinementContext([original, furnished, user("Show furnished 1BR apartments in El Poblado."), cap], context)).toEqual({ baseText: "Show furnished 1BR apartments in El Poblado.", furnishing: undefined });
+    expect(rentalRefinementContext([original, user("Find restaurants in El Poblado."), furnished, cap], context)).toEqual({ baseText: furnished.content.parts[0].text, furnishing: true });
+    expect(rentalRefinementContext([original, user("Are the apartments furnished?"), cap], context)).toEqual({ baseText: null, furnishing: undefined });
+    expect(rentalRefinementContext([original, user("Do not show furnished apartments."), cap], context)).toEqual({ baseText: null, furnishing: undefined });
+  });
+  it("resolves a standalone furnishing clear as a field update, keeping the original search and latest cap", () => {
+    const original = user("Find pet-friendly furnished 2BR apartments in Laureles under COP 4 million per month.");
+    const cap3 = user("Show only apartments under COP 3 million per month.");
+    const cap2 = user("Show only apartments under COP 2 million per month.");
+    const clear = user("Either furnished or unfurnished.");
+    expect(rentalRefinementContext([original, cap3, cap2, clear], context)).toEqual({
+      baseText: original.content.parts[0].text, furnishing: null,
+      budget: { maxPriceMonthly: 2_000_000, budgetCurrency: "COP" },
+    });
+    expect(rentalRefinementContext([original, user("Find restaurants in El Poblado."), clear], context)).toEqual({ baseText: null, furnishing: null });
+    expect(rentalRefinementContext([original, clear])).toEqual({ baseText: null });
+    expect(rentalRefinementContext([original, cap3, user("Show only apartments under USD 800 per month."), clear], context)).toEqual({
+      baseText: original.content.parts[0].text, furnishing: null,
+      budget: { maxPriceMonthly: 800, budgetCurrency: "USD" },
+    });
+  });
+  it("only produces the canonical COP or USD monthly preference", () => {
+    expect(rentalBudgetRefinementPreference([user("Show apartments under COP 2 million per month.")], context)).toEqual({ maxPriceMonthly: 2_000_000, budgetCurrency: "COP" });
+    expect(rentalBudgetRefinementPreference([user("Show apartments under USD 900 per month.")], context)).toEqual({ maxPriceMonthly: 900, budgetCurrency: "USD" });
+    expect(rentalBudgetRefinementPreference([user("Show apartments under EUR 900 per month.")], context)).toBeNull();
+  });
+  it("forces the official comparison for the two cheapest current rentals without choosing ordinal two", () => {
+    const messages = [user("Compare the two cheapest apartments.")];
+    expect(comparisonCheapestRequested(messages)).toBe(true);
+    expect(shouldForceComparisonTable({stepNumber: 0, messages, requestContext: context})).toBe(true);
+    expect(comparisonRequestedPositions(messages)).toBeNull();
+    expect(shouldSearchBeforeComparison({stepNumber: 0, messages, steps: []})).toBe(false);
+    expect(comparisonCheapestRequested([user("Find the two cheapest apartments in Laureles.")])).toBe(false);
+    expect(comparisonCheapestRequested([user("Compare the two cheapest events.")])).toBe(false);
+  });
+  it("stops model tools after a successful same-message search and comparison", () => {
+    const messages = [user("Find 2BR apartments in Laureles and compare the first two.")];
+    const steps = [{ toolResults: [{ toolName: "searchRentalsTool" }] }, { toolResults: [{ toolName: "showComparisonTable" }] }];
+    expect(shouldFinishComparisonWithoutAnotherTool({stepNumber: 2, messages, steps, requestContext: context})).toBe(true);
   });
 });

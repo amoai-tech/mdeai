@@ -78,6 +78,7 @@ function makeRental(id: string, nightly: number, tags: string[]): Rental {
     title: id,
     neighborhood: "Laureles",
     nightly_price: nightly,
+    price_monthly: nightly * 30,
     currency: "USD",
     bedrooms: 1,
     wifi: true,
@@ -112,6 +113,15 @@ describe("sortForMonthlyStay", () => {
     const b = makeRental("b", 60, []);
     const sorted = sortForMonthlyStay([a, b]);
     expect(sorted[0].id).toBe("b");
+  });
+
+  it("uses recorded monthly prices rather than nightly rates and groups currencies", () => {
+    const a = { ...makeRental("a", 100, []), price_monthly: 2_400_000, currency: "COP" };
+    const b = { ...makeRental("b", 50, []), price_monthly: 2_500_000, currency: "COP" };
+    const c = { ...makeRental("c", 1, []), price_monthly: 1, currency: "USD" };
+    const d = { ...makeRental("d", 1, []), price_monthly: undefined, currency: "COP" };
+    expect(sortForMonthlyStay([d, c, b, a]).map(x => x.id)).toEqual(["a", "b", "c", "d"]);
+    expect(sortForMonthlyStay([b, d, a, c]).map(x => x.id)).toEqual(["a", "b", "c", "d"]);
   });
 
   it("has deterministic ID order when monthly tier and prices are tied", () => {

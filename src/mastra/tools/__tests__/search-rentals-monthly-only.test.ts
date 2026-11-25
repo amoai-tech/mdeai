@@ -420,11 +420,12 @@ describe("monthly budget PostgREST filter input safety", () => {
     }).success).toBe(false);
   });
 
-  it("rejects a currency-free monthly cap in the tool and direct search", async () => {
+  it("allows the tool to resolve a missing currency from trusted user text but rejects an unresolved cap before search", async () => {
     const { searchRentalsTool, searchRentals } = await import("../search-rentals");
     const inputSchema = searchRentalsTool.inputSchema as unknown as ZodType;
-    expect(inputSchema.safeParse({ maxPriceMonthly: 2_000 }).success).toBe(false);
+    expect(inputSchema.safeParse({ maxPriceMonthly: 2_000 }).success).toBe(true);
     await expect(searchRentals({ maxPriceMonthly: 2_000 })).rejects.toThrow(/budgetCurrency is required/);
+    await expect(searchRentalsTool.execute!({ maxPriceMonthly: 2_000, limit: 8 }, {} as never)).rejects.toThrow(/budgetCurrency is required/);
   });
 
   it("normalizes an ordinary three-letter tool currency to uppercase", async () => {
