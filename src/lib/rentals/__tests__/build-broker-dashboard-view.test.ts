@@ -82,8 +82,8 @@ describe("buildBrokerDashboardView", () => {
     expect(view.kpis.map((kpi) => [kpi.label, kpi.value])).toEqual([
       ["Listings", "210"],
       ["Open leads", "12"],
-      ["Upcoming", "8"],
-      ["Today", "3"],
+      ["All upcoming appointments", "8"],
+      ["Today’s appointments", "3"],
     ]);
     expect(view.kpis.map((kpi) => kpi.id)).toEqual(["listings_total", "open_leads", "upcoming", "today"]);
     // Every metric states what it counts; no "Data pending" placeholder among them.

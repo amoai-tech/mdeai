@@ -235,14 +235,14 @@ export function buildBrokerDashboardView(input: BuildBrokerDashboardInput): Brok
     },
     {
       id: "upcoming",
-      label: "Upcoming",
+      label: "All upcoming appointments",
       value: String(input.upcomingCount),
       provenance: "Scheduled or confirmed, still ahead",
       testId: "r1-kpi-2",
     },
     {
       id: "today",
-      label: "Today",
+      label: "Today’s appointments",
       value: String(input.todayTotal),
       provenance: "Appointments today, Medellín time",
       testId: "r1-kpi-3",

@@ -7,6 +7,7 @@ import { useGenerativeUIRuntime } from "@copilotkit/react-core/v2/generative-ui/
 import { MDE_DASHBOARD_THREAD_ID, MdeDashboardSurface } from "@/components/copilot/a2ui/mde-dashboard-surface";
 import { mdeUI } from "@/components/copilot/a2ui/mde-ui-catalog";
 import type { BrokerDashboardView } from "@/lib/rentals/broker-dashboard-types";
+import { BROKER_ASK_MDE_EVENT } from "@/lib/rentals/broker-ask-mde";
 import { availableBrokerViewingActions } from "@/lib/rentals/broker-viewing-action";
 import {
   BROKER_OVERVIEW_SURFACE_ID,
@@ -76,9 +77,15 @@ function BrokerOverviewFunctions({
     }
     if (target === "listings") router.push(`${basePath}/listings`);
     else if (target === "new_listing") router.push(`${basePath}/onboarding`);
-    // The existing concierge chat lives on the workspace root until SAN-1685
-    // mounts the single bottom composer; this never creates a second chat.
-    else router.push(basePath);
+    else if (basePath === "/app/rentals") {
+      // SAN-1685 — open the one persistent bottom chat in place. This is the
+      // same signal the account header dispatches; it never mounts a second
+      // provider and never navigates away from Overview.
+      window.dispatchEvent(new Event(BROKER_ASK_MDE_EVENT, { cancelable: true }));
+    } else {
+      // The legacy host overview has no bottom composer; open its concierge.
+      router.push(basePath);
+    }
     return { ok: true };
   });
 

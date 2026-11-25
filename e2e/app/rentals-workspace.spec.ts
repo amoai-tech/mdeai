@@ -113,7 +113,8 @@ test.describe("SAN-1578 /app rentals", { tag: ["@app", "@rentals"] }, () => {
         const overview = page.getByTestId("mde-surface-broker-overview");
         await expect(overview.getByText("Listings", { exact: true })).toBeVisible();
         await expect(overview.getByText("Open leads", { exact: true })).toBeVisible();
-        await expect(overview.getByText("Upcoming", { exact: true }).first()).toBeVisible();
+        await expect(overview.getByText("All upcoming appointments", { exact: true })).toBeVisible();
+        await expect(overview.getByText("Upcoming after today", { exact: true })).toBeVisible();
         await expect(overview.getByRole("tab")).toHaveCount(0);
         await expect(overview.locator("svg.recharts-surface")).toHaveCount(0);
         await expect(page.getByTestId("host-rentals-nav-overview")).toHaveAttribute("aria-current", "page");

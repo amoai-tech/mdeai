@@ -13,11 +13,12 @@ const state = vi.hoisted(() => ({
   renderChat: false,
   submit: vi.fn(),
   refresh: vi.fn(),
+  push: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({
   usePathname: () => "/app/rentals",
   useSearchParams: () => new URLSearchParams(state.mode ? "mode=" + state.mode : ""),
-  useRouter: () => ({ refresh: state.refresh, push: vi.fn(), replace: vi.fn() }),
+  useRouter: () => ({ refresh: state.refresh, push: state.push, replace: vi.fn() }),
 }));
 vi.mock("@/hooks/use-session", () => ({
   useSession: () => ({ user: state.authLoading ? null : { id: "broker-a" }, loading: state.authLoading }),
@@ -66,6 +67,7 @@ afterEach(() => {
   sessionStorage.clear();
   state.submit.mockReset();
   state.refresh.mockReset();
+  state.push.mockReset();
   vi.unstubAllGlobals();
 });
 
@@ -186,6 +188,17 @@ describe("SAN-1683 broker frame without live chat", () => {
     // One page-level heading remains for the document outline.
     expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Rentals overview");
+  });
+
+  it("opens the one bottom chat from the Overview header without leaving the page", async () => {
+    state.renderChat = true;
+    render(<RentalsBrokerFrame><RentalsConciergeShell basePath="/app/rentals" workspaceMode="overview" dashboard={dashboard} /></RentalsBrokerFrame>);
+    const surface = await screen.findByTestId("mde-surface-broker-overview");
+    fireEvent.click(within(surface).getByRole("button", { name: "Ask MDE" }));
+    await waitFor(() => expect(state.chatMounts).toBeGreaterThan(0));
+    expect(document.getElementById("rentals-ask-mde-panel")?.hidden).toBe(false);
+    // SAN-1685: the mode is a signal, not a route change.
+    expect(state.push).not.toHaveBeenCalled();
   });
 
   it("opens the same bottom chat from Overview and retains its panel across page changes and collapse", async () => {

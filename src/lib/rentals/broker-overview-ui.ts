@@ -255,7 +255,7 @@ export function buildBrokerOverviewOperations(
       children: upcomingHeaderChildren },
     { id: "upcoming-heading", component: "Column", gap: 0, flex: 1, minWidth: 0,
       children: ["upcoming-title", "upcoming-subtitle"] },
-    { id: "upcoming-title", component: "Title", size: "lg", text: "Upcoming" },
+    { id: "upcoming-title", component: "Title", size: "lg", text: "Upcoming after today" },
     { id: "upcoming-subtitle", component: "Caption", size: "sm", text: "After today" },
     ...(view.upcomingPreview.length > 0
       ? [...upcomingRows, {
