@@ -19,12 +19,12 @@ describe("SAN-1124 broker concierge integration contract", () => {
     expect(ask).toContain('scope="broker"');
     expect(ask).toContain("window.addEventListener(BROKER_ASK_MDE_EVENT, onAsk)");
     const appShell = readFileSync(join(ROOT, "../../app/app-shell.tsx"), "utf8");
-    expect(appShell).toContain('href={brokerRentals ? "/app/rentals" : "/chat"}');
+    expect(appShell).toContain('href={brokerRentals ? `${APP_RENTALS_ROUTE}?mode=concierge` : "/chat"}');
     expect(appShell).toContain("window.dispatchEvent(new Event(BROKER_ASK_MDE_EVENT");
     expect(ask).toContain('activated && <BrokerChatProvider');
     expect(shell).toContain("<RentalsAskMde>{children}</RentalsAskMde>");
     expect(shell).toContain("<MdeDashboardRenderProvider>");
-    expect(shell).toContain('if (basePath === "/app/rentals")');
+    expect(shell).toContain("if (basePath === APP_RENTALS_ROUTE)");
     expect(center).not.toContain("<ChatProvider");
     expect(shell).toContain("<RentalsConciergeCenter");
     expect(shell).toContain("<RentalsDynamicWorkspace");
@@ -90,7 +90,7 @@ describe("broker conversation survives a reload", () => {
 describe("SAN-1683 shared route frame", () => {
   it("renders the selected Overview instead of hiding it behind mobile Chat", () => {
     const shell = readComponent("rentals-concierge-shell.tsx");
-    expect(shell).toContain('if (basePath === "/app/rentals")');
+    expect(shell).toContain("if (basePath === APP_RENTALS_ROUTE)");
     expect(shell).toContain('surfaceId="rentals-workspace-header"');
     expect(readComponent("rentals-ask-mde.tsx")).toContain('data-testid="rentals-ask-mde-slot"');
     expect(readComponent("host-rentals-nav.tsx")).toContain('aria-current={active ? "page" : undefined}');
