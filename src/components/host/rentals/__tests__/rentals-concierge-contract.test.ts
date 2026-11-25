@@ -19,12 +19,12 @@ describe("SAN-1124 broker concierge integration contract", () => {
     expect(ask).toContain('scope="broker"');
     expect(ask).toContain("window.addEventListener(BROKER_ASK_MDE_EVENT, onAsk)");
     const appShell = readFileSync(join(ROOT, "../../app/app-shell.tsx"), "utf8");
-    expect(appShell).toContain('href={brokerRentals ? "/app/rentals" : "/chat"}');
+    expect(appShell).toContain('href={brokerRentals ? `${APP_RENTALS_ROUTE}?mode=concierge` : "/chat"}');
     expect(appShell).toContain("window.dispatchEvent(new Event(BROKER_ASK_MDE_EVENT");
     expect(ask).toContain('activated && <BrokerChatProvider');
     expect(shell).toContain("<RentalsAskMde>{children}</RentalsAskMde>");
     expect(shell).toContain("<MdeDashboardRenderProvider>");
-    expect(shell).toContain('if (basePath === "/app/rentals")');
+    expect(shell).toContain("if (basePath === APP_RENTALS_ROUTE)");
     expect(center).not.toContain("<ChatProvider");
     expect(shell).toContain("<RentalsConciergeCenter");
     expect(shell).toContain("<RentalsDynamicWorkspace");
@@ -93,7 +93,7 @@ describe("SAN-1683 shared route frame", () => {
     // SAN-1710/SAN-1685: the /app tree renders one full-width Overview and the
     // frame owns the chat; the legacy host keeps its own full-width overview
     // branch and its unchanged three-panel concierge path.
-    expect(shell).toContain('if (basePath === "/app/rentals")');
+    expect(shell).toContain("if (basePath === APP_RENTALS_ROUTE)");
     expect(shell).toContain('if (workspaceMode === "overview")');
     expect(shell).toContain("<RentalsDynamicWorkspace");
     expect(shell).toContain('surfaceId="rentals-workspace-header"');
