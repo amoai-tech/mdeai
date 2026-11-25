@@ -505,6 +505,16 @@
       "note": "SAN-1675/SAN-1710: broker Overview consumer; registers mount-key-scoped brokerViewingAction (existing PATCH /api/host/rentals/viewings/:id writer) and brokerOverviewNavigate (closed target set: listings, onboarding, concierge) with the official useGenerativeUIFunction."
     },
     {
+      "file": "src/components/host/rentals/rentals-listings-grid.tsx",
+      "classification": "keep",
+      "note": "SAN-1711: deterministic official EntityCard/Grid surface reusing the existing selected listing and native drawer; renderer-only mount-key selection."
+    },
+    {
+      "file": "src/components/host/rentals/__tests__/rentals-listings-grid.test.tsx",
+      "classification": "test-only",
+      "note": "SAN-1711: validates the official inventory operations and real SDK selection event without AI."
+    },
+    {
       "file": "src/lib/rentals/__tests__/broker-overview-ui.test.ts",
       "classification": "test-only",
       "note": "SAN-1675: validates the broker Overview operations with the installed validateOperation and the catalog's own prop schemas."
