@@ -740,6 +740,12 @@ export const mdeUI = createGenerativeUI({
     },
     // SAN-1710 — the Overview's own navigation. The model can never call it; the
     // page maps a closed set of targets to real, implemented destinations.
+    // SAN-1711 — select only an already-loaded owned inventory row.
+    brokerListingSelect: {
+      parameters: z.object({ rendererKey: z.string().uuid(), listingId: z.string().uuid() }),
+      allowedCallers: "rendererOnly",
+      requiresUserActivation: true,
+    },
     brokerOverviewNavigate: {
       parameters: z.object({
         rendererKey: z.string().uuid(),
