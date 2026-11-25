@@ -90,7 +90,12 @@ describe("broker conversation survives a reload", () => {
 describe("SAN-1683 shared route frame", () => {
   it("renders the selected Overview instead of hiding it behind mobile Chat", () => {
     const shell = readComponent("rentals-concierge-shell.tsx");
+    // SAN-1710/SAN-1685: the /app tree renders one full-width Overview and the
+    // frame owns the chat; the legacy host keeps its own full-width overview
+    // branch and its unchanged three-panel concierge path.
     expect(shell).toContain("if (basePath === APP_RENTALS_ROUTE)");
+    expect(shell).toContain('if (workspaceMode === "overview")');
+    expect(shell).toContain("<RentalsDynamicWorkspace");
     expect(shell).toContain('surfaceId="rentals-workspace-header"');
     expect(readComponent("rentals-ask-mde.tsx")).toContain('data-testid="rentals-ask-mde-slot"');
     expect(readComponent("host-rentals-nav.tsx")).toContain('aria-current={active ? "page" : undefined}');

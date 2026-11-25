@@ -1,5 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/database.types";
+import { listingDayBounds } from "@/lib/leads/schedule-viewing-time";
+import {
+  BROKER_APPOINTMENT_STATUSES,
+  BROKER_OPEN_LEAD_STATUSES,
+  BROKER_PENDING_APPOINTMENT_STATUSES,
+  BROKER_UNANSWERED_LEAD_STATUSES,
+} from "./broker-overview-status";
 import {
   buildBrokerDashboardView,
   type BrokerLeadRow,
@@ -15,9 +22,26 @@ const BROKER_DASHBOARD_LOAD_ERROR =
 
 /** Requests shown per load. The exact total is carried separately so truncation is never silent. */
 const REQUEST_PAGE_SIZE = 50;
+/** Today's card is a day, not an inbox: cap the rows while keeping the exact count. */
+const TODAY_ROW_LIMIT = 50;
+/** The Overview shows a bounded preview, never the whole calendar. */
+const UPCOMING_PREVIEW_LIMIT = 5;
 
 type Page = { offset?: number; limit?: number };
 type DashboardPages = { viewings?: Page; leads?: Page };
+
+// PostgreSQL ARE Unicode escapes mirror JavaScript String.trim's whitespace
+// set (including NBSP and BOM), without a new SQL function or a client-side scan.
+const BLANK_LISTING_TEXT = String.raw`^[\u0009-\u000d\u0020\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]*$`;
+const INCOMPLETE_DETAILS_FILTER = [
+  "description.is.null",
+  ...["description", "title", "neighborhood"].map((field) => `${field}.match.${BLANK_LISTING_TEXT}`),
+  "price_monthly.is.null",
+  "bedrooms.is.null",
+].join(",");
+
+const SHOWING_SELECT =
+  "id, apartment_id, scheduled_at, status, lead_id, created_at, apartment:apartments!showings_apartment_id_fkey!inner(landlord_id,title,neighborhood)";
 
 function boundedPage(page: Page, defaultLimit: number) {
   const offset = page.offset ?? 0;
@@ -34,7 +58,13 @@ function failDashboard(context: string, error: unknown): FetchBrokerDashboardRes
   return { ok: false, message: BROKER_DASHBOARD_LOAD_ERROR };
 }
 
-/** Load broker dashboard metrics from Supabase (RLS-scoped). */
+/**
+ * Load broker dashboard metrics from Supabase (RLS-scoped).
+ *
+ * SAN-1710 — every Overview number is an exact count or a direct row read. Nothing
+ * is derived by subtracting bounded pages, and the Bogotá day boundary is resolved
+ * once so the Today count and Today rows cannot disagree.
+ */
 // skipcq: JS-0067 - ES module export; not browser global scope
 // skipcq: JS-0044, JS-R1005 - scoped reads, independent requests grouped
 export async function fetchBrokerDashboard(
@@ -51,18 +81,17 @@ export async function fetchBrokerDashboard(
   if (!listingsResult.ok) return failDashboard("listings", listingsResult);
   const { landlordProfileIds, displayName } = listingsResult;
 
-  let publishedListingsCount = 0;
-  if (landlordProfileIds.length > 0) {
-    const published = await supabase.from("apartments").select("id", { count: "exact", head: true })
-      .in("landlord_id", landlordProfileIds).eq("listing_workflow_status", "published");
-    if (published.error || published.count === null) return failDashboard("published_listings_count", published.error ?? "Missing exact total");
-    publishedListingsCount = published.count;
-  }
-
-  let leads7dCount = 0;
-  let viewingsBookedCount = 0;
-  let unansweredLeads: BrokerLeadRow[] = [];
-  let upcomingShowings: BrokerShowingRow[] = [];
+  let openLeadsCount = 0;
+  let unansweredLeadsCount = 0;
+  let pendingDecisionsCount = 0;
+  let upcomingCount = 0;
+  let todayTotal = 0;
+  let upcomingPreviewTotal = 0;
+  let draftsCount = 0;
+  let noPhotosCount = 0;
+  let missingDetailsCount = 0;
+  let todayShowings: BrokerShowingRow[] = [];
+  let upcomingPreviewShowings: BrokerShowingRow[] = [];
   let requestShowings: BrokerShowingRow[] = [];
   let requestShowingsTotal = 0;
   let requestLeads: BrokerLeadRow[] = [];
@@ -70,31 +99,64 @@ export async function fetchBrokerDashboard(
   let leadInbox: BrokerLeadPage | undefined = leadPage
     ? { rows: [], total: 0, offset: leadPage.offset }
     : undefined;
-  let attentionIsPartial = listingsResult.total > listingsResult.listings.length;
 
   if (landlordProfileIds.length > 0) {
-    // One clock snapshot for both rolling windows and upcoming appointments.
+    // One clock snapshot for the metrics, the local day and every window below.
     const now = Date.now();
     const nowIso = new Date(now).toISOString();
-    const sevenDaysAgo = new Date(now - 7 * 86_400_000).toISOString();
     const thirtyDaysAgo = new Date(now - 30 * 86_400_000).toISOString();
+    const day = listingDayBounds(new Date(now));
 
     // Join the authoritative apartment ownership scope in PostgREST. No unbounded apartment ID array.
-    const [leads7d, unanswered, leads30d, upcomingCount, upcoming, requests, inbox] = await Promise.all([
+    const [
+      openLeads,
+      unansweredLeads,
+      pendingDecisions,
+      upcoming,
+      today,
+      upcomingPreview,
+      drafts,
+      noPhotos,
+      missingDetails,
+      leads30d,
+      requests,
+      inbox,
+    ] = await Promise.all([
       supabase.from("leads").select("id, apartment:apartments!leads_apartment_id_fkey!inner(landlord_id)", { count: "exact", head: true })
-        .in("apartment.landlord_id", landlordProfileIds).gte("created_at", sevenDaysAgo).lte("created_at", nowIso),
-      supabase.from("leads").select("id, name, status, created_at, last_contacted_at, apartment_id, apartment:apartments!leads_apartment_id_fkey!inner(landlord_id)", { count: "exact" })
-        .in("apartment.landlord_id", landlordProfileIds).eq("status", "new")
-        .order("created_at", { ascending: false }).order("id", { ascending: true }).limit(20),
+        .in("apartment.landlord_id", landlordProfileIds).in("status", [...BROKER_OPEN_LEAD_STATUSES]),
+      supabase.from("leads").select("id, apartment:apartments!leads_apartment_id_fkey!inner(landlord_id)", { count: "exact", head: true })
+        .in("apartment.landlord_id", landlordProfileIds).in("status", [...BROKER_UNANSWERED_LEAD_STATUSES]),
+      // A request nobody has answered still needs a decision even after its slot
+      // passed: the broker can decline or reschedule it. Do not hide that backlog.
+      supabase.from("showings").select("id, apartment:apartments!showings_apartment_id_fkey!inner(landlord_id)", { count: "exact", head: true })
+        .in("apartment.landlord_id", landlordProfileIds)
+        .in("status", [...BROKER_PENDING_APPOINTMENT_STATUSES]),
+      supabase.from("showings").select("id, apartment:apartments!showings_apartment_id_fkey!inner(landlord_id)", { count: "exact", head: true })
+        .in("apartment.landlord_id", landlordProfileIds).gte("scheduled_at", nowIso)
+        .in("status", [...BROKER_APPOINTMENT_STATUSES]),
+      supabase.from("showings").select(SHOWING_SELECT, { count: "exact" })
+        .in("apartment.landlord_id", landlordProfileIds).gte("scheduled_at", day.start).lt("scheduled_at", day.end)
+        .in("status", [...BROKER_APPOINTMENT_STATUSES])
+        .order("scheduled_at", { ascending: true }).order("id", { ascending: true }).limit(TODAY_ROW_LIMIT),
+      // The preview starts after today so it never repeats a Today row.
+      supabase.from("showings").select(SHOWING_SELECT, { count: "exact" })
+        .in("apartment.landlord_id", landlordProfileIds).gte("scheduled_at", day.end)
+        .in("status", [...BROKER_APPOINTMENT_STATUSES])
+        .order("scheduled_at", { ascending: true }).order("id", { ascending: true }).limit(UPCOMING_PREVIEW_LIMIT),
+      supabase.from("apartments").select("id", { count: "exact", head: true })
+        .in("landlord_id", landlordProfileIds).eq("listing_workflow_status", "draft"),
+      // Exact "no photos": the array default is '{}', but legacy rows can be NULL.
+      supabase.from("apartments").select("id", { count: "exact", head: true })
+        .in("landlord_id", landlordProfileIds).or("images.is.null,images.eq.{}"),
+      // Blank is incomplete too: `listingCompletenessChecks` trims these fields, and a
+      // wizard draft can store '' without violating the NOT NULL constraint on title.
+      supabase.from("apartments").select("id", { count: "exact", head: true })
+        .in("landlord_id", landlordProfileIds)
+        .or(INCOMPLETE_DETAILS_FILTER),
       supabase.from("leads").select("id, apartment:apartments!leads_apartment_id_fkey!inner(landlord_id)", { count: "exact", head: true })
         .in("apartment.landlord_id", landlordProfileIds).gte("created_at", thirtyDaysAgo).lte("created_at", nowIso),
-      supabase.from("showings").select("id, apartment:apartments!showings_apartment_id_fkey!inner(landlord_id)", { count: "exact", head: true })
-        .in("apartment.landlord_id", landlordProfileIds).gte("scheduled_at", nowIso).in("status", ["scheduled", "confirmed"]),
-      supabase.from("showings").select("id, apartment_id, scheduled_at, status, lead_id, created_at, apartment:apartments!showings_apartment_id_fkey!inner(landlord_id,title)", { count: "exact" })
-        .in("apartment.landlord_id", landlordProfileIds).gte("scheduled_at", nowIso).eq("status", "scheduled")
-        .order("scheduled_at", { ascending: true }).order("id", { ascending: true }).limit(20),
       // Keep past-due requests visible and newest-created first. Exact total is separate.
-      supabase.from("showings").select("id, apartment_id, scheduled_at, status, lead_id, created_at, apartment:apartments!showings_apartment_id_fkey!inner(landlord_id,title)", { count: "exact" })
+      supabase.from("showings").select(SHOWING_SELECT, { count: "exact" })
         .in("apartment.landlord_id", landlordProfileIds).order("created_at", { ascending: false })
         .order("id", { ascending: true }).range(viewingPage.offset, viewingPage.end),
       leadPage ? supabase.from("leads")
@@ -104,11 +166,17 @@ export async function fetchBrokerDashboard(
         .range(leadPage.offset, leadPage.end) : null,
     ]);
 
-    if (leads7d.error || leads7d.count === null) return failDashboard("leads_7d_count", leads7d.error ?? "Missing exact total");
-    if (unanswered.error || unanswered.count === null) return failDashboard("unanswered_leads", unanswered.error ?? "Missing exact total");
+    if (openLeads.error || openLeads.count === null) return failDashboard("open_leads_count", openLeads.error ?? "Missing exact total");
+    if (unansweredLeads.error || unansweredLeads.count === null) return failDashboard("unanswered_leads", unansweredLeads.error ?? "Missing exact total");
+    if (pendingDecisions.error || pendingDecisions.count === null) return failDashboard("pending_decisions_count", pendingDecisions.error ?? "Missing exact total");
+    if (upcoming.error || upcoming.count === null) return failDashboard("viewings_booked_count", upcoming.error ?? "Missing exact total");
+    if (today.error || today.count === null) return failDashboard("today_showings", today.error ?? "Missing exact total");
+    if (upcomingPreview.error || upcomingPreview.count === null) return failDashboard("upcoming_preview", upcomingPreview.error ?? "Missing exact total");
+    if (drafts.error || drafts.count === null) return failDashboard("draft_listings_count", drafts.error ?? "Missing exact total");
+    if (noPhotos.error || noPhotos.count === null) return failDashboard("photo_less_listings_count", noPhotos.error ?? "Missing exact total");
+    if (missingDetails.error || missingDetails.count === null) return failDashboard("incomplete_listings_count", missingDetails.error ?? "Missing exact total");
     if (leads30d.error || leads30d.count === null) return failDashboard("leads_30d_count", leads30d.error ?? "Missing exact total");
-    if (upcomingCount.error || upcomingCount.count === null) return failDashboard("viewings_booked_count", upcomingCount.error ?? "Missing exact total");
-    if (upcoming.error || upcoming.count === null) return failDashboard("upcoming_showings", upcoming.error ?? "Missing exact total");
+
     // The SDK drops Content-Range counts on errors. Recover only a real out-of-range page,
     // using the same ownership scope; never turn an unrelated failure into empty data.
     const requestOutOfRange = requests.status === 416 && requests.error?.code === "PGRST103";
@@ -128,14 +196,20 @@ export async function fetchBrokerDashboard(
       return failDashboard("request_showings", requestTotal.error ?? requests.error ?? "Missing exact total");
     }
 
-    leads7dCount = leads7d.count;
-    unansweredLeads = (unanswered.data ?? []) as BrokerLeadRow[];
+    openLeadsCount = openLeads.count;
+    unansweredLeadsCount = unansweredLeads.count;
+    pendingDecisionsCount = pendingDecisions.count;
+    upcomingCount = upcoming.count;
+    todayTotal = today.count;
+    todayShowings = (today.data ?? []) as BrokerShowingRow[];
+    upcomingPreviewTotal = upcomingPreview.count;
+    upcomingPreviewShowings = (upcomingPreview.data ?? []) as BrokerShowingRow[];
+    draftsCount = drafts.count;
+    noPhotosCount = noPhotos.count;
+    missingDetailsCount = missingDetails.count;
     leads30dCount = leads30d.count;
-    viewingsBookedCount = upcomingCount.count;
-    upcomingShowings = (upcoming.data ?? []) as BrokerShowingRow[];
     requestShowings = (requests.data ?? []) as BrokerShowingRow[];
     requestShowingsTotal = requestTotal.count;
-    attentionIsPartial ||= unanswered.count > 5 || upcoming.count > 5;
     if (inbox && leadPage) {
       if (inboxTotal.error || inboxTotal.count === null ||
           (inboxOutOfRange && leadPage.offset < inboxTotal.count)) {
@@ -151,7 +225,13 @@ export async function fetchBrokerDashboard(
       };
     }
 
-    const requestLeadIds = [...new Set(requestShowings.map((s) => s.lead_id))];
+    // Today and Upcoming rows need their renter names too. One narrow read covers both,
+    // plus the request page the View-all dialog shows.
+    const requestLeadIds = [...new Set([
+      ...requestShowings.map((s) => s.lead_id),
+      ...todayShowings.map((s) => s.lead_id),
+      ...upcomingPreviewShowings.map((s) => s.lead_id),
+    ])];
     if (requestLeadIds.length > 0) {
       const { data: requestLeadsData, error: requestLeadsError } = await supabase
         .from("leads")
@@ -168,19 +248,24 @@ export async function fetchBrokerDashboard(
   const view = buildBrokerDashboardView({
     displayName,
     listings: listingsResult.listings,
-    publishedListingsCount,
-    leads7dCount,
-    viewingsBookedCount,
-    apartmentCount: listingsResult.total,
-    unansweredLeads,
-    upcomingShowings,
+    ownedListingsCount: listingsResult.total,
+    openLeadsCount,
+    unansweredLeadsCount,
+    pendingDecisionsCount,
+    upcomingCount,
+    todayShowings,
+    todayTotal,
+    upcomingPreviewShowings,
+    upcomingPreviewTotal,
+    draftsCount,
+    noPhotosCount,
+    missingDetailsCount,
     requestShowings,
     requestShowingsTotal,
     requestShowingsOffset: viewingPage.offset,
     requestLeads,
     leads30dCount,
     views30dCount: null,
-    attentionIsPartial,
   });
 
   return { ok: true, view, inventory: listingsResult, leadInbox };

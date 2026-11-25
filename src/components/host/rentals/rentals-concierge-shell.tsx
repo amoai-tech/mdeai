@@ -79,12 +79,35 @@ export function RentalsConciergeShell({
   basePath = "/host/rentals",
 }: RentalsConciergeShellProps) {
   const [mobilePane, setMobilePane] = useState<MobilePane>("chat");
-  // /app owns the single persistent bottom chat in its route layout.
-  // The legacy host keeps its separate three-panel presentation.
+  // /app owns the single persistent bottom chat in its route layout. Both
+  // `?mode=overview` and `?mode=concierge` show the one Overview page; the
+  // mode only controls whether that chat starts open, never a second page.
   if (basePath === APP_RENTALS_ROUTE) {
     return (
       <div data-testid="rentals-concierge" className="min-w-0">
-        <RentalsDynamicWorkspace mode="overview" dashboard={dashboard} loadError={loadError} />
+        <RentalsDynamicWorkspace
+          mode="overview"
+          dashboard={dashboard}
+          loadError={loadError}
+          basePath={basePath}
+        />
+      </div>
+    );
+  }
+
+  // SAN-1710 — the legacy host overview is one full-width page, not a
+  // right-hand panel. It keeps its own domain navigation because it has no
+  // shared frame; the host concierge three-panel view is unchanged below.
+  if (workspaceMode === "overview") {
+    return (
+      <div data-testid="rentals-concierge" className="min-w-0">
+        <HostRentalsNav basePath={basePath} />
+        <RentalsDynamicWorkspace
+          mode={workspaceMode}
+          dashboard={dashboard}
+          loadError={loadError}
+          basePath={basePath}
+        />
       </div>
     );
   }
@@ -95,7 +118,7 @@ export function RentalsConciergeShell({
         <RentalsConciergeCenter mode={workspaceMode} />
       </div>
       <div className={cn("min-h-0 min-w-0", mobilePane !== "workspace" && "max-lg:hidden", "lg:block")}>
-        <RentalsDynamicWorkspace mode={workspaceMode} dashboard={dashboard} loadError={loadError} />
+        <RentalsDynamicWorkspace mode={workspaceMode} dashboard={dashboard} loadError={loadError} basePath={basePath} />
       </div>
     </>
   );
